@@ -22,8 +22,9 @@ export const DEFAULTS = Object.freeze({
     // Which of the armature's actions are exported (`include`, `exclude`: names, * and ?
     // wildcards), and what they're called (`rename`: { "Blender name": "clip name" }); clips to
     // play in place (`inPlace`: names or true, their travel taken out of `rootBone`, by default
-    // the topmost bone that moves)
-    clips: { include: null, exclude: [], rename: {}, inPlace: [], rootBone: null },
+    // the topmost bone that moves); and `trimStill`: channels that never move a bone from where
+    // it stands at rest left out (a clip only says what moves)
+    clips: { include: null, exclude: [], rename: {}, inPlace: [], rootBone: null, trimStill: false },
     // Only the bones that deform the mesh: no control bones, IK targets or widgets, and no bones
     // flagged to deform that move no vertex and carry none that do (the tips of chains)...
     deformBonesOnly: true,
@@ -42,9 +43,13 @@ export const DEFAULTS = Object.freeze({
         // The atlas's largest size, and the largest any other texture is kept at (pixels)
         atlasSize: 1024,
         maxSize: 1024,
-        // "webp" (EXT_texture_webp), "jpeg" or "png"; and the quality of WebP and JPEG (0 to 100)
+        // "webp" (EXT_texture_webp), "jpeg", "png" or "ktx2" (KHR_texture_basisu: kept compressed
+        // on the GPU, lib/ktx2.js); and the quality of WebP and JPEG (0 to 100)
         format: "webp",
         quality: 90,
+        // For "ktx2": each kind of map "etc1s" (small, blockier) or "uastc" (sharper, larger);
+        // ETC1S's quality (1 to 255); and the largest a normal map's kept at (pixels; null: as the rest)
+        ktx2: { color: "etc1s", data: "etc1s", normal: "uastc", quality: 128, normalSize: null },
         // Bake ambient occlusion into the atlas (Cycles, this many samples)
         ao: false,
         aoSamples: 32,
@@ -69,12 +74,20 @@ export const DEFAULTS = Object.freeze({
     stripMaterialExtensions: true,
     // Lower-detail copies: [{ ratio (of vertices kept), error (fraction of its size) }]
     lods: [],
+    // The full mesh itself simplified ({ ratio, error }, as a lower-detail copy's), when even it
+    // is more than the game wants; the lower-detail copies' ratios stay shares of what Blender gave
+    simplify: null,
+    // The lower-detail copies in the one GLB, beside the full one, sharing its skeleton,
+    // materials, textures and clips (each a mesh of its own: "<mesh>.lod1"..., extras.lod 1...),
+    // rather than files of their own each carrying all of it again
+    packLods: false,
     // Limits it's checked against: triangles, vertices, joints, drawCalls, textureSize,
     // textureMegabytes (on the GPU, with mipmaps), kilobytes (the GLB), clips (names it must have)
     budgets: {},
 });
 
-const TEXTURE_CHOICES = { bake: ["auto", "always", "never"], udim: ["atlas", "split"], format: ["webp", "jpeg", "png"] };
+const TEXTURE_CHOICES = { bake: ["auto", "always", "never"], udim: ["atlas", "split"], format: ["webp", "jpeg", "png", "ktx2"] };
+const KTX2_MODES = ["etc1s", "uastc"];
 const SIZES = ["height", "length", "width", "longest", "scale"];
 const BUDGETS = ["triangles", "vertices", "joints", "drawCalls", "textureSize", "textureMegabytes", "kilobytes", "clips"];
 
@@ -102,7 +115,7 @@ export function resolveConfig(raw, file) {
         ...structuredClone(DEFAULTS),
         ...raw,
         clips: { ...DEFAULTS.clips, ...raw.clips },
-        textures: { ...DEFAULTS.textures, ...raw.textures },
+        textures: { ...DEFAULTS.textures, ...raw.textures, ktx2: { ...DEFAULTS.textures.ktx2, ...raw.textures?.ktx2 } },
         budgets: { ...raw.budgets },
     };
 
@@ -124,6 +137,20 @@ export function resolveConfig(raw, file) {
         if (!choices.includes(config.textures[key])) {
             fail(`textures.${key} is one of ${choices.join(", ")}, not ${JSON.stringify(config.textures[key])}`);
         }
+    }
+
+    for (const kind of ["color", "data", "normal"]) {
+        if (!KTX2_MODES.includes(config.textures.ktx2[kind])) {
+            fail(`textures.ktx2.${kind} is etc1s or uastc, not ${JSON.stringify(config.textures.ktx2[kind])}`);
+        }
+    }
+
+    if (!(Number.isInteger(config.textures.ktx2.quality) && config.textures.ktx2.quality >= 1 && config.textures.ktx2.quality <= 255)) {
+        fail("textures.ktx2.quality is a whole number from 1 to 255");
+    }
+
+    if (config.textures.ktx2.normalSize !== null && !(config.textures.ktx2.normalSize >= 1)) {
+        fail("textures.ktx2.normalSize is a size in pixels, or null");
     }
 
     if (!["meshopt", "quantize", "none"].includes(config.compress)) {
@@ -162,6 +189,22 @@ export function resolveConfig(raw, file) {
 
     if (config.clips.inPlace !== true && !Array.isArray(config.clips.inPlace)) {
         fail("clips.inPlace is true or a list of clip names");
+    }
+
+    if (typeof config.clips.trimStill !== "boolean") {
+        fail("clips.trimStill is true or false");
+    }
+
+    if (config.simplify !== null) {
+        unknownKeys(config.simplify, { ratio: 0, error: 0 }, "simplify.", fail);
+
+        if (!(config.simplify.ratio > 0 && config.simplify.ratio < 1)) {
+            fail("simplify.ratio is the share of vertices kept, between 0 and 1");
+        }
+    }
+
+    if (typeof config.packLods !== "boolean") {
+        fail("packLods is true or false");
     }
 
     return config;

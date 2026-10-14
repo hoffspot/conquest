@@ -33,7 +33,7 @@ const distance = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
 const sizeOf = (pose) => pose.max.map((v, i) => v - pose.min[i]);
 
 test("there are built assets to test", () => {
-    expect(reports.map((report) => report.name).sort()).toEqual(["dragon", "dragon-statue", "horse", "palette-crate", "udim-creature", "udim-creature-split"]);
+    expect(reports.map((report) => report.name).sort()).toEqual(["dragon", "dragon-phone", "dragon-statue", "horse", "palette-crate", "udim-creature", "udim-creature-phone", "udim-creature-split"]);
 });
 
 for (const report of reports) {
@@ -98,8 +98,20 @@ for (const report of reports) {
         // It's drawn
         expect(await page.evaluate(() => window.viewer.coverage())).toBeGreaterThan(0.01);
 
-        // Its lower-detail copies load too, with the same clips
+        // Its lower-detail copies load too, with the same clips (or, packed in, are drawn in its
+        // place, at rest covering nearly as much of the picture as the full one does)
+        await page.evaluate(() => window.viewer.pose(null));
+
+        const full = await page.evaluate(() => window.viewer.coverage());
+
         for (const lod of report.lods) {
+            if (lod.packed) {
+                await page.evaluate((level) => window.viewer.lod(level), lod.level);
+                expect((await page.evaluate(() => window.viewer.info())).drawCalls).toBe(lod.drawCalls);
+                expect(await page.evaluate(() => window.viewer.coverage()), `lower detail ${lod.level} drawn`).toBeGreaterThan(0.75 * full);
+                continue;
+            }
+
             const copy = await page.evaluate((url) => window.viewer.load(url), `/${lod.file}`);
 
             expect(copy.clips.map((clip) => clip.name)).toEqual(report.clips.map((clip) => clip.name));
@@ -110,37 +122,81 @@ for (const report of reports) {
     });
 }
 
-test("udim-creature: each UDIM tile's colour is where its segment is on the baked atlas", async ({ page }) => {
-    const report = reports.find((one) => one.name === "udim-creature");
-    const errors = await openViewer(page);
-    const info = await page.evaluate((url) => window.viewer.load(url), `/${report.glb}`);
+for (const [name, tolerance] of [
+    ["udim-creature", 20],
+    // (ETC1S, the GPU's compression, strays a little further from the colours)
+    ["udim-creature-phone", 32],
+]) {
+    test(`${name}: each UDIM tile's colour is where its segment is on the baked atlas`, async ({ page }) => {
+        const report = reports.find((one) => one.name === name);
+        const errors = await openViewer(page);
+        const info = await page.evaluate((url) => window.viewer.load(url), `/${report.glb}`);
 
-    // One material, with the textures its three materials' bakes made: colour, occlusion with
-    // roughness and metal (the horn's metallic, the ambient occlusion), normals (the horn's
-    // bump), emission (the eyes)
-    expect(info.materials).toHaveLength(1);
-    expect(info.materials[0]).toMatchObject({ map: true, roughnessMap: true, aoMap: true, normalMap: true, emissiveMap: true });
+        // One material, with the textures its three materials' bakes made: colour, occlusion with
+        // roughness and metal (the horn's metallic, the ambient occlusion), normals (the horn's
+        // bump), emission (the eyes)
+        expect(info.materials).toHaveLength(1);
+        expect(info.materials[0]).toMatchObject({ map: true, roughnessMap: true, aoMap: true, normalMap: true, emissiveMap: true });
 
-    // The body's own faces: its boxes' sides (half its width out) and bottoms (on the ground),
-    // where no horn or eye is
-    const half = 0.2 * report.scale;
-    const triangles = (await page.evaluate(() => window.viewer.triangles())).filter(({ position: [x, y] }) => Math.abs(Math.abs(x) - half) < 0.002 * report.scale || y < 0.002 * report.scale);
-    const [low, high] = [report.bounds.rest.min[2], report.bounds.rest.max[2]];
-    const colours = await page.evaluate((uvs) => window.viewer.sampleTexture(uvs), triangles.map((triangle) => triangle.uv));
-    const found = [[], [], [], []];
+        // The body's own faces: its boxes' sides (half its width out) and bottoms (on the ground),
+        // where no horn or eye is
+        const half = 0.2 * report.scale;
+        const triangles = (await page.evaluate(() => window.viewer.triangles())).filter(({ position: [x, y] }) => Math.abs(Math.abs(x) - half) < 0.002 * report.scale || y < 0.002 * report.scale);
+        const [low, high] = [report.bounds.rest.min[2], report.bounds.rest.max[2]];
+        const colours = await page.evaluate((uvs) => window.viewer.sampleTexture(uvs), triangles.map((triangle) => triangle.uv));
+        const found = [[], [], [], []];
 
-    triangles.forEach(({ position }, i) => {
-        const segment = Math.min(3, Math.floor(((high - position[2]) / (high - low)) * 4));
+        triangles.forEach(({ position }, i) => {
+            const segment = Math.min(3, Math.floor(((high - position[2]) / (high - low)) * 4));
 
-        found[segment].push(colours[i]);
-    });
+            found[segment].push(colours[i]);
+        });
 
-    for (const [segment, expected] of TILE_COLOURS.entries()) {
-        expect(found[segment].length, `segment ${segment}'s faces`).toBeGreaterThanOrEqual(6);
+        for (const [segment, expected] of TILE_COLOURS.entries()) {
+            expect(found[segment].length, `segment ${segment}'s faces`).toBeGreaterThanOrEqual(6);
 
-        for (const colour of found[segment]) {
-            colour.slice(0, 3).forEach((v, i) => expect(Math.abs(v - expected[i]), `segment ${segment}: ${colour}, not ${expected}`).toBeLessThan(20));
+            for (const colour of found[segment]) {
+                colour.slice(0, 3).forEach((v, i) => expect(Math.abs(v - expected[i]), `segment ${segment}: ${colour}, not ${expected}`).toBeLessThan(tolerance));
+            }
         }
+
+        expect(errors).toEqual([]);
+    });
+}
+
+for (const name of ["udim-creature-phone", "dragon-phone"]) {
+    test(`${name}: its textures kept compressed on the GPU (KTX2)`, async ({ page }) => {
+        const report = reports.find((one) => one.name === name);
+        const errors = await openViewer(page);
+
+        await page.evaluate((url) => window.viewer.load(url), `/${report.glb}`);
+
+        const kinds = await page.evaluate(() => window.viewer.textureKinds());
+
+        expect(kinds.length).toBe(report.textures.length);
+        expect(kinds.every((kind) => kind.mimeType === "image/ktx2" && kind.compressed)).toBe(true);
+        expect(errors).toEqual([]);
+    });
+}
+
+test("dragon-phone: its lower details packed in its one file, fewer triangles each, sharing its skeleton and textures", async ({ page }) => {
+    const report = reports.find((one) => one.name === "dragon-phone");
+    const errors = await openViewer(page);
+
+    await page.evaluate((url) => window.viewer.load(url), `/${report.glb}`);
+
+    const counts = [report.meshes.triangles, ...report.lods.map((lod) => lod.triangles)];
+    const textures = await page.evaluate(() => window.viewer.textureKinds());
+    const bones = (await page.evaluate(() => window.viewer.info())).bones;
+
+    expect(report.lods.length).toBe(2);
+    expect(report.lods.every((lod) => lod.packed)).toBe(true);
+    counts.slice(1).forEach((count, i) => expect(count).toBeLessThan(counts[i]));
+
+    for (const lod of report.lods) {
+        await page.evaluate((level) => window.viewer.lod(level), lod.level);
+        expect(await page.evaluate(() => window.viewer.textureKinds())).toEqual(textures);
+        expect((await page.evaluate(() => window.viewer.info())).bones).toBe(bones);
     }
 
     expect(errors).toEqual([]);

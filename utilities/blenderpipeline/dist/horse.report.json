@@ -335,7 +335,9 @@
       "KHR_materials_specular"
     ],
     "texturesOfOneColourMadeFactors": 0,
-    "tangentsMended": 0
+    "tangentsMended": 0,
+    "stillChannelsTrimmed": 0,
+    "ktx2": []
   },
   "budgets": [
     {

@@ -14,6 +14,18 @@ export function hashed(path, hash) {
 }
 
 /**
+ * A catalog entry's files, each by its name, at its full address with its hash ({ name: URL }):
+ * none if the catalog hasn't the entry.
+ *
+ * @param {object} assets - The catalog (assets.js).
+ * @param {string} entry - The entry's name.
+ * @param {string} base - What the paths are relative to (the page).
+ */
+export function filesOf(assets, entry, base) {
+    return Object.fromEntries((assets.models[entry]?.files ?? []).map(({ path, hash }) => [path.slice(path.lastIndexOf("/") + 1), new URL(hashed(path, hash), base).href]));
+}
+
+/**
  * What this page's release keeps, as the service worker hears it: its name, and the full URLs of
  * the files it keeps by hash, the manifest's (`boot`: needed to start, so never let go of to make
  * room) and the catalog's (`assets`).

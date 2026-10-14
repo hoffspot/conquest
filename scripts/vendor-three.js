@@ -10,7 +10,9 @@
 // so browsers let go of their copy of the old one, and delete the old vendor folder. Add-ons (the
 // glTF loader, and meshoptimizer's decoder for the models it reads compressed) are copied to
 // addons/ and imported as three/addons/. Run it too after changing which add-ons are copied
-// (ADDONS), then npm run build:manifest.
+// (ADDONS), then npm run build:manifest. The Basis Universal transcoder (for KTX2 textures) is
+// copied as it is, with its licences (kept in scripts/licences/: the package has none): the game
+// fetches it only when a model wants it (client/models/assets.json).
 
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -33,10 +35,23 @@ for (const name of ["three.core", "three.module"]) {
     await writeFile(path.join(target, `${name}.min.js`), code.replaceAll("./three.core.js", "./three.core.min.js"));
 }
 
-// Add-ons the game and the character lab use (loading glTF models, and decoding those compressed
-// with meshoptimizer, as utilities/blenderpipeline makes them; orbiting the camera, lighting with a
-// studio environment), keeping their paths so their relative imports work
-const ADDONS = ["loaders/GLTFLoader.js", "libs/meshopt_decoder.module.js", "utils/BufferGeometryUtils.js", "utils/SkeletonUtils.js", "controls/OrbitControls.js", "environments/RoomEnvironment.js"];
+// Add-ons the game and the character lab use (loading glTF models, decoding those compressed with
+// meshoptimizer and reading their KTX2 textures, as utilities/blenderpipeline makes them, with
+// what KTX2Loader imports; orbiting the camera, lighting with a studio environment), keeping their
+// paths so their relative imports work
+const ADDONS = [
+    "loaders/GLTFLoader.js",
+    "libs/meshopt_decoder.module.js",
+    "loaders/KTX2Loader.js",
+    "utils/WorkerPool.js",
+    "libs/ktx-parse.module.js",
+    "libs/zstddec.module.js",
+    "math/ColorSpaces.js",
+    "utils/BufferGeometryUtils.js",
+    "utils/SkeletonUtils.js",
+    "controls/OrbitControls.js",
+    "environments/RoomEnvironment.js",
+];
 
 for (const addon of ADDONS) {
     const source = await readFile(path.join(three, "examples/jsm", addon), "utf8");
@@ -51,8 +66,23 @@ for (const addon of ADDONS) {
     await writeFile(file, /licen[cs]e/i.test(notice) ? notice + code : code);
 }
 
-// (meshoptimizer's licence, beside its decoder)
+// (meshoptimizer's licence, beside its decoder; KTX-Parse's and zstddec's, beside them)
 await copyFile(path.join(root, "node_modules/meshoptimizer/LICENSE.md"), path.join(target, "addons/libs/meshopt_decoder.LICENSE.md"));
+await copyFile(path.join(root, "scripts/licences/ktx-parse-LICENSE"), path.join(target, "addons/libs/ktx-parse.LICENSE"));
+await copyFile(path.join(root, "scripts/licences/zstddec-LICENSE"), path.join(target, "addons/libs/zstddec.LICENSE"));
+
+// The Basis Universal transcoder KTX2Loader starts its workers with (Emscripten's output, already
+// minified), with its licence and notice
+const basis = path.join(target, "addons/libs/basis");
+
+await mkdir(basis, { recursive: true });
+
+for (const name of ["basis_transcoder.js", "basis_transcoder.wasm"]) {
+    await copyFile(path.join(three, "examples/jsm/libs/basis", name), path.join(basis, name));
+}
+
+await copyFile(path.join(root, "scripts/licences/basis_universal-LICENSE"), path.join(basis, "LICENSE"));
+await copyFile(path.join(root, "scripts/licences/basis_universal-NOTICE.md"), path.join(basis, "NOTICE.md"));
 await copyFile(path.join(three, "LICENSE"), path.join(target, "LICENSE"));
 
 console.log(`Three.js ${version} copied to ${path.relative(root, target)}`);

@@ -1170,7 +1170,8 @@ def export(job, meshes, armature):
             raise PipelineError(f"{thing.name} can't be selected to export (is its collection hidden or excluded?)")
 
     textures = job["textures"]
-    formats = {"webp": "WEBP", "jpeg": "JPEG", "png": "AUTO"}
+    # (KTX2 is made in Node from PNG, lossless: lib/ktx2.js)
+    formats = {"webp": "WEBP", "jpeg": "JPEG", "png": "AUTO", "ktx2": "AUTO"}
     image_format = formats[textures["format"]]
 
     # Tangents (MikkTSpace, as normal maps are baked with) for a mesh with a normal map, so it's

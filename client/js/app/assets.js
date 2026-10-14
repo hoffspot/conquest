@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "063bb2e74c",
+    release: "4883bcc734",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -1837,6 +1837,22 @@ export const ASSETS = Object.freeze({
                     "path": "models/jmi/chest.glb",
                     "hash": "7bdf812b68",
                     "bytes": 178404
+                }
+            ]
+        },
+        "basis-transcoder": {
+            "tier": "demand",
+            "label": "The Basis Universal transcoder, which models' KTX2 textures are read with (Binomial, Apache 2.0)",
+            "files": [
+                {
+                    "path": "vendor/three-r186/addons/libs/basis/basis_transcoder.js",
+                    "hash": "8478b5b6d6",
+                    "bytes": 57529
+                },
+                {
+                    "path": "vendor/three-r186/addons/libs/basis/basis_transcoder.wasm",
+                    "hash": "6cf17dc889",
+                    "bytes": 527333
                 }
             ]
         }

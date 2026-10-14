@@ -1,11 +1,14 @@
 // The viewer: loads a built GLB with Three.js r186 (the game's version), as the game would (with
 // the meshopt decoder), and plays its clips. ?file=dist/dragon.glb picks one; ?test leaves it
-// still, for the browser tests (test/browser.spec.js) to drive through window.viewer.
+// still, for the browser tests (test/browser.spec.js) to drive through window.viewer. KTX2
+// textures are read as the game reads them (KTX2Loader and the Basis transcoder); a model with
+// its lower-detail meshes packed in shows the full one, or the level `lod(level)` asks for.
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
 
 const params = new URLSearchParams(location.search);
 const testing = params.has("test");
@@ -16,7 +19,8 @@ const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 2000);
 const controls = new OrbitControls(camera, canvas);
 const grid = new THREE.GridHelper(20, 20, 0x3a3f47, 0x262a30);
 const sun = new THREE.DirectionalLight(0xffffff, 2.2);
-const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+const ktx2 = new KTX2Loader().setTranscoderPath("/node_modules/three/examples/jsm/libs/basis/").detectSupport(renderer);
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).setKTX2Loader(ktx2);
 const timer = new THREE.Timer();
 const BACKGROUND = new THREE.Color(0x15171a);
 
@@ -44,7 +48,7 @@ function resize() {
 function meshes() {
     const found = [];
 
-    model?.traverse((node) => node.isMesh && found.push(node));
+    model?.traverse((node) => node.isMesh && node.visible && found.push(node));
 
     return found;
 }
@@ -60,6 +64,7 @@ async function load(url) {
 
     model = gltf.scene;
     clips = gltf.animations;
+    lod(0);
 
     // Every node's own transform, its rest pose. (Not skeleton.pose(): once a skinned mesh is
     // quantized its inverse bind matrices carry the quantization, and its bind pose isn't its
@@ -89,6 +94,15 @@ async function load(url) {
     await showStats(url);
 
     return info();
+}
+
+/** Shows one level of detail of a model whose lower-detail meshes are packed in (0: the full one). */
+function lod(level = 0) {
+    model?.traverse((node) => {
+        if (node.isMesh) {
+            node.visible = (node.userData.lod ?? 0) === level;
+        }
+    });
 }
 
 /** What's loaded: its clips, draw calls, bones, materials and nodes. */
@@ -216,6 +230,10 @@ function sampleTexture(uvs, { slot = "map", material = 0 } = {}) {
         throw new Error(`material ${material} has no ${slot}`);
     }
 
+    if (texture.isCompressedTexture || texture.isDataTexture) {
+        return sampleOnGpu(texture, uvs);
+    }
+
     const { image } = texture;
     const flat = document.createElement("canvas");
 
@@ -235,6 +253,49 @@ function sampleTexture(uvs, { slot = "map", material = 0 } = {}) {
         const at = (y * image.width + x) * 4;
 
         return [data[at], data[at + 1], data[at + 2], data[at + 3]];
+    });
+}
+
+/**
+ * A texture the GPU keeps compressed (KTX2) sampled where it's drawn from: copied, as it is, onto
+ * a target the size of its largest level, and read back. Colour textures come back sRGB, as an
+ * image's pixels would.
+ */
+function sampleOnGpu(texture, uvs) {
+    const { width, height } = texture.image.width ? texture.image : texture.mipmaps[0];
+    const target = new THREE.WebGLRenderTarget(width, height);
+    const srgb = texture.colorSpace === THREE.SRGBColorSpace;
+    const copy = new THREE.Mesh(
+        new THREE.PlaneGeometry(2, 2),
+        new THREE.ShaderMaterial({
+            uniforms: { map: { value: texture } },
+            vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
+            // (Read as the GPU decodes it: linear for an sRGB texture, so made sRGB again here)
+            fragmentShader: `uniform sampler2D map; varying vec2 vUv;
+                vec3 toSrgb(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c)); }
+                void main() { vec4 c = texture2D(map, vUv); gl_FragColor = vec4(${srgb ? "toSrgb(c.rgb)" : "c.rgb"}, c.a); }`,
+        }),
+    );
+    const pixels = new Uint8Array(width * height * 4);
+
+    // (Drawn whatever the camera's looking at: the shader puts it over the whole target)
+    copy.frustumCulled = false;
+    renderer.setRenderTarget(target);
+    renderer.render(copy, camera);
+    renderer.readRenderTargetPixels(target, 0, 0, width, height, pixels);
+    renderer.setRenderTarget(null);
+    target.dispose();
+    copy.geometry.dispose();
+    copy.material.dispose();
+
+    // (Row 0 read back is the plane's bottom, drawn from the texture's first row, its top: glTF's
+    // v = 0, as a texture not flipped, as compressed ones never are, has it)
+    return uvs.map(([u, v]) => {
+        const x = Math.min(width - 1, Math.max(0, Math.floor(u * width)));
+        const y = Math.min(height - 1, Math.max(0, Math.floor(v * height)));
+        const at = (y * width + x) * 4;
+
+        return [pixels[at], pixels[at + 1], pixels[at + 2], pixels[at + 3]];
     });
 }
 
@@ -364,6 +425,21 @@ renderer.setAnimationLoop((now) => {
     renderer.render(scene, camera);
 });
 
-window.viewer = { load, info, pose, coverage, colourAt, sampleTexture, triangles, resize };
+/** Each texture of the shown meshes: which it is, what it was read from, how it's kept on the GPU. */
+function textureKinds() {
+    const found = new Set();
+
+    for (const mesh of meshes()) {
+        for (const slot of ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap"]) {
+            if (mesh.material[slot]) {
+                found.add(mesh.material[slot]);
+            }
+        }
+    }
+
+    return [...found].map((texture) => ({ id: texture.uuid, mimeType: texture.userData.mimeType ?? null, compressed: Boolean(texture.isCompressedTexture), data: Boolean(texture.isDataTexture) }));
+}
+
+window.viewer = { load, info, pose, coverage, colourAt, sampleTexture, triangles, resize, lod, textureKinds };
 await chooseModels();
 window.viewerReady = true;

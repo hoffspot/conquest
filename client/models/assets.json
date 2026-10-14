@@ -1520,6 +1520,18 @@
                     "path": "models/jmi/chest.glb"
                 }
             ]
+        },
+        "basis-transcoder": {
+            "tier": "demand",
+            "label": "The Basis Universal transcoder, which models' KTX2 textures are read with (Binomial, Apache 2.0)",
+            "files": [
+                {
+                    "path": "vendor/three-r186/addons/libs/basis/basis_transcoder.js"
+                },
+                {
+                    "path": "vendor/three-r186/addons/libs/basis/basis_transcoder.wasm"
+                }
+            ]
         }
     }
 }

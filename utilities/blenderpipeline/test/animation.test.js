@@ -1,9 +1,10 @@
-// lib/animation.js, lib/transform.js and lib/optimize.js's tangent mending on a document made in
-// code (test/helpers.js)
+// lib/animation.js, lib/transform.js, lib/optimize.js's tangent mending, still channels and packed
+// lower details, and lib/ktx2.js, on a document made in code (test/helpers.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices } from "../lib/animation.js";
-import { mendTangents } from "../lib/optimize.js";
+import { decodeImage, encodeImage, shrinkImage, textureUses } from "../lib/ktx2.js";
+import { mendTangents, packLod, trimStill } from "../lib/optimize.js";
 import { moveDocument, scaleDocument } from "../lib/transform.js";
 import { near, skinnedDocument, vertices } from "./helpers.js";
 
@@ -172,5 +173,87 @@ describe("mending tangents", () => {
         assert.ok(near(tangents[3], [0, 1, 0, 1]));
         assert.ok(near(tangents[0], [1, 0, 0, 1]));
         assert.equal(mendTangents(document), 0);
+    });
+});
+
+describe("leaving out what doesn't move", () => {
+    it("drops a channel that holds a bone where it stands at rest, and keeps those that move it", () => {
+        const document = skinnedDocument();
+        const walk = clip(document, "Walk");
+        const spine = document.getRoot().listNodes().find((node) => node.getName() === "spine");
+        const still = document.createAnimationSampler().setInput(walk.listSamplers()[0].getInput()).setInterpolation("LINEAR");
+
+        // (The spine's scale, 1 throughout, as it is at rest)
+        still.setOutput(document.createAccessor().setType("VEC3").setArray(new Float32Array([1, 1, 1, 1, 1, 1, 1, 1, 1])).setBuffer(document.getRoot().listBuffers()[0]));
+        walk.addSampler(still).addChannel(document.createAnimationChannel().setTargetNode(spine).setTargetPath("scale").setSampler(still));
+
+        assert.equal(trimStill(document), 1);
+        assert.deepEqual(
+            walk.listChannels().map((channel) => `${channel.getTargetNode().getName()} ${channel.getTargetPath()}`),
+            ["root translation", "spine rotation"],
+        );
+        assert.equal(trimStill(document), 0);
+    });
+});
+
+describe("lower detail packed in", () => {
+    it("gives each mesh a simpler copy on the same skeleton and material, marked with its level", async () => {
+        const document = skinnedDocument();
+        const body = document.getRoot().listMeshes()[0];
+        const [lower] = await packLod(document, 1, { ratio: 0.5 });
+        const node = document.getRoot().listNodes().find((one) => one.getMesh() === lower);
+        const full = document.getRoot().listNodes().find((one) => one.getMesh() === body);
+
+        assert.equal(lower.getName(), "Body.lod1");
+        assert.equal(node.getName(), "Body.lod1");
+        assert.deepEqual(node.getExtras(), { lod: 1 });
+        assert.equal(node.getSkin(), full.getSkin());
+        assert.equal(lower.listPrimitives()[0].getMaterial(), body.listPrimitives()[0].getMaterial());
+        assert.notEqual(lower.listPrimitives()[0].getAttribute("POSITION"), body.listPrimitives()[0].getAttribute("POSITION"));
+        assert.ok(document.getRoot().listScenes()[0].listChildren().includes(node));
+
+        // (A level's own copies aren't copied again)
+        assert.equal((await packLod(document, 2, { ratio: 0.5 })).length, 1);
+    });
+});
+
+describe("textures the GPU keeps compressed (KTX2)", () => {
+    it("knows a normal map, a colour map and a data map by what they're used as", () => {
+        const document = skinnedDocument();
+        const [normal, colour, data] = ["n", "c", "d"].map((name) => document.createTexture(name));
+
+        document.createMaterial().setNormalTexture(normal).setBaseColorTexture(colour).setOcclusionTexture(data).setMetallicRoughnessTexture(data);
+
+        const uses = textureUses(document);
+
+        assert.deepEqual([uses.get(normal), uses.get(colour), uses.get(data)], ["normal", "color", "data"]);
+    });
+
+    it("halves an image (each pixel the mean of four) down to a size", () => {
+        const image = { data: new Uint8Array(4 * 4 * 4).map((_, i) => (i % 4 === 3 ? 255 : (i >> 2) % 2 ? 200 : 100)), width: 4, height: 4 };
+        const small = shrinkImage(image, 1);
+
+        assert.deepEqual([small.width, small.height], [1, 1]);
+        assert.deepEqual([...small.data], [150, 150, 150, 255]);
+    });
+
+    it("encodes an image as KTX2, in ETC1S or UASTC, with mipmaps", async () => {
+        const image = { data: new Uint8Array(8 * 8 * 4).map((_, i) => (i % 4 === 3 ? 255 : i % 251)), width: 8, height: 8 };
+
+        for (const mode of ["etc1s", "uastc"]) {
+            const bytes = await encodeImage(image, { mode, kind: "color" });
+
+            // (KTX2's identifier, then its width and height, and its levels: 8, 4, 2 and 1 across)
+            assert.deepEqual([...bytes.slice(0, 12)], [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a]);
+            assert.deepEqual([20, 24, 40].map((at) => new DataView(bytes.buffer, bytes.byteOffset).getUint32(at, true)), [8, 8, 4]);
+        }
+    });
+
+    it("reads a PNG's pixels as RGBA", () => {
+        // (A 1x1 red PNG, made by hand)
+        const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC", "base64");
+        const { data, width, height } = decodeImage(new Uint8Array(png), "image/png");
+
+        assert.deepEqual([width, height, ...data], [1, 1, 255, 0, 0, 255]);
     });
 });

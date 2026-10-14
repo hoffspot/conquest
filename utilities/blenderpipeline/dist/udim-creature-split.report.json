@@ -203,7 +203,9 @@
     "texturesShrunk": [],
     "materialExtensionsLeftOut": [],
     "texturesOfOneColourMadeFactors": 4,
-    "tangentsMended": 0
+    "tangentsMended": 0,
+    "stillChannelsTrimmed": 0,
+    "ktx2": []
   },
   "budgets": [],
   "validation": {

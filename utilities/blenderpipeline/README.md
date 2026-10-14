@@ -65,7 +65,8 @@ Build one asset, or several: `node build.js my-asset.json [more.json...]`. Optio
    - what varies becomes a texture (occlusion, roughness and metallic share one), what doesn't a
      factor; what glTF has no place for (displacement, subsurface scattering, coat, sheen) is
      left out, and the report says so.
-5. Shrinks any other texture larger than `textures.maxSize`, and writes WebP (or JPEG, or PNG).
+5. Shrinks any other texture larger than `textures.maxSize`, and writes WebP (or JPEG, or PNG;
+   PNG too for KTX2, which Node makes).
    With a normal map, it writes MikkTSpace tangents too (cutting n-gons into triangles), so
    Three.js shades it as it was baked.
 
@@ -86,11 +87,25 @@ Build one asset, or several: `node build.js my-asset.json [more.json...]`. Optio
    of one colour becomes the material's colour), and the material extensions the game doesn't
    draw (`stripMaterialExtensions`). A mesh's parts that share a material are joined into one
    draw call (separate objects keep their names).
-5. Works out whether each clip loops, and how far out the creature reaches at any moment of any
+5. Leaves out every channel that holds a bone where it stands at rest (`clips.trimStill`): a
+   clip need only say what moves, and a baked rig keys every bone in every clip. Three.js holds a
+   bone no clip moves where it stands.
+6. Encodes the textures as KTX2 (`textures.format: "ktx2"`, `lib/ktx2.js`), which the GPU keeps
+   compressed: a 2048-pixel texture takes 4 to 5 MB on a phone's GPU, mipmaps and all, where a
+   WebP takes 21 MB once decoded. Each is encoded as what it's used for: colour (sRGB) and data
+   (occlusion, roughness, metal) in ETC1S, small; normals in UASTC, sharper (`textures.ktx2`).
+   Encoding is in WebAssembly ([ktx2-encoder](https://github.com/gz65555/ktx2-encoder), Basis
+   Universal), so it needs nothing installed.
+7. Works out whether each clip loops, and how far out the creature reaches at any moment of any
    clip (for culling).
-6. Validates it with the glTF Validator, before it's compressed (the validator can't read
+8. Packs the lower-detail copies (`lods`) into the same GLB when `packLods` is set: each a mesh
+   of its own beside the full one ("<mesh>.lod1"..., `extras.lod`), on the same skeleton, with
+   the same materials, textures and clips, which otherwise each copy's file carries again. Then
+   simplifies the full mesh itself, if `simplify` asks.
+9. Validates it with the glTF Validator, before it's compressed (the validator can't read
    meshopt's compression) and after.
-7. Makes lower-detail copies (`lods`), and compresses (`compress`).
+10. Makes lower-detail copies as files of their own (`lods`, without `packLods`), and compresses
+    (`compress`).
 
 Then it reads the GLB back as the game would, and writes `<name>.report.json` beside it.
 
@@ -112,6 +127,7 @@ error, so a misspelt one isn't silently ignored.
 | `clips.rename` | `{}` | `{ "Blender name": "clip name" }` |
 | `clips.inPlace` | `[]` | Clips to play in place (names, or `true` for all) |
 | `clips.rootBone` | the topmost bone that's carried | The bone carrying the creature's travel |
+| `clips.trimStill` | `false` | Leaves out channels that never move a bone from where it stands at rest |
 | `deformBonesOnly` | `true` | Only bones that deform the mesh (above) |
 | `keepBones` | `[]` | Bones to keep even if they move nothing (points to attach things to: a mouth for fire, a claw for footprints) |
 | `applyModifiers` | `true` | Applies modifiers (mirror, subdivision...) except the armature |
@@ -120,7 +136,8 @@ error, so a misspelt one isn't silently ignored.
 | `textures.mergeMaterials` | `true` | Several materials on one mesh baked into one (one draw call) |
 | `textures.atlasSize` | `1024` | The atlas's largest size (pixels) |
 | `textures.maxSize` | `1024` | The largest any other texture is kept at |
-| `textures.format` | `"webp"` | `"webp"`, `"jpeg"` or `"png"` |
+| `textures.format` | `"webp"` | `"webp"`, `"jpeg"`, `"png"` or `"ktx2"` (KHR_texture_basisu: kept compressed on the GPU; Three.js reads it with KTX2Loader) |
+| `textures.ktx2` | `{ "color": "etc1s", "data": "etc1s", "normal": "uastc", "quality": 128, "normalSize": null }` | For KTX2: each kind of map `"etc1s"` (small, blockier) or `"uastc"` (sharper, 4 to 5 times the size); ETC1S's quality (1 to 255); the largest a normal map's kept at (pixels; `null`: as the rest) |
 | `textures.quality` | `90` | WebP's and JPEG's quality |
 | `textures.ao` | `false` | Bake ambient occlusion into the atlas |
 | `textures.aoSamples` | `32` | Cycles's samples for it |
@@ -133,18 +150,22 @@ error, so a misspelt one isn't silently ignored.
 | `resample` | `0.0001` | How far a resampled animation may stray from its keyframes |
 | `stripMaterialExtensions` | `true` | Leaves out transmission, sheen, clearcoat and the like |
 | `lods` | `[]` | `[{ "ratio": 0.35, "error": 0.02 }]`: lower-detail copies (share of vertices kept; error as a share of its size) |
+| `packLods` | `false` | The lower-detail copies in the one GLB, beside the full mesh, sharing everything else, not files of their own |
+| `simplify` | `null` | `{ "ratio": 0.3, "error": 0.01 }`: the full mesh itself simplified, when even it is more than the game wants (the copies' ratios stay shares of what Blender gave) |
 | `budgets` | `{}` | Limits it's checked against: `triangles`, `vertices`, `joints`, `drawCalls`, `textureSize`, `textureMegabytes` (on the GPU, with mipmaps), `kilobytes` (the GLB), `clips` (names it must have) |
 
 ## What you get
 
 `dist/<name>.glb`, its lower-detail copies, and `dist/<name>.report.json`:
 
-- `meshes`: draw calls, vertices, triangles, joints and influences a vertex;
+- `meshes`: draw calls, vertices, triangles, joints and influences a vertex (of the full mesh);
+- `lods`: each lower-detail copy's file and size, or, packed in, its level, meshes and triangles;
 - `materials` and `textures`: each texture's size, format, kilobytes and GPU megabytes;
 - `clips`: each clip's length, whether it loops, its root motion (bone, distance, speed,
   direction) and whether that was taken out, and the file it came from;
 - `bounds`: its box at rest, its box over every clip, and how far from its origin it ever reaches;
-- `exported`: what Blender exported, how each mesh was baked and why, what was left out;
+- `exported`: what Blender exported, how each mesh was baked and why, what was left out, the
+  channels left out for not moving, and each texture made KTX2 (its kind, mode, size and bytes);
 - `budgets`, `validation`, `notes` and `warnings`.
 
 And a summary as it's built:
@@ -196,6 +217,13 @@ crawling.play();
   ignored by Three.js anyway); move, turn and scale what holds `scene`.
 - `bounds.radius` is how far it reaches from its origin at any moment of any clip: a culling
   sphere that's never too small.
+- **KTX2 textures** need Three.js's `KTX2Loader` and the Basis transcoder (`libs/basis/`), told the
+  renderer: `new GLTFLoader().setKTX2Loader(new KTX2Loader().setTranscoderPath(path).detectSupport(renderer))`.
+  The transcoder turns each texture into the GPU's own compressed format (ASTC on most phones, BC7
+  on desktops, ETC2 elsewhere), in a worker. The game's loader does this already
+  (`readKtx2With` in `client/js/world/art/engine/models.js`).
+- **Packed lower detail** loads as meshes beside the full one, each with `userData.lod` (1, 2...):
+  show one level at a time (`mesh.visible`), as the viewer's `lod(level)` does.
 
 ## For a bought asset
 
@@ -310,6 +338,8 @@ After changing the pipeline, `npm run build` and commit `dist/`: the tests check
 | `palette-crate.json` | A test crate (`fixtures/make_palette_crate.py`) | Two materials whose faces sit on points of a palette: baking can't sample them, so they're kept, not merged onto an atlas; joined into one draw call all the same |
 | `udim-creature.json` | The test creature (`fixtures/make_udim_creature.py`) | Four UDIM tiles, a procedural metal horn with a bump and glowing eyes, three materials baked onto one 512 px atlas (colour, normals, occlusion with roughness and metal, emission); an action from another file; one left out, one renamed; a crawl's 1.5 m/s travel taken out; cameras, lights, a hidden collider, a widget and a control bone left out |
 | `udim-creature-split.json` | The test creature | UDIM tiles split by the exporter instead; its warning for a material it can't carry unbaked; one clip kept; quantized |
+| `udim-creature-phone.json` | The test creature | KTX2: colour, occlusion with roughness and metal, and emission in ETC1S, normals in UASTC shrunk to 256 px; still channels left out |
+| `dragon-phone.json` | Mesh2Motion's dragon, as `dragon.json` | Made for phones: KTX2, still channels left out, the full mesh simplified to 70%, and two lower-detail copies packed into the one GLB |
 
 The test creature and crate are made by scripts, so they're known exactly: what colour each tile
 is, where each segment is, how fast it crawls.
@@ -319,7 +349,8 @@ is, where each segment is, how fast it crawls.
 - One armature in an export (name the objects for one at a time).
 - Only the armature's actions are exported: shape-key (morph) animation and objects' own
   animation are left out, and the report says which actions were.
-- Textures are WebP, JPEG or PNG, so on the GPU they take their full size (no KTX2).
+- WebP, JPEG and PNG textures take their full size on the GPU; KTX2 doesn't, but takes longer to
+  build (a 2048-pixel texture: about 20 s in ETC1S, a few minutes in UASTC).
 - The atlas gives each material and UDIM tile a rectangle round all its UVs. That keeps the
   artist's layout, but a tile that's mostly empty wastes its share.
 - Baking is Cycles on the CPU: a large mesh with ambient occlusion at 4096 pixels takes minutes.
