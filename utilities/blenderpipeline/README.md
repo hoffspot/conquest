@@ -71,22 +71,26 @@ Build one asset, or several: `node build.js my-asset.json [more.json...]`. Optio
 
 **In Node** (`lib/optimize.js`):
 
-1. Turns it (`turn`) to face +z, sizes it in metres (`size`), stands it on its origin
+1. Mends tangents that aren't a unit long. MikkTSpace gives none where a triangle's UVs have no
+   area, as a few of a bought model's may (the Dreadthorn Dragon has 8 of its 82,905): the
+   validator counts each as an error, and a normal map shades it as a black speck. Each gets a
+   direction along the surface instead; the report says how many (`exported.tangentsMended`).
+2. Turns it (`turn`) to face +z, sizes it in metres (`size`), stands it on its origin
    (`origin: "feet"`). All are baked into the data, skinned meshes included, not put on a node
    over it.
-2. Measures each clip's root motion (the bone carried across the ground, how far, how fast), and
+3. Measures each clip's root motion (the bone carried across the ground, how far, how fast), and
    takes it out of the clips to be played in place (`clips.inPlace`): the drift from start to
    end, spread evenly, comes off the root bone; its sway and bounce stay. The report gives the
    speed, so the game can match a clip's playing speed to how fast the creature moves.
-3. Takes out keyframes a straight line gives anyway, duplicates, and anything unused (a texture
+4. Takes out keyframes a straight line gives anyway, duplicates, and anything unused (a texture
    of one colour becomes the material's colour), and the material extensions the game doesn't
    draw (`stripMaterialExtensions`). A mesh's parts that share a material are joined into one
    draw call (separate objects keep their names).
-4. Works out whether each clip loops, and how far out the creature reaches at any moment of any
+5. Works out whether each clip loops, and how far out the creature reaches at any moment of any
    clip (for culling).
-5. Validates it with the glTF Validator, before it's compressed (the validator can't read
+6. Validates it with the glTF Validator, before it's compressed (the validator can't read
    meshopt's compression) and after.
-6. Makes lower-detail copies (`lods`), and compresses (`compress`).
+7. Makes lower-detail copies (`lods`), and compresses (`compress`).
 
 Then it reads the GLB back as the game would, and writes `<name>.report.json` beside it.
 
@@ -207,20 +211,40 @@ private/
   out/                         what's built
 ```
 
-A config for the Dreadthorn Dragon might be (its object, action and bone names are guesses until
-it's opened; run it once, read the report's `notes` for what it found, and fill them in):
+Its config, as built (`private/dreadthorn.json`). The dragon comes as two `.blend` files: use
+`Dragon_Animation-baked.blend`, whose wings, tail and tongue have their dynamics baked into the
+clips. The other works them out as it plays, and run without a window its drivers don't (172 of
+them invalid) and its constraints go round in circles (66 dependency cycles): the seller's manual
+says to bake them before exporting. It was modelled facing +y, so it's turned round:
 
 ```json
 {
-    "source": "dreadthorn/dreadthorn_dragon.blend",
+    "source": "dreadthorn/Dragon_Animation-baked.blend",
     "out": "out",
     "clips": {
-        "exclude": ["*T-Pose*"],
+        "rename": {
+            "Animation_Idling": "Idling",
+            "Animation_Crawling": "Crawling",
+            "Animation_CrawlingLeft": "Crawling Left",
+            "Animation_CrawlingRight": "Crawling Right",
+            "Animation_Roar": "Roar",
+            "Animation_GlidingFireBreath": "Breathing Fire",
+            "Animation_HitReact": "Hit React",
+            "Animation_TakeOff": "Take off",
+            "Animation_Landing": "Landing",
+            "Animation_Flying": "Flying",
+            "Animation_FlyingLeft": "Flying Left",
+            "Animation_FlyingRight": "Flying Right",
+            "Animation_Gliding": "Gliding",
+            "Animation_Hovering": "Hovering"
+        },
         "inPlace": ["Crawling*"]
     },
-    "keepBones": ["*jaw*"],
-    "textures": { "atlasSize": 2048, "format": "webp", "quality": 90 },
+    "keepBones": ["Jaw"],
+    "textures": { "atlasSize": 2048, "maxSize": 2048, "format": "webp", "quality": 90 },
+    "turn": 180,
     "size": { "length": 10 },
+    "origin": "feet",
     "lods": [{ "ratio": 0.25, "error": 0.02 }],
     "budgets": {
         "triangles": 140000,
@@ -231,20 +255,25 @@ it's opened; run it once, read the report's `notes` for what it found, and fill 
 }
 ```
 
-What to expect from it:
+What it makes (Blender 4.5.14 LTS, about 4.5 minutes, most of it baking):
 
+- One mesh of 137,101 triangles and 180 joints, in one draw call; its lower-detail copy (34,266
+  triangles) is for the dragon circling high over its lair. The GLB is 9.2 MB, most of it
+  textures.
 - Its nine 2K UDIM tiles become one atlas: at 2048 pixels each tile gets a third of that across
-  (about 670 pixels); at 4096, about 1350. Three or four textures (colour, normals, occlusion
-  with roughness and metal, emission if it glows) of 2048 pixels take 64 to 85 MB on the GPU with
-  their mipmaps (21 MB each). The 36 maps the game could use from its tiles, as they come, would
-  take 768 MB.
+  (about 670 pixels). Its colour, normals, and occlusion with roughness take 64 MB on the GPU
+  with their mipmaps (21 MB each); the 36 maps the game could use from its tiles, as they come,
+  would take 768 MB. `textures.maxSize` is raised with `atlasSize`, or the atlas is shrunk to
+  the default 1024.
 - Its displacement and subsurface scattering maps are left out (the normal map keeps the
   displacement's detail; glTF has no subsurface scattering). The report says so.
-- About 130,000 triangles at full detail: the lower-detail copy is for the dragon circling high
-  over its lair.
-- It's 35 m long as it comes: `size` makes it what the game wants.
-- Its fourteen clips as they're named in the file; the budget's `clips` fails the build (with
-  `--strict`) if any is missing.
+- 8 of its tangents are mended (UVs with no area on a seam).
+- It's 22 m long with a 35 m wingspan as it comes: at 10 m long, its wings span 16 m.
+- Its fourteen clips, 8 s each. None ends quite as it starts, so the report calls none a loop:
+  Idling, Roar, Hit React and Breathing Fire come back to within 6 degrees (the head, jaw and
+  toes), the flying clips within 14 degrees (the toes), the crawls within 20 (the wing
+  membranes). Played looped, each has a small hitch there. Take off and Landing play once. The crawls stay in place
+  as they come, so the game moves the dragon itself.
 
 ## Testing
 

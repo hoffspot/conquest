@@ -122,7 +122,8 @@
     ],
     "texturesShrunk": [],
     "materialExtensionsLeftOut": [],
-    "texturesOfOneColourMadeFactors": 0
+    "texturesOfOneColourMadeFactors": 0,
+    "tangentsMended": 0
   },
   "budgets": [
     {
