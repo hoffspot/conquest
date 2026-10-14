@@ -38,6 +38,17 @@ import { bonjour, folders } from "./platform/index.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 import { WorldServer } from "./world-server.js";
 
+// (What it says gone nowhere once whoever read it is gone (the menu-bar app quit or crashed, its
+// launcher gone): it still saves every world and stops. Without this, the second line said after
+// that ended it there and then, unsaved. Any other trouble saying things ends it, as it did)
+for (const output of [process.stdout, process.stderr]) {
+    output.on("error", (error) => {
+        if (error.code !== "EPIPE") {
+            throw error;
+        }
+    });
+}
+
 const { values } = parseArgs({ options: WORLD_OPTIONS });
 const root = path.resolve(values.data ?? folders().data);
 const update = { ...(values.releases ? { releases: values.releases } : {}), ...(values["release-key"] ? { key: readFileSync(values["release-key"], "utf8") } : {}) };
