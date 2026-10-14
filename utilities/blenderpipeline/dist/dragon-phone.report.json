@@ -8,7 +8,7 @@
     "gltfExporter": "4.5.51",
     "sourceSavedWith": "5.1.29"
   },
-  "kilobytes": 207.7,
+  "kilobytes": 226.1,
   "compression": "meshopt",
   "extensionsRequired": [
     "EXT_meshopt_compression",
@@ -117,6 +117,38 @@
         "direction": null
       },
       "from": "animation-dragon-idle.blend"
+    },
+    {
+      "name": "Biting",
+      "seconds": 1.2,
+      "channels": 58,
+      "keyframes": 116,
+      "loops": false,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": null,
+      "madeFrom": "Idling"
+    },
+    {
+      "name": "Dying",
+      "seconds": 1.5,
+      "channels": 55,
+      "keyframes": 110,
+      "loops": false,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "root",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": null,
+      "madeFrom": "Idling"
     }
   ],
   "scale": 1.50536,
@@ -216,7 +248,7 @@
     "materialExtensionsLeftOut": [],
     "texturesOfOneColourMadeFactors": 0,
     "tangentsMended": 0,
-    "stillChannelsTrimmed": 836,
+    "stillChannelsTrimmed": 1263,
     "ktx2": [
       {
         "name": "DragonTexture",
@@ -257,7 +289,7 @@
     {
       "budget": "kilobytes",
       "limit": 1024,
-      "value": 207.7,
+      "value": 226.1,
       "ok": true
     },
     {
@@ -266,7 +298,9 @@
         "Idling",
         "Crawling",
         "Flying",
-        "Gliding"
+        "Gliding",
+        "Biting",
+        "Dying"
       ],
       "value": "all there",
       "ok": true
