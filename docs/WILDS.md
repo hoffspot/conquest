@@ -86,7 +86,7 @@ two tiers above it, up to their most.
 | Chimera | 85 | aggressive | 1 | 5–9 | the orcs' wilds only: volcanic, badlands |
 | Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins, ruined castles and graveyards, with their dead |
 | Wraith | 46 | aggressive | 1 | 5–10 | the ruins and ruined castles, with their dead |
-| Dragon | 90 | aggressive | 1 | 10 | the dragon's lair |
+| Drake | 90 | aggressive | 1 | 10 | the drake's lair |
 | Wight lord | 70 | aggressive | 1 | 9–10 | the ruined castles |
 | Frost troll | 75 | aggressive | 1 | 9–10 | the high snows |
 
@@ -97,9 +97,9 @@ in the eyes (staggering whoever it catches, and leaving none lying), a mandrake 
 astray), a basilisk's glare staggers and slows whoever meets it, a great boa and a knucker throw
 their coils round whoever they're after (crushing and slowing them), a kelpie's bite and an
 ahuizotl's tail-hand drag whoever they hold (slowing them), a chimera's serpent tail strikes
-(venomous) and it breathes fire as the dragon does, the
+(venomous) and it breathes fire as the drake does, the
 will-o'-wisp looses bolts of light, the treant calls up roots, the cave spider
-spits webs, the dragon breathes fire, the wight lord and a draugr lay a curse, a mare sends
+spits webs, the drake breathes fire, the wight lord and a draugr lay a curse, a mare sends
 nightmares (withering), a ghost wails (staggering whoever it reaches) and a wraith draws the life out of whoever it holds its hand out to (each flies
 as a projectile). A ghost's touch is the grave's cold, slowing; a wraith's claws wither.
 The bog frog's tongue reaches two squares off. The rock tusker's charge, a Cape buffalo's, and a
@@ -124,7 +124,7 @@ clear, onto the nearest free square (battle.js `TOSS`). The thrown are in the ai
 use anything); then they can't be thrown again for 4 seconds. Players and their companions are
 thrown as anyone is; never the heavy or the unsolid (bats and the other flocks and swarms,
 bears, trolls, ogres, wyverns, wisps, treants, crocodiles, rock tuskers, wild bulls, Cape
-buffalo, Nandi bears, great boas, knuckers, kelpies, chimeras, draugar, dragons, ghosts, wraiths,
+buffalo, Nandi bears, great boas, knuckers, kelpies, chimeras, draugar, drakes, ghosts, wraiths,
 mares, frost trolls: creatures.js
 `steady`), the perilous places' own, an elite, a dungeon's boss, a fortification, a palisade or
 a wagon. The thrown body's a ragdoll (docs/CHARACTERS.md *Thrown*); a creature's tumbles whole.
@@ -162,8 +162,8 @@ the dark elves' cave spiders, the cat folk's hyenas and sand scorpions, the liza
 frogs and the orcs' magma slimes. (The wild camps keep their own ladder, the first tier within
 about 2 km of the start: docs/WORLD.md.)
 
-The perilous places hold the mightiest, each a master and its guards (`LAIRS`): the dragon at the
-dragon's lair, a wight lord and its dead in each ruined castle (three skeletons, two ghosts and a
+The perilous places hold the mightiest, each a master and its guards (`LAIRS`): the drake at the
+drake's lair, a wight lord and its dead in each ruined castle (three skeletons, two ghosts and a
 wraith), the frost troll in the snows. The ghosts and wraiths are found nowhere else but with the
 dead at the ruins (core/places.js `PLACE_BANDS`): the restless dead of whoever lived there long ago;
 and at the old graveyard outside each people's start town, a few bones and a ghost led by a
@@ -505,8 +505,8 @@ an adder's near home.
 | Poisoned | 9 s | 1 every 1.5 s | | adder, bog frog (spit), wyvern and scorpion stings, cave spider's bite, Gila monster's bite, death worm's bite and acid, a spitting cobra's, a basilisk's and a giant centipede's bite, cobra and knucker venom, a chimera's serpent tail | Cure poison draught, 12 gold |
 | Diseased | 45 s | 1 every 5 s | stamina comes back at 40% | rats, bats, hyenas, jackals, cave olms, bloodflies, skeletons, draugar, boggarts | Cure disease draught, 18 gold |
 | Withered | 20 s | 1 every 2.5 s | healing takes half as well | the wight lord's curse and a draugr's, the black shuck's bite, a wraith's claws and draining, a mare's nightmares | Invigorating draught, 22 gold |
-| Burning | 4 s | 1 every 0.8 s | | the dragon's fire and a chimera's, a magma slime's lava and slam, a salamander's bite and fire | Burn salve, 8 gold |
-| Bleeding | 10 s | 1 every 2 s | | wolves, boars, bears, pumas, crocodiles, knuckers, harts' antlers, ahuizotls, chimeras' claws, a hodmedod's sickle, the dragon's bite... | Bandage, 5 gold |
+| Burning | 4 s | 1 every 0.8 s | | the drake's fire and a chimera's, a magma slime's lava and slam, a salamander's bite and fire | Burn salve, 8 gold |
+| Bleeding | 10 s | 1 every 2 s | | wolves, boars, bears, pumas, crocodiles, knuckers, harts' antlers, ahuizotls, chimeras' claws, a hodmedod's sickle, the drake's bite... | Bandage, 5 gold |
 | Slowed | 5 s | | moving at half pace | a spider's web, a treant's roots, a frost troll's club, a ghost's touch, a great boa's or a knucker's coils, pixies' dazzle, a basilisk's glare, a kelpie's bite, an ahuizotl's tail-hand, a mare's weight | Quickening draught, 10 gold |
 
 Caught at a bordello (a courtesan's company, one time in four: docs/GAME.md), the pox is
@@ -531,7 +531,7 @@ action wheel, as a draught can.
   round their feet and coiled up their legs; ice crusting their feet, frost glittering. Each hurt,
   a number the colour of it over them, and a puff of it.
 
-**The creatures' own attacks.** Fire's breathed in a roaring stream from the dragon's jaws to
+**The creatures' own attacks.** Fire's breathed in a roaring stream from the drake's jaws to
 whoever it's at, smoke rolling off it; venom and lava are spat in an arc and splash where they
 land (spattering sparks and smoke, for lava); a web's thrown and bursts; roots burrow along the
 ground and break it up at their feet; a curse bursts in shadow; a ghost's wail flies pale and
@@ -546,7 +546,7 @@ wraith or a mare, a ghost's pale motes.
 ## What they leave
 
 A creature brought down may leave something: its parts (a wolf's pelt and fangs, a boar's tusks
-and meat, a wyvern's scales and sting, a dragon's scales, fangs and heart), and the people-shaped
+and meat, a wyvern's scales and sting, a drake's scales, fangs and heart), and the people-shaped
 ones a little gold and gear (`core/spoils.js`). Every player within 30 m when it falls finds their
 own bundle on it, rolled for them alone, where it fell, seen only by them, there for five minutes
 to tap and take (what doesn't fit in the pack stays there). Each thing in it (and its gold) lies
@@ -584,9 +584,9 @@ what's found is to trade it (below).
 
 The parts are worth what the adventurers' guild pays for them (only the guild buys them; other
 shops have no use for them): a couple of gold for a rat's tail near home, a few for a wolf's pelt,
-fifteen or so for a bear's, sixty for a dragon's scale and two hundred and fifty for its heart. So
+fifteen or so for a bear's, sixty for a drake's scale and two hundred and fifty for its heart. So
 a creature near home is worth a gold piece or two a kill on average (often nothing), a bear a dozen,
-and a dragon a fortune. Some are good to eat or drink: boar, bear and frog meat heal, troll's blood
+and a drake a fortune. Some are good to eat or drink: boar, bear and frog meat heal, troll's blood
 heals more, a wisp's essence fills your stamina. Each has its picture in the pack, in its colour.
 
 The guilds' boards want them too ("Wanted at the guild": `standing.js` `offerContract`): a few of
@@ -642,16 +642,16 @@ smaller, its colour a little different, its markings its own.
   Legs of three bones: a dog's on
   its toes; a bear's pillars in front and flat-footed behind, with long claws; a crocodile's
   sprawling out to the sides, swung round forward and back as it walks while its body and tail
-  sway; a dragon's with great hooked talons. Tails from a dog's brush (slim at the root, full,
+  sway; a drake's with great hooked talons. Tails from a dog's brush (slim at the root, full,
   drawn to a point) to a cat's long hanging curve, a crocodile's deep flattened one with its double
-  ridge of scutes, and a dragon's spade; an ahuizotl's ends in a hand, its fingers curled; a
+  ridge of scutes, and a drake's spade; an ahuizotl's ends in a hand, its fingers curled; a
   chimera's is a serpent, its head at the tip. Wings as a bat's: an upper arm and forearm, three long
   fingers fanning from the wrist, skin stretched between them and back to the flank (a mesh of its
   own bound to the finger bones either side, so it stretches as they spread), folded along the
   flank at rest and beating when it runs or strikes. It flies too (`fly`): legs tucked up under
   it, neck stretched out ahead and head level, tail streaming behind, wings spread wide, beating
   (slower the bigger they are) or held out to glide, rising a little with each downstroke; so
-  wyverns and the dragon are seen in the air near where they hunt and come down out of the sky to
+  wyverns and the drake are seen in the air near where they hunt and come down out of the sky to
   fight (GAME.md, *What flies*). The creature lab's Fly and Land show it.
 - **Serpents** (`serpent.js`): a body of bones down its length, the skin bound to them, tapering
   to the tail, banded or zig-zagged and pale beneath; a head with a jaw that opens on its fangs and
@@ -740,7 +740,7 @@ playing, its body is made a step at a time within the frame's budget, as everyon
   the steps.
 - **The same:** a body made a step at a time is byte for byte what it was made all at once.
 - **Where:** creatures coming into view (`dressingCreature`, as the game draws the wild's), and a
-  wyvern or the dragon before it comes into the sky (GAME.md, *What flies*). The creature lab
+  wyvern or the drake before it comes into the sky (GAME.md, *What flies*). The creature lab
   builds at once.
 - **Folding** a creature's pieces gathers their points into arrays made once, counted first,
   rather than grown a number at a time: a skeleton's or the wight lord's first build, mostly
@@ -816,7 +816,7 @@ each of the three it's built as (`seed % 3`), at its kind's size, each drawn at 
 - **Which.** Those whose bodies move by their bones alone and aren't seen through (`herds`):
   four-legged beasts, skeletons and treants, spiders and scorpions, snakes, bog frogs. Not a slime
   (its body squashed as a whole), bats (a swarm), a wisp, a ghost or wraith, the black shuck or the
-  shadow stalker (seen through), a wyvern or dragon (wings), nor the wight lord (its cape).
+  shadow stalker (seen through), a wyvern or drake (wings), nor the wight lord (its cape).
 - In a crowd, a beast doesn't rest (it stands), and bites with its first way of attacking whatever
   it does in full; a special (a spit, a breath) is a bite too.
 - `test/herd.test.js`: which are drawn in a crowd; a wolf's figure, posed as its bones are walking

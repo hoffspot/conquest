@@ -29,7 +29,7 @@ lying about, and their war camps, in 3D from a seed to go round and look at, is 
 <https://hoffspot.github.io/conquest/building-lab.html>.
 
 The creature lab, showing every creature of the wilds walking, running, attacking, resting,
-struck, knocked down and dying (and the wyvern and the dragon flying and coming down to land),
+struck, knocked down and dying (and the wyvern and the drake flying and coming down to land),
 and each dungeon's bosses and mini-bosses as they're drawn, is at <https://hoffspot.github.io/conquest/creature-lab.html>.
 The uniform lab, showing each people's soldiers in their uniforms and their officials in their
 livery side by side, is at <https://hoffspot.github.io/conquest/uniform-lab.html>.
@@ -166,7 +166,7 @@ or a building, it sees through you rather than into you.
 your foe from the side, three-quarters on, from whichever side no building, tree, well or stall
 stands between you and it, and keeps to that side as you fight; a drag still turns it, and a
 second after you let go it frames the fight again. With the battle cam off, it keeps you and your
-foe both in view by itself, turning no more than it must. Either way it draws back for a dragon or
+foe both in view by itself, turning no more than it must. Either way it draws back for a drake or
 a foe far off, and cuts through trees or walls in the way of either of you; anyone attacking you
 from out of view has a red arrow at the screen's edge pointing to them. Messages told in a fight
 move up under the buttons, down over the quick actions, or off to the side rather than cover
@@ -798,7 +798,7 @@ client/                 The game (static files served to the browser)
     sky.js              The sky outdoors: blue overhead to the haze at the horizon, the sun,
                         clouds drifting
     flyers3d.js         What flies over the world: flocks of each land's birds, wyverns over
-                        the wild lands, the dragon near its lair
+                        the wild lands, the drake near its lair
     drops3d.js          Things dropped on the ground: a bundle, its icon floating over it
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and

@@ -598,7 +598,7 @@ describe("the buildings (insides.js Interiors)", () => {
     });
 });
 
-describe("the places worth finding gone into (insides.js: a cave, the dragon's lair, the crypt under the ruins, a ruined castle's keep, a broken watchtower, the humans' abbeys and manors)", () => {
+describe("the places worth finding gone into (insides.js: a cave, the drake's lair, the crypt under the ruins, a ruined castle's keep, a broken watchtower, the humans' abbeys and manors)", () => {
     it("have their way in among the world's links as they're set down, their floors made when wanted: all in them got to from the way in, their holders' and chest's places marked, a tower's two floors joined by stairs; and are drawn", () => {
         const world = buildWorld({ seed: 1 });
         const sites = world.maps.town.sites;

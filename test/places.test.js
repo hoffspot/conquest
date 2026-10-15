@@ -100,7 +100,7 @@ describe("places worth finding (places.js)", () => {
         assert.ok(Object.values(PLACE_RIMS).length === HOLDERS.length + 1);
     });
 
-    it("are held at the start as the war has it: castles by their people, the ruins by the dead, caves and wild towers by outlaws, the lair by the dragon, holy stones by no one", () => {
+    it("are held at the start as the war has it: castles by their people, the ruins by the dead, caves and wild towers by outlaws, the lair by the drake, holy stones by no one", () => {
         for (const plan of plans) {
             for (const place of placesOf(plan)) {
                 const held = heldAtStart(plan, place);
@@ -378,7 +378,7 @@ describe("the restless dead's relics (M7.5c-3: progress.js rollRelic)", () => {
     });
 });
 
-describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watchtower, the humans' abbeys and manors)", () => {
+describe("the places gone into (M7.5b: a cave, the drake's lair, a broken watchtower, the humans' abbeys and manors)", () => {
     it("a cave's gone into by its mouth, and the crypt under the ruins by the door of their stair-house, the way kept clear; its band held so while a player's within; put to the sword there, the chest's share lies where it stood", () => {
         for (const kind of ["cave", "ruins"]) {
             const context = hosted();
@@ -467,7 +467,7 @@ describe("the places gone into (M7.5b: a cave, the dragon's lair, a broken watch
         assert.ok(band.some((one) => one.map === "town"), "the rest in the courtyard");
     });
 
-    it("the dragon's hoard lies at the back of its lair, locked while the dragon lives; opened once it falls, a share of it for each player there", () => {
+    it("the drake's hoard lies at the back of its lair, locked while the drake lives; opened once it falls, a share of it for each player there", () => {
         const context = hosted();
         const { host, world, me } = context;
         const site = world.plan.sites.find((one) => one.kind === "dragon's lair");

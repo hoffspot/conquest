@@ -142,7 +142,7 @@ export const CREATURES = Object.freeze({
     vultureFlock: { name: "Vulture flock", hp: 30, weapon: "vultureFlock", speed: 1.4, chase: 3, temper: "aggressive", roam: 12, leash: 22, pack: [1, 1], tiers: [1, 4], biomes: ["badlands", "heath"], people: "orc", blood: "red", steady: true },
     chimera: { name: "Chimera", hp: 85, weapon: "chimera", speed: 1.3, chase: 3, temper: "aggressive", roam: 10, leash: 24, pack: [1, 1], tiers: [5, 9], biomes: ["volcanic", "badlands"], people: "orc", blood: "red", steady: true },
     // The mightiest: only in the perilous places
-    dragon: { name: "Dragon", hp: 90, weapon: "dragon", speed: 1, chase: 2.2, temper: "aggressive", roam: 6, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true , steady: true },
+    dragon: { name: "Drake", hp: 90, weapon: "dragon", speed: 1, chase: 2.2, temper: "aggressive", roam: 6, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true , steady: true },
     // (The restless dead of whoever lived in the ruins long ago, only ever met there: core/places.js
     // PLACE_BANDS, and in the ruined castles with their lords: LAIRS)
     ghost: { name: "Restless ghost", hp: 26, weapon: "ghost", speed: 1.1, chase: 2.3, temper: "aggressive", roam: 6, leash: 16, pack: [1, 2], tiers: [3, 9], biomes: [], blood: "none", armor: 0.15, night: "only", darkSight: true , steady: true },

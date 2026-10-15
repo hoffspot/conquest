@@ -136,7 +136,7 @@ describe("what flies in the sky (flyers3d.js)", () => {
         }
     });
 
-    it("near a dragon's lair, the dragon circles within sight of the player; handed over to land, it's gone from the air", () => {
+    it("near a drake's lair, the drake circles within sight of the player; handed over to land, it's gone from the air", () => {
         let lairs = [{ at: [300, 0] }];
         const flyers = new Flyers({ landAt: () => "volcanic", lairs: () => lairs, random: seeded(11) });
 

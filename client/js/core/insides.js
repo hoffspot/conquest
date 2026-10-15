@@ -1370,7 +1370,7 @@ export function clearOfWaysIn(map, entries, posts, { clear = WAY_IN_CLEAR } = {}
 // --- The buildings ---
 
 // What a building's called that has no name of its own
-const NAMES = Object.freeze({ swordsmith: "the swordsmith's", armorer: "the armorer's", scriptorium: "the Occult Scriptorium", alchemist: "the alchemist's", masterSwordsmith: "the Master Swordsmith's", masterArmorer: "the Master Armorer's", emporium: "the Mystic Emporium", blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", barracks: "the barracks", guardhouse: "the guardhouse", cave: "the cave", lair: "the dragon's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", watchtower: "the watchtower", dungeon: "the dungeon" });
+const NAMES = Object.freeze({ swordsmith: "the swordsmith's", armorer: "the armorer's", scriptorium: "the Occult Scriptorium", alchemist: "the alchemist's", masterSwordsmith: "the Master Swordsmith's", masterArmorer: "the Master Armorer's", emporium: "the Mystic Emporium", blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", barracks: "the barracks", guardhouse: "the guardhouse", cave: "the cave", lair: "the drake's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", watchtower: "the watchtower", dungeon: "the dungeon" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column

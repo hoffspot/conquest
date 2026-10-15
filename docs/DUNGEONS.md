@@ -289,7 +289,7 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
   - the remains of someone who died there (`i`): a skull, ribs, hips and the long bones laid out
     a body's length, now and then a sword or an estoc, a shield, a lantern gone out; old bones
     (`j`): a heap, a skull on crossed bones, a ribcage, or a skull and its bones scattered (the
-    same in the dragon's lair, crypts and ruined halls); beasts' skulls by a cave's or a kennel's
+    same in the drake's lair, crypts and ruined halls); beasts' skulls by a cave's or a kennel's
     walls;
   - shelves (`e`) and what's kept on them, a side table (`o`) with a light on it, a stand of arms
     (`n`: a shield and weapons leant on the wall, or a weapon rack), an offering's vessels (`v`),

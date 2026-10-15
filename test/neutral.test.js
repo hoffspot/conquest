@@ -174,7 +174,7 @@ describe("the sites no people keeps in the world (sites.js)", () => {
         assert.ok(set >= 100, `${set} set down`);
     });
 
-    it("cuts each cave and the dragon's lair into a hillside facing down it, its floor dug in front of its face; or sinks a cave into the ground where there's none", () => {
+    it("cuts each cave and the drake's lair into a hillside facing down it, its floor dug in front of its face; or sinks a cave into the ground where there's none", () => {
         const forms = { hillside: 0, pit: 0 };
 
         for (const site of sites.filter(({ kind }) => kind === "cave" || kind === "dragon's lair")) {

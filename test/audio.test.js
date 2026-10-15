@@ -668,7 +668,7 @@ describe("playing sounds (sound.js)", () => {
         assert.deepEqual(creatureSounds("nobody"), []);
     });
 
-    it("voices the wild's creatures: their family's at their own pitch, an attack loudest as it lands, a call heard furthest, what's heard with it, a dragon's own fire", async () => {
+    it("voices the wild's creatures: their family's at their own pitch, an attack loudest as it lands, a call heard furthest, what's heard with it, a drake's own fire", async () => {
         const { sound, played } = await started();
 
         await sound.want([...creatureSounds("direWolf"), ...creatureSounds("magmaSlime"), ...creatureSounds("dragon"), ...creatureSounds("bandit")]);

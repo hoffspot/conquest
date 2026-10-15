@@ -87,7 +87,7 @@ const ABOUT = {
     deathWorm: ["Death worm", "Only in the orcs' wilds, in the badlands"],
     vultureFlock: ["Vulture flock", "Only in the orcs' wilds, over the badlands"],
     chimera: ["Chimera", "Only in the orcs' wilds, in the volcanic lands and badlands"],
-    dragon: ["Dragon", "The dragon's lair: for the mightiest"],
+    dragon: ["Drake", "The drake's lair: for the mightiest"],
     ghost: ["Restless ghost", "The ruins and ruined castles, with their dead"],
     wraith: ["Wraith", "The ruins and ruined castles, with their dead"],
     wightLord: ["Wight lord", "Ruined castles: for the mightiest"],
