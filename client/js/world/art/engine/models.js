@@ -1,16 +1,24 @@
 // Ready-made 3D models (glTF), lit like the rest of the art: KayKit's trees, props and landmark
 // buildings (client/models/kaykit, CC0); and, as it is, with its animations, the treasure chest
 // (client/models/jmi, MIT: world/drops3d.js). Models compressed with meshoptimizer
-// (EXT_meshopt_compression, as utilities/blenderpipeline makes them) are read too.
+// (EXT_meshopt_compression) are read too, and, once the game's said which renderer it draws with
+// (readKtx2With), those with KTX2 textures (KHR_texture_basisu), both as utilities/blenderpipeline
+// makes them.
 
 import * as THREE from "three";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
+
+// How many workers turn KTX2 textures into what the GPU takes, at most (each holds the
+// transcoder's WebAssembly; a texture takes a few hundredths of a second)
+const KTX2_WORKERS = 2;
 
 const manager = new THREE.LoadingManager();
 const loader = new GLTFLoader(manager).setMeshoptDecoder(MeshoptDecoder);
 const loaded = new Map();
 const files = new Map();
+let ktx2 = null;
 
 /**
  * A glTF file as it is ({ scene, animations }: its materials and animations its own), read once
@@ -30,6 +38,24 @@ export function loadGltf(url) {
  */
 export function readModelsFrom(resolve) {
     manager.setURLModifier(resolve);
+}
+
+/**
+ * Lets the models read from now on have KTX2 textures, which the GPU keeps compressed (a quarter
+ * of the memory a decoded picture takes, or less), each turned in a worker into the compressed
+ * format `renderer`'s GPU takes (ASTC on most phones, BC7 on desktops, ETC2...). `transcoder`:
+ * where the Basis Universal transcoder's two files are ({ "basis_transcoder.js": url,
+ * "basis_transcoder.wasm": url }), fetched only once a model has a KTX2 texture.
+ */
+export function readKtx2With(renderer, transcoder) {
+    const fetched = new THREE.LoadingManager();
+
+    // (KTX2Loader asks for them where they're copied beside it, vendor/three-r186/addons/libs/basis:
+    // known by their names, they're fetched from where `transcoder` says instead)
+    fetched.setURLModifier((url) => transcoder[url.slice(url.lastIndexOf("/") + 1)] ?? url);
+    ktx2?.dispose();
+    ktx2 = new KTX2Loader(fetched).setWorkerLimit(KTX2_WORKERS).detectSupport(renderer);
+    loader.setKTX2Loader(ktx2);
 }
 
 /** A copy of the model in a glTF file, with materials the art's lights work with. */

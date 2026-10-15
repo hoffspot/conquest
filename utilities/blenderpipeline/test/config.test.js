@@ -32,6 +32,16 @@ describe("an asset's config", () => {
         assert.deepEqual(config.clips.inPlace, []);
     });
 
+    it("fills in KTX2's settings as it does the others'", () => {
+        const config = resolveConfig({ source: "a.blend", textures: { format: "ktx2", ktx2: { normal: "etc1s" } } }, file);
+
+        assert.deepEqual(config.textures.ktx2, { ...DEFAULTS.textures.ktx2, normal: "etc1s" });
+        assert.equal(config.packLods, false);
+        assert.equal(config.simplify, null);
+        assert.equal(config.clips.trimStill, false);
+        assert.deepEqual(config.clips.invent, []);
+    });
+
     it("refuses what it doesn't know or can't do", () => {
         const refuses = (raw, message) => assert.throws(() => resolveConfig(raw, file), message);
 
@@ -47,6 +57,26 @@ describe("an asset's config", () => {
         refuses({ source: "a.blend", actions: [{ action: "Walk" }] }, /actions\[0\].from/);
         refuses({ source: "a.blend", clips: { inPlace: "Walk" } }, /inPlace/);
         refuses({ source: "a.blend", keepBones: "jaw" }, /keepBones/);
+        refuses({ source: "a.blend", textures: { format: "avif" } }, /textures.format/);
+        refuses({ source: "a.blend", textures: { ktx2: { normal: "bc7" } } }, /textures.ktx2.normal/);
+        refuses({ source: "a.blend", textures: { ktx2: { quality: 300 } } }, /textures.ktx2.quality/);
+        refuses({ source: "a.blend", textures: { ktx2: { size: 512 } } }, /unknown setting textures.ktx2.size/);
+        refuses({ source: "a.blend", packLods: "yes" }, /packLods/);
+        refuses({ source: "a.blend", simplify: { ratio: 0 } }, /simplify.ratio/);
+        refuses({ source: "a.blend", simplify: { share: 0.5 } }, /unknown setting simplify.share/);
+        refuses({ source: "a.blend", clips: { trimStill: 1 } }, /trimStill/);
+
+        // (Clips made up from others: lib/invent.js)
+        const invent = (...layers) => ({ source: "a.blend", clips: { invent: [{ name: "Bite", from: "Idle", layers }] } });
+
+        refuses({ source: "a.blend", clips: { invent: { name: "Bite" } } }, /clips.invent is a list/);
+        refuses({ source: "a.blend", clips: { invent: [{ name: "Bite", layers: [] }] } }, /names the clip it makes \(name\) and the clip it's made from/);
+        refuses({ source: "a.blend", clips: { invent: [{ name: "Bite", from: "Idle", layers: [], speed: 2 }] } }, /unknown setting clips.invent\[0\].speed/);
+        refuses(invent({ bones: ["Neck"], turn: "nod", keys: [[0, 1]] }), /turn is pitch, yaw, roll, lift, not "nod"/);
+        refuses(invent({ bones: ["Neck"], turn: "pitch", keys: [[1, 0], [0, 1]] }), /keys are in order of time/);
+        refuses(invent({ bones: ["Neck", "Head"], turn: "pitch", keys: [[0, 1]], weights: [1] }), /weights has a weight for each bone/);
+        refuses(invent({ bones: ["Neck"], turn: "pitch", move: [[0, [0, 0, 0]]] }), /turns bones \(turn\), moves one \(move\) or grafts/);
+        refuses(invent({ bone: "Hip", move: [[0, [0, 1]]] }), /move is a list of \[seconds, value\] keys/);
     });
 
     it("gives Blender what it needs", () => {

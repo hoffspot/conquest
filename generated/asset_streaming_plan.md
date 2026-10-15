@@ -606,10 +606,12 @@ the full model is kept.
   1024 for low, medium, high) is the same kind of choice for the characters' skins, so the
   model's textures can follow it. `detectQuality` already weighs `deviceMemory`, cores and touch.
   Cap at 512 where `deviceMemory` is 4 GB or less.
-- **KTX2, after:** textures the GPU keeps compressed take 4 to 8 times less of its memory, but
-  need Three.js's `KTX2Loader` and the Basis transcoder (WebAssembly, a few hundred KB, through
-  `scripts/vendor-three.js` `ADDONS`). The pipeline would also need KTX-Software's `toktx`, which
-  isn't on npm. Weigh it once there are several models.
+- **KTX2, done:** textures the GPU keeps compressed take 4 to 8 times less of its memory. The
+  pipeline makes them (`textures.format: "ktx2"`, encoded in WebAssembly by `ktx2-encoder`, so no
+  `toktx`), and the game reads them: `KTX2Loader` and what it imports are in
+  `scripts/vendor-three.js` `ADDONS`, and the Basis transcoder (WebAssembly, about 580 KB) is the
+  catalog's `basis-transcoder`, fetched only once a model with a KTX2 texture is read
+  (`readKtx2With` in `world/art/engine/models.js`).
 
 ### 11.5 Measurements still owed
 

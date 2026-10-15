@@ -6,9 +6,11 @@
 
 import { readFile } from "node:fs/promises";
 import { Logger } from "@gltf-transform/core";
-import { clearNodeParent, cloneDocument, dedup, join, meshopt, prune, quantize, reorder, resample, simplify, unpartition, weld } from "@gltf-transform/functions";
+import { clearNodeParent, cloneDocument, dedup, join, meshopt, prune, quantize, reorder, resample, simplify, simplifyPrimitive, unpartition, weld, weldPrimitive } from "@gltf-transform/functions";
 import { bounds, duration, loops, playInPlace, rootMotion, visitVertices } from "./animation.js";
 import { createIO, MeshoptEncoder, MeshoptSimplifier } from "./gltf.js";
+import { inventClip } from "./invent.js";
+import { encodeTextures } from "./ktx2.js";
 import { moveDocument, scaleDocument } from "./transform.js";
 import { validate } from "./validate.js";
 
@@ -90,6 +92,126 @@ export function mendTangents(document) {
 }
 
 /**
+ * Channels that never move a bone from where it stands at rest left out: a clip need only say
+ * what moves (Three.js holds a bone no clip moves where it stands). A clip left with nothing
+ * keeps one channel, as glTF wants one. Returns how many were left out.
+ */
+export function trimStill(document, { tolerance = 1e-5 } = {}) {
+    let trimmed = 0;
+
+    for (const animation of document.getRoot().listAnimations()) {
+        for (const channel of animation.listChannels()) {
+            const node = channel.getTargetNode();
+            const path = channel.getTargetPath();
+            const output = channel.getSampler()?.getOutput();
+
+            if (!node || !output || !["translation", "rotation", "scale"].includes(path) || animation.listChannels().length === 1) {
+                continue;
+            }
+
+            const rest = path === "translation" ? node.getTranslation() : path === "rotation" ? node.getRotation() : node.getScale();
+            const value = [];
+            let still = true;
+
+            for (let i = 0; i < output.getCount() && still; i++) {
+                output.getElement(i, value);
+
+                // (A rotation and its negation are the same turn)
+                still =
+                    path === "rotation"
+                        ? Math.abs(value.reduce((sum, v, k) => sum + v * rest[k], 0)) > 1 - tolerance
+                        : value.every((v, k) => Math.abs(v - rest[k]) <= tolerance * Math.max(1, Math.abs(rest[k])));
+            }
+
+            if (still && channel.getSampler().getInterpolation() !== "CUBICSPLINE") {
+                const sampler = channel.getSampler();
+
+                channel.dispose();
+
+                if (!sampler.listParents().some((parent) => parent.propertyType === "AnimationChannel")) {
+                    sampler.dispose();
+                }
+
+                trimmed++;
+            }
+        }
+    }
+
+    return trimmed;
+}
+
+/**
+ * A lower-detail copy of every mesh, in the same document: a mesh of its own on a node of its
+ * own ("<name>.lod<level>", extras.lod = level), its vertices welded then simplified (`ratio`
+ * of them kept, at most `error` of its size astray), on the same skeleton and materials as the
+ * full mesh. Resolves with the meshes made.
+ */
+export async function packLod(document, level, { ratio, error = 0.01 }) {
+    const root = document.getRoot();
+    const made = [];
+
+    await MeshoptSimplifier.ready;
+
+    for (const node of root.listNodes()) {
+        const mesh = node.getMesh();
+
+        if (!mesh || node.getExtras().lod !== undefined) {
+            continue;
+        }
+
+        const copy = document.createMesh(`${mesh.getName()}.lod${level}`);
+
+        for (const primitive of mesh.listPrimitives()) {
+            const lower = document.createPrimitive().setMode(primitive.getMode()).setMaterial(primitive.getMaterial());
+
+            for (const semantic of primitive.listSemantics()) {
+                lower.setAttribute(semantic, primitive.getAttribute(semantic).clone());
+            }
+
+            if (primitive.getIndices()) {
+                lower.setIndices(primitive.getIndices().clone());
+            }
+
+            for (const target of primitive.listTargets()) {
+                const lowerTarget = document.createPrimitiveTarget();
+
+                for (const semantic of target.listSemantics()) {
+                    lowerTarget.setAttribute(semantic, target.getAttribute(semantic).clone());
+                }
+
+                lower.addTarget(lowerTarget);
+            }
+
+            weldPrimitive(lower);
+            simplifyPrimitive(lower, { simplifier: MeshoptSimplifier, ratio, error });
+            copy.addPrimitive(lower);
+        }
+
+        const lodNode = document
+            .createNode(`${node.getName()}.lod${level}`)
+            .setMesh(copy)
+            .setSkin(node.getSkin())
+            .setTranslation(node.getTranslation())
+            .setRotation(node.getRotation())
+            .setScale(node.getScale())
+            .setExtras({ lod: level });
+        const parent = node.getParentNode();
+
+        if (parent) {
+            parent.addChild(lodNode);
+        } else {
+            for (const scene of root.listScenes().filter((scene) => scene.listChildren().includes(node))) {
+                scene.addChild(lodNode);
+            }
+        }
+
+        made.push(copy);
+    }
+
+    return made;
+}
+
+/**
  * Makes the Blender stage's GLB (`raw`) ready for the game, written to `glb` (and its
  * lower-detail copies to `lodFile(1)`, `lodFile(2)`...). Returns what it did and found.
  */
@@ -143,6 +265,17 @@ export async function optimize(config, { raw, glb, lodFile }) {
         moveDocument(document, { offset: [-(box.min[0] + box.max[0]) / 2, -box.min[1], -(box.min[2] + box.max[2]) / 2] });
     }
 
+    // Clips made up from those there are, sized and turned as the rest are now
+    for (const spec of config.clips.invent) {
+        if (root.listAnimations().some((animation) => animation.getName() === spec.name)) {
+            throw new Error(`clips.invent ${spec.name}: there's a clip ${spec.name} already`);
+        }
+
+        inventClip(document, spec);
+    }
+
+    result.invented = config.clips.invent.map(({ name, from }) => ({ name, from }));
+
     // Each clip's travel, measured, or taken out to play in place
     const { inPlace, rootBone } = config.clips;
     const names = root.listAnimations().map((animation) => animation.getName());
@@ -175,6 +308,11 @@ export async function optimize(config, { raw, glb, lodFile }) {
         result.texturesMadeFactors = textures - root.listTextures().length;
     }
 
+    if (config.clips.trimStill) {
+        result.stillChannelsTrimmed = trimStill(document);
+        await document.transform(prune());
+    }
+
     if (config.stripMaterialExtensions) {
         const stripped = root
             .listExtensionsUsed()
@@ -190,6 +328,11 @@ export async function optimize(config, { raw, glb, lodFile }) {
         }
     }
 
+    // Textures the GPU keeps compressed
+    if (config.textures.format === "ktx2") {
+        result.ktx2 = await encodeTextures(document, config.textures.ktx2);
+    }
+
     // Whether each clip loops, and how far out it reaches at any moment of any clip
     for (const [i, animation] of root.listAnimations().entries()) {
         result.clips[i].loops = loops(document, animation, { rootBone });
@@ -197,11 +340,28 @@ export async function optimize(config, { raw, glb, lodFile }) {
 
     result.bounds = { rest: boxOf(bounds(document)), ...reach(document) };
 
-    // Checked before it's compressed: the validator can't read meshopt's compression
-    result.validation = await validate(await io.writeBinary(document));
+    // Lower-detail copies in this file, beside the full mesh, sharing everything else
+    if (config.packLods) {
+        for (const [i, lod] of config.lods.entries()) {
+            const meshes = await packLod(document, i + 1, lod);
 
-    for (const [i, lod] of config.lods.entries()) {
-        const copy = cloneDocument(document);
+            result.lods.push({ packed: true, level: i + 1, ratio: lod.ratio, error: lod.error ?? 0.01, meshes: meshes.map((mesh) => mesh.getName()) });
+        }
+    }
+
+    // (Lower-detail files are made from the mesh as Blender gave it, as packed ones are)
+    const original = config.packLods || !config.lods.length ? null : cloneDocument(document);
+
+    // The full mesh itself simplified, when even that's more than the game wants
+    if (config.simplify) {
+        simplifyFull(document, config.simplify);
+    }
+
+    // Checked before it's compressed: the validator can't read meshopt's compression
+    result.validation = await validate(await io.writeBinary(document), { ktx2: config.textures.format === "ktx2" });
+
+    for (const [i, lod] of (original ? config.lods : []).entries()) {
+        const copy = cloneDocument(original);
 
         await copy.transform(weld(), simplify({ simplifier: MeshoptSimplifier, ratio: lod.ratio, error: lod.error ?? 0.01 }), prune());
         await compress(copy, config.compress);
@@ -211,9 +371,21 @@ export async function optimize(config, { raw, glb, lodFile }) {
 
     await compress(document, config.compress);
     await io.write(glb, document);
-    result.finalValidation = await validate(await readFile(glb), { ignore: config.compress === "meshopt" ? MESHOPT_IGNORED : [] });
+    result.finalValidation = await validate(await readFile(glb), { ignore: config.compress === "meshopt" ? MESHOPT_IGNORED : [], ktx2: config.textures.format === "ktx2" });
 
     return result;
+}
+
+/** The full meshes (not the packed lower-detail ones) welded and simplified: { ratio, error }. */
+function simplifyFull(document, { ratio, error = 0.01 }) {
+    for (const node of document.getRoot().listNodes()) {
+        if (node.getMesh() && node.getExtras().lod === undefined) {
+            for (const primitive of node.getMesh().listPrimitives()) {
+                weldPrimitive(primitive);
+                simplifyPrimitive(primitive, { simplifier: MeshoptSimplifier, ratio, error });
+            }
+        }
+    }
 }
 
 async function compress(document, how) {

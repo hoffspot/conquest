@@ -6,11 +6,18 @@ import { Sound } from "../audio/sound.js";
 import { loadCharacterKit } from "../characters/kit.js";
 import { Host } from "../core/host.js";
 import { buildWorld } from "../core/overworld.js";
+import { readKtx2With } from "../world/art/engine/models.js";
 import { View } from "../world/view.js";
+import { ASSETS } from "./assets.js";
+import { filesOf } from "./catalog.js";
 import { Game } from "./game.js";
 
 export { readModelsFrom } from "../world/art/engine/models.js";
 export { detectQuality, QUALITY } from "../world/view.js";
+
+// The catalog's entry for the Basis Universal transcoder, which models' KTX2 textures are read with
+// (client/models/assets.json)
+const TRANSCODER = "basis-transcoder";
 
 /**
  * Set up the view, the sound (on or off: `sound`, with `volumes` { effects, environment, music })
@@ -21,6 +28,8 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
     onProgress("Starting the 3D view");
 
     const view = new View(canvas, { quality, far: true });
+
+    readKtx2With(view.renderer, filesOf(ASSETS, TRANSCODER, document.baseURI));
 
     onProgress("Unpacking the body and mapping its skin");
 

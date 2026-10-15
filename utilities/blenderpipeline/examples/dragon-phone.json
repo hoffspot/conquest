@@ -1,0 +1,31 @@
+{
+    "source": "mesh2motion/rigs/rig-dragon.blend",
+    "out": "../dist",
+    "actions": [
+        { "from": "mesh2motion/rigs/dragon/animation-dragon-idle.blend" },
+        { "from": "mesh2motion/rigs/dragon/animation-dragon-walk.blend" },
+        { "from": "mesh2motion/rigs/dragon/animation-dragon-fly-flap.blend" },
+        { "from": "mesh2motion/rigs/dragon/animation-dragon-fly-glide.blend" }
+    ],
+    "clips": {
+        "rename": { "Idle": "Idling", "Walk": "Crawling", "Fly Flap": "Flying", "Fly Glide": "Gliding" },
+        "trimStill": true,
+        "invent": [
+            { "name": "Biting", "from": "Idling", "seconds": 1.2, "layers": [
+                { "bones": ["spine_2", "spine_3", "spine_4"], "turn": "pitch", "keys": [[0, 0], [0.35, 8], [0.55, -10], [0.75, -10], [1.2, 0]] },
+                { "bones": ["mouth_lower"], "turn": "pitch", "keys": [[0, 0], [0.3, -5], [0.45, -30], [0.6, 0], [1.2, 0]] }
+            ] },
+            { "name": "Dying", "from": "Idling", "hold": 0, "seconds": 1.5, "layers": [
+                { "bone": "hips", "move": [[0, [0, 0, 0]], [1.2, [0, -0.6, 0]], [1.5, [0, -0.6, 0]]] },
+                { "bones": ["hips"], "turn": "roll", "keys": [[0, 0], [1.2, 70], [1.5, 70]] },
+                { "bones": ["tail_1", "tail_2", "tail_3", "tail_4", "tail_5", "tail_6"], "turn": "yaw", "lag": 0.05, "keys": [[0, 0], [1.2, 8], [1.5, 8]] }
+            ] }
+        ]
+    },
+    "textures": { "format": "ktx2" },
+    "size": { "length": 9 },
+    "simplify": { "ratio": 0.7, "error": 0.01 },
+    "lods": [{ "ratio": 0.35, "error": 0.02 }, { "ratio": 0.15, "error": 0.05 }],
+    "packLods": true,
+    "budgets": { "triangles": 20000, "joints": 128, "drawCalls": 1, "textureSize": 1024, "kilobytes": 1024, "clips": ["Idling", "Crawling", "Flying", "Gliding", "Biting", "Dying"] }
+}

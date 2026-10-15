@@ -1,0 +1,17 @@
+{
+    "source": "../fixtures/udim-creature/udim-creature.blend",
+    "out": "../dist",
+    "actions": [
+        { "from": "../fixtures/udim-creature/udim-creature-extra.blend", "action": "Roar", "name": "Roaring" }
+    ],
+    "clips": {
+        "exclude": ["Look"],
+        "rename": { "Rear": "Rearing" },
+        "inPlace": ["Crawl"],
+        "trimStill": true
+    },
+    "textures": { "atlasSize": 512, "ao": true, "aoSamples": 16, "format": "ktx2", "ktx2": { "normalSize": 256 } },
+    "size": { "length": 3 },
+    "origin": "feet",
+    "budgets": { "drawCalls": 1, "textureSize": 512, "textureMegabytes": 1.5, "joints": 5, "clips": ["Idle", "Crawl", "Rearing", "Roaring"] }
+}

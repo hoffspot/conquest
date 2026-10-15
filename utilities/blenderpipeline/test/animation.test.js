@@ -1,9 +1,12 @@
-// lib/animation.js, lib/transform.js and lib/optimize.js's tangent mending on a document made in
-// code (test/helpers.js)
+// lib/animation.js, lib/transform.js, lib/optimize.js's tangent mending, still channels and packed
+// lower details, and lib/ktx2.js, on a document made in code (test/helpers.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices } from "../lib/animation.js";
-import { mendTangents } from "../lib/optimize.js";
+import { Quaternion, Vector3 } from "three";
+import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices, worldMatrix } from "../lib/animation.js";
+import { eased, inventClip } from "../lib/invent.js";
+import { decodeImage, encodeImage, shrinkImage, textureUses } from "../lib/ktx2.js";
+import { mendTangents, packLod, trimStill } from "../lib/optimize.js";
 import { moveDocument, scaleDocument } from "../lib/transform.js";
 import { near, skinnedDocument, vertices } from "./helpers.js";
 
@@ -172,5 +175,177 @@ describe("mending tangents", () => {
         assert.ok(near(tangents[3], [0, 1, 0, 1]));
         assert.ok(near(tangents[0], [1, 0, 0, 1]));
         assert.equal(mendTangents(document), 0);
+    });
+});
+
+describe("leaving out what doesn't move", () => {
+    it("drops a channel that holds a bone where it stands at rest, and keeps those that move it", () => {
+        const document = skinnedDocument();
+        const walk = clip(document, "Walk");
+        const spine = document.getRoot().listNodes().find((node) => node.getName() === "spine");
+        const still = document.createAnimationSampler().setInput(walk.listSamplers()[0].getInput()).setInterpolation("LINEAR");
+
+        // (The spine's scale, 1 throughout, as it is at rest)
+        still.setOutput(document.createAccessor().setType("VEC3").setArray(new Float32Array([1, 1, 1, 1, 1, 1, 1, 1, 1])).setBuffer(document.getRoot().listBuffers()[0]));
+        walk.addSampler(still).addChannel(document.createAnimationChannel().setTargetNode(spine).setTargetPath("scale").setSampler(still));
+
+        assert.equal(trimStill(document), 1);
+        assert.deepEqual(
+            walk.listChannels().map((channel) => `${channel.getTargetNode().getName()} ${channel.getTargetPath()}`),
+            ["root translation", "spine rotation"],
+        );
+        assert.equal(trimStill(document), 0);
+    });
+});
+
+describe("clips made up from others", () => {
+    const bone = (document, name) => document.getRoot().listNodes().find((node) => node.getName() === name);
+    const tip = (document, animation, time) => new Vector3(0, 1, 0).transformDirection(worldMatrix(bone(document, "spine"), channelsByNode(animation), time));
+    const turnOf = (document, animation, name, time) => new Quaternion().fromArray(sampleChannel(channelsByNode(animation).get(bone(document, name)).rotation, time));
+
+    it("eases from key to key, holding each", () => {
+        const keys = [[0, 0], [1, 10], [2, 10]];
+
+        assert.equal(eased(keys, -1), 0);
+        assert.equal(eased(keys, 0.5), 5);
+        assert.ok(eased(keys, 0.25) < 2.5);
+        assert.equal(eased(keys, 1.5), 10);
+        assert.deepEqual(eased([[0, [0, 0, 0]], [1, [2, 4, 6]]], 0.5), [1, 2, 3]);
+    });
+
+    it("is a stretch of the clip it's made from, with bones turned about the creature's axes", () => {
+        const document = skinnedDocument();
+        const walk = clip(document, "Walk");
+        const made = inventClip(document, { name: "Rear", from: "Walk", start: 0.5, seconds: 0.5, hold: 0, layers: [{ bones: ["spine"], turn: "pitch", keys: [[0, 0], [0.25, 90], [0.5, 90]] }] });
+
+        assert.equal(made.getName(), "Rear");
+        assert.ok(near(duration(made), 0.5));
+
+        // (Where it starts, as the walk is there; then its spine, standing up, pitched back a quarter turn)
+        assert.ok(near(tip(document, made, 0).toArray(), tip(document, walk, 0.5).toArray()));
+        assert.ok(near(tip(document, made, 0.5).toArray(), [0, 0, -1]));
+    });
+
+    it("holds each bone back on the one before by its lag, and turns each by its weight", () => {
+        const document = skinnedDocument();
+        const made = inventClip(document, { name: "Whip", from: "Walk", hold: 0, seconds: 1, layers: [{ bones: ["root", "spine"], turn: "yaw", lag: 0.5, weights: [1, 2], keys: [[0, 0], [0.5, 10], [1, 10]] }] });
+        const turned = (name, time) => (turnOf(document, made, name, time).angleTo(turnOf(document, made, name, 0)) * 180) / Math.PI;
+
+        assert.ok(near(turned("root", 0.5), 10, 1e-3));
+        assert.ok(near(turned("spine", 0.5), 0, 1e-3));
+        assert.ok(near(turned("spine", 1), 20, 1e-3));
+    });
+
+    it("moves a bone along the creature's axes, in its parent's frame, however that's turned", () => {
+        const document = skinnedDocument({ armatureTurn: Math.PI / 2 });
+        const walk = clip(document, "Walk");
+        const made = inventClip(document, { name: "Sink", from: "Walk", seconds: 1, layers: [{ bone: "root", move: [[0, [0, 0, 0]], [1, [0.5, -0.25, 2]]] }] });
+        const at = (animation, time) => new Vector3().setFromMatrixPosition(worldMatrix(bone(document, "root"), channelsByNode(animation), time));
+
+        assert.ok(near(at(made, 1).sub(at(walk, 1)).toArray(), [0.5, -0.25, 2]));
+    });
+
+    it("keys as often as the clip it's made from does, though its first bone is still", () => {
+        const document = skinnedDocument();
+        const buffer = document.getRoot().listBuffers()[0];
+        const stand = document.createAnimation("Stand");
+        const times = Array.from({ length: 21 }, (_, i) => i / 10);
+
+        // (A baked rig's: the root held still, its first and last keys only; the spine swaying)
+        for (const [name, path, at, values] of [
+            ["root", "translation", [0, 2], [0, 0, 0, 0, 0, 0]],
+            ["spine", "rotation", times, times.flatMap((t) => new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), 0.1 * Math.sin(t * Math.PI)).toArray())],
+        ]) {
+            const sampler = document
+                .createAnimationSampler()
+                .setInput(document.createAccessor().setType("SCALAR").setArray(new Float32Array(at)).setBuffer(buffer))
+                .setOutput(document.createAccessor().setType(path === "rotation" ? "VEC4" : "VEC3").setArray(new Float32Array(values)).setBuffer(buffer));
+
+            stand.addSampler(sampler).addChannel(document.createAnimationChannel().setTargetNode(bone(document, name)).setTargetPath(path).setSampler(sampler));
+        }
+
+        const made = inventClip(document, { name: "Look", from: "Stand", layers: [{ bones: ["spine"], turn: "yaw", keys: [[0, 0], [1, 30], [2, 0]] }] });
+        const turned = (turnOf(document, made, "spine", 1).angleTo(turnOf(document, stand, "spine", 1)) * 180) / Math.PI;
+
+        assert.equal(channelsByNode(made).get(bone(document, "spine")).rotation.getSampler().getInput().getCount(), 21);
+        assert.ok(near(turned, 30, 1e-2));
+    });
+
+    it("grafts another clip's motion onto some of its bones", () => {
+        const document = skinnedDocument();
+        const wave = clip(document, "Wave");
+        const made = inventClip(document, { name: "Walk and wave", from: "Walk", layers: [{ graft: "Wave", bones: ["spine"] }] });
+
+        assert.ok(near(turnOf(document, made, "spine", 0.75).toArray(), turnOf(document, wave, "spine", 0.75).toArray()));
+        assert.ok(near(sampleChannel(channelsByNode(made).get(bone(document, "root")).translation, 1), [0, 0, 2]));
+    });
+
+    it("says which clip or bone isn't there", () => {
+        const document = skinnedDocument();
+
+        assert.throws(() => inventClip(document, { name: "Odd", from: "Swim", layers: [] }), /Odd: there's no clip Swim/);
+        assert.throws(() => inventClip(document, { name: "Odd", from: "Walk", layers: [{ bones: ["tail"], turn: "yaw", keys: [[0, 0]] }] }), /there's no bone tail/);
+    });
+});
+
+describe("lower detail packed in", () => {
+    it("gives each mesh a simpler copy on the same skeleton and material, marked with its level", async () => {
+        const document = skinnedDocument();
+        const body = document.getRoot().listMeshes()[0];
+        const [lower] = await packLod(document, 1, { ratio: 0.5 });
+        const node = document.getRoot().listNodes().find((one) => one.getMesh() === lower);
+        const full = document.getRoot().listNodes().find((one) => one.getMesh() === body);
+
+        assert.equal(lower.getName(), "Body.lod1");
+        assert.equal(node.getName(), "Body.lod1");
+        assert.deepEqual(node.getExtras(), { lod: 1 });
+        assert.equal(node.getSkin(), full.getSkin());
+        assert.equal(lower.listPrimitives()[0].getMaterial(), body.listPrimitives()[0].getMaterial());
+        assert.notEqual(lower.listPrimitives()[0].getAttribute("POSITION"), body.listPrimitives()[0].getAttribute("POSITION"));
+        assert.ok(document.getRoot().listScenes()[0].listChildren().includes(node));
+
+        // (A level's own copies aren't copied again)
+        assert.equal((await packLod(document, 2, { ratio: 0.5 })).length, 1);
+    });
+});
+
+describe("textures the GPU keeps compressed (KTX2)", () => {
+    it("knows a normal map, a colour map and a data map by what they're used as", () => {
+        const document = skinnedDocument();
+        const [normal, colour, data] = ["n", "c", "d"].map((name) => document.createTexture(name));
+
+        document.createMaterial().setNormalTexture(normal).setBaseColorTexture(colour).setOcclusionTexture(data).setMetallicRoughnessTexture(data);
+
+        const uses = textureUses(document);
+
+        assert.deepEqual([uses.get(normal), uses.get(colour), uses.get(data)], ["normal", "color", "data"]);
+    });
+
+    it("halves an image (each pixel the mean of four) down to a size", () => {
+        const image = { data: new Uint8Array(4 * 4 * 4).map((_, i) => (i % 4 === 3 ? 255 : (i >> 2) % 2 ? 200 : 100)), width: 4, height: 4 };
+        const small = shrinkImage(image, 1);
+
+        assert.deepEqual([small.width, small.height], [1, 1]);
+        assert.deepEqual([...small.data], [150, 150, 150, 255]);
+    });
+
+    it("encodes an image as KTX2, in ETC1S or UASTC, with mipmaps", async () => {
+        const image = { data: new Uint8Array(8 * 8 * 4).map((_, i) => (i % 4 === 3 ? 255 : i % 251)), width: 8, height: 8 };
+
+        for (const mode of ["etc1s", "uastc"]) {
+            const bytes = await encodeImage(image, { mode, kind: "color" });
+
+            // (KTX2's identifier, then its width and height, and its levels: 8, 4, 2 and 1 across)
+            assert.deepEqual([...bytes.slice(0, 12)], [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a]);
+            assert.deepEqual([20, 24, 40].map((at) => new DataView(bytes.buffer, bytes.byteOffset).getUint32(at, true)), [8, 8, 4]);
+        }
+    });
+
+    it("reads a PNG's pixels as RGBA", () => {
+        // (A 1x1 red PNG, made by hand)
+        const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC", "base64");
+        const { data, width, height } = decodeImage(new Uint8Array(png), "image/png");
+
+        assert.deepEqual([width, height, ...data], [1, 1, 255, 0, 0, 255]);
     });
 });

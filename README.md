@@ -634,7 +634,9 @@ client/                 The game (static files served to the browser)
   uniform-lab.html      The uniform lab: each people's soldiers and officials (with world-map.css)
   fire-lab.html         The fire lab: every kind of fire and the fire spells (with world-map.css)
   sound-studio.html     The sound studio: every sound described and played (with sound-studio.css)
-  vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map)
+  vendor/three-r186/    Three.js (minified by scripts/vendor-three.js; loaded through an import map),
+                        with the Basis Universal transcoder KTX2 textures are read with (fetched
+                        only once a model has one: the catalog's basis-transcoder)
   vendor/recast-navigation-0.43.1/  Recast and Detour as WebAssembly (scripts/vendor-recast.js): the
                         navigation meshes (core/navigation.js); its memory starting with 16 MB
                         (scripts/wasm-memory.js)
@@ -853,7 +855,8 @@ scripts/                vendor-three.js, build-characters.js, build-manifest.js,
                         build-clips.js (the lab's Mesh2Motion clips), vendor-recast.js (with
                         wasm-memory.js: how much memory a WebAssembly module starts with),
                         e2e-shard.js and e2e-durations.js (CI's split of the browser tests),
-                        balance.js (the wild against sides of each size, rules alone: npm run balance)
+                        balance.js (the wild against sides of each size, rules alone: npm run balance),
+                        licences/ (vendored code's licences that its package doesn't carry)
 utilities/blenderpipeline/  Turns .blend files into game-ready GLB models, animations and all
                         (its own README.md, dependencies and tests)
 .github/workflows/      CI (ci.yml) and publishing to GitHub Pages (pages.yml)
@@ -1017,6 +1020,13 @@ asset out of this public repository.
   (`client/vendor/meshoptimizer-1.3.0/`) and its decoder (Three.js's copy,
   `client/vendor/three-r186/addons/libs/`), MIT license (`LICENSE.md` and
   `meshopt_decoder.LICENSE.md` there).
+- KTX2 textures (kept compressed on the GPU) read with Three.js's KTX2Loader and the
+  [Basis Universal](https://github.com/BinomialLLC/basis_universal) transcoder by Binomial LLC
+  (Apache License 2.0, with its notice: `LICENSE` and `NOTICE.md` in
+  `client/vendor/three-r186/addons/libs/basis/`), [KTX-Parse](https://github.com/donmccurdy/KTX-Parse)
+  and [zstddec](https://github.com/donmccurdy/zstddec) by Don McCurdy (MIT license; zstddec's
+  WebAssembly is Zstandard's decoder, BSD license: `ktx-parse.LICENSE` and `zstddec.LICENSE` in
+  `client/vendor/three-r186/addons/libs/`).
 - Navigation meshes: [Recast and Detour](https://github.com/recastnavigation/recastnavigation) by
   Mikko Mononen (zlib license) as built by
   [recast-navigation-js](https://github.com/isaac-mason/recast-navigation-js) by Isaac Mason (MIT

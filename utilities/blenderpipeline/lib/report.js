@@ -19,19 +19,31 @@ export async function inspectGlb(file) {
     const bytes = await readFile(file);
     const document = await io.readBinary(new Uint8Array(bytes));
     const root = document.getRoot();
-    const meshes = { meshes: root.listMeshes().length, drawCalls: 0, vertices: 0, triangles: 0, skinned: root.listSkins().length > 0, joints: 0, influences: 0, morphTargets: 0 };
+    const meshes = { meshes: 0, drawCalls: 0, vertices: 0, triangles: 0, skinned: root.listSkins().length > 0, joints: 0, influences: 0, morphTargets: 0 };
+    // (Lower-detail meshes packed beside the full one, by level: counted on their own)
+    const levelOf = new Map(root.listNodes().filter((node) => node.getMesh()).map((node) => [node.getMesh(), node.getExtras().lod ?? 0]));
+    const packed = new Map();
 
     for (const mesh of root.listMeshes()) {
+        const level = levelOf.get(mesh) ?? 0;
+        const counts = level ? (packed.get(level) ?? { level, meshes: 0, drawCalls: 0, vertices: 0, triangles: 0 }) : meshes;
+
+        counts.meshes += 1;
+
         for (const primitive of mesh.listPrimitives()) {
             const count = primitive.getAttribute("POSITION")?.getCount() ?? 0;
             const indices = primitive.getIndices();
             const sets = primitive.listSemantics().filter((semantic) => semantic.startsWith("JOINTS_")).length;
 
-            meshes.drawCalls += 1;
-            meshes.vertices += count;
-            meshes.triangles += primitive.getMode() === 4 ? (indices ? indices.getCount() : count) / 3 : 0;
+            counts.drawCalls += 1;
+            counts.vertices += count;
+            counts.triangles += primitive.getMode() === 4 ? (indices ? indices.getCount() : count) / 3 : 0;
             meshes.influences = Math.max(meshes.influences, sets * 4);
             meshes.morphTargets = Math.max(meshes.morphTargets, primitive.listTargets().length);
+        }
+
+        if (level) {
+            packed.set(level, counts);
         }
     }
 
@@ -42,7 +54,11 @@ export async function inspectGlb(file) {
     const textures = root.listTextures().map((texture) => {
         const [width, height] = ImageUtils.getSize(texture.getImage(), texture.getMimeType()) ?? [0, 0];
 
-        return { name: texture.getName(), mimeType: texture.getMimeType(), width, height, bytes: texture.getImage().byteLength, gpuBytes: Math.round((width * height * 4 * 4) / 3) };
+        // (On the GPU, mipmaps and all: 4 bytes a pixel decoded, or 1 kept compressed as KTX2 is:
+        // ASTC 4x4, BC7 or ETC2 with alpha, the most a device's choice takes)
+        const perPixel = texture.getMimeType() === "image/ktx2" ? 1 : 4;
+
+        return { name: texture.getName(), mimeType: texture.getMimeType(), width, height, bytes: texture.getImage().byteLength, gpuBytes: Math.round((width * height * perPixel * 4) / 3) };
     });
 
     const materials = root.listMaterials().map((material) => ({
@@ -67,6 +83,7 @@ export async function inspectGlb(file) {
         extensionsUsed: root.listExtensionsUsed().map((extension) => extension.extensionName).sort(),
         extensionsRequired: root.listExtensionsRequired().map((extension) => extension.extensionName).sort(),
         ...meshes,
+        packedLods: [...packed.values()].sort((a, b) => a.level - b.level),
         materials,
         textures,
         clips,
@@ -104,6 +121,13 @@ export async function makeReport(config, { blender, optimized, glb }) {
     const lods = [];
 
     for (const lod of optimized.lods) {
+        if (lod.packed) {
+            const read = file.packedLods.find((one) => one.level === lod.level);
+
+            lods.push({ packed: true, level: lod.level, meshes: lod.meshes, ratio: lod.ratio, error: lod.error, triangles: read.triangles, vertices: read.vertices, drawCalls: read.drawCalls });
+            continue;
+        }
+
         const read = await inspectGlb(lod.file);
 
         lods.push({ file: relative(lod.file), ratio: lod.ratio, error: lod.error, triangles: read.triangles, vertices: read.vertices, kilobytes: round(read.bytes / 1024, 1) });
@@ -113,7 +137,9 @@ export async function makeReport(config, { blender, optimized, glb }) {
         const done = optimized.clips.find((one) => one.name === clip.name) ?? {};
         const action = blender.actions?.find((one) => one.name === clip.name);
 
-        return { ...clip, loops: done.loops, inPlace: done.inPlace, rootMotion: done.rootMotion, from: action?.from ?? null };
+        const invented = optimized.invented?.find((one) => one.name === clip.name);
+
+        return { ...clip, loops: done.loops, inPlace: done.inPlace, rootMotion: done.rootMotion, from: action?.from ?? null, ...(invented ? { madeFrom: invented.from } : {}) };
     });
 
     const warnings = [...(blender.warnings ?? [])];
@@ -151,6 +177,8 @@ export async function makeReport(config, { blender, optimized, glb }) {
             materialExtensionsLeftOut: optimized.strippedExtensions ?? [],
             texturesOfOneColourMadeFactors: optimized.texturesMadeFactors ?? 0,
             tangentsMended: optimized.tangentsMended ?? 0,
+            stillChannelsTrimmed: optimized.stillChannelsTrimmed ?? 0,
+            ktx2: optimized.ktx2 ?? [],
         },
         budgets,
         validation: { beforeCompression: optimized.validation, final: optimized.finalValidation },
@@ -196,7 +224,7 @@ export function summarize(report) {
     lines.push(`  ${width} x ${height} x ${length} m (across, up, along), reaching ${bounds.radius.toFixed(2)} m from its origin`);
 
     for (const lod of report.lods) {
-        lines.push(`  ${lod.file}: ${lod.triangles} triangles, ${lod.kilobytes} KB`);
+        lines.push(lod.packed ? `  lower detail ${lod.level} (in the GLB): ${lod.triangles} triangles` : `  ${lod.file}: ${lod.triangles} triangles, ${lod.kilobytes} KB`);
     }
 
     const over = report.budgets.filter((budget) => !budget.ok);
@@ -217,7 +245,7 @@ export function summarize(report) {
 }
 
 function describeClip(clip) {
-    const parts = [];
+    const parts = clip.madeFrom ? [`made from ${clip.madeFrom}`] : [];
 
     if (clip.loops) {
         parts.push("loops");

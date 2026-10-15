@@ -63,7 +63,7 @@ describe("every example builds into what dist/ has", () => {
 
             // And, built with the Blender that built dist/, the very same files
             if (report.built.blender === committed.built.blender) {
-                for (const glb of [`${name}.glb`, ...report.lods.map((lod) => path.basename(lod.file))]) {
+                for (const glb of [`${name}.glb`, ...report.lods.filter((lod) => !lod.packed).map((lod) => path.basename(lod.file))]) {
                     assert.ok(readFileSync(path.join(out, glb)).equals(readFileSync(path.join(dist, glb))), `${glb} differs from dist/${glb} (npm run build, and commit dist/)`);
                 }
             }
@@ -72,7 +72,7 @@ describe("every example builds into what dist/ has", () => {
 
     it("has a report and a GLB in dist/ for every example, and nothing else", () => {
         const names = examples.map((file) => path.basename(file, ".json"));
-        const expected = names.flatMap((name) => [`${name}.glb`, `${name}.report.json`, ...JSON.parse(readFileSync(path.join(dist, `${name}.report.json`), "utf8")).lods.map((lod) => path.basename(lod.file))]);
+        const expected = names.flatMap((name) => [`${name}.glb`, `${name}.report.json`, ...JSON.parse(readFileSync(path.join(dist, `${name}.report.json`), "utf8")).lods.filter((lod) => !lod.packed).map((lod) => path.basename(lod.file))]);
 
         assert.deepEqual(readdirSync(dist).filter((file) => !file.startsWith(".")).sort(), expected.sort());
     });

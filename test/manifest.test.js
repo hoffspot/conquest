@@ -4,7 +4,7 @@ import { readFile, stat } from "node:fs/promises";
 import { describe, test } from "node:test";
 import { catalog, catalogSource, manifestGroups, manifestSource, releaseOf } from "../scripts/build-manifest.js";
 import { ASSETS } from "../client/js/app/assets.js";
-import { releaseOf as releaseTold } from "../client/js/app/catalog.js";
+import { filesOf, releaseOf as releaseTold } from "../client/js/app/catalog.js";
 import { MANIFEST } from "../client/js/app/manifest.js";
 import { GAME_BODY } from "../client/js/characters/body.js";
 import { readHumanFiles } from "../scripts/lib/human-data.js";
@@ -139,5 +139,19 @@ describe("the catalog of models downloaded as they're wanted (client/js/app/asse
         assert.ok(told.boot.includes(`https://example.github.io/conquest/characters/${GAME_BODY}.bin?h=${await hashOf(`characters/${GAME_BODY}.bin`)}`));
         assert.equal(told.boot.length, MANIFEST.flatMap(({ files }) => files).filter(([, , hash]) => hash).length);
         assert.deepEqual(told.assets, [`https://example.github.io/conquest/models/kaykit/barrel.gltf?h=${await hashOf("models/kaykit/barrel.gltf")}`]);
+    });
+
+    test("names an entry's files, each at its address with its hash: the Basis Universal transcoder's, which KTX2 textures are read with", async () => {
+        const page = "https://example.github.io/conquest/";
+        const folder = "vendor/three-r186/addons/libs/basis";
+        const files = filesOf(ASSETS, "basis-transcoder", page);
+
+        assert.deepEqual(Object.keys(files), ["basis_transcoder.js", "basis_transcoder.wasm"]);
+
+        for (const [name, url] of Object.entries(files)) {
+            assert.equal(url, `${page}${folder}/${name}?h=${await hashOf(`${folder}/${name}`)}`);
+        }
+
+        assert.deepEqual(filesOf(ASSETS, "nothing", page), {});
     });
 });
