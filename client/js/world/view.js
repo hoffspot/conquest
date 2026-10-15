@@ -15,6 +15,7 @@
 
 import * as THREE from "three";
 import { daylight } from "../core/daytime.js";
+import { Steps } from "../core/steps.js";
 import { SKY_GLOW, skyAt } from "./daytime.js";
 import { WINDOW_LIGHT } from "./art/engine/atlas.js";
 import { bakeEnvironments, SkyLight } from "./environment.js";
@@ -156,6 +157,13 @@ export function toneOf(r, g, b, exposure = 1) {
 }
 
 const PREVIEW_BACKGROUND = new THREE.Color(0x221c16);
+
+// The world behind the pack (#freeze): the screen as it was drawn, toned already, its colours
+// taken down to `FROZEN_DIM` of what they were, as they are and no more (no tone or colour space
+// of three.js's put on them again)
+const FROZEN_DIM = 0.27;
+const FROZEN_VERTEX = "varying vec2 vUv;\nvoid main() {\n    vUv = uv;\n    gl_Position = vec4(position.xy, 0.0, 1.0);\n}";
+const FROZEN_FRAGMENT = "uniform sampler2D picture;\nuniform float dim;\nvarying vec2 vUv;\nvoid main() {\n    gl_FragColor = vec4(texture2D(picture, vUv).rgb * dim, 1.0);\n}";
 const ABOVE_HORIZON = 45;
 
 // Looking up, the camera comes down behind the player no lower than this over the ground
@@ -1600,30 +1608,35 @@ export class View {
         return pixels;
     }
 
-    // The world drawn once into a picture (half as sharp), to show behind the pack, still and dimmed
+    // The world drawn once, onto the screen as every frame is, and copied into a picture to show
+    // behind the pack, still and dimmed. (Not drawn into a picture of its own: three.js draws into
+    // one untoned and linear, with a shader of its own for every material, so every one in sight
+    // had a second made, all in that one frame: 40 at a town's gate, more than an iPhone could
+    // take as the pack opened, the page lost)
     #freeze(size) {
         this.#thaw();
+        Steps.begun?.("the world drawn behind the pack");
 
-        const target = new THREE.WebGLRenderTarget(Math.max(1, Math.round(size.x / 2)), Math.max(1, Math.round(size.y / 2)), { type: THREE.HalfFloatType });
-        const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({ map: target.texture, color: 0x6a6a6a, depthTest: false, depthWrite: false }));
+        const picture = new THREE.FramebufferTexture(size.x, size.y);
+        const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: { picture: { value: picture }, dim: { value: FROZEN_DIM } }, vertexShader: FROZEN_VERTEX, fragmentShader: FROZEN_FRAGMENT, depthTest: false, depthWrite: false, toneMapped: false }));
         const scene = new THREE.Scene();
         const lights = [];
 
         this.#cutAway(0);
         this.sky.update(this.camera, performance.now() / 1000);
-        this.renderer.setRenderTarget(target);
+        this.renderer.setRenderTarget(null);
         this.#updateShown();
         this.#draw(this.camera);
-        this.renderer.setRenderTarget(null);
+        this.renderer.copyFramebufferToTexture(picture);
         scene.add(quad);
         this.scene.traverse((node) => node.isLight && lights.push(node));
-        this.frozen = { target, scene, camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), width: size.x, height: size.y, lights };
+        this.frozen = { picture, scene, camera: new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), width: size.x, height: size.y, lights };
     }
 
     // The picture of the world let go (the pack closed)
     #thaw() {
         if (this.frozen) {
-            this.frozen.target.dispose();
+            this.frozen.picture.dispose();
             this.frozen.scene.children[0].geometry.dispose();
             this.frozen.scene.children[0].material.dispose();
             this.frozen = null;
