@@ -4,7 +4,7 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
         <meta name="theme-color" content="#101418">
-        <meta name="description" content="Model viewer: every creature of the wilds and each dungeon's bosses, rendered as the game draws them, every animation played, paused and stepped, with its skeleton, wireframe and details">
+        <meta name="description" content="Model viewer: every creature of the wilds, each dungeon's bosses and the game's people, rendered as the game draws them, every animation played, paused and stepped, with its skeleton, wireframe and details">
 
         <title>Model Viewer</title>
 
@@ -251,6 +251,18 @@
         </div>
 
         <aside id="panel" aria-label="Inspect">
+            <section id="person" aria-labelledby="personing" hidden>
+                <h2 id="personing">Person</h2>
+                <div class="row">
+                    <select id="people" aria-label="People"></select>
+                    <select id="sex" aria-label="Woman or man">
+                        <option value="f">Woman</option>
+                        <option value="m">Man</option>
+                    </select>
+                    <select id="weapon" aria-label="Weapon"></select>
+                </div>
+            </section>
+
             <section aria-labelledby="playback">
                 <h2 id="playback">Playback</h2>
                 <div class="row">

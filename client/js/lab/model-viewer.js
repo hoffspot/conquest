@@ -1,7 +1,9 @@
 // The model viewer (model-viewer.html; it was the creature lab, creature-lab.html, which sends
-// on here): every creature of the wilds (beasts/looks.js), and each dungeon's bosses and
-// mini-bosses, one at a time, doing what each does in the game (standing, walking, running,
-// attacking, struck, resting, dying, flying), to look at from any side and watch move:
+// on here): every creature of the wilds (beasts/looks.js), each dungeon's bosses and
+// mini-bosses, and the game's people (an adventurer, a soldier, each of the folk's roles: of any
+// people, a woman or a man), one at a time, doing what each does in the game (standing, walking,
+// running, attacking, struck, resting, dying, flying; a person's every motion, as the motion
+// check plays them: characters/motioncheck.js), to look at from any side and watch move:
 //
 // - played slower or faster, paused, and stepped a frame at a time either way (inspect.js
 //   Rewind), each move once or over and over;
@@ -12,7 +14,8 @@
 //
 // ?creature=wolf&action=walk&seed=3 opens on one (a dungeon's boss or mini-boss:
 // ?creature=caves:boss:trollKing, its theme, its rank and its id there: beasts/champions.js; and
-// ?clip=Roar one of its model's clips); window.lab lets a script do the same and step time on
+// ?clip=Roar one of its model's clips); ?person=smith&people=lizard&sex=m opens on one of the
+// people (?person=adventurer or soldier, &weapon=bow); window.lab lets a script do the same and step time on
 // exactly (for renders: .shots, and e2e/model-viewer.spec.js). The ox is shown in its wagon's
 // shafts, laden with ?load=wood (or stone, metal; none: empty) in ?people=human's timber.
 
@@ -20,17 +23,25 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { ASSETS } from "../app/assets.js";
+import { HERO_PEOPLES } from "../app/heroes.js";
 import { filesOf } from "../app/catalog.js";
 import { dressCreature, restsOf } from "../beasts/beast.js";
 import { LOOKS } from "../beasts/looks.js";
 import { hasModel, MODELS, modelOf, wantModel } from "../beasts/model.js";
-import { ATTACKS, RESTS } from "../characters/actions.js";
+import { ATTACKS, EMOTE_WAYS, RESTS } from "../characters/actions.js";
+import { Character } from "../characters/character.js";
+import { folkLook } from "../characters/folk.js";
 import { loadCharacterKit } from "../characters/kit.js";
+import { motions } from "../characters/motioncheck.js";
+import { ARMS, soldierLook } from "../characters/soldiers.js";
 import { CREATURES } from "../core/creatures.js";
 import { THEMES } from "../core/dungeons/themes.js";
-import { WEAPONS, weaponOf } from "../core/weapons.js";
+import { ACT_TIMES, ROLES } from "../core/roles.js";
+import { allAtOnce } from "../core/steps.js";
+import { STARTING_WEAPONS, WEAPONS, weaponOf } from "../core/weapons.js";
 import { readKtx2With } from "../world/art/engine/models.js";
 import { hitch } from "../world/art/kits/wagon.js";
+import { Avatar } from "../world/avatar.js";
 import { detailsOf, Rewind, wireframe } from "./inspect.js";
 
 const canvas = document.querySelector("#view");
@@ -202,6 +213,109 @@ function resize() {
     }
 }
 
+// --- The people ---
+
+// Who's shown, of the game's people: of which people (a RACES id), a woman or a man ("f", "m"),
+// and fighting with what (a WEAPONS key: an adventurer's or a soldier's), chosen in the panel
+const person = {
+    people: HERO_PEOPLES.some(({ id }) => id === params.get("people")) ? params.get("people") : "human",
+    sex: params.get("sex") === "m" ? "m" : "f",
+    weapon: params.get("weapon") in WEAPONS ? params.get("weapon") : "sword",
+};
+
+// The folk's roles, each of them shown as the game dresses them (characters/folk.js): all but
+// the adventurer's and the sentry's, shown as an adventurer and a soldier
+const FOLK_ROLES = Object.keys(ROLES).filter((role) => role !== "adventurer" && role !== "sentry");
+
+// An adventurer's calling (their look: folk.js) by what they fight with
+const CALLING = { sword: "warrior", hammer: "warrior", greatsword: "warrior", axe: "warrior", cleaver: "warrior", gauntlets: "rogue", boots: "rogue", bow: "ranger", wand: "mage", grimoire: "mage", staff: "cleric" };
+
+// What's a weapon of what's carried (taken away for the one chosen)
+const WEAPON_ITEMS = new Set(Object.values(WEAPONS).flatMap(({ equipment = [] }) => equipment));
+
+// Every motion the characters make (the motion check's: characters/motioncheck.js), by its id
+const MOTIONS = new Map(motions().map((motion) => [motion.id, motion]));
+
+/** Whether an id in the picker is one of the people's ("person:" and a role, "adventurer" or "soldier"). */
+const isPerson = (id) => String(id).startsWith("person:");
+
+// The weapons one of the people may be shown with: an adventurer any a player may start with
+// (and an orc's cleaver), a soldier their people's (soldiers.js ARMS); none, one of the folk
+function weaponsOf(role, people) {
+    return role === "adventurer" ? [...STARTING_WEAPONS, "cleaver"] : role === "soldier" ? [...new Set(ARMS[people] ?? ["sword"])] : [];
+}
+
+/**
+ * One of the people (`role`: "adventurer", "soldier", or one of the folk's roles) as the game
+ * dresses them, of `person`'s people and sex, one of their kind (`seed`): { role (whose rests
+ * they have: roles.js), weapon, shape, look, equipment, walk }.
+ */
+function personLook(role, seed) {
+    const { people, sex } = person;
+    const arms = weaponsOf(role, people);
+    const weapon = arms.length ? (arms.includes(person.weapon) ? person.weapon : arms[0]) : null;
+
+    if (role === "soldier") {
+        return { role: "sentry", weapon, ...soldierLook({ people, weapon, sex, seed }) };
+    }
+
+    if (role === "adventurer") {
+        const look = folkLook({ role, look: CALLING[weapon] ?? "warrior", sex, seed, people });
+
+        return { role, weapon, ...look, equipment: [...look.equipment.filter((item) => !WEAPON_ITEMS.has(item)), ...WEAPONS[weapon].equipment] };
+    }
+
+    // (A role with no one of that sex in it: the other)
+    try {
+        return { role, weapon: null, ...folkLook({ role, sex, seed, people }) };
+    } catch {
+        return { role, weapon: null, ...folkLook({ role, sex: sex === "f" ? "m" : "f", seed, people }) };
+    }
+}
+
+// One of the people, drawn as the game draws them (app/game.js #dressing: a character, and an
+// Avatar to move it), resting as their role does
+function dressPerson(role, seed) {
+    const look = personLook(role, seed);
+    const character = allAtOnce(Character.building(kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: 1, merge: true }));
+    const avatar = new Avatar(character, { walk: look.walk, guard: look.weapon ? WEAPONS[look.weapon].attacks[0].animation : null });
+
+    character.sheathe(true);
+    avatar.rest = (variant = null) => {
+        avatar.actions.setSeated(Boolean(ROLES[look.role]?.seated));
+        avatar.actions.rest(look.role, { variant });
+    };
+
+    return { avatar, look };
+}
+
+// What one of the people's motions is called, under what sort it is ({ group, label }), for
+// one of them with `weapon`, resting as `role` does; or null, if it isn't one of theirs
+function motionOf({ id, group, label }, { weapon, role }) {
+    const [, first, second] = id.split("/");
+
+    switch (group) {
+        case "attack":
+            return first === weapon ? { group: `Attacks (${WEAPONS[weapon].label.toLowerCase()})`, label } : null;
+        case "draw":
+            return first === weapon ? { group: "Drawing and putting away", label: id.startsWith("draw/") ? "drawing it" : "putting it away" } : null;
+        case "cast":
+            return { group: "Spells", label: `${first === "castHeal" ? "a heal" : "a hex"}: ${label}` };
+        case "flinch":
+            return { group: "Struck and dodging", label: id.startsWith("dodge/") ? `dodging ${first}` : `${first}${second ? ` (${words(second)})` : ""}` };
+        case "fall":
+            return { group: "Falling", label: first.replace(/-/g, " ") };
+        case "act":
+            return ACT_TIMES[first].by === role ? { group: "Work", label: first } : null;
+        case "emote":
+            return id.endsWith("/armed") ? null : { group: "Emotes", label: EMOTE_WAYS[first]?.[Number(second)]?.name ?? first };
+        case "rest":
+            return first === role && /^rest\/[^/]+\/\d+$/.test(id) ? { group: "Rests", label } : null;
+        default:
+            return null;
+    }
+}
+
 // --- The creature ---
 
 status.textContent = "Loading the body…";
@@ -250,13 +364,56 @@ function championOf(key) {
     return one ? { creature: one.creature, rank, regalia, title: one.title, theme: THEMES[theme] } : null;
 }
 
-/** Show one of the creatures (a LOOKS id, or a dungeon's champion: championOf), one of its kind (`which`). */
+/**
+ * Show one of the creatures (a LOOKS id, or a dungeon's champion: championOf), or one of the
+ * people ("person:" and a role: isPerson), one of its kind (`which`).
+ */
 function show(id, which = seed) {
     if (current) {
         current.avatar.object.removeFromParent();
         current.avatar.character.dispose();
     }
 
+    if (isPerson(id)) {
+        showPerson(id, which);
+    } else {
+        showCreature(id, which);
+    }
+
+    scene.add(current.avatar.object);
+    along = 0;
+    current.avatar.place(0, 0, Math.PI / 2);
+    seed = which;
+    picker.value = id;
+    document.querySelector("#name").textContent = current.name;
+    document.querySelector("#about").textContent = current.about;
+    frame();
+    act("stand");
+
+    // (Only a winged one flies, and comes down to land; only one that takes to the air over a
+    // fight hovers: creatures.js `hover`; only one with a weapon or a bite attacks)
+    for (const button of document.querySelectorAll("[data-action=fly], [data-action=land]")) {
+        button.hidden = !current.avatar.winged;
+    }
+
+    document.querySelector("[data-action=hover]").hidden = !CREATURES[current.kind]?.hover;
+    document.querySelector("[data-action=attack]").hidden = Boolean(current.person) && !current.weapon;
+
+    // (Who one of the people is, chosen in the panel: of which people, a woman or a man, and with
+    // what, if they fight)
+    showWho();
+
+    // (Watched as the last one was: its bones and wireframe shown if they were)
+    showBones();
+    wireframe(current.avatar.object, looks.wireframe.checked);
+    listMoves();
+    describe();
+
+    return current;
+}
+
+// One of the creatures, as the game draws it (beasts/beast.js dressCreature)
+function showCreature(id, which) {
     const champion = championOf(id);
     const kind = champion?.creature ?? id;
     const weapon = ABOUT[kind]?.[2] ?? null;
@@ -267,16 +424,15 @@ function show(id, which = seed) {
         hitch(avatar, LOOKS.ox, { load: params.get("load") ?? "wood", people: params.get("people") ?? "human", seed: which });
     }
 
-    scene.add(avatar.object);
-    along = 0;
-    avatar.place(0, 0, Math.PI / 2);
-    current = { id, kind, avatar, weapon, size: Math.max(avatar.character.height, (avatar.plan?.length ?? 0.6) * (avatar.scale ?? 1)) };
-    seed = which;
-    picker.value = id;
-    document.querySelector("#name").textContent = champion ? champion.title.replace(/^the /, "The ") : (ABOUT[id]?.[0] ?? id);
-    document.querySelector("#about").textContent = champion ? `${champion.rank === "boss" ? "The boss" : "A mini-boss"} of ${champion.theme.name}: ${ABOUT[kind]?.[0] ?? kind}` : (ABOUT[id]?.[1] ?? "");
-    frame();
-    act("stand");
+    current = {
+        id,
+        kind,
+        avatar,
+        weapon,
+        person: null,
+        name: champion ? champion.title.replace(/^the /, "The ") : (ABOUT[id]?.[0] ?? id),
+        about: champion ? `${champion.rank === "boss" ? "The boss" : "A mini-boss"} of ${champion.theme.name}: ${ABOUT[kind]?.[0] ?? kind}` : (ABOUT[id]?.[1] ?? ""),
+    };
 
     // (One drawn from a model: its stand-in till the model's read, then the model, beasts/model.js,
     // doing what its stand-in was, or the clip asked for of the model meanwhile: ?clip=)
@@ -295,22 +451,23 @@ function show(id, which = seed) {
             }
         });
     }
+}
 
-    // (Only a winged one flies, and comes down to land; only one that takes to the air over a
-    // fight hovers: creatures.js `hover`)
-    for (const button of document.querySelectorAll("[data-action=fly], [data-action=land]")) {
-        button.hidden = !avatar.winged;
-    }
+// One of the people, of the people, sex and weapon chosen (`person`)
+function showPerson(id, which) {
+    const role = id.slice("person:".length);
+    const { avatar, look } = dressPerson(role, which);
+    const people = HERO_PEOPLES.find(({ id: each }) => each === person.people).label;
 
-    document.querySelector("[data-action=hover]").hidden = !CREATURES[kind]?.hover;
-
-    // (Watched as the last one was: its bones and wireframe shown if they were)
-    showBones();
-    wireframe(avatar.object, looks.wireframe.checked);
-    listMoves();
-    describe();
-
-    return current;
+    current = {
+        id,
+        kind: id,
+        avatar,
+        weapon: look.weapon,
+        person: { role, rests: look.role, weapon: look.weapon, people: person.people, sex: person.sex },
+        name: role === "adventurer" ? "Adventurer" : role === "soldier" ? "Soldier" : ROLES[role].title,
+        about: [people, person.sex === "f" ? "woman" : "man", look.weapon ? WEAPONS[look.weapon].label.toLowerCase() : null, role === "adventurer" ? "as the players and their followers" : null].filter(Boolean).join(" · "),
+    };
 }
 
 // The camera on it: three-quarters from the front, far enough to see all of it, as wide as what
@@ -351,7 +508,33 @@ function act(what, which = null, variant = null, { again: repeated = false } = {
     avatar.actions.revive();
     again = 0;
 
-    if (what === "attack" || what === "hover") {
+    // (One of the people standing, walking or running: off guard, their weapon put away, and not
+    // sat down, as the game's are going about; each motion as the motion check plays it)
+    if (current.person && what !== "motion") {
+        avatar.actions.setSeated(false);
+        avatar.actions.setGuard(what === "attack");
+        avatar.character.sheathe(what !== "attack");
+    }
+
+    if (what === "motion") {
+        const motion = MOTIONS.get(which);
+        const { people, sex, weapon } = current.person;
+
+        avatar.actions.setSeated(false);
+        avatar.character.sheathe(motion.sheathed);
+        motion.start({ actions: avatar.actions, walker: avatar.walker, character: avatar.character }, { people, sex });
+
+        // (On guard as they are, with what they carry: a spell's cast or a flinch is played on
+        // guard with their people's first weapon)
+        if (!["attack", "draw"].includes(motion.group) && !motion.sheathed) {
+            avatar.actions.setWeapon(weapon ? WEAPONS[weapon].attacks[0].animation : null);
+            avatar.actions.setGuard(Boolean(weapon));
+            avatar.character.sheathe(!weapon);
+        }
+
+        every = motion.seconds + 0.6;
+        shown(motionOf(motion, { weapon, role: current.person.rests })?.label ?? which);
+    } else if (what === "attack" || what === "hover") {
         // (A creature's own attack as the game times it: the one named, or its first bite or
         // swipe; a model's clips play over that. Hovering, its fire breathed down)
         const own = weaponOf(CREATURES[kind]?.weapon)?.attacks ?? [];
@@ -434,12 +617,12 @@ function doingNow() {
         return null;
     }
 
-    return doing.rest ? (RESTS[restsOf(current.kind)]?.[doing.variant]?.name ?? null) : (ATTACKS[doing.name]?.variants?.[doing.variant]?.name ?? null);
+    return doing.rest ? (RESTS[current.person?.rests ?? restsOf(current.kind)]?.[doing.variant]?.name ?? null) : (ATTACKS[doing.name]?.variants?.[doing.variant]?.name ?? null);
 }
 
 // What it's doing, named under what it is
 function shown(name) {
-    document.querySelector("#about").textContent = `${ABOUT[current.id]?.[1] ?? ""}${name ? ` · ${words(name)}` : ""}`;
+    document.querySelector("#about").textContent = `${current.about}${name ? ` · ${words(name)}` : ""}`;
 }
 
 // A name as it's written in the code ("tailSweep"), in words ("tail sweep")
@@ -488,12 +671,12 @@ function advance(seconds, step = 1 / 60) {
             avatar.update(dt, along, 0, Math.PI / 2, false);
             avatar.object.position.y = HOVER_HEIGHT;
         } else {
-            avatar.update(dt, along, 0, Math.PI / 2, action !== "attack");
+            avatar.update(dt, along, 0, Math.PI / 2, action !== "attack" && action !== "motion");
         }
 
         again += dt;
 
-        const period = action === "attack" || action === "hover" ? every : AGAIN[action];
+        const period = action === "attack" || action === "hover" || action === "motion" ? every : AGAIN[action];
 
         if (watch.loop && period !== undefined && again > period) {
             const { what, which, variant } = current.doing;
@@ -643,6 +826,21 @@ function showBones() {
  */
 function movesOf() {
     const { avatar, weapon, kind } = current;
+
+    // (One of the people: every motion of theirs, as the motion check has them, their own first:
+    // their weapon's, their work and their rests)
+    if (current.person) {
+        const { rests: role } = current.person;
+        const order = (group) => ["Attacks", "Drawing", "Work", "Rests", "Emotes", "Spells", "Struck", "Falling"].findIndex((first) => group.startsWith(first));
+
+        return [...MOTIONS.values()]
+            .flatMap((motion) => {
+                const named = motionOf(motion, { weapon, role });
+
+                return named ? [{ group: named.group, label: named.label, what: "motion", which: motion.id, variant: null }] : [];
+            })
+            .sort((a, b) => order(a.group) - order(b.group));
+    }
 
     if (avatar.plan) {
         return [
@@ -819,6 +1017,21 @@ for (const [label, ids] of groups) {
     picker.append(group);
 }
 
+// (The people: an adventurer and a soldier, of any people, with a weapon of theirs; and each of
+// the folk's roles)
+{
+    const group = document.createElement("optgroup");
+
+    group.label = "People";
+    group.append(new Option("Adventurer", "person:adventurer"), new Option("Soldier", "person:soldier"));
+
+    for (const role of FOLK_ROLES) {
+        group.append(new Option(ROLES[role].title, `person:${role}`));
+    }
+
+    picker.append(group);
+}
+
 // (Each dungeon theme's bosses and mini-bosses, as they're drawn there)
 for (const [theme, { name, bosses, minis }] of Object.entries(THEMES)) {
     const group = document.createElement("optgroup");
@@ -835,6 +1048,37 @@ for (const [theme, { name, bosses, minis }] of Object.entries(THEMES)) {
 }
 
 picker.addEventListener("change", () => show(picker.value));
+
+// Who one of the people is: their people, a woman or a man, and what they fight with
+const who = { section: document.querySelector("#person"), people: document.querySelector("#people"), sex: document.querySelector("#sex"), weapon: document.querySelector("#weapon") };
+
+who.people.append(...HERO_PEOPLES.map(({ id, label }) => new Option(label, id)));
+
+// (Shown with the choices for one of the people, as they are; not for a creature)
+function showWho() {
+    const shown = current.person;
+
+    who.section.hidden = !shown;
+
+    if (!shown) {
+        return;
+    }
+
+    const arms = weaponsOf(shown.role, shown.people);
+
+    who.people.value = shown.people;
+    who.sex.value = shown.sex;
+    who.weapon.replaceChildren(...arms.map((weapon) => new Option(WEAPONS[weapon].label, weapon)));
+    who.weapon.value = shown.weapon ?? "";
+    who.weapon.hidden = arms.length === 0;
+}
+
+for (const [key, select] of [["people", who.people], ["sex", who.sex], ["weapon", who.weapon]]) {
+    select.addEventListener("change", () => {
+        person[key] = select.value;
+        show(current.id);
+    });
+}
 document.querySelector("#another").addEventListener("click", () => show(current.id, seed + 1));
 
 for (const button of document.querySelectorAll("[data-action]")) {
@@ -908,7 +1152,8 @@ document.addEventListener("keydown", (event) => {
 
 // --- Running ---
 
-const start = params.get("creature") in LOOKS || championOf(params.get("creature") ?? "") ? params.get("creature") : "wolf";
+const asked = params.has("person") ? `person:${params.get("person")}` : params.get("creature");
+const start = asked in LOOKS || championOf(asked ?? "") || (isPerson(asked) && (FOLK_ROLES.includes(asked.slice(7)) || ["adventurer", "soldier"].includes(asked.slice(7)))) ? asked : "wolf";
 
 show(start);
 
@@ -952,7 +1197,7 @@ window.lab = {
     act,
     advance,
     avatar: () => current.avatar,
-    current: () => ({ id: current.id, humanoid: !current.avatar.plan, attacks: current.avatar.attacks ?? [], specials: current.avatar.specials ?? [], rests: current.avatar.rests ?? [] }),
+    current: () => ({ id: current.id, humanoid: !current.avatar.plan, person: current.person, attacks: current.avatar.attacks ?? [], specials: current.avatar.specials ?? [], rests: current.avatar.rests ?? [] }),
     pause: () => play(false),
     play: () => play(true),
     step,
