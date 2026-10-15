@@ -5642,6 +5642,7 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
     await page.keyboard.press("Escape");
     await expect(talk).toBeHidden();
 
+
     // Out of the guild: they come out with the player, and keep up on a walk down the street
     const out = await page.evaluate((door) => {
         const { game } = window.pellagos;
@@ -5651,6 +5652,13 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
         const apart = () => Math.hypot(follower.x - player.x, follower.y - player.y);
 
         game.stop();
+
+        // (Drawn a moment after they're hired, a step at a time, once the guild's own folk are:
+        // played on till they are)
+        for (let k = 0; k < 600 && !game.avatars.has(id); k++) {
+            game.advance(0.1, { render: false });
+        }
+
         game.battle.command("player", { type: "enter", link: door });
 
         for (let k = 0; k < 100 && player.map !== "town"; k++) {
