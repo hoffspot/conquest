@@ -261,3 +261,80 @@ test("the things: what's carried and worn, built in code; the catalog's props, t
     await expect(page.locator("#bottom")).toBeVisible();
     expect(await page.evaluate(() => window.lab.current().id)).toBe("ox");
 });
+
+test("on a phone: the bars a row each and nothing off the screen, the panel under what's shown in tabs, played with its icons, what's shown in the middle of what's left; on its side, the panel beside it", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openViewer(page, "/model-viewer.html?person=smith&people=lizard&sex=m");
+
+    // (Compact, the panel shut to start with; the top bar a row and a line, playing it a row, what
+    // it does a row scrolled across; nothing wider than the screen)
+    const sizes = await page.evaluate(() => {
+        const height = (selector) => document.querySelector(selector).getBoundingClientRect().height;
+
+        return { top: height("#top"), transport: height("#transport"), bottom: height("#bottom"), wide: document.documentElement.scrollWidth, screen: innerWidth, ...window.lab.layout() };
+    });
+
+    expect(sizes.compact).toBe(true);
+    expect(sizes.side).toBe(false);
+    expect(sizes.top).toBeLessThan(90);
+    expect(sizes.transport).toBeLessThan(64);
+    expect(sizes.bottom).toBeLessThan(60);
+    expect(sizes.wide).toBeLessThanOrEqual(sizes.screen);
+    await expect(page.locator("#panel")).toBeHidden();
+
+    // Played and paused, stepped, with its icons (their names as before)
+    await page.getByRole("button", { name: "Pause" }).click();
+    await expect(page.locator("#play")).toHaveAttribute("aria-label", "Play");
+    await page.getByRole("button", { name: "On a frame" }).click();
+    await expect(page.locator("#time")).toContainText("s");
+
+    // The panel, under what's shown: its tabs, one part at a time
+    await page.getByRole("button", { name: "Inspect" }).click();
+    await expect(page.locator("#panel")).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Moves" })).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator("#moves").getByRole("button", { name: "forge", exact: true })).toBeVisible();
+    await expect(page.locator("#details")).toBeHidden();
+    await page.getByRole("tab", { name: "Details" }).click();
+    await expect(page.locator("#details")).toBeVisible();
+    await expect(page.locator("#moves")).toBeHidden();
+    await page.getByRole("tab", { name: "Person" }).click();
+    await expect(page.locator("#people")).toBeVisible();
+
+    // (What's shown in the middle of what the bars and the panel leave of the view)
+    const seen = await page.evaluate(() => ({ at: window.lab.onScreen(), ...window.lab.layout(), height: innerHeight }));
+
+    expect(seen.covered.bottom).toBeGreaterThan(seen.height * 0.4);
+    expect(seen.at[1]).toBeGreaterThan(seen.covered.top);
+    expect(seen.at[1]).toBeLessThan(seen.height - seen.covered.bottom);
+
+    // On its side: the panel beside what's shown, playing it and what it does one row
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.waitForFunction(() => window.lab.layout().side);
+
+    const turned = await page.evaluate(() => ({ panel: document.querySelector("#panel").getBoundingClientRect().left, transport: document.querySelector("#transport").getBoundingClientRect().top, bottom: document.querySelector("#bottom").getBoundingClientRect().top, at: window.lab.onScreen(), ...window.lab.layout() }));
+
+    expect(turned.panel).toBeGreaterThan(400);
+    expect(Math.abs(turned.transport - turned.bottom)).toBeLessThan(12);
+    expect(turned.at[0]).toBeLessThan(turned.panel);
+
+    // Shut with its own button
+    await page.getByRole("button", { name: "Close the panel" }).click();
+    await expect(page.locator("#panel")).toBeHidden();
+
+    // (Something big, seen from far back on a narrow screen, not lost in the fog; and the view
+    // beside a panel drawn its own shape, not stretched)
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator("#picker").selectOption("dragon");
+
+    const far = await page.evaluate(() => window.lab.camera());
+
+    expect(far.fogFar).toBeGreaterThan(far.distance * 2);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.getByRole("button", { name: "Inspect" }).click();
+    await page.waitForFunction(() => window.lab.camera().view);
+
+    const beside = await page.evaluate(() => window.lab.camera());
+
+    expect(Math.abs(beside.aspect - beside.view.fullWidth / beside.view.fullHeight)).toBeLessThan(1e-6);
+});

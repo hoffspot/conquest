@@ -38,7 +38,9 @@ the drake and the Dreadthorn fly, come down to land and hover). Its panel plays 
 moves for it by name (one of the people's every motion: their attacks, work, rests, emotes, spells,
 blows and falls), and every clip in a model's file by name. It pauses, slows to a tenth, steps a frame back or on, and plays a move
 once or over and over. It shows the skeleton and the wireframe. It says how much there is to draw
-(triangles, textures, bones, clips), how big it is and whose it is. (It was the creature lab:
+(triangles, textures, bones, clips), how big it is and whose it is. On a phone, either way up,
+its bars are a row each, playback is a row of icons always there, and its panel is in tabs, under
+what's shown or beside it. (It was the creature lab:
 `creature-lab.html` sends on to it.)
 The uniform lab, showing each people's soldiers in their uniforms and their officials in their
 livery side by side, is at <https://hoffspot.github.io/conquest/uniform-lab.html>.

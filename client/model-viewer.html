@@ -18,6 +18,9 @@
                 --muted: #8a99a8;
                 --accent: #e0a24a;
                 --accent-text: #1b1206;
+                --edge: max(12px, env(safe-area-inset-left));
+                --edge-right: max(12px, env(safe-area-inset-right));
+                --panel-width: 300px;
 
                 color-scheme: dark;
                 font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -34,6 +37,7 @@
                 background: var(--background);
                 color: var(--text);
                 overflow: hidden;
+                -webkit-text-size-adjust: 100%;
             }
 
             #view {
@@ -45,24 +49,6 @@
                 touch-action: none;
             }
 
-            .bar {
-                position: fixed;
-                left: max(12px, env(safe-area-inset-left));
-                right: max(12px, env(safe-area-inset-right));
-                display: flex;
-                flex-wrap: wrap;
-                gap: 8px;
-                align-items: center;
-            }
-
-            #top {
-                top: max(12px, env(safe-area-inset-top));
-            }
-
-            #bottom {
-                bottom: max(12px, env(safe-area-inset-bottom));
-            }
-
             select,
             button {
                 font: inherit;
@@ -72,23 +58,123 @@
                 border-radius: 8px;
                 padding: 8px 12px;
                 min-height: 40px;
+                -webkit-tap-highlight-color: transparent;
             }
 
-            button[aria-pressed="true"] {
+            button[aria-pressed="true"],
+            button[aria-selected="true"] {
                 background: var(--accent);
                 color: var(--accent-text);
                 border-color: var(--accent);
             }
 
+            /* Icons, for when there's no room for words (a phone): what a button says is its
+               label, and its aria-label for those who can't see it */
+            .icon {
+                display: none;
+            }
+
+            /* The bar at the top: the picker, another of its kind, the panel; and what it is */
+            #top {
+                position: fixed;
+                top: max(12px, env(safe-area-inset-top));
+                left: var(--edge);
+                right: var(--edge-right);
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                align-items: center;
+            }
+
+            #picker {
+                max-width: min(420px, 100%);
+                min-width: 0;
+            }
+
+            #caption {
+                min-width: 0;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0 8px;
+                align-items: baseline;
+                text-shadow: 0 1px 3px #000;
+            }
+
             #name {
                 font-size: 18px;
                 font-weight: 600;
-                text-shadow: 0 1px 3px #000;
             }
 
             #about {
                 color: var(--muted);
-                text-shadow: 0 1px 3px #000;
+            }
+
+            /* At the foot: playing it (a frame back, play or pause, a frame on, how fast, over and
+               over, how far in), and what it does */
+            #foot {
+                position: fixed;
+                left: var(--edge);
+                right: var(--edge-right);
+                bottom: max(12px, env(safe-area-inset-bottom));
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+                pointer-events: none;
+            }
+
+            #foot > * {
+                pointer-events: auto;
+            }
+
+            #transport {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                align-items: center;
+                max-width: 100%;
+                background: color-mix(in srgb, var(--panel) 85%, transparent);
+                border: 1px solid var(--line);
+                border-radius: 10px;
+                padding: 4px;
+            }
+
+            #transport button,
+            #transport select {
+                min-height: 36px;
+                padding: 4px 10px;
+            }
+
+            #play {
+                min-width: 72px;
+            }
+
+            #transport label {
+                display: inline-flex;
+                gap: 6px;
+                align-items: center;
+                padding: 0 6px;
+                min-height: 36px;
+            }
+
+            #time {
+                font-variant-numeric: tabular-nums;
+                color: var(--muted);
+                padding: 0 6px;
+                white-space: nowrap;
+            }
+
+            #scrub {
+                flex: 1 0 100%;
+                margin: 2px 6px 4px;
+                accent-color: var(--accent);
+            }
+
+            #bottom {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                max-width: 100%;
             }
 
             #status {
@@ -100,21 +186,22 @@
                 pointer-events: none;
             }
 
-            body.shot .bar,
+            body.shot #top,
+            body.shot #foot,
             body.shot #panel {
                 display: none;
             }
 
-            /* The panel: watching it (playing, pausing, stepping), its bones and wireframe, its
-               moves and clips, and its details */
+            /* The panel: who one of the people is (or the wagon), its bones and wireframe, its
+               moves and clips, and its details. Beside what's shown, between the bars; on a
+               phone held upright, under it (placed by the script: showPanel) */
             #panel {
                 position: fixed;
-                top: max(64px, calc(env(safe-area-inset-top) + 52px));
-                bottom: max(64px, calc(env(safe-area-inset-bottom) + 52px));
-                right: max(12px, env(safe-area-inset-right));
-                width: 300px;
+                right: var(--edge-right);
+                width: var(--panel-width);
                 overflow-y: auto;
-                background: color-mix(in srgb, var(--panel) 92%, transparent);
+                overscroll-behavior: contain;
+                background: color-mix(in srgb, var(--panel) 94%, transparent);
                 border: 1px solid var(--line);
                 border-radius: 10px;
                 padding: 4px 12px 12px;
@@ -125,17 +212,18 @@
                 display: block;
             }
 
-            @media (min-width: 760px) {
-                body.panel-open .bar {
-                    right: calc(max(12px, env(safe-area-inset-right)) + 312px);
-                }
+            body.panel-open.side #top,
+            body.panel-open.side #foot {
+                right: calc(var(--edge-right) + var(--panel-width) + 12px);
             }
 
-            @media (max-width: 759px) {
-                #panel {
-                    left: max(12px, env(safe-area-inset-left));
-                    width: auto;
-                }
+            body.below #panel {
+                left: var(--edge);
+                width: auto;
+            }
+
+            #tabs {
+                display: none;
             }
 
             #panel h2 {
@@ -159,7 +247,7 @@
                 display: inline-flex;
                 gap: 6px;
                 align-items: center;
-                min-height: 32px;
+                min-height: 40px;
                 margin-right: 12px;
             }
 
@@ -171,21 +259,9 @@
             }
 
             #panel .chips button {
-                min-height: 32px;
+                min-height: 36px;
                 padding: 4px 10px;
                 margin: 0 4px 6px 0;
-            }
-
-            #time {
-                font-variant-numeric: tabular-nums;
-                color: var(--muted);
-                margin-top: 6px;
-            }
-
-            #scrub {
-                width: 100%;
-                margin-top: 6px;
-                accent-color: var(--accent);
             }
 
             #panel .note {
@@ -214,6 +290,205 @@
             #details a {
                 color: var(--accent);
             }
+
+            /* --- A phone, or any screen with little room (the script sets .compact: layout) --- */
+
+            body.compact {
+                --panel-width: 280px;
+                font-size: 15px;
+            }
+
+            body.compact .icon {
+                display: inline;
+            }
+
+            body.compact .label {
+                display: none;
+            }
+
+            /* (The top bar one row: the picker as wide as there's room for, the buttons icons; and
+               what it is one line under it, cut short if need be) */
+            body.compact #top {
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+
+            body.compact #picker {
+                flex: 1 1 0;
+                max-width: none;
+            }
+
+            body.compact #top > button {
+                min-width: 44px;
+                min-height: 44px;
+                padding: 0;
+                font-size: 20px;
+                line-height: 1;
+            }
+
+            body.compact #picker {
+                min-height: 44px;
+            }
+
+            body.compact #caption {
+                flex: 1 0 100%;
+                flex-wrap: nowrap;
+                overflow: hidden;
+                white-space: nowrap;
+            }
+
+            body.compact #name {
+                font-size: 15px;
+                flex: none;
+            }
+
+            body.compact #about {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                font-size: 13px;
+            }
+
+            /* (Playing it a full row, its buttons icons; what it does one row scrolled across) */
+            body.compact #foot {
+                align-items: stretch;
+            }
+
+            body.compact #transport {
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+
+            body.compact #transport button {
+                min-width: 44px;
+                min-height: 44px;
+                padding: 0 6px;
+                font-size: 18px;
+            }
+
+            body.compact #transport select,
+            body.compact #transport label {
+                min-height: 44px;
+            }
+
+            body.compact #transport select {
+                padding: 0 4px;
+            }
+
+            body.compact #transport label {
+                gap: 4px;
+                padding: 0 4px;
+                font-size: 18px;
+            }
+
+            /* (Play or pause as an icon: drawn, so what the button says is still "Play" or "Pause") */
+            body.compact #play::before {
+                content: "\23F8\FE0E";
+            }
+
+            body.compact #play[data-playing="false"]::before {
+                content: "\25B6\FE0E";
+            }
+
+            body.compact #time {
+                margin-left: auto;
+                font-size: 13px;
+                order: 3;
+            }
+
+            /* (A clip's slider and its time sharing the next row) */
+            body.compact #scrub {
+                order: 2;
+                flex: 1 1 120px;
+                min-width: 0;
+            }
+
+            body.compact #bottom {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                scrollbar-width: none;
+                scroll-snap-type: x proximity;
+                -webkit-overflow-scrolling: touch;
+                gap: 6px;
+                padding-bottom: 2px;
+            }
+
+            /* (Fading at its end, where there's more to scroll to) */
+            body.compact #bottom {
+                -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+                mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+                padding-right: 28px;
+            }
+
+            body.compact #bottom::-webkit-scrollbar {
+                display: none;
+            }
+
+            body.compact #bottom button {
+                flex: none;
+                min-height: 44px;
+                padding: 0 14px;
+                scroll-snap-align: start;
+            }
+
+            /* (On its side: playing it and what it does side by side in one row) */
+            body.compact.side #foot {
+                flex-direction: row;
+                flex-wrap: wrap;
+                align-items: center;
+            }
+
+            body.compact.side #transport {
+                flex: none;
+                flex-wrap: nowrap;
+            }
+
+            /* (What it does on a row of its own if there's too little room beside playing it: a
+               clip's slider out) */
+            body.compact.side #bottom {
+                flex: 1 1 160px;
+                min-width: 0;
+            }
+
+            /* (The panel in tabs, one part of it at a time) */
+            body.compact #tabs {
+                display: flex;
+                gap: 4px;
+                position: sticky;
+                top: -4px;
+                margin: 0 -12px;
+                padding: 8px 12px 6px;
+                background: var(--panel);
+                border-bottom: 1px solid var(--line);
+                z-index: 1;
+            }
+
+            body.compact #tabs button {
+                flex: 1 1 0;
+                min-height: 40px;
+                padding: 0 4px;
+            }
+
+            body.compact #tabs #close {
+                flex: none;
+                min-width: 44px;
+            }
+
+            body.compact #panel section {
+                display: none;
+            }
+
+            body.compact #panel section.shown {
+                display: block;
+            }
+
+            body.compact #panel h2 {
+                display: none;
+            }
+
+            body.compact #panel section > .row:first-of-type,
+            body.compact #panel section > .chips:first-child {
+                margin-top: 10px;
+            }
         </style>
         <script type="importmap">
             {
@@ -230,28 +505,24 @@
 
         <div class="bar" id="top">
             <select id="picker" aria-label="Model"></select>
-            <button type="button" id="another">Another one</button>
-            <button type="button" id="inspect" aria-controls="panel" aria-expanded="false">Inspect</button>
-            <span id="name"></span>
-            <span id="about"></span>
-        </div>
-
-        <div class="bar" id="bottom" role="toolbar" aria-label="What it does">
-            <button type="button" data-action="stand" aria-pressed="true">Stand</button>
-            <button type="button" data-action="walk" aria-pressed="false">Walk</button>
-            <button type="button" data-action="run" aria-pressed="false">Run</button>
-            <button type="button" data-action="attack" aria-pressed="false">Attack</button>
-            <button type="button" data-action="react" aria-pressed="false">Struck</button>
-            <button type="button" data-action="rest" aria-pressed="false">Rest</button>
-            <button type="button" data-action="die" aria-pressed="false">Die</button>
-            <button type="button" data-action="knockdown" aria-pressed="false">Knocked down</button>
-            <button type="button" data-action="fly" aria-pressed="false" hidden>Fly</button>
-            <button type="button" data-action="land" aria-pressed="false" hidden>Land</button>
-            <button type="button" data-action="hover" aria-pressed="false" hidden>Hover</button>
+            <button type="button" id="another" aria-label="Another one" title="Another one of its kind"><span class="icon" aria-hidden="true">⟳</span><span class="label">Another one</span></button>
+            <button type="button" id="inspect" aria-label="Inspect" aria-controls="panel" aria-expanded="false" title="Its moves, its bones and wireframe, its details"><span class="icon" aria-hidden="true">☰</span><span class="label">Inspect</span></button>
+            <div id="caption">
+                <span id="name"></span>
+                <span id="about"></span>
+            </div>
         </div>
 
         <aside id="panel" aria-label="Inspect">
-            <section id="person" aria-labelledby="personing" hidden>
+            <div id="tabs" role="tablist" aria-label="Inspect">
+                <button type="button" role="tab" data-tab="person" aria-selected="false" hidden>Person</button>
+                <button type="button" role="tab" data-tab="moving" aria-selected="true">Moves</button>
+                <button type="button" role="tab" data-tab="showing" aria-selected="false">Show</button>
+                <button type="button" role="tab" data-tab="detailing" aria-selected="false">Details</button>
+                <button type="button" id="close" aria-label="Close the panel">✕</button>
+            </div>
+
+            <section id="person" data-tab="person" aria-labelledby="personing" hidden>
                 <h2 id="personing">Person</h2>
                 <div class="row">
                     <select id="people" aria-label="People"></select>
@@ -269,28 +540,7 @@
                 </div>
             </section>
 
-            <section aria-labelledby="playback">
-                <h2 id="playback">Playback</h2>
-                <div class="row">
-                    <button type="button" id="back" aria-label="Back a frame" title="Back a frame (←)">◀ Frame</button>
-                    <button type="button" id="play" title="Play or pause (Space)">Pause</button>
-                    <button type="button" id="forward" aria-label="On a frame" title="On a frame (→)">Frame ▶</button>
-                </div>
-                <div class="row">
-                    <select id="speed" aria-label="Speed">
-                        <option value="0.1">0.1×</option>
-                        <option value="0.25">¼×</option>
-                        <option value="0.5">½×</option>
-                        <option value="1" selected>1×</option>
-                        <option value="2">2×</option>
-                    </select>
-                    <label><input type="checkbox" id="loop" checked> Loop</label>
-                </div>
-                <div id="time" aria-live="off"></div>
-                <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" aria-label="Time into the clip" hidden>
-            </section>
-
-            <section aria-labelledby="showing">
+            <section data-tab="showing" aria-labelledby="showing">
                 <h2 id="showing">Show</h2>
                 <div class="row">
                     <label><input type="checkbox" id="skeleton"> Skeleton</label>
@@ -298,18 +548,50 @@
                 </div>
             </section>
 
-            <section aria-labelledby="moving">
+            <section data-tab="moving" aria-labelledby="moving">
                 <h2 id="moving">The game's moves</h2>
                 <div class="chips" id="moves"></div>
                 <h2 id="clipping">Clips in its model</h2>
                 <div class="chips" id="clips" aria-labelledby="clipping"></div>
             </section>
 
-            <section aria-labelledby="detailing">
+            <section data-tab="detailing" aria-labelledby="detailing">
                 <h2 id="detailing">Details</h2>
                 <dl id="details"></dl>
             </section>
         </aside>
+
+        <div id="foot">
+            <div id="transport" role="toolbar" aria-label="Playback">
+                <button type="button" id="back" aria-label="Back a frame" title="Back a frame (←)"><span class="icon" aria-hidden="true">⏮&#xFE0E;</span><span class="label">◀ Frame</span></button>
+                <button type="button" id="play" aria-label="Pause" data-playing="true" title="Play or pause (Space)"><span class="label">Pause</span></button>
+                <button type="button" id="forward" aria-label="On a frame" title="On a frame (→)"><span class="icon" aria-hidden="true">⏭&#xFE0E;</span><span class="label">Frame ▶</span></button>
+                <select id="speed" aria-label="Speed">
+                    <option value="0.1">0.1×</option>
+                    <option value="0.25">¼×</option>
+                    <option value="0.5">½×</option>
+                    <option value="1" selected>1×</option>
+                    <option value="2">2×</option>
+                </select>
+                <label title="Each move over and over, or once"><input type="checkbox" id="loop" aria-label="Loop" checked><span class="label">Loop</span><span class="icon" aria-hidden="true">⟲</span></label>
+                <span id="time" aria-live="off"></span>
+                <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" aria-label="Time into the clip" hidden>
+            </div>
+
+            <div class="bar" id="bottom" role="toolbar" aria-label="What it does">
+                <button type="button" data-action="stand" aria-pressed="true">Stand</button>
+                <button type="button" data-action="walk" aria-pressed="false">Walk</button>
+                <button type="button" data-action="run" aria-pressed="false">Run</button>
+                <button type="button" data-action="attack" aria-pressed="false">Attack</button>
+                <button type="button" data-action="react" aria-pressed="false">Struck</button>
+                <button type="button" data-action="rest" aria-pressed="false">Rest</button>
+                <button type="button" data-action="die" aria-pressed="false">Die</button>
+                <button type="button" data-action="knockdown" aria-pressed="false">Knocked down</button>
+                <button type="button" data-action="fly" aria-pressed="false" hidden>Fly</button>
+                <button type="button" data-action="land" aria-pressed="false" hidden>Land</button>
+                <button type="button" data-action="hover" aria-pressed="false" hidden>Hover</button>
+            </div>
+        </div>
 
         <div id="status" role="status">Loading…</div>
         <noscript>The model viewer needs JavaScript.</noscript>

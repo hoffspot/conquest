@@ -155,7 +155,7 @@ sun.shadow.normalBias = 0.02;
 scene.add(sun, sun.target);
 scene.add(new THREE.HemisphereLight(0xbcd4ff, 0x3a3025, 0.55));
 
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.MeshStandardMaterial({ map: groundTexture(), roughness: 0.95 }));
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ map: groundTexture(), roughness: 0.95 }));
 
 ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
@@ -165,6 +165,7 @@ const camera = new THREE.PerspectiveCamera(35, 1, 0.05, 200);
 const controls = new OrbitControls(camera, canvas);
 
 controls.enableDamping = true;
+controls.addEventListener("change", () => fogFor(camera.position.distanceTo(controls.target)));
 
 function groundTexture() {
     const size = 256;
@@ -184,32 +185,38 @@ function groundTexture() {
     const map = new THREE.CanvasTexture(texture);
 
     map.wrapS = map.wrapT = THREE.RepeatWrapping;
-    map.repeat.set(60, 60);
+    map.repeat.set(300, 300);
     map.anisotropy = 8;
     map.colorSpace = THREE.SRGBColorSpace;
 
     return map;
 }
 
-// (How much of the view the panel covers, at its right or its foot (pixels): what's shown is
-// centred in what's left, set as the panel's shown)
-const covered = { right: 0, below: 0 };
+// (How much of the view the bars and the panel cover, at its top, right, foot and left (pixels):
+// what's shown is centred in what's left, and fitted to it; set by layout)
+const covered = { top: 0, right: 0, bottom: 0, left: 0 };
 let drawnFor = "";
 
 function resize() {
     const { clientWidth: width, clientHeight: height } = canvas;
     const ratio = renderer.getPixelRatio();
-    const size = `${width} ${height} ${ratio} ${covered.right} ${covered.below}`;
+    const size = `${width} ${height} ${ratio} ${covered.top} ${covered.right} ${covered.bottom} ${covered.left}`;
 
     if (size !== drawnFor) {
         drawnFor = size;
         renderer.setSize(width, height, false);
-        camera.aspect = width / height;
 
-        // (Drawn as the right of a view as wide as the screen and the panel, or the foot of one
-        // as tall, so its middle's in the middle of what's left)
-        if (covered.right > 0 || covered.below > 0) {
-            camera.setViewOffset(width + covered.right, height + covered.below, covered.right, covered.below, width, height);
+        // (Drawn as part of a bigger view, so its middle's in the middle of what's left: as wide
+        // and as tall as the screen and twice as far as its middle moves; of that view's shape, or
+        // it would be drawn stretched; and zoomed out to see as much as the screen would)
+        const [x, y] = [(covered.left - covered.right) / 2, (covered.top - covered.bottom) / 2];
+        const [wide, tall] = [width + 2 * Math.abs(x), height + 2 * Math.abs(y)];
+
+        camera.aspect = wide / tall;
+        camera.zoom = height / tall;
+
+        if (x || y) {
+            camera.setViewOffset(wide, tall, Math.abs(x) - x, Math.abs(y) - y, width, height);
         } else {
             camera.clearViewOffset();
         }
@@ -589,15 +596,61 @@ function showThing(id) {
     }
 }
 
-// The camera on it: three-quarters from the front, far enough to see all of it, as wide as what
-// of the view the panel leaves is (further back on a phone held upright)
+// How big what's shown is to frame (metres): a thing by its biggest side, a beast by its height
+// or most of its length, one of the people by their height
+function sizeOf() {
+    const { avatar } = current;
+    const height = avatar.character.height;
+
+    return current.thing ? Math.max(avatar.size.x, avatar.size.y, avatar.size.z) : avatar.plan ? Math.max(height, avatar.plan.length * avatar.scale * 0.8) : height;
+}
+
+// How far back the camera stands to see all of something `size` across in what the bars and the
+// panel leave of the view: further on a narrow view (a phone held upright), and on a short one
+function fitted(size) {
+    const [width, height] = [canvas.clientWidth, canvas.clientHeight];
+    const [across, up] = [Math.max(1, width - covered.left - covered.right), Math.max(1, height - covered.top - covered.bottom)];
+
+    return (size * 1.75 + (current.thing ? 0.2 * size : 0.8)) * Math.max(1, FRAMED / (across / up)) * Math.max(1, (0.8 * height) / up);
+}
+
+// The fog and the camera's far plane as far off as the camera is from what's shown (metres), so
+// that something big seen from far back isn't lost in the fog
+function fogFor(distance) {
+    scene.fog.near = Math.max(18, distance * 1.5);
+    scene.fog.far = Math.max(60, distance * 4);
+
+    if (camera.far < distance * 8) {
+        camera.far = distance * 8;
+        camera.updateProjectionMatrix();
+    }
+}
+
+// The camera kept as near or far as the view left for it needs, its way round kept, as the panel
+// opens or shuts or the screen turns
+function fit() {
+    if (!current?.fitted) {
+        return;
+    }
+
+    const now = fitted(sizeOf());
+    const offset = camera.position.clone().sub(controls.target).multiplyScalar(now / current.fitted);
+
+    camera.position.copy(controls.target).add(offset);
+    current.fitted = now;
+    fogFor(offset.length());
+}
+
+// The camera on it: three-quarters from the front, far enough to see all of it in what the bars
+// and the panel leave of the view
 function frame() {
     const { avatar } = current;
     const height = avatar.character.height;
-    const size = current.thing ? Math.max(avatar.size.x, avatar.size.y, avatar.size.z) : avatar.plan ? Math.max(height, avatar.plan.length * avatar.scale * 0.8) : height;
-    const shape = (canvas.clientWidth - covered.right) / Math.max(1, canvas.clientHeight - covered.below);
-    const distance = (size * 1.75 + (current.thing ? 0.2 * size : 0.8)) * Math.max(1, FRAMED / shape);
+    const size = sizeOf();
+    const distance = fitted(size);
 
+    current.fitted = distance;
+    fogFor(distance);
     controls.target.set(avatar.object.position.x, height * 0.5, avatar.object.position.z);
     camera.position.set(avatar.object.position.x + distance * 0.75, height * 0.55 + distance * 0.32, avatar.object.position.z + distance * 0.7);
     controls.minDistance = size * 0.4;
@@ -840,8 +893,9 @@ const looks = {
 /** Play on as it's drawn, or pause (`on`). */
 function play(on) {
     watch.playing = on;
-    looks.play.textContent = on ? "Pause" : "Play";
+    looks.play.querySelector(".label").textContent = on ? "Pause" : "Play";
     looks.play.setAttribute("aria-label", on ? "Pause" : "Play");
+    looks.play.dataset.playing = String(on);
 
     // (Played on from how it is now, whatever's been stepped back to)
     if (on && rewind.past) {
@@ -901,12 +955,15 @@ function showTime(time = rewind.kept[rewind.at]?.time ?? watch.elapsed, furthest
     if (watch.clip) {
         const length = current.avatar.plan.lengths[watch.clip];
 
-        looks.time.textContent = `${watch.clipAt.toFixed(2)} s of ${length.toFixed(2)} s`;
+        looks.time.replaceChildren(`${watch.clipAt.toFixed(2)} s of ${length.toFixed(2)} s`);
         looks.scrub.max = String(length);
         looks.scrub.value = String(watch.clipAt);
         looks.scrub.hidden = false;
     } else {
-        looks.time.textContent = `${time.toFixed(2)} s into it${furthest ? " (as far back as is kept)" : ""}`;
+        // (The words after the time left out where there's no room: a phone's)
+        const more = (text, as = "label") => Object.assign(document.createElement("span"), { className: as, textContent: text });
+
+        looks.time.replaceChildren(`${time.toFixed(2)} s`, more(" into it"), ...(furthest ? [more(" (as far back as is kept)"), more(" ⇤", "icon")] : []));
         looks.scrub.hidden = true;
     }
 }
@@ -1205,6 +1262,16 @@ function showWho() {
 
     who.section.hidden = !shown && !wagon;
     who.heading.textContent = wagon ? "Wagon" : "Person";
+
+    // (Its tab, on a phone, with it: named for it; another one shown if it's going)
+    const tab = document.querySelector("#tabs [data-tab=person]");
+
+    tab.hidden = who.section.hidden;
+    tab.textContent = who.heading.textContent;
+
+    if (tab.hidden && tab.getAttribute("aria-selected") === "true") {
+        showTab("moving");
+    }
     who.sex.hidden = wagon;
     who.load.hidden = !wagon;
 
@@ -1266,28 +1333,84 @@ looks.wireframe.addEventListener("change", () => wireframe(current.avatar.object
 // (The panel of all that, shown or not: shown to start with where there's room for it)
 const inspect = document.querySelector("#inspect");
 
-function showPanel(on) {
+// A screen with little room (a phone, either way up): the bars one row each, their buttons icons,
+// the panel in tabs
+const COMPACT = window.matchMedia("(max-width: 759px), (max-height: 520px)");
+
+/**
+ * Lay the page out for the screen and the panel: compact or not; the panel beside what's shown
+ * (a screen wider than it's tall, or a wide one) or under it (a phone or a tablet held upright,
+ * its lower half),
+ * between the bars however many lines they take; and how much of the view they cover (covered),
+ * what's shown centred in what's left.
+ */
+function layout() {
+    const body = document.body;
     const panel = document.querySelector("#panel");
-    const wide = window.matchMedia("(min-width: 760px)").matches;
+    const open = body.classList.contains("panel-open");
+    const compact = COMPACT.matches;
+    const side = window.innerWidth > window.innerHeight || (!compact && window.innerWidth >= 1000);
 
-    document.body.classList.toggle("panel-open", on);
-    inspect.setAttribute("aria-expanded", String(on));
+    body.classList.toggle("compact", compact);
+    body.classList.toggle("side", side);
+    body.classList.toggle("below", !side);
 
-    // (Between the bars, however many lines they take: beside what's shown where there's room,
-    // or under it, the lower half of a phone's screen)
-    const top = document.querySelector("#top").getBoundingClientRect().bottom + 8;
-    const foot = window.innerHeight - document.querySelector("#bottom").getBoundingClientRect().top + 8;
+    // (Drawn for a picture, nothing over it)
+    if (body.classList.contains("shot")) {
+        Object.assign(covered, { top: 0, right: 0, bottom: 0, left: 0 });
 
-    panel.style.top = `${wide ? top : Math.max(top, window.innerHeight * 0.5)}px`;
-    panel.style.bottom = `${foot}px`;
-    covered.right = on && wide ? panel.offsetWidth + 12 : 0;
-    covered.below = on && !wide ? window.innerHeight - panel.getBoundingClientRect().top : 0;
+        return;
+    }
+
+    const top = document.querySelector("#top").getBoundingClientRect().bottom;
+    const foot = document.querySelector("#foot").getBoundingClientRect().top;
+
+    panel.style.top = `${side ? top + 8 : Math.max(top + 8, window.innerHeight * 0.45)}px`;
+    panel.style.bottom = `${window.innerHeight - foot + 8}px`;
+
+    const sheet = open ? panel.getBoundingClientRect() : null;
+
+    Object.assign(covered, { top: top + 4, right: open && side ? window.innerWidth - sheet.left + 4 : 0, bottom: window.innerHeight - (open && !side ? sheet.top : foot) + 4, left: 0 });
 }
 
-window.addEventListener("resize", () => showPanel(document.body.classList.contains("panel-open")));
+function showPanel(on) {
+    document.body.classList.toggle("panel-open", on);
+    inspect.setAttribute("aria-expanded", String(on));
+    layout();
+    fit();
+}
+
+// (Laid out again as the screen turns or changes size, and as the bars take more or fewer lines)
+window.addEventListener("resize", () => {
+    layout();
+    fit();
+});
+
+new ResizeObserver(() => layout()).observe(document.querySelector("#foot"));
+new ResizeObserver(() => layout()).observe(document.querySelector("#top"));
 
 inspect.addEventListener("click", () => showPanel(!document.body.classList.contains("panel-open")));
-showPanel(!params.has("shot") && window.matchMedia("(min-width: 760px)").matches);
+document.querySelector("#close").addEventListener("click", () => showPanel(false));
+showPanel(!params.has("shot") && !COMPACT.matches);
+
+// (The panel's tabs, on a phone: one part of it at a time, its moves to start with)
+const tabs = [...document.querySelectorAll("#tabs [role=tab]")];
+
+function showTab(name) {
+    for (const tab of tabs) {
+        tab.setAttribute("aria-selected", String(tab.dataset.tab === name));
+    }
+
+    for (const section of document.querySelectorAll("#panel section")) {
+        section.classList.toggle("shown", section.dataset.tab === name);
+    }
+}
+
+for (const tab of tabs) {
+    tab.addEventListener("click", () => showTab(tab.dataset.tab));
+}
+
+showTab("moving");
 
 // (Space plays or pauses, the arrows step a frame back or on: not while choosing something)
 document.addEventListener("keydown", (event) => {
@@ -1361,6 +1484,15 @@ window.lab = {
     clip: playClip,
     watch: () => ({ ...watch, past: rewind.past, kept: rewind.kept.length, bones: bones?.bones.length ?? 0, moves: movesOf().map(({ label }) => label), clips: Object.keys(current.avatar.plan?.lengths ?? {}) }),
     details: () => detailsOf(current.avatar.object),
+    // (How it's laid out and seen: how much of the view the bars and panel cover; where the middle
+    // of what's shown is on the screen; and the camera, how far back, its fog, its view's shape)
+    layout: () => ({ covered: { ...covered }, compact: document.body.classList.contains("compact"), side: document.body.classList.contains("side") }),
+    onScreen: () => {
+        const at = controls.target.clone().project(camera);
+
+        return [((at.x + 1) / 2) * canvas.clientWidth, ((1 - at.y) / 2) * canvas.clientHeight];
+    },
+    camera: () => ({ distance: camera.position.distanceTo(controls.target), fogFar: scene.fog.far, aspect: camera.aspect, view: camera.view && camera.view.enabled ? { ...camera.view } : null }),
     view: ({ turn = 0, lift = 0, zoom = 1, at = null } = {}) => {
         // (Looking at a height, metres: its head, say)
         if (at !== null) {
