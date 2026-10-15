@@ -66,7 +66,10 @@ const PACK_EVERY = 2;
  * `king`, goes by its own name). How it fights besides its weapon (battle.js, the actor's `wild`:
  * traitsOf): too heavy to be thrown by a blast, or not solid enough (`steady`); keeping `keep`
  * metres off whoever it's after; a bomb it lobs now and then (`bomb`), and as a dungeon's boss
- * (`boss`: what of `bomb` it does otherwise, its throne room's: the caves' Goblin King).
+ * (`boss`: what of `bomb` it does otherwise, its throne room's: the caves' Goblin King); taking to
+ * the air now and then once it's badly hurt (`hover`: at `below` its hit points or fewer, a share;
+ * `ms` up there, `every` ms at least from coming down to going up again, `rise` ms going up and
+ * as long coming down), out of reach of any blow up close meanwhile (battle.js #hover).
  */
 export const CREATURES = Object.freeze({
     // Near home, everywhere
@@ -146,7 +149,7 @@ export const CREATURES = Object.freeze({
     // (The mightiest of all, each in a lair of its own: worldplan/settle.js DREADTHORN_LAIRS. On
     // the ground for the most part; it breathes fire as it bites, and takes to the air when badly
     // hurt)
-    dreadthorn: { name: "Dreadthorn", hp: 220, weapon: "dreadthorn", speed: 1, chase: 2.4, temper: "aggressive", roam: 6, leash: 34, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.35, perilous: true, steady: true },
+    dreadthorn: { name: "Dreadthorn", hp: 220, weapon: "dreadthorn", speed: 1, chase: 2.4, temper: "aggressive", roam: 6, leash: 34, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.35, perilous: true, steady: true, hover: { below: 0.4, ms: 12000, every: 25000, rise: 2000 } },
     // (The restless dead of whoever lived in the ruins long ago, only ever met there: core/places.js
     // PLACE_BANDS, and in the ruined castles with their lords: LAIRS)
     ghost: { name: "Restless ghost", hp: 26, weapon: "ghost", speed: 1.1, chase: 2.3, temper: "aggressive", roam: 6, leash: 16, pack: [1, 2], tiers: [3, 9], biomes: [], blood: "none", armor: 0.15, night: "only", darkSight: true , steady: true },
@@ -320,9 +323,9 @@ export function notable(wild, { master = false } = {}) {
  * `bomb` (CREATURES); as a dungeon's boss (`boss`), its bomb as its `boss` has it.
  */
 export function traitsOf(creature, { boss = false } = {}) {
-    const { steady = false, keep = null, bomb = null, boss: asBoss = null } = CREATURES[creature] ?? {};
+    const { steady = false, keep = null, bomb = null, boss: asBoss = null, hover = null } = CREATURES[creature] ?? {};
 
-    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null };
+    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null };
 }
 
 /** The round an elite walks ([[x, y], ...] metres): ELITES.stops evenly about where it was put out (`at`), ELITES.loop metres off. */

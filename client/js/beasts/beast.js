@@ -425,6 +425,16 @@ export class BeastAvatar {
     }
 
     /**
+     * Hanging in the air over a fight (battle.js #hover), `share` of the way up (0 to 1: the game
+     * lifts it there): its wings beating, harder going up and coming down, or its hover's clip if
+     * it's drawn from a model (beasts/model.js). Said each moment it's up, before update, as soar
+     * and arrive say it flies.
+     */
+    hover(share) {
+        this.flight = share > 0 ? { amount: Math.min(1, share * 4), beat: share < 1 ? 1 : 0.7, hover: true } : null;
+    }
+
+    /**
      * Fly (a winged one), not following an actor: at a point (metres, `y` up), heading a way
      * (radians, as `facing`), beating its wings so hard (`beat`: 0 gliding to 1), leaning into its
      * turn (`bank`, radians, + to its right) and climbing (`climb`, radians, + nose up).

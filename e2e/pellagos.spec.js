@@ -10569,3 +10569,85 @@ test("a Dreadthorn drawn with its stand-in is drawn again from its model once th
     await page.evaluate(() => window.pellagos.fetcher.release("the stand-in first"));
     expect(await playUntil(page, () => window.pellagos.game.avatars.get("dread")?.model === true, { seconds: 90 })).toBe(true);
 });
+
+test("a Dreadthorn badly hurt takes to the air: drawn hanging up there, out of reach of the player's blade, the player told; down again after", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    // A Dreadthorn out in the open west of the start town, 6 metres from the player where they
+    // can see each other, badly hurt and set on them, the player set on it with a sword
+    await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { world, host, battle } = game;
+        const { CREATURES, traitsOf } = await import("/js/core/creatures.js");
+        const [mx, my] = world.stamp.middle;
+        const { name, hp, weapon, speed, chase } = CREATURES.dreadthorn;
+
+        game.stop();
+        session.view.adaptive = false;
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [Math.floor(mx - 140), Math.floor(my - 20)], { facing: Math.PI });
+
+        const me = battle.actor(game.me);
+
+        Object.assign(me, { hp: 1e6, maxHp: 1e6 });
+        host.wild.set("dread", { creature: "dreadthorn", tier: 10, pack: "dread", camp: null, lair: null, master: false });
+        battle.add({ id: "dread", kind: "beast", name, weapon, team: "beasts", square: [Math.floor(me.x), Math.floor(me.y) - 6], ai: "wild", hp, speed, chase, armor: 0.35, wild: { creature: "dreadthorn", tier: 10, temper: "aggressive", guard: 0, roam: 0, leash: 40, pack: "dread", leader: null, menace: true, unique: true, ...traitsOf("dreadthorn") } });
+
+        const dread = battle.actor("dread");
+
+        for (const [dx, dy] of [[0, -6], [6, 0], [-6, 0], [0, 6], [4, -4], [-4, 4]]) {
+            host.battle.place("dread", "town", [Math.floor(me.x) + dx, Math.floor(me.y) + dy]);
+
+            if (battle.canSee(me, dread, 8)) {
+                break;
+            }
+        }
+
+        dread.spawn = [...dread.square];
+        dread.hp = Math.floor(hp * 0.3);
+        game.enlisting.push("dread");
+        host.command(game.me, { type: "engage", target: "dread" });
+
+        const message = game.hud.message.bind(game.hud);
+
+        window.said = [];
+        game.hud.message = (text, seconds) => {
+            window.said.push(text);
+            message(text, seconds);
+        };
+    });
+
+    // Up: drawn hanging above the ground, as high as it goes, its wings beating
+    const up = () => {
+        const { game } = window.pellagos;
+        const dread = game.battle.actor("dread");
+        const avatar = game.avatars.get("dread");
+
+        return Boolean(dread?.aloft && avatar && game.battle.time > dread.aloft.from + 3000 && avatar.object.position.y - avatar.ground > 6);
+    };
+
+    expect(await playUntil(page, up, { seconds: 60 })).toBe(true);
+
+    const there = await page.evaluate(() => {
+        return { said: window.said.filter((text) => text.includes("takes to the air")) };
+    });
+
+    expect(there.said).toEqual(["The Dreadthorn takes to the air, out of reach of blows!"]);
+
+    // Down again once it's landed, on the ground (drawn again first, if it was let go of to be
+    // drawn from its model meanwhile: beasts/model.js)
+    const down = () => {
+        const { game } = window.pellagos;
+        const dread = game.battle.actor("dread");
+        const avatar = game.avatars.get("dread");
+
+        return Boolean(avatar) && !dread.aloft && dread.hoverAt > 0 && avatar.object.position.y - avatar.ground < 0.2;
+    };
+
+    expect(await playUntil(page, down, { seconds: 30 })).toBe(true);
+
+    // (And in reach of the player's blade again)
+    await page.evaluate(() => (window.hpDown = window.pellagos.game.battle.actor("dread").hp));
+    expect(await playUntil(page, () => window.pellagos.game.battle.actor("dread").hp < window.hpDown, { seconds: 20 })).toBe(true);
+});

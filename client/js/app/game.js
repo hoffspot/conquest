@@ -36,7 +36,7 @@ import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
 import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
-import { sitting, STEP_MS, TALK_REACH } from "../core/battle.js";
+import { aloftShare, sitting, STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { townOf } from "../core/insides.js";
@@ -620,6 +620,10 @@ const LINGER = 5;
 
 // Levitating: how high off the ground (m), bobbing so much (m), so fast (radians a second)
 const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
+
+// Taken to the air over a fight (battle.js #hover: a Dreadthorn badly hurt): how high it hangs
+// (m), rising and falling so much (m), so fast (radians a second)
+const HOVERING = Object.freeze({ height: 7, swing: 0.4, bob: 1.6 });
 
 // How fast the camera's shaking dies away (a share of it, a second)
 const SHAKE_DIES = 4;
@@ -2778,6 +2782,13 @@ export class Game {
 
             avatar.every = thronged ? Infinity : this.#posing(actor, avatar, dt, pixels);
             this.#gazing(actor, avatar, mine);
+
+            // (Up in the air over a fight, badly hurt: battle.js #hover; its wings heard)
+            if (actor.aloft && !actor.dead) {
+                avatar.hover?.(aloftShare(actor.aloft, battle.time));
+                this.#hovering(actor, avatar);
+            }
+
             avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
 
             if (!thronged) {
@@ -3419,7 +3430,7 @@ export class Game {
         }
 
         for (const [id, avatar] of this.avatars) {
-            if (avatar instanceof BeastAvatar && !avatar.model && MODELS[avatar.id] && modelOf(avatar.id) && !avatar.seen && !avatar.doing.attack && !avatar.doing.dead && !avatar.arriving) {
+            if (avatar instanceof BeastAvatar && !avatar.model && MODELS[avatar.id] && modelOf(avatar.id) && !avatar.seen && !avatar.doing.attack && !avatar.doing.dead && !avatar.arriving && !this.battle.actor(id)?.aloft) {
                 this.#undress(id);
                 this.enlisting.push(id);
             }
@@ -3723,6 +3734,34 @@ export class Game {
         }
     }
 
+    // One of the wild's creatures taking to the air, badly hurt (battle.js #hover): calling as it
+    // goes, if it's drawn; whoever's fighting it, or it them, told no blow up close reaches it
+    #takesOff(event) {
+        const actor = this.battle.actor(event.id);
+        const avatar = this.avatars.get(event.id);
+        const me = this.battle.actor(this.me);
+        const creature = avatar && this.#voiced(actor, avatar);
+
+        if (creature) {
+            this.sound?.voice(creature, "call", avatar.object.position);
+        }
+
+        if (actor && me && !me.dead && (me.target === event.id || me.order?.target === event.id || actor.target === this.me)) {
+            this.hud.message(`The ${actor.name} takes to the air, out of reach of blows!`, 2.5);
+        }
+    }
+
+    // One of the wild's creatures up in the air over a fight (battle.js #hover): its wings heard
+    // beating as they beat (CALLS.wings apart)
+    #hovering(actor, avatar) {
+        const wings = CREATURE_VOICES[actor.wild?.creature]?.wings;
+
+        if (wings && this.clock >= (avatar.beatHeard ?? 0)) {
+            this.sound?.play(wings, { at: avatar.object.position, rate: CREATURE_VOICES[actor.wild.creature].rate ?? 1, far: CALLS.aloft });
+            avatar.beatHeard = this.clock + CALLS.wings / (CREATURE_VOICES[actor.wild.creature].rate ?? 1);
+        }
+    }
+
     // A bomb lobbed (battle.js BOMBS): drawn flying from the hand of whoever threw it (or where
     // they stood) to where it lands, fizzing there, a ring warning how far it'll reach; its wick
     // heard sputtering till it bursts (#blast)
@@ -3817,7 +3856,8 @@ export class Game {
         }
 
         if (!actor.dead) {
-            const lift = this.battle.buffOf(actor, "levitate") ? LIFT.height + Math.sin(this.clock * LIFT.bob) * LIFT.swing : 0;
+            const hover = aloftShare(actor.aloft, this.battle.time);
+            const lift = hover > 0 ? hover * (HOVERING.height + Math.sin(this.clock * HOVERING.bob) * HOVERING.swing) : this.battle.buffOf(actor, "levitate") ? LIFT.height + Math.sin(this.clock * LIFT.bob) * LIFT.swing : 0;
 
             object.visible = true;
             // (Following the ground as it rises and falls; easing up and down a step, onto a
@@ -3836,8 +3876,10 @@ export class Game {
 
         const sinking = Math.max(0, avatar.deadFor - (avatar.lands ?? 0) - LIE_STILL) / SINK;
 
+        // (Killed up in the air, or levitating: falling to the ground, faster and faster)
+        avatar.lift = Math.max(0, (avatar.lift ?? 0) - 9.8 * avatar.deadFor * dt);
         avatar.ground = ground;
-        object.position.y = ground - 0.5 * Math.min(1, sinking);
+        object.position.y = ground - 0.5 * Math.min(1, sinking) + avatar.lift;
         object.visible = sinking < 1;
     }
 
@@ -8016,6 +8058,12 @@ export class Game {
 
             if (event.type === "blast") {
                 this.#blast(event);
+                continue;
+            }
+
+            // (One of the wild's creatures taking to the air, drawn yet or not)
+            if (event.type === "aloft") {
+                this.#takesOff(event);
                 continue;
             }
 

@@ -14,7 +14,7 @@ const { LAIRS } = await import("../client/js/core/creatures.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
 
 const model = MODELS.dreadthorn;
-const lengths = { Idling: 8, Crawling: 8, Flying: 8, Gliding: 8, "Hit React": 8, Death: 3.6, Bite: 1.6, Claw: 1.5, "Tail Sweep": 1.7, "Fire Breath": 3.4, Roar: 8 };
+const lengths = { Idling: 8, Crawling: 8, Flying: 8, Gliding: 8, Hovering: 8, "Hit React": 8, Death: 3.6, Bite: 1.6, Claw: 1.5, "Tail Sweep": 1.7, "Fire Breath": 3.4, "Hover Breath": 3.4, Roar: 8 };
 const total = (posed) => posed.reduce((sum, { weight }) => sum + weight, 0);
 const weightOf = (posed, clip) => posed.find((one) => one.clip === clip)?.weight ?? 0;
 
@@ -39,12 +39,12 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
     });
 
     it("has every clip and bone it names in its model, as the glTF loader names them", async () => {
-        for (const { asset, clips, attacks, specials, rests, joints, mouth } of Object.values(MODELS)) {
+        for (const { asset, clips, attacks, specials, aloft, rests, fire, joints, mouth } of Object.values(MODELS)) {
             const gltf = await gltfOf(ASSETS.models[asset].files[0].path);
             const named = new Set(gltf.animations.map(({ name }) => name));
             const nodes = new Set(gltf.nodes.map(({ name }) => PropertyBinding.sanitizeNodeName(name)));
 
-            for (const clip of [...Object.values(clips), ...Object.values(attacks), ...Object.values(specials), ...Object.values(rests)]) {
+            for (const clip of [...Object.values(clips), ...Object.values(attacks), ...Object.values(specials), ...Object.values(aloft ?? {}), ...Object.values(rests), ...Object.keys(fire)]) {
                 assert.ok(named.has(clip), clip);
             }
 
@@ -69,7 +69,7 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         assert.deepEqual(modelsNear([5000, 5000], lairs), []);
     });
 
-    it("poses its clips for what the game asks: standing, walking, attacking through to the end, struck, resting, flying, dead", () => {
+    it("poses its clips for what the game asks: standing, walking, attacking through to the end, struck, resting, flying, hovering, dead", () => {
         // (Standing still: idling, all of it)
         let posed = poseOf(model, { speed: 0, t: 3 }, { lengths });
 
@@ -101,13 +101,21 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         posed = poseOf(model, { fly: { amount: 1, beat: 0.8 }, t: 3 }, { lengths });
         assert.ok(Math.abs(weightOf(posed, "Flying") - 0.8) < 1e-6 && Math.abs(weightOf(posed, "Gliding") - 0.2) < 1e-6);
 
+        // (Hanging in the air over a fight, battle.js #hover: its hover; its breath there, its
+        // breath from the air)
+        posed = poseOf(model, { fly: { amount: 1, beat: 1, hover: true }, t: 3 }, { lengths });
+        assert.equal(weightOf(posed, "Hovering"), 1);
+        posed = poseOf(model, { fly: { amount: 1, beat: 1, hover: true }, attack: { style: "breath", u: 0.5 }, t: 3 }, { lengths });
+        assert.equal(weightOf(posed, "Hover Breath"), 1);
+        assert.equal(weightOf(posed, "Fire Breath"), 0);
+
         // (Dead: its fall at its own pace, held at its end; nothing else)
         posed = poseOf(model, { dead: { u: 1 }, attack: { style: "bite", u: 0.5 }, t: 3 }, { lengths, died: 2 });
         assert.deepEqual(posed, [{ clip: "Death", weight: 1, time: 2 }]);
         assert.ok(poseOf(model, { dead: { u: 1 } }, { lengths, died: 60 })[0].time < 3.6);
     });
 
-    it("breathes its fire only while its breath's mouth is open (from a second in to 2.8)", () => {
+    it("breathes its fire only while its breath's mouth is open (from a second in to 2.8), on the ground or from the air", () => {
         const at = (u) => breathing(model, { style: "breath", u }, lengths);
 
         assert.equal(at(0.2), false);
@@ -116,5 +124,9 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         assert.equal(at(3 / 3.4), false);
         assert.equal(breathing(model, { style: "bite", u: 0.5 }, lengths), false);
         assert.equal(breathing(model, null, lengths), false);
+
+        // (From the air, its hover's breath: the same while)
+        assert.equal(breathing(model, { style: "breath", u: 0.2 }, lengths, true), false);
+        assert.equal(breathing(model, { style: "breath", u: 1.2 / 3.4 }, lengths, true), true);
     });
 });
