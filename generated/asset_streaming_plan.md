@@ -372,7 +372,7 @@ Each is shippable alone, and the game is no worse after each.
 | --- | --- | --- |
 | **A1** (done) | The catalog and the cache | `assets.json` and the generated `assets.js` (hashes, sizes); hashes for the manifest's data too; the boot budget test; the service worker's `-v2` caches, `?h=` keys checked before they're kept, collection (§5.4) and the move from `pellagos-v1`. The body, its skin and the chest move to `?h=`. No lazy loading yet |
 | **A2** (done) | The downloader | `app/fetcher.js`: the queue, chunked range requests and slow reading, the controller, quiet times, `saveData`. Range support and `immutable` for `?h=` (when the hash is the file's) in `server/static.js`. The debug overlay shows the rate, queueing delay and what's queued |
-| **A3** (next: §11.2) | The first model on demand | The pipeline's dragon (lower-detail copy and full) in the catalog. Prediction from lairs (§4); the stand-in swap (§3.6); `useWorkers`; compiling ahead |
+| **A3** (landed for the Dreadthorn: §11.2) | The first model on demand | The Dreadthorn's model in the catalog, its lower details packed in. Fetched by the downloader near its lairs and as one comes (§4); the stand-in swap (§3.6); compiling ahead as any creature is. Still to do: the service worker's part (§11.2, step 8), `useWorkers`, dropping a model walked away from |
 | **A4** (§11.3) | Players' choices | **Extra models** under Game options; storage used, **Download all now**, **Clear**; `persist()` |
 | **A5** (§11.4) | Quality variants | The pipeline builds texture variants (512, 1024, 2048); the catalog lists them; the device and Visual quality pick. KTX2 textures to be weighed after |
 
@@ -476,6 +476,33 @@ code's own names, so nothing has to be looked up again from scratch.
     browser offers, the least recently used let go of first (`sw.js`: `room`, `toLetGo`).
 
 ### 11.2 A3: the first model on demand
+
+**Landed on 2026-10-15, for the Dreadthorn**, a bought model the owner has permission to put in
+the repository in its converted form, rather than the pipeline's dragon (`docs/WILDS.md`, *Drawn
+from a model*). What was built differs from the steps below:
+
+- **One file**, `client/models/beasts/dreadthorn.glb` (5.1 MB): KTX2 textures, its three levels
+  of detail packed in (the pipeline's `extras.lod`), so no lower-detail copy to fetch first. Its
+  catalog entry is `beast-dreadthorn` (`demand`).
+- **What the game knows of it** isn't in the catalog entry (`stand`, `when`, `clips`) but in
+  `MODELS` (`beasts/model.js`), next to the code that uses it: its size, which clips and bones
+  are what, its stand-in (its `LOOKS` id, the same as its own).
+- **Fetched** by the downloader once the game's handed it over (`fetchModelsWith`, from `main.js`):
+  `"soon"` within 1.5 km of one of its lairs, slain or not (`modelsNear`, every 2 s); `"now"` as one
+  comes into the battle. Read from a Blob URL. While saving data, only `"now"`. Not dropped when
+  the player walks away: what's fetched is kept by the service worker, and it's read once.
+- **The swap:** a stand-in out of view, and not attacking, falling or coming down out of the sky,
+  is let go of and drawn again, from the model. The model body isn't built a step at a time: a
+  copy of its skeleton and a mixer, a few milliseconds. It's compiled before it's shown, as any
+  creature is.
+- **Not done:** `useWorkers` (decoding 5 MB of meshopt takes a few milliseconds), the service
+  worker's part (step 8), dropping a model walked away from, and hinting models to joined
+  players (each game fetches its own as it predicts).
+- **Tests:** `test/model.test.js` (its clips and bones are in the model, what's asked for near
+  lairs, the clip weights, when its fire's out) and `e2e/models.spec.js` (drawn from its model
+  through the downloader, a level at a time, its fire; its stand-in left when it can't be read).
+
+The plan as written before it landed:
 
 **The model.** The plan was the pipeline's dragon. The player's own secondary model, put through
 `utilities/blenderpipeline`, takes its place when it's ready: a config like
@@ -684,3 +711,9 @@ joined one, and `Joining.onPong` wrapped to log each round trip. There it could 
   `world/drops3d.js` reads it by `?h=` once the game's started, the chest made in code standing in
   till then, as it always has if the model can't be read. That's 174 KB off the boot download (12.0
   MB to 11.85 MB), which had come within 18 KB of its budget with the code alone growing.
+- **2026-10-15. A3 landed, for the Dreadthorn** (§11.2): its model in the catalog, fetched by the
+  downloader near its lairs and as one comes, its stand-in drawn till then and swapped out of
+  view, and a body made from a model's clips. Changed from the plan: one file with its levels of
+  detail packed in; what the game knows of a model in `MODELS`, not the catalog entry; the body
+  built at once, not a step at a time; no `useWorkers` and nothing dropped yet; the service
+  worker's part still to do.

@@ -1532,6 +1532,15 @@
                     "path": "vendor/three-r186/addons/libs/basis/basis_transcoder.wasm"
                 }
             ]
+        },
+        "beast-dreadthorn": {
+            "tier": "demand",
+            "label": "The Dreadthorn (HuyKhoi2407's Dreadthorn Dragon, from Superhive: used with permission; client/models/beasts/LICENSE.md)",
+            "files": [
+                {
+                    "path": "models/beasts/dreadthorn.glb"
+                }
+            ]
         }
     }
 }

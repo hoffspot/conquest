@@ -28,6 +28,7 @@ import { folkLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature, sizeOf } from "../beasts/beast.js";
+import { MODELS, modelOf, modelsNear, wantModel } from "../beasts/model.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
 import { LOOKS as CREATURE_LOOKS, humanoidLook } from "../beasts/looks.js";
@@ -416,6 +417,10 @@ const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 // How often (seconds) the beasts' bodies none of their look has been drawn on for a while
 // (beasts/sculpt.js LINGER) are let go of (forget)
 const FORGET_EVERY = 5;
+
+// How often (seconds) the game looks for creatures drawn from a model to ask for, near their lairs
+// (#modelling)
+const MODELLING = 2;
 
 // How far from the camera anyone with a crowd to be drawn in (the soldiers; the players' hired
 // adventurers and the wild's creatures: #thronging) is drawn in full at most (metres), however
@@ -1843,6 +1848,11 @@ export class Game {
     // character is built in steps)
     *#addingBeast(actor) {
         const seed = this.#seedOf(actor);
+
+        // (Its model asked for now, if it's drawn from one and it isn't read yet: its stand-in's
+        // drawn till it is, #modelling)
+        wantModel(actor.wild.creature, "now");
+
         const weapon = WEAPONS[actor.weapon];
         const avatar = yield* dressingCreature(this.kit, actor.wild.creature, { seed, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(actor.weapon) : null, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR), champion: actor.wild.champion ?? null, regalia: actor.wild.regalia ?? null, release: true });
 
@@ -2708,6 +2718,7 @@ export class Game {
         this.#thronging(dt);
         this.#crowding();
         this.#forgetting(dt);
+        this.#modelling(dt);
 
         const bodies = Object.assign(this.stats.bodies, { drawn: 0, posed: 0, shadows: 0 });
         this.#cheered();
@@ -3382,6 +3393,35 @@ export class Game {
 
         this.crowdWaiting.delete(actor.id);
         avatar.actions.setGuard(actor.armed);
+    }
+
+    // The great lairs, and the kind each one's master is (a drake, a Dreadthorn), slain or not
+    #greatLairs() {
+        this.greatLairs ??= this.world.plan.sites.filter((site) => LAIR_KINDS.includes(site.kind)).map((site) => ({ id: site.id, at: site.at, beast: LAIRS[site.kind].master[0] }));
+
+        return this.greatLairs;
+    }
+
+    // The creatures drawn from a model (beasts/model.js): each kind's asked for once the player's
+    // near one of its lairs (looked at every MODELLING seconds), before it's met; and one drawn
+    // with its stand-in, its model read since, drawn again from the model once it's out of view
+    // and not attacking, falling or coming down out of the sky (let go of: it's drawn again)
+    #modelling(dt) {
+        const me = this.avatars.get(this.me)?.object.position;
+
+        if ((this.modelClock = (this.modelClock ?? 0) - dt) <= 0 && me) {
+            this.modelClock = MODELLING;
+
+            for (const kind of modelsNear([me.x, me.z], this.#greatLairs())) {
+                wantModel(kind);
+            }
+        }
+
+        for (const [id, avatar] of this.avatars) {
+            if (avatar instanceof BeastAvatar && !avatar.model && MODELS[avatar.id] && modelOf(avatar.id) && !avatar.seen && !avatar.doing.attack && !avatar.doing.dead && !avatar.arriving) {
+                this.#undress(id);
+            }
+        }
     }
 
     // The beasts' bodies none of their look has been drawn on for a while let go of, every so often
@@ -7909,12 +7949,9 @@ export class Game {
     // The dragons' lairs a dragon's to be seen circling over: those whose dragon's alive (as far as
     // this game knows) and isn't down on the ground near its lair to be fought
     #lairsAloft() {
-        // (The great lairs, and the kind each one's master is: a drake, a Dreadthorn)
-        this.greatLairs ??= this.world.plan.sites.filter((site) => LAIR_KINDS.includes(site.kind)).map((site) => ({ id: site.id, at: site.at, beast: LAIRS[site.kind].master[0] }));
+        const onGround = [...this.avatars.values()].filter((avatar) => this.#greatLairs().some(({ beast }) => beast === avatar.id));
 
-        const onGround = [...this.avatars.values()].filter((avatar) => this.greatLairs.some(({ beast }) => beast === avatar.id));
-
-        return this.greatLairs.filter((lair) => (this.host?.slain?.[lair.id] ?? -Infinity) <= this.battle.time && !onGround.some(({ id, object: { position } }) => id === lair.beast && Math.hypot(position.x - lair.at[0], position.z - lair.at[1]) < 250));
+        return this.#greatLairs().filter((lair) => (this.host?.slain?.[lair.id] ?? -Infinity) <= this.battle.time && !onGround.some(({ id, object: { position } }) => id === lair.beast && Math.hypot(position.x - lair.at[0], position.z - lair.at[1]) < 250));
     }
 
     // --- What happened in the battle ---
@@ -8057,8 +8094,9 @@ export class Game {
                         ground: Boolean(shape.ground),
                     });
 
-                    // (Fire breathed: a roaring stream from its jaws to whoever it's at, a moment)
-                    if (event.kind === "flame" && target) {
+                    // (Fire breathed: a roaring stream from its jaws to whoever it's at, a moment;
+                    // a creature drawn from a model breathes its own, beasts/model.js)
+                    if (event.kind === "flame" && target && !avatar.plan?.breath) {
                         effects.breathe(() => avatar.hand("Right"), () => target.point(0.6), 0.7);
                     }
 

@@ -171,9 +171,11 @@ every blow (armour 0.35), its bite reaches two metres and lays a wound open, and
 nine, setting whatever it reaches burning. Its hoard is greater than a drake's (`LOOT.greatHoard`,
 500 to 900 gold and masterwork things), with an old relic in it as a ruined castle's has. Its
 scales, horn and heart are its own (`dreadthornScale`, `dreadthornHorn`, `dreadthornHeart`, up to
-700 gold for the heart). It circles high over its lair while it lives (34 to 48 metres), comes down
-to fight, and is drawn as a greater, darker drake for now (beasts/looks.js), its own model to
-come. The ghosts and wraiths are found nowhere else but with the
+700 gold for the heart). It circles high over its lair while it lives (34 to 48 metres), and comes
+down to fight. It's drawn from its own model (HuyKhoi2407's Dreadthorn Dragon: beasts/model.js),
+fetched as the player nears one of its lairs (within 1.5 km); a greater, darker drake stands in for
+it until then (beasts/looks.js). Its fire is a long jet from its jaws, spreading along the ground
+(beasts/breath.js). The ghosts and wraiths are found nowhere else but with the
 dead at the ruins (core/places.js `PLACE_BANDS`): the restless dead of whoever lived there long ago;
 and at the old graveyard outside each people's start town, a few bones and a ghost led by a
 skeleton (`PLACE_BANDS.graveyard`), out by day as by night, so the dead and what they leave
@@ -629,8 +631,9 @@ alike (and a trade's kept with the world: `snapshot`).
 
 ## How they're built
 
-Every creature's made in code (no models downloaded), from its look (`beasts/looks.js`), on one of
-a few bodies (`beasts/beast.js BUILDERS`). Each of a kind is a little different: a little bigger or
+Every creature but the Dreadthorn is made in code (no models downloaded), from its look
+(`beasts/looks.js`), on one of a few bodies (`beasts/beast.js BUILDERS`). The Dreadthorn is drawn
+from a model (*Drawn from a model*). Each of a kind is a little different: a little bigger or
 smaller, its colour a little different, its markings its own.
 
 - **Sculpted in one piece** (`sculpt.js`). A body's shapes (ellipsoids, and limbs that taper from
@@ -803,6 +806,41 @@ drawn: every creature near the player was drawn, and cast its shadow, wherever t
   out of view went from 0.6 ms to under 0.02.
 - `test/beast-culling.test.js`: every kind stays in its sphere through all it does, its cape too,
   and the cape's left as it is out of view and blown about again once seen.
+
+### Drawn from a model (beasts/model.js)
+
+The Dreadthorn is drawn from a model, HuyKhoi2407's Dreadthorn Dragon from Superhive (in the
+repository with permission: `client/models/beasts/LICENSE.md`). It was put through
+`utilities/blenderpipeline`: 5.1 MB, its textures in KTX2, three levels of detail packed in, and
+20 clips, some made there (its attacks, its fall). It's in the catalog (`beast-dreadthorn`), not in
+what's downloaded before the game starts.
+
+- **Fetched as it's wanted** (`wantModel`): once the player's within 1.5 km of one of its lairs
+  (`modelsNear`, looked at every two seconds: the game's `#modelling`), or one comes into the
+  battle. One that couldn't be read is asked for again a minute later.
+- **Its stand-in meanwhile:** until it's read, its look (`beasts/looks.js`, a greater, darker
+  drake) is drawn. Once it's read, a stand-in out of view, and not attacking, falling or coming
+  down out of the sky, is let go of and drawn again from the model.
+- **A body like any other** (`modelBody`): `BeastAvatar` takes it as its `plan`, as it does one
+  built in code. `MODELS` names which of its clips are what (standing, walking, flying, gliding,
+  struck, falling; its bite, claw and tail sweep, its breath; its roar) and which bones are its
+  joints. Each frame, `poseOf` turns what the game asks of its body into a weight and a time for
+  each clip (`test/model.test.js`), and a mixer poses its bones from them. Its fall plays at its
+  own pace (3.6 seconds) and is held at its end.
+- **Its levels of detail** are the model's own: one mesh each, the one for how big it is on the
+  screen shown (`showLevel`, at the same sizes as a body built in code). Its shadow is always cast by
+  the least detailed one. When that one isn't shown, it's drawn writing nothing to the screen,
+  since three.js casts a shadow only from what the camera drawing sees.
+- **Culled by one sphere** worked out from its skin as it stands, made big enough for its wings
+  spread (its points are packed small, and made full size by its skin, so the mesh's own sphere is
+  far too small).
+- **Its fire** (`beasts/breath.js`), while its breath's mouth is open (a second in to 2.8): flames,
+  embers and smoke from between its lips, along its snout and turned a little toward its lower
+  jaw. They spread along the ground and rise, are drawn where they are in the world as it moves,
+  and are stepped a sixtieth of a second at a time, so they look the same at any frame rate. The
+  stream the drake's breath draws isn't drawn for it.
+- `e2e/models.spec.js`: drawn from its model once it's read, a level at a time, its fire out; its
+  stand-in left drawn, with no error, when the model can't be read.
 
 ### In a crowd (beasts/herd.js)
 

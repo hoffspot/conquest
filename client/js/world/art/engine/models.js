@@ -22,11 +22,18 @@ let ktx2 = null;
 
 /**
  * A glTF file as it is ({ scene, animations }: its materials and animations its own), read once
- * and shared (copy its scene to use it: scene.clone(true)).
+ * and shared (copy its scene to use it: scene.clone(true)). One that couldn't be read is read
+ * again the next time it's asked for.
  */
 export function loadGltf(url) {
     if (!files.has(url)) {
-        files.set(url, loader.loadAsync(url));
+        files.set(
+            url,
+            loader.loadAsync(url).catch((error) => {
+                files.delete(url);
+                throw error;
+            }),
+        );
     }
 
     return files.get(url);

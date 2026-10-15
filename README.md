@@ -891,6 +891,9 @@ asset out of this public repository.
 
 ## Credits and license
 
+- The Dreadthorn is HuyKhoi2407's Dreadthorn Dragon, bought on Superhive. It's in this repository
+  with permission, in its converted form only (`client/models/beasts/LICENSE.md`). It isn't free
+  to reuse.
 - The KayKit Medieval Hexagon Pack by Kay Lousberg (<https://kaylousberg.com>), CC0
   (`client/models/kaykit/LICENSE.txt`): the town's props were these until the game built its own.
 - The dungeons' rock, earth, stone and timber are photographs scanned by ambientCG

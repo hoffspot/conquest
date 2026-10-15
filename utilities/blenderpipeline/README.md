@@ -273,7 +273,8 @@ with the browser tests (each moves, stays inside its bounds).
 **Its licence first.** This repository is public, and its rule is that assets in it are CC0, MIT
 or similarly permissive (contribution.md, section 3). A bought model's files, and what's built from
 them, don't go in it. Put them in `private/` here, which git ignores: the source, its config and
-what's built.
+what's built. (The one exception, the owner's call: the Dreadthorn's converted model, which the game
+draws, is in `client/models/beasts/` with permission. Its source and config stay here.)
 
 ```text
 private/

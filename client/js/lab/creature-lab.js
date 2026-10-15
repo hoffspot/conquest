@@ -10,11 +10,16 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { ASSETS } from "../app/assets.js";
+import { filesOf } from "../app/catalog.js";
 import { dressCreature } from "../beasts/beast.js";
 import { LOOKS } from "../beasts/looks.js";
+import { hasModel, modelOf, wantModel } from "../beasts/model.js";
 import { loadCharacterKit } from "../characters/kit.js";
+import { CREATURES } from "../core/creatures.js";
 import { THEMES } from "../core/dungeons/themes.js";
-import { WEAPONS } from "../core/weapons.js";
+import { WEAPONS, weaponOf } from "../core/weapons.js";
+import { readKtx2With } from "../world/art/engine/models.js";
 import { hitch } from "../world/art/kits/wagon.js";
 
 const canvas = document.querySelector("#view");
@@ -98,6 +103,9 @@ const ABOUT = {
 // --- The scene ---
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: params.has("shot") });
+
+// (A model's KTX2 textures read for this renderer, as the game reads them: app/session.js)
+readKtx2With(renderer, filesOf(ASSETS, "basis-transcoder", document.baseURI));
 
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -211,13 +219,22 @@ function show(id, which = seed) {
     scene.add(avatar.object);
     along = 0;
     avatar.place(0, 0, Math.PI / 2);
-    current = { id, avatar, weapon, size: Math.max(avatar.character.height, (avatar.plan?.length ?? 0.6) * (avatar.scale ?? 1)) };
+    current = { id, kind, avatar, weapon, size: Math.max(avatar.character.height, (avatar.plan?.length ?? 0.6) * (avatar.scale ?? 1)) };
     seed = which;
     picker.value = id;
     document.querySelector("#name").textContent = champion ? champion.title.replace(/^the /, "The ") : (ABOUT[id]?.[0] ?? id);
     document.querySelector("#about").textContent = champion ? `${champion.rank === "boss" ? "The boss" : "A mini-boss"} of ${champion.theme.name}: ${ABOUT[kind]?.[0] ?? kind}` : (ABOUT[id]?.[1] ?? "");
     frame();
     act("stand");
+
+    // (One drawn from a model: its stand-in till the model's read, then the model, beasts/model.js)
+    if (hasModel(kind) && !modelOf(kind)) {
+        wantModel(kind)?.then((gltf) => {
+            if (gltf && current?.id === id && seed === which) {
+                show(id, which);
+            }
+        });
+    }
 
     // (Only a winged one flies, and comes down to land)
     for (const button of document.querySelectorAll("[data-action=fly], [data-action=land]")) {
@@ -249,7 +266,7 @@ function frame() {
 
 /** Have it do something: stand, walk, run, attack, react (struck), rest or die (`which`: an attack's or rest's name). */
 function act(what, which = null) {
-    const { avatar, weapon } = current;
+    const { avatar, weapon, kind } = current;
 
     action = what;
 
@@ -261,7 +278,12 @@ function act(what, which = null) {
     again = 0;
 
     if (what === "attack") {
-        const attack = weapon ? WEAPONS[weapon].attacks[0] : { animation: "bite", hitAt: 450, duration: 900 };
+        // (A creature's own attack as the game times it: the one named, or its first bite or
+        // swipe; a model's clips play over that)
+        const own = weaponOf(CREATURES[kind]?.weapon)?.attacks ?? [];
+        const attack = weapon ? WEAPONS[weapon].attacks[0] : (own.find(({ animation }) => animation === which) ?? own.find(({ animation }) => animation === "melee") ?? { animation: "bite", hitAt: 450, duration: 900 });
+
+        every = Math.max(2, attack.duration / 1000 + 0.6);
 
         avatar.actions.setGuard?.(true);
         avatar.character.sheathe(false);
@@ -293,8 +315,10 @@ function shown(name) {
     document.querySelector("#about").textContent = `${ABOUT[current.id]?.[1] ?? ""}${name ? ` · ${name}` : ""}`;
 }
 
-// Every few moments, it attacks (or flinches) again, while that's what it's showing
+// Every few moments (`every` seconds: an attack's length and a little more), it attacks (or
+// flinches) again, while that's what it's showing
 let again = 0;
+let every = 2;
 
 /** Step time on (seconds): it moves and does what it's doing. */
 function advance(seconds, step = 1 / 60) {
@@ -316,7 +340,7 @@ function advance(seconds, step = 1 / 60) {
 
         again += dt;
 
-        if ((action === "attack" || action === "react" || action === "knockdown") && again > (action === "knockdown" ? 2.6 : 2)) {
+        if ((action === "attack" || action === "react" || action === "knockdown") && again > (action === "knockdown" ? 2.6 : action === "attack" ? every : 2)) {
             again = 0;
             act(action);
         }
