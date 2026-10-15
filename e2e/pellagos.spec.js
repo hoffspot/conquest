@@ -5940,6 +5940,20 @@ test("the pack's paperdoll: the player drawn among their gear; tapped, a piece s
     await title(page);
     await page.locator("#continuebutton").click();
     await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+
+    // (The shaders made as the pack opens: the world behind it is the screen as it was drawn,
+    // copied, with no second shader for every material in sight, which lost an iPhone the page.
+    // Counted once the world's shaders have all been made, none new for a second and a half)
+    const programs = () => page.evaluate(() => window.pellagos.game.view.renderer.info.programs.length);
+    let made = -1;
+
+    await expect(async () => {
+        const before = await programs();
+
+        await page.waitForTimeout(1500);
+        made = await programs();
+        expect(made).toBe(before);
+    }).toPass({ timeout: 60000 });
     await page.keyboard.press("i");
 
     const pack = page.locator(".pack");
@@ -5957,6 +5971,8 @@ test("the pack's paperdoll: the player drawn among their gear; tapped, a piece s
 
     // The staff in both hands, the other greyed out behind it; the player among their gear; two pages
     await expect(pack.locator(".doll .doll-view")).toBeVisible();
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+    expect(await programs()).toBeLessThanOrEqual(made + 3);
     await expect(slot("mainHand")).toHaveText(/^Weapon\s*Staff$/);
     await expect(slot("offHand")).toHaveClass(/locked/);
     await expect(pack.locator(".pack-page")).toHaveCount(2);
