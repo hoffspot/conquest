@@ -392,6 +392,14 @@
             body.compact #time {
                 margin-left: auto;
                 font-size: 13px;
+                order: 3;
+            }
+
+            /* (A clip's slider and its time sharing the next row) */
+            body.compact #scrub {
+                order: 2;
+                flex: 1 1 120px;
+                min-width: 0;
             }
 
             body.compact #bottom {
@@ -425,6 +433,7 @@
             /* (On its side: playing it and what it does side by side in one row) */
             body.compact.side #foot {
                 flex-direction: row;
+                flex-wrap: wrap;
                 align-items: center;
             }
 
@@ -433,13 +442,11 @@
                 flex-wrap: nowrap;
             }
 
+            /* (What it does on a row of its own if there's too little room beside playing it: a
+               clip's slider out) */
             body.compact.side #bottom {
-                flex: 1 1 0;
+                flex: 1 1 160px;
                 min-width: 0;
-            }
-
-            body.compact.side #scrub {
-                flex: 1 0 120px;
             }
 
             /* (The panel in tabs, one part of it at a time) */
