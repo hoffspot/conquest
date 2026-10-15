@@ -208,6 +208,25 @@ export const BOMBS = Object.freeze({
 });
 
 /**
+ * How far up one that's taken to the air is (battle.js #hover: its `aloft`, { from, down,
+ * landed }) at `time` (ms): 0 on the ground, 1 all the way up; eased going up and coming down.
+ */
+export function aloftShare(aloft, time) {
+    if (!aloft) {
+        return 0;
+    }
+
+    const rise = aloft.landed - aloft.down;
+    const eased = (u) => {
+        const v = Math.min(1, Math.max(0, u));
+
+        return v * v * (3 - 2 * v);
+    };
+
+    return time < aloft.down ? eased((time - aloft.from) / rise) : 1 - eased((time - aloft.down) / rise);
+}
+
+/**
  * Thrown by a blast (docs/CHARACTERS.md *Thrown*): flung away from its heart, `far` metres from
  * the heart of it (times the blast's `toss`), half that from its edge, as far as there's clear
  * ground that way (the nearest free square, else where they stood); in the air `flight` ms and
@@ -785,6 +804,11 @@ export class Battle {
             // at) }: #wild; and, wary, till when it waits on first seeing someone)
             wild,
             waryUntil: 0,
+            // (One that takes to the air, badly hurt: off the ground, { from, down, landed } (ms:
+            // going up from `from`, coming down from `down`, down again at `landed`), or null; and
+            // when it may go up again: #hover)
+            aloft: null,
+            hoverAt: 0,
             // (In a formation: its place in it, { id, slot: [right, back], role }: core/formation.js;
             // and when it next looks for whom to fight, RETHINK_MS)
             formation: formation ? { id: formation.id, slot: [...formation.slot], role: formation.role ?? null } : null,
@@ -1723,6 +1747,7 @@ export class Battle {
 
         for (const actor of this.actors) {
             this.#arm(actor);
+            this.#hover(actor);
             this.#think(actor);
         }
 
@@ -2582,7 +2607,7 @@ export class Battle {
             return;
         }
 
-        const closing = actor.wild && !actor.wild.keep && this.time < actor.readyAt && ringsApart(actor.square, this.#aimAt(target, actor.square)) > MELEE_REACH && actor.arms.some((attack) => attack.kind === "melee");
+        const closing = actor.wild && !actor.wild.keep && this.time < actor.readyAt && ringsApart(actor.square, this.#aimAt(target, actor.square)) > MELEE_REACH && this.#armsAgainst(actor, target).some((attack) => attack.kind === "melee");
 
         if (!closing && this.#reachable(actor, target) && (!actor.path.length || this.#stopsHere(actor, target))) {
             actor.path = [];
@@ -2667,20 +2692,71 @@ export class Battle {
     /**
      * Can `actor` attack `target` from where they stand (on the same map, within reach, and seen
      * for ranged: looked for as far as the shot reaches, a bow's past where anyone looks round; up
-     * close, not one on an army's camp's walkway from the lane under it, nor down: #apart)?
+     * close, not one on an army's camp's walkway from the lane under it, nor down: #apart; nor
+     * either of them up in the air: #armsAgainst)?
      */
     #reachable(actor, target) {
         if (actor.map !== target.map) {
             return false;
         }
 
-        const attack = chooseAttack(actor.arms, actor.square, this.#aimAt(target, actor.square));
+        const attack = chooseAttack(this.#armsAgainst(actor, target), actor.square, this.#aimAt(target, actor.square));
 
         if (attack?.kind === "melee") {
             return !this.#apart(actor.map, [actor.x, actor.y], [target.x, target.y]);
         }
 
         return attack !== null && this.canSee(actor, target, Math.max(SIGHT, attack.reach));
+    }
+
+    // What `actor` can strike `target` with: any of its attacks, but none up close with either of
+    // them up in the air (#hover)
+    #armsAgainst(actor, target) {
+        return actor.aloft || target.aloft ? actor.arms.filter(({ kind }) => kind !== "melee") : actor.arms;
+    }
+
+    /**
+     * One of the wild's creatures that takes to the air once it's badly hurt (its `wild.hover`:
+     * creatures.js `hover`): at `below` its hit points or fewer, fighting someone, between blows
+     * and free to, it goes up (`rise` ms), stays up there (`ms`), and comes down again (`rise`),
+     * not to go up again for `every` ms. While it's off the ground (`aloft`), no blow up close
+     * reaches it nor any of its own reaches down (#armsAgainst), it starts nothing it wouldn't be
+     * done with before it comes down (#attack), and going up or down it stays where it is
+     * (#rising). Told as "aloft": { id, from, down, landed } (ms), going up; dead, it falls (#die).
+     */
+    #hover(actor) {
+        const hover = actor.wild?.hover;
+
+        if (!hover || actor.dead) {
+            return;
+        }
+
+        if (actor.aloft) {
+            if (this.time >= actor.aloft.landed) {
+                actor.aloft = null;
+                actor.hoverAt = this.time + hover.every;
+            }
+
+            return;
+        }
+
+        const ready = this.time >= (actor.hoverAt ?? 0) && this.time >= actor.staggeredUntil && this.time >= actor.stunnedUntil && !actor.attack && !actor.casting;
+
+        if (!ready || actor.target === null || actor.hp > actor.maxHp * hover.below) {
+            return;
+        }
+
+        actor.aloft = { from: this.time, down: this.time + hover.rise + hover.ms, landed: this.time + hover.rise * 2 + hover.ms };
+        actor.path = [];
+        actor.readyAt = Math.max(actor.readyAt, this.time + hover.rise);
+        this.#emit("aloft", { id: actor.id, ...actor.aloft });
+    }
+
+    // Going up into the air, or coming down out of it (#hover): staying where it is meanwhile
+    #rising(actor) {
+        const aloft = actor.aloft;
+
+        return Boolean(aloft) && (this.time < aloft.from + (aloft.landed - aloft.down) || this.time >= aloft.down);
     }
 
     // Where `actor` aims at `target` from `from` (squares): its own square; or, standing over more
@@ -3367,7 +3443,7 @@ export class Battle {
 
         actor.pace = want > actor.pace ? Math.min(want, actor.pace + ACCELERATION * seconds) : Math.max(want, actor.pace - BRAKING * seconds);
 
-        const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting;
+        const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting || this.#rising(actor);
         const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds * shareOf(actor, "speed"));
 
         // Getting nowhere, jostling: squeezing past (#bumps)
@@ -3524,14 +3600,21 @@ export class Battle {
     }
 
     // Is whoever it's after within reach from where it is, and (with a blow up close) is it as
-    // near them as it closes before striking?
+    // near them as it closes before striking? (Up in the air out of reach of all it has: as near
+    // as it'd strike from, waiting under them, not walking in under them: #hover)
     #stopsHere(actor, target) {
+        const arms = this.#armsAgainst(actor, target);
+
+        if (!arms.length) {
+            return Boolean(target.aloft) && hypot(target.x - actor.x, target.y - actor.y) <= MELEE_SPACING;
+        }
+
         // (Cheap first: no further than its longest reach, before what it can see)
-        if (distanceBetween(actor.square, this.#aimAt(target, actor.square)) > longestReach(actor.arms) + 1.5 || !this.#reachable(actor, target)) {
+        if (distanceBetween(actor.square, this.#aimAt(target, actor.square)) > longestReach(arms) + 1.5 || !this.#reachable(actor, target)) {
             return false;
         }
 
-        const attack = chooseAttack(actor.arms, actor.square, this.#aimAt(target, actor.square));
+        const attack = chooseAttack(arms, actor.square, this.#aimAt(target, actor.square));
 
         // (Up against a fortification's walls: as near as it gets)
         return attack.kind !== "melee" || Boolean(target.footprint) || hypot(target.x - actor.x, target.y - actor.y) <= MELEE_SPACING;
@@ -3690,7 +3773,13 @@ export class Battle {
         }
 
         // (Kicking or using the weapon, at random, wearing spiked boots)
-        const attack = chooseAttack(actor.arms, actor.square, this.#aimAt(target, actor.square), this.random);
+        const attack = chooseAttack(this.#armsAgainst(actor, target), actor.square, this.#aimAt(target, actor.square), this.random);
+
+        // (Nothing that reaches them; up in the air, nothing it wouldn't be done with before it
+        // starts coming down)
+        if (!attack || (actor.aloft && this.time + attack.duration > actor.aloft.down)) {
+            return;
+        }
 
         actor.attack = { attack, target: target.id, start: this.time, struck: false };
         actor.readyAt = this.time + attack.interval;
@@ -3726,7 +3815,7 @@ export class Battle {
                 this.#lob(actor, target, attack);
             } else if (attack.kind === "ranged") {
                 this.#launch(actor, target, attack);
-            } else if (target && !target.dead && this.#reachable(actor, target)) {
+            } else if (target && !target.dead && this.#reachable(actor, target) && !(attack.kind === "melee" && (actor.aloft || target.aloft))) {
                 this.#hit(actor, target, attack);
             } else {
                 this.#emit("miss", { id: actor.id, target: current.target, attack: attack.id });
@@ -4562,6 +4651,8 @@ export class Battle {
     #die(actor, killer) {
         actor.dead = true;
         actor.respawnAt = this.time + actor.respawnMs;
+        // (Up in the air: falling)
+        actor.aloft = null;
         actor.afflictions = [];
         actor.buffs = [];
         actor.drawing = null;

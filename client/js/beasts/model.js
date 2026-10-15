@@ -16,9 +16,10 @@ import { Breath } from "./breath.js";
 /**
  * The creatures drawn from a model, by their LOOKS id (which stands in for one until it's read):
  * the catalog's entry (`asset`); how long it's drawn (metres) and how long and tall it's made;
- * which of its clips are what (`clips`), and its ways of attacking (`attacks`, the special ones
- * `specials`, as named: weapons.js `animation`) and resting (`rests`), each a clip; when in each
- * breath it breathes fire (`fire`: seconds into the clip); its joints for the game's (`joints`:
+ * which of its clips are what (`clips`: `hover`, hanging in the air, battle.js #hover), and its
+ * ways of attacking (`attacks`, the special ones `specials`, as named: weapons.js `animation`; up
+ * in the air, `aloft`'s in their place) and resting (`rests`), each a clip; when in a clip it
+ * breathes fire (`fire`, by clip: seconds into it); its joints for the game's (`joints`:
  * beast.js BONES' names, by the model's bones' names as the glTF loader gives them); and how fast
  * (metres a second, as it's drawn) it goes when its walk plays at its own pace (`pace`).
  */
@@ -27,11 +28,12 @@ export const MODELS = Object.freeze({
         asset: "beast-dreadthorn",
         length: 17,
         made: Object.freeze({ long: 10, tall: 2.27 }),
-        clips: Object.freeze({ idle: "Idling", walk: "Crawling", fly: "Flying", glide: "Gliding", react: "Hit React", dead: "Death" }),
+        clips: Object.freeze({ idle: "Idling", walk: "Crawling", fly: "Flying", glide: "Gliding", hover: "Hovering", react: "Hit React", dead: "Death" }),
         attacks: Object.freeze({ bite: "Bite", claw: "Claw", tailSweep: "Tail Sweep" }),
         specials: Object.freeze({ breath: "Fire Breath" }),
+        aloft: Object.freeze({ breath: "Hover Breath" }),
         rests: Object.freeze({ roar: "Roar" }),
-        fire: Object.freeze({ breath: [1.0, 2.8] }),
+        fire: Object.freeze({ "Fire Breath": [1.0, 2.8], "Hover Breath": [1.0, 2.8] }),
         joints: Object.freeze({ torso: "Spine002", body: "Hip", head: "Head", mouth: "lipjaw", left: "Wing_L" }),
         mouth: Object.freeze({ upper: "lip", lower: "lipjaw", hinge: "Jaw" }),
         pace: 3.2,
@@ -161,9 +163,15 @@ const smoothstep = (u) => {
     return v * v * (3 - 2 * v);
 };
 
+/** The clip an attack's way (`style`) plays: up in the air (`aloft`), its way there's, if it has one. */
+export function clipOf(model, style, aloft = false) {
+    return (aloft && model.aloft?.[style]) || model.attacks[style] || model.specials[style] || null;
+}
+
 /**
  * How a model's clips are posed for what the game asks of a body (BeastAvatar's plan.pose: its
- * `speed`, `attack`, `rest`, `react`, `dead`, `fly`; `t`, the beast's own clock, seconds): each
+ * `speed`, `attack`, `rest`, `react`, `dead`, `fly` (hanging in the air, `hover`: its hover clip);
+ * `t`, the beast's own clock, seconds): each
  * clip (by name) with its weight (all of them adding up to 1) and how far in it is (seconds).
  * `lengths`: each clip's length (seconds); `died`: how long it's been dead (seconds: its fall
  * plays at its own pace, longer than the game's). A pure function.
@@ -197,14 +205,16 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
         posed = posed.map((one) => ({ ...one, weight: one.weight * (1 - weight) })).concat([{ clip, weight, time }]);
     };
 
-    // In the air: beating its wings or gliding, as hard as it beats them
+    // In the air: beating its wings or gliding, as hard as it beats them; or hanging there
+    const hovering = Boolean(fly?.hover && clips.hover);
+
     if (fly?.amount > 0) {
         const beat = Math.min(1, Math.max(0, fly.beat ?? 0.5));
+        const beating = { clip: clips.fly, weight: fly.amount * beat, time: loop(clips.fly, t) };
+        const gliding = { clip: clips.glide, weight: fly.amount * (1 - beat), time: loop(clips.glide, t) };
+        const hanging = { clip: clips.hover, weight: fly.amount, time: loop(clips.hover, t) };
 
-        posed = posed.map((one) => ({ ...one, weight: one.weight * (1 - fly.amount) })).concat([
-            { clip: clips.fly, weight: fly.amount * beat, time: loop(clips.fly, t) },
-            { clip: clips.glide, weight: fly.amount * (1 - beat), time: loop(clips.glide, t) },
-        ]);
+        posed = posed.map((one) => ({ ...one, weight: one.weight * (1 - fly.amount) })).concat(hovering ? [hanging] : [beating, gliding]);
     }
 
     // Resting its way (a roar), eased in and out
@@ -213,7 +223,7 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
     }
 
     // Attacking: the clip for its way, through to its end, eased in and out at either end
-    const way = attack && (model.attacks[attack.style] ?? model.specials[attack.style]);
+    const way = attack && clipOf(model, attack.style, hovering);
 
     if (way) {
         const u = Math.min(1, Math.max(0, attack.u));
@@ -233,16 +243,18 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
 
 /**
  * Whether a breath's fire is out at this moment of an attack (BeastAvatar's attack: { style, u }),
- * and so how far through its clip (`lengths`: each clip's length, seconds).
+ * and so how far through its clip (`lengths`: each clip's length, seconds; `aloft`: hanging in
+ * the air, its clip there's).
  */
-export function breathing(model, attack, lengths) {
-    const window = attack && model.fire[attack.style];
+export function breathing(model, attack, lengths, aloft = false) {
+    const clip = attack && clipOf(model, attack.style, aloft);
+    const window = clip && model.fire[clip];
 
     if (!window) {
         return false;
     }
 
-    const seconds = attack.u * (lengths[model.specials[attack.style] ?? model.attacks[attack.style]] || 1);
+    const seconds = attack.u * (lengths[clip] || 1);
 
     return seconds >= window[0] && seconds <= window[1];
 }
@@ -389,7 +401,7 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0 } = {}) {
             }
 
             // Its fire, out of its mouth while it breathes (where its lips are now)
-            const fire = breathing(model, inputs.attack, lengths);
+            const fire = breathing(model, inputs.attack, lengths, Boolean(inputs.fly?.hover));
 
             if (fire) {
                 object.updateWorldMatrix(true, true);

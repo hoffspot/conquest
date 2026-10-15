@@ -172,7 +172,18 @@ nine, setting whatever it reaches burning. Its hoard is greater than a drake's (
 500 to 900 gold and masterwork things), with an old relic in it as a ruined castle's has. Its
 scales, horn and heart are its own (`dreadthornScale`, `dreadthornHorn`, `dreadthornHeart`, up to
 700 gold for the heart). It circles high over its lair while it lives (34 to 48 metres), and comes
-down to fight. It's drawn from its own model (HuyKhoi2407's Dreadthorn Dragon: beasts/model.js),
+down to fight. Badly hurt (two fifths of its hit points or fewer), it takes to the air now and then
+(`hover`, battle.js `#hover`): two seconds going up, twelve up there, two coming down, and not again
+for 25 seconds after it's down. It goes up between blows, and stays where it is going up and
+coming down. Up there:
+
+- no blow up close reaches it, nor does its bite reach down. Whoever has only a blade waits under
+  it, as near as they'd strike from;
+- it breathes fire down from seven metres up, and starts no breath it wouldn't finish before it
+  comes down;
+- arrows, bolts and spells reach it, and killed up there it falls.
+
+Whoever's fighting it is told it's out of reach of blows. It's drawn from its own model (HuyKhoi2407's Dreadthorn Dragon: beasts/model.js),
 fetched as the player nears one of its lairs (within 1.5 km); a greater, darker drake stands in for
 it until then (beasts/looks.js). Its fire is a long jet from its jaws, spreading along the ground
 (beasts/breath.js). The ghosts and wraiths are found nowhere else but with the
@@ -834,6 +845,10 @@ what's downloaded before the game starts.
 - **Culled by one sphere** worked out from its skin as it stands, made big enough for its wings
   spread (its points are packed small, and made full size by its skin, so the mesh's own sphere is
   far too small).
+- **Up in the air** over a fight (its `hover`, above), it hangs seven metres up, rising and falling
+  a little (the game's `HOVERING`), posed by its own Hovering clip, and breathes fire with its Hover
+  Breath, its head down. Its wings are heard beating, and it calls as it goes up. The stand-in beats
+  its wings as it flies.
 - **Its fire** (`beasts/breath.js`), while its breath's mouth is open (a second in to 2.8): flames,
   embers and smoke from between its lips, along its snout and turned a little toward its lower
   jaw. They spread along the ground and rise, are drawn where they are in the world as it moves,

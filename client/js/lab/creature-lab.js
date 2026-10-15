@@ -188,6 +188,9 @@ let seed = Number(params.get("seed") ?? 1);
 // Along the ground it goes, walking or running, as the battle would move it; or flying (metres a
 // second)
 const PACE = { stand: 0, walk: 1.3, run: 3.2, fly: 7 };
+
+// How high one that takes to the air over a fight hangs (metres: app/game.js HOVERING)
+const HOVER_HEIGHT = 7;
 let along = 0;
 
 // A dungeon's boss or mini-boss, by "theme:rank:id" (its theme, "boss" or "mini", its id there):
@@ -236,10 +239,13 @@ function show(id, which = seed) {
         });
     }
 
-    // (Only a winged one flies, and comes down to land)
+    // (Only a winged one flies, and comes down to land; only one that takes to the air over a
+    // fight hovers: creatures.js `hover`)
     for (const button of document.querySelectorAll("[data-action=fly], [data-action=land]")) {
         button.hidden = !avatar.winged;
     }
+
+    document.querySelector("[data-action=hover]").hidden = !CREATURES[kind]?.hover;
 
     return current;
 }
@@ -277,11 +283,12 @@ function act(what, which = null) {
     avatar.actions.revive();
     again = 0;
 
-    if (what === "attack") {
+    if (what === "attack" || what === "hover") {
         // (A creature's own attack as the game times it: the one named, or its first bite or
-        // swipe; a model's clips play over that)
+        // swipe; a model's clips play over that. Hovering, its fire breathed down)
         const own = weaponOf(CREATURES[kind]?.weapon)?.attacks ?? [];
-        const attack = weapon ? WEAPONS[weapon].attacks[0] : (own.find(({ animation }) => animation === which) ?? own.find(({ animation }) => animation === "melee") ?? { animation: "bite", hitAt: 450, duration: 900 });
+        const named = what === "hover" ? "breath" : which;
+        const attack = weapon ? WEAPONS[weapon].attacks[0] : (own.find(({ animation }) => animation === named) ?? own.find(({ animation }) => animation === "melee") ?? { animation: "bite", hitAt: 450, duration: 900 });
 
         every = Math.max(2, attack.duration / 1000 + 0.6);
 
@@ -334,13 +341,19 @@ function advance(seconds, step = 1 / 60) {
             const t = (avatar.clock ?? 0) + dt;
 
             avatar.soar(dt, along, avatar.character.height * 1.3, 0, Math.PI / 2, { beat: 0.55 + 0.45 * Math.sin(t * 0.4), bank: Math.sin(t * 0.3) * 0.15 });
+        } else if (action === "hover") {
+            // (Hanging in the air over a fight: battle.js #hover)
+            avatar.hover(1);
+            avatar.ground = 0;
+            avatar.update(dt, along, 0, Math.PI / 2, false);
+            avatar.object.position.y = HOVER_HEIGHT;
         } else {
             avatar.update(dt, along, 0, Math.PI / 2, action !== "attack");
         }
 
         again += dt;
 
-        if ((action === "attack" || action === "react" || action === "knockdown") && again > (action === "knockdown" ? 2.6 : action === "attack" ? every : 2)) {
+        if ((action === "attack" || action === "hover" || action === "react" || action === "knockdown") && again > (action === "knockdown" ? 2.6 : action === "attack" || action === "hover" ? every : 2)) {
             again = 0;
             act(action);
         }
