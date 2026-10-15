@@ -1548,6 +1548,12 @@ export class Game {
 
         this.cameraFollow = new CameraFollow({ x: start.x, z: start.z });
         this.#follow(0);
+
+        // (The navigation tiles round the player baked off the page's thread from now on, and the
+        // ways the world's first steps find waited for, not baked here as the game begins: they
+        // were baked so in its first frame, before the first bake ahead, and held an iPhone up
+        // for a moment as it began)
+        this.#bakeAhead();
         step("Drawing the map");
 
         this.minimap = await time("minimap", () => new Minimap(this.hud.map, world, { onTap: (tap) => this.mapTap(tap), onHold: () => this.onWorldMap() }));
