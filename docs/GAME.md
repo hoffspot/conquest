@@ -206,8 +206,8 @@ back to the same world:
     each side; its wheels of felloes and eight spokes, turning as it goes. Laden with what its works
     yields: logs in two courses, a little longer than its bed; blocks squared and dressed, two by
     two, a rough one over them; or iron in bars, laid along and across, with red ore heaped by
-    them. Emptied once its goods are in, and going back for more. The creature lab
-    (`creature-lab.html?creature=ox&load=stone&people=orc`) shows one.
+    them. Emptied once its goods are in, and going back for more. The model viewer
+    (`model-viewer.html?creature=ox&load=stone&people=orc`) shows one.
 - **Each people's fortifications** (`art/kits/forts.js` `fortObject`, set down by
   `world/forts3d.js` where the war builds them; docs/WAR.md, *Fortifications*):
   - **a guard tower:** 3.6 m square and 9.5 m high, two rows of loops in each face, its door at
