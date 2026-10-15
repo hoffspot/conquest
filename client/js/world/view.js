@@ -128,8 +128,9 @@ const PREVIEW = 3;
 // them is seen (`span`: of their height, top to bottom, round `at` of it up: head and shoulders);
 // a creature not shaped as a person seen whole, from `aside` radians round from its front, near
 // enough that the ball round it fills `snug` of the picture (its corners never reach the ball);
-// toned `bright` times as bright as the screen, to read on an icon so small
-const LIKENESS = Object.freeze({ layer: 4, size: 96, span: 0.42, at: 0.8, fov: 30, aside: 0.6, snug: 1.25, bright: 1.4 });
+// toned `bright` times as bright as the screen, to read on an icon so small; its shaders waited
+// for, made in the background, `patience` ms at the most (portrait)
+const LIKENESS = Object.freeze({ layer: 4, size: 96, span: 0.42, at: 0.8, fov: 30, aside: 0.6, snug: 1.25, bright: 1.4, patience: 3000 });
 
 // ACES, as three.js tones the picture on the screen (ACESFilmicToneMapping), for a portrait drawn
 // into a picture of its own, which three.js leaves untoned: its matrices (each row a channel), and
@@ -1536,6 +1537,36 @@ export class View {
         }
 
         const { target, deep, camera } = this.portraits;
+
+        // (Its shaders for drawing into a picture of its own made first, in the background where
+        // the browser can (KHR_parallel_shader_compile): three.js draws into one untoned and
+        // linear, with a second shader for each of its materials, made as it was drawn, in the
+        // middle of a fight, for each new kind of attacker. Drawn once they're ready, as it is
+        // then, if it's still there)
+        subject.traverse((node) => node.layers.enable(layer));
+        this.scene.traverse((node) => node.isLight && node.layers.enable(layer));
+        renderer.setRenderTarget(target);
+
+        const making = [...renderer.compile(subject, camera, this.scene)].map((material) => renderer.properties.get(material).currentProgram);
+        const gl = renderer.getContext();
+        const until = performance.now() + LIKENESS.patience;
+
+        renderer.setRenderTarget(null);
+
+        // (Sent on to be made, which the browser may not do till it's told: nothing drawn
+        // meanwhile, they'd wait. Drawn after `patience` ms whatever, made then if they must be)
+        gl.flush();
+
+        while (making.some((program) => program && !program.isReady()) && performance.now() < until) {
+            await new Promise((resolve) => setTimeout(resolve, 16));
+            gl.flush();
+        }
+
+        if (!subject.parent) {
+            subject.traverse((node) => node.layers.disable(layer));
+
+            return null;
+        }
 
         // (A creature's whole: as far as its parts reach, each as it was made, where it is; not
         // Box3.setFromObject, which takes a skinned part's bones' reach as it's posed and then

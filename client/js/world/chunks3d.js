@@ -1035,10 +1035,10 @@ export class Chunks {
 }
 
 // Water, a waterfall and its mist, ground wet by water, a bridge, chimney smoke, a banner, a tuft
-// of grass and a window's light on the ground, far under the ground where they're never seen, so
-// that their shaders are made while the game loads (with the rest: Game.build) rather than the
-// first time a river, a fall, a bridge, smoke, a banner, the undergrowth or a lit window comes into
-// view
+// of grass, a window's light on the ground and a face of rock, far under the ground where they're
+// never seen, so that their shaders are made while the game loads (with the rest: Game.build)
+// rather than the first time a river, a fall, a bridge, smoke, a banner, the undergrowth, a lit
+// window or a cliff or arch of rock comes into view
 function primer() {
     const group = new THREE.Group();
     const water = primingWater();
@@ -1065,6 +1065,14 @@ function primer() {
 
     // (A window's light on the ground: windowpools.js's, drawn by night only, so made here)
     group.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), poolMaterial()));
+
+    // (And a face of rock: the cliffs' material, the arches' of rock too, shared, so not thrown
+    // away with the rest. Made the first time an arch came into view, it held an iPhone's frame
+    // up 0.4 s)
+    const rock = new Mesher(3);
+
+    rock.tri([0, 0, 0], [1, 0, 0], [0, 1, 0]);
+    group.add(cliffMesh(rock, [0, 0]));
 
     return group;
 }

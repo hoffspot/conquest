@@ -1425,7 +1425,10 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   not shaped as a person, all of it, from a little to its side), alone on the paperdoll's dark
   in a picture of its own and read back without stalling (view.js `portrait`, `LIKENESS`:
   three.js leaves such a picture untoned, so it's toned as the screen is, `toneOf`, a little
-  brighter to read so small); one of a
+  brighter to read so small). Drawn into a picture of its own, each of its materials wants a
+  shader of its own: they're made first, in the background where the browser can
+  (KHR_parallel_shader_compile, Safari and Chrome), and it's drawn once they're ready (made as it
+  was drawn, they held a fight's frame up, each new kind of attacker's); one of a
   crowd shows their name's first letter till they're drawn in full. Tapped, an icon sets the
   player on them where they stand (an `engage` order with `stand`, as tapping them does);
   tapped on whoever they're going after, they stop (`#halt`); tapped twice in quick succession
