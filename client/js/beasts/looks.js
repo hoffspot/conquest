@@ -500,11 +500,12 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0x561410, saddle: 0x2e0806, mask: 0x4a100c, belly: 0x8a5e34, dark: 0x160604, wings: 0x3a0e0c, wingBones: 0x2a0a08, claws: 0xc8b89a, ivory: 0xd8ccb0, eyes: 0xffc020, glow: 0xffa010 },
         attacks: ["bite", "swipe", "tailSlap", "stamp"], rests: ["lie", "yawn", "stretch", "sniff"], specials: ["breath"],
     },
-    // (The Dreadthorn: the drake's body for now, near twice its size, darker, more horned and
-    // spined; its own model to come, built from the bought one: beasts/model.js)
+    // (The Dreadthorn: the drake's body for now, half as big again (about 17 metres long, as its
+    // own model will be), darker, more horned and spined; its own model to come, built from the
+    // bought one: beasts/model.js)
     dreadthorn: {
         body: "quadruped",
-        scale: [1.9, 1.9],
+        scale: [1.4, 1.4],
         length: 4.4, height: 2.4, girth: 0.62, width: 0.48, chest: 1.12, haunch: 1.1, neck: 2.1, neckUp: 0.7,
         head: [0.38, 0.29, 0.58], snout: { length: 0.95, radius: 0.19, taper: 0.55, flat: 1.15 }, teeth: 14, brows: true, slit: true, eyeSize: 0.6, crouch: 1.6,
         ears: "none", horns: 2, horned: true, frill: 7, legs: 0.3, claws: 1.7, talons: true,
