@@ -202,7 +202,7 @@ and 40 to 55 farmsteads.
 | Standing stones | 14 | Heath, meadow, tundra, marsh, farmland |
 | Watchtowers | 18 | By roads |
 | Ruined castles | 5 | Only in the wild |
-| A dragon's lair | 1 | Volcanic ground, mountains or snow, in the wild |
+| A drake's lair | 1 | Volcanic ground, mountains or snow, in the wild |
 | An old graveyard | 1 for each people | Outside their start town, 8 to 17 cells out (about 250 to 550 m), in their lands, as near a road as there's room (`graveyards`) |
 | Each people's works | 2 lumber mills, 2 mines and 2 quarries for each people | In their lands, not on their edge (`WORKINGS`), on gentle dry ground: mills in the woods, mines and quarries up in the hills, where there are any; by a road where there's one; two of a kind 24 cells apart (`workings`; docs/WAR.md, *The works*) |
 
@@ -710,7 +710,7 @@ town.js`: see GAME.md, *Towns*), every settlement laid out by it and set into th
 player comes near with its roads built to it, each people's own buildings, castles and special
 places built their way, and each people's homeland its own ground, trees and things lying about.
 The sites no people keeps are built (terrain plan M7a): the ruins, caves, shrines, standing
-stones, ruined castles, the dragon's lair and the broken watchtowers, each where it rests, open
+stones, ruined castles, the drake's lair and the broken watchtowers, each where it rests, open
 where it's entered (GAME.md, *The sites no people keeps*). Next: going into them (the caves'
 and catacombs' insides).
 
@@ -835,8 +835,8 @@ The world is played on the land's height with what's built levelled into it (`Gr
   (and sinking into it far off from there).
 - Everyone standing at the ground under where they're drawn: snapped to it as it rises and
   falls, easing only up and down steps (onto a bridge's deck); the fallen sinking into it; a
-  wyvern or dragon gliding down to it to land.
-- Birds, wyverns and the dragon flying at their height over the ground, rising over what's ahead
+  wyvern or drake gliding down to it to land.
+- Birds, wyverns and the drake flying at their height over the ground, rising over what's ahead
   and sinking slowly after, nose up and down as they go.
 - **The far land** past the chunks (GAME.md, *The far land and the haze*): the land as it's seen
   from afar (`distantHeights`: the lie of the land with lakes and the sea carved in, but not

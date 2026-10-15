@@ -29,6 +29,9 @@ const SITE_MARKS = {
     mine: "⚒",
     quarry: "▣",
 };
+// (A kind of site as a player calls it, where that isn't its key: the drake's lair keeps the key
+// it had as the dragon's)
+const SHOWN_KINDS = { "dragon's lair": "drake's lair" };
 const TIER_COLOURS = ["#ffe066", "#ffc04d", "#ff9f40", "#ff7a33", "#f5522e", "#e0322d", "#c01f3a", "#8f1747"];
 
 const LAYERS = [
@@ -340,7 +343,7 @@ function describe(sx, sy) {
     }
 
     for (const site of near(plan.sites)) {
-        lines.push(`${site.name ? `${site.name}: ` : ""}${site.race ? `the ${race(site.race)} ` : ""}${site.kind}`);
+        lines.push(`${site.name ? `${site.name}: ` : ""}${site.race ? `the ${race(site.race)} ` : ""}${SHOWN_KINDS[site.kind] ?? site.kind}`);
     }
 
     for (const camp of near(plan.camps)) {

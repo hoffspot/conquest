@@ -44,7 +44,7 @@ back to the same world:
   plan's roads carried on to its streets' ends.
 - **The sites no people keeps** (`core/setpieces/neutral.js`, built by `art/kits/neutral.js` and
   the castle kit's `RUINED`): the ruins of old halls, caves, shrines, rings of standing stones,
-  ruined castles, the dragon's lair, the broken watchtowers no one mans, and the old graveyard
+  ruined castles, the drake's lair, the broken watchtowers no one mans, and the old graveyard
   outside each people's start town. Old and weathered,
   as the Elden Ring's are; the peoples' own towns, castles and farms are kept up and lived in.
   - **Laid out** from the site's seed, the same everywhere: its parts, what of it stands in the
@@ -65,7 +65,7 @@ back to the same world:
     hanging over it (`RUINS.crypt`). **Ruined castle:** the humans' castle as it's laid out, left to ruin: its walls and
     towers crumbled (below), its keep open to the sky with joists still across it, its gatehouse's
     bridge fallen, its houses heaps of stone and charred timbers; old barrels, crates and a cart
-    left by its walls. **Dragon's lair:** a hollow dug into a mountainside, a great dark doorway
+    left by its walls. **Drake's lair:** a hollow dug into a mountainside, a great dark doorway
     in the face at its back, ridges of dark rock coming down either side, bones. **Broken
     watchtower:** its walls broken off at different heights round its top.
   - **Graveyard** (`GRAVEYARD`, laid out as old churchyards are; the research behind it, from
@@ -1403,7 +1403,7 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
 - **It leans towards the foe:** 40% of the way, up to 4.5 metres, and no more than a quarter of
   the camera's distance across the ground (`LEAN`), so a foe far off doesn't lean the player out
   of the bottom of the picture.
-- **Out of doors it draws back** for a foe much taller than the player (a wyvern, a dragon: 15%
+- **Out of doors it draws back** for a foe much taller than the player (a wyvern, a drake: 15%
   for each metre over 2.5) or far from them (an archer: 7% for each metre past 4), up to half as
   far again, easing there over a second or so (view.js `BIG_FOE`, `backFor`).
 - **What's in the way of the foe is cut through** too: a second dithered hole round them, as
@@ -2365,16 +2365,16 @@ its wings beaten in the shader; so a sky full of birds costs a draw call a kind.
 
 Over the wild lands wyverns hunt in (the mountains, the badlands, volcanic land and the snow),
 a wyvern flies over now and then (a try every 40 to 110 seconds), 18 to 30 metres up; and within
-420 metres of a dragon's lair, while its dragon's alive and not down on the ground to be fought,
-the dragon circles over its lair's side of the player, 28 to 40 metres up. They're the creatures
+420 metres of a drake's lair, while its drake's alive and not down on the ground to be fought,
+the drake circles over its lair's side of the player, 28 to 40 metres up. They're the creatures
 as they're drawn on the ground (beasts/), flying: legs tucked up, neck out ahead, tail streaming,
-wings spread wide, beating or held out to glide, leaning into their turns. A wyvern or the dragon
+wings spread wide, beating or held out to glide, leaning into their turns. A wyvern or the drake
 put out near the player (within 140 metres) to fight is seen coming down out of the sky to where
 it is: one already flying about, if there is one, or from far up behind (`BeastAvatar.arrive`),
 gliding lower all the way, then flaring, nose up and beating hard, and touching down facing the
 way it will fight. It's where its battle's creature is all along; it's only drawn coming down.
 Nothing in the air can be fought. Each player's game draws its own fliers, from its own random
-numbers. A wyvern or the dragon is built a little each frame (2 ms) before it comes (`hatching`),
+numbers. A wyvern or the drake is built a little each frame (2 ms) before it comes (`hatching`),
 so the first of each of its looks, a tenth of a second or more to sculpt, stalls no frame; the
 labs' and tests' `send` puts one up at once.
 
@@ -3473,7 +3473,7 @@ they are: every site the world plan puts out between the settlements and every w
   starwatch and the obsidian spire), a people's great hall (the tree hall, the hatchery, the
   shadow gate, the fighting pit), a holy spring (the moonwell, the watering hole, the serpent
   pool), a great rock (pride rock), a totem (the war totem, the skull pit), ruins, a ruined
-  castle, a cave's mouth, the dragon's claw marks, a shrine's flame, standing stones and a camp's
+  castle, a cave's mouth, the drake's claw marks, a shrine's flame, standing stones and a camp's
   tent.
 - **Their rim** is the colour of who holds the place now (`PLACE_RIMS`): its people's gold,
   outlaws' red, the restless dead's pale green, a great beast's orange, grey once it's been
@@ -3499,8 +3499,8 @@ been seen (app/game.js `dungeonIcons`); rimmed grey while it's cleared, till it'
   outlaws' in about a third of them (`PLACE_TIMES.taken`, by the world's seed and the place's).
   Holy springs, pride rock and the war totem are theirs alone.
 - A watchtower out in the wild, and a cave, are outlaws'. The ruins and the ruined castles are the
-  restless dead's, and so is the old graveyard outside each people's start town; the dragon's
-  lair is the dragon's, and the shrines and standing stones no one's.
+  restless dead's, and so is the old graveyard outside each people's start town; the drake's
+  lair is the drake's, and the shrines and standing stones no one's.
 - **Cleared and retaken:** once a place's occupiers are put to the sword (`War.clearPlace`, kept
   with the war: `places`, by the place's id, the turn it was cleared and how often), it stands
   empty for 120 of the war's turns (two days of the world's clock: `PLACE_TIMES.retake`), then
@@ -3548,7 +3548,7 @@ metres off (back as many as ever the next time, unless it's been cleared).
 - **The guilds want them cleared:** an adventurers' guild offers a contract on a place within
   1.5 km of its town held by outlaws or the dead ("Put them to the sword", docs/WAR.md), done once
   it's cleared with the player there.
-- **Gone into** (M7.5b-1: a cave, the dragon's lair, a broken watchtower out in the wild; M7.5b-4,
+- **Gone into** (M7.5b-1: a cave, the drake's lair, a broken watchtower out in the wild; M7.5b-4,
   the crypt under the ruins and a ruined castle's keep): its way in is a door as a building's
   (`sites.js` `entranceAt`: the mouth, the tower's door, the ruins' stair-house's, the breach in
   the ruined keep's front where its door was, kept clear of what stands in the way), its floors
@@ -3557,7 +3557,7 @@ metres off (back as many as ever the next time, unless it's been cleared).
   insides are (`interiors3d.js`):
   - **A cave:** a passage in from its mouth (daylight in it) to a chamber, rock all round,
     earth underfoot; the outlaws' bedrolls and their fire, sacks and a crate, torches on the walls.
-  - **The dragon's lair:** a great cavern of dark rock, the floor scorched, bones about it, embers
+  - **The drake's lair:** a great cavern of dark rock, the floor scorched, bones about it, embers
     glowing in its cracks, heaps of gold at the back.
   - **The crypt under the ruins** ("The crypt under Peningmoor Ruins"): down the stair, daylight
     at its head, into a vaulted aisle between two rows of pillars, ribs across the vault from
@@ -3603,8 +3603,8 @@ metres off (back as many as ever the next time, unless it's been cleared).
   - **A ruined castle's wight lord** keeps within its keep's great hall by its hoard (`LAIRS`
     `within`), half of each kind of its dead with it (three skeletons, two ghosts and a wraith,
     each at a post of its own), the rest in the courtyard; slain, the hoard's opened as the
-    dragon's is, an old relic in each share.
-  - **The dragon's hoard** lies at the back of its lair, a chest locked while the dragon lives
+    drake's is, an old relic in each share.
+  - **The drake's hoard** lies at the back of its lair, a chest locked while the drake lives
     (`#lairs`); once it falls, it's opened, a share for each player there (`LOOT.hoard`: 180 to 320
     gold, potions, a ring and maybe an amulet, now and then a masterwork sword or bow).
   - Its sound's its own (`sound.js` PLACES: a cave's, the lair's and the crypt's hushed, the
@@ -3935,21 +3935,21 @@ played at its own volume:
   domain), real animals where there are any (the National Park Service's wolves, grizzlies and
   bison; a pet rat, a cobra, wild boars, an alligator, a frog), the nearest real thing for the
   rest (a hissing cockroach for a spider, a tree creaking for a treant, a lion, a bison and an
-  alligator slowed for a dragon, men's voices for goblins and trolls, whispers and moans for the
+  alligator slowed for a drake, men's voices for goblins and trolls, whispers and moans for the
   dead). Each creature has its family's (21 families), played slower and lower for a bigger one
-  of the family and higher for a smaller (a dire wolf a wolf's at 0.85, a wyvern a dragon's at
+  of the family and higher for a smaller (a dire wolf a wolf's at 0.85, a wyvern a drake's at
   1.15):
   - **A call** as it sets on someone (no sooner than 8 s after its last), and now and then as it
     goes about its business (every 25 to 70 s, never two creatures' within 5 s), heard to 50 m.
-    A dragon or a wyvern in the sky calls now and then too.
+    A drake or a wyvern in the sky calls now and then too.
   - **An attack**, loudest as its blow lands: a beast's every blow, a people-shaped one's (a
     bandit, a goblin, a troll) about half of them, 0.9 s apart at least.
   - **Hurt**, no oftener than every 0.7 s; struck dead, its death instead.
-  - **Dying**, and falling: a body's thud for its size (a rat's light, a bear's or a dragon's
+  - **Dying**, and falling: a body's thud for its size (a rat's light, a bear's or a drake's
     heavy), none for a slime, a ghost or the bats (a skeleton's bones and a treant's crash are in
     their deaths); the people-shaped as a person falls.
-  - **Wings**: a dragon's and a wyvern's beating in the air when they beat hard (heard to 45 m),
-    and flaring as one comes down to land; the bats fluttering under their voice. **A dragon's
+  - **Wings**: a drake's and a wyvern's beating in the air when they beat hard (heard to 45 m),
+    and flaring as one comes down to land; the bats fluttering under their voice. **A drake's
     fire** is its own (a fire whooshing up), and **a magma slime** sizzles under its voice.
   - **A woman** among the bandits and cultists is silent: no woman's voice is recorded yet.
   - **Downloaded only once wanted**, as a creature's drawn (about 2.5 MB in all; a family's
@@ -3981,7 +3981,7 @@ played at its own volume:
     over a person's or, on all fours, over 1.2 m), louder and lower the bigger. A big stride's a
     walk at a pace a small one runs at. Beasts on all fours step softer, on paws. A spider's legs
     skitter, a slime squelches, a serpent slithers and a frog's webbed feet slap, whatever's under
-    them. Nothing's heard of what floats or flies in a swarm, of a dragon in the air or of anyone
+    them. Nothing's heard of what floats or flies in a swarm, of a drake in the air or of anyone
     Levitating.
   - **Stairs**: four treads on the stairs' boards or stone as anyone goes up or down them, on the
     player's floor (coming up, louder; going away, quieter); on wooden stairs, a recording of old
@@ -4057,7 +4057,7 @@ from Freesound, the National Park Service's and the Versilian Community Sample L
 - **Beds indoors** (`INDOORS`): a taproom's crowd and its hearth (louder nearer), the crowd
   quieter upstairs and in an adventurers' guild; a smithy's forge; a temple's hush, quieter in a
   town hall and quieter still in a shop (papers rustling in both); a crypt's still air (with drips; quieter in a keep, with a brazier in a castle's
-  undercroft); a cave's drips; the dragon's lair's belching spring; wind through a ruined keep and
+  undercroft); a cave's drips; the drake's lair's belching spring; wind through a ruined keep and
   a watchtower.
 - **Calls** (`CALLS`), each from somewhere round the player (or a tree near, or its smithy):
   birdsong by day (every 4 to 14 seconds; more in the woods, fewer in a town or on dry land, none
@@ -4828,14 +4828,14 @@ phone's quality, a frame is 70 to 95 draw calls and 160,000 to 200,000 triangles
 350,000 triangles out in their homeland. Looking level towards the horizon shows more of the world
 (an orc's town: 136 draw calls and 300,000 triangles); looking up into the sky, less (about 100
 and 240,000). The sky's dome is one draw call; the birds one a kind flying; a wyvern or the
-dragon in the air about 18,000 triangles in seven draw calls, casting no shadow. A chunk is
+drake in the air about 18,000 triangles in seven draw calls, casting no shadow. A chunk is
 drawn a step at a time within each frame's budget (the longest step a few milliseconds on a
 desktop): walking across the world, no frame's streaming takes over 8 ms there. The near camera
 sees 160 metres; past that, the far land out to 1, 2 or 4 km (low, medium, high), in four to
 eight more draw calls and about 50,000 more triangles (the view, *The far land and the haze*).
 Everything that can be is built once: the town is merged, shaders are compiled while loading
 (the far land's and the sky's with the rest's, drawn first as they are; and a character,
-creature, wyvern or dragon that comes later has its compiled before it's first drawn, hidden till then: `View.prepare`, in the background where the browser can, so a kind not
+creature, wyvern or drake that comes later has its compiled before it's first drawn, hidden till then: `View.prepare`, in the background where the browser can, so a kind not
 seen before doesn't stall the frame it appears in; the birds each have their own colour from the
 start, so their shader's the one compiled while loading), the pictures of what the camera sees are
 sent to the graphics card while loading too (`View.upload`, after the shaders: three.js otherwise sends
@@ -5066,10 +5066,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
 - `test/sky.test.js`: the sky's dome round the camera, drawn behind everything, its horizon the
   haze's colour; birds for every land, a dozen triangles or so each; flocks of the land's birds
   now and then, never too many, at their heights, gone once far off; a wyvern over the lands they
-  hunt in, built over several frames before it comes, and none over a meadow; the dragon circling within sight on its lair's side of the
+  hunt in, built over several frames before it comes, and none over a meadow; the drake circling within sight on its lair's side of the
   player, handed over to land and gone from the air, and flying off when its lair's no longer
   near; none of it indoors; a wyvern coming down out of the sky to where its actor is, lower all
-  the way, landing facing its way; a dragon soaring where it's put; nothing without wings coming
+  the way, landing facing its way; a drake soaring where it's put; nothing without wings coming
   down out of the sky.
 - `test/actions.test.js`: attacks (five ways of each, every one landing in front at a fighting
   height, never the same way twice in a row, all five used; their timing, where the hands reach

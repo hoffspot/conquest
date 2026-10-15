@@ -423,11 +423,11 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
             Object.assign(host.battle.actor(id), { hp: 5000, maxHp: 5000, map: me.map });
         }
 
-        // (A dragon, near dead: it always has gold on it)
+        // (A drake, near dead: it always has gold on it)
         const square = [me.square[0] + 1, me.square[1]];
 
         host.wild.set("test-dragon", { creature: "dragon", tier: 10, pack: "test-dragon", camp: null, lair: null, master: false });
-        host.battle.add({ id: "test-dragon", kind: "beast", name: "Dragon", weapon: "dragon", team: WILD, square, ai: "wild", hp: 1, speed: 0.1, chase: 0.1, wild: { creature: "dragon", tier: 10, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: "test-dragon", leader: null, menace: false } });
+        host.battle.add({ id: "test-dragon", kind: "beast", name: "Drake", weapon: "dragon", team: WILD, square, ai: "wild", hp: 1, speed: 0.1, chase: 0.1, wild: { creature: "dragon", tier: 10, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: "test-dragon", leader: null, menace: false } });
         host.command(HOST_PLAYER, { type: "engage", target: "test-dragon" });
 
         const events = run(host, 5000);
@@ -594,7 +594,7 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         assert.ok(kept > 0 && dropped > 0, `${kept} kept, ${dropped} left`);
     });
 
-    it("rolls creatures' spoils as their tables say, never certain but for a dragon's gold, worth more the mightier", () => {
+    it("rolls creatures' spoils as their tables say, never certain but for a drake's gold, worth more the mightier", () => {
         const random = createRandom(7);
         const tally = (creature, tier, n = 2000) => {
             let worth = 0;
