@@ -604,7 +604,9 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   nothing's grown or placed within 4 m past its furthest reach (`roomOf`; a clearing, as round
   the places). If any of its legs' squares is a road's, water, a bridge or built on, it isn't
   there at all. A chunk's arch is one of its features (`kind: "arch"`, `arch`: arches.js's own).
-  `NET_VERSION` 26 (24 when its legs were round footprints at its feet).
+  `NET_VERSION` 26 (24 when its legs were round footprints at its feet). Its rock is the cliffs'
+  material, whose shader's made at load (the chunks' primer: a face of rock under the ground); made
+  the first time an arch or cliff came into view, it held an iPhone's frame up 0.4 s.
 - **Broken aqueducts** (`core/aqueducts.js`; the terrain plan's M7i-3, §9's humans: "ruined
   villages; hill citadels; broken aqueducts"): a straight row of stone piers striding across a dip
   in the humans' land, arches between them carrying a channel no water's run in for an age, a

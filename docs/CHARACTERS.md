@@ -776,9 +776,11 @@ skin a few rows a step (`paintingSkin`), the hair a few dozen strands a step (`g
 garment's shell and toe caps (`fittingGarment`), a garment's picture a few rows a step the first
 time (`paintingGarment`) and an outfit's (`compositingGarments`), then each thing carried. With
 everything once made kept, the longest step is 10 to 20 ms on a desktop, where a soldier or one of
-the folk was one piece of 300 to 800 ms. A follower just hired is built so too, drawn a moment
-after (`#mirror`: dressed there and then, one held an iPhone up for 0.6 s); another player coming
-into the world is still dressed at once. `new Character(...)`, `setLook` and `setEquipment` take
+the folk was one piece of 300 to 800 ms. A follower just hired keeps the body of the adventurer
+they were, drawn at once as they stood (`#adopted`: both are drawn from the same calling, sex, seed
+and people); one hired from a crowd's figure is built so too, drawn a moment after (`#mirror`:
+dressed there and then, one held an iPhone up for 0.6 s). Another player coming into the world is
+still dressed at once. `new Character(...)`, `setLook` and `setEquipment` take
 every step at once, as before (the character maker, the paperdoll). Its hair is grown once: under a
 helmet or hat, only what's below its rim, when it's dressed (it was grown whole first, and grown
 again for anyone carrying anything). Tests build soldiers, folk and a hero both ways and check
