@@ -32,10 +32,13 @@ jobs:
       - run: npm run lint
       - run: npm test
 
+      # (Which code this is written into the site's copy for the debug log: the commit and when,
+      # in place of client/js/app/version.js's noughts: scripts/stamp-version.js)
       - name: Put the site together
         run: |
           npm run build:manifest
           cp -R client _site
+          node scripts/stamp-version.js _site/js/app/version.js "$GITHUB_SHA"
 
       - uses: actions/configure-pages@v6
 

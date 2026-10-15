@@ -27,9 +27,16 @@
 //    each of TELEMETRY.memory.marks, or the page's heap near its limit (TELEMETRY.memory.heap of
 //    it). With what holds it, and what's going on.
 //
+// Each event names the code it came from (its commit's first 10 digits, written into app/version.js
+// as the site's put together: "dev" for a copy run from the repository) and the assets' release
+// (app/assets.js); so does the log as copied, and a crash the code of the page that fell over.
+//
 // Each kind of event is kept at most once every TELEMETRY.again ms, so one bad patch doesn't fill
-// the log. It costs a frame a few clock readings and a little arithmetic; the rest is only done
-// when something's kept. Kept in the browser's storage (localStorage), never sent anywhere.
+// the log; one that wouldn't be is never worked out (#due), so a patch where every frame's a
+// freeze costs those frames nothing more. It costs a frame a few clock readings and a little
+// arithmetic; the rest is only done when something's kept, and the notes (every TELEMETRY.notes
+// ms) after a frame, not in it (aliveSoon). Kept in the browser's storage (localStorage), never
+// sent anywhere.
 
 /**
  * - `kept`: how many events are kept (the newest).
@@ -104,6 +111,10 @@ export class Telemetry {
     #nearLimit = false;
     #trend = [];
     #begun = [];
+    // (The notes asked for after this frame, not yet written; and how many times they've been
+    // closed, for those asked for before to know they mustn't be: aliveSoon)
+    #noting = false;
+    #closings = 0;
     // What the graphics card had been given as this frame and the one before began (#look)
     #given = { textures: 0, geometries: 0, shaders: -1, newest: -1 };
     #givenBefore = { textures: 0, geometries: 0, shaders: -1, newest: -1 };
@@ -113,13 +124,18 @@ export class Telemetry {
      * @param {Storage} [options.storage] - Where the log and the notes are kept (localStorage).
      * @param {Function} [options.now] - The time (ms, a frame's: performance.now).
      * @param {Function} [options.clock] - The time of day (ms since 1970: Date.now).
-     * @param {string} [options.build] - Which build of the game this is.
+     * @param {string} [options.build] - Which release of the game's assets this is (app/assets.js).
+     * @param {string} [options.code] - Which code this is: its commit's first 10 digits, or "dev"
+     *   (app/version.js codeVersion).
+     * @param {?string} [options.built] - When the code was put together (an ISO date), if known.
      */
-    constructor({ storage = null, now = () => performance.now(), clock = () => Date.now(), build = "" } = {}) {
+    constructor({ storage = null, now = () => performance.now(), clock = () => Date.now(), build = "", code = "", built = null } = {}) {
         this.#storage = storage ?? null;
         this.#now = now;
         this.#clock = clock;
         this.build = build;
+        this.code = code;
+        this.built = built;
 
         /** The events kept, the newest first. */
         this.events = this.#read(TELEMETRY.key) ?? [];
@@ -280,6 +296,10 @@ export class Telemetry {
     // browser says ran from `from` to `end`, the jobs then, and what the graphics card was given
     // since the frame (or the frame before) began
     #freeze({ ms, where, slot, own, from, end, state }) {
+        if (!this.#due("freeze")) {
+            return;
+        }
+
         const phases = {};
 
         PHASES.forEach((name, k) => {
@@ -311,6 +331,10 @@ export class Telemetry {
 
     // Slow going: the window's frames' middle, and each phase's time on average over it
     #slow(state) {
+        if (!this.#due("slow")) {
+            return;
+        }
+
         let spanned = 0;
         const intervals = [];
 
@@ -457,11 +481,20 @@ export class Telemetry {
 
         this.#errors.push({ ...what, where, at: this.#clock() });
         this.#errors.splice(0, Math.max(0, this.#errors.length - 3));
+
+        if (!this.#due(`error:${what.message}`)) {
+            return;
+        }
+
         this.keep(`error:${what.message}`, { kind: "error", summary: `${where === "uncaught" ? "Error" : `Error (${where})`}: ${what.message}`, where, error: what, recent: this.#recent(), state: state() });
     }
 
     /** The picture lost (WebGL's context: a phone short of memory takes it back). */
     lost(state = () => ({})) {
+        if (!this.#due("lost")) {
+            return;
+        }
+
         this.keep("lost", { summary: "The picture was lost (the graphics context)", recent: this.#recent(), state: state() });
     }
 
@@ -489,8 +522,31 @@ export class Telemetry {
             this.#trend.splice(0, Math.max(0, this.#trend.length - TELEMETRY.trend));
         }
 
-        this.#write(TELEMETRY.alive, { at: this.#clock(), pageAt: round(now), build: this.build, closed: false, state: noted, trend: this.#trend, recent: this.#recent(), jobs: this.#lately(), errors: this.#errors });
+        this.#write(TELEMETRY.alive, { at: this.#clock(), pageAt: round(now), build: this.build, code: this.code, built: this.built, closed: false, state: noted, trend: this.#trend, recent: this.#recent(), jobs: this.#lately(), errors: this.#errors });
         this.#memory(noted);
+    }
+
+    /**
+     * The notes (alive), if they're due, written just after this frame (`later`: a task of its
+     * own, setTimeout's) rather than in it: a frame's shown only once its work's done, and the
+     * notes take a millisecond or two on a phone. Not if the game's closed or hidden meanwhile
+     * (closed: whatever comes next isn't a crash).
+     */
+    aliveSoon(state, later = (write) => setTimeout(write, 0)) {
+        if (this.#noting || this.#now() - this.#notedAt < TELEMETRY.notes) {
+            return;
+        }
+
+        const closings = this.#closings;
+
+        this.#noting = true;
+        later(() => {
+            this.#noting = false;
+
+            if (closings === this.#closings) {
+                this.alive(state);
+            }
+        });
     }
 
     // What the game holds (the state's memory: app/game.js memoryNow) past its next mark, or the
@@ -529,6 +585,7 @@ export class Telemetry {
         const notes = this.#read(TELEMETRY.alive);
 
         this.#notedAt = -Infinity;
+        this.#closings++;
 
         if (notes && !notes.closed) {
             this.#write(TELEMETRY.alive, { ...notes, closed: true });
@@ -560,6 +617,8 @@ export class Telemetry {
             at: notes.at,
             later: round(ago / 1000),
             build: notes.build,
+            code: notes.code ?? null,
+            built: notes.built ?? null,
             pageAt,
             jobs: notes.jobs ?? [],
             begun: begun.map((each) => (pageAt !== null && each.at > pageAt ? { ...each, afterNotes: true } : each)),
@@ -572,23 +631,29 @@ export class Telemetry {
 
     // --- The log ---
 
+    // Whether an event of `kind` would be kept now (none of its kind kept in the last
+    // TELEMETRY.again ms): asked before what it'd say is worked out (how the game's going among
+    // it), so that in a bad patch, every frame a freeze, those that can't be kept cost nothing
+    #due(kind) {
+        const last = this.#last.get(kind);
+
+        return last === undefined || this.#now() - last >= TELEMETRY.again;
+    }
+
     /**
      * Keep an event (`kind`, and what it says), unless one of its kind was kept less than
      * TELEMETRY.again ms ago; the newest TELEMETRY.kept kept. Returns it, if kept.
      */
     keep(kind, detail) {
-        const now = this.#now();
-        const last = this.#last.get(kind);
-
-        if (last !== undefined && now - last < TELEMETRY.again) {
+        if (!this.#due(kind)) {
             return null;
         }
 
-        this.#last.set(kind, now);
+        this.#last.set(kind, this.#now());
 
-        const { kind: named = kind, summary, at = this.#clock(), build = this.build, ...rest } = detail;
+        const { kind: named = kind, summary, at = this.#clock(), build = this.build, code = this.code, built = this.built, ...rest } = detail;
 
-        this.events = [{ kind: named, summary, at: new Date(at).toISOString(), build, ...rest }, ...this.events].slice(0, TELEMETRY.kept);
+        this.events = [{ kind: named, summary, at: new Date(at).toISOString(), build, code, built, ...rest }, ...this.events].slice(0, TELEMETRY.kept);
         this.#write(TELEMETRY.key, this.events);
         this.onChange?.(this.events);
 
@@ -605,7 +670,7 @@ export class Telemetry {
 
     /** The log as text to copy (JSON, the newest first). */
     text() {
-        return JSON.stringify({ build: this.build, events: this.events }, null, 2);
+        return JSON.stringify({ build: this.build, code: this.code, built: this.built, events: this.events }, null, 2);
     }
 
     #read(key) {
