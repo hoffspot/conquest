@@ -386,6 +386,15 @@ export const NATURAL = Object.freeze({
             ranged({ id: "breath", reach: 6, damage: [6, 12], hitAt: 700, duration: 1400, interval: 3000, stagger: 300, reaction: "fire", animation: "breath", projectile: { kind: "flame", speed: 14 }, afflict: { kind: "burn", chance: 1 } }),
         ],
     },
+    // (The Dreadthorn's: greater than a drake's, its bite reaching further and laying a wound open,
+    // its fire a long breath that sets whatever it reaches burning)
+    dreadthorn: {
+        label: "Jaws and dragonfire",
+        attacks: [
+            melee({ id: "bite", reach: 2, damage: [12, 20], hitAt: 720, duration: 1600, interval: 2000, stagger: 500, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.5 } }),
+            ranged({ id: "breath", reach: 9, damage: [10, 18], hitAt: 1100, duration: 3400, interval: 6000, stagger: 400, reaction: "fire", animation: "breath", projectile: { kind: "flame", speed: 14 }, afflict: { kind: "burn", chance: 1 } }),
+        ],
+    },
     // (A ghost's touch is the grave's cold, slowing; its wail staggers whoever hears it. A wraith
     // rakes with its claws, and draws the life out of whoever it holds its hand out to)
     ghost: {

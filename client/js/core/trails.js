@@ -19,6 +19,7 @@ import { wadeable, watersOf } from "./terrain/waters.js";
 import { heightAt, stillLevelAt } from "./terrain/height.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
 import { layoutNeutral, NEUTRAL } from "./setpieces/neutral.js";
+import { LAIR_KINDS } from "./places.js";
 import { PLOT } from "./setpieces/pieces.js";
 import { CUT_EASE, cutOf, isNeutral, LIE, restingOf } from "./sites.js";
 import { CELL, CELLS, WORKS, WORLD_SIZE } from "./worldplan/plan.js";
@@ -35,7 +36,7 @@ import { CELL, CELLS, WORKS, WORLD_SIZE } from "./worldplan/plan.js";
 export const TRAILS = Object.freeze({ height: 0.5, reach: 700, room: 160, half: 0.7, front: 2, clear: 2, byTown: 48 });
 
 /** The sites a trail goes up to (in the hills); and each people's works, wherever they are (their convoys' way to the road). */
-export const TRAIL_SITES = Object.freeze(["cave", "ruins", "shrine", "standing stones", "ruined castle", "dragon's lair"]);
+export const TRAIL_SITES = Object.freeze(["cave", "ruins", "shrine", "standing stones", "ruined castle", ...LAIR_KINDS]);
 const WORKED = WORKS.map(({ kind }) => kind);
 
 // How far past a trail's room its land must be wanted for it to be found first (metres: as far as

@@ -298,6 +298,8 @@ export const LOOT = Object.freeze({
     chest: { gold: [25, 60], items: [{ id: "potion", chance: 0.9 }, { uniform: true, chance: 0.9 }, { uniform: true, chance: 0.5 }, { id: "sword", quality: "fine", chance: 0.2 }, { id: "bow", quality: "fine", chance: 0.15 }] },
     // (The dragon's hoard in its lair, opened once it's slain: core/host.js #lairs)
     hoard: { gold: [180, 320], items: [{ id: "potion", chance: 1 }, { id: "potion", chance: 0.6 }, { id: "ring", quality: "fine", chance: 0.8 }, { id: "amulet", quality: "fine", chance: 0.5 }, { id: "sword", quality: "masterwork", chance: 0.35 }, { id: "bow", quality: "masterwork", chance: 0.25 }] },
+    // (A Dreadthorn's, greater: creatures.js LAIRS, an old relic in it too)
+    greatHoard: { gold: [500, 900], items: [{ id: "potion", chance: 1 }, { id: "potion", chance: 1 }, { id: "ring", quality: "masterwork", chance: 0.8 }, { id: "amulet", quality: "masterwork", chance: 0.7 }, { id: "sword", quality: "masterwork", chance: 0.6 }, { id: "bow", quality: "masterwork", chance: 0.45 }] },
 });
 
 /**

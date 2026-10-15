@@ -1,16 +1,16 @@
 // Places worth finding (the terrain plan's M7.5, §8 "Places worth finding"): every site the world
 // plan puts out between the settlements (sites.js: each people's castle and its own special places,
-// the watchtowers, and the ruins, caves, shrines, circles of stones, ruined castles and the
-// dragon's lair no people keeps) and the wild camps, as places: what each is, how big, the icon it
-// has on the maps, and who holds it.
+// the watchtowers, and the ruins, caves, shrines, circles of stones, ruined castles, the drake's
+// lair and the Dreadthorns' no people keeps) and the wild camps, as places: what each is, how big,
+// the icon it has on the maps, and who holds it.
 //
 // Who holds a place is mixed by the war, a world at a time (the user's choice): each people's own
 // castle is theirs; their other places theirs or taken by bandits; a watchtower out in the wild,
 // and a cave, a band of outlaws'; the ruins the restless dead's (the bones, ghosts and wraiths of
 // whoever lived there long ago, led by a wight guarding an old relic), and the old graveyard
 // outside each people's start town theirs too (a few bones and ghosts, led by a skeleton: the
-// first of the dead a new adventurer meets); the dragon's lair the
-// dragon's; the shrines and the circles of stones no one's. Once a place's occupiers are put to
+// first of the dead a new adventurer meets); the drake's lair the
+// drake's, and a Dreadthorn's lair the Dreadthorn's; the shrines and the circles of stones no one's. Once a place's occupiers are put to
 // the sword and their leader killed it's empty for a while (`PLACE_TIMES.retake`: a few days of
 // the world's clock), and then a new band moves in, or the dead rise again (the war keeps when
 // each was cleared: war.js clearPlace).
@@ -21,6 +21,13 @@ import { createRandom } from "./random.js";
 
 /** Who can hold a place: its people (friendly to those not at war with them), outlaws, the restless dead, a great beast, or no one. */
 export const HOLDERS = Object.freeze(["friendly", "bandits", "dead", "beast"]);
+
+/**
+ * The lairs a great winged beast keeps, a cave's mouth cut into a mountainside with its hoard
+ * inside (setpieces/neutral.js, insides.js): the drake's (its key still "dragon's lair") and the
+ * Dreadthorns'.
+ */
+export const LAIR_KINDS = Object.freeze(["dragon's lair", "dreadthorn's lair"]);
 
 /**
  * Each kind of place: how big it is (`size`: small, medium or large, as many occupy it), its icon on
@@ -56,6 +63,7 @@ export const PLACE_KINDS = Object.freeze({
     "ruined castle": { size: "large", icon: "ruinedCastle", holds: ["dead"] },
     cave: { size: "medium", icon: "cave", holds: ["bandits"] },
     "dragon's lair": { size: "large", icon: "lair", holds: ["beast"] },
+    "dreadthorn's lair": { size: "large", icon: "lair", holds: ["beast"] },
     shrine: { size: "small", icon: "shrine", holds: [] },
     "standing stones": { size: "small", icon: "stones", holds: [] },
     // (The old graveyard outside each people's start town: its dead their own band, PLACE_BANDS)

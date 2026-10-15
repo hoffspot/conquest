@@ -604,7 +604,7 @@ describe("the places worth finding gone into (insides.js: a cave, the drake's la
         const sites = world.maps.town.sites;
 
         // (The ruins whosever they were: their crypt's the same)
-        for (const [kind, floors] of [["cave", 1], ["dragon's lair", 1], ["ruins", 1], ["ruined castle", 1], ["watchtower", 2]]) {
+        for (const [kind, floors] of [["cave", 1], ["dragon's lair", 1], ["dreadthorn's lair", 1], ["ruins", 1], ["ruined castle", 1], ["watchtower", 2]]) {
             const site = world.plan.sites.find((one) => one.kind === kind && (kind === "ruins" || !one.race));
 
             sites.heartOf(site);
@@ -630,7 +630,7 @@ describe("the places worth finding gone into (insides.js: a cave, the drake's la
             });
             assert.equal(marked("h").length > 0, true, `${kind}'s chest`);
             assert.equal(marked("l").length, 1, `${kind}'s chief`);
-            assert.ok(kind === "dragon's lair" || marked("g").length >= 2, `${kind}'s guards`);
+            assert.ok(kind.endsWith("lair") || marked("g").length >= 2, `${kind}'s guards`);
 
             for (const map of maps) {
                 const interior = buildInterior(map);

@@ -31,6 +31,7 @@ export const NEUTRAL = Object.freeze({
     ruins: [6, 5],
     "ruined castle": [18, 16],
     "dragon's lair": [10, 9],
+    "dreadthorn's lair": [14, 12],
     watchtower: [3, 3],
     graveyard: [6, 5],
     dungeon: [5, 4],
@@ -137,6 +138,42 @@ export function layoutNeutral({ kind, seed, form = null, facing = 0, theme = nul
     const laid = WORKS_SIZE[kind] ? layoutWorks(kind, random, width, depth, people) : LAYOUTS[kind](random, width, depth, seed, form, facing, theme);
 
     return { size, ...laid };
+}
+
+/**
+ * How each great lair's laid out (lairLayout): its cave's mouth (metres wide and high), how far its
+ * face of rock comes forward (`face`, metres from the back) and how high it rises (`high`), its
+ * spurs' height, how far the hollow's heart is forward of the middle (`forward`), and how many
+ * bones lie about it, how far out.
+ */
+const LAIRS_LAID = Object.freeze({
+    "dragon's lair": { mouth: { w: 7, h: 6 }, face: 8, back: 12, high: [12, 15], inset: 4, spur: 8, spurs: [5, 7.5], forward: 2, bones: [4, 7], out: [2, 7] },
+    "dreadthorn's lair": { mouth: { w: 11, h: 9 }, face: 11, back: 22, high: [17, 21], inset: 6, spur: 11, spurs: [7, 10], forward: 3, bones: [7, 11], out: [3, 10] },
+});
+
+// A great beast's lair, cut into a mountainside (LAIRS_LAID: its sizes)
+function lairLayout(random, width, depth, { mouth, face, back, high, inset, spur, spurs, forward, bones, out: [near, far] }) {
+    const [cx, cy] = [width / 2, depth / 2 + forward];
+    const parts = [
+        { part: "outcrop", x0: inset, y0: 0.5, x1: width - inset, y1: back, h: random.range(...high), face, mouth, seed: random.seed() },
+        { part: "spur", x0: 0.5, y0: face, x1: spur + 0.5, y1: depth - 6, h: random.range(...spurs), seed: random.seed() },
+        { part: "spur", x0: width - spur - 0.5, y0: face, x1: width - 0.5, y1: depth - 8, h: random.range(...spurs), seed: random.seed() },
+    ];
+
+    for (let k = 0; k < random.int(...bones); k++) {
+        const angle = random.range(0, TAU);
+        const out = random.range(near, far);
+
+        parts.push({ part: "bones", x: cx + cos(angle) * out, y: cy + sin(angle) * out, turn: random.range(0, TAU), big: random.chance(0.35) });
+    }
+
+    const solid = [
+        [inset, 0.5, width - inset, back + 0.4],
+        [0.5, face, spur + 0.5, depth - 6],
+        [width - spur - 0.5, face, width - 0.5, depth - 8],
+    ];
+
+    return { parts, solid, heart: [cx, cy], cut: { x: cx, y: back, face }, entry: { x: cx, y: back + 0.4, width: mouth.w, height: mouth.h, inside: "lair" } };
 }
 
 const LAYOUTS = {
@@ -416,31 +453,17 @@ const LAYOUTS = {
         return { parts, solid, heart, castle: pieces, ...(entry ? { entry } : {}) };
     },
 
-    // The dragon's lair, cut into a mountainside: a great cave's mouth in a face of dark rock, the
-    // hill going on over it; spurs of rock either side running down from it round a hollow, open
-    // at the front; bones about the hollow
+    // The drake's lair (its key still the dragon's), cut into a mountainside: a great cave's mouth
+    // in a face of dark rock, the hill going on over it; spurs of rock either side running down
+    // from it round a hollow, open at the front; bones about the hollow
     "dragon's lair"(random, width, depth) {
-        const [cx, cy] = [width / 2, depth / 2 + 2];
-        const parts = [
-            { part: "outcrop", x0: 4, y0: 0.5, x1: width - 4, y1: 12, h: random.range(12, 15), face: 8, mouth: { w: 7, h: 6 }, seed: random.seed() },
-            { part: "spur", x0: 0.5, y0: 8, x1: 8.5, y1: depth - 6, h: random.range(5, 7.5), seed: random.seed() },
-            { part: "spur", x0: width - 8.5, y0: 8, x1: width - 0.5, y1: depth - 8, h: random.range(5, 7.5), seed: random.seed() },
-        ];
+        return lairLayout(random, width, depth, LAIRS_LAID["dragon's lair"]);
+    },
 
-        for (let k = 0; k < random.int(4, 7); k++) {
-            const angle = random.range(0, TAU);
-            const out = random.range(2, 7);
-
-            parts.push({ part: "bones", x: cx + cos(angle) * out, y: cy + sin(angle) * out, turn: random.range(0, TAU), big: random.chance(0.35) });
-        }
-
-        const solid = [
-            [4, 0.5, width - 4, 12.4],
-            [0.5, 8, 8.5, depth - 6],
-            [width - 8.5, 8, width - 0.5, depth - 8],
-        ];
-
-        return { parts, solid, heart: [cx, cy], cut: { x: cx, y: 12, face: 8 }, entry: { x: cx, y: 12.4, width: 7, height: 6, inside: "lair" } };
+    // A Dreadthorn's lair: the same, greater, for a greater beast (its mouth wide and high enough
+    // for it, the face higher, the hollow deeper, more bones about it)
+    "dreadthorn's lair"(random, width, depth) {
+        return lairLayout(random, width, depth, LAIRS_LAID["dreadthorn's lair"]);
     },
 
     // An old graveyard outside a town (GRAVEYARD): a wall of field stone round it, broken here

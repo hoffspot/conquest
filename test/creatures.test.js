@@ -623,11 +623,13 @@ describe("the wild come to life near the players (host.js, battle.js)", () => {
         const wolf = tally("wolf", 2);
         const bear = tally("bear", 4);
         const dragon = tally("dragon", 10, 400);
+        const dreadthorn = tally("dreadthorn", 10, 400);
 
         assert.ok(rat.worth > 0.5 && rat.worth < 3 && rat.nothing > 0.25, JSON.stringify(rat));
         assert.ok(wolf.worth > rat.worth && wolf.worth < 8, JSON.stringify(wolf));
         assert.ok(bear.worth > wolf.worth && bear.worth < 25, JSON.stringify(bear));
         assert.ok(dragon.worth > 200 && dragon.nothing === 0, JSON.stringify(dragon));
+        assert.ok(dreadthorn.worth > dragon.worth * 2 && dreadthorn.nothing === 0, JSON.stringify(dreadthorn));
     });
 
     it("has the guild want creatures' parts brought in, paid better than over the counter, taken from the pack", () => {

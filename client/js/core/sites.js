@@ -100,11 +100,13 @@ export const isNeutral = (site) => !ownPlace(site) && !(site.kind === "watchtowe
 const REST = Object.freeze({ gentle: 3, shift: 48, step: 12 });
 
 /**
- * The sites cut into a hillside (a cave's mouth, the dragon's): how far the land must rise across
- * them, front to back (metres: `rise`, at least and at most), and the slope they'd best be on;
- * where there's none so steep near, a cave goes down into the ground instead.
+ * The sites cut into a hillside (a cave's mouth, the great lairs'): how far the land must rise
+ * across them, front to back (metres: `rise`, at least and at most), and the slope they'd best be
+ * on; where there's none so steep near, a cave goes down into the ground instead. One `always`
+ * cut into a hill (a Dreadthorn's lair, high in the mountains) takes the slope nearest the one
+ * wanted near it if none rises as it should.
  */
-const HILLSIDE = Object.freeze({ cave: { rise: [6, 14], slope: 0.55 }, dungeon: { rise: [6, 14], slope: 0.55 }, "dragon's lair": { rise: [8, 26], slope: 0.4 } });
+const HILLSIDE = Object.freeze({ cave: { rise: [6, 14], slope: 0.55 }, dungeon: { rise: [6, 14], slope: 0.55 }, "dragon's lair": { rise: [8, 26], slope: 0.4 }, "dreadthorn's lair": { rise: [10, 64], slope: 0.55, always: true } });
 
 /**
  * The hill's lie over the brow of a face of rock cut into it (art/kits/neutral.js outcrop, so its
@@ -181,6 +183,21 @@ export function restingOf(plan, site) {
 
                 if (rise >= hill.rise[0] && rise <= hill.rise[1] && (!best || off < best.off - 0.02 || (off <= best.off && far < best.far))) {
                     best = { at, off, far, slope, facing: atan2(-gx, -gy) };
+                }
+            }
+
+            // (One always cut into a hill, `always`: if none rises as it's wanted to, the one
+            // whose slope is nearest the one wanted)
+            if (!best && hill.always) {
+                for (const { at, far } of spots) {
+                    const g = depth / 2;
+                    const [gx, gy] = [(land(at[0] + g, at[1]) - land(at[0] - g, at[1])) / (2 * g), (land(at[0], at[1] + g) - land(at[0], at[1] - g)) / (2 * g)];
+                    const slope = hypot(gx, gy);
+                    const off = Math.abs(slope - hill.slope);
+
+                    if (slope > 0.05 && (!best || off < best.off - 0.02 || (off <= best.off && far < best.far))) {
+                        best = { at, off, far, slope, facing: atan2(-gx, -gy) };
+                    }
                 }
             }
 

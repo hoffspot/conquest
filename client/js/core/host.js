@@ -1743,7 +1743,9 @@ export class Host {
                     this.#clearedBy(beast.lair, heart, lair?.maps);
 
                     if (lair?.hoard && this.ground.has(`chest-${beast.lair}`)) {
-                        this.#opened(beast.lair, "hoard", { at: heart, maps: lair.maps, map: lair.hoard.map, square: lair.hoard.square, people: "human", tier: 1, relic: this.#siteOf(beast.lair).kind === "ruined castle" });
+                        const { hoard = "hoard", relic = false } = LAIRS[this.#siteOf(beast.lair).kind];
+
+                        this.#opened(beast.lair, hoard, { at: heart, maps: lair.maps, map: lair.hoard.map, square: lair.hoard.square, people: "human", tier: 1, relic });
                     }
                 }
 

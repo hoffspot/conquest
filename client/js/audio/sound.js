@@ -275,6 +275,7 @@ export const CREATURE_VOICES = Object.freeze({
     giantLeech: { family: "slime", rate: 1.2, fall: null },
     wyvern: { family: "dragon", rate: 1.15, fall: "deathThudBig", wings: "wingbeat" },
     dragon: { family: "dragon", fall: "deathThudBig", wings: "wingbeat", fire: "dragonBreath" },
+    dreadthorn: { family: "dragon", rate: 0.8, fall: "deathThudBig", wings: "wingbeat", fire: "dragonBreath" },
     wildBull: { family: "dragon", rate: 1.2, fall: "deathThudBig" },
     capeBuffalo: { family: "dragon", rate: 1.1, fall: "deathThudBig" },
     kelpie: { family: "dragon", rate: 1.24, fall: "deathThudBig" },

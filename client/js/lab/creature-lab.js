@@ -88,6 +88,7 @@ const ABOUT = {
     vultureFlock: ["Vulture flock", "Only in the orcs' wilds, over the badlands"],
     chimera: ["Chimera", "Only in the orcs' wilds, in the volcanic lands and badlands"],
     dragon: ["Drake", "The drake's lair: for the mightiest"],
+    dreadthorn: ["Dreadthorn", "A Dreadthorn's lair: the mightiest of all"],
     ghost: ["Restless ghost", "The ruins and ruined castles, with their dead"],
     wraith: ["Wraith", "The ruins and ruined castles, with their dead"],
     wightLord: ["Wight lord", "Ruined castles: for the mightiest"],
@@ -337,7 +338,7 @@ const groups = [
     ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "goblin", "goblinBomber", "goblinKing", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
     ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "knucker", "hodmedod", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "hart", "kelpie", "caveSpider", "shadowStalker", "olm", "centipede", "basilisk", "draugr", "mare", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "spittingCobra", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "ahuizotl", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock", "chimera"]],
     ["The restless dead", ["ghost", "wraith"]],
-    ["For the mightiest", ["dragon", "wightLord", "frostTroll", "banditChief"]],
+    ["For the mightiest", ["dreadthorn", "dragon", "wightLord", "frostTroll", "banditChief"]],
 ];
 
 for (const [label, ids] of groups) {
