@@ -18,12 +18,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Lint and the unit tests: about 7½ minutes
+  # Lint and the unit tests: about 13½ minutes
   test:
     runs-on: ubuntu-latest
-    # (Twenty minutes is more than twice the longest it's taken; a job hung longer is ended rather
-    # than held to GitHub's six hours, as the e2e jobs are below)
-    timeout-minutes: 20
+    # (Thirty minutes is twice the longest it's taken, and a little more; a job hung longer is
+    # ended rather than held to GitHub's six hours, as the e2e jobs are below)
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
 
@@ -42,7 +42,7 @@ jobs:
   # with the run, for the contact sheet (motion-sheet.html, "Report")
   motion:
     runs-on: ubuntu-latest
-    # (Twice the longest it's taken, 11 minutes, and a little more)
+    # (Twice the longest it's taken, 12 minutes, and a little more)
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
@@ -71,9 +71,10 @@ jobs:
   # GitHub's 20 at a time
   e2e:
     runs-on: ubuntu-latest
-    # (Twenty minutes is twice a job's usual, and half as long again as the longest; a job hung
-    # longer is ended rather than held to GitHub's six hours)
-    timeout-minutes: 20
+    # (Forty minutes is twice the longest a job's taken, 19, and a little more; a job hung
+    # longer is ended rather than held to GitHub's six hours. At twenty, a job was ended
+    # still running as the tests grew)
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
