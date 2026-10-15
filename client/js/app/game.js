@@ -1777,6 +1777,16 @@ export class Game {
                 // So is a follower just hired: one dressed here at once held an iPhone up for
                 // 0.6 s)
                 if (actor.kind === "beast" || actor.kind === "follower") {
+                    // (But one hired here and now, drawn as the adventurer they were, at once:
+                    // queued, they were gone from where they stood till built, once the guild's
+                    // own folk were, seconds on a phone)
+                    if (actor.kind === "follower" && this.#adopted(actor)) {
+                        this.#place(actor);
+                        this.hud.track(actor.id, { ...actor, hostile: Boolean(me) && this.battle.hostile(actor, me) });
+
+                        continue;
+                    }
+
                     // (Not a creature that's died never drawn: one past the bodies' budget, say,
                     // #rationing; its body built only to lie there a while)
                     if (!this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id) && !this.aside.has(actor.id) && !(actor.kind === "beast" && actor.dead)) {
@@ -1808,14 +1818,46 @@ export class Game {
         }
     }
 
-    // Someone gone from the battle, no longer drawn
-    #undress(id) {
+    // A follower just hired drawn as the adventurer they were, their body kept as it is, not
+    // dressed again from nothing at once (that held an iPhone's frame up 0.7 s): both are drawn
+    // from the same calling, sex, seed and people (folkLook). Whether they were: not if the
+    // adventurer's gone already, or was one of a crowd
+    #adopted(actor) {
+        const following = this.host.followers.get(actor.id);
+        const was = following?.from ? this.avatars.get(following.from) : null;
+
+        if (!(was instanceof Avatar) || this.battle.actor(following.from)) {
+            return false;
+        }
+
+        const look = folkLook({ role: "adventurer", look: following.calling, sex: following.sex, seed: following.seed, people: following.people });
+        const character = was.character;
+
+        this.#undress(following.from, { keep: true });
+        character.sheathe(true);
+
+        const avatar = this.#addAvatar(actor.id, character, { walk: look.walk, guard: guardOf(actor.weapon) });
+
+        // (Drawn already, its shaders made and its pictures sent, as a rule: shown at once, as it
+        // was, facing the way it was)
+        avatar.compiling = Boolean(was.compiling);
+        avatar.sent = was.sent;
+        avatar.facing = was.facing;
+        character.object.visible = !avatar.compiling && avatar.sent !== false;
+
+        return true;
+    }
+
+    // Someone gone from the battle, no longer drawn (their body kept, `keep`, for someone else)
+    #undress(id, { keep = false } = {}) {
         this.#unthrong(id);
 
         const avatar = this.avatars.get(id);
 
-        avatar?.character.object.removeFromParent();
-        avatar?.character.dispose();
+        if (!keep) {
+            avatar?.character.object.removeFromParent();
+            avatar?.character.dispose();
+        }
         this.wounds.get(id)?.dispose();
         this.hud.untrack(id);
         this.ailments?.clear(id);

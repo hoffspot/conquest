@@ -5632,32 +5632,34 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
 
         game.start();
 
-        return { name: adventurer.name, door: building.door.id };
+        return { name: adventurer.name, door: building.door.id, id: adventurer.id };
     });
     const talk = page.locator(".talk");
 
     await expect(talk).toBeVisible();
     await expect(talk.locator(".talk-name")).toHaveText(guild.name);
 
-    // Asked to ride along, for their price: paid, and they follow (built a step at a time, not
-    // dressed there and then as the hire's told: that held an iPhone up for 0.6 s)
+    // Asked to ride along, for their price: paid, and they follow, drawn at once as the
+    // adventurer they were, the same body (not dressed there and then from nothing, which held an
+    // iPhone up for 0.6 s; nor gone from where they stood till built a step at a time)
     const ask = talk.getByRole("button", { name: /Would you ride with me\? \(\d+ gold\)$/ });
     const price = Number((await ask.textContent()).match(/(\d+) gold/)[1]);
 
-    await page.evaluate(() => {
+    await page.evaluate((adventurer) => {
         const { game } = window.pellagos;
         const kept = game.onFollowers;
+        const body = game.avatars.get(adventurer)?.character ?? null;
 
         game.onFollowers = (followers) => {
-            window.hired = [...game.host.followers].filter(([, { leader }]) => leader === "player").map(([id]) => ({ drawn: game.avatars.has(id), queued: game.enlisting.includes(id) || game.enlistees.has(id) }));
+            window.hired = [...game.host.followers].filter(([, { leader }]) => leader === "player").map(([id]) => ({ drawn: game.avatars.has(id), queued: game.enlisting.includes(id) || game.enlistees.has(id), same: Boolean(body) && game.avatars.get(id)?.character === body, shown: Boolean(game.avatars.get(id)?.object.visible) }));
             kept(followers);
         };
-    });
+    }, guild.id);
     await ask.click();
     await expect(talk.locator(".talk-line")).toContainText(/Lead on|Where to\?|killed/);
     await expect(page.locator("#banner")).toHaveText(`${guild.name} follows you now.`);
     await expect(page.locator(".coins").first()).toHaveText(`${200 - price} gold`);
-    expect(await page.evaluate(() => window.hired)).toEqual([{ drawn: false, queued: true }]);
+    expect(await page.evaluate(() => window.hired)).toEqual([{ drawn: true, queued: false, same: true, shown: true }]);
     await page.keyboard.press("Escape");
     await expect(talk).toBeHidden();
 
@@ -5672,8 +5674,8 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
 
         game.stop();
 
-        // (Drawn a moment after they're hired, a step at a time, once the guild's own folk are:
-        // played on till they are)
+        // (Drawn at once, as the adventurer they were; were that one of a crowd's figures, a moment
+        // after, a step at a time, once the guild's own folk are: played on till they are)
         for (let k = 0; k < 600 && !game.avatars.has(id); k++) {
             game.advance(0.1, { render: false });
         }
