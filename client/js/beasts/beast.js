@@ -810,6 +810,14 @@ export class BeastAvatar {
 }
 
 /**
+ * Whose ways of passing the time a people-shaped creature has as it stands (actions.js RESTS'
+ * role): a bandit's an adventurer's, the rest a sentry's.
+ */
+export function restsOf(id) {
+    return id === "bandit" || id === "banditChief" ? "adventurer" : "sentry";
+}
+
+/**
  * Draw one of the wild's creatures (a LOOKS id), one of its kind (`seed`): a BeastAvatar, or for
  * a people-shaped one, a character's Avatar, sized as its kind is, holding its weapon
  * (`equipment`: EQUIPMENT ids) and fighting as it does (`guard`: actions.js GUARDS); a dungeon's
@@ -851,17 +859,18 @@ export function* dressingCreature(kit, id, { seed = 1, equipment = [], guard = n
     // (Its footfalls as heavy as it's big: a goblin's lighter than a man's, a troll's heavier)
     avatar.gait = { size: scale };
 
-    // Standing a while, it passes the time as its kind does (actions.js's rests: a bandit as an
-    // adventurer, the rest as a sentry), and stops when it moves or fights
-    const role = id === "bandit" || id === "banditChief" ? "adventurer" : "sentry";
+    // Standing a while, it passes the time as its kind does (actions.js's rests: restsOf), and
+    // stops when it moves or fights
+    const role = restsOf(id);
     const update = avatar.update.bind(avatar);
     const attack = avatar.actions.startAttack.bind(avatar.actions);
     let still = 0;
     let next = 3 + (seed % 5);
     let resting = false;
 
-    avatar.rest = () => {
-        resting = avatar.actions.rest(role) !== null;
+    // (One of them, `variant` of its role's, or whichever's next)
+    avatar.rest = (variant = null) => {
+        resting = avatar.actions.rest(role, { variant }) !== null;
     };
     avatar.update = (dt, x, z, facing, steer) => {
         update(dt, x, z, facing, steer);

@@ -366,12 +366,13 @@ CC0 or CC BY (its maker named), and only what can be downloaded without an accou
 and mini-bosses' looks: an entry each in `beasts/champions.js` `REGALIA`, by its id (one not
 there looks as its rank has it).
 
-## The creature lab (`creature-lab.html`, `js/lab/creature-lab.js`)
+## The model viewer (`model-viewer.html`, `js/lab/model-viewer.js`)
 
-The creature lab shows each theme's bosses and mini-bosses as they're drawn in a dungeon, one
-group of them for each theme ("Dungeons: caves" and so on), beside the creatures of the wild they
-are. Each is named by its title and rank. Open one straight away with `?creature=` and its theme,
-rank and id: `creature-lab.html?creature=caves:boss:trollKing`.
+The model viewer (once the creature lab) shows each theme's bosses and mini-bosses as they're
+drawn in a dungeon, one group of them for each theme ("Dungeons: caves" and so on), beside the
+creatures of the wild they are. Each is named by its title and rank. Open one straight away with
+`?creature=` and its theme, rank and id: `model-viewer.html?creature=caves:boss:trollKing`.
+WILDS.md, *The model viewer*, says what else it does.
 
 ## The dungeon map (`dungeon-map.html`, `js/lab/dungeon-map.js`)
 

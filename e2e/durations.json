@@ -24,6 +24,8 @@
     "character-lab.spec.js › switches to the orc, changes gear and looks": 26.3,
     "downloads.spec.js › downloads a file a part at a time, checks it and keeps it, has it from there the next time, and says so in debug mode": 6.1,
     "dungeon-map.spec.js › cooks up a dungeon for a seed and theme and draws each level, and another theme or seed": 1.2,
+    "model-viewer.spec.js › a creature drawn from a model: every clip in its file played alone, stepped and slid through; its skeleton and wireframe shown and hidden; what there is of it and whose it is": 60.9,
+    "model-viewer.spec.js › the creature lab's address opens the model viewer on what it asked for; a creature's moves played by name, paused, slowed, and stepped a frame back and on to just where it was": 31.7,
     "models.spec.js › draws the Dreadthorn from its model once it's read, in place of its stand-in: a level of detail at a time, its fire out of its mouth": 27.5,
     "models.spec.js › its model missing › leaves the Dreadthorn's stand-in drawn, with no error, when its model can't be read": 6.7,
     "models.spec.js › reads a model's KTX2 textures, kept compressed on the GPU, with the transcoder from the catalog, and draws it": 10.4,

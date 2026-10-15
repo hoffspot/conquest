@@ -12,8 +12,8 @@ The code: `client/js/core/creatures.js` (what each is), `core/battle.js` (how th
 caches and the brigands keeping them), `core/weapons.js` `NATURAL` (their fangs, claws
 and breath), `core/afflictions.js` (what lingers after their blows, and the cures),
 `client/js/beasts/` (how each looks and moves), and `world/effects.js`, `world/ailments3d.js`
-(their fire, venom, webs and roots, and what shows on whoever they hit). The creature lab
-(`creature-lab.html`) shows every one, doing everything it does.
+(their fire, venom, webs and roots, and what shows on whoever they hit). The model viewer
+(`model-viewer.html`, *The model viewer* below) shows every one, doing everything it does.
 
 ## The creatures
 
@@ -675,7 +675,7 @@ smaller, its colour a little different, its markings its own.
   it, neck stretched out ahead and head level, tail streaming behind, wings spread wide, beating
   (slower the bigger they are) or held out to glide, rising a little with each downstroke; so
   wyverns and the drake are seen in the air near where they hunt and come down out of the sky to
-  fight (GAME.md, *What flies*). The creature lab's Fly and Land show it.
+  fight (GAME.md, *What flies*). The model viewer's Fly and Land show it.
 - **Serpents** (`serpent.js`): a body of bones down its length, the skin bound to them, tapering
   to the tail, banded or zig-zagged and pale beneath; a head with a jaw that opens on its fangs and
   a flickering tongue. It slithers (a wave down its length), stands with its front raised in an S
@@ -759,11 +759,11 @@ playing, its body is made a step at a time within the frame's budget, as everyon
   Half a millisecond in the browser, as a rule; the longest, a few builders' first run (their code
   compiled), up to 18.
 - **Wanted twice at once** (two wolves of a look coming together), the second takes up the
-  sculpting where the first had got to. One made all at once meanwhile (the creature lab) ends
+  sculpting where the first had got to. One made all at once meanwhile (the model viewer) ends
   the steps.
 - **The same:** a body made a step at a time is byte for byte what it was made all at once.
 - **Where:** creatures coming into view (`dressingCreature`, as the game draws the wild's), and a
-  wyvern or the drake before it comes into the sky (GAME.md, *What flies*). The creature lab
+  wyvern or the drake before it comes into the sky (GAME.md, *What flies*). The model viewer
   builds at once.
 - **Folding** a creature's pieces gathers their points into arrays made once, counted first,
   rather than grown a number at a time: a skeleton's or the wight lord's first build, mostly
@@ -886,3 +886,32 @@ each of the three it's built as (`seed % 3`), at its kind's size, each drawn at 
   recorded, its walk and run a stride each, every one played over and over going round without a
   jump; a stand-in for a beast told its bites, flinches and falls and not a dodge, and its actions
   as they were after; a stand-in twice its kind's size taking a stride in twice the ground.
+
+## The model viewer
+
+`model-viewer.html` (`js/lab/model-viewer.js`, `js/lab/inspect.js`) is for watching the
+creatures move, at <https://hoffspot.github.io/conquest/model-viewer.html>. It was the creature
+lab; `creature-lab.html` sends on to it, with what it was asked for. Choose a creature of the
+wild, or a dungeon's boss or mini-boss (DUNGEONS.md), and it's drawn as the game draws it. Drag to
+go round it and pinch or scroll to come nearer. The bar at its foot has it stand, walk, run,
+attack, be struck, rest, die or be knocked down, and fly, land or hover if it can. Its panel
+(**Inspect**: beside it where there's room, under it on a phone):
+
+- **Playback:** pause and play (Space), a frame back or on (← and →, a thirtieth of a second), as
+  slow as a tenth or twice as fast, and each move over and over (**Loop**) or once. Stepping back
+  goes through the last ten seconds as they were drawn (`Rewind`: each bone where it was), and on
+  again to just where it was.
+- **Show:** its skeleton (three.js's `SkeletonHelper`) and its wireframe, each on and off.
+- **The game's moves,** each by name: a beast's attacks, its special ones and its ways of resting;
+  a people-shaped one's weapon's attacks and its ways of resting (characters/actions.js).
+- **Clips in its model:** drawn from a model (the Dreadthorn), every clip in its file by name and
+  length, played alone as it was made (`modelBody`'s `hold`), and slid through. One built in code
+  has none: its moves are worked out as it plays.
+- **Details** (`detailsOf`): how it's made (a model's file and its size, or the game's code); its
+  source; how tall and long it is; the triangles, vertices, meshes and materials drawn of it as
+  it's shown (one level of detail); its textures, each once, the largest first; its bones and
+  clips; and its licence, linked to.
+
+`?creature=` opens it on one, `&action=` doing something, `&clip=` playing one of its model's clips
+(once the model's read). `e2e/model-viewer.spec.js` uses it as a player would. `test/inspect.test.js`
+covers what it says of a model, its wireframe, and stepping back and on.

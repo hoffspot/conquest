@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+        <meta name="theme-color" content="#101418">
+        <meta name="description" content="Model viewer: every creature of the wilds and each dungeon's bosses, rendered as the game draws them, every animation played, paused and stepped, with its skeleton, wireframe and details">
+
+        <title>Model Viewer</title>
+
+        <link rel="icon" href="images/icons/icon-192.png" type="image/png">
+        <style>
+            :root {
+                --background: #101418;
+                --panel: #171d23;
+                --line: #2d3843;
+                --text: #dce5ee;
+                --muted: #8a99a8;
+                --accent: #e0a24a;
+                --accent-text: #1b1206;
+
+                color-scheme: dark;
+                font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            }
+
+            [hidden] {
+                display: none !important;
+            }
+
+            html,
+            body {
+                margin: 0;
+                height: 100%;
+                background: var(--background);
+                color: var(--text);
+                overflow: hidden;
+            }
+
+            #view {
+                position: fixed;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                display: block;
+                touch-action: none;
+            }
+
+            .bar {
+                position: fixed;
+                left: max(12px, env(safe-area-inset-left));
+                right: max(12px, env(safe-area-inset-right));
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                align-items: center;
+            }
+
+            #top {
+                top: max(12px, env(safe-area-inset-top));
+            }
+
+            #bottom {
+                bottom: max(12px, env(safe-area-inset-bottom));
+            }
+
+            select,
+            button {
+                font: inherit;
+                color: var(--text);
+                background: var(--panel);
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                padding: 8px 12px;
+                min-height: 40px;
+            }
+
+            button[aria-pressed="true"] {
+                background: var(--accent);
+                color: var(--accent-text);
+                border-color: var(--accent);
+            }
+
+            #name {
+                font-size: 18px;
+                font-weight: 600;
+                text-shadow: 0 1px 3px #000;
+            }
+
+            #about {
+                color: var(--muted);
+                text-shadow: 0 1px 3px #000;
+            }
+
+            #status {
+                position: fixed;
+                inset: 0;
+                display: grid;
+                place-items: center;
+                color: var(--muted);
+                pointer-events: none;
+            }
+
+            body.shot .bar,
+            body.shot #panel {
+                display: none;
+            }
+
+            /* The panel: watching it (playing, pausing, stepping), its bones and wireframe, its
+               moves and clips, and its details */
+            #panel {
+                position: fixed;
+                top: max(64px, calc(env(safe-area-inset-top) + 52px));
+                bottom: max(64px, calc(env(safe-area-inset-bottom) + 52px));
+                right: max(12px, env(safe-area-inset-right));
+                width: 300px;
+                overflow-y: auto;
+                background: color-mix(in srgb, var(--panel) 92%, transparent);
+                border: 1px solid var(--line);
+                border-radius: 10px;
+                padding: 4px 12px 12px;
+                display: none;
+            }
+
+            body.panel-open #panel {
+                display: block;
+            }
+
+            @media (min-width: 760px) {
+                body.panel-open .bar {
+                    right: calc(max(12px, env(safe-area-inset-right)) + 312px);
+                }
+            }
+
+            @media (max-width: 759px) {
+                #panel {
+                    left: max(12px, env(safe-area-inset-left));
+                    width: auto;
+                }
+            }
+
+            #panel h2 {
+                font-size: 12px;
+                font-weight: 600;
+                letter-spacing: 0.06em;
+                text-transform: uppercase;
+                color: var(--muted);
+                margin: 14px 0 8px;
+            }
+
+            #panel .row {
+                margin-bottom: 6px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                align-items: center;
+            }
+
+            #panel label {
+                display: inline-flex;
+                gap: 6px;
+                align-items: center;
+                min-height: 32px;
+                margin-right: 12px;
+            }
+
+            #panel .chips h3 {
+                font-size: 12px;
+                font-weight: 400;
+                color: var(--muted);
+                margin: 4px 0 6px;
+            }
+
+            #panel .chips button {
+                min-height: 32px;
+                padding: 4px 10px;
+                margin: 0 4px 6px 0;
+            }
+
+            #time {
+                font-variant-numeric: tabular-nums;
+                color: var(--muted);
+                margin-top: 6px;
+            }
+
+            #scrub {
+                width: 100%;
+                margin-top: 6px;
+                accent-color: var(--accent);
+            }
+
+            #panel .note {
+                color: var(--muted);
+                margin: 0;
+            }
+
+            #details {
+                display: grid;
+                grid-template-columns: auto 1fr;
+                gap: 4px 12px;
+                margin: 0;
+            }
+
+            #details dt {
+                color: var(--muted);
+            }
+
+            #details dd {
+                margin: 0;
+                min-width: 0;
+                overflow-wrap: anywhere;
+                font-variant-numeric: tabular-nums;
+            }
+
+            #details a {
+                color: var(--accent);
+            }
+        </style>
+        <script type="importmap">
+            {
+                "imports": {
+                    "three": "./vendor/three-r186/three.module.min.js",
+                    "three/addons/": "./vendor/three-r186/addons/"
+                }
+            }
+        </script>
+        <script type="module" src="js/lab/model-viewer.js"></script>
+    </head>
+    <body>
+        <canvas id="view"></canvas>
+
+        <div class="bar" id="top">
+            <select id="picker" aria-label="Model"></select>
+            <button type="button" id="another">Another one</button>
+            <button type="button" id="inspect" aria-controls="panel" aria-expanded="false">Inspect</button>
+            <span id="name"></span>
+            <span id="about"></span>
+        </div>
+
+        <div class="bar" id="bottom" role="toolbar" aria-label="What it does">
+            <button type="button" data-action="stand" aria-pressed="true">Stand</button>
+            <button type="button" data-action="walk" aria-pressed="false">Walk</button>
+            <button type="button" data-action="run" aria-pressed="false">Run</button>
+            <button type="button" data-action="attack" aria-pressed="false">Attack</button>
+            <button type="button" data-action="react" aria-pressed="false">Struck</button>
+            <button type="button" data-action="rest" aria-pressed="false">Rest</button>
+            <button type="button" data-action="die" aria-pressed="false">Die</button>
+            <button type="button" data-action="knockdown" aria-pressed="false">Knocked down</button>
+            <button type="button" data-action="fly" aria-pressed="false" hidden>Fly</button>
+            <button type="button" data-action="land" aria-pressed="false" hidden>Land</button>
+            <button type="button" data-action="hover" aria-pressed="false" hidden>Hover</button>
+        </div>
+
+        <aside id="panel" aria-label="Inspect">
+            <section aria-labelledby="playback">
+                <h2 id="playback">Playback</h2>
+                <div class="row">
+                    <button type="button" id="back" aria-label="Back a frame" title="Back a frame (←)">◀ Frame</button>
+                    <button type="button" id="play" title="Play or pause (Space)">Pause</button>
+                    <button type="button" id="forward" aria-label="On a frame" title="On a frame (→)">Frame ▶</button>
+                </div>
+                <div class="row">
+                    <select id="speed" aria-label="Speed">
+                        <option value="0.1">0.1×</option>
+                        <option value="0.25">¼×</option>
+                        <option value="0.5">½×</option>
+                        <option value="1" selected>1×</option>
+                        <option value="2">2×</option>
+                    </select>
+                    <label><input type="checkbox" id="loop" checked> Loop</label>
+                </div>
+                <div id="time" aria-live="off"></div>
+                <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" aria-label="Time into the clip" hidden>
+            </section>
+
+            <section aria-labelledby="showing">
+                <h2 id="showing">Show</h2>
+                <div class="row">
+                    <label><input type="checkbox" id="skeleton"> Skeleton</label>
+                    <label><input type="checkbox" id="wireframe"> Wireframe</label>
+                </div>
+            </section>
+
+            <section aria-labelledby="moving">
+                <h2 id="moving">The game's moves</h2>
+                <div class="chips" id="moves"></div>
+                <h2 id="clipping">Clips in its model</h2>
+                <div class="chips" id="clips" aria-labelledby="clipping"></div>
+            </section>
+
+            <section aria-labelledby="detailing">
+                <h2 id="detailing">Details</h2>
+                <dl id="details"></dl>
+            </section>
+        </aside>
+
+        <div id="status" role="status">Loading…</div>
+        <noscript>The model viewer needs JavaScript.</noscript>
+    </body>
+</html>

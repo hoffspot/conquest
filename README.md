@@ -28,9 +28,15 @@ great trees), their castles and special places, their homelands' own ground, tre
 lying about, and their war camps, in 3D from a seed to go round and look at, is at
 <https://hoffspot.github.io/conquest/building-lab.html>.
 
-The creature lab, showing every creature of the wilds walking, running, attacking, resting,
-struck, knocked down and dying (and the wyvern and the drake flying and coming down to land),
-and each dungeon's bosses and mini-bosses as they're drawn, is at <https://hoffspot.github.io/conquest/creature-lab.html>.
+The model viewer, for watching the game's models move, is at
+<https://hoffspot.github.io/conquest/model-viewer.html>. Choose any creature of the wilds, or a
+dungeon's boss or mini-boss, and it's drawn as the game draws it. It walks, runs, attacks,
+rests, is struck, knocked down and dies (the wyvern, the drake and the Dreadthorn fly, come down
+to land and hover). Its panel plays each of the game's moves for it by name, and every clip in a
+model's file by name. It pauses, slows to a tenth, steps a frame back or on, and plays a move
+once or over and over. It shows the skeleton and the wireframe. It says how much there is to draw
+(triangles, textures, bones, clips), how big it is and whose it is. (It was the creature lab:
+`creature-lab.html` sends on to it.)
 The uniform lab, showing each people's soldiers in their uniforms and their officials in their
 livery side by side, is at <https://hoffspot.github.io/conquest/uniform-lab.html>.
 The fire lab, showing every kind of fire (torches, a brazier, a camp fire, candles) lighting what's
@@ -630,7 +636,9 @@ client/                 The game (static files served to the browser)
   dungeon-map.html      The dungeon map: a dungeon level by level (with world-map.css)
   war.html              The war between the peoples (with world-map.css and war.css)
   building-lab.html     The building lab (with world-map.css)
-  creature-lab.html     The creature lab: every creature of the wilds, doing everything it does
+  model-viewer.html     The model viewer: every creature, doing everything it does, watched
+                        frame by frame, its skeleton, wireframe, clips and details shown
+  creature-lab.html     The creature lab's old address: sends on to the model viewer
   uniform-lab.html      The uniform lab: each people's soldiers and officials (with world-map.css)
   fire-lab.html         The fire lab: every kind of fire and the fire spells (with world-map.css)
   sound-studio.html     The sound studio: every sound described and played (with sound-studio.css)
@@ -837,6 +845,9 @@ client/                 The game (static files served to the browser)
     liveries.js         Each people's colours and emblem: their soldiers' uniforms, their
                         officials' livery, and how a player's gear is drawn
   js/lab/character-lab.js  The character lab
+  js/lab/model-viewer.js  The model viewer
+  js/lab/inspect.js     What the model viewer says of a model (triangles, textures, bones), its
+                        wireframe, and the moments kept to step back through
   js/lab/uniform-lab.js The uniform lab: each people's soldiers and officials side by side
   js/lab/world-map.js   The world map
   js/lab/town-map.js    The town map

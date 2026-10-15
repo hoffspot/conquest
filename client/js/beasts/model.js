@@ -413,6 +413,17 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0 } = {}) {
             breath.step(inputs.seen === false && !fire ? 0 : inputs.dt, fire ? where : null);
         },
 
+        // One of its clips (by name: `lengths`' keys) alone, `time` seconds into it, as it was
+        // made: the model viewer's, to watch each of them (not what the game asks of a body: pose)
+        hold(clip, time) {
+            for (const [name, action] of actions) {
+                action.setEffectiveWeight(name === clip ? 1 : 0);
+                action.time = name === clip ? time : action.time;
+            }
+
+            mixer.update(0);
+        },
+
         dispose() {
             unseen.dispose();
             breath.dispose();
