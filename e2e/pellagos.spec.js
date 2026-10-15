@@ -10421,7 +10421,19 @@ test("a beast's look is let go of three minutes after the last of it's drawn: it
         host.battle.place(game.me, "town", [Math.floor(mx - 140), Math.floor(my - 20)], { facing: Math.PI });
     });
     await add("forget-wolf");
-    expect(await playUntil(page, () => window.pellagos.game.avatars.has("forget-wolf"), { seconds: 60 })).toBe(true);
+    // (Shown, not just there: a new avatar's hidden till its shaders are ready and its pictures
+    // sent, and one hidden isn't drawn, nor its body put on the graphics card)
+    expect(
+        await playUntil(
+            page,
+            () => {
+                const wolf = window.pellagos.game.avatars.get("forget-wolf");
+
+                return Boolean(wolf?.object.visible && !wolf.compiling && wolf.sent !== false);
+            },
+            { seconds: 60 },
+        ),
+    ).toBe(true);
 
     // Drawn: its look's body and folded pieces on the graphics card, held by it
     const drawn = await page.evaluate(async () => {
