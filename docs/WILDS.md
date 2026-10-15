@@ -901,11 +901,24 @@ the weapons, shields, helms and hats, quivers and packs, the tusks and tails); a
 props (app/assets.js: the dungeons' and the shops' furniture, wares and dressing, and the
 treasure chest, its opening its one clip). Drag to
 go round it and pinch or scroll to come nearer. The bar at its foot has it stand, walk, run,
-attack, be struck, rest, die or be knocked down, and fly, land or hover if it can. Its panel
-(**Inspect**: beside it where there's room, under it on a phone):
+attack, be struck, rest, die or be knocked down, and fly, land or hover if it can; over it,
+**playback** (below). Its panel (**Inspect**) is beside it on a screen wider than it's tall, and
+under it on a phone or tablet held upright, its lower half; what's shown is centred in what the
+bars and the panel leave of the view, the camera far enough back to see all of it there (and the
+fog as far off, so a big creature seen from far back on a narrow screen isn't lost in it).
 
-- **Playback:** pause and play (Space), a frame back or on (← and →, a thirtieth of a second), as
-  slow as a tenth or twice as fast, and each move over and over (**Loop**) or once. Stepping back
+- **On a phone** (narrower than 760 px, or shorter than 520: either way up), the page is compact:
+  the top bar one row (the picker as wide as there's room for, its buttons icons) and what's shown
+  one line under it, cut short; playback one row of icons; what it does one row scrolled across
+  (side by side with playback on its side); the panel in tabs (Moves, Show, Details, and Person or
+  Wagon), one part at a time, shut with its ✕; every button at least 44 px. The script lays it
+  out (`layout`), and again as the screen turns or the bars take more or fewer lines.
+
+The panel and playback:
+
+- **Playback** (the bar over what it does, always there): pause and play (Space), a frame back
+  or on (← and →, a thirtieth of a second), as slow as a tenth or twice as fast, and each move
+  over and over (**Loop**) or once. Stepping back
   goes through the last ten seconds as they were drawn (`Rewind`: each bone where it was), and on
   again to just where it was.
 - **Show:** its skeleton (three.js's `SkeletonHelper`) and its wireframe, each on and off.
