@@ -278,6 +278,37 @@ describe("clips made up from others", () => {
 
         assert.ok(near(turnOf(document, made, "spine", 0.75).toArray(), turnOf(document, wave, "spine", 0.75).toArray()));
         assert.ok(near(sampleChannel(channelsByNode(made).get(bone(document, "root")).translation, 1), [0, 0, 2]));
+
+        // (A bone the other clip doesn't move, it has at rest: grafted, so it's held)
+        const held = inventClip(document, { name: "Wave standing", from: "Walk", layers: [{ graft: "Wave", bones: ["root", "spine"] }] });
+
+        assert.ok(near(sampleChannel(channelsByNode(held).get(bone(document, "root")).translation, 1), [0, 0, 0]));
+    });
+
+    it("grafts only a share of the other clip's motion, eased from key to key", () => {
+        const document = skinnedDocument();
+        const walk = clip(document, "Walk");
+        const wave = clip(document, "Wave");
+        const made = inventClip(document, { name: "Wave in", from: "Walk", hold: 0, layers: [{ graft: "Wave", bones: ["spine"], start: 1, keys: [[0, 0], [1, 1]] }] });
+        const turned = (time) => turnOf(document, made, "spine", time);
+
+        // (None of it at first, as the walk has it; all of it at the end; halfway between, eased)
+        assert.ok(near(turned(0).toArray(), turnOf(document, walk, "spine", 0).toArray()));
+        assert.ok(near(turned(1).toArray(), turnOf(document, wave, "spine", 1).toArray()));
+        assert.ok(near((turned(0.5).angleTo(turned(0)) * 180) / Math.PI, 45, 0.5));
+    });
+
+    it("turns a bone about its axes as it lies at a moment of the clip made, after the layers before it (axes)", () => {
+        const document = skinnedDocument();
+        const graft = { graft: "Wave", bones: ["spine"], start: 1 };
+        const lift = { bones: ["spine"], turn: "lift", keys: [[0, 30]] };
+        const laid = inventClip(document, { name: "Laid", from: "Walk", hold: 0, seconds: 1, layers: [graft, { ...lift, axes: 1 }] });
+        const turned = inventClip(document, { name: "Turned", from: "Walk", hold: 0, seconds: 1, layers: [graft, lift] });
+
+        // (Laid on its side by the graft, pointing to the creature's right: lifted, its tip rises a
+        // half; turned about its axes where the stretch starts, standing up, it swings round level)
+        assert.ok(near(tip(document, laid, 1).y, 0.5, 1e-3));
+        assert.ok(near(tip(document, turned, 1).y, 0, 1e-3));
     });
 
     it("says which clip or bone isn't there", () => {

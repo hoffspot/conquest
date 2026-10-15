@@ -4,8 +4,9 @@
 // and the jaw snapped open and shut; a death is a flinch held still while the body sinks and rolls
 // onto its side; a breath on the wing is the hover with the neck lowered and the jaw wide.
 //
-// Turns are about the creature's own axes, as the bone lies where the stretch starts (the
-// pipeline has every asset facing +z, up +y): pitch raises the bone's tip (nose up, tail down),
+// Turns are about the creature's own axes, as the bone lies where the stretch starts, or at a
+// moment of the clip made (`axes`: a wing spread by a graft, then laid down; the pipeline has every
+// asset facing +z, up +y): pitch raises the bone's tip (nose up, tail down),
 // yaw turns it to the creature's left, roll turns it about the way the creature faces (its right
 // side down), and lift raises its tip whichever way it points (a wing held out to the side).
 // Moves are metres along the creature's left, up and forward, in the bone's parent's frame.
@@ -55,14 +56,30 @@ function stepOf(animation) {
     return Number.isFinite(step) ? step : 1 / 30;
 }
 
+// Where a bone stands at rest, one way (translation, rotation or scale)
+function restOf(node, path) {
+    return { translation: node.getTranslation(), rotation: node.getRotation(), scale: node.getScale() }[path];
+}
+
+// A share of the way from one value of a channel to another (a turn's along the shortest arc)
+function between(path, from, to, share) {
+    if (path === "rotation") {
+        return new Quaternion().fromArray(from).slerp(new Quaternion().fromArray(to), share).toArray();
+    }
+
+    return from.map((v, k) => v + (to[k] - v) * share);
+}
+
 /**
  * Adds the clip `spec` makes to the document, and returns it: { name, from, start = 0, seconds =
  * the rest of it, hold = null (seconds in, from which the clip it's made from is held still),
  * layers: [ { bones, turn, keys: [[seconds, degrees]...], weights?, lag? } | { bone, move:
- * [[seconds, [left, up, forward]]...] } | { graft: clip, bones, start? } ] }. A turn's degrees
- * are each bone's (times its weight, if it has one); `lag` (seconds) holds each bone back on the
- * one before it, as a tail whips. A graft gives the bones the other clip's motion, from its
- * `start`, round again if it's shorter.
+ * [[seconds, [left, up, forward]]...] } | { graft: clip, bones, start?, keys? } ] }. A turn's
+ * degrees are each bone's (times its weight, if it has one); `lag` (seconds) holds each bone back
+ * on the one before it, as a tail whips; `axes` (seconds), the bone's axes as it lies then in the
+ * clip made, as the layers before have it, not where the stretch starts. A graft gives the bones the other clip's motion, from its
+ * `start`, round again if it's shorter; with `keys` ([[seconds, share]...], 0 to 1), only that
+ * share of it, eased from key to key (a folded wing spread as the body falls).
  */
 export function inventClip(document, spec) {
     const root = document.getRoot();
@@ -89,12 +106,20 @@ export function inventClip(document, spec) {
         }
     }
 
+    // (A bone's turn in the world at a moment of the clip made, as the layers so far have it)
+    const turnAt = (node, i) => {
+        const own = new Quaternion().fromArray(channels.get(`${node.getName()}/rotation`)?.values[i] ?? node.getRotation());
+        const parent = node.getParentNode();
+
+        return parent ? turnAt(parent, i).multiply(own) : own;
+    };
+
     // (A bone the clip doesn't move: held where it stands at rest, to be moved now)
     const channelOf = (node, path) => {
         const key = `${node.getName()}/${path}`;
 
         if (!channels.has(key)) {
-            const rest = { translation: node.getTranslation(), rotation: node.getRotation(), scale: node.getScale() }[path];
+            const rest = restOf(node, path);
 
             channels.set(key, { node, path, values: [...times].map(() => [...rest]) });
         }
@@ -109,12 +134,27 @@ export function inventClip(document, spec) {
             const theirs = channelsByNode(other);
 
             for (const name of layer.bones) {
-                for (const [path, channel] of Object.entries(theirs.get(bone(name)) ?? {})) {
-                    channelOf(bone(name), path).values = [...times].map((t) => {
-                        const from = (layer.start ?? 0) + Math.min(t, spec.hold ?? Infinity);
+                const node = bone(name);
 
+                for (const path of ["translation", "rotation", "scale"]) {
+                    const channel = theirs.get(node)?.[path];
+
+                    // (A way the other clip doesn't move the bone, it has it at rest: so too here,
+                    // unless it's at rest here already)
+                    if (!channel && !channels.has(`${name}/${path}`)) {
+                        continue;
+                    }
+
+                    const rest = restOf(node, path);
+                    const own = channelOf(node, path);
+
+                    own.values = own.values.map((value, i) => {
+                        const from = (layer.start ?? 0) + Math.min(times[i], spec.hold ?? Infinity);
                         // (Round again past its end; at its very end, there)
-                        return sampleChannel(channel, from <= otherLength ? from : from % otherLength);
+                        const grafted = channel ? sampleChannel(channel, from <= otherLength ? from : from % otherLength) : [...rest];
+                        const share = layer.keys ? eased(layer.keys, times[i]) : 1;
+
+                        return share === 1 ? grafted : between(path, value, grafted, share);
                     });
                 }
             }
@@ -136,7 +176,11 @@ export function inventClip(document, spec) {
                 const node = bone(name);
                 const posed = new Quaternion();
 
-                worldMatrix(node, moving, start).decompose(new Vector3(), posed, new Vector3());
+                if (layer.axes === undefined) {
+                    worldMatrix(node, moving, start).decompose(new Vector3(), posed, new Vector3());
+                } else {
+                    posed.copy(turnAt(node, Math.min(frames, Math.max(0, Math.round((layer.axes / (seconds || 1)) * frames)))));
+                }
 
                 // (Lift: about the level line across the bone, so its tip rises; a bone standing
                 // straight up lifts as the creature pitches)
@@ -250,6 +294,10 @@ export function checkInvented(list, fail) {
                     fail(`${at}.graft names a clip`);
                 }
 
+                if (layer.keys !== undefined) {
+                    keysOf(layer.keys, `${at}.keys`, (value) => typeof value === "number" && value >= 0 && value <= 1);
+                }
+
                 continue;
             }
 
@@ -265,6 +313,10 @@ export function checkInvented(list, fail) {
 
             if (layer.lag !== undefined && !(layer.lag >= 0)) {
                 fail(`${at}.lag is a number of seconds`);
+            }
+
+            if (layer.axes !== undefined && !(layer.axes >= 0)) {
+                fail(`${at}.axes is a number of seconds`);
             }
         }
     }
