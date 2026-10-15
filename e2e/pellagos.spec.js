@@ -5620,14 +5620,25 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
     await expect(talk).toBeVisible();
     await expect(talk.locator(".talk-name")).toHaveText(guild.name);
 
-    // Asked to ride along, for their price: paid, and they follow
+    // Asked to ride along, for their price: paid, and they follow (built a step at a time, not
+    // dressed there and then as the hire's told: that held an iPhone up for 0.6 s)
     const ask = talk.getByRole("button", { name: /Would you ride with me\? \(\d+ gold\)$/ });
     const price = Number((await ask.textContent()).match(/(\d+) gold/)[1]);
 
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const kept = game.onFollowers;
+
+        game.onFollowers = (followers) => {
+            window.hired = [...game.host.followers].filter(([, { leader }]) => leader === "player").map(([id]) => ({ drawn: game.avatars.has(id), queued: game.enlisting.includes(id) || game.enlistees.has(id) }));
+            kept(followers);
+        };
+    });
     await ask.click();
     await expect(talk.locator(".talk-line")).toContainText(/Lead on|Where to\?|killed/);
     await expect(page.locator("#banner")).toHaveText(`${guild.name} follows you now.`);
     await expect(page.locator(".coins").first()).toHaveText(`${200 - price} gold`);
+    expect(await page.evaluate(() => window.hired)).toEqual([{ drawn: false, queued: true }]);
     await page.keyboard.press("Escape");
     await expect(talk).toBeHidden();
 
