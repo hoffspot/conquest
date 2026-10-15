@@ -61,7 +61,7 @@ const MAX_NODES = 8192;
  * How far round a way's ends the tiles are made sure of before it's looked for (metres); how many
  * rings of tiles round them after, as it falls short; and the most tiles that's taken to.
  */
-const MARGIN = 4;
+export const MARGIN = 4;
 const WIDER = [1, 3];
 const MOST_COVERED = 100;
 

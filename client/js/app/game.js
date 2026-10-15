@@ -36,7 +36,7 @@ import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
 import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
-import { aloftShare, sitting, STEP_MS, TALK_REACH } from "../core/battle.js";
+import { aloftShare, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { townOf } from "../core/insides.js";
@@ -73,7 +73,7 @@ import { GODS } from "../core/lore/gods.js";
 import { ACT_TIMES, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
 import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
-import { navigatorOf, releaseNavigation } from "../core/navigation.js";
+import { MARGIN as WAY_MARGIN, navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { wasmBytes } from "../core/navigation/recast.js";
 import { RAISED } from "../core/overworld.js";
 import { heightAt as landHeightAt } from "../core/terrain/height.js";
@@ -1552,7 +1552,10 @@ export class Game {
         // (The navigation tiles round the player baked off the page's thread from now on, and the
         // ways the world's first steps find waited for, not baked here as the game begins: they
         // were baked so in its first frame, before the first bake ahead, and held an iPhone up
-        // for a moment as it began)
+        // for a moment as it began. Those the ways found near the player never wait for, baked
+        // all at once while it loads, and waited for before it begins, below)
+        const near = this.#bakeNear();
+
         this.#bakeAhead();
         step("Drawing the map");
 
@@ -1627,6 +1630,7 @@ export class Game {
             // (Waited on till they're there: sent, they're only on their way)
             return view.settled();
         });
+        await time("navigation", () => near);
         done = steps;
         report("Ready");
 
@@ -2374,6 +2378,20 @@ export class Game {
         }
 
         this.runner.bakeAhead(this.#navBaker());
+    }
+
+    // The navigation tiles round the player that the ways found near them never wait for
+    // (core/battle.js WAIT_BEYOND, and the few metres round a way its tiles are made for), baked
+    // off the page's thread all at once as the game loads: resolves once they're in
+    // (world/navbaker.js ready)
+    #bakeNear() {
+        const player = this.battle.actor(this.me);
+
+        if (this.remote || !this.world.maps?.town?.chunkAt || player?.map !== "town") {
+            return Promise.resolve();
+        }
+
+        return this.#navBaker().ready(player.x, player.y, WAIT_BEYOND + WAY_MARGIN);
     }
 
     // The navigation meshes round the player, if they're shown (afresh when they've gone a tile)

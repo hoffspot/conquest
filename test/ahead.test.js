@@ -74,6 +74,28 @@ describe("made ahead on the world server (server/ahead.js, server/workers.js)", 
         baker.dispose();
     });
 
+    it("bakes every tile round a point at once on a worker as the game loads (ready), and is done once they're all in", async () => {
+        const world = buildWorld({ seed: 2 });
+        const navigation = navigatorOf(world.maps.town);
+        const baker = new NavBaker(navigation);
+        const [x, y] = startFor(world.plan, world.start.race).at;
+        const [tx0, ty0] = navigation.tileOf(x - 52, y - 52);
+        const [tx1, ty1] = navigation.tileOf(x + 52, y + 52);
+
+        await baker.ready(x, y, 52);
+
+        // (Every one in, none baked here: the world's ground under them made here, as it loads)
+        for (let ty = ty0; ty <= ty1; ty++) {
+            for (let tx = tx0; tx <= tx1; tx++) {
+                assert.ok(navigation.has(tx, ty), `tile ${tx} ${ty} in`);
+            }
+        }
+
+        assert.equal(navigation.baked, 0);
+        assert.equal(baker.asked.size, 0);
+        baker.dispose();
+    });
+
     it("makes the chunks round a player between steps, nearest first, a little each time, and their navigation baked off the world's thread", async () => {
         const world = buildWorld({ seed: 2 });
         const overworld = world.maps.town;
