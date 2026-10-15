@@ -6,9 +6,10 @@
 //
 // The game has the tiles round each player baked so (around, then pump each frame: one tile's
 // triangles worked out a frame), so the ways the battle finds near them (core/battle.js) seldom
-// wait for a tile to be baked; and those the ways of anyone else are waiting for (want: the
-// navigation's later), after them, so a creature or a soldier further off never holds a step up
-// while the world under its way is made and baked.
+// wait for a tile to be baked, those nearest the player all at once as it loads (ready); and
+// those the ways of anyone else are waiting for (want: the navigation's later), after them, so a
+// creature or a soldier further off never holds a step up while the world under its way is made
+// and baked.
 
 /** How many tiles ways are waiting for are kept waiting at most (the longest waiting let go). */
 export const WANTED = 256;
@@ -88,6 +89,36 @@ export class NavBaker {
         const first = new Set(wanted.map(([tx, ty]) => `${tx} ${ty}`));
 
         this.queue = [...wanted.map(([tx, ty]) => [tx, ty]), ...this.queue.filter(([tx, ty]) => !first.has(`${tx} ${ty}`))];
+    }
+
+    /**
+     * Have every tile within `reach` metres of a point baked now, not a frame at a time, the
+     * world's ground under them made here first if need be (as the game loads, with nothing
+     * being drawn): each sent off in a turn of its own (the page's other work going on between),
+     * resolving once they're all in, or after `patience` ms (a worker gone quiet: those not in
+     * then are baked where they're wanted, as ever).
+     */
+    async ready(x, y, reach, { patience = 10000 } = {}) {
+        const { tile } = this.navigation.measures;
+        const [width, height] = this.navigation.size;
+        const [tx0, ty0] = this.navigation.tileOf(x - reach, y - reach);
+        const [tx1, ty1] = this.navigation.tileOf(x + reach, y + reach);
+        const tiles = [];
+        const turn = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+        for (let ty = Math.max(0, ty0); ty <= ty1 && ty * tile < height; ty++) {
+            for (let tx = Math.max(0, tx0); tx <= tx1 && tx * tile < width; tx++) {
+                tiles.push(`${tx} ${ty}`);
+                this.bake(tx, ty);
+                await turn();
+            }
+        }
+
+        const end = performance.now() + patience;
+
+        while (tiles.some((key) => this.asked.has(key)) && performance.now() < end) {
+            await turn();
+        }
     }
 
     /**

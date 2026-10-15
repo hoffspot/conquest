@@ -396,7 +396,9 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
     await expect(page.locator("#hud")).toBeVisible();
     await expect(page.locator("#playerplate .name")).toHaveText("Tamsin Rowe");
 
-    const game = await page.evaluate(() => {
+    const game = await page.evaluate(async () => {
+        const { MARGIN, navigatorOf } = await import("/js/core/navigation.js");
+        const { WAIT_BEYOND } = await import("/js/core/battle.js");
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
         const [cx, cy] = game.world.town.centre;
@@ -404,7 +406,23 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
 
         const character = game.avatars.get("player").character;
 
+        // (The navigation tiles the ways found near them never wait for, baked off the page's
+        // thread as the game loaded, and in before it began: not baked on the page in the world's
+        // first steps, as they were, holding an iPhone up as it began)
+        const navigation = navigatorOf(game.world.maps.town);
+        const reach = WAIT_BEYOND + MARGIN;
+        const [tx0, ty0] = navigation.tileOf(player.x - reach, player.y - reach);
+        const [tx1, ty1] = navigation.tileOf(player.x + reach, player.y + reach);
+        const near = [];
+
+        for (let ty = ty0; ty <= ty1; ty++) {
+            for (let tx = tx0; tx <= tx1; tx++) {
+                near.push(navigation.has(tx, ty));
+            }
+        }
+
         return {
+            nearBaked: near.length > 0 && near.every(Boolean),
             weapon: player.weapon,
             boots: player.boots,
             equipment: [...character.equipment.values()],
@@ -423,6 +441,7 @@ test("makes a character: a random look, a weapon and a name, then plays them in 
     expect(game.sheathed).toBe(true);
     expect(game.bowOn).toBe("Spine2");
     expect(game.inSquare).toBe(true);
+    expect(game.nearBaked).toBe(true);
     expect(saved.hero.name).toBe("Tamsin Rowe");
     expect(saved.hero.weapon).toBe("bow");
     expect(saved.hero.boots).toBe(true);

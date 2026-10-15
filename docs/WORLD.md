@@ -949,11 +949,17 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
   tile wanted before then is baked where it's wanted. The game has the tiles within 96 m of each
   player baked so, nearest first, a tile sent off a frame, and only once the world's chunks under
   it have been made (as they're drawn: making them for a tile would take several frames' time).
-  The baker's begun as the game loads (`#bakeAhead`, before its first frame). It used to be begun
-  in the first frame, after that frame's steps of the world, so the ways the world's first steps
-  looked for (its guards' rounds, its folk's errands) had their tiles baked on the page as the game
-  began. With the CPU at its own speed in headless Chromium, its first two steps took 79–170 and
-  244–428 ms, and now 70–82 and 128–173 (an iPhone's took 620).
+  The baker's begun as the game loads (`#bakeAhead`, before its first frame), and the tiles within
+  52 m of the player (`WAIT_BEYOND` and the 4 m round a way: those the ways found near a player
+  never wait for) are baked all at once then (`ready`, `#bakeNear`), each sent off in a turn of
+  its own, and waited for before the game begins. They're in before the shaders and pictures
+  are, so loading takes no longer. Before, the ways the world's first steps looked for (its
+  guards' rounds, its folk's errands) had their tiles baked on the page as the game began: all
+  of them while the baker was begun in the first frame, after that frame's steps; and those near
+  the player (5 or 6 tiles) once it was begun as the game loaded, sending a tile a frame. With
+  the CPU at its own speed in headless Chromium, the first two steps took 79–170 and 244–428 ms,
+  then 61–82 and 107–173, and now 58–93 and 30 or less: the first is the world's own opening
+  work, such as mustering its soldiers (an iPhone's took 620).
   The ways anyone but a player looks for (a creature, a soldier, a wagon: `path`'s `wait`), but
   for someone within 48 m of a player going somewhere as near one (battle.js `WAIT_BEYOND`: a
   fight beside a player never waits, its tiles mostly in already as they're baked ahead), don't
