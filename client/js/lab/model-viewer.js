@@ -1,7 +1,8 @@
 // The model viewer (model-viewer.html; it was the creature lab, creature-lab.html, which sends
 // on here): every creature of the wilds (beasts/looks.js), each dungeon's bosses and
-// mini-bosses, and the game's people (an adventurer, a soldier, each of the folk's roles: of any
-// people, a woman or a man), one at a time, doing what each does in the game (standing, walking,
+// mini-bosses, the game's people (an adventurer, a soldier, each of the folk's roles: of any
+// people, a woman or a man), and its things (what's carried and worn, built in code:
+// characters/items.js; the catalog's props, the treasure chest opening), one at a time, doing what each does in the game (standing, walking,
 // running, attacking, struck, resting, dying, flying; a person's every motion, as the motion
 // check plays them: characters/motioncheck.js), to look at from any side and watch move:
 //
@@ -15,13 +16,15 @@
 // ?creature=wolf&action=walk&seed=3 opens on one (a dungeon's boss or mini-boss:
 // ?creature=caves:boss:trollKing, its theme, its rank and its id there: beasts/champions.js; and
 // ?clip=Roar one of its model's clips); ?person=smith&people=lizard&sex=m opens on one of the
-// people (?person=adventurer or soldier, &weapon=bow); window.lab lets a script do the same and step time on
+// people (?person=adventurer or soldier, &weapon=bow); ?item=sword or ?prop=dungeon-prop-barrel
+// on a thing; window.lab lets a script do the same and step time on
 // exactly (for renders: .shots, and e2e/model-viewer.spec.js). The ox is shown in its wagon's
 // shafts, laden with ?load=wood (or stone, metal; none: empty) in ?people=human's timber.
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+import { clone as cloneScene } from "three/addons/utils/SkeletonUtils.js";
 import { ASSETS } from "../app/assets.js";
 import { HERO_PEOPLES } from "../app/heroes.js";
 import { filesOf } from "../app/catalog.js";
@@ -30,7 +33,9 @@ import { LOOKS } from "../beasts/looks.js";
 import { hasModel, MODELS, modelOf, wantModel } from "../beasts/model.js";
 import { ATTACKS, EMOTE_WAYS, RESTS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
+import { EQUIPMENT } from "../characters/equipment.js";
 import { folkLook } from "../characters/folk.js";
+import { buildItem } from "../characters/items.js";
 import { loadCharacterKit } from "../characters/kit.js";
 import { motions } from "../characters/motioncheck.js";
 import { ARMS, soldierLook } from "../characters/soldiers.js";
@@ -39,7 +44,7 @@ import { THEMES } from "../core/dungeons/themes.js";
 import { ACT_TIMES, ROLES } from "../core/roles.js";
 import { allAtOnce } from "../core/steps.js";
 import { STARTING_WEAPONS, WEAPONS, weaponOf } from "../core/weapons.js";
-import { readKtx2With } from "../world/art/engine/models.js";
+import { loadGltf, readKtx2With } from "../world/art/engine/models.js";
 import { hitch } from "../world/art/kits/wagon.js";
 import { Avatar } from "../world/avatar.js";
 import { detailsOf, Rewind, wireframe } from "./inspect.js";
@@ -221,6 +226,8 @@ const person = {
     people: HERO_PEOPLES.some(({ id }) => id === params.get("people")) ? params.get("people") : "human",
     sex: params.get("sex") === "m" ? "m" : "f",
     weapon: params.get("weapon") in WEAPONS ? params.get("weapon") : "sword",
+    // (And what the ox's wagon is laden with: wood, stone, metal or none, in its people's timber)
+    load: ["wood", "stone", "metal", "none"].includes(params.get("load")) ? params.get("load") : "wood",
 };
 
 // The folk's roles, each of them shown as the game dresses them (characters/folk.js): all but
@@ -316,6 +323,74 @@ function motionOf({ id, group, label }, { weapon, role }) {
     }
 }
 
+// --- The things ---
+
+// What's carried and worn that's a model of its own (not fitted to a body as clothes are), built
+// by the game's code (characters/items.js), by where: [id, its EQUIPMENT entry]
+const WHERE = { mainHand: "held in the right hand", offHand: "held in the left hand", head: "worn on the head", back: "carried on the back", face: "worn on the face", tail: "a tail of one of the peoples" };
+const ITEMS = Object.entries(EQUIPMENT).filter(([, { model, slot }]) => model && slot in WHERE);
+
+// The catalog's models that are things (app/assets.js): the dungeons' and the shops' props, and
+// the treasure chest, by their catalog ids
+const PROPS = Object.keys(ASSETS.models).filter((id) => id.startsWith("dungeon-prop-") || id === "chest");
+
+/** Whether an id in the picker is a thing's ("item:" and an EQUIPMENT id, or "prop:" and a catalog id). */
+const isThing = (id) => /^(item|prop):/.test(String(id));
+
+// The props read (their glTFs, by catalog id), to show again at once
+const propsRead = new Map();
+
+// A thing (`object`) shown as a creature is, on the ground in the middle, its clips (if it has
+// any: the chest's opening) played alone as a model's are (`hold`, by name)
+function thingAvatar(object, clips = []) {
+    const box = new THREE.Box3().setFromObject(object);
+    const size = box.isEmpty() ? new THREE.Vector3(1, 1, 1) : box.getSize(new THREE.Vector3());
+    const middle = box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
+    const holder = new THREE.Group();
+    const mixer = new THREE.AnimationMixer(object);
+    const actions = new Map(clips.map((clip) => [clip.name, mixer.clipAction(clip)]));
+
+    object.position.sub(new THREE.Vector3(middle.x, box.isEmpty() ? 0 : box.min.y, middle.z));
+    holder.add(object);
+    object.traverse((node) => {
+        node.castShadow = node.receiveShadow = Boolean(node.isMesh);
+    });
+
+    for (const action of actions.values()) {
+        action.play();
+        action.setEffectiveWeight(0);
+    }
+
+    const still = () => {};
+
+    return {
+        object: holder,
+        scale: 1,
+        size,
+        character: { height: Math.max(0.05, size.y), dispose: () => mixer.stopAllAction(), sheathe: still },
+        actions: { revive: still, setGuard: still, react: still, die: still, knockdown: still, startAttack: still },
+        place(x, z, facing) {
+            holder.position.set(x, 0, z);
+            holder.rotation.y = facing;
+        },
+        update: still,
+        plan: clips.length
+            ? {
+                  length: Math.max(size.x, size.z),
+                  lengths: Object.fromEntries(clips.map(({ name, duration }) => [name, duration])),
+                  hold(clip, time) {
+                      for (const [name, action] of actions) {
+                          action.setEffectiveWeight(name === clip ? 1 : 0);
+                          action.time = name === clip ? time : action.time;
+                      }
+
+                      mixer.update(0);
+                  },
+              }
+            : null,
+    };
+}
+
 // --- The creature ---
 
 status.textContent = "Loading the body…";
@@ -376,6 +451,8 @@ function show(id, which = seed) {
 
     if (isPerson(id)) {
         showPerson(id, which);
+    } else if (isThing(id)) {
+        showThing(id);
     } else {
         showCreature(id, which);
     }
@@ -399,6 +476,9 @@ function show(id, which = seed) {
     document.querySelector("[data-action=hover]").hidden = !CREATURES[current.kind]?.hover;
     document.querySelector("[data-action=attack]").hidden = Boolean(current.person) && !current.weapon;
 
+    // (A thing does none of it: it stands, or plays its clips)
+    document.querySelector("#bottom").hidden = Boolean(current.thing);
+
     // (Who one of the people is, chosen in the panel: of which people, a woman or a man, and with
     // what, if they fight)
     showWho();
@@ -421,7 +501,7 @@ function showCreature(id, which) {
 
     // (An ox in its wagon's shafts)
     if (id === "ox") {
-        hitch(avatar, LOOKS.ox, { load: params.get("load") ?? "wood", people: params.get("people") ?? "human", seed: which });
+        hitch(avatar, LOOKS.ox, { load: person.load === "none" ? null : person.load, people: person.people, seed: which });
     }
 
     current = {
@@ -430,6 +510,7 @@ function showCreature(id, which) {
         avatar,
         weapon,
         person: null,
+        thing: null,
         name: champion ? champion.title.replace(/^the /, "The ") : (ABOUT[id]?.[0] ?? id),
         about: champion ? `${champion.rank === "boss" ? "The boss" : "A mini-boss"} of ${champion.theme.name}: ${ABOUT[kind]?.[0] ?? kind}` : (ABOUT[id]?.[1] ?? ""),
     };
@@ -465,9 +546,47 @@ function showPerson(id, which) {
         avatar,
         weapon: look.weapon,
         person: { role, rests: look.role, weapon: look.weapon, people: person.people, sex: person.sex },
+        thing: null,
         name: role === "adventurer" ? "Adventurer" : role === "soldier" ? "Soldier" : ROLES[role].title,
         about: [people, person.sex === "f" ? "woman" : "man", look.weapon ? WEAPONS[look.weapon].label.toLowerCase() : null, role === "adventurer" ? "as the players and their followers" : null].filter(Boolean).join(" · "),
     };
+}
+
+// One of the things: what's carried or worn, built as the game builds it; or one of the
+// catalog's props, read as the game reads it (shown once it's read)
+function showThing(id) {
+    const [kind, name] = [id.slice(0, id.indexOf(":")), id.slice(id.indexOf(":") + 1)];
+    const thing = { id, kind: id, weapon: null, person: null };
+
+    if (kind === "item") {
+        const item = EQUIPMENT[name];
+
+        current = { ...thing, avatar: thingAvatar(buildItem(item.model, { headRadius: 0.1 })), thing: { item: name }, name: item.label, about: WHERE[item.slot] };
+
+        return;
+    }
+
+    const asset = ASSETS.models[name];
+    const read = propsRead.get(name);
+    const label = asset.label.replace(/ \(.*$/, "");
+
+    current = { ...thing, avatar: thingAvatar(read ? cloneScene(read.scene) : new THREE.Group(), read?.animations ?? []), thing: { asset: name, read: Boolean(read) }, name: label, about: read ? "A prop: one of the catalog's models" : "On its way…" };
+
+    if (!read) {
+        loadGltf(Object.values(filesOf(ASSETS, name, document.baseURI))[0])
+            .then((gltf) => {
+                propsRead.set(name, gltf);
+
+                if (current?.id === id) {
+                    show(id);
+                }
+            })
+            .catch(() => {
+                if (current?.id === id) {
+                    document.querySelector("#about").textContent = "Its model couldn't be read";
+                }
+            });
+    }
 }
 
 // The camera on it: three-quarters from the front, far enough to see all of it, as wide as what
@@ -475,9 +594,9 @@ function showPerson(id, which) {
 function frame() {
     const { avatar } = current;
     const height = avatar.character.height;
-    const size = avatar.plan ? Math.max(height, avatar.plan.length * avatar.scale * 0.8) : height;
+    const size = current.thing ? Math.max(avatar.size.x, avatar.size.y, avatar.size.z) : avatar.plan ? Math.max(height, avatar.plan.length * avatar.scale * 0.8) : height;
     const shape = (canvas.clientWidth - covered.right) / Math.max(1, canvas.clientHeight - covered.below);
-    const distance = (size * 1.75 + 0.8) * Math.max(1, FRAMED / shape);
+    const distance = (size * 1.75 + (current.thing ? 0.2 * size : 0.8)) * Math.max(1, FRAMED / shape);
 
     controls.target.set(avatar.object.position.x, height * 0.5, avatar.object.position.z);
     camera.position.set(avatar.object.position.x + distance * 0.75, height * 0.55 + distance * 0.32, avatar.object.position.z + distance * 0.7);
@@ -827,6 +946,10 @@ function showBones() {
 function movesOf() {
     const { avatar, weapon, kind } = current;
 
+    if (current.thing) {
+        return [];
+    }
+
     // (One of the people: every motion of theirs, as the motion check has them, their own first:
     // their weapon's, their work and their rests)
     if (current.person) {
@@ -908,7 +1031,7 @@ function listMoves() {
         const note = document.createElement("p");
 
         note.className = "note";
-        note.textContent = hasModel(kind) ? "Its model's file is still on its way: its stand-in, built in code, is shown meanwhile." : "Built in code, it has no file of clips: its moves are worked out as it plays (the game's, above).";
+        note.textContent = current.thing ? (current.thing.asset && !current.thing.read ? "Its model's file is on its way." : "It has no clips: it doesn't move.") : hasModel(kind) ? "Its model's file is still on its way: its stand-in, built in code, is shown meanwhile." : "Built in code, it has no file of clips: its moves are worked out as it plays (the game's, above).";
         looks.clips.replaceChildren(note);
     }
 
@@ -932,18 +1055,19 @@ function chip(label, choose) {
 
 // How much there is to draw of it, how big it is, and whose it is
 function describe() {
-    const { avatar, kind } = current;
+    const { avatar, kind, thing } = current;
     const details = detailsOf(avatar.object);
     const model = avatar.plan?.model ? MODELS[avatar.plan.model] : null;
-    const asset = model ? ASSETS.models[model.asset] : null;
+    const asset = model ? ASSETS.models[model.asset] : thing?.asset ? ASSETS.models[thing.asset] : null;
     const bytes = asset?.files.reduce((sum, file) => sum + file.bytes, 0) ?? 0;
     const sizes = details.textures.map(({ width, height, compressed }) => `${width}×${height}${compressed ? " (compressed)" : ""}`);
-    const length = avatar.plan ? avatar.plan.length * (avatar.scale ?? 1) : null;
+    const length = avatar.plan && !thing ? avatar.plan.length * (avatar.scale ?? 1) : null;
     const [source, licence] = whoseOf(asset, avatar);
+    const metres = (value) => (value < 1 ? `${Math.round(value * 100)} cm` : `${value.toFixed(2)} m`);
     const rows = [
-        ["Made", model ? `From a model's file (${(bytes / 1048576).toFixed(1)} MB)` : avatar.plan ? `In code, by the game (beasts/: a ${LOOKS[kind].body} body)` : "In code, by the game (characters/: a character)"],
+        ["Made", asset ? `From a model's file (${(bytes / 1048576).toFixed(1)} MB)` : thing ? "In code, by the game (characters/items.js)" : avatar.plan ? `In code, by the game (beasts/: a ${LOOKS[kind].body} body)` : "In code, by the game (characters/: a character)"],
         ["Source", source],
-        ["Size", `${avatar.character.height.toFixed(2)} m tall${length ? `, ${length.toFixed(2)} m long` : ""}`],
+        ["Size", thing ? `${metres(avatar.size.x)} × ${metres(avatar.size.z)}, ${metres(avatar.size.y)} tall` : `${avatar.character.height.toFixed(2)} m tall${length ? `, ${length.toFixed(2)} m long` : ""}`],
         ["Triangles", details.triangles.toLocaleString("en")],
         ["Vertices", details.vertices.toLocaleString("en")],
         ["Meshes", String(details.meshes)],
@@ -987,13 +1111,15 @@ function describe() {
 function whoseOf(asset, avatar) {
     if (asset) {
         const file = asset.label.match(/client\/([^\s;)]*LICEN[CS]E[^\s;)]*)/)?.[1] ?? null;
+        const named = asset.label.match(/\b(CC0|CC BY 4\.0|MIT)\b/)?.[1] ?? null;
+        const text = file ? `Its own (${file.split("/").pop()})` : named ? `${named} (the game's credits)` : "See the game's credits";
 
-        return [asset.label.replace(/;?\s*client\/[^\s;)]*/, ""), { text: file ? `Its own (${file.split("/").pop()})` : "See the game's credits", href: file ?? "https://github.com/hoffspot/conquest#credits-and-license" }];
+        return [asset.label.replace(/;?\s*client\/[^\s;)]*/, ""), { text, href: file ?? "https://github.com/hoffspot/conquest#credits-and-license" }];
     }
 
     const game = { text: "Apache License 2.0, as the game's code is", href: "https://github.com/hoffspot/conquest/blob/main/LICENSE" };
 
-    return avatar.plan ? ["Built by the game's code: no outside model", game] : ["CharMorph's Vitruvian body (CC0), with MakeHuman's shapes, skeleton and skin weights (CC0), dressed by the game's code", game];
+    return avatar.plan || current.thing ? ["Built by the game's code: no outside model", game] : ["CharMorph's Vitruvian body (CC0), with MakeHuman's shapes, skeleton and skin weights (CC0), dressed by the game's code", game];
 }
 
 // --- The controls ---
@@ -1047,18 +1173,48 @@ for (const [theme, { name, bosses, minis }] of Object.entries(THEMES)) {
     picker.append(group);
 }
 
+// (Things: the ox in its wagon's shafts; what's carried and worn, by where; and the catalog's
+// props, the treasure chest first)
+{
+    const wagons = document.createElement("optgroup");
+    const items = document.createElement("optgroup");
+    const props = document.createElement("optgroup");
+
+    wagons.label = "Wagons";
+    wagons.append(new Option("A works' wagon and its ox", "ox"));
+    items.label = "Things carried and worn";
+    items.append(...ITEMS.map(([id, { label, slot }]) => new Option(`${label} (${WHERE[slot].replace(/^(held|worn|carried) /, "")})`, `item:${id}`)));
+    props.label = "Props (the catalog's models)";
+    props.append(...PROPS.sort((a, b) => (a === "chest" ? -1 : b === "chest" ? 1 : 0)).map((id) => new Option(ASSETS.models[id].label.replace(/ \(.*$/, ""), `prop:${id}`)));
+    picker.append(wagons, items, props);
+}
+
 picker.addEventListener("change", () => show(picker.value));
 
-// Who one of the people is: their people, a woman or a man, and what they fight with
-const who = { section: document.querySelector("#person"), people: document.querySelector("#people"), sex: document.querySelector("#sex"), weapon: document.querySelector("#weapon") };
+// Who one of the people is: their people, a woman or a man, and what they fight with; or the
+// ox's wagon's people and load
+const who = { section: document.querySelector("#person"), heading: document.querySelector("#personing"), people: document.querySelector("#people"), sex: document.querySelector("#sex"), weapon: document.querySelector("#weapon"), load: document.querySelector("#load") };
 
 who.people.append(...HERO_PEOPLES.map(({ id, label }) => new Option(label, id)));
 
-// (Shown with the choices for one of the people, as they are; not for a creature)
+// (Shown with the choices for one of the people, as they are, or the ox's wagon; not for a
+// creature or a thing)
 function showWho() {
     const shown = current.person;
+    const wagon = current.id === "ox";
 
-    who.section.hidden = !shown;
+    who.section.hidden = !shown && !wagon;
+    who.heading.textContent = wagon ? "Wagon" : "Person";
+    who.sex.hidden = wagon;
+    who.load.hidden = !wagon;
+
+    if (wagon) {
+        who.people.value = person.people;
+        who.load.value = person.load;
+        who.weapon.hidden = true;
+
+        return;
+    }
 
     if (!shown) {
         return;
@@ -1073,7 +1229,7 @@ function showWho() {
     who.weapon.hidden = arms.length === 0;
 }
 
-for (const [key, select] of [["people", who.people], ["sex", who.sex], ["weapon", who.weapon]]) {
+for (const [key, select] of [["people", who.people], ["sex", who.sex], ["weapon", who.weapon], ["load", who.load]]) {
     select.addEventListener("change", () => {
         person[key] = select.value;
         show(current.id);
@@ -1152,8 +1308,9 @@ document.addEventListener("keydown", (event) => {
 
 // --- Running ---
 
-const asked = params.has("person") ? `person:${params.get("person")}` : params.get("creature");
-const start = asked in LOOKS || championOf(asked ?? "") || (isPerson(asked) && (FOLK_ROLES.includes(asked.slice(7)) || ["adventurer", "soldier"].includes(asked.slice(7)))) ? asked : "wolf";
+const asked = params.has("person") ? `person:${params.get("person")}` : params.has("item") ? `item:${params.get("item")}` : params.has("prop") ? `prop:${params.get("prop")}` : params.get("creature");
+const known = (id) => id in LOOKS || championOf(id ?? "") || (isPerson(id) && (FOLK_ROLES.includes(id.slice(7)) || ["adventurer", "soldier"].includes(id.slice(7)))) || (id?.startsWith("item:") && ITEMS.some(([item]) => `item:${item}` === id)) || (id?.startsWith("prop:") && PROPS.includes(id.slice(5)));
+const start = known(asked) ? asked : "wolf";
 
 show(start);
 
@@ -1197,7 +1354,7 @@ window.lab = {
     act,
     advance,
     avatar: () => current.avatar,
-    current: () => ({ id: current.id, humanoid: !current.avatar.plan, person: current.person, attacks: current.avatar.attacks ?? [], specials: current.avatar.specials ?? [], rests: current.avatar.rests ?? [] }),
+    current: () => ({ id: current.id, humanoid: !current.avatar.plan, person: current.person, thing: current.thing, attacks: current.avatar.attacks ?? [], specials: current.avatar.specials ?? [], rests: current.avatar.rests ?? [] }),
     pause: () => play(false),
     play: () => play(true),
     step,

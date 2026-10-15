@@ -219,3 +219,45 @@ test("one of the people, by role, people, woman or man and weapon: every motion 
     // (Its details: a character, its licence the game's)
     await expect(page.locator("#details")).toContainText("a character");
 });
+
+test("the things: what's carried and worn, built in code; the catalog's props, the treasure chest opening as it was made; and the ox's wagon, laden as chosen", async ({ page }) => {
+    await openViewer(page, "/model-viewer.html?item=sword");
+    await expect(page.locator("#name")).toHaveText("Arming sword");
+
+    // (A thing does nothing of a creature's: no moves, and no clips if it has none)
+    await expect(page.locator("#bottom")).toBeHidden();
+    await expect(page.locator("#moves button")).toHaveCount(0);
+    await expect(page.locator("#clips")).toContainText("It has no clips");
+
+    const details = page.locator("#details");
+
+    await expect(details).toContainText("characters/items.js");
+    await expect(details).toContainText("91 cm tall");
+
+    // The treasure chest: read from the catalog, its opening played and slid through
+    await page.locator("#picker").selectOption("prop:chest");
+
+    const clips = page.locator("#clips");
+
+    await expect(clips.getByRole("button", { name: /^Open · / })).toBeVisible({ timeout: 60000 });
+    await page.getByRole("button", { name: "Pause" }).click();
+    await clips.getByRole("button", { name: /^Open · / }).click();
+    await page.getByRole("button", { name: "On a frame" }).click();
+    await expect(page.locator("#time")).toHaveText(/^0\.03 s of 0\.\d\d s$/);
+    await expect(details).toContainText("JMI 3D Toolkit's, MIT");
+    await expect(details.getByRole("link")).toHaveText("MIT (the game's credits)");
+
+    // A prop: its source and licence as the catalog has them
+    await page.locator("#picker").selectOption("prop:dungeon-prop-barrel");
+    await expect(details).toContainText("Poly Haven wine_barrel_01, CC0", { timeout: 60000 });
+    await expect(details).toContainText("From a model's file");
+
+    // The ox's wagon, its people's and laden with stone: chosen in the panel
+    await page.locator("#picker").selectOption("ox");
+    await expect(page.locator("#personing")).toHaveText("Wagon");
+    await expect(page.locator("#sex")).toBeHidden();
+    await page.locator("#load").selectOption("stone");
+    await page.locator("#people").selectOption("orc");
+    await expect(page.locator("#bottom")).toBeVisible();
+    expect(await page.evaluate(() => window.lab.current().id)).toBe("ox");
+});

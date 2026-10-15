@@ -892,9 +892,14 @@ each of the three it's built as (`seed % 3`), at its kind's size, each drawn at 
 `model-viewer.html` (`js/lab/model-viewer.js`, `js/lab/inspect.js`) is for watching the
 creatures and the people move, at <https://hoffspot.github.io/conquest/model-viewer.html>. It was
 the creature lab; `creature-lab.html` sends on to it, with what it was asked for. Choose a
-creature of the wild, a dungeon's boss or mini-boss (DUNGEONS.md), or one of the people (an
-adventurer, a soldier, or one of the folk in their role: CHARACTERS.md, *The motion check*), and
-it's drawn as the game draws it. Drag to
+creature of the wild, a dungeon's boss or mini-boss (DUNGEONS.md), one of the people (an
+adventurer, a soldier, or one of the folk in their role: CHARACTERS.md, *The motion check*), or
+one of the things, and it's drawn as the game draws it. The things are a works' wagon and its ox
+(WAR.md, *Convoys on the roads*: of a people's timber, laden with wood, stone or metal, or
+empty); what's carried and worn that's a model of its own, built in code (characters/items.js:
+the weapons, shields, helms and hats, quivers and packs, the tusks and tails); and the catalog's
+props (app/assets.js: the dungeons' and the shops' furniture, wares and dressing, and the
+treasure chest, its opening its one clip). Drag to
 go round it and pinch or scroll to come nearer. The bar at its foot has it stand, walk, run,
 attack, be struck, rest, die or be knocked down, and fly, land or hover if it can. Its panel
 (**Inspect**: beside it where there's room, under it on a phone):
@@ -906,7 +911,7 @@ attack, be struck, rest, die or be knocked down, and fly, land or hover if it ca
 - **Show:** its skeleton (three.js's `SkeletonHelper`) and its wireframe, each on and off.
 - **Person** (one of the people): of which people, a woman or a man, and, an adventurer or a
   soldier, with which weapon (an adventurer any a player may start with, or an orc's cleaver; a
-  soldier their people's).
+  soldier their people's). **Wagon** (the ox's): its people's timber, and its load.
 - **The game's moves,** each by name: a beast's attacks, its special ones and its ways of resting;
   a people-shaped one's weapon's attacks and its ways of resting (characters/actions.js); one of
   the people's every motion, as the motion check plays it (characters/motioncheck.js `motions`):
@@ -916,11 +921,14 @@ attack, be struck, rest, die or be knocked down, and fly, land or hover if it ca
   length, played alone as it was made (`modelBody`'s `hold`), and slid through. One built in code
   has none: its moves are worked out as it plays.
 - **Details** (`detailsOf`): how it's made (a model's file and its size, or the game's code); its
-  source; how tall and long it is; the triangles, vertices, meshes and materials drawn of it as
+  source (a prop's maker and licence, as the catalog has them); how tall and long it is (a
+  thing, how wide, deep and tall); the triangles, vertices, meshes and materials drawn of it as
   it's shown (one level of detail); its textures, each once, the largest first; its bones and
   clips; and its licence, linked to.
 
 `?creature=` opens it on one, `&action=` doing something, `&clip=` playing one of its model's clips
 (once the model's read); `?person=` one of the people (`adventurer`, `soldier`, or a role: `smith`),
-`&people=`, `&sex=` (`f` or `m`) and `&weapon=` who they are. `e2e/model-viewer.spec.js` uses it as a player would. `test/inspect.test.js`
+`&people=`, `&sex=` (`f` or `m`) and `&weapon=` who they are; `?item=` one of the things carried
+and worn (an EQUIPMENT id: `sword`), `?prop=` one of the catalog's props (`chest`); and the ox's
+wagon, `?creature=ox&load=stone&people=orc`. `e2e/model-viewer.spec.js` uses it as a player would. `test/inspect.test.js`
 covers what it says of a model, its wireframe, and stepping back and on.

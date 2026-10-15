@@ -30,9 +30,10 @@ lying about, and their war camps, in 3D from a seed to go round and look at, is 
 
 The model viewer, for watching the game's models move, is at
 <https://hoffspot.github.io/conquest/model-viewer.html>. Choose any creature of the wilds, a
-dungeon's boss or mini-boss, or one of the people (an adventurer or a soldier with any weapon of
-theirs, or one of the townsfolk in their role, of any people, a woman or a man), and it's drawn as
-the game draws it. It walks, runs, attacks, rests, is struck, knocked down and dies (the wyvern,
+dungeon's boss or mini-boss, one of the people (an adventurer or a soldier with any weapon of
+theirs, or one of the townsfolk in their role, of any people, a woman or a man), or one of the
+game's things (a works' wagon and its ox, laden as you choose; what's carried and worn; the
+catalog's props, the treasure chest opening), and it's drawn as the game draws it. It walks, runs, attacks, rests, is struck, knocked down and dies (the wyvern,
 the drake and the Dreadthorn fly, come down to land and hover). Its panel plays each of the game's
 moves for it by name (one of the people's every motion: their attacks, work, rests, emotes, spells,
 blows and falls), and every clip in a model's file by name. It pauses, slows to a tenth, steps a frame back or on, and plays a move
@@ -638,8 +639,8 @@ client/                 The game (static files served to the browser)
   dungeon-map.html      The dungeon map: a dungeon level by level (with world-map.css)
   war.html              The war between the peoples (with world-map.css and war.css)
   building-lab.html     The building lab (with world-map.css)
-  model-viewer.html     The model viewer: every creature and the people, doing everything they
-                        do, watched frame by frame, skeleton, wireframe, clips and details shown
+  model-viewer.html     The model viewer: every creature, the people and the things, doing all
+                        they do, watched frame by frame, skeleton, wireframe, clips and details
   creature-lab.html     The creature lab's old address: sends on to the model viewer
   uniform-lab.html      The uniform lab: each people's soldiers and officials (with world-map.css)
   fire-lab.html         The fire lab: every kind of fire and the fire spells (with world-map.css)
