@@ -3305,7 +3305,12 @@ figure); each one more takes about 4 MB.
 
 The pack's Gear tab shows the player themself in the middle of its slots, drawn live
 (`View.renderPreview`): while it's open, the world isn't drawn. It was drawn once as the pack
-opened, into a picture half as sharp, which is shown behind the panel, still and dimmed. Then
+opened, onto the screen as every frame is, and copied into a picture, which is shown behind the
+panel, still and dimmed (to 0.27 of its colours). It isn't drawn into a picture of its own: three.js
+draws into one untoned and linear, with a second shader for every material in sight, all made in
+that one frame (40 at a town's gate). That was more than an iPhone could take as the pack opened:
+the page was lost. The debug log notes the drawing as work begun ("the world drawn behind the
+pack"), so a crash in it says so. Then
 each frame the player alone (their character and the lights on a layer of their own, `PREVIEW`)
 is drawn into the paperdoll's box, from in front of them, framed on the whole box (as much of it
 as isn't scrolled out of sight: a scissor, and the camera's view offset), without redrawing the
