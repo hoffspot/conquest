@@ -949,6 +949,11 @@ WebAssembly by recast-navigation-js, vendored in `client/vendor/recast-navigatio
   tile wanted before then is baked where it's wanted. The game has the tiles within 96 m of each
   player baked so, nearest first, a tile sent off a frame, and only once the world's chunks under
   it have been made (as they're drawn: making them for a tile would take several frames' time).
+  The baker's begun as the game loads (`#bakeAhead`, before its first frame). It used to be begun
+  in the first frame, after that frame's steps of the world, so the ways the world's first steps
+  looked for (its guards' rounds, its folk's errands) had their tiles baked on the page as the game
+  began. With the CPU at its own speed in headless Chromium, its first two steps took 79–170 and
+  244–428 ms, and now 70–82 and 128–173 (an iPhone's took 620).
   The ways anyone but a player looks for (a creature, a soldier, a wagon: `path`'s `wait`), but
   for someone within 48 m of a player going somewhere as near one (battle.js `WAIT_BEYOND`: a
   fight beside a player never waits, its tiles mostly in already as they're baked ahead), don't
