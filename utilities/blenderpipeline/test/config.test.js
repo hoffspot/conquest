@@ -77,6 +77,8 @@ describe("an asset's config", () => {
         refuses(invent({ bones: ["Neck", "Head"], turn: "pitch", keys: [[0, 1]], weights: [1] }), /weights has a weight for each bone/);
         refuses(invent({ bones: ["Neck"], turn: "pitch", move: [[0, [0, 0, 0]]] }), /turns bones \(turn\), moves one \(move\) or grafts/);
         refuses(invent({ bone: "Hip", move: [[0, [0, 1]]] }), /move is a list of \[seconds, value\] keys/);
+        refuses(invent({ graft: "Glide", bones: ["Wing"], keys: [[0, 0], [1, 1.5]] }), /keys is a list of \[seconds, value\] keys/);
+        refuses(invent({ bones: ["Wing"], turn: "lift", keys: [[0, 10]], axes: -1 }), /axes is a number of seconds/);
     });
 
     it("gives Blender what it needs", () => {

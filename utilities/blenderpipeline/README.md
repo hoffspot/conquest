@@ -256,11 +256,14 @@ and sized, so turns are the creature's own and moves are in metres:
   `roll` turns it about the way the creature faces (its right side down), and `lift` raises its
   tip whichever way it points (a wing held out to the side). `weights`: a weight for each bone
   (a share of the degrees); `lag`: seconds each bone is held back on the one before it, as a tail
-  whips.
+  whips; `axes`: seconds into the clip made, to take the bone's axes as it lies then (after the
+  layers before this one: a wing spread by a graft, then laid down), not where the stretch starts.
 - **A move** (`bone`, `move`: `[seconds, [left, up, forward]]`): metres along the creature's
   axes, added to where the clip has the bone (the hips lunging, sinking).
 - **A graft** (`graft`, `bones`, `start`): those bones moved as another clip moves them (a
-  hover's wings with a breath's neck).
+  hover's wings with a breath's neck). `keys` (`[seconds, share]`, 0 to 1): only that share of
+  the other clip's motion, eased from key to key (a folded wing spread as the body falls); none,
+  all of it.
 
 The report says which clip each was made from (`madeFrom`). Check them by eye in the viewer, and
 with the browser tests (each moves, stays inside its bounds).
