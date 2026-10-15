@@ -61,12 +61,16 @@ export const WYVERN_LANDS = Object.freeze(["mountain", "badlands", "volcanic", "
 /**
  * How often (seconds between tries, and the chance each try) a flock, a wyvern, comes; how many
  * flocks at once at most; how far off they come from and are gone at (metres); and how near a
- * dragon's lair (metres) its dragon's seen circling.
+ * great lair (metres) its master's seen circling (a drake over its lair, a Dreadthorn over its own).
  */
 export const FLYING = Object.freeze({ every: [5, 14], chance: 0.7, flocks: 3, wyvern: [40, 110], wyvernChance: 0.5, from: 95, gone: 115, lair: 420 });
 
-/** How high the wyverns and the dragon fly (metres over the ground). */
-export const ALOFT = Object.freeze({ wyvern: [18, 30], dragon: [28, 40] });
+/** How high the wyverns, the drakes and the Dreadthorns fly (metres over the ground). */
+export const ALOFT = Object.freeze({ wyvern: [18, 30], dragon: [28, 40], dreadthorn: [34, 48] });
+
+/** How fast each flies (metres a second), and how wide a lair's master circles (metres). */
+const AIRSPEED = Object.freeze({ wyvern: 11, dragon: 13, dreadthorn: 12 });
+const CIRCLING = Object.freeze({ dragon: [30, 40], dreadthorn: [36, 50] });
 
 // How long (ms) a frame gives to building a wyvern or dragon that's to come
 const HATCHING = 2;
@@ -172,8 +176,9 @@ const between = (random, [least, most]) => least + random() * (most - least);
 /**
  * The fliers over the world outside: add `object` to the scene; each frame `update(dt, time, {
  * x, z }, { outdoors })` with where the player is (metres). `landAt(x, z)`: the land (a BIOMES id)
- * at a point; `lairs()`: the dragons' lairs to show a dragon circling over ([{ at: [x, z] }]:
- * those whose dragon's alive and not on the ground near the player); `groundAt(x, z)`: the
+ * at a point; `lairs()`: the great lairs to show their master circling over ([{ at: [x, z],
+ * beast }]: `beast` the master's kind, a drake ("dragon", if it doesn't say) or a Dreadthorn;
+ * those whose master's alive and not on the ground near the player); `groundAt(x, z)`: the
  * ground's height at a point (metres: they fly over it); `random`: the random numbers to use
  * (Math.random).
  */
@@ -225,7 +230,7 @@ export class Flyers {
         }
 
         this.flocks = this.flocks.filter((flock) => !flock.gone);
-        this.#dragon(player);
+        this.#master(player);
         this.#hatchOn(player);
 
         for (const flier of this.aloft) {
@@ -267,7 +272,7 @@ export class Flyers {
             this.flocks.at(-1).mode = circles ? "circle" : this.flocks.at(-1).mode;
             Object.assign(this.flocks.at(-1), circles ? this.#course(player, { speed: this.flocks.at(-1).speed, height: BIRDS[kind].height, circles: true }) : {});
         } else {
-            this.aloft.push({ kind, beast: this.#beast(new BeastAvatar(kind, { seed: this.#seed() })), ...this.#course(player, { speed: kind === "dragon" ? 13 : 11, height: ALOFT[kind], circles, radius: [24, 36] }) });
+            this.aloft.push({ kind, beast: this.#beast(new BeastAvatar(kind, { seed: this.#seed() })), ...this.#course(player, { speed: AIRSPEED[kind] ?? 11, height: ALOFT[kind], circles, radius: [24, 36] }) });
         }
     }
 
@@ -424,28 +429,35 @@ export class Flyers {
         }
     }
 
-    // The dragon circling over its lair's side of the player, while there's one to see (only one)
-    #dragon(player) {
-        const lair = this.lairs().find(({ at }) => Math.hypot(at[0] - player.x, at[1] - player.z) < FLYING.lair);
-        const flying = this.aloft.find(({ kind }) => kind === "dragon");
+    // A lair's master (a drake, a Dreadthorn) circling over its lair's side of the player, while
+    // there's one to see (only one: the nearest lair's)
+    #master(player) {
+        const near = this.lairs()
+            .map((lair) => ({ lair, away: Math.hypot(lair.at[0] - player.x, lair.at[1] - player.z) }))
+            .filter(({ away }) => away < FLYING.lair)
+            .sort((a, b) => a.away - b.away)[0];
+        const kind = near ? (near.lair.beast ?? "dragon") : null;
 
-        if (!lair) {
-            if (flying && flying.mode === "circle") {
-                flying.mode = "across";
-                flying.age = 0;
+        // (One circling with no lair of its kind near: off it goes on its way)
+        for (const flier of this.aloft) {
+            if (CIRCLING[flier.kind] && flier.mode === "circle" && flier.kind !== kind) {
+                flier.mode = "across";
+                flier.age = 0;
             }
+        }
 
+        if (!near) {
             return;
         }
 
         // (Over somewhere between the player and the lair, within sight)
-        const [lx, lz] = lair.at;
-        const away = Math.hypot(lx - player.x, lz - player.z);
-        const share = Math.min(1, 70 / Math.max(away, 1));
+        const [lx, lz] = near.lair.at;
+        const share = Math.min(1, 70 / Math.max(near.away, 1));
         const centre = [player.x + (lx - player.x) * share, player.z + (lz - player.z) * share];
+        const flying = this.aloft.find((flier) => flier.kind === kind);
 
         if (!flying && !this.hatching) {
-            this.#hatch("dragon", (beast, now) => this.aloft.push({ kind: "dragon", beast, ...this.#course(now, { speed: 13, height: ALOFT.dragon, circles: true, radius: [30, 40] }), centre, left: Infinity }));
+            this.#hatch(kind, (beast, now) => this.aloft.push({ kind, beast, ...this.#course(now, { speed: AIRSPEED[kind], height: ALOFT[kind], circles: true, radius: CIRCLING[kind] }), centre, left: Infinity }));
         } else if (flying?.mode === "circle") {
             flying.centre = centre;
         }

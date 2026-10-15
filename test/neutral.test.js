@@ -168,16 +168,16 @@ describe("the sites no people keeps in the world (sites.js)", () => {
             assert.ok(down.squares.size > 0 && down.squares.size < down.w * down.h * PLOT * PLOT * 0.7, `${site.kind} ${site.id}: ${down.squares.size} squares blocked of ${down.w * down.h * PLOT * PLOT}`);
             // (Levelled only where it's a ruined castle's courtyard, or dug into the ground: a
             // cave's floor, its pit, and a dungeon's way in, as a cave's)
-            assert.equal(Boolean(down.pad), ["ruined castle", "cave", "dragon's lair", "dungeon"].includes(site.kind), site.kind);
+            assert.equal(Boolean(down.pad), ["ruined castle", "cave", "dragon's lair", "dreadthorn's lair", "dungeon"].includes(site.kind), site.kind);
         }
 
         assert.ok(set >= 100, `${set} set down`);
     });
 
-    it("cuts each cave and the drake's lair into a hillside facing down it, its floor dug in front of its face; or sinks a cave into the ground where there's none", () => {
+    it("cuts each cave and each great lair (the drake's, a Dreadthorn's) into a hillside facing down it, its floor dug in front of its face; or sinks a cave into the ground where there's none", () => {
         const forms = { hillside: 0, pit: 0 };
 
-        for (const site of sites.filter(({ kind }) => kind === "cave" || kind === "dragon's lair")) {
+        for (const site of sites.filter(({ kind }) => kind === "cave" || kind.endsWith("lair"))) {
             const down = overworld.sites.set.get(site.id);
             const rest = restingOf(world.plan, site);
             const { pad } = down;
@@ -261,7 +261,7 @@ describe("the sites no people keeps in the world (sites.js)", () => {
     it("shapes a face cut into a hill to it, the rock going back under the hill: none standing out above it", () => {
         let checked = 0;
 
-        for (const site of sites.filter(({ kind }) => kind === "cave" || kind === "dragon's lair")) {
+        for (const site of sites.filter(({ kind }) => kind === "cave" || kind.endsWith("lair"))) {
             for (const piece of overworld.sites.set.get(site.id).pieces.filter(({ part }) => part?.part === "outcrop")) {
                 const highest = Math.max(...piece.part.lie.heights.flat());
                 const top = new THREE.Box3().setFromObject(builderOf(piece)(piece)).max.y / 5;
@@ -306,7 +306,7 @@ describe("the sites no people keeps in the world (sites.js)", () => {
         // the ivy hanging from their tops, M7b-3c, about 200 and 2,400 more)
         // (An old graveyard's sixty graves or so, its walls, gates, path, tombs and mausoleum: as much as
         // a house)
-        const budget = { ruins: 5000, "ruined castle": 18000, "dragon's lair": 3000, graveyard: 6000 };
+        const budget = { ruins: 5000, "ruined castle": 18000, "dragon's lair": 3000, "dreadthorn's lair": 3000, graveyard: 6000 };
         const most = new Map();
 
         for (const site of sites) {
@@ -369,7 +369,7 @@ describe("the sites no people keeps seen from afar (far/shapes.js)", () => {
             return shapes;
         };
 
-        for (const kind of ["ruins", "ruined castle", "dragon's lair", "watchtower"]) {
+        for (const kind of ["ruins", "ruined castle", "dragon's lair", "dreadthorn's lair", "watchtower"]) {
             const shapes = shapesOf(kind);
 
             assert.ok(shapes.triangles > 0 && shapes.triangles < 600, `${kind}: ${shapes.triangles}`);

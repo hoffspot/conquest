@@ -136,6 +136,26 @@ describe("what flies in the sky (flyers3d.js)", () => {
         }
     });
 
+    it("near a Dreadthorn's lair, the Dreadthorn circles higher; nearer a drake's, it goes on its way and the drake comes", () => {
+        let lairs = [{ at: [300, 0], beast: "dreadthorn" }];
+        const flyers = new Flyers({ landAt: () => "volcanic", lairs: () => lairs, random: seeded(12) });
+
+        run(flyers, 60);
+
+        const [dreadthorn, ...more] = flyers.aloft.filter(({ kind }) => kind === "dreadthorn");
+
+        assert.ok(dreadthorn && more.length === 0 && !flyers.aloft.some(({ kind }) => kind === "dragon"));
+        assert.ok(dreadthorn.x > 0, "on its lair's side of the player");
+        assert.ok(dreadthorn.y >= ALOFT.dreadthorn[0] && dreadthorn.y <= ALOFT.dreadthorn[1]);
+
+        lairs = [{ at: [-200, 0], beast: "dragon" }, { at: [380, 0], beast: "dreadthorn" }];
+        run(flyers, 30);
+
+        assert.equal(dreadthorn.mode, "across");
+        assert.equal(flyers.aloft.filter(({ kind, mode }) => kind === "dragon" && mode === "circle").length, 1);
+        flyers.dispose();
+    });
+
     it("near a drake's lair, the drake circles within sight of the player; handed over to land, it's gone from the air", () => {
         let lairs = [{ at: [300, 0] }];
         const flyers = new Flyers({ landAt: () => "volcanic", lairs: () => lairs, random: seeded(11) });

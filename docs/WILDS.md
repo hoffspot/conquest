@@ -87,6 +87,7 @@ two tiers above it, up to their most.
 | Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins, ruined castles and graveyards, with their dead |
 | Wraith | 46 | aggressive | 1 | 5–10 | the ruins and ruined castles, with their dead |
 | Drake | 90 | aggressive | 1 | 10 | the drake's lair |
+| Dreadthorn | 220 | aggressive | 1 | 10 | a Dreadthorn's lair |
 | Wight lord | 70 | aggressive | 1 | 9–10 | the ruined castles |
 | Frost troll | 75 | aggressive | 1 | 9–10 | the high snows |
 
@@ -163,8 +164,16 @@ frogs and the orcs' magma slimes. (The wild camps keep their own ladder, the fir
 about 2 km of the start: docs/WORLD.md.)
 
 The perilous places hold the mightiest, each a master and its guards (`LAIRS`): the drake at the
-drake's lair, a wight lord and its dead in each ruined castle (three skeletons, two ghosts and a
-wraith), the frost troll in the snows. The ghosts and wraiths are found nowhere else but with the
+drake's lair, with two wyverns; a Dreadthorn at each of its own lairs, with three wyverns; a wight
+lord and its dead in each ruined castle (three skeletons, two ghosts and a wraith); the frost troll
+in the snows. The Dreadthorn is the mightiest of all, a fight for a party: its hide turns a third of
+every blow (armour 0.35), its bite reaches two metres and lays a wound open, and its breath reaches
+nine, setting whatever it reaches burning. Its hoard is greater than a drake's (`LOOT.greatHoard`,
+500 to 900 gold and masterwork things), with an old relic in it as a ruined castle's has. Its
+scales, horn and heart are its own (`dreadthornScale`, `dreadthornHorn`, `dreadthornHeart`, up to
+700 gold for the heart). It circles high over its lair while it lives (34 to 48 metres), comes down
+to fight, and is drawn as a greater, darker drake for now (beasts/looks.js), its own model to
+come. The ghosts and wraiths are found nowhere else but with the
 dead at the ruins (core/places.js `PLACE_BANDS`): the restless dead of whoever lived there long ago;
 and at the old graveyard outside each people's start town, a few bones and a ghost led by a
 skeleton (`PLACE_BANDS.graveyard`), out by day as by night, so the dead and what they leave

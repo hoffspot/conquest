@@ -44,7 +44,7 @@ back to the same world:
   plan's roads carried on to its streets' ends.
 - **The sites no people keeps** (`core/setpieces/neutral.js`, built by `art/kits/neutral.js` and
   the castle kit's `RUINED`): the ruins of old halls, caves, shrines, rings of standing stones,
-  ruined castles, the drake's lair, the broken watchtowers no one mans, and the old graveyard
+  ruined castles, the drake's lair, the Dreadthorns' lairs, the broken watchtowers no one mans, and the old graveyard
   outside each people's start town. Old and weathered,
   as the Elden Ring's are; the peoples' own towns, castles and farms are kept up and lived in.
   - **Laid out** from the site's seed, the same everywhere: its parts, what of it stands in the
@@ -66,7 +66,9 @@ back to the same world:
     towers crumbled (below), its keep open to the sky with joists still across it, its gatehouse's
     bridge fallen, its houses heaps of stone and charred timbers; old barrels, crates and a cart
     left by its walls. **Drake's lair:** a hollow dug into a mountainside, a great dark doorway
-    in the face at its back, ridges of dark rock coming down either side, bones. **Broken
+    in the face at its back, ridges of dark rock coming down either side, bones. **A Dreadthorn's
+    lair:** the same, greater (its doorway 11 metres wide and 9 high, its face higher, more bones),
+    dug into a steeper mountainside if it must (`HILLSIDE`'s `always`). **Broken
     watchtower:** its walls broken off at different heights round its top.
   - **Graveyard** (`GRAVEYARD`, laid out as old churchyards are; the research behind it, from
     what's written about English and Scottish churchyards, is summed up in the constants'
@@ -2365,8 +2367,9 @@ its wings beaten in the shader; so a sky full of birds costs a draw call a kind.
 
 Over the wild lands wyverns hunt in (the mountains, the badlands, volcanic land and the snow),
 a wyvern flies over now and then (a try every 40 to 110 seconds), 18 to 30 metres up; and within
-420 metres of a drake's lair, while its drake's alive and not down on the ground to be fought,
-the drake circles over its lair's side of the player, 28 to 40 metres up. They're the creatures
+420 metres of a great lair, while its master's alive and not down on the ground to be fought,
+it circles over its lair's side of the player: a drake 28 to 40 metres up, a Dreadthorn higher (34
+to 48), slower and wider (the nearest lair's, one at a time; another's goes on its way). They're the creatures
 as they're drawn on the ground (beasts/), flying: legs tucked up, neck out ahead, tail streaming,
 wings spread wide, beating or held out to glide, leaning into their turns. A wyvern or the drake
 put out near the player (within 140 metres) to fight is seen coming down out of the sky to where
@@ -3505,7 +3508,8 @@ been seen (app/game.js `dungeonIcons`); rimmed grey while it's cleared, till it'
   Holy springs, pride rock and the war totem are theirs alone.
 - A watchtower out in the wild, and a cave, are outlaws'. The ruins and the ruined castles are the
   restless dead's, and so is the old graveyard outside each people's start town; the drake's
-  lair is the drake's, and the shrines and standing stones no one's.
+  lair is the drake's, a Dreadthorn's lair the Dreadthorn's, and the shrines and standing stones
+  no one's.
 - **Cleared and retaken:** once a place's occupiers are put to the sword (`War.clearPlace`, kept
   with the war: `places`, by the place's id, the turn it was cleared and how often), it stands
   empty for 120 of the war's turns (two days of the world's clock: `PLACE_TIMES.retake`), then
@@ -3612,6 +3616,9 @@ metres off (back as many as ever the next time, unless it's been cleared).
   - **The drake's hoard** lies at the back of its lair, a chest locked while the drake lives
     (`#lairs`); once it falls, it's opened, a share for each player there (`LOOT.hoard`: 180 to 320
     gold, potions, a ring and maybe an amulet, now and then a masterwork sword or bow).
+  - **A Dreadthorn's hoard**, in its own lair (the same cavern), is greater (`LOOT.greatHoard`: 500
+    to 900 gold, two potions, masterwork rings, amulets, swords and bows), with an old relic in
+    each share as a ruined castle's has (creatures.js `LAIRS`: `hoard`, `relic`).
   - Its sound's its own (`sound.js` PLACES: a cave's, the lair's and the crypt's hushed, the
     tower's and the ruined keep's open).
   - **The humans' abbeys and manors** (M7.5b-2): gone into by the door of the temple or the keep

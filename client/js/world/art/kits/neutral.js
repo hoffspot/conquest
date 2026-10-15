@@ -13,6 +13,7 @@
 import { createRandom } from "../../../core/random.js";
 import { fireLight, lightTorch } from "./torches.js";
 import { NEUTRAL, RUINS } from "../../../core/setpieces/neutral.js";
+import { LAIR_KINDS } from "../../../core/places.js";
 import { PLOT } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
@@ -184,7 +185,7 @@ function fan(solid, ring, out, material) {
 function mouthOf(solid, piece, random, part, [cx, y, front]) {
     const [mw, mh] = [m(part.mouth.w) * 0.8, m(part.mouth.h)];
     const out = m(1.2);
-    const stone = material(piece.name === "dragon's lair" ? "rock-dark" : (MEGALITH[piece.people] ?? "rock"));
+    const stone = material(LAIR_KINDS.includes(piece.name) ? "rock-dark" : (MEGALITH[piece.people] ?? "rock"));
     const jamb = Math.max(m(0.55), mw * 0.16);
 
     // (Clear of the face's foot, which stands out a little: outcrop's)
@@ -335,7 +336,7 @@ const BUILD = {
     // part.slope). Boulders fallen at its foot.
     outcrop(solid, piece, random, part) {
         const [cx, cz] = middleOf(piece);
-        const rock = material(piece.people === "orc" || piece.name === "dragon's lair" ? "rock-dark" : "rock");
+        const rock = material(piece.people === "orc" || LAIR_KINDS.includes(piece.name) ? "rock-dark" : "rock");
         const [hw, depth] = [m(part.x1 - part.x0) / 2, m(part.y1 - part.y0)];
         const front = cz + depth / 2;
         const slope = Math.max(0, Math.min(1.2, part.slope ?? 0));

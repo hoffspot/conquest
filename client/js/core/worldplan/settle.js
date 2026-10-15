@@ -8,6 +8,7 @@
 
 import { dungeonName, themeFor, THEMES } from "../dungeons/themes.js";
 import { createRandom } from "../random.js";
+import { LAIR_KINDS } from "../places.js";
 import { Queue } from "./queue.js";
 import { MASTER_SHOPS } from "../setpieces/pieces.js";
 import { BIOME, BIOMES, FACTIONS, RACES, SITES, WORKS } from "./races.js";
@@ -88,6 +89,17 @@ const GRAVEYARD = Object.freeze({ out: [8, 17], road: 2, look: 8 });
  * `road` cells; `tries` darts thrown at the land at most.
  */
 export const DUNGEON_SITES = Object.freeze({ per: 1, apart: 26, clear: 6, sites: 8, camps: 5, road: 1, tries: 30000 });
+
+/**
+ * The Dreadthorns' lairs (core/creatures.js LAIRS: the mightiest of the wild, each in its own):
+ * `count` of them, one or two a world, out in the wild (no people's lands) on volcanic ground or
+ * high in the mountains (`biomes`, on a hillside, `hills` high at least: or, if a world has too
+ * little of that, any high wild land, `rather`), `clear` cells from the settlements, `sites` from
+ * the other sites, `camps` from the camps, and `apart` cells from each other and from the drake's
+ * lair; `tries` darts thrown at the land at most, the first `strict` share of them only where it'd
+ * rather be.
+ */
+export const DREADTHORN_LAIRS = Object.freeze({ count: [1, 2], biomes: ["volcanic", "mountain"], rather: ["snow", "badlands", "tundra", "heath"], hills: 0.5, clear: 8, sites: 8, camps: 4, apart: 40, tries: 12000, strict: 0.6 });
 
 /**
  * Each people's works (races.js WORKS: docs/WAR.md *The works*), set out after everything else
@@ -499,7 +511,7 @@ function scatter(land, road, places, random, used) {
                 continue;
             }
 
-            const named = ["ruins", "ruined castle", "castle", "dragon's lair"].includes(kind) || race;
+            const named = ["ruins", "ruined castle", "castle", ...LAIR_KINDS].includes(kind) || race;
             const tongue = owner ?? RACES[random.int(0, RACES.length - 1)];
 
             sites.push({
@@ -648,6 +660,10 @@ export function settleLand(land, seed) {
 
     // (Each people's works after them, the same way: docs/WAR.md *The works*)
     sites.push(...workings(land, road, places, sites, camps, createRandom(seed * 41 + 13), used));
+
+    // (And the Dreadthorns' lairs after them, from numbers of their own too: nothing else laid out
+    // moves for them, and their ids come after every other site's)
+    sites.push(...dreadthornLairs(land, places, sites, camps, createRandom(seed * 53 + 29), used));
 
     // (And each people's master shops, last, from numbers of their own: nothing moves for them)
     masterShops(places, createRandom(seed * 47 + 23));
@@ -953,6 +969,39 @@ function graveyards(land, road, places, sites, camps, random) {
             found.push({ id: `graveyard-${sites.length + found.length + 1}`, kind: "graveyard", race: race.id, name: null, cell, at: centre(...cell), seed: random.seed() });
         }
     });
+
+    return found;
+}
+
+// The Dreadthorns' lairs (DREADTHORN_LAIRS): darts thrown at the land, each kept where it's dry
+// wild land, high, on volcanic ground or in the mountains (or, failing that, any high wild land),
+// clear of the settlements, the sites and the camps, and far from the other great lairs. Each named
+// in a people's tongue, as the drake's lair is
+function dreadthornLairs(land, places, sites, camps, random, used) {
+    const { biome, water, height, territory } = land;
+    const { count, biomes, rather, hills, clear, sites: fromSites, camps: fromCamps, apart: away, tries, strict } = DREADTHORN_LAIRS;
+    const wanted = random.int(count[0], count[1]);
+    const found = [];
+    const lairs = sites.filter((site) => LAIR_KINDS.includes(site.kind));
+
+    for (let k = 0; k < tries && found.length < wanted; k++) {
+        const cell = [random.int(4, CELLS - 5), random.int(4, CELLS - 5)];
+        const at = cellIndex(...cell);
+        const where = BIOMES[biome[at]].id;
+        const fits = k < tries * strict ? biomes.includes(where) && height[at] >= hills : (biomes.includes(where) || rather.includes(where)) && height[at] >= hills * 0.6;
+
+        if (water[at] || biome[at] === BIOME.beach || territory[at] || !fits || !dry(land, ...cell, 1)) {
+            continue;
+        }
+
+        if (!clearOf(places, cell, clear) || [...sites, ...found].some((site) => apart(site.cell, cell) < fromSites) || camps.some((camp) => apart(camp.cell, cell) < fromCamps) || [...lairs, ...found].some((lair) => apart(lair.cell, cell) < away)) {
+            continue;
+        }
+
+        const tongue = RACES[random.int(0, RACES.length - 1)];
+
+        found.push({ id: `dreadthorn-s-lair-${sites.length + found.length + 1}`, kind: "dreadthorn's lair", race: null, name: nameIn(tongue, random, used), cell, at: centre(...cell), seed: random.seed() });
+    }
 
     return found;
 }

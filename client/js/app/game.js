@@ -37,9 +37,9 @@ import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { sitting, STEP_MS, TALK_REACH } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
-import { CREATURES, ELITES, notable } from "../core/creatures.js";
+import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { townOf } from "../core/insides.js";
-import { holderOf, PLACE_BANDS, placesOf } from "../core/places.js";
+import { holderOf, LAIR_KINDS, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
 import { atPortal, beforePortal, branchesFrom, branchOf, fareOff, portalOn } from "../core/portals.js";
 import { atWarTable, beforeWarTable, mayRead, warTableOn } from "../core/wartable.js";
@@ -7909,9 +7909,12 @@ export class Game {
     // The dragons' lairs a dragon's to be seen circling over: those whose dragon's alive (as far as
     // this game knows) and isn't down on the ground near its lair to be fought
     #lairsAloft() {
-        const onGround = [...this.avatars.values()].filter((avatar) => avatar.id === "dragon").map((avatar) => avatar.object.position);
+        // (The great lairs, and the kind each one's master is: a drake, a Dreadthorn)
+        this.greatLairs ??= this.world.plan.sites.filter((site) => LAIR_KINDS.includes(site.kind)).map((site) => ({ id: site.id, at: site.at, beast: LAIRS[site.kind].master[0] }));
 
-        return this.world.plan.sites.filter((site) => site.kind === "dragon's lair" && (this.host?.slain?.[site.id] ?? -Infinity) <= this.battle.time && !onGround.some(({ x, z }) => Math.hypot(x - site.at[0], z - site.at[1]) < 250));
+        const onGround = [...this.avatars.values()].filter((avatar) => this.greatLairs.some(({ beast }) => beast === avatar.id));
+
+        return this.greatLairs.filter((lair) => (this.host?.slain?.[lair.id] ?? -Infinity) <= this.battle.time && !onGround.some(({ id, object: { position } }) => id === lair.beast && Math.hypot(position.x - lair.at[0], position.z - lair.at[1]) < 250));
     }
 
     // --- What happened in the battle ---

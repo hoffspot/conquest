@@ -143,6 +143,10 @@ export const CREATURES = Object.freeze({
     chimera: { name: "Chimera", hp: 85, weapon: "chimera", speed: 1.3, chase: 3, temper: "aggressive", roam: 10, leash: 24, pack: [1, 1], tiers: [5, 9], biomes: ["volcanic", "badlands"], people: "orc", blood: "red", steady: true },
     // The mightiest: only in the perilous places
     dragon: { name: "Drake", hp: 90, weapon: "dragon", speed: 1, chase: 2.2, temper: "aggressive", roam: 6, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true , steady: true },
+    // (The mightiest of all, each in a lair of its own: worldplan/settle.js DREADTHORN_LAIRS. On
+    // the ground for the most part; it breathes fire as it bites, and takes to the air when badly
+    // hurt)
+    dreadthorn: { name: "Dreadthorn", hp: 220, weapon: "dreadthorn", speed: 1, chase: 2.4, temper: "aggressive", roam: 6, leash: 34, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.35, perilous: true, steady: true },
     // (The restless dead of whoever lived in the ruins long ago, only ever met there: core/places.js
     // PLACE_BANDS, and in the ruined castles with their lords: LAIRS)
     ghost: { name: "Restless ghost", hp: 26, weapon: "ghost", speed: 1.1, chase: 2.3, temper: "aggressive", roam: 6, leash: 16, pack: [1, 2], tiers: [3, 9], biomes: [], blood: "none", armor: 0.15, night: "only", darkSight: true , steady: true },
@@ -170,11 +174,14 @@ export const CAMP_FOLK = Object.freeze({
  * The perilous sites (the world plan's), and who holds each: its master (and its tier), and those
  * who guard it with it ([kind, how many, tier]); how near a player must come for them to be there
  * (metres), and how long the master's gone once it's slain (battle ms); `within`, its master keeps
- * inside, by its hoard (a ruined castle's wight lord in its keep's hall), half its guards with it.
+ * inside, by its hoard (a ruined castle's wight lord in its keep's hall), half its guards with it;
+ * what's in its hoard once the master's slain (`hoard`: progress.js LOOT, "hoard" if it doesn't
+ * say), and whether an old relic's in it too (`relic`: progress.js rollRelic).
  */
 export const LAIRS = Object.freeze({
     "dragon's lair": { master: ["dragon", 10], guards: [["wyvern", 2, 8]], near: 110, back: 45 * 60 * 1000 },
-    "ruined castle": { master: ["wightLord", 9], guards: [["skeleton", 3, 7], ["ghost", 2, 7], ["wraith", 1, 8]], near: 90, back: 30 * 60 * 1000, within: true },
+    "dreadthorn's lair": { master: ["dreadthorn", 10], guards: [["wyvern", 3, 9]], near: 130, back: 60 * 60 * 1000, hoard: "greatHoard", relic: true },
+    "ruined castle": { master: ["wightLord", 9], guards: [["skeleton", 3, 7], ["ghost", 2, 7], ["wraith", 1, 8]], near: 90, back: 30 * 60 * 1000, within: true, relic: true },
 });
 
 /** How much more often the night's creatures are met after dark (weights, by their `night`). */

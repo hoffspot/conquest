@@ -10,6 +10,7 @@ import { CITADEL, citadelLevel, citadelParts, layoutCitadel, moatReach } from ".
 import { ARCHES, feetOf, legsOf } from "../../core/arches.js";
 import { createRandom } from "../../core/random.js";
 import { layoutNeutral } from "../../core/setpieces/neutral.js";
+import { LAIR_KINDS } from "../../core/places.js";
 import { WORKS_SIZE } from "../../core/setpieces/works.js";
 import { PLOT, SHOP_LANDMARKS } from "../../core/setpieces/pieces.js";
 
@@ -474,7 +475,7 @@ export function settlementShapes(shapes, { pieces, people, origin, heightOf, big
 
 // The sites no people keeps that are seen from afar (the rest too low to be: a cave's in its
 // hillside, or down in the ground)
-const NEUTRAL_KINDS = new Set(["ruins", "ruined castle", "dragon's lair", "watchtower"]);
+const NEUTRAL_KINDS = new Set(["ruins", "ruined castle", ...LAIR_KINDS, "watchtower"]);
 
 /**
  * A people's works (core/setpieces/works.js lays it out, as near to), as seen from afar: a
@@ -538,7 +539,7 @@ function neutralShapes(shapes, { kind, people, seed, form, facing, place, height
             // (Not a face cut into the hill: that's only seen near to)
             const [x, z, y] = groundAt((part.x0 + part.x1) / 2, (part.y0 + part.y1) / 2);
 
-            shapes.cone(x, z, y, Math.max(part.x1 - part.x0, part.y1 - part.y0) * 0.5, part.h * 1.25 + SUNK, kind === "dragon's lair" || people === "orc" ? ROCK.dark : ROCK.light, 6);
+            shapes.cone(x, z, y, Math.max(part.x1 - part.x0, part.y1 - part.y0) * 0.5, part.h * 1.25 + SUNK, LAIR_KINDS.includes(kind) || people === "orc" ? ROCK.dark : ROCK.light, 6);
         } else if (part.part === "brokenTower") {
             const [x, z, y] = groundAt(part.x, part.y);
 

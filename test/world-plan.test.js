@@ -2,7 +2,7 @@
 // their own climate and lands, their settlements (with guilds), roads, rivers, sites and camps
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { BIOME, BIOMES, BUILT, campTier, CELL, CELLS, FACTIONS, guildFor, guilds, landAt, layOutWorld, openGround, planWorld, RACES, REACH, ROAD, SETTLEMENTS, SITES, startFor, WATER, WORKS } from "../client/js/core/worldplan/plan.js";
+import { BIOME, BIOMES, BUILT, campTier, CELL, CELLS, DREADTHORN_LAIRS, FACTIONS, guildFor, guilds, landAt, layOutWorld, openGround, planWorld, RACES, REACH, ROAD, SETTLEMENTS, SITES, startFor, WATER, WORKS } from "../client/js/core/worldplan/plan.js";
 import { stillWaterAt } from "../client/js/core/terrain/height.js";
 import { watersOf } from "../client/js/core/terrain/waters.js";
 import { Queue } from "../client/js/core/worldplan/queue.js";
@@ -261,6 +261,34 @@ describe("the world plan (worldplan/plan.js)", () => {
             }
 
             assert.equal(plan.roads.filter(({ kind }) => kind === "trade").length >= RACES.length - 1, true);
+        }
+    });
+
+    it("puts one or two Dreadthorns' lairs out in the wild, high on volcanic ground or in the mountains, far from each other and the drake's, after every other site", () => {
+        for (const [seed, plan] of plans) {
+            const lairs = plan.sites.filter(({ kind }) => kind === "dreadthorn's lair");
+            const drake = plan.sites.find(({ kind }) => kind === "dragon's lair");
+            const [least, most] = DREADTHORN_LAIRS.count;
+
+            assert.ok(lairs.length >= least && lairs.length <= most, `seed ${seed}: ${lairs.length}`);
+            assert.deepEqual(plan.sites.slice(-lairs.length).map(({ kind }) => kind), lairs.map(() => "dreadthorn's lair"), "laid out last");
+
+            for (const lair of lairs) {
+                const k = at(...lair.cell);
+                const land = BIOMES[plan.biome[k]].id;
+
+                assert.equal(plan.territory[k], 0, "in the wild");
+                assert.equal(plan.water[k], 0, "on dry land");
+                assert.ok([...DREADTHORN_LAIRS.biomes, ...DREADTHORN_LAIRS.rather].includes(land), `seed ${seed}: on ${land}`);
+                assert.ok(lair.name && lair.id === `dreadthorn-s-lair-${plan.sites.indexOf(lair) + 1}`, lair.id);
+                assert.ok(plan.sites.every((site) => site === lair || Math.hypot(site.cell[0] - lair.cell[0], site.cell[1] - lair.cell[1]) >= DREADTHORN_LAIRS.sites), "clear of the other sites");
+                assert.ok([drake, ...lairs].every((other) => other === lair || Math.hypot(other.cell[0] - lair.cell[0], other.cell[1] - lair.cell[1]) >= DREADTHORN_LAIRS.apart), "far from the other great lairs");
+            }
+
+            // (Most on the land a Dreadthorn would choose)
+            const chosen = lairs.filter((lair) => DREADTHORN_LAIRS.biomes.includes(BIOMES[plan.biome[at(...lair.cell)]].id));
+
+            assert.ok(chosen.length >= Math.min(1, lairs.length), `seed ${seed}`);
         }
     });
 
