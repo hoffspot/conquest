@@ -1699,6 +1699,14 @@ on that body as a row of frames from its start to its end, seen from in front an
 following the pelvis (`attack/gauntlets/5` is the punch's sixth way on a soldier with gauntlets;
 the bodies' ids are as the report has them, `human-tallest-m`).
 
+**The model viewer** (`/model-viewer.html`, WILDS.md *The model viewer*) plays the same motions
+(`motions()`) on one of the people as the game dresses them: an adventurer or a soldier with a
+weapon of their own, or one of the folk in their role, of any people, a woman or a man (People in
+its list, and its panel's Person). Each is listed by name under what sort it is: their weapon's
+attacks, drawing and putting it away, their role's work and rests, the emotes, the spells, the
+blows and dodges, and the falls. Each is played, paused, slowed and stepped a frame at a time,
+with the skeleton and wireframe shown or not.
+
 **Reactions** to being hit are functions of time and of where the blow came from (which side,
 front or back), added to whatever pose the character is in, so a flinch during an attack still
 shows the attack. Each kind of blow (weapons.js: an attack's `reaction`) has its own, and its own

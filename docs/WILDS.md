@@ -890,9 +890,11 @@ each of the three it's built as (`seed % 3`), at its kind's size, each drawn at 
 ## The model viewer
 
 `model-viewer.html` (`js/lab/model-viewer.js`, `js/lab/inspect.js`) is for watching the
-creatures move, at <https://hoffspot.github.io/conquest/model-viewer.html>. It was the creature
-lab; `creature-lab.html` sends on to it, with what it was asked for. Choose a creature of the
-wild, or a dungeon's boss or mini-boss (DUNGEONS.md), and it's drawn as the game draws it. Drag to
+creatures and the people move, at <https://hoffspot.github.io/conquest/model-viewer.html>. It was
+the creature lab; `creature-lab.html` sends on to it, with what it was asked for. Choose a
+creature of the wild, a dungeon's boss or mini-boss (DUNGEONS.md), or one of the people (an
+adventurer, a soldier, or one of the folk in their role: CHARACTERS.md, *The motion check*), and
+it's drawn as the game draws it. Drag to
 go round it and pinch or scroll to come nearer. The bar at its foot has it stand, walk, run,
 attack, be struck, rest, die or be knocked down, and fly, land or hover if it can. Its panel
 (**Inspect**: beside it where there's room, under it on a phone):
@@ -902,8 +904,14 @@ attack, be struck, rest, die or be knocked down, and fly, land or hover if it ca
   goes through the last ten seconds as they were drawn (`Rewind`: each bone where it was), and on
   again to just where it was.
 - **Show:** its skeleton (three.js's `SkeletonHelper`) and its wireframe, each on and off.
+- **Person** (one of the people): of which people, a woman or a man, and, an adventurer or a
+  soldier, with which weapon (an adventurer any a player may start with, or an orc's cleaver; a
+  soldier their people's).
 - **The game's moves,** each by name: a beast's attacks, its special ones and its ways of resting;
-  a people-shaped one's weapon's attacks and its ways of resting (characters/actions.js).
+  a people-shaped one's weapon's attacks and its ways of resting (characters/actions.js); one of
+  the people's every motion, as the motion check plays it (characters/motioncheck.js `motions`):
+  their weapon's attacks, drawing and putting it away, their role's work and rests, the emotes,
+  the spells, the blows and dodges, and the falls.
 - **Clips in its model:** drawn from a model (the Dreadthorn), every clip in its file by name and
   length, played alone as it was made (`modelBody`'s `hold`), and slid through. One built in code
   has none: its moves are worked out as it plays.
@@ -913,5 +921,6 @@ attack, be struck, rest, die or be knocked down, and fly, land or hover if it ca
   clips; and its licence, linked to.
 
 `?creature=` opens it on one, `&action=` doing something, `&clip=` playing one of its model's clips
-(once the model's read). `e2e/model-viewer.spec.js` uses it as a player would. `test/inspect.test.js`
+(once the model's read); `?person=` one of the people (`adventurer`, `soldier`, or a role: `smith`),
+`&people=`, `&sex=` (`f` or `m`) and `&weapon=` who they are. `e2e/model-viewer.spec.js` uses it as a player would. `test/inspect.test.js`
 covers what it says of a model, its wireframe, and stepping back and on.

@@ -168,3 +168,54 @@ test("a creature drawn from a model: every clip in its file played alone, steppe
     await openViewer(page, "/model-viewer.html?creature=dreadthorn&clip=Bite");
     await page.waitForFunction(() => window.lab.watch().clip === "Bite", null, { timeout: 60000 });
 });
+
+test("one of the people, by role, people, woman or man and weapon: every motion of theirs by name (their weapon's, their work, their rests, emotes, spells, blows and falls), one played and stepped", async ({ page }) => {
+    await openViewer(page, "/model-viewer.html?person=smith&people=lizard&sex=m");
+    await expect(page.locator("#name")).toHaveText("Blacksmith");
+    await expect(page.locator("#about")).toContainText("Lizard folk · man");
+
+    // (Who they are, chosen in the panel; one of the folk has no weapon, and doesn't attack)
+    await expect(page.locator("#person")).toBeVisible();
+    await expect(page.locator("#weapon")).toBeHidden();
+    await expect(page.locator("[data-action=attack]")).toBeHidden();
+
+    const moves = page.locator("#moves");
+
+    for (const name of ["forge", "wiping the brow", "waving hello", "a heal: lifted up", "dodging left", "dead"]) {
+        await expect(moves.getByRole("button", { name, exact: true })).toBeVisible();
+    }
+
+    // (Only their own work: not the barkeep's)
+    await expect(moves.getByRole("button", { name: "pour", exact: true })).toHaveCount(0);
+
+    // One played, paused, and stepped on
+    await page.getByRole("button", { name: "Pause" }).click();
+    await moves.getByRole("button", { name: "forge", exact: true }).click();
+    await expect(page.locator("#about")).toContainText("forge");
+    await page.evaluate(() => {
+        for (let k = 0; k < 10; k++) {
+            window.lab.step(1);
+        }
+    });
+    await expect(page.locator("#time")).toHaveText("0.33 s into it");
+
+    // A soldier of the orcs: their cleaver's blows
+    await page.locator("#picker").selectOption("person:soldier");
+    await page.locator("#people").selectOption("orc");
+    await expect(page.locator("#name")).toHaveText("Soldier");
+    await expect(page.locator("#weapon")).toHaveValue("cleaver");
+    await expect(moves.getByRole("button", { name: "overhead hack", exact: true })).toBeVisible();
+    await expect(page.locator("[data-action=attack]")).toBeVisible();
+
+    // An adventurer, a woman, with a bow
+    await page.locator("#picker").selectOption("person:adventurer");
+    await page.locator("#sex").selectOption("f");
+    await page.locator("#weapon").selectOption("bow");
+    await expect(page.locator("#about")).toContainText("Orc · woman · bow");
+    await expect(moves.getByRole("button", { name: "side-on draw", exact: true })).toBeVisible();
+    await expect(moves.getByRole("button", { name: "drawing it", exact: true })).toBeVisible();
+    expect(await page.evaluate(() => window.lab.current().person)).toMatchObject({ role: "adventurer", people: "orc", sex: "f", weapon: "bow" });
+
+    // (Its details: a character, its licence the game's)
+    await expect(page.locator("#details")).toContainText("a character");
+});
