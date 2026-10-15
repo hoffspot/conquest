@@ -18,6 +18,7 @@ import { blob } from "./blob.js";
 import { championLook, championScale, wearing } from "./champions.js";
 import { frog, swarm, wisp } from "./flyers.js";
 import { humanoidLook, LOOKS } from "./looks.js";
+import { MODELS, modelBody, modelOf } from "./model.js";
 import { quadruped } from "./quadruped.js";
 import { serpent } from "./serpent.js";
 import { fold, hold, release, sculpting } from "./sculpt.js";
@@ -130,27 +131,38 @@ export class BeastAvatar {
      *   (champions.js championLook): bigger, its body tinted, what glows on it brighter.
      */
     constructor(id, { seed = 1, champion = null } = {}) {
-        const look = LOOKS[id];
-
         // (One of three of its kind, which it's built as, and shares its body with: the rest of
         // what makes it itself is its size and a little difference in its colour)
         const variant = seed % 3;
         const random = seeded([...id].reduce((sum, letter) => sum * 31 + letter.charCodeAt(0), 7) + variant * 7919);
         const own = seeded(seed * 2246822519 + 3);
+        // (A kind drawn from a model, once it's read: beasts/model.js; till then, its look built
+        // in code stands in for it)
+        const model = MODELS[id] ? modelOf(id) : null;
 
         this.id = id;
         this.scale = sizeOf(id, seed);
-        this.plan = BUILDERS[look.body](look, random, `${id}:${variant}`);
+        this.plan = model ? modelBody(id, model, { scale: this.scale, groundAt: () => this.ground ?? this.object.position.y }) : BUILDERS[LOOKS[id].body](LOOKS[id], random, `${id}:${variant}`);
         this.scale *= champion ? championScale(champion, this.plan.height * this.scale) : 1;
 
-        // (Its pieces folded into a few things to draw; its skin, whatever it became)
-        const became = fold(this.plan.object, `${id}:${variant}`);
+        /** Is it drawn from its model (beasts/model.js), not its stand-in? */
+        this.model = Boolean(model);
 
-        // (Its look's body and pieces kept while it's drawn: let go of with it, dispose)
-        this.body = `${id}:${variant}`;
-        hold(this.body);
+        // (Its ways of attacking and resting its model's, if it's drawn from one)
+        const look = this.plan.look ? { ...LOOKS[id], ...this.plan.look } : LOOKS[id];
 
-        this.plan.materials.body = became.get(this.plan.materials.body) ?? this.plan.materials.body;
+        // (Its pieces folded into a few things to draw; its skin, whatever it became. Its look's
+        // body and pieces kept while it's drawn: let go of with it, dispose. A model's as it is)
+        if (model) {
+            this.body = null;
+        } else {
+            const became = fold(this.plan.object, `${id}:${variant}`);
+
+            this.body = `${id}:${variant}`;
+            hold(this.body);
+            this.plan.materials.body = became.get(this.plan.materials.body) ?? this.plan.materials.body;
+        }
+
         this.plan.materials.body.color?.multiplyScalar(0.9 + own() * 0.2);
 
         // (A champion's: its body tinted, what glows on it, folded into its own material, brighter)
@@ -493,6 +505,13 @@ export class BeastAvatar {
      * lod.js), made once for everyone of its kind built alike, and put in when they come.
      */
     lowerDetail(lods) {
+        // (A model's lower details are packed in it: shown a level at a time, fitDetail)
+        if (this.plan.showLevel) {
+            this.levels = this.plan.levels;
+
+            return;
+        }
+
         this.levels = [];
         this.object.traverse((node) => {
             if (node.isSkinnedMesh && node.geometry.index) {
@@ -533,6 +552,12 @@ export class BeastAvatar {
 
         if (level !== this.level) {
             this.level = level;
+
+            if (this.plan.showLevel) {
+                this.plan.showLevel(level);
+
+                return;
+            }
 
             for (const { mesh, whole, lower } of this.levels) {
                 mesh.geometry = level && lower ? lower[level - 1] : whole;
@@ -746,6 +771,9 @@ export class BeastAvatar {
             release(this.body);
             this.body = null;
         }
+
+        // (A model's own: its clips let go of, its fire put out)
+        this.plan.dispose?.();
 
         const materials = new Set();
         const skeletons = new Set();

@@ -351,7 +351,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    licence file and a credit in `README.md`'s *Credits and license*. Nothing with a licence that
    restricts use. That goes for the tools' test assets in `utilities/` too. A bought model, and
    anything built from it, stays out of the repository: keep it in `utilities/blenderpipeline/private/`,
-   which git ignores. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
+   which git ignores. The one exception is the Dreadthorn's model (`client/models/beasts/dreadthorn.glb`):
+   bought, and in the repository with permission the repository's owner obtained, only in its
+   converted form (its `LICENSE.md` there). Another exception is the owner's call, never a
+   contributor's. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
    script.
 9. **Heavy models go in the catalog, not in what's downloaded before the game starts.** That has
    a budget, `BOOT_BUDGET` in `test/manifest.test.js` (15 MB), and raising it is a choice to make
@@ -359,6 +362,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    its `tier` (`near`, fetched when it's predicted to be wanted soon, or `demand`, only once it's
    needed) and its `files` (`path`s under `client/`, its lower-detail copy first), and whatever
    else `generated/asset_streaming_plan.md` (section 2) says it needs. Then `npm run build:manifest`.
+   A creature drawn from a model (the Dreadthorn) also has an entry in `MODELS`
+   (`client/js/beasts/model.js`): its catalog entry, its size, and which of its clips and bones
+   are what. Its look in `client/js/beasts/looks.js` stands in for it until it's read.
+   `test/model.test.js` checks every clip and bone it names is in the model.
 
 ## 4. Before you push
 

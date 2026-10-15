@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "4883bcc734",
+    release: "b3efdd71f2",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -1853,6 +1853,17 @@ export const ASSETS = Object.freeze({
                     "path": "vendor/three-r186/addons/libs/basis/basis_transcoder.wasm",
                     "hash": "6cf17dc889",
                     "bytes": 527333
+                }
+            ]
+        },
+        "beast-dreadthorn": {
+            "tier": "demand",
+            "label": "The Dreadthorn (HuyKhoi2407's Dreadthorn Dragon, from Superhive: used with permission; client/models/beasts/LICENSE.md)",
+            "files": [
+                {
+                    "path": "models/beasts/dreadthorn.glb",
+                    "hash": "42f971a4b7",
+                    "bytes": 5064544
                 }
             ]
         }

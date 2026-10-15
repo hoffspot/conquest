@@ -12,6 +12,7 @@ import { ASSETS } from "./assets.js";
 import { filesOf } from "./catalog.js";
 import { Game } from "./game.js";
 
+export { fetchModelsWith } from "../beasts/model.js";
 export { readModelsFrom } from "../world/art/engine/models.js";
 export { detectQuality, QUALITY } from "../world/view.js";
 

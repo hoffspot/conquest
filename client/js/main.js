@@ -195,6 +195,7 @@ async function load() {
 
     state.modules = { ...session, ...creator, ...hud };
     session.readModelsFrom(loader.urlOf);
+    session.fetchModelsWith(fetcher);
     state.session = await session.createSession({
         canvas,
         quality: settings.quality === "auto" ? undefined : settings.quality,
