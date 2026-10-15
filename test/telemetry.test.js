@@ -490,6 +490,80 @@ describe("the debug log (telemetry.js)", () => {
         assert.match(memoryLines(null, gpu)[0], /^Memory graphics 540\.2 MB/);
     });
 
+    it("names the code each event came from (and when it was put together), a crash the code of the page that fell over, and the log as copied", () => {
+        const kept = storage();
+        const time = { now: 1000, clock: Date.UTC(2026, 9, 15, 12) };
+        const old = new Telemetry({ storage: kept, now: () => time.now, clock: () => time.clock, build: "4883bcc734", code: "9c6a608eb2", built: "2026-10-15T12:49:42Z" });
+
+        old.error(new Error("boom"));
+        assert.equal(old.events[0].code, "9c6a608eb2");
+        assert.equal(old.events[0].built, "2026-10-15T12:49:42Z");
+        assert.equal(old.events[0].build, "4883bcc734");
+
+        // (It falls over playing; the page loads again, on code since put out)
+        old.playing = true;
+        old.alive(() => ({ map: "town" }));
+
+        const next = new Telemetry({ storage: kept, now: () => 200, clock: () => time.clock + 60000, build: "4883bcc734", code: "1d2e3f4a5b", built: "2026-10-15T13:10:00Z" });
+        const crash = next.recover("reload");
+
+        assert.equal(crash.code, "9c6a608eb2", "the code that fell over, not the code that found it");
+        assert.equal(crash.built, "2026-10-15T12:49:42Z");
+
+        const text = JSON.parse(next.text());
+
+        assert.equal(text.code, "1d2e3f4a5b");
+        assert.equal(text.built, "2026-10-15T13:10:00Z");
+        assert.equal(text.events[0].code, "9c6a608eb2");
+    });
+
+    it("works out how the game's going only for an event it keeps: a bad patch, every frame a freeze, costs them nothing more", () => {
+        const at = logOn();
+        let asked = 0;
+        const state = () => (asked++, { map: "town" });
+
+        at.log.playing = true;
+        frame(at, 16, {}, state);
+        frame(at, 300, { draw: 300 }, state);
+        assert.equal(asked, 1, "the first freeze kept, how it was going with it");
+
+        // (Freeze after freeze, none of them kept: not one of them asks)
+        for (let k = 0; k < 20; k++) {
+            frame(at, 300, { draw: 300 }, state);
+        }
+
+        assert.equal(asked, 1);
+        assert.equal(at.log.events.length, 1);
+
+        // (Once one can be kept again, it's worked out)
+        at.time.now += TELEMETRY.again;
+        frame(at, 300, { draw: 300 }, state);
+        assert.equal(asked, 2);
+        assert.equal(at.log.events.length, 2);
+    });
+
+    it("writes the notes after the frame, not in it: once however often asked, and not if the game's closed or hidden meanwhile", () => {
+        const at = logOn();
+        const waiting = [];
+        const later = (write) => waiting.push(write);
+
+        at.log.playing = true;
+        at.log.aliveSoon(() => ({ map: "town" }), later);
+        at.log.aliveSoon(() => ({ map: "town" }), later);
+        assert.equal(waiting.length, 1, "asked for once");
+        assert.equal(at.kept.getItem(TELEMETRY.alive), null, "not written in the frame");
+        waiting.shift()();
+        assert.equal(JSON.parse(at.kept.getItem(TELEMETRY.alive)).state.map, "town");
+
+        // (Asked for, then the page hidden before they're written: not written, so no crash found)
+        at.time.now += TELEMETRY.notes;
+        at.log.aliveSoon(() => ({ map: "keep" }), later);
+        at.log.closed();
+        waiting.shift()();
+        assert.equal(JSON.parse(at.kept.getItem(TELEMETRY.alive)).closed, true);
+        assert.equal(logOn(at.kept).log.recover("reload"), null);
+    });
+
     it("gives the log as text to copy: what each event says, the newest first", () => {
         const at = logOn();
 

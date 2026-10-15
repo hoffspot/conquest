@@ -25,6 +25,7 @@ import { FullScreen } from "./app/fullscreen.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
 import { telemetry } from "./app/telemetry.js";
+import { builtAt, codeVersion } from "./app/version.js";
 import { forgetCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
@@ -800,6 +801,12 @@ function showLog() {
     });
 
     $("#logentries").replaceChildren(...(entries.length ? entries : [Object.assign(document.createElement("p"), { className: "log-empty", textContent: "Nothing kept: no freezes, slowdowns, errors or crashes so far." })]));
+
+    // (Which copy of the game this is, as each event says too: its code's commit and when it was
+    // put together, or "dev" for one run from the repository; and its assets' release)
+    const built = telemetry.built ? `, put together ${new Date(telemetry.built).toLocaleString()}` : "";
+
+    $("#logversion").textContent = `This copy: code ${telemetry.code === "dev" ? "dev (run from the repository)" : telemetry.code}${built}; assets ${telemetry.build || "unknown"}.`;
 }
 
 function openLog() {
@@ -2938,6 +2945,8 @@ async function start() {
     // crash; what the browser says takes long, listened for; work done a step at a time that
     // takes long, named; and anything that fails with no one to catch it
     telemetry.build = String(release?.release ?? "");
+    telemetry.code = codeVersion();
+    telemetry.built = builtAt();
     telemetry.recover(globalThis.performance?.getEntriesByType?.("navigation")?.[0]?.type ?? "");
     telemetry.observe();
     Steps.slow = (label, ms) => telemetry.job(label, ms);

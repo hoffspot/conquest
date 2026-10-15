@@ -50,6 +50,27 @@ export function releaseTexture(texture, also = null) {
     return texture;
 }
 
+// Which of a material's own properties hold pictures, as of its version (three.js counts it up as
+// what it's drawn with changes: a picture put where there was none), looked for again only then,
+// each picture read afresh from them every time. Looking through every property of every
+// material on every body every time (seventy or so each) was most of what the debug log's notes
+// cost: about 1 ms, up to 7, every 2 s
+const PICTURE_KEYS = new WeakMap();
+
+function pictureKeys(material) {
+    const known = PICTURE_KEYS.get(material);
+
+    if (known?.version === material.version) {
+        return known.keys;
+    }
+
+    const keys = Object.keys(material).filter((key) => material[key]?.isTexture);
+
+    PICTURE_KEYS.set(material, { version: material.version, keys });
+
+    return keys;
+}
+
 /**
  * How many bytes of the page's own copies some objects (and all under them) hold: their meshes'
  * attributes, morphs and indices, and their pictures' pixels (a picture's data, or a canvas's or a
@@ -88,8 +109,10 @@ export function heldOnPage(roots) {
             }
 
             for (const material of [node.material].flat()) {
-                for (const value of Object.values(material ?? {})) {
-                    picture(value);
+                if (material) {
+                    for (const key of pictureKeys(material)) {
+                        picture(material[key]);
+                    }
                 }
             }
 
