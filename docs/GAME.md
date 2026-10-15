@@ -4693,6 +4693,14 @@ hit an error or crashed, the newest first, each with what was going on then, to 
 to whoever's looking into it. Nothing's sent anywhere: it's kept in the browser's storage
 (`pellagos.debuglog`), and across loads, till it's cleared.
 
+Each event says which copy of the game it came from: its code (`code`, the commit's first 10
+digits, and `built`, when it was put together; app/version.js, written in as the site's put
+together: .github/workflows/pages.yml, scripts/stamp-version.js; "dev", with no time, for a copy
+run from the repository) and its assets' release (`build`, app/assets.js: it changes only when the
+models and pictures do, so it can't say which code it was). A crash says the code of the page that
+fell over, from its notes, not of the page that found it. So does the log as copied, at its top,
+and the Debug log page, above the events ("This copy: code 9c6a608eb2, put together ...").
+
 - **A freeze**: 200 ms or more without a frame, while playing and in view. Either a frame's own
   work took that long, kept with where its time went (its phases, marked as the frame goes:
   the battle's steps, setting up, everyone moved and posed, the effects and the HUD, the world
@@ -4742,8 +4750,16 @@ it brought, by the news it brought, `a step of the world (roused 23, open 5, joi
 the browser says what ran (Chromium's long animation frames), a freeze has the scripts too, the
 longest first: each one's file and place in it, its function and what called it; that's the
 nearest to a stack a freeze has. Each kind is kept at most every 20 seconds, so one bad patch
-doesn't fill the log. It costs a frame a dozen clock readings; the rest is only done when
-something's kept, or every 2 seconds for the notes.
+doesn't fill the log; and one that wouldn't be kept is never worked out (`#due`), so in a patch
+where every frame's a freeze, how it's going isn't asked of the game each frame, only to be
+thrown away (in Chromium, 109 times a minute before, the log's own cost in those frames 1.3 ms on
+average). It costs a frame a dozen clock readings; the rest is only done when something's kept,
+or every 2 seconds for the notes, and those after the frame, in a task of their own, not in it
+(`aliveSoon`: a frame's shown only once its work's done; and not written if the game's closed or
+hidden meanwhile, which would leave notes unclosed and a crash found that wasn't one). The
+bodies' own copies (`heldOnPage`) look at each material's pictures by the properties known to
+hold them (looked for again only when the material's version changes), not at every property of
+every material: in a town of 13 bodies, 0.34 ms where it took 0.88.
 
 **What the game holds** (`Game.memoryNow`, in each event and in the debug overlay's *Memory* and
 *Held* lines): the page's JavaScript heap where the browser tells (Chromium's; Safari tells
@@ -5047,6 +5063,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   from a game before, and back to the quality chosen when it's chosen again. E2E: told it can't
   keep up, fewer pixels then the level below, and debug mode and Game options say so; Visual
   quality chosen in Game options, drawn at it, every pixel, remembered; Adaptive off, remembered.
+- `test/version.test.js`: which code this is (app/version.js): "dev" as kept in the repository;
+  the commit's first 10 digits and its time once stamped (scripts/stamp-version.js), as long as
+  the noughts were, once, anything but a commit and a time refused; stamped by the deploy into the
+  site's copy after it's copied; loaded with the page, not by the loader.
 - `test/telemetry.test.js`: the debug log: a frame's own work held up, kept with where its time
   went; the time gone between two quick frames, with the frame before's phases; slow going, with
   each phase's time on average; the slowest work done a step at a time named, and a step that takes
@@ -5058,7 +5078,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   once, by name (core/steps.js); memory past each mark once, and the heap near its limit, a crash
   keeping what was held; what a frozen frame gave the graphics card (the shaders made, by material,
   and the textures and geometries sent), nothing if nothing, and since the frame before for time
-  between frames; each kind kept at most so often, the newest five, across loads, and cleared; the
+  between frames; each kind kept at most so often, the newest five, across loads, and cleared; an
+  event not worked out when it can't be kept (how it's going asked once in a run of freezes); the
+  notes written after the frame, once however often asked, and not if closed meanwhile; each event
+  naming its code and when it was put together, a crash the code that fell over; the
   log as text to copy; and the debug overlay's memory lines, the way-finding's and
   the bodies' own copies among them. `test/release.test.js`: what the page still holds of objects
   counted, each mesh and picture once however many share it, none let go of. E2E: a crash found from

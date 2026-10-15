@@ -2580,9 +2580,9 @@ export class Game {
         }
 
         // (The debug log: a freeze or slow going kept, with how it was going; and how it's going
-        // written down now and then, for a crash to be found by)
+        // written down now and then, for a crash to be found by: just after the frame, not in it)
         telemetry.end(elapsed * 1000, this.telemetryState);
-        telemetry.alive(this.telemetryState);
+        telemetry.aliveSoon(this.telemetryState);
     }
 
     // Any projectile drawn in flight that the battle no longer has, landed (taken away)

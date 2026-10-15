@@ -245,7 +245,7 @@ test("the debug log (Game options): a crash found from the last game's notes, a 
     await page.addInitScript(() => {
         if (!sessionStorage.getItem("noted")) {
             sessionStorage.setItem("noted", "yes");
-            localStorage.setItem("pellagos.alive", JSON.stringify({ at: Date.now() - 30000, pageAt: 245000, build: "earlier", closed: false, state: { map: "town", bodies: { drawn: 61 } }, trend: [{ at: 243, totalMB: 590, avatars: 31 }, { at: 245, totalMB: 600, avatars: 32 }], recent: [16, 17, 950], jobs: [{ label: "crowd figure herd:wolf:1", ms: 70 }], errors: [] }));
+            localStorage.setItem("pellagos.alive", JSON.stringify({ at: Date.now() - 30000, pageAt: 245000, build: "earlier", code: "1a2b3c4d5e", built: "2026-10-14T09:00:00Z", closed: false, state: { map: "town", bodies: { drawn: 61 } }, trend: [{ at: 243, totalMB: 590, avatars: 31 }, { at: 245, totalMB: 600, avatars: 32 }], recent: [16, 17, 950], jobs: [{ label: "crowd figure herd:wolf:1", ms: 70 }], errors: [] }));
             localStorage.setItem("pellagos.working", JSON.stringify([{ label: "dressing folk folk-3", at: 244100 }, { label: "dressing beast boggart", at: 246072 }]));
         }
     });
@@ -254,7 +254,8 @@ test("the debug log (Game options): a crash found from the last game's notes, a 
 
     const crash = await page.evaluate(() => window.pellagos.telemetry.events.find(({ kind }) => kind === "crash"));
 
-    expect(crash).toMatchObject({ build: "earlier", pageAt: 245000, state: { map: "town", bodies: { drawn: 61 } }, jobs: [{ label: "crowd figure herd:wolf:1" }] });
+    // (Named by the code it was, not the code now: what that game's notes said)
+    expect(crash).toMatchObject({ build: "earlier", code: "1a2b3c4d5e", built: "2026-10-14T09:00:00Z", pageAt: 245000, state: { map: "town", bodies: { drawn: 61 } }, jobs: [{ label: "crowd figure herd:wolf:1" }] });
     expect(crash.summary).toContain("loaded again");
     expect(crash.trend.map(({ totalMB }) => totalMB)).toEqual([590, 600]);
     expect(crash.begun).toEqual([
@@ -332,6 +333,7 @@ test("the debug log (Game options): a crash found from the last game's notes, a 
     await expect(page.locator("#logentries .log-entry")).toHaveCount(shown.length);
     await expect(page.locator("#logentries")).toContainText("Error: A test's error, thrown on purpose");
     await expect(page.locator("#logentries")).toContainText("freeze in a frame's work");
+    await expect(page.locator("#logversion"), "which code this is: run from the repository, dev").toContainText("This copy: code dev");
     await page.locator("#logentries .log-entry", { hasText: "Freeze" }).locator("summary").click();
     await expect(page.locator("#logentries .log-entry", { hasText: "Freeze" }).locator("pre")).toContainText('"draw"');
 
@@ -345,6 +347,8 @@ test("the debug log (Game options): a crash found from the last game's notes, a 
 
     expect(copied.events.map(({ kind }) => kind)).toEqual(shown);
     expect(copied.build, "which release it was (catalog.js's)").toMatch(/^[0-9a-f]{6,}$/);
+    expect(copied.code, "which code it was (version.js's)").toBe("dev");
+    expect(copied.events.find(({ kind }) => kind === "freeze").code).toBe("dev");
 
     // (Cleared: nothing kept, here or the next time)
     await page.locator("#logclear").click();

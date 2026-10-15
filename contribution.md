@@ -99,7 +99,10 @@ three times, 5 minutes a try).
 | `motion` | `npm run check:motion`: the motion check (below), failing on anything worse than its baseline. Its report is kept with the run as `motion-report` | `npm run check:motion` |
 
 `.github/workflows/pages.yml` runs when `main` changes: lint and the unit tests again, then
-`npm run build:manifest`, and it publishes `client/` to GitHub Pages
+`npm run build:manifest`. It copies `client/` and writes into the copy which code it is, for the
+debug log: the commit and the time, in place of `client/js/app/version.js`'s noughts
+(`scripts/stamp-version.js`; as kept in the repository, the game says it's "dev"). Then it
+publishes the copy to GitHub Pages
 (<https://hoffspot.github.io/conquest/>); its build is ended at 30 minutes (it takes about 13½)
 and its deploy at 15.
 Whatever is merged to `main` goes live, so `main` must always be green.
