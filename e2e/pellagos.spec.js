@@ -10535,3 +10535,37 @@ test("a beast's look is let go of three minutes after the last of it's drawn: it
 
     expect(again).toEqual({ body: drawn.body, fresh: true });
 });
+
+test("a Dreadthorn drawn with its stand-in is drawn again from its model once that's read, out of view", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    // A Dreadthorn 25 metres behind the player, out of view, not set on a fight; its model kept
+    // from being downloaded till its stand-in's drawn
+    await page.evaluate(async () => {
+        const { game, session, fetcher } = window.pellagos;
+        const { world, host, battle } = game;
+        const { CREATURES, traitsOf } = await import("/js/core/creatures.js");
+        const [mx, my] = world.stamp.middle;
+        const { name, hp, weapon, speed, chase } = CREATURES.dreadthorn;
+
+        game.stop();
+        session.view.adaptive = false;
+        fetcher.hold("the stand-in first");
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [Math.floor(mx - 140), Math.floor(my - 20)], { facing: Math.PI });
+
+        const me = battle.actor(game.me);
+
+        host.wild.set("dread", { creature: "dreadthorn", tier: 10, pack: "dread", camp: null, lair: null, master: false });
+        battle.add({ id: "dread", kind: "beast", name, weapon, team: "beasts", square: [Math.floor(me.x), Math.floor(me.y) + 25], ai: "wild", hp, speed, chase, wild: { creature: "dreadthorn", tier: 10, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: "dread", leader: null, menace: false, unique: true, ...traitsOf("dreadthorn") } });
+        game.enlisting.push("dread");
+    });
+
+    expect(await playUntil(page, () => window.pellagos.game.avatars.has("dread"), { seconds: 30 })).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.avatars.get("dread").model)).toBe(false);
+
+    // Its model downloaded and read: its stand-in let go of, and it drawn again from the model
+    await page.evaluate(() => window.pellagos.fetcher.release("the stand-in first"));
+    expect(await playUntil(page, () => window.pellagos.game.avatars.get("dread")?.model === true, { seconds: 90 })).toBe(true);
+});
