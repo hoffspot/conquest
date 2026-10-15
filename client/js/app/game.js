@@ -1756,8 +1756,10 @@ export class Game {
             if (!this.avatars.has(actor.id) && actor.kind !== "folk" && actor.kind !== "soldier" && actor.kind !== "wagon") {
                 // (The wild's creatures, put out a pack at a time, drawn a few a frame with the
                 // rest, the nearest the player first (#visit): all dressed here at once, a pack
-                // just put out, or a level of a dungeon, held the frame up for seconds on a phone)
-                if (actor.kind === "beast") {
+                // just put out, or a level of a dungeon, held the frame up for seconds on a phone.
+                // So is a follower just hired: one dressed here at once held an iPhone up for
+                // 0.6 s)
+                if (actor.kind === "beast" || actor.kind === "follower") {
                     if (!this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id) && !this.aside.has(actor.id)) {
                         this.enlisting.push(actor.id);
                     }
@@ -5956,6 +5958,13 @@ export class Game {
 
             if (avatar) {
                 this.#place(actor);
+
+                // (A follower's bar over them, as a creature's is)
+                if (actor.kind === "follower") {
+                    const me = this.battle.actor(this.me);
+
+                    this.hud.track(actor.id, { ...actor, hostile: Boolean(me) && this.battle.hostile(actor, me) });
+                }
 
                 if (actor.kind === "beast") {
                     const me = this.battle.actor(this.me);
