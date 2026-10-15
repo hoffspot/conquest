@@ -888,6 +888,9 @@ export class Game {
                 inFull: Number.isFinite(this.throng.full) ? this.throng.full : "all",
                 // (The soldiers about, and how many of them the bodies' budget left room for in full: #marshal)
                 soldiers: this.marshalled ? { ...this.marshalled, room: Number.isFinite(this.marshalled.room) ? this.marshalled.room : "all" } : null,
+                // (The wild's people-shaped creatures about, and how many the bodies' budget left
+                // room for in full: #rationing)
+                creatures: this.rationed ?? null,
                 bodies: { ...this.stats.bodies },
                 actors: this.battle.actors.length,
                 avatars: this.avatars.size,
@@ -1057,6 +1060,10 @@ export class Game {
         // Soldiers waiting on their kind's figure in the crowds to be drawn (#marshal), and those crowds
         this.crowdWaiting = new Set();
         this.crowds = null;
+
+        // The wild's people-shaped creatures past the bodies' budget waiting on their kind's figure
+        // (#rationing)
+        this.rationWaiting = new Set();
 
         // Those of them begun, being drawn a step at a time (the nearest the player first: one
         // further off put by for one nearer, and taken up again after): id -> { actor, steps }
@@ -1760,7 +1767,9 @@ export class Game {
                 // So is a follower just hired: one dressed here at once held an iPhone up for
                 // 0.6 s)
                 if (actor.kind === "beast" || actor.kind === "follower") {
-                    if (!this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id) && !this.aside.has(actor.id)) {
+                    // (Not a creature that's died never drawn: one past the bodies' budget, say,
+                    // #rationing; its body built only to lie there a while)
+                    if (!this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id) && !this.aside.has(actor.id) && !(actor.kind === "beast" && actor.dead)) {
                         this.enlisting.push(actor.id);
                     }
 
@@ -1862,8 +1871,9 @@ export class Game {
         const weapon = WEAPONS[actor.weapon];
         const avatar = yield* dressingCreature(this.kit, actor.wild.creature, { seed, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(actor.weapon) : null, hairDetail: Math.min(this.view.quality.hair, FOLK_HAIR), champion: actor.wild.champion ?? null, regalia: actor.wild.regalia ?? null, release: true });
 
-        // (Gone from the battle, or drawn some other way, while it was being built)
-        if (this.avatars.has(actor.id) || !this.battle.actor(actor.id)) {
+        // (Gone from the battle, or drawn in full some other way, while it was being built: but
+        // one in its crowd, built in full in its place, #rationing)
+        if (this.#drawnInFull(actor.id) || !this.battle.actor(actor.id)) {
             avatar.character.dispose();
 
             return this.avatars.get(actor.id) ?? null;
@@ -2721,6 +2731,7 @@ export class Game {
         this.contacts?.begin();
         this.#marshal(dt);
         this.#allying();
+        this.#rationing(dt);
         this.#thronging(dt);
         this.#crowding();
         this.#forgetting(dt);
@@ -3382,11 +3393,14 @@ export class Game {
         };
     }
 
-    // A soldier drawn in its kind's crowd from now on: where it's drawn in full now, or where it is
-    // (its character drawn in full let go)
-    #toCrowd(actor, key) {
+    // A soldier (or one of the wild's people-shaped creatures past the bodies' budget, as big as
+    // it is: `size`, #rationing) drawn in its kind's crowd from now on: where it's drawn in full
+    // now, or where it is (its character drawn in full let go)
+    #toCrowd(actor, key, size = 1) {
         const old = this.avatars.get(actor.id);
-        const avatar = new CrowdAvatar(this.crowds, key, { height: old?.character.height });
+        const avatar = new CrowdAvatar(this.crowds, key, { height: old ? old.character.height / size : undefined, size });
+
+        this.ailments?.clear(actor.id);
 
         this.view.scene.add(avatar.object);
 
@@ -3406,6 +3420,111 @@ export class Game {
 
         this.crowdWaiting.delete(actor.id);
         avatar.actions.setGuard(actor.armed);
+    }
+
+    // Is someone one of the wild's people-shaped creatures (a goblin, a troll, a bandit), each a
+    // body in full as a person's is, drawn in its kind's crowd past the bodies' budget
+    // (#rationing)? Not a dungeon's boss or mini-boss, nor an elite: always drawn in full
+    #rationed(actor) {
+        return actor.kind === "beast" && !actor.wild?.champion && !actor.wild?.elite && CREATURE_LOOKS[actor.wild?.creature]?.body === "humanoid";
+    }
+
+    // The wild's people-shaped creatures held in full no more than the bodies' budget has room for
+    // (QUALITY bodies, as the soldiers are: #marshal), beside everyone else held in full: those
+    // fighting the player first, then the nearest the camera (those on another map last); the rest
+    // drawn in their kind's crowd, their body in full let go (or not built at all), and built in
+    // full again once there's room for them. A dungeon's level, put out at once, had seventy-two
+    // bodies held on an iPhone, which let the game's tab go (the crash report of 2026-10-14). A
+    // couple of times a second (MARSHAL.every)
+    #rationing(dt) {
+        if ((this.rationClock = (this.rationClock ?? 0) - dt) > 0) {
+            return;
+        }
+
+        this.rationClock = MARSHAL.every;
+
+        const me = this.battle.actor(this.me);
+        const budget = this.view.quality.bodies ?? Infinity;
+
+        if (!me || budget === Infinity) {
+            return;
+        }
+
+        const rationed = this.battle.actors.filter((actor) => !actor.dead && this.#rationed(actor));
+        const ids = new Set(rationed.map(({ id }) => id));
+        // (Room beside everyone else held in full, but the wild's beasts built in code: their
+        // bodies shared, each one small)
+        const room = Math.max(this.view.quality.soldiers?.full ?? 0, budget - this.#heldInFull((id) => !ids.has(id) && !(this.avatars.get(id) instanceof BeastAvatar)));
+        const crowded = (id) => this.avatars.get(id) instanceof CrowdAvatar;
+
+        if (rationed.length <= room && !rationed.some(({ id }) => crowded(id)) && !this.rationWaiting.size) {
+            return;
+        }
+
+        const fighting = (actor) => actor.target === me.id || actor.attack?.target === me.id || me.target === actor.id || me.attack?.target === actor.id;
+        const ranked = rationed
+            .map((actor) => [actor.map === me.map ? this.#awayFromCamera(actor) - (fighting(actor) ? DRAW_REACH : 0) : Infinity, actor])
+            .sort((a, b) => a[0] - b[0]);
+
+        this.rationed = { rationed: rationed.length, room };
+        this.crowds ??= new Crowd(this.view.scene, this.kit, { size: this.view.quality.soldiers?.picture ?? 256 });
+
+        ranked.forEach(([, actor], place) => {
+            const avatar = this.avatars.get(actor.id);
+
+            // (With room: in full, built so if it's in its crowd, the crowd in its place till it is)
+            if (place < room) {
+                if (crowded(actor.id) && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
+                    this.enlisting.push(actor.id);
+                }
+
+                return;
+            }
+
+            // (In its crowd already; or in full, only just past the room: left as it is)
+            if (crowded(actor.id) || (avatar && place < room + MARSHAL.margin)) {
+                return;
+            }
+
+            const { key, spec, size } = this.#throngKind(actor);
+
+            if (this.crowds.failed(key)) {
+                return;
+            }
+
+            // (Its kind's figure not made yet: not built in full meanwhile, unless it's begun)
+            if (!this.crowds.template(key, spec)) {
+                if (!avatar && !this.enlistees.has(actor.id)) {
+                    this.#unenlist([actor.id]);
+                    this.rationWaiting.add(actor.id);
+                }
+
+                return;
+            }
+
+            this.#unthrong(actor.id);
+            this.#unenlist([actor.id]);
+            this.rationWaiting.delete(actor.id);
+            this.#toCrowd(actor, key, size);
+        });
+
+        // (Those waiting on a figure that couldn't be made, built in full after all; those gone,
+        // dead (never drawn) or drawn, forgotten; those with room now, built in full)
+        const places = new Map(ranked.map(([, actor], place) => [actor.id, place]));
+
+        for (const id of this.rationWaiting) {
+            const actor = this.battle.actor(id);
+
+            if (!actor || actor.dead || this.avatars.has(id)) {
+                this.rationWaiting.delete(id);
+            } else if (this.crowds.failed(this.#throngKind(actor).key) || (places.get(id) ?? 0) < room) {
+                this.rationWaiting.delete(id);
+
+                if (!this.enlisting.includes(id) && !this.enlistees.has(id)) {
+                    this.enlisting.push(id);
+                }
+            }
+        }
     }
 
     // The great lairs, and the kind each one's master is (a drake, a Dreadthorn), slain or not

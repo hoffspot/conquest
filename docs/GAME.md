@@ -3278,6 +3278,22 @@ when the throng changes:
   is kept as long as it is big, and it runs from a pace the smaller the smaller it is, as a beast
   does. Drawn in full again, its body's seen and posed again at once (for no more than a moment's
   time), its stand-in gone: nothing to build either way.
+- **Past the bodies' budget, let go.** The wild's people-shaped creatures (not a boss, mini-boss or
+  elite) are held in full only as far as the bodies' budget leaves room, as the soldiers are
+  (`QUALITY.bodies`, *Soldiers in their crowds*, above; app/game.js `#rationing`, twice a second).
+  - The budget counts everyone else held in full or about to be, but the beasts built in code, whose
+    bodies are shared and small.
+  - Whoever's fighting the player first, then the nearest the camera; those on another map last.
+  - Those past the room are drawn in their kind's crowd as a soldier is (`CrowdAvatar`, not a
+    stand-in), their body in full let go; one not built yet isn't built at all. One in full only
+    just past the room (`MARSHAL.margin`) is left as it is.
+  - Built in full again once there's room for it, as it comes near or sets on the player.
+  - A dungeon's level is put out at once: one's foes had seventy-two bodies held on an iPhone,
+    which let the game's tab go (a player's crash report, 2026-10-14). Forty-eight goblins about the
+    player in headless Chromium on "high" (a budget of 24, 12 of it held by everyone else drawn in
+    full) settle with 12 in full and 36 in their crowd.
+  - One that's died never drawn isn't built just to lie there (`#mirror`).
+  - The debug log says how many there were and how many had room (`creatures`).
 
 In headless Chromium on "medium", 30 bandits, goblins, cultists and trolls and 8 hired adventurers
 about the player, each walking a little circle: all drawn in full, a frame's update took 12.6 ms

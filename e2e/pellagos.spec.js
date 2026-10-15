@@ -10662,3 +10662,88 @@ test("a Dreadthorn badly hurt takes to the air: drawn hanging up there, out of r
     await page.evaluate(() => (window.hpDown = window.pellagos.game.battle.actor("dread").hp));
     expect(await playUntil(page, () => window.pellagos.game.battle.actor("dread").hp < window.hpDown, { seconds: 20 })).toBe(true);
 });
+
+test("the wild's people-shaped creatures past the bodies' budget are drawn in their kind's crowd, their bodies let go; one that sets on the player is built in full", async ({ page }) => {
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=1");
+
+    // Forty-eight goblins in rings 6 to 39 metres round the player west of the start town, leaving
+    // everyone be: more than the quality's bodies' budget (QUALITY bodies)
+    const many = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { world, host, battle } = game;
+        const { CREATURES } = await import("/js/core/creatures.js");
+        const [mx, my] = world.stamp.middle;
+        const { name, hp, weapon, speed, chase } = CREATURES.goblin;
+
+        game.stop();
+        session.view.adaptive = false;
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [Math.floor(mx - 140), Math.floor(my - 20)], { facing: Math.PI });
+
+        const me = battle.actor(game.me);
+
+        Object.assign(me, { hp: 1e6, maxHp: 1e6 });
+
+        for (let k = 0; k < 48; k++) {
+            const id = `ration-${k}`;
+            const [angle, reach] = [k * 2.4, 6 + (k % 12) * 3];
+
+            host.wild.set(id, { creature: "goblin", tier: 3, pack: id, camp: null, lair: null, master: false });
+            battle.add({ id, kind: "beast", name, weapon, team: "beasts", square: [Math.floor(me.x + Math.cos(angle) * reach), Math.floor(me.y + Math.sin(angle) * reach)], ai: "wild", hp: hp * 100, speed, chase, wild: { creature: "goblin", tier: 3, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: id, leader: null, menace: false } });
+            game.enlisting.push(id);
+        }
+
+        const { CrowdAvatar } = await import("/js/world/crowd.js");
+
+        window.ration = () => {
+            const ids = Array.from({ length: 48 }, (each, k) => `ration-${k}`);
+            const crowded = ids.filter((id) => game.avatars.get(id) instanceof CrowdAvatar);
+            const full = ids.filter((id) => game.avatars.has(id) && !crowded.includes(id));
+
+            return { full: full.length, crowded: crowded.length, room: game.rationed?.room ?? null, budget: game.view.quality.bodies, crowdedIds: crowded };
+        };
+
+        return game.view.quality.bodies;
+    });
+
+    // All of them drawn: as many in full as there's room for (and a few more, only just past it),
+    // the rest in their crowd
+    const settled = () => {
+        const { full, crowded, room } = window.ration();
+
+        return room !== null && full + crowded === 48 && full <= room + 3 && crowded > 0;
+    };
+
+    expect(await playUntil(page, settled, { seconds: 120 })).toBe(true);
+
+    const ration = await page.evaluate(() => window.ration());
+
+    expect(ration.full).toBeLessThanOrEqual(many);
+    expect(ration.crowded).toBeGreaterThanOrEqual(48 - many);
+
+    // (The debug log says how many there were, and how many had room)
+    const told = await page.evaluate(() => window.pellagos.game.telemetryState().creatures);
+
+    expect(told.rationed).toBeGreaterThanOrEqual(48);
+    expect(told.room).toBe(ration.room);
+
+    // One in its crowd come near the player and set on them: built in full, its crowd's figure
+    // let go
+    await page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        window.setOn = id;
+        game.host.battle.place(id, "town", [Math.floor(me.x) + 3, Math.floor(me.y)]);
+        Object.assign(game.battle.actor(id).wild, { temper: "aggressive", leash: 60 });
+    }, ration.crowdedIds[0]);
+
+    const inFull = () => {
+        const { game } = window.pellagos;
+
+        return game.battle.actor(window.setOn).target === game.me && game.avatars.has(window.setOn) && !window.ration().crowdedIds.includes(window.setOn);
+    };
+
+    expect(await playUntil(page, inFull, { seconds: 60 })).toBe(true);
+});
