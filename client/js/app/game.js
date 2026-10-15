@@ -3405,7 +3405,8 @@ export class Game {
     // The creatures drawn from a model (beasts/model.js): each kind's asked for once the player's
     // near one of its lairs (looked at every MODELLING seconds), before it's met; and one drawn
     // with its stand-in, its model read since, drawn again from the model once it's out of view
-    // and not attacking, falling or coming down out of the sky (let go of: it's drawn again)
+    // and not attacking, falling or coming down out of the sky (let go of, and put back on the
+    // list to be drawn)
     #modelling(dt) {
         const me = this.avatars.get(this.me)?.object.position;
 
@@ -3420,6 +3421,7 @@ export class Game {
         for (const [id, avatar] of this.avatars) {
             if (avatar instanceof BeastAvatar && !avatar.model && MODELS[avatar.id] && modelOf(avatar.id) && !avatar.seen && !avatar.doing.attack && !avatar.doing.dead && !avatar.arriving) {
                 this.#undress(id);
+                this.enlisting.push(id);
             }
         }
     }
