@@ -652,6 +652,83 @@ test("with six characters kept, New character asks which is to make way, and to 
     expect((await keptOf(page, "save")).hero.name).toBe("Gale");
 });
 
+// A character kept by an older version of the game (save version 1: no id of its own), with a
+// people, a weapon, things, a spell and a follower's calling this one hasn't got
+const OLD_CHARACTER = {
+    kind: "pellagos-solo-world",
+    version: 1,
+    saveVersion: 1,
+    save: { version: 1, hero: { ...SAVE.hero, name: "Old Bram", race: "dwarf", weapon: "halberd" }, seed: 777, created: "2025-01-02T03:04:05.000Z" },
+    progress: { seed: 777, format: 2, skills: { blade: 300 }, spells: ["heal", "moonwalk"], gold: 99, pack: [{ id: "potion", count: 2 }, { id: "oldBlade", count: 3 }], gear: { mainHand: { id: "sword" } } },
+    followers: { seed: 777, followers: [{ name: "Pip", calling: "jester" }] },
+};
+
+test("a saved character exported as a file and brought in again (not while they're kept); every one exported at once; one kept by an older version of the game brought in, what it hasn't got left out and said", async ({ page }) => {
+    await keepSix(page);
+    await title(page);
+    await page.locator("#savedbutton").click();
+
+    const dialog = page.locator("#characters");
+    const cards = dialog.locator(".character .name");
+    const imported = page.locator("#imported");
+    const bringIn = (files) => dialog.locator("#charactersfile").setInputFiles(files);
+
+    // Cole exported: a file of their own, as the browser downloads one
+    const [download] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "Export Cole" }).click()]);
+    const file = await download.path();
+
+    expect(download.suggestedFilename()).toBe("Cole.pellagos-character");
+
+    // Brought in while Cole's kept: refused, as they're here already
+    await bringIn(file);
+    await expect(imported).toBeVisible();
+    await expect(imported.locator("#importednote")).toHaveText("No one was brought in.");
+    await expect(imported.locator("#importedlist")).toContainText("Not brought in: they're kept here already.");
+    await imported.getByRole("button", { name: "OK" }).click();
+
+    // Deleted, then brought back from the file: the same world, their gold and their hammer
+    await dialog.getByRole("button", { name: "Delete Cole" }).click();
+    await page.locator("#forget").getByRole("button", { name: "Delete Cole" }).click();
+    await expect(cards).toHaveCount(5);
+    await bringIn(file);
+    await expect(imported.locator("#importednote")).toHaveText("One character is now among your saved characters.");
+    await expect(imported.locator(".about")).toHaveText("Human · War hammer · 75 gold");
+    await imported.getByRole("button", { name: "OK" }).click();
+    await expect(cards).toHaveCount(6);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.characters")).ids.map((id) => JSON.parse(localStorage.getItem(`pellagos.${id}.save`))).find((save) => save.hero.name === "Cole").seed)).toBe(KEPT[2].seed);
+
+    // Every one at once, in a file of the day's
+    const [all] = await Promise.all([page.waitForEvent("download"), dialog.getByRole("button", { name: "Export all" }).click()]);
+
+    expect(all.suggestedFilename()).toMatch(/^Pellagos-characters-\d{4}-\d\d-\d\d\.pellagos-character$/);
+
+    // With six kept, no room: said so
+    await bringIn({ name: "Old Bram.pellagos-character", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(OLD_CHARACTER)) });
+    await expect(imported.locator("#importedlist")).toContainText("Not brought in: 6 characters are kept, the most there can be");
+    await imported.getByRole("button", { name: "OK" }).click();
+
+    // Room made: brought forward, and what this version of the game hasn't got left out, each said
+    await dialog.getByRole("button", { name: "Delete Ash" }).click();
+    await page.locator("#forget").getByRole("button", { name: "Delete Ash" }).click();
+    await bringIn({ name: "Old Bram.pellagos-character", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(OLD_CHARACTER)) });
+    await expect(imported.locator(".name")).toHaveText("Old Bram");
+    await expect(imported.locator(".about")).toHaveText("Human · Sword · 99 gold");
+    await expect(imported.locator("#importedlist li li")).toHaveText([
+        "Changed to suit this version of the game:",
+        "Their people (dwarf), whom the game no longer has: they're human now.",
+        "The weapon they started with (halberd), which the game no longer has: a sword.",
+        "3 things the game no longer has: old blade ×3.",
+        "The spell moonwalk, which the game no longer has.",
+        "Pip (jester), who follows no more: the game has no such callings now.",
+    ]);
+    await imported.getByRole("button", { name: "OK" }).click();
+    await expect(cards.filter({ hasText: "Old Bram" })).toHaveCount(1);
+
+    // And what isn't a character file: said so
+    await bringIn({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("not a character") });
+    await expect(imported.locator("#importednote")).toHaveText("That isn't a character file: it doesn't read.");
+});
+
 test("how the player is, kept with where they are: hurt and tired, poisoned, a spell on them, blessed, a power strike waiting; the next time, each as it was, with what was left of it", async ({ page }) => {
     // (Played twice: more than the usual time)
     test.setTimeout(180000);

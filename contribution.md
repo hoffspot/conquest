@@ -343,7 +343,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
      step for each version, so add yours there.
    - `SAVE_VERSION` (`client/js/app/save.js`): the save format. A save from another version is
      set aside, not misread; or, where it can be, moved to the new one, as version 1's one
-     character is (save.js `migrate`). Players keep their characters.
+     character is (save.js `migrate`). Players keep their characters. Add a step to `SAVE_STEPS`
+     too, taking a character's export (`exportCharacter`'s) from the version before to yours: a
+     character file (`app/character-file.js`) made by any version of the game is brought in
+     through them, and `test/character-file.test.js` checks there's one for every version.
    - The world server's data, which must never be lost on an upgrade
      (`generated/world_server_plan.md` §5.1). Each version has a step forward beside it, a
      function taking what an older server kept to the next version; a newer server's is refused.
