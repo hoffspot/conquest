@@ -4414,7 +4414,21 @@ it.
      played, and is the one Continue carries on with from then. Each has a **Delete** button,
      which asks first: "Ash will be permanently deleted, with their world, what they carry and
      what they've learnt. This can't be undone." Kept, nothing changes; deleted, everything kept
-     of them goes (save.js `forgetCharacter`).
+     of them goes (save.js `forgetCharacter`). The list shows even with none kept, to bring one in.
+   - **Export** beside each saves that character as a file (`<name>.pellagos-character`), and
+     **Export all** every one in a file of the day's (app/character-file.js: `pellagos.character.1`,
+     each character as save.js `exportCharacter` gives them, their world's war with them): to keep
+     somewhere safe, or to carry to another browser or device. **Import from a file** brings in
+     what's in one, each as a new character kept here, in their own world as it was. Not one that's
+     kept here already (the same hero, started at the same moment in the same world: delete them
+     first to bring the copy back), nor with six kept. A character kept by an older version of the
+     game is brought forward a step at a time (save.js `SAVE_STEPS`, never taken away), then
+     whatever this version hasn't got is left out or put right, and the game says what: things,
+     spells, skills and followers' callings it no longer has (a renamed spell kept by its new
+     name), a people or a starting weapon (human, a sword), parts of their look (as a new hero's),
+     a world that can't be read (a new one, with what they carry), or a war kept by a newer
+     version (it starts again in the same land). A file from a newer version of the game is
+     refused, saying so.
    - **New character**, with six kept already (save.js `MOST_CHARACTERS`), first asks which of
      them is to make way, then to be sure ("...permanently deleted, ... once your new character is
      made"). They're deleted only once the new character's made: backed out of making one, they're

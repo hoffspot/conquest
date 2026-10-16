@@ -35,9 +35,9 @@ const BODY_DETAILS = {
 };
 
 // The modules the game imports once everything is downloaded (main.js: import()), and those it
-// imports only when they're first wanted (the action wheels' set-up, playing together), so that
-// they're there offline too
-const ENTRIES = ["js/app/session.js", "js/app/creator.js", "js/app/worldmap.js", "js/app/wheelsetup.js", "js/app/together.js"];
+// imports only when they're first wanted (the action wheels' set-up, playing together, characters
+// exported and brought in), so that they're there offline too
+const ENTRIES = ["js/app/session.js", "js/app/creator.js", "js/app/worldmap.js", "js/app/wheelsetup.js", "js/app/together.js", "js/app/character-file.js"];
 
 // A module's static imports and re-exports, and its import()s (minified code may have no spaces)
 const STATIC = /(?:^|[;\s}])(?:import|export)\s*(?:[\w*{}\s,$]*?\s*from\s*)?["']([^"']+)["']/g;
