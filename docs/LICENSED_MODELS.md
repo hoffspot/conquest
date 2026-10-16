@@ -229,6 +229,22 @@ No CI job is added or renamed, so the ruleset's required checks don't change.
    `test/scramble.test.js` checks every model so marked is scrambled, and no other;
    `test/licensed.test.js`, that git ignores it.
 
+## Remaking a licensed model
+
+A remade model (new clips, say) goes into the private repository **under a new name**
+(`werewolf-2.bin` after `werewolf.bin`), never over the old one: the builds check each file
+against the hash the catalog keeps, so replacing it would break `main`'s builds and its site until
+the change that uses it is in. So:
+
+1. Scramble the new build as above, into the private repository under its new name, and commit
+   it there beside the old one (its `LICENSE.md` saying so).
+2. In this repository, the catalog entry's `path`, `hash` and `bytes` the new file's, and its path
+   in `.gitignore` in place of the old; `npm run models:fetch`, `npm run build:manifest`.
+3. Once that's merged, delete the old file from the private repository.
+
+Files that come out the same (a model's skins, which hold no clips) stay as they are: compare the
+scrambled copy's hash with the catalog's.
+
 ## Changing the key
 
 If the private half might have got out, or someone who could see it no longer should:
