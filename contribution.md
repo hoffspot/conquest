@@ -357,8 +357,9 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    anything built from it, stays out of the repository: keep it in `utilities/blenderpipeline/private/`,
    which git ignores. The one exception is the Dreadthorn's model (`client/models/beasts/dreadthorn.glb`):
    bought, and in the repository with permission the repository's owner obtained, only in its
-   converted form (its `LICENSE.md` there). Another exception is the owner's call, never a
-   contributor's. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
+   converted form (its `LICENSE.md` there). How it's being moved out to a private repository,
+   and scrambled where it's served, is in `docs/LICENSED_MODELS.md`. Another exception is the
+   owner's call, never a contributor's. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
    script.
 9. **Heavy models go in the catalog, not in what's downloaded before the game starts.** That has
    a budget, `BOOT_BUDGET` in `test/manifest.test.js` (15 MB), and raising it is a choice to make
