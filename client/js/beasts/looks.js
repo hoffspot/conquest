@@ -111,6 +111,17 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0x2e2c2e, saddle: 0x161416, belly: 0x4a4648, dark: 0x121012, mane: 0x1e1c1e, eyes: 0xd03020, glow: 0xd03020 },
         attacks: ["bite", "snap", "pounce", "shake"], rests: ["sit", "lie", "sniff", "scratch", "howl", "shake"],
     },
+    // (The werewolf: a great dark wolf for now, a third bigger than a dire wolf, until its own
+    // model's read: beasts/model.js; it springs on whoever it's after)
+    werewolf: {
+        body: "quadruped",
+        scale: [1.3, 1.4],
+        length: 1.55, height: 1.1, girth: 0.25, width: 0.22, chest: 1.3, haunch: 0.85, neck: 0.4, neckUp: 0.55,
+        head: [0.17, 0.16, 0.19], snout: { length: 0.27, radius: 0.08, taper: 0.6 }, ears: "pointed", legs: 0.09, claws: 1.3,
+        tail: { length: 0.6, radius: 0.08, bushy: true, lift: -0.9, curl: 0.12 }, mane: true,
+        colours: { fur: 0x3a3632, saddle: 0x1c1a18, belly: 0x5a524a, dark: 0x141210, mane: 0x26221e, eyes: 0xe8b020, glow: 0xe8a010 },
+        attacks: ["bite", "snap", "shake"], rests: ["sit", "sniff", "scratch", "howl", "shake"], specials: ["pounce"],
+    },
     goblin: { body: "humanoid", scale: [0.72, 0.82] },
     goblinBomber: { body: "humanoid", scale: [0.7, 0.78] },
     goblinKing: { body: "humanoid", scale: [0.98, 1.04] },

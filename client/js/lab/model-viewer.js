@@ -70,6 +70,7 @@ const ABOUT = {
     bear: ["Brown bear", "Far out"],
     puma: ["Puma", "Far out, in the hills and woods"],
     direWolf: ["Dire wolf", "Far out"],
+    werewolf: ["Werewolf", "Far out, only by night, at the head of its wolves"],
     goblin: ["Goblin raider", "Far out", "cleaver"],
     goblinBomber: ["Goblin bomber", "Among goblin raiders: keeps its distance and lobs lit bombs", null],
     goblinKing: ["Goblin King", "The goblins' elite, leading their war band: a great cleaver, and a bigger bomb now and then", "cleaver"],
@@ -344,10 +345,11 @@ const ITEMS = Object.entries(EQUIPMENT).filter(([, { model, slot }]) => model &&
 // the treasure chest, by their catalog ids
 const PROPS = Object.keys(ASSETS.models).filter((id) => id.startsWith("dungeon-prop-") || id === "chest");
 
-// The catalog's creatures with a model who aren't in the game yet (no kind is drawn from it:
-// beasts/model.js MODELS), by their catalog ids: each shown as it was made, every clip in its file
-// by name, in any of its skins
-const COMING = Object.keys(ASSETS.models).filter((id) => id.startsWith("beast-") && !id.endsWith("-skins") && !Object.values(MODELS).some(({ asset }) => asset === id));
+// The catalog's creatures' models, by their catalog ids: each to be shown as it was made, every
+// clip in its file by name, in any of its skins (?model=beast-werewolf); those who aren't in the
+// game yet (no kind is drawn from it: beasts/model.js MODELS) listed in the picker
+const BEAST_MODELS = Object.keys(ASSETS.models).filter((id) => id.startsWith("beast-") && !id.endsWith("-skins"));
+const COMING = BEAST_MODELS.filter((id) => !Object.values(MODELS).some(({ asset }) => asset === id));
 
 /**
  * A model's other skins (its catalog entry's, "<id>-skins": utilities/blenderpipeline's variants,
@@ -1167,6 +1169,12 @@ function describe() {
         rows.push(["Clips", String(Object.keys(avatar.plan.lengths).length)]);
     }
 
+    // (The skin one drawn from a model wears, if its kind has others: by its seed, "Another one"
+    // for another)
+    if (model?.skins) {
+        rows.push(["Skin", `${avatar.plan.skin || "its own"}, one of ${model.skins.length} its kind wears`]);
+    }
+
     // (Its other skins, each a file of its own: only the textures that differ)
     if (thing?.skins?.length) {
         const extra = ASSETS.models[`${thing.asset}-skins`].files.reduce((sum, file) => sum + file.bytes, 0);
@@ -1219,7 +1227,7 @@ function whoseOf(asset, avatar) {
 // --- The controls ---
 
 const groups = [
-    ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "goblin", "goblinBomber", "goblinKing", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
+    ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "werewolf", "goblin", "goblinBomber", "goblinKing", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
     ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "knucker", "hodmedod", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "hart", "kelpie", "caveSpider", "shadowStalker", "olm", "centipede", "basilisk", "draugr", "mare", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "spittingCobra", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "ahuizotl", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock", "chimera"]],
     ["The restless dead", ["ghost", "wraith"]],
     ["For the mightiest", ["dreadthorn", "dragon", "wightLord", "frostTroll", "banditChief"]],
@@ -1234,6 +1242,15 @@ for (const [label, ids] of groups) {
         group.append(new Option(ABOUT[id][0], id));
     }
 
+    picker.append(group);
+}
+
+// (The creatures to come: their models, before they're in the game, with the wilds' own)
+if (COMING.length) {
+    const group = document.createElement("optgroup");
+
+    group.label = "Coming to the wilds (models not in the game yet)";
+    group.append(...COMING.map((id) => new Option(ASSETS.models[id].label.replace(/ \(.*$/, "").replace(/^the (.)/i, (_, first) => first.toUpperCase()), `model:${id}`)));
     picker.append(group);
 }
 
@@ -1281,15 +1298,6 @@ for (const [theme, { name, bosses, minis }] of Object.entries(THEMES)) {
     props.label = "Props (the catalog's models)";
     props.append(...PROPS.sort((a, b) => (a === "chest" ? -1 : b === "chest" ? 1 : 0)).map((id) => new Option(ASSETS.models[id].label.replace(/ \(.*$/, ""), `prop:${id}`)));
     picker.append(wagons, items, props);
-}
-
-// (The creatures to come: their models, before they're in the game)
-if (COMING.length) {
-    const group = document.createElement("optgroup");
-
-    group.label = "Coming to the wilds (models not in the game yet)";
-    group.append(...COMING.map((id) => new Option(ASSETS.models[id].label.replace(/ \(.*$/, "").replace(/^the (.)/i, (_, first) => first.toUpperCase()), `model:${id}`)));
-    picker.append(group);
 }
 
 picker.addEventListener("change", () => show(picker.value));
@@ -1567,7 +1575,7 @@ const known = (id) =>
     (isPerson(id) && (FOLK_ROLES.includes(id.slice(7)) || ["adventurer", "soldier"].includes(id.slice(7)))) ||
     (id?.startsWith("item:") && ITEMS.some(([item]) => `item:${item}` === id)) ||
     (id?.startsWith("prop:") && PROPS.includes(id.slice(5))) ||
-    (id?.startsWith("model:") && COMING.includes(id.slice(6)));
+    (id?.startsWith("model:") && BEAST_MODELS.includes(id.slice(6)));
 const start = known(asked) ? asked : "wolf";
 
 show(start);
@@ -1612,7 +1620,7 @@ window.lab = {
     act,
     advance,
     avatar: () => current.avatar,
-    current: () => ({ id: current.id, humanoid: !current.avatar.plan, person: current.person, thing: current.thing, attacks: current.avatar.attacks ?? [], specials: current.avatar.specials ?? [], rests: current.avatar.rests ?? [] }),
+    current: () => ({ id: current.id, humanoid: !current.avatar.plan, person: current.person, thing: current.thing, model: Boolean(current.avatar.model), skin: current.avatar.plan?.skin ?? null, attacks: current.avatar.attacks ?? [], specials: current.avatar.specials ?? [], rests: current.avatar.rests ?? [] }),
     pause: () => play(false),
     play: () => play(true),
     step,

@@ -241,6 +241,7 @@ export const CREATURE_VOICES = Object.freeze({
     vultureFlock: { family: "bats", rate: 0.72, fall: null, with: "smallWings" },
     wolf: { family: "wolf", fall: "deathThudMid" },
     direWolf: { family: "wolf", rate: 0.85, fall: "deathThudMid" },
+    werewolf: { family: "wolf", rate: 0.72, fall: "deathThudBig" },
     blackShuck: { family: "wolf", rate: 0.75, fall: "deathThudMid" },
     hyena: { family: "wolf", rate: 1.1, fall: "deathThudMid" },
     jackal: { family: "wolf", rate: 1.2, fall: "deathThudSmall" },

@@ -163,6 +163,17 @@ export const NATURAL = Object.freeze({
     },
     bear: { label: "Claws", attacks: [melee({ id: "maul", damage: [5, 10], hitAt: 600, duration: 1100, interval: 1600, stagger: 400, reaction: "crush", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } })] },
     direWolf: { label: "Fangs", attacks: [melee({ id: "bite", damage: [3, 6], hitAt: 350, duration: 700, interval: 1100, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.25 } })] },
+    // (A werewolf's: its claws raking, laying a wound open; or a spring on whoever it's after, a
+    // heavier blow that staggers, its whole weight behind it)
+    werewolf: {
+        label: "Claws and fangs",
+        attacks: [
+            eitherOf(
+                melee({ id: "claw", damage: [6, 11], hitAt: 450, duration: 900, interval: 1200, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.35 } }),
+                melee({ id: "pounce", damage: [9, 16], hitAt: 650, duration: 1300, interval: 2200, stagger: 400, reaction: "hack", animation: "pounce", afflict: { kind: "bleed", chance: 0.4 } }),
+            ),
+        ],
+    },
     skeleton: { label: "Rusty sword", attacks: [melee({ id: "slash", damage: [4, 8], hitAt: 380, duration: 760, interval: 1100, reaction: "slash", animation: "melee", afflict: { kind: "disease", chance: 0.15 } })] },
     // (A hodmedod reaps with its sickle; a draugr hacks with its barrow blade, and lays a curse as
     // the wight lord does, weaker; a mare's weight on whoever it's on staggers and slows them, and

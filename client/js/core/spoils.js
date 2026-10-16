@@ -36,6 +36,8 @@ export const PARTS = Object.freeze({
     pumaClaw: { label: "Puma claw", worth: 7, icon: "claw", tint: "#3a2a1a" },
     direPelt: { label: "Dire wolf pelt", worth: 12, icon: "pelt", tint: "#2e2c2e" },
     direFang: { label: "Dire wolf fang", worth: 8, icon: "fang", tint: "#f4ecd8" },
+    werewolfPelt: { label: "Werewolf pelt", worth: 26, icon: "pelt", tint: "#4a4440" },
+    werewolfClaw: { label: "Werewolf claw", worth: 15, icon: "claw", tint: "#d8c8b0" },
     goblinEar: { label: "Goblin ear", worth: 4, icon: "ear", tint: "#6a8a3a" },
     boneDust: { label: "Bone dust", worth: 5, icon: "dust", tint: "#d8cfb4" },
     oldSkull: { label: "Old skull", worth: 6, icon: "skull", tint: "#d8cfb4" },
@@ -154,6 +156,8 @@ export const SPOILS = Object.freeze({
     bear: { items: [{ id: "bearPelt", chance: 0.35 }, { id: "bearClaw", chance: 0.45 }, { id: "bearMeat", chance: 0.4 }] },
     puma: { items: [{ id: "pumaPelt", chance: 0.35 }, { id: "pumaClaw", chance: 0.45 }] },
     direWolf: { items: [{ id: "direPelt", chance: 0.35 }, { id: "direFang", chance: 0.45 }] },
+    // (A werewolf was someone once: what was in their purse, besides its pelt and claws)
+    werewolf: { gold: [4, 14], items: [{ id: "werewolfPelt", chance: 0.45 }, { id: "werewolfClaw", chance: 0.55, count: [1, 2] }] },
     goblin: { gold: [2, 9], items: [{ id: "goblinEar", chance: 0.5 }, { id: "potion", chance: 0.1 }, { id: "goblinBomb", chance: 0.15 }] },
     goblinBomber: { gold: [2, 9], items: [{ id: "goblinBomb", chance: 0.75, count: [1, 3] }, { id: "goblinEar", chance: 0.5 }] },
     goblinKing: { gold: [10, 30], items: [{ id: "goblinBomb", chance: 0.9, count: [3, 5] }, { id: "tomeExplosion", chance: 0.05 }, { id: "goblinEar", chance: 0.9 }] },

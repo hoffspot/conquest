@@ -1,7 +1,7 @@
 // The creatures drawn from a model (client/js/beasts/model.js): what's asked for near their
-// lairs, how their clips are posed for what the game asks of a body, when a breath's fire is out,
-// and that every clip and bone named for one is in its model as the catalog has it. (Drawn in a
-// browser: e2e/models.spec.js.)
+// lairs, how their clips are posed for what the game asks of a body (walking into a run), when a
+// breath's fire is out, and that every clip, bone and skin named for one is in its model and its
+// skins as the catalog has them. (Drawn in a browser: e2e/models.spec.js.)
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -10,7 +10,7 @@ import { PropertyBinding } from "three";
 
 const { MODELS, breathing, hasModel, modelsNear, poseOf } = await import("../client/js/beasts/model.js");
 const { ASSETS } = await import("../client/js/app/assets.js");
-const { LAIRS } = await import("../client/js/core/creatures.js");
+const { CREATURES, LAIRS } = await import("../client/js/core/creatures.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
 const { isScrambled, unscramble } = await import("../client/js/app/scramble.js");
 const { LEFT_OUT, licensedModelsHere } = await import("../scripts/licensed-models.js");
@@ -33,19 +33,32 @@ async function gltfOf(path) {
 }
 
 describe("the creatures drawn from a model (beasts/model.js)", () => {
-    it("are in the catalog, each a lair's master with a look that stands in for it till it's read", () => {
-        for (const [id, { asset }] of Object.entries(MODELS)) {
+    it("are in the catalog, each a lair's master or met in the wilds, with a look that stands in for it till it's read, and its skins there too", () => {
+        for (const [id, { asset, skins = [""] }] of Object.entries(MODELS)) {
             assert.ok(hasModel(id), id);
             assert.equal(ASSETS.models[asset].tier, "demand", "downloaded only as it's wanted");
             assert.ok(LOOKS[id], `${id}'s stand-in`);
-            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id), `${id} keeps a lair`);
+
+            // (Its model wanted near its lair (modelsNear), or as one of them is put out in the
+            // wilds (game.js, wantModel "now"))
+            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || CREATURES[id].biomes?.length, `${id} keeps a lair, or is met in the wilds`);
+
+            // (Each of its skins but its own one of the catalog's "<asset>-skins")
+            const files = (ASSETS.models[`${asset}-skins`]?.files ?? []).map(({ path }) => path);
+
+            assert.equal(skins[0], "", `${id}: its own skin first`);
+
+            for (const skin of skins.slice(1)) {
+                assert.ok(files.some((path) => path.endsWith(`.${skin}.bin`)), `${id}'s ${skin}`);
+                assert.equal(ASSETS.models[`${asset}-skins`].tier, "demand");
+            }
         }
 
         assert.equal(hasModel("dragon"), false);
     });
 
-    it("has every clip and bone it names in its model, as the glTF loader names them", { skip: licensed !== true && licensed }, async () => {
-        for (const { asset, clips, attacks, specials, aloft, rests, fire, joints, mouth } of Object.values(MODELS)) {
+    it("has every clip and bone it names in its model, as the glTF loader names them, its detail packed in, its skins' materials its own", { skip: licensed !== true && licensed }, async () => {
+        for (const { asset, skins = [""], clips, attacks, specials, aloft, rests, fire, joints, mouth } of Object.values(MODELS)) {
             const gltf = await gltfOf(ASSETS.models[asset].files[0].path);
             const named = new Set(gltf.animations.map(({ name }) => name));
             const nodes = new Set(gltf.nodes.map(({ name }) => PropertyBinding.sanitizeNodeName(name)));
@@ -54,12 +67,30 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
                 assert.ok(named.has(clip), clip);
             }
 
-            for (const bone of [...Object.values(joints), ...Object.values(mouth)]) {
+            for (const bone of [...Object.values(joints), ...Object.values(mouth ?? {})]) {
                 assert.ok(nodes.has(bone), bone);
             }
 
-            // (Its detail packed in: a mesh for each level)
-            assert.deepEqual(gltf.nodes.filter(({ mesh }) => mesh !== undefined).map(({ extras }) => extras?.lod ?? 0).sort(), [0, 1, 2]);
+            // (Its detail packed in: three levels, each of as many meshes as the full one, one for
+            // each of its parts)
+            const levels = gltf.nodes.filter(({ mesh }) => mesh !== undefined).map(({ extras }) => extras?.lod ?? 0);
+            const parts = levels.filter((level) => level === 0).length;
+
+            assert.deepEqual(
+                [0, 1, 2].map((level) => levels.filter((each) => each === level).length),
+                [parts, parts, parts],
+            );
+
+            // (Each skin's materials some of its model's, by name: put on in their place)
+            const materials = new Set(gltf.materials.map(({ name }) => name));
+
+            for (const skin of skins.slice(1)) {
+                const file = ASSETS.models[`${asset}-skins`].files.find(({ path }) => path.endsWith(`.${skin}.bin`));
+                const worn = await gltfOf(file.path);
+
+                assert.ok(worn.materials.length && worn.materials.every(({ name }) => materials.has(name)), `${asset}'s ${skin}`);
+                assert.equal(worn.meshes, undefined, `${asset}'s ${skin}: only its textures`);
+            }
         }
     });
 
@@ -119,6 +150,28 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         posed = poseOf(model, { dead: { u: 1 }, attack: { style: "bite", u: 0.5 }, t: 3 }, { lengths, died: 2 });
         assert.deepEqual(posed, [{ clip: "Death", weight: 1, time: 2 }]);
         assert.ok(poseOf(model, { dead: { u: 1 } }, { lengths, died: 60 })[0].time < 3.6);
+    });
+
+    it("walks one that has a run into it as it goes faster: its walk at its pace, its run at twice that", () => {
+        const werewolf = MODELS.werewolf;
+        const strides = { Idle: 1.88, Walk: 1.38, Run: 1.38, Claw: 1.3, Attack: 2.21, "Hit React": 0.96, Death: 2.92, Howl: 3, "Idle Alert": 2 };
+
+        assert.equal(weightOf(poseOf(werewolf, { speed: werewolf.pace, t: 1 }, { lengths: strides }), "Walk"), 1);
+        assert.equal(weightOf(poseOf(werewolf, { speed: werewolf.pace, t: 1 }, { lengths: strides }), "Run"), 0);
+
+        let posed = poseOf(werewolf, { speed: werewolf.pace * 1.6, t: 1 }, { lengths: strides });
+
+        assert.ok(weightOf(posed, "Walk") > 0.2 && weightOf(posed, "Run") > 0.2 && Math.abs(total(posed) - 1) < 1e-6);
+        posed = poseOf(werewolf, { speed: werewolf.pace * 2.2, t: 1 }, { lengths: strides });
+        assert.equal(weightOf(posed, "Run"), 1);
+
+        // (Its claws, its leap as a special, its howl as a rest)
+        assert.equal(weightOf(poseOf(werewolf, { attack: { style: "claw", u: 0.5 }, t: 1 }, { lengths: strides }), "Claw"), 1);
+        assert.equal(weightOf(poseOf(werewolf, { attack: { style: "pounce", u: 0.5 }, t: 1 }, { lengths: strides }), "Attack"), 1);
+        assert.ok(Math.abs(weightOf(poseOf(werewolf, { rest: { name: "howl", w: 1, t: 1 }, t: 1 }, { lengths: strides }), "Howl") - 1) < 1e-6);
+
+        // (The Dreadthorn has no run: its walk, however fast)
+        assert.equal(weightOf(poseOf(model, { speed: model.pace * 3, t: 3 }, { lengths }), "Crawling"), 1);
     });
 
     it("breathes its fire only while its breath's mouth is open (from a second in to 2.8), on the ground or from the air", () => {

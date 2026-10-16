@@ -169,12 +169,12 @@ const rowOf = (template, at) => template.moves.image.data.subarray(at * template
 const apart = (a, b) => a.reduce((most, value, k) => Math.max(most, Math.abs(value - b[k])), 0);
 
 describe("beasts in a crowd (herd.js)", () => {
-    it("draws in a crowd those that move by their bones alone, and none seen through, winged, caped, swarming or squashed whole", () => {
+    it("draws in a crowd those that move by their bones alone, and none seen through, winged, caped, swarming, squashed whole or drawn from a model", () => {
         for (const id of ["wolf", "boar", "bear", "rat", "crocodile", "caveSpider", "scorpion", "snake", "bogFrog", "skeleton", "treant"]) {
             assert.ok(herds(id), `${id} is drawn in a crowd`);
         }
 
-        for (const id of ["slime", "magmaSlime", "bats", "wisp", "ghost", "wraith", "blackShuck", "shadowStalker", "wyvern", "dragon", "wightLord", "bandit", "troll", "nothing"]) {
+        for (const id of ["slime", "magmaSlime", "bats", "wisp", "ghost", "wraith", "blackShuck", "shadowStalker", "wyvern", "dragon", "wightLord", "bandit", "troll", "werewolf", "nothing"]) {
             assert.ok(!herds(id), `${id} isn't`);
         }
     });

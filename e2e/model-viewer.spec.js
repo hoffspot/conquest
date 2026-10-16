@@ -171,13 +171,13 @@ test("a creature drawn from a model: every clip in its file played alone, steppe
     await page.waitForFunction(() => window.lab.watch().clip === "Bite", null, { timeout: 60000 });
 });
 
-test("a creature to come, drawn from its model before it's in the game: the werewolf, every clip in its file, its full detail only, each of its skins put on, and whose it is", async ({ page }) => {
+test("a creature's model as it was made (?model=): the werewolf, every clip in its file, its full detail only, each of its skins put on, and whose it is", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?model=beast-werewolf&skin=dusk&clip=Walk");
 
-    // (Listed with the creatures to come; read, its clips listed, the one asked for by its address
-    // played, in the skin asked for)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Werewolf"]);
+    // (Not listed with the creatures to come: it's in the game. Read, its clips listed, the one
+    // asked for by its address played, in the skin asked for)
+    await expect(page.locator("#picker optgroup[label^='Coming to the wilds']")).toHaveCount(0);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     // (Its own six, and three made up from them: utilities/blenderpipeline's clips.invent)
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual(["Attack", "Death", "Hit React", "Idle", "Idle Alert", "Walk", "Howl", "Claw", "Run"]);
@@ -222,6 +222,32 @@ test("a creature to come, drawn from its model before it's in the game: the were
     // (Not one of the game's creatures: none of the skin chooser for one)
     await page.locator("#picker").selectOption("wolf");
     await expect(page.getByLabel("Skin")).toBeHidden();
+});
+
+test("the werewolf as the game draws it, from its model once that's read: the game's moves for it, and the skin each one wears", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?creature=werewolf");
+
+    // (Its stand-in, a great dark wolf, till its model's read; then the model)
+    await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().moves)).toEqual(expect.arrayContaining(["claw", "pounce", "howl", "look"]));
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual(["Attack", "Death", "Hit React", "Idle", "Idle Alert", "Walk", "Howl", "Claw", "Run"]);
+
+    const details = page.locator("#details");
+
+    await expect(details).toContainText("Skin");
+    await expect(details).toContainText("one of 4 its kind wears");
+
+    // (Another one, another skin: each of the four, by its seed)
+    const skins = new Set([await page.evaluate(() => window.lab.current().skin)]);
+
+    for (let i = 0; i < 12 && skins.size < 4; i++) {
+        await page.getByRole("button", { name: "Another one" }).click();
+        await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+        skins.add(await page.evaluate(() => window.lab.current().skin));
+    }
+
+    expect([...skins].sort()).toEqual(["", "ash", "dusk", "russet"]);
 });
 
 test("one of the people, by role, people, woman or man and weapon: every motion of theirs by name (their weapon's, their work, their rests, emotes, spells, blows and falls), one played and stepped", async ({ page }) => {

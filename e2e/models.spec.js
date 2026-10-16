@@ -115,7 +115,7 @@ test("draws the Dreadthorn from its model once it's read, in place of its stand-
         const puffs = beast.plan.breath.puffs.reduce((sum, { alive }) => sum + alive, 0);
 
         // (Its levels: in full near; its least when it's small on the screen)
-        const shown = () => beast.plan.levels.map((mesh) => mesh.visible && mesh.material.colorWrite);
+        const shown = () => beast.plan.levels.map((meshes) => meshes.every((mesh) => mesh.visible && mesh.material.colorWrite));
         const near = shown();
 
         beast.fitDetail(100);
@@ -134,11 +134,11 @@ test("draws the Dreadthorn from its model once it's read, in place of its stand-
 
         // (Its body as it's drawn, its fire left out: measured once it's drawn, its skin bound to
         // where it is then)
-        size.setFromObject(beast.plan.levels[0], true);
+        size.setFromObject(beast.plan.levels[0][0], true);
 
         beast.dispose();
 
-        return { before, downloaded, model: beast.model, puffs, near, far, long: size.max.z - size.min.z, shadow: beast.plan.levels.at(-1).castShadow, error };
+        return { before, downloaded, model: beast.model, puffs, near, far, long: size.max.z - size.min.z, shadow: beast.plan.levels.at(-1).every((mesh) => mesh.castShadow), error };
     });
 
     expect(drawn.before).toEqual({ model: false, read: false });
@@ -156,6 +156,97 @@ test("draws the Dreadthorn from its model once it's read, in place of its stand-
     // (Its model fetched by its hash, as the catalog has it, by the game's downloader: a part at a
     // time, all from the one address)
     expect([...new Set(fetched.filter((url) => url.includes("/models/beasts/")).map((url) => url.replace(/^.*\/models\//, "").replace(/=[0-9a-f]{10}$/, "=")))]).toEqual(["beasts/dreadthorn.bin?h="]);
+});
+
+test("draws the werewolf from its model once it's read, each in a skin of its own: its body and fur a level of detail at a time, all of it flushed red when it's struck", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    const fetched = [];
+
+    page.on("request", (request) => fetched.push(request.url()));
+    await page.goto("/");
+    await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
+
+    const drawn = await page.evaluate(async () => {
+        const THREE = await import("three");
+        const { BeastAvatar, skinOf } = await import("./js/beasts/beast.js");
+        const { MODELS, wantModel } = await import("./js/beasts/model.js");
+
+        // (Its model and the three skins one of its kind may wear besides its own, read together)
+        const done = window.pellagos.fetcher.done;
+        const gltf = await wantModel("werewolf");
+        const downloaded = window.pellagos.fetcher.done - done;
+
+        // (One of each skin, by their seeds)
+        const seeds = Object.fromEntries(MODELS.werewolf.skins.map((skin) => [skin, Array.from({ length: 40 }, (_, i) => i + 1).find((seed) => skinOf("werewolf", seed) === skin)]));
+        const looks = Object.entries(seeds).map(([skin, seed]) => {
+            const beast = new BeastAvatar("werewolf", { seed });
+            const fur = beast.plan.levels[0].find((mesh) => mesh.material !== beast.plan.materials.body).material;
+            const look = { skin, worn: beast.plan.skin, model: beast.model, fur: fur.map.uuid, normals: fur.normalMap.uuid, body: beast.plan.materials.body.map.uuid };
+
+            beast.dispose();
+
+            return look;
+        });
+
+        const beast = new BeastAvatar("werewolf", { seed: seeds.dusk });
+        const scene = new THREE.Scene();
+
+        scene.add(beast.object, new THREE.HemisphereLight(0xffffff, 0x404040, 2));
+        beast.lowerDetail({});
+        beast.update(1 / 30, 0, 0, 0);
+
+        // (Its levels, each its body and two lengths of fur: in full near; its least when it's small)
+        const shown = () => beast.plan.levels.map((meshes) => meshes.filter((mesh) => mesh.visible && mesh.material.colorWrite).length);
+        const counts = beast.plan.levels.map((meshes) => meshes.length);
+        const near = shown();
+
+        beast.fitDetail(100);
+
+        const far = shown();
+
+        // (Struck: a flush of red on its fur as on its body)
+        beast.flush.emissive.setRGB(0.6, 0, 0);
+        beast.update(1 / 30, 0, 0, 0);
+
+        const flushed = beast.plan.materials.others.every((material) => material.emissive.r > 0.1);
+        const { renderer } = window.pellagos.session.view;
+        const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
+
+        camera.position.set(3, 2, 5);
+        camera.lookAt(0, 1.2, 0);
+        renderer.render(scene, camera);
+
+        const error = renderer.getContext().getError();
+        const height = new THREE.Box3().setFromObject(beast.plan.levels[0][0], true).getSize(new THREE.Vector3()).y;
+
+        beast.dispose();
+
+        return { read: Boolean(gltf), skins: Object.keys(gltf.skins).sort(), downloaded, looks, counts, near, far, flushed, height, error };
+    });
+
+    expect(drawn.read).toBe(true);
+    expect(drawn.skins).toEqual(["ash", "dusk", "russet"]);
+    expect(drawn.downloaded).toBe(4);
+    expect(drawn.looks.map(({ skin, worn, model }) => [skin, worn, model])).toEqual([
+        ["", "", true],
+        ["dusk", "dusk", true],
+        ["ash", "ash", true],
+        ["russet", "russet", true],
+    ]);
+
+    // (Each skin its own fur and body, its normals the model's own)
+    expect(new Set(drawn.looks.map(({ fur }) => fur)).size).toBe(4);
+    expect(new Set(drawn.looks.map(({ body }) => body)).size).toBe(4);
+    expect(new Set(drawn.looks.map(({ normals }) => normals)).size).toBe(1);
+    expect(drawn.counts).toEqual([3, 3, 3]);
+    expect(drawn.near).toEqual([3, 0, 0]);
+    expect(drawn.far).toEqual([0, 0, 3]);
+    expect(drawn.flushed).toBe(true);
+    // (About as tall as it's made: 2.4 metres, its body without its fur a little less)
+    expect(drawn.height).toBeGreaterThan(1.6);
+    expect(drawn.height).toBeLessThan(2.8);
+    expect(drawn.error).toBe(0);
+    expect([...new Set(fetched.filter((url) => url.includes("/models/beasts/werewolf")).map((url) => url.replace(/^.*\/models\//, "").replace(/=[0-9a-f]{10}$/, "=")))].sort()).toEqual(["beasts/werewolf-2.bin?h=", "beasts/werewolf.ash.bin?h=", "beasts/werewolf.dusk.bin?h=", "beasts/werewolf.russet.bin?h="]);
 });
 
 // (The service worker kept out: a page's routes don't see what it fetches)

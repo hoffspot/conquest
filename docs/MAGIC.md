@@ -179,7 +179,7 @@ climbs; a piece, a run of them; the sigil whole, a run up two octaves; broken or
 falling (audio/catalog.js, "The Prismatic sigil"), each said in a message too.
 
 (`SNAPSHOT_VERSION` 29: every actor's chain, none in a world kept before, and a seat's ruler told
-as one, `ruler`; `NET_VERSION` 122: both ends of a game must agree on every chain, and on what
+as one, `ruler`; `NET_VERSION` 123: both ends of a game must agree on every chain, and on what
 Prismatic Destruction does.)
 
 ## Wands and grimoires
