@@ -9,8 +9,11 @@ import { DETAILS } from "../characters/details.js";
 import { BEARDS, HAIRSTYLES } from "../characters/hair.js";
 import { MACRO_DEFAULTS } from "../characters/macro.js";
 import { LOOKS, peopleLook } from "../characters/peoples.js";
-import { PRESETS } from "../characters/presets.js";
 import { EYE_DEFAULTS, HAIR_COLOURS, SKIN_DEFAULTS, SKIN_TONES } from "../characters/skin.js";
+import { cleanName, defaultHero, HERO_PEOPLES } from "./hero-basics.js";
+
+// (A hero's basics, apart so that what reads characters without drawing them needn't bring the engine)
+export { cleanName, defaultHero, HERO_PEOPLES };
 
 /** Human skin tones, light to dark (the others are for orcs and the undead). */
 export const HUMAN_TONES = Object.freeze(Object.fromEntries(Object.entries(SKIN_TONES).filter(([name]) => !["orc", "darkOrc", "ash", "pale"].includes(name))));
@@ -24,16 +27,6 @@ const NAMES = {
 };
 
 const clone = (value) => structuredClone(value);
-
-/** The peoples a hero can be of (docs/WAR.md M11), as the character maker offers them. */
-export const HERO_PEOPLES = Object.freeze([
-    { id: "human", label: "Human" },
-    { id: "elf", label: "Elf" },
-    { id: "darkElf", label: "Dark elf" },
-    { id: "cat", label: "Cat folk" },
-    { id: "lizard", label: "Lizard folk" },
-    { id: "orc", label: "Orc" },
-]);
 
 // Orcs' skins, as the orcs' own are (peoples.js)
 const ORC_TONES = ["#4c5c2e", "#56663a", "#44532a", "#5a5a30", "#4a5a3a", "#606b34"];
@@ -67,28 +60,11 @@ export function heroOfPeople(hero, race, random = Math.random) {
     };
 }
 
-/** A new hero, as the character maker starts: the human preset, not yet named or armed. */
-export function defaultHero() {
-    const preset = PRESETS.hero;
-
-    return {
-        name: "",
-        shape: { macro: { ...MACRO_DEFAULTS, ...clone(preset.shape.macro) }, details: clone(preset.shape.details ?? {}) },
-        look: { skin: { ...SKIN_DEFAULTS, ...clone(preset.look.skin) }, eyes: { ...EYE_DEFAULTS, ...clone(preset.look.eyes) }, hair: clone(preset.look.hair) },
-        weapon: "sword",
-    };
-}
-
 /** Is a body female (0), male (1) or in between, going by the gender slider? */
 export function bodyKind(hero) {
     const gender = hero.shape.macro.gender;
 
     return gender < 0.35 ? "female" : gender > 0.65 ? "male" : "either";
-}
-
-/** A name as it's kept: trimmed, single-spaced, letters, spaces, apostrophes and hyphens. */
-export function cleanName(name) {
-    return String(name ?? "").replace(/[^\p{L}\p{M}' -]/gu, "").replace(/\s+/g, " ").trim().slice(0, 20);
 }
 
 /** A name to suggest for a hero (going by its body), not `except`. */

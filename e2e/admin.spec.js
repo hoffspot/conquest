@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -123,11 +123,20 @@ test("the management page on the server's computer: a world made, started, set a
     const first = await enter({ world, key: playerKey });
 
     expect(first.status).toBe(200);
+
+    // (And a hero of theirs kept here, which the world's owner exports as a character file)
+    await server.worlds.get(world).heroes.keep(first.json.player, { hero: { name: "Ada", race: "human", weapon: "sword", shape: { macro: {} }, look: { skin: {}, hair: {} } }, progress: { gold: 12 } });
     await dialog.locator('[data-world-tab="players"]').click();
 
     const row = dialog.locator(`tr[data-player="${first.json.player}"]`);
 
     await expect(row).toBeVisible();
+    await expect(row).toContainText("Heroes: Ada");
+
+    const [heroes] = await Promise.all([page.waitForEvent("download"), row.getByRole("button", { name: "Export heroes" }).click()]);
+
+    expect(heroes.suggestedFilename()).toBe("Ada.pellagos-character");
+    expect(JSON.parse(await readFile(await heroes.path(), "utf8")).characters.map((one) => [one.save.hero.name, one.progress.gold])).toEqual([["Ada", 12]]);
     await row.getByRole("button", { name: "New ticket" }).click();
     await expect(shown.locator("#showntitle")).toContainText("A new ticket");
 

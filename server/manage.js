@@ -21,7 +21,9 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { gunzipSync, gzip } from "node:zlib";
+import { exportOfKept, fileOf } from "../client/js/app/character-file.js";
 import { dayOf, elapsedOf, HOUR, timeOfDay } from "../client/js/core/daytime.js";
+import { decode } from "../client/js/core/wire.js";
 import { SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
 import { isRole } from "./access/world.js";
@@ -333,6 +335,45 @@ export class Management {
         }
 
         return players.sort((a, b) => Number(b.here) - Number(a.here) || String(b.seen).localeCompare(String(a.seen)));
+    }
+
+    /**
+     * A player's heroes kept in a world (all of them, or the one in `slot`) as a character file
+     * (client/js/app/character-file.js), as the game keeps one of its own: each in the world's land,
+     * with its war as it was last saved, to be played on a device, or brought into another world.
+     * { name, text, count }; refused where the world doesn't keep heroes, or they have none there.
+     */
+    async heroesFile(id, player, { slot = null } = {}) {
+        const stored = this.#world(id);
+
+        if (stored.meta.heroes !== "kept") {
+            throw new Refused(409, "not-kept", "That world doesn't keep its heroes: its players' are on their own devices.");
+        }
+
+        const kept = (await stored.heroes.list(player)).filter((hero) => slot === null || hero.slot === slot);
+        let war = null;
+
+        try {
+            war = decode(await readGzip(path.join(stored.folder, STATE, NOW))).war ?? null;
+        } catch {
+            war = null;
+        }
+
+        const characters = [];
+
+        for (const { slot: each, savedAt } of kept) {
+            const character = await stored.heroes.get(player, each);
+
+            if (character) {
+                characters.push(exportOfKept(character, { seed: stored.meta.seed, created: savedAt ?? new Date().toISOString(), war }));
+            }
+        }
+
+        if (!characters.length) {
+            throw new Refused(404, "no-hero", slot === null ? "They have no heroes kept in that world." : "There's no hero of theirs kept there.");
+        }
+
+        return fileOf(characters);
     }
 
     #player(id, player) {

@@ -11,6 +11,12 @@
 // followers' callings, a people, a weapon, the world they lived in) is left out, or what a new
 // character would have put in its place, and each is said. One kept by a newer version of the
 // game is refused, saying so.
+//
+// A world server's kept heroes (server/storage/heroes.js) go the same way: a player takes theirs
+// home, or the world's owner exports a player's, as files of this kind (exportOfKept), in the
+// world's land and with its war; and one brought into a world from a file is kept as the server
+// keeps its own (keptOfExport). A kept hero is salvaged as it's brought into the world too
+// (salvageKept).
 
 import { STARTING_WEAPONS } from "../core/weapons.js";
 import { HIRES } from "../core/host.js";
@@ -18,8 +24,8 @@ import { ITEMS, TREES } from "../core/progress.js";
 import { RENAMED, SCHOOLS, SPELLS } from "../core/spells.js";
 import { WAR_VERSION } from "../core/war/war.js";
 import { decode, encode } from "../core/wire.js";
-import { cleanName, defaultHero, HERO_PEOPLES } from "./heroes.js";
-import { ExportError, exportCharacter, forwardExport, newSeed, SAVE_VERSION, SOLO_KIND } from "./save.js";
+import { cleanName, defaultHero, HERO_PEOPLES } from "./hero-basics.js";
+import { ExportError, exportCharacter, forwardExport, importCharacter, newSeed, PROGRESS_FORMAT, SAVE_VERSION, SOLO_KIND, SOLO_VERSION } from "./save.js";
 import { codeVersion } from "./version.js";
 
 /** What a character file says it is. */
@@ -55,7 +61,11 @@ const listOf = (names) => (names.length > 1 ? `${names.slice(0, -1).join(", ")} 
  * the character's ("Aldric.pellagos-character"), or for several, the day's.
  */
 export function characterFile(saves, { when = new Date() } = {}) {
-    const characters = saves.map((save) => exportCharacter(save)).filter(Boolean);
+    return fileOf(saves.map((save) => exportCharacter(save)).filter(Boolean), { when });
+}
+
+/** Characters' exports (exportCharacter's, or exportOfKept's) as a file: { name, text, count }, as characterFile. */
+export function fileOf(characters, { when = new Date() } = {}) {
     const one = characters.length === 1 ? cleanName(characters[0].save.hero?.name).replace(/[^\p{L}\p{M}'-]+/gu, "-") : "";
     const name = `${one || `Pellagos-characters-${when.toISOString().slice(0, 10)}`}${CHARACTER_EXTENSION}`;
     const text = encode({ format: CHARACTER_FORMAT, exportedBy: codeVersion(), exported: when.toISOString(), saveVersion: SAVE_VERSION, characters });
@@ -153,6 +163,13 @@ export function salvage(given) {
     if (war && !(Number.isInteger(war.version) && war.version >= 1 && war.version <= WAR_VERSION)) {
         exported.world = null;
         left.push(`Their world's war${Number.isInteger(war.version) && war.version > WAR_VERSION ? ", kept by a newer version of the game," : ", which couldn't be read,"} starts again, in the same land.`);
+    }
+
+    // (Each kind of what's kept of them told it's theirs: of the world they're in now, started when they were)
+    for (const [kind, value] of Object.entries(exported)) {
+        if (kind !== "save" && isObject(value) && "seed" in value) {
+            exported[kind] = { ...value, created: save.created, seed: save.seed };
+        }
     }
 
     return { exported, left };
@@ -270,4 +287,61 @@ function progressOf(progress, left) {
     }
 
     return progress;
+}
+
+/**
+ * A hero a world server keeps (server/storage/heroes.js: as core/host.js leave hands one back,
+ * with where and how they were) as a character's export, as the game exports one of its own: in
+ * the world's land (`seed`), with its war as it was last saved (`war`) if there's one to give,
+ * `created` when it was kept.
+ */
+export function exportOfKept(character, { seed, created = new Date().toISOString(), war = null }) {
+    const of = { created, seed };
+    const kind = (value, wrap = null) => (value === undefined || value === null ? null : wrap ? { ...of, [wrap]: value } : isObject(value) ? { ...of, ...value } : null);
+
+    return {
+        kind: SOLO_KIND,
+        version: SOLO_VERSION,
+        saveVersion: SAVE_VERSION,
+        save: { version: SAVE_VERSION, id: "00000000", hero: character.hero, seed, created, played: created },
+        talks: kind(character.talks),
+        explored: kind(character.explored),
+        progress: isObject(character.progress) ? { ...of, format: PROGRESS_FORMAT, ...character.progress } : null,
+        standing: kind(character.standing),
+        followers: Array.isArray(character.followers) ? kind(character.followers, "followers") : null,
+        wheels: null,
+        pin: null,
+        place: kind(character.place, "place"),
+        vitals: kind(character.vitals, "vitals"),
+        messages: null,
+        told: null,
+        world: war ? { ...of, war } : null,
+    };
+}
+
+/**
+ * A character's export (brought forward and salvaged: readCharacterFile's) as a world server keeps
+ * a hero, read as the game reads what it keeps: { hero, talks, explored, progress, standing,
+ * followers, place, vitals }. Throws ExportError for one that doesn't read.
+ */
+export function keptOfExport(exported) {
+    const read = importCharacter(exported);
+
+    if (!read) {
+        throw new ExportError("It couldn't be read.");
+    }
+
+    const { hero, talks, explored, progress, standing, followers, place, vitals } = read;
+
+    return { hero, talks, explored, progress, standing, followers, ...(place ? { place } : {}), ...(vitals ? { vitals } : {}) };
+}
+
+/**
+ * A hero a world server keeps, as this version of the game can play them (in the world's land,
+ * `seed`): { character, left }, `left` saying what was left out or put right, as salvage says it.
+ */
+export function salvageKept(character, { seed }) {
+    const { exported, left } = salvage(exportOfKept(character, { seed }));
+
+    return { character: keptOfExport(exported), left };
 }
