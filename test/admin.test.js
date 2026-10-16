@@ -18,6 +18,7 @@ import { ADMIN_COOKIE, ADMIN_HEADER, ADMIN_VALUE } from "../server/admin.js";
 import { guard, Refusal } from "../server/guards.js";
 import { clockOf, EXPORT_FORMAT, IMPORT_LIMIT } from "../server/manage.js";
 import { PLAY_PROTOCOL } from "../server/play.js";
+import { SERVER_VERSION } from "../server/storage/versions.js";
 import { LADDER } from "../server/storage/worlds.js";
 import { WorldServer } from "../server/world-server.js";
 
@@ -331,6 +332,12 @@ describe("a world's management (server/manage.js)", () => {
     });
 
     it("sends a player out, gives them a new ticket (the old no longer works), bans them and lifts it, and changes their part", async () => {
+        // (A game of another version first: refused, saying the server's, for the game to say which is the newer)
+        const other = await wifi(server, "POST", "/enter", { body: { world: world.world, key: world.playerKey, net: NET_VERSION + 1 } });
+
+        assert.equal(other.status, 409);
+        assert.deepEqual({ error: other.json.error, net: other.json.net, version: other.json.version }, { error: "version", net: NET_VERSION, version: SERVER_VERSION });
+
         const entered = await wifi(server, "POST", "/enter", { body: { world: world.world, key: world.playerKey, net: NET_VERSION } });
 
         assert.equal(entered.status, 200);

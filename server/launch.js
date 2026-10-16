@@ -25,6 +25,9 @@ export const WORLD_OPTIONS = Object.freeze({
     app: { type: "boolean" },
     releases: { type: "string" },
     "release-key": { type: "string" },
+    archive: { type: "string" },
+    restore: { type: "string" },
+    replace: { type: "boolean" },
 });
 
 /** The exit code the server ends with to be started again (an update installed). */

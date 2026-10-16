@@ -101,6 +101,34 @@ the server (its **broker**), and others join it point to point (WebRTC). When th
 connect directly, the server relays them, about 2 KB/s for each player who's joined. The
 **broker** and **relaying** settings turn either off.
 
+## Archives
+
+**Settings › Archive › Archive everything** downloads the whole server as one file
+(`<name>-<when>.pellagos-archive`): every world (its saves, the heroes it keeps, its keys' and
+tickets' hashes, its players and bans, its journal), the server's settings, its admin key and
+creator keys (their hashes), its certificates, its journal, and the key it proves its id with.
+Every world going is saved first. Not its backups, the versions updates installed, nor a DNS
+host's token (give that again on the Overview). Keep it as you'd keep a password: whoever has it
+can stand in for this server.
+
+**From an archive** (Settings › Archive): choose it and **Open it**. The page lists its worlds,
+each with what will happen to it: carried on as it was, or (saved by a version of the game older
+than this one can bring forward) its land started afresh from its seed, its war and its kept
+heroes kept. Then either:
+
+- **Restore everything**, on a server with no worlds of its own (a fresh install): the server
+  starts again with everything as it was in the archive, the same server to players' games
+  (its id), whose keys and tickets all work, and whose admin key is the archive's. What was here
+  is kept in `backups/server/<when>-before-restore/`. An archive made by an older server is brought
+  forward as it's opened, as any data folder is.
+- **Bring them in as new worlds** (those ticked): each a new world here, with keys of its own,
+  shown once. The keys it had don't work here.
+
+From Terminal, with the server stopped: `node server/world.js --archive <file or folder>` makes
+one from the data folder (`--data` for another), and `--restore <archive>` stages one to be put in
+place when the server next starts (refused where there are worlds, but with `--replace`). The Mac
+installer's `--uninstall` makes one first, if you say so (MAC_APP.md).
+
 ## Keeping worlds safe
 
 Every world keeps:
@@ -121,14 +149,26 @@ this server or another, and makes it a new world here with keys of its own (the 
 work here). A file from a newer server is refused, saying so; one bigger than 64 MB isn't read.
 
 A world kept by an older version of the game is brought forward when it's opened. One that can't
-be (none of its saves read) can be **started afresh** from its seed, keeping its war and its
-heroes, with a backup first.
+be (none of its saves read, or it was saved by a version older than this one brings forward) can
+be **started afresh** from its seed (its Backups tab, **Start it afresh**), keeping its war and its
+heroes, with a backup first. One brought in from a file or an archive that's too old is started
+afresh so as it's brought in, and the page says so. Every step that brings a save forward is kept
+from one version to the next, so nothing saved since this was written is ever too old.
 
 ## Updating
 
 **Settings › Updates** says which version this is. Once a day (the **Check once a day** setting),
 the server asks the project's releases whether there's a newer one, and if so shows it with its
-notes. **Check now** asks at once. Nothing updates by itself.
+notes. **Check now** asks at once.
+
+**By itself, overnight** (the **Install new versions by itself** setting, on unless it's turned
+off): from 3 in the morning for two hours (this computer's time; the hour's its own setting), the
+server asks the releases again and installs a newer one once nobody's in, as **Update** does
+below, every world backed up first. It looks every 10 minutes then, so a player still in at 3
+only puts it off. It never tries again a version that failed (rolled back, or stopped in the last
+12 hours): the next one, or **Update**, does. The computer has to be awake then: on a Mac kept as
+a server, turn on **Prevent automatic sleeping when the display is off** (System Settings ›
+Energy). The journal (Activity) says when it did.
 
 **Update** (on the Mac app's server, or one unpacked from a release):
 
@@ -223,8 +263,9 @@ thread a fifth of a core.
 | What | What to do |
 | --- | --- |
 | Players on the Wi-Fi can't reach it | macOS's firewall: allow "node" (System Settings › Network › Firewall). Use the address on the Overview, not `localhost` |
+| A player's told the server plays an older or a newer version of the game | Their game and the server play different versions (players' games and the server must agree). The game from the server itself always matches: they open it from the server's address (its link in Worlds on servers). If the server's the older, **Update** brings it up to date; if theirs is, reloading the page does |
 | It's not in the game's Nearby list | Bonjour is off, or macOS refused Local Network (the page says so). Add it by address |
 | "The data folder … is at version N, written by Pellagos server X" | A newer server wrote it. Use that version or later, or restore the backup made before the upgrade |
-| A world "can't be carried on" | None of its saves read. Restore a backup, or start it afresh from its seed |
+| A world "can't be carried on" | None of its saves read, or it was saved by a version of the game older than this one can bring forward. Restore a backup, or **Start it afresh** (its Backups tab): its land made again from its seed, its war and heroes kept |
 | An update was rolled back | Settings › Updates says why. Everything is as it was; the journal (Activity) has it too |
 | The internet can't reach it | The internet panel's **Tested from outside**, and the router's state. Behind CGNAT, use Tailscale Funnel |

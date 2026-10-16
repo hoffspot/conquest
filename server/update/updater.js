@@ -1,7 +1,9 @@
 // Updating the server, as its owner asks on the management page (generated/world_server_plan.md
 // §11, "Updating"; §5.1). Once a day (its checkUpdates setting) it asks the project's releases
-// whether there's a newer version (releases.js), and the page says so, with its notes. Nothing
-// updates itself: the owner clicks Update. Then, never while players are in: the release's
+// whether there's a newer version (releases.js), and the page says so, with its notes. The owner
+// clicks Update; or, with its autoUpdate setting on, it updates itself overnight (overnight: from
+// its updateHour setting, for OVERNIGHT_HOURS, this computer's time), when nobody's in. Either
+// way, never while players are in: the release's
 // archive is downloaded and checked (releases.js): against its signature, with the project's
 // Ed25519 key, if the server has the key's public half; otherwise against the SHA-256 GitHub keeps
 // for it, as the Mac installer checks its zip. Every world and the server's own files are backed
@@ -25,6 +27,19 @@ import { compareVersions, fetchBytes, fetchLatest, readReleaseKey, RELEASES, sha
 /** How often it asks whether there's a new version (ms), and how long after it starts it first asks. */
 export const CHECK_EVERY = 24 * 3600000;
 export const FIRST_CHECK = 60000;
+
+/**
+ * Updating by itself (overnight): how often it looks (ms), how many hours its night lasts from
+ * the updateHour setting, how long what it last heard stands before it asks again then (ms), and
+ * how long a version that failed to update is let be before it's tried again (ms).
+ */
+export const OVERNIGHT_EVERY = 10 * 60000;
+export const OVERNIGHT_HOURS = 2;
+const HEARD_STANDS = 3600000;
+const FAILED_STANDS = 12 * 3600000;
+
+/** Whether `when` (a Date, this computer's time) is in the night that starts at `hour`. */
+export const atNight = (when, hour) => (when.getHours() - hour + 24) % 24 < OVERNIGHT_HOURS;
 
 /** What doesn't go in the backup of the server's own files: the worlds (each backed up on its own), the backups, the versions. */
 const NOT_SERVERS = new Set([BACKUPS, "worlds", VERSIONS]);
@@ -55,9 +70,10 @@ export class Updater {
         /** Why the last update asked for failed before the server stopped for it: { version, why, at }, or null. */
         this.failed = null;
         this.timer = null;
+        this.nightly = null;
     }
 
-    /** It asks once a day (after a minute), while its setting's on. */
+    /** It asks once a day (after a minute), while its setting's on; and looks every OVERNIGHT_EVERY to update by itself (overnight). */
     start() {
         const ask = () => {
             if (this.server.settings.get("checkUpdates")) {
@@ -71,11 +87,47 @@ export class Updater {
             this.timer.unref?.();
         }, FIRST_CHECK);
         this.timer.unref?.();
+        this.nightly = setInterval(() => this.overnight().catch(() => {}), OVERNIGHT_EVERY);
+        this.nightly.unref?.();
     }
 
     close() {
         clearTimeout(this.timer);
         clearInterval(this.timer);
+        clearInterval(this.nightly);
+    }
+
+    /**
+     * The update to the newer version begun by itself, if its autoUpdate setting's on and it's
+     * night (atNight, from its updateHour setting): the releases asked again if it last heard more
+     * than an hour ago; then only if this server updates itself, the newer version can be checked,
+     * nobody's in, and it isn't one that's failed (rolled back, or stopped in the last 12 hours).
+     * Returns update()'s answer if it began one, or null.
+     */
+    async overnight() {
+        const now = this.clock();
+
+        if (!this.server.settings.get("autoUpdate") || this.busy || !atNight(now, this.server.settings.get("updateHour"))) {
+            return null;
+        }
+
+        if (!updatesItself((await installOf(this.code)).kind)) {
+            return null;
+        }
+
+        if (!this.checked || now - Date.parse(this.checked.at) >= HEARD_STANDS) {
+            await this.check();
+        }
+
+        const newer = this.newer;
+        const last = await readLast(this.root);
+        const failed = (this.failed?.version === newer?.version && now - Date.parse(this.failed.at) < FAILED_STANDS) || (last?.outcome === "rolled-back" && last.to === newer?.version);
+
+        if (!newer || !this.#checkedBy(newer) || this.#playersIn() || failed) {
+            return null;
+        }
+
+        return this.update({ version: newer.version, overnight: true });
     }
 
     /** Asks whether there's a new version now. Returns state(). */
@@ -114,7 +166,8 @@ export class Updater {
 
     /**
      * How updating stands, for the page: { version (running), install: { kind, commands },
-     * checks (its setting), checked, newer, key (whether it has the project's key), checkedBy (how
+     * checks (its setting), overnight ({ on, from, hours }: whether it updates itself, from which
+     * hour, for how long), checked, newer, key (whether it has the project's key), checkedBy (how
      * the newer version would be checked: #checkedBy, null if it can't be), busy, failed, last
      * (installed.js last.json: how the last update went), current }.
      */
@@ -125,6 +178,7 @@ export class Updater {
             version: SERVER_VERSION,
             install,
             checks: Boolean(this.server.settings.get("checkUpdates")),
+            overnight: { on: Boolean(this.server.settings.get("autoUpdate")), from: this.server.settings.get("updateHour"), hours: OVERNIGHT_HOURS },
             checked: this.checked,
             newer: this.newer,
             key: Boolean(this.key),
@@ -143,8 +197,9 @@ export class Updater {
      * it can't be checked (#checkedBy), if players are in, or if one's already under way. It
      * carries on after this returns: { updating: version }. `onRestart` is called once it's ready
      * (the server then saves every world and stops, for its launcher to start the new version).
+     * `by` is who asked; `overnight`, that it's updating by itself (overnight()).
      */
-    async update({ version, by = null }) {
+    async update({ version, by = null, overnight = false }) {
         const install = await installOf(this.code);
 
         if (!updatesItself(install.kind)) {
@@ -173,7 +228,7 @@ export class Updater {
 
         this.busy = { version, stage: "downloading", by };
         this.failed = null;
-        this.#install(newer, by).catch((error) => {
+        this.#install(newer, by, overnight).catch((error) => {
             this.failed = { version, why: error.message, at: this.clock().toISOString() };
             this.busy = null;
             this.server.manage.journal(`The update to ${version} stopped: ${error.message}`).catch(() => {});
@@ -182,7 +237,7 @@ export class Updater {
         return { updating: version };
     }
 
-    async #install(release, by) {
+    async #install(release, by, overnight) {
         const { version } = release;
         const work = await mkdtemp(path.join(os.tmpdir(), "pellagos-update-"));
 
@@ -229,8 +284,8 @@ export class Updater {
 
             await writeFile(file, archive);
             await unpackRelease(this.root, file, version);
-            await writeCurrent(this.root, { version, previous: SERVER_VERSION, state: "trying", since: when.toISOString(), by, backups });
-            await this.server.manage.journal(`Updating from ${SERVER_VERSION} to ${version}${by ? `, as ${by} asked` : ""}: every world and the server's settings backed up first. The server starts again as the new version.`);
+            await writeCurrent(this.root, { version, previous: SERVER_VERSION, state: "trying", since: when.toISOString(), by: overnight ? "itself, overnight" : by, backups });
+            await this.server.manage.journal(`Updating from ${SERVER_VERSION} to ${version}${overnight ? " by itself, overnight, with nobody in" : by ? `, as ${by} asked` : ""}: every world and the server's settings backed up first. The server starts again as the new version.`);
 
             this.busy.stage = "restarting";
             setTimeout(() => this.server.onRestart?.(), 100);

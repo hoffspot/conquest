@@ -1318,6 +1318,18 @@ async function worldBackups(world) {
                 "primary",
             ),
         ),
+        h(
+            "div",
+            { class: "row" },
+            // (One that can't be carried on: none of its saves reads, or it's older than this version brings forward)
+            button("Start it afresh", async () => {
+                if (await confirmIt({ title: `Start ${world.name} afresh`, note: "Its land is made again from its seed, as new; its war carries on as far as any save of it reads, and the heroes it keeps are kept. It's backed up as it is first. For a world that can't be carried on: none of its saves reads, or it was saved by a version of the game older than this one can bring forward.", go: "Start it afresh" })) {
+                    if (await doing(() => call("POST", `/worlds/${world.id}/afresh`, {}), { status, done: "Started afresh." })) {
+                        await renderWorld();
+                    }
+                }
+            }),
+        ),
         backups.length ? null : h("p", { class: "muted" }, "None yet: it's first saved when someone first plays in it."),
         h(
             "div",
@@ -1512,6 +1524,7 @@ async function renderSettings() {
     $("#settings").replaceChildren(
         panel("The server's settings", form),
         await updatesPanel(),
+        archivePanel(),
         panel(
             "Creator keys",
             h("p", { class: "muted" }, "Whoever holds one makes worlds on this server, and owns them; nothing more."),
@@ -1560,6 +1573,137 @@ async function renderSettings() {
     );
 }
 
+// ---- The whole server as one archive (server/storage/archive.js)
+
+// "Thornwick: brought forward" and the like, for a world in an archive (manage.js readArchive)
+const CARRIES = {
+    yes: "carried on as it was",
+    afresh: "saved by a version of the game too old to carry on: its land is started afresh from its seed, its war and heroes kept",
+    newer: "saved by a newer version of the game: update this server first",
+};
+
+// Made (downloaded), or one chosen: what's in it, its worlds brought in as new ones, or restored whole
+function archivePanel() {
+    const status = h("p", { class: "warning", role: "status" });
+    const chosen = h("div", {});
+    const file = h("input", { type: "file", accept: ".pellagos-archive,.gz,.json,application/gzip,application/json" });
+
+    const open = async () => {
+        if (!file.files[0]) {
+            status.textContent = "Choose the archive first (a .pellagos-archive).";
+            status.classList.add("bad");
+
+            return;
+        }
+
+        const read = await doing(() => call("POST", "/server/archive/read", file.files[0], { raw: true }), { status });
+
+        if (read?.id) {
+            chosen.replaceChildren(archiveChosen(read, status));
+        }
+    };
+
+    return panel(
+        "Archive",
+        h("p", {}, "The whole server as one file: every world (its saves, the heroes it keeps, who may come in), the server's settings, its admin key and creator keys, and what it proves itself with. Restored, everything's as it was, and players come straight back in with the keys and tickets they have. Not its backups, nor a DNS host's token (give that again)."),
+        h("p", { class: "muted small" }, "Keep it as you'd keep a password: whoever has it can stand in for this server. Every world going is saved first."),
+        h("div", { class: "row" }, button("Archive everything", () => doing(() => download("/server/archive"), { status, done: "The archive's in your downloads." }), "primary")),
+        h("h3", {}, "From an archive"),
+        h("p", { class: "muted small" }, "One made by this server or another, by any version: what's older is brought forward as it's opened."),
+        h("div", { class: "row" }, h("label", { class: "field" }, "The archive ", file), button("Open it", open)),
+        chosen,
+        status,
+    );
+}
+
+// What an archive holds (manage.js readArchive's), its worlds to tick and bring in, or all of it to restore
+function archiveChosen(read, status) {
+    const ticks = read.worlds.map((world) => h("input", { type: "checkbox", value: world.id, checked: world.carries !== "newer", disabled: world.carries === "newer" }));
+    const results = h("div", {});
+
+    const bringIn = async () => {
+        const worlds = ticks.filter((tick) => tick.checked).map((tick) => tick.value);
+
+        if (!worlds.length) {
+            status.textContent = "Tick the worlds to bring in first.";
+            status.classList.add("bad");
+
+            return;
+        }
+
+        const brought = await doing(() => call("POST", `/server/archive/${read.id}/worlds`, { worlds }), { status });
+
+        if (brought?.results) {
+            results.replaceChildren(
+                ...brought.results.map((one) =>
+                    one.error
+                        ? h("p", { class: "warning bad" }, `${read.worlds.find((world) => world.id === one.from)?.name ?? one.from}: ${one.error}`)
+                        : h(
+                              "div",
+                              { class: "brought" },
+                              h("h3", {}, `${one.name} is brought in`),
+                              one.salvaged ? h("p", { class: "warning" }, one.salvaged) : null,
+                              h("p", { class: "small" }, "The owner's key: ", h("span", { class: "shown-value" }, one.ownerKey)),
+                              h("p", { class: "small" }, "The players' key: ", h("span", { class: "shown-value" }, one.playerKey)),
+                          ),
+                ),
+            );
+            renderWorlds().catch(() => {});
+        }
+    };
+
+    const restore = async () => {
+        const note = `Everything here is put back as it was in the archive (${read.worlds.length} world${read.worlds.length === 1 ? "" : "s"}): the server starts again to do it, and what's here now is kept in its backups. Its admin key becomes the archive's.`;
+
+        if (await confirmIt({ title: "Restore everything", note, go: "Restore it" })) {
+            if (await doing(() => call("POST", `/server/archive/${read.id}/restore`, {}), { status, done: "Restoring: the server's starting again…" })) {
+                await afterRestart();
+            }
+        }
+    };
+
+    return h(
+        "div",
+        { class: "archive" },
+        h("p", {}, `Made by Pellagos server ${read.archivedBy ?? "(unknown)"}${read.archived ? `, ${when(read.archived)}` : ""}.`),
+        read.worlds.length
+            ? h(
+                  "ul",
+                  { class: "plain" },
+                  read.worlds.map((world, k) =>
+                      h(
+                          "li",
+                          {},
+                          h("label", { class: "check" }, ticks[k], ` ${world.name}`),
+                          h("span", { class: "muted small" }, ` · ${world.players} player${world.players === 1 ? "" : "s"}, ${world.kept} kept hero${world.kept === 1 ? "" : "es"} · ${world.version === null ? "never saved" : CARRIES[world.carries]}`),
+                      ),
+                  ),
+              )
+            : h("p", { class: "muted" }, "No worlds in it."),
+        h("div", { class: "row" }, button("Bring them in as new worlds", bringIn, "primary"), Object.assign(button("Restore everything", restore), { disabled: !read.restorable })),
+        read.restorable ? h("p", { class: "muted small" }, "Restore everything puts the server back as it was. Brought in as new worlds, each gets keys of its own instead.") : h("p", { class: "muted small" }, `Restore everything: ${read.why}`),
+        results,
+    );
+}
+
+// The server started again (restored): this page loaded again once it answers
+async function afterRestart() {
+    const end = Date.now() + 5 * 60000;
+
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
+    while (Date.now() < end) {
+        try {
+            await call("GET", "/server");
+            location.reload();
+
+            return;
+        } catch {
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+    }
+}
+
 // ---- Updates (server/update/updater.js)
 
 const UPDATING = Object.freeze({
@@ -1577,6 +1721,14 @@ async function updatesPanel() {
     const status = h("p", { class: "warning", role: "status" });
     const { last, newer, checked } = updates;
     const asked = checked ? `Last asked ${when(checked.at)}${checked.error ? `: ${checked.error}` : "."}` : updates.checks ? "It asks once a day, from a minute after it starts." : "It doesn't ask (its setting's off): check by hand.";
+    // (Whether it updates itself overnight: its autoUpdate and updateHour settings, above)
+    const clock = (hour) => `${String(hour % 24).padStart(2, "0")}:00`;
+    const { overnight } = updates;
+    const itself = updates.install.commands
+        ? null
+        : overnight.on
+          ? `New versions install themselves at night, between ${clock(overnight.from)} and ${clock(overnight.from + overnight.hours)} (this computer's time), when nobody's in, with every world backed up first; the computer has to be awake then. Turn it off with "Install new versions by itself", above.`
+          : 'New versions wait for you to click Update ("Install new versions by itself", above, is off).';
     const update = async () => {
         const note = [
             "Every world is set aside and backed up first, with the server's settings. Nobody can be in.",
@@ -1618,6 +1770,7 @@ async function updatesPanel() {
               ? h("p", { class: "muted small" }, "It's the newest version.")
               : null,
         h("p", { class: "muted small" }, asked),
+        itself ? h("p", { class: "muted small" }, itself) : null,
         h(
             "div",
             { class: "row" },

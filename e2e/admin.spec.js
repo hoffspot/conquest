@@ -11,7 +11,8 @@ import { expect, test } from "./fixtures.js";
 // hand and restored, a player's lost ticket reissued (the old one no longer works, the new one
 // does), exported, deleted with its name typed, and brought in again from its export. And from
 // the Wi-Fi, the page asks for the admin key first. And its Updates: a newer version found, with
-// its notes, and the commands that update a server run from a copy of the repository.
+// its notes, and the commands that update a server run from a copy of the repository. And its
+// Archive: the whole server archived, the archive opened, and its worlds brought in as new ones.
 
 test.describe.configure({ mode: "default" });
 
@@ -230,4 +231,44 @@ test("its Updates: a newer version found, with its notes, and how this copy of t
     await expect(updates).toContainText("This server is run from a copy of the repository: update it in Terminal.");
     await expect(updates.locator("pre.commands")).toContainText("git pull");
     await expect(updates.getByRole("button", { name: /Update to/ })).toHaveCount(0);
+});
+
+test("its Archive: the whole server archived, the archive opened, its worlds brought in as new ones with keys of their own (restoring's for a server with none)", async ({ page }) => {
+    test.setTimeout(120000);
+
+    const { world } = await server.createWorld({ name: "Archived Vale", seed: 3, race: "human" });
+    const before = server.worlds.size;
+
+    await page.goto(`http://localhost:${server.adminPort}/`);
+    await page.locator('[data-tab="settings"]').click();
+
+    const archive = page.locator("#settings .panel", { hasText: "Archive everything" });
+    const downloaded = page.waitForEvent("download");
+
+    await archive.getByRole("button", { name: "Archive everything" }).click();
+
+    const file = path.join(folder, "..", `${path.basename(folder)}.pellagos-archive`);
+
+    await (await downloaded).saveAs(file);
+    await expect(archive).toContainText("The archive's in your downloads.");
+
+    // (Opened: what's in it, and since this server has worlds, not to be restored over them)
+    await archive.locator('input[type="file"]').setInputFiles(file);
+    await archive.getByRole("button", { name: "Open it" }).click();
+    await expect(archive.locator(".archive")).toContainText("Archived Vale");
+    await expect(archive.getByRole("button", { name: "Restore everything" })).toBeDisabled();
+    await expect(archive.locator(".archive")).toContainText("has worlds of its own");
+
+    // (Just the one ticked, and brought in: a new world, its keys shown)
+    for (const tick of await archive.locator('.archive input[type="checkbox"]').all()) {
+        if ((await tick.getAttribute("value")) !== world) {
+            await tick.uncheck();
+        }
+    }
+
+    await archive.getByRole("button", { name: "Bring them in as new worlds" }).click();
+    await expect(archive.locator(".brought h3")).toHaveText("Archived Vale is brought in");
+    await expect(archive.locator(".brought")).toContainText("The owner's key:");
+    expect(server.worlds.size).toBe(before + 1);
+    await rm(file, { force: true });
 });
