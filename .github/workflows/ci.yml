@@ -27,6 +27,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # The licensed models, from the private repository, with the read-only deploy key whose
+      # private half is the secret MODELS_DEPLOY_KEY (docs/LICENSED_MODELS.md)
+      - name: Fetch the licensed models
+        uses: actions/checkout@v5
+        with:
+          repository: hoffspot/conquest-models
+          ssh-key: ${{ secrets.MODELS_DEPLOY_KEY }}
+          persist-credentials: false
+          path: .models
+
+      - name: What was fetched
+        run: git -C .models log --oneline -1 && ls -la .models
+
       - uses: actions/setup-node@v5
         with:
           node-version: 22
