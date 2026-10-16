@@ -116,9 +116,26 @@ export function checkBudgets(glb, budgets) {
 const relative = (file) => path.relative(HERE, file).split(path.sep).join("/");
 
 /** The report on a built asset, from what each stage did and the GLB read back. */
-export async function makeReport(config, { blender, optimized, glb }) {
+export async function makeReport(config, { blender, optimized, glb, variants = [] }) {
     const file = await inspectGlb(glb);
     const lods = [];
+    const looks = [];
+
+    // (Each variant's materials, and the textures in them, read back as the game will)
+    for (const variant of variants) {
+        const read = await inspectGlb(variant.glb);
+        const made = (blender.variants ?? []).find((one) => one.name === variant.name);
+
+        looks.push({
+            name: variant.name,
+            glb: relative(variant.glb),
+            kilobytes: round(read.bytes / 1024, 1),
+            materials: read.materials.map(({ name, textures }) => ({ name, textures })),
+            textures: read.textures.map(({ name, mimeType, width, height, bytes, gpuBytes }) => ({ name, mimeType, width, height, kilobytes: round(bytes / 1024, 1), gpuMegabytes: round(gpuBytes / MEGABYTE, 2) })),
+            madeFrom: made?.materials ?? [],
+            validation: variant.validation,
+        });
+    }
 
     for (const lod of optimized.lods) {
         if (lod.packed) {
@@ -153,10 +170,11 @@ export async function makeReport(config, { blender, optimized, glb }) {
 
     return {
         name: config.name,
+        ...(config.profile ? { profile: config.profile } : {}),
         config: relative(config.file),
         source: relative(config.source),
         glb: relative(glb),
-        built: { blender: blender.blender, gltfExporter: blender.exporter, sourceSavedWith: blender.savedWith },
+        built: { blender: blender.blender, gltfExporter: blender.exporter, sourceSavedWith: blender.savedWith ?? null, ...(blender.sourceFormat ? { sourceFormat: blender.sourceFormat } : {}) },
         kilobytes: round(file.bytes / 1024, 1),
         compression: config.compress,
         extensionsRequired: file.extensionsRequired,
@@ -168,6 +186,7 @@ export async function makeReport(config, { blender, optimized, glb }) {
         scale: optimized.scale,
         bounds: optimized.bounds,
         lods,
+        ...(looks.length ? { variants: looks } : {}),
         exported: {
             objects: blender.objects,
             armature: blender.armature ?? null,
@@ -179,6 +198,8 @@ export async function makeReport(config, { blender, optimized, glb }) {
             tangentsMended: optimized.tangentsMended ?? 0,
             stillChannelsTrimmed: optimized.stillChannelsTrimmed ?? 0,
             ktx2: optimized.ktx2 ?? [],
+            ...(blender.madeMaterials?.length ? { materialsFromTextures: blender.madeMaterials } : {}),
+            ...(blender.joined?.length ? { joined: blender.joined } : {}),
         },
         budgets,
         validation: { beforeCompression: optimized.validation, final: optimized.finalValidation },
@@ -193,6 +214,12 @@ export function judge(report, { strict = false } = {}) {
 
     if (report.validation.beforeCompression.errors || report.validation.final.errors) {
         problems.push(`glTF Validator: ${report.validation.beforeCompression.errors + report.validation.final.errors} errors`);
+    }
+
+    for (const variant of report.variants ?? []) {
+        if (variant.validation.errors) {
+            problems.push(`glTF Validator: ${variant.validation.errors} errors in the variant ${variant.name}`);
+        }
     }
 
     if (report.warnings.some((warning) => warning.startsWith("actions not in the GLB"))) {
@@ -211,7 +238,7 @@ export function judge(report, { strict = false } = {}) {
 /** A few lines saying what was built. */
 export function summarize(report) {
     const { meshes, textures, clips, bounds } = report;
-    const lines = [`${report.name}: ${report.glb}, ${report.kilobytes} KB (${report.compression})`];
+    const lines = [`${report.name}${report.profile ? ` (${report.profile})` : ""}: ${report.glb}, ${report.kilobytes} KB (${report.compression})`];
     const [width, height, length] = bounds.rest.size.map((v) => v.toFixed(2));
 
     lines.push(`  ${meshes.triangles} triangles, ${meshes.vertices} vertices, ${meshes.drawCalls} draw call${meshes.drawCalls === 1 ? "" : "s"}${meshes.skinned ? `, ${meshes.joints} joints (${meshes.influences} a vertex)` : ""}`);
@@ -225,6 +252,10 @@ export function summarize(report) {
 
     for (const lod of report.lods) {
         lines.push(lod.packed ? `  lower detail ${lod.level} (in the GLB): ${lod.triangles} triangles` : `  ${lod.file}: ${lod.triangles} triangles, ${lod.kilobytes} KB`);
+    }
+
+    for (const variant of report.variants ?? []) {
+        lines.push(`  variant ${variant.name}: ${variant.glb}, ${variant.kilobytes} KB, ${variant.materials.map((material) => `${material.name} (${material.textures.join(", ") || "no textures"})`).join(", ")}`);
     }
 
     const over = report.budgets.filter((budget) => !budget.ok);

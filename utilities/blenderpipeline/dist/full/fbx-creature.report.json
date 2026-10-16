@@ -1,0 +1,420 @@
+{
+  "name": "fbx-creature",
+  "profile": "full",
+  "config": "examples/fbx-creature.json",
+  "source": "fixtures/fbx-creature/creature.fbx",
+  "glb": "dist/full/fbx-creature.glb",
+  "built": {
+    "blender": "4.5.14 LTS",
+    "gltfExporter": "4.5.51",
+    "sourceSavedWith": null,
+    "sourceFormat": "fbx"
+  },
+  "kilobytes": 21.7,
+  "compression": "none",
+  "extensionsRequired": [],
+  "extensionsUsed": [
+    "KHR_materials_emissive_strength"
+  ],
+  "meshes": {
+    "drawCalls": 3,
+    "vertices": 80,
+    "triangles": 40,
+    "skinned": true,
+    "joints": 3,
+    "influences": 4,
+    "morphTargets": 0
+  },
+  "materials": [
+    {
+      "name": "skin",
+      "alphaMode": "OPAQUE",
+      "doubleSided": false,
+      "textures": [
+        "baseColor",
+        "metallicRoughness",
+        "normal",
+        "occlusion",
+        "emissive"
+      ],
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 1,
+      "metallic": 1
+    },
+    {
+      "name": "fur",
+      "alphaMode": "MASK",
+      "doubleSided": true,
+      "textures": [
+        "baseColor"
+      ],
+      "baseColor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "roughness": 0.9,
+      "metallic": 0
+    }
+  ],
+  "textures": [
+    {
+      "name": "skin_emission",
+      "mimeType": "image/png",
+      "width": 128,
+      "height": 128,
+      "kilobytes": 0.9,
+      "gpuMegabytes": 0.08
+    },
+    {
+      "name": "skin_normal",
+      "mimeType": "image/png",
+      "width": 128,
+      "height": 128,
+      "kilobytes": 5.1,
+      "gpuMegabytes": 0.08
+    },
+    {
+      "name": "skin_orm",
+      "mimeType": "image/png",
+      "width": 128,
+      "height": 128,
+      "kilobytes": 0.6,
+      "gpuMegabytes": 0.08
+    },
+    {
+      "name": "skin_basecolor",
+      "mimeType": "image/png",
+      "width": 128,
+      "height": 128,
+      "kilobytes": 0.9,
+      "gpuMegabytes": 0.08
+    },
+    {
+      "name": "fur_basecolor",
+      "mimeType": "image/png",
+      "width": 128,
+      "height": 64,
+      "kilobytes": 0.5,
+      "gpuMegabytes": 0.04
+    }
+  ],
+  "clips": [
+    {
+      "name": "Idle",
+      "seconds": 0.9583,
+      "channels": 9,
+      "keyframes": 40,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "hips",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": null
+    },
+    {
+      "name": "Wave",
+      "seconds": 0.625,
+      "channels": 9,
+      "keyframes": 32,
+      "loops": true,
+      "inPlace": false,
+      "rootMotion": {
+        "bone": "hips",
+        "distance": 0,
+        "speed": 0,
+        "direction": null
+      },
+      "from": "creature@wave.fbx"
+    }
+  ],
+  "scale": 1.5,
+  "bounds": {
+    "rest": {
+      "min": [
+        -0.3,
+        0,
+        -0.255
+      ],
+      "max": [
+        0.3,
+        1.5,
+        0.255
+      ],
+      "size": [
+        0.6,
+        1.5,
+        0.51
+      ]
+    },
+    "animated": {
+      "min": [
+        -0.769,
+        0,
+        -0.2857
+      ],
+      "max": [
+        0.3494,
+        1.5218,
+        0.363
+      ],
+      "size": [
+        1.1184,
+        1.5218,
+        0.6487
+      ]
+    },
+    "radius": 1.542
+  },
+  "lods": [],
+  "variants": [
+    {
+      "name": "blue",
+      "glb": "dist/full/fbx-creature.blue.glb",
+      "kilobytes": 1.4,
+      "materials": [
+        {
+          "name": "skin",
+          "textures": [
+            "baseColor"
+          ]
+        }
+      ],
+      "textures": [
+        {
+          "name": "skin_basecolor",
+          "mimeType": "image/png",
+          "width": 128,
+          "height": 128,
+          "kilobytes": 0.9,
+          "gpuMegabytes": 0.08
+        }
+      ],
+      "madeFrom": [
+        {
+          "material": "skin",
+          "alpha": "OPAQUE",
+          "textures": {
+            "baseColor": {
+              "size": [
+                128,
+                128
+              ],
+              "from": [
+                128,
+                128
+              ]
+            }
+          },
+          "doubleSided": false
+        }
+      ],
+      "validation": {
+        "validator": "2.0.0-dev.3.10",
+        "errors": 0,
+        "warnings": 0,
+        "infos": 1,
+        "messages": []
+      }
+    }
+  ],
+  "exported": {
+    "objects": [
+      {
+        "name": "Fur",
+        "vertices": 4,
+        "faces": 1,
+        "modifiers": [
+          "ARMATURE"
+        ]
+      },
+      {
+        "name": "Mane",
+        "vertices": 4,
+        "faces": 1,
+        "modifiers": [
+          "ARMATURE"
+        ]
+      },
+      {
+        "name": "Body",
+        "vertices": 24,
+        "faces": 18,
+        "modifiers": [
+          "ARMATURE"
+        ]
+      }
+    ],
+    "armature": {
+      "name": "rig",
+      "bones": 3,
+      "deformBones": 3,
+      "exported": 3
+    },
+    "fps": 24,
+    "baking": [
+      {
+        "object": "Fur",
+        "baked": false,
+        "materials": [
+          "fur"
+        ],
+        "udim": false,
+        "lost": []
+      },
+      {
+        "object": "Mane",
+        "baked": false,
+        "materials": [
+          "fur"
+        ],
+        "udim": false,
+        "lost": []
+      },
+      {
+        "object": "Body",
+        "baked": false,
+        "materials": [
+          "skin"
+        ],
+        "udim": false,
+        "lost": []
+      }
+    ],
+    "texturesShrunk": [],
+    "materialExtensionsLeftOut": [],
+    "texturesOfOneColourMadeFactors": 0,
+    "tangentsMended": 0,
+    "stillChannelsTrimmed": 0,
+    "ktx2": [],
+    "materialsFromTextures": [
+      {
+        "material": "skin",
+        "alpha": "OPAQUE",
+        "textures": {
+          "baseColor": {
+            "size": [
+              128,
+              128
+            ],
+            "from": [
+              128,
+              128
+            ]
+          },
+          "occlusionRoughnessMetallic": {
+            "size": [
+              128,
+              128
+            ],
+            "from": {
+              "occlusion": [
+                128,
+                128
+              ],
+              "roughness": [
+                128,
+                128
+              ]
+            }
+          },
+          "normal": {
+            "size": [
+              128,
+              128
+            ],
+            "from": [
+              128,
+              128
+            ]
+          },
+          "emission": {
+            "size": [
+              128,
+              128
+            ],
+            "from": [
+              128,
+              128
+            ]
+          }
+        },
+        "emissionStrength": 2,
+        "doubleSided": false
+      },
+      {
+        "material": "fur",
+        "alpha": "MASK",
+        "textures": {
+          "baseColor": {
+            "size": [
+              128,
+              64
+            ],
+            "from": [
+              128,
+              64
+            ]
+          }
+        },
+        "doubleSided": true
+      }
+    ],
+    "joined": [
+      {
+        "name": "Body",
+        "objects": [
+          "Body",
+          "Teeth"
+        ]
+      },
+      {
+        "name": "Fur",
+        "objects": [
+          "FurBack"
+        ]
+      },
+      {
+        "name": "Mane",
+        "objects": [
+          "FurMane"
+        ]
+      }
+    ]
+  },
+  "budgets": [],
+  "validation": {
+    "beforeCompression": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0,
+      "messages": []
+    },
+    "final": {
+      "validator": "2.0.0-dev.3.10",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 0,
+      "messages": []
+    }
+  },
+  "notes": [
+    "namespaces taken off 18 names",
+    "materials made from texture files: skin, fur",
+    "not exported: Ctrl_Hips",
+    "joined: Body (Body, Teeth); Fur (FurBack); Mane (FurMane)",
+    "actions not exported: Ctrl_Hips|Scene (animates no bone)",
+    "tangents exported, for the normal maps"
+  ],
+  "warnings": []
+}

@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { blenderJob, DEFAULTS, resolveConfig } from "../lib/config.js";
+import { blenderJob, DEFAULTS, profileConfigs, resolveConfig } from "../lib/config.js";
 import { wildcard } from "../lib/optimize.js";
 import { checkBudgets, judge } from "../lib/report.js";
 
@@ -79,6 +79,97 @@ describe("an asset's config", () => {
         refuses(invent({ bone: "Hip", move: [[0, [0, 1]]] }), /move is a list of \[seconds, value\] keys/);
         refuses(invent({ graft: "Glide", bones: ["Wing"], keys: [[0, 0], [1, 1.5]] }), /keys is a list of \[seconds, value\] keys/);
         refuses(invent({ bones: ["Wing"], turn: "lift", keys: [[0, 10]], axes: -1 }), /axes is a number of seconds/);
+
+        // (Sources and actions from other formats, joins, materials from textures, variants)
+        refuses({ source: "a.obj" }, /source is a .blend, .fbx, .glb, .gltf, not "a.obj"/);
+        refuses({ source: "a.fbx", actions: [{ from: "walk.glb" }] }, /actions\[0\].from is a .blend or an .fbx/);
+        refuses({ source: "a.fbx", stripNamespaces: "yes" }, /stripNamespaces is true or false/);
+        refuses({ source: "a.fbx", join: { Body: "Body" } }, /join.Body is a list of objects' names/);
+        refuses({ source: "a.fbx", join: { Body: [] } }, /join.Body is a list of objects' names/);
+        refuses({ source: "a.fbx", textures: { maxSize: 0 } }, /textures.maxSize is a size in pixels, or null/);
+        refuses({ source: "a.fbx", textures: { atlasSize: null } }, /textures.atlasSize is a size in pixels/);
+
+        const material = (spec) => ({ source: "a.fbx", materials: { skin: spec } });
+
+        refuses(material({ colour: "a.png" }), /unknown setting materials.skin.colour/);
+        refuses(material({ baseColor: { path: "a.png" } }), /unknown setting materials.skin.baseColor.path/);
+        refuses(material({ baseColor: { channel: "R" } }), /materials.skin.baseColor.file \(the texture\) is needed/);
+        refuses(material({ baseColor: { file: "a.png", channel: "R" } }), /materials.skin.baseColor is a colour: it has no channel to choose/);
+        refuses(material({ roughness: { file: "a.png", channel: "X" } }), /materials.skin.roughness.channel is R, G, B or A/);
+        refuses(material({ normal: { file: "a.png", invert: true } }), /materials.skin.normal can't be inverted/);
+        refuses(material({ emission: { file: "a.png", scale: 0.5 } }), /materials.skin.emission can't be scaled/);
+        refuses(material({ roughness: { file: "a.png", scale: 2 } }), /materials.skin.roughness.scale is a number from 0 to 1/);
+        refuses(material({ roughness: { file: "a.png", flipGreen: true } }), /flipGreen is for a normal map/);
+        refuses(material({ roughness: 2 }), /materials.skin.roughness is a texture, or a number from 0 to 1/);
+        refuses(material({ normal: 1 }), /materials.skin.normal is a texture$/);
+        refuses(material({ alpha: "cutout" }), /materials.skin.alpha is opaque, mask or blend/);
+        refuses(material({ alphaMap: "a.png" }), /materials.skin.alphaMap needs alpha: mask or blend/);
+        refuses(material({ emissionStrength: -1 }), /emissionStrength is a number, 0 or more/);
+        refuses({ source: "a.fbx", variants: { Blue: { materials: { skin: { baseColor: "b.png" } } } } }, /variants.Blue: a variant's name is lower-case/);
+        refuses({ source: "a.fbx", variants: { lod1: { materials: { skin: { baseColor: "b.png" } } } } }, /variants.lod1: .* not lod1/);
+        refuses({ source: "a.fbx", variants: { blue: { materials: {} } } }, /variants.blue.materials: a variant gives at least one material/);
+        refuses({ source: "a.fbx", variants: { blue: { textures: {} } } }, /unknown setting variants.blue.textures/);
+        refuses({ source: "a.fbx", profiles: { phone: {} } }, /it has profiles: each is resolved on its own/);
+    });
+
+    it("makes materials' and variants' textures' paths absolute, and keeps how each is taken", () => {
+        const config = resolveConfig(
+            {
+                source: "art/beast.fbx",
+                materials: { skin: { baseColor: "tex/skin.png", roughness: { file: "tex/smooth.png", channel: "A", invert: true }, metallic: 0, alpha: "mask" } },
+                variants: { pale: { materials: { skin: { baseColor: "tex/pale.png" } } } },
+                join: { Body: ["Body", "Teeth*"] },
+            },
+            file,
+        );
+        const tex = (name) => path.join(HERE, "examples", "tex", name);
+
+        assert.deepEqual(config.materials.skin, { baseColor: { file: tex("skin.png") }, roughness: { file: tex("smooth.png"), channel: "A", invert: true }, metallic: 0, alpha: "mask" });
+        assert.deepEqual(config.variants.pale.materials.skin, { baseColor: { file: tex("pale.png") } });
+        assert.deepEqual(config.join, { Body: ["Body", "Teeth*"] });
+        assert.equal(config.stripNamespaces, true);
+        assert.equal(config.profile, null);
+    });
+
+    it("builds each profile with its settings merged over the rest, into a folder of its own", () => {
+        const raw = {
+            source: "art/beast.fbx",
+            textures: { format: "ktx2", ktx2: { quality: 200 } },
+            budgets: { joints: 80 },
+            profiles: {
+                full: { textures: { maxSize: null, format: "png" }, compress: "none" },
+                phone: { textures: { maxSize: 1024 }, lods: [{ ratio: 0.3 }], budgets: { triangles: 20000 } },
+            },
+        };
+        const [full, phone] = profileConfigs(raw, file);
+
+        assert.deepEqual([full.profile, phone.profile], ["full", "phone"]);
+        assert.equal(full.out, path.join(HERE, "examples", "dist", "full"));
+        assert.equal(phone.out, path.join(HERE, "examples", "dist", "phone"));
+        assert.deepEqual([full.textures.maxSize, full.textures.format, full.compress, full.textures.ktx2.quality], [null, "png", "none", 200]);
+        assert.deepEqual([phone.textures.maxSize, phone.textures.format, phone.compress, phone.textures.ktx2.quality], [1024, "ktx2", "meshopt", 200]);
+        assert.deepEqual(phone.budgets, { joints: 80, triangles: 20000 });
+        assert.deepEqual(full.lods, []);
+        assert.deepEqual(phone.lods, [{ ratio: 0.3 }]);
+        assert.deepEqual(
+            profileConfigs(raw, file, { profile: "phone" }).map((config) => config.profile),
+            ["phone"],
+        );
+
+        // (Without profiles: the one config, as it is)
+        assert.deepEqual(
+            profileConfigs({ source: "a.blend" }, file).map((config) => [config.profile, config.out]),
+            [[null, path.join(HERE, "examples", "dist")]],
+        );
+
+        const refuses = (profiles, message, profile = null) => assert.throws(() => profileConfigs({ source: "a.fbx", profiles }, file, { profile }), message);
+
+        refuses({ Phone: {} }, /profiles.Phone: a profile's name is lower-case/);
+        refuses({ phone: { source: "b.fbx" } }, /profiles.phone.source: that's the asset's, not a profile's/);
+        refuses({ phone: { out: "elsewhere" } }, /profiles.phone.out: that's the asset's/);
+        refuses({ phone: { textures: { size: 5 } } }, /unknown setting profiles.phone.textures.size/);
+        refuses({ phone: {} }, /it has no profile tablet \(it has phone\)/, "tablet");
+        assert.throws(() => profileConfigs({ source: "a.blend" }, file, { profile: "phone" }), /it has no profiles \(asked for phone\)/);
     });
 
     it("gives Blender what it needs", () => {
@@ -88,6 +179,13 @@ describe("an asset's config", () => {
         assert.deepEqual(job.clips, { include: null, exclude: ["T-Pose"], rename: {} });
         assert.equal(job.source, config.source);
         assert.equal(job.passes, null);
+        assert.equal(job.stripNamespaces, true);
+        assert.deepEqual([job.join, job.materials, job.variants], [{}, {}, {}]);
+
+        // (Each variant with the file its materials are written into)
+        const looks = resolveConfig({ source: "a.fbx", variants: { pale: { materials: { skin: { baseColor: "pale.png" } } } } }, file);
+
+        assert.equal(blenderJob(looks, { out: "/tmp/a.glb", report: "/tmp/a.json", variants: { pale: "/tmp/a.pale.glb" } }).variants.pale.out, "/tmp/a.pale.glb");
     });
 
     it("matches clip names with wildcards", () => {
