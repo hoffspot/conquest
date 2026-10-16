@@ -31,6 +31,7 @@
 //   GET    /worlds/:id/players              its players; POST …/players/:p/kick, /ban, /unban, /role {role}, /ticket
 //   GET    /worlds/:id/backups              its backups; POST makes one; POST …/backups/:b/restore; GET …/backups/:b/download
 //   GET    /worlds/:id/export               the world as one file (manage.js EXPORT_FORMAT)
+//   POST   /worlds/:id/afresh               one that can't be carried on started afresh from its seed, its war and heroes kept
 //
 // The server's, its admin's alone, from the computer itself or its Wi-Fi (never the internet),
 // answered to the server's own pages alone, each call carrying the management header (admin.js):
@@ -50,6 +51,10 @@
 //   GET    /server/update                   how updating stands: the version, a newer one, the last update (update/updater.js)
 //   POST   /server/update {check} | {version}   asked again whether there's a newer one; or updated to it
 //   POST   /server/admin-key, /server/stop  a new admin key; stopped (every world saved): on the computer itself alone
+//   GET    /server/archive                  the whole server as one file (storage/archive.js), every world going saved first
+//   POST   /server/archive/read (an archive's file)   read, and kept a while: { id, worlds, restorable, why }
+//   POST   /server/archive/:id/worlds {worlds}        its worlds brought in as new ones: { results }
+//   POST   /server/archive/:id/restore      put in place of everything here (a server with no worlds), the server started again
 //
 // Who's asking comes from `Authorization: Bearer <session>` (a session /enter gave), or
 // `Authorization: Key <key>` (the admin key, or a creator key), or a key in the body; on the
@@ -63,7 +68,7 @@ import { Rate } from "./access/limits.js";
 import { REFUSED } from "./access/policy.js";
 import { BROKER_PATH, BROKER_PROTOCOL } from "./broker.js";
 import { answer, bodyOf, bytesOf, connectionOf, guard, Refusal, urlOf } from "./guards.js";
-import { IMPORT_LIMIT, Refused } from "./manage.js";
+import { ARCHIVE_LIMIT, IMPORT_LIMIT, Refused } from "./manage.js";
 import { PLAY_PATH, PLAY_PROTOCOL } from "./play.js";
 import { SETTINGS } from "./storage/settings.js";
 import { SERVER_VERSION } from "./storage/versions.js";
@@ -406,6 +411,11 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return doing(() => (what === "start" ? manage.start(world) : what === "aside" ? manage.setAside(world, `set aside by ${byOf(principal)}`) : manage.save(world)));
         }],
+        ["POST", new RegExp(`^/worlds/${WORLD}/afresh$`), async (request, body, [, world]) => {
+            const principal = managing(request, world, "world.manage");
+
+            return doing(() => manage.startAfresh(world, { by: byOf(principal) }));
+        }],
         ["POST", new RegExp(`^/worlds/${WORLD}/keys/([0-9A-Z]{4})/show$`), async (request, body, [, world, id]) => {
             managing(request, world, "world.manage");
 
@@ -569,6 +579,23 @@ export function apiHandler(server, { mac = false } = {}) {
             }
 
             return doing(() => server.updater.update({ version: String(body?.version ?? ""), by: byOf(principal) }));
+        }],
+        ["GET", /^\/server\/archive$/, { server: true }, async (request) => {
+            const principal = admin(request);
+            const { name, body: file } = await doing(() => manage.archive({ by: byOf(principal) }));
+
+            return new Download(name, file);
+        }],
+        // (The file as it's sent, not JSON: an archive, up to ARCHIVE_LIMIT)
+        ["POST", /^\/server\/archive\/read$/, { server: true, raw: ARCHIVE_LIMIT }, async (request, bytes) => {
+            admin(request);
+
+            return doing(() => manage.readArchive(bytes));
+        }],
+        ["POST", /^\/server\/archive\/([A-Za-z0-9_-]{12})\/(worlds|restore)$/, { server: true }, async (request, body, [, id, what]) => {
+            const principal = admin(request);
+
+            return doing(() => (what === "worlds" ? manage.bringInFromArchive(id, body?.worlds, { by: byOf(principal), creator: byOf(principal) }) : manage.restoreArchive(id, { by: byOf(principal) })));
         }],
         ["POST", /^\/server\/(admin-key|stop)$/, { server: true, mac: true }, async (request, body, [, what]) => {
             admin(request);

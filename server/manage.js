@@ -8,9 +8,14 @@
 //   the owner's own, or a free one it gets and renews itself, certify.js), its settings, how many worlds it may run, creator keys, what's happened (the server's journal, and
 //   each world's), and how it's keeping up.
 //
+// - The whole server as one archive (storage/archive.js): made (every world going saved first);
+//   read, to say what's in it; restored, in place of everything here (on a server with no worlds
+//   of its own), or its worlds brought in one by one as new worlds.
+//
 // Everything that changes a world it can't change while it runs (its heroes mode, a restore) sets
 // it aside first, or is refused; whatever can't be undone is backed up before it's done.
 
+import { randomBytes } from "node:crypto";
 import { appendFile, cp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -23,8 +28,10 @@ import { isRole } from "./access/world.js";
 import { ROUTES, routeWords } from "./certify.js";
 import { DNS_HOSTS } from "./net/dns-hosts.js";
 import { recommendation, WORLD_MEMORY } from "./registry.js";
-import { bringForward } from "./reopen.js";
+import { bringForward, freshStart } from "./reopen.js";
+import { ARCHIVE_LIMIT, archiveFolder, ArchiveError, readArchive, stageRestore, worldBundle, worldIds, worldsIn } from "./storage/archive.js";
 import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, SERVER_JOURNAL, stampOf, writeGzip } from "./storage/files.js";
+import { LAYOUT_VERSION } from "./storage/folder.js";
 import { schemaReason } from "./storage/settings.js";
 import { NewerDataError, SERVER_VERSION } from "./storage/versions.js";
 import { BACKUP_NAME, FIRST_HEROES, HERO_MODES, HEROES, JOURNAL, NOW, STATE, StoredWorld, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
@@ -38,6 +45,12 @@ export const EXPORT_FORMAT = "pellagos.world.1";
 /** How big a world's file may be to be brought in (bytes: as sent, gzipped; and once unpacked). */
 export const IMPORT_LIMIT = 64 * 1024 * 1024;
 export const IMPORT_UNPACKED = 512 * 1024 * 1024;
+
+/** How long an archive read to be restored or brought in from is kept for it (ms), and how many at once. */
+export const ARCHIVE_KEPT = 30 * 60000;
+const ARCHIVES_AT_ONCE = 2;
+
+export { ARCHIVE_LIMIT };
 
 /** How much of the journals the Activity section's shown (lines). */
 export const ACTIVITY_LINES = 300;
@@ -54,6 +67,9 @@ export class Refused extends Error {
         Object.assign(this, { status, error });
     }
 }
+
+// Refused: not a world's file (why, if it can be said)
+const notAWorld = (why) => new Refused(400, "not-a-world", `That isn't a world exported from a Pellagos server${why ? `: ${why}` : ""}.`);
 
 // How much a folder holds (bytes), everything in it
 async function sizeOf(folder) {
@@ -88,6 +104,9 @@ export class Management {
         /** When it started (ms), and the most memory any world's used here (bytes: for the recommendation). */
         this.started = Date.now();
         this.largest = 0;
+
+        /** Archives read, to be restored or brought in from: id → { archive, at }. */
+        this.archives = new Map();
     }
 
     #world(id) {
@@ -530,7 +549,6 @@ export class Management {
      * { world, name, ownerKey, playerKey }.
      */
     async importWorld(bytes, { by = null, creator = null } = {}) {
-        const notAWorld = (why) => new Refused(400, "not-a-world", `That isn't a world exported from a Pellagos server${why ? `: ${why}` : ""}.`);
         let bundle;
 
         try {
@@ -541,6 +559,17 @@ export class Management {
             throw notAWorld(null);
         }
 
+        return this.importBundle(bundle, { by, creator });
+    }
+
+    /**
+     * A world brought in from what a world's file holds (importWorld's, or archive.js worldBundle's
+     * from an archive), as importWorld says. One whose save was kept by a version of the game older
+     * than any this one can bring forward isn't refused: its land is started afresh from its seed,
+     * its war carried on as far as it reads, its kept heroes kept (reopen.js freshStart), and
+     * `salvaged` says so. Returns { world, name, ownerKey, playerKey, salvaged (or null) }.
+     */
+    async importBundle(bundle, { by = null, creator = null, from = null } = {}) {
         if (bundle?.format !== EXPORT_FORMAT || !bundle.world || typeof bundle.world !== "object") {
             throw notAWorld(typeof bundle?.format === "string" && bundle.format.startsWith("pellagos.world.") ? `it's in a newer format (${bundle.format}): it needs the server that made it, or a newer one` : null);
         }
@@ -548,6 +577,7 @@ export class Management {
         const { world } = bundle;
         const settings = Object.fromEntries(Object.entries(world.settings ?? {}).filter(([key]) => key in WORLD_SETTINGS));
         let stored;
+        let salvaged = null;
 
         try {
             stored = await this.server.store.create({ name: world.name, description: world.description ?? "", seed: world.seed, race: world.race, creator, heroes: world.heroes ?? "kept", firstHero: world.firstHero ?? "new", settings });
@@ -574,8 +604,9 @@ export class Management {
             }
 
             // (Its snapshot read as the server will read it, and its version one this server can
-            // carry on from: not newer, nor older than any step goes back to: reopen.js openWorld)
-            const { snapshot } = await stored.load();
+            // carry on from: not newer; one older than any step goes back to, its land started
+            // afresh from its seed, its war and heroes kept: reopen.js openWorld, freshStart)
+            let { snapshot } = await stored.load();
             const oldest = Math.min(SNAPSHOT_VERSION, ...Object.keys(SNAPSHOT_STEPS).map(Number));
 
             if (snapshot && snapshot.version > SNAPSHOT_VERSION) {
@@ -583,7 +614,11 @@ export class Management {
             }
 
             if (snapshot && snapshot.version < oldest) {
-                throw new Error(`it was kept by version ${snapshot.version} of the game, older than any this server can bring forward (${oldest})`);
+                const kept = snapshot.version;
+                const host = await freshStart(stored, { why: `it was brought in from a save kept by version ${kept} of the game, older than any this server can bring forward (${oldest})` });
+
+                snapshot = host.snapshot();
+                salvaged = `Its save was kept by version ${kept} of the game, older than this server can bring forward (${oldest}): its land was started afresh from its seed, ${host.war ? `its war carried on (turn ${host.war.turn ?? 0})` : "with a new war"}, and its kept heroes kept.`;
             }
 
             await stored.writeMeta({
@@ -593,7 +628,7 @@ export class Management {
                 versions: snapshot ? { snapshot: snapshot.version, war: snapshot.war?.version ?? null } : null,
                 savedAt: snapshot ? (world.savedAt ?? null) : null,
             });
-            await stored.journal(`Brought in${by ? ` by ${by}` : ""} from a file Pellagos server ${bundle.exportedBy ?? "(unknown)"} exported${bundle.exported ? ` on ${bundle.exported}` : ""} (world ${world.id ?? "(unknown)"} there)${heroes ? `, with ${heroes} kept hero${heroes === 1 ? "" : "es"} for the players they were kept for there` : ""}.`);
+            await stored.journal(`Brought in${by ? ` by ${by}` : ""} from ${from ?? "a file"} Pellagos server ${bundle.exportedBy ?? "(unknown)"} ${from ? "made" : "exported"}${bundle.exported ? ` on ${bundle.exported}` : ""} (world ${world.id ?? "(unknown)"} there)${heroes ? `, with ${heroes} kept hero${heroes === 1 ? "" : "es"} for the players they were kept for there` : ""}.`);
         } catch (error) {
             await rm(stored.folder, { recursive: true, force: true });
 
@@ -606,9 +641,152 @@ export class Management {
 
         const adopted = await this.server.adopt(stored, { creator });
 
-        await this.journal(`The world "${stored.meta.name}" (${stored.id}) was brought in${by ? ` by ${by}` : ""}, from a file exported by Pellagos server ${bundle.exportedBy ?? "(unknown)"}.`);
+        await this.journal(`The world "${stored.meta.name}" (${stored.id}) was brought in${by ? ` by ${by}` : ""}, from ${from ?? "a file exported by"} Pellagos server ${bundle.exportedBy ?? "(unknown)"}${from ? " made" : ""}${salvaged ? `: ${salvaged}` : "."}`);
 
-        return adopted;
+        return { ...adopted, salvaged };
+    }
+
+    // ---- The whole server, as an archive (storage/archive.js)
+
+    /** The server as an archive, every world going saved first: { name, body, worlds }. */
+    async archive({ by = null } = {}) {
+        for (const [id, entry] of this.server.registry.entries) {
+            if (entry.thread) {
+                const { ok } = await entry.thread.save("saved for an archive");
+
+                if (!ok) {
+                    throw new Refused(500, "unsaved", `The world ${id} couldn't be saved for the archive: its journal says why.`);
+                }
+            }
+        }
+
+        const made = await archiveFolder(this.server.root, { name: this.server.name ?? "Pellagos server" });
+
+        await this.journal(`An archive of the server was made${by ? ` by ${by}` : ""}: ${made.worlds} world${made.worlds === 1 ? "" : "s"}.`);
+
+        return made;
+    }
+
+    /**
+     * An archive read, and kept a while (ARCHIVE_KEPT) to be restored or brought in from: { id,
+     * archivedBy, archived, worlds (archive.js worldsIn, each with whether this server can carry
+     * it on: "yes", "afresh" or "newer"), restorable (whether it can be restored here: a server
+     * with no worlds of its own, not laid out by a newer server), why (if it can't) }.
+     */
+    readArchive(bytes) {
+        let archive;
+
+        try {
+            archive = readArchive(bytes);
+        } catch (error) {
+            if (error instanceof ArchiveError) {
+                throw new Refused(error.newer ? 409 : 400, error.newer ? "newer" : "not-an-archive", error.message);
+            }
+
+            throw error;
+        }
+
+        const now = Date.now();
+
+        for (const [id, kept] of this.archives) {
+            if (now - kept.at > ARCHIVE_KEPT) {
+                this.archives.delete(id);
+            }
+        }
+
+        while (this.archives.size >= ARCHIVES_AT_ONCE) {
+            this.archives.delete(this.archives.keys().next().value);
+        }
+
+        const id = randomBytes(9).toString("base64url");
+        const oldest = Math.min(SNAPSHOT_VERSION, ...Object.keys(SNAPSHOT_STEPS).map(Number));
+        const worlds = worldsIn(archive).map((world) => ({ ...world, carries: world.version === null ? "yes" : world.version > SNAPSHOT_VERSION ? "newer" : world.version < oldest ? "afresh" : "yes" }));
+        const why = this.server.worlds.size ? "This server has worlds of its own: restoring puts the archive in place of everything here. Bring its worlds in as new ones instead, or delete those here first." : archive.layout !== null && archive.layout > LAYOUT_VERSION ? `A newer server made it (Pellagos server ${archive.archivedBy ?? "(unknown)"}): update this one first.` : null;
+
+        this.archives.set(id, { archive, at: now });
+
+        return { id, archivedBy: archive.archivedBy, archived: archive.archived, worlds, restorable: !why, why };
+    }
+
+    // An archive read (readArchive), by its id
+    #archive(id) {
+        const kept = this.archives.get(id);
+
+        if (!kept || Date.now() - kept.at > ARCHIVE_KEPT) {
+            this.archives.delete(id);
+            throw new Refused(404, "no-archive", "That archive's no longer here: choose it again.");
+        }
+
+        return kept.archive;
+    }
+
+    /**
+     * Worlds in an archive read (readArchive's `id`; `worlds`, their ids there) brought in as new
+     * worlds here, each with keys of its own (importBundle): [{ from (its id there), world, name,
+     * ownerKey, playerKey, salvaged } or { from, error }], one that can't be saying why.
+     */
+    async bringInFromArchive(id, worlds, { by = null, creator = null } = {}) {
+        const archive = this.#archive(id);
+        const there = new Set(worldIds(archive));
+        const results = [];
+
+        for (const from of Array.isArray(worlds) ? worlds : []) {
+            const bundle = there.has(from) ? worldBundle(archive, from, EXPORT_FORMAT) : null;
+
+            if (!bundle) {
+                results.push({ from, error: "That world isn't in the archive, or it doesn't read." });
+                continue;
+            }
+
+            try {
+                results.push({ from, ...(await this.importBundle(bundle, { by, creator, from: "an archive" })) });
+            } catch (error) {
+                results.push({ from, error: error.message });
+            }
+        }
+
+        return { results };
+    }
+
+    /**
+     * An archive read (readArchive's `id`) restored: put in place of everything here when the
+     * server starts again, which it does at once (onRestart), every world here saved first.
+     * Refused unless it can be (readArchive's restorable).
+     */
+    async restoreArchive(id, { by = null } = {}) {
+        const archive = this.#archive(id);
+
+        if (this.server.worlds.size) {
+            throw new Refused(409, "not-empty", "This server has worlds of its own: restoring puts the archive in place of everything here. Bring its worlds in as new ones instead, or delete those here first.");
+        }
+
+        if (archive.layout !== null && archive.layout > LAYOUT_VERSION) {
+            throw new Refused(409, "newer", `A newer server made that archive (Pellagos server ${archive.archivedBy ?? "(unknown)"}): update this one first.`);
+        }
+
+        await stageRestore(this.server.root, archive, { by });
+        this.archives.delete(id);
+        await this.journal(`The server's being restored from an archive Pellagos server ${archive.archivedBy ?? "(unknown)"} made${archive.archived ? ` on ${archive.archived}` : ""}${by ? `, as ${by} asked` : ""}: it starts again to put it in place.`);
+        setTimeout(() => this.server.onRestart?.(), 100);
+
+        return { restoring: true, worlds: worldIds(archive).length };
+    }
+
+    /**
+     * A world that can't be carried on (reopen.js CantCarryOn: none of its saves reads, or one's
+     * older than any step goes back to) started afresh from its seed, its war and its heroes kept
+     * (reopen.js freshStart), its owner having said so. Refused while it's going.
+     */
+    async startAfresh(id, { by = null } = {}) {
+        const stored = this.#world(id);
+
+        if (this.server.registry.entries.get(id)?.thread) {
+            throw new Refused(409, "going", "It's going: it can be carried on. Set it aside first if it's to start afresh all the same.");
+        }
+
+        await freshStart(stored, { why: by ? `${by} asked` : "its owner asked" });
+
+        return this.details(id);
     }
 
     /**

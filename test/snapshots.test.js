@@ -58,6 +58,9 @@ describe("worlds kept by older versions of the game, carried on (core/host.js Ho
         const oldest = Math.min(...Object.keys(SNAPSHOT_STEPS).map(Number));
 
         assert.ok(kept.includes(SNAPSHOT_VERSION), `a fixture of this version (${SNAPSHOT_VERSION}): npm run snapshot-fixture`);
+        // (A step's never taken away, nor its fixture: a world kept, exported or archived by any
+        // version since 26 always comes forward. contribution.md, "Never take a step away")
+        assert.ok(oldest <= 26, `the oldest version a save is brought forward from (${oldest}) never rises above 26: keep every step`);
 
         for (let version = oldest; version < SNAPSHOT_VERSION; version++) {
             assert.equal(typeof SNAPSHOT_STEPS[version], "function", `a step from ${version}`);

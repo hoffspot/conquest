@@ -9,6 +9,14 @@
 //                                                another place to look for new versions, and the key
 //                                                they're signed with (a release tried before it's
 //                                                published; the tests)
+//   node server/world.js --archive <file or folder>
+//                                                the whole server (its data folder) as one archive
+//                                                (storage/archive.js), then done: with it stopped, as
+//                                                the Mac installer's --uninstall makes one
+//   node server/world.js --restore <archive> [--replace]
+//                                                an archive staged to be put in place when the server
+//                                                next starts (what's there kept in backups), then
+//                                                done; refused where there are worlds, but --replace
 //
 // It says where it can be reached at home, its id, its management page (on this computer, needing
 // no key; from the Wi-Fi at /admin, with the admin key), and, the first time, its admin key (shown
@@ -31,10 +39,14 @@
 // is it, and the port's free for the app's next start. So it does if its launcher's gone.
 
 import { readFileSync } from "node:fs";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { ignoreBrokenPipes, RESTART, WORLD_OPTIONS } from "./launch.js";
 import { bonjour, folders } from "./platform/index.js";
+import { archiveFolder, ArchiveError, readArchive, stageRestore, worldIds } from "./storage/archive.js";
+import { FILE_MODE } from "./storage/files.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 import { WorldServer } from "./world-server.js";
 
@@ -43,6 +55,37 @@ ignoreBrokenPipes();
 
 const { values } = parseArgs({ options: WORLD_OPTIONS });
 const root = path.resolve(values.data ?? folders().data);
+
+// (An archive of the data folder made, or one staged to be restored, and done: --archive, --restore)
+if (values.archive) {
+    const { name, body, worlds } = await archiveFolder(root, { name: os.hostname().replace(/\.local$/, "") });
+    const into = path.resolve(values.archive);
+    const file = (await stat(into).catch(() => null))?.isDirectory() ? path.join(into, name) : into;
+
+    await writeFile(file, body, { mode: FILE_MODE });
+    console.log(`The server's archive (${worlds} world${worlds === 1 ? "" : "s"}, from ${root}): ${file}`);
+    console.log("Keep it safe: it holds what the server proves itself with, and its keys' hashes.");
+    process.exit(0);
+}
+
+if (values.restore) {
+    try {
+        const archive = readArchive(await readFile(path.resolve(values.restore)));
+        const here = await readdir(path.join(root, "worlds")).catch(() => []);
+
+        if (here.length && !values.replace) {
+            console.error(`Error: ${root} has worlds of its own (${here.length}): restoring puts the archive in place of everything there. Add --replace to do it all the same (what's there is kept in its backups).`);
+            process.exit(1);
+        }
+
+        await stageRestore(root, archive, { by: "the command line" });
+        console.log(`The archive (${worldIds(archive).length} worlds, made by Pellagos server ${archive.archivedBy ?? "(unknown)"}) is put in place when the server next starts, in ${root}; what's there now is kept in its backups.`);
+        process.exit(0);
+    } catch (error) {
+        console.error(`Error: ${error instanceof ArchiveError ? error.message : `the archive couldn't be read (${error.message})`}`);
+        process.exit(1);
+    }
+}
 const update = { ...(values.releases ? { releases: values.releases } : {}), ...(values["release-key"] ? { key: readFileSync(values["release-key"], "utf8") } : {}) };
 const server = await WorldServer.open(root, { onStop: () => stop(), onRestart: () => stop(RESTART), bonjour: bonjour(), update });
 
