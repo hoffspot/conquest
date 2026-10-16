@@ -4,13 +4,15 @@
 // updater finds it, its zip checked against GitHub's SHA-256, the app checked (its id, its
 // signature) before it's put in place of the one there, a running one stopped first and every
 // world left as it was; a zip at hand taken off as downloaded; built from the source, with a Node
-// fetched and checked if there's none here; and taken away again, its worlds kept. On a Mac, the
-// macOS workflow runs it for real.
+// fetched and checked if there's none here; and taken away again, everything it keeps with it
+// (stopped first, every world saved to an archive if the answer's yes, or with nobody to ask;
+// nothing taken away if the archive can't be made), or the app alone with --keep-data; from the
+// app's Uninstall…, saying how it went in a dialog. On a Mac, the macOS workflow runs it for real.
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, rmSync } from "node:fs";
-import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
@@ -82,6 +84,13 @@ const TOOLS = {
         fs.rmSync(path.join(stub, args[1] === "-f" ? "serving" : "running"), { force: true });`,
     launchctl: ``,
     open: ``,
+    // (Its Keychain entries: as many as the file "keychain" says, each delete taking one, till none's left)
+    security: `
+        const file = path.join(stub, "keychain");
+        const left = Number(fs.existsSync(file) ? fs.readFileSync(file, "utf8") : 0);
+        if (args[0] !== "delete-generic-password" || left === 0) { process.exit(44); }
+        fs.writeFileSync(file, String(left - 1));`,
+    defaults: ``,
     // (Waits noted, not waited)
     sleep: ``,
     "xcode-select": `if (args[0] === "-p" && process.env.STUB_NO_TOOLS) { process.exit(2); }`,
@@ -98,6 +107,14 @@ const NODE_STUB = `
     const out = args[args.indexOf("--out") + 1];
     fs.mkdirSync(out, { recursive: true });
     fs.copyFileSync(process.env.STUB_BUILT, path.join(out, "Pellagos-Server-9.9.9-arm64.zip"));`;
+
+// The app's own Node, making the archive as server/world.js --archive does (of the worlds in its
+// data folder, as they are), unless STUB_ARCHIVE_FAILS; a file left half made, as one cut off is
+const ARCHIVER = `
+    const file = args[args.indexOf("--archive") + 1];
+    if (process.env.STUB_ARCHIVE_FAILS) { fs.writeFileSync(file, "half"); process.exit(1); }
+    fs.writeFileSync(file, "every world: " + fs.readdirSync(path.join(process.env.HOME, "Library/Application Support", ${JSON.stringify(APP_ID)}, "worlds")).join(", "));
+    say("The server's archive: " + file);`;
 
 const stubOf = (name, body) => `#!${process.execPath}
 const fs = require("node:fs"), path = require("node:path"), child = require("node:child_process");
@@ -197,7 +214,7 @@ async function mac() {
                 input: piped ?? undefined,
                 cwd,
                 encoding: "utf8",
-                env: { PATH: [extraBin, bin, process.env.PATH].filter(Boolean).join(":"), HOME: home, TMPDIR: work, STUB_DIR: stub, ...env },
+                env: { PATH: [extraBin, bin, process.env.PATH].filter(Boolean).join(":"), HOME: home, TMPDIR: work, STUB_DIR: stub, PELLAGOS_TTY: path.join(work, "no-terminal"), ...env },
             });
             const log = path.join(stub, "calls.log");
             const calls = (readFileSync(log, { encoding: "utf8", flag: "a+" }).trim().split("\n").filter(Boolean)).map((line) => JSON.parse(line));
@@ -207,6 +224,48 @@ async function mac() {
             return { status: result.status, out: result.stdout, err: result.stderr, calls };
         },
     };
+}
+
+// Everything Pellagos Server keeps on a Mac besides the app, in ~/Library (install-mac.sh KEPT)
+const KEPT = [`Application Support/${APP_ID}`, `Logs/${APP_ID}`, `Caches/${APP_ID}`, `Saved Application State/${APP_ID}.savedState`, `HTTPStorages/${APP_ID}`, `Preferences/${APP_ID}.plist`];
+
+// Pellagos Server as a Mac has it, running: the app in ~/Applications (unless `app` is false) with
+// its own Node, and everything it keeps besides: its data folder (a world in it, unless `worlds`
+// is false), logs, caches, preferences and `keychain` Keychain entries. Says where ~/Library is.
+async function installed(m, { app = true, worlds = true, keychain = 0 } = {}) {
+    const library = path.join(m.home, "Library");
+
+    if (app) {
+        await tools(path.join(m.home, "Applications", APP, "Contents/Helpers"), { node: ARCHIVER });
+    }
+
+    for (const place of KEPT) {
+        const at = path.join(library, place);
+
+        await mkdir(place.endsWith(".plist") ? path.dirname(at) : at, { recursive: true });
+        await writeFile(place.endsWith(".plist") ? at : path.join(at, "kept"), "kept");
+    }
+
+    if (worlds) {
+        await mkdir(path.join(library, KEPT[0], "worlds", "thornwick"), { recursive: true });
+    }
+
+    await writeFile(path.join(m.stub, "keychain"), String(keychain));
+    await m.running();
+
+    return { library };
+}
+
+// Which of the places it keeps are still in ~/Library
+const left = async (library) => (await Promise.all(KEPT.map(async (place) => ((await exists(path.join(library, place))) ? place : null)))).filter(Boolean);
+
+// A terminal answering `answer` to the question asked
+async function answered(m, answer) {
+    const file = path.join(m.work, `tty-${answer}`);
+
+    await writeFile(file, `${answer}\n`);
+
+    return file;
 }
 
 const called = (calls, name) => calls.filter((call) => call[0] === name).map((call) => call.slice(1));
@@ -380,25 +439,127 @@ describe("the Mac installer", () => {
         assert.equal(m.run(["--help"]).status, 0);
     });
 
-    it("takes it away, stopped first, and keeps its worlds", async () => {
+    it("takes everything it keeps off the Mac, stopped first, every world saved to an archive first if the answer's yes: the app, its worlds and settings, its logs, caches, preferences and Keychain entries", async () => {
         const m = await mac();
-        const worlds = path.join(m.home, "Library/Application Support", APP_ID, "worlds");
+        const { library } = await installed(m, { keychain: 2 });
+        const { status, out, err, calls } = m.run(["--uninstall"], { PELLAGOS_TTY: await answered(m, "y") });
+        const archives = await readdir(path.join(m.home, "Documents"));
+        const archive = path.join(m.home, "Documents", archives[0]);
 
-        await mkdir(path.join(m.home, "Applications", APP, "Contents"), { recursive: true });
-        await mkdir(worlds, { recursive: true });
-        await writeFile(path.join(worlds, "kept"), "a world");
-        await m.running();
+        assert.equal(status, 0, err);
+        assert.match(out, /Save every world to an archive in .*\/Documents before it's all taken away\? \[Y\/n\]/);
+        assert.equal(archives.length, 1);
+        assert.match(archives[0], /^Pellagos-Server-archive-\d{4}-\d\d-\d\d-\d{6}\.pellagos-archive$/);
+        assert.equal(await readFile(archive, "utf8"), "every world: thornwick", "made by the app's own server, its worlds still there");
+        assert.deepEqual(called(calls, "node"), [[path.join(m.home, "Applications", APP, "Contents/Resources/app/server/world.js"), "--archive", archive]]);
+        assert.ok(calls.findIndex((call) => call[0] === "pkill") < calls.findIndex((call) => call[0] === "node"), "stopped, every world saved, before it's archived");
+        assert.equal(await m.unsaved(), false);
+        assert.equal(await exists(path.join(m.home, "Applications", APP)), false);
+        assert.deepEqual(await left(library), []);
+        assert.deepEqual(called(calls, "defaults"), [["delete", APP_ID]]);
+        assert.deepEqual(called(calls, "security"), Array(3).fill(["delete-generic-password", "-s", APP_NAME]), "one at a time, till none's left");
+        assert.match(out, /Took everything Pellagos Server kept off this Mac: its worlds and settings, its logs, caches and preferences, and its 2 Keychain entries\./);
+        assert.ok(out.includes(`Every world is in the archive ${archive}: restore it on any Pellagos server's management page (Settings › Archive).`));
+        assert.deepEqual(called(calls, "osascript"), [], "no dialogs, from Terminal");
+    });
 
-        const { status, out, err, calls } = m.run(["--uninstall"]);
+    it("asks nothing with --archive or --no-archive, nor where there are no worlds; a no takes every world away unsaved", async () => {
+        const cases = [
+            { args: [], answer: "n", archived: false, asked: true },
+            { args: ["--no-archive"], answer: "y", archived: false, asked: false },
+            { args: ["--archive", "--archive-to", "Kept"], answer: "n", archived: true, asked: false },
+            { args: [], answer: "y", worlds: false, archived: false, asked: false },
+        ];
+
+        for (const { args, answer, worlds = true, archived, asked } of cases) {
+            const m = await mac();
+            const { library } = await installed(m, { worlds });
+            const to = path.join(m.home, args.includes("--archive-to") ? "Kept" : "Documents");
+            const { status, out, err, calls } = m.run(["--uninstall", ...args.map((arg) => (arg === "Kept" ? to : arg))], { PELLAGOS_TTY: await answered(m, answer) });
+            const name = `${args.join(" ") || "asked"}, ${answer}${worlds ? "" : ", no worlds"}`;
+
+            assert.equal(status, 0, `${name}: ${err}`);
+            assert.equal(/\[Y\/n\]/.test(out), asked, `${name}: asked`);
+            assert.equal((await readdir(to).catch(() => [])).length, archived ? 1 : 0, `${name}: archived`);
+            assert.equal(called(calls, "node").length, archived ? 1 : 0, name);
+            assert.equal(out.includes("Every world is in the archive"), archived, name);
+            assert.deepEqual(await left(library), [], `${name}: everything taken away`);
+        }
+    });
+
+    it("with nobody to ask, saves every world to an archive; if it can't be made, or there's no app left to make it, takes nothing away", async () => {
+        const m = await mac();
+        const quiet = await installed(m, { keychain: 1 });
+        const { status, out, err } = m.run(["--uninstall"]);
+
+        assert.equal(status, 0, err);
+        assert.equal((await readdir(path.join(m.home, "Documents"))).length, 1);
+        assert.deepEqual(await left(quiet.library), []);
+        assert.match(out, /, and its Keychain entry\./);
+
+        const failing = await mac();
+        const broken = await installed(failing, { keychain: 1 });
+        const refused = failing.run(["--uninstall", "--archive"], { STUB_ARCHIVE_FAILS: "1" });
+
+        assert.equal(refused.status, 1);
+        assert.match(refused.err, /the archive couldn't be made\. Nothing's been taken away\./);
+        assert.deepEqual(await readdir(path.join(failing.home, "Documents")), [], "none of it left");
+        assert.equal(await exists(path.join(failing.home, "Applications", APP)), true);
+        assert.deepEqual(await left(broken.library), KEPT);
+        assert.deepEqual(called(refused.calls, "security"), []);
+
+        const gone = await mac();
+        const appless = await installed(gone, { app: false });
+        const nothing = gone.run(["--uninstall"]);
+
+        assert.equal(nothing.status, 1);
+        assert.match(nothing.err, /there's no Pellagos Server app left to make the archive with: install it again, then uninstall; or --no-archive .* Nothing's been taken away\./);
+        assert.deepEqual(await left(appless.library), KEPT);
+        assert.equal(gone.run(["--uninstall", "--no-archive"]).status, 0);
+        assert.deepEqual(await left(appless.library), []);
+    });
+
+    it("with --keep-data takes the app alone away, stopped first, its worlds and settings kept", async () => {
+        const m = await mac();
+        const { library } = await installed(m, { keychain: 1 });
+        const { status, out, err, calls } = m.run(["--uninstall", "--keep-data"], { PELLAGOS_TTY: await answered(m, "y") });
 
         assert.equal(status, 0, err);
         assert.match(out, /Took Pellagos Server out of .*Applications/);
         assert.match(out, /Its worlds and settings are kept/);
+        assert.doesNotMatch(out, /\[Y\/n\]/);
         assert.equal(await exists(path.join(m.home, "Applications", APP)), false);
-        assert.equal(await exists(path.join(worlds, "kept")), true);
+        assert.deepEqual(await left(library), KEPT);
         assert.deepEqual(called(calls, "pkill"), [["-TERM", "-f", `/${APP}/Contents/Helpers/node`], ["-TERM", "-x", EXECUTABLE]]);
+        assert.deepEqual(called(calls, "security"), []);
         assert.equal(await m.unsaved(), false);
-        assert.match(m.run(["--uninstall"]).out, /isn't in \/Applications or ~\/Applications/);
+        assert.match(m.run(["--uninstall", "--keep-data"]).out, /isn't in \/Applications or ~\/Applications/);
+    });
+
+    it("run by the app's Uninstall…, says how it went in a dialog, the archive shown in the Finder; or why nothing was taken away", async () => {
+        const m = await mac();
+        const apps = path.join(m.home, "Applications");
+
+        await installed(m);
+
+        const { status, err, calls } = m.run(["--uninstall", "--to", apps, "--from-app", "--archive"]);
+        const [archive] = await readdir(path.join(m.home, "Documents"));
+        const dialogs = called(calls, "osascript").map((call) => call.slice(-2));
+
+        assert.equal(status, 0, err);
+        assert.equal(dialogs.length, 1);
+        assert.match(dialogs[0][0], /^Pellagos Server is uninstalled\. Every world is in the archive .*\.pellagos-archive: restore it/);
+        assert.equal(dialogs[0][1], "note");
+        assert.deepEqual(called(calls, "open"), [["-R", path.join(m.home, "Documents", archive)]]);
+
+        const failing = await mac();
+
+        await installed(failing);
+
+        const refused = failing.run(["--uninstall", "--to", path.join(failing.home, "Applications"), "--from-app", "--archive"], { STUB_ARCHIVE_FAILS: "1" });
+
+        assert.equal(refused.status, 1);
+        assert.deepEqual(called(refused.calls, "osascript").map((call) => call.slice(-2)), [["Pellagos Server wasn't uninstalled: the archive couldn't be made. Nothing's been taken away.", "stop"]]);
     });
 });
 
@@ -531,6 +692,20 @@ describe("the Mac installer's names", () => {
         assert.ok(script.includes(`/${RELEASE_TAG.source}/`), "its release tag as the updater's");
         assert.ok(script.includes(`"${APP_NAME.replace(/ /g, "-")}-" + tag[1] + "-arm64.zip"`), "the zip named as build-mac-app.js names it");
         assert.ok(script.includes(`https://raw.githubusercontent.com/${REPOSITORY}/main/scripts/install-mac.sh`));
+    });
+
+    it("are the options the app's Uninstall… runs it with, from where build-mac-app.js puts it in the bundle", async () => {
+        const script = await readFile(SCRIPT, "utf8");
+        const swift = await readFile(path.join(root, "mac/Sources/PellagosServer/Uninstall.swift"), "utf8");
+        const options = [...swift.matchAll(/"(--[a-z-]+)"/g)].map((found) => found[1]);
+
+        assert.deepEqual(options.sort(), ["--archive", "--from-app", "--no-archive", "--to", "--uninstall"]);
+
+        for (const option of options) {
+            assert.ok(script.includes(`\n            ${option}) `), option);
+        }
+
+        assert.ok(swift.includes('appendingPathComponent("Contents/Resources/install-mac.sh")'));
     });
 
     it("are those the Mac app workflow publishes its releases by, from main: its tag, the zip and the server's archive", async () => {

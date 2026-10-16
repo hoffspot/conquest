@@ -66,7 +66,8 @@ Run it again to update to the newest release, the same way: a new app in place o
 | `--zip <file>` | A zip you have |
 | `--to <folder>` | Into that folder, not Applications |
 | `--no-open` | Not opened once it's installed |
-| `--uninstall` | Stopped and taken away; its worlds kept ([below](#updating-and-taking-it-off)) |
+| `--uninstall` | Everything taken off this Mac, every world saved to an archive first if you say so ([below](#updating-and-taking-it-off)) |
+| `--uninstall --keep-data` | The app alone taken away; its worlds and settings kept |
 | `--help` | All of these |
 
 **Why no Open Anyway.** A file downloaded by a browser is marked as downloaded, and macOS
@@ -158,14 +159,30 @@ built on the Mac. So can you, by hand: Quit the app, put the new one in Applicat
 old, and open it. Either way its worlds carry on: a newer server brings them forward as it
 starts. As it's a new app to macOS, the firewall and the local network may ask again.
 
-To take it off, turn **Run at login** off in its menu, then:
+To take it off, choose **Uninstall…** in its menu. It asks first whether to save every world to
+an archive in your Documents folder (**Save Worlds and Uninstall**), or not (**Uninstall Without
+Saving**, asked again, as every world is then gone for good). Then it stops the server, every world
+saved, makes the archive, and takes away everything Pellagos Server keeps on the Mac: the app, its
+login item, its worlds and settings (the folder above), its logs, caches and preferences, and its
+Keychain entries (a DNS host's token). A dialog says when it's done, and the Finder shows the
+archive. If the archive can't be made, nothing is taken away.
+
+From Terminal, the installer does the same:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash -s -- --uninstall
 ```
 
-That stops it (every world saved) and takes the app away. Or, by hand: Quit, and move the app to
-the Trash. Either way its worlds stay in the folder above until you delete that too.
+It asks the same question in Terminal (Return for yes; with nobody to ask, it saves the archive).
+`--archive` or `--no-archive` answers it beforehand, `--archive-to <folder>` puts the archive
+somewhere else, and `--keep-data` takes the app alone away, its worlds and settings kept for the
+next time it's installed. So does moving the app to the Trash by hand, once it's quit.
+
+The archive brings it all back on any Pellagos server, this Mac's once it's installed again or
+another computer's: on the management page, Settings › Archive. Restored on a server with no worlds
+of its own, it's the same server to players' games, their keys and tickets working; or its worlds
+can be brought in one by one as new ones ([SERVER.md](SERVER.md#archives)). If **Run at login** was
+on, System Settings › General › Login Items may list the app until you next log in.
 
 ## Without the app: Terminal
 
@@ -188,26 +205,35 @@ npm run build:mac -- --executable "$(swift build -c release --arch arm64 --packa
 That makes `dist/Pellagos Server.app`, signed ad hoc, its zip, the server's archive and the
 formula (`scripts/build-mac-app.js` says what's inside). The **Mac app** workflow does the same on
 GitHub's Macs, then opens the app, sees its server answer, quits it, runs the installer each way it
-installs, and installs and tests the formula; on `main`, it then publishes the zip and the
+installs and takes it away again (the app alone, then everything, its world archived), and
+installs and tests the formula; on `main`, it then publishes the zip and the
 server's archive as a release ([above](#installing-it)).
 
 Or build it and install it in one go: `scripts/install-mac.sh --build` ([Installing it](#installing-it)).
 
 The app (`mac/`) is small: `ServerProcess.swift` runs the bundle's Node on
-`server/world.js --app` and reads how it stands from the lines it prints (`@pellagos {...}`), and
+`server/world.js --app` and reads how it stands from the lines it prints (`@pellagos {...}`),
 `LoginItem.swift` registers the bundle's launch agent with `SMAppService`, which launchd runs with
 `ProcessType` Interactive (not throttled) and `KeepAlive` (started again if it fails).
+`Uninstall.swift` asks the uninstall's question and runs the installer the bundle carries
+(`Contents/Resources/install-mac.sh --uninstall --from-app`), which outlives the app it stops and
+says how it went in a dialog of its own.
 
 ## Checking it on a Mac
 
 The **Mac app** workflow runs the installer on GitHub's Macs each way it installs (a zip marked as
-downloaded, a release, built there) and takes it away again. GitHub's Macs can't answer macOS's
-questions or sleep, so the owner checks these by hand on macOS 27.0.1, with each new version of
+downloaded, a release, built there) and takes it away again, the app alone and then everything,
+its world archived. GitHub's Macs can't answer macOS's questions, sleep or have a menu clicked, so
+the owner checks these by hand on macOS 27.0.1, with each new version of
 the app:
 
 - [ ] **The installer.** In Terminal, the installer's line (above): it installs the newest
       release, says so, and the app opens with no Open Anyway. Run again, it stops the running
-      app (its worlds saved) and puts the new one in. `--uninstall` takes it away.
+      app (its worlds saved) and puts the new one in.
+- [ ] **Uninstall….** With a world made, **Uninstall…** › **Save Worlds and Uninstall**: the
+      app goes from the menu bar, a dialog says it's uninstalled and the Finder shows the archive in
+      Documents; `~/Library/Application Support/io.github.hoffspot.pellagos-server` is gone. Install
+      it again and restore the archive (Settings › Archive): the world is back.
 - [ ] **An update.** With a newer release out, Settings › Updates shows it; **Update** installs
       it, and the server starts again as it, its worlds as they were.
 

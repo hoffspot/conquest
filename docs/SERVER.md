@@ -126,8 +126,9 @@ heroes kept. Then either:
 
 From Terminal, with the server stopped: `node server/world.js --archive <file or folder>` makes
 one from the data folder (`--data` for another), and `--restore <archive>` stages one to be put in
-place when the server next starts (refused where there are worlds, but with `--replace`). The Mac
-installer's `--uninstall` makes one first, if you say so (MAC_APP.md).
+place when the server next starts (refused where there are worlds, but with `--replace`). On a
+Mac, the app's **Uninstall…** and the installer's `--uninstall` offer to make one, in Documents,
+before everything is taken away ([MAC_APP.md](MAC_APP.md#updating-and-taking-it-off)).
 
 ## Keeping worlds safe
 

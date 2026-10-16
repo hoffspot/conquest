@@ -129,13 +129,14 @@ jobs:
           grep -E "^@pellagos|Saving every world" "$log"
           grep -q '"state":"stopped"' "$log"
 
-      - name: Install it with the installer as a Mac's owner would (a zip from a browser, the newest release, built here), and take it away again
+      - name: Install it with the installer as a Mac's owner would (a zip from a browser, the newest release, built here), and take it away again (the app alone, then everything, its worlds archived)
         run: |
           version=$(node -p 'require("./package.json").version')
           zip="$PWD/dist/Pellagos-Server-$version-arm64.zip"
           apps="$RUNNER_TEMP/Applications"
           app="$apps/Pellagos Server.app"
           log="$HOME/Library/Logs/io.github.hoffspot.pellagos-server/server.log"
+          data="$HOME/Library/Application Support/io.github.hoffspot.pellagos-server"
           answers() { for try in $(seq 1 60); do curl -sf http://localhost:8480/api/v1/health > /dev/null && return 0; sleep 1; done; echo "Its server doesn't answer"; exit 1; }
           # (How many times its server has said it stopped, every world saved)
           stops() { grep -c '"state":"stopped"' "$log" || true; }
@@ -158,15 +159,28 @@ jobs:
           # (Built here from this copy: Swift's build and Node's archive kept from the steps before)
           scripts/install-mac.sh --build --source . --to "$apps"
           answers
-          # (Taken away: stopped, every world saved, its data folder kept: settings, keys and any
-          # worlds; none are made here, so it has no worlds/ of its own)
+          # (The app alone taken away, --keep-data: stopped, every world saved, its data folder kept)
           before=$(stops)
-          scripts/install-mac.sh --uninstall --to "$apps"
+          scripts/install-mac.sh --uninstall --keep-data --to "$apps"
           test ! -e "$app"
           if pgrep -x PellagosServer || pgrep -f "Pellagos Server.app/Contents/Helpers/node"; then echo "It's still running"; exit 1; fi
           [ "$(stops)" -gt "$before" ]
-          test -f "$HOME/Library/Application Support/io.github.hoffspot.pellagos-server/server.json"
-          test -f "$HOME/Library/Application Support/io.github.hoffspot.pellagos-server/secrets.json"
+          test -f "$data/server.json"
+          test -f "$data/secrets.json"
+          # (Installed again, a world made from its management page as a browser there makes one)
+          scripts/install-mac.sh --zip "$zip" --to "$apps"
+          answers
+          curl -sf -c "$RUNNER_TEMP/cookies" http://localhost:8481/ > /dev/null
+          curl -sf -b "$RUNNER_TEMP/cookies" -H "x-pellagos: manage" -H "Content-Type: application/json" -d '{"name":"Carried","race":"human","seed":5}' http://localhost:8481/api/v1/worlds > /dev/null
+          # (Everything taken away, every world saved to an archive first, as the app's Uninstall… asks
+          # it to: none of what it kept left, and the archive as any server reads it)
+          scripts/install-mac.sh --uninstall --archive --archive-to "$RUNNER_TEMP/archives" --to "$apps"
+          test ! -e "$app"
+          if pgrep -x PellagosServer || pgrep -f "Pellagos Server.app/Contents/Helpers/node"; then echo "It's still running"; exit 1; fi
+          for kept in "$data" "$HOME/Library/Logs/io.github.hoffspot.pellagos-server" "$HOME/Library/Caches/io.github.hoffspot.pellagos-server"; do
+            if [ -e "$kept" ]; then echo "Still kept: $kept"; exit 1; fi
+          done
+          node --input-type=module -e 'import { readFile } from "node:fs/promises"; import { readArchive, worldsIn } from "./server/storage/archive.js"; const archive = readArchive(await readFile(process.argv[1])); const names = worldsIn(archive).map((world) => world.name); console.log("The archive holds", names); if (names.join() !== "Carried" || !archive.files.has("identity.key")) process.exit(1);' "$RUNNER_TEMP"/archives/*.pellagos-archive
 
       - name: Install the formula from a tap of its own, and run its test
         run: |

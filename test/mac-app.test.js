@@ -200,6 +200,12 @@ describe("the bundle", () => {
         assert.equal(await readFile(path.join(contents, "Helpers/node"), "utf8"), "#!/bin/sh\n");
         assert.equal(await readFile(path.join(contents, "Resources/node/LICENSE"), "utf8"), "Node's licence\n");
 
+        // (The installer, for the app's Uninstall… to run: as the repository has it, and runnable)
+        const installer = path.join(contents, "Resources/install-mac.sh");
+
+        assert.equal(await readFile(installer, "utf8"), await readFile(new URL("../scripts/install-mac.sh", import.meta.url), "utf8"));
+        assert.ok((await stat(installer)).mode & 0o100, "runnable");
+
         const served = path.join(contents, "Resources/app");
 
         assert.deepEqual(JSON.parse(await readFile(path.join(served, "package.json"), "utf8")), { name: "pellagos-server", version: SERVER_VERSION, private: true, type: "module", license: "Apache-2.0" });

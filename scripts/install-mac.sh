@@ -9,6 +9,12 @@
 #     scripts/install-mac.sh --zip ~/Downloads/Pellagos-Server-2.0.0-arm64.zip
 #     scripts/install-mac.sh --uninstall
 #
+# --uninstall takes everything it keeps off this Mac: the app, its login item, its worlds and
+# settings, its logs, caches, preferences and Keychain entries. First it asks (in Terminal, even
+# piped from curl) whether every world's to be saved to an archive (server/storage/archive.js),
+# which any Pellagos server restores (Settings › Archive); with nobody to ask, it saves one. If
+# the archive can't be made, nothing's taken away. --keep-data takes the app away alone.
+#
 # What it checks before anything's put in place: that this is a Mac with Apple silicon on macOS 13
 # or later; that a release's zip is the one GitHub has (its SHA-256, as GitHub keeps it for each
 # release's files); that the app inside is Pellagos Server (its bundle id) and unchanged since it
@@ -17,8 +23,9 @@
 # without Open Anyway; a zip given with --zip has that mark taken off once it's checked. Nothing's
 # done with sudo: it goes in /Applications if that can be written to, otherwise ~/Applications.
 #
-# PELLAGOS_RELEASES (a URL, file:// too) asks elsewhere for the releases, and PELLAGOS_PATIENCE
-# waits that many seconds (not 180) for a running server to stop, as the tests do.
+# PELLAGOS_RELEASES (a URL, file:// too) asks elsewhere for the releases, PELLAGOS_PATIENCE
+# waits that many seconds (not 180) for a running server to stop, and PELLAGOS_TTY is where a
+# question's answer is read (not /dev/tty), as the tests do.
 
 set -euo pipefail
 
@@ -37,6 +44,14 @@ MACOS_LEAST=13
 NODE_LEAST=22
 # (How long a running server has to save every world and stop, in seconds)
 PATIENCE="${PELLAGOS_PATIENCE:-180}"
+# (Where a question's answered: the terminal, even when the script's piped from curl)
+TTY="${PELLAGOS_TTY:-/dev/tty}"
+# (Everything else it keeps on this Mac, besides the app: server/platform/darwin.js's folders, and
+# what macOS keeps for an app. Its Keychain entries are under its name: darwin.js keychain)
+LIBRARY="$HOME/Library"
+KEPT=("$LIBRARY/Application Support/$APP_ID" "$LIBRARY/Logs/$APP_ID" "$LIBRARY/Caches/$APP_ID" "$LIBRARY/Saved Application State/$APP_ID.savedState" "$LIBRARY/HTTPStorages/$APP_ID" "$LIBRARY/Preferences/$APP_ID.plist")
+# (Run by the app's Uninstall…: what it says is said in a dialog, there being no Terminal)
+from_app=0
 
 # The newest server release in GitHub's list (as releases.js latestRelease picks it: tagged
 # server-v<version>, not a draft nor a pre-release), with its app's zip: "<version>\t<url>\t<digest>",
@@ -72,7 +87,43 @@ sha256_of() {
 }
 fail() {
     printf 'install-mac: %s\n' "$*" >&2
+
+    if [ "$from_app" = 1 ]; then
+        dialog "Pellagos Server wasn't uninstalled: $*" stop
+    fi
+
     exit 1
+}
+
+# $1 said in a dialog of its own (osascript: no app's needed), with the icon $2: note, or stop
+# (AppleScript's own icons, not text, which it would take for a resource's name)
+dialog() {
+    osascript -e 'on run argv' \
+        -e 'if item 2 of argv is "stop" then' \
+        -e 'display dialog (item 1 of argv) with title "Pellagos Server" buttons {"OK"} default button "OK" with icon stop' \
+        -e 'else' \
+        -e 'display dialog (item 1 of argv) with title "Pellagos Server" buttons {"OK"} default button "OK" with icon note' \
+        -e 'end if' \
+        -e 'end run' "$1" "${2:-note}" >/dev/null 2>&1 || true
+}
+
+# Whether the answer to the question $1 is yes: asked in the terminal (even piped from curl), or
+# $2 ("y" or "n") with nobody to ask
+ask() {
+    local answer
+
+    if (exec <"$TTY") 2>/dev/null; then
+        printf '%s ' "$1"
+        read -r answer <"$TTY" || answer=""
+        answer="${answer:-$2}"
+    else
+        answer="$2"
+    fi
+
+    case "$answer" in
+        [Yy]*) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
 usage() {
@@ -83,10 +134,16 @@ Pellagos Server's installer for the Mac: the menu-bar app that keeps worlds for 
   install-mac.sh --version 2.1.0  that release
   install-mac.sh --build          built here from the project's source (Apple's Command Line Tools)
   install-mac.sh --zip FILE       a zip at hand (Pellagos-Server-<version>-arm64.zip)
-  install-mac.sh --uninstall      quit and taken away; its worlds are kept
+  install-mac.sh --uninstall      everything taken off this Mac: the app, its worlds and settings,
+                                  its logs, caches and Keychain entries; asks first whether every
+                                  world's to be saved to an archive
 
   --to DIR       install into DIR (or uninstall from it), not /Applications or ~/Applications
   --no-open      don't open it once it's installed
+  --keep-data    with --uninstall: the app alone taken away; its worlds and settings kept
+  --archive      with --uninstall: every world saved to an archive first, without asking
+  --no-archive   with --uninstall: no archive, without asking (every world's gone for good)
+  --archive-to DIR   where the archive goes (~/Documents)
   --source DIR   with --build: this copy of the repository, not one downloaded
   --ref REF      with --build: the branch or tag downloaded (main)
 
@@ -338,32 +395,109 @@ from_source() {
 
 # --- Taken away ---
 
-uninstall() {
-    local found=0 place places
-
+# The app's places (--to, or both Applications folders)
+places_of() {
     if [ -n "$to" ]; then
-        places=("$to")
+        printf '%s\n' "$to"
     else
-        places=("/Applications" "$HOME/Applications")
+        printf '%s\n' "/Applications" "$HOME/Applications"
     fi
+}
+
+# Every world saved to an archive in $archive_to, by the app's own server (server/world.js
+# --archive, run as the app runs it, the newest version an update installed): the archive's path,
+# or nothing if it couldn't be made (nor any of it left)
+archive_worlds() {
+    local app="$1" file
+
+    mkdir -p "$archive_to" || return 1
+    file="$archive_to/Pellagos-Server-archive-$(date +%Y-%m-%d-%H%M%S).pellagos-archive"
+    say "Saving every world to an archive..." >&2
+
+    if "$app/Contents/Helpers/node" "$app/Contents/Resources/app/server/world.js" --archive "$file" >&2 && [ -s "$file" ]; then
+        printf '%s\n' "$file"
+    else
+        rm -f "$file"
+        return 1
+    fi
+}
+
+uninstall() {
+    local found="" place archive="" data="${KEPT[0]}" n=0 entries="" wanted=0
+
+    while IFS= read -r place; do
+        if [ -z "$found" ] && [ -d "$place/$APP_NAME.app" ]; then
+            found="$place/$APP_NAME.app"
+        fi
+    done < <(places_of)
 
     stop_app
     launchctl bootout "gui/$(id -u)/$APP_ID" >/dev/null 2>&1 || true
 
-    for place in "${places[@]}"; do
+    # (Its worlds: kept as they are, or saved to an archive first if so asked, then taken away too)
+    if [ "$keep_data" = 0 ] && [ -d "$data/worlds" ] && [ -n "$(ls -A "$data/worlds" 2>/dev/null)" ]; then
+        case "$archive_mode" in
+            yes) wanted=1 ;;
+            no) wanted=0 ;;
+            *) if ask "Save every world to an archive in $archive_to before it's all taken away? [Y/n]" y; then wanted=1; else wanted=0; fi ;;
+        esac
+
+        if [ "$wanted" = 1 ]; then
+            [ -n "$found" ] || fail "there's no $APP_NAME app left to make the archive with: install it again, then uninstall; or --no-archive to take its worlds away as well, or --keep-data to keep them. Nothing's been taken away."
+            archive="$(archive_worlds "$found")" || fail "the archive couldn't be made. Nothing's been taken away."
+        fi
+    fi
+
+    while IFS= read -r place; do
         if [ -d "$place/$APP_NAME.app" ]; then
             rm -rf "${place:?}/$APP_NAME.app"
             say "Took $APP_NAME out of $place."
-            found=1
         fi
-    done
+    done < <(places_of)
 
-    [ "$found" = 1 ] || say "$APP_NAME isn't in ${to:-/Applications or ~/Applications}."
-    cat <<KEPT
-Its worlds and settings are kept, in ~/Library/Application Support/$APP_ID
-(its log in ~/Library/Logs/$APP_ID). Delete that folder too to take them away.
+    [ -n "$found" ] || say "$APP_NAME isn't in ${to:-/Applications or ~/Applications}."
+
+    if [ "$keep_data" = 1 ]; then
+        cat <<KEPT
+Its worlds and settings are kept, in $data
+(its log in $LIBRARY/Logs/$APP_ID). Uninstall again without --keep-data to take them away too.
 If "Run at login" was on, System Settings › General › Login Items may list it until you log in again.
 KEPT
+        return
+    fi
+
+    for place in "${KEPT[@]}"; do
+        rm -rf "${place:?}"
+    done
+
+    defaults delete "$APP_ID" >/dev/null 2>&1 || true
+
+    # (Its Keychain entries: a DNS host's token, each under its name. One taken each time, till none's left)
+    while [ "$n" -lt 50 ] && security delete-generic-password -s "$APP_NAME" >/dev/null 2>&1; do
+        n=$((n + 1))
+    done
+
+    case "$n" in
+        0) entries="" ;;
+        1) entries=", and its Keychain entry" ;;
+        *) entries=", and its $n Keychain entries" ;;
+    esac
+
+    say "Took everything $APP_NAME kept off this Mac: its worlds and settings, its logs, caches and preferences$entries."
+    say 'If "Run at login" was on, System Settings › General › Login Items may list it until you log in again.'
+
+    if [ -n "$archive" ]; then
+        say "Every world is in the archive $archive: restore it on any Pellagos server's management page (Settings › Archive)."
+    fi
+
+    if [ "$from_app" = 1 ]; then
+        if [ -n "$archive" ]; then
+            dialog "Pellagos Server is uninstalled. Every world is in the archive $archive: restore it on any Pellagos server's management page (Settings › Archive)." note
+            open -R "$archive" >/dev/null 2>&1 || true
+        else
+            dialog "Pellagos Server is uninstalled." note
+        fi
+    fi
 }
 
 # --- What it's asked to do ---
@@ -378,6 +512,9 @@ main() {
     open_it=1
     source_dir=""
     ref="main"
+    keep_data=0
+    archive_mode="ask"
+    archive_to="$HOME/Documents"
 
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -389,10 +526,21 @@ main() {
             --no-open) open_it=0; shift ;;
             --source) [ $# -ge 2 ] || fail "--source needs a folder"; source_dir="$2"; shift 2 ;;
             --ref) [ $# -ge 2 ] || fail "--ref needs a branch or tag"; ref="$2"; shift 2 ;;
+            --keep-data) keep_data=1; shift ;;
+            --archive) archive_mode="yes"; shift ;;
+            --no-archive) archive_mode="no"; shift ;;
+            --archive-to) [ $# -ge 2 ] || fail "--archive-to needs a folder"; archive_to="$2"; shift 2 ;;
+            --from-app) from_app=1; shift ;;
             -h | --help) usage; exit 0 ;;
             *) usage >&2; fail "unknown option: $1" ;;
         esac
     done
+
+    # (Run by the app, it stops the app: whatever's sent to the app's process group as it goes, it
+    # carries on)
+    if [ "$from_app" = 1 ]; then
+        trap '' HUP INT TERM
+    fi
 
     case "$wanted" in
         "" | [0-9]*.[0-9]*.[0-9]*) ;;
