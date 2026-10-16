@@ -79,6 +79,7 @@ import { RAISED } from "../core/overworld.js";
 import { heightAt as landHeightAt } from "../core/terrain/height.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
+import { CHAIN, isWhole, nextOf } from "../core/prismatic.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
@@ -140,6 +141,7 @@ import { PREDICT, Prediction } from "./predict.js";
 import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
 import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
+import { Sigil } from "./sigil.js";
 import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, forFriends, offensive, PLACES, QUICK_SHOWN, readWheels, SIDES, WHEELS } from "./wheel.js";
 
 /** What every character wears under their gear: a tunic, and trousers if nothing's on their legs. */
@@ -1568,6 +1570,8 @@ export class Game {
         this.quickBar.onUse = (slot) => this.quick(slot);
         this.quickBar.onChoose = (slot) => this.onChooseQuick(slot);
         this.quickBar.onFlick = (slot, way) => this.flickQuick(slot, way);
+        this.sigil = new Sigil(this.hud.plate);
+        this.sigil.onCast = () => this.castPrismatic();
         this.talk = new TalkPanel(this.hud.root);
         this.pack = new PackPanel(this.hud.root);
         this.pack.onCommand = (command) => this.#packCommand(command);
@@ -2261,6 +2265,7 @@ export class Game {
         this.minimap?.dispose();
         this.wheel?.element.remove();
         this.quickBar?.dispose();
+        this.sigil?.dispose();
         this.talk?.panel.remove();
         this.pack?.dispose();
         this.drops?.dispose();
@@ -2964,6 +2969,7 @@ export class Game {
         this.effects.setAlly(helped?.object ?? null, helped ? Math.max(0.5, helped.character.height * 0.33) : 0.6);
         this.#partyIcons();
         this.#quickActions(target);
+        this.sigil.show(this.#prism(), this.battle.time);
         this.#bleed(dt);
         this.#ailing();
         this.#radiant();
@@ -8269,6 +8275,13 @@ export class Game {
                 continue;
             }
 
+            // (A Prismatic chain of the player's going on, or gone: told and heard, whether
+            // they're drawn or not)
+            if (event.type === "prism") {
+                this.#prismHeard(event);
+                continue;
+            }
+
             // (A projectile gone astray, its target gone or through a door: no one's, out of the air)
             if (event.type === "fizzle") {
                 effects.land(event.projectile);
@@ -9403,6 +9416,34 @@ export class Game {
         const others = struck.filter((id) => id !== event.target && this.avatars.has(id)).map((id) => where(this.avatars.get(id)));
 
         this.spellFx.land(event.id, event.spell, { caster: where(avatar), target: where(target), struck: others });
+    }
+
+    // A Prismatic chain of the player's gone on, or gone (core/prismatic.js; battle.js "prism"):
+    // each spell of it a glass bell, higher as it climbs; a piece of the sigil, the sigil whole,
+    // and everything lost, told
+    #prismHeard({ id, change, spell, step, pieces }) {
+        if (id !== this.me) {
+            return;
+        }
+
+        const stronger = (share) => `every attack spell ${Math.round(share * 100)}% stronger`;
+        const school = SPELLS[spell]?.school ?? "";
+
+        if (change === "start" || change === "step") {
+            this.sound?.play("chainStep", { rate: 2 ** ((step - 1) / 12) });
+        } else if (change === "piece") {
+            this.hud.message(`${school[0]?.toUpperCase() ?? ""}${school.slice(1)}'s piece of the Prismatic sigil: ${stronger(pieces.length * CHAIN.piece)}. Now another element, from its first spell, within ${CHAIN.window / 1000} seconds.`, 3.5);
+            this.sound?.play("sigilPiece");
+        } else if (change === "whole") {
+            this.hud.message(`The Prismatic sigil is whole: ${stronger(pieces.length * CHAIN.piece)}. Tap it to cast Prismatic Destruction, within ${CHAIN.ready / 1000} seconds!`, 4);
+            this.sound?.play("sigilWhole");
+        } else if (change === "broken") {
+            this.hud.message("The Prismatic chain is broken: its strength is lost.", 2.5);
+            this.sound?.play("chainBroken");
+        } else if (change === "faded") {
+            this.hud.message("The Prismatic sigil fades, its power unspent.", 2.5);
+            this.sound?.play("chainBroken");
+        }
     }
 
     // Someone unseen (Invisibility): all but gone, a shimmer of them (their materials made their
@@ -10618,11 +10659,22 @@ export class Game {
 
         this.quickBar.raise(alive && this.clock < this.fightUntil);
 
+        // (A Prismatic chain's next spell rolled in, up, where it's come in place of another)
+        const { keys, chain } = this.#quickKeys();
+        const shown = this.quickShowing ?? keys;
+
+        this.quickShowing = keys;
+
         if (!this.quickBar.up) {
             return;
         }
 
-        const keys = this.wheels.quick;
+        keys.forEach((key, slot) => {
+            if (key !== shown[slot] && chain[slot]) {
+                this.quickBar.roll(slot, "up", key);
+            }
+        });
+
         const counts = {};
         const off = [];
 
@@ -10638,11 +10690,40 @@ export class Game {
             }
         });
 
-        this.quickBar.fill(keys, { counts, off });
+        this.quickBar.fill(keys, { counts, off, chain });
 
         const cooling = this.#cooldowns(Object.fromEntries(keys.map((key, slot) => [slot, key])));
 
         this.quickBar.setCooldown(keys.map((_, slot) => cooling[slot] ?? 0));
+    }
+
+    // The player's Prismatic chain, as the battle has it (core/prismatic.js), or null for none
+    #prism() {
+        return this.battle.actor(this.me)?.prism ?? null;
+    }
+
+    // What each quick action shows, and is used for: what the player's put in it; but, while a
+    // Prismatic chain of theirs is live, one holding a spell of an element it goes on with (the
+    // element being cast up through, or, between chains, any whose piece isn't held) the chain's
+    // next spell of it (core/prismatic.js nextOf), if they know it, ringed (`chain`: its element,
+    // by slot). What they've put there is kept as it is, and shown again as the chain moves on.
+    #quickKeys() {
+        const prism = this.#prism();
+        const chain = {};
+        const keys = this.wheels.quick.map((key, slot) => {
+            const element = SPELLS[actionOf(key)?.spell]?.school;
+            const next = nextOf(prism, element);
+
+            if (!next || !this.progress.knows(next)) {
+                return key;
+            }
+
+            chain[slot] = element;
+
+            return next;
+        });
+
+        return { keys, chain };
     }
 
     // Why a quick action can't be used as things are, but for cooling down (or null): nothing in
@@ -10720,7 +10801,7 @@ export class Game {
      * be, as things are, or is cooling down. An empty slot's to be filled (onChooseQuick).
      */
     quick(slot) {
-        const key = this.wheels.quick[slot] ?? null;
+        const key = this.#quickKeys().keys[slot] ?? null;
         const target = this.#target();
         const why = this.#quickRefusal(key, target) ?? ((this.#cooldowns({ slot: key }).slot ?? 0) > 0 ? "cooldown" : null);
 
@@ -10746,6 +10827,25 @@ export class Game {
         const on = offensive(key) ? target.id : ally && forFriends(actionOf(key)?.spell) ? ally.id : "self";
 
         return this.act(key, on, { refused: () => this.quickBar?.mark(slot, "refused") });
+    }
+
+    /**
+     * The Prismatic sigil tapped (app/sigil.js): Prismatic Destruction cast on the enemy the
+     * player's set to fight, with the sigil whole; refused (and said why) if it isn't, or there's
+     * no one to cast it on.
+     */
+    castPrismatic() {
+        const target = this.#target();
+        const why = !isWhole(this.#prism()) ? "sigil" : !target ? "untargeted" : null;
+
+        if (why) {
+            this.hud.message(QUICK_REFUSALS[why] ?? CAST_FAILURES[why], 1.6);
+            this.sound?.play("denied");
+
+            return { ok: false, reason: why };
+        }
+
+        return this.act("prismatic", target.id);
     }
 
     /**

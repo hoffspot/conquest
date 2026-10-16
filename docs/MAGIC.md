@@ -134,6 +134,54 @@ The Hexes skill's (core/progress.js): **Stun** (an enemy within 9 metres, 400 ms
 cooldown: it can't move, fight, cast or think for 3 seconds, and turns on whoever did it) and,
 once the skill brings it, **Hold** (600 ms, 6 s cooldown, 6 seconds).
 
+### Prismatic Destruction
+
+A reason to practise all four elements (core/prismatic.js, kept on the player's battle actor,
+`prism`, so every copy of the world sees the same; healing and hexes have no part in it):
+
+- **A chain.** An element's first spell landing starts a chain of it; each of its spells after
+  that, in order, landing within **10 seconds** of the one before, carries it on, and makes
+  every attack spell the player casts **5% stronger** for each spell of it past the first (the
+  spell that carries it on included: its own share goes with it). So Burn, Fireball, Burstflame
+  and Immolate in turn: Immolate, and every attack spell after it, 15% stronger. Anything cast out
+  of order (another element's spell mid-chain, a lower or skipped one, a hex, a heal, a blow) is
+  let be: it neither counts nor breaks it.
+- **A piece of the sigil.** The element's last spell (its seventh) landing in its chain, with all
+  its spells learnt and cast in order, earns that element's piece of the **Prismatic sigil**:
+  the chain's 5% stacks give way to the piece's own **25%**, kept as long as the sigil lasts.
+  Then another element whose piece isn't held, from its first spell, within the same 10 seconds
+  of the last; a piece already held can't be earned again. The bonuses add: two pieces and three
+  spells up a third element's chain, 60%.
+- **The sigil whole.** The fourth piece makes it whole: every attack spell **twice as strong**
+  (four pieces, 100%), and **15 seconds** to cast Prismatic Destruction, the 10 seconds no longer
+  counting.
+- **Broken.** The next spell not landing in time (10 seconds; or the whole sigil not cast in 15)
+  loses everything: every stack and every piece.
+- **Prismatic Destruction** (`prismatic`: no one learns it, nor can it be put on a wheel; cast
+  from the sigil, on the enemy the player's set to fight, within 20 metres, 1.5 s to cast): on
+  them and every enemy of the caster's within **8 metres** of them, past wards, charms, cover,
+  shields, dodging and Reflect, never a friend. It kills them outright, all but the mightiest
+  (`mighty`: a dungeon's boss, an elite, one of the perilous places' own, a seat's ruler, a
+  player), who lose **three quarters of their whole health** (and die, if that's all they had);
+  all of them are thrown down. Cast, the sigil's spent: every stack and piece with it.
+
+On screen (app/game.js; app/sigil.js): while a chain's live, a quick action holding a spell of an
+element it goes on with (the element being cast up through; between chains, any whose piece isn't
+held) shows the chain's next spell of it instead, if the player knows it, rolled in like a flick,
+ringed in the element's colour with a dashed border marching round it, pulsing; what the player's
+put there is kept, and shown again as the chain moves on. The **sigil** stands over the player's
+card (beside it, on a phone on its side): a petal for each element (fire, earth, air and water,
+from the top round), the element being cast up through glowing and filling as it climbs, each
+piece held lit whole; a ring round it running down the time left (red in its last 30%); how much
+stronger every attack spell is under it. Whole, its heart's a white star and it pulses: tapped
+(or clicked), Prismatic Destruction's cast. Each spell of a chain is a glass bell, higher as it
+climbs; a piece, a run of them; the sigil whole, a run up two octaves; broken or faded, the bells
+falling (audio/catalog.js, "The Prismatic sigil"), each said in a message too.
+
+(`SNAPSHOT_VERSION` 29: every actor's chain, none in a world kept before, and a seat's ruler told
+as one, `ruler`; `NET_VERSION` 123: both ends of a game must agree on every chain, and on what
+Prismatic Destruction does.)
+
 ## Wands and grimoires
 
 A wand or a grimoire in hand makes spells stronger by its boost, rolled when it's made (bought,

@@ -520,6 +520,7 @@ const MISSILES = { burn: "fireball", fireball: "fireball", burstflame: "fireball
 // (A stun's heard as it stuns; the spells that carry someone off, as they go and come: carried)
 const LANDINGS = {
     shockbolt: "shockbolt",
+    prismatic: "prismaticBlast",
     embolden: "buff",
     swole: "buff",
     surge: "buff",
@@ -556,8 +557,8 @@ const LANDINGS = {
 const HUSHED = { invisibility: 0.5 };
 
 // The spells with no school cast with their own sound: Explosion's heat drawn in (its blast's
-// heard as the battle tells it: app/game.js "blast")
-const CASTS = { explosion: "castExplosion" };
+// heard as the battle tells it: app/game.js "blast"), Prismatic Destruction's four elements
+const CASTS = { explosion: "castExplosion", prismatic: "castPrismatic" };
 
 /**
  * A spell's sounds (core/spells.js): its cast, swelling to its release (`cast`); its missile's

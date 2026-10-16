@@ -68,6 +68,7 @@
 
 import { AFFLICTIONS, shareOf } from "./afflictions.js";
 import { placeAt, placesOf } from "./formation.js";
+import { bonusOf, chainAfter, isWhole, lapsed, mighty, PRISMATIC } from "./prismatic.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
 import { sightAt } from "./light.js";
@@ -277,6 +278,10 @@ const charmed = (target, school, element) => {
 };
 
 const elementOf = (attack) => attack.element ?? THROWN[attack.projectile?.kind] ?? (attack.reaction === "fire" ? "fire" : attack.afflict?.look === "frost" ? "water" : null);
+
+// A chain as its "prism" events tell it (core/prismatic.js): the element being cast up through,
+// its tier reached, the pieces of the sigil held, and when it came whole
+const chainOf = (prism) => ({ element: prism?.element ?? null, step: prism?.step ?? 0, pieces: [...(prism?.pieces ?? [])], readyAt: prism?.readyAt ?? null });
 
 // Is a blow magic (a spell, or a wand's or grimoire's bolt, a curse, a wisp's)? (Not a blow of the body: Surge and Inertial Barrier have nothing to do with it)
 const magicOf = (attack, spell) => Boolean(spell) || THROWN[attack.projectile?.kind] === "magic" || attack.projectile?.kind === "fireball";
@@ -776,6 +781,8 @@ export class Battle {
             spellReadyAt: 0,
             // When each spell it's cast is ready again (by spell: ms)
             spellsReadyAt: {},
+            // A player's chain of the elements' spells (core/prismatic.js), or null
+            prism: null,
             dead: false,
             respawnAt: 0,
             // What lingers on it after some blows (afflictions.js): poison, a web...
@@ -1278,6 +1285,11 @@ export class Battle {
             return { ok: false, reason: "busy" };
         }
 
+        // (Prismatic Destruction: only with the sigil whole, its four elements' chains cast through)
+        if (spell.prismatic && !isWhole(actor.prism)) {
+            return { ok: false, reason: "sigil" };
+        }
+
         if (this.time < actor.spellReadyAt || this.time < (actor.spellsReadyAt?.[spellId] ?? 0)) {
             return { ok: false, reason: "cooldown" };
         }
@@ -1763,6 +1775,7 @@ export class Battle {
         this.#burst();
         this.#ground();
         this.#ail();
+        this.#lapse();
     }
 
     // --- Drawing weapons and putting them away ---
@@ -3844,6 +3857,12 @@ export class Battle {
             return;
         }
 
+        // (A player's spell of an element's: what it makes of their chain, first, so the spell's
+        // own share of it goes with it)
+        if (actor.kind === "player" && !spell.prismatic) {
+            this.#chain(actor, id, spell);
+        }
+
         let landed = 0;
 
         if (spell.heal || spell.full) {
@@ -3869,7 +3888,9 @@ export class Battle {
             landed += cured.length ? 1 : 0;
         }
 
-        if (spell.damage) {
+        if (spell.prismatic) {
+            landed += this.#prismatic(actor, target, id, spell);
+        } else if (spell.damage) {
             landed += this.#smite(actor, target, id, spell);
         } else if (spell.stun) {
             this.#stun(actor, target, id, Math.round(spell.stun * (actor.power?.stun ?? 1)));
@@ -3890,7 +3911,7 @@ export class Battle {
             landed += this.#drain(actor, target, id, spell, level);
         } else if (spell.venom) {
             this.#provoke(actor, target);
-            landed += this.afflict(target.id, "poison", { by: actor.id, damage: spell.venom[Math.min(level, spell.venom.length) - 1] * (actor.power?.spell ?? 1) }) ? 1 : 0;
+            landed += this.afflict(target.id, "poison", { by: actor.id, damage: spell.venom[Math.min(level, spell.venom.length) - 1] * this.#spellPower(actor) }) ? 1 : 0;
         } else if (!spell.cures && !spell.heal && !spell.full) {
             // (A wonder the host works: Zombify, Summon, Teleport, Word of Recall, Wizard's Walk, Attraction)
             landed += 1;
@@ -3965,7 +3986,7 @@ export class Battle {
     // Vampirism: life drawn out of the target into the caster (as much as it grows to: `level`). Whether it drew any
     #drain(caster, target, id, spell, level) {
         const [least, most] = spell.drain[Math.min(level, spell.drain.length) - 1];
-        const dealt = this.#hit(caster, target, { id, kind: "spell", reaction: "arcane", stagger: 200 }, null, { damage: Math.max(1, Math.round(this.random.int(least, most) * (caster.power?.spell ?? 1))), spell: id });
+        const dealt = this.#hit(caster, target, { id, kind: "spell", reaction: "arcane", stagger: 200 }, null, { damage: Math.max(1, Math.round(this.random.int(least, most) * this.#spellPower(caster))), spell: id });
 
         if (dealt > 0 && !caster.dead) {
             const before = caster.hp;
@@ -4016,13 +4037,64 @@ export class Battle {
         }
     }
 
+    // How strong a caster's attack spells are: their spell power (the Magic skill's, a wand's or
+    // grimoire's, their gear's), and more for a chain of the elements' spells they're casting
+    // (core/prismatic.js bonusOf: CHAIN.step a spell past its first, CHAIN.piece a sigil piece)
+    #spellPower(caster) {
+        return (caster.power?.spell ?? 1) * (1 + bonusOf(caster.prism));
+    }
+
+    // A player's spell landing: what it makes of their chain of the elements' spells (core/
+    // prismatic.js chainAfter), told when it changes it
+    #chain(actor, id, spell) {
+        const { prism, change } = chainAfter(actor.prism, spell, this.time);
+
+        actor.prism = prism;
+
+        if (change) {
+            this.#emit("prism", { id: actor.id, change, spell: id, ...chainOf(prism) });
+        }
+    }
+
+    // Chains let lapse (core/prismatic.js lapsed): the next spell not landed in time ("broken"), or
+    // the whole sigil not cast in time ("faded"). Every stack and piece of the sigil lost
+    #lapse() {
+        for (const actor of this.actors) {
+            if (actor.prism && lapsed(actor.prism, this.time)) {
+                const change = isWhole(actor.prism) ? "faded" : "broken";
+
+                actor.prism = null;
+                this.#emit("prism", { id: actor.id, change, spell: null, ...chainOf(null) });
+            }
+        }
+    }
+
+    // Prismatic Destruction landing (core/prismatic.js): on its target and every enemy of the
+    // caster's within its `area` round them, past wards, charms, shields and dodging: killing
+    // them, but for the mightiest, who lose PRISMATIC.mighty of their whole health. The sigil spent,
+    // every stack and piece with it. How many it struck
+    #prismatic(caster, target, id, spell) {
+        const struck = [target, ...this.actors.filter((other) => other !== target && !other.dead && other.map === target.map && this.hostile(caster, other) && hypot(other.x - target.x, other.y - target.y) <= spell.area)];
+
+        for (const one of struck) {
+            const damage = mighty(one) ? Math.max(1, Math.ceil(PRISMATIC.mighty * one.maxHp)) : Math.max(1, one.hp);
+
+            this.#hit(caster, one, { id, kind: "spell", reaction: spell.reaction, stagger: 600, knockdown: spell.knockdown }, null, { damage, spell: id, sure: true });
+        }
+
+        caster.prism = null;
+        this.#emit("prism", { id: caster.id, change: "spent", spell: id, ...chainOf(null) });
+
+        return struck.length;
+    }
+
     // An attack spell landing on its target: and on every enemy of the caster's round them (its
     // `area`), and leaping on to others near (its `chain`), each less; with whatever else it does.
     // How many it struck.
     #smite(caster, target, id, spell) {
         // (A blast: Explosion, round its target, throwing them all, the target away from the caster)
         if (spell.blast) {
-            return this.#blast(caster, caster, target.map, target.x, target.y, { radius: spell.area, damage: spell.damage, power: caster.power?.spell ?? 1, toss: spell.blast.toss, kind: id, spell: id, heart: [caster.x, caster.y] });
+            return this.#blast(caster, caster, target.map, target.x, target.y, { radius: spell.area, damage: spell.damage, power: this.#spellPower(caster), toss: spell.blast.toss, kind: id, spell: id, heart: [caster.x, caster.y] });
         }
 
         // (Each struck, and how many leaps it is from the target: 0 for those round it)
@@ -4048,7 +4120,7 @@ export class Battle {
         }
 
         for (const { one, leap } of struck) {
-            const damage = Math.max(1, Math.round(rollSpell(spell, this.random) * (caster.power?.spell ?? 1) * pow(spell.falls ?? 0.7, leap)));
+            const damage = Math.max(1, Math.round(rollSpell(spell, this.random) * this.#spellPower(caster) * pow(spell.falls ?? 0.7, leap)));
 
             this.#hit(caster, one, { id, kind: "spell", reaction: spell.reaction ?? "arcane", stagger: spell.stagger ?? 200, knockdown: spell.knockdown ?? 0, afflict: spell.effect ?? null }, null, { damage, spell: id });
 
@@ -4059,7 +4131,7 @@ export class Battle {
 
         // (What it leaves on the ground round them: fire, acid, rot)
         if (spell.hazard) {
-            this.#lay(caster, target.map, target.x, target.y, spell.hazard, ((spell.damage[0] + spell.damage[1]) / 2) * (caster.power?.spell ?? 1) * HAZARDS[spell.hazard.kind].share, id);
+            this.#lay(caster, target.map, target.x, target.y, spell.hazard, ((spell.damage[0] + spell.damage[1]) / 2) * this.#spellPower(caster) * HAZARDS[spell.hazard.kind].share, id);
         }
 
         return struck.length;
@@ -4429,13 +4501,13 @@ export class Battle {
         }
     }
 
-    #hit(attacker, target, attack, projectile = null, { damage: given = null, spell = null, ground = false } = {}) {
+    #hit(attacker, target, attack, projectile = null, { damage: given = null, spell = null, ground = false, sure = false } = {}) {
         const magic = magicOf(attack, spell);
 
         // Behind the stakes: a shot or a spell from below at someone up on an army's camp's
         // walkway, over its stakes, as often as not taken by them (COVER: not fire left burning
         // on the ground); they know they were set on
-        if (!ground && attacker && (attack.kind === "ranged" || spell) && this.#covered(attacker, target) && this.random.chance(COVER)) {
+        if (!ground && !sure && attacker && (attack.kind === "ranged" || spell) && this.#covered(attacker, target) && this.random.chance(COVER)) {
             this.#emit("covered", { id: target.id, by: attacker.id, attack: attack.id, spell, projectile });
             this.#provoke(attacker, target);
 
@@ -4447,7 +4519,7 @@ export class Battle {
         const spelled = this.buffOf(target, "dodge");
         const dodge = (magic ? 0 : (target.dodge ?? 0)) + (spelled ? SPELLS.dodge.dodge[Math.min(spelled.level, SPELLS.dodge.dodge.length) - 1] : 0);
 
-        if (!ground && attacker && attacker !== target && dodge > 0 && this.random.chance(dodge)) {
+        if (!ground && !sure && attacker && attacker !== target && dodge > 0 && this.random.chance(dodge)) {
             this.#emit("dodged", { id: target.id, by: attacker.id, attack: attack.id, spell, projectile });
             this.#provoke(attacker, target);
 
@@ -4462,7 +4534,8 @@ export class Battle {
         const element = spell ? null : elementOf(attack);
         const warded = this.#warded(target, { school, element });
         const factor = (!magic && this.buffOf(attacker, "surge") ? SPELLS.surge.might : 1) * (!magic && this.buffOf(target, "inertialBarrier") ? SPELLS.inertialBarrier.physical : 1) * (warded ? WARD : 1) * (this.buffOf(target, "surge") ? SPELLS.surge.exposed : 1) * charmed(target, school, element);
-        const whole = factor === 1 ? base : Math.max(1, Math.round(base * factor));
+        // (What can't be warded, charmed or shielded against: Prismatic Destruction's, `sure`)
+        const whole = sure || factor === 1 ? base : Math.max(1, Math.round(base * factor));
 
         if (boosted) {
             attacker.empowered = null;
@@ -4472,7 +4545,7 @@ export class Battle {
         // a spell on a spellward, as often as their knack with it has it, the shield taking its
         // share of it; all of it, nothing gets through. Neither what lingers after it nor a
         // knockdown, and a shorter stagger
-        const blocked = this.#blocks(target, attacker, { magic, ground }) ? target.shield.share : 0;
+        const blocked = !sure && this.#blocks(target, attacker, { magic, ground }) ? target.shield.share : 0;
         const damage = blocked ? Math.round(whole * (1 - blocked)) : whole;
 
         if (blocked) {
@@ -4546,7 +4619,7 @@ export class Battle {
         }
 
         // (Some of it turned back on whoever dealt it: Reflect. Never what's itself turned back)
-        const reflect = !ground && !attack.reflected && attacker && attacker !== target && !attacker.dead && this.buffOf(target, "reflect");
+        const reflect = !ground && !sure && !attack.reflected && attacker && attacker !== target && !attacker.dead && this.buffOf(target, "reflect");
 
         if (reflect) {
             this.#hit(target, attacker, { id: "reflect", kind: "spell", reaction: "arcane", stagger: 0, reflected: true }, null, { damage: Math.max(1, Math.round(damage * SPELLS.reflect.reflect)), spell: "reflect" });

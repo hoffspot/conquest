@@ -56,6 +56,9 @@ const FIGURE = `<circle cy="-9" r="4.6" fill="#1c1410"/><path d="M-6,13 L-5,-1 C
 // A dark ring round a seventh tier's icon: the height of a school
 const PINNACLE = (colour) => `<circle r="22.5" fill="none" stroke="${colour}" stroke-width="1.6"/><circle r="20.5" fill="none" stroke="${colour}" stroke-width="0.6" stroke-dasharray="1.5 2" opacity="0.8"/>`;
 
+// A petal of the Prismatic sigil, from its heart up (app/sigil.js draws the sigil with the same)
+export const PETAL = "M0,-3 C6,-8 7,-15 0,-21 C-7,-15 -6,-8 0,-3 Z";
+
 // A ward's shield, something shown on it: what it wards against
 const shield = (rim, emblem) => `
         <circle r="21" fill="url(#spell-ward-glow)"/>
@@ -719,6 +722,19 @@ export const SPELL_ICONS = Object.freeze({
         <path d="M0,-15 C5,-15 7,-11 10,-11 C15,-11 16,-5 14,-2 C17,2 15,8 11,9 C10,14 4,16 0,13 C-4,16 -10,14 -11,9 C-15,8 -17,2 -14,-2 C-16,-5 -15,-11 -10,-11 C-7,-11 -5,-15 0,-15 Z" fill="#e8420e" stroke="#6a1404" stroke-width="1.3"/>
         <path d="M0,-9 C4,-9 6,-6 8,-4 C10,0 8,5 5,6 C3,9 -3,9 -5,6 C-8,5 -10,0 -8,-4 C-6,-6 -4,-9 0,-9 Z" fill="#ffa030"/>
         <circle r="4.6" fill="#fff6d0" filter="url(#icon-glow)"/>`,
+
+    // The Prismatic sigil whole: a petal of each element round a white-hot star (fire, earth, air
+    // and water, from the top round, as app/sigil.js has them), set in a ring as the height of all four
+    prismatic: `
+        <circle r="21" fill="#b07aff" opacity="0.25"/>
+        <g stroke-width="1" stroke-linejoin="round">
+            <path d="${PETAL}" fill="#ff7a2e" stroke="#7a1a00"/>
+            <path d="${PETAL}" fill="#c49a4a" stroke="#4a3410" transform="rotate(90)"/>
+            <path d="${PETAL}" fill="#bfe6ff" stroke="#2a5a8a" transform="rotate(180)"/>
+            <path d="${PETAL}" fill="#3c9cff" stroke="#0c3a7a" transform="rotate(270)"/>
+        </g>
+        <path d="${star(0, 0, 7.5, 2.6, 4, -Math.PI / 4)}" fill="#ffffff" filter="url(#icon-glow)"/>
+        ${PINNACLE("#e8d8ff")}`,
 
     // Arrows chasing round a creature turned into a sheep
     polymorph: `
