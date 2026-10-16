@@ -46,9 +46,10 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
             // (Each of its skins but its own one of the catalog's "<asset>-skins")
             const files = (ASSETS.models[`${asset}-skins`]?.files ?? []).map(({ path }) => path);
 
-            assert.equal(skins[0], "", `${id}: its own skin first`);
+            // (Its own skin first, if one may wear it: the Moonfang's always in its own)
+            assert.ok(skins.length > 0 && skins.indexOf("") <= 0, `${id}: its own skin first`);
 
-            for (const skin of skins.slice(1)) {
+            for (const skin of skins.filter(Boolean)) {
                 assert.ok(files.some((path) => path.endsWith(`.${skin}.bin`)), `${id}'s ${skin}`);
                 assert.equal(ASSETS.models[`${asset}-skins`].tier, "demand");
             }

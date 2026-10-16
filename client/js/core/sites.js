@@ -103,10 +103,11 @@ const REST = Object.freeze({ gentle: 3, shift: 48, step: 12 });
  * The sites cut into a hillside (a cave's mouth, the great lairs'): how far the land must rise
  * across them, front to back (metres: `rise`, at least and at most), and the slope they'd best be
  * on; where there's none so steep near, a cave goes down into the ground instead. One `always`
- * cut into a hill (a Dreadthorn's lair, high in the mountains) takes the slope nearest the one
- * wanted near it if none rises as it should.
+ * cut into a hill (a Dreadthorn's lair, high in the mountains; a werewolves' den, set down where
+ * the land rises: worldplan/settle.js WEREWOLF_DENS) takes the slope nearest the one wanted near
+ * it if none rises as it should.
  */
-const HILLSIDE = Object.freeze({ cave: { rise: [6, 14], slope: 0.55 }, dungeon: { rise: [6, 14], slope: 0.55 }, "dragon's lair": { rise: [8, 26], slope: 0.4 }, "dreadthorn's lair": { rise: [10, 64], slope: 0.55, always: true } });
+const HILLSIDE = Object.freeze({ cave: { rise: [6, 14], slope: 0.55 }, dungeon: { rise: [6, 14], slope: 0.55 }, "werewolf's den": { rise: [6, 14], slope: 0.55, always: true }, "dragon's lair": { rise: [8, 26], slope: 0.4 }, "dreadthorn's lair": { rise: [10, 64], slope: 0.55, always: true } });
 
 /**
  * The hill's lie over the brow of a face of rock cut into it (art/kits/neutral.js outcrop, so its

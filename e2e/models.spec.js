@@ -249,6 +249,51 @@ test("draws the werewolf from its model once it's read, each in a skin of its ow
     expect([...new Set(fetched.filter((url) => url.includes("/models/beasts/werewolf")).map((url) => url.replace(/^.*\/models\//, "").replace(/=[0-9a-f]{10}$/, "=")))].sort()).toEqual(["beasts/werewolf-2.bin?h=", "beasts/werewolf.ash.bin?h=", "beasts/werewolf.dusk.bin?h=", "beasts/werewolf.russet.bin?h="]);
 });
 
+test("draws the Moonfang from the werewolf's model, read once for both: bigger, always in its own skin", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await page.goto("/");
+    await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
+
+    const drawn = await page.evaluate(async () => {
+        const THREE = await import("three");
+        const { BeastAvatar } = await import("./js/beasts/beast.js");
+        const { modelOf, wantModel } = await import("./js/beasts/model.js");
+
+        // (Both asked for at once: the model read once, the four skins between them once each)
+        const done = window.pellagos.fetcher.done;
+        const [wolf, master] = await Promise.all([wantModel("werewolf"), wantModel("moonfang")]);
+        const downloaded = window.pellagos.fetcher.done - done;
+        const heightOf = (beast) => new THREE.Box3().setFromObject(beast.plan.levels[0][0], true).getSize(new THREE.Vector3()).y;
+        const lookOf = (kind, seed) => {
+            const beast = new BeastAvatar(kind, { seed });
+
+            beast.update(1 / 30, 0, 0, 0);
+            beast.object.updateMatrixWorld(true);
+
+            const look = { model: beast.model, skin: beast.plan.skin, body: beast.plan.materials.body.map.uuid, height: heightOf(beast) };
+
+            beast.dispose();
+
+            return look;
+        };
+        const masters = [1, 2, 3, 4, 5].map((seed) => lookOf("moonfang", seed));
+
+        return { same: wolf === master && modelOf("werewolf") === modelOf("moonfang"), skins: Object.keys(master.skins).sort(), downloaded, masters, wolf: lookOf("werewolf", 1) };
+    });
+
+    expect(drawn.same).toBe(true);
+    expect(drawn.skins).toEqual(["ash", "dusk", "moonfang", "russet"]);
+    expect(drawn.downloaded).toBe(5);
+
+    // (Every one of them in the moonfang's skin, its own body's textures, not a werewolf's)
+    expect(drawn.masters.map(({ model, skin }) => [model, skin])).toEqual(Array.from({ length: 5 }, () => [true, "moonfang"]));
+    expect(new Set(drawn.masters.map(({ body }) => body)).size).toBe(1);
+    expect(drawn.masters[0].body).not.toBe(drawn.wolf.body);
+
+    // (3.4 metres tall to a werewolf's 2.4)
+    expect(drawn.masters[0].height / drawn.wolf.height).toBeCloseTo(3.4 / 2.4, 1);
+});
+
 // (The service worker kept out: a page's routes don't see what it fetches)
 test.describe("its model missing", () => {
     test.use({ serviceWorkers: "block" });

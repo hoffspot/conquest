@@ -23,6 +23,7 @@ const SITE_MARKS = {
     castle: "♜",
     "dragon's lair": "☠",
     "dreadthorn's lair": "♛",
+    "werewolf's den": "☾",
     graveyard: "†",
     dungeon: "⛬",
     // (Each people's works: docs/WAR.md *The works*)

@@ -13,7 +13,7 @@ import { watersOf } from "../terrain/waters.js";
 import { hypot } from "../exact.js";
 
 export { BIOME, BIOMES, FACTIONS, RACE, RACES, SITES, WORKS } from "./races.js";
-export { BUILT, campTier, DREADTHORN_LAIRS, REACH, ROAD, SETTLEMENTS } from "./settle.js";
+export { BUILT, campTier, DREADTHORN_LAIRS, REACH, ROAD, SETTLEMENTS, WEREWOLF_DENS } from "./settle.js";
 export { CELL, CELLS, WATER, WORLD_SIZE } from "./terrain.js";
 
 /** How big a chunk of the world is when it's built (metres a side), and how many a side. */

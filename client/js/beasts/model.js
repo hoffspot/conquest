@@ -15,9 +15,9 @@ import { Breath } from "./breath.js";
 
 /**
  * The creatures drawn from a model, by their LOOKS id (which stands in for one until it's read):
- * the catalog's entry (`asset`), and the skins one of them may wear (`skins`: "" its own, or one
- * of the catalog's "<asset>-skins", <name>.<skin>.bin, only the textures that differ; by its
- * seed); how long it's drawn (metres) and how long and tall it's made; which of its clips are what
+ * the catalog's entry (`asset`: two kinds may be drawn from one), and the skins one of them may
+ * wear (`skins`: "" its own, or one of the catalog's "<asset>-skins", <name>.<skin>.bin, only the
+ * textures that differ; by its seed); how long it's drawn (metres) and how long and tall it's made; which of its clips are what
  * (`clips`: `hover`, hanging in the air, battle.js #hover; `run`, running), and its ways of
  * attacking (`attacks`, the special ones `specials`, as named: weapons.js `animation`; up in the
  * air, `aloft`'s in their place) and resting (`rests`), each a clip; when in a clip it breathes
@@ -62,11 +62,32 @@ export const MODELS = Object.freeze({
         runPace: 2.6,
         flinch: 0.6,
     }),
+    // (The Moonfang, the werewolves' master: the werewolf's model, drawn 3.4 metres tall, always in
+    // the moonfang's skin, black with a pale glow; its stride as long again as it's bigger)
+    moonfang: Object.freeze({
+        asset: "beast-werewolf",
+        skins: Object.freeze(["moonfang"]),
+        length: 1.93,
+        made: Object.freeze({ long: 1.36, tall: 2.4 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit React", dead: "Death" }),
+        attacks: Object.freeze({ claw: "Claw" }),
+        specials: Object.freeze({ pounce: "Attack" }),
+        rests: Object.freeze({ howl: "Howl", look: "Idle Alert" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "hand_r", left: "hand_l" }),
+        mouth: null,
+        pace: 2.06,
+        runPace: 3.69,
+        flinch: 0.6,
+    }),
 });
 
-// The models read, those asked for, and those still being fetched, by kind
+// The models read and those asked for, by kind (each in its skins); and each model file's read,
+// by the catalog's entry, and those still being fetched: one read for every kind drawn from it (a
+// werewolf, its den's Moonfang)
 const read = new Map();
 const asked = new Map();
+const files = new Map();
 const fetching = new Set();
 
 // How long (milliseconds) before a model that couldn't be read (offline, say) is asked for again
@@ -98,31 +119,87 @@ async function readBlob(blob) {
 /**
  * A kind's skins (MODELS' `skins`, but its own), each read as its model is (the catalog's
  * "<asset>-skins", <name>.<skin>.bin), its materials ready to wear: put on the model as read
- * (`gltf.skins`: { skin: [material...] }). One that couldn't be read isn't worn: its own is.
+ * (`gltf.skins`: { skin: [material...] }), once for every kind drawn from it that wears it. One
+ * that couldn't be read isn't worn: its own is.
  */
 async function readSkins(id, gltf, { priority, page }) {
     const { asset, skins = [] } = MODELS[id];
-    const files = ASSETS.models[`${asset}-skins`]?.files ?? [];
+    const found = ASSETS.models[`${asset}-skins`]?.files ?? [];
 
-    gltf.skins = {};
+    gltf.skins ??= {};
+    gltf.skinning ??= new Map();
 
     await Promise.all(
-        skins.filter(Boolean).map(async (skin) => {
-            const file = files.find(({ path }) => path.endsWith(`.${skin}.bin`));
+        skins.filter(Boolean).map((skin) => {
+            if (!gltf.skinning.has(skin)) {
+                const file = found.find(({ path }) => path.endsWith(`.${skin}.bin`));
 
-            try {
-                const worn = !file ? null : fetcher ? await fetcher.want(file, priority).then((blob) => blob && readBlob(blob)) : await loadGltf(new URL(hashed(file.path, file.hash), page).href);
+                gltf.skinning.set(
+                    skin,
+                    (async () => {
+                        try {
+                            const worn = !file ? null : fetcher ? await fetcher.want(file, priority).then((blob) => blob && readBlob(blob)) : await loadGltf(new URL(hashed(file.path, file.hash), page).href);
 
-                if (worn) {
-                    gltf.skins[skin] = await worn.parser.getDependencies("material");
-                }
-            } catch (error) {
-                console.warn(`Couldn't read ${id}'s skin ${skin}`, error);
+                            if (worn) {
+                                gltf.skins[skin] = await worn.parser.getDependencies("material");
+                            }
+                        } catch (error) {
+                            console.warn(`Couldn't read ${id}'s skin ${skin}`, error);
+                        }
+                    })(),
+                );
             }
+
+            return gltf.skinning.get(skin);
         }),
     );
 
     return gltf;
+}
+
+// A model file read (the catalog's entry `asset`), once for every kind drawn from it, as wanted as
+// `priority`: a promise of it, or of null if it wasn't fetched (while saving data: asked for
+// again, it may be); it's asked for again a while after it couldn't be read (RETRY)
+function readFile(asset, priority, page) {
+    const file = ASSETS.models[asset].files[0];
+
+    // (Wanted sooner than it was: fetched sooner)
+    if (files.has(asset)) {
+        if (fetching.has(asset)) {
+            fetcher.want(file, priority);
+        }
+
+        return files.get(asset);
+    }
+
+    let reading;
+
+    if (fetcher) {
+        fetching.add(asset);
+        reading = fetcher.want(file, priority).finally(() => fetching.delete(asset)).then((blob) => blob && readBlob(blob));
+    } else {
+        reading = loadGltf(new URL(hashed(file.path, file.hash), page).href);
+    }
+
+    files.set(
+        asset,
+        reading.then(
+            (gltf) => {
+                if (!gltf) {
+                    files.delete(asset);
+                }
+
+                return gltf;
+            },
+            (error) => {
+                setTimeout(() => files.delete(asset), RETRY);
+
+                throw error;
+            },
+        ),
+    );
+
+    return files.get(asset);
 }
 
 /** Whether a kind's drawn from a model (MODELS) that the catalog has. */
@@ -149,32 +226,17 @@ export function wantModel(id, priority = "soon") {
         return null;
     }
 
-    const file = ASSETS.models[MODELS[id].asset].files[0];
+    // (Its file read, or being read, for another kind drawn from it: wanted sooner, if it is)
+    const reading = readFile(MODELS[id].asset, priority, page);
 
-    // (Wanted sooner than it was: fetched sooner)
     if (asked.has(id)) {
-        if (fetching.has(id)) {
-            fetcher.want(file, priority);
-        }
-
         return asked.get(id);
     }
 
-    let reading;
-
-    if (fetcher) {
-        fetching.add(id);
-        reading = fetcher.want(file, priority).finally(() => fetching.delete(id)).then((blob) => blob && readBlob(blob));
-    } else {
-        reading = loadGltf(new URL(hashed(file.path, file.hash), page).href);
-    }
-
     // (Its skins with it: one of them may wear any)
-    reading = reading.then((gltf) => gltf && readSkins(id, gltf, { priority, page }));
-
     asked.set(
         id,
-        reading.then(
+        reading.then((gltf) => gltf && readSkins(id, gltf, { priority, page })).then(
             (gltf) => {
                 if (gltf) {
                     read.set(id, gltf);

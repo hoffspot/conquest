@@ -2,7 +2,8 @@
 // their own climate and lands, their settlements (with guilds), roads, rivers, sites and camps
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { BIOME, BIOMES, BUILT, campTier, CELL, CELLS, DREADTHORN_LAIRS, FACTIONS, guildFor, guilds, landAt, layOutWorld, openGround, planWorld, RACES, REACH, ROAD, SETTLEMENTS, SITES, startFor, WATER, WORKS } from "../client/js/core/worldplan/plan.js";
+import { BIOME, BIOMES, BUILT, campTier, CELL, CELLS, DREADTHORN_LAIRS, FACTIONS, guildFor, guilds, landAt, layOutWorld, openGround, planWorld, RACES, REACH, ROAD, SETTLEMENTS, SITES, startFor, WATER, WEREWOLF_DENS, WORKS } from "../client/js/core/worldplan/plan.js";
+import { metresOf } from "../client/js/core/terrain/curve.js";
 import { stillWaterAt } from "../client/js/core/terrain/height.js";
 import { watersOf } from "../client/js/core/terrain/waters.js";
 import { Queue } from "../client/js/core/worldplan/queue.js";
@@ -264,14 +265,15 @@ describe("the world plan (worldplan/plan.js)", () => {
         }
     });
 
-    it("puts one or two Dreadthorns' lairs out in the wild, high on volcanic ground or in the mountains, far from each other and the drake's, after every other site", () => {
+    it("puts one or two Dreadthorns' lairs out in the wild, high on volcanic ground or in the mountains, far from each other and the drake's, after every other site but the werewolves' dens", () => {
         for (const [seed, plan] of plans) {
             const lairs = plan.sites.filter(({ kind }) => kind === "dreadthorn's lair");
             const drake = plan.sites.find(({ kind }) => kind === "dragon's lair");
+            const dens = plan.sites.filter(({ kind }) => kind === "werewolf's den").length;
             const [least, most] = DREADTHORN_LAIRS.count;
 
             assert.ok(lairs.length >= least && lairs.length <= most, `seed ${seed}: ${lairs.length}`);
-            assert.deepEqual(plan.sites.slice(-lairs.length).map(({ kind }) => kind), lairs.map(() => "dreadthorn's lair"), "laid out last");
+            assert.deepEqual(plan.sites.slice(-lairs.length - dens, plan.sites.length - dens).map(({ kind }) => kind), lairs.map(() => "dreadthorn's lair"), "laid out last but the dens");
 
             for (const lair of lairs) {
                 const k = at(...lair.cell);
@@ -289,6 +291,41 @@ describe("the world plan (worldplan/plan.js)", () => {
             const chosen = lairs.filter((lair) => DREADTHORN_LAIRS.biomes.includes(BIOMES[plan.biome[at(...lair.cell)]].id));
 
             assert.ok(chosen.length >= Math.min(1, lairs.length), `seed ${seed}`);
+        }
+    });
+
+    it("puts one or two werewolves' dens out in the wild, in the woods where the land rises, far from each other and every great lair, after every other site", () => {
+        for (const [seed, plan] of plans) {
+            const dens = plan.sites.filter(({ kind }) => kind === "werewolf's den");
+            const lairs = plan.sites.filter(({ kind }) => kind.endsWith("lair") || kind === "werewolf's den");
+            const [least, most] = WEREWOLF_DENS.count;
+
+            assert.ok(dens.length >= least && dens.length <= most, `seed ${seed}: ${dens.length}`);
+            assert.deepEqual(plan.sites.slice(-dens.length).map(({ kind }) => kind), dens.map(() => "werewolf's den"), "laid out last");
+
+            for (const den of dens) {
+                const k = at(...den.cell);
+                const land = BIOMES[plan.biome[k]].id;
+
+                assert.equal(plan.territory[k], 0, "in the wild");
+                assert.equal(plan.water[k], 0, "on dry land");
+                assert.ok([...WEREWOLF_DENS.biomes, ...WEREWOLF_DENS.rather].includes(land), `seed ${seed}: on ${land}`);
+
+                // (On a hillside, to be cut into: how steeply the land rises across its cell)
+                const [x, y] = den.cell;
+                const metres = (i, j) => metresOf(plan.height[at(i, j)]);
+                const rises = Math.hypot(metres(x + 1, y) - metres(x - 1, y), metres(x, y + 1) - metres(x, y - 1)) / (2 * CELL);
+
+                assert.ok(rises >= WEREWOLF_DENS.steep, `seed ${seed}: ${den.id} rises ${rises.toFixed(2)}`);
+                assert.ok(den.name && den.id === `werewolf-s-den-${plan.sites.indexOf(den) + 1}`, den.id);
+                assert.ok(plan.sites.every((site) => site === den || Math.hypot(site.cell[0] - den.cell[0], site.cell[1] - den.cell[1]) >= WEREWOLF_DENS.sites), "clear of the other sites");
+                assert.ok(lairs.every((other) => other === den || Math.hypot(other.cell[0] - den.cell[0], other.cell[1] - den.cell[1]) >= WEREWOLF_DENS.apart), "far from the other great lairs and dens");
+            }
+
+            // (Most in the woods)
+            const chosen = dens.filter((den) => WEREWOLF_DENS.biomes.includes(BIOMES[plan.biome[at(...den.cell)]].id));
+
+            assert.ok(chosen.length >= Math.min(1, dens.length), `seed ${seed}`);
         }
     });
 

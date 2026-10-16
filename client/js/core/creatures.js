@@ -155,6 +155,10 @@ export const CREATURES = Object.freeze({
     // the ground for the most part; it breathes fire as it bites, and takes to the air when badly
     // hurt)
     dreadthorn: { name: "Dreadthorn", hp: 220, weapon: "dreadthorn", speed: 1, chase: 2.4, temper: "aggressive", roam: 6, leash: 34, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.35, perilous: true, steady: true, hover: { below: 0.4, ms: 12000, every: 25000, rise: 2000 } },
+    // (The Moonfang: the first of the werewolves, the master of each of their dens, met only there,
+    // by day or night (worldplan/settle.js WEREWOLF_DENS): half as tall again as a werewolf, its
+    // claws and its spring the heavier, two of its werewolves and three dire wolves with it: LAIRS)
+    moonfang: { name: "Moonfang", hp: 170, weapon: "moonfang", speed: 1.4, chase: 3.6, temper: "aggressive", roam: 6, leash: 32, pack: [1, 1], tiers: [9, 9], biomes: [], blood: "red", armor: 0.25, perilous: true, darkSight: true, steady: true },
     // (The restless dead of whoever lived in the ruins long ago, only ever met there: core/places.js
     // PLACE_BANDS, and in the ruined castles with their lords: LAIRS)
     ghost: { name: "Restless ghost", hp: 26, weapon: "ghost", speed: 1.1, chase: 2.3, temper: "aggressive", roam: 6, leash: 16, pack: [1, 2], tiers: [3, 9], biomes: [], blood: "none", armor: 0.15, night: "only", darkSight: true , steady: true },
@@ -189,6 +193,7 @@ export const CAMP_FOLK = Object.freeze({
 export const LAIRS = Object.freeze({
     "dragon's lair": { master: ["dragon", 10], guards: [["wyvern", 2, 8]], near: 110, back: 45 * 60 * 1000 },
     "dreadthorn's lair": { master: ["dreadthorn", 10], guards: [["wyvern", 3, 9]], near: 130, back: 60 * 60 * 1000, hoard: "greatHoard", relic: true },
+    "werewolf's den": { master: ["moonfang", 9], guards: [["werewolf", 1, 8], ["werewolf", 1, 8], ["direWolf", 3, 8]], near: 100, back: 40 * 60 * 1000, relic: true },
     "ruined castle": { master: ["wightLord", 9], guards: [["skeleton", 3, 7], ["ghost", 2, 7], ["wraith", 1, 8]], near: 90, back: 30 * 60 * 1000, within: true, relic: true },
 });
 

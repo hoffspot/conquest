@@ -64,6 +64,7 @@ export const PLACE_KINDS = Object.freeze({
     cave: { size: "medium", icon: "cave", holds: ["bandits"] },
     "dragon's lair": { size: "large", icon: "lair", holds: ["beast"] },
     "dreadthorn's lair": { size: "large", icon: "lair", holds: ["beast"] },
+    "werewolf's den": { size: "medium", icon: "lair", holds: ["beast"] },
     shrine: { size: "small", icon: "shrine", holds: [] },
     "standing stones": { size: "small", icon: "stones", holds: [] },
     // (The old graveyard outside each people's start town: its dead their own band, PLACE_BANDS)
