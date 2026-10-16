@@ -118,10 +118,11 @@ describe("keys, codes and tokens, and how they're kept (server/access/tokens.js)
         assert.equal(unseal(sealed, key), "KQ2M9-XD4RT-AH3PW-C8NVB-7J2KQ-M9XDA");
         assert.equal(unseal(sealed, newSealKey()), null);
 
-        // (Tampered with: it won't open)
+        // (Tampered with: it won't open. Its first character changed, whatever it was: one time in
+        // 64 it's already "A")
         const [iv, tag, text] = sealed.split(".");
 
-        assert.equal(unseal([iv, tag, `A${text.slice(1)}`].join("."), key), null);
+        assert.equal(unseal([iv, tag, `${text[0] === "A" ? "B" : "A"}${text.slice(1)}`].join("."), key), null);
         assert.equal(unseal("nonsense", key), null);
     });
 });

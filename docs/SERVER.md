@@ -12,18 +12,17 @@ This is the guide for whoever runs one. How it's built, and why, is in
 
 ## Running it
 
-There are three ways, and each keeps its worlds in the same place on a computer, so run only one
+There are two ways, and each keeps its worlds in the same place on a computer, so run only one
 at a time.
 
 | How | Start it | Stop it |
 | --- | --- | --- |
 | **The Mac app** (menu bar) | Installed with `curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh \| bash` in Terminal, which opens it ([MAC_APP.md](MAC_APP.md#installing-it)); after that, open **Pellagos Server** | Its menu's **Stop** or **Quit** |
-| **Homebrew** | `brew install hoffspot/pellagos/pellagos-server`, then `pellagos-server`, or `brew services start pellagos-server` to run it at login | Ctrl-C, or `brew services stop pellagos-server` |
 | **A copy of this repository** | `npm run world-server` (Node 22 or newer) | Ctrl-C |
 
 Stopping it always saves every world first. From Terminal, `-- --port 9000 --data /tmp/worlds`
-(or, for Homebrew's, `pellagos-server --port 9000 --data /tmp/worlds`) gives another port and data
-folder, and `-- --admin 9001` another port for the management page.
+gives another port and data folder, and `-- --admin 9001` another port for the management page.
+(There's no Homebrew tap: [MAC_APP.md](MAC_APP.md#without-the-app-terminal).)
 
 The first time it starts, it prints its **admin key**, once. Keep it somewhere safe: it manages the
 server from another device on the Wi-Fi, and makes worlds from the game. On the server's own
@@ -134,8 +133,10 @@ notes. **Check now** asks at once. Nothing updates by itself.
 **Update** (on the Mac app's server, or one unpacked from a release):
 
 1. Waits for nobody to be in: it's refused while players are in. Set their worlds aside first.
-2. Downloads the new version and checks it's signed by the project (an Ed25519 key whose public
-   half comes with the server). One that isn't is never installed.
+2. Downloads the new version and checks it's the project's: that its archive is the one GitHub
+   has for the release (the SHA-256 GitHub keeps for it, as the Mac installer checks its zip); or,
+   on a server with the project's release key (below), that the project signed it. One that isn't
+   is never installed.
 3. Sets every world aside and backs it up, and backs up the server's settings, keys and
    certificates.
 4. Unpacks the new version beside this one (in the data folder's `versions/`: the app itself is
@@ -150,29 +151,31 @@ app says **Updating** meanwhile. As it's the same Node, macOS's firewall shouldn
 it does, allow it.
 
 A server run from **a copy of the repository** shows the commands instead (`git pull`, then start
-it again), and **Homebrew's** shows `brew upgrade pellagos-server` and
-`brew services restart pellagos-server`.
+it again).
 
 ### Releasing
 
-For the project's owner. A version's archive is signed with the project's private key, which only
-the owner keeps:
+Nobody has to: the **Mac app** workflow (`.github/workflows/mac.yml`) releases each change to
+`main` that changes what the app holds (the game, the server, the app). It builds the app on
+GitHub's Macs, tests it (opened, its server answering, quit with every world saved; the installer
+run each way it installs), then publishes it as a GitHub release tagged `server-v<version>`: the
+app's zip (`Pellagos-Server-<version>-arm64.zip`, which the Mac installer installs) and the server's
+archive (`pellagos-server-<version>.tar.gz`, which servers update to), with notes from the pull
+requests merged since the release before. The version is `package.json`'s major and minor and the
+count of `main`'s commits (2.0.4123), so each is newer than the last; bump the major or minor in
+`package.json` to say a release is a big one. The newest ten releases are kept. **Run workflow**
+on the Actions tab (Mac app, on `main`) releases `main` as it is.
 
-1. Once: `npm run release-key -- --new ~/pellagos-release-key.pem` makes the key pair: the private
-   half where it's told (never in the repository; keep a copy elsewhere too), and the public half
-   in `server/update/release-key.pem`, to commit. To have the **Mac app** workflow sign what it
-   builds, put the private half's text in the repository's Actions secret `PELLAGOS_RELEASE_KEY`.
-2. Each version: bump `package.json`'s version, run the **Mac app** workflow, and download its
-   `pellagos-server-mac` artifact (the app's zip, `pellagos-server-<version>.tar.gz` and its
-   `.sig`, and the Homebrew formula). Without the secret, sign it by hand:
-   `npm run release-key -- --sign pellagos-server-<version>.tar.gz --key ~/pellagos-release-key.pem`.
-3. Make a GitHub release tagged `server-v<version>` with the zip, the archive and its `.sig`
-   attached, and put the formula in the tap (MAC_APP.md, "Homebrew").
+GitHub keeps each release file's SHA-256, and the installer and servers check what they download
+against it: that's what they trust, the project's releases on GitHub.
 
-Servers find it on their next check, and the Mac installer (`scripts/install-mac.sh`) installs the
-newest release's zip, so the zip goes with every release, named as the workflow names it. A server
-without the public key (made before the key was) shows new versions but can't install them:
-install that one by hand, or with the installer.
+**The release key** (optional) adds the project's own signature, which servers then require. Once:
+`npm run release-key -- --new ~/pellagos-release-key.pem` makes an Ed25519 key pair: the private
+half where it's told (never in the repository; keep a copy elsewhere too), and the public half in
+`server/update/release-key.pem`, to commit. Put the private half's text in the repository's Actions
+secret `PELLAGOS_RELEASE_KEY`, and the workflow signs each release's archive
+(`pellagos-server-<version>.tar.gz.sig`). A server with the public half updates only to a release
+the key signed; one made before the key was goes on checking GitHub's SHA-256.
 
 ## Where things are
 

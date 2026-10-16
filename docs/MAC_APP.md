@@ -18,32 +18,31 @@ Terminal). Paste this line, press Return, and wait for it to say it's installed:
 curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash
 ```
 
-It finds the project's newest release, downloads the app, checks it, puts it in Applications and
-opens it. Nothing else is needed: Node and the game come inside the app. It asks for no password,
-and it never uses `sudo`: if Applications can't be changed from your account, the app goes in
-the Applications folder in your home folder instead. When it's done, the app's dot is in the menu
-bar; what macOS asks next is [below](#what-macos-asks-next).
+That's all there is to it. It finds the project's newest release, downloads the app, checks it,
+puts it in Applications and opens it. Nothing else is needed: Node and the game come inside the
+app. It asks for no password, and it never uses `sudo`: if Applications can't be changed from your
+account, the app goes in the Applications folder in your home folder instead. When it's done, the
+app's dot is in the menu bar; what macOS asks next is [below](#what-macos-asks-next).
 
-**Before the project's first release**, or to build it from the source yourself, the installer
-builds it on this Mac. That needs Apple's Command Line Tools, which are free (about 1 GB). If
-they're missing, the installer opens their installer and asks you to run it again once they're in:
+**The releases.** Each change to `main` that changes what the app holds (the game, the server,
+the app) is built on GitHub's Macs, tested, and published as a release by the **Mac app**
+workflow, ten minutes or so after it's merged: `server-v<version>` on the repository's Releases
+page, its version `package.json`'s major and minor and the count of `main`'s commits (2.0.4123).
+The newest ten are kept.
 
-```sh
-xcode-select --install          # Apple's Command Line Tools, once
-curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash -s -- --build
-```
-
-That downloads the project's source (about 40 MB) and builds the app, which takes a few minutes. The
-first build also downloads Node from nodejs.org, checked against the SHA-256 kept in
+**With no release** (if there's none yet), the installer builds the app on this Mac instead, as
+`--build` does. That needs Apple's Command Line Tools, which are free (about 1 GB). If they're
+missing, the installer opens their installer and asks you to run the same line again once they're
+in. It downloads the project's source (about 40 MB) and builds the app, which takes a few minutes.
+The first build also downloads Node from nodejs.org, checked against the SHA-256 kept in
 `scripts/build-mac-app.js`. It uses the Node already on the Mac instead, if that's version 22 or
 later. From a copy of this repository, `scripts/install-mac.sh --build` builds that copy.
 
-**From a zip you have**: a release's `Pellagos-Server-<version>-arm64.zip`, or the **Mac app**
-workflow's (the repository's Actions tab: Mac app, the latest run, `pellagos-server-mac` under
-Artifacts):
+**From a zip you have**: a release's `Pellagos-Server-<version>-arm64.zip`, downloaded from the
+Releases page:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash -s -- --zip ~/Downloads/Pellagos-Server-2.0.0-arm64.zip
+curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash -s -- --zip ~/Downloads/Pellagos-Server-2.0.4123-arm64.zip
 ```
 
 Each way, the installer:
@@ -61,8 +60,8 @@ Run it again to update to the newest release, the same way: a new app in place o
 
 | Add after `bash -s --` | Does |
 | --- | --- |
-| *(nothing)* | The newest release |
-| `--version 2.1.0` | That release |
+| *(nothing)* | The newest release (built on this Mac if there's none) |
+| `--version 2.0.4123` | That release |
 | `--build` | Built on this Mac from the project's source (`--ref <branch or tag>` for another than `main`) |
 | `--zip <file>` | A zip you have |
 | `--to <folder>` | Into that folder, not Applications |
@@ -143,11 +142,12 @@ one or the other.
 
 ## Updating, and taking it off
 
-The management page says when a new version is out (Settings, Updates), and **Update** installs
-it: every world is backed up first, the new version is unpacked beside the app in its data folder
-(the app itself isn't changed, so its signature stays as it was), and the server starts again as
-it, bringing every world forward. If it can't, it goes back to the version before, with everything
-as it was. The menu says **Updating** meanwhile. [SERVER.md](SERVER.md#updating) has the whole of it.
+The management page says when a new version is out (Settings, Updates: it asks the releases once
+a day), and **Update** installs it: it's checked to be the release GitHub has, every world is
+backed up first, the new version is unpacked beside the app in its data folder (the app itself
+isn't changed, so its signature stays as it was), and the server starts again as it, bringing
+every world forward. If it can't, it goes back to the version before, with everything as it was.
+The menu says **Updating** meanwhile. [SERVER.md](SERVER.md#updating) has the whole of it.
 
 The installer puts in a new app too ([above](#installing-it)): the newest release, a zip, or one
 built on the Mac. So can you, by hand: Quit the app, put the new one in Applications in place of the
@@ -163,27 +163,14 @@ curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/inst
 That stops it (every world saved) and takes the app away. Or, by hand: Quit, and move the app to
 the Trash. Either way its worlds stay in the folder above until you delete that too.
 
-## Without the app: Terminal and Homebrew
+## Without the app: Terminal
 
 The server runs from a copy of this repository too: `npm run world-server` (contribution.md).
 
-**Homebrew** has it as a formula, `pellagos-server`, in the project's own tap. A formula isn't held
-back by Gatekeeper as an app is:
-
-```sh
-brew install hoffspot/pellagos/pellagos-server
-pellagos-server                         # in Terminal; or, at login and kept running:
-brew services start pellagos-server
-```
-
-The tap is published by hand, once for each version (the workflow builds what's needed but
-publishes nothing):
-
-1. Run the **Mac app** workflow (Actions, Mac app, Run workflow) and download its
-   `pellagos-server-mac` artifact.
-2. Make a release tagged `server-v<version>`, with `pellagos-server-<version>.tar.gz` attached.
-3. Put `pellagos-server.rb` in the tap, the repository `hoffspot/homebrew-pellagos`, as
-   `Formula/pellagos-server.rb`.
+**Homebrew** isn't offered: the project has no tap. The Mac app workflow still makes a formula
+(`pellagos-server.rb`, the server on Homebrew's Node, as a command and a brew service) and tests it
+from a tap of its own, so one could be published from a release's archive; until then, use the
+installer.
 
 ## Building it
 
@@ -196,8 +183,9 @@ npm run build:mac -- --executable "$(swift build -c release --arch arm64 --packa
 
 That makes `dist/Pellagos Server.app`, signed ad hoc, its zip, the server's archive and the
 formula (`scripts/build-mac-app.js` says what's inside). The **Mac app** workflow does the same on
-GitHub's Macs, then opens the app, sees its server answer, quits it, and installs and tests the
-formula.
+GitHub's Macs, then opens the app, sees its server answer, quits it, runs the installer each way it
+installs, and installs and tests the formula; on `main`, it then publishes the zip and the
+server's archive as a release ([above](#installing-it)).
 
 Or build it and install it in one go: `scripts/install-mac.sh --build` ([Installing it](#installing-it)).
 
@@ -216,6 +204,8 @@ the app:
 - [ ] **The installer.** In Terminal, the installer's line (above): it installs the newest
       release, says so, and the app opens with no Open Anyway. Run again, it stops the running
       app (its worlds saved) and puts the new one in. `--uninstall` takes it away.
+- [ ] **An update.** With a newer release out, Settings › Updates shows it; **Update** installs
+      it, and the server starts again as it, its worlds as they were.
 
 - [ ] **First launch.** The zip downloaded in Safari, the app moved to Applications and opened
       with Open Anyway (above). The menu-bar dot shows; **Open the management page** opens it.
