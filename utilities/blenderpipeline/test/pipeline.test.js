@@ -305,6 +305,9 @@ describe("an asset from FBX files, as a bought one comes (fbx-creature), built f
         const { root, material: skin } = await material(path.join(out, "fbx-creature.blue.glb"), "skin");
 
         assert.deepEqual([root.listMeshes().length, root.listNodes().length, root.listSkins().length, root.listAnimations().length], [0, 0, 0, 0]);
+        // (Nor the model's geometry or keyframes: nothing in the file but its texture)
+        assert.equal(root.listAccessors().length, 0);
+        assert.ok(report.variants[0].kilobytes < report.variants[0].textures[0].kilobytes + 4, `${report.variants[0].kilobytes} KB, its texture ${report.variants[0].textures[0].kilobytes} KB`);
         assert.deepEqual(
             root.listMaterials().map((one) => one.getName()),
             ["skin"],
@@ -328,6 +331,7 @@ describe("an asset from FBX files, as a bought one comes (fbx-creature), built f
             report.variants[0].textures.map((texture) => [texture.mimeType, texture.width]),
             [["image/ktx2", 64]],
         );
+        assert.ok(report.variants[0].kilobytes < report.variants[0].textures[0].kilobytes + 4, `its variant: ${report.variants[0].kilobytes} KB, its texture ${report.variants[0].textures[0].kilobytes} KB`);
         assert.deepEqual(
             report.clips.map((clip) => clip.name),
             ["Idle", "Wave"],

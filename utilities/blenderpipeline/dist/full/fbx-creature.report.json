@@ -180,7 +180,7 @@
     {
       "name": "blue",
       "glb": "dist/full/fbx-creature.blue.glb",
-      "kilobytes": 7.7,
+      "kilobytes": 1.4,
       "materials": [
         {
           "name": "skin",
@@ -222,7 +222,7 @@
         "validator": "2.0.0-dev.3.10",
         "errors": 0,
         "warnings": 0,
-        "infos": 18,
+        "infos": 1,
         "messages": []
       }
     }

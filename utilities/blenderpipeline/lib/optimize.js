@@ -391,7 +391,14 @@ export async function optimizeVariant(config, name, { raw, glb }) {
 
     document.setLogger(new Logger(Logger.Verbosity.WARN));
 
-    for (const property of [...root.listAnimations(), ...root.listScenes(), ...root.listNodes(), ...root.listSkins(), ...root.listMeshes()]) {
+    // (Their parts too: a mesh's primitives, an animation's samplers, left behind would keep the
+    // geometry and the clips' keyframes in the file)
+    const parts = [
+        ...root.listAnimations().flatMap((animation) => [...animation.listChannels(), ...animation.listSamplers()]),
+        ...root.listMeshes().flatMap((mesh) => mesh.listPrimitives().flatMap((primitive) => [...primitive.listTargets(), primitive])),
+    ];
+
+    for (const property of [...parts, ...root.listAnimations(), ...root.listScenes(), ...root.listNodes(), ...root.listSkins(), ...root.listMeshes()]) {
         property.dispose();
     }
 
@@ -402,7 +409,8 @@ export async function optimizeVariant(config, name, { raw, glb }) {
         }
     }
 
-    await document.transform(prune({ propertyTypes: [PropertyType.ACCESSOR, PropertyType.TEXTURE, PropertyType.BUFFER], keepLeaves: false }));
+    // (Its buffer kept: there's one, and its textures are written into it)
+    await document.transform(prune({ propertyTypes: [PropertyType.ACCESSOR, PropertyType.TEXTURE], keepLeaves: false }));
 
     if (config.stripMaterialExtensions) {
         for (const extension of root.listExtensionsUsed()) {
