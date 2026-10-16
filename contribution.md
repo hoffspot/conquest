@@ -130,14 +130,16 @@ system libraries, keeps its report with the run as `soak-report`, and is ended a
 pull request and 4 hours by hand. It isn't a required check: most pull requests never run it.
 
 `.github/workflows/mac.yml` builds the world server's Mac app on a Mac (a public repository's Mac
-runners cost nothing): the menu-bar app (`mac/`, Swift), put in its bundle with Node and the server
-and signed ad hoc (`npm run build:mac`, below), numbered as a release would be (`package.json`'s
+runners cost nothing): the menu-bar app (`mac/`, Swift), put in its bundle with Node, the server
+and the installer (which its **Uninstall…** runs) and signed ad hoc (`npm run build:mac`, below), numbered as a release would be (`package.json`'s
 major and minor and the count of the commits, `2.0.4123`, in the copy it builds) and its game
 stamped with the commit (`scripts/stamp-version.js`, as the Pages deploy stamps it); then it opens
 the app, finds its item in the menu bar (`mac/ci/status-item.swift`), sees its server answer on
 port 8480, quits it and checks every world was saved first; runs the installer
 (`scripts/install-mac.sh`) as a Mac's owner would, each way it installs (a zip marked as
-downloaded, a release, built there), and takes the app away again; and installs the Homebrew
+downloaded, a release, built there), and takes it away again: the app alone (`--keep-data`), its
+data folder kept, then, a world made on its management page, everything it keeps, that world
+saved first to an archive the server reads; and installs the Homebrew
 formula from a tap of its own and runs its test. The licensed models are fetched first, so the
 app's game has them. It runs on a pull request that changes `mac/`, `scripts/build-mac-app.js`,
 `scripts/install-mac.sh`, how the server's started and updated (`server/world.js`, `serve.js`,
@@ -154,11 +156,11 @@ archive (and its signature), which servers update to, with notes from the pull r
 the release before; it checks GitHub keeps a SHA-256 for each (the installer and servers check
 against it), keeps the newest ten releases and takes older ones away with their tags, and is ended
 at 15 minutes (docs/SERVER.md, "Releasing"). `test/install-mac.test.js` runs the installer here,
-with stand-ins for the Mac's own tools (`curl`, `osascript`, `codesign`, `ditto`, ...) that note how
-they're asked; it never reaches the internet. Neither of its jobs is a required check (`release` never runs on a pull request), but
+with stand-ins for the Mac's own tools (`curl`, `osascript`, `codesign`, `ditto`, `security`, ...)
+that note how they're asked, a terminal's answers given in a file (`PELLAGOS_TTY`); it never reaches the internet. Neither of its jobs is a required check (`release` never runs on a pull request), but
 a pull request that runs it is merged only once it's green: nothing else compiles the Swift. This
 container has no Swift; the app's own checks on a Mac (first launch, the firewall's and Local
-Network's prompts, run at login, sleep) are the owner's (docs/MAC_APP.md).
+Network's prompts, run at login, sleep, its menu's **Uninstall…**) are the owner's (docs/MAC_APP.md).
 
 ### Every npm script
 

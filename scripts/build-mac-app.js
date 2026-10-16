@@ -16,7 +16,7 @@
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -207,6 +207,7 @@ async function copyServer(into, { version }) {
  *     Contents/Helpers/node                              Node arm64, from `archive` (checked against `shasums`)
  *     Contents/Library/LaunchAgents/<id>.plist           run at login
  *     Contents/Resources/app/{server,client,package.json}
+ *     Contents/Resources/install-mac.sh                  the installer, run by the app's Uninstall…
  *     Contents/Resources/node/LICENSE
  *
  * Signed ad hoc when `sign` (macOS alone). Returns its path.
@@ -244,6 +245,9 @@ export async function buildApp({ out, executable = null, archive, shasums, pinne
     await rm(unpacked, { recursive: true, force: true });
 
     await copyServer(path.join(contents, "Resources/app"), { version });
+    // (The installer, for the app's Uninstall… to take everything away with: mac/.../Uninstall.swift)
+    await cp(path.join(root, "scripts/install-mac.sh"), path.join(contents, "Resources/install-mac.sh"));
+    await chmod(path.join(contents, "Resources/install-mac.sh"), 0o755);
 
     if (sign) {
         execFileSync("codesign", ["--force", "--sign", "-", "--timestamp=none", app], { stdio: "inherit" });
