@@ -179,7 +179,8 @@ test("a creature to come, drawn from its model before it's in the game: the were
     // played, in the skin asked for)
     expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Werewolf"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
-    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual(["Attack", "Death", "Hit React", "Idle", "Idle Alert", "Walk"]);
+    // (Its own six, and three made up from them: utilities/blenderpipeline's clips.invent)
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual(["Attack", "Death", "Hit React", "Idle", "Idle Alert", "Walk", "Howl", "Claw", "Run"]);
     await page.waitForFunction(() => window.lab.watch().clip === "Walk" && window.lab.current().thing.skin === "dusk", null, { timeout: 60000 });
     await expect(page.locator("#name")).toHaveText("The werewolf");
     await expect(page.locator("#bottom")).toBeHidden();
