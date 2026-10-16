@@ -88,6 +88,11 @@ export const CREATURES = Object.freeze({
     bear: { name: "Brown bear", hp: 60, weapon: "bear", speed: 1.2, chase: 2.8, temper: "territorial", guard: 7, roam: 10, leash: 18, pack: [1, 1], tiers: [3, 7], biomes: ["woods", "mountain", "tundra", "elfwood", "darkwood"], blood: "red" , steady: true },
     puma: { name: "Puma", hp: 40, weapon: "puma", speed: 1.4, chase: 3.4, temper: "territorial", guard: 7, roam: 12, leash: 22, pack: [1, 1], tiers: [3, 7], biomes: ["mountain", "woods", "heath", "badlands", "darkwood"], blood: "red", night: "more", darkSight: true },
     direWolf: { name: "Dire wolf", hp: 30, weapon: "direWolf", speed: 1.5, chase: 3.4, temper: "aggressive", roam: 14, leash: 26, pack: [1, 3], tiers: [3, 8], biomes: ["tundra", "snow", "woods", "heath", "mountain"], blood: "red", night: "more", darkSight: true },
+    // (A werewolf: a man or a woman under a curse, out only by night at the head of the wolves it
+    // calls to it, two to four of them, dire wolves and wolves; quick, strong and too heavy to be
+    // thrown. Its claws rake and lay a wound open, and now and then it springs on whoever it's
+    // after: weapons.js. Drawn from a model of its own once it's read: beasts/model.js)
+    werewolf: { name: "Werewolf", hp: 64, weapon: "werewolf", speed: 1.4, chase: 3.8, temper: "aggressive", roam: 14, leash: 30, pack: [3, 5], tiers: [5, 9], biomes: ["woods", "darkwood", "heath", "tundra", "elfwood", "mountain", "meadow"], blood: "red", armor: 0.1, night: "only", darkSight: true, steady: true, band: { direWolf: 0.55, wolf: 0.45 } },
     goblin: { name: "Goblin raider", hp: 26, hands: true, weapon: "cleaver", speed: 1.4, chase: 2.6, temper: "aggressive", roam: 10, leash: 22, pack: [2, 5], tiers: [3, 8], biomes: ["heath", "mountain", "badlands", "woods"], blood: "red", band: { goblinBomber: 0.3 }, elite: "goblinKing" },
     // (The goblins' own, never met on their own: a bomber among a raiding party, keeping off and
     // lobbing lit bombs; and the Goblin King leading a war band, their elite, a great cleaver up

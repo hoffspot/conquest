@@ -70,6 +70,7 @@ const ABOUT = {
     bear: ["Brown bear", "Far out"],
     puma: ["Puma", "Far out, in the hills and woods"],
     direWolf: ["Dire wolf", "Far out"],
+    werewolf: ["Werewolf", "Far out, only by night, at the head of its wolves"],
     goblin: ["Goblin raider", "Far out", "cleaver"],
     goblinBomber: ["Goblin bomber", "Among goblin raiders: keeps its distance and lobs lit bombs", null],
     goblinKing: ["Goblin King", "The goblins' elite, leading their war band: a great cleaver, and a bigger bomb now and then", "cleaver"],
@@ -1219,7 +1220,7 @@ function whoseOf(asset, avatar) {
 // --- The controls ---
 
 const groups = [
-    ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "goblin", "goblinBomber", "goblinKing", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
+    ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "werewolf", "goblin", "goblinBomber", "goblinKing", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
     ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "knucker", "hodmedod", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "hart", "kelpie", "caveSpider", "shadowStalker", "olm", "centipede", "basilisk", "draugr", "mare", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "spittingCobra", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "ahuizotl", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock", "chimera"]],
     ["The restless dead", ["ghost", "wraith"]],
     ["For the mightiest", ["dreadthorn", "dragon", "wightLord", "frostTroll", "banditChief"]],

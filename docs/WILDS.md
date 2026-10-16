@@ -34,6 +34,7 @@ two tiers above it, up to their most.
 | Brown bear | 60 | territorial | 1 | 3–7 | woods, mountain, tundra, elfwood, darkwood |
 | Puma | 40 | territorial | 1 | 3–7 | mountain, woods, heath, badlands, darkwood |
 | Dire wolf | 30 | aggressive | 1–3 | 3–8 | tundra, snow, woods, heath, mountain |
+| Werewolf | 64 | aggressive | 3–5, with its wolves | 5–9 | woods, darkwood, heath, tundra, elfwood, mountain, meadow; only by night |
 | Goblin raider | 26 | aggressive | 2–5 | 3–8 | heath, mountain, badlands, woods |
 | Goblin bomber | 22 | aggressive | among goblin raiders | 3–8 | with goblins (*Goblins*, below) |
 | Goblin King | 34 | aggressive | leads goblins | 3–8 | the goblins' elite (*Goblins*, below) |
@@ -106,6 +107,22 @@ as a projectile). A ghost's touch is the grave's cold, slowing; a wraith's claws
 The bog frog's tongue reaches two squares off. The rock tusker's charge, a Cape buffalo's, and a
 kelpie's hooves knock whoever they catch off their feet (below). Many leave something lingering: poison, a sickness, a curse, fire, a
 bleeding wound, a web or roots holding them (below: "What lingers").
+
+### Werewolves
+
+A **werewolf** is someone under a curse, out only by night (`night: "only"`), far out (tiers 5 to
+9) in the woods, the dark woods, the heaths, the tundra, the elves' woods, the mountains and the
+meadows. It hunts at the head of a pack of the wolves it calls to it: each of its pack but itself
+a dire wolf or a wolf (creatures.js `band`), two to four of them, more the further out. It's fast
+(3.8 m/s chasing), sees in the dark as well as by day, is too heavy to be thrown by a blast
+(`steady`), and its hide turns a tenth of every blow. Its claws rake (6–11, laying a wound open a
+third of the time), or it springs on whoever it's after, its whole weight behind it (9–16,
+staggering): weapons.js `werewolf`. At daybreak, out of everyone's sight, it goes with the night
+(*By night*, below). It drops its pelt and claws, and what was in its purse.
+
+It's drawn from a model of its own once that's read: a bought one, its look shown in the model
+viewer (*Coming to the wilds*) till it's in the game; till then, a great dark wolf, a third bigger
+than a dire wolf, stands in for it (beasts/looks.js).
 
 ### Goblins
 
@@ -480,7 +497,8 @@ The caches and how far each player's crossed the wilds since the last are kept i
 The world's clock has a day and a night (docs/GAME.md, *Day and night*), and the wild has its own
 hours (`night` in `CREATURES`; the terrain plan's M7e-3):
 - **The night's own** (`night: "only"`): the bat swarms, the skeletons out in the open, the
-  will-o'-wisps, the black shuck, the shadow stalkers, the hodmedods and the mares are out only
+  will-o'-wisps, the black shuck, the shadow stalkers, the hodmedods, the mares and the werewolves
+  are out only
   after dark (from half through
   the dusk to half through the dawn, when the guards' torches are lit). At daybreak those out of
   everyone's sight (30 m or more from every player) and not fighting go to ground (let go); none are
