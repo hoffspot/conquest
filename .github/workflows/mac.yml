@@ -24,6 +24,7 @@ on:
       - server/update/**
       - server/platform/**
       - .github/workflows/mac.yml
+      - .github/actions/licensed-models/**
 
 concurrency:
   group: mac-${{ github.event.pull_request.number || github.run_id }}
@@ -41,6 +42,12 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+
+      # The licensed models, from the private repository, so the app's game has them
+      # (docs/LICENSED_MODELS.md)
+      - uses: ./.github/actions/licensed-models
+        with:
+          key: ${{ secrets.MODELS_DEPLOY_KEY }}
 
       - name: Build the menu-bar app
         run: swift build -c release --arch arm64 --package-path mac

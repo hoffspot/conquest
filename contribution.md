@@ -40,10 +40,15 @@ The rule is written down three times, so no one can miss it:
 - Node.js 22 or newer (`package.json`'s `engines`; CI uses 22).
 - Chromium for the browser tests. Playwright downloads it, or you point it at one you already
   have with `CHROMIUM_PATH`.
+- Only for the licensed models (the Dreadthorn's): access to the private repository
+  `hoffspot/conquest-models`, which the owner gives, then `npm run models:fetch`. Without it the
+  game draws the Dreadthorn's stand-in, and the few tests that need its model say they're left
+  out. CI always has them (`docs/LICENSED_MODELS.md`).
 
 Nothing in this pipeline costs money. CI runs on GitHub's free runners for this public
-repository, and the game needs no paid services, keys or secrets. Never add a secret to the
-repository or to a pull request.
+repository, and the game needs no paid services. The builds use the owner's secrets (the
+settings table, section 6), set in the repository's settings, never in its files. Never add a
+secret to the repository or to a pull request.
 
 ## 1. Get the code where Claude can reach it
 
@@ -94,12 +99,22 @@ three times, 5 minutes a try).
 
 | CI job | What it runs | Locally |
 | --- | --- | --- |
-| `test` | `npm ci`, then `npm run lint` (ESLint) and `npm test` (Node's test runner, `test/*.test.js`) | `npm run check`, which runs both |
-| `e2e` (8 jobs side by side) | each job's share of the Playwright browser tests (`e2e/*.spec.js`), split by how long each took (`scripts/e2e-shard.js`, `e2e/durations.json`) | `npm run test:e2e`, or only the tests you touched (below) |
+| `test` | the licensed models fetched (below), `npm ci`, then `npm run lint` (ESLint) and `npm test` (Node's test runner, `test/*.test.js`) | `npm run check`, which runs both |
+| `e2e` (8 jobs side by side) | the licensed models fetched, then each job's share of the Playwright browser tests (`e2e/*.spec.js`), split by how long each took (`scripts/e2e-shard.js`, `e2e/durations.json`) | `npm run test:e2e`, or only the tests you touched (below) |
 | `motion` | `npm run check:motion`: the motion check (below), failing on anything worse than its baseline. Its report is kept with the run as `motion-report` | `npm run check:motion` |
 
-`.github/workflows/pages.yml` runs when `main` changes: lint and the unit tests again, then
-`npm run build:manifest`. It copies `client/` and writes into the copy which code it is, for the
+**The licensed models** (`docs/LICENSED_MODELS.md`) are kept in the private repository
+`hoffspot/conquest-models`. Every job that needs them starts with `.github/actions/licensed-models`:
+it checks that repository out into `.models` with the read-only deploy key (its private half the
+secret `MODELS_DEPLOY_KEY`), and puts its files in place under `client/`, each checked against the
+hash and size the catalog keeps (`scripts/licensed-models.js`). From then on, the tests that need
+one fail if it's missing (`LICENSED_MODELS=required`); elsewhere they say they're left out. A
+fork's pull request is given no secrets, so its run leaves them out, with a notice; anywhere else,
+no key fails the job. A maintainer brings a fork's pull request into a branch here before it's
+merged.
+
+`.github/workflows/pages.yml` runs when `main` changes: the licensed models fetched, lint and the
+unit tests again, then `npm run build:manifest`. It copies `client/` and writes into the copy which code it is, for the
 debug log: the commit and the time, in place of `client/js/app/version.js`'s noughts
 (`scripts/stamp-version.js`; as kept in the repository, the game says it's "dev"). Then it
 publishes the copy to GitHub Pages
@@ -120,10 +135,12 @@ and signed ad hoc (`npm run build:mac`, below); then it opens the app, finds its
 bar (`mac/ci/status-item.swift`), sees its server answer on port 8480, quits it and checks every
 world was saved first; runs the installer (`scripts/install-mac.sh`) as a Mac's owner would, each
 way it installs (a zip marked as downloaded, a release, built there), and takes the app away again;
-and installs the Homebrew formula from a tap of its own and runs its test. It runs by hand (Mac
+and installs the Homebrew formula from a tap of its own and runs its test. The licensed models are
+fetched first, so the app's game has them. It runs by hand (Mac
 app, Run workflow) and on a pull request that changes `mac/`, `scripts/build-mac-app.js`,
 `scripts/install-mac.sh`, how the server's started and updated (`server/world.js`, `serve.js`,
-`launch.js`, `server/update/`), `server/platform/` or the workflow, keeps the zip, the server's
+`launch.js`, `server/update/`), `server/platform/`, the workflow or the licensed models' step
+(`.github/actions/licensed-models/`), keeps the zip, the server's
 archive (signed for releases with the project's key, when the repository has it as the Actions
 secret `PELLAGOS_RELEASE_KEY`: `npm run release-key`, below) and the formula with the run as
 `pellagos-server-mac` (and pictures of the screen, its menu open and the app the installer put in,
@@ -153,7 +170,8 @@ Network's prompts, run at login, sleep) are the owner's (docs/MAC_APP.md).
 | `npm run soak:server` | Changes to how the world server runs a world for its players: the world's thread, the play socket, saving, what's made ahead (generated/world_server_plan.md §15 S9). A world server with 8 players in Node, each in a process of its own, playing by themselves (`client/js/core/bot.js`), for two hours. It fails if the world's memory grows more than 15% after the first hour, if any minute's 99th-percentile step takes 50 ms or more once they're all in, or if anyone's sent out. Run it with nothing else on the machine: the players' copies of the world share its cores (they run at a lower priority, as if on devices of their own, and each minute's line says how busy the world's thread was and how many of buildings' insides' tiles it baked, besides its steps). `-- --minutes 10 --players 4` for a quick look. Its report is written to `test-results/server-soak/report.json` |
 | `npm run e2e:durations` | After adding browser tests, or making them much slower or quicker (below) |
 | `npm run build:manifest` | After changing anything under `client/`. It lists what the game downloads before it starts (`client/js/app/manifest.js`, the data with the hashes of its bytes), and the catalog of models downloaded only as they're wanted (`client/js/app/assets.js`, from `client/models/assets.json`). The unit tests fail until you do |
-| `npm run scramble` | Only when adding or remaking a licensed model (docs/LICENSED_MODELS.md): `-- <model.glb> <model.bin>` scrambles the model `utilities/blenderpipeline` made, as the game serves it, and checks it comes back. Its catalog entry in `client/models/assets.json` is marked `"licensed": true`, and `test/scramble.test.js` checks every one so marked is scrambled, and no other. Then `npm run build:manifest` |
+| `npm run scramble` | Only when adding or remaking a licensed model (docs/LICENSED_MODELS.md): `-- <model.glb> <model.bin> --copyright "<whose it is>"` scrambles the model `utilities/blenderpipeline` made, as the game serves it, with whose it is stamped in it (its glTF asset's `copyright`), and checks it comes back. The scrambled copy goes in the private repository `hoffspot/conquest-models`. Its catalog entry in `client/models/assets.json` is marked `"licensed": true`, with its hash and size, and `test/scramble.test.js` checks every one so marked is scrambled, and no other. Then `npm run build:manifest` |
+| `npm run models:fetch` | For the licensed models (the Dreadthorn's), if the owner's given you access to the private repository `hoffspot/conquest-models` (docs/LICENSED_MODELS.md): clones it into `.models`, or brings it up to date, and puts its files in place under `client/`, each checked against the hash and size its catalog entry keeps. git ignores both. Without it the game draws the stand-ins, and the tests that need one say they're left out |
 | `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`). Then `npm run build:vitruvian`, which carries its shapes over |
 | `npm run build:vitruvian` | Only when rebuilding the Vitruvian body (`client/characters/vitruvian.*` and its masks) from CharMorph's Vitruvian, or after rebuilding the MakeHuman body, whose shapes it carries over. It needs Vitruvian's files, and its `char.blend` is in Git LFS: `git clone --depth 1 https://github.com/Upliner/CharMorph-Vitruvian ../charmorph-vitruvian`, then fetch `char.blend` on its own as the top of `scripts/build-vitruvian.js` says, then `-- --from=../charmorph-vitruvian`. About 4 minutes. Then `npm run build:manifest` |
 | `npm run build:music` | Only when remaking the music's instrument recordings |
@@ -356,11 +374,13 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    licence file and a credit in `README.md`'s *Credits and license*. Nothing with a licence that
    restricts use. That goes for the tools' test assets in `utilities/` too. A bought model, and
    anything built from it, stays out of the repository: keep it in `utilities/blenderpipeline/private/`,
-   which git ignores. The one exception is the Dreadthorn's model (`client/models/beasts/dreadthorn.bin`):
-   bought, and in the repository with permission the repository's owner obtained, only in its
-   converted form (its `LICENSE.md` there), and scrambled (`npm run scramble`). How it's being
-   moved out to a private repository is in `docs/LICENSED_MODELS.md`. Another exception is the
-   owner's call, never a contributor's. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
+   which git ignores. The one exception is the Dreadthorn's model: bought, and in the game with
+   permission the repository's owner obtained, only in its converted form, and scrambled
+   (`npm run scramble`). It isn't in this repository either, but in the private
+   `hoffspot/conquest-models`, which the builds fetch (`npm run models:fetch` for your own copy,
+   with access to it; `docs/LICENSED_MODELS.md`). Its licence note is
+   `client/models/beasts/LICENSE.md`. Another exception is the owner's call, never a
+   contributor's. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
    script.
 9. **Heavy models go in the catalog, not in what's downloaded before the game starts.** That has
    a budget, `BOOT_BUDGET` in `test/manifest.test.js` (15 MB), and raising it is a choice to make
@@ -438,8 +458,10 @@ tick may no longer be true: the two changes can conflict, or each pass alone and
 
 GitHub enforces all of that. There's no merge queue, because that's only for repositories owned by
 an organisation and this one belongs to a person. These are the settings as they stand; keep this
-table current (the standing rule). They were last checked on 2026-10-04, after `motion` was made a
-required check.
+table current (the standing rule). They were last checked on 2026-10-16, when the private
+repository for the licensed models was set up: the ruleset and pull requests' settings read back
+as below; the secret shown by CI fetching the models with it; the deploy key read back by the
+owner.
 
 | Where | Setting | As it is |
 | --- | --- | --- |
@@ -453,6 +475,8 @@ required check.
 | *Settings → General → Pull Requests* | Allow auto-merge | On |
 | | Always suggest updating pull request branches | On (the *Update branch* button) |
 | | Merge methods | Merge commits, squash and rebase are all allowed; this repository's convention is a merge commit |
+| *Settings → Secrets and variables → Actions*, Repository secrets | `MODELS_DEPLOY_KEY` | The private half of the read-only deploy key on `hoffspot/conquest-models`, for the builds to fetch the licensed models (docs/LICENSED_MODELS.md). Set on 2026-10-16. `PELLAGOS_RELEASE_KEY`, for signing the world server's releases (`npm run release-key`), is the owner's to add when they make the release key |
+| `hoffspot/conquest-models` (private) → *Settings → Deploy keys* | `conquest builds (read only)` | Read-only, fingerprint `SHA256:IQCk0zNoVFZVfSDSwMVncAy0QPQEcYYLmMecRgDtCh8`. To change it: docs/LICENSED_MODELS.md, *Changing the key* |
 
 **Every CI job is a required check.** A job that's added must be added to the ruleset once it has
 run on a pull request (GitHub only offers checks it has seen). A job that's renamed or removed must

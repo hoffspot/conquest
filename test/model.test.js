@@ -13,6 +13,10 @@ const { ASSETS } = await import("../client/js/app/assets.js");
 const { LAIRS } = await import("../client/js/core/creatures.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
 const { isScrambled, unscramble } = await import("../client/js/app/scramble.js");
+const { LEFT_OUT, licensedModelsHere } = await import("../scripts/licensed-models.js");
+
+// (Reading the Dreadthorn's model, a licensed one: left out where it isn't here, saying so)
+const licensed = licensedModelsHere() || LEFT_OUT;
 
 const model = MODELS.dreadthorn;
 const lengths = { Idling: 8, Crawling: 8, Flying: 8, Gliding: 8, Hovering: 8, "Hit React": 8, Death: 3.6, Bite: 1.6, Claw: 1.5, "Tail Sweep": 1.7, "Fire Breath": 3.4, "Hover Breath": 3.4, Roar: 8 };
@@ -40,7 +44,7 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         assert.equal(hasModel("dragon"), false);
     });
 
-    it("has every clip and bone it names in its model, as the glTF loader names them", async () => {
+    it("has every clip and bone it names in its model, as the glTF loader names them", { skip: licensed !== true && licensed }, async () => {
         for (const { asset, clips, attacks, specials, aloft, rests, fire, joints, mouth } of Object.values(MODELS)) {
             const gltf = await gltfOf(ASSETS.models[asset].files[0].path);
             const named = new Set(gltf.animations.map(({ name }) => name));

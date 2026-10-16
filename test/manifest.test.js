@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { describe, test } from "node:test";
 import { catalog, catalogSource, manifestGroups, manifestSource, releaseOf } from "../scripts/build-manifest.js";
@@ -103,12 +104,26 @@ describe("the catalog of models downloaded as they're wanted (client/js/app/asse
             ],
         });
 
-        for (const { files } of Object.values(ASSETS.models)) {
-            for (const { path, hash, bytes } of files) {
+        // (A licensed model's file may not be here: its hash and size are what assets.json keeps,
+        // which the catalog checks against the file where it is, below)
+        for (const { licensed, files } of Object.values(ASSETS.models)) {
+            for (const { path, hash, bytes } of files.filter(({ path }) => !licensed || existsSync(new URL(`../client/${path}`, import.meta.url)))) {
                 assert.equal(hash, await hashOf(path), path);
                 assert.equal(bytes, (await stat(new URL(`../client/${path}`, import.meta.url))).size, path);
             }
         }
+    });
+
+    test("keeps a licensed model's hash and size, so it's the same with its file or without it (docs/LICENSED_MODELS.md); a file that isn't the one kept, or none kept, is wrong", async () => {
+        const chest = { path: "models/jmi/chest.glb", hash: await hashOf("models/jmi/chest.glb"), bytes: (await stat(new URL("../client/models/jmi/chest.glb", import.meta.url))).size };
+        const here = { tier: "demand", licensed: true, files: [chest] };
+        const away = { tier: "demand", licensed: true, files: [{ path: "models/nowhere.bin", hash: "0123456789", bytes: 12 }] };
+
+        assert.deepEqual((await catalog({ models: { here } })).models.here, here);
+        assert.deepEqual((await catalog({ models: { away } })).models.away, away);
+        await assert.rejects(catalog({ models: { here: { ...here, files: [{ ...chest, hash: "0123456789" }] } } }), /here: client\/models\/jmi\/chest\.glb isn't the file client\/models\/assets\.json keeps/);
+        await assert.rejects(catalog({ models: { here: { ...here, files: [{ ...chest, bytes: 1 }] } } }), /isn't the file client\/models\/assets\.json keeps/);
+        await assert.rejects(catalog({ models: { away: { ...away, files: [{ path: "models/nowhere.bin" }] } } }), /away: a licensed model keeps each file's hash and size/);
     });
 
     test("says what's wrong with a model listed wrongly", async () => {

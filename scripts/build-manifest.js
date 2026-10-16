@@ -188,8 +188,9 @@ const TIERS = new Set(["near", "demand"]);
 
 /**
  * The catalog: client/models/assets.json (or `catalog`, as it would be read from there), each
- * file with its size and hash. Throws if a model has no files, an unknown tier, or a file that
- * isn't there.
+ * file with its size and hash (a licensed model's as assets.json keeps them). Throws if a model
+ * has no files, an unknown tier, or a file that isn't there (a licensed model's may not be, but
+ * may not differ from what assets.json keeps).
  */
 export async function catalog(source) {
     source ??= JSON.parse(await readFile(catalogInput, "utf8"));
@@ -208,6 +209,26 @@ export async function catalog(source) {
         const files = [];
 
         for (const file of model.files) {
+            // (A licensed model's file is kept in the private repository, not here
+            // (docs/LICENSED_MODELS.md): its hash and size are kept in the catalog, so it comes out
+            // the same with the file or without it, checked against the file where it's here)
+            if (model.licensed) {
+                if (!/^[0-9a-f]{10}$/.test(file.hash ?? "") || !Number.isInteger(file.bytes)) {
+                    throw new Error(`${name}: a licensed model keeps each file's hash and size in client/models/assets.json (${file.path})`);
+                }
+
+                const bytes = await size(file.path).catch(() => null);
+
+                if (bytes !== null && (bytes !== file.bytes || (await hashOf(file.path)) !== file.hash)) {
+                    throw new Error(
+                        `${name}: client/${file.path} isn't the file client/models/assets.json keeps (${file.bytes} bytes, ${file.hash}): npm run models:fetch for the private repository's, or its hash and size in assets.json for a new one`,
+                    );
+                }
+
+                files.push({ ...file });
+                continue;
+            }
+
             const bytes = await size(file.path).catch(() => {
                 throw new Error(`${name}: client/${file.path} isn't there`);
             });

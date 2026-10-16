@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures.js";
+import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 import { Explored } from "../client/js/core/explored.js";
 import { branchesFound, fareOf } from "../client/js/core/portals.js";
 import { guilds, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
@@ -10581,6 +10582,7 @@ test("a beast's look is let go of three minutes after the last of it's drawn: it
 });
 
 test("a Dreadthorn drawn with its stand-in is drawn again from its model once that's read, out of view", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
     test.setTimeout(240000);
     await playing(page, "/?play&seed=1");
 

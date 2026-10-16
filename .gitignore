@@ -7,3 +7,7 @@ e2e-share.txt
 .cache/
 client/motion-report.json
 dist/
+# The licensed models, fetched from the private repository (npm run models:fetch;
+# docs/LICENSED_MODELS.md), and where they're put in place
+.models/
+client/models/beasts/dreadthorn.bin

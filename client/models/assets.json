@@ -1539,7 +1539,9 @@
             "licensed": true,
             "files": [
                 {
-                    "path": "models/beasts/dreadthorn.bin"
+                    "path": "models/beasts/dreadthorn.bin",
+                    "hash": "84f164271a",
+                    "bytes": 5064728
                 }
             ]
         }

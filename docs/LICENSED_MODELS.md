@@ -5,10 +5,9 @@ seller's permission. Today that's only the Dreadthorn, HuyKhoi2407's Dreadthorn 
 (`client/models/beasts/LICENSE.md`). This page is how such models are kept out of anyone else's
 hands, as far as a game played in a browser can, and what the owner sets up for it.
 
-**Status: half done.** The licensed models are served scrambled (*Scrambling*, below). The owner
-sets up the private repository on 17 October 2026 (*Setting it up*), and the models move into it
-after that. Until then, the Dreadthorn's model is in this repository, scrambled, as
-`client/models/beasts/dreadthorn.bin`.
+**Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,
+below), and the Dreadthorn's model moved into it: scrambled, with whose it is stamped in it. It's
+no longer in this repository (only in its history).
 
 ## What it does, and what it can't
 
@@ -46,49 +45,88 @@ The private half of a key is kept in this repository as the secret `MODELS_DEPLO
 public half is on `hoffspot/conquest-models` as a read-only deploy key: it can read that one
 repository and nothing else, and it can't change it.
 
-Every workflow that needs the models checks the private repository out beside this one with the
-key, and puts its files in place under `client/models/` before it tests or builds:
+Every workflow that needs the models starts with one step, `.github/actions/licensed-models`. It
+checks the private repository out into `.models` with the key, and puts its files in place under
+`client/` (`node scripts/licensed-models.js place .models`), each checked against the hash and
+size the catalog keeps. That's before it tests or builds:
 
-- `ci.yml`: the jobs that read the models (the browser tests among them);
-- `pages.yml`: before *Put the site together*, so the site has them;
+- `ci.yml`: the `test` job and the `e2e` jobs;
+- `pages.yml`: before the tests and *Put the site together*, so the site has them;
 - `mac.yml`: before the app's built, so the app has them.
 
-Where the secret isn't given (a fork's pull request), that step is skipped, and the game draws
-the stand-ins. The tests that need a licensed model can't run there, so a maintainer brings such
-a pull request into a branch here first.
+The private repository is laid out as `client/` is: its `models/beasts/dreadthorn.bin` is put at
+`client/models/beasts/dreadthorn.bin`. git ignores both that and `.models` (`.gitignore`), and
+`test/licensed.test.js` checks it does.
 
-On someone's own copy without the models, the game draws the stand-ins, and the tests that need a
-licensed model say they're left out for want of it. In CI on this repository they're never left
-out: a missing model fails the run.
+**The tests that need a licensed model** (reading the Dreadthorn's file, or drawing it) ask
+`licensedModelsHere()` (`scripts/licensed-models.js`):
+
+- **In CI on this repository**, once the step's put the models in place, it sets
+  `LICENSED_MODELS=required`: a missing one fails the run. They're never left out there.
+- **On a fork's pull request**, which GitHub gives no secrets, the step leaves the models out,
+  with a notice, and those tests say they're left out. A maintainer brings such a pull request
+  into a branch here before it's merged. Anywhere else, no key fails the job.
+- **On someone's own copy**, `npm run models:fetch` fetches the models with their own access to
+  the private repository. Without it, the game draws the stand-ins, and those tests say they're
+  left out for want of them.
 
 The catalog (`client/models/assets.json`, and the `client/js/app/assets.js` made from it) keeps
 each licensed file's hash and size. So the catalog's the same with the files or without them, and
-`npm run build:manifest` gives the same result for everyone.
+`npm run build:manifest` gives the same result for everyone. Where the file is here, it's checked
+against them, and one that differs fails the build.
 
 ## Setting it up (the owner, once)
 
-About ten minutes. Nothing costs money: a private repository is free on GitHub. Do it on a
-computer of your own, in a browser signed in to GitHub as hoffspot, with a terminal (on a Mac,
-Applications › Utilities › Terminal).
+Done on 16 October 2026; kept here for doing it again (a new repository, say). About fifteen
+minutes, and nothing costs money: a private repository is free on GitHub. Do it on a computer of
+your own (not one whose security software stops files being shared), in a browser signed in to
+GitHub as hoffspot, with a terminal: on a Mac, press **⌘ Space**, type `Terminal` and press
+**Return** (on Windows, PowerShell, from the Start menu). Use a computer's browser: GitHub's phone
+app can't change these settings.
+
+Where each half of the key goes:
+
+| Half | Goes to | Where | What it means |
+| --- | --- | --- | --- |
+| Public (`conquest-models-key.pub`) | `hoffspot/conquest-models` | *Settings → Deploy keys* | Whoever holds the matching private half may read this one repository |
+| Private (`conquest-models-key`) | `hoffspot/conquest` | *Settings → Secrets and variables → Actions* | The builds hold it as `MODELS_DEPLOY_KEY`, to read `conquest-models` with |
+
+Not your account's own SSH keys (your picture → *Settings → SSH and GPG keys*): a key there opens
+every repository you can reach.
 
 ### 1. Make the private repository
 
-1. On github.com, the **+** at the top right, then **New repository**.
-2. **Owner:** hoffspot. **Repository name:** `conquest-models`.
+1. Open `https://github.com/new`.
+2. **Owner:** `hoffspot`. **Repository name:** `conquest-models`. The description can be empty.
 3. **Private.**
-4. Tick **Add a README file**, so the repository has a `main` branch to start from. No
-   `.gitignore`, no licence.
+4. Turn on **Add a README** (a tick box or a switch), so the repository has a `main` branch to start
+   from. **.gitignore** and **license**: none.
 5. **Create repository.**
+
+A Claude session then attaches it (`add_repo`) and reads it back: there, private, its `main`
+branch. If it can't reach it, the Claude GitHub App needs it: `https://github.com/settings/installations`,
+**Configure** beside Claude, then under **Repository access**, with **Only select repositories**,
+add `conquest-models` and **Save** (with **All repositories**, there's nothing to do). Failing
+that, reconnect GitHub at `https://claude.ai/connect-github`, or start a new session with both
+repositories chosen.
 
 ### 2. Make the key pair
 
-In the terminal:
+In the terminal, paste this and press **Return**:
 
 ```sh
-ssh-keygen -t ed25519 -N "" -C "conquest builds: read conquest-models" -f ~/conquest-models-key
+ssh-keygen -t ed25519 -C "conquest builds: read conquest-models" -f ~/conquest-models-key
 ```
 
-That makes two files in your home folder:
+- At `Enter passphrase (empty for no passphrase):` press **Return**, typing nothing; at
+  `Enter same passphrase again:` **Return** again. No passphrase: the builds use the key with
+  nobody there to type one.
+- If it asks `Overwrite (y/n)?`, there's an old key of that name: `n`, and find out what it is
+  first.
+
+It says where it saved the two files, then `The key fingerprint is:` and a line starting
+`SHA256:`, then a box of symbols. The `SHA256:` line is the fingerprint: safe to share (it names
+the key, but isn't one). Give it to the session, to check against in step 3. The two files:
 
 - `~/conquest-models-key`, **the private half**. It's a secret: it goes only into GitHub's secret
   (step 4). Never into a chat, an issue, a commit or a pull request.
@@ -96,61 +134,69 @@ That makes two files in your home folder:
 
 ### 3. Give the public half to the private repository, read-only
 
-1. Copy the public half. On a Mac: `pbcopy < ~/conquest-models-key.pub`. Elsewhere,
-   `cat ~/conquest-models-key.pub` and copy the one line it shows, which starts `ssh-ed25519`.
-2. Go to `https://github.com/hoffspot/conquest-models/settings/keys` (the repository's
-   **Settings → Deploy keys**), then **Add deploy key**.
-3. **Title:** `conquest builds (read only)`. **Key:** paste.
-4. Leave **Allow write access** unticked.
-5. **Add key.**
+1. Copy the public half: `pbcopy < ~/conquest-models-key.pub` on a Mac (it prints nothing); in
+   PowerShell, `Get-Content $HOME\conquest-models-key.pub | Set-Clipboard`. (`cat` it to see it:
+   one line, `ssh-ed25519 AAAA…`, ending `conquest builds: read conquest-models`.)
+2. Open `https://github.com/hoffspot/conquest-models`, then its **Settings** tab (⚙, at the end of
+   the row of tabs; in a narrow window, under **⋯**). In the menu down the left, under
+   **Security**, **Deploy keys**. (Directly: `https://github.com/hoffspot/conquest-models/settings/keys`.)
+3. The green **Add deploy key**.
+4. **Title:** `conquest builds (read only)`. **Key:** paste (⌘V). It's the one `ssh-ed25519` line;
+   if it's `-----BEGIN OPENSSH PRIVATE KEY-----`, that's the private half: clear it, and copy the
+   `.pub` again.
+5. Leave **Allow write access** unticked.
+6. **Add key**, giving your password or two-factor code if GitHub asks.
+7. Check its entry: the title, the fingerprint from step 2, and **Read-only**. (A session can't
+   read a repository's deploy keys, so this check is yours.)
 
 ### 4. Give the private half to this repository, as a secret
 
-1. Copy the private half. On a Mac: `pbcopy < ~/conquest-models-key`. Elsewhere,
-   `cat ~/conquest-models-key` and copy all of it, from `-----BEGIN OPENSSH PRIVATE KEY-----` to
-   `-----END OPENSSH PRIVATE KEY-----`, both lines included.
-2. Go to `https://github.com/hoffspot/conquest/settings/secrets/actions` (this repository's
-   **Settings → Secrets and variables → Actions**), then **New repository secret**.
-3. **Name:** `MODELS_DEPLOY_KEY`. **Secret:** paste.
-4. **Add secret.** GitHub won't show it again, to anyone, you included.
+1. Copy the private half: `pbcopy < ~/conquest-models-key` (no `.pub`); in PowerShell,
+   `Get-Content $HOME\conquest-models-key -Raw | Set-Clipboard`. Don't `cat` it or paste it
+   anywhere else.
+2. Open `https://github.com/hoffspot/conquest`, its **Settings** tab, then in the menu down the
+   left, under **Security**, **Secrets and variables**, then **Actions**. (Directly:
+   `https://github.com/hoffspot/conquest/settings/secrets/actions`.) Not *Dependabot* or
+   *Codespaces*.
+3. On the **Secrets** tab, the green **New repository secret** (a repository secret, not an
+   environment's).
+4. **Name:** `MODELS_DEPLOY_KEY`. **Secret:** paste: several lines, from
+   `-----BEGIN OPENSSH PRIVATE KEY-----` to `-----END OPENSSH PRIVATE KEY-----`. If it's the one
+   `ssh-ed25519` line, that's the public half: clear it, and copy without `.pub`.
+5. **Add secret.** It's listed under **Repository secrets**; GitHub won't show its value again, to
+   anyone, you included.
+6. Clear the clipboard: `echo -n "" | pbcopy`.
 
-### 5. Delete the key files from your computer
+### 5. Check the two halves match
+
+A session can't read the secrets either, so it checks by using them: a pull request whose build
+checks `conquest-models` out with the secret (the `test` job's licensed models step). GitHub lets
+it only if the secret is the private half of the deploy key, so its passing proves steps 3 and 4.
+Keep the key files until it has: if it fails, you can paste them again.
+
+### 6. Delete the key files from your computer
 
 ```sh
 rm ~/conquest-models-key ~/conquest-models-key.pub
+ls ~/conquest-models-key*
 ```
 
-GitHub has each half where it's needed. If a key's ever needed again, a new pair is made
-(*Changing the key*, below).
+The `ls` should find nothing (`no matches found`, or `No such file or directory`); in PowerShell,
+`Remove-Item $HOME\conquest-models-key, $HOME\conquest-models-key.pub`. `rm` deletes outright, not
+to the Bin. If a clipboard history app (Raycast, Alfred, Paste, Maccy, Windows' ⊞ V) kept the
+private half, delete that entry too. A backup made since step 2 may hold a copy: it only matters
+if someone's in your backups, and the key only reads one repository. GitHub has each half where
+it's needed; if a key's ever needed again, a new pair is made (*Changing the key*, below).
 
-### 6. Let Claude reach the private repository
+### 7. What the session does then
 
-Claude's sessions put the models into the private repository, so the Claude GitHub App needs it:
-
-1. Go to `https://github.com/settings/installations`, and **Configure** beside Claude.
-2. Under **Repository access**: with **All repositories**, there's nothing to do. With **Only
-   select repositories**, add `conquest-models`, then **Save**.
-
-If a session still can't reach it, reconnect GitHub at `https://claude.ai/connect-github`, or
-start a new session with both repositories chosen.
-
-### 7. Tell Claude it's done
-
-The session then:
-
-1. **Reads the settings back:** the repository is there and private; the deploy key is there and
-   read-only; this repository has a secret named `MODELS_DEPLOY_KEY`. GitHub shows a secret's
-   name, never its value. If the session isn't allowed to list the secrets, the first build that
-   fetches the models shows the secret's there.
-2. **Puts the licensed models in the private repository:** scrambled, each with its `LICENSE.md`.
-3. **Opens the pull request that moves them out of this one.** It:
-   - fetches the private repository with the key in `ci.yml`, `pages.yml` and `mac.yml`;
-   - takes the Dreadthorn's model out of this repository (from then on, not from the history);
-   - stamps whose each model is into the model itself;
-   - adds the notice beside `LICENSE` that Apache 2.0 covers the code, not the licensed models;
-   - adds `npm run models:fetch`, so anyone with access can have the models in their own copy;
-   - updates `contribution.md` (the steps, and the settings table in section 6) and this page's
-     status.
+1. Puts the licensed models in the private repository: scrambled, whose each is stamped in it,
+   each with its `LICENSE.md`, laid out as under `client/`.
+2. Opens the pull request that moves them out of this one: the licensed models step in `ci.yml`,
+   `pages.yml` and `mac.yml`; the models out of this repository (from then on, not from its
+   history); `npm run models:fetch`; the notice beside `LICENSE` that Apache 2.0 covers the code,
+   not the licensed models; and `contribution.md` (the steps, and the settings table in section
+   6).
 
 No CI job is added or renamed, so the ruleset's required checks don't change.
 
@@ -162,23 +208,36 @@ No CI job is added or renamed, so the ruleset's required checks don't change.
    contributor.
 2. Convert it with `utilities/blenderpipeline` (its configuration in
    `utilities/blenderpipeline/private/`, which git ignores, with the bought files).
-3. Scramble it: `npm run scramble -- <model.glb> <model.bin>`. Commit the scrambled copy to
-   `hoffspot/conquest-models` with its `LICENSE.md`: who made it, where it was bought, the
-   permission, and "Don't copy it out of this game or use it in anything else."
-4. In this repository: its catalog entry in `client/models/assets.json`, marked
-   `"licensed": true`, with its hash and size and a label that names the seller and the
-   permission; its credit in `README.md`'s *Credits and license*; then `npm run build:manifest`.
-   `test/scramble.test.js` checks every model so marked is scrambled, and no other.
+3. Scramble it, with whose it is: `npm run scramble -- <model.glb> <model.bin> --copyright "<the
+   model, by whom, where it was bought; in Pellagos with permission; not free to reuse>"`. It
+   prints the scrambled copy's size; its hash is the first 10 hex digits of its SHA-256.
+4. Commit the scrambled copy to `hoffspot/conquest-models` where it goes under `client/` (a
+   creature's in `models/beasts/`), with its `LICENSE.md` beside it: who made it, where it was
+   bought, the permission, and "Don't copy it out of this game or use it in anything else."
+5. In this repository:
+   - its catalog entry in `client/models/assets.json`, marked `"licensed": true`, with its file's
+     `path`, `hash` and `bytes`, and a label that names the seller and the permission;
+   - its path in `.gitignore`, beside the Dreadthorn's;
+   - its licence note under `client/` too, as `client/models/beasts/LICENSE.md` is (the model
+     viewer links to it);
+   - its credit in `README.md`'s *Credits and license*;
+   - then `npm run models:fetch` and `npm run build:manifest`.
+
+   `test/scramble.test.js` checks every model so marked is scrambled, and no other;
+   `test/licensed.test.js`, that git ignores it.
 
 ## Changing the key
 
 If the private half might have got out, or someone who could see it no longer should:
 
 1. On `hoffspot/conquest-models`: **Settings → Deploy keys**, then **Delete** the old key.
-2. Make a new pair, and add it, as in steps 2 to 5. Adding a secret with the same name,
-   `MODELS_DEPLOY_KEY`, replaces the old one.
+2. Make a new pair, and add it, as in steps 2 to 6 of *Setting it up*. In step 4, the secret's
+   row under **Repository secrets** has a ✎ pencil: **Update** it with the new private half
+   (or a new secret with the same name, `MODELS_DEPLOY_KEY`, which replaces it).
+3. Update the fingerprint in `contribution.md`'s settings table (section 6).
 
-Builds between the two steps can't fetch the models, so run them again afterwards.
+Builds between deleting the old key and adding the new can't fetch the models, so run them again
+afterwards.
 
 ## Scrambling
 
@@ -196,8 +255,10 @@ stops a model being saved, opened or found as one, and no more.
   alike. The game's glTF reader (`world/art/engine/models.js`) unscrambles any file that starts as
   a scrambled GLB does (its `glTF`, scrambled), and reads any other as it is. So the model viewer,
   the labs and the game all read a scrambled model without being told.
-- **Making a scrambled copy:** `npm run scramble -- <model.glb> <model.bin>` (`scripts/scramble-model.js`),
-  which checks the copy comes back as the model. It's named `.bin`, not `.glb`, as it isn't one.
+- **Making a scrambled copy:** `npm run scramble -- <model.glb> <model.bin> --copyright "<whose>"`
+  (`scripts/scramble-model.js`), which stamps whose it is in the model (its glTF asset's
+  `copyright`, which 3D tools show) and checks the copy comes back as the model. It's named
+  `.bin`, not `.glb`, as it isn't one.
 - **Marked in the catalog:** a licensed model's entry in `client/models/assets.json` has
   `"licensed": true`. `test/scramble.test.js` checks each one so marked is scrambled and comes back
   a GLB, and that nothing else is scrambled.
