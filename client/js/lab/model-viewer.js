@@ -1238,6 +1238,15 @@ for (const [label, ids] of groups) {
     picker.append(group);
 }
 
+// (The creatures to come: their models, before they're in the game, with the wilds' own)
+if (COMING.length) {
+    const group = document.createElement("optgroup");
+
+    group.label = "Coming to the wilds (models not in the game yet)";
+    group.append(...COMING.map((id) => new Option(ASSETS.models[id].label.replace(/ \(.*$/, "").replace(/^the (.)/i, (_, first) => first.toUpperCase()), `model:${id}`)));
+    picker.append(group);
+}
+
 // (The people: an adventurer and a soldier, of any people, with a weapon of theirs; and each of
 // the folk's roles)
 {
@@ -1282,15 +1291,6 @@ for (const [theme, { name, bosses, minis }] of Object.entries(THEMES)) {
     props.label = "Props (the catalog's models)";
     props.append(...PROPS.sort((a, b) => (a === "chest" ? -1 : b === "chest" ? 1 : 0)).map((id) => new Option(ASSETS.models[id].label.replace(/ \(.*$/, ""), `prop:${id}`)));
     picker.append(wagons, items, props);
-}
-
-// (The creatures to come: their models, before they're in the game)
-if (COMING.length) {
-    const group = document.createElement("optgroup");
-
-    group.label = "Coming to the wilds (models not in the game yet)";
-    group.append(...COMING.map((id) => new Option(ASSETS.models[id].label.replace(/ \(.*$/, "").replace(/^the (.)/i, (_, first) => first.toUpperCase()), `model:${id}`)));
-    picker.append(group);
 }
 
 picker.addEventListener("change", () => show(picker.value));
