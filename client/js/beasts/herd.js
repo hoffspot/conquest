@@ -14,6 +14,7 @@ import * as THREE from "three";
 import { CROWD, figureOf, recordPose, templateFrom } from "../world/crowd.js";
 import { BeastAvatar } from "./beast.js";
 import { LOOKS } from "./looks.js";
+import { MODELS } from "./model.js";
 import { sculpting } from "./sculpt.js";
 
 /** The bodies (LOOKS' `body`) a beast can be drawn in a crowd with. */
@@ -27,11 +28,15 @@ export const HERDS = Object.freeze(["quadruped", "biped", "arachnid", "serpent",
  */
 export const HERD = Object.freeze({ attack: 0.8, hitAt: 0.4, ease: 0.25, stride: 16, picture: 32 });
 
-/** Can one of the wild's creatures (a LOOKS id) be drawn in a crowd? */
+/**
+ * Can one of the wild's creatures (a LOOKS id) be drawn in a crowd? Not one drawn from a model
+ * (beasts/model.js): its crowd's figure would be its stand-in's, not what it is; its own least
+ * detailed level is drawn far off instead.
+ */
 export function herds(id) {
     const look = LOOKS[id];
 
-    return Boolean(look) && HERDS.includes(look.body) && !look.wings && !look.spectral && !look.cloak;
+    return Boolean(look) && HERDS.includes(look.body) && !look.wings && !look.spectral && !look.cloak && !MODELS[id];
 }
 
 /**

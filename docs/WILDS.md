@@ -120,9 +120,11 @@ third of the time), or it springs on whoever it's after, its whole weight behind
 staggering): weapons.js `werewolf`. At daybreak, out of everyone's sight, it goes with the night
 (*By night*, below). It drops its pelt and claws, and what was in its purse.
 
-It's drawn from a model of its own once that's read: a bought one, its look shown in the model
-viewer (*Coming to the wilds*) till it's in the game; till then, a great dark wolf, a third bigger
-than a dire wolf, stands in for it (beasts/looks.js).
+It's drawn from a model of its own once that's read (*Drawn from a model*, below): a bought one,
+2.4 metres tall, in its own grey skin or one of three others, the dusk's (black), the ash's (pale)
+or the russet's, by its seed; it rakes with its claws, leaps on whoever it's after, and howls and
+looks about as it rests. Till it's read, a great dark wolf, a third bigger than a dire wolf,
+stands in for it (beasts/looks.js).
 
 ### Goblins
 
@@ -875,6 +877,29 @@ what's downloaded before the game starts.
 - `e2e/models.spec.js`: drawn from its model once it's read, a level at a time, its fire out; its
   stand-in left drawn, with no error, when the model can't be read.
 
+The **werewolf** is drawn from a model too: Werewolf - Mythical Creature, bought on Fab under its
+Standard License (`client/models/beasts/LICENSE.md`), 3.4 MB, 16,456 triangles, two lower levels
+packed in, nine clips (three made in `utilities/blenderpipeline`: a howl, a claw swipe and a run).
+What's the same as the Dreadthorn's, and what's its own:
+
+- **Fetched as it's wanted:** as one comes into the battle (it has no lair), with the three skins
+  one of its kind may wear besides its own, all four together.
+- **Its skins** (`MODELS` `skins`): its own grey, or the dusk's, the ash's or the russet's, the
+  catalog's `beast-werewolf-skins` (0.2 MB each: only the textures that differ, the pipeline's
+  variants). Which one each wears is from its seed, well mixed (`skinOf`), so a pack's each wear
+  their own. Its materials are its own copies, the skin's textures in place of the model's.
+- **Its levels of detail** are each three meshes, its body and two lengths of fur, shown and
+  hidden together; its two materials, its body's and its fur's, both tinted and both flushed red
+  when it's struck.
+- **Walking into a run** (`clips.run`): its walk at its pace (1.45 m/s, as it's drawn), giving
+  way to its run from a fifth again that, all of it at twice, its run's own pace 2.6 m/s.
+- **Its ways:** its claws (`claw`, the Claw clip), its spring (`pounce`, a special: its leap, the
+  model's Attack clip), resting by howling or looking about; no fire (`mouth: null`).
+- **Not in a crowd:** a kind drawn from a model isn't drawn in its kind's crowd (*In a crowd*,
+  below: its figure would be its stand-in's); far off, its least detailed level is drawn.
+- `e2e/models.spec.js`: its model and three skins read, each skin worn by one of its seeds, its
+  levels three meshes each, shown together, its fur flushed with its body.
+
 ### In a crowd (beasts/herd.js)
 
 More than 45 metres from the camera, and in a crowded fight that comes too slowly those least
@@ -893,7 +918,8 @@ each of the three it's built as (`seed % 3`), at its kind's size, each drawn at 
   (a rat's and a porcupine's run, 0.2 s a stride). What's played over and over has its end eased
   into its start over a quarter of a second, as its breathing and looking about aren't in step with
   its stride.
-- **Which.** Those whose bodies move by their bones alone and aren't seen through (`herds`):
+- **Which.** Those whose bodies move by their bones alone, aren't seen through and aren't drawn
+  from a model (`herds`):
   four-legged beasts, skeletons and treants, spiders and scorpions, snakes, bog frogs. Not a slime
   (its body squashed as a whole), bats (a swarm), a wisp, a ghost or wraith, the black shuck or the
   shadow stalker (seen through), a wyvern or drake (wings), nor the wight lord (its cape).

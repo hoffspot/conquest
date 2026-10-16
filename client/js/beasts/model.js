@@ -15,13 +15,16 @@ import { Breath } from "./breath.js";
 
 /**
  * The creatures drawn from a model, by their LOOKS id (which stands in for one until it's read):
- * the catalog's entry (`asset`); how long it's drawn (metres) and how long and tall it's made;
- * which of its clips are what (`clips`: `hover`, hanging in the air, battle.js #hover), and its
- * ways of attacking (`attacks`, the special ones `specials`, as named: weapons.js `animation`; up
- * in the air, `aloft`'s in their place) and resting (`rests`), each a clip; when in a clip it
- * breathes fire (`fire`, by clip: seconds into it); its joints for the game's (`joints`:
- * beast.js BONES' names, by the model's bones' names as the glTF loader gives them); and how fast
- * (metres a second, as it's drawn) it goes when its walk plays at its own pace (`pace`).
+ * the catalog's entry (`asset`), and the skins one of them may wear (`skins`: "" its own, or one
+ * of the catalog's "<asset>-skins", <name>.<skin>.bin, only the textures that differ; by its
+ * seed); how long it's drawn (metres) and how long and tall it's made; which of its clips are what
+ * (`clips`: `hover`, hanging in the air, battle.js #hover; `run`, running), and its ways of
+ * attacking (`attacks`, the special ones `specials`, as named: weapons.js `animation`; up in the
+ * air, `aloft`'s in their place) and resting (`rests`), each a clip; when in a clip it breathes
+ * fire (`fire`, by clip: seconds into it) and from where (`mouth`, if it does); its joints for the
+ * game's (`joints`: beast.js BONES' names, by the model's bones' names as the glTF loader gives
+ * them); and how fast (metres a second, as it's drawn) it goes when its walk plays at its own pace
+ * (`pace`), and its run (`runPace`).
  */
 export const MODELS = Object.freeze({
     dreadthorn: Object.freeze({
@@ -39,6 +42,25 @@ export const MODELS = Object.freeze({
         pace: 3.2,
         // (How much of a flinch's clip a flinch plays, seconds: its first start)
         flinch: 0.8,
+    }),
+    // (The werewolf: drawn 2.4 metres tall, as it's made, its body and two lengths of fur a level
+    // of detail; in its own grey skin or the dusk's, the ash's or the russet's; its claws raking,
+    // or springing on whoever it's after (its leap); howling and looking about as it rests)
+    werewolf: Object.freeze({
+        asset: "beast-werewolf",
+        skins: Object.freeze(["", "dusk", "ash", "russet"]),
+        length: 1.36,
+        made: Object.freeze({ long: 1.36, tall: 2.4 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit React", dead: "Death" }),
+        attacks: Object.freeze({ claw: "Claw" }),
+        specials: Object.freeze({ pounce: "Attack" }),
+        rests: Object.freeze({ howl: "Howl", look: "Idle Alert" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "hand_r", left: "hand_l" }),
+        mouth: null,
+        pace: 1.45,
+        runPace: 2.6,
+        flinch: 0.6,
     }),
 });
 
@@ -71,6 +93,36 @@ async function readBlob(blob) {
     } finally {
         URL.revokeObjectURL(url);
     }
+}
+
+/**
+ * A kind's skins (MODELS' `skins`, but its own), each read as its model is (the catalog's
+ * "<asset>-skins", <name>.<skin>.bin), its materials ready to wear: put on the model as read
+ * (`gltf.skins`: { skin: [material...] }). One that couldn't be read isn't worn: its own is.
+ */
+async function readSkins(id, gltf, { priority, page }) {
+    const { asset, skins = [] } = MODELS[id];
+    const files = ASSETS.models[`${asset}-skins`]?.files ?? [];
+
+    gltf.skins = {};
+
+    await Promise.all(
+        skins.filter(Boolean).map(async (skin) => {
+            const file = files.find(({ path }) => path.endsWith(`.${skin}.bin`));
+
+            try {
+                const worn = !file ? null : fetcher ? await fetcher.want(file, priority).then((blob) => blob && readBlob(blob)) : await loadGltf(new URL(hashed(file.path, file.hash), page).href);
+
+                if (worn) {
+                    gltf.skins[skin] = await worn.parser.getDependencies("material");
+                }
+            } catch (error) {
+                console.warn(`Couldn't read ${id}'s skin ${skin}`, error);
+            }
+        }),
+    );
+
+    return gltf;
 }
 
 /** Whether a kind's drawn from a model (MODELS) that the catalog has. */
@@ -116,6 +168,9 @@ export function wantModel(id, priority = "soon") {
     } else {
         reading = loadGltf(new URL(hashed(file.path, file.hash), page).href);
     }
+
+    // (Its skins with it: one of them may wear any)
+    reading = reading.then((gltf) => gltf && readSkins(id, gltf, { priority, page }));
 
     asked.set(
         id,
@@ -194,13 +249,20 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
         return [{ clip: clips.dead, weight: 1, time: at(clips.dead, died) }];
     }
 
-    // On the ground: standing, or walking as fast as it goes (its walk's pace)
+    // On the ground: standing, or walking as fast as it goes (its walk's pace); one that has a run
+    // running from a fifth again its walk's pace, all of it at twice, as fast as it goes (its
+    // run's pace)
     const walking = smoothstep(speed / (model.pace * 0.35));
+    const running = clips.run ? smoothstep((speed - model.pace * 1.2) / (model.pace * 0.8)) : 0;
     const rate = Math.max(0.5, Math.min(2, speed / model.pace));
     let posed = [
         { clip: clips.idle, weight: 1 - walking, time: loop(clips.idle, t) },
-        { clip: clips.walk, weight: walking, time: loop(clips.walk, t * rate) },
+        { clip: clips.walk, weight: walking * (1 - running), time: loop(clips.walk, t * rate) },
     ];
+
+    if (running > 0) {
+        posed.push({ clip: clips.run, weight: walking * running, time: loop(clips.run, t * Math.max(0.5, Math.min(2, speed / model.runPace))) });
+    }
     const over = (clip, weight, time) => {
         posed = posed.map((one) => ({ ...one, weight: one.weight * (1 - weight) })).concat([{ clip, weight, time }]);
     };
@@ -259,32 +321,51 @@ export function breathing(model, attack, lengths, aloft = false) {
     return seconds >= window[0] && seconds <= window[1];
 }
 
+// The textures a skin's material may give in place of its model's own, as three.js names them
+const MAPS = ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap"];
+
 /**
  * A body (BeastAvatar's plan) made from a kind's model as read (`gltf`), at the size BeastAvatar
- * scales it by (`scale`: drawn at MODELS' `length` all the same). `groundAt(x, z)`: the ground's
- * height, for its fire to spread along.
+ * scales it by (`scale`: drawn at MODELS' `length` all the same), in one of its skins (`skin`: ""
+ * its own, or one of MODELS' `skins`, as wantModel read it; its own if that wasn't). `groundAt(x,
+ * z)`: the ground's height, for its fire to spread along.
  */
-export function modelBody(id, gltf, { scale = 1, groundAt = () => 0 } = {}) {
+export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" } = {}) {
     const model = MODELS[id];
     const scene = clone(gltf.scene);
     const inner = new THREE.Group();
     const size = model.length / model.made.long / scale;
     const levels = [];
-    let material = null;
+    const materials = new Map();
+    const drawn = new Map();
+    const worn = (skin && gltf.skins?.[skin]) || [];
 
     inner.scale.setScalar(size);
     inner.add(scene);
 
-    // Its meshes: one level of detail each (the pipeline's packed lower details: extras.lod),
-    // sharing one material of its own (flushed red when it's struck)
+    // Its meshes, a level of detail at a time (the pipeline's packed lower details: extras.lod),
+    // each level's those of all its parts (a werewolf's body and its two lengths of fur); each of
+    // its materials its own (flushed red when it's struck), in the skin it wears: the skin's
+    // textures in place of its own, the rest its own
     scene.traverse((node) => {
         if (!node.isSkinnedMesh) {
             return;
         }
 
-        material ??= node.material.clone();
-        node.material = material;
-        levels[node.userData.lod ?? 0] = node;
+        if (!materials.has(node.material.name)) {
+            const own = node.material.clone();
+            const given = worn.find((material) => material.name === own.name);
+
+            for (const map of MAPS.filter((one) => given?.[one])) {
+                own[map] = given[map];
+            }
+
+            materials.set(node.material.name, own);
+        }
+
+        node.material = materials.get(node.material.name);
+        drawn.set(node, node.material);
+        (levels[node.userData.lod ?? 0] ??= []).push(node);
         node.castShadow = false;
         node.receiveShadow = true;
     });
@@ -292,19 +373,23 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0 } = {}) {
     // (Its shadow from its least detailed level only: there all the time, casting it; not its own
     // level shown, drawn leaving nothing on the screen. A layer of its own won't do: three.js casts
     // only what the camera that's drawing sees)
-    const shadow = levels.at(-1);
+    const shadows = levels.at(-1);
     const unseen = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
 
-    shadow.castShadow = true;
+    for (const mesh of shadows) {
+        mesh.castShadow = true;
+    }
 
     const showLevel = (level) => {
-        levels.forEach((mesh, i) => {
-            const shown = i === Math.min(level, levels.length - 1);
+        const shown = Math.min(level, levels.length - 1);
 
-            if (mesh === shadow) {
-                mesh.material = shown ? material : unseen;
-            } else {
-                mesh.visible = shown;
+        levels.forEach((meshes, i) => {
+            for (const mesh of meshes) {
+                if (i === levels.length - 1) {
+                    mesh.material = i === shown ? drawn.get(mesh) : unseen;
+                } else {
+                    mesh.visible = i === shown;
+                }
             }
         });
     };
@@ -328,33 +413,45 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0 } = {}) {
     idle.setEffectiveWeight(1);
     mixer.update(0);
     scene.updateMatrixWorld(true);
-    shadow.computeBoundingSphere();
+
+    const sphere = new THREE.Sphere();
+
+    for (const mesh of shadows) {
+        mesh.computeBoundingSphere();
+        sphere.isEmpty() ? sphere.copy(mesh.boundingSphere) : sphere.union(mesh.boundingSphere);
+    }
+
     idle.setEffectiveWeight(0);
-
-    const sphere = shadow.boundingSphere.clone();
-
     sphere.radius *= 1.8;
 
-    for (const mesh of levels) {
+    for (const mesh of levels.flat()) {
         mesh.boundingSphere = sphere;
     }
 
+    // (Its fire, if it breathes any: from its mouth's lips, `mouth`)
     const joints = Object.fromEntries(Object.entries(model.joints).map(([joint, bone]) => [joint, scene.getObjectByName(bone) ?? scene]));
-    const lips = Object.fromEntries(Object.entries(model.mouth).map(([part, bone]) => [part, scene.getObjectByName(bone)]));
-    const breath = new Breath({ groundAt });
+    const lips = model.mouth ? Object.fromEntries(Object.entries(model.mouth).map(([part, bone]) => [part, scene.getObjectByName(bone)])) : null;
+    const breath = lips ? new Breath({ groundAt }) : null;
     const object = new THREE.Group();
     const where = { upper: new THREE.Vector3(), lower: new THREE.Vector3(), hinge: new THREE.Vector3() };
+    const [body, ...others] = materials.values();
     let died = 0;
     let stepped = 0;
 
-    object.add(inner, breath.object);
+    object.add(inner);
+
+    if (breath) {
+        object.add(breath.object);
+    }
 
     return {
         object,
         height: model.made.tall * size,
         // (Nose to tail, as the bodies built in code say theirs: scaled up by BeastAvatar's scale)
         length: model.length / scale,
-        materials: { body: material },
+        // (Its first material its body's; any others, its fur's, tinted and flushed as it is)
+        materials: { body, others },
+        skin: worn.length ? skin : "",
         joints,
         attacks: [...Object.keys(model.attacks), ...Object.keys(model.specials)],
         rests: Object.keys(model.rests),
@@ -401,7 +498,7 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0 } = {}) {
             }
 
             // Its fire, out of its mouth while it breathes (where its lips are now)
-            const fire = breathing(model, inputs.attack, lengths, Boolean(inputs.fly?.hover));
+            const fire = Boolean(breath) && breathing(model, inputs.attack, lengths, Boolean(inputs.fly?.hover));
 
             if (fire) {
                 object.updateWorldMatrix(true, true);
@@ -410,7 +507,7 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0 } = {}) {
                 lips.hinge.getWorldPosition(where.hinge);
             }
 
-            breath.step(inputs.seen === false && !fire ? 0 : inputs.dt, fire ? where : null);
+            breath?.step(inputs.seen === false && !fire ? 0 : inputs.dt, fire ? where : null);
         },
 
         // One of its clips (by name: `lengths`' keys) alone, `time` seconds into it, as it was
@@ -426,7 +523,7 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0 } = {}) {
 
         dispose() {
             unseen.dispose();
-            breath.dispose();
+            breath?.dispose();
             mixer.stopAllAction();
             mixer.uncacheRoot(scene);
         },

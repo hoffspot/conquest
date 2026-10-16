@@ -345,10 +345,11 @@ const ITEMS = Object.entries(EQUIPMENT).filter(([, { model, slot }]) => model &&
 // the treasure chest, by their catalog ids
 const PROPS = Object.keys(ASSETS.models).filter((id) => id.startsWith("dungeon-prop-") || id === "chest");
 
-// The catalog's creatures with a model who aren't in the game yet (no kind is drawn from it:
-// beasts/model.js MODELS), by their catalog ids: each shown as it was made, every clip in its file
-// by name, in any of its skins
-const COMING = Object.keys(ASSETS.models).filter((id) => id.startsWith("beast-") && !id.endsWith("-skins") && !Object.values(MODELS).some(({ asset }) => asset === id));
+// The catalog's creatures' models, by their catalog ids: each to be shown as it was made, every
+// clip in its file by name, in any of its skins (?model=beast-werewolf); those who aren't in the
+// game yet (no kind is drawn from it: beasts/model.js MODELS) listed in the picker
+const BEAST_MODELS = Object.keys(ASSETS.models).filter((id) => id.startsWith("beast-") && !id.endsWith("-skins"));
+const COMING = BEAST_MODELS.filter((id) => !Object.values(MODELS).some(({ asset }) => asset === id));
 
 /**
  * A model's other skins (its catalog entry's, "<id>-skins": utilities/blenderpipeline's variants,
@@ -1168,6 +1169,12 @@ function describe() {
         rows.push(["Clips", String(Object.keys(avatar.plan.lengths).length)]);
     }
 
+    // (The skin one drawn from a model wears, if its kind has others: by its seed, "Another one"
+    // for another)
+    if (model?.skins) {
+        rows.push(["Skin", `${avatar.plan.skin || "its own"}, one of ${model.skins.length} its kind wears`]);
+    }
+
     // (Its other skins, each a file of its own: only the textures that differ)
     if (thing?.skins?.length) {
         const extra = ASSETS.models[`${thing.asset}-skins`].files.reduce((sum, file) => sum + file.bytes, 0);
@@ -1568,7 +1575,7 @@ const known = (id) =>
     (isPerson(id) && (FOLK_ROLES.includes(id.slice(7)) || ["adventurer", "soldier"].includes(id.slice(7)))) ||
     (id?.startsWith("item:") && ITEMS.some(([item]) => `item:${item}` === id)) ||
     (id?.startsWith("prop:") && PROPS.includes(id.slice(5))) ||
-    (id?.startsWith("model:") && COMING.includes(id.slice(6)));
+    (id?.startsWith("model:") && BEAST_MODELS.includes(id.slice(6)));
 const start = known(asked) ? asked : "wolf";
 
 show(start);
@@ -1613,7 +1620,7 @@ window.lab = {
     act,
     advance,
     avatar: () => current.avatar,
-    current: () => ({ id: current.id, humanoid: !current.avatar.plan, person: current.person, thing: current.thing, attacks: current.avatar.attacks ?? [], specials: current.avatar.specials ?? [], rests: current.avatar.rests ?? [] }),
+    current: () => ({ id: current.id, humanoid: !current.avatar.plan, person: current.person, thing: current.thing, model: Boolean(current.avatar.model), skin: current.avatar.plan?.skin ?? null, attacks: current.avatar.attacks ?? [], specials: current.avatar.specials ?? [], rests: current.avatar.rests ?? [] }),
     pause: () => play(false),
     play: () => play(true),
     step,
