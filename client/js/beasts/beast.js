@@ -106,6 +106,24 @@ const smoothstep = (u) => u * u * (3 - 2 * u);
 // Which of a creature's joints stands for each of a person's bones the game asks for
 const BONES = { Spine2: "torso", Spine1: "torso", Spine: "body", Head: "head", Neck: "head", RightHand: "mouth", LeftHand: "left" };
 
+/**
+ * Which of its model's skins one of a kind wears (its seed): "" its own (beasts/model.js MODELS'
+ * `skins`). (Its seed well mixed first, so that those whose seeds are near each other, a pack's,
+ * wear a skin each of their own: murmur3's finaliser)
+ */
+export function skinOf(id, seed) {
+    const skins = MODELS[id]?.skins ?? [""];
+    let mixed = (seed * 104729 + 29) | 0;
+
+    mixed ^= mixed >>> 16;
+    mixed = Math.imul(mixed, 0x85ebca6b);
+    mixed ^= mixed >>> 13;
+    mixed = Math.imul(mixed, 0xc2b2ae35);
+    mixed ^= mixed >>> 16;
+
+    return skins[Math.floor(((mixed >>> 0) / 4294967296) * skins.length)];
+}
+
 /** How big one of a kind is (its seed): a share of its look's size. */
 export function sizeOf(id, seed) {
     const [least, most] = LOOKS[id]?.scale ?? [1, 1];
@@ -142,7 +160,7 @@ export class BeastAvatar {
 
         this.id = id;
         this.scale = sizeOf(id, seed);
-        this.plan = model ? modelBody(id, model, { scale: this.scale, groundAt: () => this.ground ?? this.object.position.y }) : BUILDERS[LOOKS[id].body](LOOKS[id], random, `${id}:${variant}`);
+        this.plan = model ? modelBody(id, model, { scale: this.scale, groundAt: () => this.ground ?? this.object.position.y, skin: skinOf(id, seed) }) : BUILDERS[LOOKS[id].body](LOOKS[id], random, `${id}:${variant}`);
         this.scale *= champion ? championScale(champion, this.plan.height * this.scale) : 1;
 
         /** Is it drawn from its model (beasts/model.js), not its stand-in? */
@@ -163,12 +181,20 @@ export class BeastAvatar {
             this.plan.materials.body = became.get(this.plan.materials.body) ?? this.plan.materials.body;
         }
 
-        this.plan.materials.body.color?.multiplyScalar(0.9 + own() * 0.2);
+        // (Its colour a little its own; a model's other materials, its fur's, with its body's)
+        const skins = [this.plan.materials.body, ...(this.plan.materials.others ?? [])];
+        const shade = 0.9 + own() * 0.2;
+
+        for (const material of skins) {
+            material.color?.multiplyScalar(shade);
+        }
 
         // (A champion's: its body tinted, what glows on it, folded into its own material, brighter)
         if (champion) {
             if (champion.tint !== null) {
-                this.plan.materials.body.color?.multiply(new THREE.Color(champion.tint));
+                for (const material of skins) {
+                    material.color?.multiply(new THREE.Color(champion.tint));
+                }
             }
 
             this.plan.object.traverse((node) => {
@@ -234,6 +260,9 @@ export class BeastAvatar {
 
         this.glow = skin.emissive.clone().multiplyScalar(skin.emissiveIntensity * (champion?.glow ?? 1));
         this.flush = { emissive: new THREE.Color(0, 0, 0) };
+
+        // (A model's other materials, its fur's, each with its own glow, flushed with it)
+        this.others = (this.plan.materials.others ?? []).map((material) => ({ material, glow: material.emissive.clone().multiplyScalar(material.emissiveIntensity * (champion?.glow ?? 1)) }));
 
         const joints = this.plan.joints;
         const bone = (name) => joints[BONES[name]] ?? joints.torso;
@@ -751,10 +780,14 @@ export class BeastAvatar {
             this.flight = null;
         }
 
-        // Its glow, and any flush of red on it
+        // Its glow, and any flush of red on it (on all of it: a model's fur too)
         const skin = this.plan.materials.body;
 
         skin.emissive.copy(this.glow).add(this.flush.emissive).multiplyScalar(1 / Math.max(0.001, skin.emissiveIntensity));
+
+        for (const { material, glow } of this.others) {
+            material.emissive.copy(glow).add(this.flush.emissive).multiplyScalar(1 / Math.max(0.001, material.emissiveIntensity));
+        }
     }
 
     /** As Avatar.angleTo: which way a point is from it (0 ahead, positive to its left). */

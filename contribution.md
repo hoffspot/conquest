@@ -417,10 +417,12 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    its `tier` (`near`, fetched when it's predicted to be wanted soon, or `demand`, only once it's
    needed) and its `files` (`path`s under `client/`, its lower-detail copy first), and whatever
    else `generated/asset_streaming_plan.md` (section 2) says it needs. Then `npm run build:manifest`.
-   A creature drawn from a model (the Dreadthorn) also has an entry in `MODELS`
-   (`client/js/beasts/model.js`): its catalog entry, its size, and which of its clips and bones
-   are what. Its look in `client/js/beasts/looks.js` stands in for it until it's read.
-   `test/model.test.js` checks every clip and bone it names is in the model.
+   A creature drawn from a model (the Dreadthorn, the werewolf) also has an entry in `MODELS`
+   (`client/js/beasts/model.js`): its catalog entry, the skins its kind wears (its catalog
+   entry's `<id>-skins`), its size, and which of its clips and bones are what. Its look in
+   `client/js/beasts/looks.js` stands in for it until it's read. `test/model.test.js` checks every
+   clip, bone and skin it names is in the model and the catalog, and that it's a lair's master or
+   met in the wilds.
 
 ## 4. Before you push
 
