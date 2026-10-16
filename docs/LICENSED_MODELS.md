@@ -5,10 +5,10 @@ seller's permission. Today that's only the Dreadthorn, HuyKhoi2407's Dreadthorn 
 (`client/models/beasts/LICENSE.md`). This page is how such models are kept out of anyone else's
 hands, as far as a game played in a browser can, and what the owner sets up for it.
 
-**Status: planned.** Scrambling comes first, in a pull request of its own. The owner sets up the
-private repository on 17 October 2026 (*Setting it up*, below), and the models move into it after
-that. Until then, the Dreadthorn's model is in this repository, as
-`client/models/beasts/dreadthorn.glb`.
+**Status: half done.** The licensed models are served scrambled (*Scrambling*, below). The owner
+sets up the private repository on 17 October 2026 (*Setting it up*), and the models move into it
+after that. Until then, the Dreadthorn's model is in this repository, scrambled, as
+`client/models/beasts/dreadthorn.bin`.
 
 ## What it does, and what it can't
 
@@ -162,12 +162,13 @@ No CI job is added or renamed, so the ruleset's required checks don't change.
    contributor.
 2. Convert it with `utilities/blenderpipeline` (its configuration in
    `utilities/blenderpipeline/private/`, which git ignores, with the bought files).
-3. Scramble it, and commit it to `hoffspot/conquest-models` with its `LICENSE.md`: who made it,
-   where it was bought, the permission, and "Don't copy it out of this game or use it in anything
-   else."
-4. In this repository: its catalog entry in `client/models/assets.json`, with its hash and size
-   and a label that names the seller and the permission; its credit in `README.md`'s *Credits and
-   license*; then `npm run build:manifest`.
+3. Scramble it: `npm run scramble -- <model.glb> <model.bin>`. Commit the scrambled copy to
+   `hoffspot/conquest-models` with its `LICENSE.md`: who made it, where it was bought, the
+   permission, and "Don't copy it out of this game or use it in anything else."
+4. In this repository: its catalog entry in `client/models/assets.json`, marked
+   `"licensed": true`, with its hash and size and a label that names the seller and the
+   permission; its credit in `README.md`'s *Credits and license*; then `npm run build:manifest`.
+   `test/scramble.test.js` checks every model so marked is scrambled, and no other.
 
 ## Changing the key
 
@@ -190,6 +191,16 @@ every pair, for speed.
 
 It's not a secret, and can't be: the game has to undo it, so anyone with the game's code can. It
 stops a model being saved, opened or found as one, and no more.
+
+- **The code:** `client/js/app/scramble.js`, used by the game, the build's scripts and the tests
+  alike. The game's glTF reader (`world/art/engine/models.js`) unscrambles any file that starts as
+  a scrambled GLB does (its `glTF`, scrambled), and reads any other as it is. So the model viewer,
+  the labs and the game all read a scrambled model without being told.
+- **Making a scrambled copy:** `npm run scramble -- <model.glb> <model.bin>` (`scripts/scramble-model.js`),
+  which checks the copy comes back as the model. It's named `.bin`, not `.glb`, as it isn't one.
+- **Marked in the catalog:** a licensed model's entry in `client/models/assets.json` has
+  `"licensed": true`. `test/scramble.test.js` checks each one so marked is scrambled and comes back
+  a GLB, and that nothing else is scrambled.
 
 ### What it costs
 

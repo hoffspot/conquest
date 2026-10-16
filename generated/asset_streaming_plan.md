@@ -481,7 +481,8 @@ code's own names, so nothing has to be looked up again from scratch.
 the repository in its converted form, rather than the pipeline's dragon (`docs/WILDS.md`, *Drawn
 from a model*). What was built differs from the steps below:
 
-- **One file**, `client/models/beasts/dreadthorn.glb` (5.1 MB): KTX2 textures, its three levels
+- **One file**, `client/models/beasts/dreadthorn.glb` (5.1 MB; since 16 October 2026 served
+  scrambled, as `dreadthorn.bin`: docs/LICENSED_MODELS.md): KTX2 textures, its three levels
   of detail packed in (the pipeline's `extras.lod`), so no lower-detail copy to fetch first. Its
   catalog entry is `beast-dreadthorn` (`demand`).
 - **What the game knows of it** isn't in the catalog entry (`stand`, `when`, `clips`) but in

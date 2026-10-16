@@ -153,6 +153,7 @@ Network's prompts, run at login, sleep) are the owner's (docs/MAC_APP.md).
 | `npm run soak:server` | Changes to how the world server runs a world for its players: the world's thread, the play socket, saving, what's made ahead (generated/world_server_plan.md §15 S9). A world server with 8 players in Node, each in a process of its own, playing by themselves (`client/js/core/bot.js`), for two hours. It fails if the world's memory grows more than 15% after the first hour, if any minute's 99th-percentile step takes 50 ms or more once they're all in, or if anyone's sent out. Run it with nothing else on the machine: the players' copies of the world share its cores (they run at a lower priority, as if on devices of their own, and each minute's line says how busy the world's thread was and how many of buildings' insides' tiles it baked, besides its steps). `-- --minutes 10 --players 4` for a quick look. Its report is written to `test-results/server-soak/report.json` |
 | `npm run e2e:durations` | After adding browser tests, or making them much slower or quicker (below) |
 | `npm run build:manifest` | After changing anything under `client/`. It lists what the game downloads before it starts (`client/js/app/manifest.js`, the data with the hashes of its bytes), and the catalog of models downloaded only as they're wanted (`client/js/app/assets.js`, from `client/models/assets.json`). The unit tests fail until you do |
+| `npm run scramble` | Only when adding or remaking a licensed model (docs/LICENSED_MODELS.md): `-- <model.glb> <model.bin>` scrambles the model `utilities/blenderpipeline` made, as the game serves it, and checks it comes back. Its catalog entry in `client/models/assets.json` is marked `"licensed": true`, and `test/scramble.test.js` checks every one so marked is scrambled, and no other. Then `npm run build:manifest` |
 | `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`). Then `npm run build:vitruvian`, which carries its shapes over |
 | `npm run build:vitruvian` | Only when rebuilding the Vitruvian body (`client/characters/vitruvian.*` and its masks) from CharMorph's Vitruvian, or after rebuilding the MakeHuman body, whose shapes it carries over. It needs Vitruvian's files, and its `char.blend` is in Git LFS: `git clone --depth 1 https://github.com/Upliner/CharMorph-Vitruvian ../charmorph-vitruvian`, then fetch `char.blend` on its own as the top of `scripts/build-vitruvian.js` says, then `-- --from=../charmorph-vitruvian`. About 4 minutes. Then `npm run build:manifest` |
 | `npm run build:music` | Only when remaking the music's instrument recordings |
@@ -355,10 +356,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    licence file and a credit in `README.md`'s *Credits and license*. Nothing with a licence that
    restricts use. That goes for the tools' test assets in `utilities/` too. A bought model, and
    anything built from it, stays out of the repository: keep it in `utilities/blenderpipeline/private/`,
-   which git ignores. The one exception is the Dreadthorn's model (`client/models/beasts/dreadthorn.glb`):
+   which git ignores. The one exception is the Dreadthorn's model (`client/models/beasts/dreadthorn.bin`):
    bought, and in the repository with permission the repository's owner obtained, only in its
-   converted form (its `LICENSE.md` there). How it's being moved out to a private repository,
-   and scrambled where it's served, is in `docs/LICENSED_MODELS.md`. Another exception is the
+   converted form (its `LICENSE.md` there), and scrambled (`npm run scramble`). How it's being
+   moved out to a private repository is in `docs/LICENSED_MODELS.md`. Another exception is the
    owner's call, never a contributor's. Third-party code goes in `client/vendor/` through a `scripts/vendor-*.js`
    script.
 9. **Heavy models go in the catalog, not in what's downloaded before the game starts.** That has

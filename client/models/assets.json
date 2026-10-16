@@ -1536,9 +1536,10 @@
         "beast-dreadthorn": {
             "tier": "demand",
             "label": "The Dreadthorn (HuyKhoi2407's Dreadthorn Dragon, from Superhive: used with permission; client/models/beasts/LICENSE.md)",
+            "licensed": true,
             "files": [
                 {
-                    "path": "models/beasts/dreadthorn.glb"
+                    "path": "models/beasts/dreadthorn.bin"
                 }
             ]
         }
