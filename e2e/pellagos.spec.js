@@ -9443,6 +9443,118 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     await expect(page.locator("#menuoptions")).toBeVisible();
 });
 
+test("a Prismatic chain: an element's spell cast from the quick actions rolls its slot on to the next, ringed and pulsing, every attack spell 5% stronger a spell; at the last, its piece of the sigil, the other elements ringed; let lapse, all lost; whole, the sigil tapped casts Prismatic Destruction on the foe", async ({ page }) => {
+    test.setTimeout(120000);
+    await page.setViewportSize({ width: 402, height: 874 });
+    await playing(page, "/?play&seed=1");
+
+    const bar = page.locator(".quickbar");
+    const slot = (n) => bar.locator(`.quick-slot[data-slot="${n}"]`);
+    const sigil = page.locator(".sigil");
+    const petal = (element) => sigil.locator(`.sigil-petal[data-element="${element}"]`);
+    const play = (seconds) => page.evaluate((seconds) => window.pellagos.game.advance(seconds), seconds);
+    const prism = () => page.evaluate(() => window.pellagos.game.battle.actor("player").prism);
+    // (What a slot shows, its own name: not the one rolling out of it)
+    const label = (n) => slot(n).locator(":scope > .quick-label");
+
+    // Fire's spells and Rumble learnt, Burn and Rumble in the quick actions; a hardy orc brought
+    // near, and set on (stunned, so it doesn't stagger the player as they cast)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const orc = battle.actor("orc");
+        const square = [player.square[0] + 3, player.square[1] - 2];
+
+        game.stop();
+
+        for (const spell of ["burn", "fireball", "burstflame", "immolate", "flamefill", "inferno", "hellfire", "rumble"]) {
+            game.progress.learn(spell);
+        }
+
+        game.setQuick(["vigor", "stun", "burn", "rumble", null, null]);
+        Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null, hp: 5000, maxHp: 5000, stunnedUntil: battle.time + 120000 });
+        Object.assign(player, { hp: 5000, maxHp: 5000 });
+        game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        battle.command("player", { type: "engage", target: "orc" });
+        game.advance(0.1);
+    });
+    await expect(bar).toHaveClass(/up/);
+    await expect(label(2)).toHaveText("Burn");
+    await expect(slot(2)).not.toHaveClass(/chain/);
+    await expect(sigil).toBeHidden();
+
+    // Burn tapped and landed: the chain begun, its slot rolled on to Fireball, ringed in fire's
+    // colour; the sigil up, fire's petal climbing; Rumble's slot as it was
+    await slot(2).click();
+    await play(1.6);
+    expect(await prism()).toMatchObject({ element: "fire", step: 1, pieces: [] });
+    await expect(label(2)).toHaveText("Fireball");
+    await expect(slot(2)).toHaveClass(/chain/);
+    await expect(slot(2)).toHaveAttribute("data-chain", "fire");
+    await expect(slot(3)).not.toHaveClass(/chain/);
+    await expect(sigil).toBeVisible();
+    await expect(petal("fire")).toHaveClass(/climbing/);
+    await expect(sigil.locator(".sigil-bonus")).toHaveText("+0%");
+    expect(await page.evaluate(() => window.pellagos.game.wheels.quick[2])).toBe("burn");
+
+    // Fireball, from the same slot: 5% stronger, Burstflame next
+    await slot(2).click();
+    await play(1.8);
+    expect(await prism()).toMatchObject({ element: "fire", step: 2 });
+    await expect(label(2)).toHaveText("Burstflame");
+    await expect(sigil.locator(".sigil-bonus")).toHaveText("+5%");
+
+    // (Cast up to Inferno) Hellfire, the last: fire's piece, 25%; Burn back in its slot, unringed,
+    // and Rumble's ringed in earth's colour, the next chain's to begin. Tapped meanwhile, the
+    // sigil isn't whole
+    await page.evaluate(() => {
+        const { battle } = window.pellagos.game;
+
+        battle.actor("player").prism = { element: "fire", step: 6, at: battle.time, pieces: [], readyAt: null };
+        window.pellagos.game.advance(0.05);
+    });
+    await expect(label(2)).toHaveText("Hellfire");
+    await slot(2).click();
+    await play(2.4);
+    expect(await prism()).toMatchObject({ element: null, pieces: ["fire"] });
+    await expect(page.locator("#banner")).toContainText("Fire's piece of the Prismatic sigil: every attack spell 25% stronger");
+    await expect(petal("fire")).toHaveClass(/held/);
+    await expect(sigil.locator(".sigil-bonus")).toHaveText("+25%");
+    await expect(label(2)).toHaveText("Burn");
+    await expect(slot(2)).not.toHaveClass(/chain/);
+    await expect(label(3)).toHaveText("Rumble");
+    await expect(slot(3)).toHaveAttribute("data-chain", "earth");
+    await sigil.click();
+    await expect(page.locator("#banner")).toHaveText("The Prismatic sigil isn't whole: cast each element's spells in order, first to last");
+
+    // Nothing more cast for ten seconds: broken, everything lost
+    await play(10.2);
+    expect(await prism()).toBeNull();
+    await expect(page.locator("#banner")).toHaveText("The Prismatic chain is broken: its strength is lost.");
+    await expect(sigil).toBeHidden();
+    await expect(slot(3)).not.toHaveClass(/chain/);
+
+    // The four pieces held, the sigil whole: every attack spell twice as strong, no slot ringed;
+    // tapped, Prismatic Destruction cast on the orc, which it kills; the sigil spent
+    await page.evaluate(() => {
+        const { battle } = window.pellagos.game;
+
+        battle.actor("player").prism = { element: null, step: 0, at: battle.time, pieces: ["fire", "earth", "air", "water"], readyAt: battle.time };
+        window.pellagos.game.advance(0.05);
+    });
+    await expect(sigil).toHaveClass(/whole/);
+    await expect(sigil.locator(".sigil-bonus")).toHaveText("+100%");
+    await expect(sigil).toHaveAttribute("aria-label", /whole: cast Prismatic Destruction on your foe/);
+    await expect(bar.locator(".quick-slot.chain")).toHaveCount(0);
+    await sigil.click();
+    await play(2);
+    expect(await page.evaluate(() => window.pellagos.game.battle.actor("orc").dead)).toBe(true);
+    expect(await prism()).toBeNull();
+    await expect(sigil).toBeHidden();
+});
+
 test("six quick actions across (Game options): only their icons on a phone held upright, their names on its side; a school's spell flicked down or up rolls to the last or next of its school the player knows, its name said over it, and is kept; at either end of its school, or anything else, it bounces", async ({ page }) => {
     test.setTimeout(180000);
     // (Not full screen, as a tap on the game asks to be, or the phone can't be turned on its side)

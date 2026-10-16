@@ -4348,6 +4348,16 @@ the slot gives 9 pixels that way and springs back (`bounce`, 0.26 s), with a tap
 icons are shown, the new spell's name is said a moment over its slot (`.quick-name`, 1.1 s).
 Asked for less motion (`prefers-reduced-motion`), the spell's simply changed.
 
+**A Prismatic chain** (MAGIC.md, "Prismatic Destruction"): while one of the player's is live, a
+slot holding a spell of an element it goes on with shows the chain's next spell of it, if they
+know it (`#quickKeys`: it's what a tap casts, and what's greyed or cooling), rolled in up as a
+flick is, and ringed in the element's colour (`chain`, `data-chain`), a dashed border marching
+round it and pulsing, as a combo's next action is in other games. What the player's put in the
+slot isn't changed: it's shown again as the chain moves on, or ends. The Prismatic sigil stands
+over the player's card while the chain lasts (app/sigil.js), tapped to cast Prismatic Destruction
+once it's whole. Asked for less motion, the ring's still there, dashed and glowing, but nothing
+marches or pulses.
+
 **Changed** by holding a slot (0.5 s, `QUICK_HOLD_MS`; sliding off it does neither): the game
 pauses (when no one else is playing in the world) at **Game options, Quick actions**
 (app/quicksetup.js) with that slot chosen, and Back to the game carries on. Quick actions in Game

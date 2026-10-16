@@ -8,7 +8,10 @@
 // greyed; while it's cooling down, greyed over as much of it as the cooldown has left, swept back
 // round as it passes, as a wheel's slice is. The keys 1 to 4 (or 6) tap them too. Flicked up or
 // down, a school's spell in one turns to the next of its school or the last, rolling in like a
-// slot machine's reel (wheel.js flicked); at either end of its school, it bounces.
+// slot machine's reel (wheel.js flicked); at either end of its school, it bounces. While a
+// Prismatic chain of the player's is live (core/prismatic.js), a slot holding one of its
+// element's spells shows the chain's next, rolled in, ringed in the element's colour with a
+// dashed border marching round it, pulsing (game.js #quickKeys).
 //
 // Six across, each slot's name is smaller where they're narrow, and where they're narrower still
 // (a phone held upright) only their icons are shown (styles.css), a flicked spell's name said a
@@ -227,15 +230,22 @@ export class QuickBar {
 
     /**
      * Show what's in each slot (`keys`: an ACTIONS key or "item:" and a thing to use, or null),
-     * how many of each thing to use there are (`counts`, by item id), and which can't be used as
-     * things are (`off`: their indices).
+     * how many of each thing to use there are (`counts`, by item id), which can't be used as
+     * things are (`off`: their indices), and which hold a Prismatic chain's next spell (`chain`:
+     * its element, by index), ringed and pulsing.
      */
-    fill(keys, { counts = {}, off = [] } = {}) {
+    fill(keys, { counts = {}, off = [], chain = {} } = {}) {
         this.slots.forEach((slot, index) => {
             const key = keys[index] ?? null;
+            const element = chain[index] ?? "";
 
             fillSlot(slot, key, counts[actionOf(key)?.item] ?? 0);
             slot.classList.toggle("off", off.includes(index));
+
+            if ((slot.dataset.chain ?? "") !== element) {
+                slot.dataset.chain = element;
+                slot.classList.toggle("chain", Boolean(element));
+            }
         });
     }
 
