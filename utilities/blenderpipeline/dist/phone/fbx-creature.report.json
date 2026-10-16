@@ -10,7 +10,7 @@
     "sourceSavedWith": null,
     "sourceFormat": "fbx"
   },
-  "kilobytes": 19.5,
+  "kilobytes": 19.6,
   "compression": "meshopt",
   "extensionsRequired": [
     "EXT_meshopt_compression",
@@ -92,7 +92,7 @@
       "mimeType": "image/ktx2",
       "width": 64,
       "height": 64,
-      "kilobytes": 1.2,
+      "kilobytes": 1.3,
       "gpuMegabytes": 0.01
     },
     {
@@ -342,8 +342,8 @@
         "mode": "etc1s",
         "width": 64,
         "height": 64,
-        "from": 311,
-        "to": 1275
+        "from": 324,
+        "to": 1286
       },
       {
         "name": "skin_basecolor",

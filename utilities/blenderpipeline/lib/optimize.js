@@ -331,7 +331,7 @@ export async function optimize(config, { raw, glb, lodFile }) {
 
     // Textures the GPU keeps compressed
     if (config.textures.format === "ktx2") {
-        result.ktx2 = await encodeTextures(document, config.textures.ktx2);
+        result.ktx2 = await encodeTextures(document, config.textures.ktx2, { maxSize: config.textures.maxSize });
     }
 
     // Whether each clip loops, and how far out it reaches at any moment of any clip
@@ -426,7 +426,7 @@ export async function optimizeVariant(config, name, { raw, glb }) {
         throw new Error(`variants.${name}: the export has no material ${missing.join(", ")}`);
     }
 
-    const ktx2 = config.textures.format === "ktx2" ? await encodeTextures(document, config.textures.ktx2) : [];
+    const ktx2 = config.textures.format === "ktx2" ? await encodeTextures(document, config.textures.ktx2, { maxSize: config.textures.maxSize }) : [];
 
     await io.write(glb, document);
 

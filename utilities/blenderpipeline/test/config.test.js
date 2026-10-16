@@ -97,6 +97,8 @@ describe("an asset's config", () => {
         refuses(material({ baseColor: { file: "a.png", channel: "R" } }), /materials.skin.baseColor is a colour: it has no channel to choose/);
         refuses(material({ roughness: { file: "a.png", channel: "X" } }), /materials.skin.roughness.channel is R, G, B or A/);
         refuses(material({ normal: { file: "a.png", invert: true } }), /materials.skin.normal can't be inverted/);
+        refuses(material({ emission: { file: "a.png", scale: 0.5 } }), /materials.skin.emission can't be scaled/);
+        refuses(material({ roughness: { file: "a.png", scale: 2 } }), /materials.skin.roughness.scale is a number from 0 to 1/);
         refuses(material({ roughness: { file: "a.png", flipGreen: true } }), /flipGreen is for a normal map/);
         refuses(material({ roughness: 2 }), /materials.skin.roughness is a texture, or a number from 0 to 1/);
         refuses(material({ normal: 1 }), /materials.skin.normal is a texture$/);

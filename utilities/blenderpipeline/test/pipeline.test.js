@@ -285,13 +285,14 @@ describe("an asset from FBX files, as a bought one comes (fbx-creature), built f
         assert.deepEqual(report.extensionsRequired, []);
         assert.ok(report.extensionsUsed.includes("KHR_materials_emissive_strength"));
 
-        // Occlusion in red, roughness in green (the smoothness in the alpha of its file, inverted),
-        // no metal in blue: one texture for the three, as glTF has them
+        // Occlusion in red, roughness in green (the smoothness in the alpha of its file, scaled and
+        // inverted, as Unity's is: 1 - smoothness x 0.8), no metal in blue: one texture for the
+        // three, as glTF has them
         assert.equal(skin.getMetallicRoughnessTexture(), skin.getOcclusionTexture());
         const orm = decodeImage(skin.getMetallicRoughnessTexture().getImage(), "image/png");
 
-        assert.ok(close(pixel(orm, 0, 0).slice(0, 3), [255, 100, 0]), JSON.stringify(pixel(orm, 0, 0)));
-        assert.ok(close(pixel(orm, 127, 127).slice(0, 3), [255 - 63, 227, 0]), JSON.stringify(pixel(orm, 127, 127)));
+        assert.ok(close(pixel(orm, 0, 0).slice(0, 3), [255, 131, 0]), JSON.stringify(pixel(orm, 0, 0)));
+        assert.ok(close(pixel(orm, 127, 127).slice(0, 3), [255 - 63, 233, 0]), JSON.stringify(pixel(orm, 127, 127)));
 
         // The fur's strands, and the gaps between them
         const strands = decodeImage(fur.getBaseColorTexture().getImage(), "image/png");

@@ -542,9 +542,10 @@ def resized(pixels, shape):
 
 
 def grey(spec, limit, shape):
-    """One channel of a texture (spec: { file, channel, invert }), at `shape` (rows, columns)."""
+    """One channel of a texture (spec: { file, channel, scale, invert }), at `shape` (rows,
+    columns): scaled, then turned over (Unity's roughness: 1 - smoothness x _GlossMapScale)."""
     pixels, _ = load_texture(spec["file"], limit)
-    channel = resized(pixels, shape)[..., CHANNELS[spec.get("channel", "R")]]
+    channel = resized(pixels, shape)[..., CHANNELS[spec.get("channel", "R")]] * spec.get("scale", 1)
 
     return 1 - channel if spec.get("invert") else channel
 

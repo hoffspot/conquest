@@ -112,10 +112,10 @@ const SOURCES = [".blend", ".fbx", ".glb", ".gltf"];
 // A variant's or a profile's name: in file and folder names
 const NAME = /^[a-z0-9][a-z0-9-]*$/;
 // What a material from texture files is made of, and how a texture's given ({ file, channel,
-// invert, flipGreen } or just its file)
+// scale, invert, flipGreen } or just its file)
 const MATERIAL_KEYS = { baseColor: 0, alpha: 0, alphaMap: 0, normal: 0, occlusion: 0, roughness: 0, metallic: 0, emission: 0, emissionStrength: 0, doubleSided: 0 };
 const MAPS = { baseColor: "colour", alphaMap: "grey", normal: "normal", occlusion: "grey", roughness: "grey", metallic: "grey", emission: "colour" };
-const MAP_KEYS = { file: 0, channel: 0, invert: 0, flipGreen: 0 };
+const MAP_KEYS = { file: 0, channel: 0, scale: 0, invert: 0, flipGreen: 0 };
 const KTX2_MODES = ["etc1s", "uastc"];
 const SIZES = ["height", "length", "width", "longest", "scale"];
 const BUDGETS = ["triangles", "vertices", "joints", "drawCalls", "textureSize", "textureMegabytes", "kilobytes", "clips"];
@@ -417,6 +417,10 @@ function resolveMaterial(spec, where, prefix, fail) {
 
         if (map.channel !== undefined && (kind !== "grey" || !["R", "G", "B", "A"].includes(map.channel))) {
             fail(kind === "grey" ? `${prefix}.${key}.channel is R, G, B or A` : `${prefix}.${key} is a colour: it has no channel to choose`);
+        }
+
+        if (map.scale !== undefined && (kind !== "grey" || !(typeof map.scale === "number" && map.scale >= 0 && map.scale <= 1))) {
+            fail(kind === "grey" ? `${prefix}.${key}.scale is a number from 0 to 1` : `${prefix}.${key} can't be scaled (only a map of one channel: Unity's smoothness, say)`);
         }
 
         if (map.invert !== undefined && (kind !== "grey" || typeof map.invert !== "boolean")) {
