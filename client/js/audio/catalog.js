@@ -21,6 +21,7 @@ export const GROUPS = Object.freeze([
     "Healing spells",
     "Tome spells",
     "Explosions",
+    "The Prismatic sigil",
     "Bodies and doors",
     "Beasts",
     "Monsters",
@@ -154,6 +155,14 @@ export const CATALOG = Object.freeze({
     fuse: { group: "Explosions", label: "A lit wick", about: "A strike, then a wick fizzing: hiss band-passed high, fluttering 8 to 14 times a second, with sputtering crackles.", plays: "A bomb lying where it landed, its wick burning down; cut short as it bursts. Heard up to 20 metres off." },
     bombThrow: { group: "Explosions", label: "A bomb lobbed", about: "A short low whoosh, loudest as it's let go.", plays: "A bomb thrown (a goblin bomber's, the Goblin King's or a player's Goblin Bomb), loudest as it leaves the hand." },
     castExplosion: { group: "Explosions", label: "Casting Explosion", about: "Heat drawn in: noise rising from 250 Hz to 3.2 kHz over a tone climbing two octaves, crackling thicker and thicker, and a breath held a moment before it's let go.", plays: "Casting Explosion, loudest as it's let go; its blast is the great blast." },
+
+    // The Prismatic sigil (core/prismatic.js; docs/MAGIC.md, "Prismatic Destruction")
+    chainStep: { group: "The Prismatic sigil", label: "A chain goes on", about: "A glass bell struck twice, a fifth apart (its partials out of tune with each other, as a bell's are).", plays: "An element's spell of the player's landing in its Prismatic chain: its first, and each after it in order; a little higher for each spell up the chain." },
+    sigilPiece: { group: "The Prismatic sigil", label: "A piece of the sigil", about: "A run of four glass bells up from G.", plays: "The last of an element's spells landing in its chain: that element's piece of the Prismatic sigil." },
+    sigilWhole: { group: "The Prismatic sigil", label: "The sigil whole", about: "Seven glass bells running up two octaves from C, a high shimmer swelling under them.", plays: "The fourth piece of the Prismatic sigil earned: the sigil whole, Prismatic Destruction to be cast." },
+    chainBroken: { group: "The Prismatic sigil", label: "The chain broken", about: "Three glass bells falling, and a brittle hiss as of glass cracking.", plays: "A Prismatic chain broken (no spell of it landing within ten seconds of the last), or the whole sigil fading unused after fifteen; every stack and piece lost." },
+    castPrismatic: { group: "The Prismatic sigil", label: "Casting Prismatic Destruction", about: "Four glass tones, one for each element, climbing an octave together under a band of noise rising from 400 Hz to 6 kHz, swelling to the release.", plays: "Casting Prismatic Destruction, loudest as it's let go." },
+    prismaticBlast: { group: "The Prismatic sigil", label: "Prismatic Destruction", about: "A blast bigger than the great blast, echoing, a glass chord from C ringing over it.", plays: "Prismatic Destruction landing." },
 
     // Tome spells (sound.js spellSounds: what each does, as it lands)
     buff: { group: "Tome spells", label: "Strength given", about: "A shimmer of chimes sweeping up to a glockenspiel's note, with a triangle's roll or a cymbal's swell.", plays: "Embolden, Swole, Surge, Dodge or Levitate landing." },

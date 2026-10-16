@@ -226,6 +226,13 @@ function step(random, kind) {
     return add(add(rustle, burst(random, 0.12, "bandpass", 4200, 0.7, 0.006, 0.03), 0.5, 0.04), thud(90, 60, 0.07, 0.02), 0.2);
 }
 
+// A glass bell's partials (a struck bell's are out of tune with each other: 2.76 and 5.4 times)
+const GLASS = [
+    [1, 1],
+    [2.76, 0.25],
+    [5.4, 0.08],
+];
+
 // Notes one after another (a cue): [[frequency, start (s)]...], each ringing for `decay` seconds
 function notes(list, { decay = 0.35, harmonics = [[1, 1], [2, 0.25], [3, 0.08]], length = 1 } = {}) {
     let out = new Float32Array(count(length));
@@ -458,6 +465,24 @@ export const SOUNDS = {
             return shape(add(add(rising, climbing, 0.5), crackling, 0.3), (t) => (t > release - 0.06 && t < release - 0.01 ? 0.4 : 1));
         },
     },
+    // Casting Prismatic Destruction: the four elements drawn in, a tone for each climbing an
+    // octave together, and a shimmer over them swelling to its release (PEAKS); landing, the
+    // great blast with a glass chord ringing over it
+    castPrismatic: {
+        variants: 2,
+        volume: 0.55,
+        make: (random) => {
+            const length = 1.5;
+            let out = shape(filter(noise(random, length), "bandpass", (t) => 400 * (6000 / 400) ** (t / length), 1.2), swell(length, 0.94));
+
+            for (const from of [131, 196, 262, 392]) {
+                out = add(out, shape(tone(length, (t) => from * 2 ** (t / length), { harmonics: GLASS }), swell(length, 0.94)), 0.3);
+            }
+
+            return out;
+        },
+    },
+    prismaticBlast: { variants: 2, volume: 1, make: (random) => add(blast(random, 1.5), notes([[523, 0.02], [784, 0.05], [1047, 0.08], [1568, 0.11]], { decay: 0.9, harmonics: GLASS, length: 1.85 }), 0.35) },
     castHeal: {
         variants: 2,
         volume: 0.45,
@@ -509,6 +534,22 @@ export const SOUNDS = {
         volume: 0.3,
         make: (random) => notes([0, 0.05, 0.11, 0.16].map((at) => [2400 + random.next() * 1600, at + random.next() * 0.02]), { decay: 0.08, harmonics: [[1, 1], [2.4, 0.4], [3.9, 0.2]], length: 0.5 }),
     },
+    // The Prismatic sigil (docs/MAGIC.md): a glass bell struck for each spell of a chain (played
+    // higher as it climbs: app/game.js), a run of them for a piece of the sigil, a run up two
+    // octaves and a shimmer for the sigil whole, and the bells falling for it all lost
+    chainStep: { variants: 1, volume: 0.32, make: () => notes([[1319, 0], [1976, 0.045]], { decay: 0.45, harmonics: GLASS, length: 0.9 }) },
+    sigilPiece: { variants: 1, volume: 0.4, make: () => notes([[784, 0], [988, 0.07], [1175, 0.14], [1568, 0.21]], { decay: 0.8, harmonics: GLASS, length: 1.8 }) },
+    sigilWhole: {
+        variants: 1,
+        volume: 0.45,
+        make: (random) =>
+            add(
+                notes([523, 659, 784, 1047, 1319, 1568, 2093].map((frequency, k) => [frequency, k * 0.06]), { decay: 0.8, harmonics: GLASS, length: 1.9 }),
+                shape(filter(noise(random, 1.9), "highpass", 5000), swell(1.9, 0.3)),
+                0.25,
+            ),
+    },
+    chainBroken: { variants: 1, volume: 0.35, make: (random) => add(notes([[1175, 0], [880, 0.08], [622, 0.16]], { decay: 0.3, harmonics: GLASS, length: 0.9 }), burst(random, 0.15, "highpass", 3000, 0.7, 0.002, 0.05), 0.3) },
     wake: { variants: 1, volume: 0.35, make: () => notes([[880, 0], [1320, 0.12]], { decay: 0.7, harmonics: [[1, 1], [2.76, 0.2], [5.4, 0.06]], length: 1.6 }) },
     breath: {
         variants: 2,
@@ -656,6 +697,7 @@ export const SOUNDS = {
 
 // (Casting Explosion loudest as it's let go: its swell's peak)
 PEAKS.castExplosion = 1.4 * 0.94;
+PEAKS.castPrismatic = 1.5 * 0.94;
 
 /** The wind: ten seconds of gusting, low noise, which loops without a seam. */
 export function wind(seed = 1) {

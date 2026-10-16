@@ -191,6 +191,9 @@ export const SPELLS = Object.freeze({
     summon: tome("Summon", "common", { about: "Calls a creature of these parts to your side to fight with you, an hour. One at a time at first; the more you use it, the more at once, up to five (the oldest let go for a new one). Or calls another player (of a people not your enemy) to you, if they'll come.", target: "summon", castTime: 1500, cooldown: 60000, lasts: COMPANY, grows: true, company: [1, 2, 3, 4, 5] }),
     levitate: tome("Levitate", "common", { about: "Float a hand's breadth above the ground, five minutes: nothing on it (traps, pools, fire) touches you.", target: "self", castTime: 600, cooldown: 20000, lasts: LASTING }),
     fear: tome("Fear", "uncommon", { about: "Terror: an enemy runs blindly away, ten seconds (half that cast on them again soon after; a third time, nothing). The mighty may shrug it off; the unique always do.", target: "enemy", castTime: 500, cooldown: 8000, reach: SPELL_REACH.reach + SPELL_REACH.hexes, flee: 10000 }),
+    // (Not learnt: cast with the Prismatic sigil whole, the four elements' chains cast through,
+    // and only then: core/prismatic.js)
+    prismatic: { label: "Prismatic Destruction", about: "The four elements at once, on an enemy and every foe within eight metres of them: it kills them, all but the mightiest (a dungeon's boss, an elite, a seat's ruler, one of the perilous places' own, a player), who lose three quarters of their whole health. Cast with the Prismatic sigil whole, the four elements' chains cast through.", target: "enemy", reach: SPELL_REACH.reach + 2 * SPELL_REACH.tiers, castTime: 1500, cooldown: SPELL_COOLDOWN, area: 8, prismatic: true, knockdown: 1500, reaction: "arcane", like: "stun" },
     explosion: tome("Explosion", "rare", { about: "A blast of fire round an enemy: every foe within four metres is hurt (the nearer, the worse) and thrown through the air, and is a few moments getting up. It never hurts or throws you or your allies.", target: "enemy", castTime: 1400, cooldown: 20000, damage: [20, 32], area: 4, blast: { toss: 1.5 }, reaction: "crush" }),
     polymorph: tome("Polymorph", "rare", { about: "Turns a creature into another of the world's creatures, any at all. The mighty may resist; the unique can't be changed.", target: "enemy", castTime: 900, cooldown: 20000 }),
     attraction: tome("Attraction", "uncommon", { about: "A puff of smoke, and out of it one of the creatures of these parts.", target: "self", castTime: 800, cooldown: 30000 }),
@@ -267,6 +270,7 @@ export const CAST_FAILURES = Object.freeze({
     corpse: "No one fallen near enough",
     hostile: "Not on an enemy",
     unread: "Not learnt yet: its tome's sold at any adventurers' guild",
+    sigil: "The Prismatic sigil isn't whole: cast each element's spells in order, first to last",
 });
 
 /** A spell that grows's level (1 to 5) for so much experience in it. */

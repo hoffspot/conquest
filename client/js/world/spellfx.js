@@ -2867,6 +2867,47 @@ const RECIPES = {
             });
         },
     },
+    // (Prismatic Destruction: the four elements drawn in as it's let go, a ring of each closing
+    // on whom it's cast at; landing, a column of each element's light round them and their rings
+    // racing out as far as it reaches, the sky whitening, and each of the others it struck burst
+    // in the elements' light)
+    prismatic: {
+        palette: { glow: [0xffffff, 0xc89aff], deep: 0xb07aff, bright: 0xffffff },
+        charging: (fx, { target, seconds }) => {
+            [FIRE, EARTH, AIR, WATER].forEach((element, k) =>
+                fx.after(Math.max(0, seconds - 0.5 + k * 0.08), () => {
+                    const at = target?.();
+
+                    if (at) {
+                        fx.ring(at, { colour: element.deep, from: 6, to: 0.3, life: 0.4, opacity: 0.75 });
+                    }
+                }),
+            );
+        },
+        land: (fx, { at, point, struck }) => {
+            fx.flash(point, { colour: 0xffffff, intensity: 40, distance: 18, life: 0.8, size: 5 });
+            fx.screen(0xffffff, 0.35, 0.8);
+            fx.decal(at, { texture: "runes", colour: 0xe8d8ff, radius: 3, life: 2, spin: 0.8, grow: 0.3 });
+
+            [FIRE, EARTH, AIR, WATER].forEach((element, k) => {
+                const angle = (k / 4) * Math.PI * 2;
+
+                fx.pillar(new THREE.Vector3(at.x + Math.cos(angle) * 0.9, at.y ?? 0, at.z + Math.sin(angle) * 0.9), { colour: element.deep, radius: 0.5, height: 9, life: 1.3 });
+                fx.after(k * 0.07, () => fx.ring(at, { colour: element.deep, from: 0.5, to: 8, life: 0.8 }));
+                fx.spray(p(element.glow, { count: 24, size: [0.08, 0.18], speed: [2, 5], life: [0.5, 1], gravity: -1, spread: 2, swirl: 8 }), point);
+            });
+
+            struck.forEach((other, k) => {
+                const to = other.point();
+                const element = [FIRE, EARTH, AIR, WATER][k % 4];
+
+                if (to) {
+                    fx.spray(p(element.glow, { count: 16, size: [0.06, 0.14], speed: [1.5, 3.5], life: [0.4, 0.8], gravity: -1, spread: 2 }), to);
+                    fx.flash(to, { colour: element.bright, intensity: 12, distance: 5, life: 0.4 });
+                }
+            });
+        },
+    },
     polymorph: {
         palette: { glow: [0xffd8ff, 0xc04dff], deep: 0xd070ff, bright: 0xffd8ff },
         land: (fx, { point }) => fx.spray(p([0xffd8ff, 0xc04dff], { count: 40, size: [0.06, 0.12], speed: [1, 2.5], life: [0.4, 0.8], gravity: 0, spread: 2, swirl: 12 }), point),

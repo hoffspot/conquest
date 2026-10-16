@@ -550,7 +550,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 28;
+export const SNAPSHOT_VERSION = 29;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -574,6 +574,13 @@ export const SNAPSHOT_STEPS = Object.freeze({
 
         return { ...snapshot, version: 28, fields: ids.length || formations.length ? [{ ids, formations, at: snapshot.battle.time, over: null }] : [] };
     },
+    // 29: each one's chain of the elements' spells (core/prismatic.js: none yet), and a seat's
+    // ruler told as one (their `ruler`, for Prismatic Destruction: the leaders out are by id)
+    28: (snapshot) => ({
+        ...snapshot,
+        version: 29,
+        battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => ({ prism: null, ...actor, ...(/\/ruler-0$/.test(actor.id) ? { ruler: true } : {}) })) },
+    }),
 });
 
 /**
@@ -1473,8 +1480,9 @@ export class Host {
             case "stop":
                 return this.#order(actor, { type: "stop" });
             case "cast": {
-                // (Only the spells they know: their schools' up to their tiers, and those learnt)
-                if (!player.progress.knows(command.spell)) {
+                // (Only the spells they know: their schools' up to their tiers, and those learnt; and
+                // Prismatic Destruction, which the battle lets them cast with the sigil whole)
+                if (!SPELLS[command.spell]?.prismatic && !player.progress.knows(command.spell)) {
                     return refuse("unknown");
                 }
 
@@ -4996,8 +5004,9 @@ export class Host {
             // (No free ground there: those found are out, and no more)
         }
 
-        // (The ruler, by name: as the war has them)
-        Object.assign(this.battle.actor(ids[0]) ?? {}, { name: `${realm.leader.title} ${realm.leader.name}` });
+        // (The ruler, by name: as the war has them; one of the mightiest, whom Prismatic Destruction
+        // doesn't kill outright: core/prismatic.js mighty)
+        Object.assign(this.battle.actor(ids[0]) ?? {}, { name: `${realm.leader.title} ${realm.leader.name}`, ...(ids[0]?.endsWith("/ruler-0") ? { ruler: true } : {}) });
         this.leaders.set(id, { people: town.owner, ids, at: [x + 0.5, y + 0.5] });
         this.#event("leaders", { town: id, people: town.owner, by, ruler: realm.leader.name, title: realm.leader.title, ids });
     }
