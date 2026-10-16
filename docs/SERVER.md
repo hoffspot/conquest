@@ -69,6 +69,22 @@ A world either **keeps** its players' heroes (up to 6 a player, made there, or o
 first time if its rules allow it), or players **bring** the heroes they have in their game. It can
 be switched while the world's set aside.
 
+**Heroes as files.** The heroes a world keeps can leave it as character files, the same files the
+game's Saved characters exports and brings in (`.pellagos-character`):
+
+- A player **takes one home** when they choose who goes in (**Take one home**): a copy of that hero
+  is kept in their game, in the world's land and with its war as it was last saved, to play by
+  themselves or to bring into another world. The hero stays in the world as they are.
+- Where a first hero may be brought in, a player can **bring one from a file** (**Bring one from a
+  file**), as well as one their game keeps.
+- The world's owner **exports a player's heroes** from the Players tab (**Export heroes**): every
+  hero of theirs kept there, in one file, to give them or keep.
+
+A hero kept by an older version of the game, or brought in from an older file, comes in as this
+version plays them: whatever it no longer has (things, spells, skills, callings, a people or a
+weapon) is left out or put right, and the world's journal says what. Brought in from a file, the
+game says it first.
+
 A world with nobody in it waits 2 minutes, then it's saved and **set aside**: it uses nothing
 until someone comes in. Two worlds run at once by default (the page says how many the computer can
 take); a third waits its turn. While anyone's in a world, the computer is kept awake.

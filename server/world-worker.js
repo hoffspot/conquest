@@ -34,6 +34,7 @@
 
 import { performance } from "node:perf_hooks";
 import { parentPort, workerData } from "node:worker_threads";
+import { salvageKept } from "../client/js/app/character-file.js";
 import { characterFrom, Hosting } from "../client/js/core/netplay.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { elapsedOf } from "../client/js/core/daytime.js";
@@ -131,6 +132,22 @@ hosting.onLeave = (id, peer, character) => {
     }
 };
 
+// A hero kept here, or brought in, as this version of the game plays them (character-file.js
+// salvageKept): what it hasn't got left out or put right, and the world's journal told what
+async function forward(character, player) {
+    try {
+        const { character: salvaged, left } = salvageKept(character, { seed: stored.meta.seed });
+
+        if (left.length) {
+            await stored.journal(`${salvaged.hero.name} (${player}), brought to this version of the game: ${left.join(" ")}`).catch(() => {});
+        }
+
+        return salvaged;
+    } catch {
+        return character;
+    }
+}
+
 // The character a player comes in with (as Hosting.characterOf hands it over), from what their
 // hello asked for: in a kept world, one of their heroes (by its slot) or a new one; else theirs
 async function characterFor(one, { character, hero = "new" }) {
@@ -143,7 +160,7 @@ async function characterFor(one, { character, hero = "new" }) {
     if (Number.isInteger(hero) && slots.includes(hero)) {
         one.slot = hero;
 
-        return stored.heroes.get(one.player, hero);
+        return forward(await stored.heroes.get(one.player, hero), one.player);
     }
 
     // (A slot neither kept nor taken by one of theirs in the world now, from another device, not yet kept)
@@ -159,7 +176,7 @@ async function characterFor(one, { character, hero = "new" }) {
 
     // (Their first, if the world lets them bring one: as it is; else new, as the character maker made it)
     if (!slots.length && !playing.length && stored.meta.firstHero === "bring") {
-        return brought;
+        return forward(brought, one.player);
     }
 
     return { ...brought, talks: { memory: {}, knowledge: [] }, explored: {}, progress: {}, standing: {}, followers: [] };

@@ -182,6 +182,73 @@ test("a world made on a server and shared by an invite link: both play in it, le
     await guestContext.close();
 });
 
+test("a first hero brought into a world from a character file, told first what was changed to suit this version of the game; and taken home again, a copy among the saved characters, in the world's land", async ({ page }) => {
+    await ready(page, null);
+
+    // (A world that keeps its heroes and lets a first one be brought in, its key held by the game)
+    const made = await server.createWorld({ name: "Fernhollow", seed: 31, race: "human", heroes: "kept", firstHero: "bring" });
+    const key = `127.0.0.1:${server.port}`;
+    const created = "2025-05-05T05:05:05.000Z";
+    const file = {
+        format: "pellagos.character.1",
+        characters: [
+            {
+                kind: "pellagos-solo-world",
+                version: 1,
+                saveVersion: 2,
+                save: { version: 2, id: "oldbram1", hero: save("Old Bram", "human", "sword").hero, seed: 5, created, played: created },
+                progress: { created, seed: 5, format: 2, skills: { blade: 80 }, gold: 41, pack: [{ id: "potion", count: 1 }, { id: "oldBlade", count: 1 }], gear: { mainHand: { id: "sword" } } },
+            },
+        ],
+    };
+
+    await page.addInitScript(
+        ({ key, port, id, world, playerKey }) => localStorage.setItem("pellagos.servers", JSON.stringify({ version: 1, servers: [{ key, host: "127.0.0.1", port, secure: false, id, name: null, seen: null, worlds: { [world]: { name: "Fernhollow", key: playerKey } } }] })),
+        { key, port: server.port, id: server.identity.id, world: made.world, playerKey: made.playerKey },
+    );
+    await page.goto(`${base}/`);
+
+    const ask = page.locator("#worldask");
+    const into = async () => {
+        await page.locator("#worldsbutton").click();
+        await page.locator(`#worlds li[data-world="${made.world}"]`).getByRole("button").click();
+        await expect(ask.locator("#worldasktitle")).toHaveText("Who goes into Fernhollow", { timeout: 60000 });
+    };
+
+    // Their first time in: brought in from the file, told first what couldn't come
+    await into();
+
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), ask.getByRole("button", { name: /^Bring one from a file/ }).click()]);
+
+    await chooser.setFiles({ name: "Old Bram.pellagos-character", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(file)) });
+    await expect(ask.locator("#worldasktitle")).toHaveText("Bring Old Bram in?");
+    await expect(ask.locator("#worldasknote")).toHaveText("Changed to suit this version of the game: 1 thing the game no longer has: old blade.");
+    await ask.getByRole("button", { name: "Bring Old Bram in" }).click();
+    await playing(page);
+    expect(await page.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Old Bram");
+
+    const [player] = (await page.evaluate(() => window.pellagos.game.me)).split(".");
+
+    await page.locator("#menubutton").click();
+    await page.locator("#quitbutton").click();
+    await expect(page.locator("#title")).toBeVisible();
+    await expect.poll(async () => (await server.worlds.get(made.world).heroes.list(player)).map(({ name }) => name), { timeout: 60000 }).toEqual(["Old Bram"]);
+
+    // Taken home: a copy among the saved characters, in Fernhollow's land, with what they carry
+    await into();
+    await ask.getByRole("button", { name: /^Take one home/ }).click();
+    await expect(ask.locator("#worldasktitle")).toHaveText("Take which hero home?");
+    await ask.getByRole("button", { name: /^Old Bram/ }).click();
+
+    const imported = page.locator("#imported");
+
+    await expect(imported.locator("#importednote")).toHaveText("One character is now among your saved characters.");
+    await expect(imported.locator(".about")).toHaveText("Human · Sword · 41 gold");
+    await imported.getByRole("button", { name: "OK" }).click();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.characters")).ids.map((id) => JSON.parse(localStorage.getItem(`pellagos.${id}.save`))).map(({ hero, seed }) => [hero.name, seed]))).toEqual([["Old Bram", 31]]);
+    expect((await server.worlds.get(made.world).heroes.list(player)).map(({ name }) => name)).toEqual(["Old Bram"]);
+});
+
 test("a server that proves to be another than the one pinned is sent no key", async ({ page }) => {
     await ready(page, save("Brand", "human", "sword"));
 
