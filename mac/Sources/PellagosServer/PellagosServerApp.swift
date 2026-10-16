@@ -1,6 +1,7 @@
 // The menu-bar app (generated/world_server_plan.md §11, Phase 2): a dot in the menu bar saying how
 // the server stands (stopped, running with nobody in so the Mac may sleep, or players in), and its
-// menu: open the management page, start or stop, run at login, and quit (every world saved first).
+// menu: open the management page, start or stop, run at login, uninstall (Uninstall.swift), and
+// quit (every world saved first).
 // The server itself is the one run from Terminal, run by this app (ServerProcess.swift).
 
 import AppKit
@@ -59,6 +60,10 @@ struct ServerMenu: View {
         Divider()
 
         Text("Pellagos Server \(server.version)")
+
+        Button("Uninstall…") {
+            Uninstall.ask()
+        }
 
         Button("Quit (every world saved first)") {
             NSApp.terminate(nil)
