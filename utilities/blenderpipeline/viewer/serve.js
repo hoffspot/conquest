@@ -22,11 +22,24 @@ const TYPES = {
     ".wasm": "application/wasm",
 };
 
-/** The GLBs in dist/ (without their lower-detail copies), for the viewer's list. */
+/**
+ * The GLBs in dist/ and its profiles' folders (dist/<profile>/), for the viewer's list: not their
+ * lower-detail copies or variants (<name>.lod1.glb, <name>.<variant>.glb).
+ */
 function listModels() {
     const dist = path.join(HERE, "dist");
 
-    return existsSync(dist) ? readdirSync(dist).filter((file) => file.endsWith(".glb") && !/\.lod\d+\.glb$/.test(file)).sort().map((file) => `dist/${file}`) : [];
+    if (!existsSync(dist)) {
+        return [];
+    }
+
+    const glbs = (folder, prefix) =>
+        readdirSync(folder)
+            .filter((file) => /^[^.]+\.glb$/.test(file))
+            .map((file) => `${prefix}${file}`);
+    const profiles = readdirSync(dist, { withFileTypes: true }).filter((entry) => entry.isDirectory() && !entry.name.startsWith("."));
+
+    return [...glbs(dist, "dist/"), ...profiles.flatMap((entry) => glbs(path.join(dist, entry.name), `dist/${entry.name}/`))].sort();
 }
 
 export function serve(port = Number(process.env.PORT) || 8099) {

@@ -257,9 +257,11 @@ npm run check:motion -- --data vitruvian  # on another body's data (the baseline
 
 ### The tools in `utilities/`
 
-`utilities/blenderpipeline/` turns `.blend` files into GLB models for the game, with their
-animations (its `README.md`). It's a project of its own, with its own `package.json`, lockfile
-and tests. The game's `npm ci` doesn't install it, and CI doesn't run its tests, because it needs
+`utilities/blenderpipeline/` turns `.blend` files, and FBX and glTF files as models for other
+engines come (Unity's, Unreal's, Maya's), into GLB models for the game, with their animations
+(its `README.md`). A config can build a model several ways (`profiles`): `full`, as it is, to
+keep; and one for play, made for a phone and a browser (`phone`), which is what the game ships.
+It's a project of its own, with its own `package.json`, lockfile and tests. The game's `npm ci` doesn't install it, and CI doesn't run its tests, because it needs
 Blender (a large download). CI's `npm run lint` does lint its JavaScript (`eslint.config.js`).
 When you change anything in it, run its checks there:
 
@@ -267,7 +269,7 @@ When you change anything in it, run its checks there:
 cd utilities/blenderpipeline
 npm ci
 npm run setup          # once: Blender as a Python module, in .venv (Python 3.11; about 1 GB)
-npm run build          # rebuild the examples into dist/, and commit dist/
+npm run build          # rebuild the examples into dist/ (each profile into dist/<profile>/), and commit dist/
 npm test               # unit tests, and every example built with Blender: fit, and as dist/ has it
 CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB played in Three.js
 ```
@@ -277,7 +279,10 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
 - `npm test` fails if `dist/` isn't what the sources build: after changing the pipeline or an
   example, `npm run build` and commit `dist/`.
 - Bought assets never go in the repository, built or not: `utilities/blenderpipeline/private/`
-  is ignored by git for them (section 3, *Assets*).
+  is ignored by git for them (section 3, *Assets*). What the game draws of one goes, scrambled,
+  in the private repository (`docs/LICENSED_MODELS.md`).
+- Its test fixtures are made by scripts (`node build.js --fixtures`), never bought: a test of FBX
+  input uses `fixtures/fbx-creature/`, made by `fixtures/make_fbx_creature.py`.
 
 ## 3. Making a change
 
