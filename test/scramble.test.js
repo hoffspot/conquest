@@ -1,6 +1,8 @@
 // The licensed models' scrambling (client/js/app/scramble.js; docs/LICENSED_MODELS.md,
 // *Scrambling*): a scrambled file comes back as it was, packs as small, is known by how it starts,
-// and is read a MiB at a time; and every licensed model in the catalog is served scrambled.
+// and is read a MiB at a time; and every licensed model in the catalog is served scrambled. (Those
+// that read a licensed model are left out where the licensed models aren't here, saying so:
+// scripts/licensed-models.js.)
 
 import assert from "node:assert/strict";
 import { open, readFile } from "node:fs/promises";
@@ -9,6 +11,9 @@ import { gzipSync } from "node:zlib";
 
 const { isScrambled, readable, scramble, unscramble } = await import("../client/js/app/scramble.js");
 const { ASSETS } = await import("../client/js/app/assets.js");
+const { LEFT_OUT, licensedModelsHere } = await import("../scripts/licensed-models.js");
+
+const licensed = licensedModelsHere() || LEFT_OUT;
 
 const MIB = 1 << 20;
 
@@ -90,7 +95,7 @@ describe("the licensed models' scrambling (app/scramble.js)", () => {
         }
     });
 
-    it("packs as small as the model it scrambles (the Dreadthorn's, gzipped as GitHub Pages sends it)", async () => {
+    it("packs as small as the model it scrambles (the Dreadthorn's, gzipped as GitHub Pages sends it)", { skip: licensed !== true && licensed }, async () => {
         const file = await readFile(fileOf(ASSETS.models["beast-dreadthorn"].files[0].path));
         const scrambled = gzipSync(file).length;
         const model = gzipSync(unscramble(Uint8Array.from(file))).length;
@@ -98,32 +103,47 @@ describe("the licensed models' scrambling (app/scramble.js)", () => {
         assert.ok(Math.abs(scrambled - model) < model * 0.001, `${scrambled} bytes gzipped, the model ${model}`);
     });
 
-    it("is how every licensed model in the catalog is served, each a GLB once it's unscrambled; and no other is", async () => {
-        const licensed = Object.entries(ASSETS.models).filter(([, { licensed }]) => licensed);
+    // A file's first 12 bytes: a GLB's header, if it is one
+    async function startOf(path) {
+        const handle = await open(fileOf(path));
+        const start = new Uint8Array(12);
 
-        assert.deepEqual(licensed.map(([name]) => name), ["beast-dreadthorn"]);
+        try {
+            await handle.read(start, 0, 12, 0);
+        } finally {
+            await handle.close();
+        }
+
+        return start;
+    }
+
+    it("is how no model in the catalog but a licensed one is served", async () => {
+        assert.deepEqual(
+            Object.entries(ASSETS.models)
+                .filter(([, { licensed: marked }]) => marked)
+                .map(([name]) => name),
+            ["beast-dreadthorn"],
+        );
 
         for (const [name, { licensed: marked, files }] of Object.entries(ASSETS.models)) {
-            for (const { path, bytes } of files) {
-                const handle = await open(fileOf(path));
-                const start = new Uint8Array(12);
+            for (const { path } of marked ? [] : files) {
+                assert.equal(isScrambled(await startOf(path)), false, `${name}: ${path}`);
+            }
+        }
+    });
 
-                try {
-                    await handle.read(start, 0, 12, 0);
-                } finally {
-                    await handle.close();
-                }
+    it("is how every licensed model in the catalog is served, each a GLB once it's unscrambled", { skip: licensed !== true && licensed }, async () => {
+        for (const [name, { licensed: marked, files }] of Object.entries(ASSETS.models)) {
+            for (const { path, bytes } of marked ? files : []) {
+                const start = await startOf(path);
 
-                assert.equal(isScrambled(start), Boolean(marked), `${name}: ${path}`);
+                assert.equal(isScrambled(start), true, `${name}: ${path}`);
+                assert.match(path, /\.bin$/, `${name}: not named as a GLB`);
 
-                if (marked) {
-                    assert.match(path, /\.bin$/, `${name}: not named as a GLB`);
+                const glb = unscramble(start);
 
-                    const glb = unscramble(start);
-
-                    assert.equal(new TextDecoder().decode(glb.subarray(0, 4)), "glTF", `${name}: ${path}`);
-                    assert.equal(new DataView(glb.buffer).getUint32(8, true), bytes, `${name}: ${path}, its length`);
-                }
+                assert.equal(new TextDecoder().decode(glb.subarray(0, 4)), "glTF", `${name}: ${path}`);
+                assert.equal(new DataView(glb.buffer).getUint32(8, true), bytes, `${name}: ${path}, its length`);
             }
         }
     });

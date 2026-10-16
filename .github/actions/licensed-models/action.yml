@@ -1,0 +1,44 @@
+name: The licensed models
+description: >-
+  Fetches the licensed models from the private repository hoffspot/conquest-models, with the
+  read-only deploy key whose private half is the secret MODELS_DEPLOY_KEY, and puts them in place
+  under client/ (docs/LICENSED_MODELS.md). A fork's pull request is given no secrets, so there
+  they're left out, and the tests that need one say so; anywhere else, no key fails the job.
+
+inputs:
+  key:
+    description: The secret MODELS_DEPLOY_KEY
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Without the key
+      if: inputs.key == ''
+      shell: bash
+      run: |
+        if [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
+          echo "::notice::A fork's pull request is given no secrets: the licensed models aren't fetched, and the tests that need one are left out (docs/LICENSED_MODELS.md)"
+        else
+          echo "::error::There's no MODELS_DEPLOY_KEY secret, so the licensed models can't be fetched (docs/LICENSED_MODELS.md, Changing the key)"
+          exit 1
+        fi
+
+    - name: Fetch them
+      if: inputs.key != ''
+      uses: actions/checkout@v5
+      with:
+        repository: hoffspot/conquest-models
+        ssh-key: ${{ inputs.key }}
+        persist-credentials: false
+        path: .models
+
+    # (Each checked against the hash and size the catalog keeps; and from here on, the tests
+    # that need one fail if one's missing, rather than leaving themselves out)
+    - name: Put them in place
+      if: inputs.key != ''
+      shell: bash
+      run: |
+        node scripts/licensed-models.js place .models
+        echo "LICENSED_MODELS=required" >> "$GITHUB_ENV"

@@ -482,7 +482,8 @@ the repository in its converted form, rather than the pipeline's dragon (`docs/W
 from a model*). What was built differs from the steps below:
 
 - **One file**, `client/models/beasts/dreadthorn.glb` (5.1 MB; since 16 October 2026 served
-  scrambled, as `dreadthorn.bin`: docs/LICENSED_MODELS.md): KTX2 textures, its three levels
+  scrambled, as `dreadthorn.bin`, and kept in a private repository the builds fetch it from:
+  docs/LICENSED_MODELS.md): KTX2 textures, its three levels
   of detail packed in (the pipeline's `extras.lod`), so no lower-detail copy to fetch first. Its
   catalog entry is `beast-dreadthorn` (`demand`).
 - **What the game knows of it** isn't in the catalog entry (`stand`, `when`, `clips`) but in

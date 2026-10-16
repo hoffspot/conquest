@@ -39,6 +39,7 @@ on:
       - server/update/**
       - server/platform/**
       - .github/workflows/mac.yml
+      - .github/actions/licensed-models/**
 
 # (A pull request's run cancelled by its next; main's one at a time, each finished, the newest
 # waiting its turn: a release at a time, in order)
@@ -64,6 +65,12 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+
+      # The licensed models, from the private repository, so the app's game has them
+      # (docs/LICENSED_MODELS.md)
+      - uses: ./.github/actions/licensed-models
+        with:
+          key: ${{ secrets.MODELS_DEPLOY_KEY }}
 
       # (As a release is numbered and stamped: package.json's version in the copy built here, and
       # client/js/app/version.js's commit, for the debug log; scripts/stamp-version.js)

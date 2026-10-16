@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "./fixtures.js";
+import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 
 // The models the game reads (world/art/engine/models.js) in a real browser: one made for phones by
 // utilities/blenderpipeline (its dragon-phone example: textures in KTX2, lower details packed in),
@@ -75,6 +76,7 @@ test("reads a model's KTX2 textures, kept compressed on the GPU, with the transc
 });
 
 test("draws the Dreadthorn from its model once it's read, in place of its stand-in: a level of detail at a time, its fire out of its mouth", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
     const fetched = [];
 
     page.on("request", (request) => fetched.push(request.url()));

@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures.js";
+import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 
 // The model viewer (model-viewer.html; the creature lab, creature-lab.html, sends on to it): a
 // creature chosen, shown as the game draws it, each of its moves played by name, paused, slowed
@@ -95,6 +96,7 @@ test("the creature lab's address opens the model viewer on what it asked for; a 
 });
 
 test("a creature drawn from a model: every clip in its file played alone, stepped and slid through; its skeleton and wireframe shown and hidden; what there is of it and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?creature=dreadthorn");
 
     // (Its stand-in shown till its model's read, then the model, its clips listed)

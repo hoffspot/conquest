@@ -28,6 +28,7 @@
     "vendor:ed25519": "node scripts/vendor-ed25519.js",
     "build:manifest": "node scripts/build-manifest.js",
     "scramble": "node scripts/scramble-model.js",
+    "models:fetch": "node scripts/licensed-models.js fetch",
     "build:characters": "node scripts/build-characters.js",
     "build:vitruvian": "node scripts/build-vitruvian.js",
     "build:music": "node scripts/build-music.js",

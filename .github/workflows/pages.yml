@@ -28,6 +28,12 @@ jobs:
           node-version: 22
           cache: npm
 
+      # The licensed models, from the private repository, so the site has them
+      # (docs/LICENSED_MODELS.md)
+      - uses: ./.github/actions/licensed-models
+        with:
+          key: ${{ secrets.MODELS_DEPLOY_KEY }}
+
       - run: npm ci
       - run: npm run lint
       - run: npm test

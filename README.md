@@ -905,13 +905,18 @@ npm test && npm run test:browser
 ```
 
 Its [README.md](utilities/blenderpipeline/README.md) says how to use it, and how to keep a bought
-asset out of this public repository. A licensed model the game serves is scrambled first
-(`npm run scramble`, [docs/LICENSED_MODELS.md](docs/LICENSED_MODELS.md)).
+asset out of this public repository. A licensed model the game serves is scrambled
+(`npm run scramble`) and kept in a private repository the builds fetch it from; with access to it,
+`npm run models:fetch` puts it in your copy ([docs/LICENSED_MODELS.md](docs/LICENSED_MODELS.md)).
 
 ## Credits and license
 
-- The Dreadthorn is HuyKhoi2407's Dreadthorn Dragon, bought on Superhive. It's in this repository
-  with permission, in its converted form only, scrambled (`client/models/beasts/LICENSE.md`,
+`LICENSE` (Apache 2.0) covers this repository's own code and assets; [NOTICE.md](NOTICE.md) says
+what it doesn't cover.
+
+- The Dreadthorn is HuyKhoi2407's Dreadthorn Dragon, bought on Superhive. It's in the game with
+  permission, in its converted form only, scrambled. It isn't in this repository, but in a private
+  one the game's builds fetch it from (`client/models/beasts/LICENSE.md`,
   `docs/LICENSED_MODELS.md`). It isn't free to reuse.
 - The KayKit Medieval Hexagon Pack by Kay Lousberg (<https://kaylousberg.com>), CC0
   (`client/models/kaykit/LICENSE.txt`): the town's props were these until the game built its own.
