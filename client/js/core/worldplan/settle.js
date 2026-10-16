@@ -13,6 +13,7 @@ import { Queue } from "./queue.js";
 import { MASTER_SHOPS } from "../setpieces/pieces.js";
 import { BIOME, BIOMES, FACTIONS, RACES, SITES, WORKS } from "./races.js";
 import { CELL, CELLS, cellIndex, WATER } from "./terrain.js";
+import { metresOf } from "../terrain/curve.js";
 import { stillWaterAt } from "../terrain/height.js";
 import { runningIn, watersOf } from "../terrain/waters.js";
 import { cos, hypot, pow, sin } from "../exact.js";
@@ -100,6 +101,19 @@ export const DUNGEON_SITES = Object.freeze({ per: 1, apart: 26, clear: 6, sites:
  * rather be.
  */
 export const DREADTHORN_LAIRS = Object.freeze({ count: [1, 2], biomes: ["volcanic", "mountain"], rather: ["snow", "badlands", "tundra", "heath"], hills: 0.5, clear: 8, sites: 8, camps: 4, apart: 40, tries: 12000, strict: 0.6 });
+
+/**
+ * The werewolves' dens (core/creatures.js LAIRS: each the Moonfang's, with its werewolves and dire
+ * wolves): as the Dreadthorns' lairs are found (DREADTHORN_LAIRS), one or two a world, in the deep
+ * woods (`biomes`, low hills will do; failing that, any wooded or wild high land, `rather`), where
+ * the land rises across its cell (`steep`: metres a metre at least, so there's a hillside near
+ * to cut it into: the woods are mostly gentle), clear of the settlements, the sites, the camps and
+ * the other great lairs and dens.
+ */
+export const WEREWOLF_DENS = Object.freeze({ count: [1, 2], biomes: ["darkwood", "woods"], rather: ["elfwood", "tundra", "heath", "mountain"], hills: 0.2, steep: 0.2, clear: 7, sites: 7, camps: 4, apart: 30, tries: 12000, strict: 0.6 });
+
+// The kinds of place a beast keeps (a great lair, a den), each far from the others
+const BEAST_LAIRS = Object.freeze([...LAIR_KINDS, "werewolf's den"]);
 
 /**
  * Each people's works (races.js WORKS: docs/WAR.md *The works*), set out after everything else
@@ -663,7 +677,11 @@ export function settleLand(land, seed) {
 
     // (And the Dreadthorns' lairs after them, from numbers of their own too: nothing else laid out
     // moves for them, and their ids come after every other site's)
-    sites.push(...dreadthornLairs(land, places, sites, camps, createRandom(seed * 53 + 29), used));
+    sites.push(...beastLairs(land, places, sites, camps, createRandom(seed * 53 + 29), used));
+
+    // (And the werewolves' dens after them, the same way, from numbers of their own: nothing laid
+    // out before moves for them)
+    sites.push(...beastLairs(land, places, sites, camps, createRandom(seed * 59 + 31), used, { kind: "werewolf's den", numbers: WEREWOLF_DENS, id: "werewolf-s-den" }));
 
     // (And each people's master shops, last, from numbers of their own: nothing moves for them)
     masterShops(places, createRandom(seed * 47 + 23));
@@ -973,16 +991,23 @@ function graveyards(land, road, places, sites, camps, random) {
     return found;
 }
 
-// The Dreadthorns' lairs (DREADTHORN_LAIRS): darts thrown at the land, each kept where it's dry
-// wild land, high, on volcanic ground or in the mountains (or, failing that, any high wild land),
-// clear of the settlements, the sites and the camps, and far from the other great lairs. Each named
-// in a people's tongue, as the drake's lair is
-function dreadthornLairs(land, places, sites, camps, random, used) {
+// The Dreadthorns' lairs (DREADTHORN_LAIRS), or the werewolves' dens (WEREWOLF_DENS: `kind`, its
+// numbers and its sites' ids): darts thrown at the land, each kept where it's dry wild land, high
+// enough and steep enough (`steep`, if it asks it), in the land it would rather be (or, failing
+// that, in any it will do), clear of the settlements, the sites and the camps, and far from the
+// other great lairs and dens. Each named in a people's tongue, as the drake's lair is
+function beastLairs(land, places, sites, camps, random, used, { kind = "dreadthorn's lair", numbers = DREADTHORN_LAIRS, id = "dreadthorn-s-lair" } = {}) {
     const { biome, water, height, territory } = land;
-    const { count, biomes, rather, hills, clear, sites: fromSites, camps: fromCamps, apart: away, tries, strict } = DREADTHORN_LAIRS;
+    const { count, biomes, rather, hills, steep = 0, clear, sites: fromSites, camps: fromCamps, apart: away, tries, strict } = numbers;
+    // (How steeply the land rises across a cell, metres a metre: from the cells either side)
+    const rising = ([x, y]) => {
+        const metres = (i, j) => metresOf(height[cellIndex(i, j)]);
+
+        return hypot(metres(x + 1, y) - metres(x - 1, y), metres(x, y + 1) - metres(x, y - 1)) / (2 * CELL);
+    };
     const wanted = random.int(count[0], count[1]);
     const found = [];
-    const lairs = sites.filter((site) => LAIR_KINDS.includes(site.kind));
+    const lairs = sites.filter((site) => BEAST_LAIRS.includes(site.kind));
 
     for (let k = 0; k < tries && found.length < wanted; k++) {
         const cell = [random.int(4, CELLS - 5), random.int(4, CELLS - 5)];
@@ -990,7 +1015,7 @@ function dreadthornLairs(land, places, sites, camps, random, used) {
         const where = BIOMES[biome[at]].id;
         const fits = k < tries * strict ? biomes.includes(where) && height[at] >= hills : (biomes.includes(where) || rather.includes(where)) && height[at] >= hills * 0.6;
 
-        if (water[at] || biome[at] === BIOME.beach || territory[at] || !fits || !dry(land, ...cell, 1)) {
+        if (water[at] || biome[at] === BIOME.beach || territory[at] || !fits || !dry(land, ...cell, 1) || (steep && rising(cell) < steep)) {
             continue;
         }
 
@@ -1000,7 +1025,7 @@ function dreadthornLairs(land, places, sites, camps, random, used) {
 
         const tongue = RACES[random.int(0, RACES.length - 1)];
 
-        found.push({ id: `dreadthorn-s-lair-${sites.length + found.length + 1}`, kind: "dreadthorn's lair", race: null, name: nameIn(tongue, random, used), cell, at: centre(...cell), seed: random.seed() });
+        found.push({ id: `${id}-${sites.length + found.length + 1}`, kind, race: null, name: nameIn(tongue, random, used), cell, at: centre(...cell), seed: random.seed() });
     }
 
     return found;

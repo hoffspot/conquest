@@ -3606,6 +3606,14 @@ export class Game {
         return this.greatLairs;
     }
 
+    // Every lair and den whose master's drawn from a model (a Dreadthorn's lair, a werewolves'
+    // den), and the kind each one's master is: its model asked for near it (#modelling)
+    #modelLairs() {
+        this.modelLairs ??= this.world.plan.sites.filter((site) => LAIRS[site.kind] && MODELS[LAIRS[site.kind].master[0]]).map((site) => ({ id: site.id, at: site.at, beast: LAIRS[site.kind].master[0] }));
+
+        return this.modelLairs;
+    }
+
     // The creatures drawn from a model (beasts/model.js): each kind's asked for once the player's
     // near one of its lairs (looked at every MODELLING seconds), before it's met; and one drawn
     // with its stand-in, its model read since, drawn again from the model once it's out of view
@@ -3617,7 +3625,7 @@ export class Game {
         if ((this.modelClock = (this.modelClock ?? 0) - dt) <= 0 && me) {
             this.modelClock = MODELLING;
 
-            for (const kind of modelsNear([me.x, me.z], this.#greatLairs())) {
+            for (const kind of modelsNear([me.x, me.z], this.#modelLairs())) {
                 wantModel(kind);
             }
         }

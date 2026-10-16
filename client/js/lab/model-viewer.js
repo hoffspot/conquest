@@ -3,7 +3,7 @@
 // mini-bosses, the game's people (an adventurer, a soldier, each of the folk's roles: of any
 // people, a woman or a man), and its things (what's carried and worn, built in code:
 // characters/items.js; the catalog's props, the treasure chest opening), and the creatures whose
-// models are in the catalog but who aren't in the game yet (the werewolf), in any of their skins,
+// models are in the catalog but who aren't in the game yet, in any of their skins,
 // one at a time, doing what each does in the game (standing, walking,
 // running, attacking, struck, resting, dying, flying; a person's every motion, as the motion
 // check plays them: characters/motioncheck.js), to look at from any side and watch move:
@@ -125,6 +125,7 @@ const ABOUT = {
     chimera: ["Chimera", "Only in the orcs' wilds, in the volcanic lands and badlands"],
     dragon: ["Drake", "The drake's lair: for the mightiest"],
     dreadthorn: ["Dreadthorn", "A Dreadthorn's lair: the mightiest of all"],
+    moonfang: ["Moonfang", "A werewolves' den: for the mightiest"],
     ghost: ["Restless ghost", "The ruins and ruined castles, with their dead"],
     wraith: ["Wraith", "The ruins and ruined castles, with their dead"],
     wightLord: ["Wight lord", "Ruined castles: for the mightiest"],
@@ -1230,7 +1231,7 @@ const groups = [
     ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "werewolf", "goblin", "goblinBomber", "goblinKing", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
     ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "knucker", "hodmedod", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "hart", "kelpie", "caveSpider", "shadowStalker", "olm", "centipede", "basilisk", "draugr", "mare", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "spittingCobra", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "ahuizotl", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock", "chimera"]],
     ["The restless dead", ["ghost", "wraith"]],
-    ["For the mightiest", ["dreadthorn", "dragon", "wightLord", "frostTroll", "banditChief"]],
+    ["For the mightiest", ["dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief"]],
 ];
 
 for (const [label, ids] of groups) {

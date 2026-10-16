@@ -122,6 +122,17 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0x3a3632, saddle: 0x1c1a18, belly: 0x5a524a, dark: 0x141210, mane: 0x26221e, eyes: 0xe8b020, glow: 0xe8a010 },
         attacks: ["bite", "snap", "shake"], rests: ["sit", "sniff", "scratch", "howl", "shake"], specials: ["pounce"],
     },
+    // (The Moonfang: the werewolf's stand-in, half as big again, black, its eyes pale as the moon,
+    // till its own model's read)
+    moonfang: {
+        body: "quadruped",
+        scale: [1.9, 1.9],
+        length: 1.55, height: 1.1, girth: 0.25, width: 0.22, chest: 1.3, haunch: 0.85, neck: 0.4, neckUp: 0.55,
+        head: [0.17, 0.16, 0.19], snout: { length: 0.27, radius: 0.08, taper: 0.6 }, ears: "pointed", legs: 0.09, claws: 1.4,
+        tail: { length: 0.6, radius: 0.08, bushy: true, lift: -0.9, curl: 0.12 }, mane: true,
+        colours: { fur: 0x1c1a1c, saddle: 0x0c0a0c, belly: 0x3a363a, dark: 0x080608, mane: 0x141214, eyes: 0xd8e8ff, glow: 0xc8dcff },
+        attacks: ["bite", "snap", "shake"], rests: ["sit", "sniff", "howl", "shake"], specials: ["pounce"],
+    },
     goblin: { body: "humanoid", scale: [0.72, 0.82] },
     goblinBomber: { body: "humanoid", scale: [0.7, 0.78] },
     goblinKing: { body: "humanoid", scale: [0.98, 1.04] },

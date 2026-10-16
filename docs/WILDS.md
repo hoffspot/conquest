@@ -126,6 +126,20 @@ or the russet's, by its seed; it rakes with its claws, leaps on whoever it's aft
 looks about as it rests. Till it's read, a great dark wolf, a third bigger than a dire wolf,
 stands in for it (beasts/looks.js).
 
+**The Moonfang** is the first of the werewolves, the master of each of their dens: one or two a
+world, a cave's mouth cut into a wooded hillside, the bones of what's been dragged home about it
+(`werewolf's den`: worldplan/settle.js `WEREWOLF_DENS`, setpieces/neutral.js). It's always there,
+by day or night, with two of its werewolves, each at the head of a pack of its own (the wolves
+it runs with join it against a stronger side), and three dire wolves (`LAIRS`), once a player's
+within 100 metres; slain, it's gone 40 minutes. It's drawn from the werewolf's model, 3.4 metres
+tall to a werewolf's 2.4, always in the moonfang's skin, black with a pale glow (beasts/model.js
+`MODELS`), its hide turning a quarter of every blow; its claws rake harder (10–17) and its spring
+reaches further and knocks down (14–24): weapons.js `moonfang`. Its pelt and a fang are its own
+(`moonfangPelt`, `moonfangFang`), and its den's hoard has an old relic in it. Its model's asked
+for once a player's within 1.5 km of a den (game.js `#modelLairs`), as a Dreadthorn's is near its
+lair; it doesn't circle over its den as a drake does. Till it's read, the werewolf's stand-in,
+bigger still and black, its eyes pale as the moon, stands in for it.
+
 ### Goblins
 
 Goblins go about in raiding parties, and some of each party (each but its leader, 3 in 10:
@@ -183,7 +197,8 @@ frogs and the orcs' magma slimes. (The wild camps keep their own ladder, the fir
 about 2 km of the start: docs/WORLD.md.)
 
 The perilous places hold the mightiest, each a master and its guards (`LAIRS`): the drake at the
-drake's lair, with two wyverns; a Dreadthorn at each of its own lairs, with three wyverns; a wight
+drake's lair, with two wyverns; a Dreadthorn at each of its own lairs, with three wyverns; the
+Moonfang at each werewolves' den, with two werewolves and three dire wolves; a wight
 lord and its dead in each ruined castle (three skeletons, two ghosts and a wraith); the frost troll
 in the snows. The Dreadthorn is the mightiest of all, a fight for a party: its hide turns a third of
 every blow (armour 0.35), its bite reaches two metres and lays a wound open, and its breath reaches
@@ -897,8 +912,13 @@ What's the same as the Dreadthorn's, and what's its own:
   model's Attack clip), resting by howling or looking about; no fire (`mouth: null`).
 - **Not in a crowd:** a kind drawn from a model isn't drawn in its kind's crowd (*In a crowd*,
   below: its figure would be its stand-in's); far off, its least detailed level is drawn.
+- **The Moonfang's too:** drawn from the same model, bigger (`length`), its stride as long again
+  (`pace`, `runPace`), only ever in the moonfang's skin. The model's file is read once for both
+  kinds (`wantModel`: by the catalog's entry), each kind's skins read onto it as that kind's
+  wanted, once each, so a den's werewolves and its Moonfang share one copy.
 - `e2e/models.spec.js`: its model and three skins read, each skin worn by one of its seeds, its
-  levels three meshes each, shown together, its fur flushed with its body.
+  levels three meshes each, shown together, its fur flushed with its body; the Moonfang drawn
+  from the same model as read, bigger, in its own skin.
 
 ### In a crowd (beasts/herd.js)
 

@@ -168,16 +168,16 @@ describe("the sites no people keeps in the world (sites.js)", () => {
             assert.ok(down.squares.size > 0 && down.squares.size < down.w * down.h * PLOT * PLOT * 0.7, `${site.kind} ${site.id}: ${down.squares.size} squares blocked of ${down.w * down.h * PLOT * PLOT}`);
             // (Levelled only where it's a ruined castle's courtyard, or dug into the ground: a
             // cave's floor, its pit, and a dungeon's way in, as a cave's)
-            assert.equal(Boolean(down.pad), ["ruined castle", "cave", "dragon's lair", "dreadthorn's lair", "dungeon"].includes(site.kind), site.kind);
+            assert.equal(Boolean(down.pad), ["ruined castle", "cave", "dragon's lair", "dreadthorn's lair", "werewolf's den", "dungeon"].includes(site.kind), site.kind);
         }
 
         assert.ok(set >= 100, `${set} set down`);
     });
 
-    it("cuts each cave and each great lair (the drake's, a Dreadthorn's) into a hillside facing down it, its floor dug in front of its face; or sinks a cave into the ground where there's none", () => {
+    it("cuts each cave and each great lair (the drake's, a Dreadthorn's) and den (the werewolves') into a hillside facing down it, its floor dug in front of its face; or sinks a cave into the ground where there's none", () => {
         const forms = { hillside: 0, pit: 0 };
 
-        for (const site of sites.filter(({ kind }) => kind === "cave" || kind.endsWith("lair"))) {
+        for (const site of sites.filter(({ kind }) => kind === "cave" || kind.endsWith("lair") || kind === "werewolf's den")) {
             const down = overworld.sites.set.get(site.id);
             const rest = restingOf(world.plan, site);
             const { pad } = down;
@@ -306,7 +306,7 @@ describe("the sites no people keeps in the world (sites.js)", () => {
         // the ivy hanging from their tops, M7b-3c, about 200 and 2,400 more)
         // (An old graveyard's sixty graves or so, its walls, gates, path, tombs and mausoleum: as much as
         // a house)
-        const budget = { ruins: 5000, "ruined castle": 18000, "dragon's lair": 3000, "dreadthorn's lair": 3000, graveyard: 6000 };
+        const budget = { ruins: 5000, "ruined castle": 18000, "dragon's lair": 3000, "dreadthorn's lair": 3000, "werewolf's den": 3000, graveyard: 6000 };
         const most = new Map();
 
         for (const site of sites) {

@@ -401,7 +401,8 @@ async function build() {
         const distance = ({ at }) => Math.hypot(at[0] - world.start.at[0], at[1] - world.start.at[1]);
         const whose = ({ race }) => state.people === "human" || race === state.people;
         const wanted = params.get("site");
-        const site = sited ? world.plan.sites.filter(({ race, kind }) => race === state.people && (state.show === "castle" ? kind === "castle" : wanted ? kind === wanted : siteSize({ race, kind }) && kind !== "castle" && kind !== "watchtower"))[0] : null;
+        // (One asked for by its kind, `site`, may be no people's: a cave, a great lair, a den)
+        const site = sited ? world.plan.sites.filter(({ race, kind }) => (race === state.people || (wanted && !race)) && (state.show === "castle" ? kind === "castle" : wanted ? kind === wanted : siteSize({ race, kind }) && kind !== "castle" && kind !== "watchtower"))[0] : null;
         const place = site ?? world.plan.places.filter((one) => one.kind === state.show && whose(one)).sort((a, b) => distance(a) - distance(b))[0];
         const chunks = new Chunks(world);
 

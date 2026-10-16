@@ -32,6 +32,7 @@ export const NEUTRAL = Object.freeze({
     "ruined castle": [18, 16],
     "dragon's lair": [10, 9],
     "dreadthorn's lair": [14, 12],
+    "werewolf's den": [7, 6],
     watchtower: [3, 3],
     graveyard: [6, 5],
     dungeon: [5, 4],
@@ -149,6 +150,7 @@ export function layoutNeutral({ kind, seed, form = null, facing = 0, theme = nul
 const LAIRS_LAID = Object.freeze({
     "dragon's lair": { mouth: { w: 7, h: 6 }, face: 8, back: 12, high: [12, 15], inset: 4, spur: 8, spurs: [5, 7.5], forward: 2, bones: [4, 7], out: [2, 7] },
     "dreadthorn's lair": { mouth: { w: 11, h: 9 }, face: 11, back: 22, high: [17, 21], inset: 6, spur: 11, spurs: [7, 10], forward: 3, bones: [7, 11], out: [3, 10] },
+    "werewolf's den": { mouth: { w: 4.5, h: 4 }, face: 6, back: 9, high: [7, 10], inset: 3, spur: 6, spurs: [3.5, 5], forward: 1.5, bones: [6, 10], out: [1.5, 5.5] },
 });
 
 // A great beast's lair, cut into a mountainside (LAIRS_LAID: its sizes)
@@ -464,6 +466,12 @@ const LAYOUTS = {
     // for it, the face higher, the hollow deeper, more bones about it)
     "dreadthorn's lair"(random, width, depth) {
         return lairLayout(random, width, depth, LAIRS_LAID["dreadthorn's lair"]);
+    },
+
+    // A werewolf's den: the same, smaller, in a wooded hillside (its mouth a man's height and half
+    // again, the bones of what it's dragged home thicker about it)
+    "werewolf's den"(random, width, depth) {
+        return lairLayout(random, width, depth, LAIRS_LAID["werewolf's den"]);
     },
 
     // An old graveyard outside a town (GRAVEYARD): a wall of field stone round it, broken here

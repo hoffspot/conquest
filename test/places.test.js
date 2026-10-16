@@ -100,7 +100,7 @@ describe("places worth finding (places.js)", () => {
         assert.ok(Object.values(PLACE_RIMS).length === HOLDERS.length + 1);
     });
 
-    it("are held at the start as the war has it: castles by their people, the ruins by the dead, caves and wild towers by outlaws, the great lairs by their beasts, holy stones by no one", () => {
+    it("are held at the start as the war has it: castles by their people, the ruins by the dead, caves and wild towers by outlaws, the great lairs and the dens by their beasts, holy stones by no one", () => {
         for (const plan of plans) {
             for (const place of placesOf(plan)) {
                 const held = heldAtStart(plan, place);
@@ -113,7 +113,7 @@ describe("places worth finding (places.js)", () => {
                     assert.equal(held, "dead");
                 } else if (place.kind === "cave" || (place.kind === "watchtower" && !place.race)) {
                     assert.equal(held, "bandits");
-                } else if (place.kind === "dragon's lair" || place.kind === "dreadthorn's lair") {
+                } else if (place.kind === "dragon's lair" || place.kind === "dreadthorn's lair" || place.kind === "werewolf's den") {
                     assert.equal(held, "beast");
                 } else if (place.kind === "shrine" || place.kind === "standing stones" || place.kind === "camp") {
                     assert.equal(held, null);
@@ -519,6 +519,36 @@ describe("the places gone into (M7.5b: a cave, the drake's lair, a broken watcht
 
         assert.ok(!host.ground.has(chest.id), "opened");
         assert.ok(share?.for === HOST_PLAYER && share.bundle.gold >= 500, JSON.stringify(share?.bundle));
+        assert.ok(share.bundle.items.at(-1).quality === "legendary" && share.bundle.items.at(-1).name, "an old relic, by name");
+    });
+
+    it("a Moonfang keeps its den with its werewolves and dire wolves; its hoard, an old relic in it, opened once it falls", () => {
+        const context = hosted();
+        const { host, world, me } = context;
+        const site = world.plan.sites.find((one) => one.kind === "werewolf's den");
+        const heart = world.maps.town.sites.heartOf(site);
+
+        put(me, [Math.floor(heart[0] + 12), Math.floor(heart[1])]);
+        run(host, 600);
+
+        const lair = host.lairs.get(site.id);
+        const chest = host.ground.get(`chest-${site.id}`);
+        const [master] = lair.ids.filter((id) => host.wild.get(id)?.master);
+        const guards = lair.ids.filter((id) => !host.wild.get(id)?.master).map((id) => host.wild.get(id).creature);
+
+        assert.equal(host.wild.get(master).creature, "moonfang");
+        assert.ok(host.battle.actor(master).wild.unique, "one of a kind: perilous");
+        assert.ok(guards.filter((kind) => kind === "werewolf").length >= 2 && guards.filter((kind) => kind === "direWolf").length >= 3, guards.join());
+        assert.ok(guards.every((kind) => kind === "werewolf" || kind === "direWolf"), guards.join());
+        assert.ok(chest?.locked && lair.maps.includes(chest.map), "locked, within");
+
+        host.battle.afflict(master, "poison", { by: HOST_PLAYER, damage: 1e7 });
+        run(host, 3000);
+
+        const share = [...host.ground.values()].find((dropped) => dropped.from === "chest" && dropped.map === chest.map);
+
+        assert.ok(!host.ground.has(chest.id), "opened");
+        assert.ok(share?.for === HOST_PLAYER && share.bundle.gold >= 180, JSON.stringify(share?.bundle));
         assert.ok(share.bundle.items.at(-1).quality === "legendary" && share.bundle.items.at(-1).name, "an old relic, by name");
     });
 

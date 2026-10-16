@@ -397,6 +397,16 @@ export const NATURAL = Object.freeze({
             ranged({ id: "breath", reach: 6, damage: [6, 12], hitAt: 700, duration: 1400, interval: 3000, stagger: 300, reaction: "fire", animation: "breath", projectile: { kind: "flame", speed: 14 }, afflict: { kind: "burn", chance: 1 } }),
         ],
     },
+    // (The Moonfang's: a werewolf's, the heavier, its spring reaching further and knocking down)
+    moonfang: {
+        label: "Great claws and fangs",
+        attacks: [
+            eitherOf(
+                melee({ id: "claw", reach: 1.6, damage: [10, 17], hitAt: 450, duration: 900, interval: 1200, stagger: 200, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.45 } }),
+                melee({ id: "pounce", reach: 2.2, damage: [14, 24], hitAt: 650, duration: 1300, interval: 2400, stagger: 500, reaction: "hack", animation: "pounce", afflict: { kind: "bleed", chance: 0.5 } }),
+            ),
+        ],
+    },
     // (The Dreadthorn's: greater than a drake's, its bite reaching further and laying a wound open,
     // its fire a long breath that sets whatever it reaches burning)
     dreadthorn: {

@@ -36,7 +36,7 @@ import { CELL, CELLS, WORKS, WORLD_SIZE } from "./worldplan/plan.js";
 export const TRAILS = Object.freeze({ height: 0.5, reach: 700, room: 160, half: 0.7, front: 2, clear: 2, byTown: 48 });
 
 /** The sites a trail goes up to (in the hills); and each people's works, wherever they are (their convoys' way to the road). */
-export const TRAIL_SITES = Object.freeze(["cave", "ruins", "shrine", "standing stones", "ruined castle", ...LAIR_KINDS]);
+export const TRAIL_SITES = Object.freeze(["cave", "ruins", "shrine", "standing stones", "ruined castle", ...LAIR_KINDS, "werewolf's den"]);
 const WORKED = WORKS.map(({ kind }) => kind);
 
 // How far past a trail's room its land must be wanted for it to be found first (metres: as far as
