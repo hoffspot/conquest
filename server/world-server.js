@@ -194,7 +194,7 @@ export class WorldServer {
         /** The other servers on the Wi-Fi, and its own advertising (nearby.js): on with the `bonjour` setting, once it's listening. */
         this.nearby = new Nearby({ bonjour, card: () => this.bonjourCard() });
 
-        /** Its updates (update/updater.js): new versions looked for once a day, once it's started; installed when its owner asks. */
+        /** Its updates (update/updater.js): new versions looked for once a day, once it's started; installed when its owner asks, or by itself overnight. */
         this.updater = new Updater(this, update);
     }
 

@@ -1555,7 +1555,7 @@ async function join(event) {
     playedSave(save);
     state.save = save;
 
-    const { joinWorld, RELAY_ERRORS, NET_KICKS, NET_REFUSALS } = await import("./app/together.js");
+    const { joinWorld, RELAY_ERRORS, NET_KICKS, NET_REFUSALS, versionWords } = await import("./app/together.js");
 
     $("#joingo").disabled = true;
     $("#joinstatus").textContent = "Joining…";
@@ -1591,11 +1591,12 @@ async function join(event) {
     }
 
     setTogether(joined);
-    joined.joining.onRefused = (reason) => {
+    joined.joining.onRefused = (reason, said) => {
         joined.close();
         setTogether(null);
         $("#joingo").disabled = false;
-        $("#joinstatus").textContent = NET_REFUSALS[reason] ?? "You couldn't join that world.";
+        // (Another version: which is the newer, and what to do, by the host's version where it says it)
+        $("#joinstatus").textContent = reason === "version" ? versionWords(said?.net) : (NET_REFUSALS[reason] ?? "You couldn't join that world.");
     };
     joined.joining.onKicked = (reason) => {
         joined.close();
@@ -1882,7 +1883,7 @@ function worldCard({ name, about = "", when = "", badge = "", className = "", di
 
 // The known servers and their worlds, as last heard
 async function showWorlds() {
-    const { NET_VERSION } = await import("./core/netplay.js");
+    const { NET_VERSION, versionShort, versionWords } = await import("./core/netplay.js");
     const { baseOf, homeHost, inviteLink, SERVER_REFUSALS } = await serversOf();
     const rows = [];
 
@@ -1896,7 +1897,8 @@ async function showWorlds() {
         const own = { ...record, secure: false };
         const handOff = (world = null) => inviteLink(`${baseOf(own)}/`, { address: own, id: record.id, world, ...(world ? { key: record.worlds?.[world]?.key ?? null, ticket: record.worlds?.[world]?.ticket ?? null } : {}) });
         const head = document.createElement("li");
-        const about = card ? `${matched ? `Version ${card.server.version}` : "Another version of the game"} · ${Math.round(card.rtt)} ms` : walled ? SERVER_REFUSALS.walled : error ? error.message : "Asking it how it is…";
+        // (Another version: which is the newer, and what to do about it)
+        const about = card ? (matched ? `Version ${card.server.version} · ${Math.round(card.rtt)} ms` : versionWords(card.server?.net, { server: true })) : walled ? SERVER_REFUSALS.walled : error ? error.message : "Asking it how it is…";
 
         head.className = `server${error ? " unreachable" : ""}`;
         head.dataset.server = record.key;
@@ -1971,7 +1973,7 @@ async function showWorlds() {
                     name: listing.name,
                     badge: "A player's world",
                     about: `${listing.players} of ${listing.most} in · ${how}${listing.temporary ? " · on a phone, for a while" : ""}`,
-                    when: fits ? "Join it" : "Another version of the game",
+                    when: fits ? "Join it" : versionShort(listing.net),
                     className: fits ? "" : "unmatched",
                     disabled: !fits,
                     onClick: () => {
@@ -1984,7 +1986,7 @@ async function showWorlds() {
         }
     }
 
-    rows.push(...nearbyRows(NET_VERSION));
+    rows.push(...nearbyRows(NET_VERSION, versionShort));
     $("#worldslist").replaceChildren(...rows);
     $("#worldsnote").hidden = rows.length > 0;
 }
@@ -1992,7 +1994,7 @@ async function showWorlds() {
 // The servers the known ones find near them on their Wi-Fi (their status's `nearby`: Bonjour, plan
 // §8.2), those not known here yet, each added with a tap: by its .local name when this page was
 // reached by one (as a phone's browser resolves them), else by its address on the Wi-Fi
-function nearbyRows(net) {
+function nearbyRows(net, versionShort) {
     const known = state.servers.list();
     const seen = new Set();
     const rows = [];
@@ -2018,7 +2020,7 @@ function nearbyRows(net) {
                     name: near.name ?? where,
                     badge: "Nearby",
                     about: `On the Wi-Fi with ${record.name ?? record.key}${listed}`,
-                    when: matched ? `Add it (${where})` : "Another version of the game",
+                    when: matched ? `Add it (${where})` : versionShort(near.net),
                     className: matched ? "" : "unmatched",
                     disabled: !matched,
                     onClick: () => addNearby(where, near),
@@ -2371,7 +2373,7 @@ function chooseHero(client, entered) {
  */
 async function playServerWorld(client, entered, { save = null, hero = undefined }) {
     const { SERVER_REFUSALS } = await serversOf();
-    const { NET_REFUSALS, NET_KICKS } = await import("./app/together.js");
+    const { NET_REFUSALS, NET_KICKS, versionWords } = await import("./app/together.js");
     const kept = entered.card?.heroes === "kept";
     const character = save ? { hero: save.hero, talks: loadTalks(save), progress: loadProgress(save), standing: loadStanding(save), followers: loadFollowers(save) } : {};
 
@@ -2415,11 +2417,11 @@ async function playServerWorld(client, entered, { save = null, hero = undefined 
 
     setTogether(joined);
     state.onServer = { client, entered, kept };
-    joined.joining.onRefused = (reason) => {
+    joined.joining.onRefused = (reason, said) => {
         joined.close();
         setTogether(null);
         state.onServer = null;
-        $("#worldsstatus").textContent = NET_REFUSALS[reason] ?? SERVER_REFUSALS[reason] ?? "You couldn't go into that world.";
+        $("#worldsstatus").textContent = reason === "version" ? versionWords(said?.net, { server: true }) : (NET_REFUSALS[reason] ?? SERVER_REFUSALS[reason] ?? "You couldn't go into that world.");
     };
     joined.joining.onKicked = (reason) => {
         joined.close();

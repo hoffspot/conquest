@@ -98,13 +98,43 @@ export const PACE = Object.freeze({ behind: 6, catchUp: 40, catchUpMs: 8, tooFar
  */
 export const PLAYOUT = Object.freeze({ least: 2, most: 6, jitter: 16, late: 1000, rate: 0.1, gain: 0.05, settle: 1000 });
 
-/** Why a game can't join: shown to its player. */
+/** Why a game can't join: shown to its player (a version's own words: versionWords). */
 export const NET_REFUSALS = Object.freeze({
     version: "That world's being played in another version of the game.",
     full: "That world's full.",
     character: "Your character couldn't be brought into that world.",
     here: "You're in that world already, on another device.",
 });
+
+/**
+ * What a player's told when a world or a world server plays another version of the game than
+ * theirs: which is the newer (by `other`, its NET_VERSION, where it's said: a refusal or a
+ * listing from one made before it said can't tell), and what they can do about it. `server`: a
+ * world server, whose own page always serves its version of the game, and whose owner updates it;
+ * otherwise a player's own world, whose host reloads theirs.
+ */
+export function versionWords(other, { server = false } = {}) {
+    const what = server ? "That server" : "That world";
+
+    if (Number.isInteger(other) && other < NET_VERSION) {
+        return `${what} plays an older version of the game than yours. ${server ? "Open the game from the server itself (it always matches), or ask its owner to update it." : "Ask whoever's hosting it to reload their game for the newest version."}`;
+    }
+
+    if (Number.isInteger(other) && other > NET_VERSION) {
+        return `${what} plays a newer version of the game than yours. Reload this page for the newest version${server ? ", or open the game from the server itself (it always matches)" : ""}.`;
+    }
+
+    return `${what} plays another version of the game than yours. ${server ? "Open the game from the server itself: it always matches." : "Reload this page, and ask whoever's hosting it to reload theirs, for the newest version."}`;
+}
+
+/** The same in a few words, for a list: which is the newer, and (if it's this game that's older) to reload. */
+export function versionShort(other) {
+    if (Number.isInteger(other) && other < NET_VERSION) {
+        return "An older version of the game";
+    }
+
+    return Number.isInteger(other) && other > NET_VERSION ? "A newer version of the game: reload this page" : "Another version of the game";
+}
 
 /** Why a player was sent out of a world (Hosting.kick), as they're told it. */
 export const NET_KICKS = Object.freeze({
@@ -424,10 +454,12 @@ export class Hosting {
             return;
         }
 
-        const refuse = (reason) => this.#send(peer, "refused", encode({ kind: "refused", reason }));
+        const refuse = (reason, more = {}) => this.#send(peer, "refused", encode({ kind: "refused", reason, ...more }));
 
+        // (With this version, for the joiner to say which is the newer: versionWords. A refusal's
+        // words are read by games of every version, so they only ever gain what can be left out)
         if (version !== NET_VERSION) {
-            refuse("version");
+            refuse("version", { net: NET_VERSION });
 
             return;
         }
@@ -757,7 +789,7 @@ export class Joining {
                 this.#last = null;
                 break;
             case "refused":
-                this.onRefused(message.reason);
+                this.onRefused(message.reason, message);
                 break;
             case "kicked":
                 this.onKicked(message.reason);

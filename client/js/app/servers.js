@@ -24,7 +24,7 @@
 //   const { joining } = await client.play({ world, session: entered.session, character, hero });
 
 import { newNonce, verifyIdentity } from "../core/identity.js";
-import { Joining, NET_VERSION } from "../core/netplay.js";
+import { Joining, NET_VERSION, versionWords } from "../core/netplay.js";
 import { addressOf, DEFAULT_PORT, inviteLink, inviteOf } from "./invites.js";
 import { LINK_TIMING, RelayLink } from "./together.js";
 
@@ -55,7 +55,7 @@ export const SERVER_REFUSALS = Object.freeze({
     home: "That key only works at home, on the server's own Wi-Fi.",
     role: "Only the world's owner can do that.",
     full: "That world's full.",
-    version: "That world's played in another version of the game. Open the game from the server's own page.",
+    version: versionWords(undefined, { server: true }),
     code: "That code doesn't open anything here (or no longer does).",
     wait: "Too many tries: wait a moment, then try again.",
     "too-many": "You're already in that world on too many devices.",
@@ -361,7 +361,10 @@ export class ServerClient {
         }
 
         if (!response.ok || !answer) {
-            throw new ServerRefusal(answer?.error ?? "unreachable", SERVER_REFUSALS[answer?.error] ?? answer?.message, answer?.wait ? { wait: answer.wait } : {});
+            // (Another version: which is the newer, by the server's version where it says it)
+            const message = answer?.error === "version" ? versionWords(answer.net, { server: true }) : (SERVER_REFUSALS[answer?.error] ?? answer?.message);
+
+            throw new ServerRefusal(answer?.error ?? "unreachable", message, answer?.wait ? { wait: answer.wait } : {});
         }
 
         return answer;

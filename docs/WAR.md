@@ -2282,7 +2282,11 @@ made first).
   finds for themselves, seen by them alone. The one way anything passes between players is
   trading face to face (docs/WILDS.md); in a party (below), what's brought down counts for each.
 - **Refused:** a game of another version, a character that isn't one, or a world with 8 in it
-  already (`NET_REFUSALS`).
+  already (`NET_REFUSALS`). A game of another version is told the host's (`NET_VERSION`, in the
+  refusal), and so which is the newer, and what to do: reload, for the newest, or ask the host
+  to (`versionWords`). A world server says its version when it refuses one too, and the game
+  says to open it from the server, which always matches, or to ask its owner to update it; its
+  list of servers says the same of each, before anyone tries.
 
 **Coming and going.** Everyone's told of anyone who comes into the world or leaves it. Anyone
 can leave, and the world goes on. When the host closes the world to others (or leaves), those

@@ -142,12 +142,16 @@ one or the other.
 
 ## Updating, and taking it off
 
-The management page says when a new version is out (Settings, Updates: it asks the releases once
-a day), and **Update** installs it: it's checked to be the release GitHub has, every world is
-backed up first, the new version is unpacked beside the app in its data folder (the app itself
-isn't changed, so its signature stays as it was), and the server starts again as it, bringing
-every world forward. If it can't, it goes back to the version before, with everything as it was.
-The menu says **Updating** meanwhile. [SERVER.md](SERVER.md#updating) has the whole of it.
+The server updates itself overnight: from 3 in the morning, once nobody's in, it installs the
+newest release (Settings: **Install new versions by itself**, and the hour it starts from). The
+Mac has to be awake then: on a Mac kept as a server, turn on **Prevent automatic sleeping when the
+display is off** (System Settings › Energy). The management page also says when a new version is
+out (Settings, Updates: it asks the releases once a day), and **Update** installs it at once.
+Either way it's checked to be the release GitHub has, every world is backed up first, the new
+version is unpacked beside the app in its data folder (the app itself isn't changed, so its
+signature stays as it was), and the server starts again as it, bringing every world forward. If it
+can't, it goes back to the version before, with everything as it was. The menu says **Updating**
+meanwhile. [SERVER.md](SERVER.md#updating) has the whole of it.
 
 The installer puts in a new app too ([above](#installing-it)): the newest release, a zip, or one
 built on the Mac. So can you, by hand: Quit the app, put the new one in Applications in place of the

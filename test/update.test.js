@@ -20,10 +20,11 @@ import { decode } from "../client/js/core/wire.js";
 import { makeKeyPair, signArchive } from "../scripts/release-key.js";
 import { ADMIN_HEADER, ADMIN_VALUE } from "../server/admin.js";
 import { SERVER_JOURNAL } from "../server/manage.js";
-import { BACKUPS, exists, readJSON, writeGzip } from "../server/storage/files.js";
+import { BACKUPS, exists, readJSON, writeGzip, writeJSON } from "../server/storage/files.js";
 import { SERVER_VERSION } from "../server/storage/versions.js";
-import { chooseVersion, CURRENT, ENTRY, installOf, readCurrent, readLast, rollBack, unpackRelease, updatesItself, VERSIONS, versionFolder, writeCurrent } from "../server/update/installed.js";
+import { chooseVersion, CURRENT, ENTRY, installOf, LAST, readCurrent, readLast, rollBack, unpackRelease, updatesItself, VERSIONS, versionFolder, writeCurrent } from "../server/update/installed.js";
 import { archiveName, compareVersions, latestRelease, readReleaseKey, sha256Of, signatureName, verifySignature } from "../server/update/releases.js";
+import { atNight, OVERNIGHT_HOURS } from "../server/update/updater.js";
 import { WorldServer } from "../server/world-server.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -411,6 +412,64 @@ describe("the updater, without the project's key", () => {
             await until(() => restarted === 1, "the server to be restarted");
             assert.equal((await readCurrent(root)).version, "99.0.2");
             assert.ok(await exists(path.join(versionFolder(root, "99.0.2"), ENTRY)));
+        } finally {
+            await found.close();
+        }
+    });
+});
+
+describe("the updater, overnight", () => {
+    it("is night from its hour for two hours (this computer's time), past midnight too", () => {
+        const at = (hour, minute = 0) => new Date(2026, 9, 16, hour, minute);
+
+        assert.equal(OVERNIGHT_HOURS, 2);
+        assert.deepEqual([at(2, 59), at(3), at(4, 59), at(5)].map((when) => atNight(when, 3)), [false, true, true, false]);
+        assert.deepEqual([at(22, 59), at(23), at(0, 30), at(1)].map((when) => atNight(when, 23)), [false, true, true, false]);
+    });
+
+    it("updates by itself at night, with its setting on and nobody in; not by day, nor to a version that's failed", async () => {
+        const work = await scratch();
+        const archive = await readFile(await release(work, "99.0.0"));
+        const found = await releases([]);
+        const root = await scratch();
+        let now = new Date(2026, 9, 16, 14, 0);
+        let restarted = 0;
+        const server = await WorldServer.open(root, { awake: () => ({ stop() {} }), router: false, funnel: false, onRestart: () => restarted++, update: { releases: found.url, key: null, code: path.join(work, "pellagos-server-98.0.0"), clock: () => now } });
+
+        servers.push(server);
+
+        try {
+            await found.add({ version: "99.0.0", archive, sha256: sha256Of(archive) });
+            assert.deepEqual((await server.updater.state()).overnight, { on: true, from: 3, hours: 2 });
+
+            // (By day: nothing done, not even asked)
+            assert.equal(await server.updater.overnight(), null);
+            assert.equal(server.updater.checked, null);
+
+            // (At night, with its setting off; then on, with a player in: asked, found, but not updated)
+            now = new Date(2026, 9, 17, 3, 20);
+            await server.settings.change({ autoUpdate: false });
+            assert.equal(await server.updater.overnight(), null);
+            await server.settings.change({ autoUpdate: true });
+            server.registry.entries.set("somewhere", { thread: { state: { present: 1 } } });
+            assert.equal(await server.updater.overnight(), null);
+            assert.equal(server.updater.newer.version, "99.0.0");
+            server.registry.entries.delete("somewhere");
+
+            // (Not to a version that failed: rolled back last time, or stopped in the last 12 hours)
+            await mkdir(path.join(root, VERSIONS), { recursive: true });
+            await writeJSON(path.join(root, VERSIONS, LAST), { from: SERVER_VERSION, to: "99.0.0", outcome: "rolled-back", why: "It didn't start.", when: now.toISOString(), worlds: null });
+            assert.equal(await server.updater.overnight(), null);
+            await rm(path.join(root, VERSIONS, LAST));
+            server.updater.failed = { version: "99.0.0", why: "The download stopped.", at: now.toISOString() };
+            assert.equal(await server.updater.overnight(), null);
+            server.updater.failed = null;
+
+            // (Then updated: by itself, said so, and restarted as it)
+            assert.deepEqual(await server.updater.overnight(), { updating: "99.0.0" });
+            await until(() => restarted === 1, "the server to be restarted");
+            assert.equal((await readCurrent(root)).by, "itself, overnight");
+            assert.match(await readFile(path.join(root, SERVER_JOURNAL), "utf8"), /to 99\.0\.0 by itself, overnight, with nobody in/);
         } finally {
             await found.close();
         }

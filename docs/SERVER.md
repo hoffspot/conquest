@@ -128,7 +128,16 @@ heroes, with a backup first.
 
 **Settings › Updates** says which version this is. Once a day (the **Check once a day** setting),
 the server asks the project's releases whether there's a newer one, and if so shows it with its
-notes. **Check now** asks at once. Nothing updates by itself.
+notes. **Check now** asks at once.
+
+**By itself, overnight** (the **Install new versions by itself** setting, on unless it's turned
+off): from 3 in the morning for two hours (this computer's time; the hour's its own setting), the
+server asks the releases again and installs a newer one once nobody's in, as **Update** does
+below, every world backed up first. It looks every 10 minutes then, so a player still in at 3
+only puts it off. It never tries again a version that failed (rolled back, or stopped in the last
+12 hours): the next one, or **Update**, does. The computer has to be awake then: on a Mac kept as
+a server, turn on **Prevent automatic sleeping when the display is off** (System Settings ›
+Energy). The journal (Activity) says when it did.
 
 **Update** (on the Mac app's server, or one unpacked from a release):
 
@@ -223,6 +232,7 @@ thread a fifth of a core.
 | What | What to do |
 | --- | --- |
 | Players on the Wi-Fi can't reach it | macOS's firewall: allow "node" (System Settings › Network › Firewall). Use the address on the Overview, not `localhost` |
+| A player's told the server plays an older or a newer version of the game | Their game and the server play different versions (players' games and the server must agree). The game from the server itself always matches: they open it from the server's address (its link in Worlds on servers). If the server's the older, **Update** brings it up to date; if theirs is, reloading the page does |
 | It's not in the game's Nearby list | Bonjour is off, or macOS refused Local Network (the page says so). Add it by address |
 | "The data folder … is at version N, written by Pellagos server X" | A newer server wrote it. Use that version or later, or restore the backup made before the upgrade |
 | A world "can't be carried on" | None of its saves read. Restore a backup, or start it afresh from its seed |
