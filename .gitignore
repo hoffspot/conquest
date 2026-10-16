@@ -15,6 +15,8 @@ dist/
 .models/
 client/models/beasts/dreadthorn.bin
 client/models/beasts/werewolf-2.bin
+# (A licensed model's earlier builds, kept ignored where a copy's left behind)
+client/models/beasts/werewolf.bin
 client/models/beasts/werewolf.dusk.bin
 client/models/beasts/werewolf.ash.bin
 client/models/beasts/werewolf.russet.bin

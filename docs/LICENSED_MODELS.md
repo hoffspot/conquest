@@ -239,7 +239,8 @@ the change that uses it is in. So:
 1. Scramble the new build as above, into the private repository under its new name, and commit
    it there beside the old one (its `LICENSE.md` saying so).
 2. In this repository, the catalog entry's `path`, `hash` and `bytes` the new file's, and its path
-   in `.gitignore` in place of the old; `npm run models:fetch`, `npm run build:manifest`.
+   in `.gitignore` beside the old (which stays: a copy of it is left behind in everyone's
+   `client/`, and mustn't be committed); `npm run models:fetch`, `npm run build:manifest`.
 3. Once that's merged, delete the old file from the private repository.
 
 Files that come out the same (a model's skins, which hold no clips) stay as they are: compare the
