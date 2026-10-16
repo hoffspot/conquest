@@ -1564,7 +1564,7 @@ async function renderSettings() {
 
 const UPDATING = Object.freeze({
     downloading: "Downloading the new version…",
-    checking: "Checking it's signed by the project…",
+    checking: "Checking it's the project's release…",
     "backing-up": "Backing up every world and the server's settings…",
     unpacking: "Unpacking it beside this one…",
     restarting: "Saving every world, then starting again as the new version…",
@@ -1608,8 +1608,8 @@ async function updatesPanel() {
                   newer.page ? h("p", { class: "small" }, h("a", { href: newer.page, target: "_blank", rel: "noopener" }, "Its release page")) : null,
                   updates.install.commands
                       ? [h("p", {}, `This server is run from ${updates.install.kind === "homebrew" ? "Homebrew" : "a copy of the repository"}: update it in Terminal.`), h("pre", { class: "commands" }, updates.install.commands.join("\n"))]
-                      : !updates.key
-                        ? h("p", { class: "muted" }, "This version has no key to check new versions with, so it can't update itself: install the new one by hand.")
+                      : !updates.checkedBy
+                        ? h("p", { class: "muted" }, updates.key ? `Version ${newer.version} isn't signed with the project's key, which this server checks new versions with: install it by hand.` : `GitHub doesn't say what version ${newer.version}'s archive should be, so it can't be checked: install it by hand.`)
                         : updates.playersIn
                           ? [h("p", { class: "muted" }, `${updates.playersIn === 1 ? "A player is" : `${updates.playersIn} players are`} in: update when nobody's in, or set their worlds aside.`), button(`Update to ${newer.version}`, update, "primary")]
                           : button(`Update to ${newer.version}`, update, "primary"),

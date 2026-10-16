@@ -277,16 +277,24 @@ describe("the Mac installer", () => {
         assert.equal(await exists(path.join(to, APP)), false);
     });
 
-    it("says to build it when there's no release with the Mac app yet", async () => {
+    it("builds it here when there's no release with the Mac app yet; a version asked for that isn't there, refused", async () => {
         const m = await mac();
 
         await m.releases([release("9.9.9")]);
 
-        const { status, err } = m.run([]);
+        // (On to building it: here without the Command Line Tools, so their installer's opened)
+        const { status, out, calls } = m.run([], { STUB_NO_TOOLS: "1" });
 
         assert.equal(status, 1);
-        assert.match(err, /there's no release of Pellagos Server with the Mac app yet/);
-        assert.match(err, /bash -s -- --build/);
+        assert.match(out, /There's no release of Pellagos Server with the Mac app yet: building it on this Mac instead/);
+        assert.match(out, /needs Apple's Command Line Tools/);
+        assert.deepEqual(called(calls, "xcode-select").at(-1), ["--install"]);
+
+        const asked = m.run(["--version", "9.9.9"], { STUB_NO_TOOLS: "1" });
+
+        assert.equal(asked.status, 1);
+        assert.match(asked.err, /there's no release of Pellagos Server 9\.9\.9 with the Mac app/);
+        assert.deepEqual(called(asked.calls, "xcode-select"), []);
     });
 
     it("refuses an app that isn't Pellagos Server, or has been changed since it was signed", async () => {
@@ -523,5 +531,19 @@ describe("the Mac installer's names", () => {
         assert.ok(script.includes(`/${RELEASE_TAG.source}/`), "its release tag as the updater's");
         assert.ok(script.includes(`"${APP_NAME.replace(/ /g, "-")}-" + tag[1] + "-arm64.zip"`), "the zip named as build-mac-app.js names it");
         assert.ok(script.includes(`https://raw.githubusercontent.com/${REPOSITORY}/main/scripts/install-mac.sh`));
+    });
+
+    it("are those the Mac app workflow publishes its releases by, from main: its tag, the zip and the server's archive", async () => {
+        const workflow = await readFile(path.join(root, ".github/workflows/mac.yml"), "utf8");
+        const release = workflow.slice(workflow.indexOf("\n  release:"));
+
+        assert.match(workflow, /push:\n {4}branches: \[main\]/);
+        assert.ok(RELEASE_TAG.test("server-v2.0.4123"));
+        assert.ok(release.includes('tag="server-v$VERSION"'), "tagged as the updater and installer look for");
+        assert.ok(release.includes(`dist/${APP_NAME.replace(/ /g, "-")}-$VERSION-arm64.zip`), "the zip, as the installer looks for it");
+        assert.ok(release.includes("dist/pellagos-server-$VERSION.tar.gz"), "the server's archive, as releases.js archiveName names it");
+        assert.match(release, /permissions:\n {6}contents: write/);
+        assert.match(release, /if: github\.ref == 'refs\/heads\/main'/);
+        assert.match(workflow, /node scripts\/stamp-version\.js client\/js\/app\/version\.js "\$GITHUB_SHA"/, "the bundle's game says which code it is");
     });
 });

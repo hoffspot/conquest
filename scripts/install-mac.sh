@@ -1,7 +1,8 @@
 #!/bin/bash
 # Pellagos Server's installer for the Mac (docs/MAC_APP.md, "Installing it"): the menu-bar app put
-# in Applications and opened, from the project's newest release, a zip at hand, or built on this
-# Mac from the project's source. Run again, it updates the app; worlds are kept as they are.
+# in Applications and opened, from the project's newest release (the Mac app workflow publishes
+# one for each change to main), a zip at hand, or built on this Mac from the project's source (as
+# it is when there's no release yet). Run again, it updates the app; worlds are kept as they are.
 #
 #     curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash
 #     curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash -s -- --build
@@ -78,7 +79,7 @@ usage() {
     cat <<'USAGE'
 Pellagos Server's installer for the Mac: the menu-bar app that keeps worlds for players.
 
-  install-mac.sh                  the newest release, into Applications, then opened
+  install-mac.sh                  the newest release (built here if there's none), into Applications, then opened
   install-mac.sh --version 2.1.0  that release
   install-mac.sh --build          built here from the project's source (Apple's Command Line Tools)
   install-mac.sh --zip FILE       a zip at hand (Pellagos-Server-<version>-arm64.zip)
@@ -210,9 +211,15 @@ from_release() {
     pick="$(osascript -l JavaScript -e "$PICK" "$(cat "$work/releases.json")" "$wanted" 2>/dev/null)" \
         || fail "GitHub's answer about its releases didn't make sense; try again in a while."
 
+    if [ -z "$pick" ] && [ -n "$wanted" ]; then
+        fail "there's no release of $APP_NAME $wanted with the Mac app. Leave out --version for the newest."
+    fi
+
+    # (None yet: built here from the project's source instead, as --build builds it)
     if [ -z "$pick" ]; then
-        fail "there's no release of $APP_NAME ${wanted:+$wanted }with the Mac app yet. Build it on this Mac instead, with --build:
-  curl -fsSL https://raw.githubusercontent.com/$REPOSITORY/main/scripts/install-mac.sh | bash -s -- --build"
+        say "There's no release of $APP_NAME with the Mac app yet: building it on this Mac instead."
+        from_source
+        return
     fi
 
     IFS=$'\t' read -r version url digest <<EOF
