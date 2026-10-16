@@ -437,15 +437,25 @@ async function exportCharacters(saves) {
 // The characters in a file brought in, each as a new character kept here: said who came (and
 // what of them couldn't, or was put right for this version of the game), and who didn't, and why
 async function importCharacters(file) {
-    const { CHARACTER_LIMIT, readCharacterFile } = await import("./app/character-file.js");
+    const { CHARACTER_LIMIT } = await import("./app/character-file.js");
+
+    if (file.size > CHARACTER_LIMIT) {
+        showImported("That file is far too big to be a character file.", []);
+
+        return;
+    }
+
+    keepFromFile(await file.text());
+}
+
+// The characters in a character file's text (one brought in, or a hero taken home from a world
+// on a server) kept here, as importCharacters says
+async function keepFromFile(text) {
+    const { readCharacterFile } = await import("./app/character-file.js");
     let read;
 
     try {
-        if (file.size > CHARACTER_LIMIT) {
-            throw new Error("That file is far too big to be a character file.");
-        }
-
-        read = readCharacterFile(await file.text());
+        read = readCharacterFile(text);
     } catch (error) {
         showImported(error.message, []);
 
@@ -507,7 +517,11 @@ $("#charactersfile").addEventListener("change", (event) => {
 });
 $("#importedok").addEventListener("click", () => {
     $("#imported").close();
-    openCharacters("play");
+
+    // (Back to the saved characters, unless a hero was taken home from a world on a server)
+    if ($("#characters").open) {
+        openCharacters("play");
+    }
 });
 $("#charactersback").addEventListener("click", () => $("#characters").close());
 $("#charactersnew").addEventListener("click", () => {
@@ -2440,6 +2454,28 @@ function chooseHero(client, entered) {
     const bring = !heroes.length && card.firstHero === "bring";
     const choices = heroes.map((hero) => worldCard({ name: hero.name, about: `${peopleOf(hero)} · kept by ${name}`, onClick: () => ($("#worldask").close(), playServerWorld(client, entered, { save, hero: hero.slot })) }));
 
+    // (Or one of theirs taken home: a copy of them, among the characters kept on this device)
+    if (heroes.length) {
+        choices.push(
+            worldCard({
+                name: "Take one home",
+                about: `A copy of one of your heroes kept by ${name}, among your saved characters on this device`,
+                onClick: () =>
+                    askWorld({
+                        title: "Take which hero home?",
+                        note: `They stay in ${name} as they are: a copy of them is kept on this device, in ${name}'s land, to play by yourself, or to bring into another world.`,
+                        choices: heroes.map((hero) => worldCard({ name: hero.name, about: `${peopleOf(hero)} · kept by ${name}`, onClick: () => takeHome(client, entered, hero) })),
+                        go: null,
+                    }),
+            }),
+        );
+    }
+
+    // (Or their first brought in from a file the game exported, where the world lets them bring one)
+    if (bring) {
+        choices.push(worldCard({ name: "Bring one from a file", about: `A character the game exported: they come in as they are, and stay in ${name}`, onClick: () => bringFromFile(client, entered) }));
+    }
+
     if (heroes.length < 6) {
         choices.push(
             worldCard({
@@ -2465,15 +2501,70 @@ function chooseHero(client, entered) {
     askWorld({ title: `Who goes into ${name}`, note: heroes.length ? `${name} keeps its heroes: choose one of yours there, or start a new one.` : `${name} keeps its heroes. This is your first time in.`, choices, go: null });
 }
 
+// A hero of theirs kept in a world taken home: a copy of them kept on this device (app/character-file.js)
+async function takeHome(client, entered, hero) {
+    let file;
+
+    try {
+        file = await client.heroFile({ world: entered.world, session: entered.session, slot: hero.slot });
+    } catch (error) {
+        $("#worldaskstatus").textContent = error.message;
+
+        return;
+    }
+
+    $("#worldask").close();
+    keepFromFile(file.text);
+}
+
+// Their first hero brought into a world that keeps its heroes from a character file (one of
+// those in it, if there are several), told first what was changed to suit this version of the game
+function bringFromFile(client, entered) {
+    const input = Object.assign(document.createElement("input"), { type: "file", accept: ".pellagos-character,application/json" });
+
+    input.addEventListener("change", async () => {
+        const [file] = input.files;
+        const { CHARACTER_LIMIT, keptOfExport, readCharacterFile } = await import("./app/character-file.js");
+        let read;
+
+        try {
+            if (!file || file.size > CHARACTER_LIMIT) {
+                throw new Error("That isn't a character file.");
+            }
+
+            read = readCharacterFile(await file.text()).filter((one) => !one.error);
+        } catch (error) {
+            $("#worldaskstatus").textContent = error.message;
+
+            return;
+        }
+
+        const bring = ({ name, exported, left }) =>
+            left.length
+                ? askWorld({ title: `Bring ${name} in?`, note: `Changed to suit this version of the game: ${left.join(" ")}`, go: `Bring ${name} in`, onGo: async () => (playServerWorld(client, entered, { character: keptOfExport(exported), hero: "new" }), true) })
+                : ($("#worldask").close(), playServerWorld(client, entered, { character: keptOfExport(exported), hero: "new" }));
+
+        if (!read.length) {
+            $("#worldaskstatus").textContent = "There's no one in that file who can be brought in.";
+        } else if (read.length === 1) {
+            bring(read[0]);
+        } else {
+            askWorld({ title: "Bring who in?", choices: read.map((one) => worldCard({ name: one.name, about: "From the file", onClick: () => bring(one) })), go: null });
+        }
+    });
+    input.click();
+}
+
 /**
  * Into a world on a server, on its play socket, as `hero` (a kept hero's slot, or "new") or, in a
- * world that doesn't keep heroes, as `save`; then played as a joined world is.
+ * world that doesn't keep heroes, as `save`; then played as a joined world is. A `character`
+ * given (one brought in from a file) comes in as it is.
  */
-async function playServerWorld(client, entered, { save = null, hero = undefined }) {
+async function playServerWorld(client, entered, { save = null, hero = undefined, character: given = null }) {
     const { SERVER_REFUSALS } = await serversOf();
     const { NET_REFUSALS, NET_KICKS, versionWords } = await import("./app/together.js");
     const kept = entered.card?.heroes === "kept";
-    const character = save ? { hero: save.hero, talks: loadTalks(save), progress: loadProgress(save), standing: loadStanding(save), followers: loadFollowers(save) } : {};
+    const character = given ?? (save ? { hero: save.hero, talks: loadTalks(save), progress: loadProgress(save), standing: loadStanding(save), followers: loadFollowers(save) } : {});
 
     if (!$("#worlds").open) {
         $("#worlds").showModal();

@@ -596,6 +596,14 @@ export class ServerClient {
         return this.#entered(world, await this.#call("POST", "/enter", { body: { world, ...(key ? { key } : {}), ...(ticket ? { ticket } : {}), net: NET_VERSION } }), key, ticket);
     }
 
+    /**
+     * A hero of the player's kept in a world (by its slot), as a character file to take home
+     * (app/character-file.js): { name, text, count }. Throws ServerRefusal.
+     */
+    async heroFile({ world, session, slot }) {
+        return this.#call("GET", `/worlds/${world}/heroes/${slot}`, { session });
+    }
+
     /** A short code traded for its world and key, then into it, as enter(). Proves the server first. */
     async redeem(code) {
         await this.prove();

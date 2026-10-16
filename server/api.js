@@ -437,6 +437,31 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return { players: await doing(() => manage.players(world)) };
         }],
+        // (A player's heroes kept in a world, as a character file: one of theirs taken home, by them;
+        // all of a player's, exported by the world's owner)
+        ["GET", new RegExp(`^/worlds/${WORLD}/heroes/([1-9])$`), async (request, body, [, world, slot]) => {
+            if (!server.metaOf(world)) {
+                throw refuse("no-world");
+            }
+
+            const principal = principalOf(request, { world });
+
+            if (principal.kind !== "player" || principal.world !== world || !principal.player) {
+                throw refuse(principal.why ?? "key");
+            }
+
+            return doing(() => manage.heroesFile(world, principal.player.id, { slot: Number(slot) }));
+        }],
+        ["GET", new RegExp(`^/worlds/${WORLD}/players/${PLAYER}/heroes$`), async (request, body, [, world, player]) => {
+            managing(request, world, "world.manage");
+
+            const { name, text } = await doing(() => manage.heroesFile(world, player));
+            // (Its name as a header carries it: a hero's accents let go of, "Élodie" as "Elodie")
+            const plain = name.normalize("NFKD").replace(/[^\x20-\x7e]/g, "");
+
+            // (Sent as bytes, not JSON: a file to keep, not an answer to read)
+            return new Download(plain.startsWith(".") ? `heroes${plain}` : plain, Buffer.from(text), "application/octet-stream");
+        }],
         ["POST", new RegExp(`^/worlds/${WORLD}/players/${PLAYER}/(kick|ban|unban|role|ticket)$`), async (request, body, [, world, player, what]) => {
             const principal = managing(request, world, { kick: "player.kick", ban: "player.ban", unban: "player.ban" }[what] ?? "world.manage");
             const by = byOf(principal);

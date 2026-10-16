@@ -4428,7 +4428,8 @@ it.
      name), a people or a starting weapon (human, a sword), parts of their look (as a new hero's),
      a world that can't be read (a new one, with what they carry), or a war kept by a newer
      version (it starts again in the same land). A file from a newer version of the game is
-     refused, saying so.
+     refused, saying so. A hero taken home from a world on a server comes in the same way, in
+     that world's land (docs/SERVER.md, "Heroes as files").
    - **New character**, with six kept already (save.js `MOST_CHARACTERS`), first asks which of
      them is to make way, then to be sure ("...permanently deleted, ... once your new character is
      made"). They're deleted only once the new character's made: backed out of making one, they're
