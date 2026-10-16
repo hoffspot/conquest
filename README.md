@@ -82,7 +82,9 @@ and go in: installing it (`scripts/install-mac.sh`, one line in Terminal), what 
 menu, and building it.
 [docs/SERVER.md](docs/SERVER.md) is the guide to running a world server, however it's run: its
 management page, worlds and their keys, reaching it from the internet, backups, bringing worlds
-in, and updating it.
+in, and updating it. [docs/LICENSED_MODELS.md](docs/LICENSED_MODELS.md) is how the models that
+aren't free to reuse (the Dreadthorn) are kept out of the public repository and scrambled where
+they're served, and what the owner sets up for it.
 
 ## How to play
 
@@ -883,6 +885,7 @@ docs/WAR.md             The war between the peoples, and playing with others (ho
 docs/WILDS.md           The wild's creatures: roster, tiers, behaviour, and how they're built
 docs/DUNGEONS.md        The dungeons: themes, layouts, what's put in, in play, adding a theme
 docs/MAGIC.md           Magic: the schools, wands, tomes, wonders, the spellbook, and the spells' looks
+docs/LICENSED_MODELS.md Licensed models: kept in a private repository, scrambled where they're served
 docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before Pellagos replaced it
 ```
 
