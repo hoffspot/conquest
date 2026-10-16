@@ -14,3 +14,9 @@ dist/
 # docs/LICENSED_MODELS.md), and where they're put in place
 .models/
 client/models/beasts/dreadthorn.bin
+client/models/beasts/werewolf.bin
+client/models/beasts/werewolf.dusk.bin
+client/models/beasts/werewolf.ash.bin
+client/models/beasts/werewolf.russet.bin
+client/models/beasts/werewolf.moonfang.bin
+client/models/beasts/werewolf.rotten.bin

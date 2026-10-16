@@ -2,7 +2,9 @@
 // on here): every creature of the wilds (beasts/looks.js), each dungeon's bosses and
 // mini-bosses, the game's people (an adventurer, a soldier, each of the folk's roles: of any
 // people, a woman or a man), and its things (what's carried and worn, built in code:
-// characters/items.js; the catalog's props, the treasure chest opening), one at a time, doing what each does in the game (standing, walking,
+// characters/items.js; the catalog's props, the treasure chest opening), and the creatures whose
+// models are in the catalog but who aren't in the game yet (the werewolf), in any of their skins,
+// one at a time, doing what each does in the game (standing, walking,
 // running, attacking, struck, resting, dying, flying; a person's every motion, as the motion
 // check plays them: characters/motioncheck.js), to look at from any side and watch move:
 //
@@ -17,7 +19,8 @@
 // ?creature=caves:boss:trollKing, its theme, its rank and its id there: beasts/champions.js; and
 // ?clip=Roar one of its model's clips); ?person=smith&people=lizard&sex=m opens on one of the
 // people (?person=adventurer or soldier, &weapon=bow); ?item=sword or ?prop=dungeon-prop-barrel
-// on a thing; window.lab lets a script do the same and step time on
+// on a thing; ?model=beast-werewolf on a creature not in the game yet (&skin=dusk in one of its
+// skins); window.lab lets a script do the same and step time on
 // exactly (for renders: .shots, and e2e/model-viewer.spec.js). The ox is shown in its wagon's
 // shafts, laden with ?load=wood (or stone, metal; none: empty) in ?people=human's timber.
 
@@ -341,8 +344,21 @@ const ITEMS = Object.entries(EQUIPMENT).filter(([, { model, slot }]) => model &&
 // the treasure chest, by their catalog ids
 const PROPS = Object.keys(ASSETS.models).filter((id) => id.startsWith("dungeon-prop-") || id === "chest");
 
-/** Whether an id in the picker is a thing's ("item:" and an EQUIPMENT id, or "prop:" and a catalog id). */
-const isThing = (id) => /^(item|prop):/.test(String(id));
+// The catalog's creatures with a model who aren't in the game yet (no kind is drawn from it:
+// beasts/model.js MODELS), by their catalog ids: each shown as it was made, every clip in its file
+// by name, in any of its skins
+const COMING = Object.keys(ASSETS.models).filter((id) => id.startsWith("beast-") && !id.endsWith("-skins") && !Object.values(MODELS).some(({ asset }) => asset === id));
+
+/**
+ * A model's other skins (its catalog entry's, "<id>-skins": utilities/blenderpipeline's variants,
+ * <name>.<skin>.bin, each only the textures that differ), by name: { dusk: url, ... }.
+ */
+function skinsOf(name) {
+    return Object.fromEntries(Object.entries(filesOf(ASSETS, `${name}-skins`, document.baseURI)).map(([file, url]) => [file.match(/\.([a-z0-9-]+)\.bin$/)[1], url]));
+}
+
+/** Whether an id in the picker is a thing's ("item:" and an EQUIPMENT id, "prop:" or "model:" and a catalog id). */
+const isThing = (id) => /^(item|prop|model):/.test(String(id));
 
 // The props read (their glTFs, by catalog id), to show again at once
 const propsRead = new Map();
@@ -486,6 +502,9 @@ function show(id, which = seed) {
     // (A thing does none of it: it stands, or plays its clips)
     document.querySelector("#bottom").hidden = Boolean(current.thing);
 
+    // (Its skins, if it has others: the one chosen worn, if it has that one)
+    showSkins();
+
     // (Who one of the people is, chosen in the panel: of which people, a woman or a man, and with
     // what, if they fight)
     showWho();
@@ -560,7 +579,8 @@ function showPerson(id, which) {
 }
 
 // One of the things: what's carried or worn, built as the game builds it; or one of the
-// catalog's props, read as the game reads it (shown once it's read)
+// catalog's props, or a creature not in the game yet, read as the game reads it (shown once it's
+// read: its full detail, the lower ones packed in hidden; in the skin chosen)
 function showThing(id) {
     const [kind, name] = [id.slice(0, id.indexOf(":")), id.slice(id.indexOf(":") + 1)];
     const thing = { id, kind: id, weapon: null, person: null };
@@ -576,16 +596,26 @@ function showThing(id) {
     const asset = ASSETS.models[name];
     const read = propsRead.get(name);
     const label = asset.label.replace(/ \(.*$/, "");
+    const object = read ? cloneScene(read.scene) : new THREE.Group();
+    const made = kind === "model" ? "A creature's model, not in the game yet: its clips as it was made" : "A prop: one of the catalog's models";
 
-    current = { ...thing, avatar: thingAvatar(read ? cloneScene(read.scene) : new THREE.Group(), read?.animations ?? []), thing: { asset: name, read: Boolean(read) }, name: label, about: read ? "A prop: one of the catalog's models" : "On its way…" };
+    object.traverse((node) => {
+        node.visible = !node.userData.lod;
+    });
+    current = { ...thing, avatar: thingAvatar(object, read?.animations ?? []), thing: { asset: name, read: Boolean(read), skins: Object.keys(skinsOf(name)) }, name: label, about: read ? made : "On its way…" };
 
     if (!read) {
         loadGltf(Object.values(filesOf(ASSETS, name, document.baseURI))[0])
             .then((gltf) => {
                 propsRead.set(name, gltf);
 
+                // (Doing the clip asked for of it meanwhile: ?clip=)
                 if (current?.id === id) {
                     show(id);
+
+                    if (clipWanted && playClip(clipWanted)) {
+                        clipWanted = null;
+                    }
                 }
             })
             .catch(() => {
@@ -1137,6 +1167,13 @@ function describe() {
         rows.push(["Clips", String(Object.keys(avatar.plan.lengths).length)]);
     }
 
+    // (Its other skins, each a file of its own: only the textures that differ)
+    if (thing?.skins?.length) {
+        const extra = ASSETS.models[`${thing.asset}-skins`].files.reduce((sum, file) => sum + file.bytes, 0);
+
+        rows.push(["Skins", `${thing.skins.length} more (${(extra / 1048576).toFixed(1)} MB): ${thing.skins.join(", ")}`]);
+    }
+
     looks.details.replaceChildren(
         ...rows.flatMap(([name, value]) => {
             const term = document.createElement("dt");
@@ -1246,6 +1283,15 @@ for (const [theme, { name, bosses, minis }] of Object.entries(THEMES)) {
     picker.append(wagons, items, props);
 }
 
+// (The creatures to come: their models, before they're in the game)
+if (COMING.length) {
+    const group = document.createElement("optgroup");
+
+    group.label = "Coming to the wilds (models not in the game yet)";
+    group.append(...COMING.map((id) => new Option(ASSETS.models[id].label.replace(/ \(.*$/, "").replace(/^the (.)/i, (_, first) => first.toUpperCase()), `model:${id}`)));
+    picker.append(group);
+}
+
 picker.addEventListener("change", () => show(picker.value));
 
 // Who one of the people is: their people, a woman or a man, and what they fight with; or the
@@ -1295,6 +1341,89 @@ function showWho() {
     who.weapon.value = shown.weapon ?? "";
     who.weapon.hidden = arms.length === 0;
 }
+
+// The skin worn by what's shown, if it has others ("" its own: ?skin=), chosen in the panel; the
+// skins read (their glTFs, by URL)
+const skins = { row: document.querySelector("#skinning"), select: document.querySelector("#skin") };
+const skinsRead = new Map();
+let skin = params.get("skin") ?? "";
+let wearing = 0;
+
+// The textures a skin's material may give, as three.js names them
+const MAPS = ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap"];
+
+// (Shown with what has other skins, the one chosen worn if it has it; not for anything else)
+function showSkins() {
+    const others = current.thing?.read ? (current.thing.skins ?? []) : [];
+
+    skins.row.hidden = others.length === 0;
+    skins.select.replaceChildren(new Option("Its own skin", ""), ...others.map((name) => new Option(`${name[0].toUpperCase()}${name.slice(1)}`, name)));
+    skins.select.value = others.includes(skin) ? skin : "";
+
+    if (others.length) {
+        wear(skins.select.value);
+    }
+}
+
+/**
+ * Puts one of the skins on what's shown ("" its own): each of the skin's materials' textures in
+ * place of those of the model's material of the same name, the rest of it as it is, as
+ * utilities/blenderpipeline's variants are made to be worn. Resolves once it's on (or something
+ * else is shown).
+ */
+async function wear(name) {
+    const shown = current;
+    const url = name && shown.thing?.asset ? skinsOf(shown.thing.asset)[name] : null;
+    const ticket = ++wearing;
+
+    if (!shown.thing?.skins?.length || (name && !url)) {
+        return;
+    }
+
+    if (url && !skinsRead.has(url)) {
+        skinsRead.set(url, loadGltf(url));
+    }
+
+    const materials = url ? await (await skinsRead.get(url)).parser.getDependencies("material") : [];
+
+    // (Something else shown or worn meanwhile)
+    if (current !== shown || ticket !== wearing) {
+        return;
+    }
+
+    const made = new Map();
+
+    shown.avatar.object.traverse((node) => {
+        if (!node.isMesh) {
+            return;
+        }
+
+        node.userData.ownMaterial ??= node.material;
+
+        const own = node.userData.ownMaterial;
+        const given = materials.find((material) => material.name === own.name);
+
+        if (given && !made.has(own.name)) {
+            const worn = own.clone();
+
+            for (const map of MAPS.filter((one) => given[one])) {
+                worn[map] = given[map];
+            }
+
+            made.set(own.name, worn);
+        }
+
+        node.material = given ? made.get(own.name) : own;
+    });
+
+    shown.thing.skin = name;
+    wireframe(shown.avatar.object, looks.wireframe.checked);
+}
+
+skins.select.addEventListener("change", () => {
+    skin = skins.select.value;
+    wear(skin);
+});
 
 for (const [key, select] of [["people", who.people], ["sex", who.sex], ["weapon", who.weapon], ["load", who.load]]) {
     select.addEventListener("change", () => {
@@ -1431,8 +1560,14 @@ document.addEventListener("keydown", (event) => {
 
 // --- Running ---
 
-const asked = params.has("person") ? `person:${params.get("person")}` : params.has("item") ? `item:${params.get("item")}` : params.has("prop") ? `prop:${params.get("prop")}` : params.get("creature");
-const known = (id) => id in LOOKS || championOf(id ?? "") || (isPerson(id) && (FOLK_ROLES.includes(id.slice(7)) || ["adventurer", "soldier"].includes(id.slice(7)))) || (id?.startsWith("item:") && ITEMS.some(([item]) => `item:${item}` === id)) || (id?.startsWith("prop:") && PROPS.includes(id.slice(5)));
+const asked = params.has("person") ? `person:${params.get("person")}` : params.has("item") ? `item:${params.get("item")}` : params.has("prop") ? `prop:${params.get("prop")}` : params.has("model") ? `model:${params.get("model")}` : params.get("creature");
+const known = (id) =>
+    id in LOOKS ||
+    championOf(id ?? "") ||
+    (isPerson(id) && (FOLK_ROLES.includes(id.slice(7)) || ["adventurer", "soldier"].includes(id.slice(7)))) ||
+    (id?.startsWith("item:") && ITEMS.some(([item]) => `item:${item}` === id)) ||
+    (id?.startsWith("prop:") && PROPS.includes(id.slice(5))) ||
+    (id?.startsWith("model:") && COMING.includes(id.slice(6)));
 const start = known(asked) ? asked : "wolf";
 
 show(start);
@@ -1482,6 +1617,14 @@ window.lab = {
     play: () => play(true),
     step,
     clip: playClip,
+    // (A skin put on what's shown, by name: "" its own; resolves once it's on)
+    skin: async (name) => {
+        skin = name;
+        skins.select.value = name;
+        await wear(name);
+
+        return current.thing?.skin === name;
+    },
     watch: () => ({ ...watch, past: rewind.past, kept: rewind.kept.length, bones: bones?.bones.length ?? 0, moves: movesOf().map(({ label }) => label), clips: Object.keys(current.avatar.plan?.lengths ?? {}) }),
     details: () => detailsOf(current.avatar.object),
     // (How it's laid out and seen: how much of the view the bars and panel cover; where the middle

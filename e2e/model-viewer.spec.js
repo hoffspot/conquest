@@ -171,6 +171,58 @@ test("a creature drawn from a model: every clip in its file played alone, steppe
     await page.waitForFunction(() => window.lab.watch().clip === "Bite", null, { timeout: 60000 });
 });
 
+test("a creature to come, drawn from its model before it's in the game: the werewolf, every clip in its file, its full detail only, each of its skins put on, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-werewolf&skin=dusk&clip=Walk");
+
+    // (Listed with the creatures to come; read, its clips listed, the one asked for by its address
+    // played, in the skin asked for)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Werewolf"]);
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual(["Attack", "Death", "Hit React", "Idle", "Idle Alert", "Walk"]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Walk" && window.lab.current().thing.skin === "dusk", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The werewolf");
+    await expect(page.locator("#bottom")).toBeHidden();
+
+    // Its full detail drawn, the lower ones packed in its file left hidden: its body and two
+    // lengths of fur
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 3, triangles: 16456, bones: 67 });
+
+    // Each skin's textures in place of its own, the rest its own: the dusk's colour on its fur, its
+    // own normals; the moonfang's glow; and its own skin again
+    const looks = () =>
+        page.evaluate(() => {
+            const fur = window.lab.avatar().object.getObjectByName("Mane");
+            const body = window.lab.avatar().object.getObjectByName("Body");
+            const own = (node) => node.userData.ownMaterial ?? node.material;
+
+            return { fur: fur.material.map === own(fur).map, normals: fur.material.normalMap === own(fur).normalMap, glow: body.material.emissiveMap === own(body).emissiveMap, skin: window.lab.current().thing.skin };
+        });
+
+    expect(await looks()).toEqual({ fur: false, normals: true, glow: true, skin: "dusk" });
+    await expect(page.getByLabel("Skin")).toHaveValue("dusk");
+    expect(await page.getByLabel("Skin").locator("option").allTextContents()).toEqual(["Its own skin", "Dusk", "Ash", "Russet", "Moonfang", "Rotten"]);
+    await page.getByLabel("Skin").selectOption("moonfang");
+    await page.waitForFunction(() => window.lab.current().thing.skin === "moonfang", null, { timeout: 60000 });
+    expect(await looks()).toEqual({ fur: false, normals: true, glow: false, skin: "moonfang" });
+    await page.getByLabel("Skin").selectOption("");
+    await page.waitForFunction(() => window.lab.current().thing.skin === "");
+    expect(await looks()).toEqual({ fur: true, normals: true, glow: true, skin: "" });
+
+    // What there is of it, and whose it is: bought on Fab, its licence's note linked to
+    const details = page.locator("#details");
+
+    await expect(details).toContainText("From a model's file");
+    await expect(details).toContainText("bought on Fab: used with the permission its Standard License gives");
+    await expect(details).toContainText("5 more");
+    await expect(details).toContainText("1024×1024 (compressed)");
+    await expect(details.getByRole("link")).toHaveAttribute("href", "models/beasts/LICENSE.md");
+
+    // (Not one of the game's creatures: none of the skin chooser for one)
+    await page.locator("#picker").selectOption("wolf");
+    await expect(page.getByLabel("Skin")).toBeHidden();
+});
+
 test("one of the people, by role, people, woman or man and weapon: every motion of theirs by name (their weapon's, their work, their rests, emotes, spells, blows and falls), one played and stepped", async ({ page }) => {
     await openViewer(page, "/model-viewer.html?person=smith&people=lizard&sex=m");
     await expect(page.locator("#name")).toHaveText("Blacksmith");
