@@ -3,7 +3,9 @@
 // out (LAYOUT_VERSION) and which server laid it out. Opened by an older server than that, it's
 // refused, saying which server it needs; by a newer one, it's laid out anew a step at a time
 // (LAYOUT_STEPS: files moved or split), on opening, before anything else, after everything in it
-// has been copied into its backups. Then its settings (settings.js) are opened, as they are.
+// has been copied into its backups. Then its settings (settings.js) are opened, as they are. An
+// archive staged to be restored (archive.js) is put in place first of all, so what it holds is
+// brought forward as anything kept by an older server is.
 //
 //   VERSION                 the layout's version, and the server that laid it out
 //   server.json             the server's settings
@@ -13,6 +15,7 @@
 
 import { cp, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { applyRestore } from "./archive.js";
 import { BACKUPS, ensureFolder, stampOf, writeAtomic } from "./files.js";
 import { CONFIG_VERSION, Settings } from "./settings.js";
 import { checkVersion, SERVER_VERSION } from "./versions.js";
@@ -73,6 +76,8 @@ export class DataFolder {
     static async open(root, { current = LAYOUT_VERSION, steps = LAYOUT_STEPS, configVersion = CONFIG_VERSION, settingsSteps, clock = () => new Date() } = {}) {
         await ensureFolder(root);
 
+        // (An archive staged to be restored put in place, what was here backed up: archive.js)
+        const restored = await applyRestore(root, { when: clock() });
         let layout = await readLayout(root);
 
         if (!layout) {
@@ -113,7 +118,12 @@ export class DataFolder {
             },
         });
 
-        return new DataFolder(root, settings);
+        const folder = new DataFolder(root, settings);
+
+        /** The archive put in place as it opened (archive.js applyRestore), or null. */
+        folder.restored = restored;
+
+        return folder;
     }
 
     // Everything in the folder but its backups, copied into them (BACKUPS/SERVER_BACKUPS/<when>-<why>/)
