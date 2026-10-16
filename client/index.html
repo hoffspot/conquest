@@ -63,7 +63,7 @@
                 <div class="menu">
                     <button type="button" id="continuebutton" class="button primary" hidden>Continue</button>
                     <button type="button" id="newbutton" class="button">New character</button>
-                    <button type="button" id="savedbutton" class="button" hidden>Saved character</button>
+                    <button type="button" id="savedbutton" class="button">Saved characters</button>
                     <button type="button" id="joinbutton" class="button">Join a world</button>
                     <button type="button" id="worldsbutton" class="button">Worlds on servers</button>
                 </div>
@@ -305,15 +305,29 @@
             </div>
         </dialog>
 
-        <!-- The characters kept (up to six): one chosen to play or delete, to make way for a new one,
-             or to bring to someone's world -->
+        <!-- The characters kept (up to six): one chosen to play, export or delete, to make way for a
+             new one, or to bring to someone's world; and all of them exported, or characters brought
+             in from a file (app/character-file.js) -->
         <dialog id="characters" class="together characters" aria-labelledby="characterstitle">
             <h2 id="characterstitle">Saved characters</h2>
             <p class="note" id="charactersnote"></p>
             <ul class="character-list" id="characterlist"></ul>
             <div class="menu">
                 <button type="button" class="button" id="charactersnew" hidden>A new character</button>
+                <button type="button" class="button" id="charactersexport" hidden>Export all</button>
+                <button type="button" class="button" id="charactersimport" hidden>Import from a file</button>
+                <input type="file" id="charactersfile" accept=".pellagos-character,application/json" hidden>
                 <button type="button" class="button" id="charactersback">Back</button>
+            </div>
+        </dialog>
+
+        <!-- Characters brought in from a file: who came, what of them couldn't, and who didn't -->
+        <dialog id="imported" class="together" aria-labelledby="importedtitle" aria-describedby="importednote">
+            <h2 id="importedtitle">Brought in</h2>
+            <p class="note" id="importednote"></p>
+            <ul class="imported-list" id="importedlist"></ul>
+            <div class="menu">
+                <button type="button" class="button primary" id="importedok">OK</button>
             </div>
         </dialog>
 

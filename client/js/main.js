@@ -26,7 +26,7 @@ import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
 import { telemetry } from "./app/telemetry.js";
 import { builtAt, codeVersion } from "./app/version.js";
-import { forgetCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
+import { forgetCharacter, keepCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
 import { released } from "./world/release.js";
@@ -248,8 +248,9 @@ function title() {
     $("#titlenote").hidden = true;
     continueButton.hidden = !save;
     note.hidden = !save;
-    $("#savedbutton").hidden = !kept.length;
-    $("#savedbutton").textContent = kept.length > 1 ? `Saved characters (${kept.length})` : "Saved character";
+    // (Shown with none kept too: to bring one in from a file)
+    $("#savedbutton").hidden = false;
+    $("#savedbutton").textContent = kept.length > 1 ? `Saved characters (${kept.length})` : kept.length ? "Saved character" : "Saved characters";
 
     if (save) {
         continueButton.textContent = `Continue as ${save.hero.name}`;
@@ -296,13 +297,14 @@ $("#savedbutton").addEventListener("click", () => openCharacters("play"));
 
 // --- The characters kept ---
 
-// Who's to be played (`mode` "play": or forgotten, each by its own button), replaced by a new
-// character ("replace"), or brought to someone's world ("join")
+// Who's to be played (`mode` "play": or exported or forgotten, each by its own button; all of them
+// exported, or more brought in from a file), replaced by a new character ("replace"), or brought
+// to someone's world ("join")
 function openCharacters(mode) {
     const dialog = $("#characters");
     const kept = loadCharacters(WEAPONS);
 
-    if (!kept.length) {
+    if (!kept.length && mode !== "play") {
         dialog.close();
         title();
 
@@ -311,8 +313,10 @@ function openCharacters(mode) {
 
     dialog.dataset.mode = mode;
     $("#characterstitle").textContent = mode === "replace" ? "Make way for a new character" : mode === "join" || mode === "worlds" ? "Who comes" : "Saved characters";
-    $("#charactersnote").textContent = mode === "replace" ? `${MOST_CHARACTERS} characters are kept, the most there can be. Choose one to be replaced by your new character.` : mode === "join" || mode === "worlds" ? "Choose who comes with you." : `Choose who to play. Up to ${MOST_CHARACTERS} are kept.`;
+    $("#charactersnote").textContent = mode === "replace" ? `${MOST_CHARACTERS} characters are kept, the most there can be. Choose one to be replaced by your new character.` : mode === "join" || mode === "worlds" ? "Choose who comes with you." : kept.length ? `Choose who to play. Up to ${MOST_CHARACTERS} are kept.` : "No characters are kept here yet. Make a new one, or bring one in from a file the game exported.";
     $("#charactersnew").hidden = mode !== "join" || kept.length >= MOST_CHARACTERS;
+    $("#charactersexport").hidden = mode !== "play" || kept.length < 2;
+    $("#charactersimport").hidden = mode !== "play";
     $("#characterlist").replaceChildren(
         ...kept.map((save) => {
             const { name, about, when } = describe(save);
@@ -325,11 +329,16 @@ function openCharacters(mode) {
             row.append(pick);
 
             if (mode === "play") {
+                const side = Object.assign(document.createElement("div"), { className: "side" });
+                const share = Object.assign(document.createElement("button"), { type: "button", className: "export", textContent: "Export", title: `Save ${name} as a file, to keep or to bring in elsewhere` });
                 const forget = Object.assign(document.createElement("button"), { type: "button", className: "forget", textContent: "Delete", title: `Delete ${name}` });
 
+                share.setAttribute("aria-label", `Export ${name}`);
+                share.addEventListener("click", () => exportCharacters([save]));
                 forget.setAttribute("aria-label", `Delete ${name}`);
                 forget.addEventListener("click", () => askForget(save, "delete"));
-                row.append(forget);
+                side.append(share, forget);
+                row.append(side);
             }
 
             return row;
@@ -411,6 +420,95 @@ $("#forgetgo").addEventListener("click", () => {
 });
 
 $("#forgetback").addEventListener("click", () => $("#forget").close());
+
+// Characters saved as a file (app/character-file.js: loaded once it's wanted, as it brings the
+// game's rules with it), as the browser downloads one
+async function exportCharacters(saves) {
+    const { characterFile } = await import("./app/character-file.js");
+    const { name, text } = characterFile(saves);
+    const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([text], { type: "application/json" })), download: name });
+
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 60000);
+}
+
+// The characters in a file brought in, each as a new character kept here: said who came (and
+// what of them couldn't, or was put right for this version of the game), and who didn't, and why
+async function importCharacters(file) {
+    const { CHARACTER_LIMIT, readCharacterFile } = await import("./app/character-file.js");
+    let read;
+
+    try {
+        if (file.size > CHARACTER_LIMIT) {
+            throw new Error("That file is far too big to be a character file.");
+        }
+
+        read = readCharacterFile(await file.text());
+    } catch (error) {
+        showImported(error.message, []);
+
+        return;
+    }
+
+    const why = { here: "they're kept here already.", full: `${MOST_CHARACTERS} characters are kept, the most there can be: delete one to make room, then bring the file in again.`, storage: "this browser wouldn't keep them." };
+    const said = read.map((one) => {
+        const kept = one.error ? { error: null } : keepCharacter(one.exported);
+
+        if (kept.save) {
+            return { name: one.name, about: describe(kept.save).about, says: one.left.length ? ["Changed to suit this version of the game:", ...one.left] : [], brought: true };
+        }
+
+        return { name: one.name, says: [one.error ? `Not brought in. ${one.error}` : `Not brought in: ${why[kept.error]}`] };
+    });
+    const brought = said.filter((one) => one.brought).length;
+
+    title();
+    showImported(brought ? `${brought === 1 ? "One character is" : `${brought} characters are`} now among your saved characters${said.length > brought ? `; ${said.length - brought} couldn't be` : ""}.` : "No one was brought in.", said);
+}
+
+function showImported(note, said) {
+    $("#importednote").textContent = note;
+    $("#importedlist").replaceChildren(
+        ...said.map(({ name, about, says }) => {
+            const row = document.createElement("li");
+
+            row.append(Object.assign(document.createElement("span"), { className: "name", textContent: name }));
+
+            if (about) {
+                row.append(Object.assign(document.createElement("span"), { className: "about", textContent: about }));
+            }
+
+            if (says.length) {
+                const list = document.createElement("ul");
+
+                list.append(...says.map((text) => Object.assign(document.createElement("li"), { textContent: text })));
+                row.append(list);
+            }
+
+            return row;
+        }),
+    );
+    $("#imported").showModal();
+    $("#importedok").focus();
+}
+
+$("#charactersexport").addEventListener("click", () => exportCharacters(loadCharacters(WEAPONS)));
+$("#charactersimport").addEventListener("click", () => $("#charactersfile").click());
+$("#charactersfile").addEventListener("change", (event) => {
+    const [file] = event.target.files;
+
+    event.target.value = "";
+
+    if (file) {
+        importCharacters(file);
+    }
+});
+$("#importedok").addEventListener("click", () => {
+    $("#imported").close();
+    openCharacters("play");
+});
 $("#charactersback").addEventListener("click", () => $("#characters").close());
 $("#charactersnew").addEventListener("click", () => {
     $("#characters").close();

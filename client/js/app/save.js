@@ -30,6 +30,7 @@ const KINDS = Object.freeze(["save", "talks", "explored", "progress", "standing"
 const ID = /^[a-z0-9]{8}$/;
 
 const keyOf = (save, kind) => `pellagos.${save.id}.${kind}`;
+const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
 /** How many characters are kept at most: making another means replacing one of them. */
 export const MOST_CHARACTERS = 6;
@@ -534,6 +535,62 @@ export const SOLO_KIND = "pellagos-solo-world";
 export const SOLO_VERSION = 1;
 
 /**
+ * The steps that bring a character's export (exportCharacter's) from an older save version
+ * forward: [n] takes it from version n to n + 1, as the game does with what it keeps itself.
+ * Never take one away: a character kept by any version of the game can always be brought in
+ * (app/character-file.js; contribution.md).
+ */
+export const SAVE_STEPS = Object.freeze({
+    // (1, the one character kept before there could be several, as migrate moves it: an id of its
+    // own, when it was last played, and each kind of its own told when it was started as well as
+    // its seed)
+    1: (exported) => {
+        const save = { ...exported.save, version: 2, id: typeof exported.save?.id === "string" && ID.test(exported.save.id) ? exported.save.id : "00000000", played: exported.save?.played ?? exported.save?.created };
+        const kinds = Object.fromEntries(KINDS.filter((kind) => kind !== "save" && isObject(exported[kind])).map((kind) => [kind, { ...exported[kind], created: save.created }]));
+
+        return { ...exported, ...kinds, save };
+    },
+});
+
+/** Why an export can't be brought in: `newer` if a newer version of the game made it. */
+export class ExportError extends Error {
+    constructor(message, { newer = false } = {}) {
+        super(message);
+        this.newer = newer;
+    }
+}
+
+/**
+ * A character's export (exportCharacter's, as any version of the game made it) brought forward to
+ * this version's, a step at a time (SAVE_STEPS). Throws ExportError for what isn't one, or one a
+ * newer version of the game made.
+ */
+export function forwardExport(exported) {
+    const from = exported?.saveVersion;
+
+    if (exported?.kind !== SOLO_KIND || !Number.isInteger(exported.version) || !Number.isInteger(from) || from < 1 || !isObject(exported.save)) {
+        throw new ExportError("It isn't a character the game kept.");
+    }
+
+    if (exported.version > SOLO_VERSION || from > SAVE_VERSION) {
+        throw new ExportError("It was kept by a newer version of the game: bring it in there, or once this one's updated.", { newer: true });
+    }
+
+    let forward = structuredClone(exported);
+
+    for (let at = from; at < SAVE_VERSION; at++) {
+        if (!SAVE_STEPS[at]) {
+            throw new ExportError(`It was kept by a version of the game this one can't bring forward (save version ${at}).`);
+        }
+
+        forward = SAVE_STEPS[at](forward);
+        forward.saveVersion = at + 1;
+    }
+
+    return forward;
+}
+
+/**
  * Everything kept of a character and their world, as one piece of plain data, for taking their
  * world to a world server (generated/world_server_plan.md §5: "bring my world to the server"):
  * { kind, version, saveVersion, save, talks, explored, progress, ..., world (its war) }, each as
@@ -564,12 +621,16 @@ export function exportCharacter(save) {
  * explored, progress, standing, followers, wheels, pin, place, vitals, messages, told, war }; or
  * null if it isn't an export, or is one from a newer version of the game.
  */
-export function importCharacter(exported) {
-    const save = exported?.save;
+export function importCharacter(given) {
+    let exported;
 
-    if (exported?.kind !== SOLO_KIND || !Number.isInteger(exported.version) || exported.version > SOLO_VERSION || exported.saveVersion !== SAVE_VERSION) {
+    try {
+        exported = forwardExport(given);
+    } catch {
         return null;
     }
+
+    const save = exported.save;
 
     if (save?.version !== SAVE_VERSION || typeof save.id !== "string" || !ID.test(save.id) || !Number.isInteger(save.seed) || typeof save.created !== "string" || typeof save.hero?.name !== "string") {
         return null;
@@ -603,6 +664,60 @@ export function importCharacter(exported) {
     } finally {
         reading = null;
     }
+}
+
+/**
+ * A character from an export (exportCharacter's, brought forward and salvaged:
+ * app/character-file.js) kept on this device as a new character, under an id of its own, with
+ * their world and all that's kept of them: { save } (as loadCharacters gives one); or { error:
+ * "full" } with MOST_CHARACTERS kept already (one must go first: forgetCharacter), "here" if the
+ * same character's kept already (the same hero, started at the same moment in the same world),
+ * or "storage" if the browser wouldn't keep them.
+ */
+export function keepCharacter(exported) {
+    const { ids, last } = roster();
+    const from = exported.save;
+
+    if (ids.some((id) => {
+        const kept = read(`pellagos.${id}.save`);
+
+        return kept?.created === from.created && kept?.seed === from.seed && kept?.hero?.name === from.hero?.name;
+    })) {
+        return { error: "here" };
+    }
+
+    if (ids.length >= MOST_CHARACTERS) {
+        return { error: "full" };
+    }
+
+    const save = { version: SAVE_VERSION, id: newId(ids), hero: from.hero, seed: from.seed, created: from.created, played: from.played ?? from.created };
+    let kept = true;
+
+    for (const kind of KINDS.filter((each) => each !== "save" && each !== "world" && isObject(exported[each]))) {
+        kept &&= write(keyOf(save, kind), { ...exported[kind], created: save.created, seed: save.seed });
+    }
+
+    if (isObject(exported.world) && exported.world.war) {
+        try {
+            globalThis.localStorage?.setItem(keyOf(save, "world"), encode({ created: save.created, seed: save.seed, war: exported.world.war }));
+        } catch {
+            kept = false;
+        }
+    }
+
+    kept &&= write(keyOf(save, "save"), save) && write(ROSTER_KEY, { ids: [...ids, save.id], last });
+
+    if (!kept) {
+        for (const kind of KINDS) {
+            remove(keyOf(save, kind));
+        }
+
+        write(ROSTER_KEY, { ids, last });
+
+        return { error: "storage" };
+    }
+
+    return { save };
 }
 
 /** Forget every character kept (and the one kept before there could be several). */
