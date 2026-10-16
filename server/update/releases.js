@@ -1,12 +1,14 @@
 // The server's new versions, as the project releases them (generated/world_server_plan.md §11,
 // "Updating"): a GitHub release tagged server-v<version>, with the server's archive
-// (pellagos-server-<version>.tar.gz, scripts/build-mac-app.js) and its signature
-// (pellagos-server-<version>.tar.gz.sig: Ed25519, base64, over the archive's bytes, made with the
-// project's private key, scripts/release-key.js). The public half ships with the server, in
-// release-key.pem beside this file; until the project has made one, nothing can be updated (a new
-// version is still shown). Checking costs nothing: GitHub's API, asked once a day.
+// (pellagos-server-<version>.tar.gz, scripts/build-mac-app.js), published by the Mac app workflow
+// for each change to main (.github/workflows/mac.yml). An archive is checked before it's
+// installed: against its signature (pellagos-server-<version>.tar.gz.sig: Ed25519, base64, over
+// the archive's bytes, made with the project's private key, scripts/release-key.js) if the server
+// has the key's public half (release-key.pem beside this file); otherwise against the SHA-256 GitHub
+// keeps for the release's file, as the Mac installer checks its zip (scripts/install-mac.sh).
+// Checking costs nothing: GitHub's API, asked once a day.
 
-import { createPublicKey, verify } from "node:crypto";
+import { createHash, createPublicKey, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 
 /** Where the project's releases are listed. */
@@ -58,8 +60,10 @@ export function compareVersions(a, b) {
 
 /**
  * The newest server release in GitHub's list of releases (not a draft, nor a pre-release, with
- * its archive and signature), or null: { version, notes, published, page, archive, signature }
- * (archive and signature: where they're downloaded from).
+ * its archive and either its signature or the SHA-256 GitHub keeps for it), or null: { version,
+ * notes, published, page, archive, signature, sha256 } (archive and signature: where they're
+ * downloaded from, the signature null if the release has none; sha256: the archive's, in hex, as
+ * GitHub says it is, or null).
  */
 export function latestRelease(releases) {
     let latest = null;
@@ -71,11 +75,12 @@ export function latestRelease(releases) {
             continue;
         }
 
-        const asset = (name) => (release.assets ?? []).find((one) => one?.name === name)?.browser_download_url ?? null;
+        const asset = (name) => (release.assets ?? []).find((one) => one?.name === name && one.browser_download_url) ?? null;
         const archive = asset(archiveName(version));
-        const signature = asset(signatureName(version));
+        const signature = asset(signatureName(version))?.browser_download_url ?? null;
+        const sha256 = /^sha256:([0-9a-f]{64})$/.exec(archive?.digest ?? "")?.[1] ?? null;
 
-        if (!archive || !signature || (latest && compareVersions(version, latest.version) <= 0)) {
+        if (!archive || !(signature || sha256) || (latest && compareVersions(version, latest.version) <= 0)) {
             continue;
         }
 
@@ -84,8 +89,9 @@ export function latestRelease(releases) {
             notes: String(release.body ?? "").slice(0, NOTES),
             published: release.published_at ?? null,
             page: release.html_url ?? null,
-            archive,
+            archive: archive.browser_download_url,
             signature,
+            sha256,
         };
     }
 
@@ -147,3 +153,6 @@ export function verifySignature(bytes, signature, key) {
         return false;
     }
 }
+
+/** The SHA-256 of `bytes`, in hex. */
+export const sha256Of = (bytes) => createHash("sha256").update(bytes).digest("hex");

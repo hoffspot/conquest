@@ -1,5 +1,6 @@
 // Updating the server (generated/world_server_plan.md §11, "Updating"; §15 S9): the newest
-// release found in the project's list, and only one its key signed taken; how the server was
+// release found in the project's list, and only one its key signed taken, or without the key, one
+// whose archive is the one GitHub has (the SHA-256 it keeps for it); how the server was
 // installed, so whether it updates itself; a release unpacked beside the version running; the
 // updater's refusals, and an update made ready (every world and the server's own files backed up
 // first). Then for real, in processes, as the menu-bar app runs it: a server from the previous
@@ -22,7 +23,7 @@ import { SERVER_JOURNAL } from "../server/manage.js";
 import { BACKUPS, exists, readJSON, writeGzip } from "../server/storage/files.js";
 import { SERVER_VERSION } from "../server/storage/versions.js";
 import { chooseVersion, CURRENT, ENTRY, installOf, readCurrent, readLast, rollBack, unpackRelease, updatesItself, VERSIONS, versionFolder, writeCurrent } from "../server/update/installed.js";
-import { archiveName, compareVersions, latestRelease, readReleaseKey, signatureName, verifySignature } from "../server/update/releases.js";
+import { archiveName, compareVersions, latestRelease, readReleaseKey, sha256Of, signatureName, verifySignature } from "../server/update/releases.js";
 import { WorldServer } from "../server/world-server.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -85,19 +86,24 @@ async function release(work, version, change = async () => {}) {
     return file;
 }
 
-// The project's releases, as GitHub lists them, for the server to find (`listed`: [{ version, archive, signature }])
+// The project's releases, as GitHub lists them, for the server to find (`listed`: [{ version,
+// sha256 (GitHub's for the archive, or null), signed (whether there's a signature) }])
 async function releases(listed) {
     const assets = new Map();
     const server = http.createServer((request, response) => {
         if (request.url === "/releases") {
-            const list = listed.map(({ version }) => ({
+            const url = (name) => `http://127.0.0.1:${server.address().port}/assets/${name}`;
+            const list = listed.map(({ version, sha256, signed }) => ({
                 tag_name: `server-v${version}`,
                 draft: false,
                 prerelease: false,
                 body: `Version ${version}.`,
                 published_at: "2026-10-13T09:00:00Z",
                 html_url: `https://example.invalid/${version}`,
-                assets: [archiveName(version), signatureName(version)].map((name) => ({ name, browser_download_url: `http://127.0.0.1:${server.address().port}/assets/${name}` })),
+                assets: [
+                    { name: archiveName(version), browser_download_url: url(archiveName(version)), ...(sha256 ? { digest: `sha256:${sha256}` } : {}) },
+                    ...(signed ? [{ name: signatureName(version), browser_download_url: url(signatureName(version)) }] : []),
+                ],
             }));
 
             response.writeHead(200, { "Content-Type": "application/json" });
@@ -115,17 +121,22 @@ async function releases(listed) {
 
     return {
         url: `http://127.0.0.1:${server.address().port}/releases`,
-        async add({ version, archive, signature }) {
+        // (A release: its archive, with its signature or GitHub's SHA-256 for it, or both)
+        async add({ version, archive, signature = null, sha256 = null }) {
             assets.set(`/assets/${archiveName(version)}`, archive);
-            assets.set(`/assets/${signatureName(version)}`, signature);
-            listed.push({ version });
+
+            if (signature !== null) {
+                assets.set(`/assets/${signatureName(version)}`, signature);
+            }
+
+            listed.push({ version, sha256, signed: signature !== null });
         },
         close: () => new Promise((resolve) => server.close(resolve)),
     };
 }
 
 describe("the server's releases", () => {
-    it("compare by version, the newest found among the server's own, its archive and signature both there", () => {
+    it("compare by version, the newest found among the server's own, its archive there with its signature or GitHub's SHA-256", () => {
         assert.equal(compareVersions("2.4.0", "2.10.0"), -1);
         assert.equal(compareVersions("2.4.1", "2.4.0"), 1);
         assert.equal(compareVersions("2.4.0", "2.4.0"), 0);
@@ -145,6 +156,19 @@ describe("the server's releases", () => {
         assert.equal(latest.notes, "Newer");
         assert.equal(latest.archive, `https://x/${archiveName("2.10.0")}`);
         assert.equal(latest.signature, `https://x/${signatureName("2.10.0")}`);
+        assert.equal(latest.sha256, null);
+
+        // (The archive and GitHub's SHA-256 for it, with no signature: as the Mac app workflow
+        // publishes them without the project's key; a digest that isn't a SHA-256, passed over)
+        const sha256 = "ab".repeat(32);
+        const vouched = latestRelease([
+            { tag_name: "server-v2.4.0", assets: both("2.4.0") },
+            { tag_name: "server-v2.5.0", assets: [{ name: archiveName("2.5.0"), browser_download_url: "https://x/2.5.0", digest: `sha256:${sha256}` }] },
+            { tag_name: "server-v2.6.0", assets: [{ name: archiveName("2.6.0"), browser_download_url: "https://x/2.6.0", digest: `md5:${"0".repeat(32)}` }] },
+        ]);
+
+        assert.deepEqual({ version: vouched.version, signature: vouched.signature, sha256: vouched.sha256 }, { version: "2.5.0", signature: null, sha256 });
+        assert.equal(sha256Of(Buffer.from("abc")), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
         assert.equal(latestRelease([]), null);
         assert.equal(latestRelease({ message: "rate limited" }), null);
     });
@@ -263,7 +287,7 @@ describe("the updater", () => {
         return { root, server, restarted: () => restarted };
     }
 
-    it("refuses what it can't do: a checkout, no key, no newer version, players in, a release its key didn't sign", async () => {
+    it("refuses what it can't do: a checkout, no newer version, one it can't check, players in, a release its key didn't sign", async () => {
         const work = await scratch();
         const { privateKey, publicKey } = makeKeyPair();
         const archive = await readFile(await release(work, "99.0.0"));
@@ -276,9 +300,6 @@ describe("the updater", () => {
             await assert.rejects(checkout.server.updater.update({ version: "99.0.0" }), { error: "not-here", message: /git pull/ });
 
             const keyless = await updating({ found, key: null, code });
-
-            await assert.rejects(keyless.server.updater.update({ version: "99.0.0" }), { error: "no-key" });
-
             const { root, server } = await updating({ found, key: publicKey, code });
 
             assert.equal((await server.updater.check()).newer, null);
@@ -291,7 +312,14 @@ describe("the updater", () => {
             assert.equal(state.newer.version, "99.0.0");
             assert.equal(state.install.kind, "archive");
             assert.equal(state.key, true);
+            assert.equal(state.checkedBy, "signature");
             await assert.rejects(server.updater.update({ version: "99.0.1" }), { error: "not-newer", message: /The newer version is 99.0.0/ });
+
+            // (Without the key, a release with no SHA-256 from GitHub can't be checked)
+            const unchecked = await keyless.server.updater.check();
+
+            assert.deepEqual([unchecked.key, unchecked.checkedBy], [false, null]);
+            await assert.rejects(keyless.server.updater.update({ version: "99.0.0" }), { error: "unchecked", message: /GitHub doesn't say what version 99\.0\.0's archive should be/ });
 
             // (A player in)
             server.registry.entries.set("somewhere", { thread: { state: { present: 1 } } });
@@ -345,6 +373,44 @@ describe("the updater", () => {
             assert.ok(await exists(path.join(versionFolder(root, "99.0.0"), ENTRY)));
             assert.equal((await server.updater.state()).busy.stage, "restarting");
             assert.match(await readFile(path.join(root, SERVER_JOURNAL), "utf8"), new RegExp(`Updating from ${SERVER_VERSION.replace(/\./g, "\\.")} to 99\\.0\\.0, as the admin asked`));
+        } finally {
+            await found.close();
+        }
+    });
+});
+
+describe("the updater, without the project's key", () => {
+    it("takes a release whose archive is the one GitHub has (its SHA-256), refuses one that isn't, and one that's only signed", async () => {
+        const work = await scratch();
+        const archive = await readFile(await release(work, "99.0.0"));
+        const found = await releases([]);
+        const root = await scratch();
+        let restarted = 0;
+        const server = await WorldServer.open(root, { awake: () => ({ stop() {} }), router: false, funnel: false, onRestart: () => restarted++, update: { releases: found.url, key: null, code: path.join(work, "pellagos-server-98.0.0") } });
+
+        servers.push(server);
+
+        try {
+            // (GitHub's SHA-256 for another archive: downloaded, refused, nothing installed)
+            await found.add({ version: "99.0.0", archive, sha256: sha256Of(Buffer.from("another archive")) });
+            assert.equal((await server.updater.check()).checkedBy, "sha256");
+            await server.updater.update({ version: "99.0.0" });
+            await until(() => server.updater.failed, "the update to fail");
+            assert.match(server.updater.failed.why, /isn't the one GitHub has/);
+            assert.equal(await exists(path.join(root, VERSIONS, "99.0.0")), false);
+
+            // (The one GitHub has: installed beside, and the server restarted as it)
+            await found.add({ version: "99.0.1", archive: await readFile(await release(work, "99.0.1")), sha256: null, signature: "signed, but this server has no key" });
+            await assert.rejects(server.updater.check().then(() => server.updater.update({ version: "99.0.1" })), { error: "unchecked" });
+
+            const good = await readFile(await release(work, "99.0.2"));
+
+            await found.add({ version: "99.0.2", archive: good, sha256: sha256Of(good) });
+            assert.equal((await server.updater.check()).newer.version, "99.0.2");
+            await server.updater.update({ version: "99.0.2", by: "the admin" });
+            await until(() => restarted === 1, "the server to be restarted");
+            assert.equal((await readCurrent(root)).version, "99.0.2");
+            assert.ok(await exists(path.join(versionFolder(root, "99.0.2"), ENTRY)));
         } finally {
             await found.close();
         }

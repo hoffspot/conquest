@@ -5,14 +5,29 @@ name: Mac app
 # its server answering on the usual port, and on Quit every world saved before it goes; and the
 # Homebrew formula installed from a tap of its own and its test run; and the installer
 # (scripts/install-mac.sh) run as a Mac's owner runs it, each way it installs, then taking it away
-# (generated/world_server_plan.md §11, Phase 2; docs/MAC_APP.md). Run by hand (Actions, Mac app, Run workflow), and on a pull
-# request that changes the app, its bundle, or how the server runs for it. A public repository's
-# Mac runners cost nothing. The zip, the server's archive (signed with the project's release key,
-# scripts/release-key.js, if the repository has it as the secret PELLAGOS_RELEASE_KEY) and the
-# formula are kept with the run, for a release; and pictures of the screen with the app running,
-# and its menu open
+# (generated/world_server_plan.md §11, Phase 2; docs/MAC_APP.md). Run on a pull request that
+# changes the app, its bundle, or how the server runs for it; on main, for each change to what the
+# app holds, when it then publishes it as a release (the release job): server-v<version>, the
+# version package.json's major and minor and the count of main's commits, which the installer
+# installs and servers update to; and by hand (Actions, Mac app, Run workflow), on main a release
+# too. A public repository's Mac runners cost nothing. The zip, the server's archive (signed with
+# the project's release key, scripts/release-key.js, if the repository has it as the secret
+# PELLAGOS_RELEASE_KEY; checked by GitHub's SHA-256 for it otherwise) and the formula are kept
+# with the run; and pictures of the screen with the app running, and its menu open
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - client/**
+      - server/**
+      - mac/**
+      - package.json
+      - scripts/build-mac-app.js
+      - scripts/stamp-version.js
+      - LICENSE
+      - LICENSE-BOOK-CODE.txt
+      - .github/workflows/mac.yml
   pull_request:
     paths:
       - mac/**
@@ -25,8 +40,10 @@ on:
       - server/platform/**
       - .github/workflows/mac.yml
 
+# (A pull request's run cancelled by its next; main's one at a time, each finished, the newest
+# waiting its turn: a release at a time, in order)
 concurrency:
-  group: mac-${{ github.event.pull_request.number || github.run_id }}
+  group: mac-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -35,12 +52,29 @@ jobs:
     runs-on: macos-15
     # (About 10 minutes: the Swift build, Node fetched, Homebrew's Node installed)
     timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
+      # (Every commit, without their files: a release's version counts main's commits)
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: blob:none
 
       - uses: actions/setup-node@v5
         with:
           node-version: 24
+
+      # (As a release is numbered and stamped: package.json's version in the copy built here, and
+      # client/js/app/version.js's commit, for the debug log; scripts/stamp-version.js)
+      - name: Which version it is, and which code
+        id: version
+        run: |
+          version=$(node -p 'require("./package.json").version.split(".").slice(0, 2).join(".")').$(git rev-list --count HEAD)
+          node -e 'const fs = require("fs"); const pkg = JSON.parse(fs.readFileSync("package.json", "utf8")); pkg.version = process.argv[1]; fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n")' "$version"
+          node scripts/stamp-version.js client/js/app/version.js "$GITHUB_SHA"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Version $version"
 
       - name: Build the menu-bar app
         run: swift build -c release --arch arm64 --package-path mac
@@ -154,3 +188,56 @@ jobs:
           path: dist/*.png
           retention-days: 14
           if-no-files-found: ignore
+
+  # The release: what the mac job built, published as server-v<version> on main (pushed to, or run
+  # by hand there), for the installer (scripts/install-mac.sh) and servers' updates
+  # (server/update/releases.js): the app's zip, the server's archive and its signature if it was
+  # signed. GitHub keeps each file's SHA-256, which both check against. Notes from the pull requests
+  # merged since the release before. The newest 10 kept; older ones taken away, with their tags.
+  release:
+    needs: mac
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pellagos-server-mac
+          path: dist
+
+      - name: Publish it as a release, and keep the newest 10
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.mac.outputs.version }}
+        run: |
+          tag="server-v$VERSION"
+          files=("dist/Pellagos-Server-$VERSION-arm64.zip" "dist/pellagos-server-$VERSION.tar.gz")
+          if [ -f "dist/pellagos-server-$VERSION.tar.gz.sig" ]; then files+=("dist/pellagos-server-$VERSION.tar.gz.sig"); fi
+          ls -l "${files[@]}"
+          # (The server releases there are, the newest first, by version)
+          releases() { gh release list --limit 200 --json tagName --jq '.[].tagName' | sed -n 's/^server-v\([0-9]*\.[0-9]*\.[0-9]*\)$/\1/p' | sort -V -r; }
+          # (The newest before this one, for the notes to start from)
+          before=$(releases | while read -r one; do if [ "$(printf '%s\n%s\n' "$one" "$VERSION" | sort -V | tail -n 1)" = "$VERSION" ] && [ "$one" != "$VERSION" ]; then echo "$one"; break; fi; done)
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" "${files[@]}" --clobber
+          elif [ -n "$before" ]; then
+            gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" --title "Pellagos Server $VERSION" --generate-notes --notes-start-tag "server-v$before"
+          else
+            gh release create "$tag" "${files[@]}" --target "$GITHUB_SHA" --title "Pellagos Server $VERSION" --notes "The first release of Pellagos Server for the Mac, built from $GITHUB_SHA."
+          fi
+          # (GitHub's SHA-256 for each file, which the installer and servers check against)
+          for try in $(seq 1 10); do
+            digests=$(gh api "repos/$GH_REPO/releases/tags/$tag" --jq '.assets[] | "\(.name) \(.digest)"')
+            echo "$digests" | grep -q "^Pellagos-Server-$VERSION-arm64.zip sha256:" && echo "$digests" | grep -q "^pellagos-server-$VERSION.tar.gz sha256:" && break
+            sleep 3
+          done
+          echo "$digests"
+          echo "$digests" | grep -q "^Pellagos-Server-$VERSION-arm64.zip sha256:" || { echo "GitHub gives no SHA-256 for the zip: the installer can't check it"; exit 1; }
+          echo "$digests" | grep -q "^pellagos-server-$VERSION.tar.gz sha256:" || { echo "GitHub gives no SHA-256 for the archive: servers can't check it"; exit 1; }
+          releases | tail -n +11 | while read -r old; do
+            echo "Taking away server-v$old"
+            gh release delete "server-v$old" --cleanup-tag --yes
+          done

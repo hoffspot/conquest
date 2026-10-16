@@ -465,10 +465,9 @@ remembered.
   found nearby on the Wi-Fi), then comes into a world with its key or short code, or makes one.
   Up to 8 play in a world at once. Its owner looks after it from its management page: worlds,
   keys, players, backups, and opening it to the internet. Run one from the Mac's menu bar
-  ([docs/MAC_APP.md](docs/MAC_APP.md)), with Homebrew, or with `npm run world-server`; how, and
-  what it keeps, is in [docs/SERVER.md](docs/SERVER.md). On a Mac with Apple silicon, this line
-  in Terminal installs the menu-bar app and opens it (before the project's first release, end it
-  with `bash -s -- --build` to build the app on the Mac):
+  ([docs/MAC_APP.md](docs/MAC_APP.md)), or with `npm run world-server`; how, and what it keeps,
+  is in [docs/SERVER.md](docs/SERVER.md). On a Mac with Apple silicon, this line in Terminal
+  installs the menu-bar app from the newest release and opens it (the same line updates it):
 
   ```sh
   curl -fsSL https://raw.githubusercontent.com/hoffspot/conquest/main/scripts/install-mac.sh | bash

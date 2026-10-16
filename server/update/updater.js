@@ -2,12 +2,13 @@
 // §11, "Updating"; §5.1). Once a day (its checkUpdates setting) it asks the project's releases
 // whether there's a newer version (releases.js), and the page says so, with its notes. Nothing
 // updates itself: the owner clicks Update. Then, never while players are in: the release's
-// archive is downloaded and checked against its signature (the project's Ed25519 key, whose
-// public half ships with the server); every world and the server's own files are backed up; the
-// archive's unpacked beside the version running (installed.js), and the server saves every world,
-// stops, and is started again by its launcher (launch.js) as the new version, which brings every
-// world forward before it says it's running. If it can't, the launcher goes back to the version
-// before and puts everything back from those backups, and the page says why.
+// archive is downloaded and checked (releases.js): against its signature, with the project's
+// Ed25519 key, if the server has the key's public half; otherwise against the SHA-256 GitHub keeps
+// for it, as the Mac installer checks its zip. Every world and the server's own files are backed
+// up; the archive's unpacked beside the version running (installed.js), and the server saves
+// every world, stops, and is started again by its launcher (launch.js) as the new version, which
+// brings every world forward before it says it's running. If it can't, the launcher goes back to
+// the version before and puts everything back from those backups, and the page says why.
 //
 // A server run from a copy of the repository, or Homebrew's, isn't updated this way: the page
 // shows the commands that update it instead.
@@ -19,7 +20,7 @@ import { Refused } from "../manage.js";
 import { BACKUPS, ensureFolder, stampOf } from "../storage/files.js";
 import { SERVER_VERSION } from "../storage/versions.js";
 import { CODE, installOf, readCurrent, readLast, unpackRelease, updatesItself, VERSIONS, writeCurrent } from "./installed.js";
-import { compareVersions, fetchBytes, fetchLatest, readReleaseKey, RELEASES, verifySignature } from "./releases.js";
+import { compareVersions, fetchBytes, fetchLatest, readReleaseKey, RELEASES, sha256Of, verifySignature } from "./releases.js";
 
 /** How often it asks whether there's a new version (ms), and how long after it starts it first asks. */
 export const CHECK_EVERY = 24 * 3600000;
@@ -27,6 +28,13 @@ export const FIRST_CHECK = 60000;
 
 /** What doesn't go in the backup of the server's own files: the worlds (each backed up on its own), the backups, the versions. */
 const NOT_SERVERS = new Set([BACKUPS, "worlds", VERSIONS]);
+
+// Why `release` can't be checked by a server with the project's key (`key`) or without
+function uncheckable(release, key) {
+    return key
+        ? `Version ${release.version} isn't signed with the project's key, which this server checks new versions with: install it by hand.`
+        : `GitHub doesn't say what version ${release.version}'s archive should be (its SHA-256), so it can't be checked: install it by hand.`;
+}
 
 export class Updater {
     /**
@@ -88,6 +96,17 @@ export class Updater {
         return latest && compareVersions(latest.version, SERVER_VERSION) > 0 ? latest : null;
     }
 
+    // How `release`'s archive is checked: "signature" (the project's key, if this server has it,
+    // and the release is signed), "sha256" (no key: the SHA-256 GitHub keeps for it), or null if
+    // it can't be
+    #checkedBy(release) {
+        if (this.key) {
+            return release.signature ? "signature" : null;
+        }
+
+        return release.sha256 ? "sha256" : null;
+    }
+
     // Players in any world now
     #playersIn() {
         return [...this.server.registry.entries.values()].reduce((sum, entry) => sum + (entry.thread?.state?.present ?? 0), 0);
@@ -95,8 +114,9 @@ export class Updater {
 
     /**
      * How updating stands, for the page: { version (running), install: { kind, commands },
-     * checks (its setting), checked, newer, key (whether there's a key to check releases with),
-     * busy, failed, last (installed.js last.json: how the last update went), current }.
+     * checks (its setting), checked, newer, key (whether it has the project's key), checkedBy (how
+     * the newer version would be checked: #checkedBy, null if it can't be), busy, failed, last
+     * (installed.js last.json: how the last update went), current }.
      */
     async state() {
         const install = await installOf(this.code);
@@ -108,6 +128,7 @@ export class Updater {
             checked: this.checked,
             newer: this.newer,
             key: Boolean(this.key),
+            checkedBy: this.newer ? this.#checkedBy(this.newer) : null,
             playersIn: this.#playersIn(),
             busy: this.busy,
             failed: this.failed,
@@ -118,8 +139,8 @@ export class Updater {
 
     /**
      * The update to `version` (the newer one found) begun, if it can be: refused if this server
-     * isn't updated this way (with the commands that do), if there's no key to check it with, if
-     * it isn't the newer version found, if players are in, or if one's already under way. It
+     * isn't updated this way (with the commands that do), if it isn't the newer version found, if
+     * it can't be checked (#checkedBy), if players are in, or if one's already under way. It
      * carries on after this returns: { updating: version }. `onRestart` is called once it's ready
      * (the server then saves every world and stops, for its launcher to start the new version).
      */
@@ -130,14 +151,14 @@ export class Updater {
             throw new Refused(409, "not-here", `This server is run from ${install.kind === "homebrew" ? "Homebrew" : "a copy of the repository"}: update it with ${install.commands.join(", then ")}.`);
         }
 
-        if (!this.key) {
-            throw new Refused(409, "no-key", "This version of the server has no key to check new versions with, so it can't update itself: install the new version by hand.");
-        }
-
         const newer = this.newer;
 
         if (!newer || newer.version !== version) {
             throw new Refused(409, "not-newer", newer ? `The newer version is ${newer.version}, not ${version}.` : "There's no newer version to update to: check again.");
+        }
+
+        if (!this.#checkedBy(newer)) {
+            throw new Refused(409, "unchecked", uncheckable(newer, this.key));
         }
 
         const playing = this.#playersIn();
@@ -167,12 +188,21 @@ export class Updater {
 
         try {
             const archive = await fetchBytes(release.archive, { fetch: this.fetch });
-            const signature = (await fetchBytes(release.signature, { fetch: this.fetch, limit: 4096 })).toString("utf8");
 
-            this.busy.stage = "checking";
+            if (this.key) {
+                const signature = (await fetchBytes(release.signature, { fetch: this.fetch, limit: 4096 })).toString("utf8");
 
-            if (!verifySignature(archive, signature, this.key)) {
-                throw new Error(`Version ${version}'s archive isn't signed by the project's key: it wasn't installed.`);
+                this.busy.stage = "checking";
+
+                if (!verifySignature(archive, signature, this.key)) {
+                    throw new Error(`Version ${version}'s archive isn't signed by the project's key: it wasn't installed.`);
+                }
+            } else {
+                this.busy.stage = "checking";
+
+                if (sha256Of(archive) !== release.sha256) {
+                    throw new Error(`Version ${version}'s archive isn't the one GitHub has (its SHA-256 isn't the one GitHub keeps for it): it wasn't installed.`);
+                }
             }
 
             // (Nobody's come in while it downloaded: if they have, it waits for another click)
