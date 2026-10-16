@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "736d900ee5",
+    release: "7b924e025a",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -1865,6 +1865,50 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/dreadthorn.bin",
                     "hash": "84f164271a",
                     "bytes": 5064728
+                }
+            ]
+        },
+        "beast-werewolf": {
+            "tier": "demand",
+            "label": "The werewolf (Werewolf - Mythical Creature, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/werewolf.bin",
+                    "hash": "cac6f8eea7",
+                    "bytes": 3288596
+                }
+            ]
+        },
+        "beast-werewolf-skins": {
+            "tier": "demand",
+            "label": "The werewolf's other skins: dusk, ash, russet, moonfang and rotten (Werewolf - Mythical Creature, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/werewolf.dusk.bin",
+                    "hash": "9a800655fc",
+                    "bytes": 222760
+                },
+                {
+                    "path": "models/beasts/werewolf.ash.bin",
+                    "hash": "dc97f32a56",
+                    "bytes": 253528
+                },
+                {
+                    "path": "models/beasts/werewolf.russet.bin",
+                    "hash": "575135eab7",
+                    "bytes": 244672
+                },
+                {
+                    "path": "models/beasts/werewolf.moonfang.bin",
+                    "hash": "fd74f86d34",
+                    "bytes": 380432
+                },
+                {
+                    "path": "models/beasts/werewolf.rotten.bin",
+                    "hash": "ce58a9f771",
+                    "bytes": 1565632
                 }
             ]
         }

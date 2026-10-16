@@ -1,7 +1,8 @@
 # Licensed models
 
 Some of the game's models aren't free to reuse: they were bought, and are in the game with the
-seller's permission. Today that's only the Dreadthorn, HuyKhoi2407's Dreadthorn Dragon
+seller's permission, or under a licence that gives it. Today they're the Dreadthorn, HuyKhoi2407's
+Dreadthorn Dragon, and the werewolf, Fab's Werewolf - Mythical Creature, with its five other skins
 (`client/models/beasts/LICENSE.md`). This page is how such models are kept out of anyone else's
 hands, as far as a game played in a browser can, and what the owner sets up for it.
 
@@ -203,9 +204,10 @@ No CI job is added or renamed, so the ruleset's required checks don't change.
 ## Adding a licensed model, later
 
 1. **Check the licence first**, before anything's bought: it has to allow use in a game in a
-   browser, in any engine (not "Unreal Engine only"). And the seller has to agree to the model
-   being served from the game's site, as the Dreadthorn's did. The owner decides, never a
-   contributor.
+   browser, in any engine (not "Unreal Engine only"). And either the licence itself allows the
+   model to be served from the game's site as part of the game (Fab's Standard License does: a
+   project may be distributed with its assets in it, never the assets on their own), or the
+   seller agrees to it, as the Dreadthorn's did. The owner decides, never a contributor.
 2. Convert it with `utilities/blenderpipeline` (its configuration in
    `utilities/blenderpipeline/private/`, which git ignores, with the bought files).
 3. Scramble it, with whose it is: `npm run scramble -- <model.glb> <model.bin> --copyright "<the
@@ -217,7 +219,8 @@ No CI job is added or renamed, so the ruleset's required checks don't change.
 5. In this repository:
    - its catalog entry in `client/models/assets.json`, marked `"licensed": true`, with its file's
      `path`, `hash` and `bytes`, and a label that names the seller and the permission;
-   - its path in `.gitignore`, beside the Dreadthorn's;
+   - its path in `.gitignore`, beside the Dreadthorn's (each file's: a model's skins are
+     files of their own, in an entry of their own, `<id>-skins`);
    - its licence note under `client/` too, as `client/models/beasts/LICENSE.md` is (the model
      viewer links to it);
    - its credit in `README.md`'s *Credits and license*;

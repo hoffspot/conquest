@@ -16,3 +16,24 @@ in this repository, but in the private one the game's builds fetch it from
 (`docs/LICENSED_MODELS.md`).
 
 Don't copy it out of this game or use it in anything else.
+
+## werewolf.bin, and its skins: werewolf.dusk.bin, .ash, .russet, .moonfang, .rotten
+
+**Werewolf - Mythical Creature**, bought on **Fab**
+(<https://www.fab.com/listings/cb347314-44c4-416e-9367-893073f931d6>) by this repository's owner
+under **Fab's Standard License**.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought FBX put through `utilities/blenderpipeline`
+(`private/werewolf.json`, which stays out of the repository with the bought files), its `browser`
+build. That's 16,456 triangles with two lower details packed in, 1,024-pixel KTX2 textures and its
+six clips. Each skin holds only the textures that differ, made from the asset's own for its Skin2
+to Skin6.
+
+They're scrambled as the game serves them, with whose they are in each glTF asset's `copyright`.
+They aren't in this repository, but in the private one the game's builds fetch them from
+(`docs/LICENSED_MODELS.md`). The model viewer shows the werewolf (*Coming to the wilds*) until it's
+in the game.
+
+Don't copy it out of this game or use it in anything else.
