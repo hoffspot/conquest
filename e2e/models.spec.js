@@ -153,7 +153,7 @@ test("draws the Dreadthorn from its model once it's read, in place of its stand-
 
     // (Its model fetched by its hash, as the catalog has it, by the game's downloader: a part at a
     // time, all from the one address)
-    expect([...new Set(fetched.filter((url) => url.includes("/models/beasts/")).map((url) => url.replace(/^.*\/models\//, "").replace(/=[0-9a-f]{10}$/, "=")))]).toEqual(["beasts/dreadthorn.glb?h="]);
+    expect([...new Set(fetched.filter((url) => url.includes("/models/beasts/")).map((url) => url.replace(/^.*\/models\//, "").replace(/=[0-9a-f]{10}$/, "=")))]).toEqual(["beasts/dreadthorn.bin?h="]);
 });
 
 // (The service worker kept out: a page's routes don't see what it fetches)
@@ -161,7 +161,7 @@ test.describe("its model missing", () => {
     test.use({ serviceWorkers: "block" });
 
     test("leaves the Dreadthorn's stand-in drawn, with no error, when its model can't be read", async ({ page }) => {
-        await page.route(/\/models\/beasts\/dreadthorn\.glb/, (route) => route.fulfill({ status: 404, body: "" }));
+        await page.route(/\/models\/beasts\/dreadthorn\.bin/, (route) => route.fulfill({ status: 404, body: "" }));
         await page.goto("/");
         await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
 

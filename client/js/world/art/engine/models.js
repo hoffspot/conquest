@@ -3,12 +3,14 @@
 // (client/models/jmi, MIT: world/drops3d.js). Models compressed with meshoptimizer
 // (EXT_meshopt_compression) are read too, and, once the game's said which renderer it draws with
 // (readKtx2With), those with KTX2 textures (KHR_texture_basisu), both as utilities/blenderpipeline
-// makes them.
+// makes them; and the licensed models, served scrambled, unscrambled as they're read
+// (app/scramble.js).
 
 import * as THREE from "three";
 import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
+import { readable } from "../../../app/scramble.js";
 
 // How many workers turn KTX2 textures into what the GPU takes, at most (each holds the
 // transcoder's WebAssembly; a texture takes a few hundredths of a second)
@@ -16,9 +18,18 @@ const KTX2_WORKERS = 2;
 
 const manager = new THREE.LoadingManager();
 const loader = new GLTFLoader(manager).setMeshoptDecoder(MeshoptDecoder);
+const fetcher = new THREE.FileLoader(manager).setResponseType("arraybuffer");
 const loaded = new Map();
 const files = new Map();
 let ktx2 = null;
+
+// A glTF file read: fetched (through the manager, so from the game's downloaded copy where it has
+// one), unscrambled if it's a licensed model's, and parsed
+async function read(url) {
+    const data = await fetcher.loadAsync(url);
+
+    return loader.parseAsync(await readable(data), THREE.LoaderUtils.extractUrlBase(url));
+}
 
 /**
  * A glTF file as it is ({ scene, animations }: its materials and animations its own), read once
@@ -29,7 +40,7 @@ export function loadGltf(url) {
     if (!files.has(url)) {
         files.set(
             url,
-            loader.loadAsync(url).catch((error) => {
+            read(url).catch((error) => {
                 files.delete(url);
                 throw error;
             }),
@@ -68,7 +79,7 @@ export function readKtx2With(renderer, transcoder) {
 /** A copy of the model in a glTF file, with materials the art's lights work with. */
 export async function loadModel(url) {
     if (!loaded.has(url)) {
-        loaded.set(url, loader.loadAsync(url).then(({ scene }) => scene));
+        loaded.set(url, read(url).then(({ scene }) => scene));
     }
 
     const object = (await loaded.get(url)).clone(true);

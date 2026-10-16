@@ -12,15 +12,17 @@ const { MODELS, breathing, hasModel, modelsNear, poseOf } = await import("../cli
 const { ASSETS } = await import("../client/js/app/assets.js");
 const { LAIRS } = await import("../client/js/core/creatures.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
+const { isScrambled, unscramble } = await import("../client/js/app/scramble.js");
 
 const model = MODELS.dreadthorn;
 const lengths = { Idling: 8, Crawling: 8, Flying: 8, Gliding: 8, Hovering: 8, "Hit React": 8, Death: 3.6, Bite: 1.6, Claw: 1.5, "Tail Sweep": 1.7, "Fire Breath": 3.4, "Hover Breath": 3.4, Roar: 8 };
 const total = (posed) => posed.reduce((sum, { weight }) => sum + weight, 0);
 const weightOf = (posed, clip) => posed.find((one) => one.clip === clip)?.weight ?? 0;
 
-// A GLB's JSON (its first chunk)
+// A GLB's JSON (its first chunk), unscrambled first if it's a licensed model's (app/scramble.js)
 async function gltfOf(path) {
-    const bytes = await readFile(new URL(`../client/${path}`, import.meta.url));
+    const file = await readFile(new URL(`../client/${path}`, import.meta.url));
+    const bytes = isScrambled(file) ? unscramble(file) : file;
     const length = bytes.readUInt32LE(12);
 
     return JSON.parse(bytes.subarray(20, 20 + length).toString("utf8"));
