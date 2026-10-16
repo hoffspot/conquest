@@ -34,6 +34,8 @@ export const SETTINGS = Object.freeze({
     broker: { kind: "boolean", default: true, about: "List players' own worlds (hosted in their browsers) here, and help their games connect to them" },
     relaying: { kind: "boolean", default: true, about: "Relay a player's own world through this server when games can't connect to it directly (about 2 KB/s for each who's joined)" },
     checkUpdates: { kind: "boolean", default: true, about: "Check once a day whether there's a new version" },
+    autoUpdate: { kind: "boolean", default: true, about: "Install new versions by itself, at night when nobody's in (from the hour below, for two hours)" },
+    updateHour: { kind: "integer", min: 0, max: 23, default: 3, about: "The hour it installs new versions by itself from, this computer's time (3 is 3 in the morning)" },
 });
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);

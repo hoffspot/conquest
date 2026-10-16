@@ -14,7 +14,7 @@ import { STEP_MS } from "../client/js/core/battle.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
 import { MOTION } from "../client/js/core/motion.js";
-import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, MOST_PLAYERS, NET_VERSION, PACE, PLAYOUT, spawnFor } from "../client/js/core/netplay.js";
+import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, MOST_PLAYERS, NET_VERSION, PACE, PLAYOUT, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
@@ -432,22 +432,45 @@ describe("playing together (netplay.js)", () => {
         assert.deepEqual([...hosting.players.keys()], [bryn.peer]);
     });
 
+    it("tells a player turned away for another version which is the newer, and what to do about it", () => {
+        const older = NET_VERSION - 1;
+        const newer = NET_VERSION + 1;
+
+        // (A player's own world: its host reloads theirs; this game reloads for the newest)
+        assert.match(versionWords(older), /^That world plays an older version of the game than yours\. Ask whoever's hosting it to reload/);
+        assert.match(versionWords(newer), /^That world plays a newer version of the game than yours\. Reload this page for the newest version\.$/);
+
+        // (A world server: its own page always matches; its owner updates it)
+        assert.match(versionWords(older, { server: true }), /^That server plays an older version .* Open the game from the server itself .* or ask its owner to update it\.$/);
+        assert.match(versionWords(newer, { server: true }), /^That server plays a newer version .* Reload this page for the newest version, or open the game from the server itself/);
+
+        // (One made before it said its version: which is newer can't be told)
+        assert.match(versionWords(undefined, { server: true }), /^That server plays another version of the game than yours\. Open the game from the server itself/);
+        assert.deepEqual([older, newer, undefined].map(versionShort), ["An older version of the game", "A newer version of the game: reload this page", "Another version of the game"]);
+    });
+
     it("turns away a game of another version, a character that isn't one, and anyone when the world's full", () => {
         const { hosting, post, deliver } = opened();
         const refusals = [];
+        const said = [];
         const hear = (peer) => {
             const joining = new Joining({ send: (text) => post.push({ from: peer, text }) });
 
-            joining.onRefused = (reason) => refusals.push(reason);
+            joining.onRefused = (reason, message) => {
+                refusals.push(reason);
+                said.push(message);
+            };
 
             return joining;
         };
 
-        // (Heard directly: another version)
+        // (Heard directly: another version, told the host's, for the joiner to say which is the newer)
         hosting.send = (peer, text) => hear(peer).hear(text);
         hosting.hear("p9", encode({ kind: "hello", version: NET_VERSION + 1, character: guest("Old") }));
         hosting.hear("p9", encode({ kind: "hello", version: NET_VERSION, character: { hero: { name: "" } } }));
         assert.deepEqual(refusals, ["version", "character"]);
+        assert.equal(said[0].net, NET_VERSION);
+        assert.equal(said[1].net, undefined);
 
         for (let k = 1; k < MOST_PLAYERS; k++) {
             hosting.hear(`q${k}`, encode({ kind: "hello", version: NET_VERSION, character: guest(`G${k}`) }));

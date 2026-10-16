@@ -10,7 +10,7 @@
 import { Hosting, Joining } from "../core/netplay.js";
 import { BROKER_ERRORS, BrokerHost, BrokerJoin, reachability } from "./peer.js";
 
-export { NET_KICKS, NET_REFUSALS } from "../core/netplay.js";
+export { NET_KICKS, NET_REFUSALS, versionWords } from "../core/netplay.js";
 
 /** How long to wait for the relay to answer (ms). */
 const RELAY_TIMEOUT = 8000;

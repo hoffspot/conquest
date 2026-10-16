@@ -1577,6 +1577,14 @@ async function updatesPanel() {
     const status = h("p", { class: "warning", role: "status" });
     const { last, newer, checked } = updates;
     const asked = checked ? `Last asked ${when(checked.at)}${checked.error ? `: ${checked.error}` : "."}` : updates.checks ? "It asks once a day, from a minute after it starts." : "It doesn't ask (its setting's off): check by hand.";
+    // (Whether it updates itself overnight: its autoUpdate and updateHour settings, above)
+    const clock = (hour) => `${String(hour % 24).padStart(2, "0")}:00`;
+    const { overnight } = updates;
+    const itself = updates.install.commands
+        ? null
+        : overnight.on
+          ? `New versions install themselves at night, between ${clock(overnight.from)} and ${clock(overnight.from + overnight.hours)} (this computer's time), when nobody's in, with every world backed up first; the computer has to be awake then. Turn it off with "Install new versions by itself", above.`
+          : 'New versions wait for you to click Update ("Install new versions by itself", above, is off).';
     const update = async () => {
         const note = [
             "Every world is set aside and backed up first, with the server's settings. Nobody can be in.",
@@ -1618,6 +1626,7 @@ async function updatesPanel() {
               ? h("p", { class: "muted small" }, "It's the newest version.")
               : null,
         h("p", { class: "muted small" }, asked),
+        itself ? h("p", { class: "muted small" }, itself) : null,
         h(
             "div",
             { class: "row" },

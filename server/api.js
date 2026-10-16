@@ -158,7 +158,8 @@ export function apiHandler(server, { mac = false } = {}) {
         }
 
         if (body.net !== undefined && body.net !== NET_VERSION) {
-            throw refuse("version", { message: "That world's played in another version of the game: open it from the server's own page." });
+            // (With its version, for the game to say which is the newer: netplay.js versionWords)
+            throw refuse("version", { message: "That server plays another version of the game than yours: open the game from the server itself.", net: NET_VERSION, version: SERVER_VERSION });
         }
 
         const { state } = registry.lifeOf(world);
