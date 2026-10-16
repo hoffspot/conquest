@@ -9,8 +9,11 @@ import { checkInvented } from "./invent.js";
 export const DEFAULTS = Object.freeze({
     // What it's called (the files written: <name>.glb, <name>.report.json); the config file's name
     name: null,
-    // The .blend to build from
+    // What to build from: a .blend, or an .fbx, .glb or .gltf (imported into an empty scene)
     source: null,
+    // Maya's (and others') "namespace:" taken off the names of objects, bones, materials, images and
+    // actions, in the source and in the actions brought in
+    stripNamespaces: true,
     // Where to write, relative to the config file
     out: "dist",
     // What to export: these objects, or this collection; by default every mesh shown and
@@ -18,8 +21,23 @@ export const DEFAULTS = Object.freeze({
     objects: null,
     collection: null,
     scene: null,
-    // Actions to bring in from other .blend files: [{ from, action?, name? }]
+    // Actions to bring in from other files: [{ from, action?, name? }]: a .blend's, by name, or an
+    // .fbx's, the one moving its skeleton (the objects it brings are left behind)
     actions: [],
+    // Objects joined into one mesh each before they're exported: { "new name": ["object", "Fur*"] }
+    // (one draw call for each material in it; a group kept apart can be shown or hidden alone)
+    join: {},
+    // Materials made from texture files, in place of those in the source by these names:
+    // { "material": { baseColor, alpha, alphaMap, normal, occlusion, roughness, metallic,
+    // emission, emissionStrength, doubleSided } } (README.md, *Materials from textures*)
+    materials: {},
+    // Other looks: { "variant": { materials: { "material": { ...as in materials } } } }, each
+    // written as <name>.<variant>.glb with only its materials, and in them only the textures it
+    // gives (the game puts them on the model in place of the main file's)
+    variants: {},
+    // Ways to build it, each into a folder of its own (<out>/<profile>/): { "profile": { ...any of
+    // these settings, merged over the rest } }, e.g. "full" (as it is) and "phone" (for play)
+    profiles: {},
     // Which of the armature's actions are exported (`include`, `exclude`: names, * and ?
     // wildcards), and what they're called (`rename`: { "Blender name": "clip name" }); clips to
     // play in place (`inPlace`: names or true, their travel taken out of `rootBone`, by default
@@ -42,7 +60,8 @@ export const DEFAULTS = Object.freeze({
         udim: "atlas",
         // Several materials on one mesh baked into one (one draw call)
         mergeMaterials: true,
-        // The atlas's largest size, and the largest any other texture is kept at (pixels)
+        // The atlas's largest size, and the largest any other texture is kept at (pixels; null: as
+        // it is)
         atlasSize: 1024,
         maxSize: 1024,
         // "webp" (EXT_texture_webp), "jpeg", "png" or "ktx2" (KHR_texture_basisu: kept compressed
@@ -89,15 +108,105 @@ export const DEFAULTS = Object.freeze({
 });
 
 const TEXTURE_CHOICES = { bake: ["auto", "always", "never"], udim: ["atlas", "split"], format: ["webp", "jpeg", "png", "ktx2"] };
+const SOURCES = [".blend", ".fbx", ".glb", ".gltf"];
+// A variant's or a profile's name: in file and folder names
+const NAME = /^[a-z0-9][a-z0-9-]*$/;
+// What a material from texture files is made of, and how a texture's given ({ file, channel,
+// invert, flipGreen } or just its file)
+const MATERIAL_KEYS = { baseColor: 0, alpha: 0, alphaMap: 0, normal: 0, occlusion: 0, roughness: 0, metallic: 0, emission: 0, emissionStrength: 0, doubleSided: 0 };
+const MAPS = { baseColor: "colour", alphaMap: "grey", normal: "normal", occlusion: "grey", roughness: "grey", metallic: "grey", emission: "colour" };
+const MAP_KEYS = { file: 0, channel: 0, invert: 0, flipGreen: 0 };
 const KTX2_MODES = ["etc1s", "uastc"];
 const SIZES = ["height", "length", "width", "longest", "scale"];
 const BUDGETS = ["triangles", "vertices", "joints", "drawCalls", "textureSize", "textureMegabytes", "kilobytes", "clips"];
 
-/** Reads an asset's config file and fills in its defaults, its paths made absolute. */
-export function loadConfig(file) {
+/**
+ * Reads an asset's config file and fills in its defaults, its paths made absolute: one with
+ * profiles, as `profile` builds it (loadConfigs for all of them).
+ */
+export function loadConfig(file, { profile = null } = {}) {
     const raw = JSON.parse(readFileSync(file, "utf8"));
+    const configs = profileConfigs(raw, file, { profile });
 
-    return resolveConfig(raw, file);
+    if (configs.length > 1) {
+        throw new Error(`${path.basename(file)}: it has profiles (${configs.map((config) => config.profile).join(", ")}): choose one, or build them all (loadConfigs)`);
+    }
+
+    return configs[0];
+}
+
+/** An asset's configs: one for each profile (`profile`: that one only), or the one it is. */
+export function loadConfigs(file, { profile = null } = {}) {
+    return profileConfigs(JSON.parse(readFileSync(file, "utf8")), file, { profile });
+}
+
+/**
+ * The configs a raw config makes: each profile's settings merged over the rest, built into
+ * <out>/<profile>/; or itself, if it has none.
+ */
+export function profileConfigs(raw, file, { profile = null } = {}) {
+    const fail = (message) => {
+        throw new Error(`${path.basename(file)}: ${message}`);
+    };
+    const { profiles = {}, ...base } = raw ?? {};
+
+    if (profiles === null || typeof profiles !== "object" || Array.isArray(profiles)) {
+        fail('profiles is { "profile": { ...settings } }');
+    }
+
+    const names = Object.keys(profiles);
+
+    if (!names.length) {
+        if (profile) {
+            fail(`it has no profiles (asked for ${profile})`);
+        }
+
+        return [resolveConfig(base, file)];
+    }
+
+    if (profile && !names.includes(profile)) {
+        fail(`it has no profile ${profile} (it has ${names.join(", ")})`);
+    }
+
+    return names
+        .filter((name) => !profile || name === profile)
+        .map((name) => {
+            if (!NAME.test(name)) {
+                fail(`profiles.${name}: a profile's name is lower-case letters, digits and dashes`);
+            }
+
+            unknownKeys(profiles[name], DEFAULTS, `profiles.${name}.`, fail);
+
+            for (const key of ["profiles", "name", "source", "out"]) {
+                if (key in profiles[name]) {
+                    fail(`profiles.${name}.${key}: that's the asset's, not a profile's`);
+                }
+            }
+
+            const config = resolveConfig(merge(base, profiles[name]), file);
+
+            config.profile = name;
+            config.out = path.join(config.out, name);
+
+            return config;
+        });
+}
+
+// Settings merged: objects key by key, all the way down; anything else (a list, a number) replaced
+function merge(base, over) {
+    const plain = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+    if (!plain(base) || !plain(over)) {
+        return structuredClone(over);
+    }
+
+    const merged = structuredClone(base);
+
+    for (const [key, value] of Object.entries(over)) {
+        merged[key] = key in merged ? merge(merged[key], value) : structuredClone(value);
+    }
+
+    return merged;
 }
 
 /** An asset's config with its defaults filled in and its paths made absolute (from `file`). */
@@ -110,7 +219,15 @@ export function resolveConfig(raw, file) {
     unknownKeys(raw, DEFAULTS, "", fail);
 
     if (typeof raw.source !== "string") {
-        fail("`source` (the .blend to build from) is needed");
+        fail(`\`source\` (the ${SOURCES.join(", ")} to build from) is needed`);
+    }
+
+    if (!SOURCES.includes(path.extname(raw.source).toLowerCase())) {
+        fail(`source is a ${SOURCES.join(", ")}, not ${JSON.stringify(path.basename(raw.source))}`);
+    }
+
+    if (raw.profiles && Object.keys(raw.profiles).length) {
+        fail("it has profiles: each is resolved on its own (profileConfigs)");
     }
 
     const config = {
@@ -122,6 +239,7 @@ export function resolveConfig(raw, file) {
     };
 
     config.file = path.resolve(file);
+    config.profile = null;
     config.name ??= path.basename(file, path.extname(file));
     config.source = path.resolve(where, raw.source);
     config.out = path.resolve(where, config.out);
@@ -129,11 +247,45 @@ export function resolveConfig(raw, file) {
         unknownKeys(action, { from: 0, action: 0, name: 0 }, `actions[${i}].`, fail);
 
         if (typeof action.from !== "string") {
-            fail(`actions[${i}].from (the .blend it's in) is needed`);
+            fail(`actions[${i}].from (the .blend or .fbx it's in) is needed`);
+        }
+
+        if (![".blend", ".fbx"].includes(path.extname(action.from).toLowerCase())) {
+            fail(`actions[${i}].from is a .blend or an .fbx, not ${JSON.stringify(path.basename(action.from))}`);
         }
 
         return { ...action, from: path.resolve(where, action.from) };
     });
+
+    if (typeof config.stripNamespaces !== "boolean") {
+        fail("stripNamespaces is true or false");
+    }
+
+    config.join = resolveJoin(raw.join ?? {}, fail);
+    config.materials = resolveMaterials(raw.materials ?? {}, where, "materials", fail);
+    config.variants = Object.fromEntries(
+        Object.entries(raw.variants ?? {}).map(([name, variant]) => {
+            if (!NAME.test(name) || /^lod\d+$/.test(name)) {
+                fail(`variants.${name}: a variant's name is lower-case letters, digits and dashes (and not lod1, lod2...: those are the lower-detail copies')`);
+            }
+
+            unknownKeys(variant, { materials: 0 }, `variants.${name}.`, fail);
+
+            if (!variant.materials || !Object.keys(variant.materials).length) {
+                fail(`variants.${name}.materials: a variant gives at least one material its own textures`);
+            }
+
+            return [name, { materials: resolveMaterials(variant.materials, where, `variants.${name}.materials`, fail) }];
+        }),
+    );
+
+    for (const key of ["atlasSize", "maxSize"]) {
+        const value = config.textures[key];
+
+        if (!((Number.isInteger(value) && value >= 1) || (key === "maxSize" && value === null))) {
+            fail(`textures.${key} is a size in pixels${key === "maxSize" ? ", or null (as it is)" : ""}`);
+        }
+    }
 
     for (const [key, choices] of Object.entries(TEXTURE_CHOICES)) {
         if (!choices.includes(config.textures[key])) {
@@ -214,6 +366,89 @@ export function resolveConfig(raw, file) {
     return config;
 }
 
+function resolveJoin(join, fail) {
+    if (join === null || typeof join !== "object" || Array.isArray(join)) {
+        fail('join is { "new name": ["object", ...] }');
+    }
+
+    for (const [name, objects] of Object.entries(join)) {
+        if (!name || !Array.isArray(objects) || !objects.length || !objects.every((object) => typeof object === "string" && object)) {
+            fail(`join.${name} is a list of objects' names (* and ? wildcards)`);
+        }
+    }
+
+    return structuredClone(join);
+}
+
+function resolveMaterials(materials, where, prefix, fail) {
+    if (materials === null || typeof materials !== "object" || Array.isArray(materials)) {
+        fail(`${prefix} is { "material": { baseColor, normal, ... } }`);
+    }
+
+    return Object.fromEntries(Object.entries(materials).map(([name, spec]) => [name, resolveMaterial(spec, where, `${prefix}.${name}`, fail)]));
+}
+
+function resolveMaterial(spec, where, prefix, fail) {
+    unknownKeys(spec, MATERIAL_KEYS, `${prefix}.`, fail);
+
+    const resolved = { ...spec };
+
+    for (const [key, kind] of Object.entries(MAPS)) {
+        if (spec[key] === undefined) {
+            continue;
+        }
+
+        // (Roughness and metal may be one number for the whole material)
+        if (typeof spec[key] === "number") {
+            if (!["roughness", "metallic"].includes(key) || !(spec[key] >= 0 && spec[key] <= 1)) {
+                fail(`${prefix}.${key} is a texture${["roughness", "metallic"].includes(key) ? ", or a number from 0 to 1" : ""}`);
+            }
+
+            continue;
+        }
+
+        const map = typeof spec[key] === "string" ? { file: spec[key] } : spec[key];
+
+        unknownKeys(map, MAP_KEYS, `${prefix}.${key}.`, fail);
+
+        if (typeof map.file !== "string") {
+            fail(`${prefix}.${key}.file (the texture) is needed`);
+        }
+
+        if (map.channel !== undefined && (kind !== "grey" || !["R", "G", "B", "A"].includes(map.channel))) {
+            fail(kind === "grey" ? `${prefix}.${key}.channel is R, G, B or A` : `${prefix}.${key} is a colour: it has no channel to choose`);
+        }
+
+        if (map.invert !== undefined && (kind !== "grey" || typeof map.invert !== "boolean")) {
+            fail(kind === "grey" ? `${prefix}.${key}.invert is true or false` : `${prefix}.${key} can't be inverted (only a map of one channel: smoothness into roughness, say)`);
+        }
+
+        if (map.flipGreen !== undefined && (kind !== "normal" || typeof map.flipGreen !== "boolean")) {
+            fail(kind === "normal" ? `${prefix}.${key}.flipGreen is true or false` : `${prefix}.${key}.flipGreen is for a normal map (DirectX's, as Unreal's are, into OpenGL's, as glTF's are)`);
+        }
+
+        resolved[key] = { ...map, file: path.resolve(where, map.file) };
+    }
+
+    if (spec.alpha !== undefined && !["opaque", "mask", "blend"].includes(spec.alpha)) {
+        fail(`${prefix}.alpha is opaque, mask or blend, not ${JSON.stringify(spec.alpha)}`);
+    }
+
+    if (spec.alphaMap !== undefined && !["mask", "blend"].includes(spec.alpha)) {
+        fail(`${prefix}.alphaMap needs alpha: mask or blend`);
+    }
+
+    if (spec.emissionStrength !== undefined && !(typeof spec.emissionStrength === "number" && spec.emissionStrength >= 0)) {
+        fail(`${prefix}.emissionStrength is a number, 0 or more`);
+    }
+
+    if (spec.doubleSided !== undefined && typeof spec.doubleSided !== "boolean") {
+        fail(`${prefix}.doubleSided is true or false`);
+    }
+
+    return resolved;
+}
+
 function unknownKeys(value, known, prefix, fail) {
     if (value === null || typeof value !== "object" || Array.isArray(value)) {
         fail(`${prefix || "the config"} must be an object`);
@@ -233,8 +468,11 @@ function unknownKeys(value, known, prefix, fail) {
     }
 }
 
-/** The job the Blender stage is given (blender/export.py). */
-export function blenderJob(config, { out, report, passes = null }) {
+/**
+ * The job the Blender stage is given (blender/export.py). `variants`: { variant: the GLB to write
+ * its materials into }.
+ */
+export function blenderJob(config, { out, report, passes = null, variants = {} }) {
     return {
         source: config.source,
         out,
@@ -243,6 +481,10 @@ export function blenderJob(config, { out, report, passes = null }) {
         scene: config.scene,
         objects: config.objects,
         collection: config.collection,
+        stripNamespaces: config.stripNamespaces,
+        join: config.join,
+        materials: config.materials,
+        variants: Object.fromEntries(Object.entries(config.variants).map(([name, variant]) => [name, { ...variant, out: variants[name] }])),
         actions: config.actions,
         clips: { include: config.clips.include, exclude: config.clips.exclude, rename: config.clips.rename },
         deformBonesOnly: config.deformBonesOnly,

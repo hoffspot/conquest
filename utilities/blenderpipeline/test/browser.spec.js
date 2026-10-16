@@ -6,9 +6,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
 const dist = new URL("../dist/", import.meta.url);
-const reports = readdirSync(dist)
-    .filter((file) => file.endsWith(".report.json"))
-    .map((file) => JSON.parse(readFileSync(new URL(file, dist), "utf8")));
+// (In dist/, and in its profiles' folders)
+const folders = ["", ...readdirSync(dist, { withFileTypes: true }).filter((entry) => entry.isDirectory() && !entry.name.startsWith(".")).map((entry) => `${entry.name}/`)];
+const reports = folders.flatMap((folder) =>
+    readdirSync(new URL(folder, dist))
+        .filter((file) => file.endsWith(".report.json"))
+        .map((file) => JSON.parse(readFileSync(new URL(`${folder}${file}`, dist), "utf8"))),
+);
+const label = (report) => (report.profile ? `${report.name} (${report.profile})` : report.name);
 
 // The UDIM creature's tiles' colours (sRGB), head to tail (fixtures/make_udim_creature.py)
 const TILE_COLOURS = [
@@ -33,11 +38,31 @@ const distance = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
 const sizeOf = (pose) => pose.max.map((v, i) => v - pose.min[i]);
 
 test("there are built assets to test", () => {
-    expect(reports.map((report) => report.name).sort()).toEqual(["dragon", "dragon-phone", "dragon-statue", "horse", "palette-crate", "udim-creature", "udim-creature-phone", "udim-creature-split"]);
+    expect(reports.map(label).sort()).toEqual(["dragon", "dragon-phone", "dragon-statue", "fbx-creature (full)", "fbx-creature (phone)", "horse", "palette-crate", "udim-creature", "udim-creature-phone", "udim-creature-split"]);
+});
+
+test("fbx-creature: Three.js reads its variant, and puts its colour on the skin in place of the model's own", async ({ page }) => {
+    const errors = await openViewer(page);
+    const report = reports.find((one) => one.name === "fbx-creature" && one.profile === "full");
+
+    await page.evaluate((url) => window.viewer.load(url), `/${report.glb}`);
+
+    // (The skin's colour at its top left: the model's red-brown, then the variant's blue; the fur's as it was)
+    const sample = () => page.evaluate(() => [window.viewer.sampleTexture([[0.01, 0.01]], { material: "skin" })[0], window.viewer.sampleTexture([[0.01, 0.01]], { material: "fur" })[0]]);
+    const [skin, fur] = await sample();
+
+    expect(skin.slice(0, 3)).toEqual([150, 90, 50]);
+    expect(await page.evaluate((url) => window.viewer.look(url), `/${report.variants[0].glb}`)).toEqual({ skin: ["map"] });
+
+    const [blue, furAfter] = await sample();
+
+    expect(blue.slice(0, 3)).toEqual([60, 70, 150]);
+    expect(furAfter).toEqual(fur);
+    expect(errors).toEqual([]);
 });
 
 for (const report of reports) {
-    test(`${report.name}: Three.js loads it and plays every clip`, async ({ page }) => {
+    test(`${label(report)}: Three.js loads it and plays every clip`, async ({ page }) => {
         const errors = await openViewer(page);
         const info = await page.evaluate((url) => window.viewer.load(url), `/${report.glb}`);
         const longest = Math.max(...report.bounds.rest.size);

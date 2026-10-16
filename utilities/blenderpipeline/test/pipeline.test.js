@@ -1,7 +1,7 @@
-// The whole pipeline, Blender and all, on every example (examples/*.json): each builds, fit to use
-// (no validator errors, every action there), into what dist/ has (byte for byte, built with the
-// same Blender), and does what its config asks. And it says clearly what's wrong when it can't.
-// Needs Blender: npm run setup (or BLENDER, BLENDER_PYTHON).
+// The whole pipeline, Blender and all, on every example (examples/*.json), each of its profiles
+// too: each builds, fit to use (no validator errors, every action there), into what dist/ has
+// (byte for byte, built with the same Blender), and does what its config asks. And it says
+// clearly what's wrong when it can't. Needs Blender: npm run setup (or BLENDER, BLENDER_PYTHON).
 import assert from "node:assert/strict";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -9,8 +9,9 @@ import path from "node:path";
 import { after, describe, it } from "node:test";
 import { buildAsset } from "../build.js";
 import { findBlender, HERE } from "../lib/blender.js";
-import { loadConfig } from "../lib/config.js";
+import { loadConfig, loadConfigs } from "../lib/config.js";
 import { createIO } from "../lib/gltf.js";
+import { decodeImage } from "../lib/ktx2.js";
 
 const blender = findBlender();
 const work = mkdtempSync(path.join(os.tmpdir(), "blenderpipeline-test-"));
@@ -22,15 +23,24 @@ const built = new Map();
 
 after(() => rmSync(work, { recursive: true, force: true }));
 
-async function build(name) {
-    if (!built.has(name)) {
-        const config = loadConfig(path.join(HERE, "examples", `${name}.json`));
+// (Each example's configs: one, or one for each of its profiles)
+const configs = examples.flatMap((file) => loadConfigs(path.join(HERE, "examples", file)));
 
-        built.set(name, buildAsset(config, { blender, out: path.join(work, name), log: () => {} }).then((result) => ({ ...result, out: path.join(work, name) })));
+async function build(name, profile = null) {
+    const key = `${name}/${profile ?? ""}`;
+
+    if (!built.has(key)) {
+        const config = loadConfig(path.join(HERE, "examples", `${name}.json`), { profile });
+        const out = path.join(work, name, profile ?? "");
+
+        built.set(key, buildAsset(config, { blender, out, log: () => {} }).then((result) => ({ ...result, out })));
     }
 
-    return built.get(name);
+    return built.get(key);
 }
+
+// The files a built example has: its GLB, its report, its lower-detail files and its variants
+const filesOf = (report) => [`${report.name}.glb`, `${report.name}.report.json`, ...report.lods.filter((lod) => !lod.packed).map((lod) => path.basename(lod.file)), ...(report.variants ?? []).map((variant) => path.basename(variant.glb))];
 
 async function nodeNames(file) {
     const io = await createIO();
@@ -45,12 +55,15 @@ async function nodeNames(file) {
 const near = (a, b, tolerance) => Math.abs(a - b) <= tolerance;
 
 describe("every example builds into what dist/ has", () => {
-    for (const file of examples) {
-        const name = path.basename(file, ".json");
+    for (const config of configs) {
+        const { name, profile } = config;
+        // (dist/, or dist/<profile>/)
+        const committedIn = path.join(dist, profile ?? "");
+        const where = path.join("dist", profile ?? "", `${name}.report.json`);
 
-        it(name, async () => {
-            const { report, ok, problems, out } = await build(name);
-            const committed = JSON.parse(readFileSync(path.join(dist, `${name}.report.json`), "utf8"));
+        it(profile ? `${name} (${profile})` : name, async () => {
+            const { report, ok, problems, out } = await build(name, profile);
+            const committed = JSON.parse(readFileSync(path.join(committedIn, `${name}.report.json`), "utf8"));
 
             assert.ok(ok, problems.join("; "));
             assert.equal(report.validation.beforeCompression.errors, 0);
@@ -58,23 +71,34 @@ describe("every example builds into what dist/ has", () => {
 
             // What it is: as committed
             for (const key of ["meshes", "materials", "textures", "clips", "bounds", "scale", "extensionsRequired", "budgets"]) {
-                assert.deepEqual(report[key], committed[key], `${name}: its ${key} differ from dist/${name}.report.json (npm run build, and commit dist/)`);
+                assert.deepEqual(report[key], committed[key], `${name}: its ${key} differ from ${where} (npm run build, and commit dist/)`);
             }
+
+            // (Its variants as committed, but for where they were written)
+            const looks = (variants) => (variants ?? []).map(({ glb, ...look }) => ({ ...look, glb: path.basename(glb) }));
+
+            assert.deepEqual(looks(report.variants), looks(committed.variants), `${name}: its variants differ from ${where} (npm run build, and commit dist/)`);
 
             // And, built with the Blender that built dist/, the very same files
             if (report.built.blender === committed.built.blender) {
-                for (const glb of [`${name}.glb`, ...report.lods.filter((lod) => !lod.packed).map((lod) => path.basename(lod.file))]) {
-                    assert.ok(readFileSync(path.join(out, glb)).equals(readFileSync(path.join(dist, glb))), `${glb} differs from dist/${glb} (npm run build, and commit dist/)`);
+                for (const glb of filesOf(report).filter((file) => file.endsWith(".glb"))) {
+                    assert.ok(readFileSync(path.join(out, glb)).equals(readFileSync(path.join(committedIn, glb))), `${glb} differs from ${path.join("dist", profile ?? "", glb)} (npm run build, and commit dist/)`);
                 }
             }
         });
     }
 
-    it("has a report and a GLB in dist/ for every example, and nothing else", () => {
-        const names = examples.map((file) => path.basename(file, ".json"));
-        const expected = names.flatMap((name) => [`${name}.glb`, `${name}.report.json`, ...JSON.parse(readFileSync(path.join(dist, `${name}.report.json`), "utf8")).lods.filter((lod) => !lod.packed).map((lod) => path.basename(lod.file))]);
+    it("has a report and a GLB in dist/ for every example (and each of its profiles, in a folder of its own), and nothing else", () => {
+        const folders = [...new Set(configs.map((config) => config.profile ?? ""))];
 
-        assert.deepEqual(readdirSync(dist).filter((file) => !file.startsWith(".")).sort(), expected.sort());
+        for (const folder of folders) {
+            const expected = configs.filter((config) => (config.profile ?? "") === folder).flatMap((config) => filesOf(JSON.parse(readFileSync(path.join(dist, folder, `${config.name}.report.json`), "utf8"))));
+            const there = readdirSync(path.join(dist, folder), { withFileTypes: true })
+                .filter((entry) => !entry.name.startsWith(".") && !(folder === "" && entry.isDirectory() && folders.includes(entry.name)))
+                .map((entry) => entry.name);
+
+            assert.deepEqual(there.sort(), expected.sort(), `dist/${folder}`);
+        }
     });
 });
 
@@ -208,6 +232,109 @@ describe("what each example's config asks for", () => {
     });
 });
 
+describe("an asset from FBX files, as a bought one comes (fbx-creature), built for keeping and for play", () => {
+    const pixel = (image, x, y) => Array.from(image.data.slice((y * image.width + x) * 4, (y * image.width + x) * 4 + 4));
+    const close = (a, b) => a.every((value, i) => Math.abs(value - b[i]) <= 1);
+
+    async function material(file, name) {
+        const io = await createIO();
+        const document = await io.read(file);
+
+        return { root: document.getRoot(), material: document.getRoot().listMaterials().find((one) => one.getName() === name) };
+    }
+
+    it("full: its namespaces off, the rig's control object and its clip left out, a clip from another FBX, objects joined", async () => {
+        const { report, out } = await build("fbx-creature", "full");
+        const nodes = await nodeNames(path.join(out, "fbx-creature.glb"));
+
+        assert.equal(report.built.sourceFormat, "fbx");
+        assert.deepEqual(nodes.sort(), ["Body", "Fur", "Mane", "head", "hips", "rig", "spine"]);
+        assert.deepEqual(
+            report.clips.map((clip) => [clip.name, clip.from]),
+            [
+                ["Idle", null],
+                ["Wave", "creature@wave.fbx"],
+            ],
+        );
+        assert.ok(report.notes.includes("actions not exported: Ctrl_Hips|Scene (animates no bone)"));
+        assert.deepEqual(report.exported.joined, [
+            { name: "Body", objects: ["Body", "Teeth"] },
+            { name: "Fur", objects: ["FurBack"] },
+            { name: "Mane", objects: ["FurMane"] },
+        ]);
+        assert.equal(report.meshes.drawCalls, 3);
+    });
+
+    it("full: its materials made from its texture files, kept at their own size, lossless and uncompressed", async () => {
+        const { report, out } = await build("fbx-creature", "full");
+        const { material: skin } = await material(path.join(out, "fbx-creature.glb"), "skin");
+        const { material: fur } = await material(path.join(out, "fbx-creature.glb"), "fur");
+
+        assert.deepEqual(
+            report.materials.map(({ name, alphaMode, doubleSided, textures }) => [name, alphaMode, doubleSided, textures]),
+            [
+                ["skin", "OPAQUE", false, ["baseColor", "metallicRoughness", "normal", "occlusion", "emissive"]],
+                ["fur", "MASK", true, ["baseColor"]],
+            ],
+        );
+        assert.deepEqual(
+            report.textures.map((texture) => [texture.mimeType, texture.width, texture.height]),
+            [...Array(4).fill(["image/png", 128, 128]), ["image/png", 128, 64]],
+        );
+        assert.equal(report.compression, "none");
+        assert.deepEqual(report.extensionsRequired, []);
+        assert.ok(report.extensionsUsed.includes("KHR_materials_emissive_strength"));
+
+        // Occlusion in red, roughness in green (the smoothness in the alpha of its file, inverted),
+        // no metal in blue: one texture for the three, as glTF has them
+        assert.equal(skin.getMetallicRoughnessTexture(), skin.getOcclusionTexture());
+        const orm = decodeImage(skin.getMetallicRoughnessTexture().getImage(), "image/png");
+
+        assert.ok(close(pixel(orm, 0, 0).slice(0, 3), [255, 100, 0]), JSON.stringify(pixel(orm, 0, 0)));
+        assert.ok(close(pixel(orm, 127, 127).slice(0, 3), [255 - 63, 227, 0]), JSON.stringify(pixel(orm, 127, 127)));
+
+        // The fur's strands, and the gaps between them
+        const strands = decodeImage(fur.getBaseColorTexture().getImage(), "image/png");
+
+        assert.equal(pixel(strands, 0, 0)[3], 255);
+        assert.equal(pixel(strands, 4, 0)[3], 0);
+    });
+
+    it("full: a variant, with its own colour for the skin and nothing else: no meshes, skeleton or clips", async () => {
+        const { report, out } = await build("fbx-creature", "full");
+        const { root, material: skin } = await material(path.join(out, "fbx-creature.blue.glb"), "skin");
+
+        assert.deepEqual([root.listMeshes().length, root.listNodes().length, root.listSkins().length, root.listAnimations().length], [0, 0, 0, 0]);
+        assert.deepEqual(
+            root.listMaterials().map((one) => one.getName()),
+            ["skin"],
+        );
+        assert.deepEqual(
+            report.variants.map(({ name, materials }) => [name, materials]),
+            [["blue", [{ name: "skin", textures: ["baseColor"] }]]],
+        );
+        assert.deepEqual(pixel(decodeImage(skin.getBaseColorTexture().getImage(), "image/png"), 0, 0).slice(0, 3), [60, 70, 150]);
+    });
+
+    it("phone: the same, made for play on a phone: 64-pixel KTX2 textures, compressed, a lower detail packed in, within its budgets; its variant's texture as small", async () => {
+        const { report } = await build("fbx-creature", "phone");
+
+        assert.equal(report.profile, "phone");
+        assert.ok(report.textures.every((texture) => texture.mimeType === "image/ktx2" && Math.max(texture.width, texture.height) === 64));
+        assert.deepEqual(report.extensionsRequired, ["EXT_meshopt_compression", "KHR_mesh_quantization", "KHR_texture_basisu"]);
+        assert.equal(report.lods[0].packed, true);
+        assert.ok(report.budgets.length && report.budgets.every((budget) => budget.ok));
+        assert.deepEqual(
+            report.variants[0].textures.map((texture) => [texture.mimeType, texture.width]),
+            [["image/ktx2", 64]],
+        );
+        assert.deepEqual(
+            report.clips.map((clip) => clip.name),
+            ["Idle", "Wave"],
+        );
+    });
+});
+
 describe("saying what's wrong", () => {
     const fails = async (raw, message) => {
         const file = path.join(work, "broken.json");
@@ -232,4 +359,15 @@ describe("saying what's wrong", () => {
     it("an object that isn't there", () => fails({ source: fixture, objects: ["Tail"] }, /no objects named Tail/));
 
     it("UDIM tiles neither baked nor split", () => fails({ source: fixture, textures: { bake: "never" } }, /has UDIM tiles: bake them/));
+
+    const creature = path.join(HERE, "fixtures", "fbx-creature", "creature.fbx");
+    const colour = path.join(HERE, "fixtures", "fbx-creature", "textures", "skin_colour.png");
+
+    it("a material to make that isn't there", () => fails({ source: creature, materials: { leather: { baseColor: colour } } }, /materials.leather: there's no material called leather \(there are: fur, skin\)/));
+
+    it("a texture that isn't there", () => fails({ source: creature, materials: { skin: { baseColor: path.join(HERE, "nothing.png") } } }, /no such texture: .*nothing\.png/));
+
+    it("objects to join that aren't there", () => fails({ source: creature, join: { Body: ["Body", "Tail"] } }, /join.Body: no mesh exported is called Tail/));
+
+    it("a variant for a material no mesh has", () => fails({ source: creature, materials: { skin: { baseColor: colour }, fur: { baseColor: colour } }, variants: { red: { materials: { leather: { baseColor: colour } } } } }, /variants.red: no mesh exported has the material leather/));
 });

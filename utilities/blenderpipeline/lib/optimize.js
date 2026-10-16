@@ -5,7 +5,7 @@
 // taken out; it's validated, lower-detail copies are made, and it's compressed.
 
 import { readFile } from "node:fs/promises";
-import { Logger } from "@gltf-transform/core";
+import { Logger, PropertyType } from "@gltf-transform/core";
 import { clearNodeParent, cloneDocument, dedup, join, meshopt, prune, quantize, reorder, resample, simplify, simplifyPrimitive, unpartition, weld, weldPrimitive } from "@gltf-transform/functions";
 import { bounds, duration, loops, playInPlace, rootMotion, visitVertices } from "./animation.js";
 import { createIO, MeshoptEncoder, MeshoptSimplifier } from "./gltf.js";
@@ -34,7 +34,8 @@ export function wildcard(pattern, name) {
     return new RegExp(`^${source}$`).test(name);
 }
 
-export const round = (value, places = 4) => (typeof value === "number" ? Number(value.toFixed(places)) : Array.isArray(value) ? value.map((v) => round(v, places)) : value);
+// (-0 made 0, as JSON writes it)
+export const round = (value, places = 4) => (typeof value === "number" ? Number(value.toFixed(places)) + 0 : Array.isArray(value) ? value.map((v) => round(v, places)) : value);
 
 /**
  * Tangents that aren't a unit long made so. MikkTSpace gives none (no length) where a triangle's UVs
@@ -374,6 +375,54 @@ export async function optimize(config, { raw, glb, lodFile }) {
     result.finalValidation = await validate(await readFile(glb), { ignore: config.compress === "meshopt" ? MESHOPT_IGNORED : [], ktx2: config.textures.format === "ktx2" });
 
     return result;
+}
+
+/**
+ * A variant's GLB (config.variants): only its materials, and in them only the textures it gives,
+ * made as the model's are (the material extensions the game doesn't draw left out, KTX2): no
+ * meshes, skins, clips or scene. The game puts its textures on the model's materials of the same
+ * names, in place of theirs.
+ */
+export async function optimizeVariant(config, name, { raw, glb }) {
+    const io = await createIO();
+    const document = await io.read(raw);
+    const root = document.getRoot();
+    const own = new Set(Object.keys(config.variants[name].materials));
+
+    document.setLogger(new Logger(Logger.Verbosity.WARN));
+
+    for (const property of [...root.listAnimations(), ...root.listScenes(), ...root.listNodes(), ...root.listSkins(), ...root.listMeshes()]) {
+        property.dispose();
+    }
+
+    // (The model's other materials came with it: they're the main file's)
+    for (const material of root.listMaterials()) {
+        if (!own.has(material.getName())) {
+            material.dispose();
+        }
+    }
+
+    await document.transform(prune({ propertyTypes: [PropertyType.ACCESSOR, PropertyType.TEXTURE, PropertyType.BUFFER], keepLeaves: false }));
+
+    if (config.stripMaterialExtensions) {
+        for (const extension of root.listExtensionsUsed()) {
+            if (extension.extensionName.startsWith("KHR_materials_") && !KEPT_MATERIAL_EXTENSIONS.has(extension.extensionName)) {
+                extension.dispose();
+            }
+        }
+    }
+
+    const missing = [...own].filter((material) => !root.listMaterials().some((one) => one.getName() === material));
+
+    if (missing.length) {
+        throw new Error(`variants.${name}: the export has no material ${missing.join(", ")}`);
+    }
+
+    const ktx2 = config.textures.format === "ktx2" ? await encodeTextures(document, config.textures.ktx2) : [];
+
+    await io.write(glb, document);
+
+    return { name, glb, ktx2, validation: await validate(await readFile(glb), { ktx2: config.textures.format === "ktx2" }) };
 }
 
 /** The full meshes (not the packed lower-detail ones) welded and simplified: { ratio, error }. */

@@ -224,7 +224,8 @@ function colourAt(point) {
 /** The colours (sRGB, 0 to 255) of a material's texture at UV points ([[u, v]]). */
 function sampleTexture(uvs, { slot = "map", material = 0 } = {}) {
     const materials = [...new Set(meshes().map((mesh) => mesh.material))];
-    const texture = materials[material][slot];
+    // (A material by its place, or by its name)
+    const texture = (typeof material === "string" ? materials.find((one) => one.name === material) : materials[material])[slot];
 
     if (!texture) {
         throw new Error(`material ${material} has no ${slot}`);
@@ -440,6 +441,33 @@ function textureKinds() {
     return [...found].map((texture) => ({ id: texture.uuid, mimeType: texture.userData.mimeType ?? null, compressed: Boolean(texture.isCompressedTexture), data: Boolean(texture.isDataTexture) }));
 }
 
-window.viewer = { load, info, pose, coverage, colourAt, sampleTexture, triangles, resize, lod, textureKinds };
+/**
+ * Puts a variant on the model loaded (a URL: the pipeline's <name>.<variant>.glb, materials alone):
+ * its materials' textures on copies of the model's materials of the same names. Resolves with the
+ * maps each material was given: { material: ["map", ...] }.
+ */
+async function look(url) {
+    const gltf = await loader.loadAsync(url);
+    const materials = await gltf.parser.getDependencies("material");
+    const maps = ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap"];
+    const given = {};
+
+    model.traverse((node) => {
+        const own = node.isMesh && materials.find((material) => material.name === node.material.name);
+
+        if (own) {
+            node.material = node.material.clone();
+            given[own.name] = maps.filter((map) => own[map]);
+
+            for (const map of given[own.name]) {
+                node.material[map] = own[map];
+            }
+        }
+    });
+
+    return given;
+}
+
+window.viewer = { load, look, info, pose, coverage, colourAt, sampleTexture, triangles, resize, lod, textureKinds };
 await chooseModels();
 window.viewerReady = true;

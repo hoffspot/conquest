@@ -1,7 +1,9 @@
-"""The Blender stage of the pipeline (README.md): opens a .blend, picks what's to be exported and
-the actions to go with it, bakes the materials glTF can't carry (UDIM tiles, procedural or mixed
-shaders, several materials on one mesh) onto one texture atlas, shrinks textures that are too
-big, and writes a GLB, with a report of what it did (JSON).
+"""The Blender stage of the pipeline (README.md): opens a .blend (or imports an .fbx, .glb or
+.gltf), makes the materials given from texture files, picks what's to be exported and the actions
+to go with it (from other .blend or .fbx files too), joins the objects asked to be one, bakes the
+materials glTF can't carry (UDIM tiles, procedural or mixed shaders, several materials on one
+mesh) onto one texture atlas, shrinks textures that are too big, and writes a GLB (and one for each
+variant's materials), with a report of what it did (JSON).
 
 build.js runs it with Blender's Python module (bpy, `npm run setup`) or with Blender itself:
 
@@ -105,12 +107,98 @@ def open_source(path):
     if not os.path.isfile(path):
         raise PipelineError(f"no such file: {path}")
 
+    kind = os.path.splitext(path)[1].lower()
+
+    if kind != ".blend":
+        # Imported into an empty scene: an FBX as Maya, 3ds Max, Unity or Unreal write them (its
+        # textures given as materials if they're elsewhere), a glTF as it is
+        bpy.ops.wm.read_factory_settings(use_empty=True)
+        REPORT["sourceFormat"] = kind[1:]
+
+        if kind == ".fbx":
+            import_fbx(path)
+        else:
+            bpy.ops.import_scene.gltf(filepath=path)
+
+        return
+
     bpy.ops.wm.open_mainfile(filepath=path, load_ui=False)
     REPORT["savedWith"] = ".".join(str(part) for part in bpy.data.version)
 
     # (Major and minor only: the file's third number is its format's, not Blender's patch)
     if tuple(bpy.data.version[:2]) > tuple(bpy.app.version[:2]):
         warn(f"{os.path.basename(path)} was saved by Blender {REPORT['savedWith']}, newer than this one ({bpy.app.version_string}): check the result")
+
+
+def import_fbx(path):
+    """Imports an FBX: its skeleton's bones as they were (not turned to point along their chains,
+    which would change the rest pose its clips are relative to), its clips, its leaf bones."""
+    result = bpy.ops.import_scene.fbx(filepath=path, use_anim=True, automatic_bone_orientation=False, ignore_leaf_bones=False, use_custom_props=False)
+
+    if "FINISHED" not in result:
+        raise PipelineError(f"Blender couldn't import {os.path.basename(path)} ({result})")
+
+
+# --- Namespaces ------------------------------------------------------------------------------
+
+
+def bare(name):
+    """A name without its namespaces: "rig:Basemesh:pelvis" is "pelvis"."""
+    return name.rsplit(":", 1)[-1] if ":" in name else name
+
+
+def strip_action_namespaces(action):
+    """An action's bone channels named without their bones' namespaces."""
+    for fcurve in object_fcurves(action):
+        match = BONE_PATH.match(fcurve.data_path)
+
+        if match and ":" in match.group(1):
+            fcurve.data_path = f'pose.bones["{bare(match.group(1))}"]{fcurve.data_path[match.end():]}'
+
+    for group in getattr(action, "groups", []):
+        group.name = bare(group.name)
+
+
+def rename(thing, name, what):
+    if thing.name == name:
+        return
+
+    taken = what.get(name) if hasattr(what, "get") else None
+    thing.name = name
+
+    if taken is not None and taken != thing:
+        warn(f"{name} is two things' name without their namespaces: one's called {thing.name}")
+
+
+def strip_namespaces():
+    """Takes "namespace:" off every object's, bone's, material's, image's and action's name (Maya
+    writes them into FBX files: "Basemesh_rig:pelvis")."""
+    stripped = 0
+
+    for armature in bpy.data.armatures:
+        for bone in armature.bones:
+            if ":" in bone.name:
+                # (Renaming a bone renames the vertex groups it moves, and the channels of the
+                # actions playing on it; the others' are renamed below)
+                bone.name = bare(bone.name)
+                stripped += 1
+
+    for action in bpy.data.actions:
+        strip_action_namespaces(action)
+
+    for collection in (bpy.data.objects, bpy.data.meshes, bpy.data.armatures, bpy.data.materials, bpy.data.images, bpy.data.actions):
+        for thing in list(collection):
+            if ":" in thing.name:
+                rename(thing, bare(thing.name), collection)
+                stripped += 1
+
+    for thing in bpy.data.objects:
+        for group in thing.vertex_groups:
+            if ":" in group.name:
+                group.name = bare(group.name)
+
+    if stripped:
+        note(f"namespaces taken off {stripped} names")
 
 
 def pick_objects(job, scene):
@@ -223,6 +311,55 @@ def matches(name, patterns):
     return any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
 
 
+def import_fbx_actions(path, strip, scene):
+    """The clips an FBX brings that move a skeleton's bones (its armature's own); everything else
+    it brings (its objects, their meshes and materials, the clips of a rig's control objects, as
+    Maya's HumanIK has) left behind."""
+    objects = set(bpy.data.objects)
+    actions = set(bpy.data.actions)
+    blocks = {kind: set(getattr(bpy.data, kind)) for kind in ("meshes", "armatures", "materials", "images", "cameras", "lights")}
+    fps = (scene.render.fps, scene.render.fps_base)
+    import_fbx(path)
+
+    # (Its clips keep their own frames: the scene's rate stays the source's)
+    scene.render.fps, scene.render.fps_base = fps
+    brought = [thing for thing in bpy.data.objects if thing not in objects]
+    kept = []
+
+    for thing in brought:
+        if thing.type == "ARMATURE" and thing.animation_data:
+            for action in [thing.animation_data.action] + [strip.action for track in thing.animation_data.nla_tracks for strip in track.strips]:
+                if action and action not in kept:
+                    kept.append(action)
+
+    for action in list(bpy.data.actions):
+        if action not in actions and action not in kept:
+            bpy.data.actions.remove(action)
+
+    for thing in brought:
+        bpy.data.objects.remove(thing, do_unlink=True)
+
+    for kind, before in blocks.items():
+        for block in list(getattr(bpy.data, kind)):
+            if block not in before and block.users == 0:
+                getattr(bpy.data, kind).remove(block)
+
+    if not kept:
+        raise PipelineError(f"{os.path.basename(path)} has no clip moving a skeleton's bones")
+
+    for action in kept:
+        # (Kept with nothing playing it)
+        action.use_fake_user = True
+
+        if strip:
+            strip_action_namespaces(action)
+
+            # (Often the same name as one there already, "Take 001": named in its actions entry)
+            action.name = bare(action.name)
+
+    return kept
+
+
 def gather_actions(job, armature, scene):
     """Brings in the actions from other files, picks those to export (removing the rest, so the
     exporter takes only those), and names them as they're to be called."""
@@ -234,22 +371,41 @@ def gather_actions(job, armature, scene):
         if not os.path.isfile(path):
             raise PipelineError(f"no such file: {path}")
 
-        # (The file that's open has its actions already: Blender can't load from it)
-        same = os.path.samefile(path, bpy.data.filepath)
-
-        with bpy.data.libraries.load(path, link=False) if not same else _nothing() as (source, target):
-            available = sorted(action.name for action in bpy.data.actions) if same else sorted(source.actions)
+        if path.lower().endswith(".fbx"):
+            brought = import_fbx_actions(path, job.get("stripNamespaces", True), scene)
+            available = sorted(action.name for action in brought)
             names = [spec["action"]] if spec.get("action") else available
             missing = [name for name in names if name not in available]
 
             if missing:
-                raise PipelineError(f"{os.path.basename(path)} has no action {', '.join(missing)} (it has: {', '.join(available) or 'none'})")
+                raise PipelineError(f"{os.path.basename(path)} has no clip {', '.join(missing)} moving a skeleton (it has: {', '.join(available)})")
 
-            # (A copy: Blender fills the list it's given with what it loads)
-            if not same:
-                target.actions = list(names)
+            for action in brought:
+                if action.name not in names:
+                    bpy.data.actions.remove(action)
 
-        loaded = [bpy.data.actions[name] for name in names] if same else [action for action in target.actions if action is not None]
+            loaded = [bpy.data.actions[name] for name in names]
+        else:
+            # (The file that's open has its actions already: Blender can't load from it)
+            same = bool(bpy.data.filepath) and os.path.samefile(path, bpy.data.filepath)
+
+            with bpy.data.libraries.load(path, link=False) if not same else _nothing() as (source, target):
+                available = sorted(action.name for action in bpy.data.actions) if same else sorted(source.actions)
+                names = [spec["action"]] if spec.get("action") else available
+                missing = [name for name in names if name not in available]
+
+                if missing:
+                    raise PipelineError(f"{os.path.basename(path)} has no action {', '.join(missing)} (it has: {', '.join(available) or 'none'})")
+
+                # (A copy: Blender fills the list it's given with what it loads)
+                if not same:
+                    target.actions = list(names)
+
+            loaded = [bpy.data.actions[name] for name in names] if same else [action for action in target.actions if action is not None]
+
+            if job.get("stripNamespaces", True):
+                for action in loaded:
+                    strip_action_namespaces(action)
 
         if spec.get("name"):
             if len(loaded) != 1:
@@ -334,6 +490,274 @@ def gather_actions(job, armature, scene):
     return chosen
 
 
+# --- Materials from texture files ------------------------------------------------------------
+
+CHANNELS = {"R": 0, "G": 1, "B": 2, "A": 3}
+
+# Each texture file read, by (file, largest size): its pixels and the size it was
+TEXTURE_FILES = {}
+
+
+def load_texture(file, limit):
+    """A texture file's pixels (rows, columns, RGBA, as stored, 0 to 1), shrunk to `limit` pixels
+    at most (None: as it is). Read once, however many maps take from it."""
+    key = (file, limit)
+
+    if key not in TEXTURE_FILES:
+        if not os.path.isfile(file):
+            raise PipelineError(f"no such texture: {file}")
+
+        image = bpy.data.images.load(file, check_existing=False)
+        width, height = image.size
+
+        if not width:
+            raise PipelineError(f"Blender can't read the texture {os.path.basename(file)}")
+
+        if limit and max(width, height) > limit:
+            factor = limit / max(width, height)
+            image.scale(max(1, round(width * factor)), max(1, round(height * factor)))
+
+        w, h = image.size
+        pixels = np.empty(w * h * 4, dtype=np.float32)
+        image.pixels.foreach_get(pixels)
+        bpy.data.images.remove(image)
+        TEXTURE_FILES[key] = (pixels.reshape(h, w, 4), [width, height])
+
+    return TEXTURE_FILES[key]
+
+
+def resized(pixels, shape):
+    """Pixels scaled to (rows, columns), as Blender scales an image."""
+    if pixels.shape[:2] == tuple(shape):
+        return pixels
+
+    image = bpy.data.images.new("__resize", pixels.shape[1], pixels.shape[0], alpha=True, float_buffer=True)
+    image.pixels.foreach_set(np.ascontiguousarray(pixels, dtype=np.float32).ravel())
+    image.scale(shape[1], shape[0])
+    out = np.empty(shape[0] * shape[1] * 4, dtype=np.float32)
+    image.pixels.foreach_get(out)
+    bpy.data.images.remove(image)
+
+    return out.reshape(shape[0], shape[1], 4)
+
+
+def grey(spec, limit, shape):
+    """One channel of a texture (spec: { file, channel, invert }), at `shape` (rows, columns)."""
+    pixels, _ = load_texture(spec["file"], limit)
+    channel = resized(pixels, shape)[..., CHANNELS[spec.get("channel", "R")]]
+
+    return 1 - channel if spec.get("invert") else channel
+
+
+def image_of(name, pixels, data):
+    """An image made from pixels (rows, columns, RGBA), packed, as the exporter will write it."""
+    rows, columns = pixels.shape[:2]
+    image = bpy.data.images.new(name, columns, rows, alpha=True)
+    set_colorspace(image, data)
+    image.pixels.foreach_set(np.ascontiguousarray(pixels, dtype=np.float32).ravel())
+    image.pack()
+
+    return image
+
+
+def make_material(name, spec, limit):
+    """A material from texture files (materials.<name>, README.md): only the maps it's given, a
+    Principled BSDF as the glTF exporter reads it; occlusion, roughness and metallic in one
+    texture (red, green, blue) when any of them is a texture."""
+    material = new_material(name)
+    tree = material.node_tree
+    tree.nodes.clear()
+    output = tree.nodes.new("ShaderNodeOutputMaterial")
+    shader = tree.nodes.new("ShaderNodeBsdfPrincipled")
+    tree.links.new(shader.outputs["BSDF"], output.inputs["Surface"])
+    alpha = spec.get("alpha", "opaque")
+    made = {"material": name, "alpha": alpha.upper(), "textures": {}}
+
+    def texture(image, kind, original):
+        node = tree.nodes.new("ShaderNodeTexImage")
+        node.image = image
+        made["textures"][kind] = {"size": list(image.size), "from": original}
+
+        return node
+
+    if "baseColor" in spec or "alphaMap" in spec:
+        if "baseColor" in spec:
+            pixels, original = load_texture(spec["baseColor"]["file"], limit)
+            rgba = pixels.copy()
+        else:
+            pixels, original = load_texture(spec["alphaMap"]["file"], limit)
+            rgba = np.ones_like(pixels)
+
+        if alpha == "opaque":
+            rgba[..., 3] = 1
+        elif "alphaMap" in spec:
+            rgba[..., 3] = grey(spec["alphaMap"], limit, rgba.shape[:2])
+
+        node = texture(image_of(f"{name}_basecolor", rgba, False), "baseColor", original)
+
+        if "baseColor" in spec:
+            tree.links.new(node.outputs["Color"], shader.inputs["Base Color"])
+
+        if alpha == "mask":
+            # (Rounded: the exporter makes it a mask, cut off at a half)
+            rounded = tree.nodes.new("ShaderNodeMath")
+            rounded.operation = "ROUND"
+            tree.links.new(node.outputs["Alpha"], rounded.inputs[0])
+            tree.links.new(rounded.outputs[0], shader.inputs["Alpha"])
+        elif alpha == "blend":
+            tree.links.new(node.outputs["Alpha"], shader.inputs["Alpha"])
+
+            if hasattr(material, "surface_render_method"):
+                material.surface_render_method = "BLENDED"
+            else:
+                material.blend_method = "BLEND"
+
+    maps = {kind: spec[kind] for kind in ("occlusion", "roughness", "metallic") if isinstance(spec.get(kind), dict)}
+
+    if maps:
+        loaded = {kind: load_texture(map_["file"], limit) for kind, map_ in maps.items()}
+        shape = max((pixels.shape[:2] for pixels, _ in loaded.values()), key=lambda rows_columns: rows_columns[0] * rows_columns[1])
+        orm = np.ones((*shape, 4), dtype=np.float32)
+        orm[..., 0] = grey(maps["occlusion"], limit, shape) if "occlusion" in maps else 1
+        orm[..., 1] = grey(maps["roughness"], limit, shape) if "roughness" in maps else spec.get("roughness", 0.5)
+        orm[..., 2] = grey(maps["metallic"], limit, shape) if "metallic" in maps else spec.get("metallic", 0)
+        node = texture(image_of(f"{name}_orm", orm, True), "occlusionRoughnessMetallic", {kind: original for kind, (_, original) in loaded.items()})
+        split = tree.nodes.new("ShaderNodeSeparateColor")
+        tree.links.new(node.outputs["Color"], split.inputs["Color"])
+        tree.links.new(split.outputs["Green"], shader.inputs["Roughness"])
+        tree.links.new(split.outputs["Blue"], shader.inputs["Metallic"])
+
+        if "occlusion" in maps:
+            group = tree.nodes.new("ShaderNodeGroup")
+            group.node_tree = occlusion_group()
+            tree.links.new(split.outputs["Red"], group.inputs["Occlusion"])
+    else:
+        shader.inputs["Roughness"].default_value = spec.get("roughness", 0.5)
+        shader.inputs["Metallic"].default_value = spec.get("metallic", 0)
+
+    if "normal" in spec:
+        pixels, original = load_texture(spec["normal"]["file"], limit)
+        pixels = pixels.copy()
+
+        # (DirectX's normal maps, as Unreal's are, point green the other way from glTF's)
+        if spec["normal"].get("flipGreen"):
+            pixels[..., 1] = 1 - pixels[..., 1]
+
+        pixels[..., 3] = 1
+        node = texture(image_of(f"{name}_normal", pixels, True), "normal", original)
+        mapping = tree.nodes.new("ShaderNodeNormalMap")
+        tree.links.new(node.outputs["Color"], mapping.inputs["Color"])
+        tree.links.new(mapping.outputs["Normal"], shader.inputs["Normal"])
+
+    if "emission" in spec:
+        pixels, original = load_texture(spec["emission"]["file"], limit)
+        pixels = pixels.copy()
+        pixels[..., 3] = 1
+        node = texture(image_of(f"{name}_emission", pixels, False), "emission", original)
+        tree.links.new(node.outputs["Color"], shader.inputs["Emission Color"])
+        shader.inputs["Emission Strength"].default_value = spec.get("emissionStrength", 1)
+        made["emissionStrength"] = spec.get("emissionStrength", 1)
+
+    material.use_backface_culling = not spec.get("doubleSided", False)
+    made["doubleSided"] = bool(spec.get("doubleSided", False))
+
+    return material, made
+
+
+def apply_materials(job):
+    """The source's materials named in materials replaced by those made from texture files."""
+    made = []
+
+    for name, spec in (job.get("materials") or {}).items():
+        old = bpy.data.materials.get(name)
+
+        if old is None:
+            raise PipelineError(f"materials.{name}: there's no material called {name} (there are: {', '.join(sorted(m.name for m in bpy.data.materials)) or 'none'})")
+
+        old.name = f"{name}.replaced"
+        material, info = make_material(name, spec, job["textures"]["maxSize"])
+
+        for thing in bpy.data.objects:
+            for slot in thing.material_slots:
+                if slot.material == old:
+                    slot.material = material
+
+        bpy.data.materials.remove(old)
+        made.append(info)
+
+    if made:
+        note(f"materials made from texture files: {', '.join(info['material'] for info in made)}")
+
+    REPORT["madeMaterials"] = made
+
+
+# --- Joined ----------------------------------------------------------------------------------
+
+
+def join_objects(job, meshes):
+    """The objects in each of join's groups joined into one mesh of that name (its parts that share
+    a material one draw call): the rest as they are."""
+    groups = job.get("join") or {}
+    joined = []
+    taken = {}
+
+    for name, patterns in groups.items():
+        # (In the order the group names them, then by name: the first is the one kept, the rest
+        # joined into it, the same every time)
+        order = lambda thing: (next(i for i, pattern in enumerate(patterns) if matches(thing.name, [pattern])), thing.name)  # noqa: E731
+        members = sorted((thing for thing in meshes if matches(thing.name, patterns)), key=order)
+        unmatched = [pattern for pattern in patterns if not any(matches(thing.name, [pattern]) for thing in meshes)]
+
+        if unmatched:
+            raise PipelineError(f"join.{name}: no mesh exported is called {', '.join(unmatched)} (there are: {', '.join(sorted(thing.name for thing in meshes))})")
+
+        for thing in members:
+            if thing.name in taken:
+                raise PipelineError(f"{thing.name} is in join.{taken[thing.name]} and join.{name}: in one only")
+
+            taken[thing.name] = name
+
+        names = [thing.name for thing in members]
+        first = members[0]
+
+        # (Before they're joined: Blender removes the others then)
+        meshes = [thing for thing in meshes if thing == first or thing not in members]
+
+        if len(members) > 1:
+            deselect_all()
+
+            for thing in members:
+                thing.hide_viewport = False
+                thing.hide_set(False)
+                thing.select_set(True)
+
+            bpy.context.view_layer.objects.active = first
+
+            with bpy.context.temp_override(active_object=first, object=first, selected_objects=members, selected_editable_objects=members):
+                bpy.ops.object.join()
+
+            # (What's left of the others, so their names are free)
+            for other in names[1:]:
+                leftover = bpy.data.objects.get(other)
+
+                if leftover is not None and leftover != first:
+                    bpy.data.objects.remove(leftover)
+
+            for mesh in [mesh for mesh in bpy.data.meshes if mesh.users == 0]:
+                bpy.data.meshes.remove(mesh)
+
+        rename(first, name, bpy.data.objects)
+        rename(first.data, name, bpy.data.meshes)
+        joined.append({"name": name, "objects": names})
+
+    if joined:
+        note(f"joined: {'; '.join(group['name'] + ' (' + ', '.join(group['objects']) + ')' for group in joined)}")
+
+    REPORT["joined"] = joined
+
+    return meshes
+
+
 # --- Materials -------------------------------------------------------------------------------
 
 
@@ -400,6 +824,10 @@ def why_not_exportable(material):
 
     for socket in shader.inputs:
         for node in upstream(socket):
+            # (Alpha rounded is the exporter's way to a mask cut off at a half: it carries that)
+            if node.type == "MATH" and node.operation == "ROUND" and socket.name == "Alpha":
+                continue
+
             if node.type not in EXPORTABLE:
                 return f"{socket.name} comes from a {node.type}"
 
@@ -1084,7 +1512,7 @@ def shrink_images(meshes, max_size):
                     warn(f"{image.name} has no pixels (is its file missing? {image.filepath})")
                     continue
 
-                if max(width, height) > max_size:
+                if max_size is not None and max(width, height) > max_size:
                     factor = max_size / max(width, height)
                     image.scale(max(1, round(width * factor)), max(1, round(height * factor)))
                     image.pack()
@@ -1158,8 +1586,9 @@ def drop_idle_bones(armature, meshes, keep):
 
 
 
-def export(job, meshes, armature):
+def export(job, meshes, armature, out=None, animations=True):
     deselect_all()
+    out = out or job["out"]
 
     for thing in meshes + ([armature] if armature else []):
         thing.hide_viewport = False
@@ -1189,6 +1618,10 @@ def export(job, meshes, armature):
                     warn(f"{thing.name} has n-gons, so no tangents can be worked out for it unless its modifiers are applied (applyModifiers)")
                     continue
 
+                # (Once: a variant's export comes after the model's)
+                if thing.modifiers.get("glTF triangles"):
+                    continue
+
                 cut = thing.modifiers.new("glTF triangles", "TRIANGULATE")
 
                 if hasattr(cut, "keep_custom_normals"):
@@ -1200,7 +1633,7 @@ def export(job, meshes, armature):
         note("UDIM tiles exported as their own files are (udim: split): textures kept in their own format, and the tiles at their own size")
 
     settings = {
-        "filepath": job["out"],
+        "filepath": out,
         "export_format": "GLB",
         "use_selection": True,
         "export_apply": job["applyModifiers"],
@@ -1216,7 +1649,7 @@ def export(job, meshes, armature):
         "export_cameras": False,
         "export_lights": False,
         "export_extras": False,
-        "export_animations": True,
+        "export_animations": animations,
         "export_animation_mode": "ACTIONS",
         "export_anim_single_armature": True,
         "export_force_sampling": True,
@@ -1244,14 +1677,52 @@ def export(job, meshes, armature):
     if unknown:
         note(f"this Blender's glTF exporter has no {', '.join(unknown)}: left out")
 
-    os.makedirs(os.path.dirname(job["out"]), exist_ok=True)
+    os.makedirs(os.path.dirname(out), exist_ok=True)
     started = time.time()
     result = bpy.ops.export_scene.gltf(**{name: value for name, value in settings.items() if name in known})
 
-    if "FINISHED" not in result or not os.path.isfile(job["out"]):
+    if "FINISHED" not in result or not os.path.isfile(out):
         raise PipelineError(f"the glTF exporter failed ({result})")
 
-    log(f"wrote {job['out']} ({os.path.getsize(job['out'])} bytes, {time.time() - started:.1f} s)")
+    log(f"wrote {out} ({os.path.getsize(out)} bytes, {time.time() - started:.1f} s)")
+
+
+def export_variants(job, meshes, armature):
+    """Each variant's materials, written as the exporter writes the model with them on, for Node
+    to keep only the materials of (lib/optimize.js): its own textures, nothing else."""
+    written = []
+
+    for name, variant in (job.get("variants") or {}).items():
+        swapped = []
+
+        for material_name, spec in variant["materials"].items():
+            current = bpy.data.materials.get(material_name)
+            slots = [slot for thing in meshes for slot in thing.material_slots if current is not None and slot.material == current]
+
+            if not slots:
+                baked = any(material_name in item.get("materials", []) for item in REPORT.get("materials", []) if item.get("baked"))
+                raise PipelineError(f"variants.{name}: no mesh exported has the material {material_name}{' (it was baked onto an atlas: a variant is for a material exported as it is, textures.bake: never)' if baked else ''}")
+
+            current.name = f"{material_name}.main"
+            look, info = make_material(material_name, spec, job["textures"]["maxSize"])
+
+            for slot in slots:
+                slot.material = look
+
+            swapped.append((current, look, slots, info))
+
+        export(job, meshes, armature, out=variant["out"], animations=False)
+        written.append({"name": name, "materials": [info for *_, info in swapped]})
+
+        # (The model's own materials back on, for the next)
+        for current, look, slots, _ in swapped:
+            for slot in slots:
+                slot.material = current
+
+            bpy.data.materials.remove(look)
+            current.name = current.name[: -len(".main")]
+
+    REPORT["variants"] = written
 
 
 # --- The stage -------------------------------------------------------------------------------
@@ -1269,7 +1740,12 @@ def run(job):
     if job.get("scene") and job["scene"] != scene.name:
         raise PipelineError(f"the file opens on the scene {scene.name!r}, not {job['scene']!r}: save it on that scene")
 
+    if job.get("stripNamespaces", True):
+        strip_namespaces()
+
+    apply_materials(job)
     meshes, armature = pick_objects(job, scene)
+    meshes = join_objects(job, meshes)
     missing = missing_images(meshes)
 
     if missing:
@@ -1332,6 +1808,7 @@ def run(job):
         drop_idle_bones(armature, meshes, job.get("keepBones") or [])
 
     export(job, meshes, armature)
+    export_variants(job, meshes, armature)
     REPORT["seconds"] = round(time.time() - started, 1)
 
 

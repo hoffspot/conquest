@@ -890,8 +890,10 @@ docs/MODERNIZATION.md   The history: the book's Last Colony, modernized, before 
 
 ### Models from Blender
 
-`utilities/blenderpipeline/` turns `.blend` files (a rigged and animated creature bought for the
-game, say) into GLB files ready for it. It exports the mesh, its deforming bones and every
+`utilities/blenderpipeline/` turns `.blend` files, or FBX files as Unity's and Unreal's assets come
+(a rigged and animated creature bought for the game, say), into GLB files ready for it. One config
+builds it at its full quality, to keep, and made small for play on a phone (`profiles`); other looks
+(`variants`) come as small files of their textures alone. It exports the mesh, its deforming bones and every
 animation, and bakes materials glTF can't carry (UDIM tiles, procedural shaders) onto one
 texture atlas. It sizes the result in metres, takes clips' travel out to play them in place,
 compresses and validates it, and reports on it. It has its own dependencies and tests, which

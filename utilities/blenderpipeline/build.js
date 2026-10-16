@@ -1,10 +1,12 @@
-// Builds game-ready GLBs from .blend files (README.md):
+// Builds game-ready GLBs from .blend (or .fbx, .glb, .gltf) files (README.md):
 //
 //     node build.js examples/dragon.json [more configs...]
 //     npm run build                        # every example
 //     node build.js --fixtures             # remakes the test fixtures (fixtures/*.py)
 //
 // Options:
+//     --profile <name>  build only this profile of a config that has profiles (else all of them,
+//                       each into <out>/<profile>/)
 //     --out <dir>       write here, not where each config says
 //     --blender <path>  run this Blender (else BLENDER, BLENDER_PYTHON, or .venv's bpy)
 //     --strict          fail an asset that's over any of its budgets
@@ -21,8 +23,8 @@ import os from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { findBlender, HERE, runBlender } from "./lib/blender.js";
-import { blenderJob, loadConfig } from "./lib/config.js";
-import { optimize } from "./lib/optimize.js";
+import { blenderJob, loadConfigs } from "./lib/config.js";
+import { optimize, optimizeVariant } from "./lib/optimize.js";
 import { judge, makeReport, summarize } from "./lib/report.js";
 
 const EXPORT_SCRIPT = path.join(HERE, "blender", "export.py");
@@ -39,8 +41,9 @@ export async function buildAsset(config, { blender, out = config.out, keep = fal
         const raw = path.join(work, `${config.name}.blender.glb`);
         const stageReport = path.join(work, `${config.name}.blender.json`);
         const job = path.join(work, `${config.name}.job.json`);
+        const rawVariants = Object.fromEntries(Object.keys(config.variants).map((name) => [name, path.join(work, `${config.name}.${name}.blender.glb`)]));
 
-        writeFileSync(job, JSON.stringify(blenderJob(config, { out: raw, report: stageReport, passes: keep ? work : null }), null, 2));
+        writeFileSync(job, JSON.stringify(blenderJob(config, { out: raw, report: stageReport, passes: keep ? work : null, variants: rawVariants }), null, 2));
         log(`${config.name}: exporting ${path.relative(process.cwd(), config.source)} with ${blender.label}`);
 
         try {
@@ -55,13 +58,19 @@ export async function buildAsset(config, { blender, out = config.out, keep = fal
         const glb = path.join(out, `${config.name}.glb`);
         const lodFile = (level) => path.join(out, `${config.name}.lod${level}.glb`);
 
-        // (Lower-detail copies from an earlier build that this one doesn't make)
-        for (const old of readdirSync(out).filter((file) => file.startsWith(`${config.name}.lod`) && file.endsWith(".glb"))) {
+        // (Lower-detail copies and variants from an earlier build that this one doesn't make)
+        for (const old of readdirSync(out).filter((file) => file.startsWith(`${config.name}.`) && file.endsWith(".glb") && file !== `${config.name}.glb`)) {
             rmSync(path.join(out, old));
         }
 
         const optimized = await optimize(config, { raw, glb, lodFile });
-        const report = await makeReport(config, { blender: stage, optimized, glb });
+        const variants = [];
+
+        for (const [name, file] of Object.entries(rawVariants)) {
+            variants.push(await optimizeVariant(config, name, { raw: file, glb: path.join(out, `${config.name}.${name}.glb`) }));
+        }
+
+        const report = await makeReport(config, { blender: stage, optimized, glb, variants });
         const verdict = judge(report, { strict });
 
         writeFileSync(path.join(out, `${config.name}.report.json`), `${JSON.stringify(report, null, 2)}\n`);
@@ -108,6 +117,7 @@ async function main() {
             keep: { type: "boolean", default: false },
             verbose: { type: "boolean", default: false },
             fixtures: { type: "boolean", default: false },
+            profile: { type: "string" },
         },
     });
     const blender = findBlender({ blender: values.blender ?? process.env.BLENDER });
@@ -124,17 +134,21 @@ async function main() {
     const failed = [];
 
     for (const file of positionals) {
-        const config = loadConfig(file);
+        // (A config with profiles: each, into a folder of its own)
+        for (const config of loadConfigs(file, { profile: values.profile ?? null })) {
+            const label = config.profile ? `${config.name} (${config.profile})` : config.name;
+            const out = values.out ? path.resolve(values.out, config.profile ?? "") : config.out;
 
-        try {
-            const result = await buildAsset(config, { blender, out: values.out ? path.resolve(values.out) : config.out, keep: values.keep, verbose: values.verbose, strict: values.strict });
+            try {
+                const result = await buildAsset(config, { blender, out, keep: values.keep, verbose: values.verbose, strict: values.strict });
 
-            if (!result.ok) {
-                failed.push(config.name);
+                if (!result.ok) {
+                    failed.push(label);
+                }
+            } catch (error) {
+                console.error(`${label}: FAILED\n${error.message}`);
+                failed.push(label);
             }
-        } catch (error) {
-            console.error(`${config.name}: FAILED\n${error.message}`);
-            failed.push(config.name);
         }
     }
 

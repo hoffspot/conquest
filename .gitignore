@@ -7,6 +7,9 @@ e2e-share.txt
 .cache/
 client/motion-report.json
 dist/
+# (But not the Blender pipeline's: what it builds from the examples is committed, and its tests
+# compare against it: utilities/blenderpipeline/README.md)
+!/utilities/blenderpipeline/dist/
 # The licensed models, fetched from the private repository (npm run models:fetch;
 # docs/LICENSED_MODELS.md), and where they're put in place
 .models/
