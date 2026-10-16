@@ -1,14 +1,14 @@
 // The creatures drawn from a model (client/js/beasts/model.js): what's asked for near their
-// lairs, how their clips are posed for what the game asks of a body (walking into a run), when a
+// lairs, what's kept and let go of once none's drawn from it, how their clips are posed for what the game asks of a body (walking into a run), when a
 // breath's fire is out, and that every clip, bone and skin named for one is in its model and its
 // skins as the catalog has them. (Drawn in a browser: e2e/models.spec.js.)
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
-import { PropertyBinding } from "three";
+import { BoxGeometry, Group, Mesh, MeshStandardMaterial, PropertyBinding, Texture } from "three";
 
-const { MODELS, breathing, hasModel, modelsNear, poseOf } = await import("../client/js/beasts/model.js");
+const { MODELS, breathing, forgetModels, hasModel, holdModel, keptModels, modelOf, modelsNear, poseOf, releaseModel, useModel } = await import("../client/js/beasts/model.js");
 const { ASSETS } = await import("../client/js/app/assets.js");
 const { CREATURES, LAIRS } = await import("../client/js/core/creatures.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
@@ -105,6 +105,51 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         assert.deepEqual(modelsNear([0, 0], lairs), ["dreadthorn"]);
         assert.deepEqual(modelsNear([0, 0], lairs, 800), []);
         assert.deepEqual(modelsNear([5000, 5000], lairs), []);
+    });
+
+    it("keeps a model while any's drawn from it, and a while after, then lets it go off the graphics card, its skins with it; but not one still wanted near its lair", () => {
+        // (A model as read, shared by the werewolf and its den's Moonfang: its body's shape and
+        // picture, and the moonfang's skin's own material, each counting when they're let go)
+        const disposed = [];
+        const counted = (thing, name) => Object.assign(thing, { dispose: () => disposed.push(name) });
+        const body = counted(new MeshStandardMaterial({ map: counted(new Texture(), "picture") }), "material");
+        const scene = new Group().add(new Mesh(counted(new BoxGeometry(), "shape"), body));
+        const gltf = { scene, animations: [], skins: { moonfang: [counted(new MeshStandardMaterial({ emissiveMap: counted(new Texture(), "glow") }), "skin")] } };
+
+        useModel("werewolf", gltf);
+        useModel("moonfang", gltf);
+        holdModel("werewolf");
+        holdModel("moonfang");
+        holdModel("moonfang");
+        assert.deepEqual(keptModels(), { models: 1, unheld: 0 });
+
+        // (Still drawn from, by the Moonfang: kept, however long)
+        releaseModel("werewolf", 0);
+        releaseModel("moonfang", 0);
+        assert.equal(forgetModels(1e9, 1000), 0);
+
+        // (None drawn from it: kept a while, and while it's wanted near its lair)
+        releaseModel("moonfang", 1000);
+        assert.deepEqual(keptModels(), { models: 1, unheld: 1 });
+        assert.equal(forgetModels(1500, 1000), 0);
+        assert.equal(forgetModels(5000, 1000, ["moonfang"]), 0);
+        assert.equal(modelOf("werewolf"), gltf);
+        assert.deepEqual(disposed, []);
+
+        // (Then let go of, for both kinds drawn from it, all of it off the graphics card)
+        assert.equal(forgetModels(5000, 1000, ["dreadthorn"]), 1);
+        assert.equal(modelOf("werewolf"), null);
+        assert.equal(modelOf("moonfang"), null);
+        assert.deepEqual(disposed.sort(), ["glow", "material", "picture", "shape", "skin"]);
+        assert.deepEqual(keptModels(), { models: 0, unheld: 0 });
+
+        // (Drawn from again once it's read again: held again)
+        useModel("werewolf", gltf);
+        holdModel("werewolf");
+        assert.equal(forgetModels(1e9, 1000), 0);
+        releaseModel("werewolf", 0);
+        forgetModels(1e9, 1000);
+        assert.equal(modelOf("werewolf"), null);
     });
 
     it("poses its clips for what the game asks: standing, walking, attacking through to the end, struck, resting, flying, hovering, dead", () => {

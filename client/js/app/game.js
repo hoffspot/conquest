@@ -28,7 +28,7 @@ import { folkLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature, sizeOf } from "../beasts/beast.js";
-import { MODELS, modelOf, modelsNear, wantModel } from "../beasts/model.js";
+import { forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsNear, wantModel } from "../beasts/model.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
 import { LOOKS as CREATURE_LOOKS, humanoidLook } from "../beasts/looks.js";
@@ -419,6 +419,11 @@ const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 // How often (seconds) the beasts' bodies none of their look has been drawn on for a while
 // (beasts/sculpt.js LINGER) are let go of (forget)
 const FORGET_EVERY = 5;
+
+// How near one of their lairs the player must be (metres) for the models of its master's kind to
+// be kept, none drawn from them (beasts/model.js forgetModels): further than they're asked for
+// from (modelsNear's 1500)
+const KEEP_MODELS = 2000;
 
 // How often (seconds) the game looks for creatures drawn from a model to ask for, near their lairs
 // (#modelling)
@@ -1141,8 +1146,9 @@ export class Game {
      * been given (world/gpumemory.js), the sounds' decoded copies (audio/sound.js memory), the
      * way-finding's WebAssembly (core/navigation/recast.js wasmBytes), the bodies' own copies on
      * the page (their meshes and pictures, kept to be posed and painted again: world/release.js
-     * heldOnPage), all of them together, and how many of what's kept for the world. Where the
-     * heap isn't told (Safari), the bodies' copies stand in for it in the total: the least of it,
+     * heldOnPage), all of them together, and how many of what's kept for the world (the beasts'
+     * looks, and the models read: beasts/model.js keptModels). Where the heap isn't told
+     * (Safari), the bodies' copies stand in for it in the total: the least of it,
      * the most of what grows as more are about (measured in Chromium, a town's 30 bodies took the
      * heap from 325 to 485 MB).
      */
@@ -1154,6 +1160,7 @@ export class Game {
         const bodies = heldOnPage([...this.avatars.values()].map((avatar) => avatar.object ?? avatar.character?.object));
         const total = (heap?.usedJSHeapSize ?? bodies) + (this.view.gpuMemory?.total ?? 0) + sound + wasm;
         const beasts = keptBodies();
+        const models = keptModels();
 
         return {
             totalMB: megabytes(total),
@@ -1163,7 +1170,7 @@ export class Game {
             soundMB: megabytes(sound),
             wasmMB: megabytes(wasm),
             bodiesMB: megabytes(bodies),
-            held: { avatars: this.avatars.size, chunks: this.chunks?.drawn.size ?? 0, interiors: this.interiors.size, crowds: this.crowds?.kinds.size ?? 0, beasts: { looks: beasts.looks, unheld: beasts.unheld, MB: megabytes(beasts.bytes) } },
+            held: { avatars: this.avatars.size, chunks: this.chunks?.drawn.size ?? 0, interiors: this.interiors.size, crowds: this.crowds?.kinds.size ?? 0, beasts: { looks: beasts.looks, unheld: beasts.unheld, MB: megabytes(beasts.bytes) }, models },
         };
     }
 
@@ -3639,7 +3646,9 @@ export class Game {
     }
 
     // The beasts' bodies none of their look has been drawn on for a while let go of, every so often
-    // (FORGET_EVERY)
+    // (FORGET_EVERY); and the models none has been drawn from for a while, but those whose lairs
+    // the player's near enough to want them for (KEEP_MODELS: a little further than they're asked
+    // for from, so one isn't let go and read again going to and fro at the edge)
     #forgetting(dt) {
         if ((this.forgetClock = (this.forgetClock ?? FORGET_EVERY) - dt) > 0) {
             return;
@@ -3647,6 +3656,10 @@ export class Game {
 
         this.forgetClock = FORGET_EVERY;
         forgetBodies();
+
+        const me = this.avatars.get(this.me)?.object.position;
+
+        forgetModels(performance.now(), MODEL_LINGER, me ? modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS) : []);
     }
 
     // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): past

@@ -265,6 +265,111 @@ export function useModel(id, gltf) {
     read.set(id, gltf);
 }
 
+// The textures a skin's material may give in place of its model's own, as three.js names them
+const MAPS = ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap"];
+
+// How many are drawn from each model file (by the catalog's entry: BeastAvatar's), and since when
+// none has been (performance.now()'s), each kept that long for another to be drawn from it at once
+// before it's let go (forgetModels)
+const holders = new Map();
+const unheld = new Map();
+
+/**
+ * How long a model none is drawn from is kept (ms), for another to be drawn from it at once: a
+ * kind met lately is likely met again, and one that isn't costs its model's reading again if it is
+ * (not its fetching: the downloader keeps what it's fetched, app/fetcher.js).
+ */
+export const MODEL_LINGER = 3 * 60 * 1000;
+
+/** One more drawn from a kind's model. */
+export function holdModel(id) {
+    const { asset } = MODELS[id];
+
+    holders.set(asset, (holders.get(asset) ?? 0) + 1);
+    unheld.delete(asset);
+}
+
+/** One fewer drawn from a kind's model (at `now`): none left, it's let go MODEL_LINGER after (forgetModels). */
+export function releaseModel(id, now = performance.now()) {
+    const { asset } = MODELS[id];
+    const left = (holders.get(asset) ?? 0) - 1;
+
+    if (left > 0) {
+        holders.set(asset, left);
+
+        return;
+    }
+
+    holders.delete(asset);
+    unheld.set(asset, now);
+}
+
+// A model as read let go of off the graphics card: its meshes' shapes, and its materials and their
+// pictures, its skins' too (those drawn from it have their own copies of its materials, let go of
+// with them: beast.js dispose)
+function disposeModel(gltf) {
+    const materials = new Set(Object.values(gltf.skins ?? {}).flat());
+
+    gltf.scene.traverse((node) => {
+        node.geometry?.dispose();
+
+        for (const material of [node.material ?? []].flat()) {
+            materials.add(material);
+        }
+    });
+
+    for (const material of materials) {
+        for (const value of Object.values(material)) {
+            if (value?.isTexture) {
+                value.dispose();
+            }
+        }
+
+        material.dispose();
+    }
+}
+
+/**
+ * Let go of the models none has been drawn from for `linger` ms (at `now`), but those of the kinds
+ * still `wanted` (near the player's lairs: modelsNear) and those still being read: out of what's
+ * read (modelOf null again: its stand-in drawn, till it's wanted and read again), and off the
+ * graphics card. Returns how many were let go.
+ */
+export function forgetModels(now = performance.now(), linger = MODEL_LINGER, wanted = []) {
+    let gone = 0;
+
+    for (const [asset, since] of unheld) {
+        const kinds = Object.keys(MODELS).filter((id) => MODELS[id].asset === asset);
+        const gltf = kinds.map((id) => read.get(id)).find(Boolean);
+
+        if (now - since < linger || kinds.some((id) => wanted.includes(id) || (asked.has(id) && !read.has(id)))) {
+            continue;
+        }
+
+        unheld.delete(asset);
+        files.delete(asset);
+
+        for (const id of kinds) {
+            read.delete(id);
+            asked.delete(id);
+        }
+
+        if (gltf) {
+            disposeModel(gltf);
+            gone++;
+        }
+    }
+
+    return gone;
+}
+
+/** What's kept: how many models are read, and how many of them none's drawn from now. */
+export function keptModels() {
+    const assets = new Set([...read.keys()].map((id) => MODELS[id]?.asset ?? id));
+
+    return { models: assets.size, unheld: [...unheld.keys()].filter((asset) => assets.has(asset)).length };
+}
+
 /**
  * Which kinds' models to ask for (wantModel), by where the player is (`at`: [x, z], metres) and
  * the great lairs (`lairs`: [{ at, beast }], as game.js #lairsAloft lists them, slain or not):
@@ -382,9 +487,6 @@ export function breathing(model, attack, lengths, aloft = false) {
 
     return seconds >= window[0] && seconds <= window[1];
 }
-
-// The textures a skin's material may give in place of its model's own, as three.js names them
-const MAPS = ["map", "normalMap", "roughnessMap", "metalnessMap", "aoMap", "emissiveMap"];
 
 /**
  * A body (BeastAvatar's plan) made from a kind's model as read (`gltf`), at the size BeastAvatar

@@ -867,6 +867,16 @@ what's downloaded before the game starts.
 - **Its stand-in meanwhile:** until it's read, its look (`beasts/looks.js`, a greater, darker
   drake) is drawn. Once it's read, a stand-in out of view, and not attacking, falling or coming
   down out of the sky, is let go of and drawn again from the model.
+- **Let go of when none is drawn from it**, as a look's body is (*Let go of when none is drawn*,
+  above): each drawn from it holds it (`holdModel`, as `BeastAvatar` is made; `releaseModel`, its
+  `dispose`), and three minutes after the last is let go of (`MODEL_LINGER`), it's let go of too
+  (`forgetModels`, every five seconds: the game's `FORGET_EVERY`): out of what's read, its
+  meshes' shapes and its pictures, its skins' too, off the graphics card. Not while the player's
+  within 2 km of one of its lairs (the game's `KEEP_MODELS`: further than it's asked for from, so
+  it isn't let go of and read again going to and fro at the edge), nor while it's being read.
+  Wanted again, it's read again from what the downloader kept (nothing downloaded again), its
+  stand-in drawn meanwhile. Told in the debug overlay and log, under *Held*: how many models are
+  read, and how many of them none is drawn from (`keptModels`).
 - **A body like any other** (`modelBody`): `BeastAvatar` takes it as its `plan`, as it does one
   built in code. `MODELS` names which of its clips are what (standing, walking, flying, gliding,
   struck, falling; its bite, claw and tail sweep, its breath; its roar) and which bones are its
@@ -890,15 +900,18 @@ what's downloaded before the game starts.
   and are stepped a sixtieth of a second at a time, so they look the same at any frame rate. The
   stream the drake's breath draws isn't drawn for it.
 - `e2e/models.spec.js`: drawn from its model once it's read, a level at a time, its fire out; its
-  stand-in left drawn, with no error, when the model can't be read.
+  stand-in left drawn, with no error, when the model can't be read; a model let go of off the
+  graphics card once none's drawn from it, and read again when it's wanted, nothing downloaded
+  again.
 
 The **werewolf** is drawn from a model too: Werewolf - Mythical Creature, bought on Fab under its
 Standard License (`client/models/beasts/LICENSE.md`), 3.4 MB, 16,456 triangles, two lower levels
 packed in, nine clips (three made in `utilities/blenderpipeline`: a howl, a claw swipe and a run).
 What's the same as the Dreadthorn's, and what's its own:
 
-- **Fetched as it's wanted:** as one comes into the battle (it has no lair), with the three skins
-  one of its kind may wear besides its own, all four together.
+- **Fetched as it's wanted:** as one comes into the battle (it keeps no lair of its own: near a
+  den, its file's read for the Moonfang, drawn from the same), with the three skins one of its
+  kind may wear besides its own, all four together.
 - **Its skins** (`MODELS` `skins`): its own grey, or the dusk's, the ash's or the russet's, the
   catalog's `beast-werewolf-skins` (0.2 MB each: only the textures that differ, the pipeline's
   variants). Which one each wears is from its seed, well mixed (`skinOf`), so a pack's each wear

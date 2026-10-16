@@ -105,7 +105,8 @@ export function bodiesLine(bodies) {
  * given: world/gpumemory.js report): all of it, the graphics card's (buffers, pictures, render
  * targets), the sounds', the way-finding's WebAssembly, the bodies' own copies on the page, the
  * page's heap where the browser tells, and how many of what's kept for the world (the beasts'
- * looks: their bodies kept, and how many of them none's drawn on, beasts/sculpt.js kept).
+ * looks: their bodies kept, and how many of them none's drawn on, beasts/sculpt.js kept; the
+ * models read, and how many none's drawn from, beasts/model.js keptModels).
  */
 export function memoryLines(memory, gpu = memory?.gpu ?? null) {
     const card = gpu ? `graphics ${gpu.totalMB} MB (buffers ${gpu.buffersMB}, pictures ${gpu.texturesMB}, targets ${gpu.targetsMB})` : "graphics not told";
@@ -119,10 +120,11 @@ export function memoryLines(memory, gpu = memory?.gpu ?? null) {
     const { totalMB, heapMB, limitMB, soundMB, wasmMB, bodiesMB, held } = memory;
     const page = [...(wasmMB === undefined ? [] : [`, way-finding ${wasmMB} MB`]), ...(bodiesMB === undefined ? [] : [`, bodies' own copies ${bodiesMB} MB`])].join("");
     const beasts = held.beasts ? `  ${held.beasts.looks} beast looks (${held.beasts.MB} MB, ${held.beasts.unheld} none drawn)` : "";
+    const models = held.models ? `  ${held.models.models} models (${held.models.unheld} none drawn from)` : "";
 
     return [
         `Memory ${totalMB} MB held: ${card}, sound ${soundMB} MB${page}, JS heap ${heapMB === null ? "not told by this browser" : `${heapMB} of ${limitMB} MB`}`,
-        `Held ${held.avatars} bodies  ${held.chunks} chunks  ${held.interiors} interiors  ${held.crowds} crowd kinds${beasts}`,
+        `Held ${held.avatars} bodies  ${held.chunks} chunks  ${held.interiors} interiors  ${held.crowds} crowd kinds${beasts}${models}`,
     ];
 }
 
