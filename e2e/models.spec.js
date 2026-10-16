@@ -294,6 +294,86 @@ test("draws the Moonfang from the werewolf's model, read once for both: bigger, 
     expect(drawn.masters[0].height / drawn.wolf.height).toBeCloseTo(3.4 / 2.4, 1);
 });
 
+test("lets a model go off the graphics card once none's drawn from it, and reads it again, without downloading it again, when it's wanted", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await page.goto("/");
+    await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
+
+    const kept = await page.evaluate(async () => {
+        const THREE = await import("three");
+        const { BeastAvatar } = await import("./js/beasts/beast.js");
+        const { forgetModels, keptModels, modelOf, wantModel } = await import("./js/beasts/model.js");
+        const { renderer } = window.pellagos.session.view;
+        const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
+        const scene = new THREE.Scene();
+        const memory = () => ({ ...renderer.info.memory });
+
+        camera.position.set(3, 2, 5);
+        camera.lookAt(0, 1.2, 0);
+
+        // (What three.js makes once, the first time it draws such a material, made first)
+        const plain = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+
+        scene.add(plain);
+        renderer.render(scene, camera);
+        plain.removeFromParent();
+
+        const gltf = await wantModel("werewolf");
+        const before = memory();
+        const beast = new BeastAvatar("werewolf", { seed: 1 });
+
+        scene.add(beast.object);
+        renderer.render(scene, camera);
+
+        const drawn = memory();
+        const held = keptModels();
+
+        // (Let go of: kept a while (none forgotten yet), then forgotten)
+        beast.object.removeFromParent();
+        beast.dispose();
+
+        const lingering = forgetModels(performance.now(), 60000);
+        const unheld = keptModels();
+        const gone = forgetModels(performance.now() + 120000, 60000);
+
+        renderer.render(scene, camera);
+
+        const after = memory();
+        const read = modelOf("werewolf");
+
+        // (Wanted again: read again from what the downloader kept, its four files (the model and
+        // its three skins), nothing downloaded again; and drawn from again)
+        const { done, fetched } = window.pellagos.fetcher;
+        const again = await wantModel("werewolf");
+        const status = window.pellagos.fetcher;
+        const downloaded = { files: status.done - done, bytes: status.fetched - fetched };
+        const another = new BeastAvatar("werewolf", { seed: 1 });
+
+        scene.add(another.object);
+        renderer.render(scene, camera);
+
+        const redrawn = { model: another.model, error: renderer.getContext().getError() };
+
+        another.dispose();
+
+        return { before, drawn, after, held, unheld, lingering, gone, read, fresh: again !== gltf, downloaded, redrawn };
+    });
+
+    expect(kept.held).toEqual({ models: 1, unheld: 0 });
+    expect(kept.unheld).toEqual({ models: 1, unheld: 1 });
+    expect(kept.lingering).toBe(0);
+    expect(kept.gone).toBe(1);
+    expect(kept.read).toBeNull();
+
+    // (Its pictures and shapes sent to the graphics card when it was drawn, and let go of with it)
+    expect(kept.drawn.textures).toBeGreaterThan(kept.before.textures);
+    expect(kept.after.textures).toBeLessThanOrEqual(kept.before.textures);
+    expect(kept.after.geometries).toBeLessThan(kept.drawn.geometries);
+    expect(kept.fresh).toBe(true);
+    expect(kept.downloaded).toEqual({ files: 4, bytes: 0 });
+    expect(kept.redrawn).toEqual({ model: true, error: 0 });
+});
+
 // (The service worker kept out: a page's routes don't see what it fetches)
 test.describe("its model missing", () => {
     test.use({ serviceWorkers: "block" });

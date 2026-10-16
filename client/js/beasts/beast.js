@@ -18,7 +18,7 @@ import { blob } from "./blob.js";
 import { championLook, championScale, wearing } from "./champions.js";
 import { frog, swarm, wisp } from "./flyers.js";
 import { humanoidLook, LOOKS } from "./looks.js";
-import { MODELS, modelBody, modelOf } from "./model.js";
+import { holdModel, MODELS, modelBody, modelOf, releaseModel } from "./model.js";
 import { quadruped } from "./quadruped.js";
 import { serpent } from "./serpent.js";
 import { fold, hold, release, sculpting } from "./sculpt.js";
@@ -165,6 +165,14 @@ export class BeastAvatar {
 
         /** Is it drawn from its model (beasts/model.js), not its stand-in? */
         this.model = Boolean(model);
+
+        // (Its model kept while it's drawn from it: let go of with it, dispose; and forgotten a
+        // while after none is, beasts/model.js forgetModels)
+        this.holding = model ? id : null;
+
+        if (model) {
+            holdModel(id);
+        }
 
         // (Its ways of attacking and resting its model's, if it's drawn from one)
         const look = this.plan.look ? { ...LOOKS[id], ...this.plan.look } : LOOKS[id];
@@ -813,6 +821,11 @@ export class BeastAvatar {
         if (this.body) {
             release(this.body);
             this.body = null;
+        }
+
+        if (this.holding) {
+            releaseModel(this.holding);
+            this.holding = null;
         }
 
         // (A model's own: its clips let go of, its fire put out)

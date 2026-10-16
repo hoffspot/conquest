@@ -471,7 +471,7 @@ describe("the debug log (telemetry.js)", () => {
         assert.equal(crash.state.memory.totalMB, 1800);
     });
 
-    it("shows what's held in the debug overlay: all of it, the graphics card's, the sounds', the heap where it's told, and how much of the world's kept", () => {
+    it("shows what's held in the debug overlay: all of it, the graphics card's, the sounds', the heap where it's told, and how much of the world's kept (the beasts' looks, the models read)", () => {
         const gpu = { totalMB: 540.2, buffersMB: 226.3, texturesMB: 301.9, targetsMB: 12, count: {} };
 
         assert.deepEqual(memoryLines({ totalMB: 1245.6, heapMB: 684.5, limitMB: 4096, gpu, soundMB: 20.9, held: { avatars: 64, chunks: 9, interiors: 2, crowds: 6 } }), [
@@ -486,6 +486,10 @@ describe("the debug log (telemetry.js)", () => {
         assert.equal(
             memoryLines({ totalMB: 731, heapMB: null, limitMB: null, gpu, soundMB: 20, held: { avatars: 30, chunks: 9, interiors: 0, crowds: 2, beasts: { looks: 12, unheld: 3, MB: 9.4 } } })[1],
             "Held 30 bodies  9 chunks  0 interiors  2 crowd kinds  12 beast looks (9.4 MB, 3 none drawn)",
+        );
+        assert.equal(
+            memoryLines({ totalMB: 731, heapMB: null, limitMB: null, gpu, soundMB: 20, held: { avatars: 30, chunks: 9, interiors: 0, crowds: 2, beasts: { looks: 12, unheld: 3, MB: 9.4 }, models: { models: 2, unheld: 1 } } })[1],
+            "Held 30 bodies  9 chunks  0 interiors  2 crowd kinds  12 beast looks (9.4 MB, 3 none drawn)  2 models (1 none drawn from)",
         );
         assert.match(memoryLines(null, gpu)[0], /^Memory graphics 540\.2 MB/);
     });
