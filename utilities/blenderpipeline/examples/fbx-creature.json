@@ -17,7 +17,7 @@
             "baseColor": "../fixtures/fbx-creature/textures/skin_colour.png",
             "normal": "../fixtures/fbx-creature/textures/skin_normal.png",
             "occlusion": "../fixtures/fbx-creature/textures/skin_ao.png",
-            "roughness": { "file": "../fixtures/fbx-creature/textures/skin_metal_smooth.png", "channel": "A", "invert": true },
+            "roughness": { "file": "../fixtures/fbx-creature/textures/skin_metal_smooth.png", "channel": "A", "scale": 0.8, "invert": true },
             "metallic": 0,
             "emission": "../fixtures/fbx-creature/textures/skin_glow.png",
             "emissionStrength": 2

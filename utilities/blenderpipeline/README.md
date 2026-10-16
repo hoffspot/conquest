@@ -111,7 +111,10 @@ Build one asset, or several: `node build.js my-asset.json [more.json...]`. Optio
    compressed: a 2048-pixel texture takes 4 to 5 MB on a phone's GPU, mipmaps and all, where a
    WebP takes 21 MB once decoded. Each is encoded as what it's used for: colour (sRGB) and data
    (occlusion, roughness, metal) in ETC1S, small; normals in UASTC, sharper (`textures.ktx2`).
-   Encoding is in WebAssembly ([ktx2-encoder](https://github.com/gz65555/ktx2-encoder), Basis
+   Each is made a power of two on each side first, the nearest (1024 x 907 is made 1024 x 1024),
+   no more than `maxSize`: the GPU's compressed formats are made of 4 x 4 blocks, and a texture,
+   or a mipmap of it, whose sides aren't can't be relied on (Three.js warns of it, and drew a fur
+   whose sides weren't black). Encoding is in WebAssembly ([ktx2-encoder](https://github.com/gz65555/ktx2-encoder), Basis
    Universal), so it needs nothing installed.
 8. Works out whether each clip loops, and how far out the creature reaches at any moment of any
    clip (for culling).
@@ -191,7 +194,7 @@ material from its files, in place of the source's of that name:
         "baseColor": "Textures/Skin_Albedo.tga",
         "normal": "Textures/Skin_Normal.tga",
         "occlusion": "Textures/Skin_Occlusion.tga",
-        "roughness": { "file": "Textures/Skin_MetallicSmoothness.tga", "channel": "A", "invert": true },
+        "roughness": { "file": "Textures/Skin_MetallicSmoothness.tga", "channel": "A", "scale": 0.8, "invert": true },
         "metallic": 0,
         "emission": "Textures/Skin_Emission.tga",
         "emissionStrength": 2
@@ -210,9 +213,11 @@ material from its files, in place of the source's of that name:
 | `emission` | What glows (sRGB), as strong as `emissionStrength` (default 1) | A file |
 | `doubleSided` | Drawn from both sides (fur cards, leaves); `false` by default | |
 
-A map is a file, or `{ "file", "channel", "invert" }` to take one channel of one: `"channel"` is
-`R` (the default), `G`, `B` or `A`, and `"invert": true` turns it over (Unity keeps smoothness,
-glTF roughness). Each file is shrunk to `textures.maxSize` before it's read, once however many
+A map is a file, or `{ "file", "channel", "scale", "invert" }` to take one channel of one:
+`"channel"` is `R` (the default), `G`, `B` or `A`; `"scale"` multiplies it (0 to 1); and `"invert":
+true` turns it over (Unity keeps smoothness, glTF roughness). Unity's roughness is `1 - smoothness
+x _GlossMapScale`: its material's `_GlossMapScale` is the scale. (Check a bought model's own
+roughness files before using them: they may be empty, every pixel black.) Each file is shrunk to `textures.maxSize` before it's read, once however many
 maps take from it, and the report says what each material was made from
 (`exported.materialsFromTextures`).
 
@@ -261,10 +266,16 @@ play, small enough for a phone and a browser.
   (PNG), its mesh uncompressed (`compress: "none"`) and every keyframe (`resample: 0`). It's
   what the asset is, in glTF: to look at, to compare a play build with, and to make other
   profiles from later without the source to hand.
-- **`phone`** is what the game ships: textures the GPU keeps compressed (KTX2, at most 1024
-  pixels), lower-detail copies packed in, compressed geometry, the channels that don't move left
-  out, and budgets it must keep within (`--strict` fails it otherwise).
+- **`phone`** is made for play: textures the GPU keeps compressed (KTX2, at most 1024 pixels),
+  lower-detail copies packed in, compressed geometry, the channels that don't move left out, and
+  budgets it must keep within (`--strict` fails it otherwise).
 - Others as the game needs them (`desktop`, with 2048-pixel textures, say).
+
+The game ships one play build of a model for every device, phones and all: it reads a model's
+file once and every creature drawn from it shares its mesh and textures, so ten cost the GPU
+what one does, and the lower-detail copies packed in draw the far ones. A bought creature of 16,000
+triangles with seven 1024-pixel KTX2 textures is a 3 MB file and 9 MB on the GPU; at 512 pixels,
+1.3 MB and 2 MB, a saving too small to keep two builds for.
 
 `node build.js my-asset.json` builds every profile, into `<out>/full/` and `<out>/phone/`;
 `--profile phone` only that one. A profile can't have its own `source`, `name` or `out`: they're
@@ -424,7 +435,8 @@ textures*, above: Unity's smoothness inverted, Unreal's normal maps' green flipp
 package (`.unitypackage`) is a gzipped tar: `mkdir pack && tar -xzf Wolf.unitypackage -C pack`,
 then each folder in it is one file, `asset` (the file) beside `pathname` (where it was), and its
 materials (`.mat`) say which texture is which (`_MainTex` the colour, `_BumpMap` the normals,
-`_MetallicGlossMap` metal in red and smoothness in alpha, `_OcclusionMap`, `_EmissionMap`). Maya's
+`_MetallicGlossMap` metal in red and smoothness in alpha, scaled by `_GlossMapScale`,
+`_OcclusionMap`, `_EmissionMap`). Maya's
 own files (`.mb`) don't open in Blender: the FBX is what's needed. And give it `profiles`: `full`
 to keep it as bought, and one for play.
 
@@ -536,7 +548,7 @@ After changing the pipeline, `npm run build` and commit `dist/`: the tests check
 | `udim-creature-split.json` | The test creature | UDIM tiles split by the exporter instead; its warning for a material it can't carry unbaked; one clip kept; quantized |
 | `udim-creature-phone.json` | The test creature | KTX2: colour, occlusion with roughness and metal, and emission in ETC1S, normals in UASTC shrunk to 256 px; still channels left out |
 | `dragon-phone.json` | Mesh2Motion's dragon, as `dragon.json` | Made for phones: KTX2, still channels left out, the full mesh simplified to 70%, and two lower-detail copies packed into the one GLB; two clips made up from its idle, a bite and a death (`clips.invent`) |
-| `fbx-creature.json` | The FBX test creature (`fixtures/make_fbx_creature.py`), as a bought asset for another engine comes | From FBX: namespaces taken off, a rig's control object and its clip left out, a clip from an animation FBX; objects joined (body and teeth) and kept apart (fur, mane); materials made from texture files (occlusion, roughness from inverted smoothness, and metal packed into one; a fur mask; glowing eyes); a variant (another colour for the skin); two profiles, `full` (PNG at its own size, uncompressed) and `phone` (64 px KTX2, meshopt, a lower detail packed in, budgets), into `dist/full/` and `dist/phone/` |
+| `fbx-creature.json` | The FBX test creature (`fixtures/make_fbx_creature.py`), as a bought asset for another engine comes | From FBX: namespaces taken off, a rig's control object and its clip left out, a clip from an animation FBX; objects joined (body and teeth) and kept apart (fur, mane); materials made from texture files (occlusion, roughness from scaled and inverted smoothness, and metal packed into one; a fur mask; glowing eyes); a variant (another colour for the skin); two profiles, `full` (PNG at its own size, uncompressed) and `phone` (64 px KTX2, meshopt, a lower detail packed in, budgets), into `dist/full/` and `dist/phone/` |
 
 The test creature and crate are made by scripts, so they're known exactly: what colour each tile
 is, where each segment is, how fast it crawls.

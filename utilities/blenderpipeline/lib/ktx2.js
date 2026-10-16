@@ -4,6 +4,10 @@
 //   - colour (base colour, emission): ETC1S by default, in sRGB;
 //   - data (occlusion, roughness and metal): ETC1S by default, linear;
 //   - normals: UASTC by default (sharper, larger), linear, as a normal map.
+// Each is made a power of two on each side first (a bought model's 3248 x 2877 fur, shrunk to 1024
+// x 907, made 1024 x 1024): the GPU's compressed formats are made of 4 x 4 blocks, and a texture
+// whose side, or whose mipmaps' sides, aren't can't be relied on (three.js warns of it, and drew
+// that fur black).
 // ETC1S is small to download but blockier; UASTC is close to the original but 4 to 5 times the
 // size. Three.js reads them with KTX2Loader and the Basis transcoder (WebAssembly), which turns
 // each into whatever compressed format the device's GPU takes (ASTC, BC7, ETC2...).
@@ -93,6 +97,78 @@ export function shrinkImage(image, size) {
     return { data, width, height };
 }
 
+/**
+ * The power of two nearest `size` (by its logarithm: 907 is 1024, 600 is 512); if that's more
+ * than `most`, the largest power of two within it.
+ */
+export function powerOfTwo(size, most = null) {
+    const nearest = 2 ** Math.max(0, Math.round(Math.log2(size)));
+
+    return most && nearest > most ? 2 ** Math.max(0, Math.floor(Math.log2(most))) : nearest;
+}
+
+// For each pixel of a row (or column) `to` long, made from one `from` long: the pixels it's a
+// weighted mean of ([index, weight], a triangle filter, as wide as a pixel of the two is)
+function taps(from, to) {
+    const scale = from / to;
+    const reach = Math.max(1, scale);
+
+    return Array.from({ length: to }, (_, i) => {
+        const centre = (i + 0.5) * scale - 0.5;
+        const list = [];
+
+        for (let j = Math.floor(centre - reach); j <= Math.ceil(centre + reach); j++) {
+            const weight = 1 - Math.abs(j - centre) / reach;
+
+            if (weight > 0) {
+                list.push([Math.min(from - 1, Math.max(0, j)), weight]);
+            }
+        }
+
+        const total = list.reduce((sum, [, weight]) => sum + weight, 0);
+
+        return list.map(([j, weight]) => [j, weight / total]);
+    });
+}
+
+/** The image resampled to `width` x `height` (across, then down; larger or smaller). */
+export function resizeImage(image, width, height) {
+    if (image.width === width && image.height === height) {
+        return image;
+    }
+
+    const across = taps(image.width, width);
+    const down = taps(image.height, height);
+    const middle = new Float32Array(width * image.height * 4);
+    const out = new Uint8Array(width * height * 4);
+
+    for (let y = 0; y < image.height; y++) {
+        for (let x = 0; x < width; x++) {
+            for (const [j, weight] of across[x]) {
+                for (let c = 0; c < 4; c++) {
+                    middle[(y * width + x) * 4 + c] += image.data[(y * image.width + j) * 4 + c] * weight;
+                }
+            }
+        }
+    }
+
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            for (let c = 0; c < 4; c++) {
+                let sum = 0;
+
+                for (const [j, weight] of down[y]) {
+                    sum += middle[(j * width + x) * 4 + c] * weight;
+                }
+
+                out[(y * width + x) * 4 + c] = Math.min(255, Math.max(0, Math.round(sum)));
+            }
+        }
+    }
+
+    return { data: out, width, height };
+}
+
 /** One image encoded as KTX2: `mode` "etc1s" or "uastc", `kind` "color", "data" or "normal". */
 export async function encodeImage(image, { mode, kind, quality = 128 }) {
     const options =
@@ -113,10 +189,11 @@ export async function encodeImage(image, { mode, kind, quality = 128 }) {
 
 /**
  * Every PNG and JPEG texture in the document encoded as KTX2 (`settings`: textures.ktx2 from the
- * config), each as what it's used for. Returns [{ name, kind, mode, width, height, from, to }]
- * (from and to: bytes).
+ * config), each as what it's used for, a power of two on each side (no more than `maxSize`, the
+ * config's textures.maxSize, if it has one). Returns [{ name, kind, mode, width, height, from, to
+ * }] (from and to: bytes).
  */
-export async function encodeTextures(document, settings) {
+export async function encodeTextures(document, settings, { maxSize = null } = {}) {
     const done = [];
     const uses = textureUses(document);
     let any = false;
@@ -135,6 +212,10 @@ export async function encodeTextures(document, settings) {
         if (kind === "normal" && settings.normalSize) {
             image = shrinkImage(image, settings.normalSize);
         }
+
+        const most = kind === "normal" && settings.normalSize ? Math.min(settings.normalSize, maxSize ?? Infinity) : maxSize;
+
+        image = resizeImage(image, powerOfTwo(image.width, most), powerOfTwo(image.height, most));
 
         const from = texture.getImage().byteLength;
         const bytes = await encodeImage(image, { mode, kind, quality: settings.quality });
