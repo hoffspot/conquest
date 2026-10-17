@@ -34,7 +34,7 @@ dungeon's boss or mini-boss, one of the people (an adventurer or a soldier with 
 theirs, or one of the townsfolk in their role, of any people, a woman or a man), or one of the
 game's things (a works' wagon and its ox, laden as you choose; what's carried and worn; the
 catalog's props, the treasure chest opening), or a creature still to come (the centipede, the Ant
-Monster and the ant: their models before they're in the game), and it's drawn as the game draws it. It walks, runs, attacks, rests, is struck, knocked down and dies (the wyvern,
+Monster, the ant and the Dungeon Spider: their models before they're in the game), and it's drawn as the game draws it. It walks, runs, attacks, rests, is struck, knocked down and dies (the wyvern,
 the drake and the Dreadthorn fly, come down to land and hover). Its panel plays each of the game's
 moves for it by name (one of the people's every motion: their attacks, work, rests, emotes, spells,
 blows and falls), and every clip in a model's file by name. It pauses, slows to a tenth, steps a frame back or on, and plays a move
@@ -84,7 +84,7 @@ menu, and building it.
 [docs/SERVER.md](docs/SERVER.md) is the guide to running a world server, however it's run: its
 management page, worlds and their keys, reaching it from the internet, backups, bringing worlds
 in, and updating it. [docs/LICENSED_MODELS.md](docs/LICENSED_MODELS.md) is how the models that
-aren't free to reuse (the Dreadthorn, the werewolf, the centipede, the Ant Monster, the ant) are kept out of the public repository and scrambled where
+aren't free to reuse (the Dreadthorn, the werewolf, the centipede, the Ant Monster, the ant, the Dungeon Spider) are kept out of the public repository and scrambled where
 they're served, and what the owner sets up for it.
 
 ## How to play
@@ -475,7 +475,9 @@ up. They're all remembered.
   with that character in it, and them its owner). A world's **invite link** (its owner's World
   panel, or the management page's **Invite players**) opens the game from the server and takes
   anyone in, a character made first if they have none; a world **open to anyone** needs no link,
-  and the server's own address shows its worlds on the title.
+  and the server's own address shows its worlds on the title. Worlds on servers' **Worlds Guide**
+  goes through every way into a world, a friend's own or one on a server, with examples, and what
+  to do when one won't join.
   Up to 8 play in a world at once. Its owner looks after it from its management page: worlds,
   keys, players, backups, and opening it to the internet. Run one from the Mac's menu bar
   ([docs/MAC_APP.md](docs/MAC_APP.md)), or with `npm run world-server`; how, and what it keeps,
@@ -937,8 +939,8 @@ what it doesn't cover.
   License, which allows it in a game made with it, never on its own. It's in the game in its
   converted form only, scrambled, and like the Dreadthorn kept in the private repository
   (`client/models/beasts/LICENSE.md`). It isn't free to reuse.
-- The centipede is Centipede Monster-V2, the Ant Monster Ant Monster V1b and the ant Ant V2, all
-  bought on Fab under the same Standard License, and kept as the werewolf is: in their converted form only,
+- The centipede is Centipede Monster-V2, the Ant Monster Ant Monster V1b, the ant Ant V2 and the
+  Dungeon Spider Spider V3, all bought on Fab under the same Standard License, and kept as the werewolf is: in their converted form only,
   scrambled, in the private repository (`client/models/beasts/LICENSE.md`). They aren't free to
   reuse.
 - The KayKit Medieval Hexagon Pack by Kay Lousberg (<https://kaylousberg.com>), CC0

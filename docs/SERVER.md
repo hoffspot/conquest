@@ -133,6 +133,9 @@ In the game, in the world: the menu's **World**.
 | A new phone or browser | Ask the world's owner for the link again. Or, on the old one, Worlds on servers, **My servers and tickets**, and bring the code to the new one. |
 | A short code | Worlds on servers, the server's **Enter a code**. |
 
+The game's **Worlds Guide** (on its Worlds on servers screen) tells players all of this, with
+examples of each kind of link, address and code, and what to do when a world won't join.
+
 ### Open worlds
 
 A world **open to anyone** lets in whoever comes without a key. It's shown to everyone who opens

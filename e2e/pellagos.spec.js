@@ -110,8 +110,10 @@ async function playing(page, address) {
 // Play on (the game stopped) till `done` (a function run in the page) says so, or `seconds` of the
 // game's time go by: whether it did. Half a second at a time, a frame at a time, the page's events
 // let in between them as between frames, so what's done elsewhere (skins painted in a worker)
-// comes back to be waited on, as in play
-async function playUntil(page, done, { seconds = 30 } = {}) {
+// comes back to be waited on, as in play; with `realTime`, no faster than the clock
+async function playUntil(page, done, { seconds = 30, realTime = false } = {}) {
+    const start = Date.now();
+
     for (let time = 0; time < seconds; time += 0.5) {
         if (await page.evaluate(done)) {
             return true;
@@ -125,6 +127,12 @@ async function playUntil(page, done, { seconds = 30 } = {}) {
                 await new Promise((resolve) => setTimeout(resolve, 0));
             }
         });
+
+        // (`realTime`: never played ahead of the clock, as a player plays it, for what takes the
+        // time it really takes: the downloader keeps to a rate, in real time, not the game's)
+        if (realTime) {
+            await page.waitForTimeout(Math.max(0, (time + 0.5) * 1000 - (Date.now() - start)));
+        }
     }
 
     return page.evaluate(done);
@@ -251,6 +259,63 @@ test("the title's About: what the game is and how it's played, scrolled through,
     expect(await body.evaluate((element) => element.scrollTop)).toBe(0);
     await page.keyboard.press("Escape");
     await expect(page.locator("#about")).toBeHidden();
+});
+
+test("Worlds on servers' Worlds Guide: every way into a world, with examples, its contents and its own pointers taking you to each part; on a phone, nothing wider than the screen; closed, back to the worlds", async ({ page }) => {
+    await title(page);
+    await page.locator("#worldsbutton").click();
+    await expect(page.locator("#worlds")).toBeVisible();
+
+    // (Over the worlds, which stay open under it)
+    await page.getByRole("button", { name: "Worlds Guide" }).click();
+
+    const guide = page.locator("#worldsguide");
+    const body = page.locator("#worldsguidebody");
+    // (A part at the top of what's read)
+    const atTop = (id) => page.locator(`#${id}`).evaluate((section) => Math.abs(section.getBoundingClientRect().top - section.parentElement.getBoundingClientRect().top));
+
+    await expect(guide).toBeVisible();
+    await expect(page.locator("#worlds")).toBeVisible();
+    await expect(page.locator("#worldsguidetitle")).toHaveText("Worlds Guide");
+    await expect(page.locator("#worldsguidebody h3")).toHaveText(["Which way in?", "Two kinds of world", "A friend's world, by its code", "Players' worlds on a server", "Invite links", "A server's address", "Servers nearby", "Open worlds", "Short codes", "Keys", "Coming back, and other devices", "Who you come as", "A world of your own on a server", "When it won't join"]);
+    expect(await body.evaluate((element) => element.scrollTop)).toBe(0);
+
+    // What you've been given, and what to do with it; and examples of each kind of code and link
+    await expect(page.locator(".guide-ways th")).toHaveCount(9);
+    await expect(page.locator(".guide-ways").getByText("KQWX")).toBeVisible();
+    await expect(page.locator("#worldsguidebody .guide-example")).toHaveCount(4);
+    await expect(page.locator("#guide-short .guide-example")).toContainText("7KQM-2XWD");
+
+    // Its contents take you to a part, and so does a part's pointer to another
+    await page.locator('#worldsguide nav [data-to="guide-short"]').click();
+    await expect.poll(() => atTop("guide-short")).toBeLessThan(30);
+    await page.locator('#worldsguide nav [data-to="guide-ways"]').click();
+    await expect.poll(() => atTop("guide-ways")).toBeLessThan(30);
+    await page.locator("#guide-ways").getByRole("button", { name: "Keys" }).click();
+    await expect.poll(() => atTop("guide-key")).toBeLessThan(30);
+
+    // Back to the worlds, what it says out of the page
+    await page.locator("#worldsguideclose").click();
+    await expect(guide).toBeHidden();
+    await expect(page.locator("#worlds")).toBeVisible();
+    await expect(body).toBeEmpty();
+
+    // On a phone: its contents swiped along one row, the table one under the other, and nothing,
+    // the longest link included, wider than the screen
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("button", { name: "Worlds Guide" }).click();
+    await expect(guide).toBeVisible();
+    expect(await body.evaluate((element) => element.scrollTop)).toBe(0);
+    expect(await page.locator(".guide-ways th").first().evaluate((cell) => getComputedStyle(cell).display)).toBe("block");
+    await page.locator('#worldsguide nav [data-to="guide-link"]').click();
+    await expect.poll(() => atTop("guide-link")).toBeLessThan(30);
+    expect(await body.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+    expect(await guide.evaluate((dialog) => dialog.getBoundingClientRect().right)).toBeLessThanOrEqual(390);
+
+    // (Escape closes the guide alone)
+    await page.keyboard.press("Escape");
+    await expect(guide).toBeHidden();
+    await expect(page.locator("#worlds")).toBeVisible();
 });
 
 // (The pixels it draws counted: at the screen's own, a pixel a pixel, not the half the others
@@ -11490,7 +11555,8 @@ test("out in the woods far from home by night, where werewolves are met: the wer
     expect(woods.at).not.toBeNull();
     expect(woods.before).toBe(false);
 
-    // (Read, and no werewolf come yet to be drawn: asked for where it's met, not as it comes)
+    // (Read, and no werewolf come yet to be drawn: asked for where it's met, not as it comes; in a
+    // minute's play, as a player plays it, as the downloader keeps to a rate in real time)
     const read = () => {
         const { game } = window.pellagos;
 
@@ -11499,7 +11565,7 @@ test("out in the woods far from home by night, where werewolves are met: the wer
         return Boolean(window.modelOf("werewolf"));
     };
 
-    expect(await playUntil(page, read, { seconds: 60 })).toBe(true);
+    expect(await playUntil(page, read, { seconds: 60, realTime: true })).toBe(true);
     expect(await page.evaluate(() => window.met)).toBe(false);
 });
 

@@ -3,8 +3,9 @@
 Some of the game's models aren't free to reuse: they were bought, and are in the game with the
 seller's permission, or under a licence that gives it. Today they're the Dreadthorn, HuyKhoi2407's
 Dreadthorn Dragon; the werewolf, Fab's Werewolf - Mythical Creature, with its five other skins; and
-three not in the game yet: the centipede, Fab's Centipede Monster-V2; the Ant Monster, Fab's Ant
-Monster V1b; and the ant, Fab's Ant V2 (`client/models/beasts/LICENSE.md`). This page is how such
+four not in the game yet: the centipede, Fab's Centipede Monster-V2; the Ant Monster, Fab's Ant
+Monster V1b; the ant, Fab's Ant V2; and the Dungeon Spider, Fab's Spider V3
+(`client/models/beasts/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,
