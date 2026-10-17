@@ -340,7 +340,7 @@ wheel opens round them, cut in eight like a compass: N, NE, E, SE, S, SW, W and 
 and flick towards a slice to do what's in it; let go in the middle to change your mind. Flick
 down (S) and the wheel turns over to its other side, wheel two, opened again under your finger.
 What's on your own wheel and an enemy's, both sides of each, you choose in **Game options,
-Action wheels**: the spells and blows you've learnt, and draughts, meals and ale from your pack
+Controls, Action wheels**: the spells and blows you've learnt, and draughts, meals and ale from your pack
 (each showing how many you have). You start with **Vigor** on yourself (a little healing), and
 **Attack** at the top of an enemy's (walking up to them, into reach of what's in your hands, to
 fight them) with **Stun** beside it. Each element's school opens with its first spell's tome, 25 gold at any
@@ -355,7 +355,7 @@ the bottom of the screen, your name and the zoom buttons lifted above them. Tap 
 in it at once: an attack, a hex or a blow on the enemy you're fighting, and anything else (Vigor,
 a ward, a draught) on yourself. Attacks are greyed while no enemy's set on, and each is greyed
 over while it cools down, as on the wheels. You start with Vigor, Stun, Burn and a healing
-draught; hold a slot (or go to **Game options, Quick actions**) to choose what's in it. Flick a
+draught; hold a slot (or go to **Game options, Controls, Quick actions**) to choose what's in it. Flick a
 spell up or down to turn it to the next or last spell of its school that you know (Mend Wounds
 down to Vigor, up to Detraumatize); it rolls round like a slot machine's reel, and bounces at
 either end. **Six across**, in Quick actions, shows six slots instead of four, with smaller
@@ -438,10 +438,14 @@ The effects and the town's sounds are made in code as the game starts (in a work
 waits for them); the music's recordings (about 1.1 megabytes) are downloaded meanwhile. Effects and
 the town are heard from where you stand: quieter further away, and to the left or right.
 
-**Game options**, in the menu: turn the minimap on or off (off, the compass in its place), turn all the sound on or off, and set
-how loud the effects (50% to start with), the environment (40%) and the music (35%) are. The
-defaults suit a phone at about 40% volume, with plenty of room to turn each up. They're
-remembered.
+**Game options**, in the menu, is a list of groups at the top, each a short page of its own:
+**Graphics** (visual quality, Adaptive, full screen, screen shake), **Sound**, **Controls** (the
+thumb stick, zoom buttons and minimap, and the Action wheels and Quick actions pages), **Camera**
+and **Gameplay** (Auto-snag, other players' summons and party invites), then the **Debug log**.
+The arrow in each page's heading, or Back at its foot, goes back a page. Under Sound, turn all the
+sound on or off, and set how loud the effects (50% to start with), the environment (40%) and the
+music (35%) are. The defaults suit a phone at about 40% volume, with plenty of room to turn each
+up. They're all remembered.
 
 | Action | Touch | Mouse and keyboard |
 | --- | --- | --- |

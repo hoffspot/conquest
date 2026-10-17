@@ -4314,7 +4314,7 @@ the foe; green, the player). They're kept with the wheels (`pellagos.<id>.wheels
 back safely by `readWheels`: six, each something that can be one, or empty; a save from when there
 were four has the last two empty).
 
-**Six across** (Game options, Quick actions: the Six across switch, `quickSix`, off to start
+**Six across** (Game options, Controls, Quick actions: the Six across switch, `quickSix`, off to start
 with; `QUICK_SHOWN`): six slots instead of four, a little closer together, on a bar up to 640
 pixels wide. Each slot is a size container (styles.css), so what's shown goes by how wide each
 slot is, not by the device: up to 75 pixels wide, its name is 9 pixels high; up to 57 (a phone
@@ -4359,7 +4359,7 @@ once it's whole. Asked for less motion, the ring's still there, dashed and glowi
 marches or pulses.
 
 **Changed** by holding a slot (0.5 s, `QUICK_HOLD_MS`; sliding off it does neither): the game
-pauses (when no one else is playing in the world) at **Game options, Quick actions**
+pauses (when no one else is playing in the world) at **Game options, Controls, Quick actions**
 (app/quicksetup.js) with that slot chosen, and Back to the game carries on. Quick actions in Game
 options shows the four slots (or six) as they rise; tap one, then what goes in it: "Nothing", or anything
 learnt and carried that can go on either wheel (`assignable("quick")`), each saying who it's
@@ -4594,14 +4594,32 @@ it.
   rise up over the character as well").
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
    world too): Resume, Invite others (the world opened to others: a code, and who's come),
-   Game options, or back to the title. **Game options** has the Visual quality slider (Low,
-   Medium, High) and the Adaptive switch (Keeping up, above), a switch for full screen while
-   playing (below), a switch for the minimap (off, the compass in its place: above), the
-   Auto-snag switch (off to start with) and under it, while it's on, what it takes (its own
-   page: docs/WILDS.md *What they leave*), a switch that turns all the sound
-   on or off, and a slider (0 to 100%) for each bus: sound effects, environment and music (a
-   sound plays as the first two are moved, to hear how loud); and the Action wheels and Quick
-   actions pages. Back (or Escape) returns to the menu.
+   Game options, or back to the title. **Game options** is a list of its groups, at the top,
+   each a page of its own, short enough to see whole on a phone without scrolling (the user:
+   "Move the buttons for the game options menu to the top from the bottom. Organize the menu
+   into submenus so the scrolling isn't as long"):
+   - **Graphics:** the Visual quality slider (Low, Medium, High) and the Adaptive switch
+     (Keeping up, above), full screen while playing (below), and screen shake.
+   - **Sound:** a switch that turns all the sound on or off, and a slider (0 to 100%) for each
+     bus: sound effects, environment and music (a sound plays as the first two are moved, to
+     hear how loud).
+   - **Controls:** the thumb stick, and under it the stick under your thumb; the zoom buttons;
+     the minimap (off, the compass in its place: above); and the Action wheels and Quick
+     actions pages.
+   - **Camera:** Camera follows, the battle cam, Camera turning and Invert tilt (*The camera's
+     settings*, above).
+   - **Gameplay:** the Auto-snag switch (off to start with) and under it, while it's on, what it
+     takes (its own page: docs/WILDS.md *What they leave*); Resist all summons; Refuse party
+     invites.
+   - **Debug log** (below).
+
+   Each page under the main one has an arrow back (‹) at the left of its heading and Back at its
+   foot; both, and Escape, go back a page (main.js `menuBack`, `MENU_PAGES`), to the group's
+   button, focused (Action wheels and Quick actions back to Controls, what auto-snag takes to
+   Gameplay; the Quick actions opened from a fight back to the game), and from the main page to
+   the game. Escape pressed again and again with nothing else done between, the browser closes
+   the menu itself after a couple, whatever the page asks (Chrome's close watchers): the game's
+   resumed then, as Resume does, never left stopped with no menu up.
 
 **Full screen while playing** (on to start with: Game options; app/fullscreen.js): the game asks
 the browser for the whole screen whenever play starts or carries on from a tap, click or key
@@ -5322,7 +5340,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   minimap, a building gone into marked on the minimap, the world map held open from it (the game
   paused under it, the fog over every chunk but those walked into, the tavern's icon and the
   town's name on it, zooming out, closed by Escape and by M), walking 300 metres out of the town into the world (the chunks round the player drawn,
-  those left behind thrown away, the minimap following), Game options and the volume sliders
+  those left behind thrown away, the minimap following), Game options (its groups at the top,
+  each a page that fits a phone's screen with its own settings and no other's, back from each by
+  the arrow in its heading, Back at its foot or Escape to the group's button, focused; Escape
+  again and again deep in, the menu closed and the game going on) and the volume sliders
   (remembered), the minimap off and the compass in its corner (turned a quarter round as the
   camera is, the party's column under it; tapped, the minimap back; folded again with the button
   on its corner, remembered), the
