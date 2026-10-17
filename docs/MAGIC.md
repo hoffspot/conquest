@@ -493,7 +493,7 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
   - **as it lands:** the glass bursting (the spectrum's motes, white shards), and three
     shockwaves, a pale one, the spectrum's fringe a moment after (a chromatic split), then the
     element's; the sigil left burnt into the ground a few seconds. It keeps Prismatic
-    Destruction's white sky, its four columns and its 8 m rings to it.
+    Destruction's own to it: the sky turned, its four columns, its rings past 8 m.
   - **Prismatic Fire:** a sun kindled 3.6 m over them as it's cast (the blasts' fireball, held,
     golden), the sky darkening a little, four pyres round them streaming fire up into it; it
     collapses to a point as it's let go, then bursts: a dome of boiling fire, a pillar of fire 11
@@ -521,6 +521,38 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
 
   Each lighter than Hellfire on the graphics card: at most a little over half its particles and
   fires (Prismatic Fire's, the most of the four).
+- **Prismatic Destruction**, the greatest spell there is (you: "Prismatic Destruction is the
+  biggest spell in the game. It should be epic"), the top of the ladder: the only spell that
+  turns the sky (view.js `setOmen`'s tints, `OMENS`: the fire spells' red dusk; an eclipse's
+  violet; radiance's white), the only one with a collapse to a point and a breath held, the
+  widest marks and the strongest wash and shake. Each element has a quarter round whom it's cast
+  at, as the caster sees them (fire far left, earth far right, air near right, water near left:
+  the sigil's order round; none behind them, none between them and the caster).
+  - **As it's cast:** the sky eclipsed violet, the land dimmed; the whole sigil spreading under
+    them, 19 m across (past the 8 m it strikes), and turning in the sky over them; four prisms,
+    each its element's colour (`prisms` `colours`), circling over their quarters; in each quarter,
+    10 m out, a column of the element's light, its power streaming in to them, and its own
+    gathering (a sun swelling over a pyre; a monolith rising out of gold cracks, the ground
+    trembling; a whirlwind, lightning crawling down it; a column of water and fountains, frost
+    spreading); the four elements' rings and the spectrum's drawn in, a shell of light collapsing
+    on them (`sphere`) to a point of white, held a moment.
+  - **As it lands:** a beam out of the sky as wide as a house, split like light through a prism,
+    red at its edge, blue, white at its heart, striking while the sky's still violet; then the
+    sky white, the screen washed white and the ground heaving; a shell of light bursting out past
+    all it strikes, the glass shattering, rings to 14, 16 and 28 m; the four element columns 24 m
+    high round the beam; each element's own in its quarter, one after another (fire's pillar and
+    flares, earth's spires, air's spear of lightning, water's ice blooming and shattering); each
+    struck unmade in its quarter's light, a column of it over them and motes rising off them.
+  - **What's left:** the whole sigil burnt into the ground, glowing cracks across all it struck,
+    scorch, each quarter's ice and spires standing a few seconds, light falling like ash.
+  - **Heard:** its cast with a low drone rising under the four glass tones and a rush of air
+    sucked to a point at the last; its landing a crack and a falling glass tone for the beam, the
+    greatest blast after it, each element on its beat, the glass chord over all
+    (audio/catalog.js).
+  - **What it costs:** at most about 1.4 times Hellfire's particles, with a dozen struck (it adds
+    no more for more than that), and far fewer fires; within a phone's means. The spikes and
+    shards every spell throws (earth's, ice's, a bomb's) are each drawn at once now
+    (`InstancedMesh`: one draw call however many), so Absolute Zero's 113 meshes are 15.
 - **Blasts** (`blast`: Explosion's, a goblin bomb's, the Goblin King's bigger one), built in
   layers as realtime effects artists build an explosion (researched for it: the flash only a
   frame or two, the shockwave first, smoke starting at once and lasting longest; fast fire

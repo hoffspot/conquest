@@ -2958,7 +2958,7 @@ export class Game {
         // lasting on anyone here showing on them now and then
         this.spellFx.update(dt);
         // (The sky as dark as the greatest spells have made it)
-        this.view.setOmen(this.spellFx.darkness());
+        this.view.setOmen(this.spellFx.darkness(), this.spellFx.omenTint());
 
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);
