@@ -3,9 +3,10 @@
 Some of the game's models aren't free to reuse: they were bought, and are in the game with the
 seller's permission, or under a licence that gives it. Today they're the Dreadthorn, HuyKhoi2407's
 Dreadthorn Dragon; the werewolf, Fab's Werewolf - Mythical Creature, with its five other skins; the
-ants' nests' creatures, Fab's Centipede Monster-V2, Ant Monster V1b and Ant V2; and three not in the
-game yet: the Dungeon Spider, Fab's Spider V3; the Elite Dungeon Spider, Fab's Spider V6a; and the
-Dungeon Scorpion, Fab's Scorpion V5d (`client/models/beasts/LICENSE.md`). This page is how such
+ants' nests' five: the great centipede, Fab's Centipede Monster-V2; the Ant Monster, Fab's Ant
+Monster V1b; the giant ant, Fab's Ant V2; the dungeon spider, Fab's Spider V3; and the elite
+dungeon spider, Fab's Spider V6a; and one not in the game yet, the Dungeon Scorpion, Fab's Scorpion
+V5d (`client/models/beasts/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,

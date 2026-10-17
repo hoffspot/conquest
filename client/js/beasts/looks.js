@@ -528,6 +528,22 @@ export const LOOKS = Object.freeze({
         colours: { scales: 0x241a14, bands: 0x0e0a08, belly: 0x5a3a22, legs: 0x8a5a30, eyes: 0x0a0806 },
         attacks: ["strike", "double"], rests: ["coil", "bask"],
     },
+    // (A dungeon spider's stand-in, a brown spider of its size; an elite dungeon spider's, a red and
+    // black one, bigger, its markings glowing)
+    dungeonSpider: {
+        body: "arachnid",
+        scale: [0.92, 1.08],
+        size: 0.8,
+        colours: { shell: 0x5a3e28, dark: 0x2a1c12, marks: 0x8a6a48, eyes: 0x140a06 },
+        attacks: ["bite", "leap"], rests: ["groom", "crouch", "twitch"], specials: ["web"],
+    },
+    eliteDungeonSpider: {
+        body: "arachnid",
+        scale: [1, 1],
+        size: 1.2,
+        colours: { shell: 0x8a1e1a, dark: 0x140808, marks: 0xff5a3a, eyes: 0xff5030 },
+        attacks: ["bite", "leap"], rests: ["groom", "crouch", "twitch"], specials: ["web"],
+    },
     antMonster: {
         body: "arachnid",
         scale: [1, 1],

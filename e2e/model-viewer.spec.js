@@ -228,11 +228,11 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?model=beast-centipede&clip=Run");
 
-    // (In the game now, as are the ant and the Ant Monster: not listed with the creatures to come,
-    // the spiders and the scorpion the only ones; read, its clips listed, the one asked for by its address
-    // played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Dungeon Spider", "Elite Dungeon Spider", "Dungeon Scorpion"]);
-    expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Ant Monster"]);
+    // (In the game now, as are the ant, the spiders and the Ant Monster: every bought model is but
+    // the scorpion, the one creature to come listed; read, its clips listed, the one asked for by
+    // its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Dungeon Scorpion"]);
+    expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
         "Attack",

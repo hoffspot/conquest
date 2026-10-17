@@ -17,6 +17,8 @@ import { registerTheme, THEMES } from "../client/js/core/dungeons/themes.js";
 import { WAY_IN_CLEAR } from "../client/js/core/insides.js";
 import { PLAN_KEY, readPlan } from "../client/js/core/interiors.js";
 
+const { MODELS } = await import("../client/js/beasts/model.js");
+
 const THEME_IDS = ["caves", "hideout", "ancient"];
 
 // Every theme: those with layouts of their own, and those with another's (an ants' nest, the caves')
@@ -336,12 +338,17 @@ describe("themes", () => {
         }
     });
 
-    it("has an ants' nest, dug as the caves are: ants, great centipedes, and the Ant Monster at the bottom with ants about it, all of them drawn from models", () => {
+    it("has an ants' nest, dug as the caves are: ants, great centipedes, dungeon spiders led by elite dungeon spiders, and the Ant Monster at the bottom with ants about it, all of them drawn from models", () => {
         const nest = THEMES.nest;
         const kinds = [...nest.packs.flatMap(({ creatures }) => creatures), ...nest.minis.map(({ creature }) => creature), ...nest.bosses.flatMap(({ creature, guard = [] }) => [creature, ...guard])];
 
         assert.equal(nest.layout, "caves");
-        assert.deepEqual([...new Set(kinds)].sort(), ["ant", "antMonster", "greatCentipede"]);
+        assert.deepEqual([...new Set(kinds)].sort(), ["ant", "antMonster", "dungeonSpider", "eliteDungeonSpider", "greatCentipede"]);
+        assert.ok(kinds.every((kind) => MODELS[kind]), "each drawn from a model");
+
+        // (Each pack of spiders led by an elite)
+        assert.ok(nest.packs.filter(({ creatures }) => creatures.includes("dungeonSpider")).every(({ creatures }) => creatures[0] === "eliteDungeonSpider"));
+        assert.equal(CREATURES.dungeonSpider.elite, "eliteDungeonSpider");
         assert.deepEqual(nest.bosses.map(({ creature, guard }) => [creature, guard]), [["antMonster", ["ant"]]]);
 
         for (const looks of Object.values(nest.rooms)) {

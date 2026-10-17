@@ -149,6 +149,44 @@ export const MODELS = Object.freeze({
         runPace: 0.96,
         flinch: 0.5,
     }),
+    // (A dungeon spider: made 1.43 metres long, legs and all, drawn 1.8; biting, springing (its
+    // leap: Attack 2), spitting its web (its forelegs flung out: Attack 3); resting, rearing up or
+    // eating; dead, flipped over, its legs curled)
+    dungeonSpider: Object.freeze({
+        asset: "beast-dungeon-spider",
+        length: 1.8,
+        made: Object.freeze({ long: 1.43, tall: 0.4 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit React", dead: "Death" }),
+        attacks: Object.freeze({ bite: "Attack", snap: "Attack 5" }),
+        specials: Object.freeze({ leap: "Attack 2", web: "Attack 3" }),
+        rests: Object.freeze({ rear: "Roar", eat: "Eat" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "bone_abdomen_01", body: "body_COM", head: "bone_head_01", mouth: "bone_R_chelicerae_02", left: "bone_L_leg01_tarsus_01" }),
+        mouth: null,
+        pace: 0.54,
+        runPace: 1.07,
+        flinch: 0.5,
+    }),
+    // (An elite dungeon spider: its own model, red and black, its markings glowing (its own
+    // emissive map); made 3 metres long, drawn 2.8, standing a little above where it's made, sunk
+    // to the ground; its fangs, its sting brought over (its belly curled forward: Attack 2), its web
+    // sprayed from its spinnerets (Butt Attack); resting, looking about or cowering; bursting apart
+    // as it dies (its Explode, its only fall). Its walk carries it as fast as it ever goes: no run)
+    eliteDungeonSpider: Object.freeze({
+        asset: "beast-elite-dungeon-spider",
+        length: 2.8,
+        made: Object.freeze({ long: 3, tall: 0.77 }),
+        sink: 0.09,
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", react: "Hit React", dead: "Explode" }),
+        attacks: Object.freeze({ bite: "Attack", lunge: "Attack 3" }),
+        specials: Object.freeze({ sting: "Attack 2", web: "Butt Attack" }),
+        rests: Object.freeze({ look: "Idle 2", cower: "Scared" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "Bip001_Spine", body: "Bip001_Pelvis", head: "Bip001_Head", mouth: "Bip001_Head", left: "Bn_L_Leg_A04" }),
+        mouth: null,
+        pace: 0.87,
+        flinch: 0.6,
+    }),
     // (The Ant Monster, the nests' great queen: made 6.8 metres long, drawn 4.2, 1.5 metres tall;
     // its mandibles, rearing to slam down, its acid spat, and its flock called (its call: battle.js
     // #calls); resting, looking about, swaying, rearing in threat. Its walk carries it as fast as

@@ -269,6 +269,8 @@ export const CREATURE_VOICES = Object.freeze({
     ant: { family: "spider", rate: 1.05, fall: "deathThudSmall" },
     greatCentipede: { family: "spider", rate: 0.9, fall: "deathThudMid" },
     antMonster: { family: "spider", rate: 0.72, fall: "deathThudBig" },
+    dungeonSpider: { family: "spider", rate: 0.95, fall: "deathThudSmall" },
+    eliteDungeonSpider: { family: "spider", rate: 0.8, fall: "deathThudMid" },
     scorpion: { family: "spider", rate: 0.85, fall: "deathThudSmall" },
     locustSwarm: { family: "spider", rate: 1.2, fall: null },
     bloodflies: { family: "spider", rate: 1.24, fall: null },
