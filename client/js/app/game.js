@@ -28,7 +28,7 @@ import { folkLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature, sizeOf } from "../beasts/beast.js";
-import { forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsNear, wantModel } from "../beasts/model.js";
+import { forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsMet, modelsNear, wantModel } from "../beasts/model.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
 import { LOOKS as CREATURE_LOOKS, humanoidLook } from "../beasts/looks.js";
@@ -3613,26 +3613,32 @@ export class Game {
         return this.greatLairs;
     }
 
-    // Every lair and den whose master's drawn from a model (a Dreadthorn's lair, a werewolves'
-    // den), and the kind each one's master is: its model asked for near it (#modelling)
+    // Every lair and den kept by a kind drawn from a model (a Dreadthorn's lair; a werewolves' den,
+    // its Moonfang and its werewolves), once for each such kind, its master or one of its guards:
+    // their models asked for near it (#modelling), so none's met as its stand-in
     #modelLairs() {
-        this.modelLairs ??= this.world.plan.sites.filter((site) => LAIRS[site.kind] && MODELS[LAIRS[site.kind].master[0]]).map((site) => ({ id: site.id, at: site.at, beast: LAIRS[site.kind].master[0] }));
+        this.modelLairs ??= this.world.plan.sites.flatMap((site) => {
+            const lair = LAIRS[site.kind];
+            const kinds = lair ? [lair.master[0], ...lair.guards.map(([kind]) => kind)] : [];
+
+            return [...new Set(kinds)].filter((kind) => MODELS[kind]).map((beast) => ({ id: site.id, at: site.at, beast }));
+        });
 
         return this.modelLairs;
     }
 
     // The creatures drawn from a model (beasts/model.js): each kind's asked for once the player's
-    // near one of its lairs (looked at every MODELLING seconds), before it's met; and one drawn
-    // with its stand-in, its model read since, drawn again from the model once it's out of view
-    // and not attacking, falling or coming down out of the sky (let go of, and put back on the
-    // list to be drawn)
+    // near one of its lairs, or where one may be met at that hour (a werewolf: #modelsHere), before
+    // it's met (looked at every MODELLING seconds); and one drawn with its stand-in, its model read
+    // since, drawn again from the model once it's out of view and not attacking, falling or coming
+    // down out of the sky (let go of, and put back on the list to be drawn)
     #modelling(dt) {
         const me = this.avatars.get(this.me)?.object.position;
 
         if ((this.modelClock = (this.modelClock ?? 0) - dt) <= 0 && me) {
             this.modelClock = MODELLING;
 
-            for (const kind of modelsNear([me.x, me.z], this.#modelLairs())) {
+            for (const kind of new Set([...modelsNear([me.x, me.z], this.#modelLairs()), ...this.#modelsHere()])) {
                 wantModel(kind);
             }
         }
@@ -3645,10 +3651,19 @@ export class Game {
         }
     }
 
+    // The kinds drawn from a model that may be met where the player is, out in the world, at this
+    // hour (beasts/model.js modelsMet: its land, how far it is from their home, by night or day)
+    #modelsHere() {
+        const actor = this.battle.actor(this.me);
+
+        return actor?.map === "town" && this.world.plan ? modelsMet(this.world.plan, [actor.x, actor.y], this.world.start?.at ?? [0, 0], torchesLit(elapsedOf(this.host.war))) : [];
+    }
+
     // The beasts' bodies none of their look has been drawn on for a while let go of, every so often
     // (FORGET_EVERY); and the models none has been drawn from for a while, but those whose lairs
     // the player's near enough to want them for (KEEP_MODELS: a little further than they're asked
-    // for from, so one isn't let go and read again going to and fro at the edge)
+    // for from, so one isn't let go and read again going to and fro at the edge), and those that
+    // may be met where they are (#modelsHere)
     #forgetting(dt) {
         if ((this.forgetClock = (this.forgetClock ?? FORGET_EVERY) - dt) > 0) {
             return;
@@ -3659,7 +3674,7 @@ export class Game {
 
         const me = this.avatars.get(this.me)?.object.position;
 
-        forgetModels(performance.now(), MODEL_LINGER, me ? modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS) : []);
+        forgetModels(performance.now(), MODEL_LINGER, me ? [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere()] : []);
     }
 
     // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): past

@@ -123,8 +123,9 @@ staggering): weapons.js `werewolf`. At daybreak, out of everyone's sight, it goe
 It's drawn from a model of its own once that's read (*Drawn from a model*, below): a bought one,
 2.4 metres tall, in its own grey skin or one of three others, the dusk's (black), the ash's (pale)
 or the russet's, by its seed; it rakes with its claws, leaps on whoever it's after, and howls and
-looks about as it rests. Till it's read, a great dark wolf, a third bigger than a dire wolf,
-stands in for it (beasts/looks.js).
+looks about as it rests. Its model's read before one's met, wherever one may be by night and near
+its dens. Till it's read, a great dark wolf, a third bigger than a dire wolf, stands in for it
+(beasts/looks.js).
 
 **The Moonfang** is the first of the werewolves, the master of each of their dens: one or two a
 world, a cave's mouth cut into a wooded hillside, the bones of what's been dragged home about it
@@ -873,7 +874,8 @@ what's downloaded before the game starts.
   (`forgetModels`, every five seconds: the game's `FORGET_EVERY`): out of what's read, its
   meshes' shapes and its pictures, its skins' too, off the graphics card. Not while the player's
   within 2 km of one of its lairs (the game's `KEEP_MODELS`: further than it's asked for from, so
-  it isn't let go of and read again going to and fro at the edge), nor while it's being read.
+  it isn't let go of and read again going to and fro at the edge), nor where one may be met at
+  that hour (a werewolf's, out in its woods by night: `modelsMet`), nor while it's being read.
   Wanted again, it's read again from what the downloader kept (nothing downloaded again), its
   stand-in drawn meanwhile. Told in the debug overlay and log, under *Held*: how many models are
   read, and how many of them none is drawn from (`keptModels`).
@@ -909,9 +911,14 @@ Standard License (`client/models/beasts/LICENSE.md`), 3.4 MB, 16,456 triangles, 
 packed in, nine clips (three made in `utilities/blenderpipeline`: a howl, a claw swipe and a run).
 What's the same as the Dreadthorn's, and what's its own:
 
-- **Fetched as it's wanted:** as one comes into the battle (it keeps no lair of its own: near a
-  den, its file's read for the Moonfang, drawn from the same), with the three skins one of its
-  kind may wear besides its own, all four together.
+- **Fetched before it's met:** wherever one may be met at that hour (`modelsMet`: by night, in
+  its woods, five tiers or more from home; looked at every two seconds with the lairs, the
+  game's `#modelsHere`), and within 1.5 km of a den, whose werewolves are out by day as by night
+  (the game's `#modelLairs` lists each lair's guards drawn from a model as well as its master).
+  So one's read before it comes, and isn't fought as its stand-in, which is only let go of out of
+  view. Failing that (saving data, say), as one comes into the battle. With it, the three skins
+  one of its kind may wear besides its own, all four together; the Moonfang's file is the same,
+  read once for both.
 - **Its skins** (`MODELS` `skins`): its own grey, or the dusk's, the ash's or the russet's, the
   catalog's `beast-werewolf-skins` (0.2 MB each: only the textures that differ, the pipeline's
   variants). Which one each wears is from its seed, well mixed (`skinOf`), so a pack's each wear
@@ -932,6 +939,12 @@ What's the same as the Dreadthorn's, and what's its own:
 - `e2e/models.spec.js`: its model and three skins read, each skin worn by one of its seeds, its
   levels three meshes each, shown together, its fur flushed with its body; the Moonfang drawn
   from the same model as read, bigger, in its own skin.
+- `e2e/pellagos.spec.js`, in the game: one met by night drawn from its model in one of its skins,
+  clawing and springing at the player (both its model's clips), flushed red when struck, falling
+  as its model falls, its pelt and claws and its purse's gold left; its model read out in its
+  woods by night before one comes; and, a kilometre from a den by day, the Moonfang's and its
+  werewolves' read, one file, before they're met. `test/model.test.js`: where its model's asked
+  for (`modelsMet`), by night and day, far out and near home.
 
 ### In a crowd (beasts/herd.js)
 
