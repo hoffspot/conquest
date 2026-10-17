@@ -7,10 +7,12 @@
 // copy of everything made first.
 //
 // And a player's solo world brought to the server (§5, "Bring my world to the server"): a world
-// made with the same seed and the same war, their hero its first kept hero and they its owner;
-// the rest from the seed, as a solo game's is each time it's loaded.
+// made with the same seed and the same war, their hero its first kept hero and they its owner
+// (manage.js bringSolo); the rest from the seed, as a solo game's is each time it's loaded.
 
-import { importCharacter } from "../client/js/app/save.js";
+import { rm } from "node:fs/promises";
+import { salvage } from "../client/js/app/character-file.js";
+import { ExportError, forwardExport, importCharacter } from "../client/js/app/save.js";
 import { Host, SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { characterFrom } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -141,42 +143,75 @@ export async function freshStart(stored, { why = "its owner asked", build = buil
     return host;
 }
 
-/**
- * A player's solo world brought to the server (`exported`: app/save.js exportCharacter's, read
- * through importCharacter as the game reads its own), as a new world kept in `store`: its seed,
- * its home people the hero's (as the game made it), its war carried on; the hero the first kept
- * for `owner`, who made it. Refused, with the reason, if it can't be. Returns the world kept.
- */
-export async function importSolo(store, exported, { owner, name = null, id, build = buildWorld, when = () => new Date() } = {}) {
-    const imported = importCharacter(exported);
+/** Refused: a character and their world that can't be brought to the server, saying why (`newer`: kept by a newer game). */
+export class SoloError extends Error {
+    constructor(message, { newer = false } = {}) {
+        super(message);
+        this.name = "SoloError";
+        this.newer = newer;
+    }
+}
 
-    if (!imported) {
-        throw new Error("That isn't a world the game saved, or it was saved by a newer version of the game.");
+/**
+ * A player's solo world brought to the server (§5, "Bring my world to the server"): `exported` is
+ * a character and their world as the game exports them (app/save.js exportCharacter), brought
+ * forward and made one this version plays as a character file is (character-file.js salvage). A
+ * new world is kept in `store` for it: its seed, its home people the hero's (as the game made it),
+ * its war carried on, and the rest from the seed, as a solo game's is each time it's loaded;
+ * made by `creator`, named `name` (or after the hero), its first heroes as `firstHero` has them.
+ * Its hero isn't kept yet: they're kept for whoever brought it, once they're one of its players
+ * (manage.js bringSolo). Throws SoloError, saying why, if it can't be brought. Returns { stored,
+ * kept (the hero, as a world keeps one), left (what was left out or put right, as salvage says),
+ * turn (its war's, or null for a new war) }.
+ */
+export async function importSolo(store, exported, { name = null, creator = null, firstHero = "new", id, build = buildWorld, when = () => new Date() } = {}) {
+    let imported;
+    let left;
+
+    try {
+        const salvaged = salvage(forwardExport(exported));
+
+        imported = importCharacter(salvaged.exported);
+        left = salvaged.left;
+    } catch (error) {
+        throw new SoloError(error instanceof ExportError ? error.message : "That isn't a character and world the game saved.", { newer: Boolean(error.newer) });
     }
 
-    const character = characterFrom({ hero: imported.hero, talks: imported.talks, progress: imported.progress, standing: imported.standing, followers: imported.followers });
+    const character = imported && characterFrom({ hero: imported.hero, talks: imported.talks, progress: imported.progress, standing: imported.standing, followers: imported.followers });
 
     if (!character) {
-        throw new Error("Its hero couldn't be brought in.");
+        throw new SoloError("Its hero couldn't be brought in.");
     }
 
     const { hero } = character;
-    const stored = await store.create({ name: name ?? `${hero.name}'s world`.slice(0, 60), seed: imported.save.seed, race: hero.race, creator: owner, heroes: "kept" }, { ...(id ? { id } : {}), when: when() });
     const kept = { ...character, explored: imported.explored, wheels: imported.wheels, pin: imported.pin, place: imported.place, vitals: imported.vitals, messages: imported.messages, told: imported.told };
-
-    await stored.heroes.keep(owner, kept, { slot: 1, when: when() });
-
-    let host;
+    let stored;
 
     try {
-        host = new Host(build({ seed: imported.save.seed, race: hero.race }), { war: imported.war, rules: rulesFor(stored.meta) });
+        stored = await store.create({ name: String(name ?? "").trim() || `${hero.name}'s world`.slice(0, 60), seed: imported.save.seed, race: hero.race, creator, heroes: "kept", firstHero }, { ...(id ? { id } : {}), when: when() });
     } catch (error) {
-        host = new Host(build({ seed: imported.save.seed, race: hero.race }), { rules: rulesFor(stored.meta) });
-        await stored.journal(`Its war couldn't be taken (${error.message}): a new war.`, when());
+        throw new SoloError(error.message);
     }
 
-    await stored.save(host.snapshot(), { why: `brought from ${owner}'s solo game`, when });
-    await stored.journal(`Brought from ${owner}'s solo game: ${hero.name}, its first kept hero; its war at turn ${host.war?.turn ?? 0}.`, when());
+    // (Its land made from the seed and its war carried on, then saved; if it can't be, nothing's
+    // left of it)
+    try {
+        let host;
 
-    return stored;
+        try {
+            host = new Host(build({ seed: imported.save.seed, race: hero.race }), { war: imported.war, rules: rulesFor(stored.meta) });
+        } catch (error) {
+            host = new Host(build({ seed: imported.save.seed, race: hero.race }), { rules: rulesFor(stored.meta) });
+            imported.war = null;
+            await stored.journal(`Its war couldn't be taken (${error.message}): a new war.`, when());
+        }
+
+        await stored.save(host.snapshot(), { why: "brought from a solo game", when });
+
+        return { stored, kept, left, turn: imported.war ? (host.war?.turn ?? 0) : null };
+    } catch (error) {
+        await rm(stored.folder, { recursive: true, force: true });
+
+        throw new SoloError(`It couldn't be made here (${error.message}).`);
+    }
 }

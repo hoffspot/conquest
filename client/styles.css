@@ -5569,6 +5569,28 @@ dialog.worlds input.text.code-entry {
     margin: 16px 0 6px;
 }
 
+/* Instructions in a world's dialog (main.js helpBlock: Bring my world): a heading, a line or two,
+   and steps or points */
+.world-help .worlds-heading {
+    font-size: 15px;
+    margin: 12px 0 4px;
+}
+
+.world-help .note {
+    margin: 0 0 6px;
+}
+
+.world-help ol,
+.world-help ul {
+    margin: 0 0 4px;
+    padding-left: 20px;
+    display: grid;
+    gap: 4px;
+    font-size: 14px;
+    line-height: 1.35;
+    color: var(--muted);
+}
+
 .world-people {
     list-style: none;
     margin: 0;

@@ -41,6 +41,24 @@ export const PLAY_PROTOCOL = "pellagos.play.1";
 
 /** How long a call to a server's API may take (ms); and asking one of a server's addresses when there's another to try. */
 export const CALL_TIMEOUT = 10000;
+
+/**
+ * What the game sends to bring a world to a server (as server/manage.js BRING_FORMAT reads it),
+ * and how long the server may take to make it (ms): its land's made from its seed first.
+ */
+export const BRING_FORMAT = "pellagos.bring.1";
+export const BRING_TIMEOUT = 120000;
+
+// A value as JSON, gzipped where the browser can (CompressionStream): bytes to send
+async function packed(value) {
+    const bytes = new TextEncoder().encode(JSON.stringify(value));
+
+    if (typeof CompressionStream !== "function") {
+        return bytes;
+    }
+
+    return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+}
 export const REACH_TIMEOUT = 4000;
 
 /** What a code of servers and tickets starts with (KnownServers export). */
@@ -333,17 +351,18 @@ export class ServerClient {
 
     // A call to its API (`at` one of its addresses: where it's reached, unless given): the answer,
     // or throws a ServerRefusal
-    async #call(method, path, { body = null, session = null, key = null, at = null, timeout = CALL_TIMEOUT } = {}) {
+    async #call(method, path, { body = null, raw = null, session = null, key = null, at = null, timeout = CALL_TIMEOUT } = {}) {
         const target = at ?? this.via ?? (await this.reach());
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeout);
         let response;
 
         try {
+            // (A body as JSON; or `raw`, bytes sent as they are: a file's)
             response = await this.fetch(`${baseOf(target)}${API_PATH}${path}`, {
                 method,
-                headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...(session ? { Authorization: `Bearer ${session}` } : key ? { Authorization: `Key ${key}` } : {}) },
-                ...(body ? { body: JSON.stringify(body) } : {}),
+                headers: { ...(raw ? { "Content-Type": "application/octet-stream" } : body ? { "Content-Type": "application/json" } : {}), ...(session ? { Authorization: `Bearer ${session}` } : key ? { Authorization: `Key ${key}` } : {}) },
+                ...(raw ? { body: raw } : body ? { body: JSON.stringify(body) } : {}),
                 signal: controller.signal,
             });
         } catch {
@@ -632,6 +651,25 @@ export class ServerClient {
         this.servers?.keepWorld(this.record.key, made.world, { name: made.name, key: made.ownerKey, playerKey: made.playerKey, role: "owner" });
 
         return made;
+    }
+
+    /**
+     * A character's own world brought to the server ("Bring my world to the server": server/
+     * manage.js bringSolo), with a creator or admin key (`maker`): `character` as app/save.js
+     * exportCharacter gives one, the world named `name` (or after them), its first heroes as
+     * `firstHero` has them. A world of the server's, with the land and the war of theirs, their
+     * hero its first kept hero, and they its owner: { world, name, ownerKey, playerKey, ticket,
+     * player, hero, turn, left }. The owner's key and their ticket kept for it, so they come in as
+     * its owner, to their hero. Proves the server first. Throws ServerRefusal.
+     */
+    async bringWorld(maker, { character, name = null, firstHero = "new" }) {
+        await this.prove();
+
+        const brought = await this.#call("POST", "/worlds/bring", { key: maker, raw: await packed({ format: BRING_FORMAT, net: NET_VERSION, name, firstHero, character }), timeout: BRING_TIMEOUT });
+
+        this.servers?.keepWorld(this.record.key, brought.world, { name: brought.name, key: brought.ownerKey, playerKey: brought.playerKey, ticket: brought.ticket, player: brought.player, role: "owner" });
+
+        return brought;
     }
 
     /** A world's keys and short codes (its owner's session): { keys, codes }. */
