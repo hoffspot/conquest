@@ -613,7 +613,7 @@ bobs 3 cm up and down (its foot 2.5 to 8.5 cm off it, each in its own time), ove
 the colour of how rare it is, the pack's own colours (drops3d.js `FLOAT`, `RING`, `RARITY_GLOW`,
 `shownOf`); a tap on any of them takes the lot, and what's left is drawn again, fewer. The first
 time a fight leaves a character something they're told so across the screen in a line, for 5 s
-("The wolf dropped something. Tap it to take it all, or turn on Auto-snag in Game options."); never
+("The wolf dropped something. Tap it to take it all, or turn on Auto-snag in Game options, Gameplay."); never
 again for that character, not even after the game's started again (game.js `#once`,
 `SPOILS_HINT`; kept with the character: save.js `loadTold`, given to the game by session.js
 `createGame` and `createJoinedGame`; the user: "The big message on how the drops work is too big
