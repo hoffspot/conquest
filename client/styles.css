@@ -398,6 +398,12 @@ select:focus-visible,
 #create {
     justify-content: flex-end;
     align-items: stretch;
+    /* What's dragged and pinched beside the panel goes to the view behind it (app/creator.js) */
+    pointer-events: none;
+}
+
+#create .creator {
+    pointer-events: auto;
 }
 
 .creator {

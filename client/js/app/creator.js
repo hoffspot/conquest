@@ -4,8 +4,10 @@
 //
 //     const hero = await new Creator({ view, kit }).run();   // null if the player went back
 //
-// Drag across the view to walk round the character; each tab frames what it changes (the face
-// close up, the hair head and shoulders). Choosing a weapon shows it held on guard and swung.
+// Drag across the view (a finger, or the mouse) to walk round the character, and pinch (or turn the
+// mouse wheel) to come nearer or stand further off, never so near the camera cuts into them; each
+// tab frames what it changes (the face close up, the hair head and shoulders). Choosing a weapon
+// shows it held on guard and swung.
 
 import * as THREE from "three";
 import { Character } from "../characters/character.js";
@@ -17,6 +19,7 @@ import { armsOf, STARTING_WEAPONS, WEAPONS } from "../core/weapons.js";
 import { Avatar } from "../world/avatar.js";
 import { bakeStudio } from "../world/environment.js";
 import { Progress } from "../core/progress.js";
+import { Steps } from "../core/steps.js";
 import { guardOf, heroEquipment } from "./game.js";
 import { cleanName, defaultHero, HERO_PEOPLES, heroOfPeople, IRIS_COLOURS, randomHero, suggestName, tonesOf } from "./heroes.js";
 
@@ -40,6 +43,140 @@ const DEMO_EVERY = 3.2;
 
 // A body's shape is rebuilt at most this often while a slider is dragged (ms)
 const RESHAPE_EVERY = 90;
+
+// How far a pinch or the mouse wheel takes the camera out, as a share of the distance the tab
+// frames the character from (in, as near as NEAREST lets it)
+const ZOOM_OUT = 1.6;
+
+/**
+ * How near the camera may come to the character (#nearest), so it never cuts into them: along its
+ * line to what it looks at, `margin` metres further out than the last of them within `side` metres
+ * of that line, as they're shaped, dressed and posed then; and, while it's being turned, further
+ * out than that where it's going and `ahead` radians past it, so it eases back before an arm or a
+ * shield comes between. Where they are is measured (pointsOf) from every corner of what's drawn of
+ * them, each triangle wider than `spacing` metres filled in, a point kept in each `grain`-metre
+ * cube, `budget` ms a frame (some 150 ms in all), once they're first drawn and again `settle` ms
+ * after they're last changed; till they're first measured, the camera comes no nearer than the tab
+ * frames them from. While a weapon's swung, the camera keeps out of its sweep too: as far from
+ * what it looks at as `arm` of their height and the longest thing they hold.
+ */
+const NEAREST = Object.freeze({ margin: 0.1, side: 0.08, ahead: 0.25, spacing: 0.06, grain: 0.02, budget: 4, settle: 300, arm: 0.6 });
+
+// How many points of a character's measured between looks at the time (pointsOf)
+const POINTS_A_STEP = 1500;
+
+/**
+ * Where a character is as they stand now (`object`), a step at a time (core/steps.js): every
+ * corner of each mesh drawn of them, their skin posed by their bones, and points filling in each
+ * triangle wider than `spacing` metres, so none can be passed through between its corners; one
+ * kept in each `grain`-metre cube (`points`: x, y, z in the world, metres); and the longest thing
+ * they hold or wear that isn't skin (`longest`, metres: a weapon, end to end).
+ */
+function* pointsOf(object, { spacing, grain }) {
+    const point = new THREE.Vector3();
+    const [a, b, c, ab, ac] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    const scale = new THREE.Vector3();
+    const points = [];
+    const meshes = [];
+    const cubes = new Set();
+    let longest = 0;
+    let counted = 0;
+    // (A point kept, unless one's been kept in its cube already: cubes counted from 10 m below,
+    // west and north of them, 2,048 a side)
+    const keep = ({ x, y, z }) => {
+        const cube = Math.floor(x / grain + 1024) + Math.floor(y / grain + 1024) * 2048 + Math.floor(z / grain + 1024) * 2048 * 2048;
+
+        if (!cubes.has(cube)) {
+            cubes.add(cube);
+            points.push(x, y, z);
+        }
+    };
+    // (Drawn: it and all it's part of shown)
+    const shown = (node) => node === object || (node.visible && (!node.parent || shown(node.parent)));
+
+    object.updateMatrixWorld(true);
+    object.traverse((mesh) => mesh.isMesh && shown(mesh) && meshes.push(mesh));
+
+    for (const mesh of meshes) {
+        const { geometry } = mesh;
+        const count = geometry.attributes.position.count;
+        const at = new Float32Array(count * 3);
+
+        for (let i = 0; i < count; i++) {
+            mesh.getVertexPosition(i, point);
+
+            if (mesh.isSkinnedMesh) {
+                mesh.applyBoneTransform(i, point);
+            }
+
+            point.applyMatrix4(mesh.matrixWorld).toArray(at, i * 3);
+            keep(point);
+
+            if (++counted % POINTS_A_STEP === 0) {
+                yield;
+            }
+        }
+
+        // (Each triangle wider than `spacing` filled in, on a grid as fine)
+        const corners = geometry.index?.count ?? count;
+
+        for (let t = 0; t + 2 < corners; t += 3) {
+            const [i, j, k] = [t, t + 1, t + 2].map((n) => geometry.index?.getX(n) ?? n);
+
+            a.fromArray(at, i * 3);
+            b.fromArray(at, j * 3);
+            c.fromArray(at, k * 3);
+
+            const wide = Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a));
+
+            if (wide > spacing) {
+                const n = Math.ceil(wide / spacing);
+
+                ab.subVectors(b, a);
+                ac.subVectors(c, a);
+
+                for (let u = 0; u <= n; u++) {
+                    for (let v = 0; v <= n - u; v++) {
+                        keep(point.copy(a).addScaledVector(ab, u / n).addScaledVector(ac, v / n));
+                    }
+                }
+            }
+
+            if (++counted % POINTS_A_STEP === 0) {
+                yield;
+            }
+        }
+
+        if (!mesh.isSkinnedMesh) {
+            geometry.boundingSphere ?? geometry.computeBoundingSphere();
+            mesh.matrixWorld.decompose(point, new THREE.Quaternion(), scale);
+            longest = Math.max(longest, geometry.boundingSphere.radius * 2 * Math.max(scale.x, scale.y, scale.z));
+        }
+    }
+
+    return { points: Float32Array.from(points), longest };
+}
+
+/**
+ * How far from `look` (THREE.Vector3) along the line to a camera round it at `angle` (radians,
+ * looking down at `pitch`) the last of `points` (pointsOf's) within `side` metres of that line is
+ * (metres; 0 if none are). A pure function.
+ */
+export function clearAlong(points, look, angle, pitch, side) {
+    const [ux, uy, uz] = [Math.sin(angle) * Math.cos(pitch), Math.sin(pitch), Math.cos(angle) * Math.cos(pitch)];
+    let last = 0;
+
+    for (let i = 0; i < points.length; i += 3) {
+        const [x, y, z] = [points[i] - look.x, points[i + 1] - look.y, points[i + 2] - look.z];
+        const along = x * ux + y * uy + z * uz;
+
+        if (along > last && x * x + y * y + z * z - along * along < side * side) {
+            last = along;
+        }
+    }
+
+    return last;
+}
 
 const element = (tag, attributes = {}, ...children) => {
     const node = document.createElement(tag);
@@ -93,6 +230,11 @@ export class Creator {
         this.pending = new Set();
         this.lastReshape = 0;
         this.orbit = { angle: 0.35, target: 0.35, pitch: 0.08, zoom: 1 };
+        // (Where the character is, pointsOf: measured once they're drawn, `at` then, and as they're
+        // being measured; and when they were last changed)
+        this.measured = null;
+        this.measuring = null;
+        this.changedAt = 0;
         this.tab = "body";
         this.step = "look";
         this.demoAt = 0;
@@ -182,6 +324,10 @@ export class Creator {
     #buildCharacter() {
         const { hero } = this;
 
+        // (Someone new: where they are measured afresh, #nearest)
+        this.measured = null;
+        this.measuring = null;
+
         this.avatar?.object.removeFromParent();
         this.avatar?.character.dispose();
 
@@ -223,6 +369,8 @@ export class Creator {
             this.#showDraw();
         }
 
+        // (Measured again once they've settled: #nearest)
+        this.changedAt = now;
         pending.clear();
     }
 
@@ -284,7 +432,19 @@ export class Creator {
 
         orbit.angle += (orbit.target - orbit.angle) * ease;
         this.look.y += (height * framing.at - this.look.y) * ease;
-        this.distance += (framing.distance * orbit.zoom * room - this.distance) * ease;
+
+        // (Never nearer than the character lets it come, once it's come nearer than the tab frames
+        // them from, or the tab frames them close: easing back before an arm or a shield comes
+        // between as it's turned, and never cutting into them: #nearest)
+        const wanted = framing.distance * orbit.zoom * room;
+        const near = orbit.zoom < 1 || framing.distance * room < height;
+
+        this.#measure(now);
+
+        // (Not measured yet, or someone new: back out to where the tab frames them meanwhile)
+        const { here, about } = near ? (this.#nearest() ?? { here: 0, about: framing.distance * room }) : { here: 0, about: 0 };
+
+        this.distance = Math.max(here, this.distance + (Math.max(about, wanted) - this.distance) * ease);
         camera.position.set(Math.sin(orbit.angle) * Math.cos(orbit.pitch), Math.sin(orbit.pitch), Math.cos(orbit.angle) * Math.cos(orbit.pitch)).multiplyScalar(this.distance).add(this.look);
         camera.lookAt(this.look);
         this.#fitCamera();
@@ -314,20 +474,112 @@ export class Creator {
         this.view.resize();
     }
 
+    // Measure where the character is (pointsOf) once they're first drawn, and again once they've
+    // changed since (and settled), or carry on measuring them, NEAREST.budget ms a frame
+    #measure(now) {
+        const { avatar, measured } = this;
+
+        if (avatar && !this.measuring && (!measured || (measured.at < this.changedAt && now - this.changedAt >= NEAREST.settle))) {
+            this.measuring = { steps: new Steps(pointsOf(avatar.object, NEAREST)), at: now };
+        }
+
+        if (this.measuring?.steps.take(performance.now() + NEAREST.budget)) {
+            this.measured = { ...this.measuring.steps.value, at: this.measuring.at };
+            this.measuring = null;
+        }
+    }
+
+    /**
+     * How near the camera may come to what it looks at (`look`: where it looks now, or will once
+     * it's eased there; metres), as the character's shaped, dressed and posed (NEAREST): `here`, as
+     * it's turned now, never to be come nearer than; `about`, while it's being turned, as it will
+     * be (where it's being turned, and a little past it), to ease back to before anything comes
+     * between. Null till they're first measured (#measure).
+     */
+    #nearest(look = this.look) {
+        const { avatar, orbit, measured } = this;
+
+        if (!avatar || !measured) {
+            return null;
+        }
+
+        const { points, longest } = measured;
+        const { margin, side, ahead } = NEAREST;
+        const along = (angle) => clearAlong(points, look, angle, orbit.pitch, side) + margin;
+        // (Swinging: out of reach of their arm and what they hold)
+        const sweep = this.step === "weapon" ? avatar.character.height * NEAREST.arm + longest + margin : 0;
+        const here = Math.max(sweep, along(orbit.angle));
+        // (Being turned: where it's going, and a little past it)
+        const turning = orbit.target - orbit.angle;
+        const about = Math.abs(turning) < 0.01 ? here : Math.max(here, along(orbit.target), along(orbit.target + Math.sign(turning) * ahead));
+
+        return { here, about };
+    }
+
+    // Come nearer the character or stand further off (`zoom`: a share of the distance the tab frames
+    // them from), no further than ZOOM_OUT nor nearer than #nearest lets it come to what the tab
+    // looks at
+    #zoomTo(zoom) {
+        const framing = FRAMING[this.step === "look" ? this.tab : this.step];
+        const room = this.view.canvas.clientWidth < this.view.canvas.clientHeight ? UPRIGHT_DISTANCE : 1;
+        // (As near as it may come to what the tab looks at, once it's eased there from another's;
+        // no nearer than the tab frames them from till they're measured)
+        const look = new THREE.Vector3(0, (this.avatar?.character.height ?? 0) * framing.at, 0);
+        const nearest = this.#nearest(look);
+        const least = nearest ? nearest.about / (framing.distance * room) : Math.min(1, this.orbit.zoom);
+
+        this.orbit.zoom = Math.min(Math.max(ZOOM_OUT, least), Math.max(least, zoom));
+    }
+
+    // A finger (or the mouse) dragged across the view walks round the character; two pinched
+    // together or apart come nearer or stand further off, as the mouse wheel does. Whatever's down
+    // is taken afresh as a finger's put down or lifted, so nothing jumps
     #listen() {
         const canvas = this.view.canvas;
+        const down = new Map();
         let drag = null;
+        let pinch = null;
+        const apart = () => {
+            const [a, b] = [...down.values()];
+
+            return Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+        };
+        const afresh = () => {
+            const [first] = down.values();
+
+            drag = down.size === 1 ? { x: first.x, angle: this.orbit.target } : null;
+            pinch = down.size >= 2 ? { apart: apart(), zoom: this.orbit.zoom } : null;
+        };
+        const lift = (event) => {
+            if (down.delete(event.pointerId)) {
+                afresh();
+            }
+        };
 
         this.listeners = [
-            [canvas, "pointerdown", (event) => (drag = { x: event.clientX, angle: this.orbit.target })],
+            [canvas, "pointerdown", (event) => {
+                down.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                afresh();
+            }],
             [window, "pointermove", (event) => {
-                if (drag) {
+                const finger = down.get(event.pointerId);
+
+                if (!finger) {
+                    return;
+                }
+
+                Object.assign(finger, { x: event.clientX, y: event.clientY });
+
+                if (pinch) {
+                    this.#zoomTo(pinch.zoom * (pinch.apart / apart()));
+                } else if (drag) {
                     this.orbit.target = drag.angle - ((event.clientX - drag.x) / Math.max(200, canvas.clientWidth)) * Math.PI * 2;
                 }
             }],
-            [window, "pointerup", () => (drag = null)],
+            [window, "pointerup", lift],
+            [window, "pointercancel", lift],
             [canvas, "wheel", (event) => {
-                this.orbit.zoom = Math.min(1.6, Math.max(0.55, this.orbit.zoom * Math.exp(event.deltaY * 0.001)));
+                this.#zoomTo(this.orbit.zoom * Math.exp(event.deltaY * 0.001));
             }],
         ];
 
@@ -400,6 +652,8 @@ export class Creator {
 
     #goTo(step) {
         this.step = step;
+        // (Held on guard, or put away: measured again, #nearest)
+        this.changedAt = performance.now();
 
         for (const name of STEPS) {
             this.root.querySelector(`#step-${name}`).hidden = name !== step;
