@@ -33,6 +33,47 @@ async function title(page) {
     await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
 }
 
+// How near the camera making a character is to the nearest of them, every point of what's drawn of
+// them as it's posed now (metres), against how near it draws (its near plane's distance); and how
+// far it is from what it looks at
+const creatorGap = (page) =>
+    page.evaluate(async () => {
+        const THREE = await import("three");
+        const { camera, avatar, distance } = window.pellagos.creator;
+        const point = new THREE.Vector3();
+        let gap = Infinity;
+
+        avatar.object.updateMatrixWorld(true);
+        avatar.object.traverse((mesh) => {
+            if (mesh.isMesh && mesh.visible) {
+                for (let i = 0; i < mesh.geometry.attributes.position.count; i++) {
+                    mesh.getVertexPosition(i, point);
+
+                    if (mesh.isSkinnedMesh) {
+                        mesh.applyBoneTransform(i, point);
+                    }
+
+                    gap = Math.min(gap, point.applyMatrix4(mesh.matrixWorld).distanceTo(camera.position));
+                }
+            }
+        });
+
+        return { gap, near: camera.near, distance };
+    });
+
+// Till the camera making a character has turned to where it's being turned, and come to look at
+// what the tab it's on frames (`at`, a share of their height)
+const creatorSettled = (page, at) =>
+    page.waitForFunction(
+        (at) => {
+            const { orbit, look, avatar } = window.pellagos.creator;
+
+            return Math.abs(orbit.target - orbit.angle) < 0.003 && Math.abs(look.y - avatar.character.height * at) < 0.005;
+        },
+        at,
+        { timeout: 60000 },
+    );
+
 // What's kept of a kind (save.js: "pellagos.<id>.<kind>") for the character played last, or null
 const keptOf = (page, kind) =>
     page.evaluate((kind) => {
@@ -408,6 +449,59 @@ test("the debug log (Game options): a crash found from the last game's notes, a 
     expect(await page.evaluate(() => localStorage.getItem("pellagos.debuglog"))).toBeNull();
     await page.locator("#logback").click();
     await expect(page.locator("#menuoptions")).toBeVisible();
+});
+
+test("making a character, the mouse dragged across the view walks round them, and its wheel comes nearer, never so near the camera cuts into them", async ({ page }) => {
+    test.setTimeout(180000);
+    await title(page);
+    await page.getByRole("button", { name: "New character" }).click();
+    await expect(page.locator("#create")).toBeVisible();
+    await page.waitForFunction(() => window.pellagos.creator?.avatar);
+
+    // (Beside the panel: the view, under the screen it's on)
+    const panel = await page.locator(".creator").boundingBox();
+    const [x, y] = [panel.x / 2, panel.y + panel.height / 2];
+
+    expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y).id, [x, y])).toBe("view");
+
+    const start = await page.evaluate(() => ({ ...window.pellagos.creator.orbit }));
+
+    await page.mouse.move(x - 100, y);
+    await page.mouse.down();
+    await page.mouse.move(x + 100, y, { steps: 10 });
+    await page.mouse.up();
+
+    const turned = await page.evaluate(() => ({ ...window.pellagos.creator.orbit }));
+
+    expect(turned.target).toBeLessThan(start.target - 0.5);
+
+    // The wheel turned towards them as far as it goes: nearer than the tab frames them from, and
+    // no nearer than lets the camera keep out of them, all the way round
+    for (let k = 0; k < 30; k++) {
+        await page.mouse.wheel(0, -400);
+    }
+
+    const zoomed = await page.evaluate(() => window.pellagos.creator.orbit.zoom);
+
+    expect(zoomed).toBeLessThan(0.5);
+    expect(zoomed).toBeGreaterThan(0);
+
+    for (let turn = 0; turn < 4; turn++) {
+        await page.evaluate((turn) => (window.pellagos.creator.orbit.target = turn * (Math.PI / 2)), turn);
+        await creatorSettled(page, 0.52);
+
+        const { gap, near, distance } = await creatorGap(page);
+
+        expect(distance).toBeLessThan(4.5);
+        expect(gap, `turned ${turn} quarters`).toBeGreaterThan(near);
+    }
+
+    // And back out, no further than half as far again as the tab frames them from
+    for (let k = 0; k < 60; k++) {
+        await page.mouse.wheel(0, 400);
+    }
+
+    expect(await page.evaluate(() => window.pellagos.creator.orbit.zoom)).toBe(1.6);
 });
 
 test("makes a character: a random look, a weapon and a name, then plays them in the town square", async ({ page }) => {
@@ -10161,6 +10255,84 @@ test.describe("on a phone", () => {
         await doubleTap(page, await spotNorth(page, 4), { touch: true });
 
         expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").order?.run)).toBe(true);
+    });
+
+    test("making a character, one finger dragged across the view walks round them, two spread apart come nearer and brought together stand further off; never so near the camera cuts into them, all the way round, even close up on their face", async ({ page }) => {
+        test.setTimeout(240000);
+        await title(page);
+        await page.getByRole("button", { name: "New character" }).tap();
+        await expect(page.locator("#create")).toBeVisible();
+        await page.waitForFunction(() => window.pellagos.creator?.avatar);
+
+        // (Fingers on the screen as a phone's are: each moved from where it lands to where it's
+        // lifted in five steps)
+        const cdp = await page.context().newCDPSession(page);
+        const touch = (type, fingers) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: fingers.map(([x, y], id) => ({ x, y, id })) });
+        const moved = async (from, to) => {
+            await touch("touchStart", from);
+
+            for (let k = 1; k <= 5; k++) {
+                await touch("touchMove", from.map(([x, y], i) => [x + ((to[i][0] - x) * k) / 5, y + ((to[i][1] - y) * k) / 5]));
+            }
+
+            await touch("touchEnd", []);
+        };
+        const orbit = () => page.evaluate(() => ({ ...window.pellagos.creator.orbit }));
+
+        // (Measured as they're first drawn, a little at a time: how near the camera may come)
+        await page.waitForFunction(() => window.pellagos.creator.measured, null, { timeout: 60000 });
+
+        // (Above the panel: the view, under the screen it's on)
+        const panel = await page.locator(".creator").boundingBox();
+        const [x, y] = [195, panel.y / 2];
+
+        expect(await page.evaluate(([x, y]) => document.elementFromPoint(x, y).id, [x, y])).toBe("view");
+
+        // One finger dragged 120 pixels across: walked round them, a turn for the screen's width
+        const start = await orbit();
+
+        await moved([[x - 60, y]], [[x + 60, y]]);
+
+        const turned = await orbit();
+
+        expect(turned.target).toBeCloseTo(start.target - (120 / 390) * Math.PI * 2, 2);
+        expect(turned.zoom).toBe(start.zoom);
+
+        // Two spread four times as far apart: four times nearer; brought halfway together again:
+        // twice as far off; not turning them either way
+        await moved([[x, y - 20], [x, y + 20]], [[x, y - 80], [x, y + 80]]);
+
+        const nearer = await orbit();
+
+        expect(nearer.zoom).toBeCloseTo(start.zoom / 4, 2);
+        expect(nearer.target).toBe(turned.target);
+
+        await moved([[x, y - 80], [x, y + 80]], [[x, y - 40], [x, y + 40]]);
+        expect((await orbit()).zoom).toBeCloseTo(nearer.zoom * 2, 2);
+
+        // Spread as far as they go, on the body and close up on the face, and walked all the way
+        // round in four drags: the camera as near as each way round lets it come, never so near it
+        // cuts into them (none of them nearer it than it draws from), and nearer than each tab
+        // frames them from
+        for (const [tab, at, framed] of [["Body", 0.52, 4.5], ["Face", 0.935, 0.95]]) {
+            await page.getByRole("tab", { name: tab }).tap();
+            await creatorSettled(page, at);
+            await moved([[x, y - 10], [x, y + 10]], [[x, y - 150], [x, y + 150]]);
+
+            const closest = [];
+
+            for (let turn = 0; turn < 4; turn++) {
+                await moved([[x - 49, y]], [[x + 49, y]]);
+                await creatorSettled(page, at);
+
+                const { gap, near, distance } = await creatorGap(page);
+
+                expect(gap, `${tab}, turned ${turn} quarters`).toBeGreaterThan(near);
+                closest.push(distance);
+            }
+
+            expect(Math.min(...closest), tab).toBeLessThan(framed * 1.6 * 0.6);
+        }
     });
 
     test("on the world map one finger drags it about, two spread apart zoom in and brought together zoom out, and two moved drag it, what's under them staying under them", async ({ page }) => {

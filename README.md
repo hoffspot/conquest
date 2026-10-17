@@ -106,8 +106,8 @@ saving, the keys and the options.
    scales, snout and tail, orcs' tusks), with their own skin colours to choose from, and you'll
    wake in one of their towns, as one of them. Shape the body (build, height, bust, heritage and
    physique), the face, and the colours and hair (skin, eyes, hairstyle, beard). **Random** makes
-   someone new, of the same people. Drag across the picture to walk round them; each tab frames
-   what it changes.
+   someone new, of the same people. Drag across the picture to walk round them, and pinch (or turn
+   the mouse wheel) to come nearer or stand further off; each tab frames what it changes.
 2. **Weapon.** Everyone starts in a tunic, leather bracers, leather pants and leather boots, and
    chooses one weapon (a bow comes with a quiver of arrows on the back). **Spiked boots** can be
    chosen on their own, or worn with any other weapon (a switch under the list):
