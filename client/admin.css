@@ -649,3 +649,13 @@ dialog::backdrop {
         gap: 0;
     }
 }
+
+/* --- An invite link: what those it's sent to do --- */
+
+.world-help ol {
+    margin: 4px 0 10px;
+    padding-left: 22px;
+    display: grid;
+    gap: 4px;
+    font-size: 14px;
+}

@@ -91,7 +91,58 @@ take); a third waits its turn. While anyone's in a world, the computer is kept a
 
 Players add the server in the game's **Worlds on servers** (by its address, from an invite link or
 QR code, or from the servers found nearby on the Wi-Fi), then come into a world with its key or
-code, or make one with a creator key or the admin key, or bring one of their own (below).
+code, or make one with a creator key or the admin key, or bring one of their own (below). Opening
+the game from the server's own address adds it by itself (Getting people in, below).
+
+## Getting people in
+
+The quickest way for each, the commonest first. An invite link opens the game from the server
+itself, so a player's game is always the server's own version. Once the server's open to the
+internet ([Reaching it from the internet](#reaching-it-from-the-internet)), the link carries its
+internet address (`https://pellagos.duckdns.org:8480/…`, say) and works from anywhere. Until
+then it carries the server's Wi-Fi address and works at home alone, and wherever it's shown, it
+says so.
+
+### Running the server
+
+| To | Do this |
+| --- | --- |
+| Invite people into a world | The management page's **Worlds**, the world's **Invite players**: copy the link and send it, or let them scan its code. One link does for everyone you send it to. |
+| Have a world anyone can drop into | The world's **Settings**, **Open to anyone** (below). Whoever opens the server's address sees it, and joins it with a tap. |
+| Let a friend run a world of their own | **Settings**, **Creator keys**: make one and send it. In the game's **Worlds on servers** they **Make a world**, or bring one they've played alone (**Bring my world**), and own it. |
+| Stop a link that's gone too far | The world's **Invite players**, **Replace the link**. The old one lets nobody else in. Everyone who came by it keeps their place, and comes back as before. |
+| Keep someone out | The world's **Players**: **Send out**, or **Ban**. |
+
+### Owning a world
+
+In the game, in the world: the menu's **World**.
+
+- **Invite link**: the world's link, copied at once, with its code to scan, **Share…** on a phone,
+  and **Replace the link**. It's the same link the management page gives.
+- **Open to anyone**: the switch (below).
+- **Make a short code**: for someone who has the game open already, typed on the Worlds screen
+  (**Enter a code**). It works once, for half an hour.
+
+### Playing
+
+| You have | Do this |
+| --- | --- |
+| An invite link | Open it, or scan its code. The game opens from the server. The first time, you make a character for the world, then you're in. |
+| Only the server's address (`pellagos.duckdns.org:8480`) | Open it in a browser: `https://` from the internet, `http://` on its Wi-Fi. The title shows the worlds on it. One open to anyone, tap and you're in; any other, ask its owner for the link. |
+| Been in before | Open the server's address again (or the link): your world's on the title. Tap it. Your game keeps a ticket, on that device. |
+| A new phone or browser | Ask the world's owner for the link again. Or, on the old one, Worlds on servers, **My servers and tickets**, and bring the code to the new one. |
+| A short code | Worlds on servers, the server's **Enter a code**. |
+
+### Open worlds
+
+A world **open to anyone** lets in whoever comes without a key. It's shown to everyone who opens
+the server's address (as a listed world is), and joined with a tap. Each newcomer comes in by its
+**open door**, a key of its own among its keys ("Anyone (an open world)"), and is given a ticket
+like anyone else, to come back by. No more than 20 newcomers an hour come in by it, nor 3 from one
+address, and bans hold as ever. Turned off, nobody new comes in without the link, and those
+already in can still come back; to keep them out too, revoke the open door under its **Keys**.
+Its owner turns it on or off from its Settings on the management page, or from the game's World
+panel.
 
 ## Reaching it from the internet
 

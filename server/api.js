@@ -5,11 +5,13 @@
 //
 //   GET    /status                          the server's card: its id, versions, addresses (home and
 //                                           internet), where the caller seems to be (you), listed worlds
+//                                           (and those open to anyone, `open`)
 //   POST   /reachability {results}          what a game found reaching it from elsewhere ("Test this
 //                                           server"): kept for the management page (manage.js report)
 //   GET    /health                          "ok", or "slow" if any world's steps are
 //   POST   /enter {world, key?, ticket?}    into a world: { session, ticket?, role, world, card (as
-//                                           /status lists it), player, heroes, life, position }
+//                                           /status lists it), player, heroes, life, position }; an
+//                                           open world's with no key at all (by its door: access/world.js)
 //   POST   /codes/redeem {code}             a short code traded for { world, key }, then as /enter
 //   GET    /worlds                          listed worlds, and the caller's own (a session or the admin key)
 //   POST   /worlds {name, seed?, race...}   a world made (a creator key or the admin key): { world, ownerKey, playerKey }
@@ -21,6 +23,9 @@
 //   DELETE /worlds/:id/keys/:key            a key revoked (its players' sockets closed, "key-revoked")
 //   POST   /worlds/:id/keys/:key/replace    a key replaced: { key, record }
 //   POST   /worlds/:id/codes {key, minutes?, uses?}                   a short code made: { code, record }
+//   POST   /worlds/:id/invite {replace?}    its invite link (players' key, to the server's own page: its
+//                                           internet address if it has one): { link, key, page,
+//                                           everywhere, open }; replaced, the old one letting nobody else in
 //
 // A world's owner's (or the admin's) management of it (manage.js), the management page's:
 //
@@ -95,7 +100,7 @@ export class Download {
 }
 
 // What each refusal is, as HTTP says it
-const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 403, home: 403, role: 403, full: 409, version: 409, code: 401, wait: 429 });
+const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 403, home: 403, role: 403, full: 409, version: 409, code: 401, wait: 429, busy: 429 });
 
 const refuse = (why, extra = {}) => new Refusal(STATUS[why] ?? 403, why, REFUSED[why] ?? extra.message ?? "That can't be done.", extra);
 
@@ -151,6 +156,7 @@ export function apiHandler(server, { mac = false } = {}) {
             most: meta.settings.mostPlayers,
             players: state?.players.filter((one) => one.id).length ?? 0,
             life,
+            open: meta.settings.open === true,
         };
     };
 
@@ -237,7 +243,8 @@ export function apiHandler(server, { mac = false } = {}) {
                 throw refuse("wait", { message: "Asked too often: wait a moment." });
             }
 
-            const listed = [...server.worlds.keys()].filter((id) => server.metaOf(id).settings.listed);
+            // (Those listed, and those open to anyone: they're shown to anyone)
+            const listed = [...server.worlds.keys()].filter((id) => server.metaOf(id).settings.listed || server.metaOf(id).settings.open);
 
             // (Where the caller seems to be: at the server's home if it came from there, or from the
             // home's own public address the long way round; the game tries home addresses first then)
@@ -282,6 +289,12 @@ export function apiHandler(server, { mac = false } = {}) {
             }
 
             const { key, ticket, session } = credentials(request, body);
+
+            // (Into an open world without a key: by its door, made the first time)
+            if (!key && !session && server.metaOf(world).settings.open) {
+                await access.openDoor(world, { by: "the world's being open" });
+            }
+
             const { principal } = policy.identify({ world, key, ticket, session, address: request.address, from: request.from });
 
             return enter(principal, world, body);
@@ -398,6 +411,11 @@ export function apiHandler(server, { mac = false } = {}) {
             server.closePlaces((place) => place.world === world && place.via === id, "key-revoked");
 
             return { key, record };
+        }],
+        ["POST", new RegExp(`^/worlds/${WORLD}/invite$`), async (request, body, [, world]) => {
+            const principal = managing(request, world, body.replace === true ? "key.revoke" : "key.issue", { role: "player" });
+
+            return doing(() => manage.invite(world, { replace: body.replace === true, by: byOf(principal) }));
         }],
         ["POST", /^\/worlds\/([a-z0-9]{10})\/codes$/, async (request, body, [, world]) => {
             const principal = managing(request, world, "key.issue", { role: access.world(world)?.key(body.key)?.role });

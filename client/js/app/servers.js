@@ -76,6 +76,7 @@ export const SERVER_REFUSALS = Object.freeze({
     version: versionWords(undefined, { server: true }),
     code: "That code doesn't open anything here (or no longer does).",
     wait: "Too many tries: wait a moment, then try again.",
+    busy: "Too many newcomers have come into that world lately: try again in an hour or so.",
     "too-many": "You're already in that world on too many devices.",
     newer: "That world was kept by a newer version of the server.",
     broken: "That world couldn't be opened just now. Try again soon.",
@@ -685,6 +686,26 @@ export class ServerClient {
     /** A key revoked (by its id, the first four characters): those who came in by it sent out. */
     async revokeKey(world, session, id) {
         return this.#call("DELETE", `/worlds/${world}/keys/${id}`, { session });
+    }
+
+    /**
+     * A world's invite link (its owner's session, or a trusted player's that may invite: server/
+     * manage.js invite): one for anyone, to the game's page on the server itself at its internet
+     * address (or, closed to the internet, its Wi-Fi's), with the world's players' key: { link,
+     * key, page, everywhere, open }. Or `replace`d: the old link letting nobody else in. The
+     * players' key kept for the world.
+     */
+    async invite(world, session, { replace = false } = {}) {
+        const made = await this.#call("POST", `/worlds/${world}/invite`, { session, body: replace ? { replace: true } : {} });
+
+        this.servers?.keepWorld(this.record.key, world, { playerKey: made.key });
+
+        return made;
+    }
+
+    /** A world's settings changed (its owner's session: `settings`, as server/storage/worlds.js WORLD_SETTINGS has them): its details. */
+    async changeWorld(world, session, settings) {
+        return this.#call("PATCH", `/worlds/${world}`, { session, body: { settings } });
     }
 
     /** A short code made for one of a world's keys (its owner's session): { code, record }. */

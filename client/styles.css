@@ -5612,6 +5612,51 @@ dialog.worlds input.text.code-entry {
     display: block;
     margin: 8px 0;
     font-size: 13px;
+    overflow-wrap: anywhere;
+}
+
+/* The game opened from a world server: its worlds on the title, each joined with a tap */
+.title-server {
+    margin: 14px 0 4px;
+    text-align: left;
+}
+
+.title-server-name {
+    font-size: 16px;
+    margin: 0 0 4px;
+}
+
+.title-server .note {
+    margin: 0 0 8px;
+}
+
+.title-worlds {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+    max-height: min(36vh, 300px);
+    overflow-y: auto;
+}
+
+/* An invite to a world on a server: its code to scan, its link, and what to do with it */
+.world-invite {
+    margin: 10px 0;
+    text-align: center;
+}
+
+.world-invite-qr {
+    width: 168px;
+    height: 168px;
+    image-rendering: pixelated;
+    background: #fff;
+    padding: 6px;
+    border-radius: 6px;
+}
+
+.world-invite .note {
+    text-align: left;
 }
 
 /* The characters kept: one card each (its name, people, weapon, gold, when last played), and,

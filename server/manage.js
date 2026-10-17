@@ -22,6 +22,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { gunzipSync, gzip } from "node:zlib";
 import { exportOfKept, fileOf } from "../client/js/app/character-file.js";
+import { addressOf, inviteLink } from "../client/js/app/invites.js";
 import { dayOf, elapsedOf, HOUR, timeOfDay } from "../client/js/core/daytime.js";
 import { decode } from "../client/js/core/wire.js";
 import { SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
@@ -242,11 +243,43 @@ export class Management {
         await stored.writeMeta(meta);
         this.server.registry.entries.get(id)?.thread?.meta(meta);
 
+        // (Opened to anyone: its door made now, so it's among its keys at once)
+        if (settings?.open === true) {
+            await this.server.access.openDoor(id, { by });
+        }
+
         const what = [name !== undefined && `named "${meta.name}"`, description !== undefined && "described anew", heroes !== undefined && `its heroes ${heroes === "kept" ? "kept by the world" : "brought in by their players"}`, firstHero !== undefined && `first heroes ${firstHero === "bring" ? "may be brought in" : "made new"}`, settings && `its settings (${Object.entries(settings).map(([key, value]) => `${key} ${value}`).join(", ")})`].filter(Boolean);
 
         await stored.journal(`Changed${by ? ` by ${by}` : ""}: ${what.join("; ")}.`);
 
         return this.details(id);
+    }
+
+    /**
+     * A world's invite link (app/invites.js): its players' key (made if it hasn't one that works),
+     * on the game's page at the server's own address: its internet address if it has one, so it
+     * works anywhere; else its Wi-Fi's (WorldServer invitePage). Or `replace`d: a new players' key,
+     * the old links letting nobody else in, those who came by them kept (access/index.js
+     * replaceInvite). Returns { link, key, page, everywhere (whether it works beyond the Wi-Fi),
+     * open (whether anyone may come in without it, too) }.
+     */
+    async invite(id, { replace = false, by = null } = {}) {
+        const { meta } = this.#world(id);
+        const { access } = this.server;
+        const made = replace ? await access.replaceInvite(id, { by }) : await access.inviteKey(id, { by });
+
+        if (made.reason) {
+            throw new Refused(409, "keys", `${made.reason} (under its Keys)`);
+        }
+
+        const { page, everywhere } = this.server.invitePage();
+        const link = inviteLink(page, { address: addressOf(page), id: this.server.identity.id, world: id, key: made.key });
+
+        if (replace) {
+            await this.#world(id).journal(`Its invite link replaced${by ? ` by ${by}` : ""}: the old one lets nobody else in.`);
+        }
+
+        return { link, key: made.key, page, everywhere, open: meta.settings.open === true };
     }
 
     /** A world started (opened, as if someone were coming in): it's set aside again if nobody comes. Returns its details once it's open, or waiting. */

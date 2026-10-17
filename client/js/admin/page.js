@@ -256,7 +256,9 @@ function showOnce({ title, note = "", value = null, code = null, link = null, mo
             ...more,
         ].filter(Boolean),
     );
-    $("#shown").showModal();
+    if (!$("#shown").open) {
+        $("#shown").showModal();
+    }
 }
 
 /** Something that can't be undone, asked again (`typed`: a name to type first). Resolves whether to go on. */
@@ -701,7 +703,7 @@ async function renderOverview() {
     const sections = [
         panel(
             "Where players reach it",
-            h("p", { class: "muted" }, "On the same Wi-Fi, players open the game from one of these (a phone can scan its code), then add the server by its address in Worlds on servers. The game finds the server's worlds there."),
+            h("p", { class: "muted" }, "On the same Wi-Fi, players open the game from one of these (a phone can scan its code): the title shows the server's worlds open to anyone, and any they've been in. To invite someone into a world, give them its link: Worlds, the world's Invite players."),
             h(
                 "div",
                 { class: "addresses" },
@@ -826,7 +828,8 @@ function worldCard(world) {
         facts([
             ["Home people", world.people],
             ["Heroes", heroesWords(world)],
-            ["Listed", world.settings.listed ? "Yes: anyone can see it" : "No: those with a key alone"],
+            ["Who can join", world.settings.open ? "Anyone who opens the server" : "Those with its invite link or a key"],
+            ["Listed", world.settings.listed || world.settings.open ? "Yes: anyone can see it" : "No: those with a key alone"],
             ["Most players", String(world.settings.mostPlayers)],
             ["Seed", String(world.seed)],
             ["Made", `${when(world.created)}${world.creator ? `, by ${world.creator}` : ""}`],
@@ -838,6 +841,7 @@ function worldCard(world) {
             "div",
             { class: "actions" },
             button("Play", () => play(world), "primary"),
+            button("Invite players", () => invitePlayers(world), "primary"),
             going ? button("Set aside", () => lifeOf(world, "aside")) : button("Start", () => lifeOf(world, "start")),
             going ? button("Save now", () => lifeOf(world, "save")) : null,
             button("Keys", () => openWorld(world.id, "keys")),
@@ -848,6 +852,40 @@ function worldCard(world) {
             button("Delete", () => deleteWorld(world), "danger"),
         ),
     );
+}
+
+// The world's invite link (server/manage.js invite): one for anyone, to the game on this server at
+// its internet address if it has one (else its Wi-Fi's), with the code to scan and what it does; and
+// replaced, should it have gone too far
+async function invitePlayers(world, { replace = false } = {}) {
+    const made = await doing(() => call("POST", `/worlds/${world.id}/invite`, replace ? { replace: true } : {}));
+
+    if (!made) {
+        return;
+    }
+
+    const again = button("Replace the link", async () => {
+        if (await confirmIt({ title: "Replace the invite link", note: `The old link stops letting anyone new into ${world.name}. Everyone who came in by it keeps their place, and can come back as before. Send the new link to anyone still to come.`, go: "Replace it" })) {
+            await invitePlayers(world, { replace: true });
+        }
+    });
+
+    showOnce({
+        title: `Invite players to ${world.name}`,
+        note: `${replace ? "A new link: the old one lets nobody else in. " : ""}Anyone with this link can join ${world.name} as a player, as many as you send it to. Send it by message or email, or let them scan the code.`,
+        link: made.link,
+        more: [
+            h("p", { class: made.everywhere ? "good" : "warning" }, made.everywhere ? "It works from anywhere: it opens the game at this server's internet address." : "It works only on this Wi-Fi: the server isn't open to the internet. To invite people elsewhere, open it to the internet (Overview, The internet), then make the link again: it'll carry the internet address."),
+            h(
+                "div",
+                { class: "world-help" },
+                h("h3", {}, "What they do"),
+                h("ol", {}, h("li", {}, "Open the link (or scan the code with a phone's camera). The game opens, from this server."), h("li", {}, "Make a character, if it's their first time: the game takes them through it."), h("li", {}, `They're in ${world.name}. Next time, they open the server's address (or the link again) and carry on.`)),
+            ),
+            made.open ? h("p", { class: "muted small" }, `${world.name} is open to anyone too: whoever opens the server can join it without the link (its Settings).`) : null,
+            h("div", { class: "actions" }, again),
+        ].filter(Boolean),
+    });
 }
 
 // Into a world, as its owner: the game opened on it with an owner's key
