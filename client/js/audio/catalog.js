@@ -113,24 +113,24 @@ export const CATALOG = Object.freeze({
     impactFireLow: { group: "Fire spells", label: "Landing, tiers 1–2", about: "A fire catching: a fwoomp of flame, and crackle after.", plays: "Burn or Fireball landing on whoever it's cast at." },
     castFireMid: { group: "Fire spells", label: "Casting, tiers 3–5", about: "Fire gathering: flames' whooshes drawn in over a wildfire's swelling roar and crackle.", plays: "Casting Burstflame, Immolate or Flamefill, swelling until it's let go." },
     impactFireMid: { group: "Fire spells", label: "Landing, tiers 3–5", about: "A burst of fire, its roar, and a crackling tail.", plays: "Burstflame, Immolate or Flamefill landing on whoever it's cast at." },
-    castFireHigh: { group: "Fire spells", label: "Casting, tiers 6–7", about: "A wildfire's roar building from far down, dense crackle, and a flame's whoosh drawn in to the release.", plays: "Casting Inferno or Hellfire, swelling until it's let go." },
-    impactFireHigh: { group: "Fire spells", label: "Landing, tiers 6–7", about: "A great burst of fire with a wildfire's roar under it and a long, crackling tail.", plays: "Inferno or Hellfire landing on whoever it's cast at." },
+    castFireHigh: { group: "Fire spells", label: "Casting, tiers 6–7", about: "A wildfire's roar building from far down, dense crackle, and a flame's whoosh drawn in to the release.", plays: "Casting Inferno, Hellfire or Prismatic Fire, swelling until it's let go." },
+    impactFireHigh: { group: "Fire spells", label: "Landing, tiers 6–7", about: "A great burst of fire with a wildfire's roar under it and a long, crackling tail.", plays: "Inferno, Hellfire or Prismatic Fire (the sigil's glass chord over it) landing on whoever it's cast at." },
 
     // Earth spells (sound.js spellSounds: by the spell's tier; a cast swells to its release, loudest as it's let go)
     castEarthLow: { group: "Earth spells", label: "Casting, tiers 1–2", about: "A stone slab grinding, swelling, with stone-on-stone grit.", plays: "Casting Rumble or Stone Crush, swelling until it's let go." },
     impactEarthLow: { group: "Earth spells", label: "Landing, tiers 1–2", about: "A rock knocking onto a pile, with a short clatter.", plays: "Rumble or Stone Crush landing on whoever it's cast at." },
     castEarthMid: { group: "Earth spells", label: "Casting, tiers 3–5", about: "Heavier grinding, and rubble beginning to slide.", plays: "Casting Shatterstone, Engulf or Earthquake, swelling until it's let go." },
     impactEarthMid: { group: "Earth spells", label: "Landing, tiers 3–5", about: "A boulder crashing down, and a rock's knock.", plays: "Shatterstone, Engulf or Earthquake landing on whoever it's cast at." },
-    castEarthHigh: { group: "Earth spells", label: "Casting, tiers 6–7", about: "Two stones grinding, a rockfall and a boulder's rumble, all building.", plays: "Casting Acidify or Disintegrate, swelling until it's let go." },
-    impactEarthHigh: { group: "Earth spells", label: "Landing, tiers 6–7", about: "A boulder and a rockfall, with the ground's deep rumble under them (thunder, far down).", plays: "Acidify or Disintegrate landing on whoever it's cast at." },
+    castEarthHigh: { group: "Earth spells", label: "Casting, tiers 6–7", about: "Two stones grinding, a rockfall and a boulder's rumble, all building.", plays: "Casting Acidify, Disintegrate or Prismatic Earth, swelling until it's let go." },
+    impactEarthHigh: { group: "Earth spells", label: "Landing, tiers 6–7", about: "A boulder and a rockfall, with the ground's deep rumble under them (thunder, far down).", plays: "Acidify, Disintegrate or Prismatic Earth (the sigil's glass chord over it) landing on whoever it's cast at." },
 
     // Air spells (sound.js spellSounds: by the spell's tier; a cast swells to its release, loudest as it's let go)
     castAirLow: { group: "Air spells", label: "Casting, tiers 1–2", about: "A gust of wind swelling, a whoosh drawn in.", plays: "Casting Hurt or Dustgust, swelling until it's let go." },
     impactAirLow: { group: "Air spells", label: "Landing, tiers 1–2", about: "A cutting whoosh; some with grit in it (Dustgust's).", plays: "Hurt or Dustgust landing on whoever it's cast at." },
     castAirMid: { group: "Air spells", label: "Casting, tiers 3–5", about: "Electricity gathering: a Tesla coil's sizzle and sparks crowding in.", plays: "Casting Shockbolt, Lightning or Thunderbolt, swelling until it's let go." },
     impactAirMid: { group: "Air spells", label: "Landing, tiers 3–5", about: "Lightning striking: its crack, sparks spitting, and thunder or a sizzle.", plays: "Shockbolt, Lightning or Thunderbolt landing on whoever it's cast at." },
-    castAirHigh: { group: "Air spells", label: "Casting, tiers 6–7", about: "Wind roaring up round lightning's crackling build, a coil's buzz and sparks.", plays: "Casting Tornado or Ionize, swelling until it's let go." },
-    impactAirHigh: { group: "Air spells", label: "Landing, tiers 6–7", about: "A strike, thunder rolling, a gust and sparks.", plays: "Tornado or Ionize landing on whoever it's cast at." },
+    castAirHigh: { group: "Air spells", label: "Casting, tiers 6–7", about: "Wind roaring up round lightning's crackling build, a coil's buzz and sparks.", plays: "Casting Tornado, Ionize or Prismatic Air, swelling until it's let go." },
+    impactAirHigh: { group: "Air spells", label: "Landing, tiers 6–7", about: "A strike, thunder rolling, a gust and sparks.", plays: "Tornado, Ionize or Prismatic Air (the sigil's glass chord over it) landing on whoever it's cast at." },
     shockbolt: { group: "Air spells", label: "Shockbolt", about: "A spark's crack, then a Tesla coil's buzz.", plays: "Shockbolt striking, in place of the lightning's landing." },
 
     // Water spells (sound.js spellSounds: by the spell's tier; a cast swells to its release, loudest as it's let go)
@@ -138,8 +138,8 @@ export const CATALOG = Object.freeze({
     impactWaterLow: { group: "Water spells", label: "Landing, tiers 1–2", about: "A splash into a lake, with a scald's sizzle.", plays: "Blister or Waterbolt landing on whoever it's cast at." },
     castWaterMid: { group: "Water spells", label: "Casting, tiers 3–5", about: "Water coming to the boil, steam hissing up, and an ice tick drawn in.", plays: "Casting Steamblast, Bloodboil or Iceblade, swelling until it's let go." },
     impactWaterMid: { group: "Water spells", label: "Landing, tiers 3–5", about: "Steam bursting over a plunge, boiling water, or ice cracking with a hiss.", plays: "Steamblast, Bloodboil or Iceblade landing on whoever it's cast at." },
-    castWaterHigh: { group: "Water spells", label: "Casting, tiers 6–7", about: "A mud pot's deep bubbling and hiss, thin ice ringing, and ice building to the release.", plays: "Casting Putrify or Absolute Zero, swelling until it's let go." },
-    impactWaterHigh: { group: "Water spells", label: "Landing, tiers 6–7", about: "Freezing and festering: ice cracking over a mud pot's bubbling, or foul water boiling under a burst of steam.", plays: "Putrify or Absolute Zero landing on whoever it's cast at." },
+    castWaterHigh: { group: "Water spells", label: "Casting, tiers 6–7", about: "A mud pot's deep bubbling and hiss, thin ice ringing, and ice building to the release.", plays: "Casting Putrify, Absolute Zero or Prismatic Water, swelling until it's let go." },
+    impactWaterHigh: { group: "Water spells", label: "Landing, tiers 6–7", about: "Freezing and festering: ice cracking over a mud pot's bubbling, or foul water boiling under a burst of steam.", plays: "Putrify, Absolute Zero or Prismatic Water (the sigil's glass chord over it) landing on whoever it's cast at." },
 
     // Healing spells (sound.js spellSounds: by the spell's tier; a cast swells to its release, loudest as it's let go)
     castHealingLow: { group: "Healing spells", label: "Casting, tiers 1–2", about: "A singing bowl's rim swelling under a rising shimmer of chimes (a mark tree).", plays: "Casting Vigor or Mend Wounds, swelling until it's let go; and casting a tome's spell on a friend or yourself." },
@@ -162,6 +162,7 @@ export const CATALOG = Object.freeze({
     sigilWhole: { group: "The Prismatic sigil", label: "The sigil whole", about: "Seven glass bells running up two octaves from C, a high shimmer swelling under them.", plays: "The fourth piece of the Prismatic sigil earned: the sigil whole, Prismatic Destruction to be cast." },
     chainBroken: { group: "The Prismatic sigil", label: "The chain broken", about: "Three glass bells falling, and a brittle hiss as of glass cracking.", plays: "A Prismatic chain broken (no spell of it landing within ten seconds of the last), or the whole sigil fading unused after fifteen; every stack and piece lost." },
     castPrismatic: { group: "The Prismatic sigil", label: "Casting Prismatic Destruction", about: "Four glass tones, one for each element, climbing an octave together under a band of noise rising from 400 Hz to 6 kHz, swelling to the release.", plays: "Casting Prismatic Destruction, loudest as it's let go." },
+    prismaticChord: { group: "The Prismatic sigil", label: "A piece of the sigil spent", about: "A glass chord rolled up from C, five bells a fifth and a third apart over two octaves, ringing long.", plays: "Prismatic Fire, Earth, Air or Water landing, over its element's greatest spells' landing." },
     prismaticBlast: { group: "The Prismatic sigil", label: "Prismatic Destruction", about: "A blast bigger than the great blast, echoing, a glass chord from C ringing over it.", plays: "Prismatic Destruction landing." },
 
     // Tome spells (sound.js spellSounds: what each does, as it lands)

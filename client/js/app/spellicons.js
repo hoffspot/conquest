@@ -59,6 +59,17 @@ const PINNACLE = (colour) => `<circle r="22.5" fill="none" stroke="${colour}" st
 // A petal of the Prismatic sigil, from its heart up (app/sigil.js draws the sigil with the same)
 export const PETAL = "M0,-3 C6,-8 7,-15 0,-21 C-7,-15 -6,-8 0,-3 Z";
 
+// An element's Prismatic spell: its petal of the sigil lit (`k`: fire, earth, air and water, from
+// the top round, as app/sigil.js has them), the other three faint, round a white star, set in a
+// ring of its colour
+const prismaticOf = (k, fill, edge) => `
+        <circle r="21" fill="${fill}" opacity="0.22"/>
+        <g stroke-width="1" stroke-linejoin="round">
+            ${[0, 1, 2, 3].map((j) => (j === k ? `<path d="${PETAL}" fill="${fill}" stroke="${edge}" transform="rotate(${j * 90}) scale(1.08)" filter="url(#icon-glow)"/>` : `<path d="${PETAL}" fill="none" stroke="#e8d8ff" opacity="0.4" transform="rotate(${j * 90})"/>`)).join("")}
+        </g>
+        <path d="${star(0, 0, 6.5, 2.3, 4, -Math.PI / 4)}" fill="#ffffff" filter="url(#icon-glow)"/>
+        ${PINNACLE(fill)}`;
+
 // A ward's shield, something shown on it: what it wards against
 const shield = (rim, emblem) => `
         <circle r="21" fill="url(#spell-ward-glow)"/>
@@ -735,6 +746,12 @@ export const SPELL_ICONS = Object.freeze({
         </g>
         <path d="${star(0, 0, 7.5, 2.6, 4, -Math.PI / 4)}" fill="#ffffff" filter="url(#icon-glow)"/>
         ${PINNACLE("#e8d8ff")}`,
+
+    // Each element's Prismatic spell, its piece of the sigil spent on it
+    prismaticFire: prismaticOf(0, "#ff7a2e", "#7a1a00"),
+    prismaticEarth: prismaticOf(1, "#c49a4a", "#4a3410"),
+    prismaticAir: prismaticOf(2, "#bfe6ff", "#2a5a8a"),
+    prismaticWater: prismaticOf(3, "#3c9cff", "#0c3a7a"),
 
     // Arrows chasing round a creature turned into a sheep
     polymorph: `

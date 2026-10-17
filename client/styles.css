@@ -1457,7 +1457,7 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
 
 /* The Prismatic sigil (app/sigil.js): over the player's card while a chain is live (rising with
    it, over the quick actions in a fight), a petal for each element, a ring running down its time;
-   whole, pulsing, to be tapped */
+   a piece just earned, pulsing in its element's colour, and whole, pulsing white, to be tapped */
 #hud .sigil {
     position: absolute;
     right: 0;
@@ -1557,6 +1557,19 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     animation: sigil-whole 0.8s ease-in-out infinite alternate;
 }
 
+/* (A piece just earned: its element's Prismatic spell to be cast, its petal the brightest) */
+.sigil.offered .sigil-heart {
+    fill: var(--offer);
+}
+
+.sigil.offered .sigil-emblem {
+    animation: sigil-offered 0.7s ease-in-out infinite alternate;
+}
+
+.sigil-petal.offered .sigil-shape {
+    stroke-width: 2.4;
+}
+
 .sigil-bonus {
     margin-top: 1px;
     font: 800 12px/1 var(--font-ui);
@@ -1584,6 +1597,16 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     }
 }
 
+@keyframes sigil-offered {
+    from {
+        filter: drop-shadow(0 0 3px color-mix(in srgb, var(--offer) 50%, transparent));
+    }
+
+    to {
+        filter: drop-shadow(0 0 14px var(--offer));
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     #hud .quickbar,
     #hud .quickbar.up,
@@ -1606,6 +1629,11 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     .sigil.whole .sigil-emblem {
         animation: none;
         filter: drop-shadow(0 0 10px rgba(200, 154, 255, 0.9));
+    }
+
+    .sigil.offered .sigil-emblem {
+        animation: none;
+        filter: drop-shadow(0 0 10px var(--offer));
     }
 }
 
