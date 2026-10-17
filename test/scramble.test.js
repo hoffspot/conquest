@@ -122,7 +122,7 @@ describe("the licensed models' scrambling (app/scramble.js)", () => {
             Object.entries(ASSETS.models)
                 .filter(([, { licensed: marked }]) => marked)
                 .map(([name]) => name),
-            ["beast-dreadthorn", "beast-werewolf", "beast-werewolf-skins", "beast-centipede", "beast-ant-monster", "beast-ant", "beast-dungeon-spider"],
+            ["beast-dreadthorn", "beast-werewolf", "beast-werewolf-skins", "beast-centipede", "beast-ant-monster", "beast-ant", "beast-dungeon-spider", "beast-elite-dungeon-spider"],
         );
 
         for (const [name, { licensed: marked, files }] of Object.entries(ASSETS.models)) {
