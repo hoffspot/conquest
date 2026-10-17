@@ -14,4 +14,5 @@ It doesn't cover:
   werewolf, Fab's Werewolf - Mythical Creature, with its skins; the centipede, Fab's Centipede
   Monster-V2; the Ant Monster, Fab's Ant Monster V1b; the ant, Fab's Ant V2; the Dungeon Spider,
   Fab's Spider V3; the Elite Dungeon Spider, Fab's Spider V6a; the Dungeon Scorpion, Fab's
-  Scorpion V5d; and the Giant Cockroach, Medhue's Cockroach from Fab (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
+  Scorpion V5d; the Giant Cockroach, Medhue's Cockroach from Fab; and the Dungeon Wasp, Fab's Vespa
+  Titanus Giant Wasp (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.

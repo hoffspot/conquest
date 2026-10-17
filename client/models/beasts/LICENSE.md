@@ -177,3 +177,26 @@ in this repository, but in the private one the game's builds fetch it from
 game.
 
 Don't copy it out of this game or use it in anything else.
+
+## dungeon-wasp.bin
+
+**Vespa Titanus Giant Wasp** (Rigged And Animated), bought on **Fab** by this repository's owner
+under **Fab's Standard License**: the Dungeon Wasp.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought `.blend` put through `utilities/blenderpipeline`
+(`private/dungeon-wasp.json`, which stays out of the repository with the bought files), its
+`browser` build. That's its rest pose taken from its idle (`restPose`: its rig rests 54 metres
+from where its clips have it), its material made from its own textures (its colour, normal and
+ambient occlusion maps, its specular map turned to roughness), 15,960 triangles with two lower
+details packed in (6,384 and 2,394), 1,024-pixel KTX2 textures, all 9 of its own clips (the one
+called Action, knocked out of the air, as Death 2), at 30 keyframes a second, and a flinch made
+from its idle by the pipeline (`clips.invent`: Hit React).
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`). The model viewer shows it (*Coming to the wilds*) until it's in the
+game.
+
+Don't copy it out of this game or use it in anything else.
