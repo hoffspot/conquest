@@ -152,6 +152,26 @@ A reason to practise all four elements (core/prismatic.js, kept on the player's 
   Then another element whose piece isn't held, from its first spell, within the same 10 seconds
   of the last; a piece already held can't be earned again. The bonuses add: two pieces and three
   spells up a third element's chain, 60%.
+- **A piece spent at once.** A piece just earned, the sigil can be spent there and then on that
+  element's Prismatic spell, **Prismatic Fire, Earth, Air or Water** (`prismaticFire` and the
+  rest; `ELEMENT_SPELLS`, `sigilSpell`), till the next element's first spell lands (or the 10
+  seconds run out). No one learns them, nor can they be put on a wheel; each is cast like
+  Prismatic Destruction (from the sigil, on the enemy the player's set to fight, within 20
+  metres, 1.5 s to cast), a quarter of it: on them and every enemy of the caster's within **4
+  metres**, past wards, charms, cover, shields, dodging and Reflect, never a friend, each loses a
+  **quarter of their whole health** (the mightiest, three sixteenths: a quarter of what
+  Prismatic Destruction takes from them), or as much as the element's last spell (Hellfire,
+  Disintegrate, Ionize, Absolute Zero) would deal them with the chain's strength, whichever's
+  more (`PRISMATIC.share`). All are thrown down (1.5 s), and more, each its element's way:
+  - **Fire:** set burning, and the ground round them left aflame (4 metres, 6 seconds);
+  - **Earth:** kept down twice as long (3 s);
+  - **Air:** stunned (1.5 s), and it leaps on to four more beyond, each within 3 metres of the
+    last (the first from whichever of those it struck is nearest), each leap a fifth less;
+  - **Water:** frozen solid (3 s), then slowed.
+
+  Cast, the sigil's spent, every stack and piece with it, as Prismatic Destruction spends it. (A
+  spell of the sigil begun in time lands with it, though its time runs out as it's cast.) The
+  fourth piece makes the sigil whole instead: Prismatic Destruction, not the fourth element's.
 - **The sigil whole.** The fourth piece makes it whole: every attack spell **twice as strong**
   (four pieces, 100%), and **15 seconds** to cast Prismatic Destruction, the 10 seconds no longer
   counting.
@@ -176,11 +196,15 @@ piece held lit whole; a ring round it running down the time left (red in its las
 stronger every attack spell is under it. Whole, its heart's a white star and it pulses: tapped
 (or clicked), Prismatic Destruction's cast. Each spell of a chain is a glass bell, higher as it
 climbs; a piece, a run of them; the sigil whole, a run up two octaves; broken or faded, the bells
-falling (audio/catalog.js, "The Prismatic sigil"), each said in a message too.
+falling (audio/catalog.js, "The Prismatic sigil"), each said in a message too. A piece just
+earned, the sigil pulses in that element's colour, its petal the brightest and its heart a star
+of that colour: tapped, that element's Prismatic spell is cast, as its element's greatest spells
+are cast and land, a glass chord rung over its landing.
 
 (`SNAPSHOT_VERSION` 29: every actor's chain, none in a world kept before, and a seat's ruler told
 as one, `ruler`; `NET_VERSION` 123: both ends of a game must agree on every chain, and on what
-Prismatic Destruction does.)
+Prismatic Destruction does; 127: and on the piece just earned, `piece`, and what the elements'
+Prismatic spells do. A chain kept before it has no piece to spend on its own.)
 
 ## Wands and grimoires
 

@@ -3,14 +3,17 @@
 // phone on its side; styles.css), a petal for each element (fire, earth, air and water, from the top round). The element being
 // cast up through glows, filling as it climbs; each element whose piece is held is lit whole; and
 // a ring round it all runs down the time left (the ten seconds for the chain's next spell, or the
-// fifteen to cast the whole sigil), how much stronger every attack spell is said under it. Whole,
-// the four petals lit, it pulses, its heart a white star: tapped (or clicked), Prismatic
-// Destruction's cast on the enemy the player's set to fight. Gone with the chain.
+// fifteen to cast the whole sigil), how much stronger every attack spell is said under it. A
+// piece just earned, it pulses in that element's colour, the piece's petal the brightest, its
+// heart a star of that colour: tapped (or clicked), the element's Prismatic spell's cast, spending
+// it, till another element's first spell lands. Whole, the four petals lit, it pulses, its heart a
+// white star: tapped, Prismatic Destruction's cast. Each on the enemy the player's set to fight.
+// Gone with the chain.
 //
 // It only shows and hears: the game (game.js) says what the chain is and what to do.
 
-import { bonusOf, CHAIN, ELEMENTS, isWhole } from "../core/prismatic.js";
-import { SCHOOLS } from "../core/spells.js";
+import { bonusOf, CHAIN, ELEMENTS, isWhole, sigilSpell } from "../core/prismatic.js";
+import { SCHOOLS, SPELLS } from "../core/spells.js";
 import { PETAL } from "./spellicons.js";
 
 /** Each element's colour in the sigil (as its icon has it: spellicons.js prismatic). */
@@ -41,6 +44,11 @@ export function sigilSaid(prism) {
 
     const held = prism.pieces.length ? `${prism.pieces.length} of 4 pieces` : "no pieces yet";
     const climbing = prism.element ? `, ${prism.element} chain at spell ${prism.step} of ${SCHOOLS[prism.element].tiers.length}` : "";
+    const offered = sigilSpell(prism);
+
+    if (offered) {
+        return `The Prismatic sigil, ${prism.piece}'s piece just earned: cast ${SPELLS[offered].label} on your foe, spending it (${held}, ${bonus})`;
+    }
 
     return `The Prismatic sigil: ${held}${climbing} (${bonus})`;
 }
@@ -66,7 +74,7 @@ export class Sigil {
         this.element.addEventListener("pointerdown", (event) => event.stopPropagation());
         root.append(this.element);
 
-        /** Hears the sigil tapped, to cast Prismatic Destruction (with it whole: game.js says if not). */
+        /** Hears the sigil tapped, to cast what it may be spent on (game.js says if nothing). */
         this.onCast = () => {};
 
         this.drawn = null;
@@ -85,17 +93,22 @@ export class Sigil {
         }
 
         const whole = isWhole(prism);
-        const drawn = `${prism.pieces.join()}|${prism.element}|${prism.step}|${whole}`;
+        // (A piece just earned, to be spent on its element's Prismatic spell: its element)
+        const offered = !whole && sigilSpell(prism) ? prism.piece : null;
+        const drawn = `${prism.pieces.join()}|${prism.element}|${prism.step}|${whole}|${offered}`;
 
         if (drawn !== this.drawn) {
             this.drawn = drawn;
             this.element.hidden = false;
             this.element.classList.toggle("whole", whole);
+            this.element.classList.toggle("offered", Boolean(offered));
+            this.element.style.setProperty("--offer", offered ? SIGIL_COLOURS[offered] : "transparent");
 
             for (const [element, petal] of this.petals) {
                 const climbing = prism.element === element;
 
                 petal.classList.toggle("held", prism.pieces.includes(element));
+                petal.classList.toggle("offered", element === offered);
                 petal.classList.toggle("climbing", climbing);
                 petal.style.setProperty("--filled", climbing ? (prism.step / SCHOOLS[element].tiers.length).toFixed(3) : "0");
             }

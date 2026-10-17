@@ -68,14 +68,14 @@
 
 import { AFFLICTIONS, shareOf } from "./afflictions.js";
 import { placeAt, placesOf } from "./formation.js";
-import { bonusOf, chainAfter, isWhole, lapsed, mighty, PRISMATIC } from "./prismatic.js";
+import { bonusOf, chainAfter, isWhole, lapsed, mighty, PRISMATIC, sigilSpell } from "./prismatic.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
 import { sightAt } from "./light.js";
 import { navigatorOf } from "./navigation.js";
 import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
-import { rollHeal, rollSpell, SPELL_COOLDOWN, SPELLS, WARD } from "./spells.js";
+import { rollHeal, rollSpell, SCHOOLS, SPELL_COOLDOWN, SPELLS, WARD } from "./spells.js";
 import { Variety } from "./variety.js";
 import { armsOf, chooseAttack, distanceBetween, longestReach, MELEE_REACH, ringsApart, rollDamage, WEAPONS } from "./weapons.js";
 import { atan2, cos, hypot, pow, sin } from "./exact.js";
@@ -1292,8 +1292,9 @@ export class Battle {
             return { ok: false, reason: "busy" };
         }
 
-        // (Prismatic Destruction: only with the sigil whole, its four elements' chains cast through)
-        if (spell.prismatic && !isWhole(actor.prism)) {
+        // (Prismatic Destruction: only with the sigil whole, its four elements' chains cast through;
+        // an element's Prismatic spell, only with its piece just earned: core/prismatic.js sigilSpell)
+        if (spell.prismatic && sigilSpell(actor.prism) !== spellId) {
             return { ok: false, reason: "sigil" };
         }
 
@@ -3921,8 +3922,10 @@ export class Battle {
             landed += cured.length ? 1 : 0;
         }
 
-        if (spell.prismatic) {
+        if (spell.prismatic === true) {
             landed += this.#prismatic(actor, target, id, spell);
+        } else if (spell.prismatic) {
+            landed += this.#prismaticElement(actor, target, id, spell);
         } else if (spell.damage) {
             landed += this.#smite(actor, target, id, spell);
         } else if (spell.stun) {
@@ -4090,10 +4093,11 @@ export class Battle {
     }
 
     // Chains let lapse (core/prismatic.js lapsed): the next spell not landed in time ("broken"), or
-    // the whole sigil not cast in time ("faded"). Every stack and piece of the sigil lost
+    // the whole sigil not cast in time ("faded"). Every stack and piece of the sigil lost. (Not
+    // while the sigil's being spent: a spell of it begun in time lands with it)
     #lapse() {
         for (const actor of this.actors) {
-            if (actor.prism && lapsed(actor.prism, this.time)) {
+            if (actor.prism && lapsed(actor.prism, this.time) && !SPELLS[actor.casting?.spell]?.prismatic) {
                 const change = isWhole(actor.prism) ? "faded" : "broken";
 
                 actor.prism = null;
@@ -4121,6 +4125,41 @@ export class Battle {
         return struck.length;
     }
 
+    // An element's Prismatic spell landing (core/prismatic.js; spells.js prismaticFire and the
+    // rest): on its target and every enemy of the caster's within its `area` round them (Prismatic
+    // Air leaping on from them, each leap less), past wards, charms, shields and dodging, each
+    // losing PRISMATIC.share of their whole health (the mightiest, that share of what Prismatic
+    // Destruction takes from them), or as much as the element's last spell would deal them with the
+    // chain's strength, whichever's more; thrown down, with whatever else it does as its element's
+    // (set burning, frozen, stunned; fire left on the ground). The sigil spent, every stack and
+    // piece with it. How many it struck
+    #prismaticElement(caster, target, id, spell) {
+        const last = SPELLS[SCHOOLS[spell.prismatic].tiers.at(-1)];
+        const power = this.#spellPower(caster);
+        const struck = this.#spellStruck(caster, target, spell, { beyond: true });
+
+        for (const { one, leap } of struck) {
+            const falls = pow(spell.falls ?? 0.7, leap);
+            const share = PRISMATIC.share * (mighty(one) ? PRISMATIC.mighty : 1);
+            const damage = Math.max(1, Math.ceil(share * one.maxHp * falls), Math.round(rollSpell(last, this.random) * power * falls));
+
+            this.#hit(caster, one, { id, kind: "spell", reaction: spell.reaction, stagger: spell.stagger ?? 600, knockdown: spell.knockdown, afflict: spell.effect ?? null }, null, { damage, spell: id, sure: true });
+
+            if (!one.dead && spell.stun) {
+                this.#stun(caster, one, id, spell.stun);
+            }
+        }
+
+        if (spell.hazard) {
+            this.#lay(caster, target.map, target.x, target.y, spell.hazard, ((last.damage[0] + last.damage[1]) / 2) * power * HAZARDS[spell.hazard.kind].share, id);
+        }
+
+        caster.prism = null;
+        this.#emit("prism", { id: caster.id, change: "spent", spell: id, ...chainOf(null) });
+
+        return struck.length;
+    }
+
     // An attack spell landing on its target: and on every enemy of the caster's round them (its
     // `area`), and leaping on to others near (its `chain`), each less; with whatever else it does.
     // How many it struck.
@@ -4130,27 +4169,7 @@ export class Battle {
             return this.#blast(caster, caster, target.map, target.x, target.y, { radius: spell.area, damage: spell.damage, power: this.#spellPower(caster), toss: spell.blast.toss, kind: id, spell: id, heart: [caster.x, caster.y] });
         }
 
-        // (Each struck, and how many leaps it is from the target: 0 for those round it)
-        const struck = [{ one: target, leap: 0 }];
-        const near = (from, reach) => this.actors.filter((other) => !other.dead && other.map === from.map && !struck.some(({ one }) => one === other) && this.hostile(caster, other) && hypot(other.x - from.x, other.y - from.y) <= reach);
-
-        if (spell.area) {
-            struck.push(...near(target, spell.area).map((one) => ({ one, leap: 0 })));
-        }
-
-        // (Leaping from the last struck to the nearest enemy not struck yet, within 3 m)
-        let from = target;
-
-        for (let leap = 1; leap <= (spell.chain ?? 0); leap++) {
-            const next = near(from, 3).sort((a, b) => hypot(a.x - from.x, a.y - from.y) - hypot(b.x - from.x, b.y - from.y))[0];
-
-            if (!next) {
-                break;
-            }
-
-            struck.push({ one: next, leap });
-            from = next;
-        }
+        const struck = this.#spellStruck(caster, target, spell);
 
         for (const { one, leap } of struck) {
             const damage = Math.max(1, Math.round(rollSpell(spell, this.random) * this.#spellPower(caster) * pow(spell.falls ?? 0.7, leap)));
@@ -4168,6 +4187,47 @@ export class Battle {
         }
 
         return struck.length;
+    }
+
+    // Whom an attack spell strikes: its target, every enemy of the caster's round them (its
+    // `area`), and others it leaps on to (its `chain`: from the last struck to the nearest enemy
+    // not struck yet, within 3 m; the first leap, `beyond` its area, from whichever of those round
+    // the target is nearest one). Each, and how many leaps it is from the target (0 for those
+    // round it)
+    #spellStruck(caster, target, spell, { beyond = false } = {}) {
+        const struck = [{ one: target, leap: 0 }];
+        const near = (from, reach) => this.actors.filter((other) => !other.dead && other.map === from.map && !struck.some(({ one }) => one === other) && this.hostile(caster, other) && hypot(other.x - from.x, other.y - from.y) <= reach);
+
+        if (spell.area) {
+            struck.push(...near(target, spell.area).map((one) => ({ one, leap: 0 })));
+        }
+
+        let from = target;
+
+        for (let leap = 1; leap <= (spell.chain ?? 0); leap++) {
+            let next = null;
+            let nearest = Infinity;
+
+            for (const start of beyond && leap === 1 ? struck.map(({ one }) => one) : [from]) {
+                for (const other of near(start, 3)) {
+                    const apart = hypot(other.x - start.x, other.y - start.y);
+
+                    if (apart < nearest) {
+                        next = other;
+                        nearest = apart;
+                    }
+                }
+            }
+
+            if (!next) {
+                break;
+            }
+
+            struck.push({ one: next, leap });
+            from = next;
+        }
+
+        return struck;
     }
 
     // Does a blow (a shot, a spell: `magic`) catch on its target's shield? One carried, from in

@@ -10019,7 +10019,7 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     await expect(page.locator("#menucontrols")).toBeVisible();
 });
 
-test("a Prismatic chain: an element's spell cast from the quick actions rolls its slot on to the next, ringed and pulsing, every attack spell 5% stronger a spell; at the last, its piece of the sigil, the other elements ringed; let lapse, all lost; whole, the sigil tapped casts Prismatic Destruction on the foe", async ({ page }) => {
+test("a Prismatic chain: an element's spell cast from the quick actions rolls its slot on to the next, ringed and pulsing, every attack spell 5% stronger a spell; at the last, its piece of the sigil, the other elements ringed, the sigil pulsing in its colour till the next element's begun; let lapse, all lost; a piece just earned, the sigil tapped casts its element's Prismatic spell on the foe; whole, Prismatic Destruction", async ({ page }) => {
     test.setTimeout(120000);
     await page.setViewportSize({ width: 402, height: 874 });
     await playing(page, "/?play&seed=1");
@@ -10083,8 +10083,8 @@ test("a Prismatic chain: an element's spell cast from the quick actions rolls it
     await expect(sigil.locator(".sigil-bonus")).toHaveText("+5%");
 
     // (Cast up to Inferno) Hellfire, the last: fire's piece, 25%; Burn back in its slot, unringed,
-    // and Rumble's ringed in earth's colour, the next chain's to begin. Tapped meanwhile, the
-    // sigil isn't whole
+    // and Rumble's ringed in earth's colour, the next chain's to begin; the sigil pulsing in fire's
+    // colour, Prismatic Fire to be cast with it
     await page.evaluate(() => {
         const { battle } = window.pellagos.game;
 
@@ -10102,8 +10102,19 @@ test("a Prismatic chain: an element's spell cast from the quick actions rolls it
     await expect(slot(2)).not.toHaveClass(/chain/);
     await expect(label(3)).toHaveText("Rumble");
     await expect(slot(3)).toHaveAttribute("data-chain", "earth");
+    await expect(page.locator("#banner")).toContainText("Tap the sigil for Prismatic Fire, spending it, or go on to another element");
+    await expect(sigil).toHaveClass(/offered/);
+    await expect(petal("fire")).toHaveClass(/offered/);
+    await expect(sigil).toHaveAttribute("aria-label", /fire's piece just earned: cast Prismatic Fire on your foe/);
+
+    // Rumble cast: earth's chain begun, fire's piece no longer to be spent on its own; tapped, the
+    // sigil has nothing to cast
+    await slot(3).click();
+    await play(1.6);
+    expect(await prism()).toMatchObject({ element: "earth", step: 1, pieces: ["fire"], piece: null });
+    await expect(sigil).not.toHaveClass(/offered/);
     await sigil.click();
-    await expect(page.locator("#banner")).toHaveText("The Prismatic sigil isn't whole: cast each element's spells in order, first to last");
+    await expect(page.locator("#banner")).toHaveText("Nothing in the Prismatic sigil to cast: an element's spells cast in order, first to last, earn its piece");
 
     // Nothing more cast for ten seconds: broken, everything lost
     await play(10.2);
@@ -10111,6 +10122,24 @@ test("a Prismatic chain: an element's spell cast from the quick actions rolls it
     await expect(page.locator("#banner")).toHaveText("The Prismatic chain is broken: its strength is lost.");
     await expect(sigil).toBeHidden();
     await expect(slot(3)).not.toHaveClass(/chain/);
+
+    // Water's piece just earned: tapped, the sigil casts Prismatic Water on the orc, a quarter of
+    // its whole health gone, frozen and slowed; the sigil spent
+    await page.evaluate(() => {
+        const { battle } = window.pellagos.game;
+
+        Object.assign(battle.actor("orc"), { hp: 5000, afflictions: [] });
+        battle.actor("player").prism = { element: null, step: 0, at: battle.time, pieces: ["water"], piece: "water", readyAt: null };
+        window.pellagos.game.advance(0.05);
+    });
+    await expect(sigil).toHaveClass(/offered/);
+    await expect(petal("water")).toHaveClass(/offered/);
+    await sigil.click();
+    await play(1.8);
+    expect(await prism()).toBeNull();
+    await expect(sigil).toBeHidden();
+    expect(await page.evaluate(() => window.pellagos.game.battle.actor("orc").hp)).toBeLessThanOrEqual(5000 - 1250);
+    expect(await page.evaluate(() => window.pellagos.game.battle.actor("orc").afflictions.some(({ kind }) => kind === "slow"))).toBe(true);
 
     // The four pieces held, the sigil whole: every attack spell twice as strong, no slot ringed;
     // tapped, Prismatic Destruction cast on the orc, which it kills; the sigil spent

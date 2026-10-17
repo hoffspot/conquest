@@ -4364,8 +4364,9 @@ know it (`#quickKeys`: it's what a tap casts, and what's greyed or cooling), rol
 flick is, and ringed in the element's colour (`chain`, `data-chain`), a dashed border marching
 round it and pulsing, as a combo's next action is in other games. What the player's put in the
 slot isn't changed: it's shown again as the chain moves on, or ends. The Prismatic sigil stands
-over the player's card while the chain lasts (app/sigil.js), tapped to cast Prismatic Destruction
-once it's whole. Asked for less motion, the ring's still there, dashed and glowing, but nothing
+over the player's card while the chain lasts (app/sigil.js), tapped to cast the element's
+Prismatic spell with a piece just earned (pulsing in its colour), or Prismatic Destruction once
+it's whole. Asked for less motion, the ring's still there, dashed and glowing, but nothing
 marches or pulses.
 
 **Changed** by holding a slot (0.5 s, `QUICK_HOLD_MS`; sliding off it does neither): the game

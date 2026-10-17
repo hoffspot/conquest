@@ -573,6 +573,7 @@ describe("playing sounds (sound.js)", () => {
         assert.deepEqual(spellSounds("absoluteZero"), { cast: "castWaterHigh", missile: null, land: "impactWaterHigh" });
         assert.equal(spellSounds("stoneCrush").missile, "stoneShot");
         assert.equal(spellSounds("shockbolt").land, "shockbolt", "Shockbolt's own");
+        assert.deepEqual(spellSounds("prismaticWater"), { cast: "castWaterHigh", missile: null, land: "impactWaterHigh" }, "a Prismatic element spell: as its element's greatest (the sigil's chord over it: Sound landed)");
         assert.equal(spellSounds("renewal").land, "impactHealingMid");
         assert.equal(spellSounds("astralHeal").cast, "castHealingHigh", "healing's fifth its greatest");
         assert.deepEqual(spellSounds("stun"), { cast: "bolt", missile: null, land: null }, "the made stun kept, heard as it stuns");

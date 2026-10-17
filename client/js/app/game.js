@@ -79,7 +79,7 @@ import { RAISED } from "../core/overworld.js";
 import { heightAt as landHeightAt } from "../core/terrain/height.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
-import { CHAIN, isWhole, nextOf } from "../core/prismatic.js";
+import { CHAIN, ELEMENT_SPELLS, nextOf, sigilSpell } from "../core/prismatic.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
@@ -9534,7 +9534,7 @@ export class Game {
         if (change === "start" || change === "step") {
             this.sound?.play("chainStep", { rate: 2 ** ((step - 1) / 12) });
         } else if (change === "piece") {
-            this.hud.message(`${school[0]?.toUpperCase() ?? ""}${school.slice(1)}'s piece of the Prismatic sigil: ${stronger(pieces.length * CHAIN.piece)}. Now another element, from its first spell, within ${CHAIN.window / 1000} seconds.`, 3.5);
+            this.hud.message(`${school[0]?.toUpperCase() ?? ""}${school.slice(1)}'s piece of the Prismatic sigil: ${stronger(pieces.length * CHAIN.piece)}. Tap the sigil for ${SPELLS[ELEMENT_SPELLS[school]]?.label}, spending it, or go on to another element, from its first spell, within ${CHAIN.window / 1000} seconds.`, 4.5);
             this.sound?.play("sigilPiece");
         } else if (change === "whole") {
             this.hud.message(`The Prismatic sigil is whole: ${stronger(pieces.length * CHAIN.piece)}. Tap it to cast Prismatic Destruction, within ${CHAIN.ready / 1000} seconds!`, 4);
@@ -10932,13 +10932,15 @@ export class Game {
     }
 
     /**
-     * The Prismatic sigil tapped (app/sigil.js): Prismatic Destruction cast on the enemy the
-     * player's set to fight, with the sigil whole; refused (and said why) if it isn't, or there's
-     * no one to cast it on.
+     * The Prismatic sigil tapped (app/sigil.js): what it may be spent on cast on the enemy the
+     * player's set to fight (core/prismatic.js sigilSpell: whole, Prismatic Destruction; an
+     * element's piece just earned, that element's Prismatic spell); refused (and said why) if
+     * there's nothing to spend it on, or no one to cast it on.
      */
     castPrismatic() {
+        const spell = sigilSpell(this.#prism());
         const target = this.#target();
-        const why = !isWhole(this.#prism()) ? "sigil" : !target ? "untargeted" : null;
+        const why = !spell ? "sigil" : !target ? "untargeted" : null;
 
         if (why) {
             this.hud.message(QUICK_REFUSALS[why] ?? CAST_FAILURES[why], 1.6);
@@ -10947,7 +10949,7 @@ export class Game {
             return { ok: false, reason: why };
         }
 
-        return this.act("prismatic", target.id);
+        return this.act(spell, target.id);
     }
 
     /**

@@ -522,10 +522,16 @@ const MISSILES = { burn: "fireball", fireball: "fireball", burstflame: "fireball
 // What the spells with no school sound like landing: strength and speed given (buff), a ward
 // raised (ward), something ended (cure), a curse (hex), terror, a creature come, a shape changed,
 // a light lit, someone gone from sight; and Shockbolt its own, a spark's crack and a coil's buzz.
+// The Prismatic sigil's element spells, as their element's greatest (the sigil's glass chord over
+// them: Sound landed).
 // (A stun's heard as it stuns; the spells that carry someone off, as they go and come: carried)
 const LANDINGS = {
     shockbolt: "shockbolt",
     prismatic: "prismaticBlast",
+    prismaticFire: "impactFireHigh",
+    prismaticEarth: "impactEarthHigh",
+    prismaticAir: "impactAirHigh",
+    prismaticWater: "impactWaterHigh",
     embolden: "buff",
     swole: "buff",
     surge: "buff",
@@ -562,8 +568,9 @@ const LANDINGS = {
 const HUSHED = { invisibility: 0.5 };
 
 // The spells with no school cast with their own sound: Explosion's heat drawn in (its blast's
-// heard as the battle tells it: app/game.js "blast"), Prismatic Destruction's four elements
-const CASTS = { explosion: "castExplosion", prismatic: "castPrismatic" };
+// heard as the battle tells it: app/game.js "blast"), Prismatic Destruction's four elements, and
+// each element's Prismatic spell as its greatest spells are cast
+const CASTS = { explosion: "castExplosion", prismatic: "castPrismatic", prismaticFire: "castFireHigh", prismaticEarth: "castEarthHigh", prismaticAir: "castAirHigh", prismaticWater: "castWaterHigh" };
 
 /**
  * A spell's sounds (core/spells.js): its cast, swelling to its release (`cast`); its missile's
@@ -1409,6 +1416,11 @@ export class Sound {
     /** A spell landing at `at` (its target): what it sounds like there (spellSounds), if anything. */
     landed(spell, at) {
         const { land } = spellSounds(spell);
+
+        // (A piece of the Prismatic sigil spent on its element's spell: its glass chord rung over it)
+        if (typeof SPELLS[spell]?.prismatic === "string") {
+            this.play("prismaticChord", { at });
+        }
 
         return land ? this.play(land, { at, volume: HUSHED[spell] ?? 1 }) : null;
     }

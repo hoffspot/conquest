@@ -3,11 +3,14 @@
 // landing within CHAIN.window of the one before, makes every attack spell they cast stronger as
 // they go (CHAIN.step for each spell past the first), and, at the last of them, earns that
 // element's piece of the Prismatic sigil: the stacks of the chain give way to the piece's own
-// CHAIN.piece, kept while the sigil lasts. Then another element whose piece they haven't got,
-// from its first spell, within the same window of the last; with all four pieces (every attack
-// spell twice as strong), the sigil is whole, and they have CHAIN.ready to cast Prismatic
-// Destruction with it. Cast, or let go, it's spent: every stack and piece with it. And a chain
-// let lapse (the next spell not landing in time) loses everything there is.
+// CHAIN.piece, kept while the sigil lasts. A piece just earned, the sigil can be spent at once
+// on that element's Prismatic spell (Prismatic Fire, Earth, Air or Water: ELEMENT_SPELLS), a
+// quarter of Prismatic Destruction (PRISMATIC.share), till another element's first spell lands.
+// Or on: another element whose piece they haven't got, from its first spell, within the same
+// window of the last; with all four pieces (every attack spell twice as strong), the sigil is
+// whole, and they have CHAIN.ready to cast Prismatic Destruction with it. Cast, or let go, it's
+// spent: every stack and piece with it. And a chain let lapse (the next spell not landing in
+// time) loses everything there is.
 //
 // Anything cast out of the chain's order (another element's spell mid-chain, a lower one, a hex,
 // a heal, a blow) is let be: it neither counts nor breaks it. Healing has no part in it.
@@ -15,8 +18,9 @@
 // A chain as it stands, kept on the player's battle actor (battle.js `prism`, in snapshots, so
 // every copy of the world sees the same): { element (the one being cast up through, or null
 // between them), step (its tier reached), at (when the last of it landed: ms of battle time),
-// pieces (the elements whose piece is held), readyAt (when the sigil came whole, or null) }, or
-// null for none.
+// pieces (the elements whose piece is held), piece (the element whose piece was just earned,
+// while its Prismatic spell may be cast, or null), readyAt (when the sigil came whole, or null)
+// }, or null for none.
 //
 // Pure data and rules, no DOM: the battle (battle.js) keeps it and works it.
 
@@ -32,12 +36,18 @@ export const CHAIN = Object.freeze({ window: 10000, step: 0.05, piece: 0.25, rea
 /** The elements whose spells make chains, in the sigil's order. */
 export const ELEMENTS = Object.freeze(["fire", "earth", "air", "water"]);
 
+/** Each element's Prismatic spell (spells.js), cast with its piece of the sigil just earned. */
+export const ELEMENT_SPELLS = Object.freeze({ fire: "prismaticFire", earth: "prismaticEarth", air: "prismaticAir", water: "prismaticWater" });
+
 /**
  * Prismatic Destruction (spells.js `prismatic`: on its target and every enemy within its `area`
  * round them): the share of their whole health it takes from the mightiest (mighty), which may
- * not kill them outright; anyone else it kills.
+ * not kill them outright; anyone else it kills. And an element's Prismatic spell, a quarter of
+ * it (share): the share of their whole health it takes from each it strikes (of the mightiest,
+ * that share of what Prismatic Destruction takes from them), or as much as the element's last
+ * spell would deal them, whichever's more.
  */
-export const PRISMATIC = Object.freeze({ mighty: 0.75 });
+export const PRISMATIC = Object.freeze({ mighty: 0.75, share: 0.25 });
 
 /**
  * What a spell (by id, SPELLS') landing for its caster at `time` makes of their chain (`prism`):
@@ -54,9 +64,10 @@ export function chainAfter(prism, spell, time) {
         return { prism: live, change: null };
     }
 
-    // (An element's first spell, with no chain being cast up through: one whose piece isn't held)
+    // (An element's first spell, with no chain being cast up through: one whose piece isn't held.
+    // The piece just earned no longer to be spent on its own)
     if (spell.tier === 1 && !live?.element && !pieces.includes(spell.school)) {
-        return { prism: { element: spell.school, step: 1, at: time, pieces: [...pieces], readyAt: null }, change: "start" };
+        return { prism: { element: spell.school, step: 1, at: time, pieces: [...pieces], piece: null, readyAt: null }, change: "start" };
     }
 
     if (!live?.element || spell.school !== live.element || spell.tier !== live.step + 1) {
@@ -70,11 +81,24 @@ export function chainAfter(prism, spell, time) {
     const held = ELEMENTS.filter((element) => pieces.includes(element) || element === spell.school);
     const whole = held.length === ELEMENTS.length;
 
-    return { prism: { element: null, step: 0, at: time, pieces: held, readyAt: whole ? time : null }, change: whole ? "whole" : "piece" };
+    return { prism: { element: null, step: 0, at: time, pieces: held, piece: whole ? null : spell.school, readyAt: whole ? time : null }, change: whole ? "whole" : "piece" };
 }
 
 /** Is a chain's sigil whole: all four pieces held, Prismatic Destruction to be cast? */
 export const isWhole = (prism) => Number.isFinite(prism?.readyAt);
+
+/**
+ * The spell a chain's sigil may be spent on now (spells.js), or null for none: whole, Prismatic
+ * Destruction; a piece just earned (between chains, till another element's first spell lands),
+ * that element's Prismatic spell.
+ */
+export function sigilSpell(prism) {
+    if (isWhole(prism)) {
+        return "prismatic";
+    }
+
+    return prism && !prism.element ? (ELEMENT_SPELLS[prism.piece] ?? null) : null;
+}
 
 /** Has a chain lapsed by `time`: the next spell not landed in time, or the whole sigil not cast? */
 export function lapsed(prism, time) {

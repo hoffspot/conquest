@@ -482,6 +482,9 @@ export const SOUNDS = {
             return out;
         },
     },
+    // (A piece of the sigil spent on its element's Prismatic spell: a glass chord rolled up over
+    // the element's greatest landing, played with it: sound.js landed)
+    prismaticChord: { variants: 1, volume: 0.5, make: () => notes([[523, 0], [784, 0.035], [1047, 0.07], [1319, 0.105], [1568, 0.14]], { decay: 0.95, harmonics: GLASS, length: 1.9 }) },
     prismaticBlast: { variants: 2, volume: 1, make: (random) => add(blast(random, 1.5), notes([[523, 0.02], [784, 0.05], [1047, 0.08], [1568, 0.11]], { decay: 0.9, harmonics: GLASS, length: 1.85 }), 0.35) },
     castHeal: {
         variants: 2,

@@ -1487,7 +1487,8 @@ export class Host {
                 return this.#order(actor, { type: "stop" });
             case "cast": {
                 // (Only the spells they know: their schools' up to their tiers, and those learnt; and
-                // Prismatic Destruction, which the battle lets them cast with the sigil whole)
+                // the Prismatic sigil's, which the battle lets them cast with it whole (Prismatic
+                // Destruction) or an element's piece just earned (its Prismatic spell))
                 if (!SPELLS[command.spell]?.prismatic && !player.progress.knows(command.spell)) {
                     return refuse("unknown");
                 }
