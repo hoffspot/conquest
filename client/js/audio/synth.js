@@ -466,18 +466,23 @@ export const SOUNDS = {
         },
     },
     // Casting Prismatic Destruction: the four elements drawn in, a tone for each climbing an
-    // octave together, and a shimmer over them swelling to its release (PEAKS); landing, the
-    // great blast with a glass chord ringing over it
+    // octave together, a shimmer over them and a low drone under them, the sky going dark, swelling
+    // to its release (PEAKS); at the last, all of it drawn in, a rush of air sucked to a point
     castPrismatic: {
         variants: 2,
         volume: 0.55,
         make: (random) => {
             const length = 1.5;
+            const release = length * 0.94;
+            const drawn = (t) => Math.min(1, Math.max(0, (t - 1.05) / (release - 1.05)) ** 2);
             let out = shape(filter(noise(random, length), "bandpass", (t) => 400 * (6000 / 400) ** (t / length), 1.2), swell(length, 0.94));
 
             for (const from of [131, 196, 262, 392]) {
                 out = add(out, shape(tone(length, (t) => from * 2 ** (t / length), { harmonics: GLASS }), swell(length, 0.94)), 0.3);
             }
+
+            out = add(out, shape(tone(length, (t) => 55 * 1.5 ** (t / length), { harmonics: [[1, 1], [2, 0.5], [3, 0.25]] }), swell(length, 0.94)), 0.35);
+            out = add(out, shape(filter(noise(random, length), "lowpass", (t) => 300 + 7000 * drawn(t), 0.9), (t) => drawn(t) * (t > release ? Math.max(0, 1 - (t - release) / 0.08) : 1)), 0.5);
 
             return out;
         },
@@ -485,7 +490,25 @@ export const SOUNDS = {
     // (A piece of the sigil spent on its element's Prismatic spell: a glass chord rolled up over
     // the element's greatest landing, played with it: sound.js landed)
     prismaticChord: { variants: 1, volume: 0.5, make: () => notes([[523, 0], [784, 0.035], [1047, 0.07], [1319, 0.105], [1568, 0.14]], { decay: 0.95, harmonics: GLASS, length: 1.9 }) },
-    prismaticBlast: { variants: 2, volume: 1, make: (random) => add(blast(random, 1.5), notes([[523, 0.02], [784, 0.05], [1047, 0.08], [1568, 0.11]], { decay: 0.9, harmonics: GLASS, length: 1.85 }), 0.35) },
+    // Prismatic Destruction landing: the beam striking out of the sky (a crack, and a bright glass
+    // tone falling), the greatest blast there is as the sky whitens, echoing; each element after
+    // it in its quarter, one after another (fire's roar, earth's thud, air's crack, water's ice
+    // ringing); and a glass chord from C ringing over it all
+    prismaticBlast: {
+        variants: 2,
+        volume: 1,
+        make: (random) => {
+            const beam = add(burst(random, 0.1, "highpass", 2500, 0.7, 0.0005, 0.02), shape(tone(0.35, (t) => 2400 * 0.15 ** (t / 0.35), { harmonics: GLASS }), hit(0.002, 0.12)), 0.4);
+            let out = add(beam, blast(random, 1.55), 1.25, 0.12);
+
+            out = add(out, shape(filter(noise(random, 0.45), "bandpass", (t) => 300 + 900 * (t / 0.45), 0.9), swell(0.45, 0.3)), 0.35, 0.2);
+            out = add(out, thud(85, 32, 0.4, 0.1), 0.5, 0.32);
+            out = add(out, burst(random, 0.12, "highpass", 3000, 0.7, 0.0005, 0.015), 0.4, 0.44);
+            out = add(out, notes([[2093, 0], [2637, 0.03], [3136, 0.06]], { decay: 0.4, harmonics: GLASS, length: 0.8 }), 0.12, 0.56);
+
+            return add(out, notes([[262, 0.02], [523, 0.05], [784, 0.08], [1047, 0.11], [1568, 0.14]], { decay: 0.95, harmonics: GLASS, length: 1.7 }), 0.35, 0.14);
+        },
+    },
     castHeal: {
         variants: 2,
         volume: 0.45,
