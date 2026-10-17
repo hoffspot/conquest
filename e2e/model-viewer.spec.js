@@ -230,7 +230,7 @@ test("a creature to come, drawn from its model before it's in the game: the cent
 
     // (Listed with the creatures to come; read, its clips listed, the one asked for by its address
     // played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Centipede", "Ant Monster", "Ant"]);
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Centipede", "Ant Monster", "Ant", "Dungeon Spider"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
         "Attack",
@@ -348,6 +348,37 @@ test("and the ant: all 12 clips in its file, its full detail only, and whose it 
     await expect(page.locator("#name")).toHaveText("The ant");
     expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 9768, bones: 36 });
     await expect(page.locator("#details")).toContainText("Ant V2, bought on Fab: used with the permission its Standard License gives");
+});
+
+test("and the Dungeon Spider: all 18 clips in its file, its full detail only, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-dungeon-spider&clip=Walk");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack",
+        "Attack 2",
+        "Attack 3",
+        "Attack 4",
+        "Attack 5",
+        "Attack 6",
+        "Death",
+        "Eat",
+        "Hit React",
+        "Hit React 2",
+        "Idle",
+        "Knockdown",
+        "Roar",
+        "Run",
+        "Slow",
+        "Turn Left",
+        "Turn Right",
+        "Walk",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Walk", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Dungeon Spider");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 42996, bones: 54 });
+    await expect(page.locator("#details")).toContainText("Spider V3, bought on Fab: used with the permission its Standard License gives");
 });
 
 test("the werewolf as the game draws it, from its model once that's read: the game's moves for it, and the skin each one wears", async ({ page }) => {
