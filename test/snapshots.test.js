@@ -162,7 +162,7 @@ describe("a kept world opened by the server (server/reopen.js)", () => {
         assert.equal(again.host.war.turn, kept.war.turn);
     });
 
-    it("brings a player's solo world in: the same seed and war, their hero the first kept and they its owner", async () => {
+    it("brings a player's solo world in: the same seed and war, their hero to be kept for whoever brings it (server/manage.js bringSolo)", async () => {
         const kept = await fixture(SNAPSHOT_VERSION);
         const items = new Map();
 
@@ -178,16 +178,14 @@ describe("a kept world opened by the server (server/reopen.js)", () => {
 
             const exported = JSON.parse(JSON.stringify(exportCharacter(save)));
             const folder = await DataFolder.open(await scratch());
-            const stored = await importSolo(folder.worlds, exported, { owner: "p-ada" });
+            const { stored, kept: hero, turn } = await importSolo(folder.worlds, exported, { creator: "Sam" });
 
             assert.equal(stored.meta.seed, 3);
             assert.equal(stored.meta.race, "human");
-            assert.equal(stored.meta.creator, "p-ada");
+            assert.equal(stored.meta.creator, "Sam");
             assert.equal(stored.meta.name, "Ada's world");
             assert.equal(stored.meta.heroes, "kept");
-
-            const hero = await stored.heroes.get("p-ada", 1);
-
+            assert.equal(turn, kept.war.turn);
             assert.equal(hero.hero.name, "Ada");
             assert.equal(hero.progress.gold, 77);
             assert.deepEqual(hero.talks.knowledge, ["the road north"]);
@@ -198,8 +196,9 @@ describe("a kept world opened by the server (server/reopen.js)", () => {
             assert.equal(host.players.size, 0, "(no one in it till they come)");
 
             // (Not an export, or a newer game's: refused)
-            await assert.rejects(importSolo(folder.worlds, { kind: "something" }, { owner: "p-ada" }), /isn't a world the game saved/);
-            await assert.rejects(importSolo(folder.worlds, { ...exported, version: 99 }, { owner: "p-ada" }), /newer version/);
+            await assert.rejects(importSolo(folder.worlds, { kind: "something" }), /isn't a character the game kept/);
+            await assert.rejects(importSolo(folder.worlds, { ...exported, version: 99 }), (error) => error.newer && /newer version/.test(error.message));
+            assert.equal((await readdir(path.join(folder.root, "worlds"))).length, 1, "(nothing left of those refused)");
         } finally {
             delete globalThis.localStorage;
         }

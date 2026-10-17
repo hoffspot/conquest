@@ -463,7 +463,9 @@ remembered.
 - **Worlds on a server.** A world server (a Mac at home, or any computer with Node) keeps worlds
   that go on being there when everyone's left, and wait for them to come back: the title's
   **Worlds on servers** adds a server by its address, an invite link or its QR code (or from those
-  found nearby on the Wi-Fi), then comes into a world with its key or short code, or makes one.
+  found nearby on the Wi-Fi), then comes into a world with its key or short code, or makes one,
+  or brings one of their own characters' worlds there (**Bring my world**: its land and its war,
+  with that character in it, and them its owner).
   Up to 8 play in a world at once. Its owner looks after it from its management page: worlds,
   keys, players, backups, and opening it to the internet. Run one from the Mac's menu bar
   ([docs/MAC_APP.md](docs/MAC_APP.md)), or with `npm run world-server`; how, and what it keeps,

@@ -91,7 +91,7 @@ take); a third waits its turn. While anyone's in a world, the computer is kept a
 
 Players add the server in the game's **Worlds on servers** (by its address, from an invite link or
 QR code, or from the servers found nearby on the Wi-Fi), then come into a world with its key or
-code, or make one with a creator key or the admin key.
+code, or make one with a creator key or the admin key, or bring one of their own (below).
 
 ## Reaching it from the internet
 
@@ -109,6 +109,36 @@ internet panel):
    tries every way in and tells the page how it went.
 
 **Close to the internet** stops answering it at once.
+
+## Bringing your own world
+
+Each character a player plays alone has a world of their own: the land they started in (its seed
+and home people), and the war going on in it. **Bring my world**, on the server's card in the
+game's **Worlds on servers**, makes one of those a world of the server's. The game says how, as it
+goes:
+
+1. **Which world.** The characters saved in that browser are listed, each as their world. One on
+   another device or in another browser is exported there (Saved characters, Export) and imported
+   here first (Saved characters, Import from a file).
+2. **A key that makes worlds here:** the admin key (on the server's Wi-Fi alone), or a creator key
+   its owner made for them (Settings, Creator keys).
+3. **Its name** (the character's world, to start with), and whether others may bring a hero of
+   their own in, or make one new here (its **first heroes**).
+
+The server makes a world with the same seed and home people, its war carried on as it stood, and
+the rest made from the seed, as the game makes it each time it's loaded. Its heroes are kept by
+the world, and the character is the first of them, put right as this version of the game plays
+them, as a character file is (what changed is said to the player, and in the world's journal).
+Whoever brought it is its first player, its owner, by the owner's key: their game keeps that key
+and their ticket, says what came of it, and goes straight in to their character. The character on
+their device is left as they were: from then on there are two of them.
+
+It's refused, and nothing's made, for a key that makes no worlds; a game of another version than
+the server's (the game says what to do: export the character, open the game from the server
+itself, import them there, and bring their world from there); a character kept by a newer game
+than the server plays (it updates itself overnight, or **Update** does now); or more than 16 MB
+sent. (`POST /api/v1/worlds/bring`, the game's `ServerClient.bringWorld`: server/manage.js
+`bringSolo`, server/reopen.js `importSolo`.)
 
 ## Players' own worlds
 

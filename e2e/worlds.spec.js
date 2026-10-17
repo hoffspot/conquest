@@ -249,6 +249,65 @@ test("a first hero brought into a world from a character file, told first what w
     expect((await server.worlds.get(made.world).heroes.list(player)).map(({ name }) => name)).toEqual(["Old Bram"]);
 });
 
+test("a character's own world brought to a server (Bring my world): told how, and what comes with it; refused a key that makes no worlds; then a world of the server's, in their land, its owner going in as that character", async ({ page }) => {
+    await ready(page, save("Wren", "human", "sword"));
+
+    const before = server.worlds.size;
+
+    await page.goto(`${base}/`);
+    await page.locator("#worldsbutton").click();
+
+    const worlds = page.locator("#worlds");
+
+    await page.locator("#worldsaddress").fill(`127.0.0.1:${server.port}`);
+    await worlds.getByRole("button", { name: "Add" }).click();
+
+    const row = worlds.locator(`li[data-server="127.0.0.1:${server.port}"]`);
+
+    await expect(row).toContainText("Version", { timeout: 30000 });
+    await row.getByRole("button", { name: "Bring my world" }).click();
+
+    // The characters on this device, each their own world's, and how it works
+    const ask = page.locator("#worldask");
+
+    await expect(ask.locator("#worldasktitle")).toHaveText("Bring my world to the server");
+    await expect(ask.locator("#worldasknote")).toContainText("Each character you play alone has a world of their own");
+    await expect(ask.locator(".world-help").first().locator("li")).toHaveCount(4);
+    await expect(ask.locator(".world-help").nth(1)).toContainText("To bring one from another device or browser, export them there");
+    await ask.getByRole("button", { name: /^Wren's world/ }).click();
+
+    // What comes with it, and the key that makes worlds: one that doesn't, refused, saying which will
+    await expect(ask.locator("#worldasktitle")).toHaveText(/^Bring Wren's world to /);
+    await expect(ask.locator(".world-help").first()).toContainText("Wren, with all they carry, know and have found, kept by the world as your first hero there.");
+    await expect(ask.locator("#worldaskname")).toHaveValue("Wren's world");
+    await ask.locator("#worldaskmaker").fill("NOT-A-KEY");
+    await ask.getByRole("button", { name: "Bring it to the server" }).click();
+    await expect(ask.locator("#worldaskstatus")).toContainText("That key doesn't make worlds on");
+    expect(server.worlds.size).toBe(before);
+
+    await ask.locator("#worldaskmaker").fill(server.adminKey);
+    await ask.locator("#worldaskname").fill("Wren's Vale");
+    await ask.getByRole("button", { name: "Bring it to the server" }).click();
+
+    // Brought: said what came of it, and in, as its owner, to Wren
+    await expect(ask.locator("#worldasktitle")).toHaveText(/^Wren's Vale is on /, { timeout: 120000 });
+    await expect(ask.locator("#worldasknote")).toContainText("You're its owner, and Wren is kept there for you.");
+
+    const world = [...server.worlds.keys()].find((id) => server.metaOf(id).name === "Wren's Vale");
+
+    expect(server.metaOf(world)).toMatchObject({ seed: 777, race: "human", heroes: "kept" });
+    await ask.getByRole("button", { name: "Go in" }).click();
+    await expect(ask.locator("#worldasktitle")).toHaveText("Who goes into Wren's Vale", { timeout: 60000 });
+    await ask.getByRole("button", { name: /^Wren/ }).click();
+    await playing(page);
+    expect(await page.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Wren");
+
+    const [player, slot] = (await page.evaluate(() => window.pellagos.game.me)).split(".");
+
+    expect(slot).toBe("1");
+    expect(server.access.world(world).player(player).role).toBe("owner");
+});
+
 test("a server that proves to be another than the one pinned is sent no key", async ({ page }) => {
     await ready(page, save("Brand", "human", "sword"));
 
