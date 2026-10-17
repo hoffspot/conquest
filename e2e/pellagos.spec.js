@@ -9034,6 +9034,88 @@ test("a dungeon whose creatures are drawn from models: theirs fetched, not read,
     expect(near).toEqual({ fetching: true, hurried: 0, read: false, made: false });
 });
 
+test("an ants' nest: its creatures' models got ready at its door, the card naming them; gone in, its ants drawn from their model, lent the Ant Monster's fall", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=1");
+
+    // (The nearest ants' nest not made yet: none within 200 metres of the start; the ground about
+    // it found from far enough off that it isn't made yet, then before its door, facing it, where
+    // it's made; its door tapped)
+    const nest = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+        const settle = async (frames) => {
+            for (let k = 0; k < frames; k++) {
+                game.advance(0.05);
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        const away = (site) => Math.hypot(site.at[0] - player.x, site.at[1] - player.y);
+        const site = game.world.plan.sites.filter((one) => one.kind === "dungeon" && one.theme === "nest" && away(one) > 200).sort((a, b) => away(a) - away(b))[0];
+
+        Object.assign(player, { x: site.at[0] + 120, y: site.at[1], path: [], order: null, progress: null });
+        await settle(10);
+
+        const building = game.world.interiors.buildings.get(`site:${site.id}`);
+        const [ox, oy] = building.entrance.outside;
+
+        Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null, facing: building.entrance.facing });
+        await settle(10);
+        game.doors.sync();
+
+        const target = game.doors.targets.find((each) => each.map === "town" && each.link.id === building.door.id);
+        const spot = session.view.toScreen(target.box.getCenter(target.box.min.clone()));
+
+        game.tap(spot.x, spot.y);
+
+        return { name: building.name, key: building.key, theme: building.theme, running: game.running };
+    });
+    const card = page.locator("#readying");
+
+    // (Waited for at its door: its name, and the creatures in it drawn from models, the ants and
+    // their Ant Monster among them)
+    expect(nest).toMatchObject({ theme: "nest", running: false });
+    await expect(card).toBeVisible();
+    await expect(page.locator("#readyingname")).toHaveText(nest.name);
+
+    const named = await page.locator("#readyinglist li span:first-child").allTextContents();
+
+    expect(named).toContain("Giant ant");
+    expect(named).toContain("Ant Monster");
+    expect(named.every((name) => ["Giant ant", "Great centipede", "Ant Monster"].includes(name))).toBe(true);
+
+    // (In, of itself, once they're read; its first level's ants drawn from their model, the ant's
+    // model lent the Ant Monster's fall and flinch)
+    await expect(card).toBeHidden({ timeout: 120000 });
+    await expect.poll(() => page.evaluate(() => window.pellagos.game.battle.actor("player").map), { timeout: 30000 }).not.toBe("town");
+
+    const inside = await page.evaluate(async (key) => {
+        const { game } = window.pellagos;
+        const { modelOf } = await import("/js/beasts/model.js");
+        const player = game.battle.actor("player");
+        const ants = () => [...game.host.wild].filter(([id, one]) => one.creature === "ant" && game.battle.actor(id)?.map === player.map).map(([id]) => game.avatars.get(id)).filter(Boolean);
+
+        for (let k = 0; k < 200 && !ants().length; k++) {
+            player.hp = player.maxHp;
+            game.advance(0.05);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        return { building: game.world.interiors.of(player.map)?.key, running: game.running, ants: ants().length, drawn: ants().every((avatar) => avatar.model), lent: modelOf("ant").animations.map(({ name }) => name).filter((name) => ["Death", "Hit React"].includes(name)).sort(), key };
+    }, nest.key);
+
+    expect(inside).toMatchObject({ building: nest.key, running: true, drawn: true, lent: ["Death", "Hit React"] });
+    expect(inside.ants).toBeGreaterThan(0);
+});
+
 test("on the world map a pin's dropped where it's held: a column of light where it stands and a line the way there, taken away held again; tapped twice, the player runs there, or is told there's no way", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

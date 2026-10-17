@@ -273,6 +273,30 @@ export const NATURAL = Object.freeze({
     olm: { label: "Jaws", attacks: [melee({ id: "bite", damage: [2, 5], hitAt: 400, duration: 800, interval: 1200, reaction: "hack", animation: "melee", afflict: { kind: "disease", chance: 0.1 } })] },
     // (A giant centipede's fangs are venomous)
     centipede: { label: "Venomous fangs", attacks: [melee({ id: "bite", damage: [3, 5], hitAt: 300, duration: 650, interval: 1100, reaction: "pierce", animation: "melee", afflict: { kind: "poison", chance: 0.4 } })] },
+    // (The ants' nests' own: a giant ant's mandibles, their bite burning with its acid; a great
+    // centipede's fangs, or it rears and strikes down the harder, staggering whoever it strikes;
+    // the Ant Monster's mandibles, or rearing to slam its weight down, and its acid spat at whoever
+    // keeps off, a pool of it left burning where it lands)
+    ant: { label: "Mandibles", attacks: [melee({ id: "bite", damage: [3, 6], hitAt: 900, duration: 1500, interval: 1700, reaction: "pierce", animation: "melee", afflict: { kind: "poison", chance: 0.25 } })] },
+    greatCentipede: {
+        label: "Venomous fangs",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", damage: [6, 11], hitAt: 500, duration: 1000, interval: 1300, reaction: "pierce", animation: "melee", afflict: { kind: "poison", chance: 0.45 } }),
+                melee({ id: "rear", reach: 1.6, damage: [9, 15], hitAt: 900, duration: 1500, interval: 2200, stagger: 400, reaction: "hack", animation: "rear", afflict: { kind: "poison", chance: 0.5 } }),
+            ),
+        ],
+    },
+    antMonster: {
+        label: "Mandibles and acid",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", reach: 1.8, damage: [10, 18], hitAt: 700, duration: 1300, interval: 1700, stagger: 300, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.35 } }),
+                melee({ id: "slam", reach: 2.2, damage: [14, 24], hitAt: 1000, duration: 1800, interval: 2600, stagger: 500, reaction: "crush", animation: "slam" }),
+            ),
+            ranged({ id: "spit", reach: 7, damage: [6, 11], hitAt: 1100, duration: 2000, interval: 3600, reaction: "arcane", animation: "spit", projectile: { kind: "venom", speed: 10 }, afflict: { kind: "poison", chance: 0.7 }, pool: { kind: "venom", ms: 5000, radius: 1.2 } }),
+        ],
+    },
     // (A basilisk bites; and its glare, the stare said to turn to stone, staggers whoever meets
     // it and slows them)
     basilisk: {

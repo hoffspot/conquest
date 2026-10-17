@@ -2,7 +2,7 @@
 // (layouts.js), how it's drawn and sounds, what it's called, who's in it (packs of the wild's
 // creatures, the mini-bosses along the way and the boss at the bottom, each by the tiers it suits),
 // and how each kind of room in it is dressed (its props, by plan character: interiors.js PLAN_KEY)
-// and lit. Start with caves, an outlaws' hideout and an ancient temple; add more with
+// and lit. Start with caves, an outlaws' hideout, an ancient temple and an ants' nest; add more with
 // registerTheme (a new layout with layouts.js registerLayout, new art by the theme's `style`).
 //
 // Everything's chosen from these lists by seed in a way (seeds.js pickStable) that adding to a list
@@ -176,6 +176,50 @@ export const THEMES = {
             cell: [{ id: "cell", props: [{ char: "m", count: [0, 2], at: "wall" }, { char: "j", count: [0, 1], at: "open" }, { char: "d", count: [1, 2], at: "wall" }, { char: "i", count: [0, 1], at: "open" }], torches: [0, 1] }],
             stairhall: [{ id: "stairhall", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "v", count: [0, 2], at: "wall" }], torches: [2, 2] }],
             arena: [{ id: "sanctum", props: [{ char: "I", count: [6, 10], at: "rows" }, { char: "a", count: [1, 1], at: "head", size: [2, 1] }, { char: "k", count: [2, 4], at: "corner", mirror: true }, { char: "y", count: [2, 2], at: "open", mirror: true }, { char: "v", count: [2, 4], at: "wall", mirror: true }, { char: "i", count: [0, 2], at: "open" }], torches: [2, 4] }],
+        },
+    },
+    // (An ants' nest: the caves' layout dug through earth, its chambers heaped with what the ants
+    // have dragged in; giant ants in their numbers, great centipedes in its deeper tunnels, and the
+    // Ant Monster, their great queen, calling her flock to her in her chamber at the bottom
+    // (creatures.js). All of them drawn from models of their own, read at its door: beasts/model.js
+    // modelsInside, app/readying.js)
+    nest: {
+        id: "nest",
+        name: "an ants' nest",
+        layout: "caves",
+        lands: { savannah: 4, badlands: 3, meadow: 2, farmland: 2, heath: 2, jungle: 2 },
+        style: "dungeon-caves",
+        ground: GROUND.soil,
+        sound: "cave",
+        names: {
+            forms: ["the {adj} Nest", "the {adj} Mound", "the Ant Hills of {place}", "{place} Warrens", "the {adj} Hive", "the Brood Halls of {place}"],
+            adj: ["Teeming", "Seething", "Red", "Biting", "Swarming", "Crawling", "Hollow", "Amber"],
+            place: ["Old Varro", "Dunmere", "the Dry Hills", "Kessick", "Redearth", "Thornbrake", "Gall Rise", "Sallow Down"],
+        },
+        packs: [
+            { id: "workers", creatures: ["ant"], size: [3, 5], weight: 5 },
+            { id: "soldiers", creatures: ["ant"], size: [4, 6], weight: 2 },
+            { id: "crawlers", creatures: ["greatCentipede"], size: [1, 2], weight: 2 },
+            // (A crawler come in among the ants: every fourth of them)
+            { id: "hunted", creatures: ["ant", "ant", "ant", "greatCentipede"], size: [3, 5], weight: 1 },
+        ],
+        minis: [
+            { id: "warden", creature: "ant", title: "Brood warden", weight: 2 },
+            { id: "crawler", creature: "greatCentipede", title: "Tunnel crawler", weight: 2 },
+        ],
+        bosses: [{ id: "antMonster", creature: "antMonster", title: "the Ant Monster", weight: 1, guard: ["ant"] }],
+        rooms: {
+            mouth: [{ id: "mouth", props: [{ char: "m", count: [1, 3], at: "wall" }, { char: "j", count: [0, 1], at: "open" }, { char: "d", count: [2, 4], at: "wall" }], torches: [1, 1] }],
+            cavern: [
+                { id: "galleries", weight: 2, props: [{ char: "*", count: [2, 4], at: "open" }, { char: "m", count: [1, 3], at: "wall" }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 1] },
+                { id: "larder", weight: 1, props: [{ char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "m", count: [0, 2], at: "wall" }, { char: "d", count: [2, 3], at: "wall" }], torches: [0, 0] },
+            ],
+            grotto: [
+                { id: "brood", weight: 2, props: [{ char: "m", count: [2, 4], at: "wall" }, { char: "j", count: [0, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] },
+                { id: "midden", weight: 1, props: [{ char: "j", count: [2, 4], at: "open" }, { char: "i", count: [0, 2], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0] },
+            ],
+            nook: [{ id: "nook", props: [{ char: "m", count: [0, 2], at: "wall" }, { char: "j", count: [0, 1], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 0] }],
+            arena: [{ id: "chamber", props: [{ char: "*", count: [3, 5], at: "open" }, { char: "j", count: [4, 7], at: "open" }, { char: "i", count: [2, 4], at: "open" }, { char: "m", count: [2, 4], at: "wall" }, { char: "d", count: [2, 4], at: "wall" }], torches: [2, 3] }],
         },
     },
 };

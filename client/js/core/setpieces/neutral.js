@@ -262,8 +262,9 @@ const LAYOUTS = {
     // A dungeon's way in (core/dungeons: docs/DUNGEONS.md): a cave's mouth, cut into a hillside or
     // sunk into the ground where the land's flat, as a cave's is, leading down to its levels; and
     // round it, as its theme has it, the bones of those who went in (caves), what outlaws keep by
-    // their door (barrels and crates, a heap of old timber: a hideout), or the stumps of an old
-    // temple's columns either side, its fallen stone about (an ancient temple)
+    // their door (barrels and crates, a heap of old timber: a hideout), the stumps of an old
+    // temple's columns either side, its fallen stone about (an ancient temple), or the earth the
+    // ants have dug out heaped either side (an ants' nest)
     dungeon(random, width, depth, seed, form, facing, theme) {
         const laid = LAYOUTS.cave(random, width, depth, seed, form);
         const [cx, front] = [width / 2, laid.entry.y];
@@ -285,6 +286,10 @@ const LAYOUTS = {
             }
 
             keep({ part: "rubble", x: cx + random.pick([-1, 1]) * random.range(6, 7), y: front + random.range(2.4, 3.2), r: random.range(0.7, 1), seed: random.seed() }, 1.8, 1.8);
+        } else if (theme === "nest") {
+            for (const side of [-1, 1]) {
+                keep({ part: "rubble", x: cx + side * random.range(4.4, 5.6), y: front + random.range(1.4, 2.4), r: random.range(0.8, 1.1), seed: random.seed() }, 1.8, 1.8);
+            }
         } else {
             keep({ part: "bones", x: cx + random.pick([-1, 1]) * random.range(4.4, 5.4), y: front + random.range(1.8, 2.6), turn: random.range(0, TAU), big: random.chance(0.3) }, 1.6, 1.6);
         }
