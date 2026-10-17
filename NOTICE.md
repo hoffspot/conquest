@@ -11,5 +11,6 @@ It doesn't cover:
   permission, or under a licence that gives it (Fab's Standard License). They aren't free to
   reuse, and they aren't in this repository: the game's builds fetch them from a private one
   (`docs/LICENSED_MODELS.md`). Today they're the Dreadthorn, HuyKhoi2407's Dreadthorn Dragon; the
-  werewolf, Fab's Werewolf - Mythical Creature, with its skins; and the centipede, Fab's Centipede
-  Monster-V2 (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
+  werewolf, Fab's Werewolf - Mythical Creature, with its skins; the centipede, Fab's Centipede
+  Monster-V2; the Ant Monster, Fab's Ant Monster V1b; and the ant, Fab's Ant V2
+  (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.

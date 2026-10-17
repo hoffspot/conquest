@@ -230,7 +230,7 @@ test("a creature to come, drawn from its model before it's in the game: the cent
 
     // (Listed with the creatures to come; read, its clips listed, the one asked for by its address
     // played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Centipede"]);
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Centipede", "Ant Monster", "Ant"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
         "Attack",
@@ -271,6 +271,83 @@ test("a creature to come, drawn from its model before it's in the game: the cent
     await expect(details).toContainText("Centipede Monster-V2, bought on Fab: used with the permission its Standard License gives");
     await expect(details).toContainText("1024×1024 (compressed)");
     await expect(details.getByRole("link")).toHaveAttribute("href", "models/beasts/LICENSE.md");
+});
+
+test("another to come: the Ant Monster, all 31 clips in its file, turned to face the game's front, its see-through parts cut out", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-ant-monster&clip=Walk");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack",
+        "Attack 2",
+        "Attack 3",
+        "Attack 4",
+        "Attack 5",
+        "Call Flock",
+        "Crawl Up",
+        "Death",
+        "Eat",
+        "Funny",
+        "Hit React",
+        "Hit React 2",
+        "Idle",
+        "Idle 2",
+        "Idle 3",
+        "Jump",
+        "Landing",
+        "Landing 2",
+        "Landing 3",
+        "Left Right",
+        "Lying",
+        "Lying Back",
+        "Lying Back 2",
+        "Play",
+        "Play 2",
+        "Play 3",
+        "Run",
+        "Sleep",
+        "Up",
+        "Up 2",
+        "Walk",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Walk", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Ant Monster");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 35172, bones: 57 });
+
+    // Its head ahead of its tail along +z, where the game's creatures face (in its own space,
+    // however it's shown); its spines and wings cut out of its colour's alpha, not blended (drawn
+    // with the solid, its depth written)
+    const shape = await page.evaluate(() => {
+        const object = window.lab.avatar().object;
+        const mesh = object.getObjectByProperty("isSkinnedMesh", true);
+        const at = (name) => {
+            const bone = object.getObjectByName(name);
+
+            return object.worldToLocal(bone.getWorldPosition(bone.position.clone()));
+        };
+
+        object.updateMatrixWorld(true);
+
+        const [head, tail] = [at("Bip001_Head"), at("Bn_tail_05")];
+
+        return { ahead: head.z - tail.z > 2 * Math.abs(head.x - tail.x), transparent: mesh.material.transparent, cut: mesh.material.alphaTest };
+    });
+
+    expect(shape).toEqual({ ahead: true, transparent: false, cut: 0.5 });
+    await expect(page.locator("#details")).toContainText("Ant Monster V1b, bought on Fab: used with the permission its Standard License gives");
+});
+
+test("and the ant: all 12 clips in its file, its full detail only, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-ant&clip=Run");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual(["Attack", "Cool", "Drink", "Eat", "Idle", "Idle 2", "Jump", "Play", "Play 2", "Play 3", "Run", "Walk"]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Run", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The ant");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 9768, bones: 36 });
+    await expect(page.locator("#details")).toContainText("Ant V2, bought on Fab: used with the permission its Standard License gives");
 });
 
 test("the werewolf as the game draws it, from its model once that's read: the game's moves for it, and the skin each one wears", async ({ page }) => {
