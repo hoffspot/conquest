@@ -12,8 +12,9 @@
 import { STEP_MS } from "./battle.js";
 
 export const RUNNER = Object.freeze({
-    // How often (ms of the world's time) what's been done is sent to those who've joined
-    flushEvery: 100,
+    // How often (ms of the world's time) what's been done is sent to those who've joined: each
+    // step, as it's done (sooner there, and more evenly: core/netplay.js PLAYOUT)
+    flushEvery: 50,
     // How many steps' times are kept, for the worst and the slow ones (StepTimes)
     kept: 1200,
     // The navigation round each player in the world outside baked ahead (metres): as far as this,

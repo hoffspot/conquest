@@ -231,7 +231,7 @@ rooms that no one hosts ([§8.3](#83-players-running-the-game)).
 
 - **The step loop.** Fixed 50 ms steps from a monotonic clock, with no 0.1 s clamp per frame. When
   the clock falls behind it catches up by at most 1 s a tick, then lets the rest go and logs it.
-- **Flushing.** `hosting.flush()` every 100 ms.
+- **Flushing.** `hosting.flush()` every 50 ms: each step as it's done (`RUNNER.flushEvery`).
 - **The first join.** `populate()`.
 - **Baking ahead.** Navigation tiles and settlement layouts are made ahead in a ring around each
   player, so a step never makes them.

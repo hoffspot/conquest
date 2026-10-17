@@ -592,39 +592,64 @@ describe("playing together (netplay.js)", () => {
         assert.ok(post.length === 0);
     });
 
-    it("keeps steps in hand as the host's sendings' unevenness asks: the fewest when they come evenly, more when not, none counted over a pause", () => {
+    it("keeps steps in hand to cover how late the host's steps come, all but the latest few: the fewest when they come evenly; more while a link's held up often enough (a phone's), till it's been steady a while; none counted over a pause", () => {
         let now = 0;
         const joining = new Joining({ send: () => {}, clock: () => now });
         let step = 0;
+        // (The host sends each step as it's done, each taking 60 ms to come and `late` more: in
+        // order, those after one held up coming at once with it)
         const arrive = (late = 0) => {
-            step += 2;
-            now = step * STEP_MS + 60 + late;
-            joining.hear(encode({ kind: "ops", step, ops: [["a", STEP_MS, 2]] }));
+            step++;
+            now = Math.max(now, step * STEP_MS + 60 + late);
+            joining.hear(encode({ kind: "ops", step, ops: [["a", STEP_MS, 1]] }));
         };
 
-        for (let k = 0; k < 100; k++) {
+        for (let k = 0; k < 400; k++) {
             arrive();
         }
 
         assert.equal(joining.jitter, 0);
         assert.equal(joining.delay, PLAYOUT.least);
 
-        // (Some come early, some late)
-        for (let k = 0; k < 100; k++) {
-            arrive(k % 2 ? 90 : 0);
+        // (Held up a moment once: too seldom to keep more in hand for)
+        arrive(300);
+        assert.equal(joining.delay, PLAYOUT.least);
+
+        // (Held up 300 ms every second, as a weak mobile signal can be: the 300 ms not all
+        // covered, the rest of the way run on, game.js RUN_ON)
+        for (let k = 0; k < 400; k++) {
+            arrive(k % 20 === 0 ? 300 : 0);
         }
 
-        assert.ok(joining.jitter > 60, `${joining.jitter} ms`);
-        assert.ok(joining.delay >= 4 && joining.delay <= PLAYOUT.most, `${joining.delay} steps`);
+        assert.ok(joining.jitter >= 100 && joining.jitter < 300, `${joining.jitter} ms`);
+        assert.equal(joining.delay, Math.ceil(joining.jitter / STEP_MS));
 
-        // (Steadily again: it comes down)
-        for (let k = 0; k < 200; k++) {
+        // (Steadily again: more kept in hand a while, then the fewest)
+        for (let k = 0; k < 10; k++) {
+            arrive();
+        }
+
+        assert.ok(joining.delay > PLAYOUT.least, "for a while after");
+
+        for (let k = 0; k < PLAYOUT.remember / STEP_MS; k++) {
             arrive();
         }
 
         assert.equal(joining.delay, PLAYOUT.least);
 
+        // (However late they come, no more than the most)
+        for (let k = 0; k < 400; k++) {
+            arrive(k % 20 === 0 ? 900 : 0);
+        }
+
+        assert.equal(joining.delay, PLAYOUT.most);
+
         // (Over a pause, the host's steps stopped: not late)
+        for (let k = 0; k < PLAYOUT.remember / STEP_MS; k++) {
+            arrive();
+        }
+
+        assert.equal(joining.delay, PLAYOUT.least);
         joining.hear(encode({ kind: "paused", paused: true }));
         now += 30000;
         joining.hear(encode({ kind: "paused", paused: false }));

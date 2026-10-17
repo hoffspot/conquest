@@ -1,9 +1,10 @@
 // A world played on (client/js/core/runner.js; generated/world_server_plan.md §3): moved on in
 // whole steps as time's given it, what's left over kept for the next; what's done sent to those
-// who've joined every RUNNER.flushEvery of its time; told of the war's turns as they come; the
-// steps timed, if it's given a clock; the navigation round each player out in the world asked for
-// ahead, again once they've gone far enough; and, run with no browser at all (as the world server
-// will run it), a world joined over a link that plays on the same, step for step, for a long while
+// who've joined every RUNNER.flushEvery of its time (each step); told of the war's turns as they
+// come; the steps timed, if it's given a clock; the navigation round each player out in the world
+// asked for ahead, again once they've gone far enough; and, run with no browser at all (as the
+// world server will run it), a world joined over a link that plays on the same, step for step, for
+// a long while
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
@@ -53,22 +54,33 @@ describe("the world runner (core/runner.js)", () => {
         assert.deepEqual(heard, ["before 1", "after 1: 0", "before 2", "after 2: 1", "before 3", "after 3: 0"]);
     });
 
-    it("sends what's been done to those who've joined every flushEvery of its time, not every step", () => {
+    it("sends what's been done to those who've joined every flushEvery of its time: each step, however the frames fall", () => {
         const host = counting();
         const flushed = [];
-        const runner = new WorldRunner(host, { hosting: { flush: () => flushed.push(runner.time) } });
+        const runner = new WorldRunner(host, { hosting: { flush: () => flushed.push(host.steps) } });
 
-        for (let k = 0; k < 10; k++) {
-            runner.advance(STEP_MS);
+        assert.equal(RUNNER.flushEvery, STEP_MS, "(each step as it's done)");
+
+        // (Frames of a sixtieth of a second, or the world server's ticks of 25 ms: each sending
+        // with a step in it, now and then two)
+        for (const frame of [1000 / 60, 25]) {
+            flushed.length = 0;
+
+            for (let k = 0; k < 120; k++) {
+                runner.advance(frame);
+            }
+
+            const sent = flushed.map((steps, k) => steps - (k ? flushed[k - 1] : 0)).slice(1);
+
+            assert.ok(sent.every((steps) => steps === 1 || steps === 2) && sent.filter((steps) => steps === 2).length <= sent.length / 10, `${frame} ms frames: ${sent}`);
         }
 
-        assert.equal(STEP_MS * 10, 5 * RUNNER.flushEvery, "(ten steps, five sendings' worth)");
-        assert.deepEqual(flushed, [100, 200, 300, 400, 500]);
-
         // Not opened to others: nothing sent
+        const before = flushed.length;
+
         runner.hosting = null;
         runner.advance(RUNNER.flushEvery * 2);
-        assert.equal(flushed.length, 5);
+        assert.equal(flushed.length, before);
     });
 
     it("tells of each turn of the war as it comes, with the war", () => {

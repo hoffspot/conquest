@@ -104,3 +104,80 @@ describe("your hero, drawn ahead (predict.js)", () => {
         assert.deepEqual(prediction.at(actor, 5, 5, 300), [5, 5]);
     });
 });
+
+describe("your hero, running with the stick held over a phone's link (predict.js)", () => {
+    // The stick held: an order sent every 500 ms (app/steering.js), each coming back done `took(k)`
+    // ms later (some taking longer than the next is sent after); the copy running at `pace` once
+    // the first's done, and turning `turn` (radians) once the order sent at `turnAt` is done.
+    // How far the hero's drawn going each frame (m/s), and which way (radians), after `from` ms.
+    const run = ({ took, turnAt = Infinity, turn = 0, until = 8000, from = 2000 }) => {
+        const prediction = new Prediction();
+        const actor = hero();
+        const pace = 6.3;
+        const frame = 1000 / 60;
+        const orders = [];
+        const going = [];
+        let heading = 0;
+        let last = null;
+
+        for (let now = 0, k = 0; now < until; now += frame) {
+            if (now >= k * 500) {
+                const facing = now >= turnAt ? turn : 0;
+                const to = [actor.x + Math.sin(facing) * 30, actor.y + Math.cos(facing) * 30];
+
+                orders.push({ order: prediction.ordered(actor, to, true, now, [Math.sin(facing), Math.cos(facing)]), due: now + took(k), facing });
+                k++;
+            }
+
+            // (The copy going on a frame as it was, then hearing what's done: going its new way from the next)
+            if (actor.progress) {
+                actor.x += (Math.sin(heading) * pace * frame) / 1000;
+                actor.y += (Math.cos(heading) * pace * frame) / 1000;
+            }
+
+            for (const sent of orders.filter(({ due }) => due <= now)) {
+                orders.splice(orders.indexOf(sent), 1);
+                prediction.done({ ok: true }, now, sent.order);
+                heading = sent.facing;
+                [actor.progress, actor.pace] = [{ left: 30, at: 0 }, pace];
+            }
+
+            if (actor.progress) {
+                actor.path = [[actor.x + Math.sin(heading) * 30, actor.y + Math.cos(heading) * 30]];
+            }
+
+            const drawn = prediction.at(actor, actor.x, actor.y, now);
+
+            if (last && now > from) {
+                going.push({ at: now, speed: (apart(drawn, last) / frame) * 1000, way: Math.atan2(drawn[0] - last[0], drawn[1] - last[1]) });
+            }
+
+            last = drawn;
+        }
+
+        return { going, pace, prediction };
+    };
+
+    it("is drawn going on at the same pace, as far ahead as the orders take to come back, each sent again before the last's come", () => {
+        // (Each taking 350 to 650 ms: half a second there and back and in hand, give or take)
+        const { going, pace, prediction } = run({ took: (k) => 350 + ((k * 7) % 4) * 100 });
+        const speeds = going.map(({ speed }) => speed / pace);
+
+        assert.ok(Math.min(...speeds) > 0.85 && Math.max(...speeds) < 1.15, `drawn going ${Math.min(...speeds).toFixed(2)} to ${Math.max(...speeds).toFixed(2)} times their pace`);
+        assert.ok(Math.abs(prediction.lead - 500) < 100, `${prediction.lead} ms ahead`);
+    });
+
+    it("turns at once when the stick's turned, going on at the same pace, the copy turning when the host hears", () => {
+        const { going, pace } = run({ took: () => 450, turnAt: 4000, turn: Math.PI / 2, from: 3000 });
+        const after = going.filter(({ at }) => at > 4000 + 1000 / 60);
+
+        // (Going east at once, give or take a few degrees as they come round to where the copy
+        // turned; never back the way they came; and as fast as they were going, give or take)
+        const ways = after.map(({ way }) => way);
+        const speeds = going.map(({ speed }) => speed / pace);
+
+        assert.ok(after.filter(({ at }) => at > 4000 + PREDICT.blend).every(({ way }) => Math.abs(way - Math.PI / 2) < 0.15), `${Math.min(...ways).toFixed(2)} to ${Math.max(...ways).toFixed(2)} radians, once turned`);
+        assert.ok(ways.every((way) => way > -0.05 && way < Math.PI / 2 + 0.15), "turning, not going back");
+        assert.ok(Math.min(...speeds) > 0.85 && Math.max(...speeds) < 1.15, `${Math.min(...speeds).toFixed(2)} to ${Math.max(...speeds).toFixed(2)} times their pace`);
+    });
+});
