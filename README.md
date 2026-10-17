@@ -33,8 +33,8 @@ The model viewer, for watching the game's models move, is at
 dungeon's boss or mini-boss, one of the people (an adventurer or a soldier with any weapon of
 theirs, or one of the townsfolk in their role, of any people, a woman or a man), or one of the
 game's things (a works' wagon and its ox, laden as you choose; what's carried and worn; the
-catalog's props, the treasure chest opening), or a creature still to come (the werewolf, in any of
-its six skins: its model before it's in the game), and it's drawn as the game draws it. It walks, runs, attacks, rests, is struck, knocked down and dies (the wyvern,
+catalog's props, the treasure chest opening), or a creature still to come (the centipede: its
+model before it's in the game), and it's drawn as the game draws it. It walks, runs, attacks, rests, is struck, knocked down and dies (the wyvern,
 the drake and the Dreadthorn fly, come down to land and hover). Its panel plays each of the game's
 moves for it by name (one of the people's every motion: their attacks, work, rests, emotes, spells,
 blows and falls), and every clip in a model's file by name. It pauses, slows to a tenth, steps a frame back or on, and plays a move
@@ -84,7 +84,7 @@ menu, and building it.
 [docs/SERVER.md](docs/SERVER.md) is the guide to running a world server, however it's run: its
 management page, worlds and their keys, reaching it from the internet, backups, bringing worlds
 in, and updating it. [docs/LICENSED_MODELS.md](docs/LICENSED_MODELS.md) is how the models that
-aren't free to reuse (the Dreadthorn, the werewolf) are kept out of the public repository and scrambled where
+aren't free to reuse (the Dreadthorn, the werewolf, the centipede) are kept out of the public repository and scrambled where
 they're served, and what the owner sets up for it.
 
 ## How to play
@@ -932,6 +932,9 @@ what it doesn't cover.
 - The werewolf, with its skins, is Werewolf - Mythical Creature, bought on Fab under its Standard
   License, which allows it in a game made with it, never on its own. It's in the game in its
   converted form only, scrambled, and like the Dreadthorn kept in the private repository
+  (`client/models/beasts/LICENSE.md`). It isn't free to reuse.
+- The centipede is Centipede Monster-V2, bought on Fab under the same Standard License, and kept as
+  the werewolf is: in its converted form only, scrambled, in the private repository
   (`client/models/beasts/LICENSE.md`). It isn't free to reuse.
 - The KayKit Medieval Hexagon Pack by Kay Lousberg (<https://kaylousberg.com>), CC0
   (`client/models/kaykit/LICENSE.txt`): the town's props were these until the game built its own.

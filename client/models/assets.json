@@ -1588,6 +1588,18 @@
                     "bytes": 1565632
                 }
             ]
+        },
+        "beast-centipede": {
+            "tier": "demand",
+            "label": "The centipede (Centipede Monster-V2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/centipede.bin",
+                    "hash": "410241ea10",
+                    "bytes": 4492948
+                }
+            ]
         }
     }
 }

@@ -177,7 +177,7 @@ test("a creature's model as it was made (?model=): the werewolf, every clip in i
 
     // (Not listed with the creatures to come: it's in the game. Read, its clips listed, the one
     // asked for by its address played, in the skin asked for)
-    await expect(page.locator("#picker optgroup[label^='Coming to the wilds']")).toHaveCount(0);
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).not.toContain("Werewolf");
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     // (Its own six, and three made up from them: utilities/blenderpipeline's clips.invent)
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual(["Attack", "Death", "Hit React", "Idle", "Idle Alert", "Walk", "Howl", "Claw", "Run"]);
@@ -222,6 +222,55 @@ test("a creature's model as it was made (?model=): the werewolf, every clip in i
     // (Not one of the game's creatures: none of the skin chooser for one)
     await page.locator("#picker").selectOption("wolf");
     await expect(page.getByLabel("Skin")).toBeHidden();
+});
+
+test("a creature to come, drawn from its model before it's in the game: the centipede, all 23 clips in its file, its full detail only, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-centipede&clip=Run");
+
+    // (Listed with the creatures to come; read, its clips listed, the one asked for by its address
+    // played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Centipede"]);
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack",
+        "Attack 2",
+        "Attack 3",
+        "Death",
+        "Death 2",
+        "Death 3",
+        "Eat",
+        "Eat 2",
+        "Eat 3",
+        "Get Down",
+        "Get Up",
+        "Hit React",
+        "Hit React 2",
+        "Idle",
+        "Idle 2",
+        "Jump Back",
+        "Painful",
+        "Run",
+        "Sleep",
+        "Wake Up",
+        "Walk",
+        "Walk 2",
+        "Walk Eat",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Run", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The centipede");
+
+    // Its full detail drawn, the lower ones packed in its file left hidden; no skins to choose
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 33539, bones: 81 });
+    await expect(page.getByLabel("Skin")).toBeHidden();
+
+    // What there is of it, and whose it is: bought on Fab, its licence's note linked to
+    const details = page.locator("#details");
+
+    await expect(details).toContainText("From a model's file");
+    await expect(details).toContainText("Centipede Monster-V2, bought on Fab: used with the permission its Standard License gives");
+    await expect(details).toContainText("1024×1024 (compressed)");
+    await expect(details.getByRole("link")).toHaveAttribute("href", "models/beasts/LICENSE.md");
 });
 
 test("the werewolf as the game draws it, from its model once that's read: the game's moves for it, and the skin each one wears", async ({ page }) => {
