@@ -26,7 +26,7 @@ import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
 import { telemetry } from "./app/telemetry.js";
 import { builtAt, codeVersion } from "./app/version.js";
-import { forgetCharacter, keepCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
+import { exportCharacter, forgetCharacter, keepCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
 import { released } from "./world/release.js";
@@ -2032,6 +2032,7 @@ async function showWorlds() {
         } else {
             action("Enter a code", () => askCode(record));
             action("Make a world", () => askMake(record));
+            action("Bring my world", () => askBring(record));
         }
 
         if (!walled) {
@@ -2366,6 +2367,168 @@ async function askMake(record) {
             }
         },
     });
+}
+
+// Instructions in a dialog: a heading, a line or two, and steps or points (`ordered`: steps)
+function helpBlock(heading, lines = [], { items = [], ordered = false } = {}) {
+    const block = Object.assign(document.createElement("div"), { className: "world-help" });
+    const list = document.createElement(ordered ? "ol" : "ul");
+
+    block.append(Object.assign(document.createElement("h3"), { className: "worlds-heading", textContent: heading }), ...lines.map((line) => Object.assign(document.createElement("p"), { className: "note", textContent: line })));
+    list.append(...items.map((item) => Object.assign(document.createElement("li"), { textContent: item })));
+
+    if (items.length) {
+        block.append(list);
+    }
+
+    return block;
+}
+
+// Bring my world to the server (docs/SERVER.md, "Bringing your own world"): one of the characters
+// kept on this device chosen, and their own world (its land, and its war as it stands) made a
+// world of the server's, with them in it, kept by the world, and whoever brings it its owner
+function askBring(record) {
+    const server = record.name ?? record.key;
+    const kept = loadCharacters(WEAPONS);
+    const how = helpBlock("How it works", [], {
+        ordered: true,
+        items: [
+            "Choose the character whose world you'll bring.",
+            `Give a key that makes worlds on ${server}: its admin key, or a creator key its owner made for you.`,
+            "Name the world, and say whether others may bring a hero of their own in.",
+            "Go in: you're its owner, playing that character. Invite others from the world's menu: World, then Invite others.",
+        ],
+    });
+    const only = helpBlock("Only characters on this device", ["The characters saved in this browser are listed here. To bring one from another device or browser, export them there (Saved characters, then Export), and import the file here first (Saved characters, then Import from a file)."]);
+
+    askWorld({
+        title: "Bring my world to the server",
+        note: `Each character you play alone has a world of their own: the land they started in, and the war going on in it. Bring one to ${server}, and it becomes a world there: the same land, its war carried on from where it stands, and your character in it, ready for others to join.`,
+        fields: kept.length ? [how, only] : [only],
+        choices: kept.length
+            ? kept.map((save) => {
+                  const { name, about, when } = describe(save);
+                  const war = loadWorld(save);
+
+                  return worldCard({ name: `${name}'s world`, about: `${about}${war ? ` · the war at turn ${war.turn ?? 0}` : ""}`, when, onClick: () => askBringAs(record, save) });
+              })
+            : null,
+        go: null,
+    });
+
+    if (!kept.length) {
+        $("#worldaskstatus").textContent = "There are no characters saved on this device yet: play one alone first, or import one from a file.";
+    }
+}
+
+// The rest of it, for the character chosen (`save`): the key that makes worlds, its name, and its
+// first heroes; then brought, and said what came of it, before going in
+async function askBringAs(record, save) {
+    const { ServerClient, SERVER_REFUSALS } = await serversOf();
+    const server = record.name ?? record.key;
+    const hero = save.hero.name;
+    const maker = textField("worldaskmaker", { type: "password", value: record.maker ?? "", placeholder: "Its admin key, or a creator key" });
+    const name = textField("worldaskname", { maxLength: 60, value: `${hero}'s world`, autocapitalize: "words" });
+    const first = selectField("worldaskfirst", [
+        ["new", "Others make a new hero here"],
+        ["bring", "Others may bring a hero of their own"],
+    ]);
+    const keyHelp = helpBlock("The key that makes worlds", [
+        `${server}'s admin key works at home, on its own Wi-Fi: it's on its management page's Overview (and printed when the server first started). From anywhere else, ask the server's owner for a creator key (management page: Settings, then Creator keys).`,
+    ]);
+    const comes = helpBlock("What comes with it", [], {
+        items: [
+            `The land ${hero} started in, and the war, as it stands now.`,
+            `${hero}, with all they carry, know and have found, kept by the world as your first hero there.`,
+            "Where everyone is and what they're doing is made afresh from the land, as it is each time you load your game.",
+            `${hero} stays on this device as they are: what they do on ${server} stays in its world, and what they do alone here stays here.`,
+        ],
+    });
+
+    askWorld({
+        title: `Bring ${hero}'s world to ${server}`,
+        note: `A new world on ${server}, made from ${hero}'s: you'll be its owner, and only those you give a key come in.`,
+        fields: [comes, worldField("Key that makes worlds", maker), keyHelp, worldField("World's name", name), worldField("Other players' heroes", first)],
+        go: "Bring it to the server",
+        onGo: async () => {
+            if (!maker.value.trim()) {
+                $("#worldaskstatus").textContent = `Give a key that makes worlds on ${server}.`;
+
+                return false;
+            }
+
+            if (!name.value.trim()) {
+                $("#worldaskstatus").textContent = "Give the world a name.";
+
+                return false;
+            }
+
+            const character = exportCharacter(save);
+
+            if (!character) {
+                $("#worldaskstatus").textContent = `${hero} couldn't be read from this device.`;
+
+                return false;
+            }
+
+            $("#worldaskstatus").textContent = `Bringing ${hero}'s world to ${server}… Making its land can take a minute.`;
+
+            let brought;
+
+            try {
+                brought = await new ServerClient(state.servers.get(record.key), { servers: state.servers }).bringWorld(maker.value.trim(), { character, name: name.value.trim(), firstHero: first.value });
+            } catch (error) {
+                $("#worldaskstatus").textContent = bringRefusal(error, { server, hero, refusals: SERVER_REFUSALS });
+
+                return false;
+            }
+
+            state.servers.remember(state.servers.get(record.key), { maker: maker.value.trim() });
+            showWorlds();
+            askWorld({
+                title: `${brought.name} is on ${server}`,
+                note: `${brought.hero}'s world is a world of ${server}'s now${brought.turn === null ? ", its war begun afresh" : `, its war at turn ${brought.turn}`}. You're its owner, and ${brought.hero} is kept there for you.`,
+                fields: [
+                    ...(brought.left?.length ? [helpBlock(`What changed for ${brought.hero}`, [`This version of the game plays them a little differently: ${brought.left.join(" ")}`])] : []),
+                    helpBlock("Next", [], {
+                        items: [
+                            `Go in, and choose ${brought.hero}.`,
+                            "To invite others: in the world, open the menu, then World, then Invite others (an invite link, or a short code to say aloud).",
+                            `Come back any time from Worlds on servers: ${brought.name} is listed under ${server}.`,
+                        ],
+                    }),
+                ],
+                go: "Go in",
+                onGo: async () => {
+                    $("#worldask").close();
+                    await enterServerWorld(state.servers.get(record.key), brought.world);
+
+                    return true;
+                },
+            });
+
+            return true;
+        },
+    });
+}
+
+// Why a world couldn't be brought to a server, and what to do about it
+function bringRefusal(error, { server, hero, refusals }) {
+    switch (error.error) {
+        case "key":
+        case "role":
+            return `That key doesn't make worlds on ${server}: give its admin key, or a creator key its owner made for you.`;
+        case "home":
+            return `${server}'s admin key only works on its own Wi-Fi. From elsewhere, ask its owner for a creator key.`;
+        case "version":
+            return `${error.message} To bring ${hero}'s world anyway: export ${hero} here (Saved characters, then Export), open the game from the server itself, import the file there (Saved characters, then Import from a file), and bring their world from there.`;
+        case "newer":
+            return `${hero} was saved by a newer version of the game than ${server} plays. It updates itself overnight; or its owner can update it now (management page: Settings, then Updates).`;
+        case "too-big":
+            return `${hero}'s world is too big to send to ${server}.`;
+        default:
+            return error.message ?? refusals[error.error] ?? `${hero}'s world couldn't be brought to ${server}.`;
+    }
 }
 
 // The servers and tickets known, as a code to carry to another page or device; or one taken in

@@ -144,7 +144,8 @@
     "war.spec.js › plays the war on: forces march and camp, the news tells of it, and the players' might brings on the next age": 3.2,
     "world-map.spec.js › lays out another world from another seed, and zooms in and out": 5.3,
     "world-map.spec.js › lays out the world for a seed and draws it, with where a player of each people starts": 3,
-    "worlds.spec.js › a first hero brought into a world from a character file, told first what was changed to suit this version of the game; and taken home again, a copy among the saved characters, in the world's land": 27.1,
-    "worlds.spec.js › a server that proves to be another than the one pinned is sent no key": 6.4,
-    "worlds.spec.js › a world made on a server and shared by an invite link: both play in it, leave, and it waits; the second comes back to the same hero": 102.2
+    "worlds.spec.js › a character's own world brought to a server (Bring my world): told how, and what comes with it; refused a key that makes no worlds; then a world of the server's, in their land, its owner going in as that character": 30.5,
+    "worlds.spec.js › a first hero brought into a world from a character file, told first what was changed to suit this version of the game; and taken home again, a copy among the saved characters, in the world's land": 27.9,
+    "worlds.spec.js › a server that proves to be another than the one pinned is sent no key": 5.5,
+    "worlds.spec.js › a world made on a server and shared by an invite link: both play in it, leave, and it waits; the second comes back to the same hero": 89.4
 }

@@ -14,6 +14,8 @@
 //   GET    /worlds                          listed worlds, and the caller's own (a session or the admin key)
 //   POST   /worlds {name, seed?, race...}   a world made (a creator key or the admin key): { world, ownerKey, playerKey }
 //   POST   /worlds/import (a world's file)  a world brought in from an export (manage.js importWorld; a creator key or the admin key)
+//   POST   /worlds/bring (a character's world)   a player's solo world brought to the server (manage.js bringSolo; a
+//                                           creator key or the admin key): { world, name, ownerKey, playerKey, ticket, player, hero, turn, left }
 //   GET    /worlds/:id/keys                 its keys (owners)
 //   POST   /worlds/:id/keys {label, role, expires?, uses?}            a key made: { key, record }
 //   DELETE /worlds/:id/keys/:key            a key revoked (its players' sockets closed, "key-revoked")
@@ -68,7 +70,7 @@ import { Rate } from "./access/limits.js";
 import { REFUSED } from "./access/policy.js";
 import { BROKER_PATH, BROKER_PROTOCOL } from "./broker.js";
 import { answer, bodyOf, bytesOf, connectionOf, guard, Refusal, urlOf } from "./guards.js";
-import { ARCHIVE_LIMIT, IMPORT_LIMIT, Refused } from "./manage.js";
+import { ARCHIVE_LIMIT, BRING_LIMIT, IMPORT_LIMIT, Refused } from "./manage.js";
 import { PLAY_PATH, PLAY_PROTOCOL } from "./play.js";
 import { SETTINGS } from "./storage/settings.js";
 import { SERVER_VERSION } from "./storage/versions.js";
@@ -325,6 +327,25 @@ export function apiHandler(server, { mac = false } = {}) {
             } catch (error) {
                 throw new Refusal(400, "bad-request", error.message);
             }
+        }],
+        // (A character and their world, as the game sends them, not JSON: up to BRING_LIMIT)
+        ["POST", /^\/worlds\/bring$/, { raw: BRING_LIMIT }, async (request, bytes) => {
+            const principal = principalOf(request, { body: {} });
+            const allowed = policy.allows(principal, "world.create");
+
+            if (!allowed.yes) {
+                policy.on("refused", { why: allowed.why, address: request.address });
+                throw refuse(allowed.why);
+            }
+
+            const brought = await doing(async () => manage.readBrought(bytes));
+
+            // (A game of another version: as /enter says it, the game saying which is the newer)
+            if (brought.net !== undefined && brought.net !== NET_VERSION) {
+                throw refuse("version", { message: "That server plays another version of the game than yours: open the game from the server itself.", net: NET_VERSION, version: SERVER_VERSION });
+            }
+
+            return doing(() => manage.bringSolo(brought, { by: byOf(principal), creator: principal.kind === "creator" ? principal.creator.label : byOf(principal) }));
         }],
         // (The file as it's sent, not JSON: a world's export, up to IMPORT_LIMIT)
         ["POST", /^\/worlds\/import$/, { raw: IMPORT_LIMIT }, async (request, bytes) => {

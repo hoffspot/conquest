@@ -30,7 +30,7 @@ import { isRole } from "./access/world.js";
 import { ROUTES, routeWords } from "./certify.js";
 import { DNS_HOSTS } from "./net/dns-hosts.js";
 import { recommendation, WORLD_MEMORY } from "./registry.js";
-import { bringForward, freshStart } from "./reopen.js";
+import { bringForward, freshStart, importSolo } from "./reopen.js";
 import { ARCHIVE_LIMIT, archiveFolder, ArchiveError, readArchive, stageRestore, worldBundle, worldIds, worldsIn } from "./storage/archive.js";
 import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, SERVER_JOURNAL, stampOf, writeGzip } from "./storage/files.js";
 import { LAYOUT_VERSION } from "./storage/folder.js";
@@ -47,6 +47,13 @@ export const EXPORT_FORMAT = "pellagos.world.1";
 /** How big a world's file may be to be brought in (bytes: as sent, gzipped; and once unpacked). */
 export const IMPORT_LIMIT = 64 * 1024 * 1024;
 export const IMPORT_UNPACKED = 512 * 1024 * 1024;
+
+/**
+ * A character and their world sent to be brought to the server ("Bring my world to the
+ * server": bringSolo): its format, and how big it may be (bytes, as sent, gzipped or not).
+ */
+export const BRING_FORMAT = "pellagos.bring.1";
+export const BRING_LIMIT = 16 * 1024 * 1024;
 
 /** How long an archive read to be restored or brought in from is kept for it (ms), and how many at once. */
 export const ARCHIVE_KEPT = 30 * 60000;
@@ -685,6 +692,65 @@ export class Management {
         await this.journal(`The world "${stored.meta.name}" (${stored.id}) was brought in${by ? ` by ${by}` : ""}, from ${from ?? "a file exported by"} Pellagos server ${bundle.exportedBy ?? "(unknown)"}${from ? " made" : ""}${salvaged ? `: ${salvaged}` : "."}`);
 
         return { ...adopted, salvaged };
+    }
+
+    /**
+     * What a game sent to bring a world to the server (BRING_FORMAT, gzipped or not, as the game's
+     * ServerClient bringWorld sends it): { net (its NET_VERSION), name, firstHero, character (a
+     * character and their world, as app/save.js exportCharacter gives them) }. Refused, saying
+     * so, if it isn't that.
+     */
+    readBrought(bytes) {
+        let brought;
+
+        try {
+            const packed = bytes[0] === 0x1f && bytes[1] === 0x8b;
+
+            brought = JSON.parse((packed ? gunzipSync(bytes, { maxOutputLength: IMPORT_UNPACKED }) : bytes).toString("utf8"));
+        } catch {
+            brought = null;
+        }
+
+        if (brought?.format !== BRING_FORMAT || !brought.character || typeof brought.character !== "object") {
+            throw new Refused(400, "not-a-world", "That isn't a character and their world, as the game sends them to be brought to a server.");
+        }
+
+        return brought;
+    }
+
+    /**
+     * A player's solo world brought to the server (generated/world_server_plan.md §5, "Bring my
+     * world to the server"; reopen.js importSolo), by whoever may make worlds here (`by` and
+     * `creator` as createWorld's), from what readBrought read: a new world with the solo world's
+     * seed, its home people and its war, named `name` (or after its hero), its heroes kept by the
+     * world and its first heroes as `firstHero` has them; an owner's key and a player's key, as
+     * any world made here has; and whoever brought it its first player, by the owner's key, their
+     * hero its first kept hero. Returns { world, name, ownerKey, playerKey, ticket (theirs, to come
+     * back in by), player (their id in it), hero (its name), turn (its war's, or null for a new
+     * war), left (what was left out of the hero or put right, as the game says it) }. Refused,
+     * saying why, if it can't be brought; nothing's left of it then.
+     */
+    async bringSolo({ character, name = null, firstHero = "new" } = {}, { by = null, creator = null } = {}) {
+        let brought;
+
+        try {
+            brought = await importSolo(this.server.store, character, { name, creator, firstHero: FIRST_HEROES.includes(firstHero) ? firstHero : "new" });
+        } catch (error) {
+            throw error.newer ? new Refused(409, "newer", `That character and world were kept by a newer version of the game than this server plays: ${error.message}`) : new Refused(400, "not-a-world", `That world can't be brought to the server: ${error.message}`);
+        }
+
+        const { stored, kept, left, turn } = brought;
+        const who = creator ?? by;
+        const adopted = await this.server.adopt(stored, { creator });
+        const access = this.server.access.world(stored.id);
+        const owners = access.keys().find((key) => key.role === "owner");
+        const { id: player, ticket } = await access.newPlayer({ role: "owner", via: owners.id });
+
+        await stored.heroes.keep(player, kept, { slot: 1 });
+        await stored.journal(`Brought from a solo game${who ? ` by ${who}` : ""}, its owner now, as player ${player}: ${kept.hero.name}, its first kept hero; ${turn === null ? "a new war" : `its war carried on, at turn ${turn}`}.${left.length ? ` Of ${kept.hero.name}, as this version of the game plays them: ${left.join(" ")}` : ""}`);
+        await this.journal(`The world "${stored.meta.name}" (${stored.id}) was brought from a solo game${who ? ` by ${who}` : ""}, with ${kept.hero.name}.`);
+
+        return { ...adopted, ticket, player, hero: kept.hero.name, turn, left };
     }
 
     // ---- The whole server, as an archive (storage/archive.js)
