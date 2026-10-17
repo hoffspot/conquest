@@ -110,8 +110,10 @@ async function playing(page, address) {
 // Play on (the game stopped) till `done` (a function run in the page) says so, or `seconds` of the
 // game's time go by: whether it did. Half a second at a time, a frame at a time, the page's events
 // let in between them as between frames, so what's done elsewhere (skins painted in a worker)
-// comes back to be waited on, as in play
-async function playUntil(page, done, { seconds = 30 } = {}) {
+// comes back to be waited on, as in play; with `realTime`, no faster than the clock
+async function playUntil(page, done, { seconds = 30, realTime = false } = {}) {
+    const start = Date.now();
+
     for (let time = 0; time < seconds; time += 0.5) {
         if (await page.evaluate(done)) {
             return true;
@@ -125,6 +127,12 @@ async function playUntil(page, done, { seconds = 30 } = {}) {
                 await new Promise((resolve) => setTimeout(resolve, 0));
             }
         });
+
+        // (`realTime`: never played ahead of the clock, as a player plays it, for what takes the
+        // time it really takes: the downloader keeps to a rate, in real time, not the game's)
+        if (realTime) {
+            await page.waitForTimeout(Math.max(0, (time + 0.5) * 1000 - (Date.now() - start)));
+        }
     }
 
     return page.evaluate(done);
@@ -11263,7 +11271,8 @@ test("out in the woods far from home by night, where werewolves are met: the wer
     expect(woods.at).not.toBeNull();
     expect(woods.before).toBe(false);
 
-    // (Read, and no werewolf come yet to be drawn: asked for where it's met, not as it comes)
+    // (Read, and no werewolf come yet to be drawn: asked for where it's met, not as it comes; in a
+    // minute's play, as a player plays it, as the downloader keeps to a rate in real time)
     const read = () => {
         const { game } = window.pellagos;
 
@@ -11272,7 +11281,7 @@ test("out in the woods far from home by night, where werewolves are met: the wer
         return Boolean(window.modelOf("werewolf"));
     };
 
-    expect(await playUntil(page, read, { seconds: 60 })).toBe(true);
+    expect(await playUntil(page, read, { seconds: 60, realTime: true })).toBe(true);
     expect(await page.evaluate(() => window.met)).toBe(false);
 });
 
