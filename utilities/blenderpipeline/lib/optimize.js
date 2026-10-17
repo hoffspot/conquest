@@ -7,7 +7,7 @@
 import { readFile } from "node:fs/promises";
 import { Logger, PropertyType } from "@gltf-transform/core";
 import { clearNodeParent, cloneDocument, dedup, join, meshopt, prune, quantize, reorder, resample, simplify, simplifyPrimitive, unpartition, weld, weldPrimitive } from "@gltf-transform/functions";
-import { bounds, duration, loops, playInPlace, rootMotion, visitVertices } from "./animation.js";
+import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices } from "./animation.js";
 import { createIO, MeshoptEncoder, MeshoptSimplifier } from "./gltf.js";
 import { inventClip } from "./invent.js";
 import { encodeTextures } from "./ktx2.js";
@@ -139,6 +139,37 @@ export function trimStill(document, { tolerance = 1e-5 } = {}) {
     }
 
     return trimmed;
+}
+
+/**
+ * The rest pose taken from a clip's first frame: each bone the clip moves stood as it is there.
+ * For a source whose skeleton rests where its clips never have it (a root bone resting tens of
+ * metres off that every clip brings back): the model's measured, turned and moved to its origin
+ * as its clips show it. Its clips aren't changed (glTF's keyframes are where a bone is, not how far
+ * it's moved from its rest). Returns how many bones were moved.
+ */
+export function restFromClip(document, name) {
+    const clip = document.getRoot().listAnimations().find((animation) => animation.getName() === name);
+
+    if (!clip) {
+        throw new Error(`restPose: there's no clip ${name}`);
+    }
+
+    const set = { translation: "setTranslation", rotation: "setRotation", scale: "setScale" };
+    let moved = 0;
+
+    for (const [node, paths] of channelsByNode(clip)) {
+        // (A morph's weights aren't a bone's place)
+        const kept = Object.entries(paths).filter(([path]) => set[path]);
+
+        for (const [path, channel] of kept) {
+            node[set[path]](sampleChannel(channel, 0));
+        }
+
+        moved += kept.length > 0 ? 1 : 0;
+    }
+
+    return moved;
 }
 
 /**
@@ -302,6 +333,10 @@ export async function optimize(config, { raw, glb, lodFile }) {
     }
 
     result.tangentsMended = mendTangents(document);
+
+    if (config.restPose) {
+        result.restPose = restFromClip(document, config.restPose);
+    }
 
     if (config.turn) {
         moveDocument(document, { turn: (config.turn * Math.PI) / 180 });

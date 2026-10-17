@@ -372,8 +372,10 @@ const isThing = (id) => /^(item|prop|model):/.test(String(id));
 const propsRead = new Map();
 
 // A thing (`object`) shown as a creature is, on the ground in the middle, its clips (if it has
-// any: the chest's opening) played alone as a model's are (`hold`, by name)
-function thingAvatar(object, clips = []) {
+// any: the chest's opening) played alone as a model's are (`hold`, by name). A creature's model
+// made hovering over its origin (`hover`: the Dungeon Wasp, whose deaths fall to it) keeps its
+// origin for the ground; one made below it is raised to stand on it
+function thingAvatar(object, clips = [], { hover = false } = {}) {
     const box = new THREE.Box3().setFromObject(object);
     const size = box.isEmpty() ? new THREE.Vector3(1, 1, 1) : box.getSize(new THREE.Vector3());
     const middle = box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
@@ -381,7 +383,9 @@ function thingAvatar(object, clips = []) {
     const mixer = new THREE.AnimationMixer(object);
     const actions = new Map(clips.map((clip) => [clip.name, mixer.clipAction(clip)]));
 
-    object.position.sub(new THREE.Vector3(middle.x, box.isEmpty() ? 0 : box.min.y, middle.z));
+    const floor = box.isEmpty() ? 0 : hover ? Math.min(box.min.y, 0) : box.min.y;
+
+    object.position.sub(new THREE.Vector3(middle.x, floor, middle.z));
     holder.add(object);
     object.traverse((node) => {
         node.castShadow = node.receiveShadow = Boolean(node.isMesh);
@@ -398,7 +402,8 @@ function thingAvatar(object, clips = []) {
         object: holder,
         scale: 1,
         size,
-        character: { height: Math.max(0.05, size.y), dispose: () => mixer.stopAllAction(), sheathe: still },
+        // (Its height: how high it reaches over the ground, a hovering one's gap below it too)
+        character: { height: Math.max(0.05, box.isEmpty() ? size.y : box.max.y - floor), dispose: () => mixer.stopAllAction(), sheathe: still },
         actions: { revive: still, setGuard: still, react: still, die: still, knockdown: still, startAttack: still },
         place(x, z, facing) {
             holder.position.set(x, 0, z);
@@ -610,7 +615,7 @@ function showThing(id) {
     object.traverse((node) => {
         node.visible = !node.userData.lod;
     });
-    current = { ...thing, avatar: thingAvatar(object, read?.animations ?? []), thing: { asset: name, read: Boolean(read), skins: Object.keys(skinsOf(name)) }, name: label, about: read ? made : "On its way…" };
+    current = { ...thing, avatar: thingAvatar(object, read?.animations ?? [], { hover: kind === "model" }), thing: { asset: name, read: Boolean(read), skins: Object.keys(skinsOf(name)) }, name: label, about: read ? made : "On its way…" };
 
     if (!read) {
         loadGltf(Object.values(filesOf(ASSETS, name, document.baseURI))[0])
@@ -640,7 +645,7 @@ function sizeOf() {
     const { avatar } = current;
     const height = avatar.character.height;
 
-    return current.thing ? Math.max(avatar.size.x, avatar.size.y, avatar.size.z) : avatar.plan ? Math.max(height, avatar.plan.length * avatar.scale * 0.8) : height;
+    return current.thing ? Math.max(avatar.size.x, height, avatar.size.z) : avatar.plan ? Math.max(height, avatar.plan.length * avatar.scale * 0.8) : height;
 }
 
 // How far back the camera stands to see all of something `size` across in what the bars and the

@@ -6,7 +6,7 @@ import { Quaternion, Vector3 } from "three";
 import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices, worldMatrix } from "../lib/animation.js";
 import { eased, inventClip } from "../lib/invent.js";
 import { decodeImage, encodeImage, shrinkImage, textureUses } from "../lib/ktx2.js";
-import { mendTangents, packLod, thinKeys, trimStill } from "../lib/optimize.js";
+import { mendTangents, packLod, restFromClip, thinKeys, trimStill } from "../lib/optimize.js";
 import { moveDocument, scaleDocument } from "../lib/transform.js";
 import { near, skinnedDocument, vertices } from "./helpers.js";
 
@@ -434,5 +434,27 @@ describe("thinning keyframes", () => {
         assert.deepEqual(second.getOutput().getElement(23, []), [45, 45, 45, 45]);
         assert.deepEqual(clip(document, "Walk").listSamplers().map((sampler) => sampler.getInput().getCount()), walkKeys);
         assert.deepEqual(slow.listSamplers().map((sampler) => sampler.getInput().getCount()), [4, 4]);
+    });
+});
+
+describe("the rest pose taken from a clip (restPose)", () => {
+    it("stands each bone the clip moves as it is at the clip's start, and changes no clip", () => {
+        const document = skinnedDocument();
+        const nodes = document.getRoot().listNodes();
+        const root = nodes.find((node) => node.getName() === "root");
+        const walk = clip(document, "Walk");
+        const keys = walk.listSamplers().map((sampler) => Array.from(sampler.getOutput().getArray()));
+        const start = bounds(document, { animation: walk, time: 0 });
+
+        // (Its root resting 50 metres off, where the clip never has it)
+        root.setTranslation([50, 0, 0]);
+        assert.ok(near(bounds(document).min[0], start.min[0] + 50));
+
+        assert.equal(restFromClip(document, "Walk"), channelsByNode(walk).size);
+        assert.ok(near(root.getTranslation(), sampleChannel(channelsByNode(walk).get(root).translation, 0)));
+        assert.ok(near(bounds(document).min, start.min));
+        assert.ok(near(bounds(document).max, start.max));
+        assert.deepEqual(walk.listSamplers().map((sampler) => Array.from(sampler.getOutput().getArray())), keys);
+        assert.throws(() => restFromClip(document, "Fly"), /restPose: there's no clip Fly/);
     });
 });
