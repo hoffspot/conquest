@@ -34,6 +34,10 @@ const WATER = { glow: [0xe8f8ff, 0x3a9ae8], deep: 0x1a5ab8, bright: 0xbfeaff };
 const HEAL = { glow: [0xdcffe0, 0x28d05a], deep: 0x2fd46a, bright: 0xe9fff0, gold: [0xfffbe0, 0xffc84a] };
 const HEX = { glow: [0xe8d8ff, 0x8a4dff], deep: 0x8a4dff, bright: 0xe8d8ff };
 const PALETTES = { fire: FIRE, earth: EARTH, air: AIR, water: WATER, healing: HEAL };
+// The Prismatic sigil's (core/prismatic.js): each element's colour in it (app/sigil.js
+// SIGIL_COLOURS), and the colours its glass splits light into, red to violet
+const PRISM = Object.freeze({ fire: 0xff7a2e, earth: 0xc49a4a, air: 0xbfe6ff, water: 0x3c9cff });
+const SPECTRUM = Object.freeze([0xff4a5a, 0xffa030, 0xfff060, 0x60ff90, 0x40c0ff, 0x9a60ff]);
 // A Scroll of Safety's circle (underfoot), and the motes off it
 const SAFETY = { colour: 0x4aa8ff, bright: 0xdff2ff, glow: [0xeaf6ff, 0x3a8ae8] };
 
@@ -604,6 +608,104 @@ TEXTURES.fissures = () =>
         burnAndGlow(g, s, lines, { dark: 0.85 });
     });
 
+// The Prismatic sigil (app/sigil.js, spellicons.js PETAL), as an element's Prismatic spell burns it
+// into the ground: a band of runes between two rings, teeth inside it, the four petals (fire,
+// earth, air, water), each twice drawn, and the four-pointed star at its heart, small circles
+// between the petals
+TEXTURES.prism = () =>
+    canvasTexture(512, (g, s) => {
+        const c = s / 2;
+        const w = 0.007;
+        const lines = [];
+        // (The icon's own shapes, its box -32 to 32: the petal's tip at 21, drawn here to 0.8)
+        const k = 0.8 / 21;
+        const turned = (x, y, a) => [c + (x * Math.cos(a) - y * Math.sin(a)) * k * c, c + (x * Math.sin(a) + y * Math.cos(a)) * k * c];
+        const ring = (r, width = w) => lines.push([width, () => g.arc(c, c, r * c, 0, Math.PI * 2)]);
+        const petal = (a, scale) =>
+            lines.push([
+                w * (scale < 1 ? 0.7 : 1.1),
+                () => {
+                    const at = (x, y) => turned(x * scale, -3 + (y + 3) * scale, a);
+
+                    g.moveTo(...at(0, -3));
+                    g.bezierCurveTo(...at(6, -8), ...at(7, -15), ...at(0, -21));
+                    g.bezierCurveTo(...at(-7, -15), ...at(-6, -8), ...at(0, -3));
+                },
+            ]);
+
+        ring(0.97, w * 1.4);
+        ring(0.86);
+        ring(0.82, w * 0.6);
+
+        // (Runes round between the outer rings, as the fire spells' circles have)
+        for (let n = 0; n < 28; n++) {
+            const a = (n / 28) * Math.PI * 2;
+            const strokes = RUNE_STROKES[(n * 7 + 5) % RUNE_STROKES.length];
+            const [r, h] = [0.915 * c, 0.11 * c * 0.34];
+            const [x, y] = [c + Math.cos(a) * r, c + Math.sin(a) * r];
+            const point = (u, v) => [x + (-Math.sin(a) * u * 0.6 + Math.cos(a) * v) * h, y + (Math.cos(a) * u * 0.6 + Math.sin(a) * v) * h];
+
+            lines.push([
+                w * 0.75,
+                () => {
+                    for (const [u0, v0, u1, v1] of strokes) {
+                        g.moveTo(...point(u0, v0));
+                        g.lineTo(...point(u1, v1));
+                    }
+                },
+            ]);
+        }
+
+        for (let n = 0; n < 4; n++) {
+            const a = (n * Math.PI) / 2;
+
+            petal(a, 1);
+            petal(a, 0.62);
+
+            // (A small circle between each two petals)
+            const [x, y] = [c + Math.cos(a + Math.PI / 4 - Math.PI / 2) * 0.6 * c, c + Math.sin(a + Math.PI / 4 - Math.PI / 2) * 0.6 * c];
+
+            lines.push([w * 0.8, () => g.arc(x, y, 0.045 * c, 0, Math.PI * 2)]);
+        }
+
+        // (The star at its heart)
+        lines.push([
+            w * 1.1,
+            () => {
+                const star = [[0, -7], [2.4, -2.4], [7, 0], [2.4, 2.4], [0, 7], [-2.4, 2.4], [-7, 0], [-2.4, -2.4]];
+
+                star.forEach(([x, y], n) => g[n ? "lineTo" : "moveTo"](...turned(x * 1.25, y * 1.25, 0)));
+                g.closePath();
+            },
+        ]);
+
+        burnAndGlow(g, s, lines);
+    });
+
+// A band of the spectrum (the Prismatic sigil's glass splitting light), violet inside to red
+// outside, over the outer tenth of its radius: a ring's (RingGeometry 0.9 to 1 laid on it)
+TEXTURES.spectrum = () =>
+    canvasTexture(256, (g, s) => {
+        const c = s / 2;
+        const gradient = g.createRadialGradient(c, c, c * 0.88, c, c, c);
+
+        for (const [at, colour] of [
+            [0, "rgba(150,90,255,0)"],
+            [0.14, "rgba(150,90,255,1)"],
+            [0.3, "rgba(70,150,255,1)"],
+            [0.46, "rgba(70,240,210,1)"],
+            [0.6, "rgba(150,255,90,1)"],
+            [0.74, "rgba(255,230,70,1)"],
+            [0.87, "rgba(255,120,50,1)"],
+            [1, "rgba(255,50,70,0)"],
+        ]) {
+            gradient.addColorStop(at, colour);
+        }
+
+        g.fillStyle = gradient;
+        g.fillRect(0, 0, s, s);
+    });
+
 // --- The effect itself ---
 
 export class SpellFx {
@@ -653,6 +755,7 @@ export class SpellFx {
             crescent: new THREE.TorusGeometry(0.5, 0.06, 6, 20, Math.PI).rotateX(Math.PI / 2),
             fireball: new THREE.IcosahedronGeometry(1, 3),
             wick: new THREE.CylinderGeometry(1, 1, 1, 6, 1).translate(0, 0.5, 0),
+            prism: new THREE.OctahedronGeometry(1, 0).scale(0.5, 1.3, 0.5),
         };
 
         // The lights lent to flashes (never added or taken away, so nothing's compiled again)
@@ -759,9 +862,12 @@ export class SpellFx {
         }
     }
 
-    /** A ring spreading on the ground from a point, `from` to `to` metres across, fading. */
-    ring(centre, { colour, from = 0.3, to = 2, life = 0.6, y = 0.06, opacity = 1 }) {
-        const mesh = new THREE.Mesh(this.geometries.ring, this.#additive(colour, { opacity }));
+    /**
+     * A ring spreading on the ground from a point, `from` to `to` metres across, fading; of its
+     * colour, or of a picture's (`texture`: the spectrum's) times its colour.
+     */
+    ring(centre, { colour, from = 0.3, to = 2, life = 0.6, y = 0.06, opacity = 1, texture = null }) {
+        const mesh = new THREE.Mesh(this.geometries.ring, this.#additive(colour, { opacity, map: texture ? this.#texture(texture) : null }));
 
         this.#lay(mesh, centre, (from + to) / 2, y);
         mesh.renderOrder = ORDER.ring;
@@ -852,14 +958,16 @@ export class SpellFx {
     /**
      * A circle of runes turning on the ground under someone (`feet`: a function giving where they
      * stand, followed as they go; nothing given, gone), its diameter going from `from` to `to`
-     * metres over its `life` (seconds: growing eases in, shrinking eases out), a second ring of
-     * runes inside it turning the other way, a soft glow under both and motes rising off its rim.
-     * Returns it ({ object, end(): gone at once }).
+     * metres over its `life` (seconds: growing eases in, shrinking eases out; grown in its first
+     * `grow` of it), a second ring of runes inside it turning the other way, a soft glow under
+     * both and motes rising off its rim; or another circle (`texture`: the Prismatic sigil's,
+     * prism) and another inside it (`inner`: the spectrum's rim). Returns it ({ object, end():
+     * gone at once }).
      */
-    underfoot(feet, { from = 0, to = 2, life = 3, colour = SAFETY.colour, bright = SAFETY.bright, glow = SAFETY.glow, spin = 1.4 } = {}) {
+    underfoot(feet, { from = 0, to = 2, life = 3, colour = SAFETY.colour, bright = SAFETY.bright, glow = SAFETY.glow, spin = 1.4, texture = "runes", inner: within = "runeband", grow = 1 } = {}) {
         const group = new THREE.Group();
-        const outer = new THREE.Mesh(this.geometries.disc, this.#vivid(colour, { map: this.#texture("runes"), opacity: 0.95, boost: 2.4 }));
-        const inner = new THREE.Mesh(this.geometries.disc, this.#vivid(bright, { map: this.#texture("runeband"), opacity: 0.85, boost: 2 }));
+        const outer = new THREE.Mesh(this.geometries.disc, this.#vivid(colour, { map: this.#texture(texture), opacity: 0.95, boost: 2.4 }));
+        const inner = new THREE.Mesh(this.geometries.disc, this.#vivid(bright, { map: this.#texture(within), opacity: 0.85, boost: 2 }));
         const halo = new THREE.Mesh(this.geometries.disc, this.#additive(colour, { map: this.#texture("glow"), opacity: 0.4 }));
         const growing = to >= from;
         let [turn, motes] = [Math.random() * Math.PI * 2, 0];
@@ -884,7 +992,7 @@ export class SpellFx {
             }
 
             // (Lying on the ground where they stand, as it slopes there)
-            const eased = growing ? 1 - (1 - t) ** 2 : t * t;
+            const eased = growing ? 1 - (1 - Math.min(1, t / grow)) ** 2 : t * t;
             const radius = Math.max(0.001, (from + (to - from) * eased) / 2);
 
             lieOn(this.groundAt, at.x, at.z, Math.min(Math.max(radius, 0.5), 3), group.quaternion);
@@ -1181,8 +1289,11 @@ export class SpellFx {
         return glow;
     }
 
-    /** Pieces flung from a point (stone, ice), tumbling and falling, gone after a while. */
-    shards(at, { count = 10, colour = EARTH.stone, size = 0.12, speed = 4, up = 3, life = 1.2, shape = "shard", glow = false, spread = 1 }) {
+    /**
+     * Pieces flung from a point (stone, ice), tumbling and falling (or, `gravity` below nothing,
+     * rising: stones lifted), gone after a while.
+     */
+    shards(at, { count = 10, colour = EARTH.stone, size = 0.12, speed = 4, up = 3, life = 1.2, shape = "shard", glow = false, spread = 1, gravity = 9.8 }) {
         const material = glow ? this.#additive(colour) : new THREE.MeshStandardMaterial({ color: colour, roughness: 0.8, flatShading: true, transparent: true });
         const group = new THREE.Group();
         const flying = [];
@@ -1200,7 +1311,7 @@ export class SpellFx {
 
         this.#show(group, life, (t, dt) => {
             for (const { piece, velocity, spin } of flying) {
-                velocity.y -= 9.8 * dt;
+                velocity.y -= gravity * dt;
                 piece.position.addScaledVector(velocity, dt);
 
                 const floor = velocity.y < 0 ? this.groundAt(piece.position.x, piece.position.z) + 0.05 : -Infinity;
@@ -1222,11 +1333,13 @@ export class SpellFx {
 
     /**
      * Spikes (of earth, of ice) bursting up round a point: `count` in a ring `radius` m out (or
-     * scattered over it: `scatter`), `height` tall, leaning in (`lean`), then sinking back; lit
-     * (as rough as `roughness`: ice glossy) or glowing.
+     * scattered over it: `scatter`), `height` tall, leaning in (`lean`), bursting up over the
+     * first `rise` of their life and sinking back over the last `sink`; lit (as rough as
+     * `roughness`: ice glossy; see-through as `opacity` has it, glowing as `emissive`: ice) or
+     * glowing.
      */
-    spikes(centre, { count = 8, radius = 1.2, height = 1.6, colour = EARTH.deep, life = 1.4, lean = 0.3, scatter = false, glow = false, width = 0.25, stagger = 0, roughness = 0.9 }) {
-        const material = glow ? this.#additive(colour, { opacity: 0.85 }) : new THREE.MeshStandardMaterial({ color: colour, roughness, flatShading: true });
+    spikes(centre, { count = 8, radius = 1.2, height = 1.6, colour = EARTH.deep, life = 1.4, lean = 0.3, scatter = false, glow = false, width = 0.25, stagger = 0, roughness = 0.9, rise = 0.15, sink = 0.2, opacity = 1, emissive = 0x000000 }) {
+        const material = glow ? this.#additive(colour, { opacity: 0.85 * opacity }) : new THREE.MeshStandardMaterial({ color: colour, roughness, flatShading: true, emissive, transparent: opacity < 1, opacity });
         const group = new THREE.Group();
         const spikes = [];
 
@@ -1250,9 +1363,9 @@ export class SpellFx {
         this.#show(group, life, (t) => {
             for (const { spike, tall, delay } of spikes) {
                 const local = Math.max(0, (t - delay) / (1 - delay));
-                const rise = local < 0.15 ? local / 0.15 : local > 0.8 ? (1 - local) / 0.2 : 1;
+                const up = local < rise ? local / rise : local > 1 - sink ? (1 - local) / sink : 1;
 
-                spike.scale.set(width * Math.max(0.01, rise), tall * Math.max(0.01, rise), width * Math.max(0.01, rise));
+                spike.scale.set(width * Math.max(0.01, up), tall * Math.max(0.01, up), width * Math.max(0.01, up));
             }
         });
     }
@@ -1587,29 +1700,106 @@ export class SpellFx {
 
     /**
      * A blast's fireball at a point, `size` metres across at its biggest: swelling out fast and
-     * slowing (all but there in its first 0.15 s), boiling, rising once it's out, cooling from
-     * white-hot through orange to sooty smoke and thinning away over its `life` (seconds).
+     * slowing (all but there in its first `swell` s), boiling, rising once it's out (`rise` m a
+     * second), cooling from as hot as `heat` has it (1: white-hot) through orange to sooty smoke
+     * (cooled by `hot` of its life) and thinning away from `thin` of it over its `life` (seconds).
+     * Or a sun held (`follow`: a
+     * function giving where, kept there) that shrinks to nothing over its last `collapse`, and
+     * thins away at once if it's called off (`alive` false). Returns it.
      */
-    fireball(at, { size = 2, life = 0.9 } = {}) {
+    fireball(at, { size = 2, life = 0.9, swell = 0.15, rise = 0.8, hot = 0.55, thin = 0.45, collapse = 0, follow = null, alive = null, heat = 1 } = {}) {
         const material = this.#fireballMaterial();
         const mesh = new THREE.Mesh(this.geometries.fireball, material);
         const { uniforms } = material;
+        let off = null;
 
         mesh.position.copy(at);
         this.#show(mesh, life, (t, dt, age = 0) => {
-            const swell = 1 - (1 - Math.min(1, age / 0.15)) ** 3;
+            const grown = 1 - (1 - Math.min(1, age / swell)) ** 3;
+            const shrunk = collapse && t > 1 - collapse ? ((1 - t) / collapse) ** 1.5 : 1;
+            const now = follow?.();
 
-            mesh.scale.setScalar((size / 2) * swell * (1 + 0.15 * t));
+            if (off === null && alive && !alive()) {
+                off = age;
+            }
 
-            if (age > 0.3) {
-                mesh.position.y += 0.8 * dt;
+            mesh.scale.setScalar((size / 2) * grown * shrunk * (1 + 0.15 * t));
+
+            if (now) {
+                mesh.position.copy(now);
+            } else if (age > 0.3) {
+                mesh.position.y += rise * dt;
             }
 
             uniforms.time.value = age;
-            uniforms.heat.value = Math.max(0, 1 - age / (life * 0.55));
-            uniforms.dissolve.value = t < 0.45 ? 0 : (t - 0.45) / 0.55;
+            uniforms.heat.value = heat * Math.max(0, 1 - age / (life * hot));
+            uniforms.dissolve.value = off !== null ? Math.min(1, (age - off) / 0.15) : t < thin ? 0 : (t - thin) / (1 - thin);
             uniforms.boil.value = 0.25 + 0.3 * t;
-            uniforms.fade.value = t > 0.85 ? (1 - t) / 0.15 : 1;
+            uniforms.fade.value = off !== null ? Math.max(0, 1 - (age - off) / 0.15) : t > 0.85 && !collapse ? (1 - t) / 0.15 : 1;
+        });
+
+        return mesh;
+    }
+
+    /**
+     * The Prismatic sigil's glass prisms circling over someone (`centre`: a function giving where
+     * they stand, followed; nothing given, gone), `count` of them `radius` m out and `height` m up,
+     * each turning, the first of the spell's `colour` and bigger, the rest clear glass catching the
+     * spectrum's colours, a glint trailing each; closing in on them over the last `close` of their
+     * `life` (seconds), down to `to` m over the ground there, shrinking as they go; gone at once
+     * if the casting's stopped (`alive` false).
+     */
+    prisms(centre, { colour, count = 4, radius = 3, height = 3.2, to = 1.1, life = 1.2, size = 0.3, close = 0.3, spin = 2.4, alive = () => true }) {
+        const group = new THREE.Group();
+        const pieces = [];
+        const edges = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+        let [turn, glint] = [Math.random() * Math.PI * 2, 0];
+
+        for (let k = 0; k < count; k++) {
+            const tint = k ? SPECTRUM[(k * 2) % SPECTRUM.length] : colour;
+            const body = new THREE.Mesh(this.geometries.prism, this.#additive(k ? 0xd8e4ff : colour, { opacity: k ? 0.35 : 0.75 }));
+            const edge = new THREE.Mesh(this.geometries.prism, edges);
+
+            edge.scale.setScalar(1.02);
+            body.add(edge);
+            group.add(body);
+            pieces.push({ body, tint, big: k ? 1 : 1.45, bob: Math.random() * Math.PI * 2 });
+        }
+
+        this.#show(group, life, (t, dt, age = 0) => {
+            const at = alive() ? centre() : null;
+
+            group.visible = Boolean(at);
+
+            if (!at) {
+                return;
+            }
+
+            const closing = Math.min(1, Math.max(0, (t - (1 - close)) / close));
+            const eased = closing * closing;
+            const shown = Math.min(1, t * 8);
+
+            turn += spin * dt * (1 + 3 * closing);
+            glint -= dt;
+            group.position.set(at.x, at.y, at.z);
+
+            for (const [k, { body, tint, big, bob }] of pieces.entries()) {
+                const angle = turn + (k / count) * Math.PI * 2;
+                const out = radius * (1 - eased);
+
+                body.position.set(Math.cos(angle) * out, height + (to - height) * eased + Math.sin(age * 2.2 + bob) * 0.15 * (1 - closing), Math.sin(angle) * out);
+                body.rotation.set(0.35, angle * -2 + age * 3, 0);
+                body.scale.setScalar(size * big * shown * (1 - 0.6 * eased));
+
+                // (A glint off each, of its colour, now and then)
+                if (glint <= 0) {
+                    this.spray(p([0xffffff, tint], { count: 1, size: [0.03, 0.06], speed: [0, 0.25], life: [0.25, 0.4], gravity: 0, spread: 2 }), body.getWorldPosition(new THREE.Vector3()));
+                }
+            }
+
+            if (glint <= 0) {
+                glint = 0.05;
+            }
         });
     }
 
@@ -1898,7 +2088,7 @@ export class SpellFx {
             }
         }
 
-        recipe.charging?.(this, { target, seconds });
+        recipe.charging?.(this, { id, target, seconds, still, feet, hand });
         this.casting.set(id, { id, spell, hand, still, palette, tier, next: 0, recipe });
 
         // (Its missile thrown, to arrive as it lands)
@@ -2154,6 +2344,65 @@ const cure = (colour) => ({
         fx.ring(at, { colour: 0xf2e08a, from: 0.3, to: 1.2, life: 0.5 });
     },
 });
+
+// --- An element's Prismatic spell (core/prismatic.js ELEMENT_SPELLS) ---
+
+// The light gathering in the caster's hand: the element's, a mote of the spectrum now and then
+const prismGathering = (colours) => (fx, at, cast) => {
+    cast.motes = (cast.motes ?? 0) + 1;
+    fx.spray(p(colours, { count: 2, size: [0.05, 0.11], speed: [0.3, 1.1], life: [0.25, 0.45], gravity: -0.6, spread: 2, swirl: 5 }), at);
+
+    if (cast.motes % 3 === 0) {
+        fx.spray(p([0xffffff, SPECTRUM[(cast.motes / 3) % SPECTRUM.length]], { count: 1, size: [0.04, 0.08], speed: [0.4, 1.2], life: [0.3, 0.5], gravity: -0.4, spread: 2, swirl: 6 }), at);
+    }
+};
+
+// Motes of the whole spectrum flung from a point (the sigil's glass shattering), `count` in all
+const spectrumBurst = (fx, at, { count = 36, speed = [2.5, 6], life = [0.35, 0.7] } = {}) =>
+    SPECTRUM.forEach((hue) => fx.spray(p([0xffffff, hue], { count: Math.round(count / SPECTRUM.length), size: [0.05, 0.11], speed, life, gravity: 1.5, spread: 2, drag: 3 }), at));
+
+// As it's cast: the Prismatic sigil turning under the caster's feet, and, as wide as it'll strike
+// (four metres round), under whom it's cast at, following them, its rim the spectrum's; the
+// sigil's glass prisms circling over them and closing in as it's let go, the element's ring and
+// the spectrum's drawn in to them; and the element's own (`own`: given `on`, where they are now,
+// or null once the casting's stopped). Nothing of it left if the casting's stopped
+const prismCharging = (colour, own) => (fx, args) => {
+    const { target, seconds, still, feet } = args;
+    const on = () => (still() ? target?.() : null);
+
+    if (!on()) {
+        return;
+    }
+
+    const circle = { colour, bright: 0xffffff, glow: [0xffffff, colour], texture: "prism", inner: "spectrum" };
+
+    fx.underfoot(() => (still() ? feet?.() : null), { ...circle, from: 0.6, to: 3, life: seconds + 0.1, grow: 0.4, spin: 1.6 });
+    fx.underfoot(on, { ...circle, from: 1.5, to: 8, life: seconds, grow: 0.3, spin: -0.9 });
+    fx.after(0.2, () => on() && fx.prisms(on, { colour, life: seconds - 0.2, radius: 3, height: 3.6, close: 0.32, alive: still }));
+    fx.after(Math.max(0, seconds - 0.3), () => {
+        const at = on();
+
+        if (at) {
+            fx.ring(at, { colour, from: 5, to: 0.3, life: 0.3, opacity: 0.85 });
+            fx.ring(at, { texture: "spectrum", colour: 0xffffff, from: 5.6, to: 0.6, life: 0.32 });
+        }
+    });
+    own(fx, { ...args, on });
+};
+
+// As it lands, the sigil's own: the glass bursting where it strikes (shards and the spectrum's
+// motes), and the shockwaves (pale and fast, the spectrum's fringe after it, then the element's),
+// out just past the four metres it strikes
+const prismLanding = (fx, { at, heart, pale, colour }) => {
+    spectrumBurst(fx, heart);
+    fx.shards(heart, { count: 12, colour: 0xffffff, size: 0.06, speed: 7, up: 3, life: 0.8, glow: true });
+    fx.ring(at, { colour: pale, from: 0.4, to: 5.2, life: 0.3, opacity: 0.95 });
+    fx.after(0.04, () => fx.ring(at, { texture: "spectrum", colour: 0xffffff, from: 0.5, to: 5.6, life: 0.5 }));
+    fx.after(0.09, () => fx.ring(at, { colour, from: 0.5, to: 4.5, life: 0.55 }));
+};
+
+// Whom it struck: its target first, and as many of the rest as `most` in all
+const struckBy = (target, struck, most = 8) => [target, ...struck].slice(0, most);
 
 const RECIPES = {
     // --- Healing ---
@@ -2906,6 +3155,435 @@ const RECIPES = {
                     fx.flash(to, { colour: element.bright, intensity: 12, distance: 5, life: 0.4 });
                 }
             });
+        },
+    },
+    // (Prismatic Fire: a sun kindled over them as it's cast, the sky darkening, fed by fire drawn
+    // up out of the ground, collapsing as it's let go; landing, it bursts: a flash, a dome of
+    // boiling fire as wide as it strikes, a pillar of fire twisting up out of it, flares leaping
+    // out of it in arcs to set the ground alight, a wall of fire round its rim, each struck set
+    // burning; molten cracks, smoke over it)
+    prismaticFire: {
+        palette: FIRE,
+        gathering: prismGathering(FIRE.glow),
+        charging: prismCharging(PRISM.fire, (fx, { id, seconds, still, on }) => {
+            const at = on();
+            const sun = () => {
+                const now = on();
+
+                return now ? above(now, 3.6) : null;
+            };
+
+            fx.omen(0.5, seconds + 1.8, { rise: seconds * 0.9, fall: 1.2 });
+
+            // (The sun: a ball of fire boiling, its corona round it, flames licking off it: the
+            // corona thrown as the caster's, so it's gone if they're stopped, and as it lands)
+            const body = fx.fireball(sun(), { size: 2, life: seconds, swell: seconds * 0.7, hot: 8, thin: 0.98, collapse: 0.16, heat: 0.8, follow: sun, alive: still });
+
+            fx.throw(id, sun, sun, { travel: seconds, arc: 0, colour: 0xff6a1a, size: 0.8, trail: p(FIRE.glow, { count: 2, size: [0.3, 0.55], speed: [0.6, 1.6], life: [0.25, 0.45], gravity: -1.5, spread: 2, grow: 0.5 }) });
+            fx.glow(body.position, { colour: 0xff8a3a, strength: 10, reach: 10, life: seconds, steady: 0.8, fade: (t) => (still() ? Math.min(1, t * 2) * (t > 0.84 ? (1 - t) / 0.16 : 1) : 0) });
+
+            // (Four pyres round them, fire streaming up out of each into it)
+            for (let k = 0; k < 4; k++) {
+                const angle = (k / 4) * Math.PI * 2 + Math.PI / 4;
+                const rim = () => {
+                    const now = on();
+
+                    return now ? fx.onGround(now.x + Math.cos(angle) * 3.4, now.z + Math.sin(angle) * 3.4, 0.4) : null;
+                };
+
+                fx.blaze(fx.onGround(at.x + Math.cos(angle) * 3.4, at.z + Math.sin(angle) * 3.4), { width: 0.6, height: 1.7, tongues: 4, spread: 0.12, twist: 3, life: seconds, rise: 0.3, fall: 0.12 });
+                fx.after(0.25, () => on() && fx.stream(rim, sun, p(FIRE.glow, { size: [0.22, 0.4], speed: [4, 6], life: [0.3, 0.5], gravity: 0, spread: 0.3, grow: 0.3, drag: 0.4 }), { life: seconds - 0.45, rate: 45 }));
+            }
+        }),
+        land: (fx, { at, target, struck }) => {
+            const heart = above(at, 1.2);
+
+            fx.flash(heart, { colour: 0xfff0d0, intensity: 60, distance: 20, life: 0.25, size: 7 });
+            fx.glow(heart.clone(), { colour: 0xff7a2a, strength: 24, reach: 16, life: 1.8, steady: 1 });
+            fx.screen(0xff6a1a, 0.3, 0.6);
+            fx.shake(0.38);
+            fx.fireball(above(at, 0.9), { size: 4.4, life: 1.2 });
+            fx.fireball(above(at, 0.4), { size: 2.4, life: 0.9 });
+            fx.dome(() => at, { colour: 0xffb060, radius: 4.2, height: 0.55, life: 0.4, wire: false, opacity: 0.2 });
+            prismLanding(fx, { at, heart, pale: 0xffe6b0, colour: FIRE.deep });
+
+            // (The pillar, twisting up out of it)
+            fx.after(0.08, () => {
+                fx.blaze(at, { width: 2.4, height: 11, tongues: 14, spread: 1.1, twist: 4.5, heat: 1.5, life: 2.2, rise: 0.12, fall: 0.4, light: 22, reach: 16 });
+                fx.blaze(at, { width: 1.1, height: 13, tongues: 5, spread: 0.3, twist: 6, heat: 1.7, life: 1.8, rise: 0.15 });
+                fx.pillar(at, { colour: FIRE.deep, radius: 1.2, height: 12, life: 1.1, rise: 0.1, opacity: 0.3 });
+            });
+
+            // (Flares leaping out of it in arcs, the ground alight where they fall)
+            for (let k = 0; k < 6; k++) {
+                const angle = (k / 6) * Math.PI * 2 + Math.random() * 0.5;
+                const spot = fx.onGround(at.x + Math.cos(angle) * 3.3, at.z + Math.sin(angle) * 3.3);
+
+                fx.after(0.05 + k * 0.04, () =>
+                    fx.throw(`prismFlare-${Math.random()}`, () => heart, () => spot, {
+                        travel: 0.5,
+                        arc: 3,
+                        colour: FIRE.deep,
+                        size: 0.55,
+                        vivid: true,
+                        trail: [p(FIRE.glow, { count: 3, size: [0.2, 0.4], speed: [0.1, 0.6], life: [0.2, 0.4], gravity: -1.5, grow: 0.6 }), FIRE_TRAIL],
+                        onArrive: (hit) => {
+                            fx.blaze(hit, { width: 0.7, height: 1.9, tongues: 4, spread: 0.15, twist: 2.5, life: 2.4, fall: 0.5 });
+                            fx.ring(hit, { colour: FIRE.deep, from: 0.3, to: 1.8, life: 0.4 });
+                            fx.spray({ ...FLAMES, count: 8 }, above(hit, 0.3));
+                        },
+                    }),
+                );
+            }
+
+            // (A wall of fire running round its rim)
+            for (let k = 0; k < 10; k++) {
+                const angle = (k / 10) * Math.PI * 2;
+
+                fx.after(0.12 + k * 0.03, () => fx.blaze(fx.onGround(at.x + Math.cos(angle) * 3.8, at.z + Math.sin(angle) * 3.8), { width: 0.55, height: 1.4 + Math.random() * 0.6, tongues: 3, spread: 0.12, twist: 2.5, life: 2.6 + Math.random() * 0.5, rise: 0.12, fall: 0.5 }));
+            }
+
+            // (Each struck set burning)
+            struckBy(target, struck, 6).forEach((one, k) =>
+                fx.after(0.04 + k * 0.03, () => {
+                    const feet = one.feet();
+
+                    if (feet) {
+                        fx.blaze(feet, { width: 0.5, height: (one.height ?? 1.8) * 0.85, tongues: 4, spread: 0.12, twist: 3, life: 1.6, fall: 0.5 });
+                        fx.spray({ ...FLAMES, count: 8 }, one.point() ?? feet);
+                    }
+                }),
+            );
+
+            for (let k = 0; k < 4; k++) {
+                fx.after(k * 0.1, () => fx.spray(p(FIRE.glow, { count: 12, size: [0.3, 0.6], speed: [1.5, 3], life: [0.5, 0.9], gravity: -4, spread: 2.4, swirl: 8, grow: 0.5 }), above(at, 0.3)));
+            }
+
+            fx.spray({ ...EMBERS, count: 90, speed: [3, 9], spread: 2.5 }, heart);
+            fx.after(0.5, () => fx.scatter(DARK_SMOKE, above(at, 0), 2.5, 10, { seconds: 1.4, y: 9 }));
+            fx.decal(at, { texture: "fissures", colour: FIRE.deep, radius: 4.4, life: 6.5, vivid: 2.4, grow: 0.15, fade: 0.4 });
+            fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 5.2, life: 9, dark: true });
+            fx.decal(at, { texture: "prism", colour: FIRE.bright, radius: 3.8, life: 2.6, vivid: 2.2, spin: 0.4, fade: 0.6 });
+        },
+    },
+    // (Prismatic Earth: the ground trembling as it's cast, more and more, stones lifting off it,
+    // its cracks glowing gold; a great stone driven down out of the sky onto them as it's let go.
+    // Landing: the stone bursting, the ground heaving them up and splitting round them into a
+    // crown of spires leaning out at its rim, gold light out of the earth's heart, dust rolling out,
+    // stones raining back; aftershocks; the spires sinking as they rise again)
+    prismaticEarth: {
+        palette: EARTH,
+        gathering: prismGathering(EARTH.glow),
+        charging: prismCharging(PRISM.earth, (fx, { id, seconds, still, on }) => {
+            const at = on();
+
+            [0.25, 0.65, 1.05].filter((when) => when < seconds).forEach((when, k) => fx.after(when, () => still() && fx.shake(0.03 + k * 0.025)));
+            fx.decal(at, { texture: "fissures", colour: 0xffc860, radius: 4.2, life: seconds + 0.1, vivid: 2, grow: 0.85, fade: 0.08 });
+            fx.scatter(p([0x9a8a70, 0x5a4a38], { count: 4, size: [0.03, 0.07], speed: [0.4, 1], life: [0.8, 1.2], gravity: -1.5, spread: 0.6, glow: false, opacity: 0.9, late: true, drag: 1 }), at, 3.8, 14, { seconds: seconds - 0.3, y: 0.05 });
+
+            for (let k = 0; k < 5; k++) {
+                fx.after(0.15 + k * 0.15, () => {
+                    const now = on();
+                    const [angle, reach] = [Math.random() * Math.PI * 2, 1 + Math.random() * 2.6];
+
+                    if (now) {
+                        fx.shards(fx.onGround(now.x + Math.cos(angle) * reach, now.z + Math.sin(angle) * reach, 0.1), { count: 3, colour: EARTH.stone, size: 0.13, speed: 0.4, up: 1.3, gravity: -0.5, life: seconds - 0.2 - k * 0.15, spread: 1 });
+                    }
+                });
+            }
+
+            // (The stone, out of the sky beyond them, its shadow growing under it: thrown as the
+            // caster's, so it's called off if they're stopped, and gone as it lands)
+            fx.after(seconds - 0.42, () => {
+                const now = on();
+
+                if (now) {
+                    const sky = fx.beyond(now, 3).setY(now.y + 15);
+
+                    fx.throw(id, () => sky, () => (on() ? above(on(), 0.9) : null), { travel: 0.42, arc: 0, shape: "rock", colour: 0x5e5044, size: 1.4, spin: 1.5, trail: [p([0xffe0a0, 0xff9a30], { count: 2, size: [0.25, 0.45], speed: [0.1, 0.5], life: [0.2, 0.35], gravity: 0, grow: 0.5 }), { ...DUST, count: 1, size: [0.5, 0.9] }] });
+                    fx.decal(now, { texture: "glow", colour: 0x140c06, dark: true, radius: 2.4, life: 0.45, grow: 1, opacity: 0.7, fade: 0.05 });
+                }
+            });
+        }),
+        land: (fx, { at, target, struck }) => {
+            const heart = above(at, 0.8);
+
+            fx.flash(heart, { colour: 0xffd890, intensity: 50, distance: 18, life: 0.3, size: 6 });
+            fx.glow(above(at, 0.3), { colour: 0xffb050, strength: 14, reach: 12, life: 2.6, steady: 0.4, fade: (t) => 1 - t });
+            fx.screen(0xa07a3a, 0.28, 0.5);
+            fx.shake(0.5);
+            fx.after(0.55, () => fx.shake(0.16));
+            fx.after(1.15, () => fx.shake(0.1));
+            prismLanding(fx, { at, heart, pale: EARTH.bright, colour: 0xffc860 });
+
+            // (The stone bursting)
+            fx.shards(heart, { count: 18, colour: EARTH.stone, size: 0.16, speed: 7, up: 5, life: 2, spread: 1.3 });
+            fx.shards(heart, { count: 5, colour: 0x5e5044, size: 0.4, speed: 3.5, up: 6, life: 2.2 });
+
+            // (A crown of spires at its rim, leaning out, and more between; gold out of its heart)
+            fx.spikes(at, { count: 12, radius: 3.7, height: 3.6, width: 0.8, colour: 0x6a5e50, life: 3.1, lean: -0.38, rise: 0.04, sink: 0.12 });
+            fx.after(0.05, () => fx.spikes(at, { count: 9, radius: 3, height: 2, width: 0.5, colour: EARTH.deep, life: 3, lean: 0.15, scatter: true, stagger: 0.3, rise: 0.05, sink: 0.12 }));
+            fx.spikes(at, { count: 6, radius: 0.9, height: 1.8, width: 0.22, colour: 0xffc860, glow: true, life: 2.2, lean: -0.5, rise: 0.06 });
+
+            // (Each struck heaved up by the ground under them)
+            struckBy(target, struck).forEach((one) => {
+                const feet = one.feet();
+
+                if (feet) {
+                    fx.spikes(feet, { count: 1, radius: 0, height: 1, width: 0.9, colour: EARTH.stone, life: 0.7, lean: 0, rise: 0.08, sink: 0.4 });
+                    fx.spray({ ...DUST, count: 8 }, above(feet, 0.3));
+                }
+            });
+
+            // (Dust rolling out low all round, stones raining back, a haze settling)
+            for (let k = 0; k < 14; k++) {
+                const angle = (k / 14) * Math.PI * 2 + Math.random() * 0.3;
+                const out = new THREE.Vector3(Math.cos(angle), 0.08, Math.sin(angle));
+
+                fx.spray(p([0x8a7a62, 0x5a4e40], { count: 4, size: [0.8, 1.3], speed: [2.5, 5], life: [1, 1.7], gravity: -0.2, spread: 0.4, glow: false, opacity: 0.6, grow: 2.5, drag: 3 }), fx.onGround(at.x + out.x * 2, at.z + out.z * 2, 0.4), out.multiplyScalar(3));
+            }
+
+            fx.after(0.4, () => fx.scatter(p([0x8a7a66, 0x4a3a2a], { count: 4, size: [0.05, 0.12], speed: [0.5, 1.5], life: [0.8, 1.2], gravity: 9.8, spread: 1, glow: false, opacity: 1, late: true, drag: 0.4 }), at, 4, 14, { seconds: 1, y: 5 }));
+            fx.after(0.3, () => fx.scatter({ ...DUST, colours: [0x9a8a70, 0x6a5e4c], count: 3, size: [1, 1.6], life: [1.6, 2.4], opacity: 0.5 }, at, 4, 10, { seconds: 1.2, y: 0.6 }));
+            fx.after(2.7, () => fx.scatter({ ...DUST, count: 5 }, at, 3.8, 10, { y: 0.3 }));
+            fx.decal(at, { texture: "cracks", colour: 0xffffff, radius: 5.5, life: 9, dark: true, grow: 0.05 });
+            fx.decal(at, { texture: "fissures", colour: 0xffc860, radius: 4.4, life: 3.4, vivid: 2.2, fade: 0.6 });
+            fx.decal(at, { texture: "prism", colour: PRISM.earth, radius: 3.8, life: 3, vivid: 2, fade: 0.5 });
+        },
+    },
+    // (Prismatic Water: water drawn up out of the ground in a whirl round them as it's cast, mist
+    // thickening, frost creeping in over the ground; landing, all of it frozen in an instant: ice
+    // blades opening out of them like a flower, the freeze racing out over the ground in spears of
+    // ice, each struck sealed in a crystal of it, diamond dust glittering and snow falling; three
+    // seconds on, the ice shattering)
+    prismaticWater: {
+        palette: WATER,
+        gathering: prismGathering(WATER.glow),
+        charging: prismCharging(PRISM.water, (fx, { seconds, on }) => {
+            const at = on();
+
+            // (Water rising round them in a ring of fountains, falling back, faster and faster)
+            for (let k = 0; k < 16; k++) {
+                fx.after(0.25 + k * ((seconds - 0.4) / 16), () => {
+                    const now = on();
+
+                    for (let n = 0; now && n < 3; n++) {
+                        const angle = Math.random() * Math.PI * 2;
+
+                        fx.spray(p([0xf0faff, 0x2a7ad0], { count: 8, size: [0.1, 0.22], speed: [3, 5 + k * 0.1], life: [0.5, 0.8], gravity: 8, spread: 0.35, glow: false, opacity: 0.9, late: true, drag: 0.3 }), fx.onGround(now.x + Math.cos(angle) * 3.3, now.z + Math.sin(angle) * 3.3, 0.1), new THREE.Vector3(-Math.sin(angle) * 1.2, 5, Math.cos(angle) * 1.2));
+                    }
+                });
+            }
+
+            fx.after(0.2, () => on() && fx.pillar(on(), { colour: 0x2a8ae8, radius: 3.4, height: 2.4, life: seconds - 0.2, rise: 0.6, opacity: 0.35 }));
+            fx.scatter({ ...STEAM, colours: [0xeaf6ff, 0x9abfd8], count: 2, opacity: 0.35 }, at, 3.8, 10, { seconds: seconds - 0.3, y: 0.3 });
+            fx.decal(at, { texture: "cracks", colour: 0x9adcff, radius: 4.4, life: seconds + 0.2, opacity: 0.7, grow: 0.9, fade: 0.1 });
+        }),
+        land: (fx, { at, target, struck }) => {
+            const heart = above(at, 1);
+            const sealed = struckBy(target, struck, 6);
+
+            fx.flash(heart, { colour: 0xe8f8ff, intensity: 55, distance: 20, life: 0.3, size: 6 });
+            fx.glow(heart.clone(), { colour: 0x8ad0ff, strength: 12, reach: 12, life: 3.4, fade: (t) => (t < 0.85 ? 1 - t * 0.5 : ((1 - t) / 0.15) * 0.575) });
+            fx.screen(0x8ac8ff, 0.32, 0.7);
+            fx.shake(0.3);
+            prismLanding(fx, { at, heart, pale: 0xffffff, colour: WATER.bright });
+
+            // (The bloom, and the freeze racing out, nearest first)
+            fx.spikes(at, { count: 8, radius: 0.7, height: 3.6, width: 0.42, colour: 0x3a8ae0, glow: true, lean: -0.55, life: 3.2, rise: 0.03, sink: 0.05 });
+            fx.spikes(at, { count: 14, radius: 3.9, scatter: true, height: 2.2, width: 0.4, colour: 0x6aa8d8, roughness: 0.12, opacity: 0.85, emissive: 0x123a6a, lean: -0.3, stagger: 0.25, life: 3.2, rise: 0.03, sink: 0.05 });
+
+            // (Each struck sealed in ice)
+            for (const one of sealed) {
+                const feet = one.feet();
+                const tall = (one.height ?? 1.8) * 1.05;
+
+                if (feet) {
+                    fx.spikes(feet, { count: 4, radius: 0.5, height: tall, width: 0.45, colour: 0x9ccbec, roughness: 0.08, opacity: 0.75, emissive: 0x1a4a80, lean: 0.22, life: 3, rise: 0.04, sink: 0.04 });
+                    fx.spikes(feet, { count: 1, radius: 0, height: tall * 0.9, width: 0.3, colour: 0x4a9aff, glow: true, lean: 0, life: 3, rise: 0.04, sink: 0.04 });
+                }
+            }
+
+            fx.after(0.1, () => fx.scatter(p([0xffffff, 0xbfeaff], { count: 6, size: [0.03, 0.06], speed: [0.2, 0.6], life: [1.4, 2.2], gravity: 0.15, spread: 2, swirl: 1.5 }), at, 4, 20, { seconds: 2.2, y: 1.6 }));
+            fx.scatter({ ...SNOW, count: 4 }, at, 4.5, 16, { seconds: 2.4, y: 6 });
+
+            for (let k = 0; k < 12; k++) {
+                const angle = (k / 12) * Math.PI * 2 + Math.random() * 0.3;
+                const out = new THREE.Vector3(Math.cos(angle), 0.06, Math.sin(angle));
+
+                fx.spray(p([0xeaf6ff, 0x9abfd8], { count: 3, size: [0.6, 1], speed: [2, 3.5], life: [1, 1.6], gravity: -0.1, spread: 0.4, glow: false, opacity: 0.4, grow: 2.4, drag: 2.5 }), fx.onGround(at.x + out.x * 1.5, at.z + out.z * 1.5, 0.3), out.multiplyScalar(3));
+            }
+
+            fx.decal(at, { texture: "glow", colour: 0x2a6ab8, radius: 5.2, life: 5, opacity: 0.55, grow: 0.08 });
+            fx.decal(at, { texture: "cracks", colour: 0xbfeaff, radius: 5, life: 6, opacity: 0.8, grow: 0.1 });
+            fx.decal(at, { texture: "prism", colour: 0xbfeaff, radius: 3.8, life: 3.4, vivid: 2, fade: 0.3 });
+
+            // (Three seconds on, the ice shattering)
+            fx.after(2.95, () => {
+                for (const one of sealed) {
+                    const middle = one.point();
+
+                    if (middle) {
+                        fx.shards(middle, { count: 6, colour: 0xbfeaff, size: 0.12, speed: 4, up: 3, life: 1.1, glow: true });
+                        fx.spray(p([0xffffff, 0x6ab8ff], { count: 20, size: [0.04, 0.09], speed: [2, 4.5], life: [0.4, 0.8], gravity: 6, spread: 2 }), middle);
+                        fx.spray({ ...SNOW, count: 24, speed: [1, 3] }, middle);
+                    }
+                }
+
+                for (let k = 0; k < 5; k++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const reach = 0.6 + Math.random() * 3;
+
+                    fx.spray(p([0xffffff, 0x6ab8ff], { count: 16, size: [0.04, 0.1], speed: [2, 4], life: [0.4, 0.8], gravity: 6, spread: 2 }), fx.onGround(at.x + Math.cos(angle) * reach, at.z + Math.sin(angle) * reach, 0.8));
+                }
+
+                fx.flash(heart, { colour: 0xdff4ff, intensity: 20, distance: 10, life: 0.3, size: 4 });
+                fx.ring(at, { colour: 0xdff4ff, from: 0.5, to: 4.5, life: 0.4, opacity: 0.7 });
+                spectrumBurst(fx, heart, { count: 24 });
+                fx.shake(0.12);
+            });
+        },
+    },
+    // (Prismatic Air: the storm's eye opening over them as it's cast, dark cloud wheeling, wind
+    // spiralling up round them, static crackling over the ground, lightning flickering in the
+    // cloud; landing, a spear of lightning out of it into them, splitting to every one round them
+    // at once and leaping on beyond, one after another, each struck from the sky as it's reached;
+    // a wall of wind wheeling round them, blades of wind cutting out; the storm discharging round
+    // its rim after, static clinging to the stunned)
+    prismaticAir: {
+        palette: AIR,
+        gathering: prismGathering(AIR.glow),
+        charging: prismCharging(PRISM.air, (fx, { seconds, on }) => {
+            const at = on();
+
+            fx.halo(at, { texture: "swirl", colour: 0x9ab0d8, radius: 5, from: 6, life: seconds + 0.25, spin: 2.2, opacity: 0.6, boost: 1.4 });
+            fx.scatter(p([0x6a7488, 0x2a3040], { count: 2, size: [1.2, 2], speed: [0.2, 0.6], life: [seconds, seconds + 0.8], gravity: 0, spread: 1, glow: false, opacity: 0.65, grow: 1.2, swirl: 1.2 }), at, 4, 14, { seconds: seconds * 0.6, y: 6.5 });
+            fx.after(Math.max(0, seconds - 0.65), () => on() && fx.funnel(on(), { colour: 0xe8f4ff, radius: 3.4, height: 2.6, life: 0.65, opacity: 0.22 }));
+
+            for (let k = 0; k < 10; k++) {
+                fx.after(0.1 + k * 0.12, () => {
+                    const now = on();
+
+                    if (now) {
+                        fx.spray(p(AIR.glow, { count: 6, size: [0.04, 0.08], speed: [2, 3.5], life: [0.5, 0.8], gravity: -2.5, spread: 1, swirl: 10, drag: 1 }), above(now, 0.2));
+                        fx.spray({ ...DUST, count: 4, size: [0.3, 0.6], speed: [1.5, 3], swirl: 9, gravity: -1.2, opacity: 0.45 }, above(now, 0.1));
+                    }
+                });
+            }
+
+            for (let k = 0; k < 6; k++) {
+                fx.after(0.4 + k * 0.16, () => {
+                    const now = on();
+                    const [angle, reach] = [Math.random() * Math.PI * 2, 1 + Math.random() * 3];
+
+                    if (now) {
+                        const from = fx.onGround(now.x + Math.cos(angle) * reach, now.z + Math.sin(angle) * reach, 0.1);
+
+                        fx.lightning(from, fx.onGround(from.x + (Math.random() - 0.5) * 2.4, from.z + (Math.random() - 0.5) * 2.4, 0.15), { colour: AIR.deep, width: 0.04, life: 0.16, jag: 0.4, branches: 1 });
+                    }
+                });
+            }
+
+            fx.after(Math.max(0, seconds - 0.25), () => {
+                const now = on();
+
+                if (now) {
+                    fx.flash(above(now, 6), { colour: 0xbfe0ff, intensity: 18, distance: 14, life: 0.2, size: 6 });
+                }
+            });
+        }),
+        land: (fx, { at, point, target, struck }) => {
+            const sky = above(at, 6.5);
+            const heart = above(at, 1);
+
+            fx.beam(() => sky, () => point, { colour: 0x7aa8ff, width: 0.5, life: 0.35 });
+            fx.lightning(sky, point, { colour: AIR.deep, width: 0.15, life: 0.5, jag: 1, branches: 5 });
+            fx.lightning(sky, above(at, 0.1), { colour: 0xc080ff, width: 0.08, life: 0.35, jag: 1.3, branches: 2 });
+            fx.flash(point, { colour: 0xdff0ff, intensity: 70, distance: 22, life: 0.35, size: 8 });
+            fx.screen(0x8ab8ff, 0.3, 0.35);
+            fx.shake(0.32);
+            prismLanding(fx, { at, heart, pale: AIR.bright, colour: AIR.deep });
+
+            // (To every one round them at once; and on beyond, one after another, from the nearest
+            // already struck, each struck from the sky too)
+            const near = struck.filter((one) => {
+                const feet = one.feet();
+
+                return feet && Math.hypot(feet.x - at.x, feet.z - at.z) <= 4.3;
+            });
+            const reached = [point, ...near.map((one) => one.point()).filter(Boolean)];
+
+            for (const one of near) {
+                const to = one.point();
+
+                if (to) {
+                    fx.lightning(point.clone(), to, { colour: AIR.deep, width: 0.06, life: 0.45, jag: 0.5, branches: 1 });
+                    fx.spray({ ...SPARKS, count: 18, colours: [0xffffff, 0x9ad8ff] }, to);
+                }
+            }
+
+            struck
+                .filter((one) => !near.includes(one))
+                .slice(0, 4)
+                .forEach((one, k) =>
+                    fx.after(0.12 + k * 0.14, () => {
+                        const to = one.point();
+
+                        if (!to) {
+                            return;
+                        }
+
+                        const from = reached.reduce((best, each) => (each.distanceTo(to) < best.distanceTo(to) ? each : best));
+
+                        fx.lightning(from.clone(), to, { colour: k % 2 ? 0xc080ff : AIR.deep, width: 0.08, life: 0.4, jag: 0.6, branches: 2 });
+                        fx.lightning(above(to, 7), to, { colour: AIR.deep, width: 0.05, life: 0.25, jag: 0.8 });
+                        fx.spray({ ...SPARKS, count: 24, colours: [0xffffff, 0x9ad8ff] }, to);
+                        fx.flash(to, { colour: 0xbfe0ff, intensity: 16, distance: 7, life: 0.25, size: 2.5 });
+                        fx.ring(fx.onGround(to.x, to.z), { colour: AIR.bright, from: 0.3, to: 1.6, life: 0.3 });
+                        fx.shake(0.08);
+                        reached.push(to);
+                    }),
+                );
+
+            // (The storm's eye clearing over them, and the wind)
+            fx.halo(at, { texture: "swirl", colour: 0x9ab0d8, radius: 5.4, from: 6, to: 7, life: 1.4, spin: 2.6, shrink: 1.3, opacity: 0.6, boost: 1.4 });
+            fx.funnel(at, { colour: 0xe8f4ff, radius: 4.3, height: 3.2, life: 1.4, opacity: 0.32 });
+
+            for (let k = 0; k < 8; k++) {
+                const angle = (k / 8) * Math.PI * 2;
+                const to = fx.onGround(at.x + Math.cos(angle) * 5.5, at.z + Math.sin(angle) * 5.5, 1);
+
+                fx.throw(`prismWind-${Math.random()}`, () => heart, () => to, { travel: 0.3, arc: 0, shape: "crescent", colour: 0xe8f8ff, size: 1.1, glow: true, trail: p(AIR.glow, { count: 1, size: [0.05, 0.1], speed: [0, 0.2], life: [0.12, 0.22], gravity: 0 }) });
+            }
+
+            // (The storm discharging round its rim after)
+            for (let k = 0; k < 5; k++) {
+                fx.after(0.15 + k * 0.17, () => {
+                    const [angle, reach] = [Math.random() * Math.PI * 2, 2.5 + Math.random() * 1.5];
+                    const spot = fx.onGround(at.x + Math.cos(angle) * reach, at.z + Math.sin(angle) * reach, 0.1);
+
+                    fx.lightning(above(spot, 9), spot, { colour: k % 2 ? 0xc080ff : AIR.deep, width: 0.07, life: 0.25, jag: 1, branches: 2 });
+                    fx.spray({ ...SPARKS, count: 12 }, above(spot, 0.3));
+                });
+            }
+
+            // (Static clinging to the stunned)
+            for (let k = 0; k < 6; k++) {
+                fx.after(0.3 + k * 0.22, () => {
+                    for (const one of struckBy(target, struck)) {
+                        const middle = one.point();
+
+                        if (middle) {
+                            fx.spray(p([0xffffff, 0x7ab8ff], { count: 3, size: [0.03, 0.06], speed: [1, 2.5], life: [0.1, 0.2], gravity: 0, spread: 2 }), middle);
+                        }
+                    }
+                });
+            }
+
+            fx.decal(at, { texture: "fissures", colour: 0x9ab8ff, radius: 4.2, life: 1.6, vivid: 2.2, fade: 0.7 });
+            fx.decal(at, { texture: "glow", colour: AIR.deep, radius: 4.6, life: 1.8, opacity: 0.45, fade: 0.6 });
+            fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 2.2, life: 7, dark: true });
+            fx.decal(at, { texture: "prism", colour: PRISM.air, radius: 3.8, life: 1.8, vivid: 2, spin: 2.4, fade: 0.5 });
         },
     },
     polymorph: {

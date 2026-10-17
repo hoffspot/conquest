@@ -347,7 +347,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/shadows.js", 3388],
             ["js/world/sky.js", 11398],
             ["js/world/smoke.js", 10010],
-            ["js/world/spellfx.js", 144087],
+            ["js/world/spellfx.js", 182903],
             ["js/world/squares.js", 6596],
             ["js/world/stockades3d.js", 20610],
             ["js/world/sun.js", 1253],

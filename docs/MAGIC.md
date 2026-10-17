@@ -476,6 +476,51 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
     a whirling column of fire 26 m high, a hotter one inside it reaching 30, a wide swirl of fire
     at its foot, five rings of runes rising up it, fire running round the great circle's rim, a
     crown of black smoke spreading over it.
+- **The elements' Prismatic spells** (you: "Not quite as awesome as Prismatic Destruction, but
+  more awesome than the 7th tier versions"), each a build-up, a climax and a brief dissipation, as
+  realtime effects artists time them (researched for it: Riot's League of Legends VFX style
+  guide, the most contrast, saturation and detail at the moment of impact, a clear edge to what's
+  struck; Diablo III's legibility first; Meteor's telegraph, fall and burning ground; Genshin's
+  frozen-then-shattered; chain lightning's trunk, branches and leaps), from what the spells are
+  drawn with, and a few small additions (`prisms`; the `prism` and `spectrum` textures; a ring of
+  a texture; spikes rising and sinking as told, and see-through; stones that rise; a held,
+  collapsing fireball). Each shares the sigil's own:
+  - **as it's cast:** the Prismatic sigil (`prism`: its four petals and star, in the element's
+    colour, a band of the spectrum round its rim) turning under the caster and spreading under
+    whom it's cast at, as wide as it'll strike, following them; four glass prisms (`prisms`: the
+    first of the element's colour and bigger) circling over them and diving in as it's let go;
+    a ring of the element's colour and one of the spectrum drawn in to them;
+  - **as it lands:** the glass bursting (the spectrum's motes, white shards), and three
+    shockwaves, a pale one, the spectrum's fringe a moment after (a chromatic split), then the
+    element's; the sigil left burnt into the ground a few seconds. It keeps Prismatic
+    Destruction's white sky, its four columns and its 8 m rings to it.
+  - **Prismatic Fire:** a sun kindled 3.6 m over them as it's cast (the blasts' fireball, held,
+    golden), the sky darkening a little, four pyres round them streaming fire up into it; it
+    collapses to a point as it's let go, then bursts: a dome of boiling fire, a pillar of fire 11
+    m high twisting up out of it (a hotter one inside, to 13), six flares leaping out in arcs to
+    set the ground alight where they fall, a wall of fire running round its rim, each struck set
+    burning; embers, a crown of smoke, molten cracks and scorch left on the ground (the burning
+    ground the battle leaves too: `hazard`).
+  - **Prismatic Earth:** the ground trembling as it's cast, more and more (three shakes), stones
+    lifting off it, its cracks glowing gold; a great stone driven down out of the sky onto them as
+    it's let go; landing, the stone bursting, the ground heaving each struck up and splitting round
+    them into a crown of twelve spires leaning out at its rim (more between, gold crystals in its
+    heart), standing as long as they're down; dust rolling out low, stones raining back, two
+    aftershocks; the spires sinking as they rise again.
+  - **Prismatic Water:** water rising round them in fountains and a wall of it as it's cast, mist
+    thickening, frost creeping in; landing, all of it frozen in an instant: ice blades opening out
+    of them like a flower, the freeze racing out over the ground in spears of ice, nearest first,
+    each struck sealed in a crystal of ice as tall as they are for the three seconds they're
+    frozen, diamond dust glittering and snow falling; then the ice shattering.
+  - **Prismatic Air:** the storm's eye opening over them as it's cast, dark cloud wheeling, wind
+    spiralling up, static crackling over the ground, lightning flickering in the cloud; landing, a
+    spear of lightning out of it into them, splitting to every one round them at once, then leaping
+    on beyond, one after another, each struck from the sky too; a wall of wind wheeling round them
+    and blades of wind cutting out; the storm discharging round its rim after, static clinging to
+    the stunned; a lightning figure burnt into the ground.
+
+  Each lighter than Hellfire on the graphics card: at most a little over half its particles and
+  fires (Prismatic Fire's, the most of the four).
 - **Blasts** (`blast`: Explosion's, a goblin bomb's, the Goblin King's bigger one), built in
   layers as realtime effects artists build an explosion (researched for it: the flash only a
   frame or two, the shockwave first, smoke starting at once and lasting longest; fast fire
