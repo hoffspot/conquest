@@ -125,6 +125,7 @@
     "texturesOfOneColourMadeFactors": 0,
     "tangentsMended": 0,
     "stillChannelsTrimmed": 0,
+    "keyframesThinned": 0,
     "ktx2": []
   },
   "budgets": [

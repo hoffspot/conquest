@@ -1,12 +1,12 @@
-// lib/animation.js, lib/transform.js, lib/optimize.js's tangent mending, still channels and packed
-// lower details, and lib/ktx2.js, on a document made in code (test/helpers.js)
+// lib/animation.js, lib/transform.js, lib/optimize.js's tangent mending, still channels, thinned
+// keyframes and packed lower details, and lib/ktx2.js, on a document made in code (test/helpers.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Quaternion, Vector3 } from "three";
 import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices, worldMatrix } from "../lib/animation.js";
 import { eased, inventClip } from "../lib/invent.js";
 import { decodeImage, encodeImage, shrinkImage, textureUses } from "../lib/ktx2.js";
-import { mendTangents, packLod, trimStill } from "../lib/optimize.js";
+import { mendTangents, packLod, thinKeys, trimStill } from "../lib/optimize.js";
 import { moveDocument, scaleDocument } from "../lib/transform.js";
 import { near, skinnedDocument, vertices } from "./helpers.js";
 
@@ -378,5 +378,61 @@ describe("textures the GPU keeps compressed (KTX2)", () => {
         const { data, width, height } = decodeImage(new Uint8Array(png), "image/png");
 
         assert.deepEqual([width, height, ...data], [1, 1, 255, 0, 0, 255]);
+    });
+});
+
+describe("thinning keyframes", () => {
+    it("keeps the nearest keyframe at each 1/fps, and always the last, so a clip keeps its length", () => {
+        const document = skinnedDocument();
+        const buffer = document.getRoot().listBuffers()[0];
+        const [root, spine] = ["root", "spine"].map((name) => document.getRoot().listNodes().find((node) => node.getName() === name));
+        const scalars = (array) => document.createAccessor().setType("SCALAR").setArray(new Float32Array(array)).setBuffer(buffer);
+
+        // (A 0.75-second run keyed 60 times a second, 46 keyframes: two channels sharing them,
+        // each key's value its own number; a slower and a cubic channel in a clip of their own)
+        const frames = Array.from({ length: 46 }, (_, i) => i / 60);
+        const input = scalars(frames);
+        const run = document.createAnimation("Run");
+
+        for (const [node, path, type, size] of [
+            [root, "translation", "VEC3", 3],
+            [spine, "rotation", "VEC4", 4],
+        ]) {
+            const values = new Float32Array(frames.flatMap((_, i) => Array(size).fill(i)));
+            const sampler = document.createAnimationSampler().setInput(input).setOutput(document.createAccessor().setType(type).setArray(values).setBuffer(buffer));
+
+            run.addSampler(sampler).addChannel(document.createAnimationChannel().setTargetNode(node).setTargetPath(path).setSampler(sampler));
+        }
+
+        const slow = document.createAnimation("Slow");
+
+        for (const interpolation of ["LINEAR", "CUBICSPLINE"]) {
+            const times = [0, 1 / 24, 2 / 24, 3 / 24];
+            const sampler = document
+                .createAnimationSampler()
+                .setInput(scalars(times))
+                .setOutput(document.createAccessor().setType("VEC3").setArray(new Float32Array(times.length * 3 * (interpolation === "CUBICSPLINE" ? 3 : 1))).setBuffer(buffer))
+                .setInterpolation(interpolation);
+
+            slow.addSampler(sampler).addChannel(document.createAnimationChannel().setTargetNode(root).setTargetPath(interpolation === "LINEAR" ? "translation" : "scale").setSampler(sampler));
+        }
+
+        const walkKeys = clip(document, "Walk").listSamplers().map((sampler) => sampler.getInput().getCount());
+
+        // (Walk's keyed less often than 30 a second; Run loses every other key but its last)
+        assert.equal(thinKeys(document, 30), 2 * (46 - 24));
+
+        const [first, second] = run.listSamplers();
+        const times = Array.from(first.getInput().getArray());
+
+        assert.equal(first.getInput(), second.getInput());
+        assert.equal(times.length, 24);
+        assert.ok(near(times.at(-2), 44 / 60));
+        assert.ok(near(times.at(-1), 0.75));
+        assert.ok(near(duration(run), 0.75));
+        assert.deepEqual(Array.from({ length: 24 }, (_, i) => first.getOutput().getElement(i, [])[0]), [...Array.from({ length: 23 }, (_, i) => 2 * i), 45]);
+        assert.deepEqual(second.getOutput().getElement(23, []), [45, 45, 45, 45]);
+        assert.deepEqual(clip(document, "Walk").listSamplers().map((sampler) => sampler.getInput().getCount()), walkKeys);
+        assert.deepEqual(slow.listSamplers().map((sampler) => sampler.getInput().getCount()), [4, 4]);
     });
 });

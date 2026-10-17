@@ -65,6 +65,8 @@ describe("an asset's config", () => {
         refuses({ source: "a.blend", simplify: { ratio: 0 } }, /simplify.ratio/);
         refuses({ source: "a.blend", simplify: { share: 0.5 } }, /unknown setting simplify.share/);
         refuses({ source: "a.blend", clips: { trimStill: 1 } }, /trimStill/);
+        refuses({ source: "a.blend", clips: { fps: 0 } }, /clips.fps is a number of times a second/);
+        refuses({ source: "a.blend", clips: { fps: "30" } }, /clips.fps is a number of times a second/);
 
         // (Clips made up from others: lib/invent.js)
         const invent = (...layers) => ({ source: "a.blend", clips: { invent: [{ name: "Bite", from: "Idle", layers }] } });

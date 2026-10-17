@@ -8,7 +8,8 @@
         "exclude": ["Look"],
         "rename": { "Rear": "Rearing" },
         "inPlace": ["Crawl"],
-        "trimStill": true
+        "trimStill": true,
+        "fps": 10
     },
     "textures": { "atlasSize": 512, "ao": true, "aoSamples": 16, "format": "ktx2", "ktx2": { "normalSize": 256 } },
     "size": { "length": 3 },

@@ -11,8 +11,8 @@ udim-creature.blend: a four-segment creature, one mesh with three materials:
 It's skinned to an armature (root, tail, body, chest, head) with a control bone that doesn't
 deform (CTRL_look) and a custom bone shape (WGT_root) that's shown but mustn't be exported; and
 there's a camera, a light and a hidden collider that mustn't be exported either. Actions: Idle
-(loops), Crawl (travels 1.5 m forward in its 1 s, and loops), Rear (doesn't loop), Look (only the
-control bone).
+(loops), Crawl (travels 1.5 m forward in its 1 s, and loops), Rear (doesn't loop; never played,
+as a Blender before 4.4 saved one: its slot for no kind of thing), Look (only the control bone).
 
 udim-creature-extra.blend: the same, with one more action, Roar, to be brought in from it.
 
@@ -186,12 +186,17 @@ def build_rig(scene):
     return rig
 
 
-def key_action(rig, name, frames, pose):
-    """An action: pose(bones, frame) sets the bones for each frame keyed."""
+def key_action(rig, name, frames, pose, unplayed=False):
+    """An action: pose(bones, frame) sets the bones for each frame keyed. An unplayed one is keyed
+    through its own F-curves, never played on the rig, as a Blender before 4.4 saved an action
+    nothing played: since 4.4 its slot is for no kind of thing yet (UNSPECIFIED)."""
     action = bpy.data.actions.new(name)
     action.use_fake_user = True
     rig.animation_data_create()
-    rig.animation_data.action = action
+
+    # (Blender 5 has no action.fcurves: it's keyed as the rest are)
+    unplayed = unplayed and hasattr(action, "fcurves")
+    rig.animation_data.action = None if unplayed else action
 
     for frame in frames:
         for bone in rig.pose.bones:
@@ -202,7 +207,15 @@ def key_action(rig, name, frames, pose):
 
         for bone_name, paths in keyed.items():
             for path in paths:
-                rig.pose.bones[bone_name].keyframe_insert(path, frame=frame)
+                if not unplayed:
+                    rig.pose.bones[bone_name].keyframe_insert(path, frame=frame)
+                    continue
+
+                data_path = f'pose.bones["{bone_name}"].{path}'
+
+                for index, value in enumerate(getattr(rig.pose.bones[bone_name], path)):
+                    curve = action.fcurves.find(data_path, index=index) or action.fcurves.new(data_path, index=index, action_group=bone_name)
+                    curve.keyframe_points.insert(frame, value)
 
     rig.animation_data.action = None
 
@@ -304,7 +317,7 @@ def main():
 
     key_action(rig, "Idle", range(0, 49, 4), idle)
     key_action(rig, "Crawl", range(0, 25, 2), crawl)
-    key_action(rig, "Rear", range(0, 37, 4), rear)
+    key_action(rig, "Rear", range(0, 37, 4), rear, unplayed=True)
     key_action(rig, "Look", range(0, 25, 4), look)
     bpy.ops.wm.save_as_mainfile(filepath=main_file, compress=True)
 
