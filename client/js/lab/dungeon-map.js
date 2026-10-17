@@ -15,7 +15,7 @@ import { PLAN_KEY } from "../core/interiors.js";
 const $ = (selector) => document.querySelector(selector);
 
 // How each theme's ground and rock look from above
-const GROUNDS = { caves: ["#5d5447", "#17130f"], hideout: ["#6b5a43", "#1a140e"], ancient: ["#7a766c", "#15140f"] };
+const GROUNDS = { caves: ["#5d5447", "#17130f"], hideout: ["#6b5a43", "#1a140e"], ancient: ["#7a766c", "#15140f"], nest: ["#6e4c34", "#1a110a"] };
 
 // Each room's part, tinted
 const ROLES = { entry: ["#46c46a", "the way in"], stairs: ["#5b8cff", "stairs down"], arena: ["#ff4b3a", "the boss's arena"], mini: ["#ff9f1a", "a mini-boss's room"], pack: ["#c9b28a", "a pack's room"], quiet: [null, "an empty room"] };

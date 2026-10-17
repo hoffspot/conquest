@@ -510,6 +510,31 @@ export const LOOKS = Object.freeze({
         attacks: ["pounce", "swipe", "bite", "maul"], rests: ["lie", "stretch", "yawn", "sniff", "sit"], specials: ["breath"],
     },
 
+    // --- In the ants' nests (dungeons/themes.js `nest`) ---
+    // (Each drawn from a model of its own once it's read (beasts/model.js); till then a giant ant
+    // stands in as a red-brown spider of its size, a great centipede as a giant centipede twice as
+    // long and thick, black, and the Ant Monster as a great black spider)
+    ant: {
+        body: "arachnid",
+        scale: [0.92, 1.08],
+        size: 0.62,
+        colours: { shell: 0x7a2a14, dark: 0x3a120a, marks: 0xa84a24, eyes: 0x140806 },
+        attacks: ["bite", "leap"], rests: ["groom", "crouch", "twitch"],
+    },
+    greatCentipede: {
+        body: "serpent",
+        scale: [0.95, 1.08],
+        length: 3, thickness: 0.13, segments: 20, legs: true, banded: true, feet: "legs", taper: 0.35,
+        colours: { scales: 0x241a14, bands: 0x0e0a08, belly: 0x5a3a22, legs: 0x8a5a30, eyes: 0x0a0806 },
+        attacks: ["strike", "double"], rests: ["coil", "bask"],
+    },
+    antMonster: {
+        body: "arachnid",
+        scale: [1, 1],
+        size: 1.7,
+        colours: { shell: 0x1c1618, dark: 0x0a0809, marks: 0x3a2a24, eyes: 0x200a08 },
+        attacks: ["bite", "leap"], rests: ["groom", "crouch", "twitch"],
+    },
     // --- In the perilous places, for the mightiest ---
     dragon: {
         body: "quadruped",

@@ -85,6 +85,9 @@ two tiers above it, up to their most.
 | Death worm | 40 | territorial | 1 | 2–6 | the orcs' wilds only: badlands |
 | Vulture flock | 30 | aggressive | 1 | 1–4 | the orcs' wilds only: badlands, heath |
 | Chimera | 85 | aggressive | 1 | 5–9 | the orcs' wilds only: volcanic, badlands |
+| Giant ant | 24 | aggressive | an ants' nest's packs | 1–9 | the ants' nests only (docs/DUNGEONS.md) |
+| Great centipede | 52 | aggressive | an ants' nest's packs | 3–10 | the ants' nests only |
+| Ant Monster | 96 | aggressive | 1, calling its flock | 4–10 | the ants' nests: their boss |
 | Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins, ruined castles and graveyards, with their dead |
 | Wraith | 46 | aggressive | 1 | 5–10 | the ruins and ruined castles, with their dead |
 | Drake | 90 | aggressive | 1 | 10 | the drake's lair |
@@ -950,6 +953,39 @@ What's the same as the Dreadthorn's, and what's its own:
   woods by night before one comes; and, a kilometre from a den by day, the Moonfang's and its
   werewolves' read, one file, before they're met. `test/model.test.js`: where its model's asked
   for (`modelsMet`), by night and day, far out and near home.
+
+**The ants' nests' own** (docs/DUNGEONS.md), each drawn from a model bought on Fab, in the
+catalog as the others are (`beast-ant`, `beast-centipede`, `beast-ant-monster`), sized and paced
+by measuring each model in a browser: how long and tall it stands idle, and how fast its feet go
+back along the ground while planted.
+
+- **The giant ant** (`ant`): drawn 1.5 m long, about as it's made, half a metre high; rearing to
+  bite (its Attack clip); resting by looking about, drinking or rearing up. Its walk is 0.62 m/s
+  as it's drawn, its run 1.55.
+- **The great centipede** (`greatCentipede`): the centipede's model, made 6.7 m long, drawn 4. It's
+  made standing 0.42 m above where it is, so it's sunk that far to the ground (`sink`, metres as
+  it's made). Its fangs (Attack), or rearing to strike down (`rear`, a special: Attack 2); resting
+  by looking about or eating; flinching and falling as its model does.
+- **The Ant Monster** (`antMonster`): made 6.8 m long, drawn 4.2 and 1.5 m tall (1.22 times that
+  as a boss). Its mandibles (Attack, Attack 5), rearing to slam down (`slam`: Attack 2), its acid
+  spat (`spit`: Attack 3, a pool of venom where it lands) and its flock called (`call`: Call
+  Flock, docs/DUNGEONS.md); resting by looking about, swaying or rearing in threat. Its walk carries
+  it as fast as it ever goes, 2.34 m/s as it's drawn: no run.
+- **The ant borrows the Ant Monster's fall and flinch** (`borrows`, `borrowClips`): its own model
+  has neither. Once both models are read (as they are at a nest's door), its Hit React and Death
+  are the Ant Monster's, played on its own skeleton. Each of its bones is lent one of the Ant
+  Monster's: its body the pelvis, its belly the segments of the tail, each leg's three bones the
+  first three of the Ant Monster's four, its head, feelers and mandibles theirs. Each turns in the
+  world as its lender turns from how it stands idle, sampled 30 times a second (`BORROW_RATE`).
+  The whole ant is carried as the pelvis is, less far across as it's shorter, and less far up and
+  down as its body stands lower. It rears, then sinks to the ground with its legs splayed. The
+  borrowed clips are made in the browser from the two models as read, so nothing of the bought
+  models is kept anywhere else. Drawn before it's lent them, struck, it doesn't flinch, and dead,
+  it rolls onto its back (`fallOf`).
+- `e2e/models.spec.js`: each drawn from its model, as long as it's drawn, the great centipede on
+  the ground; the ant rolled over dead till the Ant Monster's read, then falling as it does.
+  `test/model.test.js`: every clip and bone each names in its model, those the ant borrows (and the
+  bones they're played on) in the Ant Monster's; the ant's poses before and after it's lent them.
 
 ### A place's creatures, ready before they're met (beasts/model.js, app/readying.js)
 

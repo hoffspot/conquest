@@ -294,6 +294,118 @@ test("draws the Moonfang from the werewolf's model, read once for both: bigger, 
     expect(drawn.masters[0].height / drawn.wolf.height).toBeCloseTo(3.4 / 2.4, 1);
 });
 
+test("draws the ants' nests' creatures from their models: a giant ant, a great centipede sunk to the ground, the Ant Monster, each as long as it's drawn; the ant rolling onto its back dead till it's lent the Ant Monster's fall, then falling as it does", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    const fetched = [];
+
+    page.on("request", (request) => fetched.push(request.url()));
+    await page.goto("/");
+    await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
+
+    const drawn = await page.evaluate(async () => {
+        const THREE = await import("three");
+        const { BeastAvatar } = await import("./js/beasts/beast.js");
+        const { modelOf, wantModel } = await import("./js/beasts/model.js");
+        const { renderer } = window.pellagos.session.view;
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
+        const sizeOf = (beast) => new THREE.Box3().setFromObject(beast.plan.levels[0][0], true);
+        const chestOf = (beast) => beast.plan.object.getObjectByName("Chest").getWorldPosition(new THREE.Vector3()).y;
+
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x404040, 2));
+        camera.position.set(6, 4, 8);
+        camera.lookAt(0, 0.5, 0);
+
+        // (Each drawn from its model once read: how long and how high, as it stands (drawn as long
+        // as MODELS says, whatever one of its kind's size))
+        const look = async (kind) => {
+            await wantModel(kind);
+
+            const beast = new BeastAvatar(kind, { seed: 3 });
+
+            scene.add(beast.object);
+            beast.update(1 / 30, 0, 0, 0);
+            beast.object.updateMatrixWorld(true);
+            renderer.render(scene, camera);
+
+            const box = sizeOf(beast);
+            const seen = { model: beast.model, long: box.max.z - box.min.z, low: box.min.y, tall: box.max.y - box.min.y, ways: [...beast.plan.attacks].sort() };
+
+            scene.remove(beast.object);
+            beast.dispose();
+
+            return seen;
+        };
+
+        // (An ant falling dead, a few seconds on: rolled over, or fallen as its lent fall has it)
+        const fall = () => {
+            const beast = new BeastAvatar("ant", { seed: 3 });
+
+            beast.update(1 / 30, 0, 0, 0);
+            beast.object.updateMatrixWorld(true);
+
+            const standing = chestOf(beast);
+
+            beast.actions.die({ from: 1 });
+
+            for (let k = 0; k < 120; k++) {
+                beast.update(1 / 30, 0, 0, 0);
+            }
+
+            beast.object.updateMatrixWorld(true);
+
+            const fell = { roll: beast.plan.object.children[0].rotation.z, dropped: standing - chestOf(beast), lent: "Death" in beast.plan.lengths };
+
+            beast.dispose();
+
+            return fell;
+        };
+
+        const ant = await look("ant");
+        const before = fall();
+        const centipede = await look("greatCentipede");
+        const queen = await look("antMonster");
+        const after = fall();
+
+        return { ant, before, centipede, queen, after, lent: modelOf("ant").animations.map(({ name }) => name).filter((name) => ["Death", "Hit React"].includes(name)).sort(), error: renderer.getContext().getError() };
+    });
+
+    // (The ant: 1.5 metres long, as it's made, half a metre high; its bite)
+    expect(drawn.ant.model).toBe(true);
+    expect(drawn.ant.long).toBeGreaterThan(1.2);
+    expect(drawn.ant.long).toBeLessThan(1.8);
+    expect(drawn.ant.tall).toBeLessThan(0.7);
+    expect(drawn.ant.ways).toEqual(["bite"]);
+
+    // (Its fall not lent it yet: rolled over onto its back)
+    expect(drawn.before.lent).toBe(false);
+    expect(Math.abs(drawn.before.roll)).toBeCloseTo(Math.PI, 1);
+
+    // (The great centipede: four metres long, its feet on the ground, not hanging over it)
+    expect(drawn.centipede.model).toBe(true);
+    expect(drawn.centipede.long).toBeGreaterThan(3);
+    expect(drawn.centipede.long).toBeLessThan(5);
+    expect(Math.abs(drawn.centipede.low)).toBeLessThan(0.15);
+    expect(drawn.centipede.ways).toEqual(["bite", "rear"]);
+
+    // (The Ant Monster: 4.2 metres long, its acid, its slam and its call among its ways)
+    expect(drawn.queen.model).toBe(true);
+    expect(drawn.queen.long).toBeGreaterThan(3.2);
+    expect(drawn.queen.long).toBeLessThan(5.2);
+    expect(drawn.queen.ways).toEqual(["bite", "call", "slam", "spit", "strike"]);
+
+    // (Once the Ant Monster's read, the ant's lent its fall and flinch: falling as it does, onto
+    // its belly, not rolled over)
+    expect(drawn.lent).toEqual(["Death", "Hit React"]);
+    expect(drawn.after.lent).toBe(true);
+    expect(drawn.after.roll).toBe(0);
+    expect(drawn.after.dropped).toBeGreaterThan(0.03);
+    expect(drawn.error).toBe(0);
+
+    // (Each file downloaded once)
+    expect([...new Set(fetched.filter((url) => url.includes("/models/beasts/")).map((url) => url.replace(/^.*\/models\//, "").replace(/=[0-9a-f]{10}$/, "=")))].sort()).toEqual(["beasts/ant-monster.bin?h=", "beasts/ant.bin?h=", "beasts/centipede.bin?h="]);
+});
+
 test("lets a model go off the graphics card once none's drawn from it, and reads it again, without downloading it again, when it's wanted", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await page.goto("/");

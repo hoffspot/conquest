@@ -8,7 +8,7 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, PropertyBinding, Texture } from "three";
 
-const { AREA_LINGER, MODELS, breathing, fetchModelsWith, forgetModels, hasModel, holdModel, keptModels, modelOf, modelsInside, modelsMet, modelsNear, poseOf, readyModels, releaseModel, useModel } = await import("../client/js/beasts/model.js");
+const { AREA_LINGER, MODELS, breathing, fallOf, fetchModelsWith, forgetModels, hasModel, holdModel, keptModels, modelOf, modelsInside, modelsMet, modelsNear, poseOf, readyModels, releaseModel, useModel } = await import("../client/js/beasts/model.js");
 const { THEMES } = await import("../client/js/core/dungeons/themes.js");
 const { landAt, planWorld, startFor } = await import("../client/js/core/worldplan/plan.js");
 const { ASSETS } = await import("../client/js/app/assets.js");
@@ -35,15 +35,18 @@ async function gltfOf(path) {
 }
 
 describe("the creatures drawn from a model (beasts/model.js)", () => {
-    it("are in the catalog, each a lair's master or met in the wilds, with a look that stands in for it till it's read, and its skins there too", () => {
+    it("are in the catalog, each a lair's master, met in the wilds or in a kind of dungeon, with a look that stands in for it till it's read, and its skins there too", () => {
         for (const [id, { asset, skins = [""] }] of Object.entries(MODELS)) {
             assert.ok(hasModel(id), id);
             assert.equal(ASSETS.models[asset].tier, "demand", "downloaded only as it's wanted");
             assert.ok(LOOKS[id], `${id}'s stand-in`);
 
-            // (Its model wanted near its lair (modelsNear), or as one of them is put out in the
-            // wilds (game.js, wantModel "now"))
-            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || CREATURES[id].biomes?.length, `${id} keeps a lair, or is met in the wilds`);
+            // (Its model wanted near its lair (modelsNear), as one of them is put out in the wilds
+            // (game.js, wantModel "now"), or on the way to and at the door of a dungeon whose
+            // theme it's in (modelsInside))
+            const inDungeons = Object.values(THEMES).some((theme) => modelsInside({ kind: "dungeon", theme: theme.id }).includes(id));
+
+            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || CREATURES[id].biomes?.length || inDungeons, `${id} keeps a lair, is met in the wilds, or in a kind of dungeon`);
 
             // (Each of its skins but its own one of the catalog's "<asset>-skins")
             const files = (ASSETS.models[`${asset}-skins`]?.files ?? []).map(({ path }) => path);
@@ -60,14 +63,27 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         assert.equal(hasModel("dragon"), false);
     });
 
-    it("has every clip and bone it names in its model, as the glTF loader names them, its detail packed in, its skins' materials its own", { skip: licensed !== true && licensed }, async () => {
-        for (const { asset, skins = [""], clips, attacks, specials, aloft, rests, fire, joints, mouth } of Object.values(MODELS)) {
+    it("has every clip and bone it names in its model, as the glTF loader names them (a clip it borrows, and the bones it's played on, in the lender's), its detail packed in, its skins' materials its own", { skip: licensed !== true && licensed }, async () => {
+        for (const { asset, skins = [""], clips, attacks, specials, aloft, rests, fire, joints, mouth, borrows } of Object.values(MODELS)) {
             const gltf = await gltfOf(ASSETS.models[asset].files[0].path);
             const named = new Set(gltf.animations.map(({ name }) => name));
             const nodes = new Set(gltf.nodes.map(({ name }) => PropertyBinding.sanitizeNodeName(name)));
 
-            for (const clip of [...Object.values(clips), ...Object.values(attacks), ...Object.values(specials), ...Object.values(aloft ?? {}), ...Object.values(rests), ...Object.keys(fire)]) {
+            for (const clip of [...Object.values(clips), ...Object.values(attacks), ...Object.values(specials), ...Object.values(aloft ?? {}), ...Object.values(rests), ...Object.keys(fire)].filter((each) => !borrows?.clips.includes(each))) {
                 assert.ok(named.has(clip), clip);
+            }
+
+            // (What it borrows in the lender's model: the clips, and the bones each of its own is
+            // lent, borrowClips; its own, and the one carried, in its own)
+            if (borrows) {
+                const lender = await gltfOf(ASSETS.models[MODELS[borrows.from].asset].files[0].path);
+                const theirs = new Set(lender.nodes.map(({ name }) => PropertyBinding.sanitizeNodeName(name)));
+
+                assert.ok(borrows.clips.every((clip) => !named.has(clip) && lender.animations.some(({ name }) => name === clip)), `${asset} borrows ${borrows.clips}`);
+
+                for (const [own, other] of [...Object.entries(borrows.bones), borrows.carried]) {
+                    assert.ok(nodes.has(own) && theirs.has(other), `${own} lent ${other}`);
+                }
             }
 
             for (const bone of [...Object.values(joints), ...Object.values(mouth ?? {})]) {
@@ -332,6 +348,34 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
 
         // (The Dreadthorn has no run: its walk, however fast)
         assert.equal(weightOf(poseOf(model, { speed: model.pace * 3, t: 3 }, { lengths }), "Crawling"), 1);
+    });
+
+    it("plays a giant ant's fall and flinch once it's been lent them (the Ant Monster's: borrowClips); till then, struck, it doesn't flinch, and dead, it rolls onto its back", () => {
+        const ant = MODELS.ant;
+        const own = { Idle: 4, Walk: 2, Run: 2, Attack: 3.33, Drink: 3, "Idle 2": 8, "Play 2": 3 };
+        const lent = { ...own, "Hit React": 2.5, Death: 4 };
+        const dead = { u: 0.5, side: -1 };
+
+        assert.equal(ant.borrows.from, "antMonster");
+        assert.deepEqual(ant.borrows.clips, [ant.clips.react, ant.clips.dead]);
+
+        // (Not lent them yet: standing still as it rolls over, and no flinch)
+        assert.deepEqual(poseOf(ant, { dead, t: 1 }, { lengths: own, died: 2 }), [{ clip: "Idle", weight: 1, time: 0 }]);
+        assert.equal(weightOf(poseOf(ant, { react: { u: 0.5 }, t: 1 }, { lengths: own }), "Idle"), 1);
+        assert.deepEqual(fallOf(ant, null, own), { roll: 0, lift: 0 });
+        assert.deepEqual(fallOf(ant, { u: 1, side: -1 }, own), { roll: -Math.PI, lift: 1 });
+
+        const half = fallOf(ant, dead, own);
+
+        assert.ok(Math.abs(half.roll + Math.PI / 2) < 1e-9 && Math.abs(half.lift - 0.5) < 1e-9);
+
+        // (Lent them: its fall played through, its flinch's start; no roll)
+        assert.deepEqual(poseOf(ant, { dead, t: 1 }, { lengths: lent, died: 2 }), [{ clip: "Death", weight: 1, time: 2 }]);
+        assert.ok(weightOf(poseOf(ant, { react: { u: 0.5 }, t: 1 }, { lengths: lent }), "Hit React") > 0.8);
+        assert.deepEqual(fallOf(ant, dead, lent), { roll: 0, lift: 0 });
+
+        // (One with a fall of its own never rolls)
+        assert.deepEqual(fallOf(model, { u: 1, side: 1 }, lengths), { roll: 0, lift: 0 });
     });
 
     it("breathes its fire only while its breath's mouth is open (from a second in to 2.8), on the ground or from the air", () => {
