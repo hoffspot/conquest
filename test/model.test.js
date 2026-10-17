@@ -8,9 +8,10 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, PropertyBinding, Texture } from "three";
 
-const { MODELS, breathing, forgetModels, hasModel, holdModel, keptModels, modelOf, modelsNear, poseOf, releaseModel, useModel } = await import("../client/js/beasts/model.js");
+const { MODELS, breathing, forgetModels, hasModel, holdModel, keptModels, modelOf, modelsMet, modelsNear, poseOf, releaseModel, useModel } = await import("../client/js/beasts/model.js");
+const { landAt, planWorld, startFor } = await import("../client/js/core/worldplan/plan.js");
 const { ASSETS } = await import("../client/js/app/assets.js");
-const { CREATURES, LAIRS } = await import("../client/js/core/creatures.js");
+const { CREATURES, LAIRS, tierAt } = await import("../client/js/core/creatures.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
 const { isScrambled, unscramble } = await import("../client/js/app/scramble.js");
 const { LEFT_OUT, licensedModelsHere } = await import("../scripts/licensed-models.js");
@@ -105,6 +106,39 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         assert.deepEqual(modelsNear([0, 0], lairs), ["dreadthorn"]);
         assert.deepEqual(modelsNear([0, 0], lairs, 800), []);
         assert.deepEqual(modelsNear([5000, 5000], lairs), []);
+    });
+
+    it("asks for a kind's model where one may be met, at that hour: a werewolf's in the woods far from home by night, not by day, nor near home; a lair's master's only near its lair", () => {
+        const plan = planWorld(2);
+        const home = startFor(plan, "human").at;
+
+        // (Woods out in the wild, five to eight tiers out: a ring of spots round home)
+        const woods = [];
+
+        for (let far = 3000; far < 7000 && woods.length < 3; far += 250) {
+            for (let a = 0; a < Math.PI * 2 && woods.length < 3; a += 0.3) {
+                const at = [Math.round(home[0] + Math.cos(a) * far), Math.round(home[1] + Math.sin(a) * far)];
+                const land = landAt(plan, ...at);
+                const tier = tierAt(at, [home], land.biome);
+
+                if (["woods", "darkwood"].includes(land.biome) && !land.race && !land.water && tier >= 5 && tier <= 8) {
+                    woods.push(at);
+                }
+            }
+        }
+
+        assert.equal(woods.length, 3);
+
+        for (const at of woods) {
+            assert.deepEqual(modelsMet(plan, at, home, true), ["werewolf"], `${at} by night`);
+            assert.deepEqual(modelsMet(plan, at, home, false), [], `${at} by day`);
+        }
+
+        // (Near home, the wild's tamest: none, by night or day; the Dreadthorn and the Moonfang
+        // are met only at their lairs and dens: modelsNear)
+        assert.deepEqual(modelsMet(plan, [home[0] + 700, home[1]], home, true), []);
+        assert.equal(CREATURES.dreadthorn.perilous && CREATURES.moonfang.perilous, true);
+        assert.deepEqual(CREATURES.moonfang.biomes, []);
     });
 
     it("keeps a model while any's drawn from it, and a while after, then lets it go off the graphics card, its skins with it; but not one still wanted near its lair", () => {
