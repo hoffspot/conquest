@@ -33,8 +33,8 @@ The model viewer, for watching the game's models move, is at
 dungeon's boss or mini-boss, one of the people (an adventurer or a soldier with any weapon of
 theirs, or one of the townsfolk in their role, of any people, a woman or a man), or one of the
 game's things (a works' wagon and its ox, laden as you choose; what's carried and worn; the
-catalog's props, the treasure chest opening), or a creature still to come (the centipede, the Ant
-Monster, the ant, the Dungeon Spider, the Elite Dungeon Spider and the Dungeon Scorpion: their models before they're in the game), and it's drawn as the game draws it. It walks, runs, attacks, rests, is struck, knocked down and dies (the wyvern,
+catalog's props, the treasure chest opening), or a creature still to come (the Dungeon Spider, the
+Elite Dungeon Spider and the Dungeon Scorpion: their models before they're in the game), and it's drawn as the game draws it. It walks, runs, attacks, rests, is struck, knocked down and dies (the wyvern,
 the drake and the Dreadthorn fly, come down to land and hover). Its panel plays each of the game's
 moves for it by name (one of the people's every motion: their attacks, work, rests, emotes, spells,
 blows and falls), and every clip in a model's file by name. It pauses, slows to a tenth, steps a frame back or on, and plays a move
