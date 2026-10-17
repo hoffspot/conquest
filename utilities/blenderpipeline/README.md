@@ -180,6 +180,7 @@ error, so a misspelt one isn't silently ignored.
 | `textures.aoSamples` | `32` | Cycles's samples for it |
 | `textures.proceduralSize` | `512` | Pixels a UV unit for a procedural texture's share of the atlas |
 | `textures.margin` | `4` | Pixels baked round each island, so edges don't bleed when mipmapped |
+| `restPose` | the bones' rest | A clip (its name as exported) whose first frame is taken as the rest pose, for a rig whose bones rest where its clips never have them (a root bone resting tens of metres off that every clip brings back): it's measured, turned, sized and moved to its origin as the clips show it, and the clips aren't changed |
 | `size` | as it is | `{ "height" \| "length" \| "width" \| "longest": metres }` or `{ "scale": factor }` (measured at rest, after turning) |
 | `turn` | `0` | Degrees about the vertical, counterclockwise from above, so it faces +z (Blender's front, −y, already is) |
 | `origin` | `"keep"` | `"feet"`: its lowest point at y = 0, centred across |

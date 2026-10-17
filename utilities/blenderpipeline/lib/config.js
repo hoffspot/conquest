@@ -80,6 +80,9 @@ export const DEFAULTS = Object.freeze({
         // Pixels baked round each UV island, so its edges don't bleed when mipmapped
         margin: 4,
     },
+    // A clip whose first frame is taken as the rest pose (by its name as exported), for a source
+    // whose skeleton rests where its clips never have it: measured, turned and moved as they show it
+    restPose: null,
     // Its size in metres: { height | length | width | longest: metres } or { scale: factor }
     size: null,
     // Turned about the vertical (degrees, counterclockwise from above), so it faces +z
@@ -314,6 +317,10 @@ export function resolveConfig(raw, file) {
 
     if (!["keep", "feet"].includes(config.origin)) {
         fail(`origin is keep or feet, not ${JSON.stringify(config.origin)}`);
+    }
+
+    if (config.restPose !== null && !(typeof config.restPose === "string" && config.restPose)) {
+        fail("restPose is the name of a clip (or null: the rest pose as Blender has it)");
     }
 
     if (config.size !== null) {
