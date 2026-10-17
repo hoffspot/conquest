@@ -228,10 +228,10 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?model=beast-centipede&clip=Run");
 
-    // (In the game now, as are the ant, the spiders and the Ant Monster: every bought model is, so
-    // there are no creatures to come listed; read, its clips listed, the one asked for by its
-    // address played)
-    await expect(page.locator("#picker optgroup[label^='Coming to the wilds']")).toHaveCount(0);
+    // (In the game now, as are the ant, the spiders and the Ant Monster: every bought model is but
+    // the scorpion, the one creature to come listed; read, its clips listed, the one asked for by
+    // its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Dungeon Scorpion"]);
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
@@ -447,6 +447,35 @@ test("and the Elite Dungeon Spider: all 33 clips in its file, turned to face the
 
     expect(looks).toEqual({ ahead: true, glows: true });
     await expect(page.locator("#details")).toContainText("Spider V6a, bought on Fab: used with the permission its Standard License gives");
+});
+
+test("and the Dungeon Scorpion: all 16 clips in its file, its full detail only, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-dungeon-scorpion&clip=Walk");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack",
+        "Attack 2",
+        "Attack 3",
+        "Attack 4",
+        "Death",
+        "Death 2",
+        "Hit React Left",
+        "Hit React Right",
+        "Idle",
+        "Knockdown",
+        "Roar",
+        "Run",
+        "Stun",
+        "Stun Left",
+        "Stun Right",
+        "Walk",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Walk", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Dungeon Scorpion");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 53268, bones: 66 });
+    await expect(page.locator("#details")).toContainText("Scorpion V5d, bought on Fab: used with the permission its Standard License gives");
 });
 
 test("the werewolf as the game draws it, from its model once that's read: the game's moves for it, and the skin each one wears", async ({ page }) => {
