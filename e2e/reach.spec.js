@@ -55,7 +55,7 @@ test("Test this server: the game tries the server's internet address and tells i
     const row = worlds.locator(`li[data-server="127.0.0.1:${server.port}"]`);
 
     await page.locator("#worldsaddress").fill(`127.0.0.1:${server.port}`);
-    await worlds.getByRole("button", { name: "Add" }).click();
+    await worlds.getByRole("button", { name: "Add", exact: true }).click();
     await expect(row).toContainText("Version", { timeout: 30000 });
     await row.getByRole("button", { name: "Test this server" }).click();
     await expect(page.locator("#worldsstatus")).toContainText(`Tested: reached at ${FUNNEL} (`, { timeout: 30000 });

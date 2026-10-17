@@ -59,7 +59,7 @@ test("a server found near the one a player knows, listed under it and added with
     const worlds = page.locator("#worlds");
 
     await page.locator("#worldsaddress").fill(`127.0.0.1:${studio.port}`);
-    await worlds.getByRole("button", { name: "Add" }).click();
+    await worlds.getByRole("button", { name: "Add", exact: true }).click();
     await expect(worlds.locator(`li[data-server="127.0.0.1:${studio.port}"] .name`)).toHaveText("Studio Mac", { timeout: 30000 });
 
     // (The other, nearby: found by the one known)
