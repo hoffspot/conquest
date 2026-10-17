@@ -10805,6 +10805,197 @@ test("a Dreadthorn drawn with its stand-in is drawn again from its model once th
     expect(await playUntil(page, () => window.pellagos.game.avatars.get("dread")?.model === true, { seconds: 90 })).toBe(true);
 });
 
+test("a werewolf met out in the wild by night: drawn from its model in a skin of its own, clawing and springing at the player, flushed red when struck, falling dead as its model falls, its spoils left", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    // Midnight, and a werewolf 6 metres from the player out in the open west of the start town,
+    // where they can see each other, set on them, the player set on it with a sword. Its model
+    // read first, as the game asks for it where one may be met by night (beasts/model.js
+    // modelsMet: test/model.test.js)
+    await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { world, host, battle } = game;
+        const { CREATURES, traitsOf } = await import("/js/core/creatures.js");
+        const { wantModel } = await import("/js/beasts/model.js");
+        const [mx, my] = world.stamp.middle;
+        const { name, hp, weapon, speed, chase } = CREATURES.werewolf;
+
+        game.stop();
+        session.view.adaptive = false;
+        Object.assign(host.war, { turn: 41, clock: 30000 });
+        await wantModel("werewolf", "now");
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [Math.floor(mx - 140), Math.floor(my - 20)], { facing: Math.PI });
+
+        const me = battle.actor(game.me);
+
+        Object.assign(me, { hp: 1e6, maxHp: 1e6 });
+        host.wild.set("were", { creature: "werewolf", tier: 6, pack: "were", camp: null, lair: null, master: false });
+        battle.add({ id: "were", kind: "beast", name, weapon, team: "beasts", square: [Math.floor(me.x), Math.floor(me.y) - 6], ai: "wild", hp: hp * 40, speed, chase, wild: { creature: "werewolf", tier: 6, temper: "aggressive", guard: 0, roam: 0, leash: 40, pack: "were", leader: null, menace: true, unique: false, ...traitsOf("werewolf") } });
+
+        const were = battle.actor("were");
+
+        for (const [dx, dy] of [[0, -6], [6, 0], [-6, 0], [0, 6], [4, -4], [-4, 4]]) {
+            host.battle.place("were", "town", [Math.floor(me.x) + dx, Math.floor(me.y) + dy]);
+
+            if (battle.canSee(me, were, 8)) {
+                break;
+            }
+        }
+
+        were.spawn = [...were.square];
+        game.enlisting.push("were");
+        host.command(game.me, { type: "engage", target: "were" });
+    });
+
+    // Drawn from its model, in one of its skins; then, fighting, each of its ways of attacking
+    // played from its model's clips, and a flush of red on it as the player's blows land
+    expect(await playUntil(page, () => window.pellagos.game.avatars.get("were")?.model === true, { seconds: 30 })).toBe(true);
+
+    const seen = () => {
+        const { MODELS } = window.pellagosModels ?? {};
+        const avatar = window.pellagos.game.avatars.get("were");
+        const fight = (window.fight ??= { styles: [], flushed: 0, skin: avatar.plan.skin, skins: MODELS?.werewolf.skins ?? null });
+        const style = avatar.doing.attack?.style;
+
+        if (style && !fight.styles.includes(style)) {
+            fight.styles.push(style);
+        }
+
+        fight.flushed = Math.max(fight.flushed, avatar.flush.emissive.r);
+
+        return fight.styles.length === 2 && fight.flushed > 0.1;
+    };
+
+    await page.evaluate(async () => {
+        window.pellagosModels = await import("/js/beasts/model.js");
+    });
+    expect(await playUntil(page, seen, { seconds: 90 })).toBe(true);
+
+    const fight = await page.evaluate(() => window.fight);
+
+    expect(fight.styles.sort()).toEqual(["claw", "pounce"]);
+    expect(fight.skins).toContain(fight.skin);
+
+    // Slain: its model's fall played and held, and its spoils left for the player
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.host.battle.afflict("were", "poison", { by: game.me, damage: 1e7 });
+    });
+
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+        const avatar = game.avatars.get("were");
+
+        return Boolean(avatar?.doing.dead) && [...game.host.ground.values()].some((dropped) => dropped.from === "werewolf");
+    }, { seconds: 30 })).toBe(true);
+
+    const fallen = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const avatar = game.avatars.get("were");
+        const dropped = [...game.host.ground.values()].find((one) => one.from === "werewolf");
+
+        game.advance(1 / 30, { render: true });
+
+        return { model: avatar.model, dead: avatar.doing.dead.t > 0, items: dropped.bundle.items.map(({ id }) => id), gold: dropped.bundle.gold, for: dropped.for === game.me, error: session.view.renderer.getContext().getError() };
+    });
+
+    expect(fallen).toMatchObject({ model: true, dead: true, for: true, error: 0 });
+    // (Its purse's gold, and of what it leaves only its pelt and claws: it has no hands to carry more)
+    expect(fallen.gold).toBeGreaterThanOrEqual(4);
+    expect(fallen.items.every((id) => ["werewolfPelt", "werewolfClaw"].includes(id))).toBe(true);
+});
+
+test("a werewolves' den neared: the Moonfang's model and its werewolves' (one file, read once, each in their skins) read before they're met", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    // The player put a kilometre from a den, out of reach of it (its master and guards out only
+    // within 100 metres), at noon: no werewolf's about in the wild by day (beasts/model.js
+    // modelsMet), only the den's
+    const den = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { world, host } = game;
+        const { elapsedOf } = await import("/js/core/daytime.js");
+        const { torchesLit } = await import("/js/core/light.js");
+        const model = await import("/js/beasts/model.js");
+        const site = world.plan.sites.find((one) => one.kind === "werewolf's den");
+        const angle = Math.atan2(world.start.at[1] - site.at[1], world.start.at[0] - site.at[0]);
+
+        window.modelOf = model.modelOf;
+        game.stop();
+        session.view.adaptive = false;
+        Object.assign(host.war, { turn: 70, clock: 30000 });
+        host.battle.place(game.me, "town", [Math.floor(site.at[0] + Math.cos(angle) * 1000), Math.floor(site.at[1] + Math.sin(angle) * 1000)]);
+
+        return { id: site.id, dark: torchesLit(elapsedOf(host.war)), before: [Boolean(model.modelOf("moonfang")), Boolean(model.modelOf("werewolf"))] };
+    });
+
+    expect(den.dark).toBe(false);
+    expect(den.before).toEqual([false, false]);
+    expect(await playUntil(page, () => Boolean(window.modelOf("moonfang") && window.modelOf("werewolf")), { seconds: 60 })).toBe(true);
+
+    const read = await page.evaluate(async (id) => {
+        const { keptModels } = await import("/js/beasts/model.js");
+        const gltf = window.modelOf("moonfang");
+
+        return { same: gltf === window.modelOf("werewolf"), skins: Object.keys(gltf.skins).sort(), kept: keptModels().models, out: window.pellagos.game.host.lairs.has(id) };
+    }, den.id);
+
+    expect(read).toEqual({ same: true, skins: ["ash", "dusk", "moonfang", "russet"], kept: 1, out: false });
+});
+
+test("out in the woods far from home by night, where werewolves are met: the werewolf's model read before one is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    // Midnight, and the player put in the woods out in the wild, five tiers or more from home,
+    // where a werewolf may be met (beasts/model.js modelsMet)
+    const woods = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { world, host } = game;
+        const model = await import("/js/beasts/model.js");
+        const home = world.start.at;
+        let at = null;
+
+        for (let far = 3000; far < 7000 && !at; far += 250) {
+            for (let a = 0; a < Math.PI * 2 && !at; a += 0.3) {
+                const spot = [Math.round(home[0] + Math.cos(a) * far), Math.round(home[1] + Math.sin(a) * far)];
+
+                at = model.modelsMet(world.plan, spot, home, true).includes("werewolf") ? spot : null;
+            }
+        }
+
+        window.modelOf = model.modelOf;
+        game.stop();
+        session.view.adaptive = false;
+        Object.assign(host.war, { turn: 41, clock: 30000 });
+        host.battle.place(game.me, "town", at);
+
+        return { at, before: Boolean(model.modelOf("werewolf")) };
+    });
+
+    expect(woods.at).not.toBeNull();
+    expect(woods.before).toBe(false);
+
+    // (Read, and no werewolf come yet to be drawn: asked for where it's met, not as it comes)
+    const read = () => {
+        const { game } = window.pellagos;
+
+        window.met ||= [...game.host.wild].some(([id, one]) => one.creature === "werewolf" && game.avatars.has(id));
+
+        return Boolean(window.modelOf("werewolf"));
+    };
+
+    expect(await playUntil(page, read, { seconds: 60 })).toBe(true);
+    expect(await page.evaluate(() => window.met)).toBe(false);
+});
+
 test("a Dreadthorn badly hurt takes to the air: drawn hanging up there, out of reach of the player's blade, the player told; down again after", async ({ page }) => {
     test.setTimeout(240000);
     await playing(page, "/?play&seed=1");

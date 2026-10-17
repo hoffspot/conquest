@@ -11,6 +11,8 @@ import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { ASSETS } from "../app/assets.js";
 import { hashed } from "../app/catalog.js";
 import { loadGltf } from "../world/art/engine/models.js";
+import { candidatesAt, tierAt } from "../core/creatures.js";
+import { landAt } from "../core/worldplan/plan.js";
 import { Breath } from "./breath.js";
 
 /**
@@ -377,6 +379,21 @@ export function keptModels() {
  */
 export function modelsNear(at, lairs, within = 1500) {
     return [...new Set(lairs.filter((lair) => MODELS[lair.beast] && Math.hypot(lair.at[0] - at[0], lair.at[1] - at[1]) < within).map(({ beast }) => beast))];
+}
+
+/**
+ * Which kinds' models to ask for by what may be met where the player is (`at`: [x, z] metres, out
+ * in the world; `home`: where their people start, the wild's tamest near it; `dark`: whether the
+ * night's out): those drawn from a model that may be put out there, at that hour (creatures.js
+ * candidatesAt: a werewolf, in the woods far from home by night), so one's read before it comes,
+ * not drawn as its stand-in. A pure function: the game asks every so often.
+ */
+export function modelsMet(plan, at, home, dark) {
+    const land = landAt(plan, ...at);
+
+    return candidatesAt(land, tierAt(at, [home], land.biome), dark)
+        .filter(({ id }) => MODELS[id])
+        .map(({ id }) => id);
 }
 
 const smoothstep = (u) => {
