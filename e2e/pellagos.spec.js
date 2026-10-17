@@ -8870,8 +8870,12 @@ test("a dungeon whose creatures are drawn from models: theirs fetched, not read,
         game.modelLairs = [];
 
         // (The werewolves' asked for already, as the player came near: so at their door nothing of
-        // theirs is downloaded, however long the way there takes)
-        game.approached = new Set(["werewolf", "moonfang"]);
+        // theirs is downloaded, however long the way there takes; and every other kind's but the
+        // Dreadthorn's, so nothing of any other place's is downloaded meanwhile, the ants' nests
+        // these two are before they're made dens among them)
+        const { MODELS } = await import("/js/beasts/model.js");
+
+        game.approached = new Set(Object.keys(MODELS).filter((kind) => kind !== "dreadthorn"));
         window.fetchedBefore = fetch;
         fetcher.fetch = async (...args) => {
             await new Promise((resolve) => setTimeout(resolve, 1000));
