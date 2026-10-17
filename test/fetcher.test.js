@@ -21,7 +21,7 @@ function file(path, bytes) {
 // The world the downloader runs in: a clock that moves only when it waits or a request takes time
 // (`rtt` ms, then `speed` bytes/s), a server with `files` (by path; serving parts unless `ranges`
 // is false), caches, and every request it was sent ({ path, from, to, at })
-function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, connection, onRequest = () => {} } = {}) {
+function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, connection, onRequest = () => {}, tell = () => {} } = {}) {
     const clock = { now: 0 };
     const requests = [];
     const stores = new Map();
@@ -102,6 +102,7 @@ function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, connect
         },
         digest: (bytes) => crypto.subtle.digest("SHA-256", bytes),
         connection,
+        tell,
     });
 
     const kept = (path) => stores.get("pellagos-assets-v2")?.get(new URL(`${path}?h=${files.find((each) => each.path === path)?.hash}`, BASE).href);
@@ -336,6 +337,87 @@ describe("the downloader", () => {
         assert.equal(await fetcher.want(dragon), null);
         assert.deepEqual(await bytesOf(await fetcher.want(dragon)), dragon.data);
         assert.deepEqual(requests.map(({ from }) => from / KB), [0, 256, 512]);
+    });
+
+    it("hurries a file the player's waiting for: fetched at a quiet time, before the rest, and alone with its parts back to back; saying how much of it's here as it comes", async () => {
+        const dragon = file("models/dragon.glb", 600 * KB);
+        const wyvern = file("models/wyvern.glb", 300 * KB);
+        const here = [];
+        const { fetcher, requests, clock } = world({ files: [dragon, wyvern], onRequest: () => here.push(fetcher.received(dragon)) });
+
+        fetcher.hold("joining");
+
+        const wanted = fetcher.want(wyvern, "now");
+        const hurried = fetcher.want(dragon, "soon", { hurry: true });
+
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(fetcher.status.hurried, 1);
+        assert.deepEqual(await bytesOf(await hurried), dragon.data);
+
+        // (Only the hurried one at the quiet time, its parts asked for as soon as the one before
+        // came: a round trip and the time 256 KB takes at 1 MB/s apart)
+        assert.deepEqual(requests.map(({ path }) => path), ["models/dragon.glb", "models/dragon.glb", "models/dragon.glb"]);
+        assert.deepEqual(here, [0, 256 * KB, 512 * KB]);
+        assert.equal(requests[1].at - requests[0].at, 50 + 250);
+        assert.equal(fetcher.received(dragon), 0, "nothing in hand once it's here and handed over");
+
+        // (The rest once the quiet time's over)
+        const after = clock.now;
+
+        fetcher.release("joining");
+        await wanted;
+        assert.ok(requests.at(-1).at >= after);
+        assert.equal(requests.at(-1).path, "models/wyvern.glb");
+    });
+
+    it("no longer hurries a file the player's stopped waiting for (calm): it waits out a quiet time with the rest", async () => {
+        const dragon = file("models/dragon.glb", 600 * KB);
+        const { fetcher, requests, clock } = world({ files: [dragon] });
+
+        fetcher.hold("joining");
+
+        const wanted = fetcher.want(dragon, "now", { hurry: true });
+
+        fetcher.calm(dragon);
+
+        while (clock.now < 5000) {
+            await new Promise((resolve) => setImmediate(resolve));
+        }
+
+        assert.deepEqual(requests, []);
+        fetcher.release("joining");
+        await wanted;
+        assert.equal(requests.length, 3);
+    });
+
+    it("keeps a file without handing it over: one kept already not read again, nor fetched; false for one that can't be had", async () => {
+        const dragon = file("models/dragon.glb", 300 * KB);
+        const told = [];
+        const { fetcher, requests, kept } = world({ files: [dragon], tell: (message) => told.push(message) });
+
+        assert.equal(await fetcher.keep(dragon, "soon"), true);
+        assert.ok(kept(dragon.path));
+        assert.equal(requests.length, 2);
+
+        assert.equal(await fetcher.keep(dragon, "soon"), true);
+        assert.equal(requests.length, 2);
+        assert.equal(await fetcher.keep(file("models/missing.glb", 100), "now"), false);
+
+        // (The service worker told each time it was kept or found kept, so it's let go of last)
+        const url = new URL(`${dragon.path}?h=${dragon.hash}`, BASE).href;
+
+        assert.deepEqual(told, [{ kind: "used", urls: [url] }, { kind: "used", urls: [url] }]);
+    });
+
+    it("tells the service worker of a file read from what's kept, as used", async () => {
+        const dragon = file("models/dragon.glb", 100 * KB);
+        const told = [];
+        const { fetcher } = world({ files: [dragon], tell: (message) => told.push(message) });
+
+        await fetcher.want(dragon);
+        await fetcher.want(dragon);
+        assert.equal(told.length, 2);
+        assert.ok(told.every(({ kind, urls }) => kind === "used" && urls[0].includes(dragon.hash)));
     });
 
     it("fetches nothing at quiet times: until released, for a while, and until something's so", async () => {

@@ -877,8 +877,13 @@ what's downloaded before the game starts.
   it isn't let go of and read again going to and fro at the edge), nor where one may be met at
   that hour (a werewolf's, out in its woods by night: `modelsMet`), nor while it's being read.
   Wanted again, it's read again from what the downloader kept (nothing downloaded again), its
-  stand-in drawn meanwhile. Told in the debug overlay and log, under *Held*: how many models are
-  read, and how many of them none is drawn from (`keptModels`).
+  stand-in drawn meanwhile. One read and never drawn from (asked for near a lair the player never
+  went to) is let go of in the same way, counted from when it was read: it used to be kept for
+  good. Each read is the model's own (`readGltf`, not the loader's `loadGltf`, which keeps what it
+  reads by its address): read from a downloaded copy, each read was kept by the loader for good
+  as well, under an address made for that read, so every model let go of and read again was
+  another copy held. Told in the debug overlay and log, under *Held*: how many models are read,
+  and how many of them none is drawn from (`keptModels`).
 - **A body like any other** (`modelBody`): `BeastAvatar` takes it as its `plan`, as it does one
   built in code. `MODELS` names which of its clips are what (standing, walking, flying, gliding,
   struck, falling; its bite, claw and tail sweep, its breath; its roar) and which bones are its
@@ -945,6 +950,59 @@ What's the same as the Dreadthorn's, and what's its own:
   woods by night before one comes; and, a kilometre from a den by day, the Moonfang's and its
   werewolves' read, one file, before they're met. `test/model.test.js`: where its model's asked
   for (`modelsMet`), by night and day, far out and near home.
+
+### A place's creatures, ready before they're met (beasts/model.js, app/readying.js)
+
+Creatures drawn from models of 3 to 5 MB each live mostly in places with a way in: a dungeon,
+first. Their models are got ready before the player meets them, kept while the player's in there,
+and let go of soon after they've left (the user: "an interstitial loading page when entering the
+place where the models exist so that they have an opportunity to fully download to the local
+browser cache before the creature they are associated with is encountered"; "when the area where
+they exist is left, they are unloaded out of memory but of course kept in cache").
+
+- **Which.** `modelsInside(building)`: the kinds drawn from a model a place holds. For a dungeon
+  that's made, its foes (insides.js `dungeonRooms`); one not made yet, everything its theme can
+  put in it (its packs, mini-bosses, bosses and their guards). Other places hold none yet.
+- **Fetched on the way.** Within 150 m of a dungeon's way in (the game's `APPROACH`, looked at
+  every two seconds with the lairs), its kinds' models are downloaded and kept, not read
+  (`fetchModel`, the downloader's `keep`: one kept already isn't even read from where it's kept),
+  so nothing's held in memory for a place the player only passes. One that couldn't be had is
+  asked for again a minute later.
+- **Waited for at the door.** Tapping the door of a place whose models aren't all read
+  (`#readyAtDoor`), the player waits there while they're got ready (`readyModels`): each file
+  fetched, hurried (the downloader's `hurry`: before anything else, at quiet times too, and
+  playing alone as fast as the link goes), then read. Alone, the world stops meanwhile, as it does
+  under the menu. Playing with others it can't: they wait at the door outside. A card over the game
+  (`app/readying.js`) shows after a quarter of a second (`READYING.grace`: what's kept already is
+  read in less, and nothing's seen). It has the place's name, a bar, so many MB of so many, and
+  each creature, *Ready* once its model's read. Once all are, they go in, as tapped.
+  - **Go in now**, offered after five seconds (`READYING.patience`), goes in at once. Those not
+    read yet are drawn as their stand-ins till they are, as they'd be anywhere; their files are
+    still hurried.
+  - **Not now** (or Escape) stays out. What's begun is fetched on, no longer hurried.
+  - A file that can't be had (a licensed model missing from someone's own copy) is given up on, as
+    is the creature's model, which then stays its stand-in. The wait never stops anyone going in.
+- **Kept while in there.** The kinds of the place the player's in, or waiting at the door of, are
+  kept (`forgetModels`' `area`), however long it is since one was drawn.
+- **Let go of soon after.** Once the player's left, and its foes are asleep again (no one near its
+  way in: docs/DUNGEONS.md), they're let go of 30 s after they were last wanted (`AREA_LINGER`),
+  not the three minutes of one met in the wild: off the graphics card, kept by the downloader, so
+  going back in reads them, nothing downloaded. One wanted out in the world as well (near a lair)
+  is kept as one met in the wild is.
+- **Kept on the phone.** The service worker lets go of the catalog's least recently used files
+  first when room runs short. It can't see what the downloader reads from where it keeps them, so
+  each file the downloader keeps or reads is told to it as used (sw.js `used`). The big models a
+  player's been near aren't the first to go.
+- `test/model.test.js`: a place's kinds, made or not; its models kept while the player's in it,
+  let go of `AREA_LINGER` after; a place's models got ready, each file kept first, hurried, then
+  read, how far it's got, calmed. `test/fetcher.test.js`: a hurried file fetched at a quiet time,
+  before the rest, its parts back to back; calmed, waiting with the rest; kept without being
+  handed over; the service worker told. `test/sw.test.js`: a file the page says was used isn't let
+  go of first. `e2e/pellagos.spec.js`, in the game: a dungeon made a den of werewolves (a theme of
+  the test's own). At its door, the world stops and the card shows, nothing ready. Not now stays
+  out. Tapped again, Go in now is offered after a while, and the player goes in once both models
+  are read. Left and walked away from, the models are kept a while, then let go of. Near another
+  den, of the Dreadthorn's, its model is fetched in the background, not read.
 
 ### In a crowd (beasts/herd.js)
 

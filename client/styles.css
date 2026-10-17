@@ -4642,6 +4642,48 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     }
 }
 
+/* At a place's door, its creatures got ready before going in (app/readying.js): a card in the
+   middle of the screen, over the game and its buttons */
+.readying {
+    position: absolute;
+    z-index: 9;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: min(360px, calc(100% - 32px));
+    padding: 20px 22px 18px;
+    border-radius: 14px;
+    background: var(--panel-solid);
+    border: 1px solid var(--panel-border);
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.7);
+    animation: appear 0.3s ease-out;
+    /* (Its buttons tapped, not the game under it: the HUD lets taps through but for its own) */
+    pointer-events: auto;
+}
+
+.readying h2 {
+    text-align: center;
+}
+
+.readying .note {
+    margin: 8px 0 14px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.readying .amount {
+    margin: 8px 0 12px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.readying .menu {
+    margin: 18px 0 0;
+}
+
 #banner {
     position: absolute;
     z-index: 7;

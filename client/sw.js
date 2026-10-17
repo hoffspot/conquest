@@ -103,6 +103,8 @@ self.addEventListener("message", (event) => {
 
     if (message?.kind === "release" && typeof message.release === "string" && event.source?.id) {
         event.waitUntil(heard(event.source.id, message));
+    } else if (message?.kind === "used" && Array.isArray(message.urls)) {
+        event.waitUntil(usedAll(message.urls));
     }
 });
 
@@ -280,6 +282,21 @@ function saveState() {
 async function used(url) {
     (await readState()).used[url] = Date.now();
     await saveState();
+}
+
+// Files a page read from where they're kept, without asking for them (the downloader, app/
+// fetcher.js), told as used: so the least recently used are still the first let go of (toLetGo)
+async function usedAll(urls) {
+    const known = await readState();
+    const own = urls.filter((url) => typeof url === "string" && url.startsWith(`${self.location.origin}/`));
+
+    for (const url of own) {
+        known.used[url] = Date.now();
+    }
+
+    if (own.length) {
+        await saveState();
+    }
 }
 
 // A page told its release: the files it keeps by hash, and when it started (ms). The release of

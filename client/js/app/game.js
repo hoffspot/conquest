@@ -28,7 +28,7 @@ import { folkLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressingCreature, sizeOf } from "../beasts/beast.js";
-import { forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsMet, modelsNear, wantModel } from "../beasts/model.js";
+import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsInside, modelsMet, modelsNear, readyModels, wantModel } from "../beasts/model.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
 import { LOOKS as CREATURE_LOOKS, humanoidLook } from "../beasts/looks.js";
@@ -125,6 +125,7 @@ import { hitch } from "../world/art/kits/wagon.js";
 import { compassTurn, Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
 import { Doors } from "./doors.js";
+import { Readying } from "./readying.js";
 import { FatePanel, fateWords } from "./fate.js";
 import { plateScale } from "./hud.js";
 import { itemPicture } from "./icons.js";
@@ -433,6 +434,13 @@ const KEEP_MODELS = 2000;
 // How often (seconds) the game looks for creatures drawn from a model to ask for, near their lairs
 // (#modelling)
 const MODELLING = 2;
+
+// How near a place's way in the player must be (metres, out in the world) for the models of the
+// creatures in it to be fetched, not read (beasts/model.js fetchModel), so they're kept by the time
+// the player's at its door (#modelling); and how long before one that couldn't be is asked for
+// again (ms)
+const APPROACH = 150;
+const APPROACH_RETRY = 60000;
 
 // How far from the camera anyone with a crowd to be drawn in (the soldiers; the players' hired
 // adventurers and the wild's creatures: #thronging) is drawn in full at most (metres), however
@@ -3650,6 +3658,21 @@ export class Game {
             for (const kind of new Set([...modelsNear([me.x, me.z], this.#modelLairs()), ...this.#modelsHere()])) {
                 wantModel(kind);
             }
+
+            // (The places near: their creatures' models fetched, not read; and those of the place
+            // the player's in read, if they went in without waiting for them)
+            this.approached ??= new Set();
+
+            for (const kind of this.#modelsApproached()) {
+                if (!this.approached.has(kind)) {
+                    this.approached.add(kind);
+                    fetchModel(kind, "soon").then((kept) => kept || setTimeout(() => this.approached.delete(kind), APPROACH_RETRY));
+                }
+            }
+
+            for (const kind of this.#modelsInside()) {
+                wantModel(kind, "now");
+            }
         }
 
         for (const [id, avatar] of this.avatars) {
@@ -3658,6 +3681,31 @@ export class Game {
                 this.enlisting.push(id);
             }
         }
+    }
+
+    // The kinds drawn from a model in the places with a way in near the player, out in the world
+    // (APPROACH): a dungeon's foes, or all its theme may hold till it's made (beasts/model.js
+    // modelsInside)
+    #modelsApproached() {
+        const actor = this.battle.actor(this.me);
+
+        if (actor?.map !== "town" || !this.world.plan) {
+            return [];
+        }
+
+        return this.world.plan.sites
+            .filter((site) => site.kind === "dungeon" && Math.hypot(site.at[0] - actor.x, site.at[1] - actor.y) < APPROACH)
+            .flatMap((site) => modelsInside(this.world.interiors?.buildings.get(`site:${site.id}`) ?? { kind: "dungeon", theme: site.theme }));
+    }
+
+    // The kinds drawn from a model in the place the player's in (beasts/model.js modelsInside), and
+    // in the one whose door they're waiting at (#readyAtDoor): kept while they are, let go of a
+    // little after they've left (forgetModels' `area`)
+    #modelsInside() {
+        const actor = this.battle.actor(this.me);
+        const here = actor ? modelsInside(this.world.interiors?.of(actor.map)) : [];
+
+        return [...new Set([...here, ...(this.readyingAt?.kinds ?? [])])];
     }
 
     // The kinds drawn from a model that may be met where the player is, out in the world, at this
@@ -3671,8 +3719,9 @@ export class Game {
     // The beasts' bodies none of their look has been drawn on for a while let go of, every so often
     // (FORGET_EVERY); and the models none has been drawn from for a while, but those whose lairs
     // the player's near enough to want them for (KEEP_MODELS: a little further than they're asked
-    // for from, so one isn't let go and read again going to and fro at the edge), and those that
-    // may be met where they are (#modelsHere)
+    // for from, so one isn't let go and read again going to and fro at the edge), those that may be
+    // met where they are (#modelsHere), and those of the place they're in or at the door of
+    // (#modelsInside: once they've left it, let go of soon after, beasts/model.js AREA_LINGER)
     #forgetting(dt) {
         if ((this.forgetClock = (this.forgetClock ?? FORGET_EVERY) - dt) > 0) {
             return;
@@ -3683,7 +3732,7 @@ export class Game {
 
         const me = this.avatars.get(this.me)?.object.position;
 
-        forgetModels(performance.now(), MODEL_LINGER, me ? [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere()] : []);
+        forgetModels(performance.now(), MODEL_LINGER, me ? [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere()] : [], this.#modelsInside());
     }
 
     // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): past
@@ -10935,6 +10984,53 @@ export class Game {
         return true;
     }
 
+    // A door into a place whose creatures are drawn from models not read yet (beasts/model.js
+    // modelsInside): the player waits at it while they're got ready, fetched and read
+    // (readyModels), the world stopped if no one else is in it, a card saying how far it's got
+    // (app/readying.js); then through it, as tapped. Go in now goes through at once (those not
+    // ready drawn as their stand-ins till they are), Not now stays out (what's begun fetched on, no
+    // longer hurried). Returns whether it's waiting.
+    #readyAtDoor(door, run) {
+        const player = this.battle.actor(this.me);
+        const building = player?.map === "town" ? this.world.interiors?.buildings.get(door.link.building) : null;
+        const kinds = modelsInside(building).filter((kind) => !modelOf(kind));
+
+        if (!kinds.length) {
+            return false;
+        }
+
+        const readying = readyModels(kinds);
+        const waiting = { kinds: readying.kinds };
+
+        this.readyingAt = waiting;
+        this.readyCard ??= new Readying(document);
+        this.pause();
+        this.readyCard.show({
+            name: building.name,
+            kinds: readying.kinds.map((id) => ({ id, name: CREATURES[id]?.name ?? id })),
+            progress: readying.progress,
+            onClose: (how) => {
+                if (this.readyingAt === waiting) {
+                    this.readyingAt = null;
+                }
+
+                if (how === "back") {
+                    readying.calm();
+                }
+
+                this.start();
+
+                if (how !== "back") {
+                    this.#command({ type: "enter", link: door.link.id, run });
+                    this.doors.light(door, this.clock);
+                }
+            },
+        });
+        readying.ready.then(() => this.readyingAt === waiting && this.readyCard.ready());
+
+        return true;
+    }
+
     // Send the player to fight an enemy, through a door (or up or down the stairs), or to a point
     // on the ground ([x, z] metres, on their map), running if told to or tapped twice in quick
     // succession (in the same place: the view or the minimap)
@@ -10969,10 +11065,13 @@ export class Game {
             return;
         }
 
-        // The door's edge glows green as they make for it
+        // The door's edge glows green as they make for it (once what's in there's ready, if it
+        // isn't: #readyAtDoor)
         if (door) {
-            this.#command({ type: "enter", link: door.link.id, run });
-            this.doors.light(door, this.clock);
+            if (!this.#readyAtDoor(door, run)) {
+                this.#command({ type: "enter", link: door.link.id, run });
+                this.doors.light(door, this.clock);
+            }
 
             return;
         }

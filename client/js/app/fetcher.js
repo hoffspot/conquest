@@ -15,7 +15,12 @@
 // while a player joins, while the link to the others comes back.
 //
 // A file's checked against its hash once it's all here, then kept where the service worker keeps
-// the catalog's (sw.js), and handed over (a Blob). A file already kept isn't fetched.
+// the catalog's (sw.js), and handed over (a Blob). A file already kept isn't fetched. Either way
+// the service worker's told it's been used, so it's among the last let go of if room runs short.
+//
+// A file the player's waiting for (at a place's door while its creatures' models come: app/
+// readying.js) is hurried: fetched before the rest, at quiet times too, and, playing alone, as
+// fast as the link goes.
 //
 // No Three.js here.
 
@@ -179,6 +184,7 @@ export class Controller {
  * @param {Function} [options.digest] - SHA-256 of bytes (an ArrayBuffer); null where the browser
  *     can't (a page not on https or localhost), when files are handed over unchecked, and not kept.
  * @param {object} [options.connection] - navigator.connection, where the browser has it.
+ * @param {Function} [options.tell] - Tells the service worker something (sw.js "used").
  */
 export class Fetcher {
     constructor({
@@ -189,8 +195,9 @@ export class Fetcher {
         sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
         digest = globalThis.crypto?.subtle ? (bytes) => crypto.subtle.digest("SHA-256", bytes) : null,
         connection = globalThis.navigator?.connection,
+        tell = (message) => globalThis.navigator?.serviceWorker?.controller?.postMessage(message),
     } = {}) {
-        Object.assign(this, { base, fetch, caches, now, sleep, digest, connection });
+        Object.assign(this, { base, fetch, caches, now, sleep, digest, connection, tell });
         this.controller = new Controller();
 
         /** Asks for a round trip to be measured, now and then while downloading together (heard back by measure). */
@@ -229,17 +236,20 @@ export class Fetcher {
 
     /**
      * Fetch a file in the catalog ({ path, hash, bytes }), as wanted as `priority` (PRIORITY's
-     * names). Resolves with it (a Blob), from what's kept if it is; or with null if it's not to be
-     * fetched (thrifty, and not wanted now) or no longer wanted (dropped). Rejects if it can't be
-     * had: missing, or not the file its hash says.
+     * names), `hurry` if the player's waiting for it (the most wanted, fetched at quiet times too
+     * and, alone, as fast as the link goes, till it's here or calm). Resolves with it (a Blob),
+     * from what's kept if it is; or with null if it's not to be fetched (thrifty, and not wanted
+     * now) or no longer wanted (dropped). Rejects if it can't be had: missing, or not the file its
+     * hash says.
      */
-    want({ path, hash, bytes }, priority = "soon") {
-        const rank = PRIORITY[priority] ?? PRIORITY.soon;
+    want({ path, hash, bytes }, priority = "soon", { hurry = false } = {}) {
+        const rank = hurry ? PRIORITY.now : (PRIORITY[priority] ?? PRIORITY.soon);
         const url = new URL(hashed(path, hash), this.base).href;
         const known = this.entries.get(url);
 
         if (known) {
             known.priority = Math.min(known.priority, rank);
+            known.hurry ||= hurry;
 
             return known.promise;
         }
@@ -253,12 +263,45 @@ export class Fetcher {
         const entry = this.parked.get(url) ?? { url, path, hash, bytes, parts: [], received: 0, tries: 0, retryAt: -Infinity };
 
         this.parked.delete(url);
-        Object.assign(entry, { priority: rank, order: this.order++ });
+        Object.assign(entry, { priority: rank, order: this.order++, hurry });
         entry.promise = new Promise((resolve, reject) => Object.assign(entry, { resolve, reject }));
         this.entries.set(url, entry);
         this.#start(entry);
 
         return entry.promise;
+    }
+
+    /**
+     * Fetch a file in the catalog to keep, not to hand over: as want does (`priority`, `hurry`),
+     * but one kept already isn't read from where it's kept. Resolves with whether it's kept now
+     * (false: not fetched, as want's null; or it couldn't be had).
+     */
+    async keep(file, priority = "soon", options = {}) {
+        const url = new URL(hashed(file.path, file.hash), this.base).href;
+
+        if (!this.entries.has(url) && (await this.#has(url))) {
+            this.#touch(url);
+
+            return true;
+        }
+
+        return Boolean(await this.want(file, priority, options).catch(() => null));
+    }
+
+    /** No longer to be hurried (the player's stopped waiting for it): wanted as it was. */
+    calm({ path, hash }) {
+        const entry = this.entries.get(new URL(hashed(path, hash), this.base).href);
+
+        if (entry) {
+            entry.hurry = false;
+        }
+    }
+
+    /** How many bytes of a file are here so far, while it's being fetched (or put by, dropped): 0 otherwise. */
+    received({ path, hash }) {
+        const url = new URL(hashed(path, hash), this.base).href;
+
+        return (this.entries.get(url) ?? this.parked.get(url))?.received ?? 0;
     }
 
     /** No longer wanted: out of the queue (what's come of it kept a while, in case it's wanted again), heard of as null. */
@@ -319,7 +362,7 @@ export class Fetcher {
 
         const current = this.current && { path: this.current.path, received: this.current.received, bytes: this.current.bytes };
 
-        return { rate, throughput, base, queueing, together, current, queued: this.queue.length, quiet: this.quiet, thrifty: this.thrifty, done: this.done, failed: this.failed, fetched: this.fetched };
+        return { rate, throughput, base, queueing, together, current, queued: this.queue.length, hurried: this.queue.filter(({ hurry }) => hurry).length, quiet: this.quiet, thrifty: this.thrifty, done: this.done, failed: this.failed, fetched: this.fetched };
     }
 
     // From what's kept, if it is; else into the queue
@@ -332,6 +375,7 @@ export class Fetcher {
 
         if (kept) {
             this.done++;
+            this.#touch(entry.url);
             this.#settle(entry, kept);
 
             return;
@@ -357,6 +401,31 @@ export class Fetcher {
         return null;
     }
 
+    // Whether a file's kept, not reading it
+    async #has(url) {
+        try {
+            for (const name of [ASSETS_CACHE, BOOT_CACHE]) {
+                if (await (await this.caches?.open(name))?.match(url)) {
+                    return true;
+                }
+            }
+        } catch {
+            // (Nowhere to keep things)
+        }
+
+        return false;
+    }
+
+    // The service worker told a file kept's been used (sw.js "used"), so it's among the last let
+    // go of when there's no room: it doesn't see what's read from where it keeps them
+    #touch(url) {
+        try {
+            this.tell({ kind: "used", urls: [url] });
+        } catch {
+            // (No service worker: nothing to tell)
+        }
+    }
+
     // Heard of: resolved (with a Blob or null) or rejected (an Error), and out of the queue
     #settle(entry, result) {
         if (this.entries.get(entry.url) === entry) {
@@ -380,11 +449,21 @@ export class Fetcher {
         }
     }
 
-    // The most wanted that may be tried now (then the longest queued)
-    #pick() {
+    // The most wanted that may be tried now (one hurried first, then the longest queued); at a
+    // quiet time, only one hurried
+    #pick(quiet) {
         const now = this.now();
 
-        return this.queue.filter((entry) => entry.retryAt <= now).sort((a, b) => a.priority - b.priority || a.order - b.order)[0] ?? null;
+        return (
+            this.queue
+                .filter((entry) => entry.retryAt <= now && (entry.hurry || !quiet))
+                .sort((a, b) => Number(b.hurry) - Number(a.hurry) || a.priority - b.priority || a.order - b.order)[0] ?? null
+        );
+    }
+
+    // How long to wait before the next part of a file (ms): none for one hurried, playing alone
+    #waitFor(entry) {
+        return entry.hurry && !this.together ? 0 : this.controller.wait(this.now());
     }
 
     async #run() {
@@ -406,11 +485,11 @@ export class Fetcher {
                     }
                 }
 
-                const entry = this.#pick();
-                const wait = this.controller.wait(this.now());
+                const entry = this.#pick(this.quiet.length > 0);
+                const wait = entry ? this.#waitFor(entry) : 0;
 
-                if (!entry || this.quiet.length || wait > 0) {
-                    await this.sleep(entry && !this.quiet.length ? Math.min(wait, LOOK_EVERY) : LOOK_EVERY);
+                if (!entry || wait > 0) {
+                    await this.sleep(entry ? Math.min(wait, LOOK_EVERY) : LOOK_EVERY);
                     continue;
                 }
 
@@ -443,7 +522,7 @@ export class Fetcher {
         this.controller.sent(asked, size);
 
         try {
-            response = await this.fetch(entry.url, { headers: { Range: `bytes=${from}-${from + size - 1}` }, priority: "low" });
+            response = await this.fetch(entry.url, { headers: { Range: `bytes=${from}-${from + size - 1}` }, priority: entry.hurry ? "high" : "low" });
 
             if (response.status === 206) {
                 const range = /^bytes (\d+)-\d+\/\d+$/.exec(response.headers.get("Content-Range") ?? "");
@@ -484,8 +563,8 @@ export class Fetcher {
         entry.received = 0;
 
         for (;;) {
-            while (this.quiet.length || this.controller.wait(this.now()) > 0) {
-                await this.sleep(this.quiet.length ? LOOK_EVERY : Math.min(this.controller.wait(this.now()), LOOK_EVERY));
+            while ((this.quiet.length && !entry.hurry) || this.#waitFor(entry) > 0) {
+                await this.sleep(this.quiet.length && !entry.hurry ? LOOK_EVERY : Math.min(this.#waitFor(entry), LOOK_EVERY));
             }
 
             const { done, value } = await reader.read();
@@ -525,6 +604,10 @@ export class Fetcher {
 
         try {
             await (digest && (await this.caches?.open(ASSETS_CACHE)))?.put(entry.url, new Response(bytes, { headers: { "Content-Type": type, "Content-Length": String(bytes.length) } }));
+
+            if (digest) {
+                this.#touch(entry.url);
+            }
         } catch {
             // (Not kept: no room, or nowhere to keep it. Handed over all the same)
         }

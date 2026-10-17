@@ -719,3 +719,17 @@ joined one, and `Joining.onPong` wrapped to log each round trip. There it could 
   detail packed in; what the game knows of a model in `MODELS`, not the catalog entry; the body
   built at once, not a step at a time; no `useWorkers` and nothing dropped yet; the service
   worker's part still to do.
+- **2026-10-17. A place's models:** the models of a place's creatures (a dungeon's: beasts/model.js
+  `modelsInside`) fetched, not read, as the player comes within 150 m of its way in (the
+  downloader's `keep`); waited for at its door, hurried (the downloader's `hurry`: before the rest,
+  at quiet times too, and alone as fast as the link goes) and read, a card saying how far they've
+  got (app/readying.js), Go in now after five seconds and Not now; kept while the player's in
+  there, then let go of 30 s after (`AREA_LINGER`). Changed from the plan:
+  - §0.1 "Play never waits on a download" holds for the world: the wait is the player's own, at the
+    door outside, the world stopped only if no one else is in it; Go in now goes in at once.
+  - A model's let go of once none's drawn from it (A3's "dropping a model walked away from"), and
+    one read but never drawn from is now too, from when it was read.
+  - A model read from a downloaded copy is the reader's own (`readGltf`): the loader kept every
+    such read by an address made for it, so each one let go of and read again was another copy held.
+  - The service worker's told what the downloader keeps and reads (`used`), so they're among the
+    last let go of when room runs short (§5.4).
