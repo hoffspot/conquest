@@ -259,6 +259,53 @@ function title() {
     } else {
         $("#newbutton").focus();
     }
+
+    frontDoor();
+}
+
+// The game opened from a world server's own address (its front door): the server remembered, and
+// its worlds shown on the title, each joined with a tap: those open to anyone, those it lists, and
+// those a key or ticket's held for here (as Worlds on servers shows them)
+async function frontDoor() {
+    const card = await pageServer();
+
+    if (!card || $("#title").hidden) {
+        return;
+    }
+
+    const { addressOf } = await serversOf();
+    const record = state.servers.remember(addressOf(location.origin), { name: card.server.name ?? null });
+    const listed = new Map(card.worlds.map((world) => [world.id, world]));
+    const ids = [...new Set([...Object.keys(record.worlds ?? {}), ...listed.keys()])];
+    const name = card.server.name ?? location.host;
+
+    $("#titleservername").textContent = `Worlds on ${name}`;
+    $("#titleservernote").textContent = ids.length
+        ? "Tap one to go in. If it's your first time, you make a character first."
+        : "None of its worlds is open to everyone. If you were sent an invite link, open that to go in; or ask the server's owner for one.";
+    $("#titleworlds").replaceChildren(
+        ...ids.map((id) => {
+            const world = listed.get(id) ?? null;
+            const held = record.worlds?.[id];
+            const row = document.createElement("li");
+
+            row.dataset.world = id;
+            row.append(
+                worldCard({
+                    name: world?.name ?? held?.name ?? id,
+                    about: world ? `${world.description ? `${world.description} · ` : ""}${world.players} of ${world.most} playing` : "Yours to come back to",
+                    when: held?.role === "owner" ? "You own it: carry on" : held?.key || held?.ticket ? "Carry on" : world?.open ? "Open to anyone: tap to join" : "Needs an invite link or key",
+                    onClick: async () => {
+                        await openWorlds();
+                        joinServerWorld(state.servers.get(record.key) ?? record, id, world);
+                    },
+                }),
+            );
+
+            return row;
+        }),
+    );
+    $("#titleserver").hidden = false;
 }
 
 // A kept character as the title's cards show them: their name, people, what they wield (as they
@@ -565,6 +612,9 @@ async function create({ replacing = null } = {}) {
 
     show("create");
 
+    // (Made to go into a world on a server: it says which)
+    $("#createtitle").textContent = state.worldsAfter ? `Your character for ${state.worldsAfter.entered.card?.name ?? "the world"}` : "Make your character";
+
     // (Its skin atlas, worked out while the title was up: characters/kit.js)
     await kit.ready;
     state.creator = new Creator({ view, kit });
@@ -593,12 +643,20 @@ async function create({ replacing = null } = {}) {
 
     state.joinAs = save;
 
-    // (Made to go into a world on a server: back to going into it)
+    // (Made to go into a world on a server: straight in as them, a new hero there, if that's what
+    // was chosen; else back to choosing)
     if (state.worldsAfter) {
-        const { client, entered } = state.worldsAfter;
+        const { client, entered, hero = null } = state.worldsAfter;
 
         state.worldsAfter = null;
         title();
+
+        if (hero) {
+            playServerWorld(client, entered, { save, hero });
+
+            return;
+        }
+
         await openWorlds();
         chooseHero(client, entered);
 
@@ -2064,10 +2122,10 @@ async function showWorlds() {
                     name: world?.name ?? held?.name ?? id,
                     badge,
                     about: `${world?.life === "running" ? "Going now" : world ? "Waiting for someone to come in" : "Unlisted"}${players}`,
-                    when: held?.role === "owner" ? "You own it" : held?.ticket || held?.key ? "You hold a key to it" : "Ask its owner for a key",
+                    when: held?.role === "owner" ? "You own it" : held?.ticket || held?.key ? "You hold a key to it" : world?.open ? "Open to anyone: tap to join" : "Ask its owner for an invite link",
                     className: matched ? "" : "unmatched",
                     disabled: !matched,
-                    onClick: () => (walled ? location.assign(handOff(id)) : held?.key || held?.ticket ? enterServerWorld(record, id) : askKey(record, id, world?.name ?? id)),
+                    onClick: () => (walled ? location.assign(handOff(id)) : joinServerWorld(record, id, world)),
                 }),
             );
             rows.push(row);
@@ -2570,6 +2628,14 @@ async function askCarry() {
  * (what's held, or `key`), the server proved first (pinned, or to `expect`, an invite's id); then a
  * hero chosen, and the world played in.
  */
+// Into one of a server's worlds, as it's listed (`world`: its card, or null): by the key or ticket
+// held for it here; without one, if it's open to anyone; else asking for a key
+function joinServerWorld(record, id, world = null) {
+    const held = record.worlds?.[id];
+
+    return held?.key || held?.ticket || world?.open ? enterServerWorld(record, id) : askKey(record, id, world?.name ?? id);
+}
+
 async function enterServerWorld(record, world, { key = null, code = null, ticket = null, expect = null } = {}) {
     const { ServerClient } = await serversOf();
     const client = new ServerClient(record, { servers: state.servers, expect });
@@ -2615,6 +2681,17 @@ function chooseHero(client, entered) {
     }
 
     const bring = !heroes.length && card.firstHero === "bring";
+
+    // (Their first time, with no character yet and nothing else to choose: straight to making
+    // one, then straight in as them)
+    if (!save && !heroes.length && !bring) {
+        state.worldsAfter = { client, entered, hero: "new" };
+        $("#worlds").close();
+        create();
+
+        return;
+    }
+
     const choices = heroes.map((hero) => worldCard({ name: hero.name, about: `${peopleOf(hero)} · kept by ${name}`, onClick: () => ($("#worldask").close(), playServerWorld(client, entered, { save, hero: hero.slot })) }));
 
     // (Or one of theirs taken home: a copy of them, among the characters kept on this device)
@@ -2648,7 +2725,7 @@ function chooseHero(client, entered) {
                     $("#worldask").close();
 
                     if (!save) {
-                        state.worldsAfter = { client, entered };
+                        state.worldsAfter = { client, entered, hero: "new" };
                         $("#worlds").close();
                         create();
 
@@ -2821,7 +2898,9 @@ async function openWorldPanel() {
     $("#worldpanelowner").hidden = !owner;
     $("#worldpanelstatus").textContent = "";
     $("#worldpanelinvitecode").hidden = true;
-    $("#worldpanelinvitelink").hidden = true;
+    $("#worldpanelinvite").hidden = true;
+    $("#worldpanelopening").hidden = entered.role !== "owner";
+    $("#worldpanelopen").checked = entered.card?.open === true;
     $("#worldpanel").showModal();
 
     if (owner) {
@@ -2864,36 +2943,101 @@ async function showWorldKeys() {
     }
 }
 
-// A players' key to hand out: one the owner holds already (made with the world), or a new one
+// The world's players' key, to hand out: the one its invite link carries (server/manage.js invite)
 async function playersKey() {
     const { client, entered } = state.onServer;
-    const held = client.record.worlds?.[entered.world]?.playerKey;
 
-    if (held) {
-        return held;
-    }
+    return (await client.invite(entered.world, entered.session)).key;
+}
 
-    const { key } = await client.issueKey(entered.world, entered.session, { label: "Invited", role: "player" });
+// A picture of a QR code of `text` (a data: URL), the code made on demand
+async function qrOf(text) {
+    const { qrcode } = await import("../vendor/qrcode-generator-2.0.4/qrcode.min.js");
+    const code = qrcode(0, "M");
 
-    state.servers.keepWorld(client.record.key, entered.world, { playerKey: key });
+    code.addData(text);
+    code.make();
 
-    return key;
+    return code.createDataURL(4, 8);
+}
+
+// The world's invite link (the server makes it: to the game's page on the server itself, at its
+// internet address if it's open to the internet), shown with its code to scan and copied; or
+// replaced, the old one letting nobody else in
+async function showWorldInvite({ replace = false } = {}) {
+    const { client, entered } = state.onServer;
+    const made = await client.invite(entered.world, entered.session, { replace });
+    const anchor = $("#worldpanelinvitelink");
+
+    anchor.href = made.link;
+    anchor.textContent = made.link;
+    $("#worldpanelwhere").textContent = `${replace ? "A new link: the old one lets nobody else in, but those who came by it can still come back. " : ""}${made.everywhere ? "It works from anywhere, a phone on its mobile data too." : "It works only on the server's own Wi-Fi, as the server isn't open to the internet. Its owner can open it from the server's management page (The internet)."}`;
+    $("#worldpanelqr").src = await qrOf(made.link);
+    $("#worldpanelqr").alt = `QR code of the invite link to ${entered.card?.name ?? "this world"}`;
+    $("#worldpanelshare").hidden = typeof navigator.share !== "function";
+    $("#worldpanelreplace").hidden = entered.role !== "owner";
+    $("#worldpanelreplace").textContent = "Replace the link";
+    $("#worldpanelcopy").textContent = "Copy the link";
+    $("#worldpanelinvite").hidden = false;
+    navigator.clipboard?.writeText(made.link).then(() => ($("#worldpanelcopy").textContent = "Copied"), () => {});
+
+    return made;
 }
 
 $("#worldpanellink").addEventListener("click", async () => {
-    const { inviteLink } = await serversOf();
-    const { client, entered } = state.onServer;
+    try {
+        $("#worldpanelstatus").textContent = "";
+        await showWorldInvite();
+    } catch (error) {
+        $("#worldpanelstatus").textContent = error.message;
+    }
+});
+
+$("#worldpanelcopy").addEventListener("click", () => {
+    navigator.clipboard?.writeText($("#worldpanelinvitelink").href).then(
+        () => ($("#worldpanelcopy").textContent = "Copied"),
+        () => ($("#worldpanelcopy").textContent = "Select it and copy"),
+    );
+});
+
+$("#worldpanelshare").addEventListener("click", () => {
+    const name = state.onServer?.entered.card?.name ?? "my world";
+
+    navigator.share?.({ title: `Join ${name} in Pellagos`, text: `Come and play in ${name}: this opens the game and takes you in.`, url: $("#worldpanelinvitelink").href }).catch(() => {});
+});
+
+// (Asked again first: the old link stops letting anyone new in)
+$("#worldpanelreplace").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+
+    if (button.dataset.sure !== "yes") {
+        button.dataset.sure = "yes";
+        button.textContent = "Replace it: the old link stops working";
+
+        return;
+    }
+
+    delete button.dataset.sure;
 
     try {
-        const link = inviteLink(`${location.origin}${location.pathname}`, { address: client.record, id: client.record.id, world: entered.world, key: await playersKey() });
-        const anchor = $("#worldpanelinvitelink");
-
-        anchor.href = link;
-        anchor.textContent = link;
-        anchor.hidden = false;
-        navigator.clipboard?.writeText(link).catch(() => {});
-        $("#worldpanelstatus").textContent = "";
+        await showWorldInvite({ replace: true });
     } catch (error) {
+        $("#worldpanelstatus").textContent = error.message;
+    }
+});
+
+// Opened to anyone (or not): whoever opens the server sees it and can come in without a key
+$("#worldpanelopen").addEventListener("change", async (event) => {
+    const { client, entered } = state.onServer;
+    const open = event.target.checked;
+
+    try {
+        await client.changeWorld(entered.world, entered.session, { open });
+        entered.card = { ...entered.card, open };
+        $("#worldpanelstatus").textContent = open ? "Open to anyone: whoever opens this server can join it." : "No longer open: newcomers need the invite link, and those already in can still come back.";
+        showWorldKeys();
+    } catch (error) {
+        event.target.checked = !open;
         $("#worldpanelstatus").textContent = error.message;
     }
 });

@@ -10,7 +10,9 @@ import { expect, test } from "./fixtures.js";
 // invite link from the World panel; another follows the link, goes in as a new hero of their own,
 // and both are in the world; they leave, and the world stops and is set aside, its time just where
 // it stopped; the second comes back from the Worlds screen to the same hero. And a server that
-// proves to be another than the one pinned is sent no key.
+// proves to be another than the one pinned is sent no key. And getting people in (docs/SERVER.md):
+// a newcomer with no character follows a world's invite link, makes one for it, and goes straight
+// in; the server's own address shows its worlds on the title, one open to anyone joined with a tap.
 
 // (Two worlds drawn at once, without a GPU: more than the usual time; these tests one after the
 // other, never side by side)
@@ -40,7 +42,8 @@ let base;
 
 test.beforeAll(async () => {
     folder = await mkdtemp(path.join(os.tmpdir(), "pellagos-e2e-worlds-"));
-    server = await WorldServer.open(folder, { cost: CHEAP, awake: () => ({ stop() {} }) });
+    // (Its Wi-Fi this computer's loopback: the invite links it makes, closed to the internet, are to it)
+    server = await WorldServer.open(folder, { cost: CHEAP, awake: () => ({ stop() {} }), interfaces: { lo: [{ address: "127.0.0.1", family: "IPv4", internal: false }] } });
     await server.settings.change({ setAsideMinutes: 0 });
     await server.listen(0, "127.0.0.1");
     base = `http://127.0.0.1:${server.port}`;
@@ -127,12 +130,14 @@ test("a world made on a server and shared by an invite link: both play in it, le
     const panel = owner.locator("#worldpanel");
 
     await expect(panel.locator("#worldpaneltitle")).toHaveText("Thornwick");
-    await panel.getByRole("button", { name: "Make an invite link" }).click();
+    await panel.getByRole("button", { name: "Invite link" }).click();
     await expect(panel.locator("#worldpanelinvitelink")).toBeVisible({ timeout: 30000 });
+    await expect(panel.locator("#worldpanelqr")).toHaveAttribute("src", /^data:image\/gif;base64,/);
+    await expect(panel.locator("#worldpanelwhere")).toContainText("It works only on the server's own Wi-Fi");
 
     const link = await panel.locator("#worldpanelinvitelink").getAttribute("href");
 
-    expect(link).toContain(`#server=127.0.0.1%3A${server.port}`);
+    expect(link.startsWith(`http://127.0.0.1:${server.port}/#server=127.0.0.1%3A${server.port}`)).toBe(true);
     expect(link).toContain(`id=${server.identity.id}`);
     await panel.getByRole("button", { name: "Back to the game" }).click();
 
@@ -342,4 +347,50 @@ test("a server that proves to be another than the one pinned is sent no key", as
     await expect(page.locator("#worldsstatus")).toContainText("This isn't the server you played on before", { timeout: 30000 });
     expect(asked).toEqual([]);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.servers")).servers[0].id)).toBe("AAAAA-AAAAA-AAAAA-AAAAA-AAAAA");
+});
+
+test("a newcomer with no character follows a world's invite link: makes a character, told it's for that world, and goes straight in", async ({ page }) => {
+    await ready(page, null);
+
+    const made = await server.createWorld({ name: "Brackenmoor", seed: 41, race: "human", heroes: "kept" });
+    const { link } = await server.manage.invite(made.world);
+
+    // (The game opened from the link: their character made first, for the world, with nothing to choose)
+    await page.goto(link);
+    await expect(page.locator("#createtitle")).toHaveText("Your character for Brackenmoor", { timeout: 60000 });
+    await expect(page.locator("#worldask")).toBeHidden();
+    await page.getByRole("button", { name: "Next: weapon" }).click();
+    await page.getByRole("button", { name: "Next: name" }).click();
+    await page.locator("#nameinput").fill("Wren");
+    await page.getByRole("button", { name: "Begin" }).click();
+
+    // (Straight in: never asked who goes in)
+    await playing(page);
+    expect(await page.evaluate(() => window.pellagos.game.hero.name)).toBe("Wren");
+    expect(server.access.world(made.world).players().map(({ role }) => role)).toEqual(["player"]);
+});
+
+test("the server's own address shows its worlds on the title: one open to anyone joined with a tap, no key or link", async ({ page }) => {
+    await ready(page, save("Ivo", "human", "sword"));
+
+    const made = await server.createWorld({ name: "Openfield", seed: 43, race: "human", heroes: "brought", settings: { open: true } });
+
+    await page.goto(`${base}/`);
+
+    const door = page.locator("#titleserver");
+    const row = door.locator(`li[data-world="${made.world}"]`);
+
+    await expect(door).toBeVisible({ timeout: 30000 });
+    await expect(door.locator("#titleservername")).toHaveText(/^Worlds on /);
+    await expect(row).toContainText("Openfield");
+    await expect(row).toContainText("Open to anyone: tap to join");
+    await row.getByRole("button").click();
+
+    // (In as Ivo, by the world's open door: their ticket kept, to come back by)
+    await playing(page);
+
+    const access = server.access.world(made.world);
+
+    expect(access.players().map(({ via }) => via)).toEqual([access.door().id]);
+    expect(await page.evaluate((world) => Boolean(JSON.parse(localStorage.getItem("pellagos.servers")).servers[0].worlds[world].ticket), made.world)).toBe(true);
 });

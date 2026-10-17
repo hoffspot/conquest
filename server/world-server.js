@@ -142,6 +142,7 @@ export class WorldServer {
         this.manage = new Management(this);
         this.api = apiHandler(this);
         this.access.policy.listeners.push((event, detail) => this.#journal(event, detail));
+        this.access.isOpen = (id) => this.metaOf(id)?.settings?.open === true;
 
         /**
          * The one port, once it's listening: its listener (`tcp`), which hands each connection to
@@ -258,6 +259,23 @@ export class WorldServer {
     /** Where the internet reaches it now: its secure addresses (with a certificate), and Funnel's (through the tunnel). */
     internetAddresses() {
         return [...(this.internetClosed ? [] : this.secureAddresses()), ...(!this.tunnelClosed && this.funnel?.url ? [this.funnel.url] : [])];
+    }
+
+    /**
+     * The game's page as invite links give it (manage.js invite): at the server's internet address,
+     * so that it works anywhere (`everywhere`); or, closed to the internet, at its address on the
+     * Wi-Fi (an IPv4 one first: every phone finds those). Returns { page, everywhere }.
+     */
+    invitePage() {
+        const internet = this.internetAddresses()[0];
+
+        if (internet) {
+            return { page: `${internet}/`, everywhere: true };
+        }
+
+        const home = this.addresses();
+
+        return { page: `${home.find((address) => /\/\/\d+\.\d+\.\d+\.\d+:/.test(address)) ?? home[0]}/`, everywhere: false };
     }
 
     /** Where it can be reached at home (each of its home addresses, and its .local name): http URLs. */

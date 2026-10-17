@@ -22,7 +22,7 @@
 //
 // and each says where it came from: `from` ("mac", "home" or "internet") and its `address`.
 
-import { higherRole, VIA_ADMIN, WorldAccess } from "./world.js";
+import { higherRole, OPEN, VIA_ADMIN, WorldAccess } from "./world.js";
 
 /** What may be done, by name. */
 export const ACTIONS = Object.freeze(["server.manage", "world.create", "world.enter", "world.manage", "world.delete", "key.issue", "key.revoke", "player.kick", "player.ban", "broker.announce", "broker.connect"]);
@@ -35,6 +35,7 @@ export const REFUSED = Object.freeze({
     locked: "This world is locked: nobody may come in for now.",
     home: "That can only be done from home: the Mac itself or its Wi-Fi.",
     role: "You may not do that in this world.",
+    busy: "Too many newcomers have come into this world lately: try again in an hour or so.",
 });
 
 // The actions that are a world's owner's (or the server's admin's), and a trusted player's if the world allows it
@@ -111,11 +112,15 @@ export class KeyPolicy {
             return { principal: { kind: "refused", why: "banned", ...where }, proofs };
         }
 
-        if (key && !(shown && WorldAccess.works(shown, now) && (player || WorldAccess.admits(shown, now)))) {
+        const opens = shown && WorldAccess.works(shown, now) && (player || WorldAccess.admits(shown, now));
+
+        // (A key that no longer works, with a ticket: as a ticket alone, the key they last came by
+        // perhaps another now: their invite links replaced, Access.replaceInvite)
+        if (key && !opens && !player) {
             return { principal: { kind: "refused", why: "key", ...where }, proofs };
         }
 
-        if (shown) {
+        if (opens) {
             return { principal: { kind: "player", world, player, key: shown, role: player ? higherRole(player.role, shown.role) : shown.role, via: shown.id, ...where }, proofs };
         }
 
@@ -124,6 +129,21 @@ export class KeyPolicy {
 
         if (player && (via === true || (via && WorldAccess.works(via, now)))) {
             return { principal: { kind: "player", world, player, key: null, role: player.role, via: player.via, ...where }, proofs };
+        }
+
+        // An open world: anyone without a key that works comes in by its door (a key of its own,
+        // so that their ticket brings them back as any key's does), as a player; no more
+        // newcomers an hour than OPEN says, nor from one address
+        const door = this.access.isOpen(world) ? access.door(now) : null;
+
+        if (door && WorldAccess.admits(door, now)) {
+            const hour = new Date(now.getTime() - 60 * 60 * 1000);
+
+            if (!player && (access.newcomers(door.id, hour) >= OPEN.perHour || (address !== null && access.newcomers(door.id, hour, address) >= OPEN.perAddress))) {
+                return { principal: { kind: "refused", why: "busy", ...where }, proofs };
+            }
+
+            return { principal: { kind: "player", world, player, key: door, role: door.role, via: door.id, ...where }, proofs: [...proofs, "open"] };
         }
 
         return { principal: { kind: "refused", why: "key", ...where }, proofs };

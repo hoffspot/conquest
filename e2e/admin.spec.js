@@ -91,6 +91,16 @@ test("the management page on the server's computer: a world made, started, set a
 
     const world = await card.getAttribute("data-world");
 
+    // Its invite link: one for anyone, to the game on this server (on its Wi-Fi alone, the server
+    // being closed to the internet), with the world's players' key, a code to scan and what they do
+    await card.getByRole("button", { name: "Invite players" }).click();
+    await expect(shown.locator("#showntitle")).toHaveText("Invite players to Ashby");
+    await expect(shown).toContainText("It works only on this Wi-Fi");
+    await expect(shown.locator(".qr img")).toBeVisible();
+    await expect(shown.locator(".world-help li")).toHaveCount(3);
+    await expect(shown.locator("a").first()).toHaveAttribute("href", new RegExp(`^http://[^/]+:${server.port}/#server=[^&]+&id=${server.identity.id}&world=${world}&key=${playerKey}$`));
+    await page.locator("#shownclose").click();
+
     // Started, saved by hand, then set aside: saved
     await card.getByRole("button", { name: "Start" }).click();
     await expect(page.locator("#status")).toHaveText("Ashby is open.", { timeout: 60000 });

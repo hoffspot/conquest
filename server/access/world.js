@@ -2,7 +2,7 @@
 // access.json, written only by the server:
 //
 //   { accessVersion, writtenBy,
-//     keys:    [{ id, hash, sealed, label, role, made, expires, uses, used, revoked, replacedBy }]
+//     keys:    [{ id, hash, sealed, label, role, made, expires, uses, used, revoked, replacedBy, open? }]
 //     codes:   [{ id, hash, key, made, expires, uses, used, revoked }]
 //     players: { <player id>: { ticket, role, via, made, seen, address, banned } }
 //     bans:    [{ address, until, player }] }
@@ -20,6 +20,10 @@
 // that works to come back; their ticket still says who they are, so their heroes are theirs.
 //
 // A ban follows the player's ticket for good, and the address they last came from for a day.
+//
+// An open world (its owner's said anyone may come in) has a door: a key of its own (`open`), that
+// whoever comes without a key comes in by, so that their ticket brings them back as any key's
+// does (policy.js; Access.openDoor). Its invite links carry its players' key (inviteKey).
 
 import path from "node:path";
 import { exists, readJSON, writeJSON } from "../storage/files.js";
@@ -53,6 +57,18 @@ export const ADDRESS_BAN_HOURS = 24;
 
 /** How a key a player came in by (`via`) is named when it isn't one of the world's: the server's admin made them its owner. */
 export const VIA_ADMIN = "admin";
+
+/** The key invite links carry is labelled so: the players' key, made with the world. */
+export const PLAYERS_KEY = "Players' key";
+
+/** An open world's door (Access.openDoor) is labelled so. */
+export const OPEN_DOOR = "Anyone (an open world)";
+
+/**
+ * An open world (its `open` setting) lets in anyone without a key, by its door, but no more
+ * newcomers in an hour than `perHour`, nor than `perAddress` from one address.
+ */
+export const OPEN = Object.freeze({ perHour: 20, perAddress: 3 });
 
 /** Whether `role` is a part (ROLES). */
 export const isRole = (role) => ROLES.includes(role);
@@ -118,10 +134,11 @@ export class WorldAccess {
 
     /**
      * A new key: its label, its role (ROLES), when it stops working (a Date, or null: never), and
-     * how many players it lets in (or null: any number). Returns { key (as it's shown), record },
-     * or { reason } if it can't be made (MOST_KEYS already work, or the role isn't one).
+     * how many players it lets in (or null: any number); `open` if it's an open world's door.
+     * Returns { key (as it's shown), record }, or { reason } if it can't be made (MOST_KEYS
+     * already work, or the role isn't one).
      */
-    async issueKey({ label = null, role = "player", expires = null, uses = null } = {}, when = new Date()) {
+    async issueKey({ label = null, role = "player", expires = null, uses = null, open = false } = {}, when = new Date()) {
         if (!isRole(role)) {
             return { reason: `There's no part called ${JSON.stringify(role)}.` };
         }
@@ -151,6 +168,7 @@ export class WorldAccess {
             used: 0,
             revoked: null,
             replacedBy: null,
+            ...(open ? { open: true } : {}),
         };
 
         this.data.keys.push(record);
@@ -249,8 +267,39 @@ export class WorldAccess {
         return this.data.keys.map((key) => WorldAccess.#shown(key));
     }
 
-    static #shown({ id, label, role, made, expires, uses, used, revoked, replacedBy }) {
-        return { id, label, role, made, expires, uses, used, revoked, replacedBy };
+    static #shown({ id, label, role, made, expires, uses, used, revoked, replacedBy, open = false }) {
+        return { id, label, role, made, expires, uses, used, revoked, replacedBy, open };
+    }
+
+    /**
+     * The key invite links carry (its record), if one works: the players' key (a player's,
+     * letting in any number, for good), or another such; else null.
+     */
+    inviteKey(now = new Date()) {
+        const fits = (key) => key.role === "player" && !key.open && key.uses === null && key.expires === null && WorldAccess.works(key, now);
+
+        return this.data.keys.findLast((key) => fits(key) && key.label === PLAYERS_KEY) ?? this.data.keys.findLast(fits) ?? null;
+    }
+
+    /** The world's open door (its record: Access.openDoor), if it has one that works; else null. */
+    door(now = new Date()) {
+        return this.data.keys.find((key) => key.open && WorldAccess.works(key, now)) ?? null;
+    }
+
+    /** How many new players came in by the key `via` since `since` (a Date): from `address` alone, if it's given. */
+    newcomers(via, since, address = null) {
+        return Object.values(this.data.players).filter((one) => one.via === via && Date.parse(one.made) > since.getTime() && (address === null || one.address === address)).length;
+    }
+
+    /** Everyone who came in by the key `from` coming back by `to` (a key replaced, its players kept: Access.replaceInvite). */
+    async carryOver(from, to) {
+        for (const player of Object.values(this.data.players)) {
+            if (player.via === from) {
+                player.via = to;
+            }
+        }
+
+        await this.#write();
     }
 
     // ---- Short codes
