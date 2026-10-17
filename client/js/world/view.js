@@ -252,10 +252,17 @@ const LAMPS = 2;
  */
 export const NIGHT_FIRE = Object.freeze({ strength: 2, reach: 0.35 });
 
-// The sky as the greatest spells darken it (setOmen), at its darkest: its colours (sRGB 0 to 1),
-// the clouds' light (lit red from below), and how much of the sun and of the light from all round
-// is left
-const OMEN = Object.freeze({ zenith: [0.05, 0.01, 0.01], horizon: [0.4, 0.07, 0.02], clouds: [0.5, 0.14, 0.07], sun: 0.15, environment: 0.3 });
+// The sky as the greatest spells change it (setOmen), at its fullest, by the omen's tint: its
+// colours (sRGB 0 to 1), the clouds' light, and how much of the sun and of the light from all
+// round is left. Fire's (the fire spells'): darkened and red, the clouds lit red from below; an
+// eclipse's (Prismatic Destruction gathering): deep violet overhead, a pale violet glow round the
+// horizon, the clouds lit lilac, the land dim; radiance (Prismatic Destruction let loose): white,
+// the land lit brighter than day
+const OMENS = Object.freeze({
+    fire: Object.freeze({ zenith: [0.05, 0.01, 0.01], horizon: [0.4, 0.07, 0.02], clouds: [0.5, 0.14, 0.07], sun: 0.15, environment: 0.3 }),
+    eclipse: Object.freeze({ zenith: [0.05, 0.02, 0.12], horizon: [0.42, 0.3, 0.7], clouds: [0.62, 0.45, 0.95], sun: 0.2, environment: 0.35 }),
+    radiance: Object.freeze({ zenith: [0.9, 0.88, 1], horizon: [1, 0.98, 1], clouds: [1.6, 1.55, 1.75], sun: 1.35, environment: 1.8 }),
+});
 const _zenith = [0, 0, 0];
 const _horizon = [0, 0, 0];
 const _clouds = new THREE.Vector3();
@@ -465,8 +472,9 @@ export class View {
         // (Their shadow maps, and the sun's, drawn with only what they need: shadowpasses.js)
         watchShadows({ sun: this.sun, lamps: this.lamps.map(({ light }) => light) });
         this.room = null;
-        // (How far the greatest spells have darkened the sky: setOmen)
+        // (How far the greatest spells have changed the sky, and to what: setOmen)
         this.omen = 0;
+        this.omenTint = "fire";
         this.sunDirection = SUN_DIRECTION.clone();
         // (Where the shadows are cast from: the sun's way, moved on in steps: shadows.js stepShadows)
         this.shadowDirection = SUN_DIRECTION.clone();
@@ -680,13 +688,17 @@ export class View {
     }
 
     /**
-     * How far the greatest spells have darkened and reddened the sky (0, not at all, to 1:
-     * spellfx.js darkness): its colours, the haze and the clouds towards a burning dusk's, the sun
-     * and the light from all round dimmer, so their fire blazes against it by day.
+     * How far the greatest spells have changed the sky (0, not at all, to 1: spellfx.js darkness),
+     * and to what (`tint`, OMENS: spellfx.js omenTint): fire's, its colours, the haze and the clouds
+     * towards a burning dusk's, the sun and the light from all round dimmer, so their fire blazes
+     * against it by day; an eclipse's, violet and dim; radiance, white and brighter than day.
      */
-    setOmen(amount) {
-        if (amount !== this.omen) {
+    setOmen(amount, tint = "fire") {
+        const kind = OMENS[tint] ? tint : "fire";
+
+        if (amount !== this.omen || kind !== this.omenTint) {
             this.omen = amount;
+            this.omenTint = kind;
             this.#outdoors();
         }
     }
@@ -715,14 +727,15 @@ export class View {
 
         const look = this.landLook ?? PLAIN;
         const sky = this.day ? (this.daySky = skyAt(this.day.time, this.day.phase, look, this.daySky)) : null;
-        // (The day's sky, sun and light, or the fair day's: the land's own, the sun fixed; as dark
-        // and red as a great spell has made it)
+        // (The day's sky, sun and light, or the fair day's: the land's own, the sun fixed; as a
+        // great spell has changed it)
         const omen = this.omen;
+        const changed = OMENS[this.omenTint];
         const toward = (from, to, into) => into.map((_, c) => from[c] + (to[c] - from[c]) * omen);
-        const zenith = omen ? toward((sky ?? look).zenith, OMEN.zenith, _zenith) : (sky ?? look).zenith;
-        const horizon = omen ? toward((sky ?? look).horizon, OMEN.horizon, _horizon) : (sky ?? look).horizon;
+        const zenith = omen ? toward((sky ?? look).zenith, changed.zenith, _zenith) : (sky ?? look).zenith;
+        const horizon = omen ? toward((sky ?? look).horizon, changed.horizon, _horizon) : (sky ?? look).horizon;
         const [colour, keyStrength] = sky ? [sky.keyColour, sky.keyStrength] : [look.sun, look.strength];
-        const strength = keyStrength * (1 - (1 - OMEN.sun) * omen);
+        const strength = keyStrength * (1 - (1 - changed.sun) * omen);
 
         this.scene.fog.color.setRGB(horizon[0], horizon[1], horizon[2], THREE.SRGBColorSpace);
         this.scene.background.copy(this.scene.fog.color);
@@ -737,9 +750,9 @@ export class View {
         this.sun.intensity = strength;
         this.far.sun.color.copy(this.sun.color);
         this.far.sun.intensity = strength;
-        this.scene.environmentIntensity = OUTDOORS.environment * (1 - (1 - OMEN.environment) * omen);
+        this.scene.environmentIntensity = OUTDOORS.environment * (1 - (1 - changed.environment) * omen);
         this.far.scene.environmentIntensity = this.scene.environmentIntensity;
-        this.sky.uniforms.cloudLight.value.lerp(_clouds.set(...OMEN.clouds), omen);
+        this.sky.uniforms.cloudLight.value.lerp(_clouds.set(...changed.clouds), omen);
         SKY_GLOW.value.setRGB(...(sky?.glow ?? WHITE));
         this.renderer.toneMappingExposure = EXPOSURE * (sky?.exposure ?? 1);
         this.sun.shadow.intensity = sky?.shadows ?? 1;

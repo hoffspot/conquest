@@ -774,7 +774,7 @@ export class SpellFx {
         this.glowing = [];
         this.shining = [];
 
-        // The sky darkened by the greatest spells (omen: { strength, age, life, rise })
+        // The sky changed by the greatest spells (omen: { strength, age, life, rise, fall, tint })
         this.omens = [];
 
         /** Whether the lights can be lent now (not while they're lighting a room: the view's lamps indoors). */
@@ -1042,22 +1042,38 @@ export class SpellFx {
 
     /**
      * Darken and redden the sky a while (the greatest spells': how much, 0 to 1, for `seconds`,
-     * coming on over its first `rise` seconds and going over its last `fall`): darkness() says how
-     * much it is now, for the view (view.js setOmen).
+     * coming on over its first `rise` seconds and going over its last `fall`), or change it to
+     * another `tint` (view.js OMENS: an eclipse's violet, radiance's white): darkness() says how
+     * much it is now, and omenTint() to what, for the view (view.js setOmen). Going over 0.6 s
+     * from whenever `alive` says it's called off (the casting stopped).
      */
-    omen(strength, seconds, { rise = 0.5, fall = 1 } = {}) {
-        this.omens.push({ strength, age: 0, life: seconds, rise, fall });
+    omen(strength, seconds, { rise = 0.5, fall = 1, tint = "fire", alive = null } = {}) {
+        this.omens.push({ strength, age: 0, life: seconds, rise, fall, tint, alive });
     }
 
-    /** How darkened the sky is now (0, not at all, to 1: the darkest of the spells' omens now). */
-    darkness() {
-        let most = 0;
+    // How strong an omen is now
+    #omenNow({ strength, age, life, rise, fall }) {
+        return strength * Math.min(1, age / rise, Math.max(0, life - age) / fall);
+    }
 
-        for (const { strength, age, life, rise, fall } of this.omens) {
-            most = Math.max(most, strength * Math.min(1, age / rise, Math.max(0, life - age) / fall));
+    /** How changed the sky is now (0, not at all, to 1: the strongest of the spells' omens now). */
+    darkness() {
+        return Math.max(0, ...this.omens.map((omen) => this.#omenNow(omen)));
+    }
+
+    /** What the sky's changed to now: the tint of the strongest of the spells' omens now (fire's, if none). */
+    omenTint() {
+        let [most, tint] = [0, "fire"];
+
+        for (const omen of this.omens) {
+            const now = this.#omenNow(omen);
+
+            if (now > most) {
+                [most, tint] = [now, omen.tint];
+            }
         }
 
-        return most;
+        return tint;
     }
 
     /**
@@ -1289,27 +1305,46 @@ export class SpellFx {
         return glow;
     }
 
+    // Copies of a shape, all drawn at once (one draw call, however many: InstancedMesh), each placed
+    // as an object of `places` is (its position, turn and size), placed again as they're stepped
+    #copies(shape, material, places) {
+        const mesh = new THREE.InstancedMesh(this.geometries[shape], material, places.length);
+
+        // (Its pieces go where they go: never left out for being off its first bounds)
+        mesh.frustumCulled = false;
+        mesh.userData.dispose = () => mesh.dispose();
+        mesh.userData.place = () => {
+            places.forEach((place, k) => {
+                place.updateMatrix();
+                mesh.setMatrixAt(k, place.matrix);
+            });
+            mesh.instanceMatrix.needsUpdate = true;
+        };
+
+        return mesh;
+    }
+
     /**
      * Pieces flung from a point (stone, ice), tumbling and falling (or, `gravity` below nothing,
-     * rising: stones lifted), gone after a while.
+     * rising: stones lifted), gone after a while: all drawn at once.
      */
     shards(at, { count = 10, colour = EARTH.stone, size = 0.12, speed = 4, up = 3, life = 1.2, shape = "shard", glow = false, spread = 1, gravity = 9.8 }) {
         const material = glow ? this.#additive(colour) : new THREE.MeshStandardMaterial({ color: colour, roughness: 0.8, flatShading: true, transparent: true });
-        const group = new THREE.Group();
         const flying = [];
 
         for (let k = 0; k < count; k++) {
-            const piece = new THREE.Mesh(this.geometries[shape], material);
+            const piece = new THREE.Object3D();
             const angle = Math.random() * Math.PI * 2;
             const out = speed * (0.4 + Math.random() * 0.6) * spread;
 
             piece.scale.setScalar(size * (0.5 + Math.random()));
             piece.position.copy(at);
-            group.add(piece);
             flying.push({ piece, velocity: new THREE.Vector3(Math.cos(angle) * out, up * (0.5 + Math.random()), Math.sin(angle) * out), spin: new THREE.Vector3(Math.random() * 10, Math.random() * 10, Math.random() * 10) });
         }
 
-        this.#show(group, life, (t, dt) => {
+        const mesh = this.#copies(shape, material, flying.map(({ piece }) => piece));
+
+        this.#show(mesh, life, (t, dt) => {
             for (const { piece, velocity, spin } of flying) {
                 velocity.y -= gravity * dt;
                 piece.position.addScaledVector(velocity, dt);
@@ -1327,6 +1362,7 @@ export class SpellFx {
                 piece.rotation.z += spin.z * dt;
             }
 
+            mesh.userData.place();
             material.opacity = t < 0.75 ? 1 : (1 - t) / 0.25;
         });
     }
@@ -1336,37 +1372,39 @@ export class SpellFx {
      * scattered over it: `scatter`), `height` tall, leaning in (`lean`), bursting up over the
      * first `rise` of their life and sinking back over the last `sink`; lit (as rough as
      * `roughness`: ice glossy; see-through as `opacity` has it, glowing as `emissive`: ice) or
-     * glowing.
+     * glowing. All drawn at once.
      */
     spikes(centre, { count = 8, radius = 1.2, height = 1.6, colour = EARTH.deep, life = 1.4, lean = 0.3, scatter = false, glow = false, width = 0.25, stagger = 0, roughness = 0.9, rise = 0.15, sink = 0.2, opacity = 1, emissive = 0x000000 }) {
         const material = glow ? this.#additive(colour, { opacity: 0.85 * opacity }) : new THREE.MeshStandardMaterial({ color: colour, roughness, flatShading: true, emissive, transparent: opacity < 1, opacity });
-        const group = new THREE.Group();
+        const base = this.onGround(centre.x, centre.z);
         const spikes = [];
-
-        group.position.copy(this.onGround(centre.x, centre.z));
 
         for (let k = 0; k < count; k++) {
             const angle = scatter ? Math.random() * Math.PI * 2 : (k / count) * Math.PI * 2;
             const reach = scatter ? Math.sqrt(Math.random()) * radius : radius;
-            const spike = new THREE.Mesh(this.geometries.spike, material);
+            const spike = new THREE.Object3D();
             const tall = height * (0.6 + Math.random() * 0.6);
 
             const [x, z] = [Math.cos(angle) * reach, Math.sin(angle) * reach];
 
             // (Each from the ground where it is, a little into it)
-            spike.position.set(x, this.groundAt(centre.x + x, centre.z + z) - group.position.y - 0.1, z);
+            spike.position.set(x, this.groundAt(centre.x + x, centre.z + z) - base.y - 0.1, z);
             spike.rotation.set(Math.sin(angle) * -lean, 0, Math.cos(angle) * lean);
-            group.add(spike);
             spikes.push({ spike, tall, delay: stagger * (reach / Math.max(radius, 0.01)) });
         }
 
-        this.#show(group, life, (t) => {
+        const mesh = this.#copies("spike", material, spikes.map(({ spike }) => spike));
+
+        mesh.position.copy(base);
+        this.#show(mesh, life, (t) => {
             for (const { spike, tall, delay } of spikes) {
                 const local = Math.max(0, (t - delay) / (1 - delay));
                 const up = local < rise ? local / rise : local > 1 - sink ? (1 - local) / sink : 1;
 
                 spike.scale.set(width * Math.max(0.01, up), tall * Math.max(0.01, up), width * Math.max(0.01, up));
             }
+
+            mesh.userData.place();
         });
     }
 
@@ -1614,6 +1652,39 @@ export class SpellFx {
         this.onScreen(colour, strength, seconds);
     }
 
+    /**
+     * A shell of light round a point (`centre`: a function giving it, followed; nothing given,
+     * gone), its radius going from `from` to `to` metres over its `life` (seconds), `height` times
+     * as tall as it's wide (a dome, flatter): shrinking, faster and faster, to a point, flaring
+     * white as it goes (a great spell's collapse before it's let go), or swelling, fast then slowing,
+     * flaring white as it bursts out and fading as it goes (its release); brightest at its rim where
+     * it's seen edge on, bands of light running over it (a ward's shell's light: WARD_FRAGMENT).
+     * Gone at once if `alive` says so (the casting stopped).
+     */
+    sphere(centre, { colour, from = 6, to = 0.1, life = 0.4, height = 1, opacity = 1, alive = () => true }) {
+        const uniforms = { colour: { value: new THREE.Color(colour) }, reveal: { value: 1.01 }, flare: { value: 0 }, fade: { value: 0 }, time: { value: 0 } };
+        const shell = new THREE.Mesh(this.geometries.ball, new THREE.ShaderMaterial({ name: "wardShell", uniforms, vertexShader: WARD_VERTEX, fragmentShader: WARD_FRAGMENT, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }));
+        const shrinking = to < from;
+
+        this.#show(shell, life, (t, dt) => {
+            const at = alive() ? centre() : null;
+
+            shell.visible = Boolean(at);
+
+            if (!at) {
+                return;
+            }
+
+            const radius = from + (to - from) * (shrinking ? t * t * t : 1 - (1 - t) ** 3);
+
+            shell.position.copy(at);
+            shell.scale.set(radius, radius * height, radius);
+            uniforms.time.value += dt;
+            uniforms.flare.value = shrinking ? t ** 3 : Math.max(0, 1 - t * 4);
+            uniforms.fade.value = opacity * (shrinking ? Math.min(1, t * 4) : (1 - t) ** 1.5);
+        });
+    }
+
     // --- What else magic does ---
 
     /**
@@ -1745,25 +1816,28 @@ export class SpellFx {
      * The Prismatic sigil's glass prisms circling over someone (`centre`: a function giving where
      * they stand, followed; nothing given, gone), `count` of them `radius` m out and `height` m up,
      * each turning, the first of the spell's `colour` and bigger, the rest clear glass catching the
-     * spectrum's colours, a glint trailing each; closing in on them over the last `close` of their
-     * `life` (seconds), down to `to` m over the ground there, shrinking as they go; gone at once
-     * if the casting's stopped (`alive` false).
+     * spectrum's colours (or each its own of `colours`: the four elements'), a glint trailing each,
+     * the first at `turn` round them (radians: anywhere, if not said); closing in on them over the
+     * last `close` of their `life` (seconds), down to `to` m over the ground there, shrinking as
+     * they go; gone at once if the casting's stopped (`alive` false).
      */
-    prisms(centre, { colour, count = 4, radius = 3, height = 3.2, to = 1.1, life = 1.2, size = 0.3, close = 0.3, spin = 2.4, alive = () => true }) {
+    prisms(centre, { colour, colours = null, count = colours?.length ?? 4, radius = 3, height = 3.2, to = 1.1, life = 1.2, size = 0.3, close = 0.3, spin = 2.4, turn: start = null, alive = () => true }) {
         const group = new THREE.Group();
         const pieces = [];
         const edges = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-        let [turn, glint] = [Math.random() * Math.PI * 2, 0];
+        let [turn, glint] = [start ?? Math.random() * Math.PI * 2, 0];
 
         for (let k = 0; k < count; k++) {
-            const tint = k ? SPECTRUM[(k * 2) % SPECTRUM.length] : colour;
-            const body = new THREE.Mesh(this.geometries.prism, this.#additive(k ? 0xd8e4ff : colour, { opacity: k ? 0.35 : 0.75 }));
+            // (Its own colour, if it's given one; else the first the spell's, the rest clear glass)
+            const own = colours?.[k % colours.length] ?? null;
+            const tint = own ?? (k ? SPECTRUM[(k * 2) % SPECTRUM.length] : colour);
+            const body = new THREE.Mesh(this.geometries.prism, this.#additive(own ?? (k ? 0xd8e4ff : colour), { opacity: own || !k ? 0.75 : 0.35 }));
             const edge = new THREE.Mesh(this.geometries.prism, edges);
 
             edge.scale.setScalar(1.02);
             body.add(edge);
             group.add(body);
-            pieces.push({ body, tint, big: k ? 1 : 1.45, bob: Math.random() * Math.PI * 2 });
+            pieces.push({ body, tint, big: own ? 1.3 : k ? 1 : 1.45, bob: Math.random() * Math.PI * 2 });
         }
 
         this.#show(group, life, (t, dt, age = 0) => {
@@ -2033,8 +2107,10 @@ export class SpellFx {
 
         const fireball = new THREE.Mesh(this.geometries.fireball, this.#fireballMaterial());
         const bomb = this.#bombBody(false);
+        // (Shards and spikes as they're drawn: copies, all at once, lit, see-through or glowing)
+        const copies = [new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true, transparent: true }), this.#additive(0xffffff)].map((material) => this.#copies("spike", material, [new THREE.Object3D()]));
 
-        for (const object of [...warming, dark, lattice, shard, ward, fireball, bomb]) {
+        for (const object of [...warming, dark, lattice, shard, ward, fireball, bomb, ...copies]) {
             object.position.copy(at);
             this.#show(object, 1e-3, () => {});
         }
@@ -2199,8 +2275,18 @@ export class SpellFx {
             lent.light.intensity = lent.age < lent.life ? lent.peak * (1 - lent.age / lent.life) ** 2 : 0;
         }
 
-        // (The sky's darkening, going once it's over)
-        this.omens = this.omens.filter((omen) => (omen.age += dt) < omen.life);
+        // (The sky's darkening, going once it's over, or going from when it's called off)
+        this.omens = this.omens.filter((omen) => {
+            omen.age += dt;
+
+            if (omen.alive && !omen.alive()) {
+                omen.alive = null;
+                omen.fall = 0.6;
+                omen.life = Math.min(omen.life, omen.age + omen.fall);
+            }
+
+            return omen.age < omen.life;
+        });
 
         // (The spells' own lights, fading as each does, gone when they're out)
         this.glowing = this.glowing.filter((light) => {
@@ -2403,6 +2489,174 @@ const prismLanding = (fx, { at, heart, pale, colour }) => {
 
 // Whom it struck: its target first, and as many of the rest as `most` in all
 const struckBy = (target, struck, most = 8) => [target, ...struck].slice(0, most);
+
+// --- Prismatic Destruction (core/prismatic.js: the whole sigil) ---
+
+// The four elements, in the sigil's order
+const ELEMENTS = Object.freeze(["fire", "earth", "air", "water"]);
+
+// Its quarters round whom it's cast at, each an element's (fire's, earth's, air's, water's: the
+// sigil's order, round from the far left as the caster sees it, so none's hidden behind them nor
+// between them and the caster): each element and the way to it (radians, round the up)
+const quartersOf = (from, at) => {
+    const ahead = from && (from.x !== at.x || from.z !== at.z) ? Math.atan2(at.z - from.z, at.x - from.x) : -Math.PI / 2;
+
+    return ELEMENTS.map((element, k) => ({ element, angle: ahead - Math.PI / 4 + (k * Math.PI) / 2 }));
+};
+
+// A point `reach` metres out from another the way `angle` (radians), `lift` over the ground there
+const outOf = (fx, at, angle, reach, lift = 0) => fx.onGround(at.x + Math.cos(angle) * reach, at.z + Math.sin(angle) * reach, lift);
+
+// Whose quarter a point's in: the element whose way from `at` it's nearest
+const quarterOf = (quarters, at, spot) => {
+    const angle = Math.atan2(spot.z - at.z, spot.x - at.x);
+    const apart = (way) => Math.abs(Math.atan2(Math.sin(angle - way), Math.cos(angle - way)));
+
+    return quarters.reduce((best, quarter) => (apart(quarter.angle) < apart(best.angle) ? quarter : best)).element;
+};
+
+// What each element gathers in its quarter as it's cast (`at`, on the ground there; `on`, where
+// whom it's cast at is now, or null once the casting's stopped)
+const GATHERING = {
+    // (A sun swelling over a pyre, collapsing as it's let go)
+    fire: (fx, { at, seconds, still }) => {
+        const sun = fx.fireball(above(at, 3.6), { size: 2.2, life: seconds, swell: seconds * 0.6, rise: 0, hot: 8, thin: 0.98, collapse: 0.15, heat: 0.85, alive: still });
+
+        fx.glow(sun.position, { colour: 0xff8a3a, strength: 8, reach: 10, life: seconds, steady: 0.8, fade: (t) => (still() ? Math.min(1, t * 2) * (t > 0.85 ? (1 - t) / 0.15 : 1) : 0) });
+        fx.blaze(at, { width: 1, height: 2.4, tongues: 6, spread: 0.2, twist: 3, life: seconds, rise: 0.3, fall: 0.12 });
+    },
+    // (A monolith rising out of glowing cracks, stones lifting round it, the ground trembling)
+    earth: (fx, { at, seconds, still }) => {
+        fx.spikes(at, { count: 1, radius: 0, height: 3.4, width: 1.1, colour: 0x6a5e50, lean: 0, life: seconds, rise: 0.75, sink: 0.08 });
+        fx.decal(at, { texture: "fissures", colour: 0xffc860, radius: 2.6, life: seconds + 0.1, vivid: 2, grow: 0.8, fade: 0.08 });
+        fx.shards(above(at, 0.1), { count: 6, colour: EARTH.stone, size: 0.16, speed: 1.2, up: 1.4, gravity: -0.4, life: seconds - 0.1 });
+        [0.4, 0.8, 1.15].filter((when) => when < seconds).forEach((when, k) => fx.after(when, () => still() && fx.shake(0.03 + k * 0.02)));
+    },
+    // (A whirlwind under dark cloud, lightning crawling down it)
+    air: (fx, { at, seconds, still }) => {
+        fx.funnel(at, { colour: 0xe8f4ff, radius: 1.8, height: 6, life: seconds, opacity: 0.35 });
+        fx.scatter(p([0x9aa0b8, 0x5a6078], { count: 2, size: [1, 1.8], speed: [0.2, 0.5], life: [seconds * 0.7, seconds], gravity: 0, spread: 1, glow: false, opacity: 0.45, grow: 1.2, swirl: 1.2 }), at, 2, 6, { seconds: seconds * 0.4, y: 6.5 });
+
+        for (let k = 0; k < 4; k++) {
+            fx.after(0.3 + k * 0.25, () => still() && fx.lightning(above(at, 6), above(at, 0.1), { colour: AIR.deep, width: 0.04, life: 0.14, jag: 0.6, branches: 1 }));
+        }
+    },
+    // (A column of water, fountains round it, frost creeping out from it)
+    water: (fx, { at, seconds, still }) => {
+        fx.pillar(at, { colour: 0x2a8ae8, radius: 1.3, height: 4, life: seconds - 0.1, rise: 0.5, opacity: 0.4 });
+        fx.decal(at, { texture: "cracks", colour: 0x9adcff, radius: 2.4, life: seconds + 0.1, opacity: 0.7, grow: 0.9, fade: 0.1 });
+
+        for (let k = 0; k < 10; k++) {
+            fx.after(0.2 + k * 0.11, () => {
+                for (let n = 0; still() && n < 2; n++) {
+                    const angle = Math.random() * Math.PI * 2;
+
+                    fx.spray(p([0xf0faff, 0x2a7ad0], { count: 7, size: [0.1, 0.2], speed: [3, 5], life: [0.5, 0.8], gravity: 8, spread: 0.35, glow: false, opacity: 0.9, late: true, drag: 0.3 }), outOf(fx, at, angle, 1.3, 0.1), new THREE.Vector3(-Math.sin(angle), 5, Math.cos(angle)));
+                }
+            });
+        }
+    },
+};
+
+// What each element does in its quarter as it lands (`centre`, on the ground in its quarter;
+// `angle`, the way to it from `at`): its own Prismatic spell's, in brief
+const UNLEASHED = {
+    // (A fireball, a pillar of fire twisting up out of it, flares leaping out to set the ground
+    // alight; molten cracks)
+    fire: (fx, { at, angle, centre }) => {
+        fx.fireball(above(centre, 0.6), { size: 4, life: 1.2 });
+        fx.blaze(centre, { width: 2, height: 10, tongues: 12, spread: 0.9, twist: 4.5, heat: 1.5, life: 2.2, rise: 0.12, fall: 0.4, light: 16, reach: 14 });
+
+        for (let k = 0; k < 4; k++) {
+            const spot = outOf(fx, at, angle + (k - 1.5) * 0.3, 7.6);
+
+            fx.after(k * 0.04, () =>
+                fx.throw(`prismFlare-${Math.random()}`, () => above(centre, 1.2), () => spot, {
+                    travel: 0.5,
+                    arc: 3,
+                    colour: FIRE.deep,
+                    size: 0.55,
+                    vivid: true,
+                    trail: [p(FIRE.glow, { count: 3, size: [0.2, 0.4], speed: [0.1, 0.6], life: [0.2, 0.4], gravity: -1.5, grow: 0.6 }), FIRE_TRAIL],
+                    onArrive: (hit) => {
+                        fx.blaze(hit, { width: 0.7, height: 1.9, tongues: 4, spread: 0.15, twist: 2.5, life: 2.2, fall: 0.5 });
+                        fx.ring(hit, { colour: FIRE.deep, from: 0.3, to: 1.8, life: 0.4 });
+                    },
+                }),
+            );
+        }
+
+        fx.spray({ ...EMBERS, count: 50, speed: [3, 8], spread: 2.5 }, above(centre, 1));
+        fx.decal(centre, { texture: "fissures", colour: FIRE.deep, radius: 3.6, life: 5, vivid: 2.4, grow: 0.15, fade: 0.4 });
+    },
+    // (A crown of spires bursting up, gold out of its heart, stones flung and dust rolling out)
+    earth: (fx, { centre }) => {
+        fx.spikes(centre, { count: 9, radius: 2.4, height: 3.6, width: 0.8, colour: 0x6a5e50, lean: -0.38, life: 3, rise: 0.04, sink: 0.12 });
+        fx.spikes(centre, { count: 5, radius: 0.7, height: 2, width: 0.22, colour: 0xffc860, glow: true, lean: -0.5, life: 2.2, rise: 0.06 });
+        fx.shards(above(centre, 0.6), { count: 14, colour: EARTH.stone, size: 0.18, speed: 6, up: 5, life: 2, spread: 1.3 });
+        fx.shake(0.3);
+
+        for (let k = 0; k < 8; k++) {
+            const way = (k / 8) * Math.PI * 2;
+            const out = new THREE.Vector3(Math.cos(way), 0.08, Math.sin(way));
+
+            fx.spray(p([0x8a7a62, 0x5a4e40], { count: 4, size: [0.8, 1.3], speed: [2.5, 5], life: [1, 1.7], gravity: -0.2, spread: 0.4, glow: false, opacity: 0.6, grow: 2.5, drag: 3 }), outOf(fx, centre, way, 1.5, 0.4), out.multiplyScalar(3));
+        }
+
+        fx.decal(centre, { texture: "cracks", colour: 0xffffff, radius: 4, life: 8, dark: true, grow: 0.05 });
+        fx.decal(centre, { texture: "fissures", colour: 0xffc860, radius: 3.4, life: 3, vivid: 2.2, fade: 0.6 });
+    },
+    // (A spear of lightning out of the sky, a whirlwind, blades of wind cutting out, more bolts
+    // after; lightning's figure burnt into the ground)
+    air: (fx, { at, angle, centre }) => {
+        const high = above(centre, 14);
+
+        fx.beam(() => high, () => centre, { colour: 0x7aa8ff, width: 0.6, life: 0.3 });
+        fx.lightning(high, above(centre, 0.1), { colour: AIR.deep, width: 0.16, life: 0.5, jag: 1.2, branches: 5 });
+        fx.flash(above(centre, 1), { colour: 0xdff0ff, intensity: 30, distance: 14, life: 0.3, size: 5 });
+        fx.funnel(centre, { colour: 0xe8f4ff, radius: 2.8, height: 5, life: 1.3, opacity: 0.32 });
+
+        for (let k = 0; k < 4; k++) {
+            const to = outOf(fx, at, angle + (k - 1.5) * 0.35, 9, 1);
+
+            fx.throw(`prismWind-${Math.random()}`, () => above(centre, 1), () => to, { travel: 0.3, arc: 0, shape: "crescent", colour: 0xe8f8ff, size: 1.1, glow: true });
+        }
+
+        for (let k = 0; k < 3; k++) {
+            fx.after(0.12 + k * 0.12, () => {
+                const spot = outOf(fx, centre, Math.random() * Math.PI * 2, 1 + Math.random() * 1.5, 0.1);
+
+                fx.lightning(above(spot, 12), spot, { colour: k % 2 ? 0xc080ff : AIR.deep, width: 0.07, life: 0.25, jag: 1, branches: 2 });
+                fx.spray({ ...SPARKS, count: 12 }, above(spot, 0.3));
+            });
+        }
+
+        fx.decal(centre, { texture: "fissures", colour: 0x9ab8ff, radius: 3.4, life: 1.6, vivid: 2.2, fade: 0.7 });
+        fx.decal(centre, { texture: "glow", colour: AIR.deep, radius: 3.6, life: 1.8, opacity: 0.45, fade: 0.6 });
+    },
+    // (Ice blades opening out like a flower, the freeze racing out round it, diamond dust; the ice
+    // shattering three seconds on)
+    water: (fx, { centre }) => {
+        fx.spikes(centre, { count: 8, radius: 0.6, height: 3.6, width: 0.45, colour: 0x3a8ae0, glow: true, lean: -0.55, life: 3, rise: 0.03, sink: 0.05 });
+        fx.spikes(centre, { count: 9, radius: 2.6, scatter: true, height: 2.2, width: 0.4, colour: 0x6aa8d8, roughness: 0.12, opacity: 0.85, emissive: 0x123a6a, lean: -0.3, stagger: 0.25, life: 3, rise: 0.03, sink: 0.05 });
+        fx.flash(above(centre, 1), { colour: 0xe8f8ff, intensity: 24, distance: 12, life: 0.3, size: 4 });
+        fx.scatter(p([0xffffff, 0xbfeaff], { count: 5, size: [0.03, 0.06], speed: [0.2, 0.6], life: [1.4, 2.2], gravity: 0.15, spread: 2, swirl: 1.5 }), centre, 3, 14, { seconds: 2, y: 1.6 });
+        fx.decal(centre, { texture: "glow", colour: 0x2a6ab8, radius: 3.8, life: 4, opacity: 0.55, grow: 0.08 });
+        fx.decal(centre, { texture: "cracks", colour: 0xbfeaff, radius: 3.6, life: 5, opacity: 0.8, grow: 0.1 });
+        fx.after(2.75, () => {
+            for (let k = 0; k < 4; k++) {
+                fx.spray(p([0xffffff, 0x6ab8ff], { count: 16, size: [0.04, 0.1], speed: [2, 4], life: [0.4, 0.8], gravity: 6, spread: 2 }), outOf(fx, centre, Math.random() * Math.PI * 2, Math.random() * 2, 0.8));
+            }
+
+            fx.shards(above(centre, 1), { count: 8, colour: 0xbfeaff, size: 0.12, speed: 4, up: 3, life: 1.1, glow: true });
+            fx.ring(centre, { colour: 0xdff4ff, from: 0.4, to: 3.5, life: 0.4, opacity: 0.7 });
+            fx.shake(0.1);
+        });
+    },
+};
+
+// What rises off each struck as they're unmade, by their quarter's element
+const UNMADE = { fire: FLAMES, earth: DUST, air: { ...SPARKS, colours: [0xffffff, 0x9ad8ff] }, water: SNOW };
 
 const RECIPES = {
     // --- Healing ---
@@ -3116,45 +3370,180 @@ const RECIPES = {
             });
         },
     },
-    // (Prismatic Destruction: the four elements drawn in as it's let go, a ring of each closing
-    // on whom it's cast at; landing, a column of each element's light round them and their rings
-    // racing out as far as it reaches, the sky whitening, and each of the others it struck burst
-    // in the elements' light)
+    // (Prismatic Destruction, the greatest spell there is: the four elements' power at once.
+    // Cast, the sky eclipsed violet; the whole Prismatic sigil spreading under whom it's cast at,
+    // wider than it strikes, its rim the spectrum's, and turning in the sky over them; each element
+    // gathering in its quarter beyond, its column of light rising there, its prism over it, its
+    // power streaming in to them; all drawn in, a shell of light collapsing on them to a point of
+    // white, a breath held. Landing: a beam out of the sky as wide as a house, split like light
+    // through a prism, the sky white, a shell of light bursting out past all it strikes, rings
+    // racing to the edge of sight; the four columns round the beam; each element's own in its
+    // quarter, one after another (fire's pillar and flares, earth's spires, air's spear of
+    // lightning, water's ice); each struck unmade, burst in its quarter's light and gone up as
+    // motes; the sigil left burnt into the ground, the ground cracked and glowing, light falling
+    // like ash)
     prismatic: {
         palette: { glow: [0xffffff, 0xc89aff], deep: 0xb07aff, bright: 0xffffff },
-        charging: (fx, { target, seconds }) => {
-            [FIRE, EARTH, AIR, WATER].forEach((element, k) =>
-                fx.after(Math.max(0, seconds - 0.5 + k * 0.08), () => {
-                    const at = target?.();
+        gathering: (fx, at, cast) => {
+            const element = PALETTES[ELEMENTS[(cast.motes = (cast.motes ?? 0) + 1) % ELEMENTS.length]];
 
-                    if (at) {
-                        fx.ring(at, { colour: element.deep, from: 6, to: 0.3, life: 0.4, opacity: 0.75 });
-                    }
-                }),
-            );
+            fx.spray(p(element.glow, { count: 2, size: [0.06, 0.12], speed: [0.4, 1.3], life: [0.25, 0.45], gravity: -0.6, spread: 2, swirl: 6 }), at);
+            fx.spray(p([0xffffff, SPECTRUM[cast.motes % SPECTRUM.length]], { count: 1, size: [0.04, 0.08], speed: [0.4, 1.2], life: [0.3, 0.5], gravity: -0.4, spread: 2, swirl: 6 }), at);
         },
-        land: (fx, { at, point, struck }) => {
-            fx.flash(point, { colour: 0xffffff, intensity: 40, distance: 18, life: 0.8, size: 5 });
-            fx.screen(0xffffff, 0.35, 0.8);
-            fx.decal(at, { texture: "runes", colour: 0xe8d8ff, radius: 3, life: 2, spin: 0.8, grow: 0.3 });
+        charging: (fx, { id, target, seconds, still, feet }) => {
+            const on = () => (still() ? target?.() : null);
+            const at = on();
 
-            [FIRE, EARTH, AIR, WATER].forEach((element, k) => {
-                const angle = (k / 4) * Math.PI * 2;
+            if (!at) {
+                return;
+            }
 
-                fx.pillar(new THREE.Vector3(at.x + Math.cos(angle) * 0.9, at.y ?? 0, at.z + Math.sin(angle) * 0.9), { colour: element.deep, radius: 0.5, height: 9, life: 1.3 });
-                fx.after(k * 0.07, () => fx.ring(at, { colour: element.deep, from: 0.5, to: 8, life: 0.8 }));
-                fx.spray(p(element.glow, { count: 24, size: [0.08, 0.18], speed: [2, 5], life: [0.5, 1], gravity: -1, spread: 2, swirl: 8 }), point);
-            });
+            const quarters = quartersOf(feet?.(), at);
+            const circle = { colour: 0xd8c8ff, bright: 0xffffff, glow: [0xffffff, 0xb07aff], texture: "prism", inner: "spectrum" };
 
-            struck.forEach((other, k) => {
-                const to = other.point();
-                const element = [FIRE, EARTH, AIR, WATER][k % 4];
+            // (The sky eclipsed; the sigil under them, wider than it strikes, and under the caster;
+            // turning in the sky over them)
+            fx.omen(0.85, seconds + 0.25, { rise: seconds * 0.8, fall: 0.25, tint: "eclipse", alive: still });
+            fx.underfoot(on, { ...circle, from: 3, to: 19, life: seconds, grow: 0.4, spin: -0.5 });
+            fx.underfoot(() => (still() ? feet?.() : null), { ...circle, from: 0.8, to: 4, life: seconds + 0.1, grow: 0.4, spin: 1.6 });
+            fx.after(0.25, () => on() && fx.halo(on(), { texture: "prism", colour: 0xe0d0ff, radius: 7, from: 14, to: 12, life: seconds - 0.2, spin: 0.7, opacity: 0.85, boost: 2.2 }));
 
-                if (to) {
-                    fx.spray(p(element.glow, { count: 16, size: [0.06, 0.14], speed: [1.5, 3.5], life: [0.4, 0.8], gravity: -1, spread: 2 }), to);
-                    fx.flash(to, { colour: element.bright, intensity: 12, distance: 5, life: 0.4 });
+            // (The four prisms over their quarters, closing in on them as it's let go)
+            fx.after(0.15, () => on() && fx.prisms(on, { colours: ELEMENTS.map((element) => PRISM[element]), turn: quarters[0].angle, radius: 10, height: 5, to: 1.2, size: 0.55, spin: 0.35, close: 0.25, life: seconds - 0.15, alive: still }));
+
+            // (Each element gathering in its quarter, beyond all it strikes: its column of light,
+            // its own, and its power streaming in to them)
+            for (const { element, angle } of quarters) {
+                const palette = PALETTES[element];
+                const there = outOf(fx, at, angle, 10);
+                const streaming = () => (on() ? outOf(fx, on(), angle, 10, 2.5) : null);
+
+                fx.pillar(there, { colour: palette.deep, radius: 0.8, height: 8, life: seconds - 0.1, rise: 0.5, opacity: 0.45 });
+                fx.scatter(p(palette.glow, { count: 4, size: [0.1, 0.22], speed: [0.6, 1.6], life: [0.6, 1], gravity: -2.5, spread: 1.4, swirl: 6 }), there, 1.6, 10, { seconds: seconds - 0.35, y: 0.3 });
+                fx.after(0.35, () => on() && fx.stream(streaming, () => (on() ? above(on(), 2.5) : null), p(palette.glow, { size: [0.2, 0.36], speed: [5, 7], life: [0.3, 0.5], gravity: 0, spread: 0.25, grow: 0.3, drag: 0.3 }), { life: seconds - 0.6, rate: 55 }));
+                GATHERING[element](fx, { at: there, seconds, still, on });
+            }
+
+            // (All drawn in: the four elements' rings and the spectrum's closing on them, a shell
+            // of light collapsing on them to a point of white, held a moment: thrown as the
+            // caster's, so it's gone if they're stopped, and as it lands)
+            for (const [k, { element }] of quarters.entries()) {
+                fx.after(Math.max(0, seconds - 0.45 + k * 0.05), () => on() && fx.ring(on(), { colour: PALETTES[element].deep, from: 11, to: 0.3, life: 0.35, opacity: 0.85 }));
+            }
+
+            fx.after(Math.max(0, seconds - 0.4), () => on() && fx.ring(on(), { texture: "spectrum", colour: 0xffffff, from: 12, to: 0.5, life: 0.38 }));
+            fx.after(Math.max(0, seconds - 0.36), () => on() && fx.sphere(() => (on() ? above(on(), 1.2) : null), { colour: 0xc8b0ff, from: 9, to: 0.15, life: 0.32, opacity: 0.9, alive: still }));
+            fx.after(Math.max(0, seconds - 0.08), () => {
+                const now = on();
+
+                if (now) {
+                    fx.throw(id, () => above(now, 1.2), () => above(now, 1.2), { travel: 0.08, colour: 0xffffff, size: 0.3 });
                 }
             });
+        },
+        land: (fx, { caster, at, struck }) => {
+            const quarters = quartersOf(caster.feet(), at);
+            const heart = above(at, 1.2);
+            const sky = new THREE.Vector3(at.x + 0.01, at.y + 40, at.z);
+
+            // The release: a beam out of the eclipsed sky as wide as a house, split like light
+            // through a prism (red at its edge, then blue, white at its heart), a column of light
+            // in it reaching the sky; then, as it strikes, the sky and the screen white, the ground
+            // heaving
+            fx.beam(() => sky, () => at, { colour: 0xff2a6a, width: 5, life: 1.2, core: 0xff9ad0 });
+            fx.beam(() => sky, () => at, { colour: 0x2a5aff, width: 3.2, life: 1.3, core: 0x9ad8ff });
+            fx.beam(() => sky, () => at, { colour: 0xffffff, width: 1.4, life: 1.4 });
+            fx.pillar(at, { colour: 0xb07aff, radius: 2.6, height: 40, life: 1.5, rise: 0.06, opacity: 0.35 });
+            fx.flash(heart, { colour: 0xe0d0ff, intensity: 30, distance: 24, life: 0.2, size: 6 });
+            fx.shake(0.45);
+            fx.after(0.12, () => {
+                fx.omen(1, 1.5, { rise: 0.05, fall: 1.3, tint: "radiance" });
+                fx.screen(0xffffff, 0.6, 0.7);
+                fx.shake(0.7);
+                fx.flash(heart, { colour: 0xffffff, intensity: 60, distance: 40, life: 0.6, size: 14 });
+            });
+            fx.glow(above(at, 3), { colour: 0xe8d8ff, strength: 28, reach: 30, life: 3.2, steady: 0.3, fade: (t) => (1 - t) ** 1.5 });
+
+            // (Sparks of every colour in jets, up and out; light spiralling up the beam; each
+            // element's light boiling up off its quarter)
+            for (let k = 0; k < 16; k++) {
+                const way = (k / 16) * Math.PI * 2 + Math.random() * 0.3;
+                const jet = new THREE.Vector3(Math.cos(way), 0.6 + Math.random() * 0.9, Math.sin(way)).normalize().multiplyScalar(11);
+
+                fx.spray(p([0xffffff, SPECTRUM[k % SPECTRUM.length]], { count: 18, size: [0.05, 0.11], speed: [9, 15], life: [0.4, 0.8], gravity: 9.8, spread: 0.3, drag: 1.5 }), heart, jet);
+            }
+
+            fx.spray(p([0xffffff, 0xb07aff], { count: 140, size: [0.08, 0.18], speed: [1, 3], life: [0.8, 1.4], gravity: -7, spread: 1, swirl: 10 }), above(at, 0.5));
+            fx.after(0.12, () => fx.spray(p([0x9a90a8, 0x4a4450], { count: 60, size: [0.05, 0.12], speed: [5, 10], life: [0.7, 1.2], gravity: 9.8, spread: 2, glow: false, opacity: 1, late: true, drag: 0.5 }), above(at, 0.3)));
+            quarters.forEach(({ element, angle }) => fx.after(0.2, () => fx.scatter(p(PALETTES[element].glow, { count: 8, size: [0.12, 0.26], speed: [1, 2.5], life: [0.6, 1.1], gravity: -3, spread: 1.4, swirl: 4, grow: 0.4 }), outOf(fx, at, angle, 5.2), 3, 8, { seconds: 1.2, y: 0.3 })));
+
+            // (A shell of light bursting out past all it strikes; the glass shattering; rings: pale and
+            // fast, the spectrum's, each element's one after another, and one to the edge of sight)
+            fx.sphere(() => at, { colour: 0xd8c8ff, from: 0.5, to: 10.5, life: 0.7, height: 0.55 });
+            spectrumBurst(fx, heart, { count: 72, speed: [4, 10], life: [0.5, 1] });
+            fx.shards(heart, { count: 20, colour: 0xffffff, size: 0.08, speed: 10, up: 4, life: 1, glow: true });
+            fx.ring(at, { colour: 0xffffff, from: 1, to: 14, life: 0.45 });
+            fx.after(0.05, () => fx.ring(at, { texture: "spectrum", colour: 0xffffff, from: 1, to: 16, life: 0.8 }));
+            fx.after(0.35, () => fx.ring(at, { colour: 0xe8d8ff, from: 2, to: 28, life: 1.4, opacity: 0.6 }));
+
+            // (The four columns round the beam, each its element's, reaching the sky; each element's
+            // ring racing out after it)
+            for (const [k, { element, angle }] of quarters.entries()) {
+                fx.pillar(outOf(fx, at, angle, 3.4), { colour: PALETTES[element].deep, radius: 1.1, height: 24, life: 1.8, rise: 0.12, opacity: 0.75 });
+                fx.after(0.1 + k * 0.06, () => fx.ring(at, { colour: PALETTES[element].deep, from: 1, to: 11, life: 0.8 }));
+            }
+
+            // (Each element's own, in its quarter, one after another)
+            quarters.forEach(({ element, angle }, k) => fx.after(0.2 + k * 0.12, () => UNLEASHED[element](fx, { at, angle, centre: outOf(fx, at, angle, 5.2) })));
+
+            // (Each struck unmade: lashed by the beam, a column of its quarter's light on them, burst
+            // in it and gone up as motes)
+            struck.slice(0, 12).forEach((one, k) =>
+                fx.after(0.06 + k * 0.03, () => {
+                    const [feet, middle] = [one.feet(), one.point()];
+
+                    if (!feet || !middle) {
+                        return;
+                    }
+
+                    const element = quarterOf(quarters, at, feet);
+                    const palette = PALETTES[element];
+
+                    if (k < 6) {
+                        fx.lightning(heart.clone(), middle, { colour: k % 2 ? 0xc080ff : 0xffffff, width: 0.05, life: 0.35, jag: 0.6 });
+                    }
+
+                    if (k < 4) {
+                        fx.flash(middle, { colour: palette.bright, intensity: 14, distance: 6, life: 0.35 });
+                    }
+
+                    fx.pillar(feet, { colour: palette.deep, radius: 0.45, height: 10, life: 0.8, rise: 0.06, opacity: 0.8 });
+                    fx.spray(p([0xffffff, palette.bright], { count: 22, size: [0.06, 0.14], speed: [0.5, 1.6], life: [0.8, 1.4], gravity: -2.6, spread: 1.2, swirl: 4 }), middle);
+                    fx.spray({ ...UNMADE[element], count: 14 }, middle);
+                    spectrumBurst(fx, middle, { count: 12 });
+                }),
+            );
+
+            // (Dust rolling out past its edge)
+            for (let k = 0; k < 18; k++) {
+                const angle = (k / 18) * Math.PI * 2 + Math.random() * 0.2;
+                const out = new THREE.Vector3(Math.cos(angle), 0.06, Math.sin(angle));
+
+                fx.after(0.12, () => fx.spray(p([0xd8d0e0, 0x8a8090], { count: 4, size: [0.9, 1.5], speed: [3, 5.5], life: [1.2, 1.9], gravity: -0.15, spread: 0.4, glow: false, opacity: 0.45, grow: 2.5, drag: 2.5 }), outOf(fx, at, angle, 7.5, 0.4), out.multiplyScalar(3)));
+            }
+
+            fx.after(0.6, () => fx.shake(0.18));
+            fx.after(0.1, () => fx.halo(at, { texture: "prism", colour: 0xe0d0ff, radius: 7, from: 12, to: 18, life: 1.6, spin: 0.9, shrink: 1.8, opacity: 0.85, boost: 2.2 }));
+
+            // (What's left: the sigil burnt into the ground, its rim the spectrum's, the ground
+            // cracked and glowing white and violet, scorched; light falling like ash, and rising off
+            // the ground)
+            fx.decal(at, { texture: "prism", colour: 0xe0d0ff, radius: 9.5, life: 4.2, vivid: 2.2, spin: 0.25, fade: 0.5 });
+            fx.decal(at, { texture: "spectrum", colour: 0xffffff, radius: 9.8, life: 3.6, opacity: 0.9, fade: 0.6 });
+            fx.decal(at, { texture: "fissures", colour: 0xc8b0ff, radius: 9, life: 4.5, vivid: 2, grow: 0.1, fade: 0.5 });
+            fx.decal(at, { texture: "scorch", colour: 0xffffff, radius: 10, life: 10, dark: true });
+            fx.after(0.6, () => SPECTRUM.forEach((hue) => fx.scatter(p([0xffffff, hue], { count: 4, size: [0.04, 0.09], speed: [0.1, 0.4], life: [1.6, 2.4], gravity: 0.4, spread: 2, swirl: 1 }), at, 9, 6, { seconds: 2.4, y: 5 })));
+            fx.after(0.4, () => fx.scatter(p([0xffffff, 0xc89aff], { count: 3, size: [0.05, 0.1], speed: [0.3, 0.8], life: [1, 1.6], gravity: -1.2, spread: 1 }), at, 8.5, 32, { seconds: 2.8, y: 0.2 }));
         },
     },
     // (Prismatic Fire: a sun kindled over them as it's cast, the sky darkening, fed by fire drawn
