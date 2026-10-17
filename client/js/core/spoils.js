@@ -142,6 +142,7 @@ export const PARTS = Object.freeze({
     acidGland: { label: "Ant's acid gland", worth: 7, icon: "gland", tint: "#c8a030" },
     queenMandible: { label: "Ant Monster's mandible", worth: 45, icon: "fang", tint: "#1c1618" },
     royalJelly: { label: "Royal jelly", worth: 30, icon: "gland", tint: "#f0d890", use: { heal: 40 } },
+    nightglowGland: { label: "Nightglow gland", worth: 22, icon: "gland", tint: "#ff6040" },
     frostHide: { label: "Frost troll hide", worth: 70, icon: "hide", tint: "#b8c8d8" },
 });
 
@@ -193,6 +194,8 @@ export const SPOILS = Object.freeze({
     centipede: { items: [{ id: "centipedeFang", chance: 0.45 }, { id: "carapace", chance: 0.3 }] },
     ant: { items: [{ id: "antMandible", chance: 0.45 }, { id: "acidGland", chance: 0.25 }] },
     greatCentipede: { items: [{ id: "centipedeFang", chance: 0.6, count: [1, 2] }, { id: "carapace", chance: 0.45 }] },
+    dungeonSpider: { items: [{ id: "spiderSilk", chance: 0.5, count: [1, 2] }, { id: "venomGland", chance: 0.3 }] },
+    eliteDungeonSpider: { items: [{ id: "spiderSilk", chance: 0.8, count: [2, 3] }, { id: "venomGland", chance: 0.6 }, { id: "nightglowGland", chance: 0.35 }] },
     // (What's left in the Ant Monster's nest of those it's eaten, besides its mandibles and jelly)
     antMonster: { gold: [10, 30], items: [{ id: "queenMandible", chance: 0.8 }, { id: "royalJelly", chance: 0.6, count: [1, 2] }, { id: "acidGland", chance: 0.7, count: [1, 2] }] },
     basilisk: { items: [{ id: "basiliskEye", chance: 0.3 }, { id: "crownScale", chance: 0.4 }] },

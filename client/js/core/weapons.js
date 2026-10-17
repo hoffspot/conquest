@@ -287,6 +287,29 @@ export const NATURAL = Object.freeze({
             ),
         ],
     },
+    // (The nests' spiders: a dungeon spider's venomous fangs, or a spring on whoever it's after,
+    // and its web spat to slow them; an elite dungeon spider's fangs the heavier, or its sting
+    // brought over, staggering, and its web sprayed from its spinnerets)
+    dungeonSpider: {
+        label: "Fangs and web",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", damage: [4, 8], hitAt: 650, duration: 1400, interval: 1500, reaction: "pierce", animation: "melee", afflict: { kind: "poison", chance: 0.35 } }),
+                melee({ id: "leap", reach: 2, damage: [6, 11], hitAt: 900, duration: 1600, interval: 2400, stagger: 300, reaction: "hack", animation: "leap", afflict: { kind: "poison", chance: 0.4 } }),
+            ),
+            ranged({ id: "web", reach: 6, damage: [1, 3], hitAt: 600, duration: 1300, interval: 3000, stagger: 400, reaction: "punch", animation: "web", projectile: { kind: "web", speed: 11 }, afflict: { kind: "slow", chance: 1, look: "web" } }),
+        ],
+    },
+    eliteDungeonSpider: {
+        label: "Fangs, sting and web",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", reach: 1.6, damage: [8, 14], hitAt: 700, duration: 1300, interval: 1600, reaction: "pierce", animation: "melee", afflict: { kind: "poison", chance: 0.4 } }),
+                melee({ id: "sting", reach: 1.8, damage: [12, 20], hitAt: 900, duration: 1600, interval: 2400, stagger: 400, reaction: "pierce", animation: "sting", afflict: { kind: "poison", chance: 0.8 } }),
+            ),
+            ranged({ id: "web", reach: 7, damage: [3, 6], hitAt: 1000, duration: 2000, interval: 3600, stagger: 500, reaction: "punch", animation: "web", projectile: { kind: "web", speed: 11 }, afflict: { kind: "slow", chance: 1, look: "web" } }),
+        ],
+    },
     antMonster: {
         label: "Mandibles and acid",
         attacks: [
