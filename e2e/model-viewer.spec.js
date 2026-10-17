@@ -230,7 +230,7 @@ test("a creature to come, drawn from its model before it's in the game: the cent
 
     // (Listed with the creatures to come; read, its clips listed, the one asked for by its address
     // played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Centipede", "Ant Monster"]);
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Centipede", "Ant Monster", "Ant"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
         "Attack",
@@ -336,6 +336,18 @@ test("another to come: the Ant Monster, all 31 clips in its file, turned to face
 
     expect(shape).toEqual({ ahead: true, transparent: false, cut: 0.5 });
     await expect(page.locator("#details")).toContainText("Ant Monster V1b, bought on Fab: used with the permission its Standard License gives");
+});
+
+test("and the ant: all 12 clips in its file, its full detail only, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-ant&clip=Run");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual(["Attack", "Cool", "Drink", "Eat", "Idle", "Idle 2", "Jump", "Play", "Play 2", "Play 3", "Run", "Walk"]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Run", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The ant");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 9768, bones: 36 });
+    await expect(page.locator("#details")).toContainText("Ant V2, bought on Fab: used with the permission its Standard License gives");
 });
 
 test("the werewolf as the game draws it, from its model once that's read: the game's moves for it, and the skin each one wears", async ({ page }) => {

@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "7f2c6320e4",
+    release: "5164d1067f",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -1933,6 +1933,18 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/ant-monster.bin",
                     "hash": "2fa9870381",
                     "bytes": 4234780
+                }
+            ]
+        },
+        "beast-ant": {
+            "tier": "demand",
+            "label": "The ant (Ant V2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/ant.bin",
+                    "hash": "39b3992aea",
+                    "bytes": 2254056
                 }
             ]
         }
