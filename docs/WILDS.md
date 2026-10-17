@@ -89,6 +89,9 @@ two tiers above it, up to their most.
 | Great centipede | 52 | aggressive | an ants' nest's packs | 3–10 | the ants' nests only |
 | Dungeon spider | 32 | aggressive | an ants' nest's spider packs | 2–10 | the ants' nests only |
 | Elite dungeon spider | 72 | aggressive | leads each spider pack | 3–10 | the ants' nests only |
+| Giant cockroach | 22 | aggressive | an ants' nest's packs, 3–5 | 1–8 | the ants' nests only |
+| Dungeon wasp | 26 | aggressive | an ants' nest's packs, 2–4 | 2–10 | the ants' nests only |
+| Dungeon scorpion | 64 | aggressive | an ants' nest's packs, 1–2 | 3–10 | the ants' nests only |
 | Ant Monster | 96 | aggressive | 1, calling its flock | 4–10 | the ants' nests: their boss |
 | Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins, ruined castles and graveyards, with their dead |
 | Wraith | 46 | aggressive | 1 | 5–10 | the ruins and ruined castles, with their dead |
@@ -958,7 +961,8 @@ What's the same as the Dreadthorn's, and what's its own:
 
 **The ants' nests' own** (docs/DUNGEONS.md), each drawn from a model bought on Fab, in the
 catalog as the others are (`beast-ant`, `beast-centipede`, `beast-dungeon-spider`,
-`beast-elite-dungeon-spider`, `beast-ant-monster`), sized and paced
+`beast-elite-dungeon-spider`, `beast-giant-cockroach`, `beast-dungeon-wasp`,
+`beast-dungeon-scorpion`, `beast-ant-monster`), sized and paced
 by measuring each model in a browser: how long and tall it stands idle, and how fast its feet go
 back along the ground while planted.
 
@@ -982,6 +986,23 @@ back along the ground while planted.
   Attack). It rests by looking about or cowering; its model's only fall is its Explode, so it
   bursts apart as it dies. Its walk carries it as fast as it ever goes, 0.87 m/s as it's drawn: no
   run.
+- **The giant cockroach** (`giantCockroach`): made 2.3 m long, feelers and all, drawn 2 m. Quick
+  and in numbers: it bites (`Bite`, lunging head down, made for it), paws with its forelegs
+  (Attack), or rears up to strike down (`rear`: Rear Strike, made for it); its bite may carry
+  sickness. It rests by eating, feeling about or cleaning itself, and dies on its back, its legs
+  twitching. Its walk is 0.96 m/s as it's drawn, its run 1.66.
+- **The dungeon wasp** (`dungeonWasp`): made 0.8 m long, its abdomen curled under it, drawn 1.3
+  m. It's made hovering over where it is, so it's drawn hanging about a metre over the ground
+  there (though it's fought on the ground, as the bat and fly swarms are, within any blade's
+  reach), and its falls drop it to the ground. It stings (Attack), jabs (Attack 2) or lunges
+  (Attack 4), or dives in from above (`dive`: Attack 3), venomous; it rests hanging there, its
+  sting out. Its flight carries it, its wings beating the faster the faster it goes; it makes no
+  footfalls.
+- **The dungeon scorpion** (`dungeonScorpion`): made 1.95 m long, its tail raised over its back,
+  drawn 2.4 m; armoured. Its pincers thrust out or snapping (Attack, Attack 2, Attack 4), or its
+  sting brought over its back (`sting`: Attack 3), staggering, venomous. It rests rearing up, its
+  pincers raised; it flinches to its left, and dies flipped onto its back (Death 2). Its walk is a
+  slow creep, 0.17 m/s as it's drawn; its run, 0.66, is what carries it after anyone.
 - **The Ant Monster** (`antMonster`): made 6.8 m long, drawn 4.2 and 1.5 m tall (1.22 times that
   as a boss). Its mandibles (Attack, Attack 5), rearing to slam down (`slam`: Attack 2), its acid
   spat (`spit`: Attack 3, a pool of venom where it lands) and its flock called (`call`: Call

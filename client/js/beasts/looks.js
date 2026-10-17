@@ -544,6 +544,29 @@ export const LOOKS = Object.freeze({
         colours: { shell: 0x8a1e1a, dark: 0x140808, marks: 0xff5a3a, eyes: 0xff5030 },
         attacks: ["bite", "leap"], rests: ["groom", "crouch", "twitch"], specials: ["web"],
     },
+    // (A dungeon scorpion's stand-in, a dark scorpion of its size; a giant cockroach's, a squat
+    // dark brown crawler; a dungeon wasp's, a single great insect hanging in the air)
+    dungeonScorpion: {
+        body: "arachnid",
+        scale: [0.94, 1.06],
+        size: 1.1, scorpion: true,
+        colours: { shell: 0x4a3424, dark: 0x1a120c, marks: 0x8a6a48, eyes: 0x0a0806 },
+        attacks: ["pinch", "grab"], rests: ["crouch", "twitch", "raise"], specials: ["sting"],
+    },
+    giantCockroach: {
+        body: "arachnid",
+        scale: [0.9, 1.1],
+        size: 0.75,
+        colours: { shell: 0x3a1a10, dark: 0x140806, marks: 0x6a3420, eyes: 0x0a0604 },
+        attacks: ["bite", "leap"], rests: ["groom", "crouch", "twitch"],
+    },
+    dungeonWasp: {
+        body: "swarm",
+        scale: [0.92, 1.08],
+        kind: "insect", size: 0.9, count: 1, spread: 0.2,
+        colours: { fur: 0x2a2018, wings: 0xb0a8d0, eyes: 0x0a0806 },
+        attacks: ["dive", "swirl"], rests: ["settle", "scatter"],
+    },
     antMonster: {
         body: "arachnid",
         scale: [1, 1],

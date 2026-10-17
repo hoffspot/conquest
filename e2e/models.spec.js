@@ -422,6 +422,79 @@ test("draws the ants' nests' creatures from their models: a giant ant, a great c
     expect([...new Set(fetched.filter((url) => url.includes("/models/beasts/")).map((url) => url.replace(/^.*\/models\//, "").replace(/=[0-9a-f]{10}$/, "=")))].sort()).toEqual(["beasts/ant-monster.bin?h=", "beasts/ant.bin?h=", "beasts/centipede.bin?h=", "beasts/dungeon-spider.bin?h=", "beasts/elite-dungeon-spider.bin?h="]);
 });
 
+test("draws what else has crept into the ants' nests from their models: a dungeon scorpion and a giant cockroach on the ground, each as long as it's drawn; a dungeon wasp hovering about a metre over where it is, falling to the ground there dead", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await page.goto("/");
+    await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
+
+    const drawn = await page.evaluate(async () => {
+        const THREE = await import("three");
+        const { BeastAvatar } = await import("./js/beasts/beast.js");
+        const { wantModel } = await import("./js/beasts/model.js");
+        const { renderer } = window.pellagos.session.view;
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
+        const sizeOf = (beast) => new THREE.Box3().setFromObject(beast.plan.levels[0][0], true);
+
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x404040, 2));
+        camera.position.set(6, 4, 8);
+        camera.lookAt(0, 0.5, 0);
+
+        // (Each drawn from its model once read: how long and how high, as it stands, and dead a
+        // few seconds on)
+        const look = async (kind) => {
+            await wantModel(kind);
+
+            const beast = new BeastAvatar(kind, { seed: 3 });
+
+            scene.add(beast.object);
+            beast.update(1 / 30, 0, 0, 0);
+            beast.object.updateMatrixWorld(true);
+            renderer.render(scene, camera);
+
+            const box = sizeOf(beast);
+            const seen = { model: beast.model, long: box.max.z - box.min.z, low: box.min.y, ways: [...beast.plan.attacks].sort() };
+
+            beast.actions.die({ from: 1 });
+
+            for (let k = 0; k < 150; k++) {
+                beast.update(1 / 30, 0, 0, 0);
+            }
+
+            beast.object.updateMatrixWorld(true);
+            seen.deadLow = sizeOf(beast).min.y;
+            scene.remove(beast.object);
+            beast.dispose();
+
+            return seen;
+        };
+
+        return { scorpion: await look("dungeonScorpion"), roach: await look("giantCockroach"), wasp: await look("dungeonWasp"), error: renderer.getContext().getError() };
+    });
+
+    // (The dungeon scorpion: 2.4 metres long, tail and all, on the ground; its pincers and its sting)
+    expect(drawn.scorpion.model).toBe(true);
+    expect(drawn.scorpion.long).toBeGreaterThan(1.8);
+    expect(drawn.scorpion.long).toBeLessThan(3);
+    expect(Math.abs(drawn.scorpion.low)).toBeLessThan(0.1);
+    expect(drawn.scorpion.ways).toEqual(["grab", "pinch", "snap", "sting"]);
+
+    // (The giant cockroach: 2 metres long, feelers and all, on the ground; its bite, its pawing, rearing to strike)
+    expect(drawn.roach.model).toBe(true);
+    expect(drawn.roach.long).toBeGreaterThan(1.5);
+    expect(drawn.roach.long).toBeLessThan(2.5);
+    expect(Math.abs(drawn.roach.low)).toBeLessThan(0.1);
+    expect(drawn.roach.ways).toEqual(["bite", "paw", "rear"]);
+
+    // (The dungeon wasp: hanging in the air about a metre up, its stings and its dive; dead, on the ground)
+    expect(drawn.wasp.model).toBe(true);
+    expect(drawn.wasp.low).toBeGreaterThan(0.5);
+    expect(drawn.wasp.low).toBeLessThan(1.5);
+    expect(drawn.wasp.ways).toEqual(["dive", "jab", "lunge", "sting"]);
+    expect(drawn.wasp.deadLow).toBeLessThan(0.3);
+    expect(drawn.error).toBe(0);
+});
+
 test("lets a model go off the graphics card once none's drawn from it, and reads it again, without downloading it again, when it's wanted", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await page.goto("/");
