@@ -1600,6 +1600,18 @@
                     "bytes": 4492948
                 }
             ]
+        },
+        "beast-ant-monster": {
+            "tier": "demand",
+            "label": "The Ant Monster (Ant Monster V1b, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/ant-monster.bin",
+                    "hash": "2fa9870381",
+                    "bytes": 4234780
+                }
+            ]
         }
     }
 }
