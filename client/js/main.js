@@ -854,22 +854,53 @@ function resume() {
     state.game?.start();
 }
 
-// The menu's pages: the main one, Game options, and its Auto-snag, Action wheels, Quick actions
-// and Debug log
-const MENU_PAGES = { main: ["#menumain", "menutitle", "#resumebutton"], options: ["#menuoptions", "optionstitle", "#minimapswitch"], snag: ["#menusnag", "snagtitle", "#snaggrades input"], wheels: ["#menuwheels", "wheelstitle", "#wheelsback"], quick: ["#menuquick", "quicktitle", "#quickback"], log: ["#menulog", "logtitle", "#logback"] };
+// The menu's pages: the main one; Game options, and a page for each group of them; and under
+// those, Auto-snag (Gameplay), Action wheels and Quick actions (Controls), and the Debug log. Each
+// with its title, what's focused on it, the page Back goes to (`up`), and the button there that
+// opened it (`from`), focused again on the way back
+const MENU_PAGES = {
+    main: { page: "#menumain", title: "menutitle", focus: "#resumebutton", up: null },
+    options: { page: "#menuoptions", title: "optionstitle", focus: "#graphicsbutton", up: "main", from: "#optionsbutton" },
+    graphics: { page: "#menugraphics", title: "graphicstitle", focus: "#qualityslider", up: "options", from: "#graphicsbutton" },
+    sound: { page: "#menusound", title: "soundtitle", focus: "#soundswitch", up: "options", from: "#soundbutton" },
+    controls: { page: "#menucontrols", title: "controlstitle", focus: "#stickswitch", up: "options", from: "#controlsbutton" },
+    camera: { page: "#menucamera", title: "cameratitle", focus: "#followswitch", up: "options", from: "#camerabutton" },
+    gameplay: { page: "#menugameplay", title: "gameplaytitle", focus: "#snagswitch", up: "options", from: "#gameplaybutton" },
+    snag: { page: "#menusnag", title: "snagtitle", focus: "#snaggrades input", up: "gameplay", from: "#snagbutton" },
+    wheels: { page: "#menuwheels", title: "wheelstitle", focus: "#wheelsback", up: "controls", from: "#wheelsbutton" },
+    quick: { page: "#menuquick", title: "quicktitle", focus: "#quickback", up: "controls", from: "#quickbutton" },
+    log: { page: "#menulog", title: "logtitle", focus: "#logback", up: "options", from: "#logbutton" },
+};
 
-function menuPage(page) {
-    for (const [each, [id]] of Object.entries(MENU_PAGES)) {
-        $(id).hidden = each !== page;
+// The page shown, for Back
+let menuShown = "main";
+
+function menuPage(page, focus = MENU_PAGES[page].focus) {
+    for (const [each, { page: element }] of Object.entries(MENU_PAGES)) {
+        $(element).hidden = each !== page;
     }
 
-    $("#menu").setAttribute("aria-labelledby", MENU_PAGES[page][1]);
+    menuShown = page;
+    $("#menu").setAttribute("aria-labelledby", MENU_PAGES[page].title);
     $("#menu").classList.toggle("wide", page === "wheels" || page === "quick" || page === "log");
-    $(MENU_PAGES[page][2]).focus();
+    $(focus).focus();
 
     // (What auto-snag takes, told under its switch)
-    if (page === "options") {
+    if (page === "gameplay") {
         showSnag(settings.autoSnag);
+    }
+}
+
+// Back a page (the arrow in a page's heading, the Back at its foot, or Escape): to the page above
+// it, the button that opened this one focused again. From the main page, or the Quick actions
+// opened from a fight, back to the game
+function menuBack() {
+    const { up, from } = MENU_PAGES[menuShown];
+
+    if (!up || (menuShown === "quick" && state.quickFromFight)) {
+        resume();
+    } else {
+        menuPage(up, from);
     }
 }
 
@@ -1021,8 +1052,8 @@ async function openWheels() {
 }
 
 // What's in the player's quick actions, to change (app/quicksetup.js: loaded the first time), with
-// the `slot`th chosen. Opened from Game options, Back goes back there; from a quick action held
-// on in a fight (`fromFight`), back to the game.
+// the `slot`th chosen. Opened from Game options (Controls), Back goes back there; from a quick
+// action held on in a fight (`fromFight`), back to the game.
 async function openQuick(slot = 0, { fromFight = false } = {}) {
     const game = state.game;
 
@@ -1038,6 +1069,7 @@ async function openQuick(slot = 0, { fromFight = false } = {}) {
 
     state.quickFromFight = fromFight;
     $("#quickback").textContent = fromFight ? "Back to the game" : "Back";
+    $("#menuquick .menu-back").setAttribute("aria-label", fromFight ? "Back to the game" : "Back to Controls");
     state.quickSetup.onChange = (quick) => state.game?.setQuick(quick);
     state.quickSetup.showCount(quickShown());
     state.quickSetup.show(game.quickSetup(), slot);
@@ -1055,15 +1087,6 @@ function chooseQuick(slot) {
 
     if ($("#menu").open) {
         openQuick(slot, { fromFight: true });
-    }
-}
-
-// Back from the Quick actions: to the game if they came from a fight, else to Game options
-function quickBack() {
-    if (state.quickFromFight) {
-        resume();
-    } else {
-        menuPage("options");
     }
 }
 
@@ -3115,11 +3138,17 @@ $("#menubutton").addEventListener("click", pause);
 $("#resumebutton").addEventListener("click", resume);
 $("#quitbutton").addEventListener("click", quit);
 $("#optionsbutton").addEventListener("click", () => menuPage("options"));
-$("#optionsback").addEventListener("click", () => menuPage("main"));
+
+for (const button of document.querySelectorAll("#menuoptions [data-to]")) {
+    button.addEventListener("click", () => menuPage(button.dataset.to));
+}
+
+for (const button of document.querySelectorAll("#menu [data-back]")) {
+    button.addEventListener("click", menuBack);
+}
+
 $("#wheelsbutton").addEventListener("click", openWheels);
-$("#wheelsback").addEventListener("click", () => menuPage("options"));
 $("#logbutton").addEventListener("click", openLog);
-$("#logback").addEventListener("click", () => menuPage("options"));
 $("#logcopy").addEventListener("click", copyLog);
 $("#logclear").addEventListener("click", () => {
     telemetry.clear();
@@ -3127,7 +3156,6 @@ $("#logclear").addEventListener("click", () => {
     showLog();
 });
 $("#quickbutton").addEventListener("click", () => openQuick(0));
-$("#quickback").addEventListener("click", quickBack);
 $("#minimapswitch").addEventListener("change", (event) => applySetting("minimap", event.target.checked));
 
 // The minimap folded away into a compass in its corner (the button on its top left), and opened
@@ -3146,7 +3174,6 @@ $("#resistswitch").addEventListener("change", (event) => applySetting("resistSum
 $("#refuseswitch").addEventListener("change", (event) => applySetting("refuseInvites", event.target.checked));
 $("#snagswitch").addEventListener("change", (event) => applySetting("autoSnag", event.target.checked));
 $("#snagbutton").addEventListener("click", openSnag);
-$("#snagback").addEventListener("click", () => menuPage("options"));
 $("#snagall").addEventListener("click", () => snagChanged({ all: true }));
 $("#snaggrades").addEventListener("change", () => snagChanged());
 $("#snagkinds").addEventListener("change", () => snagChanged());
@@ -3218,21 +3245,18 @@ function showVolumes(on) {
 
 showVolumes(settings.sound);
 
-// Escape goes back a page (from Action wheels or Quick actions to Game options, or to the game if
-// they were opened in a fight; from Game options to the main page), and closes the menu from the
-// main page
+// Escape goes back a page, as Back does, and closes the menu from the main page. (Pressed again
+// and again, the browser closes the menu itself, whatever it's told: then it's closed as Resume
+// closes it, the game going on, not left stopped with no menu up)
 $("#menu").addEventListener("cancel", (event) => {
-    event.preventDefault();
-
-    if (!$("#menuwheels").hidden || !$("#menulog").hidden || !$("#menusnag").hidden) {
-        menuPage("options");
-    } else if (!$("#menuquick").hidden) {
-        quickBack();
-    } else if ($("#menumain").hidden) {
-        menuPage("main");
-    } else {
+    if (!event.cancelable) {
         resume();
+
+        return;
     }
+
+    event.preventDefault();
+    menuBack();
 });
 $("#zoomin").addEventListener("click", () => state.session?.view.zoom(0.8));
 $("#zoomout").addEventListener("click", () => state.session?.view.zoom(1.25));

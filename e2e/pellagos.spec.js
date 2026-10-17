@@ -298,9 +298,10 @@ test.describe("drawn at the screen's own pixels", () => {
         expect(stepped.now).toEqual(["medium", 1, "high"]);
         await expect(page.locator("#debugstats")).toContainText("Quality medium (high chosen: keeping up)");
 
-        // Game options: the quality chosen, Adaptive, and what it's drawing to keep up
+        // Game options, Graphics: the quality chosen, Adaptive, and what it's drawing to keep up
         await page.locator("#menubutton").click();
         await page.locator("#optionsbutton").click();
+        await page.locator("#graphicsbutton").click();
         await expect(page.locator("#qualityname")).toHaveText("High");
         await expect(page.locator("#adaptiveswitch")).toBeChecked();
         await page.evaluate(() => window.pellagos.game.onAdapt({ quality: "medium", scale: 1 }));
@@ -1839,10 +1840,11 @@ test("auto-snag, off to start with, turned on in Game options, picks up the play
     // Off to start with: left there to tap
     expect((await lay("snag-1")).items).toHaveLength(2);
 
-    // Turned on: what it takes under its switch (everything, to start with), and the sack at the
-    // player's feet taken
+    // Turned on (Game options, Gameplay): what it takes under its switch (everything, to start
+    // with), and the sack at the player's feet taken
     await page.locator("#menubutton").click();
     await page.locator("#optionsbutton").click();
+    await page.locator("#gameplaybutton").click();
     await expect(page.locator("#snagswitch")).not.toBeChecked();
     await expect(page.locator("#snagbutton")).toBeHidden();
     await page.locator("label:has(#snagswitch)").click();
@@ -1863,6 +1865,7 @@ test("auto-snag, off to start with, turned on in Game options, picks up the play
     }
 
     await page.locator("#snagback").click();
+    await expect(page.locator("#menugameplay"), "back on Gameplay").toBeVisible();
     await expect(page.locator("#snagsummary")).toHaveText("Legendary; Weapons");
 
     // At their feet: the legendary sword taken, its gold and the pelt left in the sack
@@ -1920,7 +1923,7 @@ test("the first time a fight leaves a character something, they're told in a lin
 
     const first = await leave("loot-1");
 
-    expect(first.told).toBe("The wolf dropped something. Tap it to take it all, or turn on Auto-snag in Game options.");
+    expect(first.told).toBe("The wolf dropped something. Tap it to take it all, or turn on Auto-snag in Game options, Gameplay.");
     expect(first.once).toEqual(["spoils"]);
     // (Kept with the character)
     expect(await keptOf(page, "told")).toMatchObject({ told: ["spoils"] });
@@ -8999,14 +9002,20 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     expect(Math.abs(walked.order.to[1] + 0.5 - spot.z)).toBeLessThan(3);
     expect(walked.sound).toBe(true);
 
-    // Menu, Game options: both on; turn them off
+    // Menu, Game options: the minimap (under Controls) and the sound (under Sound) both on; turn
+    // them off
     await page.locator("#menubutton").click();
     await page.getByRole("button", { name: "Game options" }).click();
+    await page.getByRole("button", { name: /^Controls/ }).click();
 
     const minimapSwitch = page.getByRole("switch", { name: /Minimap/ });
     const soundSwitch = page.getByRole("switch", { name: /Sound/ });
 
     await expect(minimapSwitch).toBeChecked();
+    await page.locator("label:has(#minimapswitch)").click();
+    await expect(minimapSwitch).not.toBeChecked();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await page.getByRole("button", { name: /^Sound/ }).click();
     await expect(soundSwitch).toBeChecked();
 
     // Each kind of sound has its slider: effects, environment and music (soft to start with)
@@ -9018,12 +9027,14 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
     await expect(page.locator("output[for=musicvolume]")).toHaveText("60%");
     expect(await page.evaluate(() => window.pellagos.session.sound.volumes.music)).toBe(0.6);
 
-    await page.locator("label:has(#minimapswitch)").click();
     await page.locator("label:has(#soundswitch)").click();
-    await expect(minimapSwitch).not.toBeChecked();
     await expect(soundSwitch).not.toBeChecked();
     await expect(page.locator("#musicvolume")).toBeDisabled();
-    await page.getByRole("button", { name: "Back" }).click();
+
+    // (Back to Game options, the arrow in the heading as the Back at the foot; and back again)
+    await page.getByRole("button", { name: "Back to Game options" }).click();
+    await expect(page.getByRole("heading", { name: "Game options" })).toBeVisible();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
     await page.getByRole("button", { name: "Resume" }).click();
     await expect(minimap).toBeHidden();
     expect(await page.evaluate(() => window.pellagos.session.sound.playing)).toBe(false);
@@ -9115,16 +9126,19 @@ test("full screen while playing: asked for as Continue starts the game; left by 
     await expect.poll(full).toBe(true);
     await expect(page.locator("#menu")).toBeHidden();
 
-    // Turned off: left at once, the menu still up, kept; playing on, not asked for
+    // Turned off (Game options, Graphics): left at once, the menu still up, kept; playing on, not
+    // asked for
     await page.locator("#menubutton").click();
     await page.getByRole("button", { name: "Game options" }).click();
+    await page.getByRole("button", { name: /^Graphics/ }).click();
     await expect(fullScreen).toBeChecked();
     await page.locator("label:has(#fullscreenswitch)").click();
     await expect(fullScreen).not.toBeChecked();
     await expect.poll(full).toBe(false);
     await expect(page.locator("#menu")).toBeVisible();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).fullscreen)).toBe(false);
-    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
     await page.getByRole("button", { name: "Resume" }).click();
     await page.mouse.click(640, 330);
     expect(await full()).toBe(false);
@@ -9132,10 +9146,12 @@ test("full screen while playing: asked for as Continue starts the game; left by 
     // On again: not asked for from the menu, but as play carries on
     await page.locator("#menubutton").click();
     await page.getByRole("button", { name: "Game options" }).click();
+    await page.getByRole("button", { name: /^Graphics/ }).click();
     await page.locator("label:has(#fullscreenswitch)").click();
     await expect(fullScreen).toBeChecked();
     expect(await full()).toBe(false);
-    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
     await page.getByRole("button", { name: "Resume" }).click();
     await settled();
 
@@ -9182,14 +9198,88 @@ test("full screen while playing: asked for as Continue starts the game; left by 
     await expect(page.locator("#menu")).toBeHidden();
 });
 
+test("Game options: its groups at the top, each a page of its own, short enough not to scroll; back from each by the arrow in its heading, the Back at its foot, or Escape, to the group it came from", async ({ page }) => {
+    await page.setViewportSize({ width: 402, height: 874 });
+    await playing(page, "/?play&seed=1");
+    await page.locator("#menubutton").click();
+    await page.getByRole("button", { name: "Game options" }).click();
+
+    // The groups first, then the Debug log, then Back: nothing else on the page
+    const options = page.locator("#menuoptions");
+
+    await expect(options.locator(".options > button .text")).toHaveText([/^Graphics/, /^Sound/, /^Controls/, /^Camera/, /^Gameplay/, /^Debug log/]);
+    await expect(options.locator("input")).toHaveCount(0);
+
+    const groups = {
+        graphics: ["#qualityslider", "#adaptiveswitch", "#fullscreenswitch", "#shakeswitch"],
+        sound: ["#soundswitch", "#effectsvolume", "#environmentvolume", "#musicvolume"],
+        controls: ["#stickswitch", "#floatswitch", "#zoomswitch", "#minimapswitch", "#wheelsbutton", "#quickbutton"],
+        camera: ["#followswitch", "#battlecamswitch", "#dragslider", "#invertswitch"],
+        gameplay: ["#snagswitch", "#snagbutton", "#resistswitch", "#refuseswitch"],
+    };
+    const back = { arrow: (group) => page.locator(`#menu${group} .menu-back`), button: (group) => page.locator(`#${group}back`) };
+
+    for (const [group, controls] of Object.entries(groups)) {
+        for (const [how, by] of Object.entries(back)) {
+            await page.locator(`#${group}button`).click();
+            await expect(page.locator(`#menu${group}`)).toBeVisible();
+            await expect(options).toBeHidden();
+
+            // (Each control in its group's page, and in no other)
+            for (const control of controls) {
+                expect(await page.locator(control).evaluate((element, id) => element.closest(".menupage").id === id, `menu${group}`), `${control} under ${group}`).toBe(true);
+            }
+
+            // (The whole page in view on a phone: the dialog not scrolled)
+            expect(await page.locator("#menu").evaluate((menu) => menu.scrollHeight <= menu.clientHeight + 1), `${group} fits`).toBe(true);
+
+            await by(group).click();
+            await expect(options, `back from ${group} by its ${how}`).toBeVisible();
+            await expect(page.locator(`#${group}button`)).toBeFocused();
+        }
+    }
+
+    // Escape, as Back
+    await page.locator("#camerabutton").click();
+    await page.keyboard.press("Escape");
+    await expect(options).toBeVisible();
+    await expect(page.locator("#camerabutton")).toBeFocused();
+
+    // Back from Game options: the main page, and the game from there
+    await page.getByRole("button", { name: "Back to Paused" }).click();
+    await expect(page.locator("#menumain")).toBeVisible();
+    await expect(page.locator("#optionsbutton")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#menu")).toBeHidden();
+    expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
+
+    // Escape again and again, deep in: back a page at a time while the browser lets it, then the
+    // menu closed as Resume closes it (the browser closing it itself after a few), the game going
+    // on, never left stopped with no menu up
+    await page.locator("#menubutton").click();
+    await page.locator("#optionsbutton").click();
+    await page.locator("#controlsbutton").click();
+    await page.locator("#wheelsbutton").click();
+    await expect(page.locator("#menuwheels")).toBeVisible();
+
+    for (let k = 0; k < 6 && (await page.locator("#menu").isVisible()); k++) {
+        await page.keyboard.press("Escape");
+    }
+
+    await expect(page.locator("#menu")).toBeHidden();
+    expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
+});
+
 test("Game options set the camera: following off at first, it keeps the way it's turned as the player walks; the battle cam on at first; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {
     // (The game started twice: more than the usual time)
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
-    // At first: not following, the battle cam on, a drag turning it as far as ever, shaking
+    // At first (Game options, Camera): not following, the battle cam on, a drag turning it as far
+    // as ever; and (Graphics) shaking
     await page.locator("#menubutton").click();
     await page.getByRole("button", { name: "Game options" }).click();
+    await page.getByRole("button", { name: /^Camera/ }).click();
 
     const follows = page.getByRole("switch", { name: /Camera follows/ });
     const battleCam = page.getByRole("switch", { name: /Battle cam/ });
@@ -9199,18 +9289,21 @@ test("Game options set the camera: following off at first, it keeps the way it's
     await expect(follows).not.toBeChecked();
     await expect(battleCam).toBeChecked();
     await expect(invert).not.toBeChecked();
-    await expect(shake).toBeChecked();
     await expect(page.locator("#dragslider")).toHaveValue("100");
     await expect(page.locator("#dragname")).toHaveText("100%");
 
-    // The battle cam off, tilt inverted, no shaking, a drag turning it twice as far
+    // The battle cam off, tilt inverted, a drag turning it twice as far; and no shaking
     await page.locator("label:has(#battlecamswitch)").click();
     await page.locator("label:has(#invertswitch)").click();
-    await page.locator("label:has(#shakeswitch)").click();
     await page.locator("#dragslider").fill("200");
     await page.locator("#dragslider").dispatchEvent("change");
     await expect(page.locator("#dragname")).toHaveText("200%");
-    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await page.getByRole("button", { name: /^Graphics/ }).click();
+    await expect(shake).toBeChecked();
+    await page.locator("label:has(#shakeswitch)").click();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
     await page.getByRole("button", { name: "Resume" }).click();
 
     // Walking east, the camera keeps the way it's turned; and the greatest spells' shake is let be
@@ -9256,9 +9349,11 @@ test("Game options set the camera: following off at first, it keeps the way it's
     // Following turned on; all remembered next time
     await page.locator("#menubutton").click();
     await page.getByRole("button", { name: "Game options" }).click();
+    await page.getByRole("button", { name: /^Camera/ }).click();
     await page.locator("label:has(#followswitch)").click();
     await expect(follows).toBeChecked();
-    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
+    await page.getByRole("button", { name: "Back", exact: true }).click();
     await page.getByRole("button", { name: "Resume" }).click();
     await playing(page, "/?play&seed=1");
     expect(await page.evaluate(() => window.pellagos.game.cameraSettings)).toEqual({ follows: true, battle: false, shake: false, drag: 2, invert: true });
@@ -9579,13 +9674,14 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
     await expect(slot(2).locator(".quick-label")).toHaveText("Rumble");
 
-    // And from Game options, Back going back there
+    // And from Game options (Controls), Back going back there
     await page.locator("#menubutton").click();
     await page.locator("#optionsbutton").click();
+    await page.locator("#controlsbutton").click();
     await page.locator("#quickbutton").click();
     await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Quick action 1");
     await page.locator("#quickback").click();
-    await expect(page.locator("#menuoptions")).toBeVisible();
+    await expect(page.locator("#menucontrols")).toBeVisible();
 });
 
 test("a Prismatic chain: an element's spell cast from the quick actions rolls its slot on to the next, ringed and pulsing, every attack spell 5% stronger a spell; at the last, its piece of the sigil, the other elements ringed; let lapse, all lost; whole, the sigil tapped casts Prismatic Destruction on the foe", async ({ page }) => {
@@ -9893,9 +9989,10 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
         game.battle.actor(game.me).hp = 20;
     });
 
-    // Game options, Action wheels: the player's own, wheel one, with Vigor at N
+    // Game options, Controls, Action wheels: the player's own, wheel one, with Vigor at N
     await page.locator("#menubutton").click();
     await page.locator("#optionsbutton").click();
+    await page.locator("#controlsbutton").click();
     await page.locator("#wheelsbutton").click();
     await expect(menu.locator("#wheelstitle")).toBeVisible();
     await expect(setup.locator('.wheels-tab[aria-selected="true"]')).toHaveText(["Yourself", "Wheel one"]);
@@ -9919,10 +10016,13 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await expect(setup.locator('.slice[data-direction="ne"] .count')).toHaveText("2");
     expect(await page.evaluate(() => window.pellagos.game.wheels.self)).toEqual([{ n: "vigor" }, { n: "camp", nw: "emote:wave", ne: "item:potion", w: "emote:nod", e: "emote:cheer" }]);
 
-    // Escape goes back a page, and again; then the game
+    // Escape goes back a page, and again (to Controls, then Game options); Back to the main page;
+    // then the game
+    await page.keyboard.press("Escape");
+    await expect(menu.locator("#controlstitle")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(menu.locator("#optionstitle")).toBeVisible();
-    await page.keyboard.press("Escape");
+    await page.locator("#optionsback").click();
     await page.locator("#resumebutton").click();
     await expect(menu).toBeHidden();
 

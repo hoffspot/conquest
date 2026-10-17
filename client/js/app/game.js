@@ -480,7 +480,7 @@ const DISGUISES = Object.freeze({
 
 // The first time a fight leaves the character something (#once, kept with the character), what's
 // to be done about it, short enough to read at a glance; never said again. How long it's shown (s)
-const SPOILS_HINT = "Tap it to take it all, or turn on Auto-snag in Game options.";
+const SPOILS_HINT = "Tap it to take it all, or turn on Auto-snag in Game options, Gameplay.";
 const SPOILS_TOLD = 5;
 
 // Some of a thing, in words: "a healing draught", "3 healing draughts"
@@ -6251,7 +6251,7 @@ export class Game {
         const actor = this.battle.actor(this.me);
 
         if (event.type === "rank") {
-            const ability = event.ability ? ` You can use ${ABILITIES[event.ability].label.toLowerCase()} now: put it on an action wheel (Game options).` : "";
+            const ability = event.ability ? ` You can use ${ABILITIES[event.ability].label.toLowerCase()} now: put it on an action wheel (Game options, Controls).` : "";
 
             this.hud.message(`${TREES[event.tree].name}: ${event.title}!${ability}`, ability ? 5 : 3);
             this.sound?.play("levelUp");
@@ -7520,7 +7520,7 @@ export class Game {
             }
         }
 
-        this.hud.message(`${wheel === "self" ? "Your own" : "An enemy's"} wheels are full: change them in Game options, Action wheels.`, 3.5);
+        this.hud.message(`${wheel === "self" ? "Your own" : "An enemy's"} wheels are full: change them in Game options, Controls, Action wheels.`, 3.5);
     }
 
     // Go and pick up something dropped on the ground: at once if the player's near it, or once

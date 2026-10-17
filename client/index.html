@@ -465,7 +465,7 @@
                         <li>In a fight, <strong>quick actions</strong> rise along the bottom: tap one to use it at once (your attacks and spells, a healing draught). Hold one to change what's in it.</li>
                         <li>Everyone attacking you has an icon down the <strong>right side</strong>: tap one to fight them.</li>
                         <li>Your name and <strong>health</strong> are in the bottom right. Drink a healing draught, or cast <strong>Vigor</strong>, before it runs out.</li>
-                        <li>Whoever falls drops their <strong>loot</strong>: tap it to pick it up (or turn on Auto-snag in Game options).</li>
+                        <li>Whoever falls drops their <strong>loot</strong>: tap it to pick it up (or turn on Auto-snag in Game options, Gameplay).</li>
                     </ul>
                 </section>
                 <section id="about-magic">
@@ -534,7 +534,7 @@
                     <table class="about-keys">
                         <tbody>
                             <tr><th scope="row">W A S D</th><td>Steer (Shift to run)</td></tr>
-                            <tr><th scope="row">1 to 4</th><td>Quick actions, in a fight (1 to 6 with six across, in Game options)</td></tr>
+                            <tr><th scope="row">1 to 4</th><td>Quick actions, in a fight (1 to 6 with six across, in Game options, Controls)</td></tr>
                             <tr><th scope="row">M</th><td>World map</td></tr>
                             <tr><th scope="row">I</th><td>Pack</td></tr>
                             <tr><th scope="row">B</th><td>Spellbook</td></tr>
@@ -548,7 +548,15 @@
                 </section>
                 <section id="about-options">
                     <h3>Options</h3>
-                    <p>The menu's <strong>Game options</strong> sets the sound (effects, environment and music, each with its own volume), the minimap and thumb stick, the camera and battle cam, what's on your action wheels and quick actions, Auto-snag, and the visual quality. <strong>Debug mode</strong>, on the title, shows how the game's running; Game options' <strong>Debug log</strong> keeps the last times it slowed or failed, to copy and send.</p>
+                    <p>The menu's <strong>Game options</strong> has a page for each group:</p>
+                    <ul>
+                        <li><strong>Graphics:</strong> the visual quality, Adaptive (drawing less while the game can't keep up), full screen and screen shake.</li>
+                        <li><strong>Sound:</strong> on or off, and how loud the effects, the world around you and the music are.</li>
+                        <li><strong>Controls:</strong> the thumb stick, zoom buttons and minimap, and what's on your action wheels and quick actions.</li>
+                        <li><strong>Camera:</strong> whether it follows you, the battle cam, and how dragging turns and tilts it.</li>
+                        <li><strong>Gameplay:</strong> Auto-snag, and whether other players' summons and party invites are asked of you.</li>
+                    </ul>
+                    <p><strong>Debug mode</strong>, on the title, shows how the game's running; Game options' <strong>Debug log</strong> keeps the last times it slowed or failed, to copy and send.</p>
                 </section>
                 <section id="about-credits">
                     <h3>Credits</h3>
@@ -573,79 +581,48 @@
                     <button type="button" class="button" id="quitbutton">Back to the title</button>
                 </div>
             </div>
+            <!-- Game options: a page for each group of them -->
             <div class="menupage" id="menuoptions" hidden>
-                <h2 id="optionstitle">Game options</h2>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Paused">‹</button>
+                    <h2 id="optionstitle">Game options</h2>
+                </div>
                 <div class="options">
-                    <label class="switch option">
-                        <span class="text">Minimap<small>The map in the top left corner; off, a compass there instead (tap it for the map)</small></span>
-                        <input type="checkbox" id="minimapswitch" role="switch">
-                        <span class="track" aria-hidden="true"></span>
-                    </label>
-                    <label class="switch option">
-                        <span class="text">Thumb stick<small>A stick in the bottom left corner to walk with (on to start with); off, you walk by tapping alone.<span class="keys-only"> W, A, S, D (Shift to run) steer either way.</span></small></span>
-                        <input type="checkbox" id="stickswitch" role="switch">
-                        <span class="track" aria-hidden="true"></span>
-                    </label>
-                    <label class="switch option stick-option">
-                        <span class="text">Stick under your thumb<small>The stick springs up wherever your thumb lands in the bottom left, rather than waiting in its corner; tapping there walks you no more</small></span>
-                        <input type="checkbox" id="floatswitch" role="switch">
-                        <span class="track" aria-hidden="true"></span>
-                    </label>
-                    <label class="switch option">
-                        <span class="text">Zoom buttons<small>Plus and minus in the bottom right corner. Pinching<span class="keys-only">, or the mouse wheel,</span> zooms either way</small></span>
-                        <input type="checkbox" id="zoomswitch" role="switch">
-                        <span class="track" aria-hidden="true"></span>
-                    </label>
-                    <label class="switch option">
-                        <span class="text">Camera follows<small>Swings round behind you as you walk away or across its view; off, it stays turned the way you leave it</small></span>
-                        <input type="checkbox" id="followswitch" role="switch">
-                        <span class="track" aria-hidden="true"></span>
-                    </label>
-                    <label class="switch option">
-                        <span class="text">Battle cam<small>In a fight, swings round to see you and your foe from the side, clear of buildings and trees; off, it only turns enough to keep your foe in view</small></span>
-                        <input type="checkbox" id="battlecamswitch" role="switch">
-                        <span class="track" aria-hidden="true"></span>
-                    </label>
-                    <label class="level" id="dragoption">
-                        <span class="text">Camera turning<small>How far dragging across the screen turns and tilts the camera</small></span>
-                        <input type="range" id="dragslider" min="50" max="200" step="25">
-                        <output for="dragslider" id="dragname"></output>
-                    </label>
-                    <label class="switch option">
-                        <span class="text">Invert tilt<small>Dragging up looks down, and dragging down looks up</small></span>
-                        <input type="checkbox" id="invertswitch" role="switch">
-                        <span class="track" aria-hidden="true"></span>
-                    </label>
-                    <label class="switch option">
-                        <span class="text">Screen shake<small>The greatest spells shake the view</small></span>
-                        <input type="checkbox" id="shakeswitch" role="switch">
-                        <span class="track" aria-hidden="true"></span>
-                    </label>
-                    <label class="switch option">
-                        <span class="text">Auto-snag<small>Loot from a fight picked up as soon as you're near enough to pick it up, without tapping it</small></span>
-                        <input type="checkbox" id="snagswitch" role="switch">
-                        <span class="track" aria-hidden="true"></span>
-                    </label>
-                    <button type="button" class="option-link" id="snagbutton" hidden>
-                        <span class="text">What auto-snag takes<small id="snagsummary">Everything</small></span>
+                    <button type="button" class="option-link group" id="graphicsbutton" data-to="graphics">
+                        <span class="text">Graphics<small>Visual quality, Adaptive, full screen, screen shake</small></span>
                         <span class="chevron" aria-hidden="true">›</span>
                     </button>
-                    <label class="switch option">
-                        <span class="text">Resist all summons<small>Another player's Summon: said no to, without asking</small></span>
-                        <input type="checkbox" id="resistswitch" role="switch">
-                        <span class="track" aria-hidden="true"></span>
-                    </label>
-                    <label class="switch option">
-                        <span class="text">Refuse party invites<small>Another player asking you to their party: let go unanswered, without asking</small></span>
-                        <input type="checkbox" id="refuseswitch" role="switch">
-                        <span class="track" aria-hidden="true"></span>
-                    </label>
-                    <label class="switch option" id="fullscreenoption">
-                        <span class="text">Full screen while playing<small>The game fills the screen whenever it isn't paused; leaving full screen pauses it</small></span>
-                        <input type="checkbox" id="fullscreenswitch" role="switch">
-                        <span class="track" aria-hidden="true"></span>
-                    </label>
-                    <p class="adapted" id="fullscreennote" hidden>For full screen on an iPhone, add Pellagos to your Home Screen (Share, then Add to Home Screen) and play it from there.</p>
+                    <button type="button" class="option-link group" id="soundbutton" data-to="sound">
+                        <span class="text">Sound<small>On or off; how loud effects, the world around you and music are</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
+                    <button type="button" class="option-link group" id="controlsbutton" data-to="controls">
+                        <span class="text">Controls<small>Thumb stick, zoom buttons, minimap, action wheels, quick actions</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
+                    <button type="button" class="option-link group" id="camerabutton" data-to="camera">
+                        <span class="text">Camera<small>Following you, the battle cam, turning and tilting</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
+                    <button type="button" class="option-link group" id="gameplaybutton" data-to="gameplay">
+                        <span class="text">Gameplay<small>Auto-snag, other players' summons and party invites</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
+                    <button type="button" class="option-link group" id="logbutton">
+                        <span class="text">Debug log<small>The last times the game slowed or failed, to copy and send</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
+                </div>
+                <div class="menu">
+                    <button type="button" class="button" id="optionsback" data-back>Back</button>
+                </div>
+            </div>
+            <div class="menupage" id="menugraphics" hidden>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Game options">‹</button>
+                    <h2 id="graphicstitle">Graphics</h2>
+                </div>
+                <div class="options">
                     <label class="level" id="qualityoption">
                         <span class="text">Visual quality<small>More of the world drawn, and finer, the higher it goes</small></span>
                         <input type="range" id="qualityslider" min="0" max="2" step="1">
@@ -657,6 +634,28 @@
                         <span class="track" aria-hidden="true"></span>
                     </label>
                     <p class="adapted" id="adapted" hidden></p>
+                    <label class="switch option" id="fullscreenoption">
+                        <span class="text">Full screen while playing<small>The game fills the screen whenever it isn't paused; leaving full screen pauses it</small></span>
+                        <input type="checkbox" id="fullscreenswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <p class="adapted" id="fullscreennote" hidden>For full screen on an iPhone, add Pellagos to your Home Screen (Share, then Add to Home Screen) and play it from there.</p>
+                    <label class="switch option">
+                        <span class="text">Screen shake<small>The greatest spells shake the view</small></span>
+                        <input type="checkbox" id="shakeswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                </div>
+                <div class="menu">
+                    <button type="button" class="button" id="graphicsback" data-back>Back</button>
+                </div>
+            </div>
+            <div class="menupage" id="menusound" hidden>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Game options">‹</button>
+                    <h2 id="soundtitle">Sound</h2>
+                </div>
+                <div class="options">
                     <label class="switch option">
                         <span class="text">Sound<small>Everything below, on or off</small></span>
                         <input type="checkbox" id="soundswitch" role="switch">
@@ -681,14 +680,114 @@
                     </div>
                 </div>
                 <div class="menu">
-                    <button type="button" class="button" id="wheelsbutton">Action wheels</button>
-                    <button type="button" class="button" id="quickbutton">Quick actions</button>
-                    <button type="button" class="button" id="logbutton">Debug log</button>
-                    <button type="button" class="button" id="optionsback">Back</button>
+                    <button type="button" class="button" id="soundback" data-back>Back</button>
+                </div>
+            </div>
+            <div class="menupage" id="menucontrols" hidden>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Game options">‹</button>
+                    <h2 id="controlstitle">Controls</h2>
+                </div>
+                <div class="options">
+                    <label class="switch option">
+                        <span class="text">Thumb stick<small>A stick in the bottom left corner to walk with (on to start with); off, you walk by tapping alone.<span class="keys-only"> W, A, S, D (Shift to run) steer either way.</span></small></span>
+                        <input type="checkbox" id="stickswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option stick-option">
+                        <span class="text">Stick under your thumb<small>The stick springs up wherever your thumb lands in the bottom left, rather than waiting in its corner; tapping there walks you no more</small></span>
+                        <input type="checkbox" id="floatswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Zoom buttons<small>Plus and minus in the bottom right corner. Pinching<span class="keys-only">, or the mouse wheel,</span> zooms either way</small></span>
+                        <input type="checkbox" id="zoomswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Minimap<small>The map in the top left corner; off, a compass there instead (tap it for the map)</small></span>
+                        <input type="checkbox" id="minimapswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <button type="button" class="option-link group" id="wheelsbutton">
+                        <span class="text">Action wheels<small>What's on each slice of yours and an enemy's</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
+                    <button type="button" class="option-link group" id="quickbutton">
+                        <span class="text">Quick actions<small>What rises along the bottom in a fight, four or six across</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
+                </div>
+                <div class="menu">
+                    <button type="button" class="button" id="controlsback" data-back>Back</button>
+                </div>
+            </div>
+            <div class="menupage" id="menucamera" hidden>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Game options">‹</button>
+                    <h2 id="cameratitle">Camera</h2>
+                </div>
+                <div class="options">
+                    <label class="switch option">
+                        <span class="text">Camera follows<small>Swings round behind you as you walk away or across its view; off, it stays turned the way you leave it</small></span>
+                        <input type="checkbox" id="followswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Battle cam<small>In a fight, swings round to see you and your foe from the side, clear of buildings and trees; off, it only turns enough to keep your foe in view</small></span>
+                        <input type="checkbox" id="battlecamswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="level" id="dragoption">
+                        <span class="text">Camera turning<small>How far dragging across the screen turns and tilts the camera</small></span>
+                        <input type="range" id="dragslider" min="50" max="200" step="25">
+                        <output for="dragslider" id="dragname"></output>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Invert tilt<small>Dragging up looks down, and dragging down looks up</small></span>
+                        <input type="checkbox" id="invertswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                </div>
+                <div class="menu">
+                    <button type="button" class="button" id="cameraback" data-back>Back</button>
+                </div>
+            </div>
+            <div class="menupage" id="menugameplay" hidden>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Game options">‹</button>
+                    <h2 id="gameplaytitle">Gameplay</h2>
+                </div>
+                <div class="options">
+                    <label class="switch option">
+                        <span class="text">Auto-snag<small>Loot from a fight picked up as soon as you're near enough to pick it up, without tapping it</small></span>
+                        <input type="checkbox" id="snagswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <button type="button" class="option-link" id="snagbutton" hidden>
+                        <span class="text">What auto-snag takes<small id="snagsummary">Everything</small></span>
+                        <span class="chevron" aria-hidden="true">›</span>
+                    </button>
+                    <label class="switch option">
+                        <span class="text">Resist all summons<small>Another player's Summon: said no to, without asking</small></span>
+                        <input type="checkbox" id="resistswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option">
+                        <span class="text">Refuse party invites<small>Another player asking you to their party: let go unanswered, without asking</small></span>
+                        <input type="checkbox" id="refuseswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                </div>
+                <div class="menu">
+                    <button type="button" class="button" id="gameplayback" data-back>Back</button>
                 </div>
             </div>
             <div class="menupage" id="menulog" hidden>
-                <h2 id="logtitle">Debug log</h2>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Game options">‹</button>
+                    <h2 id="logtitle">Debug log</h2>
+                </div>
                 <p class="wheels-note">The last five times the game froze, slowed, hit an error or crashed, the newest first, with what was going on then. Copy it to send to whoever's looking into it.</p>
                 <p class="wheels-note" id="logversion"></p>
                 <div id="logentries" class="log" aria-live="polite"></div>
@@ -696,11 +795,14 @@
                 <div class="menu">
                     <button type="button" class="button primary" id="logcopy">Copy the log</button>
                     <button type="button" class="button" id="logclear">Clear it</button>
-                    <button type="button" class="button" id="logback">Back</button>
+                    <button type="button" class="button" id="logback" data-back>Back</button>
                 </div>
             </div>
             <div class="menupage" id="menusnag" hidden>
-                <h2 id="snagtitle">Auto-snag</h2>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Gameplay">‹</button>
+                    <h2 id="snagtitle">Auto-snag</h2>
+                </div>
                 <p class="wheels-note">Auto-snag takes only what's ticked in both lists: Legendary and Weapons alone, say, for legendary weapons and nothing else. Whatever it leaves is still there to tap.</p>
                 <div class="snag-lists">
                     <fieldset class="snag-list" id="snaggrades"><legend>How rare</legend></fieldset>
@@ -708,19 +810,25 @@
                 </div>
                 <div class="menu">
                     <button type="button" class="button" id="snagall">Take everything</button>
-                    <button type="button" class="button" id="snagback">Back</button>
+                    <button type="button" class="button" id="snagback" data-back>Back</button>
                 </div>
             </div>
             <div class="menupage" id="menuwheels" hidden>
-                <h2 id="wheelstitle">Action wheels</h2>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Controls">‹</button>
+                    <h2 id="wheelstitle">Action wheels</h2>
+                </div>
                 <p class="wheels-note">Hold on yourself or a foe, then flick to a slice. Flick down (S) for the wheel's other side. Tap a slice here to choose what's in it.</p>
                 <div id="wheelsetup"></div>
                 <div class="menu">
-                    <button type="button" class="button" id="wheelsback">Back</button>
+                    <button type="button" class="button" id="wheelsback" data-back>Back</button>
                 </div>
             </div>
             <div class="menupage" id="menuquick" hidden>
-                <h2 id="quicktitle">Quick actions</h2>
+                <div class="menu-head">
+                    <button type="button" class="menu-back" data-back aria-label="Back to Controls">‹</button>
+                    <h2 id="quicktitle">Quick actions</h2>
+                </div>
                 <p class="wheels-note">In a fight, these rise from the bottom of the screen. Tap one to use it: attacks on the foe you're fighting, anything else on yourself. Hold one to change it, or flick a spell up or down for the next or last spell of its school. Tap a slot here to choose what's in it.</p>
                 <label class="switch option">
                     <span class="text">Six across<small>Six quick actions, not four with their names; on a narrow screen their names are smaller, or only their icons show</small></span>
@@ -729,7 +837,7 @@
                 </label>
                 <div id="quicksetup"></div>
                 <div class="menu">
-                    <button type="button" class="button" id="quickback">Back</button>
+                    <button type="button" class="button" id="quickback" data-back>Back</button>
                 </div>
             </div>
         </dialog>

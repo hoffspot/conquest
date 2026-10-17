@@ -5060,10 +5060,48 @@ dialog#menu .menu {
     margin-bottom: 0;
 }
 
-/* Game options: a switch on each row */
+/* A page's heading under the main one: the arrow back on its left, its title in the middle */
+.menu-head {
+    display: grid;
+    grid-template-columns: 44px 1fr 44px;
+    align-items: center;
+    margin: -8px -10px 0;
+}
+
+.menu-head h2 {
+    grid-column: 2;
+}
+
+.menu-back {
+    grid-row: 1;
+    grid-column: 1;
+    width: 44px;
+    height: 44px;
+    margin: 0;
+    padding: 0 0 4px;
+    border: none;
+    border-radius: 10px;
+    background: none;
+    font: inherit;
+    font-size: 32px;
+    line-height: 1;
+    color: var(--gold-bright);
+    cursor: pointer;
+}
+
+.menu-back:hover,
+.menu-back:focus-visible {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+/* Game options: a group on each row, opening a page of its own; and on those, a switch on each row */
 dialog#menu .options {
     margin: 18px 0 4px;
     display: grid;
+}
+
+dialog#menu .options > :first-child {
+    border-top: 1px solid var(--field-border);
 }
 
 .switch.option {
@@ -5129,6 +5167,13 @@ dialog#menu .options {
     font-size: 22px;
     line-height: 1;
     color: var(--muted);
+}
+
+/* A group of Game options (and Action wheels and Quick actions, under Controls): a row as a
+   switch's, not set in under one */
+.option-link.group {
+    padding: 12px 2px;
+    font-size: 16px;
 }
 
 /* What auto-snag takes: how rare (each in its colour) and what kind, ticked in two lists, side by
@@ -5230,9 +5275,11 @@ dialog#menu .options {
     opacity: 0.45;
 }
 
-/* Visual quality: below its slider, what Adaptive draws while the game can't keep up */
+/* Visual quality and Camera turning: settings of their own, in line with the switches (not set in,
+   as the volumes are under Sound); below Adaptive, what it draws while the game can't keep up */
 .level {
     border-bottom: 1px solid var(--field-border);
+    padding-left: 2px;
     padding-bottom: 10px;
 }
 
