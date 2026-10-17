@@ -122,7 +122,7 @@ test("a player's own world through the server's broker: listed on it, joined fro
     await guest.goto(`${base}/`);
     await guest.locator("#worldsbutton").click();
     await guest.locator("#worldsaddress").fill(`127.0.0.1:${server.port}`);
-    await guest.locator("#worlds").getByRole("button", { name: "Add" }).click();
+    await guest.locator("#worlds").getByRole("button", { name: "Add", exact: true }).click();
 
     const listed = guest.locator(`#worlds li.player-world[data-listing="${code}"]`);
 

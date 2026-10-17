@@ -94,7 +94,7 @@ test("a world made on a server and shared by an invite link: both play in it, le
     const worlds = owner.locator("#worlds");
 
     await owner.locator("#worldsaddress").fill(`127.0.0.1:${server.port}`);
-    await worlds.getByRole("button", { name: "Add" }).click();
+    await worlds.getByRole("button", { name: "Add", exact: true }).click();
 
     const row = worlds.locator(`li[data-server="127.0.0.1:${server.port}"]`);
 
@@ -265,7 +265,7 @@ test("a character's own world brought to a server (Bring my world): told how, an
     const worlds = page.locator("#worlds");
 
     await page.locator("#worldsaddress").fill(`127.0.0.1:${server.port}`);
-    await worlds.getByRole("button", { name: "Add" }).click();
+    await worlds.getByRole("button", { name: "Add", exact: true }).click();
 
     const row = worlds.locator(`li[data-server="127.0.0.1:${server.port}"]`);
 
