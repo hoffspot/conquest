@@ -21,6 +21,7 @@ client/models/beasts/ant.bin
 client/models/beasts/dungeon-spider.bin
 client/models/beasts/elite-dungeon-spider.bin
 client/models/beasts/dungeon-scorpion.bin
+client/models/beasts/giant-cockroach.bin
 # (A licensed model's earlier builds, kept ignored where a copy's left behind)
 client/models/beasts/werewolf.bin
 client/models/beasts/werewolf.dusk.bin
