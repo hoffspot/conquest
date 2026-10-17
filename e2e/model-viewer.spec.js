@@ -229,9 +229,9 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     await openViewer(page, "/model-viewer.html?model=beast-centipede&clip=Run");
 
     // (In the game now, as are the ant and the Ant Monster: not listed with the creatures to come,
-    // the Dungeon Spider the only one; read, its clips listed, the one asked for by its address
+    // the spiders the only ones; read, its clips listed, the one asked for by its address
     // played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Dungeon Spider"]);
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Dungeon Spider", "Elite Dungeon Spider"]);
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
@@ -381,6 +381,72 @@ test("and the Dungeon Spider: all 18 clips in its file, its full detail only, an
     await expect(page.locator("#name")).toHaveText("The Dungeon Spider");
     expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 42996, bones: 54 });
     await expect(page.locator("#details")).toContainText("Spider V3, bought on Fab: used with the permission its Standard License gives");
+});
+
+test("and the Elite Dungeon Spider: all 33 clips in its file, turned to face the game's front, its glowing markings kept, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-elite-dungeon-spider&clip=Walk");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack",
+        "Attack 2",
+        "Attack 3",
+        "Attack 4",
+        "Attack 5",
+        "Back",
+        "Back 2",
+        "Butt Attack",
+        "Explode",
+        "Fall Asleep",
+        "Falling",
+        "Falling 2",
+        "Falling 3",
+        "Get Up",
+        "Hanging",
+        "Hit React",
+        "Hit React 2",
+        "Idle",
+        "Idle 2",
+        "Jump",
+        "Landing",
+        "Landing 2",
+        "Pose",
+        "Running Attack",
+        "Running Attack 2",
+        "Scared",
+        "Shock",
+        "Sleep",
+        "Stand",
+        "Tumbling",
+        "Wake Up",
+        "Walk",
+        "Walking Attack",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Walk", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Elite Dungeon Spider");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 7378, bones: 41 });
+
+    // Its head ahead of its body along +z, where the game's creatures face (in its own space,
+    // however it's shown); and its markings glowing (its emissive map, kept)
+    const looks = await page.evaluate(() => {
+        const object = window.lab.avatar().object;
+        const mesh = object.getObjectByProperty("isSkinnedMesh", true);
+        const at = (name) => {
+            const bone = object.getObjectByName(name);
+
+            return object.worldToLocal(bone.getWorldPosition(bone.position.clone()));
+        };
+
+        object.updateMatrixWorld(true);
+
+        const [head, pelvis] = [at("Bip001_Head"), at("Bip001_Pelvis")];
+
+        return { ahead: head.z - pelvis.z > 2 * Math.abs(head.x - pelvis.x), glows: Boolean((mesh.userData.ownMaterial ?? mesh.material).emissiveMap) };
+    });
+
+    expect(looks).toEqual({ ahead: true, glows: true });
+    await expect(page.locator("#details")).toContainText("Spider V6a, bought on Fab: used with the permission its Standard License gives");
 });
 
 test("the werewolf as the game draws it, from its model once that's read: the game's moves for it, and the skin each one wears", async ({ page }) => {

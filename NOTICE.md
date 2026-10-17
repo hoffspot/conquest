@@ -12,5 +12,6 @@ It doesn't cover:
   reuse, and they aren't in this repository: the game's builds fetch them from a private one
   (`docs/LICENSED_MODELS.md`). Today they're the Dreadthorn, HuyKhoi2407's Dreadthorn Dragon; the
   werewolf, Fab's Werewolf - Mythical Creature, with its skins; the centipede, Fab's Centipede
-  Monster-V2; the Ant Monster, Fab's Ant Monster V1b; the ant, Fab's Ant V2; and the Dungeon
-  Spider, Fab's Spider V3 (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
+  Monster-V2; the Ant Monster, Fab's Ant Monster V1b; the ant, Fab's Ant V2; the Dungeon Spider,
+  Fab's Spider V3; and the Elite Dungeon Spider, Fab's Spider V6a
+  (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
