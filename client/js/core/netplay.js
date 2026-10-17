@@ -89,14 +89,17 @@ export const MOST_PLAYERS = 8;
 export const PACE = Object.freeze({ behind: 6, catchUp: 40, catchUpMs: 8, tooFar: 100 });
 
 /**
- * How many of the host's steps a joined game keeps in hand (the delay): at least `least` (the host
- * sends every other step or so), more as the host's sendings come less evenly, `most` at most,
- * twice their unevenness (ms, as RFC 3550 reckons it, over the last `jitter` or so; any one late
- * by `late` ms at most: the link dropped a moment) over. And how it keeps them: playing up to
- * `rate` slower or faster, `gain` for each step too few or too many, as it's had them in hand
- * over the last `settle` ms.
+ * How many of the host's steps a joined game keeps in hand (the delay), made for a phone's link
+ * (a mobile network's, the least even): each sending of the host's is timed as it comes, how much
+ * later its first step comes than the quickest of the last `window` ms (ms, `late` at most: the
+ * link dropped a moment), and the delay covers all but the latest `spare` of those of the last
+ * `remember` ms: at least `least` steps, `most` at most. So a link that's held up often enough
+ * keeps more in hand, till it's been steady a while. And how it keeps them: playing up to
+ * `slower` slower or `faster` faster, `gain` for each step too few or too many, as it's had them
+ * in hand over the last `settle` ms (slower sooner than faster: running out stops everyone,
+ * having a few too many only shows them a little later).
  */
-export const PLAYOUT = Object.freeze({ least: 2, most: 6, jitter: 16, late: 1000, rate: 0.1, gain: 0.05, settle: 1000 });
+export const PLAYOUT = Object.freeze({ least: 2, most: 8, window: 2000, remember: 20000, spare: 0.1, late: 1000, slower: 0.1, faster: 0.05, gain: 0.05, settle: 1000 });
 
 /** Why a game can't join: shown to its player (a version's own words: versionWords). */
 export const NET_REFUSALS = Object.freeze({
@@ -635,6 +638,10 @@ export class Hosting {
 export class Joining {
     #last = null;
 
+    // The host's sendings timed lately (#arrived): the quickest, and how late each came
+    #quickest = [];
+    #lateness = [];
+
     // How many of the host's steps are waiting to be played (in the queue)
     #waiting = 0;
 
@@ -675,9 +682,9 @@ export class Joining {
         this.desyncs = 0;
 
         /**
-         * The host's latest step heard; how unevenly its sendings come (ms); how many of its
-         * steps to keep in hand (PLAYOUT), and how many it's had in hand lately; and how long a
-         * word takes to the host and back (ms: null till it's known).
+         * The host's latest step heard; how late its steps come (ms: all but the latest few,
+         * PLAYOUT); how many of them to keep in hand, and how many it's had in hand lately; and
+         * how long a word takes to the host and back (ms: null till it's known).
          */
         this.hostStep = null;
         this.jitter = 0;
@@ -741,12 +748,15 @@ export class Joining {
                 break;
             case "ops":
                 if (Array.isArray(message.ops)) {
+                    let steps = 0;
+
                     for (const op of message.ops) {
                         this.queue.push(op);
-                        this.#waiting += Array.isArray(op) && op[0] === "a" ? (op[2] ?? 1) : 0;
+                        steps += Array.isArray(op) && op[0] === "a" ? (op[2] ?? 1) : 0;
                     }
 
-                    this.#arrived(message.step);
+                    this.#waiting += steps;
+                    this.#arrived(message.step, steps);
                 }
 
                 break;
@@ -866,21 +876,46 @@ export class Joining {
         this.send(encode({ kind: "ping", t: this.clock() }));
     }
 
-    // The host's sending of what's been done up to `step` heard: how unevenly they come, as RFC
-    // 3550 reckons it (each one's lateness against the last, by the steps between them), and so
-    // how many steps to keep in hand
-    #arrived(step) {
+    // The host's sending of what's been done up to `step` heard, `steps` of its steps in it: how
+    // late they came (its first step, against the quickest of late: the steps sent together
+    // waiting for the last), as a jitter buffer reckons it (WebRTC's NetEq, by how late each
+    // comes against the quickest), and so how many steps to keep in hand. (Over a pause, or once
+    // the world's come again, timed afresh: the host's steps stopped, not late)
+    #arrived(step, steps) {
         if (!Number.isInteger(step)) {
             return;
         }
 
         const at = this.clock();
 
-        if (this.#last && step > this.#last.step) {
-            const late = Math.min(PLAYOUT.late, Math.abs(at - this.#last.at - (step - this.#last.step) * STEP_MS));
+        if (!this.#last) {
+            this.#quickest = [];
+        }
 
-            this.jitter += (late - this.jitter) / PLAYOUT.jitter;
-            this.delay = Math.max(PLAYOUT.least, Math.min(PLAYOUT.most, PLAYOUT.least + Math.round((2 * this.jitter) / STEP_MS)));
+        if (steps > 0 && (!this.#last || step > this.#last.step)) {
+            const took = at - step * STEP_MS;
+
+            // (The quickest of the last `window` ms, first: each kept till a quicker one comes)
+            while (this.#quickest.length && this.#quickest.at(-1).took >= took) {
+                this.#quickest.pop();
+            }
+
+            this.#quickest.push({ at, took });
+
+            while (this.#quickest[0].at < at - PLAYOUT.window) {
+                this.#quickest.shift();
+            }
+
+            this.#lateness.push({ at, late: Math.min(PLAYOUT.late, took - this.#quickest[0].took + (steps - 1) * STEP_MS) });
+
+            while (this.#lateness[0].at < at - PLAYOUT.remember) {
+                this.#lateness.shift();
+            }
+
+            const lates = this.#lateness.map(({ late }) => late).sort((a, b) => a - b);
+
+            this.jitter = lates[Math.min(lates.length - 1, Math.floor(lates.length * (1 - PLAYOUT.spare)))];
+            this.delay = Math.max(PLAYOUT.least, Math.min(PLAYOUT.most, Math.ceil(this.jitter / STEP_MS)));
         }
 
         this.#last = { step, at };
@@ -895,7 +930,7 @@ export class Joining {
     pace(ms) {
         this.held += (this.behind - this.held) * Math.min(1, ms / PLAYOUT.settle);
 
-        return 1 + Math.max(-PLAYOUT.rate, Math.min(PLAYOUT.rate, (this.held - this.delay) * PLAYOUT.gain));
+        return 1 + Math.max(-PLAYOUT.slower, Math.min(PLAYOUT.faster, (this.held - this.delay) * PLAYOUT.gain));
     }
 
     /**

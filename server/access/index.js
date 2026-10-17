@@ -19,7 +19,7 @@ import { KeyPolicy } from "./policy.js";
 import { ServerSecrets } from "./secrets.js";
 import { Sessions } from "./sessions.js";
 import { shortCodeOf } from "./tokens.js";
-import { WorldAccess } from "./world.js";
+import { OPEN_DOOR, PLAYERS_KEY, WorldAccess } from "./world.js";
 
 // What's hashed for a short code that couldn't be one, so a wrong guess takes as long whatever's wrong with it
 const NOT_A_CODE = "00000000";
@@ -37,6 +37,9 @@ export class Access {
         this.blocks = new AddressBlocks({ clock });
         this.guard = new CodeGuard({ clock });
         this.policy = new KeyPolicy(this);
+
+        /** Whether a world's open to anyone, without a key (its owner's said so: the server tells it, world-server.js). */
+        this.isOpen = () => false;
 
         // Each world's access (by its id), and the short codes that work across them all (by what proves each: { world, id })
         this.worlds = new Map();
@@ -216,6 +219,49 @@ export class Access {
         this.policy.on("keyReplaced", { world, key: id, by, label: made.record.label, replacedBy: made.record.id });
 
         return { ...made, ended: this.sessions.end((session) => session.world === world && session.via === id) };
+    }
+
+    /**
+     * The key a world's invite links carry (world.js inviteKey), as it's given: its players' key,
+     * or one made with that label if it hasn't one that works. Returns { key, record }, or
+     * { reason } if none can be made.
+     */
+    async inviteKey(world, { by = null } = {}) {
+        const access = this.world(world);
+        const now = this.#now();
+        const found = access.inviteKey(now);
+
+        return found ? { key: access.showKey(found.id, now), record: found } : this.issueKey(world, { label: PLAYERS_KEY, role: "player" }, { by });
+    }
+
+    /**
+     * A world's invite links replaced (one passed on too far): a new players' key, the old one
+     * revoked, so the old links let nobody else in; and everyone who came by it kept (they come
+     * back by their ticket, as by the new key: none sent out). Returns { key, record } (the new),
+     * or { reason }.
+     */
+    async replaceInvite(world, { by = null } = {}) {
+        const access = this.world(world);
+        const old = await this.inviteKey(world, { by });
+
+        if (old.reason) {
+            return old;
+        }
+
+        const made = await access.replaceKey(old.record.id, this.#now());
+
+        await access.carryOver(old.record.id, made.record.id);
+        this.#forgetCodes(world, access);
+        this.policy.on("keyReplaced", { world, key: old.record.id, by, label: made.record.label, replacedBy: made.record.id });
+
+        return made;
+    }
+
+    /** An open world's door (world.js door): the key whoever comes in without one comes by, made the first time. Returns its record (null if it can't be made). */
+    async openDoor(world, { by = null } = {}) {
+        const access = this.world(world);
+
+        return access.door(this.#now()) ?? (await this.issueKey(world, { label: OPEN_DOOR, role: "player", open: true }, { by })).record ?? null;
     }
 
     // The short codes of a world that no longer work, forgotten

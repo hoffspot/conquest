@@ -68,6 +68,12 @@
                     <button type="button" id="worldsbutton" class="button">Worlds on servers</button>
                 </div>
                 <p class="note" id="savenote" hidden></p>
+                <!-- The game opened from a world server: its worlds, each joined with a tap -->
+                <div class="title-server" id="titleserver" hidden>
+                    <h2 class="title-server-name" id="titleservername">Worlds on this server</h2>
+                    <p class="note" id="titleservernote"></p>
+                    <ul class="title-worlds" id="titleworlds"></ul>
+                </div>
                 <p class="note warning" id="titlenote" role="status" hidden></p>
                 <label class="switch" title="Show how fast the game runs and what it draws">
                     <input type="checkbox" id="debugswitch" role="switch">
@@ -288,13 +294,27 @@
             <ul class="world-people" id="worldpanelpeople"></ul>
             <div id="worldpanelowner" hidden>
                 <h3 class="worlds-heading">Invite others</h3>
-                <p class="note">An invite link carries this server and a key to the world. A short code works once, for half an hour.</p>
+                <p class="note">Send them the invite link, or let them scan its code. It opens the game from this server and takes them into this world: they make a character first if they have none. One link does for everyone you send it to. A short code is for someone on the game already: it works once, for half an hour.</p>
                 <div class="menu">
-                    <button type="button" class="button quiet" id="worldpanellink">Make an invite link</button>
+                    <button type="button" class="button quiet" id="worldpanellink">Invite link</button>
                     <button type="button" class="button quiet" id="worldpanelcode">Make a short code</button>
                 </div>
+                <div class="world-invite" id="worldpanelinvite" hidden>
+                    <img class="world-invite-qr" id="worldpanelqr" alt="">
+                    <a id="worldpanelinvitelink" target="_blank" rel="noopener"></a>
+                    <p class="note" id="worldpanelwhere"></p>
+                    <div class="menu">
+                        <button type="button" class="button quiet" id="worldpanelcopy">Copy the link</button>
+                        <button type="button" class="button quiet" id="worldpanelshare" hidden>Share…</button>
+                        <button type="button" class="button quiet" id="worldpanelreplace" hidden>Replace the link</button>
+                    </div>
+                </div>
                 <p class="code" id="worldpanelinvitecode" hidden></p>
-                <a id="worldpanelinvitelink" hidden></a>
+                <label class="switch option" id="worldpanelopening" hidden>
+                    <span class="text"><span>Open to anyone</span><small>Whoever opens this server sees this world and can join it, no link needed. Turned off, those already in can still come back.</small></span>
+                    <input type="checkbox" id="worldpanelopen" role="switch">
+                    <span class="track" aria-hidden="true"></span>
+                </label>
                 <h3 class="worlds-heading">Keys</h3>
                 <ul class="character-list" id="worldpanelkeys"></ul>
             </div>

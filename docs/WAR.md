@@ -2443,19 +2443,49 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   Only `Math.sqrt` is left to the browser: each has the processor work it out, and IEEE 754 has
   that give the nearest number to the truth. A world's plan is also about 15% quicker to lay out:
   how far each climate reaches is worked out once for each distance.
-- **Pace** (`Joining.pace`, `PLAYOUT`). Each of the host's sendings carries its step. A copy keeps
-  a few of the host's steps in hand, so that it doesn't stop and start when one sending comes a
-  little late:
-  - **How many:** 2 when the sendings come evenly (the host sends every other step or so), more
-    the less evenly they come, up to 6: twice their unevenness, as RFC 3550 reckons it, over. A
-    pause of the host's or a resync isn't counted as unevenness, and nor is any sending later than
-    a second (the link dropping a moment).
+- **Pace** (`Joining.pace`, `PLAYOUT`). Each of the host's sendings carries its step, and the host
+  sends each step as it's done (`RUNNER.flushEvery`, 50 ms; it used to send every other step,
+  which kept the steps in hand going up and down by two, and everyone drawn a step later for
+  nothing). A copy keeps a few of the host's steps in hand, so that it doesn't stop and start
+  when one comes a little late. It's made for a phone on a mobile network, the least even link
+  it'll have:
+  - **How many:** each sending is timed as it comes: how much later its first step came than the
+    quickest of the last 2 s (as a jitter buffer reckons it: WebRTC's NetEq times each packet
+    against the quickest, too). The copy keeps enough in hand to cover all but the latest tenth of
+    the last 20 s: 2 steps when they come evenly, up to 8 (400 ms). A link held up often enough (a
+    weak signal, a busy cell) keeps more in hand till it's been steady a while; one held up only
+    now and then doesn't, running on (below) covering most of it. A pause of the host's or a resync
+    isn't counted as lateness, and nor is anything later than a second (the link dropping a
+    moment). It used to keep twice their unevenness as RFC 3550 reckons it (an average), up to 6:
+    too few for a link held up now and then, as a mobile one is, which ran out, and stopped.
   - **How they're kept:** playing a little slower while there are fewer in hand than that (lately,
-    over the last second), a little faster while there are more: up to a tenth either way.
-  - **What it does:** in a simulation of sendings up to 150 ms late, the copy stopped for want of a
-    step in 0.1% of frames playing them as they came, and never kept in hand; up to 300 ms late,
-    2% against 0.01%. It costs about 50–100 ms more behind the host, which the player's own hero
-    doesn't show (below).
+    over the last second), a little faster while there are more: up to a tenth slower, a twentieth
+    faster (running out stops everyone; a few too many only shows them a little later).
+  - **Running on** (game.js `RUN_ON`): when the next step hasn't come yet, everyone's drawn going on
+    as they were for up to 100 ms more (Source's engine draws them on up to 250 ms), rather than
+    stopped; when it comes, they're drawn going on from there. Before, they stopped at the last
+    step at once. Arrows and the like aren't drawn on past their last step: one may land in the
+    next.
+  - **What it does:** in a modelled run (another character running, frame by frame after their
+    body's spring, `world/avatar.js`; the host's steps sent over each link, in order as a WebSocket
+    has them, a held-up one holding back those after it), how much their drawn speed varies (its
+    standard deviation against their pace), how many frames they're drawn stopped, and how far
+    behind the host they're drawn, before and now:
+
+    | Link | Speed varies | Frames stopped | Behind the host |
+    | --- | --- | --- | --- |
+    | Wi-Fi | 0.9% → 0.3% | none | 199 → 172 ms |
+    | 4G | 10% → 8% | 1.2% → 0.8% | 302 → 280 ms |
+    | 4G, a weak signal | 16% → 9% | 2.3% → 0.9% | 447 → 608 ms |
+    | 3G | 24% → 16% | 4.7% → 1.8% | 599 → 790 ms |
+
+    The links: 4G some 25 ms each way and a little more, a few sendings 60–200 ms late and one in
+    250 held up a quarter to half a second more (a lost packet sent again); a weak 4G signal (or a
+    busy cell, or moving) some 40 ms, more often late, held up more often, and slower by 60–160 ms
+    for a second or three every 15 s or so; 3G, 70 ms, and worse again. On the poorer links it
+    keeps more in hand, so others are drawn later: what's left of the stopping is a link held up
+    longer than that and the run on together (the WebSocket can't hand on what came after a lost
+    packet till it's been sent again).
   - **Catching up:** when a copy falls more than 6 behind what it means to keep (`PACE`), it plays
     up to 40 more steps a frame, for no more than 8 ms of it, so that on a slow phone catching up
     doesn't make the frame so long that it falls further behind.
@@ -2497,23 +2527,38 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     gone astray: it asks for the world again at once. That's within a fifth of a second, where
     the checksum would have taken up to five seconds.
   - **What it costs:** in seed 2's start town, about 1.2 KB a second to each who's joined, beside
-    about 0.5 KB a second of what's done.
+    about 0.5 KB a second of what's done (about 1 KB now that each step's sent as it's done: some
+    47 characters, twenty times a second rather than ten).
   - Games before it (`NET_VERSION` 11) can't join.
 - **Your hero, drawn ahead** (`app/predict.js`). A joined player's command goes to the host and
-  comes back done: a round trip and the steps kept in hand, a fifth of a second or more. So a
-  tap's drawn at once:
-  - **Before it's done:** the hero's drawn setting off straight for where they were sent (or
-    straight ahead, swiped), at a walk, speeding up to a sprint as a runner does if they're to run.
-  - **Once it's done:** drawn as far ahead along their way as that took, the copy catching up as
-    they arrive.
-  - **Set right:** whenever what's drawn and where they'd be drawn part (the host had them go
-    another way, or not at all), the gap closes over 150 ms. Gone far (through a door, or by
-    magic), they're drawn where they are at once.
+  comes back done: a round trip and the steps kept in hand, a fifth of a second or more, half a
+  second and more over a mobile network. So the hero's drawn where the copy will have them once
+  the host's heard:
+  - **Before it's done:** standing, they're drawn setting off straight for where they were sent (or
+    straight ahead, swiped), at a walk, speeding up to a sprint as a runner does if they're to
+    run. Already going (the stick held, its order sent again every half second, or turned), they're
+    drawn going the new way at once, from where the copy will have them when the host hears, at
+    the pace they're going: no further ahead than ever, should it hear late. (Each order sent again
+    used to draw them from the copy afresh: a third of their pace for 150 ms, then twice it till
+    the host heard. With the stick held, 0 to 2 times their pace, frame by frame: what made a
+    joined hero's running go fast and slow.)
+  - **Once it's done:** drawn as far ahead along their way as their orders take to come back done
+    (the lead: a quarter of the way to each one's time, changing by no more than a tenth of the
+    time going by, so that they're drawn a little faster or slower a while, never lurching), the
+    copy catching up as they arrive. An order that comes back after the next's been sent is timed
+    as itself (it was taken for the next, and the next taken as done).
+  - **Set right:** whenever what's drawn and where they'd be drawn part (an order sent or come
+    back, or the host had them go another way, or not at all), the gap closes over 150 ms, from
+    where they'd have been drawn going on as they were. Gone far (through a door, or by magic),
+    they're drawn where they are at once.
+  - **What it does:** in the modelled run above, the player's own hero running with the stick held,
+    how much their drawn speed varies, before and now: Wi-Fi 9.7% → 0.9%, 4G 33% → 8.5%, a weak 4G
+    signal 48% → 9.5%, 3G 44% → 17% (and drawn stopped in 4.8% → 0.8% of frames on 4G).
   - Only what's drawn changes: the copy of the world is never touched, so the rules never guess.
 - **Timing the link.** Once a second, a joined game asks the host how long a word takes to it and
   back (`ping`, `pong`: the host answers at once, not at its next sending).
 - **Debug.** The debug overlay's `Net` line shows, joined, that round trip, the steps in hand
-  against those it means to keep (and the unevenness), the checks made and found astray, the
+  against those it means to keep (and how late they come, all but the latest tenth), the checks made and found astray, the
   resyncs, and what it's hearing a second; hosting, how many have joined and what's sent them a
   second (and of that, the motion stream).
 - **What's drawn.** Each game draws what's round its own player: others far off, and whoever's near

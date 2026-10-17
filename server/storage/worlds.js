@@ -74,6 +74,7 @@ export const FIRST_HEROES = Object.freeze(["new", "bring"]);
 export const WORLD_SETTINGS = Object.freeze({
     mostPlayers: { kind: "integer", min: 1, max: 8, default: 8, about: "The most players in it at once" },
     listed: { kind: "boolean", default: false, about: "Shown to anyone who asks the server what worlds it has" },
+    open: { kind: "boolean", default: false, about: "Open to anyone: whoever opens the server may come in, no key or link needed (shown to them too)" },
     pauseWhenHidden: { kind: "boolean", default: true, about: "Stopped while every player's page is hidden" },
     holdWhileJoining: { kind: "boolean", default: false, about: "Stopped while someone's coming in" },
     trustedMayInvite: { kind: "boolean", default: false, about: "Trusted players may give others keys" },
