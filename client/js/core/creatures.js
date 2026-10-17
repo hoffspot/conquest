@@ -69,7 +69,11 @@ const PACK_EVERY = 2;
  * (`boss`: what of `bomb` it does otherwise, its throne room's: the caves' Goblin King); taking to
  * the air now and then once it's badly hurt (`hover`: at `below` its hit points or fewer, a share;
  * `ms` up there, `every` ms at least from coming down to going up again, `rise` ms going up and
- * as long coming down), out of reach of any blow up close meanwhile (battle.js #hover).
+ * as long coming down), out of reach of any blow up close meanwhile (battle.js #hover); calling
+ * more of a kind to it now and then while it fights (`call`: { kind, count: [least, most], `most`
+ * of them about it at once, every `every` ms, the first `first` ms after it sets on someone:
+ * battle.js #calls, brought by the host, host.js #flock), and as a dungeon's boss its `boss`
+ * `call`'s (the ants' nest's Ant Monster).
  */
 export const CREATURES = Object.freeze({
     // Near home, everywhere
@@ -149,6 +153,15 @@ export const CREATURES = Object.freeze({
     deathWorm: { name: "Death worm", hp: 40, weapon: "deathWorm", speed: 0.8, chase: 2, temper: "territorial", guard: 4, roam: 6, leash: 12, pack: [1, 1], tiers: [2, 6], biomes: ["badlands"], people: "orc", blood: "red" },
     vultureFlock: { name: "Vulture flock", hp: 30, weapon: "vultureFlock", speed: 1.4, chase: 3, temper: "aggressive", roam: 12, leash: 22, pack: [1, 1], tiers: [1, 4], biomes: ["badlands", "heath"], people: "orc", blood: "red", steady: true },
     chimera: { name: "Chimera", hp: 85, weapon: "chimera", speed: 1.3, chase: 3, temper: "aggressive", roam: 10, leash: 24, pack: [1, 1], tiers: [5, 9], biomes: ["volcanic", "badlands"], people: "orc", blood: "red", steady: true },
+    // (The ants' nests' own, met only there (dungeons/themes.js `nest`), each drawn from a model of
+    // its own once it's read (beasts/model.js): a giant ant, as big as a hound, its mandibles'
+    // bite burning; a great centipede, four metres long, its fangs venomous,
+    // rearing to strike the harder; and the Ant Monster, the nest's great queen, spitting acid at
+    // whoever keeps off and calling its flock to it now and then while it fights (`call`), the
+    // more as the nest's boss)
+    ant: { name: "Giant ant", hp: 24, weapon: "ant", speed: 1.1, chase: 2.6, temper: "aggressive", roam: 8, leash: 18, pack: [1, 3], tiers: [1, 9], biomes: [], blood: "ichor", armor: 0.05, darkSight: true },
+    greatCentipede: { name: "Great centipede", hp: 52, weapon: "greatCentipede", speed: 0.9, chase: 2, temper: "aggressive", roam: 8, leash: 18, pack: [1, 2], tiers: [3, 10], biomes: [], blood: "ichor", armor: 0.1, darkSight: true, steady: true },
+    antMonster: { name: "Ant Monster", hp: 96, weapon: "antMonster", speed: 1.4, chase: 2.8, temper: "aggressive", roam: 6, leash: 24, pack: [1, 1], tiers: [4, 10], biomes: [], blood: "ichor", armor: 0.2, darkSight: true, steady: true, call: { kind: "ant", count: [2, 3], most: 4, every: 20000, first: 6000 }, boss: { call: { count: [2, 4], most: 6, every: 15000 } } },
     // The mightiest: only in the perilous places
     dragon: { name: "Drake", hp: 90, weapon: "dragon", speed: 1, chase: 2.2, temper: "aggressive", roam: 6, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true , steady: true },
     // (The mightiest of all, each in a lair of its own: worldplan/settle.js DREADTHORN_LAIRS. On
@@ -329,13 +342,14 @@ export function notable(wild, { master = false } = {}) {
 }
 
 /**
- * How a creature fights besides its weapon (battle.js, its actor's `wild`): `steady`, `keep` and
- * `bomb` (CREATURES); as a dungeon's boss (`boss`), its bomb as its `boss` has it.
+ * How a creature fights besides its weapon (battle.js, its actor's `wild`): `steady`, `keep`,
+ * `bomb`, `hover` and, one that has it, `call` (CREATURES); as a dungeon's boss (`boss`), its
+ * bomb and its call as its `boss` has them.
  */
 export function traitsOf(creature, { boss = false } = {}) {
-    const { steady = false, keep = null, bomb = null, boss: asBoss = null, hover = null } = CREATURES[creature] ?? {};
+    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null } = CREATURES[creature] ?? {};
 
-    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null };
+    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}) };
 }
 
 /** The round an elite walks ([[x, y], ...] metres): ELITES.stops evenly about where it was put out (`at`), ELITES.loop metres off. */

@@ -239,6 +239,17 @@ export const CLUTTER = {
         sanctum: [["skulls", 1], ["candles", 2], ["vessels", 2], ["coffin", 1]],
         any: [["vessels", 2], ["rocks", 2], ["candles", 1]],
     },
+    // (An ants' nest's: what the ants have dragged in, the bones of what they've eaten, roots
+    // through the earth)
+    nest: {
+        mouth: [["branches", 3], ["roots", 3], ["rocks", 2], ["log", 1]],
+        galleries: [["roots", 3], ["rocks", 3], ["boulder", 1], ["fungi", 1]],
+        larder: [["bones", 4], ["beast-skulls", 3], ["skulls", 2], ["branches", 1]],
+        brood: [["roots", 2], ["fungi", 2], ["rocks", 2], ["bones", 1]],
+        midden: [["bones", 3], ["beast-skulls", 2], ["branches", 2], ["rats", 1]],
+        chamber: [["bones", 3], ["skulls", 3], ["beast-skulls", 3], ["roots", 1]],
+        any: [["roots", 3], ["rocks", 3], ["bones", 1], ["fungi", 1]],
+    },
 };
 
 /** What's left against a wall at a square (metres: its middle; `wall`, `rough`), for a theme's room's look. */
@@ -471,10 +482,19 @@ export function blockAt(x, z, { rough }) {
     return [stump, { model: spot.r(3) < 0.5 ? "hatchet" : "axe-old", on: stump, x: x + 0.05, z, size: 0.5, roll: 0.5, turn: spot.r(4) * 6, shadow: false }];
 }
 
+// What's strewn along a level's walls, by theme: [what, weight] (an ants' nest, the twigs and
+// bark they've carried in and the bones of what they've eaten)
+const STREWN = {
+    caves: [[STONES, 4], [BARK, 2], [BRANCHES, 1], [ROCKS, 2], [BONES, 1], [MUSHROOMS, 1]],
+    hideout: [[STONES, 2], [BARK, 2], [BRANCHES, 1]],
+    ancient: [[STONES, 3], [ROCKS, 1], [BONES, 1]],
+    nest: [[STONES, 2], [BARK, 3], [BRANCHES, 2], [BONES, 2]],
+};
+
 /** Small things along a level's walls to walk over: stones, bark, a branch; by theme, at a square. */
 export function strewnAt(x, z, { theme, wall, rough, tint = null }) {
     const spot = spotOf(x, z, wall, rough);
-    const kinds = theme === "caves" ? [[STONES, 4], [BARK, 2], [BRANCHES, 1], [ROCKS, 2], [BONES, 1], [MUSHROOMS, 1]] : theme === "hideout" ? [[STONES, 2], [BARK, 2], [BRANCHES, 1]] : [[STONES, 3], [ROCKS, 1], [BONES, 1]];
+    const kinds = STREWN[theme] ?? STREWN.ancient;
     const list = pick(kinds, spot.r(1));
     const name = pick(list, spot.r(2));
     const size = list === BRANCHES ? 0.7 : list === ROCKS ? 0.18 + 0.12 * spot.r(3) : list === BONES ? 0.22 + 0.2 * spot.r(3) : list === MUSHROOMS ? 0.12 + 0.1 * spot.r(3) : 0.12 + 0.14 * spot.r(3);

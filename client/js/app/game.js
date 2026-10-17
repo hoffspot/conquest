@@ -8418,6 +8418,22 @@ export class Game {
 
                     break;
                 }
+                case "call": {
+                    // (One of the wild's calling its flock to it, as its call goes out: heard far
+                    // off, and told to whoever it's after; its flock comes running, host.js #flock)
+                    const actor = battle.actor(event.id);
+                    const creature = this.#voiced(actor, avatar);
+
+                    if (creature) {
+                        this.sound?.voice(creature, "call", avatar.object.position);
+                    }
+
+                    if (event.target === this.me) {
+                        this.hud.message(`${actor.name[0].toUpperCase()}${actor.name.slice(1)} calls its flock: more ${CREATURES[event.kind]?.name.toLowerCase() ?? "creature"}s are coming!`, 2.5);
+                    }
+
+                    break;
+                }
                 case "draw":
                     this.#draw(event, avatar);
                     break;

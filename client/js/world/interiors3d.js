@@ -3661,6 +3661,8 @@ const DUNGEON_LOOKS = Object.freeze({
     caves: { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x6f665c, ground: 0x5d554b },
     hideout: { rock: "rock", shell: "dug", picture: "rock-dug", underfoot: "ground-dug", rubble: "rock", shored: true, ground: 0x6e5440 },
     ancient: { walls: "stone-old", tall: 4.2, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple" },
+    // (An ants' nest: the caves' rock, its earth reddened, the ground the hideout's dug earth)
+    nest: { rock: "rock", shell: "caves", picture: "rock-cave", underfoot: "ground-dug", rubble: "rock", tint: 0x8a6448, ground: 0x6e4c34 },
 });
 
 // A flight of a dungeon's stairs: how many steps, how far each goes up or down, and how deep the

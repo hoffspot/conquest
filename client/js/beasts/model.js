@@ -20,8 +20,10 @@ import { Breath } from "./breath.js";
  * The creatures drawn from a model, by their LOOKS id (which stands in for one until it's read):
  * the catalog's entry (`asset`: two kinds may be drawn from one), and the skins one of them may
  * wear (`skins`: "" its own, or one of the catalog's "<asset>-skins", <name>.<skin>.bin, only the
- * textures that differ; by its seed); how long it's drawn (metres) and how long and tall it's made; which of its clips are what
- * (`clips`: `hover`, hanging in the air, battle.js #hover; `run`, running), and its ways of
+ * textures that differ; by its seed); how long it's drawn (metres) and how long and tall it's made
+ * (and how far above where it is it's made standing, `sink`: sunk that far to the ground); which
+ * of its clips are what (`clips`: `hover`, hanging in the air, battle.js #hover; `run`, running;
+ * `react` and `dead`, its flinch and its fall, if it has them: fallOf), and its ways of
  * attacking (`attacks`, the special ones `specials`, as named: weapons.js `animation`; up in the
  * air, `aloft`'s in their place) and resting (`rests`), each a clip; when in a clip it breathes
  * fire (`fire`, by clip: seconds into it) and from where (`mouth`, if it does); its joints for the
@@ -83,6 +85,88 @@ export const MODELS = Object.freeze({
         runPace: 3.69,
         flinch: 0.6,
     }),
+    // (The ants' nests' own (dungeons/themes.js `nest`). A giant ant, drawn 1.5 metres long, as
+    // it's made: rearing to bite; resting, looking about, drinking, rearing up. It has no flinch
+    // nor fall of its own: it borrows the Ant Monster's (`borrows`), once both models are read;
+    // till then, struck, it doesn't flinch, and dead, it rolls onto its back (poseOf, fallOf))
+    ant: Object.freeze({
+        asset: "beast-ant",
+        length: 1.5,
+        made: Object.freeze({ long: 1.58, tall: 0.51 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit React", dead: "Death" }),
+        // (Its body the Ant Monster's pelvis, its belly the segments of its tail, each leg's three
+        // bones the first three of the Ant Monster's four; carried as its pelvis is)
+        borrows: Object.freeze({
+            from: "antMonster",
+            clips: Object.freeze(["Hit React", "Death"]),
+            carried: Object.freeze(["Root", "Bip001_Pelvis"]),
+            bones: Object.freeze({
+                Chest: "Bip001_Pelvis",
+                Head: "Bip001_Head",
+                Spine_01st: "Bn_tail",
+                Spine_02nd: "Bn_tail_01",
+                Hip_01st: "Bn_tail_02",
+                Hip_02nd: "Bn_tail_03",
+                Hip_03rd: "Bn_tail_04",
+                Hip_04th: "Bn_tail_05",
+                Feeler_L_01st: "Bn_Cirrus_L_00",
+                Feeler_R_01st: "Bn_Cirrus_R_00",
+                Fang_L: "Bn_Tooth_L",
+                Fang_R: "Bn_Tooth_R",
+                ...Object.fromEntries(
+                    [["Front", "F"], ["Middle", "M"], ["Back", "B"]].flatMap(([pair, short]) =>
+                        ["L", "R"].flatMap((side) => ["01st", "02nd", "03rd"].map((bone, k) => [`Leg_${pair}_${side}_${bone}`, `Bn_Leg_${side}_${short}_0${k}`])),
+                    ),
+                ),
+            }),
+        }),
+        attacks: Object.freeze({ bite: "Attack" }),
+        specials: Object.freeze({}),
+        rests: Object.freeze({ look: "Idle 2", drink: "Drink", rear: "Play 2" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "Chest", body: "Root", head: "Head", mouth: "Fang_R", left: "Leg_Front_L_03rd" }),
+        mouth: null,
+        pace: 0.62,
+        runPace: 1.55,
+        flinch: 0.5,
+    }),
+    // (A great centipede: the centipede's model, made 6.7 metres long, drawn 4; made standing a
+    // little above where it is, sunk to the ground (`sink`, metres as it's made); its fangs, or
+    // rearing to strike down; resting, looking about or eating)
+    greatCentipede: Object.freeze({
+        asset: "beast-centipede",
+        length: 4,
+        made: Object.freeze({ long: 6.69, tall: 0.95 }),
+        sink: 0.42,
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit React", dead: "Death" }),
+        attacks: Object.freeze({ bite: "Attack" }),
+        specials: Object.freeze({ rear: "Attack 2" }),
+        rests: Object.freeze({ look: "Idle 2", eat: "Eat" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "Bone_Body_01", body: "Body", head: "Bone_head", mouth: "Bone_Mouth", left: "Bone_Leg_L001" }),
+        mouth: null,
+        pace: 0.42,
+        runPace: 0.96,
+        flinch: 0.5,
+    }),
+    // (The Ant Monster, the nests' great queen: made 6.8 metres long, drawn 4.2, 1.5 metres tall;
+    // its mandibles, rearing to slam down, its acid spat, and its flock called (its call: battle.js
+    // #calls); resting, looking about, swaying, rearing in threat. Its walk carries it as fast as
+    // it ever goes: no run)
+    antMonster: Object.freeze({
+        asset: "beast-ant-monster",
+        length: 4.2,
+        made: Object.freeze({ long: 6.81, tall: 2.42 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", react: "Hit React", dead: "Death" }),
+        attacks: Object.freeze({ bite: "Attack", strike: "Attack 5" }),
+        specials: Object.freeze({ slam: "Attack 2", spit: "Attack 3", call: "Call Flock" }),
+        rests: Object.freeze({ look: "Idle 2", sway: "Idle 3", rear: "Attack 4" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "Bip001_Spine1", body: "Bip001_Pelvis", head: "Bip001_Head", mouth: "Bn_Tooth_R", left: "Bn_Leg_L_F_03" }),
+        mouth: null,
+        pace: 2.34,
+        flinch: 0.8,
+    }),
 });
 
 // The models read and those asked for, by kind (each in its skins); and each model file's read,
@@ -95,6 +179,108 @@ const fetching = new Set();
 
 // How long (milliseconds) before a model that couldn't be read (offline, say) is asked for again
 const RETRY = 60000;
+
+/** How many times a second a clip one kind borrows from another's model is sampled (borrowClips). */
+export const BORROW_RATE = 30;
+
+/**
+ * The clips a kind borrows from another kind's model (MODELS' `borrows`: { from, clips, bones,
+ * carried }: the giant ant's fall and flinch, the Ant Monster's), made its own: each of `clips` in
+ * the lender's model (`lender`: its glTF as read) played on the kind's own (`gltf`), each of its
+ * bones (`bones`: its own by the lender's) turned in the world as the lender's turns from how it
+ * stands idle (each's `clips.idle`, as it starts), the rest of them as they are standing idle; and
+ * all of it carried as the lender's `carried` bone is ([its own, the lender's]), as much less far
+ * as it's the shorter (`made.long`) across, and up and down as much less as its body stands the
+ * lower. Sampled BORROW_RATE times a second. Neither model as read is changed: each is posed in a
+ * copy of it.
+ */
+export function borrowClips(id, gltf, lender) {
+    const model = MODELS[id];
+    const { from, clips, bones, carried } = model.borrows;
+    const [own, theirs] = [clone(gltf.scene), clone(lender.scene)];
+    const named = (scene) => {
+        const found = new Map();
+
+        scene.traverse((node) => node.isBone && found.set(node.name, node));
+
+        return found;
+    };
+    const [ours, others] = [named(own), named(theirs)];
+    const order = [...ours.values()];
+    const turnOf = (node) => node.getWorldQuaternion(new THREE.Quaternion());
+    const placeOf = (node) => node.getWorldPosition(new THREE.Vector3());
+    const mixer = new THREE.AnimationMixer(theirs);
+    // (Standing idle, as it starts, till another clip's played: stopping it would put it back as
+    // it's bound)
+    const stand = (scene, mixing, animations, idle) => {
+        const clip = animations.find(({ name }) => name === idle);
+
+        if (clip) {
+            mixing.clipAction(clip).play();
+            mixing.update(0);
+        }
+
+        scene.updateMatrixWorld(true);
+    };
+
+    // (Each standing idle: how they're turned and where they stand from there; its own posed so
+    // throughout, the lender till its clips are played)
+    stand(own, new THREE.AnimationMixer(own), gltf.animations, model.clips.idle);
+    stand(theirs, mixer, lender.animations, MODELS[from].clips.idle);
+
+    // (Each of its bones lent the turns of one of the lender's, and where each stands idle)
+    const lent = new Map(Object.entries(bones).filter(([mine, other]) => ours.has(mine) && others.has(other)).map(([mine, other]) => [ours.get(mine), others.get(other)]));
+    const atRest = new Map([...order.map((bone) => [bone, turnOf(bone)]), ...[...lent.values()].map((bone) => [bone, turnOf(bone)])]);
+    const [mine, other] = [ours.get(carried[0]), others.get(carried[1])];
+    const body = [...lent].find(([, source]) => source === other)?.[0] ?? mine;
+    const [from0, to0] = [placeOf(other), placeOf(mine)];
+    const across = model.made.long / MODELS[from].made.long;
+    const up = placeOf(body).y / Math.max(1e-3, from0.y);
+
+    return clips
+        .map((name) => lender.animations.find((clip) => clip.name === name))
+        .filter(Boolean)
+        .map((clip) => {
+            const frames = Math.max(2, Math.ceil(clip.duration * BORROW_RATE) + 1);
+            const times = new Float32Array(frames);
+            const turns = new Map(order.map((bone) => [bone, new Float32Array(frames * 4)]));
+            const places = new Float32Array(frames * 3);
+            const action = mixer.clipAction(clip);
+            const delta = new THREE.Quaternion();
+
+            mixer.stopAllAction();
+            action.play();
+
+            for (let f = 0; f < frames; f++) {
+                times[f] = (f / (frames - 1)) * clip.duration;
+                action.time = Math.min(times[f], clip.duration - 1e-4);
+                mixer.update(0);
+                theirs.updateMatrixWorld(true);
+
+                // (Each of its bones turned in the world as the lender's that it's lent, or as
+                // it is at rest under its parent as turned; parents before their children)
+                const world = new Map();
+
+                for (const bone of order) {
+                    const parent = world.get(bone.parent) ?? turnOf(bone.parent);
+                    const source = lent.get(bone);
+                    const turned = source ? delta.copy(turnOf(source)).multiply(atRest.get(source).clone().invert()).clone().multiply(atRest.get(bone)) : parent.clone().multiply(bone.quaternion);
+
+                    world.set(bone, turned);
+                    parent.clone().invert().multiply(turned).toArray(turns.get(bone), f * 4);
+                }
+
+                // (All of it carried as the lender is)
+                const moved = placeOf(other).sub(from0);
+
+                mine.parent.worldToLocal(new THREE.Vector3(to0.x + moved.x * across, to0.y + moved.y * up, to0.z + moved.z * across)).toArray(places, f * 3);
+            }
+
+            mixer.uncacheAction(clip);
+
+            return new THREE.AnimationClip(clip.name, clip.duration, [...order.map((bone) => new THREE.QuaternionKeyframeTrack(`${bone.name}.quaternion`, times, turns.get(bone))), new THREE.VectorKeyframeTrack(`${mine.name}.position`, times, places)]);
+        });
+}
 
 // What fetches the catalog's files, once the game's said (fetchModelsWith); till then (a test, the
 // labs) they're read straight from where they are
@@ -206,6 +392,25 @@ function readFile(asset, priority, page) {
     return files.get(asset);
 }
 
+// The clips each kind that borrows them (MODELS' `borrows`: the giant ant) has from another's model,
+// once both are read: put on its model as read, once (borrowClips), for each drawn from it from then
+// on; one that couldn't be made its own, none
+function lend() {
+    for (const [id, { borrows }] of Object.entries(MODELS)) {
+        const [gltf, lender] = [read.get(id), borrows && read.get(borrows.from)];
+
+        if (gltf && lender && !gltf.borrowed) {
+            gltf.borrowed = true;
+
+            try {
+                gltf.animations.push(...borrowClips(id, gltf, lender));
+            } catch (error) {
+                console.warn(`Couldn't lend ${id} ${borrows.from}'s clips`, error);
+            }
+        }
+    }
+}
+
 /** Whether a kind's drawn from a model (MODELS) that the catalog has. */
 export function hasModel(id) {
     return Boolean(MODELS[id] && ASSETS.models[MODELS[id].asset]?.files?.length);
@@ -244,6 +449,7 @@ export function wantModel(id, priority = "soon") {
             (gltf) => {
                 if (gltf) {
                     read.set(id, gltf);
+                    lend();
 
                     // (None drawn from it yet: let go of in time if none is, as one none's
                     // drawn from any more)
@@ -530,6 +736,8 @@ export function clipOf(model, style, aloft = false) {
  */
 export function poseOf(model, { speed = 0, attack = null, rest = null, react = null, dead = null, fly = null, t = 0 }, { lengths, died = 0 }) {
     const { clips } = model;
+    // (A clip it has: one it borrows only once it's been lent it, borrowClips)
+    const has = (clip) => Boolean(clip) && lengths[clip] !== undefined;
     const at = (clip, seconds) => {
         const length = lengths[clip] || 1;
 
@@ -541,9 +749,10 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
         return ((seconds % length) + length) % length;
     };
 
-    // (Dead: its fall, held at its end)
+    // (Dead: its fall, held at its end; one with none of its own, standing still as it rolls over:
+    // fallOf)
     if (dead) {
-        return [{ clip: clips.dead, weight: 1, time: at(clips.dead, died) }];
+        return has(clips.dead) ? [{ clip: clips.dead, weight: 1, time: at(clips.dead, died) }] : [{ clip: clips.idle, weight: 1, time: 0 }];
     }
 
     // On the ground: standing, or walking as fast as it goes (its walk's pace); one that has a run
@@ -590,14 +799,31 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
         over(way, smoothstep(Math.min(u / 0.06, (1 - u) / 0.06)), at(way, u * (lengths[way] || 1)));
     }
 
-    // Struck: the start of its flinch, eased in and out
-    if (react) {
+    // Struck: the start of its flinch, eased in and out (none, if it has none)
+    if (react && has(clips.react)) {
         const u = Math.min(1, Math.max(0, react.u));
 
         over(clips.react, Math.sin(Math.PI * u) * 0.85, at(clips.react, u * model.flinch));
     }
 
     return posed.filter(({ weight }) => weight > 1e-4);
+}
+
+/**
+ * How one without a fall (`clips.dead`, among the clips it has: `lengths`; a giant ant's, borrowed,
+ * before it's been lent it) falls dead (`dead`: BeastAvatar's { u, side }): rolled over onto its
+ * back about its length, to the side it fell (`roll`, radians), and lifted as it goes over by as
+ * much of its height (`lift`, 0 to 1) that it lies on its back on the ground, not under it; one
+ * with a fall, none of that. A pure function.
+ */
+export function fallOf(model, dead, lengths) {
+    if (!dead || lengths[model.clips.dead] !== undefined) {
+        return { roll: 0, lift: 0 };
+    }
+
+    const turned = smoothstep(dead.u) * Math.PI;
+
+    return { roll: turned * (dead.side ?? 1), lift: (1 - Math.cos(turned)) / 2 };
 }
 
 /**
@@ -636,6 +862,8 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
 
     inner.scale.setScalar(size);
     inner.add(scene);
+    // (Made standing above where it is: sunk to the ground)
+    scene.position.y = -(model.sink ?? 0);
 
     // Its meshes, a level of detail at a time (the pipeline's packed lower details: extras.lod),
     // each level's those of all its parts (a werewolf's body and its two lengths of fur); each of
@@ -780,6 +1008,12 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
             }
 
             mixer.update(0);
+
+            // (Fallen dead with no fall of its own: rolled onto its back, fallOf)
+            const fall = fallOf(model, inputs.dead, lengths);
+
+            inner.rotation.z = fall.roll;
+            inner.position.y = fall.lift * model.made.tall * size;
 
             // (Footfalls: one a stride as it walks)
             if (inputs.onStep && speed > 0.2) {

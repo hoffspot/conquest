@@ -246,6 +246,13 @@ export const TOSS = Object.freeze({ far: 3, flight: 550, per: 90, up: 1.1, upPer
 export const KEEP = Object.freeze({ off: 2, every: 4000 });
 
 /**
+ * One calling its flock to it (creatures.js `call`: the Ant Monster, #calls): a motion of its own
+ * that strikes no one, its call heard as it would land (`hitAt`), taking it `duration` ms, nothing
+ * else started meanwhile.
+ */
+export const CALL = Object.freeze({ id: "call", kind: "call", reach: 0, damage: [0, 0], hitAt: 1500, duration: 2500, interval: 2500, reaction: "punch", animation: "call" });
+
+/**
  * How much likelier one of the wild's mightier creatures is to shrug off a spell that would bend
  * its will (Fear, Pacify, Polymorph) for each tier past the middle ones (from none at tier 4 to
  * RESIST.most); the unique (the perilous places' own) and players never bend.
@@ -2615,8 +2622,9 @@ export class Battle {
     // with a ranged attack not ready yet closing in to strike up close, if it can)
     #pursue(actor, target) {
         // (One that keeps its distance, backing off from one come too near: a goblin bomber; one
-        // with bombs besides, lobbing one now and then at whoever keeps off: the Goblin King)
-        if ((actor.wild?.keep && this.#backOff(actor, target)) || (actor.wild?.bomb && this.#lobs(actor, target))) {
+        // with bombs besides, lobbing one now and then at whoever keeps off: the Goblin King; one
+        // that calls its flock to it now and then: the Ant Monster)
+        if ((actor.wild?.keep && this.#backOff(actor, target)) || (actor.wild?.bomb && this.#lobs(actor, target)) || (actor.wild?.call && this.#calls(actor, target))) {
             return;
         }
 
@@ -2692,8 +2700,29 @@ export class Battle {
         return true;
     }
 
-    // Start throwing a bomb at someone (an attack whose `bomb` says which: BOMBS), facing them;
-    // let go as the attack's blow would land (#fight)
+    // Its flock called to it (`wild.call`: creatures.js `call`) now and then while it's after
+    // someone: the first time `first` ms after it first sets on anyone, then every `every` ms,
+    // between blows and on the ground. Calling is a motion of its own that strikes no one (CALL),
+    // told as "call" as it would land (#fight), for the host to bring them (host.js #flock):
+    // whether it calls
+    #calls(actor, target) {
+        const { every, first } = actor.wild.call;
+
+        actor.callAt ??= this.time + first;
+
+        if (this.time < actor.callAt || this.time < actor.readyAt || !actor.armed || actor.aloft || target.map !== actor.map) {
+            return false;
+        }
+
+        actor.callAt = this.time + every;
+        actor.path = [];
+        this.#throwAt(actor, target, { ...CALL, call: actor.wild.call });
+
+        return true;
+    }
+
+    // Start throwing a bomb at someone (an attack whose `bomb` says which: BOMBS), or calling
+    // (`call`: #calls), facing them; let go, or called, as the attack's blow would land (#fight)
     #throwAt(actor, target, attack) {
         actor.facing = atan2(target.x - actor.x, target.y - actor.y);
         actor.attack = { attack, target: target.id, start: this.time, struck: false };
@@ -3824,7 +3853,11 @@ export class Battle {
                 actor.facing = atan2(target.x - actor.x, target.y - actor.y);
             }
 
-            if (attack.bomb) {
+            if (attack.call) {
+                const { kind, count, most } = attack.call;
+
+                this.#emit("call", { id: actor.id, target: current.target, kind, count: [...count], most, map: actor.map, x: actor.x, y: actor.y });
+            } else if (attack.bomb) {
                 this.#lob(actor, target, attack);
             } else if (attack.kind === "ranged") {
                 this.#launch(actor, target, attack);

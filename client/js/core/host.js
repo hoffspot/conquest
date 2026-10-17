@@ -331,6 +331,12 @@ export const WILDS = Object.freeze({ count: 4, night: 1, about: 60, from: 30, to
 export const REINFORCE = Object.freeze({ grown: 1, from: 10 });
 
 /**
+ * A creature's flock called to it (battle.js #calls: the Ant Monster's ants, #flock): from `from`
+ * metres behind it, `down` tiers under its own.
+ */
+export const FLOCK = Object.freeze({ from: 7, down: 2 });
+
+/**
  * Passing the time (the terrain plan's M7e, §9 Night in play): sleeping in a room at an inn, or
  * camping out in the world (no camp within a settlement, nor with anything hostile within `clear`
  * metres), to the next sunrise or sunset at least `least` ms of play off; the camp's fire burning
@@ -1638,6 +1644,10 @@ export class Host {
 
             if (event.type === "spell" && event.landed > 0) {
                 this.#wonder(event);
+            }
+
+            if (event.type === "call") {
+                this.#flock(event);
             }
         }
 
@@ -6017,6 +6027,54 @@ export class Host {
         }
     }
 
+    // A creature calling its flock to it (battle.js "call": creatures.js `call`, the Ant Monster):
+    // as many of its kind as it calls (`count`, [least, most], by chance) come running from
+    // FLOCK.from metres behind it, never more of those it's called about at once than `most`, nor
+    // more bodies about anyone than BODIES has; FLOCK.down tiers under it, of its pack, coming for
+    // anyone they see. In a dungeon, out with its level's foes (let go with them; none of its plan's,
+    // so nothing's kept of their falling: #delveFell); leaving their gold and parts only (`extra`).
+    // Told as "roused", and "called" ({ id, ids, kind })
+    #flock({ id, target, kind, count: [least, most], most: cap, map, x, y }) {
+        const caller = this.wild.get(id);
+        const actor = this.battle.actor(id);
+
+        if (!caller || !actor || actor.dead) {
+            return;
+        }
+
+        const about = [...this.wild].filter(([each, one]) => one.called === id && this.battle.actor(each) && !this.battle.actor(each).dead).length;
+        const from = this.battle.actor(target) ?? actor;
+        const away = from === actor ? 0 : atan2(y - from.y, x - from.x);
+        const at = [x + cos(away) * FLOCK.from, y + sin(away) * FLOCK.from];
+        const { count } = withinBudget(Math.max(0, Math.min(this.random.int(least, most), cap - about)), 0, BODIES.most - this.#bodiesNear(at, map));
+        const delve = caller.dungeon ? this.dungeons.get(caller.dungeon) : null;
+        const level = delve ? delve.awake.findIndex((ids) => ids?.includes(id)) : -1;
+        const free = this.#spots(map);
+        const ids = [];
+
+        try {
+            for (let k = 0; k < count; k++) {
+                const more = `wild-${this.nextWild++}`;
+
+                this.#rouse(more, kind, Math.max(1, caller.tier - FLOCK.down), free(at), { pack: caller.pack, leader: id, map, dungeon: caller.dungeon ?? null, temper: "aggressive", extra: true, called: id });
+                ids.push(more);
+            }
+        } catch {
+            // (No free ground there: those found come, and no more)
+        }
+
+        if (!ids.length) {
+            return;
+        }
+
+        if (level >= 0) {
+            delve.awake[level].push(...ids);
+        }
+
+        this.#event("roused", { ids, creature: kind });
+        this.#event("called", { id, ids, kind });
+    }
+
     // The players in groups (strength.js groupsOf: those on one map within STRENGTH.apart of one
     // another, one after another), the standing only: each { players, actors (theirs, in the
     // same order), leader (their party's leader, if they're in the group, or the first of them),
@@ -6261,7 +6319,7 @@ export class Host {
     // out, its kind with it (`elite` "escort"), and neither going far from there (ELITES); its hit
     // points × `health` against a stronger side (strength.js SCALING); one more than there'd have
     // been against a player alone, `extra` (leaving its gold and its parts only: spoils.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null }) {
         const spec = CREATURES[creature];
         const lead = elite === "lead";
         // (A dungeon's boss or mini-boss: more of it and harder, CHAMPIONS, by its title; an elite,
@@ -6271,7 +6329,7 @@ export class Host {
         const power = tierPower(at) * stands.power;
         const walks = lead ? { stops: eliteRound(square), at: 0 } : round;
 
-        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}) });
+        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}) });
         this.battle.add({
             id,
             kind: "beast",
@@ -7019,7 +7077,7 @@ export class Host {
     #delveFell(beast, id) {
         const delve = this.dungeons.get(beast.dungeon);
 
-        if (!delve || delve.dead.includes(beast.foe)) {
+        if (!delve || beast.foe === null || delve.dead.includes(beast.foe)) {
             return;
         }
 

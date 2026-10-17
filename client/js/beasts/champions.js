@@ -59,6 +59,12 @@ export const REGALIA = Object.freeze({
     champion: { tint: 0xd8b868 },
     wraith: {},
     highPriest: { wear: ["darkHood"] },
+    // An ants' nest's: the Ant Monster its own size (the biggest it's drawn already: beasts/model.js),
+    // its eyes the brighter; the brood warden a soldier of the nest, bigger and redder, and the
+    // tunnel crawler grey with age
+    antMonster: { glow: 1.2 },
+    warden: { tint: 0xd8906a, scale: 1.25 },
+    crawler: { tint: 0xa8a098, scale: 1.05 },
 });
 
 /**

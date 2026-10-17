@@ -1,5 +1,5 @@
 // The dungeon builder (client/js/core/dungeons: docs/DUNGEONS.md): a dungeon cooked up from a seed
-// and a theme (caves, an outlaws' hideout, an ancient temple), one to three levels deep, each a
+// and a theme (caves, an outlaws' hideout, an ancient temple, an ants' nest), one to three levels deep, each a
 // plan the game's interiors read; stairs joining the levels, the boss before its hoard at the far
 // end of the bottom level, mini-bosses along the way, packs, chests, props and torches; every
 // square that can be walked on reachable, no one waiting by where anyone comes in; the same every
@@ -19,8 +19,11 @@ import { PLAN_KEY, readPlan } from "../client/js/core/interiors.js";
 
 const THEME_IDS = ["caves", "hideout", "ancient"];
 
+// Every theme: those with layouts of their own, and those with another's (an ants' nest, the caves')
+const ALL_THEMES = [...THEME_IDS, "nest"];
+
 // Every dungeon looked at: each theme, a few seeds, each depth
-const MADE = THEME_IDS.flatMap((theme) => [1, 2, 3].flatMap((levels) => [11, 12, 13].map((seed) => ({ theme, levels, seed, dungeon: buildDungeon({ seed, theme, tier: 1 + (seed % 7), levels }) }))));
+const MADE = ALL_THEMES.flatMap((theme) => [1, 2, 3].flatMap((levels) => [11, 12, 13].map((seed) => ({ theme, levels, seed, dungeon: buildDungeon({ seed, theme, tier: 1 + (seed % 7), levels }) }))));
 
 // Steps from some squares to every square of a plan that can be walked on (readPlan's `blocked`)
 function walk(map, from) {
@@ -324,13 +327,37 @@ describe("themes", () => {
     });
 
     it("has a pack for every tier in every theme", () => {
-        for (const theme of THEME_IDS.map((id) => THEMES[id])) {
+        for (const theme of ALL_THEMES.map((id) => THEMES[id])) {
             for (let tier = 1; tier <= TIERS; tier++) {
                 const suited = theme.packs.filter(({ creatures }) => creatures.some((creature) => tier >= CREATURES[creature].tiers[0] - 1 && tier <= CREATURES[creature].tiers[1] + 1));
 
                 assert.ok(suited.length, `${theme.id} at tier ${tier}`);
             }
         }
+    });
+
+    it("has an ants' nest, dug as the caves are: ants, great centipedes, and the Ant Monster at the bottom with ants about it, all of them drawn from models", () => {
+        const nest = THEMES.nest;
+        const kinds = [...nest.packs.flatMap(({ creatures }) => creatures), ...nest.minis.map(({ creature }) => creature), ...nest.bosses.flatMap(({ creature, guard = [] }) => [creature, ...guard])];
+
+        assert.equal(nest.layout, "caves");
+        assert.deepEqual([...new Set(kinds)].sort(), ["ant", "antMonster", "greatCentipede"]);
+        assert.deepEqual(nest.bosses.map(({ creature, guard }) => [creature, guard]), [["antMonster", ["ant"]]]);
+
+        for (const looks of Object.values(nest.rooms)) {
+            for (const { props = [] } of looks) {
+                for (const { char } of props) {
+                    assert.ok(PLAN_KEY[char], `nest: "${char}"`);
+                }
+            }
+        }
+
+        // (Its boss at the bottom, the Ant Monster, ants about it)
+        const dungeon = buildDungeon({ seed: 21, theme: "nest", tier: 6, levels: 2 });
+        const boss = dungeon.levels.at(-1).packs.find(({ role }) => role === "boss");
+
+        assert.equal(boss.foes[0].creature, "antMonster");
+        assert.ok(boss.foes.slice(1).length >= 2 && boss.foes.slice(1).every(({ creature }) => creature === "ant"));
     });
 
     it("takes new themes and layouts", () => {

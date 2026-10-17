@@ -733,3 +733,9 @@ joined one, and `Joining.onPong` wrapped to log each round trip. There it could 
     such read by an address made for it, so each one let go of and read again was another copy held.
   - The service worker's told what the downloader keeps and reads (`used`), so they're among the
     last let go of when room runs short (§5.4).
+- **2026-10-17. The ants' nest:** the first place whose creatures are all drawn from models (the
+  giant ant, the great centipede, the Ant Monster: `beast-ant`, `beast-centipede`,
+  `beast-ant-monster`, about 11 MB together), got ready at its door. A kind may borrow clips its
+  own model hasn't from another's once both are read (beasts/model.js `borrows`, `borrowClips`:
+  the ant's fall and flinch, the Ant Monster's, played on its own skeleton). They're made in the
+  browser from the two models as read, so nothing of the bought models is kept anywhere else.

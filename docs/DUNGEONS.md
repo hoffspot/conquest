@@ -19,13 +19,18 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
 ## What a dungeon is like
 
 - **Its theme**: its look and feel, how its levels are dug, who's in it, and how each kind of room
-  is dressed. Three to start, each dug its own way:
+  is dressed. Four, three of them each dug its own way:
   - **caves** (`caves`): caverns scattered about and wandering tunnels between them, with goblins,
     cave spiders, bats, slimes, trolls and worse;
   - **an outlaws' hideout** (`hideout`): rooms dug one off another down short tunnels, with
     bandits, their hounds, hired ogres and hedge priests;
   - **an ancient temple** (`ancient`): pillared halls up a straight middle way, rooms off them
-    either side, mirrored; the dead, cultists, wraiths, serpents and scorpions.
+    either side, mirrored; the dead, cultists, wraiths, serpents and scorpions;
+  - **an ants' nest** (`nest`): dug as the caves are, through reddened earth; giant ants in their
+    numbers, great centipedes in its deeper tunnels, and the Ant Monster, their great queen, at
+    the bottom, calling her flock to her (*Who's in it*, below). All of them are drawn from models
+    of their own, got ready at its door (docs/WILDS.md, *A place's creatures, ready before they're
+    met*).
 - **How deep**: one level (30% of dungeons), two (40%) or three (30%), by seed. Fewer levels are
   bigger, so each takes about the same 15 to 25 minutes to clear (`LEVEL_SIZES`):
 
@@ -150,13 +155,14 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
     `camps` cells from the camps.
 - **Its theme by the land it's in** (`themes.js` `themeFor`, each theme's `lands`): caves likeliest
   in the mountains, the snows, the volcanic and the badlands; an outlaws' hideout in the woods,
-  the farmland and the meadows; an ancient temple in the jungle and the savannah. Any theme can
-  turn up anywhere, less often.
+  the farmland and the meadows; an ancient temple in the jungle and the savannah; an ants' nest in
+  the savannah and the badlands, and the meadows, farmland, heath and jungle. Any theme can turn up
+  anywhere, less often.
 - **Its name** from its theme's names, each its own in the world.
 - **Its way in**, set down into a hillside as a cave mouth is (`sites.js` `HILLSIDE.dungeon`), a
   mouth in the rock (`layoutNeutral({ kind: "dungeon", theme })`), dressed by its theme: stores
-  and fallen timbers by an outlaws' hideout, columns (some fallen) and rubble by a temple, bones by
-  caves.
+  and fallen timbers by an outlaws' hideout, columns (some fallen) and rubble by a temple, the earth
+  dug out heaped either side of an ants' nest, bones by caves.
 - **On the maps**: an arch over steps going down (`app/mapicons.js` `dungeon`), on the minimap and
   on the world map once the land there's been seen, grey while it's cleared.
 
@@ -207,6 +213,16 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
   every 7: creatures.js `boss`); its own war band about it, raiders and bombers in turn (a boss's
   `guard` in its theme, in place of one of the theme's packs); and never thrown by a blast, as no
   dungeon's boss is.
+- **An ants' nest's Ant Monster calls her flock** (creatures.js `call`, battle.js `#calls`,
+  host.js `#flock`). Six seconds after she first sets on someone, then every 15 seconds as a boss
+  (20 elsewhere), between blows, she stops to call (`CALL`): a motion of her own that strikes no
+  one, heard far off and told to whoever she's after. As her call goes out, two to four ants (two
+  or three elsewhere) come running from 7 m behind her (`FLOCK`). They come two tiers under her (her
+  level's), of her pack, for anyone they see, and never more than six of them about her at once
+  (four elsewhere), nor more bodies than `BODIES` has about anyone. They're kept with her level's
+  foes and let go with them, and they leave only their gold and parts (`extra`). None of them is
+  one of the nest's plan, so their falls aren't kept. Stunned or knocked down as she rears to
+  call (a shield bash, a stunning spell), her call is cut short.
 - **The slain stay slain** (`foeKey`: level, pack, place in it) till the dungeon's made again,
   however often a level's woken and let go.
 
@@ -233,7 +249,10 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
   - an outlaws' hideout: the same, dug: smoother walls, a flatter, lower roof, quarried rock over
     trodden earth, its tunnels shored up with timber posts and caps every few squares;
   - an ancient temple: walls of dressed stone on a darker plinth under a cornice, flagstones, a
-    vault over all.
+    vault over all;
+  - an ants' nest: the caves' rock as one surface, reddened as earth is, over dug earth; its
+    chambers strewn with what the ants have dragged in, the bones of what they've eaten, roots
+    through the earth (`dungeondressing.js` `CLUTTER.nest`, `STREWN`).
 - **The rock as one surface** (`caverns.js`): how far into the open each point of the level is,
   from its plan's squares (a distance transform, a quarter of a metre at a time, its corners
   rounded), shapes walls and roof together, with noise for the rock's bulges; the surface is

@@ -138,6 +138,10 @@ export const PARTS = Object.freeze({
     crownShard: { label: "Wight crown shard", worth: 120, icon: "shard", tint: "#c8a840" },
     graveIron: { label: "Grave-iron", worth: 60, icon: "ingot", tint: "#3a3f4a" },
     frostHeart: { label: "Frost heart", worth: 140, icon: "heart", tint: "#80d0ff" },
+    antMandible: { label: "Ant mandible", worth: 4, icon: "fang", tint: "#7a2a14" },
+    acidGland: { label: "Ant's acid gland", worth: 7, icon: "gland", tint: "#c8a030" },
+    queenMandible: { label: "Ant Monster's mandible", worth: 45, icon: "fang", tint: "#1c1618" },
+    royalJelly: { label: "Royal jelly", worth: 30, icon: "gland", tint: "#f0d890", use: { heal: 40 } },
     frostHide: { label: "Frost troll hide", worth: 70, icon: "hide", tint: "#b8c8d8" },
 });
 
@@ -187,6 +191,10 @@ export const SPOILS = Object.freeze({
     shadowStalker: { items: [{ id: "shadowPelt", chance: 0.35 }, { id: "shadowClaw", chance: 0.4 }] },
     olm: { items: [{ id: "olmSkin", chance: 0.4 }, { id: "olmGills", chance: 0.3 }] },
     centipede: { items: [{ id: "centipedeFang", chance: 0.45 }, { id: "carapace", chance: 0.3 }] },
+    ant: { items: [{ id: "antMandible", chance: 0.45 }, { id: "acidGland", chance: 0.25 }] },
+    greatCentipede: { items: [{ id: "centipedeFang", chance: 0.6, count: [1, 2] }, { id: "carapace", chance: 0.45 }] },
+    // (What's left in the Ant Monster's nest of those it's eaten, besides its mandibles and jelly)
+    antMonster: { gold: [10, 30], items: [{ id: "queenMandible", chance: 0.8 }, { id: "royalJelly", chance: 0.6, count: [1, 2] }, { id: "acidGland", chance: 0.7, count: [1, 2] }] },
     basilisk: { items: [{ id: "basiliskEye", chance: 0.3 }, { id: "crownScale", chance: 0.4 }] },
     draugr: { gold: [2, 8], items: [{ id: "barrowRing", chance: 0.25 }, { id: "rustedMail", chance: 0.35 }, { id: "boneDust", chance: 0.4 }] },
     mare: { items: [{ id: "mareHair", chance: 0.4 }, { id: "nightmareShard", chance: 0.25 }] },
