@@ -80,6 +80,7 @@
                     <span class="track" aria-hidden="true"></span>
                     <span>Debug mode</span>
                 </label>
+                <button type="button" class="about-button" id="aboutbutton">About</button>
             </div>
         </section>
 
@@ -405,6 +406,158 @@
             <div class="menu">
                 <button type="button" class="button primary" id="inviteback">Back to the game</button>
                 <button type="button" class="button" id="invitestop" hidden>Close the world to others</button>
+            </div>
+        </dialog>
+
+        <!-- About the game: what it is, and how it's played (the title's About) -->
+        <dialog id="about" class="together about" aria-labelledby="abouttitle">
+            <h2 id="abouttitle">About Pellagos</h2>
+            <nav class="about-contents" aria-label="Contents">
+                <button type="button" data-to="about-what">The game</button>
+                <button type="button" data-to="about-start">Starting</button>
+                <button type="button" data-to="about-move">Getting about</button>
+                <button type="button" data-to="about-fight">Fighting</button>
+                <button type="button" data-to="about-magic">Magic</button>
+                <button type="button" data-to="about-gear">Gear and gold</button>
+                <button type="button" data-to="about-folk">Towns and folk</button>
+                <button type="button" data-to="about-world">The world and its war</button>
+                <button type="button" data-to="about-party">Your party</button>
+                <button type="button" data-to="about-together">Playing together</button>
+                <button type="button" data-to="about-saving">Saving</button>
+                <button type="button" data-to="about-keys">Keys</button>
+                <button type="button" data-to="about-options">Options</button>
+                <button type="button" data-to="about-credits">Credits</button>
+            </nav>
+            <div class="about-body" id="aboutbody" tabindex="0"></div>
+            <!-- (What it says: put into it while it's open, and kept out of the page till then) -->
+            <template id="abouttext">
+                <section id="about-what">
+                    <h3>The game</h3>
+                    <p>Pellagos is a role-playing game you play in the browser, on a phone, a tablet or a computer. You make a character, wake in a market town of your own people, and set out into a world kilometres across: fields, woods, rivers, roads, villages, towns and cities, drawn round you as you walk, with no loading screens.</p>
+                    <p>Six peoples share the world, each wanting it for its own: humans, elves, dark elves, cat folk, lizard folk and orcs. Their war goes on round you. You're not a ruler, but one of your people: what you do, the work your rulers give you, and the standing you earn all make a mark on it.</p>
+                    <p>Fight the creatures of the wilds, learn magic, gather gear and gold, hire companions, and play alone or with friends.</p>
+                </section>
+                <section id="about-start">
+                    <h3>Starting</h3>
+                    <ul>
+                        <li><strong>New character</strong> takes three steps: your <strong>look</strong> (your people, body, face, colours and hair; <strong>Random</strong> makes someone new), a <strong>weapon</strong> (sword, staff, wand, grimoire, war hammer, bow, spiked gauntlets or spiked boots), and a <strong>name</strong>. Then <strong>Begin</strong>.</li>
+                        <li><strong>Continue</strong> carries on as the character you played last, just where you left them.</li>
+                        <li><strong>Saved characters</strong> keeps up to six, each in a world of their own.</li>
+                        <li><strong>Join a world</strong> and <strong>Worlds on servers</strong> are for playing with others (Playing together, below).</li>
+                    </ul>
+                </section>
+                <section id="about-move">
+                    <h3>Getting about</h3>
+                    <ul>
+                        <li><strong>Tap the ground</strong> to walk there; <strong>double-tap</strong> to run. The <strong>thumb stick</strong> in the bottom left steers you too.</li>
+                        <li>Running uses <strong>stamina</strong> (the orange bar under your health); out of breath, you walk.</li>
+                        <li><strong>Swipe up</strong> from your character to go straight ahead the way the camera looks.</li>
+                        <li><strong>Drag</strong> to turn the camera round you, <strong>pinch</strong> to zoom.</li>
+                        <li>The <strong>minimap</strong> (top left) shows what's round you; tap it to walk there. <strong>Hold</strong> it to open the <strong>world map</strong>: there, hold somewhere you've been to drop a pin, or tap twice to run there.</li>
+                        <li><strong>Tap a door or stairs</strong> to go through; <strong>tap someone</strong> to talk to them.</li>
+                        <li>Each adventurers' guild has a <strong>portal</strong> that takes you to any other guild you've been inside, for a fare.</li>
+                    </ul>
+                </section>
+                <section id="about-fight">
+                    <h3>Fighting</h3>
+                    <ul>
+                        <li><strong>Tap an enemy</strong> to set on them: a red ring marks your target. Standing still, you strike whatever's in your weapon's reach by yourself.</li>
+                        <li>In a fight, <strong>quick actions</strong> rise along the bottom: tap one to use it at once (your attacks and spells, a healing draught). Hold one to change what's in it.</li>
+                        <li>Everyone attacking you has an icon down the <strong>right side</strong>: tap one to fight them.</li>
+                        <li>Your name and <strong>health</strong> are in the bottom right. Drink a healing draught, or cast <strong>Vigor</strong>, before it runs out.</li>
+                        <li>Whoever falls drops their <strong>loot</strong>: tap it to pick it up (or turn on Auto-snag in Game options).</li>
+                    </ul>
+                </section>
+                <section id="about-magic">
+                    <h3>Magic</h3>
+                    <ul>
+                        <li><strong>Press and hold</strong> on yourself or an enemy: a wheel opens round them. Flick towards a slice to do what's in it; flick down for the wheel's other side.</li>
+                        <li>You start with <strong>Vigor</strong> (healing yourself) and <strong>Stun</strong>. Each element (fire, earth, air, water) opens with its first spell's tome, sold at any adventurers' guild.</li>
+                        <li>Each school grows as its spells land, bringing its next spell. Other spells come from <strong>tomes</strong> found in the wilds or given by the guilds.</li>
+                        <li>The <strong>spellbook</strong> (top right) shows every spell you know, and puts one on a wheel.</li>
+                    </ul>
+                </section>
+                <section id="about-gear">
+                    <h3>Gear and gold</h3>
+                    <ul>
+                        <li>The <strong>pack</strong> (top right) shows you in your gear, and 40 slots for what you carry. Tap anything to see what it does; hold a piece to put it on or take it off.</li>
+                        <li>The better made a piece, the more it brings, from common up to legendary.</li>
+                        <li>Smiths and shops sell weapons, armour, draughts, scrolls, tomes and charms, and buy what you don't need.</li>
+                        <li>Wear a people's armour together for its set's bonuses, or to pass for one of their soldiers.</li>
+                    </ul>
+                </section>
+                <section id="about-folk">
+                    <h3>Towns and folk</h3>
+                    <ul>
+                        <li>Towns have taverns, smithies, temples, shops and an <strong>adventurers' guild</strong>. Go into any of them.</li>
+                        <li>Folk talk to you, remember you, and know things: tap a reply to answer.</li>
+                        <li>At the guild, sign up, take <strong>contracts</strong> from its board, and rise through its ranks for harder work and better pay.</li>
+                        <li>The <strong>journal</strong> (top right) keeps what you've been asked to do, and the last things you were told.</li>
+                    </ul>
+                </section>
+                <section id="about-world">
+                    <h3>The world and its war</h3>
+                    <ul>
+                        <li>Out of town, the wilds hold creatures of every kind, stronger the further you go from home. Rare <strong>elites</strong> lead their packs; brigands guard <strong>caches</strong> of gold and gear.</li>
+                        <li>The six peoples' armies march, their convoys carry the harvest of mills, mines and quarries, and their towers guard the roads. Near you, all of it comes to life.</li>
+                        <li>Your people's rulers have work for you, in their keeps. Do it well and you rise in standing, and gain a say at the war table.</li>
+                    </ul>
+                </section>
+                <section id="about-party">
+                    <h3>Your party</h3>
+                    <ul>
+                        <li>Hire adventurers, call creatures with <strong>Summon</strong>, or raise the dead with <strong>Zombify</strong>: they fight at your side.</li>
+                        <li>Each has an icon down the left side. Tap one to aim your healing at them; hold it to tell them to attack your target, follow you, wait there, or be dismissed.</li>
+                        <li>The <strong>party menu</strong> (the Party button) lists them all, and, playing with others, your party of players and its chat.</li>
+                    </ul>
+                </section>
+                <section id="about-together">
+                    <h3>Playing together</h3>
+                    <ul>
+                        <li><strong>Worlds on a server.</strong> A world server keeps worlds that go on when everyone's left. Open an <strong>invite link</strong> from a world's owner (or scan its code): the game opens, you make a character if you have none, and you're in. Opened from the server's own address, the title shows its worlds; one open to anyone joins with a tap.</li>
+                        <li><strong>Your own world.</strong> In the menu, <strong>Invite others</strong> gives a code and a link; friends choose <strong>Join a world</strong> on their title screen and type the code.</li>
+                        <li>Up to eight play in a world; up to four make a party, with a chat of their own: what any of them brings down near the others counts for them all, and each finds their own loot.</li>
+                        <li>Each comes as one of their own people, so you're at peace or at war with each other as your peoples are, unless you're in a party.</li>
+                    </ul>
+                </section>
+                <section id="about-saving">
+                    <h3>Saving</h3>
+                    <ul>
+                        <li>The game saves as you play, in this browser: where you are, what you carry and know, and your world as it is.</li>
+                        <li>To keep a character safe, or take them to another device, <strong>Export</strong> them from Saved characters, and <strong>Import from a file</strong> there.</li>
+                        <li>Add the game to your home screen (the browser's Share or Install menu) to play it as an app.</li>
+                    </ul>
+                </section>
+                <section id="about-keys">
+                    <h3>Keys</h3>
+                    <p class="about-keys-note">With a keyboard and mouse, click where you'd tap. And:</p>
+                    <table class="about-keys">
+                        <tbody>
+                            <tr><th scope="row">W A S D</th><td>Steer (Shift to run)</td></tr>
+                            <tr><th scope="row">1 to 4</th><td>Quick actions, in a fight (1 to 6 with six across, in Game options)</td></tr>
+                            <tr><th scope="row">M</th><td>World map</td></tr>
+                            <tr><th scope="row">I</th><td>Pack</td></tr>
+                            <tr><th scope="row">B</th><td>Spellbook</td></tr>
+                            <tr><th scope="row">J</th><td>Journal</td></tr>
+                            <tr><th scope="row">P</th><td>Party menu</td></tr>
+                            <tr><th scope="row">Enter</th><td>Party chat, in a party of players</td></tr>
+                            <tr><th scope="row">1 to 9</th><td>A reply, talking</td></tr>
+                            <tr><th scope="row">Escape</th><td>Close, stop talking, or the menu</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+                <section id="about-options">
+                    <h3>Options</h3>
+                    <p>The menu's <strong>Game options</strong> sets the sound (effects, environment and music, each with its own volume), the minimap and thumb stick, the camera and battle cam, what's on your action wheels and quick actions, Auto-snag, and the visual quality. <strong>Debug mode</strong>, on the title, shows how the game's running; Game options' <strong>Debug log</strong> keeps the last times it slowed or failed, to copy and send.</p>
+                </section>
+                <section id="about-credits">
+                    <h3>Credits</h3>
+                    <p>Pellagos is drawn with <a href="https://threejs.org" target="_blank" rel="noopener">Three.js</a>. Its models, pictures, sounds, music and fonts come from many artists: most are free to use (CC0 and other open licences), and a few were bought for the game. Each is credited, with its licence, in the game's <a href="https://github.com/hoffspot/conquest#credits-and-license" target="_blank" rel="noopener">README on GitHub</a>. The game's own code is there too, under the Apache 2.0 licence.</p>
+                </section>
+            </template>
+            <p class="note about-version" id="aboutversion"></p>
+            <div class="menu">
+                <button type="button" class="button primary" id="aboutclose">Close</button>
             </div>
         </dialog>
 

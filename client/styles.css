@@ -393,6 +393,163 @@ select:focus-visible,
     justify-content: center;
 }
 
+/* About, at the foot of the title: a plain word, not another of its buttons */
+.about-button {
+    display: block;
+    margin: 14px auto 0;
+    padding: 6px 14px;
+    min-height: 36px;
+    background: none;
+    border: 0;
+    color: var(--muted);
+    font: inherit;
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    text-decoration: underline;
+    text-decoration-color: var(--gold-deep);
+    text-underline-offset: 4px;
+    cursor: pointer;
+}
+
+.about-button:hover {
+    color: var(--gold-bright);
+}
+
+/* About the game: its contents along the top, the rest scrolling under them */
+dialog.about {
+    width: min(560px, calc(100% - 24px));
+    max-height: calc(100dvh - 24px);
+    padding: 18px 18px 16px;
+}
+
+dialog.about[open] {
+    display: flex;
+    flex-direction: column;
+}
+
+/* (Only the reading gives way to a short screen: the title, contents and Close keep their size) */
+dialog.about > * {
+    flex-shrink: 0;
+}
+
+dialog.about > .about-body {
+    flex: 1 1 auto;
+}
+
+dialog.about h2 {
+    margin-bottom: 10px;
+}
+
+.about-contents {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+    margin: 0 0 10px;
+}
+
+.about-contents button {
+    background: var(--field);
+    border: 1px solid var(--field-border);
+    border-radius: 999px;
+    color: var(--muted);
+    font: inherit;
+    font-size: 12.5px;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+
+.about-contents button:hover {
+    color: var(--ink);
+    border-color: var(--panel-border);
+}
+
+/* (On a phone, one row of them, swiped along, leaving the reading its room) */
+@media (max-width: 560px) {
+    .about-contents {
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        overflow-x: auto;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+    }
+
+    .about-contents::-webkit-scrollbar {
+        display: none;
+    }
+
+    .about-contents button {
+        flex: 0 0 auto;
+    }
+}
+
+.about-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    border-top: 1px solid var(--field-border);
+    border-bottom: 1px solid var(--field-border);
+    padding: 4px 4px 12px;
+    font-size: 14.5px;
+    line-height: 1.5;
+}
+
+.about-body section {
+    scroll-margin-top: 6px;
+}
+
+.about-body h3 {
+    font-family: var(--font-display);
+    color: var(--gold);
+    font-size: 17px;
+    margin: 16px 0 6px;
+}
+
+.about-body p {
+    margin: 0 0 8px;
+}
+
+.about-body ul {
+    margin: 0 0 8px;
+    padding-left: 20px;
+    display: grid;
+    gap: 6px;
+}
+
+.about-body strong {
+    color: var(--ink);
+}
+
+.about-body a {
+    color: var(--gold-bright);
+}
+
+.about-keys {
+    border-collapse: collapse;
+    margin: 0 0 8px;
+}
+
+.about-keys th {
+    text-align: left;
+    vertical-align: top;
+    font-weight: 600;
+    color: var(--ink);
+    padding: 3px 14px 3px 0;
+    white-space: nowrap;
+}
+
+.about-keys td {
+    color: var(--muted);
+    padding: 3px 0;
+}
+
+.about-version {
+    text-align: center;
+    color: var(--faint);
+    font-size: 12.5px;
+}
+
 /* --- Making a character --- */
 
 #create {

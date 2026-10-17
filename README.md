@@ -95,6 +95,9 @@ with a bar for each and one for the whole. Then the title screen offers to **Con
 character you played last, make a **New character**, or choose another of your **Saved
 characters**: up to six are kept. With six, a new one takes the place of one you choose, after
 asking you to be sure, as they're deleted for good; and any can be deleted from the list.
+**About**, at the bottom of the title, is an overview of the game and how it's played, to scroll
+through: getting about, fighting, magic, gear, towns, the war, your party, playing together,
+saving, the keys and the options.
 
 **Making a character** takes three steps:
 
@@ -137,7 +140,7 @@ hurt, poisoned or blessed, a spell still on them, all carried on the next time a
 lights up, until it falls or you're told to go elsewhere. **Double-tap** (or double-click) to run there instead, as much
 faster than walking as people sprint: 7.9 metres a second to your walking 1.7. Running tires you:
 it uses 1.5 points of **stamina** a second, and anything else gets 1 a second back. You have as
-much stamina as hit points (50). Your name and health are in the bottom left corner; while your
+much stamina as hit points (50). Your name and health are in the bottom right corner; while your
 stamina isn't full, an orange bar under your health shows what's left; with none left you're out of breath, and walk the rest of the way. Standing still,
 you attack whatever is within your weapon's reach on your own: melee weapons reach the eight
 squares round yours; ranged ones anything in range that you can see. Every weapon attacks in five

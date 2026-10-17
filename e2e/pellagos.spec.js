@@ -202,6 +202,57 @@ test("debug mode shows how the game runs, and is remembered", async ({ page }) =
     await expect(page.locator("#debug")).toBeHidden();
 });
 
+test("the title's About: what the game is and how it's played, scrolled through, its contents taking you to each part, and closed", async ({ page }) => {
+    await title(page);
+
+    // (At the bottom of the title, under everything else)
+    const about = page.locator("#aboutbutton");
+
+    await expect(about).toBeVisible();
+
+    const [button, card, debug] = await Promise.all([about.boundingBox(), page.locator("#title .card").boundingBox(), page.locator("#title").getByText("Debug mode").boundingBox()]);
+
+    expect(button.y).toBeGreaterThan(debug.y + debug.height - 1);
+    expect(button.y + button.height).toBeGreaterThan(card.y + card.height - 48);
+
+    await about.click();
+    await expect(page.locator("#about")).toBeVisible();
+    await expect(page.locator("#abouttitle")).toHaveText("About Pellagos");
+    await expect(page.locator("#aboutbody h3")).toHaveText(["The game", "Starting", "Getting about", "Fighting", "Magic", "Gear and gold", "Towns and folk", "The world and its war", "Your party", "Playing together", "Saving", "Keys", "Options", "Credits"]);
+    await expect(page.locator("#aboutversion")).toContainText("Version");
+
+    // Longer than the screen: it scrolls, starting at the top
+    const body = page.locator("#aboutbody");
+    const sizes = await body.evaluate((element) => ({ scroll: element.scrollHeight, client: element.clientHeight, top: element.scrollTop }));
+
+    expect(sizes.scroll).toBeGreaterThan(sizes.client * 2);
+    expect(sizes.top).toBe(0);
+
+    // Its contents take you to each part
+    await page.locator('#about [data-to="about-keys"]').click();
+    await expect.poll(() => page.locator("#about-keys").evaluate((section) => Math.abs(section.getBoundingClientRect().top - section.parentElement.getBoundingClientRect().top))).toBeLessThan(30);
+    await expect(page.locator("#about-keys table")).toContainText("Escape");
+
+    await page.locator('#about [data-to="about-credits"]').click();
+    await expect.poll(() => body.evaluate((element) => element.scrollTop)).toBeGreaterThan(sizes.client);
+    await expect(page.locator("#about-credits").getByRole("link", { name: "README on GitHub" })).toHaveAttribute("href", /github\.com\/hoffspot\/conquest/);
+
+    await page.locator("#aboutclose").click();
+    await expect(page.locator("#about")).toBeHidden();
+    await expect(page.locator("#title")).toBeVisible();
+
+    // (Closed, what it says is out of the page: the labels it names are found once, where they are)
+    await expect(page.locator("#aboutbody")).toBeEmpty();
+    await expect(page.getByText("Debug mode")).toHaveCount(1);
+
+    // Opened again, it starts from the top
+    await about.click();
+    await expect(page.locator("#about")).toBeVisible();
+    expect(await body.evaluate((element) => element.scrollTop)).toBe(0);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#about")).toBeHidden();
+});
+
 // (The pixels it draws counted: at the screen's own, a pixel a pixel, not the half the others
 // are drawn at: playwright.config.js)
 test.describe("drawn at the screen's own pixels", () => {
