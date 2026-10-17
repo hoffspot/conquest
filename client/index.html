@@ -265,8 +265,166 @@
             <button type="button" class="button quiet" id="worldschange" hidden>Change who comes</button>
             <p class="note warning" id="worldsstatus" role="status"></p>
             <div class="menu">
+                <button type="button" class="button quiet" id="worldsguidebutton">Worlds Guide</button>
                 <button type="button" class="button quiet" id="worldscarry">My servers and tickets</button>
                 <button type="button" class="button" id="worldsback">Back</button>
+            </div>
+        </dialog>
+
+        <!-- The Worlds Guide (Worlds on servers' Worlds Guide): every way into a world, a friend's own
+             or one on a server, how each goes, with examples, and what to do when one won't. Laid
+             out as About is -->
+        <dialog id="worldsguide" class="together about worlds-guide" aria-labelledby="worldsguidetitle">
+            <h2 id="worldsguidetitle">Worlds Guide</h2>
+            <nav class="about-contents" aria-label="Contents">
+                <button type="button" data-to="guide-ways">Which way in?</button>
+                <button type="button" data-to="guide-kinds">Two kinds</button>
+                <button type="button" data-to="guide-code">A friend's code</button>
+                <button type="button" data-to="guide-listed">Players' worlds</button>
+                <button type="button" data-to="guide-link">Invite links</button>
+                <button type="button" data-to="guide-address">Addresses</button>
+                <button type="button" data-to="guide-nearby">Nearby</button>
+                <button type="button" data-to="guide-open">Open worlds</button>
+                <button type="button" data-to="guide-short">Short codes</button>
+                <button type="button" data-to="guide-key">Keys</button>
+                <button type="button" data-to="guide-back">Coming back</button>
+                <button type="button" data-to="guide-who">Who you come as</button>
+                <button type="button" data-to="guide-own">Your own world</button>
+                <button type="button" data-to="guide-trouble">Won't join?</button>
+            </nav>
+            <div class="about-body" id="worldsguidebody" tabindex="0"></div>
+            <!-- (What it says: put into it while it's open, and kept out of the page till then) -->
+            <template id="worldsguidetext">
+                <section id="guide-ways">
+                    <h3>Which way in?</h3>
+                    <p>Find what you've been given, and do what's beside it.</p>
+                    <table class="guide-ways">
+                        <tbody>
+                            <tr><th scope="row">A four-letter code from a friend, like <code>KQWX</code></th><td>On the title, <strong>Join a world</strong>: type it and <strong>Join</strong> <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-code">A friend's code</button>)</span>.</td></tr>
+                            <tr><th scope="row">A link with <code>?join=</code> in it</th><td>Open it: Join a world opens with the code in it. Tap <strong>Join</strong>.</td></tr>
+                            <tr><th scope="row">An invite link with <code>#server=</code> in it, or its square code</th><td>Open it, or scan the code with your phone's camera. Or paste it here, in <strong>Add a server, or paste an invite link</strong> <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-link">Invite links</button>)</span>.</td></tr>
+                            <tr><th scope="row">A server's address, like <code>studio-mac.local:8480</code></th><td>Type it in <strong>Add a server</strong> and <strong>Add</strong>, or open it in your browser <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-address">A server's address</button>)</span>.</td></tr>
+                            <tr><th scope="row">A short code of eight letters and numbers, like <code>7KQM-2XWD</code></th><td>Add its server, then its <strong>Enter a code</strong> <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-short">Short codes</button>)</span>.</td></tr>
+                            <tr><th scope="row">A long key, like <code>K7Q2M-…</code></th><td>Tap the world in its server's list and paste it <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-key">Keys</button>)</span>.</td></tr>
+                            <tr><th scope="row">Nothing yet, but there's a server at home</th><td>Add any server you know there: the others on its Wi-Fi show as <strong>Nearby</strong> <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-nearby">Servers nearby</button>)</span>.</td></tr>
+                            <tr><th scope="row">You've been in before</th><td>Tap your world: it says <strong>You hold a key to it</strong> <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-back">Coming back</button>)</span>.</td></tr>
+                            <tr><th scope="row">A new phone or browser</th><td><strong>My servers and tickets</strong> on the old one, carried to the new <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-back">Coming back</button>)</span>.</td></tr>
+                        </tbody>
+                    </table>
+                </section>
+                <section id="guide-kinds">
+                    <h3>Two kinds of world</h3>
+                    <ul>
+                        <li><strong>A friend's own world</strong> is the one they're playing, opened to others from their game. It's there while they play it: when they close it to others, or stop, everyone else goes back to the title. You join it with a <strong>four-letter code</strong>, or the link that carries it.</li>
+                        <li><strong>A world on a server</strong> is kept on a world server: a Mac at home, or a friend's. It goes on when everyone's left, saved as it was, and waits for you to come back. You join it with an <strong>invite link</strong>, the <strong>server's address</strong>, a <strong>short code</strong> or a <strong>key</strong>; after that, your game keeps a <strong>ticket</strong> to come back by.</li>
+                        <li>Either way, up to <strong>8</strong> play in a world, and up to <strong>4</strong> make a party. Each comes as one of their own people, at peace or at war with the others as their peoples are.</li>
+                    </ul>
+                </section>
+                <section id="guide-code">
+                    <h3>A friend's world, by its code</h3>
+                    <p><strong>The one playing:</strong></p>
+                    <ol>
+                        <li>Open the menu and choose <strong>Invite others</strong>.</li>
+                        <li>The game gives a code of four letters, and a link. Send either, or read the code out.</li>
+                        <li>Playing through a world server, <strong>List it on</strong> the server puts your world on its list too, for anyone there to join with a tap.</li>
+                    </ol>
+                    <p><strong>The one joining:</strong></p>
+                    <ol>
+                        <li>On the title, choose <strong>Join a world</strong> (or open the link they sent).</li>
+                        <li>Type the code. Letters only: <code>kqwx</code> is <code>KQWX</code>.</li>
+                        <li>Check who you'll come as (<strong>Change who comes</strong> to pick another of your characters), and <strong>Join</strong>.</li>
+                    </ol>
+                    <p class="guide-example"><strong>Example.</strong> Mara's playing. She opens the menu, <strong>Invite others</strong>, and reads out <code>KQWX</code>. On your title you choose <strong>Join a world</strong>, type <code>KQWX</code> and <strong>Join</strong>: you arrive in her world as your own character, an elf among her humans.</p>
+                    <p>A typed code is looked for where you opened the game from. If it says there's no world open with that code, open the link they sent instead: it says where their world is open.</p>
+                </section>
+                <section id="guide-listed">
+                    <h3>Players' worlds on a server</h3>
+                    <p>A world a player has opened through a server, and listed there, shows under the server here as <strong>A player's world</strong>. Tap <strong>Join it</strong>, and you're asked who comes, as with a code.</p>
+                    <ul>
+                        <li><strong>linked directly</strong>: your game and theirs talk to each other.</li>
+                        <li><strong>on your network</strong>: they're on the same Wi-Fi as you.</li>
+                        <li><strong>through the server</strong>: your games can't reach each other, so the server passes what they say between them.</li>
+                    </ul>
+                </section>
+                <section id="guide-link">
+                    <h3>Invite links</h3>
+                    <p>A world's owner gets its invite link from the world's menu (<strong>World</strong>, then <strong>Invite link</strong>), with a square code to scan; a server's owner, from its management page. One link does for everyone it's sent to.</p>
+                    <ol>
+                        <li>Open the link, or scan its code with your phone's camera.</li>
+                        <li>The game opens from the server itself, so it's always the server's own version.</li>
+                        <li>The first time, you make a character for the world (or choose one of yours); then you're in.</li>
+                    </ol>
+                    <p class="guide-example"><strong>Example.</strong> <code>https://pellagos.duckdns.org:8480/#server=pellagos.duckdns.org%3A8480&amp;secure=1&amp;world=…&amp;key=…</code> opens the game from that server and takes you into the world it names, with the key it carries. What follows the <code>#</code> stays on your device: it's never sent anywhere.</p>
+                    <p>Pasted into <strong>Add a server, or paste an invite link</strong> here, a link does the same in the page you're on. A link that carries the server's Wi-Fi address (<code>192.168.1.20</code>, say) works at home alone, until the server's open to the internet.</p>
+                </section>
+                <section id="guide-address">
+                    <h3>A server's address</h3>
+                    <p>Type it in <strong>Add a server</strong> and <strong>Add</strong>. Its card shows how it is, and its worlds under it. <code>:8480</code>, the usual port, can be left off.</p>
+                    <ul>
+                        <li><code>studio-mac.local</code>: a Mac on your Wi-Fi, by its name.</li>
+                        <li><code>192.168.1.20:8480</code>: a computer on your Wi-Fi, by its number.</li>
+                        <li><code>pellagos.duckdns.org:8480</code>: a server reached from the internet.</li>
+                    </ul>
+                    <p>Or open the address in your browser (<code>http://</code> on its Wi-Fi, <code>https://</code> from the internet): the game opens from the server, and the title shows its worlds under <strong>Worlds on this server</strong>.</p>
+                    <p class="guide-example"><strong>Example.</strong> Your friend's Mac is called Studio. Type <code>studio-mac.local</code>, <strong>Add</strong>: <strong>Studio</strong> appears with its worlds, each saying how to get in.</p>
+                </section>
+                <section id="guide-nearby">
+                    <h3>Servers nearby</h3>
+                    <p>A server finds the others on its Wi-Fi. Once you know one, those it finds show here as <strong>Nearby</strong>, with how many worlds each lists: tap one to add it.</p>
+                </section>
+                <section id="guide-open">
+                    <h3>Open worlds</h3>
+                    <p>A world its owner has made <strong>open to anyone</strong> says <strong>Open to anyone: tap to join</strong>. Tap it: no link or key needed. Your game's given a ticket like anyone's, to come back by.</p>
+                </section>
+                <section id="guide-short">
+                    <h3>Short codes</h3>
+                    <p>A short code is eight letters and numbers, easy to say aloud or type on a phone, for someone who has the game open already. A world's owner makes one in the world's menu (<strong>World</strong>, then <strong>Make a short code</strong>). It works once, for half an hour.</p>
+                    <p class="guide-example"><strong>Example.</strong> Add the server, then tap its <strong>Enter a code</strong>, type <code>7KQM-2XWD</code> (the dash, and capitals, don't matter) and <strong>Enter</strong>.</p>
+                </section>
+                <section id="guide-key">
+                    <h3>Keys</h3>
+                    <p>A world listed on a server that you hold nothing for says <strong>Ask its owner for an invite link</strong>. An invite link is easiest; or its owner can give you a key. Tap the world, paste the key, <strong>Enter</strong>.</p>
+                    <p>A key's an <strong>owner's</strong> (everything), a <strong>trusted</strong> player's (playing, and giving others keys, if the world allows it) or a <strong>player's</strong> (playing). An owner can take a key back, and whoever came by it is sent out.</p>
+                </section>
+                <section id="guide-back">
+                    <h3>Coming back, and other devices</h3>
+                    <ul>
+                        <li>Once you've been in, your game keeps a <strong>ticket</strong> for the world, on that device: the world says <strong>You hold a key to it</strong> (or <strong>You own it</strong>). Tap it to go back in, no link needed.</li>
+                        <li>On another phone or browser, ask the owner for the link again; or, on the old one, choose <strong>My servers and tickets</strong>, copy the code, and paste it into My servers and tickets on the new one: <strong>Take it in</strong>.</li>
+                        <li>That code opens your worlds: keep it to yourself.</li>
+                    </ul>
+                </section>
+                <section id="guide-who">
+                    <h3>Who you come as</h3>
+                    <ul>
+                        <li>Under the list, the game says who you'll come as: the character you played last. <strong>Change who comes</strong> picks another of yours. With none, you make one first.</li>
+                        <li>A world that says <strong>Heroes stay here</strong> keeps its players' heroes: make one there, or play one you made there before. Your first time, it may let you bring one of yours in. <strong>Take one home</strong> keeps a copy of a hero of yours there among your saved characters.</li>
+                        <li>A world that says <strong>Bring your hero</strong> takes the character you come as, as they are.</li>
+                    </ul>
+                </section>
+                <section id="guide-own">
+                    <h3>A world of your own on a server</h3>
+                    <ul>
+                        <li><strong>Make a world</strong>, on a server's card: give the key the server printed when it first started (on its Wi-Fi), or a <strong>creator key</strong> its owner made you; name the world, choose whose town it starts in, and whether it keeps heroes. You're its owner.</li>
+                        <li><strong>Bring my world</strong>, on a server's card: one of your characters' own worlds, its land and its war as it stands, made a world of the server's, with that character in it.</li>
+                        <li>Then invite others from the world's menu: <strong>World</strong>, then <strong>Invite link</strong>, <strong>Make a short code</strong>, or <strong>Open to anyone</strong>.</li>
+                    </ul>
+                </section>
+                <section id="guide-trouble">
+                    <h3>When it won't join</h3>
+                    <ul>
+                        <li><strong>There's no world open with that code</strong>: check the four letters, or open the link they sent <span class="guide-see">(<button type="button" class="guide-to" data-to="guide-code">A friend's code</button>)</span>. A friend's world closes when they stop playing.</li>
+                        <li><strong>That world's full</strong>: 8 are in it already. Try again when one leaves.</li>
+                        <li><strong>Another version of the game</strong>: a server's card says which is the newer, and offers <strong>Open the game from this server</strong>, which is always its version. A friend's world: whoever has the older one reloads the game.</li>
+                        <li><strong>Open the game from the server</strong>: the game's website can't reach a server at home over the Wi-Fi. That opens the game from the server itself, with your worlds.</li>
+                        <li><strong>A short code that's run out</strong>: each works once, for half an hour. Ask for another.</li>
+                        <li><strong>A link that's stopped working</strong>: its owner may have replaced it. Ask for the new one. If you've been in before, you come back as ever.</li>
+                        <li><strong>Test this server</strong>, on its card, tries each of its ways in from where you are and says how it went: its owner sees it on their management page. <strong>Forget</strong> takes a server off your list.</li>
+                    </ul>
+                </section>
+            </template>
+            <div class="menu">
+                <button type="button" class="button primary" id="worldsguideclose">Back to worlds</button>
             </div>
         </dialog>
 
@@ -518,6 +676,7 @@
                         <li><strong>Your own world.</strong> In the menu, <strong>Invite others</strong> gives a code and a link; friends choose <strong>Join a world</strong> on their title screen and type the code.</li>
                         <li>Up to eight play in a world; up to four make a party, with a chat of their own: what any of them brings down near the others counts for them all, and each finds their own loot.</li>
                         <li>Each comes as one of their own people, so you're at peace or at war with each other as your peoples are, unless you're in a party.</li>
+                        <li><strong>Worlds on servers</strong> has a <strong>Worlds Guide</strong>: every way into a world, with examples, and what to do when one won't join.</li>
                     </ul>
                 </section>
                 <section id="about-saving">
