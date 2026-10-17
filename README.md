@@ -471,7 +471,9 @@ remembered.
   with that character in it, and them its owner). A world's **invite link** (its owner's World
   panel, or the management page's **Invite players**) opens the game from the server and takes
   anyone in, a character made first if they have none; a world **open to anyone** needs no link,
-  and the server's own address shows its worlds on the title.
+  and the server's own address shows its worlds on the title. Worlds on servers' **Worlds Guide**
+  goes through every way into a world, a friend's own or one on a server, with examples, and what
+  to do when one won't join.
   Up to 8 play in a world at once. Its owner looks after it from its management page: worlds,
   keys, players, backups, and opening it to the internet. Run one from the Mac's menu bar
   ([docs/MAC_APP.md](docs/MAC_APP.md)), or with `npm run world-server`; how, and what it keeps,

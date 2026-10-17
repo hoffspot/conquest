@@ -415,8 +415,9 @@ select:focus-visible,
     color: var(--gold-bright);
 }
 
-/* About the game: its contents along the top, the rest scrolling under them */
-dialog.about {
+/* About the game: its contents along the top, the rest scrolling under them (wider than the other
+   dialogs: .together's width, which comes after, is for them) */
+dialog.together.about {
     width: min(560px, calc(100% - 24px));
     max-height: calc(100dvh - 24px);
     padding: 18px 18px 16px;
@@ -548,6 +549,97 @@ dialog.about h2 {
     text-align: center;
     color: var(--faint);
     font-size: 12.5px;
+}
+
+/* The Worlds Guide (Worlds on servers): About's look, with its steps, examples and what's typed */
+.about-body ol {
+    margin: 0 0 8px;
+    padding-left: 22px;
+    display: grid;
+    gap: 4px;
+}
+
+.about-body code {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--ink);
+    background: var(--field);
+    border: 1px solid var(--field-border);
+    border-radius: 4px;
+    padding: 0 4px;
+    white-space: nowrap;
+}
+
+/* (Another part pointed to: a word that takes the reader there, kept with its brackets) */
+.guide-see {
+    white-space: nowrap;
+}
+
+.guide-to {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--gold-bright);
+    font: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--gold-deep);
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+
+/* (A whole link, in an example, broken wherever it must be) */
+.guide-example code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.guide-example {
+    border-left: 3px solid var(--gold-deep);
+    padding: 4px 0 4px 10px;
+    color: var(--muted);
+}
+
+/* (Which way in: what you have, and what to do with it; one under the other on a phone) */
+.guide-ways {
+    border-collapse: collapse;
+    margin: 0 0 8px;
+    width: 100%;
+}
+
+.guide-ways tr + tr {
+    border-top: 1px solid var(--field-border);
+}
+
+.guide-ways th {
+    text-align: left;
+    vertical-align: top;
+    font-weight: 600;
+    color: var(--ink);
+    padding: 6px 12px 6px 0;
+    width: 42%;
+}
+
+.guide-ways td {
+    color: var(--muted);
+    padding: 6px 0;
+    vertical-align: top;
+}
+
+@media (max-width: 560px) {
+    .guide-ways th,
+    .guide-ways td {
+        display: block;
+        width: auto;
+        padding: 0;
+    }
+
+    .guide-ways th {
+        padding-top: 8px;
+    }
+
+    .guide-ways td {
+        padding-bottom: 8px;
+    }
 }
 
 /* --- Making a character --- */

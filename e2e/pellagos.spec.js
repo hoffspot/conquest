@@ -253,6 +253,63 @@ test("the title's About: what the game is and how it's played, scrolled through,
     await expect(page.locator("#about")).toBeHidden();
 });
 
+test("Worlds on servers' Worlds Guide: every way into a world, with examples, its contents and its own pointers taking you to each part; on a phone, nothing wider than the screen; closed, back to the worlds", async ({ page }) => {
+    await title(page);
+    await page.locator("#worldsbutton").click();
+    await expect(page.locator("#worlds")).toBeVisible();
+
+    // (Over the worlds, which stay open under it)
+    await page.getByRole("button", { name: "Worlds Guide" }).click();
+
+    const guide = page.locator("#worldsguide");
+    const body = page.locator("#worldsguidebody");
+    // (A part at the top of what's read)
+    const atTop = (id) => page.locator(`#${id}`).evaluate((section) => Math.abs(section.getBoundingClientRect().top - section.parentElement.getBoundingClientRect().top));
+
+    await expect(guide).toBeVisible();
+    await expect(page.locator("#worlds")).toBeVisible();
+    await expect(page.locator("#worldsguidetitle")).toHaveText("Worlds Guide");
+    await expect(page.locator("#worldsguidebody h3")).toHaveText(["Which way in?", "Two kinds of world", "A friend's world, by its code", "Players' worlds on a server", "Invite links", "A server's address", "Servers nearby", "Open worlds", "Short codes", "Keys", "Coming back, and other devices", "Who you come as", "A world of your own on a server", "When it won't join"]);
+    expect(await body.evaluate((element) => element.scrollTop)).toBe(0);
+
+    // What you've been given, and what to do with it; and examples of each kind of code and link
+    await expect(page.locator(".guide-ways th")).toHaveCount(9);
+    await expect(page.locator(".guide-ways").getByText("KQWX")).toBeVisible();
+    await expect(page.locator("#worldsguidebody .guide-example")).toHaveCount(4);
+    await expect(page.locator("#guide-short .guide-example")).toContainText("7KQM-2XWD");
+
+    // Its contents take you to a part, and so does a part's pointer to another
+    await page.locator('#worldsguide nav [data-to="guide-short"]').click();
+    await expect.poll(() => atTop("guide-short")).toBeLessThan(30);
+    await page.locator('#worldsguide nav [data-to="guide-ways"]').click();
+    await expect.poll(() => atTop("guide-ways")).toBeLessThan(30);
+    await page.locator("#guide-ways").getByRole("button", { name: "Keys" }).click();
+    await expect.poll(() => atTop("guide-key")).toBeLessThan(30);
+
+    // Back to the worlds, what it says out of the page
+    await page.locator("#worldsguideclose").click();
+    await expect(guide).toBeHidden();
+    await expect(page.locator("#worlds")).toBeVisible();
+    await expect(body).toBeEmpty();
+
+    // On a phone: its contents swiped along one row, the table one under the other, and nothing,
+    // the longest link included, wider than the screen
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("button", { name: "Worlds Guide" }).click();
+    await expect(guide).toBeVisible();
+    expect(await body.evaluate((element) => element.scrollTop)).toBe(0);
+    expect(await page.locator(".guide-ways th").first().evaluate((cell) => getComputedStyle(cell).display)).toBe("block");
+    await page.locator('#worldsguide nav [data-to="guide-link"]').click();
+    await expect.poll(() => atTop("guide-link")).toBeLessThan(30);
+    expect(await body.evaluate((element) => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+    expect(await guide.evaluate((dialog) => dialog.getBoundingClientRect().right)).toBeLessThanOrEqual(390);
+
+    // (Escape closes the guide alone)
+    await page.keyboard.press("Escape");
+    await expect(guide).toBeHidden();
+    await expect(page.locator("#worlds")).toBeVisible();
+});
+
 // (The pixels it draws counted: at the screen's own, a pixel a pixel, not the half the others
 // are drawn at: playwright.config.js)
 test.describe("drawn at the screen's own pixels", () => {

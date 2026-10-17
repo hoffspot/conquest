@@ -3075,23 +3075,42 @@ $("#worldsback").addEventListener("click", () => $("#worlds").close());
 $("#worldschange").addEventListener("click", () => openCharacters("worlds"));
 $("#worldscarry").addEventListener("click", askCarry);
 
+// A guide in a dialog of its own (About, the Worlds Guide: `id`, with its `${id}body` and
+// `${id}text`): what it says put in while it's open, from the top each time; its contents take the
+// reader to each part, and closing it leaves the page without it
+function openGuide(id) {
+    const body = $(`#${id}body`);
+
+    body.replaceChildren($(`#${id}text`).content.cloneNode(true));
+    $(`#${id}`).showModal();
+    body.scrollTop = 0;
+    body.focus({ preventScroll: true });
+}
+
+for (const id of ["about", "worldsguide"]) {
+    $(`#${id}`).addEventListener("close", () => $(`#${id}body`).replaceChildren());
+    // (From its contents, or from a part that points to another)
+    $(`#${id}`).addEventListener("click", (event) => {
+        const to = event.target.closest("[data-to]")?.dataset.to;
+
+        if (to) {
+            document.getElementById(to)?.scrollIntoView({ block: "start", behavior: "smooth" });
+        }
+    });
+}
+
 // About the game: what it is and how it's played, from the top, with which version this is
 $("#aboutbutton").addEventListener("click", () => {
     const built = builtAt();
 
     $("#aboutversion").textContent = codeVersion() === "dev" ? "Version: a copy run from the repository." : `Version ${codeVersion()}${built ? `, built ${new Date(built).toLocaleDateString(undefined, { dateStyle: "medium" })}` : ""}.`;
-    // (What it says is put in while it's open, from the top each time)
-    $("#aboutbody").replaceChildren($("#abouttext").content.cloneNode(true));
-    $("#about").showModal();
-    $("#aboutbody").scrollTop = 0;
-    $("#aboutbody").focus({ preventScroll: true });
+    openGuide("about");
 });
 $("#aboutclose").addEventListener("click", () => $("#about").close());
-$("#about").addEventListener("close", () => $("#aboutbody").replaceChildren());
 
-for (const button of document.querySelectorAll("#about [data-to]")) {
-    button.addEventListener("click", () => document.getElementById(button.dataset.to)?.scrollIntoView({ block: "start", behavior: "smooth" }));
-}
+// The Worlds Guide: every way into a world, over Worlds on servers, which it goes back to
+$("#worldsguidebutton").addEventListener("click", () => openGuide("worldsguide"));
+$("#worldsguideclose").addEventListener("click", () => $("#worldsguide").close());
 
 $("#joinbutton").addEventListener("click", () => openJoin());
 $("#joinform").addEventListener("submit", join);
