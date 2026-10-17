@@ -114,3 +114,24 @@ in this repository, but in the private one the game's builds fetch it from
 game.
 
 Don't copy it out of this game or use it in anything else.
+
+## elite-dungeon-spider.bin
+
+**Spider V6a**, bought on **Fab** by this repository's owner under **Fab's Standard License**:
+the Elite Dungeon Spider.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought `.blend` put through `utilities/blenderpipeline`
+(`private/elite-dungeon-spider.json`, which stays out of the repository with the bought files),
+its `browser` build. That's turned to face the game's front, its material made from the
+`.blend`'s own textures (its glowing markings kept), 7,378 triangles with two lower details packed
+in (2,951 and 1,102), 1,024-pixel KTX2 textures, and all 33 of its own clips, at 30 keyframes a
+second.
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`). The model viewer shows it (*Coming to the wilds*) until it's in the
+game.
+
+Don't copy it out of this game or use it in anything else.
