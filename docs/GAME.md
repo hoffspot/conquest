@@ -4419,6 +4419,12 @@ it.
 2. **The title.** **Continue as** the character played last; make a **New character**; choose
    another of those kept (**Saved characters**, up to six); join a world someone else has opened
    (its code: docs/WAR.md M11); and the debug mode switch.
+   - **About**, at the bottom, opens what the game is and how it's played, in a dialog that
+     scrolls (index.html `#about`): the game, starting, getting about, fighting, magic, gear and
+     gold, towns and folk, the world and its war, your party, playing together, saving, the keys,
+     the options and the credits. A row of contents along its top takes you to each part (on a
+     phone, one row swiped sideways), and it ends with which version of the game this is
+     (app/version.js). It opens at the top each time.
    - **Saved characters** lists those kept, the one played last first, each with their people,
      what they wield (as they have it now), their gold and when they last played. Tapped, one's
      played, and is the one Continue carries on with from then. Each has a **Delete** button,

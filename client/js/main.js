@@ -3075,6 +3075,24 @@ $("#worldsback").addEventListener("click", () => $("#worlds").close());
 $("#worldschange").addEventListener("click", () => openCharacters("worlds"));
 $("#worldscarry").addEventListener("click", askCarry);
 
+// About the game: what it is and how it's played, from the top, with which version this is
+$("#aboutbutton").addEventListener("click", () => {
+    const built = builtAt();
+
+    $("#aboutversion").textContent = codeVersion() === "dev" ? "Version: a copy run from the repository." : `Version ${codeVersion()}${built ? `, built ${new Date(built).toLocaleDateString(undefined, { dateStyle: "medium" })}` : ""}.`;
+    // (What it says is put in while it's open, from the top each time)
+    $("#aboutbody").replaceChildren($("#abouttext").content.cloneNode(true));
+    $("#about").showModal();
+    $("#aboutbody").scrollTop = 0;
+    $("#aboutbody").focus({ preventScroll: true });
+});
+$("#aboutclose").addEventListener("click", () => $("#about").close());
+$("#about").addEventListener("close", () => $("#aboutbody").replaceChildren());
+
+for (const button of document.querySelectorAll("#about [data-to]")) {
+    button.addEventListener("click", () => document.getElementById(button.dataset.to)?.scrollIntoView({ block: "start", behavior: "smooth" }));
+}
+
 $("#joinbutton").addEventListener("click", () => openJoin());
 $("#joinform").addEventListener("submit", join);
 $("#joincancel").addEventListener("click", () => $("#join").close());
