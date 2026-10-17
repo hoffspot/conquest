@@ -50,7 +50,7 @@ const rate = (bytes) => `${(bytes / 1000).toFixed(1)} KB/s`;
 
 /**
  * Playing together, how it's going (core/netplay.js): joined, how long a word takes to the host and
- * back, the steps in hand (and how many it means to keep, by how unevenly the host's come), how
+ * back, the steps in hand (and how many it means to keep, by how late the host's come), how
  * often it's checked against the host's world and found it astray, and what it's hearing a
  * second; hosting, how many have joined, and what's sent them a second (and of that, the motion
  * stream). `per` is how much each kind's come or gone a second (as Debug works it out).
@@ -59,7 +59,7 @@ export function netLine({ remote, hosting }, per) {
     if (remote) {
         const rtt = remote.rtt === null ? "…" : `${Math.round(remote.rtt)} ms`;
 
-        return `Net joined: RTT ${rtt}  in hand ${remote.behind}/${remote.delay} steps (jitter ${Math.round(remote.jitter)} ms)  checks ${remote.motionChecks} motion, ${remote.checks} sums, astray ${remote.desyncs}  resyncs ${remote.resyncs} (${remote.skips} too far behind)  in ${rate(total(per))}`;
+        return `Net joined: RTT ${rtt}  in hand ${remote.behind}/${remote.delay} steps (late ${Math.round(remote.jitter)} ms)  checks ${remote.motionChecks} motion, ${remote.checks} sums, astray ${remote.desyncs}  resyncs ${remote.resyncs} (${remote.skips} too far behind)  in ${rate(total(per))}`;
     }
 
     if (hosting) {

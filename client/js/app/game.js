@@ -374,6 +374,11 @@ const ENTERING = Object.freeze({ budget: 30, most: 3 });
 // the time between them all the same (playing alone, a slow frame's a slower world instead)
 const JOINED_FRAME = 1;
 
+// Joined, and the host's next step not come yet: everyone's drawn going on as they were, up to
+// RUN_ON - 1 steps past the last (100 ms), before they're drawn waiting for it (a link held up a
+// moment, as a phone's mobile network often is)
+const RUN_ON = 3;
+
 // How often a joined game times its link to the host (seconds); and how far ahead its hero's
 // drawn going when swiped straight ahead (m: app/predict.js stops it soon enough)
 const PING_EVERY = 1;
@@ -2692,13 +2697,17 @@ export class Game {
 
         if (this.remote) {
             while (this.accumulator >= STEP_MS) {
-                this.#remember();
+                // (Where everyone was, to draw them from: unless there's no step to play yet, when
+                // they're drawn going on as they were a little while (RUN_ON), rather than stopped)
+                if (this.remote.behind > 0) {
+                    this.#remember();
+                }
 
                 // (Joined to another's world: its steps as the host played them, when they've come)
                 const events = this.remote.step();
 
                 if (!events) {
-                    this.accumulator = Math.min(this.accumulator, STEP_MS);
+                    this.accumulator = Math.min(this.accumulator, STEP_MS * RUN_ON);
 
                     break;
                 }
@@ -2915,8 +2924,8 @@ export class Game {
 
             if (flight) {
                 const [ox, oz] = this.originOf(projectile.map);
-                const x = ox + flight.previous.x + (projectile.x - flight.previous.x) * alpha;
-                const z = oz + flight.previous.y + (projectile.y - flight.previous.y) * alpha;
+                const x = ox + flight.previous.x + (projectile.x - flight.previous.x) * Math.min(1, alpha);
+                const z = oz + flight.previous.y + (projectile.y - flight.previous.y) * Math.min(1, alpha);
                 // (Towards its target as drawn; or, its target not drawn, straight on at the height it left at)
                 const target = this.avatars.get(projectile.target);
                 const left = target ? Math.hypot(target.object.position.x - x, target.object.position.z - z) : flight.distance;
@@ -11040,10 +11049,11 @@ export class Game {
         const ahead = Math.min(command.reach ?? AHEAD, AHEAD);
         const to = command.type === "move" ? [command.to[0] + 0.5, command.to[1] + 0.5] : [player.x + Math.sin(command.facing) * ahead, player.y + Math.cos(command.facing) * ahead];
 
-        this.predict.ordered(player, to, Boolean(command.run), this.clock * 1000);
+        const way = command.type === "ahead" ? [Math.sin(command.facing), Math.cos(command.facing)] : null;
+        const order = this.predict.ordered(player, to, Boolean(command.run), this.clock * 1000, way);
 
         return (result) => {
-            this.predict?.done(result, this.clock * 1000);
+            this.predict?.done(result, this.clock * 1000, order);
             then?.(result);
         };
     }
