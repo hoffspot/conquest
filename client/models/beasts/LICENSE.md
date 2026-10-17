@@ -155,3 +155,25 @@ in this repository, but in the private one the game's builds fetch it from
 game.
 
 Don't copy it out of this game or use it in anything else.
+
+## giant-cockroach.bin
+
+**Medhue's Cockroach** (`medhue_cockroach.blend`), bought on **Fab** by this repository's owner
+under **Fab's Standard License**: the Giant Cockroach.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought `.blend` put through `utilities/blenderpipeline`
+(`private/giant-cockroach.json`, which stays out of the repository with the bought files), its
+`browser` build. That's 30 times its own size (a cockroach as long as a person: its body 1.8 m,
+2.4 m with its antennae), 1,786 triangles with two lower details packed in (714 and 256), its own
+three 1,024-pixel textures as KTX2, all 13 of its own clips, at 30 keyframes a second, and three
+made from its idle by the pipeline (`clips.invent`: a lunging bite, a rear and strike, and a
+flinch when it's hit).
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`). The model viewer shows it (*Coming to the wilds*) until it's in the
+game.
+
+Don't copy it out of this game or use it in anything else.

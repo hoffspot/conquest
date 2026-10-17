@@ -229,9 +229,9 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     await openViewer(page, "/model-viewer.html?model=beast-centipede&clip=Run");
 
     // (In the game now, as are the ant, the spiders and the Ant Monster: every bought model is but
-    // the scorpion, the one creature to come listed; read, its clips listed, the one asked for by
-    // its address played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Dungeon Scorpion"]);
+    // the scorpion and the cockroach, the creatures to come listed; read, its clips listed, the one
+    // asked for by its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Dungeon Scorpion", "Giant Cockroach"]);
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
@@ -476,6 +476,36 @@ test("and the Dungeon Scorpion: all 16 clips in its file, its full detail only, 
     await expect(page.locator("#name")).toHaveText("The Dungeon Scorpion");
     expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 53268, bones: 66 });
     await expect(page.locator("#details")).toContainText("Scorpion V5d, bought on Fab: used with the permission its Standard License gives");
+});
+
+test("and the Giant Cockroach: its 13 clips and the 3 made up for it, made as long as a person, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-giant-cockroach&clip=Rear%20Strike");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack",
+        "Dead",
+        "Death",
+        "Eating",
+        "Idle",
+        "Idle 2",
+        "Idle 3",
+        "Idle 4",
+        "Run",
+        "Squished",
+        "Turn Left",
+        "Turn Right",
+        "Walk",
+        // (Made up from its idle: its own attack only paws with its forelegs, and it had no flinch)
+        "Bite",
+        "Rear Strike",
+        "Hit React",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Rear Strike", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Giant Cockroach");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 1786, bones: 33 });
+    await expect(page.locator("#details")).toContainText("Medhue's Cockroach, bought on Fab: used with the permission its Standard License gives");
 });
 
 test("the werewolf as the game draws it, from its model once that's read: the game's moves for it, and the skin each one wears", async ({ page }) => {

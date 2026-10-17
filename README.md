@@ -84,7 +84,7 @@ menu, and building it.
 [docs/SERVER.md](docs/SERVER.md) is the guide to running a world server, however it's run: its
 management page, worlds and their keys, reaching it from the internet, backups, bringing worlds
 in, and updating it. [docs/LICENSED_MODELS.md](docs/LICENSED_MODELS.md) is how the models that
-aren't free to reuse (the Dreadthorn, the werewolf, the centipede, the Ant Monster, the ant, the Dungeon Spider, the Elite Dungeon Spider, the Dungeon Scorpion) are kept out of the public repository and scrambled where
+aren't free to reuse (the Dreadthorn, the werewolf, the centipede, the Ant Monster, the ant, the Dungeon Spider, the Elite Dungeon Spider, the Dungeon Scorpion, the Giant Cockroach) are kept out of the public repository and scrambled where
 they're served, and what the owner sets up for it.
 
 ## How to play
@@ -940,8 +940,8 @@ what it doesn't cover.
   converted form only, scrambled, and like the Dreadthorn kept in the private repository
   (`client/models/beasts/LICENSE.md`). It isn't free to reuse.
 - The centipede is Centipede Monster-V2, the Ant Monster Ant Monster V1b, the ant Ant V2, the
-  Dungeon Spider Spider V3, the Elite Dungeon Spider Spider V6a and the Dungeon Scorpion Scorpion
-  V5d, all bought on Fab under the same Standard License, and kept as the werewolf is: in their converted form only,
+  Dungeon Spider Spider V3, the Elite Dungeon Spider Spider V6a, the Dungeon Scorpion Scorpion
+  V5d and the Giant Cockroach Medhue's Cockroach, all bought on Fab under the same Standard License, and kept as the werewolf is: in their converted form only,
   scrambled, in the private repository (`client/models/beasts/LICENSE.md`). They aren't free to
   reuse.
 - The KayKit Medieval Hexagon Pack by Kay Lousberg (<https://kaylousberg.com>), CC0
