@@ -161,6 +161,13 @@ export const CREATURES = Object.freeze({
     // more as the nest's boss)
     ant: { name: "Giant ant", hp: 24, weapon: "ant", speed: 1.1, chase: 2.6, temper: "aggressive", roam: 8, leash: 18, pack: [1, 3], tiers: [1, 9], biomes: [], blood: "ichor", armor: 0.05, darkSight: true },
     greatCentipede: { name: "Great centipede", hp: 52, weapon: "greatCentipede", speed: 0.9, chase: 2, temper: "aggressive", roam: 8, leash: 18, pack: [1, 2], tiers: [3, 10], biomes: [], blood: "ichor", armor: 0.1, darkSight: true, steady: true },
+    // (And the spiders that hunt their tunnels, met only there, each drawn from a model of its own:
+    // the dungeon spider, as big as a hound, biting, springing, or spitting its web to slow whoever
+    // it's after; each pack of them led by an elite dungeon spider, its own kind (`elite`, as the
+    // goblins' Goblin King is theirs), red and black, its markings glowing, its sting the worse and
+    // its web sprayed from its spinnerets, bursting apart as it dies)
+    dungeonSpider: { name: "Dungeon spider", hp: 32, weapon: "dungeonSpider", speed: 1.1, chase: 2.2, temper: "aggressive", roam: 8, leash: 18, pack: [1, 3], tiers: [2, 10], biomes: [], blood: "ichor", armor: 0.05, darkSight: true, elite: "eliteDungeonSpider" },
+    eliteDungeonSpider: { name: "Elite dungeon spider", hp: 72, weapon: "eliteDungeonSpider", speed: 1, chase: 1.9, temper: "aggressive", roam: 8, leash: 20, pack: [1, 1], tiers: [3, 10], biomes: [], blood: "ichor", armor: 0.15, darkSight: true, steady: true, king: true },
     antMonster: { name: "Ant Monster", hp: 96, weapon: "antMonster", speed: 1.4, chase: 2.8, temper: "aggressive", roam: 6, leash: 24, pack: [1, 1], tiers: [4, 10], biomes: [], blood: "ichor", armor: 0.2, darkSight: true, steady: true, call: { kind: "ant", count: [2, 3], most: 4, every: 20000, first: 6000 }, boss: { call: { count: [2, 4], most: 6, every: 15000 } } },
     // The mightiest: only in the perilous places
     dragon: { name: "Drake", hp: 90, weapon: "dragon", speed: 1, chase: 2.2, temper: "aggressive", roam: 6, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true , steady: true },

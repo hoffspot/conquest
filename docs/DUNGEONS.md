@@ -27,8 +27,9 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
   - **an ancient temple** (`ancient`): pillared halls up a straight middle way, rooms off them
     either side, mirrored; the dead, cultists, wraiths, serpents and scorpions;
   - **an ants' nest** (`nest`): dug as the caves are, through reddened earth; giant ants in their
-    numbers, great centipedes in its deeper tunnels, and the Ant Monster, their great queen, at
-    the bottom, calling her flock to her (*Who's in it*, below). All of them are drawn from models
+    numbers, great centipedes in its deeper tunnels, packs of dungeon spiders each led by an elite
+    dungeon spider, and the Ant Monster, their great queen, at the bottom, calling her flock to her
+    (*Who's in it*, below). All of them are drawn from models
     of their own, got ready at its door (docs/WILDS.md, *A place's creatures, ready before they're
     met*).
 - **How deep**: one level (30% of dungeons), two (40%) or three (30%), by seed. Fewer levels are

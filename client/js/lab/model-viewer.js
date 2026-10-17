@@ -126,6 +126,8 @@ const ABOUT = {
     ant: ["Giant ant", "The ants' nests"],
     greatCentipede: ["Great centipede", "The ants' nests"],
     antMonster: ["Ant Monster", "The ants' nests: their great queen, calling its flock"],
+    dungeonSpider: ["Dungeon spider", "The ants' nests, in packs"],
+    eliteDungeonSpider: ["Elite dungeon spider", "The ants' nests, leading each pack of dungeon spiders"],
     dragon: ["Drake", "The drake's lair: for the mightiest"],
     dreadthorn: ["Dreadthorn", "A Dreadthorn's lair: the mightiest of all"],
     moonfang: ["Moonfang", "A werewolves' den: for the mightiest"],
@@ -1234,7 +1236,7 @@ const groups = [
     ["Near home", ["rat", "porcupine", "slime", "bats", "wolf", "boar", "snake", "bandit", "bear", "puma", "direWolf", "werewolf", "goblin", "goblinBomber", "goblinKing", "skeleton", "cultist", "troll", "ogre", "wyvern"]],
     ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "knucker", "hodmedod", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "hart", "kelpie", "caveSpider", "shadowStalker", "olm", "centipede", "basilisk", "draugr", "mare", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "spittingCobra", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "ahuizotl", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock", "chimera"]],
     ["The restless dead", ["ghost", "wraith"]],
-    ["The ants' nests", ["ant", "greatCentipede", "antMonster"]],
+    ["The ants' nests", ["ant", "greatCentipede", "dungeonSpider", "eliteDungeonSpider", "antMonster"]],
     ["For the mightiest", ["dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief"]],
 ];
 

@@ -294,7 +294,7 @@ test("draws the Moonfang from the werewolf's model, read once for both: bigger, 
     expect(drawn.masters[0].height / drawn.wolf.height).toBeCloseTo(3.4 / 2.4, 1);
 });
 
-test("draws the ants' nests' creatures from their models: a giant ant, a great centipede sunk to the ground, the Ant Monster, each as long as it's drawn; the ant rolling onto its back dead till it's lent the Ant Monster's fall, then falling as it does", async ({ page }) => {
+test("draws the ants' nests' creatures from their models: a giant ant, a great centipede and an elite dungeon spider sunk to the ground, a dungeon spider, the Ant Monster, each as long as it's drawn; the ant rolling onto its back dead till it's lent the Ant Monster's fall, then falling as it does", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     const fetched = [];
 
@@ -364,10 +364,12 @@ test("draws the ants' nests' creatures from their models: a giant ant, a great c
         const ant = await look("ant");
         const before = fall();
         const centipede = await look("greatCentipede");
+        const spider = await look("dungeonSpider");
+        const elite = await look("eliteDungeonSpider");
         const queen = await look("antMonster");
         const after = fall();
 
-        return { ant, before, centipede, queen, after, lent: modelOf("ant").animations.map(({ name }) => name).filter((name) => ["Death", "Hit React"].includes(name)).sort(), error: renderer.getContext().getError() };
+        return { ant, before, centipede, spider, elite, queen, after, lent: modelOf("ant").animations.map(({ name }) => name).filter((name) => ["Death", "Hit React"].includes(name)).sort(), error: renderer.getContext().getError() };
     });
 
     // (The ant: 1.5 metres long, as it's made, half a metre high; its bite)
@@ -388,6 +390,20 @@ test("draws the ants' nests' creatures from their models: a giant ant, a great c
     expect(Math.abs(drawn.centipede.low)).toBeLessThan(0.15);
     expect(drawn.centipede.ways).toEqual(["bite", "rear"]);
 
+    // (The dungeon spider: 1.8 metres long, legs and all; its bites, its spring and its web)
+    expect(drawn.spider.model).toBe(true);
+    expect(drawn.spider.long).toBeGreaterThan(1.3);
+    expect(drawn.spider.long).toBeLessThan(2.3);
+    expect(Math.abs(drawn.spider.low)).toBeLessThan(0.1);
+    expect(drawn.spider.ways).toEqual(["bite", "leap", "snap", "web"]);
+
+    // (The elite dungeon spider: 2.8 metres long, on the ground; its sting and its web among its ways)
+    expect(drawn.elite.model).toBe(true);
+    expect(drawn.elite.long).toBeGreaterThan(2.1);
+    expect(drawn.elite.long).toBeLessThan(3.5);
+    expect(Math.abs(drawn.elite.low)).toBeLessThan(0.12);
+    expect(drawn.elite.ways).toEqual(["bite", "lunge", "sting", "web"]);
+
     // (The Ant Monster: 4.2 metres long, its acid, its slam and its call among its ways)
     expect(drawn.queen.model).toBe(true);
     expect(drawn.queen.long).toBeGreaterThan(3.2);
@@ -403,7 +419,7 @@ test("draws the ants' nests' creatures from their models: a giant ant, a great c
     expect(drawn.error).toBe(0);
 
     // (Each file downloaded once)
-    expect([...new Set(fetched.filter((url) => url.includes("/models/beasts/")).map((url) => url.replace(/^.*\/models\//, "").replace(/=[0-9a-f]{10}$/, "=")))].sort()).toEqual(["beasts/ant-monster.bin?h=", "beasts/ant.bin?h=", "beasts/centipede.bin?h="]);
+    expect([...new Set(fetched.filter((url) => url.includes("/models/beasts/")).map((url) => url.replace(/^.*\/models\//, "").replace(/=[0-9a-f]{10}$/, "=")))].sort()).toEqual(["beasts/ant-monster.bin?h=", "beasts/ant.bin?h=", "beasts/centipede.bin?h=", "beasts/dungeon-spider.bin?h=", "beasts/elite-dungeon-spider.bin?h="]);
 });
 
 test("lets a model go off the graphics card once none's drawn from it, and reads it again, without downloading it again, when it's wanted", async ({ page }) => {

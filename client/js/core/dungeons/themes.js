@@ -179,8 +179,9 @@ export const THEMES = {
         },
     },
     // (An ants' nest: the caves' layout dug through earth, its chambers heaped with what the ants
-    // have dragged in; giant ants in their numbers, great centipedes in its deeper tunnels, and the
-    // Ant Monster, their great queen, calling her flock to her in her chamber at the bottom
+    // have dragged in; giant ants in their numbers, great centipedes in its deeper tunnels, packs of
+    // dungeon spiders each led by an elite dungeon spider, and the Ant Monster, their great queen,
+    // calling her flock to her in her chamber at the bottom
     // (creatures.js). All of them drawn from models of their own, read at its door: beasts/model.js
     // modelsInside, app/readying.js)
     nest: {
@@ -202,6 +203,8 @@ export const THEMES = {
             { id: "crawlers", creatures: ["greatCentipede"], size: [1, 2], weight: 2 },
             // (A crawler come in among the ants: every fourth of them)
             { id: "hunted", creatures: ["ant", "ant", "ant", "greatCentipede"], size: [3, 5], weight: 1 },
+            // (The spiders that hunt its tunnels, each pack led by an elite dungeon spider)
+            { id: "spiders", creatures: ["eliteDungeonSpider", "dungeonSpider", "dungeonSpider", "dungeonSpider"], size: [3, 5], weight: 2 },
         ],
         minis: [
             { id: "warden", creature: "ant", title: "Brood warden", weight: 2 },

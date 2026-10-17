@@ -87,6 +87,8 @@ two tiers above it, up to their most.
 | Chimera | 85 | aggressive | 1 | 5–9 | the orcs' wilds only: volcanic, badlands |
 | Giant ant | 24 | aggressive | an ants' nest's packs | 1–9 | the ants' nests only (docs/DUNGEONS.md) |
 | Great centipede | 52 | aggressive | an ants' nest's packs | 3–10 | the ants' nests only |
+| Dungeon spider | 32 | aggressive | an ants' nest's spider packs | 2–10 | the ants' nests only |
+| Elite dungeon spider | 72 | aggressive | leads each spider pack | 3–10 | the ants' nests only |
 | Ant Monster | 96 | aggressive | 1, calling its flock | 4–10 | the ants' nests: their boss |
 | Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins, ruined castles and graveyards, with their dead |
 | Wraith | 46 | aggressive | 1 | 5–10 | the ruins and ruined castles, with their dead |
@@ -955,7 +957,8 @@ What's the same as the Dreadthorn's, and what's its own:
   for (`modelsMet`), by night and day, far out and near home.
 
 **The ants' nests' own** (docs/DUNGEONS.md), each drawn from a model bought on Fab, in the
-catalog as the others are (`beast-ant`, `beast-centipede`, `beast-ant-monster`), sized and paced
+catalog as the others are (`beast-ant`, `beast-centipede`, `beast-dungeon-spider`,
+`beast-elite-dungeon-spider`, `beast-ant-monster`), sized and paced
 by measuring each model in a browser: how long and tall it stands idle, and how fast its feet go
 back along the ground while planted.
 
@@ -966,6 +969,19 @@ back along the ground while planted.
   made standing 0.42 m above where it is, so it's sunk that far to the ground (`sink`, metres as
   it's made). Its fangs (Attack), or rearing to strike down (`rear`, a special: Attack 2); resting
   by looking about or eating; flinching and falling as its model does.
+- **The dungeon spider** (`dungeonSpider`): made 1.43 m long, legs and all, drawn 1.8 m. It
+  bites (Attack, Attack 5), springs (`leap`: Attack 2, rearing high and pouncing), and spits its
+  web to slow whoever it's after (`web`: Attack 3, its forelegs flung out); it rests by rearing up
+  or eating, and dies flipped over, its legs curled. Its walk is 0.54 m/s as it's drawn, its run
+  1.07.
+- **The elite dungeon spider** (`eliteDungeonSpider`): a model of its own, red and black, its
+  markings glowing (its own emissive map), made 3 m long, drawn 2.8 m, sunk 0.09 m to the ground.
+  It's the dungeon spider's elite (`elite`, `king`, as the Goblin King is the goblins'): it leads
+  each pack of them. It bites (Attack) or lunges (Attack 3), brings its sting over (`sting`:
+  Attack 2, its belly curled forward), and sprays its web from its spinnerets (`web`: Butt
+  Attack). It rests by looking about or cowering; its model's only fall is its Explode, so it
+  bursts apart as it dies. Its walk carries it as fast as it ever goes, 0.87 m/s as it's drawn: no
+  run.
 - **The Ant Monster** (`antMonster`): made 6.8 m long, drawn 4.2 and 1.5 m tall (1.22 times that
   as a boss). Its mandibles (Attack, Attack 5), rearing to slam down (`slam`: Attack 2), its acid
   spat (`spit`: Attack 3, a pool of venom where it lands) and its flock called (`call`: Call
@@ -982,8 +998,8 @@ back along the ground while planted.
   borrowed clips are made in the browser from the two models as read, so nothing of the bought
   models is kept anywhere else. Drawn before it's lent them, struck, it doesn't flinch, and dead,
   it rolls onto its back (`fallOf`).
-- `e2e/models.spec.js`: each drawn from its model, as long as it's drawn, the great centipede on
-  the ground; the ant rolled over dead till the Ant Monster's read, then falling as it does.
+- `e2e/models.spec.js`: each drawn from its model, as long as it's drawn, the great centipede and
+  the elite dungeon spider on the ground; the ant rolled over dead till the Ant Monster's read, then falling as it does.
   `test/model.test.js`: every clip and bone each names in its model, those the ant borrows (and the
   bones they're played on) in the Ant Monster's; the ant's poses before and after it's lent them.
 
