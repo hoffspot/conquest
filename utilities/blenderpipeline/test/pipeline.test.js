@@ -193,6 +193,8 @@ describe("what each example's config asks for", () => {
         const nodes = await nodeNames(path.join(out, "udim-creature.glb"));
         const crawl = report.clips.find((clip) => clip.name === "Crawl");
 
+        // (Rear among them, never played, as a Blender before 4.4 saved an action: its slot for
+        // no kind of thing)
         assert.deepEqual(
             report.clips.map((clip) => clip.name),
             ["Crawl", "Idle", "Rearing", "Roaring"],
@@ -212,6 +214,18 @@ describe("what each example's config asks for", () => {
         assert.deepEqual(nodes.sort(), ["Body", "Rig", "body", "chest", "head", "root", "tail"]);
         assert.ok(near(report.bounds.rest.size[2], 3, 1e-3));
         assert.ok(near(report.bounds.rest.min[1], 0, 1e-3));
+    });
+
+    it("udim-creature-phone: its clips thinned to 10 keyframes a second, each as long as it was and looping as it did", async () => {
+        const [{ report }, { report: phone }] = await Promise.all([build("udim-creature"), build("udim-creature-phone")]);
+        const lengths = (clips) => clips.map(({ name, seconds, loops }) => [name, seconds, loops]);
+
+        // (Made at 24 frames a second: a tenth of a second isn't a whole number of its frames, so
+        // the keyframes kept are the nearest to each tenth, and each clip's last)
+        assert.equal(report.exported.fps, 24);
+        assert.ok(phone.exported.keyframesThinned > 0);
+        assert.equal(report.exported.keyframesThinned, 0);
+        assert.deepEqual(lengths(phone.clips), lengths(report.clips));
     });
 
     it("udim-creature-split: the exporter's own UDIM split, a material a tile; a warning for the horn it can't carry", async () => {

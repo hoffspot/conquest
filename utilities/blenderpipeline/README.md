@@ -44,8 +44,9 @@ Build one asset, or several: `node build.js my-asset.json [more.json...]`. Optio
 
 **In Blender** (`blender/export.py`):
 
-1. Opens the `.blend`, or imports an `.fbx`, `.glb` or `.gltf` into an empty scene (an FBX with
-   its bones as they were made, not turned along their chains, so its clips play as made). It
+1. Opens the `.blend` (never running the Python it may carry), or imports an `.fbx`, `.glb` or
+   `.gltf` into an empty scene (an FBX with its bones as they were made, not turned along their
+   chains, so its clips play as made). It
    takes the "namespace:" off every name (`stripNamespaces`: Maya writes them, "Basemesh:pelvis").
    It makes the materials given from texture files (`materials`, *Materials from textures*,
    below). Then it picks what's exported: every mesh shown and rendered in the scene (or the
@@ -56,7 +57,9 @@ Build one asset, or several: `node build.js my-asset.json [more.json...]`. Optio
    Mesh2Motion keeps them, or a pack bought separately), or an `.fbx`'s, the clip moving its
    skeleton (an animation FBX, as Unity and Unreal packs have one for each clip: the skeleton it
    brings, and a control rig's clips, are left behind). It picks the armature's actions to export
-   (`clips.include`, `clips.exclude`) and names them (`clips.rename`). Each becomes one glTF
+   (`clips.include`, `clips.exclude`) and names them (`clips.rename`): every one that moves its
+   bones, played or not, those an older Blender saved too (before 4.4, an action nothing played
+   was kept for no kind of thing: it's claimed for the armature). Each becomes one glTF
    animation, sampled frame by frame with its constraints (IK and all) worked out.
 3. Exports only the bones that deform the mesh: no control bones, IK targets or poles, and no
    bones flagged to deform that move no vertex (a chain's tips; a control bone flagged by mistake),
@@ -100,10 +103,15 @@ Build one asset, or several: `node build.js my-asset.json [more.json...]`. Optio
    takes it out of the clips to be played in place (`clips.inPlace`): the drift from start to
    end, spread evenly, comes off the root bone; its sway and bounce stay. The report gives the
    speed, so the game can match a clip's playing speed to how fast the creature moves.
-5. Takes out keyframes a straight line gives anyway, duplicates, and anything unused (a texture
-   of one colour becomes the material's colour), and the material extensions the game doesn't
-   draw (`stripMaterialExtensions`). A mesh's parts that share a material are joined into one
-   draw call (separate objects keep their names).
+5. Thins the clips to `clips.fps` keyframes a second, if it's asked (a 60-frame source's at 30:
+   at each 1/30 of a second, the nearest keyframe), always keeping each clip's last, so it keeps
+   its length and a loop still meets its start; the report says how many went
+   (`exported.keyframesThinned`). (Blender's own frame step stops short of a clip's last frame
+   where its length isn't a multiple of the step: the centipede's 0.75-second run stopped at
+   0.73.) Then takes out keyframes a straight line gives anyway, duplicates, and anything unused
+   (a texture of one colour becomes the material's colour), and the material extensions the game
+   doesn't draw (`stripMaterialExtensions`). A mesh's parts that share a material are joined into
+   one draw call (separate objects keep their names).
 6. Leaves out every channel that holds a bone where it stands at rest (`clips.trimStill`): a
    clip need only say what moves, and a baked rig keys every bone in every clip. Three.js holds a
    bone no clip moves where it stands.
@@ -155,6 +163,7 @@ error, so a misspelt one isn't silently ignored.
 | `clips.inPlace` | `[]` | Clips to play in place (names, or `true` for all) |
 | `clips.rootBone` | the topmost bone that's carried | The bone carrying the creature's travel |
 | `clips.trimStill` | `false` | Leaves out channels that never move a bone from where it stands at rest |
+| `clips.fps` | `null` | Keeps this many keyframes a second (a 60-frame source's at 30: half of them), and each clip's last, not every frame's |
 | `clips.invent` | `[]` | Clips made up from those there are (*Clips made up*, below) |
 | `deformBonesOnly` | `true` | Only bones that deform the mesh (above) |
 | `keepBones` | `[]` | Bones to keep even if they move nothing (points to attach things to: a mouth for fire, a claw for footprints) |

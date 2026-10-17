@@ -142,6 +142,71 @@ export function trimStill(document, { tolerance = 1e-5 } = {}) {
 }
 
 /**
+ * Each clip's keyframes thinned to `fps` a second: at each 1/fps from the clip's start, the
+ * nearest there is, and always its last, so the clip keeps its length and a loop still meets its
+ * start (Blender's own frame step stops short of a clip's last frame where its length isn't a
+ * multiple of the step). A sampler keyed no more often keeps every keyframe; a CUBICSPLINE one is
+ * left as it is (its tangents are for the keys it has). Returns how many keyframes were left out.
+ */
+export function thinKeys(document, fps) {
+    let dropped = 0;
+
+    for (const animation of document.getRoot().listAnimations()) {
+        const samplers = animation.listSamplers().filter((sampler) => sampler.getInput() && sampler.getOutput() && sampler.getInterpolation() !== "CUBICSPLINE");
+        const start = Math.min(...samplers.map((sampler) => sampler.getInput().getArray()[0]));
+        const kept = new Map();
+
+        for (const sampler of samplers) {
+            const input = sampler.getInput();
+            const times = input.getArray();
+            const last = times.length - 1;
+
+            if (!kept.has(input)) {
+                const indices = [];
+
+                for (let k = 0, i = 0; start + k / fps <= times[last] + 1e-6; k++) {
+                    const time = start + k / fps;
+
+                    while (i < last && Math.abs(times[i + 1] - time) < Math.abs(times[i] - time)) {
+                        i++;
+                    }
+
+                    if (indices.at(-1) !== i) {
+                        indices.push(i);
+                    }
+                }
+
+                if (indices.at(-1) !== last) {
+                    indices.push(last);
+                }
+
+                const thinned = indices.length < times.length ? document.createAccessor().setType("SCALAR").setArray(new Float32Array(indices.map((index) => times[index]))).setBuffer(input.getBuffer()) : null;
+
+                kept.set(input, { indices, thinned });
+            }
+
+            const { indices, thinned } = kept.get(input);
+
+            if (!thinned) {
+                continue;
+            }
+
+            // (A key's values: one element, or one for each morph target)
+            const output = sampler.getOutput();
+            const values = output.getArray();
+            const span = values.length / times.length;
+            const array = new values.constructor(indices.length * span);
+
+            indices.forEach((index, n) => array.set(values.subarray(index * span, (index + 1) * span), n * span));
+            sampler.setInput(thinned).setOutput(document.createAccessor().setType(output.getType()).setNormalized(output.getNormalized()).setArray(array).setBuffer(output.getBuffer()));
+            dropped += times.length - indices.length;
+        }
+    }
+
+    return dropped;
+}
+
+/**
  * A lower-detail copy of every mesh, in the same document: a mesh of its own on a node of its
  * own ("<name>.lod<level>", extras.lod = level), its vertices welded then simplified (`ratio`
  * of them kept, at most `error` of its size astray), on the same skeleton and materials as the
@@ -298,10 +363,15 @@ export async function optimize(config, { raw, glb, lodFile }) {
         });
     }
 
-    // Tidied: keyframes that a straight line between others gives anyway, duplicates, a mesh's
-    // parts that share a material joined (one draw call; not separate objects, which keep their
-    // names), anything nothing uses (a texture of one colour made the material's colour), one buffer
+    // Tidied: the clips thinned to clips.fps keyframes a second, if asked; keyframes that a
+    // straight line between others gives anyway, duplicates, a mesh's parts that share a material
+    // joined (one draw call; not separate objects, which keep their names), anything nothing uses
+    // (a texture of one colour made the material's colour), one buffer
     const textures = root.listTextures().length;
+
+    if (config.clips.fps) {
+        result.keyframesThinned = thinKeys(document, config.clips.fps);
+    }
 
     await document.transform(dedup(), join({ keepMeshes: true }), resample({ tolerance: config.resample }), prune(), unpartition());
 

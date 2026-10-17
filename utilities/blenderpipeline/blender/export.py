@@ -122,7 +122,8 @@ def open_source(path):
 
         return
 
-    bpy.ops.wm.open_mainfile(filepath=path, load_ui=False)
+    # (Its own scripts never run: a .blend can carry Python that runs as it's opened)
+    bpy.ops.wm.open_mainfile(filepath=path, load_ui=False, use_scripts=False)
     REPORT["savedWith"] = ".".join(str(part) for part in bpy.data.version)
 
     # (Major and minor only: the file's third number is its format's, not Blender's patch)
@@ -272,7 +273,9 @@ def object_fcurves(action):
         for layer in layers:
             for strip in layer.strips:
                 for bag in getattr(strip, "channelbags", []):
-                    if bag.slot is None or bag.slot.target_id_type == "OBJECT":
+                    # (An action a Blender before 4.4 saved, played by nothing, has a slot for no
+                    # kind of thing yet: UNSPECIFIED, till it's first played)
+                    if bag.slot is None or bag.slot.target_id_type in ("OBJECT", "UNSPECIFIED"):
                         yield from bag.fcurves
 
         return
@@ -473,9 +476,17 @@ def gather_actions(job, armature, scene):
         actions.append({"name": name, "from": source, "frames": [start, end], "seconds": (end - start) / fps, "bones": len(animated_bones(action, armature))})
 
     if armature is not None:
+        armature.animation_data_create()
+
+        # (An action whose slot is for no kind of thing yet, as a Blender before 4.4 saved one
+        # played by nothing, played on the armature once: its slot's claimed for it, so the
+        # exporter takes it as it does the rest)
+        for action in chosen:
+            if any(slot.target_id_type == "UNSPECIFIED" for slot in getattr(action, "slots", [])):
+                armature.animation_data.action = action
+
         # Nothing playing on it: the exporter takes every action fitting a lone armature, each
         # once, and its rest pose from its bones' rest positions
-        armature.animation_data_create()
         armature.animation_data.action = None
 
         for track in list(armature.animation_data.nla_tracks):
