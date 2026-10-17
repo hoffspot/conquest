@@ -8850,6 +8850,190 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
     expect(delved).toMatchObject({ out: "town", by: true });
 });
 
+test("a dungeon whose creatures are drawn from models: theirs fetched, not read, as the player nears its way in; waited for at its door, the world stopped, a card saying how far they've got, Not now staying out and Go in now offered after a while; gone in once they're read; let go of a little after the player's left", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=1");
+
+    // (Two dungeons not far from the start made dens of creatures drawn from models, by a theme of
+    // the test's own: werewolves and their Moonfang in the nearer, the Dreadthorn in the other; no
+    // lair's models asked for meanwhile; each part the downloader asks for held up a little, as a
+    // phone's link would, so the wait's seen)
+    const dens = await page.evaluate(async () => {
+        const { game, fetcher } = window.pellagos;
+        const { THEMES } = await import("/js/core/dungeons/themes.js");
+        const player = game.battle.actor("player");
+        const fetch = fetcher.fetch;
+
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+        game.modelLairs = [];
+
+        // (The werewolves' asked for already, as the player came near: so at their door nothing of
+        // theirs is downloaded, however long the way there takes)
+        game.approached = new Set(["werewolf", "moonfang"]);
+        window.fetchedBefore = fetch;
+        fetcher.fetch = async (...args) => {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+
+            return fetch(...args);
+        };
+        THEMES.wolfDen = { ...THEMES.caves, id: "wolfDen", packs: [{ id: "wolves", creatures: ["werewolf"], size: [1, 2], weight: 1 }], minis: [{ id: "wolf", creature: "werewolf", title: "Old werewolf", weight: 1 }], bosses: [{ id: "moonfang", creature: "moonfang", title: "the Moonfang", weight: 1 }] };
+        THEMES.dragonDen = { ...THEMES.caves, id: "dragonDen", packs: [{ id: "dragon", creatures: ["dreadthorn"], size: [1, 1], weight: 1 }], minis: [{ id: "dragon", creature: "dreadthorn", title: "Young Dreadthorn", weight: 1 }], bosses: [{ id: "dragon", creature: "dreadthorn", title: "the Dreadthorn", weight: 1 }] };
+
+        // (The nearest two not made yet: none within 200 metres of the start, where they're made as
+        // it begins)
+        const away = (site) => Math.hypot(site.at[0] - player.x, site.at[1] - player.y);
+        const sites = game.world.plan.sites.filter((site) => site.kind === "dungeon" && away(site) > 200).sort((a, b) => away(a) - away(b));
+
+        return { wolves: sites[0].id, dragon: sites[1].id };
+    });
+
+    // At the werewolves' door, nothing of theirs downloaded: tapped, the world stops and the card
+    // shows, nothing ready yet
+    const door = (id, theme, { there = false } = {}) =>
+        page.evaluate(async ([id, theme, there]) => {
+            const { game, session } = window.pellagos;
+            const player = game.battle.actor("player");
+            const site = game.world.plan.sites.find((one) => one.id === id);
+            const settle = async (frames) => {
+                for (let k = 0; k < frames; k++) {
+                    game.advance(0.05);
+
+                    while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                        await new Promise((resolve) => setTimeout(resolve, 0));
+                    }
+                }
+            };
+
+            // (The ground about it found, its way in with it, from far enough off that the dungeon
+            // isn't made yet (core/host.js RELEVANCE: made as a building is got ready to go into),
+            // made a den; then before its door, facing it, where it's made. Or there already)
+            if (!there) {
+                Object.assign(player, { x: site.at[0] + 120, y: site.at[1], path: [], order: null, progress: null });
+                await settle(10);
+            }
+
+            const building = game.world.interiors.buildings.get(`site:${id}`);
+            const [ox, oy] = building.entrance.outside;
+
+            if (!building.dungeon) {
+                building.theme = theme;
+            }
+
+            if (!there) {
+                Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null, facing: building.entrance.facing });
+                await settle(10);
+                game.doors.sync();
+            }
+
+            const target = game.doors.targets.find((each) => each.map === "town" && each.link.id === building.door.id);
+            const spot = session.view.toScreen(target.box.getCenter(target.box.min.clone()));
+
+            game.tap(spot.x, spot.y);
+
+            // (At once: the world stopped, Go in now not offered yet)
+            return { name: building.name, key: building.key, theme: building.theme, running: game.running, go: !document.querySelector("#readyinggo").hidden };
+        }, [id, theme, there]);
+    const card = page.locator("#readying");
+    const wolves = await door(dens.wolves, "wolfDen");
+
+    expect(wolves).toMatchObject({ theme: "wolfDen", running: false, go: false });
+    await expect(card).toBeVisible();
+    await expect(page.locator("#readyingname")).toHaveText(wolves.name);
+    await expect(page.locator("#readyinglist li")).toHaveCount(2);
+    expect((await page.locator("#readyinglist li span:first-child").allTextContents()).sort()).toEqual(["Moonfang", "Werewolf"]);
+    await expect(page.locator("#readyinglist li.done")).toHaveCount(0);
+
+    // Not now: stays out, playing on
+    await page.locator("#readyingback").click();
+    await expect(card).toBeHidden();
+    expect(await page.evaluate(() => ({ running: window.pellagos.game.running, map: window.pellagos.game.battle.actor("player").map }))).toEqual({ running: true, map: "town" });
+
+    // Tapped again: waited for again, Go in now offered after a while, the bar part way; then in,
+    // of itself, once they're read
+    await door(dens.wolves, "wolfDen", { there: true });
+    await expect(card).toBeVisible();
+    await expect(page.locator("#readyinggo")).toBeVisible({ timeout: 8000 });
+    await expect(page.locator("#readyingamount")).toHaveText(/^\d+\.\d of \d+\.\d MB$/);
+    await expect(card).toBeHidden({ timeout: 90000 });
+    await expect.poll(() => page.evaluate(() => window.pellagos.game.battle.actor("player").map), { timeout: 30000 }).not.toBe("town");
+
+    const inside = await page.evaluate(async (key) => {
+        const { game } = window.pellagos;
+        const { modelOf } = await import("/js/beasts/model.js");
+
+        return { running: game.running, building: game.world.interiors.of(game.battle.actor("player").map)?.key, werewolf: Boolean(modelOf("werewolf")), moonfang: Boolean(modelOf("moonfang")), key };
+    }, wolves.key);
+
+    expect(inside).toEqual({ running: true, building: wolves.key, werewolf: true, moonfang: true, key: wolves.key });
+
+    // Out again, and away (its foes asleep once no one's near its way in: core/dungeons/play.js
+    // DELVES): their models kept a little while (AREA_LINGER), then let go of off the graphics card
+    const left = await page.evaluate(async (key) => {
+        const { game } = window.pellagos;
+        const { AREA_LINGER, MODEL_LINGER, forgetModels, keptModels, modelOf } = await import("/js/beasts/model.js");
+        const player = game.battle.actor("player");
+        const building = game.world.interiors.buildings.get(key);
+
+        game.host.command("player", { type: "enter", link: building.door.id });
+
+        for (let k = 0; k < 200 && player.map !== "town"; k++) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+
+        Object.assign(player, { x: player.x + 150, path: [], order: null, progress: null });
+
+        for (let k = 0; k < 200 && keptModels().unheld < keptModels().models; k++) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+
+        const now = performance.now();
+
+        forgetModels(now + AREA_LINGER / 3, MODEL_LINGER, [], []);
+
+        const kept = Boolean(modelOf("werewolf"));
+
+        forgetModels(now + AREA_LINGER + 6000, MODEL_LINGER, [], []);
+
+        return { out: player.map, kept, gone: !modelOf("werewolf") && !modelOf("moonfang") };
+    }, wolves.key);
+
+    expect(left).toEqual({ out: "town", kept: true, gone: true });
+
+    // Near the Dreadthorn's way in (not at its door): its model downloaded, in the background (not
+    // hurried: no one's waiting for it), to be kept; not read
+    const near = await page.evaluate(async (id) => {
+        const { game, fetcher } = window.pellagos;
+        const { ASSETS } = await import("/js/app/assets.js");
+        const { modelOf } = await import("/js/beasts/model.js");
+        const player = game.battle.actor("player");
+        const site = game.world.plan.sites.find((one) => one.id === id);
+        const file = ASSETS.models["beast-dreadthorn"].files[0];
+
+        fetcher.fetch = window.fetchedBefore;
+
+        // (Near enough for its creatures' models to be fetched (game.js APPROACH), not so near
+        // it's made (core/host.js RELEVANCE))
+        Object.assign(player, { x: site.at[0] + 130, y: site.at[1], path: [], order: null, progress: null });
+
+        // (Its building, once the ground about it's found, a den of the Dreadthorn's)
+        for (let k = 0; k < 100 && !game.world.interiors.buildings.get(`site:${id}`); k++) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
+        game.world.interiors.buildings.get(`site:${id}`).theme = "dragonDen";
+
+        for (let k = 0; k < 300 && !fetcher.received(file); k++) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+
+        return { fetching: fetcher.received(file) > 0, hurried: fetcher.status.hurried, read: Boolean(modelOf("dreadthorn")), made: Boolean(game.world.interiors.buildings.get(`site:${id}`)?.dungeon) };
+    }, dens.dragon);
+
+    expect(near).toEqual({ fetching: true, hurried: 0, read: false, made: false });
+});
+
 test("on the world map a pin's dropped where it's held: a column of light where it stands and a line the way there, taken away held again; tapped twice, the player runs there, or is told there's no way", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

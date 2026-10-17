@@ -471,6 +471,28 @@ describe("service worker", () => {
         assert.deepEqual(worker.kept(BOOT), [full(address(boot[0]))]);
     });
 
+    it("counts a file the downloader read from what it keeps as used, when the page says so, so it isn't let go of first", async () => {
+        const files = { "/characters/human.bin": "a body that's needed to start", "/models/dragon.glb": "a".repeat(300), "/models/wyvern.glb": "b".repeat(300) };
+        const assets = [["/models/dragon.glb", files["/models/dragon.glb"]], ["/models/wyvern.glb", files["/models/wyvern.glb"]]];
+        const boot = [["/characters/human.bin", files["/characters/human.bin"]]];
+        const worker = loadServiceWorker({ files, estimate: { quota: 1000, usage: 800 } });
+
+        await worker.tell("page-1", release("r1", { boot, assets }, 1));
+
+        for (const file of [...boot, ...assets]) {
+            await worker.request(address(file));
+            worker.clock.now += 1000;
+        }
+
+        // (The dragon read by the downloader since the wyvern was kept: not asked for, told; and
+        // another site's file told of, not taken)
+        await worker.tell("page-1", { kind: "used", urls: [full(address(assets[0])), "https://elsewhere.example/models/dragon.glb"] });
+        await worker.tell("page-1", release("r1", { boot, assets }, 1));
+
+        assert.deepEqual(worker.kept(ASSETS), [full(address(assets[0]))]);
+        assert.deepEqual(worker.kept(BOOT), [full(address(boot[0]))]);
+    });
+
     it("leaves other sites alone", async () => {
         const worker = loadServiceWorker();
 

@@ -167,6 +167,18 @@
             </div>
             <div id="banner" role="status" hidden></div>
             <p id="netstatus" role="status" hidden></p>
+            <!-- At a place's door, its creatures got ready before going in (app/readying.js) -->
+            <div class="readying" id="readying" role="dialog" aria-labelledby="readyingname" aria-describedby="readyingnote" hidden>
+                <h2 id="readyingname"></h2>
+                <p class="note" id="readyingnote">Getting the creatures that live here ready, so you don't meet them half drawn.</p>
+                <div class="progress" id="readyingbar" role="progressbar" aria-labelledby="readyingname" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div></div>
+                <p class="amount" id="readyingamount"></p>
+                <ul class="files" id="readyinglist"></ul>
+                <div class="menu">
+                    <button type="button" class="button primary" id="readyinggo" hidden>Go in now</button>
+                    <button type="button" class="button" id="readyingback">Not now</button>
+                </div>
+            </div>
             <div class="plate" id="playerplate">
                 <span class="name"></span>
                 <span class="guild" role="img" hidden></span>

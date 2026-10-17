@@ -310,6 +310,12 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
   stays under its roof (never over it, as it can go over a building's ceiling).
 - **Messages**: a slain boss ("… is slain, and the hoard it kept lies unlocked"), the hoard opened,
   and the dungeon cleared.
+- **Its creatures drawn from models got ready first**: their models fetched as the player comes
+  within 150 m of its way in, waited for at its door (a card saying how far they've got, Go in
+  now after five seconds), kept while the player's in it, and let go of 30 s after they've left
+  (docs/WILDS.md *A place's creatures, ready before they're met*). Which those are is its foes once
+  it's made, or all its theme can hold before (beasts/model.js `modelsInside`). Today's themes
+  hold none: a theme's packs, mini-bosses or bosses drawn from a model are got ready this way.
 
 ### Kept
 

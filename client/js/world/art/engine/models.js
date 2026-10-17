@@ -51,6 +51,16 @@ export function loadGltf(url) {
 }
 
 /**
+ * A glTF file read afresh, not kept here ({ scene, animations }): one read from a downloaded copy
+ * (a blob: URL, made for the one read), its owner keeping it while it's wanted and letting it go
+ * when it isn't (beasts/model.js forgetModels). Kept by its URL, as loadGltf keeps them, such a
+ * read would be held for good, every read of it again another copy.
+ */
+export function readGltf(url) {
+    return read(url);
+}
+
+/**
  * Where to read models' files from: `resolve(url)` gives the URL to load instead (the game's
  * loader hands out its downloaded copies).
  */

@@ -10,8 +10,9 @@ import * as THREE from "three";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { ASSETS } from "../app/assets.js";
 import { hashed } from "../app/catalog.js";
-import { loadGltf } from "../world/art/engine/models.js";
+import { readGltf } from "../world/art/engine/models.js";
 import { candidatesAt, tierAt } from "../core/creatures.js";
+import { THEMES } from "../core/dungeons/themes.js";
 import { landAt } from "../core/worldplan/plan.js";
 import { Breath } from "./breath.js";
 
@@ -107,12 +108,13 @@ export function fetchModelsWith(downloader) {
     fetcher = downloader;
 }
 
-// A model fetched (a Blob) read
+// A model fetched (a Blob) read: not kept by the loader (readGltf), as it's let go of here
+// (forgetModels)
 async function readBlob(blob) {
     const url = URL.createObjectURL(blob);
 
     try {
-        return await loadGltf(url);
+        return await readGltf(url);
     } finally {
         URL.revokeObjectURL(url);
     }
@@ -140,7 +142,7 @@ async function readSkins(id, gltf, { priority, page }) {
                     skin,
                     (async () => {
                         try {
-                            const worn = !file ? null : fetcher ? await fetcher.want(file, priority).then((blob) => blob && readBlob(blob)) : await loadGltf(new URL(hashed(file.path, file.hash), page).href);
+                            const worn = !file ? null : fetcher ? await fetcher.want(file, priority).then((blob) => blob && readBlob(blob)) : await readGltf(new URL(hashed(file.path, file.hash), page).href);
 
                             if (worn) {
                                 gltf.skins[skin] = await worn.parser.getDependencies("material");
@@ -180,7 +182,7 @@ function readFile(asset, priority, page) {
         fetching.add(asset);
         reading = fetcher.want(file, priority).finally(() => fetching.delete(asset)).then((blob) => blob && readBlob(blob));
     } else {
-        reading = loadGltf(new URL(hashed(file.path, file.hash), page).href);
+        reading = readGltf(new URL(hashed(file.path, file.hash), page).href);
     }
 
     files.set(
@@ -242,6 +244,12 @@ export function wantModel(id, priority = "soon") {
             (gltf) => {
                 if (gltf) {
                     read.set(id, gltf);
+
+                    // (None drawn from it yet: let go of in time if none is, as one none's
+                    // drawn from any more)
+                    if (!holders.has(MODELS[id].asset)) {
+                        unheld.set(MODELS[id].asset, performance.now());
+                    }
                 } else {
                     // (Not fetched, while saving data: asked for again when it's wanted now)
                     asked.delete(id);
@@ -260,6 +268,85 @@ export function wantModel(id, priority = "soon") {
     );
 
     return asked.get(id);
+}
+
+// A kind's files: its model's, and the skins it wears (MODELS' `skins`)
+function filesOf(id) {
+    const { asset, skins = [] } = MODELS[id];
+    const worn = (ASSETS.models[`${asset}-skins`]?.files ?? []).filter(({ path }) => skins.some((skin) => skin && path.endsWith(`.${skin}.bin`)));
+
+    return [ASSETS.models[asset].files[0], ...worn];
+}
+
+/**
+ * Have a kind's model fetched and kept (its file and the skins it wears), but not read: so it's
+ * read at once, not downloaded, when it's wanted (wantModel), and isn't held in memory meanwhile.
+ * As wanted as `priority` (the downloader's), `hurry` if the player's waiting for it. Resolves
+ * with whether all of it's kept; without the game's downloader (a test, the labs), false.
+ */
+export async function fetchModel(id, priority = "soon", { hurry = false } = {}) {
+    if (!fetcher || !hasModel(id)) {
+        return false;
+    }
+
+    return (await Promise.all(filesOf(id).map((file) => fetcher.keep(file, priority, { hurry })))).every(Boolean);
+}
+
+/**
+ * Get kinds' models ready for a player waiting to meet them (at the door of the place they're in:
+ * app/readying.js): fetched first, hurried, then read. Returns { kinds (those drawn from a model
+ * the catalog has), files ({ path, bytes }: each once, the model files and skins between them),
+ * progress() ({ received, bytes, read: the kinds read, failed: the files that couldn't be had }),
+ * ready (a promise: resolved once each kind's read, or couldn't be: its stand-in's drawn then),
+ * calm() (the player's stopped waiting: no longer hurried) }.
+ */
+export function readyModels(kinds) {
+    const wanted = [...new Set(kinds)].filter(hasModel);
+    const files = [...new Map(wanted.flatMap(filesOf).map((file) => [file.path, file])).values()];
+    const done = new Map();
+    const ready = Promise.all(
+        wanted.map(async (id) => {
+            if (fetcher) {
+                await Promise.all(filesOf(id).map(async (file) => done.set(file.path, await fetcher.keep(file, "now", { hurry: true }))));
+            }
+
+            await wantModel(id, "now");
+        }),
+    ).then(() => {});
+
+    return {
+        kinds: wanted,
+        files: files.map(({ path, bytes }) => ({ path, bytes })),
+        progress: () => ({
+            received: files.reduce((sum, file) => sum + (done.has(file.path) ? file.bytes : Math.min(file.bytes, fetcher?.received(file) ?? 0)), 0),
+            bytes: files.reduce((sum, { bytes }) => sum + bytes, 0),
+            read: wanted.filter((id) => read.has(id)),
+            failed: files.filter(({ path }) => done.get(path) === false).map(({ path }) => path),
+        }),
+        ready,
+        calm: () => files.forEach((file) => fetcher?.calm(file)),
+    };
+}
+
+/**
+ * The kinds drawn from a model that a place gone into holds (a building, or a site with a way in:
+ * core/insides.js), to have them read before the player meets them: a dungeon's foes, once it's
+ * made (insides.js dungeonRooms), else all its theme may put in it (its packs, its mini-bosses,
+ * its bosses and their guards). Others hold none yet. A pure function.
+ */
+export function modelsInside(building) {
+    if (building?.kind !== "dungeon") {
+        return [];
+    }
+
+    const theme = THEMES[building.theme ?? "caves"];
+    const creatures = building.dungeon
+        ? building.dungeon.levels.flatMap(({ packs }) => packs.flatMap(({ foes }) => foes.map(({ creature }) => creature)))
+        : theme
+          ? [...theme.packs.flatMap(({ creatures: kinds }) => kinds), ...theme.minis.map(({ creature }) => creature), ...theme.bosses.flatMap(({ creature, guard = [] }) => [creature, ...guard])]
+          : [];
+
+    return [...new Set(creatures)].filter(hasModel);
 }
 
 /** Lets a model be used as read (a test's, or the labs'), as if wantModel had read it. */
@@ -282,6 +369,17 @@ const unheld = new Map();
  * (not its fetching: the downloader keeps what it's fetched, app/fetcher.js).
  */
 export const MODEL_LINGER = 3 * 60 * 1000;
+
+/**
+ * How long the models of a place's creatures are kept once the player's left it (ms), none drawn
+ * from them (forgetModels' `area`): long enough to step straight back in, not so long they're
+ * carried off into the world, where they aren't met.
+ */
+export const AREA_LINGER = 30 * 1000;
+
+// When each model wanted for a place the player's in, or at the door of, was last wanted (by the
+// catalog's entry: forgetModels' `area`), those wanted out in the world (`wanted`) not among them
+const areaWanted = new Map();
 
 /** One more drawn from a kind's model. */
 export function holdModel(id) {
@@ -333,22 +431,37 @@ function disposeModel(gltf) {
 
 /**
  * Let go of the models none has been drawn from for `linger` ms (at `now`), but those of the kinds
- * still `wanted` (near the player's lairs: modelsNear) and those still being read: out of what's
+ * still `wanted` (near the player's lairs: modelsNear), and those still being read: out of what's
  * read (modelOf null again: its stand-in drawn, till it's wanted and read again), and off the
- * graphics card. Returns how many were let go.
+ * graphics card. Those of the kinds wanted for the place the player's in, or at the door of
+ * (`area`: modelsInside), are kept while they are, and let go of AREA_LINGER after they last were
+ * (none drawn from them), unless they're wanted out in the world too. Returns how many were let go.
  */
-export function forgetModels(now = performance.now(), linger = MODEL_LINGER, wanted = []) {
+export function forgetModels(now = performance.now(), linger = MODEL_LINGER, wanted = [], area = []) {
     let gone = 0;
 
-    for (const [asset, since] of unheld) {
+    for (const id of area) {
+        if (MODELS[id]) {
+            areaWanted.set(MODELS[id].asset, now);
+        }
+    }
+
+    for (const id of wanted) {
+        areaWanted.delete(MODELS[id]?.asset);
+    }
+
+    for (const [asset, unheldAt] of unheld) {
         const kinds = Object.keys(MODELS).filter((id) => MODELS[id].asset === asset);
         const gltf = kinds.map((id) => read.get(id)).find(Boolean);
+        const placed = areaWanted.has(asset);
+        const since = placed ? Math.max(unheldAt, areaWanted.get(asset)) : unheldAt;
 
-        if (now - since < linger || kinds.some((id) => wanted.includes(id) || (asked.has(id) && !read.has(id)))) {
+        if (now - since < (placed ? AREA_LINGER : linger) || kinds.some((id) => wanted.includes(id) || area.includes(id) || (asked.has(id) && !read.has(id)))) {
             continue;
         }
 
         unheld.delete(asset);
+        areaWanted.delete(asset);
         files.delete(asset);
 
         for (const id of kinds) {

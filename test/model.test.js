@@ -8,7 +8,8 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, PropertyBinding, Texture } from "three";
 
-const { MODELS, breathing, forgetModels, hasModel, holdModel, keptModels, modelOf, modelsMet, modelsNear, poseOf, releaseModel, useModel } = await import("../client/js/beasts/model.js");
+const { AREA_LINGER, MODELS, breathing, fetchModelsWith, forgetModels, hasModel, holdModel, keptModels, modelOf, modelsInside, modelsMet, modelsNear, poseOf, readyModels, releaseModel, useModel } = await import("../client/js/beasts/model.js");
+const { THEMES } = await import("../client/js/core/dungeons/themes.js");
 const { landAt, planWorld, startFor } = await import("../client/js/core/worldplan/plan.js");
 const { ASSETS } = await import("../client/js/app/assets.js");
 const { CREATURES, LAIRS, tierAt } = await import("../client/js/core/creatures.js");
@@ -184,6 +185,85 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
         releaseModel("werewolf", 0);
         forgetModels(1e9, 1000);
         assert.equal(modelOf("werewolf"), null);
+    });
+
+    it("keeps the models of the place the player's in, or at the door of, while they are, however long; and lets them go AREA_LINGER after they've left", () => {
+        const disposed = [];
+        const gltf = { scene: new Group().add(new Mesh(Object.assign(new BoxGeometry(), { dispose: () => disposed.push("shape") }), new MeshStandardMaterial())), animations: [] };
+
+        useModel("werewolf", gltf);
+        holdModel("werewolf");
+        releaseModel("werewolf", 0);
+
+        // (In it a long while, none drawn: kept)
+        assert.equal(forgetModels(1e6, 1000, [], ["werewolf"]), 0);
+        assert.equal(modelOf("werewolf"), gltf);
+
+        // (Left: kept AREA_LINGER, then let go of off the graphics card)
+        assert.equal(forgetModels(1e6 + AREA_LINGER - 1, 1000, [], []), 0);
+        assert.equal(forgetModels(1e6 + AREA_LINGER, 1000, [], []), 1);
+        assert.equal(modelOf("werewolf"), null);
+        assert.deepEqual(disposed, ["shape"]);
+        assert.equal(AREA_LINGER, 30000);
+    });
+
+    it("lists the kinds drawn from a model a place holds: a dungeon's foes once it's made, else all its theme may put in it; none for other places", () => {
+        THEMES.denTest = { ...THEMES.caves, id: "denTest", packs: [{ id: "wolves", creatures: ["werewolf", "direWolf"], size: [1, 2], weight: 1 }], minis: [{ id: "rat", creature: "rat", title: "A rat", weight: 1 }], bosses: [{ id: "troll", creature: "troll", title: "A troll", weight: 1, guard: ["moonfang"] }] };
+
+        try {
+            assert.deepEqual(modelsInside({ kind: "dungeon", theme: "denTest" }).sort(), ["moonfang", "werewolf"]);
+            assert.deepEqual(modelsInside({ kind: "dungeon", theme: "denTest", dungeon: { levels: [{ packs: [{ foes: [{ creature: "direWolf" }, { creature: "werewolf" }] }] }, { packs: [] }] } }), ["werewolf"]);
+            assert.deepEqual(modelsInside({ kind: "dungeon", theme: "caves" }), [], "none in today's caves");
+            assert.deepEqual(modelsInside({ kind: "tavern" }), []);
+            assert.deepEqual(modelsInside(null), []);
+        } finally {
+            delete THEMES.denTest;
+        }
+    });
+
+    it("gets a place's models ready for a player waiting at its door: each file kept first, hurried, then read; saying how far it's got; calmed when they stop waiting", async () => {
+        const asked = [];
+        const calmed = [];
+        const received = new Map();
+
+        // (A downloader that has the werewolf's model and skins half here, then kept; it hands
+        // over nothing to be read, as one that's saving data would)
+        fetchModelsWith({
+            keep: async (file, priority, options) => {
+                asked.push([file.path, priority, options]);
+                received.set(file.path, file.bytes / 2);
+
+                return !file.path.endsWith(".ash.bin");
+            },
+            received: (file) => received.get(file.path) ?? 0,
+            calm: (file) => calmed.push(file.path),
+            want: async () => null,
+        });
+
+        try {
+            const readying = readyModels(["werewolf", "rat", "moonfang"]);
+            const { asset, skins } = MODELS.werewolf;
+            const paths = [ASSETS.models[asset].files[0].path, ...ASSETS.models[`${asset}-skins`].files.filter(({ path }) => [...skins, ...MODELS.moonfang.skins].some((skin) => skin && path.endsWith(`.${skin}.bin`))).map(({ path }) => path)];
+
+            assert.deepEqual(readying.kinds, ["werewolf", "moonfang"]);
+            assert.deepEqual(readying.files.map(({ path }) => path).sort(), [...paths].sort(), "each file once, the werewolf's and the Moonfang's skins between them");
+
+            await readying.ready;
+
+            const now = readying.progress();
+            const bytes = readying.files.reduce((sum, file) => sum + file.bytes, 0);
+
+            assert.equal(now.bytes, bytes);
+            assert.equal(now.received, bytes, "each file done with, kept or not");
+            assert.deepEqual(now.read, []);
+            assert.deepEqual(now.failed, paths.filter((path) => path.endsWith(".ash.bin")));
+            assert.ok(asked.every(([, priority, options]) => priority === "now" && options.hurry === true));
+
+            readying.calm();
+            assert.deepEqual(calmed.sort(), [...paths].sort());
+        } finally {
+            fetchModelsWith(null);
+        }
     });
 
     it("poses its clips for what the game asks: standing, walking, attacking through to the end, struck, resting, flying, hovering, dead", () => {

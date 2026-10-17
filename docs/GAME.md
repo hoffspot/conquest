@@ -2438,6 +2438,16 @@ up by `sync`): a green ribbon with a softer band either side, drawn additively. 
 one (after enemies, before the ground) tells the player to go through; it glows for at least
 1.2 s, and while the player's on their way, pulsing, then fades.
 
+**A place's creatures got ready at its door** (`#readyAtDoor`, app/readying.js). A tap on the door
+of a place whose creatures are drawn from models not read yet (a dungeon: beasts/model.js
+`modelsInside`) doesn't send the player through at once. They wait while those models are fetched
+(hurried, ahead of everything else) and read, the world stopped if no one else is in it, a card
+over the game saying how far it's got, and go through once they're all read. Go in now, offered
+after five seconds, goes through at once, those not ready drawn as their stand-ins till they are.
+Not now stays out. The models were mostly fetched already, as the player came within 150 metres of
+its way in (not read: `APPROACH`). Kept while the player's in there, they're let go of 30 s after
+they've left (docs/WILDS.md *A place's creatures, ready before they're met*).
+
 **Tapping a door or the stairs** counts only looking towards it: the tap's ray heading into its
 face (out of which its `normal` points, towards whoever would go through), and coming first to
 its face or to the floor just before it, within its box (`at`). Not when the ray only passes
