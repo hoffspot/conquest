@@ -759,6 +759,9 @@ as a wagon!"
   id (`circleOf`: the same for everyone in a world, and the place always inside it). The newest
   eight (`RUMOURS.kept`), and a hell's cult's heard of as near besides, in violet with a crescent
   moon. Each goes once its place is found, as its icon comes. The map's key shows both.
+- **The guild's board** asks after the same places (docs/WAR.md *Out towards what's still to
+  find*): its beasts out towards the nearest, on a hunting ground short of it, and a look round
+  where one's said to be.
 
 ## The battle (core/battle.js)
 

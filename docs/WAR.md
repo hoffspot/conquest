@@ -2729,23 +2729,24 @@ Copper is asked and paid (a higher rank's: *The guilds' ranks*, below):
 
 | Contract | On the board | Done when | Pays | Merit |
 | --- | --- | --- | --- | --- |
-| Beasts on the roads | always | 2 to 4 of the wild brought down within 1.5 km of the town | 10, and 7 for each | 3 |
+| Beasts on the roads | always | 2 to 4 of the wild brought down within 1.5 km of the town; or, with a place out there the player's still to find, within 500 m of a hunting ground out towards it (below) | 10, and 7 for each | 3 |
 | A bounty | from Iron; the town's holders at war with a people who have a town or a camp within reach (their soldiers out within 1.5 km: `SOLDIERS_OUT`) | 2 to 4 of that people's soldiers brought down within 1.5 km of the town | 8, and 6 for each | 4 |
 | The camp outside the walls | from Bronze; an enemy camp before the town (M6), within 1.5 km | the player was at it, and it's gone | 70 | 6 |
 | Wanted at the guild | the parts of the creatures found within 1.5 km (`candidatesAt`, by day or night), at the tiers the asking player meets them there (measured from their home: docs/WILDS.md); never what only the ruins' dead leave | 2 to 5 of a creature's parts brought to the counter | 4, and 1.6 times what they'd sell for | 2 |
 | Put them to the sword | a place within 1.5 km held by outlaws or the dead (docs/GAME.md *Held, in play*): a small one for a Copper | the place cleared (its band and their leader, or a ruined castle's master) with the player there | 30; 25 more for a middling place, 60 for a great one; 9 more for each tier of its land's danger; half the time a tome | 4, 7 for a middling place, 12 for a great one |
 | A sealed package | the courier work, below | taken to the guild it's for, and told of at its counter | 8, and 6 for each km | 3 |
+| A look round | a place within 2 km the player's still to find (below), the nearest not already asked of | the player near enough to see it (the maps' rule, or within 150 m: `REQUEST_REACH.survey`), and told of at the counter | 12 | 2; nothing lost if it runs out or is given up |
 
 **The guilds' ranks** (`GUILD_RANKS`): registering at any guild's counter gives the player one
 card, good at every branch: kept with their standing (`Standing.guild`: { merit }), never another
 (signing up again changes nothing). Every contract done earns its merit, and enough merit is the
-next rank. A contract failed or given up costs 2 merit (`GUILD_FAILED`), never a rank once
+next rank. A contract failed or given up costs 2 merit (`GUILD_FAILED`; a look round, nothing), never a rank once
 earned, and never the player's standing with their people; their people's requests give the
 guilds no merit.
 
 | Rank | Merit | Opens | More asked | Beasts of level | Pay | Portals |
 | --- | --- | --- | --- | --- | --- | --- |
-| Copper | 0 | Beasts on the roads, parts wanted, sealed packages, the small places to clear | — | any | ×1 | full fare |
+| Copper | 0 | Beasts on the roads, parts wanted, sealed packages, a look round, the small places to clear | — | any | ×1 | full fare |
 | Iron | 10 | Bounties | 1 more | any | ×1.1 | a fifth off |
 | Bronze | 30 | The camp outside the walls, the middling places to clear; the dearer parts | 1 more | 2 or more | ×1.25 | two fifths off |
 | Silver | 70 | — | 2 more | 3 or more | ×1.4 | three fifths off |
@@ -2782,6 +2783,28 @@ of the town's middle (the host's `#felled`: the contract's `target.near`); the j
 of 3 brought down within 1.5 km of Redemoor"). A bounty says where that people's soldiers are
 ("They hold Gorgash, 1.2 km north-east of Redemoor", or "They have a camp 0.4 km east of
 Redemoor"), and so does a camp.
+
+**Out towards what's still to find** (`offerContract`'s `explored`: what the player's found, the
+host's; docs/GAME.md *Rumours of places*). The board knows the places round its town within 2 km
+the player hasn't found (`rumoursNear`: by the maps' own rule), of those no more than a tier past
+the beasts their rank sends them against (`HUNTING.above`: a Copper's, tier 2; never the hells),
+the nearest first. With one:
+- **The beasts** are out towards the nearest at least 700 m from the town (`HUNTING.least`: any
+  nearer, the town's own beasts are near enough), not round the town: a hunting ground 60% of the way there
+  (`HUNTING.share`), or nearer it if that leaves it more than 350 m past (`HUNTING.beyond`), never
+  further out than 1.5 km; those brought down count within 500 m of it (`HUNTING.reach`: the
+  contract's `target.near`, with no town). It has a star on the maps, and a bearing in the journal
+  ("2 of 4 brought down within 0.5 km of the hunting ground"). The clerk warns of what's past it,
+  without quite saying what it is (`warningOf`, by its kind: "Wanted: someone to see off the
+  beasts troubling the farms out 1.1 km north-east of Redemoor. 3 of them, within 500 m of there,
+  and the farmers will breathe again. Don't go much further out, mind. There's holes in the ground
+  out that way, wide as a cart, and something clicking down them at night."). So hunting there, the
+  player's likely to come on it.
+- **A look round** (`survey`): what's said of the place in the town, as a crier says it, and the
+  guild wanting to know what's there ("Go near enough to see it, then come back and tell us. No
+  need to fight it."). Its star is the middle of the place's circle (`circleOf`), not the place.
+  Seen, it's done ("You've seen enough"); told of at the counter, paid ("Seen it with your own
+  eyes? Good. That's one less tale.").
 
 **The courier work** (`offerCourier`) takes the player towards a people their own aren't friends
 with: neutral, at war, or not met (`war.relation`). The package goes to the guild in a town of the
