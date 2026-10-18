@@ -3696,8 +3696,25 @@ export class Game {
             if (avatar instanceof BeastAvatar && !avatar.model && MODELS[avatar.id] && modelOf(avatar.id) && !avatar.seen && !avatar.doing.attack && !avatar.doing.dead && !avatar.arriving && !this.battle.actor(id)?.aloft) {
                 this.#undress(id);
                 this.enlisting.push(id);
+            } else if (!(avatar instanceof BeastAvatar) && this.#modelSince(id, avatar)) {
+                this.#undress(id);
+                this.enlisting.push(id);
             }
         }
+    }
+
+    // Whether one of the wild's people-shaped creatures drawn as its stand-in (a character: a
+    // hell's lord) has had its model read since, and may be drawn again from it: out of view, not
+    // attacking or fallen
+    #modelSince(id, avatar) {
+        const actor = this.battle.actor(id);
+        const kind = actor?.kind === "beast" ? actor.wild?.creature : null;
+
+        if (!kind || !MODELS[kind] || !modelOf(kind) || actor.attack || actor.dead) {
+            return false;
+        }
+
+        return this.view.heightOnScreen(avatar.object.position, avatar.character.height, this.view.pixelsPerMetre()) <= 0;
     }
 
     // The kinds drawn from a model in the places with a way in near the player, out in the world

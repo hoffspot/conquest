@@ -136,17 +136,18 @@ export function sizeOf(id, seed) {
 }
 
 // What each body steps on (audio/sound.js GAITS): a four-legged beast's paws or hooves, a
-// two-legged one's feet, a spider's many legs, a slime's belly, a serpent's scales, a frog's
-// webbed feet; nothing for what floats (spectres, wisps) or flies in a swarm. (A look may say its
-// own: a centipede, a serpent's body, skitters on its legs.) And how tall one of it stands that's
-// about as heavy as a person (m), to weigh its steps by: on all fours, lower
-const FEET = Object.freeze({ quadruped: "paws", biped: "feet", arachnid: "legs", blob: "slime", serpent: "scales", frog: "webbed" });
+// two-legged one's feet (a people-shaped one's too, drawn from its model), a spider's many legs,
+// a slime's belly, a serpent's scales, a frog's webbed feet; nothing for what floats (spectres,
+// wisps) or flies in a swarm. (A look may say its own: a centipede, a serpent's body, skitters on
+// its legs.) And how tall one of it stands that's about as heavy as a person (m), to weigh its
+// steps by: on all fours, lower
+const FEET = Object.freeze({ quadruped: "paws", biped: "feet", humanoid: "feet", arachnid: "legs", blob: "slime", serpent: "scales", frog: "webbed" });
 const AS_HEAVY = Object.freeze({ person: 1.75, quadruped: 1.2 });
 
 /** A creature built in code, drawn and moved as an avatar is. */
 export class BeastAvatar {
     /**
-     * @param {string} id - A LOOKS id (not a people-shaped one's: dressCreature).
+     * @param {string} id - A LOOKS id (not a people-shaped one's, but one drawn from its read model: dressCreature).
      * @param {object} [options]
      * @param {number} [options.seed] - Which one of its kind it is (its size, its markings).
      * @param {object} [options.champion] - A dungeon's boss's or mini-boss's look, if it's one
@@ -947,10 +948,20 @@ export function restsOf(id) {
 }
 
 /**
+ * Whether one of a kind (a LOOKS id) is drawn as a beast (a BeastAvatar): every kind but the
+ * people-shaped, and one of those drawn from a model once that's read (a hell's lord: till it is,
+ * its stand-in's a character, as the rest of the people-shaped are).
+ */
+export function drawnAsBeast(id) {
+    return LOOKS[id].body !== "humanoid" || Boolean(MODELS[id] && modelOf(id));
+}
+
+/**
  * Draw one of the wild's creatures (a LOOKS id), one of its kind (`seed`): a BeastAvatar, or for
- * a people-shaped one, a character's Avatar, sized as its kind is, holding its weapon
- * (`equipment`: EQUIPMENT ids) and fighting as it does (`guard`: actions.js GUARDS); a dungeon's
- * boss or mini-boss (`champion`: "boss" or "mini", `regalia`: its id) as champions.js has it.
+ * a people-shaped one (but one drawn from its model: drawnAsBeast), a character's Avatar, sized
+ * as its kind is, holding its weapon (`equipment`: EQUIPMENT ids) and fighting as it does
+ * (`guard`: actions.js GUARDS); a dungeon's boss or mini-boss (`champion`: "boss" or "mini",
+ * `regalia`: its id) as champions.js has it.
  */
 export function dressCreature(kit, id, options) {
     return allAtOnce(dressingCreature(kit, id, options));
@@ -966,7 +977,7 @@ export function* dressingCreature(kit, id, { seed = 1, equipment = [], guard = n
     // (A dungeon's boss or mini-boss, `champion` its rank and `regalia` its id: champions.js)
     const own = championLook(champion, regalia);
 
-    if (LOOKS[id].body !== "humanoid") {
+    if (drawnAsBeast(id)) {
         return yield* sculpting(() => new BeastAvatar(id, { seed, champion: own }));
     }
 

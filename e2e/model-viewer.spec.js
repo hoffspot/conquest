@@ -229,9 +229,9 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     await openViewer(page, "/model-viewer.html?model=beast-centipede&clip=Run");
 
     // (In the game now, as are the ant, the spiders, the scorpion, the cockroach, the wasp, the
-    // black widow and the Ant Monster: every bought model is but the greater demon, the one listed
-    // as to come; read, its clips listed, the one asked for by its address played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Greater Demon"]);
+    // black widow, the Ant Monster and the greater demon (a hell's lord): every bought model is,
+    // none listed as to come; read, its clips listed, the one asked for by its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual([]);
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Giant cockroach", "Dungeon wasp", "Dungeon scorpion", "Black widow", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
@@ -628,6 +628,20 @@ test("the werewolf as the game draws it, from its model once that's read: the ga
     }
 
     expect([...skins].sort()).toEqual(["", "ash", "dusk", "russet"]);
+});
+
+test("a hell's lord as the game draws it: a people-shaped brute till the Greater Demon's read, then the demon, its claws, its punch, hellfire hurled from its fist, and its roar", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?creature=demonLord");
+
+    // (Its stand-in a character, as the wild's people-shaped ones are, till its model's read; then
+    // the model, as a beast drawn from one is)
+    await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.current())).toMatchObject({ humanoid: false, attacks: ["claw", "punch"], specials: ["wand"], rests: ["roar"] });
+    expect(await page.evaluate(() => window.lab.watch().moves)).toEqual(expect.arrayContaining(["claw", "punch", "wand", "roar"]));
+
+    // (Drawn 3.2 metres tall, as long as MODELS has it)
+    expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(3.19, 1);
 });
 
 test("one of the people, by role, people, woman or man and weapon: every motion of theirs by name (their weapon's, their work, their rests, emotes, spells, blows and falls), one played and stepped", async ({ page }) => {

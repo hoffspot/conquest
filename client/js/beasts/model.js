@@ -285,6 +285,26 @@ export const MODELS = Object.freeze({
         pace: 2.34,
         flinch: 0.8,
     }),
+    // (The Lord of the Pit, a hell's throne's (dungeons/themes.js `hell`): the Greater Demon, made
+    // 2.5 metres tall, drawn 3.2, its wings spread 5 metres; a human's moves played on its
+    // skeleton (utilities/blenderpipeline's clips), its wings beating to them: raking with its
+    // claws or punching (its smash), hellfire hurled from its fist as it punches (weapons.js's
+    // "wand"); roaring as it rests. Its run's a sprint: at its chase it's played slower)
+    demonLord: Object.freeze({
+        asset: "beast-greater-demon",
+        length: 1.78,
+        made: Object.freeze({ long: 1.41, tall: 2.53 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit", dead: "Death" }),
+        attacks: Object.freeze({ claw: "Claw", punch: "Punch" }),
+        specials: Object.freeze({ wand: "Punch" }),
+        rests: Object.freeze({ roar: "Roar" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "hand_r", left: "hand_l" }),
+        mouth: null,
+        pace: 1.03,
+        runPace: 5.7,
+        flinch: 0.5,
+    }),
 });
 
 // The models read and those asked for, by kind (each in its skins); and each model file's read,

@@ -3,6 +3,7 @@
 // pieces folded over many small steps, the same as all at once, and shared after
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { Group } from "three";
 
 // (The creatures' skins paint a canvas: enough of one for them to in Node, every other drawing
 // call doing nothing)
@@ -21,7 +22,8 @@ const context = () =>
 
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
-const { BeastAvatar, BUILDERS, dressingCreature } = await import("../client/js/beasts/beast.js");
+const { BeastAvatar, BUILDERS, drawnAsBeast, dressingCreature } = await import("../client/js/beasts/beast.js");
+const { forgetModels, holdModel, releaseModel, useModel } = await import("../client/js/beasts/model.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
 const { fold, forget, kept, LINGER, sculpting } = await import("../client/js/beasts/sculpt.js");
 const { seeded } = await import("../client/js/beasts/shapes.js");
@@ -117,6 +119,23 @@ describe("creatures built a step at a time (sculpt.js, beast.js)", () => {
 
         // (What its look shares: another of it, seed 8, built at once)
         assert.ok(geometriesOf(new BeastAvatar("puma", { seed: 8 }).object).every((geometry, k) => geometry === geometriesOf(puma.object)[k]));
+    });
+
+    it("draws a people-shaped kind drawn from a model as a beast once its model's read (a hell's lord), as a character till then; the rest of the people-shaped always as characters", () => {
+        assert.equal(drawnAsBeast("puma"), true);
+        assert.equal(drawnAsBeast("cultist"), false);
+        assert.equal(drawnAsBeast("demonLord"), false);
+
+        // (Its model read: a beast, drawn from it; a cultist still a character)
+        useModel("demonLord", { scene: new Group(), animations: [] });
+        assert.equal(drawnAsBeast("demonLord"), true);
+        assert.equal(drawnAsBeast("cultist"), false);
+
+        // (Let go of again: its stand-in, a character)
+        holdModel("demonLord");
+        releaseModel("demonLord", 0);
+        forgetModels(1e9, 1000);
+        assert.equal(drawnAsBeast("demonLord"), false);
     });
 
     it("lets any other error through, and makes what's wanted there and then after", () => {

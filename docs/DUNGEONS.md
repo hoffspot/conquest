@@ -100,11 +100,24 @@ tests, [the dungeon map](#the-dungeon-map-dungeon-maphtml-jslabdungeon-mapjs)).
   Each realm's rooms are dressed its own way: the cult's altars and candles in the Breach, tombs
   and charnel heaps in the Halls of Bone, braziers and anvils by the River of Fire, watching statues,
   braziers and the throne in the Pit (`world/dungeondressing.js` `CLUTTER`, `STREWN`).
-- **Stand-ins for now**: everyone in it is one of the wild's creatures, and the Lord of the Pit
-  (`creatures.js` `demonLord`, tier 10, met nowhere else) is drawn as a great horned brute, red as
-  a coal (`beasts/looks.js`), its fists burning and hellfire in its hands (`weapons.js`). Bought
-  models of demons will take their places (docs/LICENSED_MODELS.md). Each master has a look of
-  its own (`beasts/champions.js` `REGALIA`): scorched, burnt, horned or hooded.
+- **Stand-ins for now**: everyone in it but its lord is one of the wild's creatures, till bought
+  models of demons take their places (docs/LICENSED_MODELS.md). Each master has a look of its own
+  (`beasts/champions.js` `REGALIA`): scorched, burnt, horned or hooded.
+- **The Lord of the Pit** (`creatures.js` `demonLord`, tier 10, met nowhere else): its fists
+  burning and hellfire hurled from its hand (`weapons.js`). It's drawn from a bought model, the
+  Greater Demon (`beasts/model.js` `MODELS.demonLord`, `client/models/beasts/LICENSE.md`): 3.2
+  metres tall (3.4 as the boss), its wings spread 5 metres, under the Pit's 4.6-metre walls even
+  roaring with its wings raised. Its clips are a human's played on its skeleton
+  (`utilities/blenderpipeline`'s `retarget`), its wings beating to them: its smash a rake of its
+  claws or a punch, its hellfire hurled from its fist as it punches (the special `wand`, as the
+  weapon names it), and its roar as it rests; its walk at its pace (1 m/s, as it's drawn), its run
+  a sprint (5.7 m/s) played slower at its chase. Till the model's read (and where the licensed
+  models aren't, as in CI) it's drawn as its stand-in, a people-shaped brute as the wild's are
+  (`beasts/looks.js`): bigger than a troll, red as a coal, horned and tusked. A people-shaped kind
+  drawn from a model is a `BeastAvatar` once its model's read (`beast.js` `dressingCreature`), and
+  one drawn as its stand-in is drawn again from the model once it's out of view, not attacking or
+  fallen (the game's `#modelSince`). Its model's fetched with the rest of the hell's at its door
+  (`modelsInside`: every level's foes).
 - **How strong**: never below tier 9 (its `tiers`), however low it's asked to be made
   (`buildDungeon`); its packs, mini-bosses and masters its own, whatever the tiers they're met at
   elsewhere (`tiered: false`: `place.js` `chooseFoe`'s slack).
@@ -659,6 +672,9 @@ code is here.
     sealed by its level's master and the way out by its lord, no one led in by it; nobody let
     down a portal till its master falls (and up again whenever), nor out till the lord falls,
     then out to before its way in.
+- **`e2e/model-viewer.spec.js`**, with the licensed models: the Lord of the Pit drawn from the
+  Greater Demon once it's read, not as its people-shaped stand-in: its claws and punch, its
+  hellfire hurled from its fist, its roar; 3.2 metres tall.
 - **`test/caverns.test.js`**, the rock as one surface: how far into the open each point is; its
   walls never in the open ground below head height; room to stand under its roof over every open
   square; every triangle facing the open; the floor under all the open ground but the stairs'
