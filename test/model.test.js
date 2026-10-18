@@ -8,7 +8,7 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { BoxGeometry, Group, Mesh, MeshStandardMaterial, PropertyBinding, Texture } from "three";
 
-const { AREA_LINGER, MODELS, breathing, fallOf, fetchModelsWith, forgetModels, hasModel, holdModel, keptModels, modelOf, modelsInside, modelsMet, modelsNear, poseOf, readyModels, releaseModel, useModel } = await import("../client/js/beasts/model.js");
+const { AREA_LINGER, MODELS, breathing, fallOf, fetchModelsWith, forgetModels, hasModel, holdModel, keptModels, modelOf, modelsInside, modelsMet, modelsNear, poseOf, readyModels, releaseModel, strideOn, useModel } = await import("../client/js/beasts/model.js");
 const { THEMES } = await import("../client/js/core/dungeons/themes.js");
 const { landAt, planWorld, startFor } = await import("../client/js/core/worldplan/plan.js");
 const { ASSETS } = await import("../client/js/app/assets.js");
@@ -350,6 +350,34 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
 
         // (The Dreadthorn has no run: its walk, however fast)
         assert.equal(weightOf(poseOf(model, { speed: model.pace * 3, t: 3 }, { lengths }), "Crawling"), 1);
+    });
+
+    it("carries its walk and its run on through their strides as it gets up to speed, never leaping along them", () => {
+        const werewolf = MODELS.werewolf;
+        const lengths = { Idle: 1.88, Walk: 1.38, Run: 1.38 };
+        const frame = 1 / 60;
+        let strides = { walk: 100, run: 100 };
+
+        // (A hundred seconds about, setting off from a stand to a sprint in half a second, a frame at
+        // a time: each a frame's worth further on, from half as fast as its pace to twice; its clock
+        // times the rate would have leapt a second along each frame)
+        for (let i = 1; i <= 30; i++) {
+            const next = strideOn(werewolf, strides, werewolf.pace * 2.2 * (i / 30), frame);
+
+            for (const gait of ["walk", "run"]) {
+                const step = next[gait] - strides[gait];
+
+                assert.ok(step >= frame * 0.5 - 1e-9 && step <= frame * 2 + 1e-9, `${gait} ${step}`);
+            }
+
+            strides = next;
+        }
+
+        // (Posed where it's got to in each)
+        const posed = poseOf(werewolf, { speed: werewolf.pace * 1.6, t: 100.5, strides }, { lengths });
+
+        assert.ok(Math.abs(posed.find(({ clip }) => clip === "Walk").time - (strides.walk % lengths.Walk)) < 1e-9);
+        assert.ok(Math.abs(posed.find(({ clip }) => clip === "Run").time - (strides.run % lengths.Run)) < 1e-9);
     });
 
     it("plays a giant ant's fall and flinch once it's been lent them (the Ant Monster's: borrowClips); till then, struck, it doesn't flinch, and dead, it rolls onto its back", () => {

@@ -864,16 +864,39 @@ export function clipOf(model, style, aloft = false) {
     return (aloft && model.aloft?.[style]) || model.attacks[style] || model.specials[style] || null;
 }
 
+// How fast its walk and its run play for how fast it goes (metres a second, as it's drawn): its
+// walk's pace and its run's, played at their own rate; slower or faster in step, down to half as
+// fast and up to twice
+const strideRates = (model, speed) => ({
+    walk: Math.max(0.5, Math.min(2, speed / model.pace)),
+    run: model.runPace ? Math.max(0.5, Math.min(2, speed / model.runPace)) : 1,
+});
+
+/**
+ * How far into its walk and its run (seconds of each clip) a body is once it's gone on `dt`
+ * seconds at `speed` from where it was (`strides`: { walk, run }): each played on at the rate for
+ * how fast it's going now (strideRates). So one setting off, speeding up or slowing down goes on
+ * through its stride from where it was; its clock times the rate (poseOf with no `strides`) would
+ * leap it along its stride, the further the longer it's been about, flickering through its walk
+ * while it gets up to speed. A pure function.
+ */
+export function strideOn(model, strides, speed, dt) {
+    const rates = strideRates(model, speed);
+
+    return { walk: strides.walk + rates.walk * dt, run: strides.run + rates.run * dt };
+}
+
 /**
  * How a model's clips are posed for what the game asks of a body (BeastAvatar's plan.pose: its
  * `speed`, `attack`, `rest`, `react`, `dead`, `fly` (hanging in the air, `hover`: its hover clip);
  * `hang`, one that lurks hanging from its thread (its `lurk`), its middle `height` metres up as it's
- * drawn, still, or dropping (`u`, 0 to 1 of the way); `t`, the beast's own clock, seconds): each
- * clip (by name) with its weight (all of them adding up to 1) and how far in it is (seconds).
- * `lengths`: each clip's length (seconds); `died`: how long it's been dead (seconds: its fall
- * plays at its own pace, longer than the game's). A pure function.
+ * drawn, still, or dropping (`u`, 0 to 1 of the way); `t`, the beast's own clock, seconds;
+ * `strides`, how far into its walk and its run it is (strideOn; none, its clock at the rate for its
+ * speed)): each clip (by name) with its weight (all of them adding up to 1) and how far in it is
+ * (seconds). `lengths`: each clip's length (seconds); `died`: how long it's been dead (seconds: its
+ * fall plays at its own pace, longer than the game's). A pure function.
  */
-export function poseOf(model, { speed = 0, attack = null, rest = null, react = null, dead = null, fly = null, hang = null, t = 0 }, { lengths, died = 0 }) {
+export function poseOf(model, { speed = 0, attack = null, rest = null, react = null, dead = null, fly = null, hang = null, t = 0, strides = null }, { lengths, died = 0 }) {
     const { clips } = model;
     // (A clip it has: one it borrows only once it's been lent it, borrowClips)
     const has = (clip) => Boolean(clip) && lengths[clip] !== undefined;
@@ -909,14 +932,15 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
     // run's pace)
     const walking = smoothstep(speed / (model.pace * 0.35));
     const running = clips.run ? smoothstep((speed - model.pace * 1.2) / (model.pace * 0.8)) : 0;
-    const rate = Math.max(0.5, Math.min(2, speed / model.pace));
+    const rates = strideRates(model, speed);
+    const stride = strides ?? { walk: t * rates.walk, run: t * rates.run };
     let posed = [
         { clip: clips.idle, weight: 1 - walking, time: loop(clips.idle, t) },
-        { clip: clips.walk, weight: walking * (1 - running), time: loop(clips.walk, t * rate) },
+        { clip: clips.walk, weight: walking * (1 - running), time: loop(clips.walk, stride.walk) },
     ];
 
     if (running > 0) {
-        posed.push({ clip: clips.run, weight: walking * running, time: loop(clips.run, t * Math.max(0.5, Math.min(2, speed / model.runPace))) });
+        posed.push({ clip: clips.run, weight: walking * running, time: loop(clips.run, stride.run) });
     }
     const over = (clip, weight, time) => {
         posed = posed.map((one) => ({ ...one, weight: one.weight * (1 - weight) })).concat([{ clip, weight, time }]);
@@ -1108,6 +1132,8 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
     const [body, ...others] = materials.values();
     let died = 0;
     let stepped = 0;
+    // (How far into its walk and its run it is, carried on as it goes: strideOn)
+    let strides = null;
 
     object.add(inner);
 
@@ -1138,9 +1164,13 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
         pose(inputs) {
             died = inputs.dead ? died + inputs.dt : 0;
 
-            // (Its speed as it's drawn: BeastAvatar gives it as the body's own, scaled down)
+            // (Its speed as it's drawn: BeastAvatar gives it as the body's own, scaled down; its
+            // stride carried on from where it was, at the rate for that speed: strideOn)
             const speed = inputs.speed * scale;
-            const posed = poseOf(model, { ...inputs, speed }, { lengths, died });
+
+            strides = strides ? strideOn(model, strides, speed, inputs.dt ?? 0) : { walk: inputs.t ?? 0, run: inputs.t ?? 0 };
+
+            const posed = poseOf(model, { ...inputs, speed, strides }, { lengths, died });
             const on = new Set(posed.map(({ clip }) => clip));
 
             for (const [name, action] of actions) {
