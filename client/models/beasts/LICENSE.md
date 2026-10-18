@@ -251,3 +251,26 @@ in this repository, but in the private one the game's builds fetch it from
 `demonLord`).
 
 Don't copy it out of this game or use it in anything else.
+
+## fiend.bin, fiend.pale.bin, fiend.ash.bin
+
+**Monster4** (its Unreal Engine files: its skeletal mesh, its textures and its 25 animations,
+exported from Unreal Engine by this repository's owner), bought on **Fab** by this repository's
+owner under **Fab's Standard License**: the Fiend.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/fiend.json`, which stays out of the repository with the bought files), its `browser`
+build. That's its mesh simplified to 20,952 triangles, with two lower details packed in (8,270
+and 3,834), its own skin's textures (colour, normal, and occlusion, roughness and metal) as
+1,024-pixel KTX2, and all 25 of its own clips: five attacks, two idles, walks every way, a run,
+two flinches, three deaths, a jump, a turn and five ways of flying. Its other two skins, pale and
+ash, are their colour textures alone (`fiend.pale.bin`, `fiend.ash.bin`).
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`). The model viewer shows it (*Coming to the wilds*) until it's in the
+game.
+
+Don't copy it out of this game or use it in anything else.
