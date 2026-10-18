@@ -91,10 +91,10 @@ wilds, and only by night, once the cult keeping its rite there is slain ([The wa
 
   | Level | Realm | Dug as | Drawn as | Heard as | Who's in it | Its master |
   |---|---|---|---|---|---|---|
-  | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | a lair | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats | the Breach Priest, a cultist |
-  | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | a crypt | skeletons, draugr, wraiths, ghosts, shadow stalkers | the Bone Lord, a wight lord |
-  | 3 | the River of Fire | caves, flooded | `hell-fire`: black basalt, its caverns lakes of lava, causeways across them, embers in its rock and thick in its hot air, the Hellforge in its last room | a lair | magma slimes, salamanders, black shucks, chimeras, wyverns | the Forge Beast, a chimera |
-  | 4 | the Pit | an ancient temple's halls | `hell-pit`: polished black stone, sigils inlaid in its floor glowing violet, the lord's own colour, his horned throne, its lava only a rim along the throne hall's walls | a crypt | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders | the Gatekeeper, an ogre; then the Lord of the Pit |
+  | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | its drone ([The sound of hell](#the-sound-of-hell)); lava belching, hissing close by; drips | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats | the Breach Priest, a cultist |
+  | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | the drone a tone lower; a crypt's still air; the heart, louder nearer it; the dead groaning and wailing far off | skeletons, draugr, wraiths, ghosts, shadow stalkers | the Bone Lord, a wight lord |
+  | 3 | the River of Fire | caves, flooded | `hell-fire`: black basalt, its caverns lakes of lava, causeways across them, embers in its rock and thick in its hot air, the Hellforge in its last room | the drone two tones lower; lava belching and roaring, hissing close by; the Hellforge's hammer | magma slimes, salamanders, black shucks, chimeras, wyverns | the Forge Beast, a chimera |
+  | 4 | the Pit | an ancient temple's halls | `hell-pit`: polished black stone, sigils inlaid in its floor glowing violet, the lord's own colour, his horned throne, its lava only a rim along the throne hall's walls | the drone a fifth lower; a crypt's air, lower; wails far off | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders | the Gatekeeper, an ogre; then the Lord of the Pit |
 
   Each realm's rooms are dressed its own way: the cult's altars and candles and pools of lava in
   the Breach, tombs and charnel heaps and pools of blood in the Halls of Bone, braziers and anvils and lakes of lava by the River of
@@ -270,6 +270,34 @@ the lord's own colour, violet, where every realm above was red and orange.
   `lordThrone`): on a plinth with a step before it, of black stone, its back rising 3.4 m to a
   crest, runes cut down each side of it glowing violet, two great horns rising from it, and his
   light over it, violet.
+
+### The sound of hell
+
+Each realm is its own place to the ear (its `sound`: `hellBreach`, `hellBone`, `hellFire`,
+`hellPit`; `audio/ambience.js` `INDOORS`, `audio/sound.js` `PLACES`), none of the world's music
+heard in any of them: another world's.
+
+- **Its drone** (`audio/synth.js` `drone`, a made bed: `BEDS.hellDrone`), all through every
+  realm: a buzzing root on A (55 Hz, its overtones carrying it on a phone's speaker) and a second
+  voice a quarter of a hertz off it, throbbing; the tritone over them, the devil's interval,
+  swelling and dying away; the deep's rumble under them, and a moan over them. Made in code, an
+  eight-second loop without a seam, made in a worker once it's first wanted (a third of a second's
+  work) and let go of a minute after it's last heard. Played lower and slower the deeper the realm
+  (a place's `rates`): on A in the Breach, a tone lower in the Halls of Bone, two in the River of
+  Fire, a fifth lower in the Pit, sliding down as the player comes down.
+- **The Breach**: a great lair's belching spring under it (its lava), a cave's drips, and lava
+  hissing and spitting close by (a magma slime's sizzle, lower).
+- **The Halls of Bone**: a crypt's still air, and the heart they beat to (`synth.js` `heartbeat`,
+  made: a deep lub and a softer dub, a beat every 1.2 seconds as it's drawn beating), heard faintly
+  all through them, louder nearer it (`HELL.heart`; where it is, the drawn level's `heart`); the
+  dead groaning (a wight lord's call, lower) and wailing (a ghost's, slowed) far off through the
+  rock, muffled.
+- **The River of Fire**: the belching spring louder, a brazier's roar two tones lower (its lava),
+  lava hissing close by, and the Hellforge's hammer from the forge (the smith's, slowed and
+  muffled through the rock: `HELL.forge`; where it is, the drawn level's `forge`), louder nearer
+  it.
+- **The Pit**: the stillest and deepest, a crypt's air two tones lower, wails and groans far off.
+- **Its ways in and out** are portals: no door's heard.
 
 ### The way in: a cult's camp by night
 

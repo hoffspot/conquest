@@ -2,14 +2,17 @@
 //
 //  - Beds, each a recording looped round and round (recorded.js loop), as loud as where the player
 //    is makes it. Indoors, each place's (INDOORS): a taproom's crowd and its hearth, a temple's
-//    hush, a crypt's still air, a cave's drips, an ants' nest's close earth. Out in the world, its land's wind (on open land,
+//    hush, a crypt's still air, a cave's drips, an ants' nest's close earth; in a hell, its drone
+//    (made: synth.js BEDS), lower the deeper the realm, and in its Halls of Bone the heart they
+//    beat to, louder nearer it. Out in the world, its land's wind (on open land,
 //    in the woods, up high), water near (a stream, a river, a waterfall, the sea's surf, a lake
 //    lapping), the crickets after dark and the marsh's frogs, a town's bustle and its market's by
 //    day, a camp fire's or a brazier's crackle close by.
 //  - Calls now and then (CALLS), each from somewhere round the player: birds by the time of day,
 //    crows, gulls, an owl at night, a tree creaking in the woods, a town's dogs, hens and horses,
 //    a farm's cattle and sheep, the smith's hammer near a smithy.
-//    In an ants' nest, something chittering far off through the earth.
+//    In an ants' nest, something chittering far off through the earth. In a hell, lava hissing
+//    close by, the dead groaning and wailing far off through the rock, the Hellforge's hammer.
 //  - A murmur: a made sound heard one after another from round about, overlapping (an ants'
 //    nest's colony at work in the earth: synth.js colonyRustle).
 //  - A church's bell at the hours of prayer (TOLLS), heard in a town.
@@ -29,16 +32,29 @@ const BARE = new Set(["sea", "snow", "tundra", "mountain", "volcanic"]);
 const FEW_BIRDS = { savannah: 0.5, badlands: 0.35, volcanic: 0.15, beach: 0.5, heath: 0.7, marsh: 0.7 };
 
 // How far off each bed's heard (metres: loudest at hand, nothing beyond)
-const REACH = { stream: 35, river: 60, falls: 90, sea: 120, lake: 45, frogs: 60, market: 45, fire: 16, brazier: 10, hearth: 14, smithy: 70, gulls: 150 };
+const REACH = { stream: 35, river: 60, falls: 90, sea: 120, lake: 45, frogs: 60, market: 45, fire: 16, brazier: 10, hearth: 14, smithy: 70, gulls: 150, heart: 40, forge: 60 };
+
+/**
+ * The Halls of Bone's heart (`heart`): how loud it's heard anywhere in them, however far off (a
+ * share of how loud it is at hand), louder nearer it (REACH.heart). The Hellforge's hammer
+ * (`forge`), from the forge in the River of Fire: muffled through the rock (a low-pass filter's
+ * frequency, Hz), and slowed (its rate: a great hammer's), louder nearer it (REACH.forge).
+ */
+export const HELL = Object.freeze({ heart: Object.freeze({ through: 0.2 }), forge: Object.freeze({ muffle: 900, pitch: 0.72 }) });
+
+// How fast a bed's played `semitones` lower (and slower)
+const lower = (semitones) => Math.round(2 ** (-semitones / 12) * 1000) / 1000;
 
 // The dawn chorus: from first light until this long after the sun's up
 const CHORUS = DAY.rises + 2 * HOUR;
 
 /**
  * Each place indoors (sound.js PLACES), and what's heard there: its beds, each at how loud
- * (1: as recorded, about as loud as the wind out of doors), and the sounds of the folk at work
- * there, downloaded as the player comes in (`wants`); its calls (CALLS', each as loud as it says),
- * and its murmur (a made sound: sound.js setAmbience).
+ * (1: as recorded, about as loud as the wind out of doors), how fast any's played (`rates`: under
+ * 1, slower and lower), and the sounds of the folk at work there, downloaded as the player comes
+ * in (`wants`); its calls (CALLS', each as loud as it says), and its murmur (a made sound: sound.js
+ * setAmbience). Its hearth's crackle (`hearth`), a hell's heart's beat (`heart`) and the
+ * Hellforge's hammer (`forge`), each at most so loud, louder nearer it.
  */
 export const INDOORS = Object.freeze({
     taproom: { beds: { tavernLoop: 0.9 }, hearth: 0.6, wants: ["clink", "pour", "crackle", "stairs"] },
@@ -58,6 +74,17 @@ export const INDOORS = Object.freeze({
     crypt: { beds: { cryptLoop: 0.9, caveDrips: 0.4 } },
     ruin: { beds: { windHigh: 0.6, caveDrips: 0.3 } },
     tower: { beds: { windHigh: 0.7 } },
+    // (A hell's realms (core/dungeons/themes.js), each with its drone (synth.js hellDrone), lower
+    // the deeper the realm: the Breach's on A, the Halls of Bone's a tone under it, the River of
+    // Fire's two, the Pit's a fifth. The Breach: lava belching in its pools and hissing close by,
+    // drips; the Halls: a crypt's still air, the heart they beat to, and the dead groaning and
+    // whispering through the walls; the River of Fire: its lava belching and roaring (a fire's
+    // roar, lower), hissing close by, and the Hellforge's hammer from the forge; the Pit: the
+    // stillest and deepest, a crypt's air lower yet, wails far off)
+    hellBreach: { beds: { hellDrone: 0.8, lairLoop: 0.6, caveDrips: 0.25 }, rates: { hellDrone: lower(0) }, calls: { slimeSizzle: 0.7 } },
+    hellBone: { beds: { hellDrone: 0.75, cryptLoop: 0.8 }, rates: { hellDrone: lower(2) }, heart: 1, calls: { wightCall: 0.6, ghostCall: 0.5 } },
+    hellFire: { beds: { hellDrone: 0.75, lairLoop: 0.9, brazierLoop: 0.5 }, rates: { hellDrone: lower(4), brazierLoop: lower(4) }, forge: 1, calls: { slimeSizzle: 0.9 } },
+    hellPit: { beds: { hellDrone: 1, cryptLoop: 0.6 }, rates: { hellDrone: lower(7), cryptLoop: lower(4) }, calls: { ghostCall: 0.7, wightCall: 0.4 } },
 });
 
 /**
@@ -83,6 +110,11 @@ export const CALLS = Object.freeze({
     // (In an ants' nest, something chittering far off in its tunnels, through the earth: a giant
     // ant's or a spider's call, slowed and muffled)
     spiderCall: { every: [10, 28], away: [16, 32], heard: 40, muffle: 1000, pitch: 0.72 },
+    // (In a hell: lava hissing and spitting close by, lower; the dead groaning far off through the
+    // rock, and wailing, slowed and muffled)
+    slimeSizzle: { every: [6, 16], away: [4, 14], heard: 24, pitch: 0.75 },
+    wightCall: { every: [20, 50], away: [20, 40], heard: 50, muffle: 900, pitch: 0.85 },
+    ghostCall: { every: [14, 35], away: [18, 36], heard: 45, muffle: 1500, pitch: 0.7 },
 });
 
 /**
@@ -96,12 +128,14 @@ export const TOLLS = Object.freeze({ hours: Object.freeze([6, 9, 12, 15, 18]), s
 const near = (far, reach) => Math.max(0, 1 - far / reach) ** 2;
 
 /**
- * What's heard where the player is: { beds ({ name: how loud }), calls ({ name: CALLS' with how
- * loud (`volume`), how much oftener than usual (`often`), and where from (`at`, if anywhere in
- * particular) }), wants (more to download now: the folk at work's sounds, the doors'), murmur (a
- * made sound heard over and over from round about, or null) }. `facts` (app/surroundings.js):
- * { place (sound.js PLACES: "town" out of doors), time (of day, ms from midnight: daytime.js
- * timeOfDay); indoors, how far the hearth is (`hearth`, metres); out of doors, the land (`land`,
+ * What's heard where the player is: { beds ({ name: how loud }), rates ({ name: how fast a bed's
+ * played }), calls ({ name: CALLS' with how loud (`volume`), how much oftener than usual
+ * (`often`), and where from (`at`, if anywhere in particular) }), wants (more to download now: the
+ * folk at work's sounds, the doors'), murmur (a made sound heard over and over from round about,
+ * or null) }. `facts` (app/surroundings.js): { place (sound.js PLACES: "town" out of doors), time
+ * (of day, ms from midnight: daytime.js timeOfDay); indoors, how far the hearth is (`hearth`,
+ * metres), and in a hell the heart (`heart`, metres) and the Hellforge, where (`forge`: { x, z,
+ * far }); out of doors, the land (`land`,
  * a BIOMES id), whether it's high (`high`), how far each of the waters is (`water`: { stream,
  * river, falls, sea, lake }, metres), how much of round about's a settlement's (`settled`, 0 to
  * 1), how far a market (`market`) is, a camp fire (`fire`), a lit brazier (`brazier`) (metres);
@@ -111,15 +145,26 @@ export function ambienceOf(facts) {
     return facts.place === "town" || !INDOORS[facts.place] ? outdoors(facts) : indoors(facts);
 }
 
-function indoors({ place, hearth = Infinity }) {
-    const { beds, calls = {}, murmur = null, wants = [], hearth: fire = 0 } = INDOORS[place];
+function indoors({ place, hearth = Infinity, heart = Infinity, forge = null }) {
+    const { beds, rates = {}, calls = {}, murmur = null, wants = [], hearth: fire = 0, heart: beating = 0, forge: hammer = 0 } = INDOORS[place];
     const heard = { ...beds };
+    const called = Object.fromEntries(Object.entries(calls).map(([name, volume]) => [name, { ...CALLS[name], volume, often: 1 }]));
 
     if (fire && near(hearth, REACH.hearth) > 0.01) {
         heard.hearthLoop = round(fire * near(hearth, REACH.hearth));
     }
 
-    return { beds: heard, calls: Object.fromEntries(Object.entries(calls).map(([name, volume]) => [name, { ...CALLS[name], volume, often: 1 }])), wants: [...wants, doorOf(place)].filter(Boolean), murmur };
+    // (A hell's heart, heard all through its halls, louder nearer it; the Hellforge's hammer, from
+    // the forge, muffled through the rock and slowed)
+    if (beating) {
+        heard.heartbeat = round(beating * (HELL.heart.through + (1 - HELL.heart.through) * near(heart, REACH.heart)));
+    }
+
+    if (hammer && forge && near(forge.far, REACH.forge) > 0.01) {
+        called.distantHammer = { ...CALLS.distantHammer, ...HELL.forge, volume: round(hammer * near(forge.far, REACH.forge) ** 0.5), often: 1, at: forge };
+    }
+
+    return { beds: heard, rates: { ...rates }, calls: called, wants: [...wants, doorOf(place)].filter(Boolean), murmur };
 }
 
 function outdoors({ land = "meadow", high = false, water = {}, settled = 0, market = Infinity, fire = Infinity, brazier = Infinity, smithy = null, time = DAY.day }) {
@@ -178,7 +223,7 @@ function outdoors({ land = "meadow", high = false, water = {}, settled = 0, mark
     call("distantHammer", smithy && light > 0.25 ? near(smithy.far, REACH.smithy) ** 0.5 : 0, { at: smithy });
 
     // (And downloaded now: the leaves in the trees; in a town, its doors and its church's bell)
-    return { beds, calls, wants: ["leaves", ...(town > 0 ? ["door", "churchBell"] : [])], murmur: null };
+    return { beds, rates: {}, calls, wants: ["leaves", ...(town > 0 ? ["door", "churchBell"] : [])], murmur: null };
 }
 
 /**
@@ -196,13 +241,13 @@ export function tolled(before, now) {
 /**
  * The door heard going in or out of a place (sound.js PLACES): a heavy one into a keep, a temple,
  * a hall or a tower; an iron gate into a ruin; none into a cave, the lair or an ants' nest (an
- * open mouth); a house's door anywhere else.
+ * open mouth), or a hell's realms (through a portal); a house's door anywhere else.
  */
 export function doorOf(place) {
     return DOORS[place] === undefined ? "door" : DOORS[place];
 }
 
-const DOORS = { keep: "doorHeavy", temple: "doorHeavy", hall: "doorHeavy", undercroft: "doorHeavy", tower: "doorHeavy", ruin: "gate", crypt: "trapdoor", cave: null, lair: null, nest: null };
+const DOORS = { keep: "doorHeavy", temple: "doorHeavy", hall: "doorHeavy", undercroft: "doorHeavy", tower: "doorHeavy", ruin: "gate", crypt: "trapdoor", cave: null, lair: null, nest: null, hellBreach: null, hellBone: null, hellFire: null, hellPit: null };
 
 // (Rounded, for steady numbers to compare)
 const round = (value) => Math.round(value * 1000) / 1000;

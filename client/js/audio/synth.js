@@ -794,29 +794,110 @@ export function wind(seed = 1) {
     const overlap = 1;
     const raw = add(filter(noise(random, loop + overlap), "lowpass", 380), filter(noise(random, loop + overlap), "bandpass", 700, 0.5), 0.35);
     const gusts = (t) => 0.55 + 0.25 * Math.sin((TAU * t) / 10) + 0.15 * Math.sin((TAU * 2 * t) / 10 + 1.3) + 0.08 * Math.sin((TAU * 3 * t) / 10 + 2.1);
-    const out = new Float32Array(count(loop));
-    const fade = count(overlap);
 
     shape(raw, gusts);
 
-    for (let n = 0; n < out.length; n++) {
-        out[n] = raw[n];
-    }
+    return loudestAt(seamless(raw, loop), 0.8);
+}
 
-    // Blend the extra second over the start, so the end runs into it
+// A loop `loop` seconds long from `raw` (that and a little more): the extra blended over its start,
+// so its end runs into it
+function seamless(raw, loop) {
+    const out = raw.slice(0, count(loop));
+    const fade = raw.length - out.length;
+
     for (let n = 0; n < fade; n++) {
         const share = n / fade;
 
         out[n] = raw[n] * share + raw[out.length + n] * (1 - share);
     }
 
+    return out;
+}
+
+// Scaled so its loudest sample is `peak`
+function loudestAt(samples, peak) {
     let loudest = 0;
 
-    for (const value of out) {
+    for (const value of samples) {
         loudest = Math.max(loudest, Math.abs(value));
     }
 
-    return out.map((value) => (value / loudest) * 0.8);
+    return samples.map((value) => (value / loudest) * peak);
+}
+
+// Scaled so it's `level` loud through and through (its root mean square), to mix layers by
+const evenly = (samples, level) => {
+    const rms = Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length);
+
+    return samples.map((value) => (value * level) / rms);
+};
+
+/**
+ * The made beds (sound.js setAmbience's `beds`, beside the recorded ones): each a loop made in code
+ * that loops without a seam, its loudest sample at 0.8 (as the wind's), made only once it's
+ * wanted (sound.js, in a worker: worker.js) and looped as the wind is, faster and lower or slower
+ * and higher where a place says (setAmbience's `rates`); how loud each is played (as the made
+ * wind is, sound.js WIND), and how it's made (`make`, from a seed).
+ *
+ *  - hellDrone: a hell's drone (drone), heard all through its realms, lower the deeper the realm.
+ *  - heartbeat: the heart the Halls of Bone beat to (heartbeat), louder nearer it.
+ */
+export const BEDS = Object.freeze({
+    hellDrone: Object.freeze({ volume: 0.24, make: drone }),
+    heartbeat: Object.freeze({ volume: 0.32, make: heartbeat }),
+});
+
+/**
+ * A hell's drone (BEDS): eight seconds that loop without a seam (every tone a whole number of
+ * cycles in it, everything that rises and falls doing so a whole number of times in it, its noise's
+ * extra second blended over its start). A root on A an octave and a half under the bass clef,
+ * buzzing with its overtones (a phone's speaker, which plays little under 200 Hz, gives its weight
+ * in them: the ear hears the missing low note), and a second voice a quarter of a hertz off it,
+ * the two throbbing twice a loop; the tritone over them (the devil's interval), swelling and dying
+ * away once a loop; the deep's rumble under it all; and over it a moan, a narrow band of noise
+ * rising and falling. Kept dark: little over a kilohertz.
+ */
+export function drone(seed = 1) {
+    const random = createRandom(seed);
+    const [loop, overlap] = [8, 1];
+    const length = loop + overlap;
+    const turns = (times, t, phase = 0) => Math.sin((TAU * times * t) / loop + phase);
+    const buzz = [[1, 1], [2, 0.75], [3, 0.55], [4, 0.4], [5, 0.28], [6, 0.18], [7, 0.12], [8, 0.08]];
+    const root = add(tone(length, 55, { harmonics: buzz }), tone(length, 55.25, { harmonics: buzz, phase: 1.1 }), 0.8);
+    const tritone = shape(tone(length, 77.75, { harmonics: [[1, 1], [2, 0.5], [3, 0.3]] }), (t) => 0.5 + 0.5 * turns(1, t, -Math.PI / 2));
+    const rumble = filter(filter(noise(random, length), "lowpass", 90), "lowpass", 160);
+    const moan = shape(filter(noise(random, length), "bandpass", (t) => 380 + 140 * turns(1, t) + 60 * turns(3, t, 1.7), 7), (t) => 0.55 + 0.45 * turns(2, t, 0.6));
+    const mixed = add(add(add(evenly(root, 1), evenly(tritone, 1), 0.3), evenly(rumble, 1), 0.7), evenly(moan, 1), 0.35);
+
+    return loudestAt(seamless(filter(mixed, "lowpass", 1100), loop), 0.8);
+}
+
+/**
+ * The Halls of Bone's heart (BEDS): four beats a loop, one every 1.2 seconds (as the heart's drawn
+ * beating: world/flesh.js), each a deep "lub" and, a moment after, a softer, higher "dub": thuds
+ * falling in pitch, with their overtones (for a phone's speaker), each with a soft, wet thump of
+ * low noise, heard as if through flesh (little over 700 Hz); each beat a little stronger or weaker
+ * and a little sooner or later than the last, the last dying away before the loop's end, so it
+ * loops without a seam.
+ */
+export function heartbeat(seed = 1) {
+    const random = createRandom(seed);
+    const [beats, apart, dub] = [4, 1.2, 0.29];
+    const length = beats * apart;
+    let out = new Float32Array(count(length));
+
+    for (let k = 0; k < beats; k++) {
+        const at = k * apart + 0.02 + random.next() * 0.015;
+        const strong = 0.88 + random.next() * 0.12;
+
+        out = add(out, thud(70, 42, 0.3, 0.07), strong, at);
+        out = add(out, burst(random, 0.12, "lowpass", 260, 0.9, 0.004, 0.03), 0.5 * strong, at);
+        out = add(out, thud(86, 54, 0.24, 0.05), 0.6 * strong, at + dub);
+        out = add(out, burst(random, 0.1, "lowpass", 320, 0.9, 0.004, 0.025), 0.3 * strong, at + dub);
+    }
+
+    return loudestAt(filter(out.slice(0, count(length)), "lowpass", 700), 0.8);
 }
 
 /** Make variant `variant` of a sound. */

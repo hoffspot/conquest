@@ -4088,7 +4088,8 @@ from Freesound, the National Park Service's and the Versilian Community Sample L
   the land underfoot and whether it's high (the mountains, the snow, the tundra, or above 175 m);
   how far a stream, a river, a waterfall's lip, the sea and a lake are; how much of round about is
   a settlement's (here and 22 m off all round); how far its market and its smithy are; how far a
-  camp fire, and a brazier while it's lit. Indoors, how far the hearth is. And the time of day.
+  camp fire, and a brazier while it's lit. Indoors, how far the hearth is (in a hell, its heart,
+  and where its Hellforge is). And the time of day.
 - **Beds**, out of doors:
   - the wind: over open land, dry grass rustling (`windOpen`); in the woods, gusts through the
     trees (`windForest`); up high, wind singing over a mountain (`windHigh`); half as loud in a
@@ -4104,7 +4105,15 @@ from Freesound, the National Park Service's and the Versilian Community Sample L
   town hall and quieter still in a shop (papers rustling in both); a crypt's still air (with drips; quieter in a keep, with a brazier in a castle's
   undercroft); a cave's drips; the drake's lair's belching spring; wind through a ruined keep and
   a watchtower; an ants' nest's close, still earth (the crypt's still air, a little of the cave's
-  drips: its own place, `nest`, a dungeon theme's `sound`).
+  drips: its own place, `nest`, a dungeon theme's `sound`); a hell's realms, each its own place,
+  with its drone (docs/DUNGEONS.md *The sound of hell*).
+- **Beds made in code** (synth.js `BEDS`, beside the recorded ones in setAmbience's `beds`): a
+  hell's drone and the Halls of Bone's heart, each a loop without a seam (8 and 4.8 seconds),
+  made in a worker once it's first wanted (not at the start: the drone is a third of a second's
+  work), looped whole as the made wind is, and let go of a minute after it's last heard.
+- **A bed played slower and lower** (setAmbience's `rates`, a place's in `INDOORS`): a made bed
+  slides to its new rate over 2 seconds (a hell's drone, lower each realm down); a recorded one
+  takes it from its next copy, its loop and crossfade the longer for it.
 - **Calls** (`CALLS`), each from somewhere round the player (or a tree near, or its smithy):
   birdsong by day (every 4 to 14 seconds; more in the woods, fewer in a town or on dry land, none
   up high), the dawn chorus from first light to five minutes after sunrise, crows over open land,
@@ -4113,7 +4122,9 @@ from Freesound, the National Park Service's and the Versilian Community Sample L
   and meadow; the smith's hammer from the smithy by day, through a low-pass filter as from off.
   A made bird's chirp sings in a recorded bird's place till it's in. In an ants' nest, something
   chittering far off in its tunnels (every 10 to 28 seconds, 16 to 32 m off): a giant ant's or a
-  spider's call slowed (a call's `pitch`, 0.72) and muffled through the earth (1 kHz).
+  spider's call slowed (a call's `pitch`, 0.72) and muffled through the earth (1 kHz). In a hell,
+  lava hissing close by, the dead groaning and wailing far off through the rock, and the
+  Hellforge's hammer from the forge.
 - **A murmur** (setAmbience's `murmur`, `MURMUR`): in an ants' nest, its colony heard at work in
   the earth round about: a made sound (synth.js `colonyRustle`: a patter of tiny clicks, 900 a
   second at 1.3 kHz, over a low rumble, swelling and dying away in under two seconds) played over

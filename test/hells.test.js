@@ -323,6 +323,13 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, bre
             assert.equal(named("forge-basin").length, k === 2 ? 1 : 0);
             assert.equal(named("forge-mouth").length, k === 2 ? 1 : 0);
 
+            // (Where the Halls' heart beats and the River's Hellforge stands, each heard from there:
+            // audio/ambience.js)
+            const middleOf = (kind) => map.pieces.filter((piece) => piece.kind === kind).map(({ x, y, w, h }) => ({ x: x + w / 2, z: y + h / 2 }))[0] ?? null;
+
+            assert.deepEqual([built.heart, built.forge], [middleOf("heart"), middleOf("forge")]);
+            assert.deepEqual([Boolean(built.heart), Boolean(built.forge)], [k === 1, k === 2]);
+
             if (k === 2) {
                 const floorYs = named("floor").flatMap((mesh) => [...mesh.geometry.attributes.position.array].filter((_, j) => j % 3 === 1));
 

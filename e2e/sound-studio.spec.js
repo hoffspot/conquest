@@ -13,12 +13,13 @@ test("describes every sound, and plays each, its recordings and its made variant
     await page.goto("/sound-studio.html");
 
     const cards = await page.evaluate(async () => {
-        const { CATALOG, MUSIC } = await import("./js/audio/catalog.js");
+        const { CATALOG, LOOPS, MUSIC } = await import("./js/audio/catalog.js");
 
-        return { shown: document.querySelectorAll(".card").length, described: Object.keys(CATALOG).length + 1 + Object.keys(MUSIC).length };
+        return { shown: document.querySelectorAll(".card").length, described: Object.keys(CATALOG).length + Object.keys(LOOPS).length + Object.keys(MUSIC).length };
     });
 
-    // (Each sound, the wind, and the music in each place)
+    // (Each sound, the beds made in code (the wind, a hell's drone and heart), and the music in
+    // each place)
     expect(cards.shown).toBe(cards.described);
     await expect(page.locator('.card[data-name="stepStone"] .badge')).toHaveText("Recorded");
     await expect(page.locator('.card[data-name="stepStone"] .source a').first()).toHaveAttribute("href", /^https:\/\/freesound\.org\/s\/\d+\/$/);
@@ -65,4 +66,20 @@ test("describes every sound, and plays each, its recordings and its made variant
     await expect.poll(() => page.evaluate(() => window.soundStudio.sound.beds.get("windOpen")?.copies.length ?? 0)).toBeGreaterThan(0);
     await page.locator('.card[data-name="windOpen"] button.primary').click();
     expect(await page.evaluate(() => window.soundStudio.sound.beds.get("windOpen").gain)).toBe(0);
+
+    // A bed made in code (a hell's drone) made in a worker once it's wanted, and looped, as low as
+    // in the Pit
+    const pit = await page.evaluate(async () => (await import("./js/audio/ambience.js")).INDOORS.hellPit.rates.hellDrone);
+
+    await page.locator('.card[data-name="hellDrone"] button', { hasText: "a hell's Pit" }).click();
+    await expect(page.locator('.card[data-name="hellDrone"] button.primary')).toHaveText("■ Stop");
+    await expect.poll(() => page.evaluate(() => window.soundStudio.sound.beds.get("hellDrone")?.copies.length ?? 0), { timeout: 10000 }).toBe(1);
+    expect(await page.evaluate(() => {
+        const [looped] = window.soundStudio.sound.beds.get("hellDrone").copies;
+
+        // (Its rate as the browser keeps it, to three places)
+        return { loop: looped.loop, rate: Math.round(looped.playbackRate.value * 1000) / 1000, seconds: looped.buffer.duration };
+    })).toEqual({ loop: true, rate: pit, seconds: 8 });
+    await page.locator('.card[data-name="hellDrone"] button.primary').click();
+    expect(await page.evaluate(() => window.soundStudio.sound.beds.get("hellDrone").gain)).toBe(0);
 });

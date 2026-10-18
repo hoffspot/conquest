@@ -240,16 +240,16 @@ export const CATALOG = Object.freeze({
     slimeAttack: { group: "Monsters", label: "Slime attacking", about: "A wet slap of slime.", plays: "A green slime (a giant leech higher, a magma slime lower, sizzling) striking, loudest as its blow lands." },
     slimeHurt: { group: "Monsters", label: "Slime hurt", about: "A squelch.", plays: "A green slime (a giant leech higher, a magma slime lower, sizzling) struck, no oftener than every 0.7 seconds." },
     slimeDeath: { group: "Monsters", label: "Slime dying", about: "Slime collapsing, squishing to rest.", plays: "A green slime (a giant leech higher, a magma slime lower, sizzling) dying." },
-    slimeSizzle: { group: "Monsters", label: "Magma slime's sizzle", about: "Sausages sizzling in a pan, the low end taken off.", plays: "Under a magma slime's and a salamander's call, attack and death." },
+    slimeSizzle: { group: "Monsters", label: "Magma slime's sizzle", about: "Sausages sizzling in a pan, the low end taken off.", plays: "Under a magma slime's and a salamander's call, attack and death. And in a hell's Breach and its River of Fire, lava hissing and spitting close by: lower, from 4 to 14 metres off, every 6 to 16 seconds." },
     skeletonCall: { group: "Monsters", label: "Skeleton calling", about: "Bones rattling.", plays: "A skeleton setting on someone, and now and then as it goes about its business; heard up to 50 metres off." },
     skeletonAttack: { group: "Monsters", label: "Skeleton attacking", about: "A sharp rattle of bones.", plays: "A skeleton striking, loudest as its blow lands: now and then." },
     skeletonHurt: { group: "Monsters", label: "Skeleton hurt", about: "Bones knocked.", plays: "A skeleton struck, no oftener than every 0.7 seconds." },
     skeletonDeath: { group: "Monsters", label: "Skeleton dying", about: "Bones falling to the ground in a heap.", plays: "A skeleton dying." },
-    ghostCall: { group: "Monsters", label: "Ghost calling", about: "Whispering voices.", plays: "A restless ghost (a will-o'-wisp, a mandrake or a pixie swarm higher, a mare a little lower, a wraith lower) setting on someone, and now and then as it goes about its business; heard up to 50 metres off." },
+    ghostCall: { group: "Monsters", label: "Ghost calling", about: "Whispering voices.", plays: "A restless ghost (a will-o'-wisp, a mandrake or a pixie swarm higher, a mare a little lower, a wraith lower) setting on someone, and now and then as it goes about its business; heard up to 50 metres off. And in a hell's Halls of Bone and its Pit, wailing far off through the rock: slowed and muffled, from 18 to 36 metres off, every 14 to 35 seconds." },
     ghostAttack: { group: "Monsters", label: "Ghost attacking", about: "A ghostly moan (a voice actor's).", plays: "A restless ghost (a will-o'-wisp, a mandrake or a pixie swarm higher, a mare a little lower, a wraith lower) striking, loudest as its blow lands." },
     ghostHurt: { group: "Monsters", label: "Ghost hurt", about: "A burst of whispers, or a moan.", plays: "A restless ghost (a will-o'-wisp, a mandrake or a pixie swarm higher, a mare a little lower, a wraith lower) struck, no oftener than every 0.7 seconds." },
     ghostDeath: { group: "Monsters", label: "Ghost dying", about: "A long moan fading away.", plays: "A restless ghost (a will-o'-wisp, a mandrake or a pixie swarm higher, a mare a little lower, a wraith lower) dying." },
-    wightCall: { group: "Monsters", label: "Wight lord calling", about: "An undead moan, slowed.", plays: "The wight lord (a draugr higher) setting on someone, and now and then as it goes about its business; heard up to 50 metres off." },
+    wightCall: { group: "Monsters", label: "Wight lord calling", about: "An undead moan, slowed.", plays: "The wight lord (a draugr higher) setting on someone, and now and then as it goes about its business; heard up to 50 metres off. And in a hell's Halls of Bone and its Pit, the dead groaning far off through the rock: lower and muffled, from 20 to 40 metres off, every 20 to 50 seconds." },
     wightAttack: { group: "Monsters", label: "Wight lord attacking", about: "A zombie's snarl, slowed.", plays: "The wight lord (a draugr higher) striking, loudest as its blow lands: now and then." },
     wightHurt: { group: "Monsters", label: "Wight lord hurt", about: "A zombie's groan, slowed.", plays: "The wight lord (a draugr higher) struck, no oftener than every 0.7 seconds." },
     wightDeath: { group: "Monsters", label: "Wight lord dying", about: "A long undead moan, slowed further.", plays: "The wight lord (a draugr higher) dying." },
@@ -288,7 +288,7 @@ export const CATALOG = Object.freeze({
     bellows: { group: "Folk at work", label: "Bellows", about: "A great leather bellows' breath, its flaps fluttering: noisymichael's, in an old mill.", plays: "The smith's assistant pumping the bellows; the forge's fire stirred." },
     grind: { group: "Folk at work", label: "Grindstone", about: "A knife drawn over a turning grindstone, three or four strokes: florianreichelt's.", plays: "The smith's assistant cranking the grindstone." },
     rustle: { group: "Folk at work", label: "Papers", about: "A few dry crinkles of paper: keweldog's.", plays: "The guild's receptionist filing, the folk reading, and in a town hall or a shop." },
-    distantHammer: { group: "Folk at work", label: "The smith at work, off", about: "A blacksmith hand-hammering at the smithy, recorded there by ldezem; heard from the street, through a low-pass filter.", plays: "By day, near a town's smithy: three or four blows every 5 to 12 seconds, from the smithy." },
+    distantHammer: { group: "Folk at work", label: "The smith at work, off", about: "A blacksmith hand-hammering at the smithy, recorded there by ldezem; heard from the street, through a low-pass filter.", plays: "By day, near a town's smithy: three or four blows every 5 to 12 seconds, from the smithy. And in a hell's River of Fire, the Hellforge's hammer, from the forge: slowed (a great hammer's), muffled through the rock, louder nearer it." },
 
     // The world (the environment's bus: ambience.js's beds, each looped round and round, and the
     // leaves; the made bird in place of a recorded one till it's in)
@@ -307,7 +307,7 @@ export const CATALOG = Object.freeze({
     lakeLapping: { group: "The world", label: "A lake", about: "Gentle waves lapping at a lake's edge: TRP's. A 28-second loop.", plays: "Within 45 metres of a lake." },
     creakTree: { group: "The world", label: "A tree creaking", about: "A tree creaking deep in the wind: felix.blume's, in Patagonia.", plays: "In the woods, from a tree near, every 25 to 70 seconds." },
     campfireLoop: { group: "The world", label: "A camp fire", about: "A small camp fire crackling: kyles's. A 31-second loop.", plays: "Within 16 metres of a camp fire." },
-    brazierLoop: { group: "The world", label: "A brazier", about: "A close fire's roar: Nox_Sound's camp fire. An 11-second loop.", plays: "Within 10 metres of a lit brazier (at a guard post, or round a hell's way in, the cult's camp, at night); in a smithy, its forge; in a castle's undercroft." },
+    brazierLoop: { group: "The world", label: "A brazier", about: "A close fire's roar: Nox_Sound's camp fire. An 11-second loop.", plays: "Within 10 metres of a lit brazier (at a guard post, or round a hell's way in, the cult's camp, at night); in a smithy, its forge; in a castle's undercroft; and in a hell's River of Fire, its lava roaring, slower and lower (two tones down)." },
     rainLoop: { group: "The world", label: "Rain", about: "Light rain in the country: jmbphilmes's. A 34-second loop.", plays: "Not yet: there's no weather. In the studio." },
     thunder: { group: "The world", label: "Thunder", about: "Distant thunder rolling: richwise's and Fission9's.", plays: "Not yet: there's no weather. In the studio." },
 
@@ -333,11 +333,11 @@ export const CATALOG = Object.freeze({
     tavernLoop: { group: "Indoors", label: "A tavern", about: "A lively pub's crowd: ondondvo's, in Czechia. A 29-second loop.", plays: "In a tavern's taproom; quieter upstairs and in an adventurers' guild." },
     hearthLoop: { group: "Indoors", label: "A hearth", about: "A fire crackling gently: florianreichelt's. A 26-second loop.", plays: "In a tavern's taproom, louder nearer the hearth." },
     templeLoop: { group: "Indoors", label: "A temple", about: "The hush of an old church: its air and a low rumble (composingatnight's). A 21.5-second loop.", plays: "In a temple or an abbey; quieter in a town hall, and quieter still in a shop." },
-    cryptLoop: { group: "Indoors", label: "A crypt", about: "A cellar's still air: kyles's. A 27-second loop.", plays: "In a crypt, a castle's undercroft and an ants' nest (its close, still earth); quieter in a keep." },
-    caveDrips: { group: "Indoors", label: "Drips in a cave", about: "Water dripping in a small cave: Selector's. A 32-second loop.", plays: "In a cave; quieter in a crypt, a ruined keep and an ants' nest (its damp)." },
+    cryptLoop: { group: "Indoors", label: "A crypt", about: "A cellar's still air: kyles's. A 27-second loop.", plays: "In a crypt, a castle's undercroft and an ants' nest (its close, still earth); quieter in a keep; in a hell's Halls of Bone, and in its Pit slower and lower (two tones down)." },
+    caveDrips: { group: "Indoors", label: "Drips in a cave", about: "Water dripping in a small cave: Selector's. A 32-second loop.", plays: "In a cave; quieter in a crypt, a ruined keep, an ants' nest (its damp) and a hell's Breach." },
     colonyRustle: { group: "Indoors", label: "A colony at work", about: "Thousands of feet scrabbling in the earth, slowed and deepened as a giant's would be: a band-passed patter of tiny clicks, 900 a second at 1.3 kHz and a few nearer at 2.4 kHz, over the earth's low rumble, swelling and dying away in under two seconds.", plays: "In an ants' nest, over and over from 4 to 13 metres round the player (every 0.8 to 1.5 seconds, each overlapping the last), muffled through the earth: its colony heard at work round about." },
     soilTrickle: { group: "Indoors", label: "Soil trickling", about: "A dry patter of grains (320 a second at 3.6 kHz, finer ones at 6.8 kHz) thickening and thinning over a soft sandy hiss, a clod or two landing among them.", plays: "In an ants' nest, where soil trickles from the roof to the floor, as it starts (every 12 to 40 seconds); heard up to 16 metres off." },
-    lairLoop: { group: "Indoors", label: "A great lair", about: "Steam belching and water sloshing deep in a spring: the National Park Service's Dragon's Mouth, in Yellowstone (David Restivo). A 31-second loop.", plays: "In the drake's lair or a Dreadthorn's." },
+    lairLoop: { group: "Indoors", label: "A great lair", about: "Steam belching and water sloshing deep in a spring: the National Park Service's Dragon's Mouth, in Yellowstone (David Restivo). A 31-second loop.", plays: "In the drake's lair or a Dreadthorn's; in a hell's Breach and its River of Fire, its lava belching." },
 
     // Coins and trade (scripts/sounds/items.js)
     coins: { group: "Coins and trade", label: "A purse of coins", about: "A handful of coins shaken in a closed hand, a warm jingle: SpaceJoe's.", plays: "Gold off a felled foe; a share of a convoy's goods fallen on, in gold; buying or selling at a shop; paying for ale, a meal, a room or a blessing; hiring a follower." },
@@ -388,9 +388,14 @@ export const CATALOG = Object.freeze({
     breath: { group: "Cues", label: "Out of breath", about: "Someone panting after running hard.", plays: "The player running out of stamina." },
 });
 
-/** What else the studio can play, not one of SOUNDS: the wind, and the music in each place. */
+/**
+ * What else the studio can play, not one of SOUNDS: the beds made in code (the wind, and synth.js
+ * BEDS), and the music in each place.
+ */
 export const LOOPS = Object.freeze({
     wind: { group: "The world", label: "The wind (made)", about: "A quiet wind made in code, a ten-second loop without a seam.", plays: "Out in the world, until a recorded wind is downloaded and blowing." },
+    hellDrone: { group: "Indoors", label: "A hell's drone", about: "Made in code, an eight-second loop without a seam: a buzzing root on A (55 Hz, its overtones carrying it on a phone) and a second voice a quarter of a hertz off it, throbbing twice a loop; the tritone over them swelling and dying away; a deep rumble under it all; a moan over it, a narrow band of noise rising and falling. Little over a kilohertz.", plays: "All through a hell's realms, lower and slower the deeper the realm: on A in the Breach, a tone lower in the Halls of Bone, two in the River of Fire, a fifth lower in the Pit; sliding down to it as the player comes down to each." },
+    heartbeat: { group: "Indoors", label: "The heart beating", about: "Made in code, four beats of a heart, a beat every 1.2 seconds, heard as if through flesh: a deep lub and a softer, higher dub, thuds falling in pitch with a soft, wet thump of low noise, each beat a little different.", plays: "All through a hell's Halls of Bone, faintly, louder nearer the heart they beat to (in their last room)." },
 });
 
 /** The music, by where it's heard (each of sound.js's PLACES). */
@@ -411,4 +416,8 @@ export const MUSIC = Object.freeze({
     crypt: { label: "In a crypt", about: "The world above barely heard through the floor.", plays: "In a crypt under a hall." },
     ruin: { label: "In a ruined keep", about: "The world outside through broken walls, open to the sky.", plays: "In a ruined keep." },
     tower: { label: "In a watchtower", about: "The world outside through the tower's stones.", plays: "In a broken watchtower." },
+    hellBreach: { label: "In a hell's Breach", about: "None of the world's music: another world's drone in its place.", plays: "In the Breach, a hell's first realm." },
+    hellBone: { label: "In a hell's Halls of Bone", about: "None of the world's music: the drone, a tone lower, and the heart.", plays: "In the Halls of Bone, a hell's second realm." },
+    hellFire: { label: "In a hell's River of Fire", about: "None of the world's music: the drone, two tones lower, under the lava's roar.", plays: "In the River of Fire, a hell's third realm." },
+    hellPit: { label: "In a hell's Pit", about: "None of the world's music: the drone at its deepest, a fifth lower.", plays: "In the Pit, a hell's last realm." },
 });
