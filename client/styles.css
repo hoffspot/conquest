@@ -4318,6 +4318,37 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     min-height: 32px;
 }
 
+/* What the player's heard tell of: as it was said, who said it, and which way it is; faded once found */
+.journal-heard {
+    display: grid;
+    gap: 4px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--field);
+    border: 1px solid var(--field-border);
+}
+
+.journal-heard-words {
+    margin: 0;
+    font-size: 14px;
+    font-style: italic;
+    color: var(--ink);
+}
+
+.journal-heard-from {
+    margin: 0;
+    font-size: 12px;
+    color: var(--gold);
+}
+
+.journal-heard.found {
+    opacity: 0.6;
+}
+
+.journal-heard.found .journal-heard-from {
+    color: var(--muted);
+}
+
 /* The journal's button between it and the last messages told, in its header */
 .journal-toggle {
     min-height: 32px;

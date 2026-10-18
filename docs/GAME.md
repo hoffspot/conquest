@@ -716,7 +716,49 @@ world's seed, as they are.
   a time (`CRY.page`), oldest first, as long as the player wants to hear more. Where they've heard
   to is kept with what they've talked of (their talk memory's `news`), so another crier goes on
   where the last left off. Never having listened, they hear the latest five (`CRY.first`); away so
-  long the war's log has gone on past them, he says so.
+  long the war's log has gone on past them, he says so. And what's said of the country round
+  about (*Rumours of places*); and among the town's own cries, that he'll tell it, if asked.
+
+#### Rumours of places
+
+A town's crier tells, if asked, what's said of the places round it the player's still to find
+(core/rumours.js; `TREES.crier`'s `hearsay`; app/game.js `#hearsayOf`): "Livestock keeps going
+missing south-east of town, out by old Kemp's farm at Keldale. Someone swears they saw a bug as big
+as a wagon!"
+
+- **Which places** (`rumouredOf`): the places worth finding out in the world: its dungeons (the
+  ants' nests, the caves, the outlaws' hideouts, the old tombs; not the hells, whose cults' word is
+  their own: docs/DUNGEONS.md *Word of it*); its ruins, ruined castles, caves, the drake's and the
+  Dreadthorns' lairs, the werewolf's den, its shrines and standing stones, its watchtowers out in
+  the wild; and the wild's camps (bandits, wolves, goblins, giant spiders, the restless dead,
+  trolls, raiders, cultists). The nearest to the town first, within 2 km of it (`RUMOURS.reach`),
+  and only those the player hasn't found and hasn't heard of (`rumoursNear`).
+- **Found** (core/explored.js `sighted`): the one rule for it, the maps' own: the player's been in
+  the chunk it's in, or one of the eight round it. So a rumour's place and its icon on the maps
+  never disagree: the icon shows just as the rumour's found.
+- **What's said** (`rumourWord`): a hook, which way it is from the town, always true, and what
+  stands by it, then something wild said of it. What stands by it is the nearest farmstead,
+  hamlet or village within 900 m of it and nearer it than the town (`landmarkOf`): a farmstead as
+  its farmer's ("old Kemp's farm at Keldale", his name made from the farm's id as the world's
+  people's are: names.js `namePeople`), a hamlet or village by its name; with none, how far it is
+  on foot. The lines by the kind of place (a dungeon's by its theme, a camp's by its faction), which
+  of them by the place and the town, so the same is said there every time. The way is never
+  false; only the tales are tall.
+- **How many**: the first time the player asks a crier, two (`RUMOURS.first`); then one a talk.
+  While three of those he's told of are still to be found (`RUMOURS.open`), he tells no more ("Go
+  and see for yourself, and I'll have more for you when you're back"); with none left near, he says
+  it's quiet.
+- **Kept**: each heard is kept with what the player's talked of (their talk memory's `heard`:
+  the place's id, the town's, the war's turn), a quill heard as it's written in the journal.
+- **In the journal** (app/journal.js, *Heard tell*): each as it was said, who said it and where,
+  and which way and how far it is from the player now (the middle of its circle: roughly); those
+  still to find first, the newest first, then the last five found, faded.
+- **On the world map** (app/game.js `heardCircles`, app/worldmap.js): a faint dashed circle round
+  about each still to find, a "?" in its middle, fog or no. 200 m across from its middle to its
+  edge (`RUMOURS.radius`), its middle off the place's by 30 to 70% of that, which way by the place's
+  id (`circleOf`: the same for everyone in a world, and the place always inside it). The newest
+  eight (`RUMOURS.kept`), and a hell's cult's heard of as near besides, in violet with a crescent
+  moon. Each goes once its place is found, as its icon comes. The map's key shows both.
 
 ## The battle (core/battle.js)
 

@@ -366,6 +366,10 @@ heard in any of them: another world's.
   know, and of the tavern's drinkers and the townsfolk, one in two of whom do (by who they are and
   which hell, so the same ones know it every time: `app/game.js` `#cultWords`). Each says it in
   their own voice; which of the band's ways of saying it comes round in turn (`talkVariety`).
+  Heard near or farther off, it's written in the journal's *Heard tell*, once for each town it's
+  heard in (`do: [{ heard: "hell" }]`, `#heardOfCult`); heard near, it's drawn on the world map
+  too, a violet circle with a crescent moon round about the camp, till the camp's found
+  (docs/GAME.md *Rumours of places*). Far off, it's only hearsay, and isn't written.
 
 ## How a level's made
 

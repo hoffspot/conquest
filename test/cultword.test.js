@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CULT_WORD, cultNear, cultWays, cultWord } from "../client/js/core/cultword.js";
-import { compass } from "../client/js/core/standing.js";
+import { TREES } from "../client/js/core/dialogue.js";
+import { compass } from "../client/js/core/ways.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
 
 const plans = [1, 2, 3].map((seed) => planWorld(seed));
@@ -62,5 +63,17 @@ describe("word of the hells' cults (cultword.js)", () => {
 
         // (None in a world with no hell)
         assert.equal(cultNear({ sites: plan.sites.filter(({ theme }) => theme !== "hell") }, plan.places[0].at), null);
+    });
+
+    it("is written in the journal whenever it's asked of anyone (app/game.js #heardOfCult)", () => {
+        const asked = Object.entries(TREES).flatMap(([role, { nodes }]) =>
+            Object.values(nodes).flatMap(({ choices }) => (Array.isArray(choices) ? choices : []).filter((choice) => choice.if?.hell === true).map((choice) => ({ role, choice }))),
+        );
+
+        assert.ok(asked.length >= 5);
+
+        for (const { role, choice } of asked) {
+            assert.deepEqual(choice.do, [{ heard: "hell" }], role);
+        }
     });
 });

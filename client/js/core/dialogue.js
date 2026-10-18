@@ -94,7 +94,7 @@ export const TREES = Object.freeze({
                     { say: "An ale, if you please. (2 gold)", next: "ale", do: [{ buy: "ale", price: 2 }] },
                     { say: "Heard any news?", next: "news" },
                     { if: { rumour: true }, say: "What's the word on the war?", next: "war" },
-                    { if: { hell: true }, say: "Anything strange out in the wilds?", next: "cult" },
+                    { if: { hell: true }, say: "Anything strange out in the wilds?", next: "cult", do: [{ heard: "hell" }] },
                     { if: { notFlag: "askedPlace" }, say: "Tell me about this place.", next: "place", do: [{ remember: "askedPlace" }] },
                     { if: { upstairs: true }, say: "I'm after a bed for the night.", next: "room", do: [{ learn: "sentByBarkeep" }] },
                     FAREWELL,
@@ -249,7 +249,7 @@ export const TREES = Object.freeze({
                     { say: "Buy you a drink? (2 gold)", next: "drink", do: [{ buy: "ale", price: 2, for: "them" }, { remember: "boughtDrink" }] },
                     { say: "What's the news?", next: "news" },
                     { if: { rumour: true }, say: "What's the word on the war?", next: "war" },
-                    { if: { hell: true }, say: "Seen anything odd out there?", next: "cult" },
+                    { if: { hell: true }, say: "Seen anything odd out there?", next: "cult", do: [{ heard: "hell" }] },
                     { say: "Seen the orc about?", next: "orc", do: [{ learn: "orc" }] },
                     FAREWELL,
                 ],
@@ -802,7 +802,7 @@ export const TREES = Object.freeze({
                     { say: "How do the ranks work?", next: "ranks" },
                     { say: "Are there other branches?", next: "branches" },
                     { say: "What's that archway by the hearth?", next: "portal" },
-                    { if: { hell: true }, say: "Anything odd being reported out in the wilds?", next: "cult" },
+                    { if: { hell: true }, say: "Anything odd being reported out in the wilds?", next: "cult", do: [{ heard: "hell" }] },
                     FAREWELL,
                 ],
             },
@@ -934,7 +934,7 @@ export const TREES = Object.freeze({
                 ],
                 choices: [
                     { if: { rumour: true }, say: "What's the news?", next: "news" },
-                    { if: { hell: true }, say: "Anything strange about these parts?", next: "cult" },
+                    { if: { hell: true }, say: "Anything strange about these parts?", next: "cult", do: [{ heard: "hell" }] },
                     { say: "What's this place like?", next: "place" },
                     { say: "Don't let me keep you.", next: null },
                 ],
@@ -967,7 +967,11 @@ export const TREES = Object.freeze({
     // A place's crier in its square (core/townsfolk.js crierOf): the war's news since the player
     // last listened to any crier, how much there is ({newsCount}), then a few pieces of it at a
     // time ({news}: each `hear` of it heard, app/game.js #crierOf); whether there's more ({ news }),
-    // and whether the war's gone on past where they last listened ({ rolled })
+    // and whether the war's gone on past where they last listened ({ rolled }). And what's said
+    // of the country round about (core/rumours.js): a place still to be found, one at a time
+    // ({hearsay}: each `hear` of it heard); whether he has one to tell ({ hearsay }), or has told
+    // all he will this time ({ toldAll }), or till they've found some of those he's told of ({
+    // heardAll })
     crier: {
         start: "greet",
         nodes: {
@@ -979,6 +983,8 @@ export const TREES = Object.freeze({
                 ],
                 choices: [
                     { if: { news: true }, say: "Let's hear it.", next: "news", do: [{ hear: "news" }] },
+                    { if: { hearsay: true }, say: "What's said of the country round about?", next: "hearsay", do: [{ hear: "hearsay" }] },
+                    { if: { hearsay: false }, say: "What's said of the country round about?", next: "nohearsay" },
                     { say: "What does a crier do?", next: "crier" },
                     { say: "Carry on.", next: null },
                 ],
@@ -993,12 +999,39 @@ export const TREES = Object.freeze({
             },
             done: {
                 say: ["That's the news, {player}. God keep {town}!", "So it's cried. God keep {town}!", "That's all I have for now. Come back by: there's always more."],
-                choices: [{ say: "Thank you.", next: null }],
+                choices: [
+                    { if: { hearsay: true }, say: "And what's said of the country round about?", next: "hearsay", do: [{ hear: "hearsay" }] },
+                    { say: "Thank you.", next: null },
+                ],
+            },
+            // (A place still to be found, as it's said here: core/rumours.js rumourWord)
+            hearsay: {
+                say: ["Word from the country round about: {hearsay}", "Here's what's said in the market. {hearsay}", "{hearsay} That's what they're saying, anyway."],
+                choices: [
+                    { if: { hearsay: true }, say: "What else is said?", next: "hearsay", do: [{ hear: "hearsay" }] },
+                    { if: { news: true }, say: "And the news?", next: "news", do: [{ hear: "news" }] },
+                    { say: "I'll go and see for myself.", next: null },
+                ],
+            },
+            nohearsay: {
+                say: [
+                    { if: { heardAll: true }, lines: ["I've told you all I've heard, {player}. Go and see for yourself, and I'll have more for you when you're back.", "You've heard all I'd tell you of what's out there till you've been to look. Off you go!"] },
+                    { if: { toldAll: true }, lines: ["That's all I've heard of late. Stop by another time.", "No more for now, friend. Ask me again when you're next by."] },
+                    { lines: ["Quiet as a churchyard round {town}, these days. Nothing strange said of the country round about.", "Nothing strange said of the country round about, that you've not found already."] },
+                ],
+                choices: [
+                    { if: { news: true }, say: "And the news?", next: "news", do: [{ hear: "news" }] },
+                    { say: "Good day.", next: null },
+                ],
             },
             crier: {
-                say: ["I cry the news of the war in {town}'s square: what's won and lost, who's marching and who's fallen. Stop by whenever you pass, and you'll miss none of it.", "The town's ears, I am, and its mouth. Whatever's heard of the war, I cry here, day and night."],
+                say: [
+                    "I cry the news of the war in {town}'s square: what's won and lost, who's marching and who's fallen. Stop by whenever you pass, and you'll miss none of it.",
+                    "The town's ears, I am, and its mouth. Whatever's heard of the war, I cry here, day and night. And what's said of the country round about, if you ask.",
+                ],
                 choices: [
                     { if: { news: true }, say: "Then let's hear it.", next: "news", do: [{ hear: "news" }] },
+                    { if: { hearsay: true }, say: "What's said of the country round about?", next: "hearsay", do: [{ hear: "hearsay" }] },
                     { say: "Good day.", next: null },
                 ],
             },
@@ -1016,7 +1049,7 @@ export const TREES = Object.freeze({
                 choices: [
                     { say: "Any advice?", next: "advice" },
                     { if: { rumour: true }, say: "Heard anything on the road?", next: "war" },
-                    { if: { hell: true }, say: "Anything out there worth the walk?", next: "cult" },
+                    { if: { hell: true }, say: "Anything out there worth the walk?", next: "cult", do: [{ heard: "hell" }] },
                     { if: { hire: true, purse: true }, say: "Would you ride with me? ({hirePrice} gold)", next: "hired", do: [{ hire: true }] },
                     { if: { hire: true, purse: false }, say: "Would you ride with me? ({hirePrice} gold)", next: "short" },
                     { say: "Good hunting.", next: null },

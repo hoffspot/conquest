@@ -4963,6 +4963,121 @@ test("a crier stands in the start town's square in his people's livery, his hand
     await expect(talk.locator(".talk-line")).toContainText(/Nothing new|Not a word more|none since/);
 });
 
+test("asked, a crier tells of the places round the town still to be found, two the first time and then one a talk, which way each is from the town; each written in the journal and drawn on the world map as a circle round about it, till it's found", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=2");
+
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.advance(0.1, { render: false });
+    });
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+
+        return game.avatars.has(`crier:${game.world.start.id}`);
+    }, { seconds: 90 })).toBe(true);
+
+    const id = await page.evaluate(() => `crier:${window.pellagos.game.world.start.id}`);
+    const talkTo = () => page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const one = game.battle.actor(id);
+        const player = game.battle.actor("player");
+
+        Object.assign(player, { square: [one.square[0] + 2, one.square[1]], x: one.square[0] + 2.5, y: one.square[1] + 0.5, to: null, path: [], order: null });
+        game.approaching = id;
+        game.battle.command("player", { type: "approach", target: id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        return game.talking?.conversation.choices.map(({ text }) => text) ?? [];
+    }, id);
+    const talk = page.locator(".talk");
+    const ask = "What's said of the country round about?";
+
+    // Asked: the nearest place still to be found, which way it is from the town, the quill heard
+    // as it's written in the journal
+    const before = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const heard = [];
+        const play = game.sound.play.bind(game.sound);
+
+        game.sound.play = (name, options) => (heard.push(name), play(name, options));
+        window.quills = heard;
+
+        return game.memory.heard ?? [];
+    });
+
+    expect(before).toEqual([]);
+    expect(await talkTo()).toContain(ask);
+    await talk.getByRole("button", { name: ask }).click();
+    await expect(talk.locator(".talk-line")).toContainText(/(north|south|east|west)[a-z-]* of town/);
+
+    const first = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [one] = game.memory.heard;
+        const place = game.world.plan.sites.find(({ id }) => id === one.id) ?? game.world.plan.camps.find(({ id }) => id === one.id);
+        const start = game.world.start;
+
+        return { heard: game.memory.heard, place: { id: place.id, at: place.at }, far: Math.hypot(place.at[0] - start.at[0], place.at[1] - start.at[1]), found: game.explored.sighted(...place.at), quills: window.quills.filter((name) => name === "quill").length, town: start.id };
+    });
+
+    expect(first.heard).toHaveLength(1);
+    expect(first.heard[0].town).toBe(first.town);
+    expect(first.far).toBeLessThanOrEqual(2000);
+    expect(first.found).toBe(false);
+    expect(first.quills).toBe(1);
+
+    // The first time, a second; and no more this talk
+    await talk.getByRole("button", { name: "What else is said?" }).click();
+    expect(await page.evaluate(() => window.pellagos.game.memory.heard.length)).toBe(2);
+    await expect(talk.getByRole("button", { name: "What else is said?" })).toHaveCount(0);
+    await talk.getByRole("button", { name: "I'll go and see for myself." }).click();
+    await expect(talk).toBeHidden();
+
+    // In the journal, as it was said, who said it, and which way; on the world map, a circle round
+    // about each, the place inside it
+    await page.evaluate(() => window.pellagos.game.toggleJournal());
+    await expect(page.locator(".journal-heard")).toHaveCount(2);
+    await expect(page.locator(".journal-heard-from").first()).toContainText(/The crier in .* · About [0-9.]+ (k?m) /);
+
+    const circles = await page.evaluate((place) => {
+        const { heard } = window.pellagos.game.worldMapView();
+
+        return heard.map(({ x, z, radius, hell }) => ({ inside: Math.hypot(x - place.at[0], z - place.at[1]) < radius, hell }));
+    }, first.place);
+
+    expect(circles).toHaveLength(2);
+    expect(circles.some(({ inside }) => inside)).toBe(true);
+    expect(circles.every(({ hell }) => !hell)).toBe(true);
+
+    // Found (been near it): its circle gone, marked found in the journal
+    const found = await page.evaluate((place) => {
+        const { game } = window.pellagos;
+
+        game.explored.visit(place.at[0], place.at[1]);
+
+        return { circles: game.worldMapView().heard.length, icon: game.worldMapView().icons.some(({ id }) => id === place.id) };
+    }, first.place);
+
+    expect(found.circles).toBe(1);
+    expect(found.icon).toBe(true);
+    await page.evaluate(() => window.pellagos.game.toggleJournal());
+    await page.evaluate(() => window.pellagos.game.toggleJournal());
+    await expect(page.locator(".journal-heard.found")).toHaveCount(1);
+
+    // Talked to again: one more, then no more this talk
+    await page.evaluate(() => window.pellagos.game.toggleJournal());
+    expect(await talkTo()).toContain(ask);
+    await talk.getByRole("button", { name: ask }).click();
+    expect(await page.evaluate(() => window.pellagos.game.memory.heard.length)).toBe(3);
+    await expect(talk.getByRole("button", { name: "What else is said?" })).toHaveCount(0);
+});
+
 test("a fingerpost stands by the town's main road out, past its edge, on squares it blocks, its boards lettered with the nearest towns", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 

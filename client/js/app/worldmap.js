@@ -34,6 +34,12 @@ const PIXELS = 4;
 const NEAREST = 0.25;
 const OPENED = 900;
 
+// The circles round about the places the player's heard tell of: never smaller than this (pixels,
+// across the middle to the edge), in these colours (red, green, blue): the criers' a pale gold,
+// a hell's cult's violet
+const HEARD_LEAST = 10;
+const HEARD_COLOURS = Object.freeze({ told: "236, 214, 150", hell: "190, 140, 255" });
+
 // A chunk the player has been in is shown as the minimap paints it from this near (metres to a
 // pixel, at most), at this many pixels to the metre, painting at most this many a frame, keeping
 // at most this many
@@ -318,12 +324,14 @@ export class WorldMap {
      * Open it on where the player is (`player` { x, z, facing }: metres, radians), with icons
      * over `icons` ([{ kind, x, z, rim }]: the buildings they've gone into, and the places worth
      * finding near where they've been, rimmed in who holds them), marks where their
-     * requests take them (`marks`: [{ x, z, label }]), and their pin (`pin`: { x, z }, or null)
+     * requests take them (`marks`: [{ x, z, label }]), the places they've heard tell of and are
+     * still to find (`heard`: [{ x, z, radius, hell }]: app/game.js heardCircles, faint circles
+     * round about where each is), and their pin (`pin`: { x, z }, or null)
      * and the way to it (`way`: [[x, z], ...], or null). Or as the travel map (`travel`: the
      * branches), the building screen (`build`: { plans, forts }), or the war table's map (`war`:
      * app/battlemap.js battleMapView's).
      */
-    open({ player, icons = [], marks = [], pin = null, way = null, travel = null, build = null, war = null }) {
+    open({ player, icons = [], marks = [], heard = [], pin = null, way = null, travel = null, build = null, war = null }) {
         const only = Boolean(travel || build || war);
 
         this.land ??= paintLand(this.world.plan);
@@ -333,6 +341,7 @@ export class WorldMap {
         this.war = war;
         this.icons = only ? [] : icons;
         this.marks = only ? [] : marks;
+        this.heard = only ? [] : heard;
         this.pin = only ? null : pin;
         this.way = only ? null : way;
         this.lastTap = null;
@@ -659,6 +668,54 @@ export class WorldMap {
         // and of everyone else where they're seen
         const war = this.war ? this.#drawWar(at, width, height, names) : null;
 
+        // Round about where the places they've heard tell of are: a faint dashed circle, fog or
+        // no, a "?" in its middle (a hell's cult's violet, with a crescent moon: found by night)
+        for (const { x: hx, z: hz, radius, hell } of this.heard ?? []) {
+            const [x, y] = at(hx, hz);
+            const r = Math.max(HEARD_LEAST, radius / view.scale);
+
+            if (x < -r || y < -r || x > width + r || y > height + r) {
+                continue;
+            }
+
+            const colour = hell ? HEARD_COLOURS.hell : HEARD_COLOURS.told;
+
+            context.save();
+            context.beginPath();
+            context.arc(x, y, r, 0, Math.PI * 2);
+            context.fillStyle = `rgba(${colour}, 0.12)`;
+            context.fill();
+            context.setLineDash([5, 5]);
+            context.lineWidth = 2;
+            context.strokeStyle = `rgba(${colour}, 0.85)`;
+            context.stroke();
+            context.setLineDash([]);
+            context.font = `bold ${Math.round(Math.min(18, Math.max(11, r * 0.6)))}px sans-serif`;
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.lineWidth = 3;
+            context.strokeStyle = "rgba(20, 14, 8, 0.85)";
+            context.fillStyle = `rgb(${colour})`;
+
+            if (hell) {
+                // (A crescent: a disc, less one a little off it)
+                const moon = Math.min(8, Math.max(5, r * 0.3));
+
+                context.beginPath();
+                context.rect(x - moon * 2, y - moon * 2, moon * 4, moon * 4);
+                context.arc(x + moon * 0.45, y - moon * 0.25, moon * 0.85, 0, Math.PI * 2);
+                context.clip("evenodd");
+                context.beginPath();
+                context.arc(x, y, moon, 0, Math.PI * 2);
+                context.fill();
+            } else {
+                context.strokeText("?", x, y);
+                context.fillText("?", x, y);
+            }
+
+            context.restore();
+        }
+
         // Where the player's requests take them: a gold ring with a star in it, fog or no
         for (const mark of this.marks ?? []) {
             const [x, y] = at(mark.x, mark.z);
@@ -713,7 +770,7 @@ export class WorldMap {
             context.restore();
         }
 
-        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
+        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, heard: (this.heard ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
     }
 
     // The war table's map: a shade over all but what its people see now (draw's)

@@ -19,6 +19,7 @@ import { rollTome, SPELLS } from "./spells.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { STAGES } from "./war/war.js";
 import { hypot } from "./exact.js";
+import { wayOf } from "./ways.js";
 import { landAt } from "./worldplan/plan.js";
 
 /** The ranks: each one's title, the standing it takes, and what it opens. */
@@ -790,9 +791,6 @@ function levelNear(plan, [x, y], home) {
     return tiers.sort((a, b) => b - a)[Math.floor(tiers.length / 4)];
 }
 
-// Which way a place is from a town, in words: "0.8 km north-east of Oakford"
-const wayOf = (town, at) => `${Math.round(apart(at, town.at) / 100) / 10} km ${compass(town.at, at)} of ${town.name}`;
-
 // Where each people's soldiers are within a guild's reach of its town (SOLDIERS_OUT): their towns
 // and camps there, by the people they fight for (a liege's id), the nearest first: [{ at, name,
 // camp (a camp: true) }]
@@ -866,19 +864,6 @@ function heldNear(war, town) {
         .map((place) => ({ place, holder: holderOf(war.plan, place, war.places?.[place.id], war.turn) }))
         .filter(({ place, holder }) => bandOf(place, holder))
         .map(({ place, holder }) => ({ place, holder, tier: tierAt(place.at, [town.at], landAt(war.plan, ...place.at).biome) }));
-}
-
-/** Which way one place is from another ([x, y] metres), by the compass (north up the map, as y falls): "north", "south-east"... */
-export function compass([fx, fy], [tx, ty]) {
-    const [dx, dy] = [tx - fx, ty - fy];
-    const ns = dy < 0 ? "north" : "south";
-    const ew = dx > 0 ? "east" : "west";
-
-    if (Math.abs(dx) > 2.414 * Math.abs(dy)) {
-        return ew;
-    }
-
-    return Math.abs(dy) > 2.414 * Math.abs(dx) ? ns : `${ns}-${ew}`;
 }
 
 // What there is to scout near a town, for a people: enemy camps and armies within a few km, or
