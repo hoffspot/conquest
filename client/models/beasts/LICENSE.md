@@ -251,3 +251,83 @@ in this repository, but in the private one the game's builds fetch it from
 `demonLord`).
 
 Don't copy it out of this game or use it in anything else.
+
+## fiend.bin, fiend.pale.bin, fiend.ash.bin
+
+**Monster4** (its Unreal Engine files: its skeletal mesh, its textures and its 25 animations,
+exported from Unreal Engine by this repository's owner), bought on **Fab** by this repository's
+owner under **Fab's Standard License**: the Fiend.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/fiend.json`, which stays out of the repository with the bought files), its `browser`
+build. That's its mesh simplified to 20,952 triangles, with two lower details packed in (8,270
+and 3,834), its own skin's textures (colour, normal, and occlusion, roughness and metal) as
+1,024-pixel KTX2, and all 25 of its own clips: five attacks, two idles, walks every way, a run,
+two flinches, three deaths, a jump, a turn and five ways of flying. Its other two skins, pale and
+ash, are their colour textures alone (`fiend.pale.bin`, `fiend.ash.bin`).
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`). The model viewer shows it (*Coming to the wilds*) until it's in the
+game.
+
+Don't copy it out of this game or use it in anything else.
+
+## flayling.bin, cinder-husk.bin, pyre-acolyte.bin, ossuary-priest.bin, dirge-warden.bin, flayed-hierarch.bin
+
+**Monster1** (its Unreal Engine files: its six builds, its textures and its 24 animations,
+exported from Unreal Engine by this repository's owner), bought on **Fab** by this repository's
+owner under **Fab's Standard License**: a hell's six flayed.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/flayling.json` and the others, which stay out of the repository with the bought files),
+their `browser` builds, one of each of its six builds: the Flayling (its fifth, bare, its first
+skin), the Cinder Husk (its sixth, bare, its third skin, ash grey), the Pyre Acolyte (its third, a
+plain staff, its second skin), the Ossuary Priest (its fourth, crowned, skulls at its belt, its
+third skin), the Dirge Warden (its second, crowned, shoulder plates, its fourth skin, a drowned
+blue) and the Flayed Hierarch (its first, all of it, its first skin). Each is its mesh simplified
+to 8,422 to 12,099 triangles, with two lower details packed in, its materials (body, head, armour,
+staff) baked onto one 1,024-pixel KTX2 atlas (colour, normal, and occlusion, roughness and metal,
+and its glow: the pack's own masks, tinted ember, bile, rime or gore), and its twelve clips (with
+its staff, or without one for the bare two: two idles, a walk, a run, a run back, strafes, two
+attacks, two flinches and a death), with a lunge cut from its second attack, played where it
+stands, and, for the four with staves, a cast made from its idle.
+
+They're scrambled as the game serves them, with whose they are in their glTF asset's
+`copyright`. They aren't in this repository, but in the private one the game's builds fetch them
+from (`docs/LICENSED_MODELS.md`). The model viewer shows them (*Coming to the wilds*) until
+they're in the game.
+
+Don't copy them out of this game or use them in anything else.
+
+## slag-gorger.bin, forge-brute.bin, chained-glutton.bin, bloat-gorger.bin, pit-ravager.bin, gorger-warlord.bin
+
+**Monster2** (its Unreal Engine files: its four builds, its textures and its ten animations,
+exported from Unreal Engine by this repository's owner), bought on **Fab** by this repository's
+owner under **Fab's Standard License**: a hell's six gorgers, headless brutes with a maw in the
+belly.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/slagGorger.json` and the others, which stay out of the repository with the bought
+files), their `browser` builds: the Slag Gorger and the Bloat Gorger its fourth build (bare: its
+third skin, burnt, and its fourth, rotten), the Forge Brute and the Pit Ravager its third (a club:
+its fifth skin, and its first with its fourth's gear), the Chained Glutton its second (chains and
+a spiked club, its sixth skin, its gear gilded) and the Gorger Warlord its first (all of it, its
+second skin, its gear gilded). Each is its mesh simplified to 7,995 to 13,843 triangles, with two
+lower details packed in, its materials (body, armour, weapon) baked onto one 1,024-pixel KTX2
+atlas (colour, normal, and occlusion, roughness and metal, and its glow: the pack's own mask,
+tinted ember, bile or gore), and its five clips (an idle, a walk, an attack, a flinch and a death;
+with its club, or without it for the bare two), with a bite, a spew and a roar made from its idle.
+
+They're scrambled as the game serves them, with whose they are in their glTF asset's
+`copyright`. They aren't in this repository, but in the private one the game's builds fetch them
+from (`docs/LICENSED_MODELS.md`). The model viewer shows them (*Coming to the wilds*) until
+they're in the game.
+
+Don't copy them out of this game or use them in anything else.

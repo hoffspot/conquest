@@ -41,7 +41,7 @@ The rule is written down three times, so no one can miss it:
 - Chromium for the browser tests. Playwright downloads it, or you point it at one you already
   have with `CHROMIUM_PATH`.
 - Only for the licensed models (the Dreadthorn's, the werewolf's, the centipede's, the Ant
-  Monster's, the ant's, the two spiders', the scorpion's, the cockroach's, the wasp's, the black widow's and the greater demon's): access to the private repository
+  Monster's, the ant's, the two spiders', the scorpion's, the cockroach's, the wasp's, the black widow's, the greater demon's, the fiend's, and a hell's six flayed's and six gorgers'): access to the private repository
   `hoffspot/conquest-models`, which the owner gives, then `npm run models:fetch`. Without it the
   game draws the stand-ins, the model viewer can't show those models, and the few tests that need their models say they're left out. CI always has them (`docs/LICENSED_MODELS.md`).
 
@@ -182,7 +182,7 @@ Network's prompts, run at login, sleep, its menu's **Uninstall…**) are the own
 | `npm run e2e:durations` | After adding browser tests, or making them much slower or quicker (below) |
 | `npm run build:manifest` | After changing anything under `client/`. It lists what the game downloads before it starts (`client/js/app/manifest.js`, the data with the hashes of its bytes), and the catalog of models downloaded only as they're wanted (`client/js/app/assets.js`, from `client/models/assets.json`). The unit tests fail until you do |
 | `npm run scramble` | Only when adding or remaking a licensed model (docs/LICENSED_MODELS.md): `-- <model.glb> <model.bin> --copyright "<whose it is>"` scrambles the model `utilities/blenderpipeline` made, as the game serves it, with whose it is stamped in it (its glTF asset's `copyright`), and checks it comes back. The scrambled copy goes in the private repository `hoffspot/conquest-models`. Its catalog entry in `client/models/assets.json` is marked `"licensed": true`, with its hash and size, and `test/scramble.test.js` checks every one so marked is scrambled, and no other. Then `npm run build:manifest` |
-| `npm run models:fetch` | For the licensed models (the Dreadthorn's, the werewolf's, the centipede's, the Ant Monster's, the ant's, the two spiders', the scorpion's, the cockroach's, the wasp's, the black widow's and the greater demon's), if the owner's given you access to the private repository `hoffspot/conquest-models` (docs/LICENSED_MODELS.md): clones it into `.models`, or brings it up to date, and puts its files in place under `client/`, each checked against the hash and size its catalog entry keeps. git ignores both. Without it the game draws the stand-ins, and the tests that need one say they're left out |
+| `npm run models:fetch` | For the licensed models (the Dreadthorn's, the werewolf's, the centipede's, the Ant Monster's, the ant's, the two spiders', the scorpion's, the cockroach's, the wasp's, the black widow's, the greater demon's, the fiend's, and a hell's six flayed's and six gorgers'), if the owner's given you access to the private repository `hoffspot/conquest-models` (docs/LICENSED_MODELS.md): clones it into `.models`, or brings it up to date, and puts its files in place under `client/`, each checked against the hash and size its catalog entry keeps. git ignores both. Without it the game draws the stand-ins, and the tests that need one say they're left out |
 | `npm run build:characters` | Only when rebuilding the body from MakeHuman's MPFB2 (`-- --mpfb2=../mpfb2`). Then `npm run build:vitruvian`, which carries its shapes over |
 | `npm run build:vitruvian` | Only when rebuilding the Vitruvian body (`client/characters/vitruvian.*` and its masks) from CharMorph's Vitruvian, or after rebuilding the MakeHuman body, whose shapes it carries over. It needs Vitruvian's files, and its `char.blend` is in Git LFS: `git clone --depth 1 https://github.com/Upliner/CharMorph-Vitruvian ../charmorph-vitruvian`, then fetch `char.blend` on its own as the top of `scripts/build-vitruvian.js` says, then `-- --from=../charmorph-vitruvian`. About 4 minutes. Then `npm run build:manifest` |
 | `npm run build:music` | Only when remaking the music's instrument recordings |
@@ -404,7 +404,7 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
    anything built from it, stays out of the repository: keep it in `utilities/blenderpipeline/private/`,
    which git ignores. The exceptions are the licensed models, the Dreadthorn's, the werewolf's, the
    centipede's, the Ant Monster's, the ant's, the two spiders', the scorpion's, the cockroach's, the
-   wasp's, the black widow's and the greater demon's: bought, and in the game with permission (the Dreadthorn's the repository's owner obtained, the others' their
+   wasp's, the black widow's, the greater demon's, the fiend's, and a hell's six flayed's and six gorgers': bought, and in the game with permission (the Dreadthorn's the repository's owner obtained, the others' their
    Fab Standard License gives), only in their converted form, and scrambled
    (`npm run scramble`). They aren't in this repository either, but in the private
    `hoffspot/conquest-models`, which the builds fetch (`npm run models:fetch` for your own copy,

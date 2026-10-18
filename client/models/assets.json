@@ -1709,6 +1709,179 @@
                 }
             ]
         },
+        "beast-fiend": {
+            "tier": "demand",
+            "label": "The Fiend (Monster4, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/fiend.bin",
+                    "hash": "a576200042",
+                    "bytes": 3821552
+                }
+            ]
+        },
+        "beast-fiend-skins": {
+            "tier": "demand",
+            "label": "The Fiend's other skins: pale and ash (Monster4, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/fiend.pale.bin",
+                    "hash": "0355d9921b",
+                    "bytes": 175724
+                },
+                {
+                    "path": "models/beasts/fiend.ash.bin",
+                    "hash": "25f4cc4790",
+                    "bytes": 174108
+                }
+            ]
+        },
+        "beast-flayling": {
+            "tier": "demand",
+            "label": "The Flayling (Monster1, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/flayling.bin",
+                    "hash": "28d7bef4d5",
+                    "bytes": 1407500
+                }
+            ]
+        },
+        "beast-cinder-husk": {
+            "tier": "demand",
+            "label": "The Cinder Husk (Monster1, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/cinder-husk.bin",
+                    "hash": "fa9aa7b74e",
+                    "bytes": 1515380
+                }
+            ]
+        },
+        "beast-pyre-acolyte": {
+            "tier": "demand",
+            "label": "The Pyre Acolyte (Monster1, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/pyre-acolyte.bin",
+                    "hash": "e857114009",
+                    "bytes": 2612428
+                }
+            ]
+        },
+        "beast-ossuary-priest": {
+            "tier": "demand",
+            "label": "The Ossuary Priest (Monster1, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/ossuary-priest.bin",
+                    "hash": "fb6f75d80a",
+                    "bytes": 2726372
+                }
+            ]
+        },
+        "beast-dirge-warden": {
+            "tier": "demand",
+            "label": "The Dirge Warden (Monster1, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/dirge-warden.bin",
+                    "hash": "bb542886ed",
+                    "bytes": 2720960
+                }
+            ]
+        },
+        "beast-flayed-hierarch": {
+            "tier": "demand",
+            "label": "The Flayed Hierarch (Monster1, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/flayed-hierarch.bin",
+                    "hash": "0378b4ee40",
+                    "bytes": 3003804
+                }
+            ]
+        },
+        "beast-slag-gorger": {
+            "tier": "demand",
+            "label": "The Slag Gorger (Monster2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/slag-gorger.bin",
+                    "hash": "ee6d0886f0",
+                    "bytes": 2071096
+                }
+            ]
+        },
+        "beast-forge-brute": {
+            "tier": "demand",
+            "label": "The Forge Brute (Monster2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/forge-brute.bin",
+                    "hash": "1512947d94",
+                    "bytes": 2206040
+                }
+            ]
+        },
+        "beast-chained-glutton": {
+            "tier": "demand",
+            "label": "The Chained Glutton (Monster2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/chained-glutton.bin",
+                    "hash": "d77306d751",
+                    "bytes": 2501552
+                }
+            ]
+        },
+        "beast-bloat-gorger": {
+            "tier": "demand",
+            "label": "The Bloat Gorger (Monster2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/bloat-gorger.bin",
+                    "hash": "b7dfa9c5de",
+                    "bytes": 2072488
+                }
+            ]
+        },
+        "beast-pit-ravager": {
+            "tier": "demand",
+            "label": "The Pit Ravager (Monster2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/pit-ravager.bin",
+                    "hash": "ef5d1e2174",
+                    "bytes": 2208240
+                }
+            ]
+        },
+        "beast-gorger-warlord": {
+            "tier": "demand",
+            "label": "The Gorger Warlord (Monster2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/gorger-warlord.bin",
+                    "hash": "b7d4a362fb",
+                    "bytes": 2854240
+                }
+            ]
+        },
         "dungeon-earth-nest": {
             "tier": "demand",
             "label": "An ants' nest's dug earth, scored by their digging (Poly Haven excavated_soil_wall, CC0)",
