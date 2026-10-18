@@ -2699,6 +2699,17 @@ game fills in what's heard where they are (`{rumour1}` to `{rumour3}`, `{rumourR
 only asked when there's something to tell. The guards and officials say how the war goes too (M2,
 M4).
 
+**The crier** (docs/GAME.md *The crier*; `news.js` `newsSince`): a town's crier cries all of what's
+heard there (as `rumoursAt` hears it) since the player last listened to any crier, oldest first,
+each once (the later kept, where the same is said again):
+- **Where they've heard to** is a cursor, as war events carry their turn alone: the turn of the
+  last event they heard, and how many of that turn's events they had (`{ turn, seen }`). It's kept
+  with what they've talked of (their talk memory's `news`: saved with their character, kept by the
+  host and in its snapshots), so no snapshot or save changes for it (`WAR_VERSION` too stays).
+- **Never having listened**, only the latest five (`CRY.first`).
+- **Away so long** that the log's full (`KEEP_LOG`, 300) and its oldest is newer than their
+  cursor, he says more's happened than he can cry.
+
 **The adventurers' guild's board** (`standing.js` `offerBoard`, `offerContract`, `offerCourier`):
 its receptionist gives contracts to any registered adventurer, of whatever people (no standing
 needed, none given, none lost; paid in gold and the guilds' merit), as hard as their rank in the

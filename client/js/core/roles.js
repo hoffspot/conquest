@@ -263,6 +263,19 @@ export const ROLES = Object.freeze({
             { name: "a glance back", hitAt: 1, duration: 2.2 },
         ],
     },
+    // A place's crier in its square (core/townsfolk.js crierOf), his handbell in his right hand:
+    // ringing it high (heard there: the news's bell), crying the news, looking about for anyone
+    // to hear it
+    crier: {
+        title: "Town crier",
+        rests: [
+            { name: "ringing the bell", hitAt: 1, duration: 2.8, sound: "newsHeard", volume: 1.6 },
+            { name: "crying the news", hitAt: 1, duration: 3 },
+            { name: "looking about", hitAt: 1, duration: 3.4 },
+            { name: "shifting the weight", hitAt: 1, duration: 3.2 },
+            { name: "a glance back", hitAt: 1, duration: 2.2 },
+        ],
+    },
     sentry: {
         title: "Sentry",
         fights: true,

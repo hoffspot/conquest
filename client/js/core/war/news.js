@@ -3,7 +3,7 @@
 
 import { RACES } from "../worldplan/races.js";
 import { describeLeader } from "./peoples.js";
-import { STAGES } from "./war.js";
+import { KEEP_LOG, STAGES } from "./war.js";
 import { hypot } from "../exact.js";
 
 const MISSIONS = Object.freeze({ truce: "a truce", alliance: "an alliance", break: "an end to their alliance" });
@@ -242,6 +242,18 @@ const EVERYWHERE = new Set(["stage", "declared", "joined", "broke", "treaty", "s
 // What isn't talked of in the taverns
 const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assailed", "ordered", "struck", "skirmishers", "skirmish", "intercepted", "supplied", "provisioned", "mended", "scattered"]);
 
+// Whether an event's talked of at `at` ([x, y] metres): what's happened within `reach` metres of
+// it, and what's heard everywhere (not what's never talked of)
+function heardAt(war, at, reach) {
+    const near = (id, there) => {
+        const place = war.town(id) ?? war.workAt?.(id) ?? war.fort?.(id) ?? war.camp?.(id) ?? war.depot?.(id) ?? (there ? { at: there } : null);
+
+        return Boolean(place) && hypot(place.at[0] - at[0], place.at[1] - at[1]) <= reach;
+    };
+
+    return (event) => !UNTOLD.has(event.type) && (EVERYWHERE.has(event.type) || near(event.town ?? event.works ?? event.target ?? event.about ?? event.from, event.at));
+}
+
 /**
  * The war's news as it's heard at `at` ([x, y] metres: a town's), newest first (docs/WAR.md M8):
  * what's happened within `reach` metres of it, and what's heard everywhere, told in words, no
@@ -249,16 +261,12 @@ const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assai
  */
 export function rumoursAt(war, at, { count = 3, reach = 5000 } = {}) {
     const heard = [];
-    const near = (id, there) => {
-        const place = war.town(id) ?? war.workAt?.(id) ?? war.fort?.(id) ?? war.camp?.(id) ?? war.depot?.(id) ?? (there ? { at: there } : null);
-
-        return Boolean(place) && hypot(place.at[0] - at[0], place.at[1] - at[1]) <= reach;
-    };
+    const told = heardAt(war, at, reach);
 
     for (let k = war.log.length - 1; k >= 0 && heard.length < count; k--) {
         const event = war.log[k];
 
-        if (UNTOLD.has(event.type) || !(EVERYWHERE.has(event.type) || near(event.town ?? event.works ?? event.target ?? event.about ?? event.from, event.at))) {
+        if (!told(event)) {
             continue;
         }
 
@@ -270,6 +278,57 @@ export function rumoursAt(war, at, { count = 3, reach = 5000 } = {}) {
     }
 
     return heard;
+}
+
+/**
+ * How a crier cries the news (newsSince): how many of its pieces at a time (`page`), and how many
+ * of the latest to someone who's never listened (`first`).
+ */
+export const CRY = Object.freeze({ page: 3, first: 5 });
+
+const COUNTED = ["no", "a", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"];
+
+/** How much news there is, in words: "a piece of news", "three pieces of news", "a great deal of news" (past a dozen). */
+export function newsCount(count) {
+    return count > 12 ? "a great deal of news" : `${COUNTED[count]} piece${count === 1 ? "" : "s"} of news`;
+}
+
+/**
+ * The war's news as a town's crier cries it at `at` ([x, y] metres: his town's, docs/WAR.md *The
+ * crier*), since a listener last heard it, oldest first: what's talked of there (as rumoursAt,
+ * within `reach` metres, or heard everywhere), told in words, no two the same (the later kept).
+ * Where they last listened is their cursor (`since`: the turn of the last event they heard, and
+ * how many of that turn's events they had: war events carry their turn alone); never having
+ * listened (null), only the last `first` of it. { told: [{ words, after (their cursor, once
+ * they've heard it) }], rolled (the war's log has gone on past where they last listened: it's
+ * full, KEEP_LOG, the oldest let go, and its oldest kept is newer) }.
+ */
+export function newsSince(war, at, since = null, { reach = 5000, first = CRY.first } = {}) {
+    const heard = heardAt(war, at, reach);
+    const told = [];
+    const counts = new Map();
+
+    for (const event of war.log) {
+        // (Its place among its turn's events, from 1)
+        const seen = (counts.get(event.turn) ?? 0) + 1;
+
+        counts.set(event.turn, seen);
+
+        if ((since && (event.turn < since.turn || (event.turn === since.turn && seen <= since.seen))) || !heard(event)) {
+            continue;
+        }
+
+        const words = tell(event, war);
+        const again = told.findIndex((each) => each.words === words);
+
+        if (again >= 0) {
+            told.splice(again, 1);
+        }
+
+        told.push({ words, after: { turn: event.turn, seen } });
+    }
+
+    return { told: since ? told : told.slice(-first), rolled: Boolean(since) && war.log.length >= KEEP_LOG && war.log[0].turn > since.turn };
 }
 
 /**

@@ -4,7 +4,9 @@
 // hay forks, merchants about the market and the guild, sweepers with their brooms, friars between
 // the church and the houses; and in a castle's wards, its servants, grooms and scribes. Each goes
 // round its errands (its routine's stops: battle.js #routine), from one kind of place to another,
-// lingering a while at each: more of them by day, a few at night.
+// lingering a while at each: more of them by day, a few at night. And in the square of every
+// village and bigger, and in a castle's heart, its crier with his handbell, crying the war's news
+// (crierOf), by night as by day.
 //
 // Where they go is worked out from the settlement's layout (setpieces/town.js layoutTown) or the
 // castle's wards (sites.js), and who they are from the place and the world's seed, so the same
@@ -233,6 +235,49 @@ export function townsfolkOf({ place, kind, people = "human", name = "", errands,
     }
 
     return namePeople(folk, hashOf(`${place}|names|${seed}`), people);
+}
+
+/**
+ * The places with a crier (docs/GAME.md *The crier*), and what he's called there: every settlement
+ * with a square to cry the news in (a village and bigger), and every castle (its herald, in its
+ * heart); not a hamlet or a farmstead.
+ */
+export const CRIERS = Object.freeze({ village: "Village crier", town: "Town crier", city: "Town crier", capital: "Town crier", castle: "Herald" });
+
+/**
+ * Where a crier cries the news (his routine's stops, in turn: by the market's middle, facing it,
+ * then by its well; in a castle, its heart, then before its keep's door: errandsOf's and
+ * wardErrandsOf's kinds, [kind, which of them], the first kind found), and how long he stays at
+ * each (ms: from and to). Not on the market's very middle: that's where a new hero first stands.
+ */
+export const CRYING = Object.freeze({ stops: [[["market", 1], ["heart", 0]], [["well", 0], ["keep", 0]]], wait: [[20000, 40000], [8000, 16000]] });
+
+/**
+ * A place's crier, as the host keeps its folk (townsfolkOf's, his role "crier", his id
+ * `crier:${place}`): out by the market's middle and by its well, a castle's heart and its keep's
+ * door, going between them (CRYING), whoever comes near; or null where there's none (CRIERS: a
+ * hamlet, a farmstead), or nowhere for him to stand. Who he is comes from the place and the
+ * world's seed, as the townsfolk's does: the same crier there whenever a player comes back.
+ * @param {object} options - As townsfolkOf's, but for `count` and `start` (he's always out).
+ */
+export function crierOf({ place, kind, people = "human", name = "", errands, seed }) {
+    const title = CRIERS[kind];
+    const stops = CRYING.stops
+        .map((kinds, k) => {
+            const [group, which] = kinds.find(([each]) => errands[each]?.length) ?? [];
+
+            return group ? { ...(errands[group][which] ?? errands[group][0]), group, wait: [...CRYING.wait[k]] } : null;
+        })
+        .filter(Boolean);
+
+    if (!title || !stops.length) {
+        return null;
+    }
+
+    const sex = createRandom(hashOf(`${place}|crier|${seed}`)).pick(["m", "m", "f"]);
+    const crier = { id: `crier:${place}`, local: "crier", title, role: "crier", look: "crier", sex, seed: hashOf(`${place}/crier|${seed}`), people, map: "town", square: [...stops[0].square], facing: stops[0].facing, routine: { order: "alternate", wait: [4000, 10000], stops }, place, townName: name };
+
+    return namePeople([crier], hashOf(`${place}|crier's name|${seed}`), people)[0];
 }
 
 /** How many are out at a place of a kind: TOWNSFOLK's by day, NIGHT_SHARE of them at night. */

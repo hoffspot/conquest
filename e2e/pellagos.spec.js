@@ -4801,6 +4801,113 @@ test("the townsfolk go about their business in the start town: dressed for their
     await expect(talk.locator(".talk-line")).not.toBeEmpty();
 });
 
+test("a crier stands in the start town's square in his people's livery, his handbell in his hand, marked with a bell on the minimap; talked to, he cries the war's news since the player last listened, three at a time, and remembers where they'd heard to", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=2");
+
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.advance(0.1, { render: false });
+    });
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+
+        return game.avatars.has(`crier:${game.world.start.id}`);
+    }, { seconds: 90 })).toBe(true);
+
+    // Out, drawn, in his livery with his bell; on the minimap, a bell
+    const crier = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const id = `crier:${game.world.start.id}`;
+        const kept = game.host.folk.get(id);
+
+        game.minimap.drawn = -Infinity;
+        game.advance(0.1);
+
+        return { id, title: kept.title, role: kept.role, wearing: [...game.avatars.get(id).character.equipment.values()], marked: game.minimap.criers.length };
+    });
+
+    expect(crier.role).toBe("crier");
+    expect(crier.title).toMatch(/crier$/);
+    expect(crier.wearing).toContain("handbell");
+    expect(crier.wearing.some((each) => each.startsWith("livery."))).toBe(true);
+    expect(crier.marked).toBe(1);
+
+    // Talked to, with news since the player last listened (none yet heard): how much, then three
+    // pieces at a time
+    const talkTo = (id) => page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const one = game.battle.actor(id);
+        const player = game.battle.actor("player");
+
+        Object.assign(player, { square: [one.square[0] + 2, one.square[1]], x: one.square[0] + 2.5, y: one.square[1] + 0.5, to: null, path: [], order: null });
+        game.approaching = id;
+        game.battle.command("player", { type: "approach", target: id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        return { with: game.talking?.id ?? null, choices: game.talking?.conversation.choices.map(({ text }) => text) ?? [] };
+    }, id);
+    const told = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const war = game.host.war;
+        const peoples = ["human", "elf", "orc", "darkElf", "cat", "lizard"];
+
+        // (The war held still meanwhile, so nothing more happens while they're heard)
+        war.advance = () => [];
+        delete game.memory.news;
+
+        for (let k = 0; k < 9; k++) {
+            war.log.push({ type: "declared", turn: war.turn, by: peoples[k % 6], on: peoples[(k + 1 + Math.floor(k / 6)) % 6] });
+        }
+
+        return war.log.length;
+    });
+    const talk = page.locator(".talk");
+
+    expect(told).toBeGreaterThanOrEqual(9);
+    expect((await talkTo(crier.id)).choices).toContain("Let's hear it.");
+    await expect(talk.locator(".talk-line")).toContainText("five pieces of news");
+    await talk.getByRole("button", { name: "Let's hear it." }).click();
+    await expect(talk.locator(".talk-line")).toContainText("declared war");
+
+    const heard = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return { cursor: game.memory.news, last: game.host.war.log.at(-1) };
+    });
+
+    // (Three heard: where they've heard to moved on past them, two still to hear)
+    expect(heard.cursor.turn).toBe(heard.last.turn);
+    await talk.getByRole("button", { name: "Go on." }).click();
+    await expect(talk.getByRole("button", { name: "Is that all?" })).toBeVisible();
+
+    const after = await page.evaluate(() => window.pellagos.game.memory.news);
+
+    expect(after.seen).toBe(heard.cursor.seen + 2);
+    await talk.getByRole("button", { name: "Is that all?" }).click();
+    await talk.getByRole("button", { name: "Thank you." }).click();
+    await expect(talk).toBeHidden();
+
+    // Talked to again: nothing new since
+    expect(await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        for (let k = 0; k < 20; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        return game.talking;
+    })).toBeFalsy();
+    expect((await talkTo(crier.id)).choices).not.toContain("Let's hear it.");
+    await expect(talk.locator(".talk-line")).toContainText(/Nothing new|Not a word more|none since/);
+});
+
 test("a fingerpost stands by the town's main road out, past its edge, on squares it blocks, its boards lettered with the nearest towns", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 

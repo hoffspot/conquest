@@ -49,6 +49,9 @@ export function itemMaterial(name) {
             straw: { color: 0xd8bd74, roughness: 0.95 },
             linen: { color: 0xece4d2, roughness: 0.9, side: THREE.DoubleSide },
             wool: { color: 0x6a5238, roughness: 0.95, side: THREE.DoubleSide },
+            // (A crier's hat: black felt, a crimson band, an ivory plume)
+            felt: { color: 0x25222a, roughness: 0.95 },
+            plume: { color: 0xeee5d2, roughness: 0.9 },
             earthenware: { color: 0xa65a35, roughness: 0.8 },
             bread: { color: 0xc58a46, roughness: 0.85 },
             apple: { color: 0xb3332a, roughness: 0.55 },
@@ -1354,6 +1357,21 @@ function jug() {
     ], "jug");
 }
 
+// A crier's handbell, held by its turned wooden handle as a tankard is (the handle along the grip),
+// the brass bell below the fist, its mouth down, its clapper hanging in it
+function handbell() {
+    const bell = new THREE.CylinderGeometry(0.024, 0.05, 0.08, 16);
+
+    return assemble([
+        [at(new THREE.CylinderGeometry(0.013, 0.015, 0.13, 10), 0, 0.005, 0), "darkWood"],
+        [at(new THREE.SphereGeometry(0.019, 10, 8), 0, 0.075, 0), "darkWood"],
+        [at(new THREE.CylinderGeometry(0.018, 0.022, 0.014, 12), 0, -0.062, 0), "brass"],
+        [at(bell, 0, -0.109, 0), "brass"],
+        [at(new THREE.TorusGeometry(0.049, 0.004, 6, 18), 0, -0.148, 0, Math.PI / 2, 0, 0), "brass"],
+        [at(new THREE.SphereGeometry(0.011, 8, 6), 0, -0.139, 0), "iron"],
+    ], "handbell");
+}
+
 // A long-handled tool, held upright in one hand as a staff is (the grip at its middle): a hay
 // fork's three iron tines at its top, or a broom's birch twigs bound at its foot
 function pitchfork() {
@@ -1997,7 +2015,8 @@ function fittedCoif(fit, { hood = false, material = "linen" } = {}) {
 
 // A hat sat on the head where it's widest (a hat's rim, tipped back a little): its band round the
 // head there, its crown rising from the band (`kind`: a straw hat's, straight-sided and flat
-// topped; a wizard's, a tall cone bent back) and its brim out from the band's foot
+// topped; a wizard's, a tall cone bent back; a crier's, low and rounded, of felt) and its brim out
+// from the band's foot; a crier's with a long plume from its band over the left ear, curling back
 function fittedHat(fit, kind) {
     const head = new HeadMap(fit.head);
     const line = rimLine(head, "hat");
@@ -2014,20 +2033,23 @@ function fittedHat(fit, kind) {
     // (The ring `scale` of the way out from the middle, `rise` above the band's highest point, bent back `back`)
     const around = (scale, rise, back = 0) => base.map((p) => new THREE.Vector3(middle.x + (p.x - middle.x) * scale, top + rise, middle.z + (p.z - middle.z) * scale - back));
     const straw = kind === "strawHat";
+    const crier = kind === "crierHat";
     const crown = straw
         ? [base, around(0.97, 0.03), around(0.9, 0.1), around(0.86, 0.12), around(0.4, 0.125), around(0.02, 0.126)]
-        : [base, ...[0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1].map((t) => around(Math.max(0.02, 1 - t), 0.3 * t, (t ** 2.5) * 0.13))];
+        : crier
+          ? [base, around(0.98, 0.025), around(0.93, 0.06), around(0.8, 0.09), around(0.55, 0.105), around(0.02, 0.11)]
+          : [base, ...[0.15, 0.3, 0.45, 0.6, 0.75, 0.9, 1].map((t) => around(Math.max(0.02, 1 - t), 0.3 * t, (t ** 2.5) * 0.13))];
     // Its brim out from the foot of the crown, drooping towards its edge (a wizard's, more), as
     // thick as its stuff
     const foot = ring(-0.001, LINING + 0.004);
-    const [brim, droop, thick] = straw ? [2.15, 0.016, 0.004] : [1.9, 0.014, 0.003];
+    const [brim, droop, thick] = straw ? [2.15, 0.016, 0.004] : crier ? [1.75, 0.01, 0.004] : [1.9, 0.014, 0.003];
     const brimRing = (t) => foot.map((p) => new THREE.Vector3(middle.x + (p.x - middle.x) * (1 + (brim - 1) * t), p.y - droop * t ** 2, middle.z + (p.z - middle.z) * (1 + (brim - 1) * t)));
     const brimRings = [0, 0.35, 0.7, 1].map(brimRing);
     const below = (points) => points.map((p) => p.clone().add(new THREE.Vector3(0, -thick, 0)));
     const edge = brimRings.at(-1);
-    const stuff = straw ? "straw" : "cloth";
+    const stuff = straw ? "straw" : crier ? "felt" : "cloth";
     const parts = [
-        [headPlate(head, { bottom: (a) => head.upAt(a, line(a)), top: (a) => head.upAt(a, line(a) + BAND), out: () => LINING + 0.001, thickness: 0.002, steps: [STEPS, 2] }), straw ? "darkLeather" : "brass"],
+        [headPlate(head, { bottom: (a) => head.upAt(a, line(a)), top: (a) => head.upAt(a, line(a) + BAND), out: () => LINING + 0.001, thickness: 0.002, steps: [STEPS, 2] }), straw ? "darkLeather" : crier ? clothOf("#8b1e24") : "brass"],
         [loft(crown), stuff],
         [loft(crown, true), stuff],
         [loft(brimRings), stuff],
@@ -2035,8 +2057,37 @@ function fittedHat(fit, kind) {
         [loft([below(edge), edge]), stuff],
     ];
 
+    // (A crier's plume: rooted in the band over the left ear, rising, sweeping back and curling down)
+    if (crier) {
+        const root = head.point(PLUME.around, head.upAt(PLUME.around, line(PLUME.around) + BAND), LINING + 0.006);
+
+        parts.push(...plumeOf([root.x, root.y, root.z]));
+    }
+
     return assemble(parts, "hat");
 }
+
+// A crier's plume: where round the head it's rooted (radians from the front, towards the left),
+// the way it goes from there (metres: up and back, curling down at its tip), and how thick it is
+// at its root and its tip (metres)
+const PLUME = Object.freeze({ around: 1.75, curve: [[0, 0, 0], [0.012, 0.055, -0.02], [0.02, 0.1, -0.08], [0.024, 0.105, -0.16], [0.018, 0.075, -0.23], [0.01, 0.04, -0.26]], thick: [0.014, 0.004] });
+
+// A crier's hat, not fitted to a head: a low rounded crown of black felt, a crimson band, a brim,
+// and a plume over the left ear sweeping back
+function crierHat(radius) {
+    const r = radius * 1.08;
+    const root = [r * 0.98, r * 0.42, -r * 0.1];
+
+    return assemble([
+        [at(new THREE.SphereGeometry(r * 0.98, 24, 10, 0, Math.PI * 2, 0, Math.PI * 0.5).scale(1, 0.75, 1), 0, r * 0.38, 0), "felt"],
+        [at(new THREE.CylinderGeometry(r * 1.75, r * 1.78, r * 0.035, 32), 0, r * 0.3 - 0.01, 0), "felt"],
+        [at(new THREE.CylinderGeometry(r * 1.0, r * 1.0, r * 0.13, 24, 1, true), 0, r * 0.38, 0), clothOf("#8b1e24")],
+        ...plumeOf(root),
+    ], "hat");
+}
+
+// The plume's parts, rooted at `root` ([x, y, z] metres): its shaft, and its tip's round end
+const plumeOf = ([x0, y0, z0]) => taperedTube(PLUME.curve.map(([x, y, z]) => [x0 + x, y0 + y, z0 + z]), PLUME.thick[0], PLUME.thick[1], { segments: 18, sides: 8 }).map((geometry) => [geometry, "plume"]);
 
 /** Build an item's model. `fit` says how big the body is: { headRadius, scale, ears (a cat's: a helm opens round them), skull (under head-wear) }. */
 export function buildItem(model, fit = {}) {
@@ -2151,6 +2202,8 @@ export function buildItem(model, fit = {}) {
             return firewood();
         case "jug":
             return jug();
+        case "handbell":
+            return handbell();
         case "pitchfork":
             return pitchfork();
         case "broom":
@@ -2179,6 +2232,12 @@ export function buildItem(model, fit = {}) {
             }
 
             return fitted(strawHat(headRadius), fit.skull, { across: headRadius * 1.08 * 0.97, band: [headRadius * 1.08 * 0.27 - 0.01, headRadius * 1.08 * 1.6], back: headRadius * 1.08 * 0.97 });
+        case "crierHat":
+            if (fit.head) {
+                return fittedHat(fit, model);
+            }
+
+            return fitted(crierHat(headRadius), fit.skull, { across: headRadius * 1.08 * 0.97, band: [headRadius * 1.08 * 0.27 - 0.01, headRadius * 1.08 * 1.2], back: headRadius * 1.08 * 0.97 });
         case "coif":
             if (fit.head) {
                 return fittedCoif(fit);

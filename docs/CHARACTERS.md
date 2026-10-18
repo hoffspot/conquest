@@ -912,6 +912,17 @@ the right, so the left's free for what they do at their ease. The motion check w
 with what they carry (`carry/<thing>`), and plays their rests with each thing in hand
 (`rest/townsfolk/<n>/<thing>`), each people's own of it (`dress.js` `theirs`).
 
+A place's crier (docs/GAME.md *The crier*) wears his people's livery and its chain of office, as
+their officials do (`liveries.js` `LIVERY.crier`), and a hat of his own (`items.js` `crierHat`, a
+hat fitted as the straw hat is: black felt, its crown low and rounded, a crimson band, a smaller
+brim, and a long ivory plume rooted in the band over the left ear, rising and sweeping back, its
+tip curling down; not over a cat's ears). He carries his handbell by its handle in his right hand,
+as a jug (`handbell`: a turned wooden handle, the brass bell below the fist, mouth down, its clapper
+in it). At his ease he rings it high, tipped back as a tankard raised in a toast is, rocked back
+and forth (`actions.js` `RINGING`), or cries the news with his left hand raised high and open, swept
+out to the side as he calls the other way (`CRYING_OUT`: a hand cupped at the mouth folded the
+elbow further than his sleeve follows); the motion check plays both (`rest/crier/<n>`).
+
 #### Each people's everyday dress
 
 The other peoples' townsfolk, and the folk of their taverns and churches about their own business

@@ -66,7 +66,7 @@ import { CHAT, PACE } from "../core/netplay.js";
 import { WorldRunner } from "../core/runner.js";
 import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
-import { peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
+import { CRY, newsCount, newsSince, peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { cultNear, cultWays, cultWord } from "../core/cultword.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { RESOURCES, RISING, STAGES } from "../core/war/war.js";
@@ -669,6 +669,9 @@ const HANG = Object.freeze({ under: 0.9, least: 3.4, most: 6, roof: 4.6 });
 
 // How fast the camera's shaking dies away (a share of it, a second)
 const SHAKE_DIES = 4;
+
+// A place's crier, by his id (core/townsfolk.js crierOf)
+const CRIER = /^crier:/;
 
 // What the host tells of besides the battle's events (#hear)
 const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party"]);
@@ -4365,7 +4368,7 @@ export class Game {
         minimap.draw({
             player: actor.dead ? null : { x: me.object.position.x - ox, z: me.object.position.z - oz, facing: me.facing },
             // (Not one lurking unseen overhead: battle.js #lurk)
-            others: battle.actors.filter((other) => other !== actor && !other.dead && !other.lurking && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite).map((other) => {
+            others: battle.actors.filter((other) => other !== actor && !other.dead && !other.lurking && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite && !CRIER.test(other.id)).map((other) => {
                 const position = this.avatars.get(other.id).object.position;
 
                 return { x: position.x - ox, z: position.z - oz, hostile: this.battle.hostile(other, actor), targeted: other === target, ally: Boolean(this.allied?.has(other.id)) };
@@ -4373,6 +4376,9 @@ export class Game {
             // (The wild's elites, marked their own way as soon as they're near enough: core/
             // creatures.js ELITES `marker`, drawn or not)
             elites: battle.actors.filter((other) => other.wild?.elite && !other.dead && other.map === this.mapId && Math.hypot(other.x - actor.x, other.y - actor.y) <= ELITES.marker).map((other) => ({ x: other.x, z: other.y, targeted: other === target })),
+            // (The criers out, each marked with his bell, at the edge the way he is if he's
+            // further than shown: core/townsfolk.js crierOf)
+            criers: battle.actors.filter((other) => CRIER.test(other.id) && other.map === this.mapId).map((other) => ({ x: other.x, z: other.y })),
             // (Not while held input steers them: where its order reaches is just a little way
             // on ahead of them, never where they're going)
             destination: actor.order?.type === "move" && !this.steering?.steering ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
@@ -5223,9 +5229,10 @@ export class Game {
 
         const soldier = npc.kind === "soldier" ? this.#soldierWords(npc) : null;
         const names = {};
-        const official = this.#officialOf(npc, building, names);
         // (One of the townsfolk out in the streets: theirs, and the place they're of)
         const out = !building ? this.host.folk.get(npc.id) : null;
+        // (An official's words, and what they ask and do; or a crier's, his news)
+        const official = this.#officialOf(npc, building, names) ?? this.#crierOf(npc, out, names);
         const title = soldier?.title ?? folk.find(({ id }) => id === npc.id)?.title ?? out?.title ?? ROLES[npc.role]?.title ?? "";
         Object.assign(names, Object.fromEntries(folk.map(({ id, local = id, name }) => [local, name.split(" ")[0]])));
 
@@ -5340,6 +5347,44 @@ export class Game {
         this.talk.show({ name: npc.name, title, card: this.talking.guild ? this.guildCard() ?? { title: null } : null }, conversation);
         this.sound?.play("talk");
         this.#keepTalks();
+    }
+
+    // A crier's talk (docs/GAME.md *The crier*), as an official's is (#officialOf's: { words,
+    // check, handles, effect }): the war's news since the player last listened to any crier, as
+    // it's cried where he stands (news.js newsSince), how much of it there is ({newsCount}), and a
+    // few pieces of it at a time ({news}, CRY.page, each `hear` of it: the player's cursor moved on
+    // past them, kept with what they've talked of, memory.news); whether there's more ({ news }),
+    // and whether the war's gone on past where they last listened ({ rolled }). Null for anyone
+    // else, or with no war
+    #crierOf(npc, out, names) {
+        const war = this.host.war;
+        const plan = this.world.plan;
+        const at = out && ([...(plan?.places ?? []), ...(plan?.sites ?? [])].find(({ id }) => id === out.place)?.at ?? this.world.start?.at);
+
+        if (npc.role !== "crier" || !war || !at) {
+            return null;
+        }
+
+        const memory = this.memory;
+        const { told, rolled } = newsSince(war, at, memory.news ?? null);
+        let heard = 0;
+
+        return {
+            words: { newsCount: newsCount(told.length), news: "" },
+            check: (condition) => ("news" in condition ? (heard < told.length) === condition.news : "rolled" in condition ? rolled === condition.rolled : true),
+            handles: (effect) => Boolean(effect.hear),
+            effect: () => {
+                const cried = told.slice(heard, heard + CRY.page);
+
+                heard += cried.length;
+                names.news = cried.map(({ words }) => words).join(" ");
+
+                if (cried.length) {
+                    memory.news = cried.at(-1).after;
+                    this.#keepTalks();
+                }
+            },
+        };
     }
 
     // The war's news as it's heard where the player's talking (docs/WAR.md M8): {rumour1} to

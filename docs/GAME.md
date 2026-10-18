@@ -670,6 +670,35 @@ got ready: only there to be seen about, they keep neither the town's guards wait
 nor a tavern's folk waiting on their skins (seed 2's start town: its 6 guards drawn as soon as
 before, its 8 townsfolk within a few seconds after).
 
+#### The crier
+
+Every settlement with a square to cry the news in (a village and bigger) has its crier, and every
+castle its herald (`CRIERS`: a village crier, a town crier, a castle's herald; none in a hamlet or
+a farmstead). He comes out and goes home with his place's townsfolk, but always out, by night as
+by day (`crierOf`, id `crier:<place>`, his role `crier`), named and seeded from the place and the
+world's seed, as they are.
+
+- **Where**: by the market's middle, facing it (not on it: a new hero first stands there), then by
+  its well (a castle's heart, then before its keep's door), a long while at each (`CRYING`: 20 to
+  40 seconds in the square, 8 to 16 by the well).
+- **Looks**: in his people's livery and its chain of office, as a town's officer is
+  (characters/liveries.js `LIVERY.crier`), and a hat of his own (characters/items.js `crierHat`:
+  black felt, low and rounded, a crimson band, a long ivory plume over the left ear sweeping back;
+  none over a cat's ears). His handbell is by its handle in his right hand, as a jug is carried
+  (`handbell`: a turned wooden handle, the brass bell below the fist, its clapper in it).
+- **At his ease** (`ROLES.crier`, characters/actions.js): ringing his bell high, rocked back and
+  forth (the news's bell heard from where he stands, `newsHeard`), crying the news with his left
+  hand raised high and open to whoever's about, looking over the square one way and the other (no
+  hand shading his eyes: it would go into his hat's brim), shifting his weight, a glance back.
+- **On the minimap**: each crier out is marked with a bell, at the edge the way he is when he's
+  further than it shows (app/minimap.js `criers`, as the wild's elites are).
+- **Talked to** (`TREES.crier`, app/game.js `#crierOf`): the war's news since the player last
+  listened to any crier (docs/WAR.md *The crier*). How much there is, then three pieces of it at
+  a time (`CRY.page`), oldest first, as long as the player wants to hear more. Where they've heard
+  to is kept with what they've talked of (their talk memory's `news`), so another crier goes on
+  where the last left off. Never having listened, they hear the latest five (`CRY.first`); away so
+  long the war's log has gone on past them, he says so.
+
 ## The battle (core/battle.js)
 
 The battle runs in fixed steps of 50 ms, the same on every device, whatever the frame rate.

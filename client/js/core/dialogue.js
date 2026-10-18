@@ -964,6 +964,46 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // A place's crier in its square (core/townsfolk.js crierOf): the war's news since the player
+    // last listened to any crier, how much there is ({newsCount}), then a few pieces of it at a
+    // time ({news}: each `hear` of it heard, app/game.js #crierOf); whether there's more ({ news }),
+    // and whether the war's gone on past where they last listened ({ rolled })
+    crier: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { all: [{ news: true }, { rolled: true }] }, lines: ["Oyez! You've been gone so long, {player}, more's happened than I can cry. Here's the latest of it.", "Hear ye! Where have you been? There's more news than I can cry since you last heard me. The latest, then."] },
+                    { if: { news: true }, lines: ["Oyez! Oyez! Oyez! I've {newsCount} since you last stopped to hear me, {player}.", "Hear ye, hear ye! I've {newsCount} for you, friend. Gather close.", "Oyez! You'll want to hear this: I've {newsCount} since you were last by."] },
+                    { lines: ["Oyez! Nothing new since you last heard me, friend. All's well in {town}.", "Not a word more since last you listened. Come back by, and I'll have more.", "No news is good news, they say. I've none since last you heard me."] },
+                ],
+                choices: [
+                    { if: { news: true }, say: "Let's hear it.", next: "news", do: [{ hear: "news" }] },
+                    { say: "What does a crier do?", next: "crier" },
+                    { say: "Carry on.", next: null },
+                ],
+            },
+            news: {
+                say: ["{news}", "Hear ye! {news}", "{news} So it's cried!"],
+                choices: [
+                    { if: { news: true }, say: "Go on.", next: "news", do: [{ hear: "news" }] },
+                    { if: { news: true }, say: "That'll do for now.", next: "done" },
+                    { if: { news: false }, say: "Is that all?", next: "done" },
+                ],
+            },
+            done: {
+                say: ["That's the news, {player}. God keep {town}!", "So it's cried. God keep {town}!", "That's all I have for now. Come back by: there's always more."],
+                choices: [{ say: "Thank you.", next: null }],
+            },
+            crier: {
+                say: ["I cry the news of the war in {town}'s square: what's won and lost, who's marching and who's fallen. Stop by whenever you pass, and you'll miss none of it.", "The town's ears, I am, and its mouth. Whatever's heard of the war, I cry here, day and night."],
+                choices: [
+                    { if: { news: true }, say: "Then let's hear it.", next: "news", do: [{ hear: "news" }] },
+                    { say: "Good day.", next: null },
+                ],
+            },
+        },
+    },
     // An adventurer at the guild: seasoned, a little wry, glad to give advice
     adventurer: {
         start: "greet",

@@ -43,7 +43,7 @@ import { brokenOf, SIDES, STOCKADE, walkwayOf } from "./war/stockade.js";
 import { ARMY, CAMP as ARMY_CAMP } from "./war/armies.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } from "./war/war.js";
-import { countOut, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
+import { countOut, crierOf, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles } from "./navigation.js";
 import { FORTS, footprintOf } from "./war/forts.js";
@@ -3463,7 +3463,9 @@ export class Host {
     }
 
     // A place's townsfolk out: where they go (its layout's errands, or its wards'), who they are,
-    // each starting where no player sees them come out (if they can), on a square of their own
+    // each starting where no player sees them come out (if they can), on a square of their own;
+    // and its crier in its square, if it has one (core/townsfolk.js crierOf), coming and going
+    // with them
     #outward({ id, kind, people, name, set }) {
         const town = this.world.maps.town;
         const squares = squaresOf(town);
@@ -3485,10 +3487,11 @@ export class Host {
         const players = [...this.players.keys()].map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead);
         const unseen = (square) => !players.some((actor) => this.battle.canSee(actor, { map: "town", square }));
         const folk = townsfolkOf({ place: id, kind, people, name, errands, count: countOut(kind, torchesLit(elapsedOf(this.war))), seed: this.world.seed ?? 1, start: unseen });
+        const crier = crierOf({ place: id, kind, people, name, errands, seed: this.world.seed ?? 1 });
         const spot = this.#spots();
         const ids = [];
 
-        for (const one of folk) {
+        for (const one of [...folk, ...(crier ? [crier] : [])]) {
             try {
                 one.square = spot([one.square[0] + 0.5, one.square[1] + 0.5]);
             } catch {

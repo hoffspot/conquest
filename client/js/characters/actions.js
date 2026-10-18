@@ -1352,6 +1352,37 @@ const GLANCING_BACK = variant("a glance back", { ...spine({}), Head: { turn: 0, 
     [1, { ...spine({ turn: 12 }), Head: { turn: 36, flex: -4 } }],
     [1.6, { ...spine({ turn: 0 }), Head: { turn: 0, flex: 0 } }]);
 
+// A crier's handbell (in the right hand, by its handle, the bell below the fist) raised high,
+// tipping back as it rises (as a tankard raised in a toast does: ATTACKS.toast), and rung, rocked
+// back and forth, a stroke with each swing back (key 1 the first), then lowered
+const BELL_HIGH = { at: [0.1, 0.56, 0.52], point: [0.05, 0.8, -0.6] };
+const bellSwung = (back) => ({ at: [0.1, 0.56 + back * 0.02, 0.52 - back * 0.03], point: back > 0 ? [0.05, 0.62, -0.78] : [0.05, 0.92, -0.38] });
+const RINGING = variant("ringing the bell", { ...spine({}), Head: { flex: 0 } },
+    [0.6, { right: BELL_HIGH, ...spine({ flex: -3 }), Head: { flex: -6 } }],
+    [0.8, { right: bellSwung(-1) }],
+    [1, { right: bellSwung(1), ...spine({ flex: -4 }), Head: { flex: -8 } }],
+    [1.2, { right: bellSwung(-1) }],
+    [1.4, { right: bellSwung(1) }],
+    [1.6, { right: BELL_HIGH, ...spine({ flex: -2 }), Head: { flex: -4 } }]);
+
+// A crier crying the news: the left hand raised high and open to whoever's about, the head up,
+// calling one way and then the other, the hand swept out to the side with it (the elbow kept open:
+// a hand cupped at the mouth folds it further than a sleeve follows)
+const PROCLAIMING = { at: [0.22, 0.62, 0.48], palm: [0.15, 0.1, 0.98], towards: [0.1, 0.97, -0.15], shape: "open" };
+const CRYING_OUT = variant("crying the news", { ...spine({}), Head: { flex: 0, turn: 0 } },
+    [0.5, { left: PROCLAIMING, ...spine({ flex: -2 }), Head: { flex: -6 } }],
+    [1, { left: PROCLAIMING, ...spine({ flex: -5 }), Head: { flex: -12 } }],
+    [1.45, { left: { ...PROCLAIMING, at: [0.48, 0.5, 0.3], palm: [0.7, 0.1, 0.7] }, ...spine({ flex: -4, turn: -8 }), Head: { flex: -10, turn: -16 } }],
+    [1.75, { left: { at: [0.3, -0.2, 0.3] }, ...spine({}), Head: { flex: 0, turn: 0 } }]);
+
+// A crier looking over the square one way and then the other, no hand raised to shade his eyes
+// (its brim's his hat's)
+const LOOKING_OVER_THE_SQUARE = variant("looking about", { ...spine({}), Head: { turn: 0, flex: 0 } },
+    [0.5, { ...spine({ turn: 10 }), Head: { turn: 24, flex: -3 } }],
+    [1, { ...spine({ turn: 12 }), Head: { turn: 28, flex: -4 } }],
+    [1.35, { ...spine({ turn: -12 }), Head: { turn: -28, flex: -4 } }],
+    [1.7, { ...spine({ turn: 0 }), Head: { turn: 0, flex: 0 } }]);
+
 const KEYED_RESTS = {
     ...BASE_RESTS,
     reeve: [renamed(BARKEEP_RESTS[3], "arms folded"), LOOKING_OVER, renamed(BARKEEP_RESTS[1], "a hand to the chin"), PRIEST_RESTS[4], renamed(BARKEEP_RESTS[4], "rubbing the neck")],
@@ -1362,6 +1393,9 @@ const KEYED_RESTS = {
     sentry: [HELMED_LOOKING, ADVENTURER_RESTS[2], ARMED_SHIFTING, ARMED_FOLDED, ARMED_CLASPED],
     // (The townsfolk's, the left hand's alone or no hand's: what's carried stays in the right)
     townsfolk: [ADVENTURER_RESTS[1], renamed(BARMAID_RESTS[4], "stretching the back"), ADVENTURER_RESTS[3], ADVENTURER_RESTS[4], GLANCING_BACK],
+    // (A crier's: his bell rung high, the news cried, looking over the square, and the
+    // townsfolk's, his bell kept in his right)
+    crier: [RINGING, CRYING_OUT, LOOKING_OVER_THE_SQUARE, ADVENTURER_RESTS[4], GLANCING_BACK],
     petitioner: [renamed(WORSHIPPER[1], "waiting, head bowed"), renamed(PATRON[4], "looking about"), WORSHIPPER[4], renamed(BARKEEP_RESTS[4], "rubbing the neck"), renamed(WORSHIPPER[2], "looking up")],
     // A castle's undercroft's traders: its quartermaster behind the armoury's counter, and its
     // arcanist among their jars

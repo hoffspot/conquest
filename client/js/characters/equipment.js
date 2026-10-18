@@ -228,6 +228,8 @@ export const ITEMS = Object.freeze({
     sack: { label: "Sack", slot: "back", model: "sack", socket: "back", garment: "straps" },
     firewood: { label: "Firewood", slot: "back", model: "firewood", socket: "back", garment: "straps" },
     jug: { label: "Jug", slot: "mainHand", model: "jug", socket: "rightHand", grips: true, hold: HOLDS.tankard },
+    // (A crier's handbell by its handle, as a jug: core/townsfolk.js crierOf)
+    handbell: { label: "Handbell", slot: "mainHand", model: "handbell", socket: "rightHand", grips: true, round: 0.014, hold: HOLDS.tankard },
     pitchfork: { label: "Hay fork", slot: "mainHand", model: "pitchfork", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.016, hold: HOLDS.staff },
     broom: { label: "Broom", slot: "mainHand", model: "broom", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.015, hold: HOLDS.staff },
     walkingStaff: { label: "Walking staff", slot: "mainHand", model: "walkingStaff", socket: "rightHand", turn: [0.25, 0, 0], grips: true, round: 0.017, hold: HOLDS.staff },
@@ -241,6 +243,8 @@ export const ITEMS = Object.freeze({
     lizardBasket: { label: "Reed basket", slot: "mainHand", model: "lizardBasket", socket: "rightHand", grips: true, round: 0.008, hold: HOLDS.basket },
     orcBasket: { label: "Stick basket", slot: "mainHand", model: "orcBasket", socket: "rightHand", grips: true, round: 0.013, hold: HOLDS.basket },
     strawHat: { label: "Straw hat", slot: "head", model: "strawHat", socket: "head", hides: ["hair"], rim: "hat" },
+    // (A crier's: black felt, a crimson band, a long ivory plume over the left ear)
+    crierHat: { label: "Crier's plumed hat", slot: "head", model: "crierHat", socket: "head", hides: ["hair"], rim: "hat" },
     coif: { label: "Linen coif", slot: "head", model: "coif", socket: "head", hides: ["hair"], rim: "coif" },
     hood: { label: "Wool hood", slot: "head", model: "hood", socket: "head", hides: ["hair"], rim: "hood" },
     // (And each people's own on their heads, dress.js: the elves' silver circlet, the dark elves'
