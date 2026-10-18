@@ -2,7 +2,8 @@
 // somewhere near the player and under the roof, a thin stream of grains falls from it to the floor
 // for a second or two, dust sifting up where it lands, as if something were digging overhead.
 // Drawn as the fights' sparks and dust are (effects.js BURSTS: `trickle`, `sift`), in their one
-// shared buffer: nothing more to draw. Only looks, so it's chosen as it plays (`random`).
+// shared buffer: nothing more to draw; heard where it falls (synth.js soilTrickle: app/game.js
+// plays it as one starts, `started`). Only looks and sounds, so it's chosen as it plays (`random`).
 
 import * as THREE from "three";
 
@@ -25,8 +26,10 @@ export class Trickles {
     /** As if just come in (a new place): none running, the first a little while off. */
     reset() {
         this.wait = this.#between(TRICKLE.first);
-        // (The one running: where, from how high, how long it has left, and the bursts owed)
+        // (The one running: where, from how high, how long it has left, and the bursts owed; and
+        // the one that started this frame, if one did)
         this.running = null;
+        this.started = null;
     }
 
     /**
@@ -36,6 +39,7 @@ export class Trickles {
      */
     update(dt, at, roofAt) {
         this.bursts.length = 0;
+        this.started = null;
 
         if (this.running) {
             const now = this.running;
@@ -77,6 +81,7 @@ export class Trickles {
 
             if (roof !== null && roof >= TRICKLE.least) {
                 this.running = { x, z, top: roof - 0.05, left: this.#between(TRICKLE.lasts), grains: 1, sifts: 0 };
+                this.started = this.running;
 
                 return this.bursts;
             }

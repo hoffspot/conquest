@@ -24,7 +24,7 @@
 // them), so they're tested in Node.
 
 import { createRandom } from "../core/random.js";
-import { add, count, filter, finish, hit, noise, pluck, shape, swell, tone } from "./dsp.js";
+import { add, count, filter, finish, hit, noise, pluck, SAMPLE_RATE, shape, swell, tone } from "./dsp.js";
 
 export { LEVEL, loudness, SAMPLE_RATE } from "./dsp.js";
 
@@ -58,6 +58,28 @@ const thud = (from, to, length, decay = length / 4) => shape(tone(length, (t) =>
 
 // A burst of noise through a filter, shaped as a hit
 const burst = (random, length, type, frequency, q, attack, decay) => shape(filter(noise(random, length), type, frequency, q), hit(attack, decay));
+
+// A patter of tiny hard things: `rate` clicks a second at random (as many as `density(t)`, 0 to 1,
+// says), each as loud as it happens to be, rung through a band-pass at `frequency`
+function patter(random, length, rate, frequency, q, density = () => 1) {
+    const out = new Float32Array(count(length));
+
+    for (let n = 0; n < out.length; n++) {
+        if (random.next() < (rate * density(n / SAMPLE_RATE)) / SAMPLE_RATE) {
+            out[n] = (random.next() < 0.5 ? -1 : 1) * (0.25 + 0.75 * random.next() ** 2);
+        }
+    }
+
+    return filter(out, "bandpass", frequency, q);
+}
+
+// Its peaks rounded off (the harder the more `drive`), so a sound of sharp clicks is as loud as
+// the others without clipping
+function rounded(samples, drive) {
+    const most = samples.reduce((top, value) => Math.max(top, Math.abs(value)), 0);
+
+    return samples.map((value) => Math.tanh((drive * value) / most));
+}
 
 // Metal ringing: inharmonic partials, each fading at its own rate
 function ring(partials, length) {
@@ -698,6 +720,46 @@ export const SOUNDS = {
             const most = out.reduce((top, value) => Math.max(top, Math.abs(value)), 0);
 
             return out.map((value) => Math.tanh((2.5 * value) / most));
+        },
+    },
+    // An ants' nest's: soil trickling from its roof to the floor (world/trickles.js), a dry patter of
+    // grains thickening and thinning over a soft sandy hiss, a clod or two landing among them; and
+    // its colony heard at work in the earth round about, thousands of feet scrabbling, slowed and
+    // deepened as a giant's would be, swelling and dying away (one after another, overlapping:
+    // sound.js setAmbience's `murmur`)
+    soilTrickle: {
+        variants: 2,
+        volume: 0.32,
+        bus: "environment",
+        make: (random) => {
+            const length = 1.5 + random.next() * 0.35;
+            const phase = random.next() * TAU;
+            const flow = (t) => Math.min(1, t / 0.12) * Math.min(1, (length - t) / 0.6) * (0.75 + 0.25 * Math.sin(t * 9 + phase));
+            const grains = patter(random, length, 320, 3600, 1.3, flow);
+            const fine = patter(random, length, 1400, 6800, 0.9, flow);
+            const hiss = shape(filter(filter(noise(random, length), "highpass", 2400), "lowpass", 8000), flow);
+            let out = add(add(grains, fine, 0.4), hiss, 0.04);
+
+            for (let k = 0, clods = 1 + Math.floor(random.next() * 3); k < clods; k++) {
+                out = add(out, burst(random, 0.06, "bandpass", 450 + random.next() * 450, 1.2, 0.0008, 0.012), 0.35 + random.next() * 0.3, 0.15 + random.next() * (length - 0.8));
+            }
+
+            return rounded(out, 4);
+        },
+    },
+    colonyRustle: {
+        variants: 3,
+        volume: 0.2,
+        bus: "environment",
+        make: (random) => {
+            const length = 1.6 + random.next() * 0.3;
+            const [a, b] = [random.next() * TAU, random.next() * TAU];
+            const swells = (t) => Math.sin((Math.PI * t) / length) ** 1.5 * (0.65 + 0.2 * Math.sin(t * 3.1 + a) + 0.15 * Math.sin(t * 7.3 + b));
+            const feet = patter(random, length, 900, 1300, 1.1, swells);
+            const nearer = patter(random, length, 70, 2400, 1.5, swells);
+            const mass = shape(filter(filter(noise(random, length), "lowpass", 520), "highpass", 120), swells);
+
+            return rounded(add(add(feet, nearer, 0.7), mass, 0.04), 4);
         },
     },
     leaves: {

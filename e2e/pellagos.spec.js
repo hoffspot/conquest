@@ -9062,7 +9062,7 @@ test("a dungeon whose creatures are drawn from models: theirs fetched, not read,
     expect(near).toEqual({ fetching: true, hurried: 0, read: false, made: false });
 });
 
-test("an ants' nest: its creatures' models got ready at its door, the card naming them; gone in, its ants drawn from their model, lent the Ant Monster's fall; its fallen lying about it, one searched; lit by the fungus on its walls and the light the player carries, in its own close dusty air, spores drifting, soil trickling; its midden heaped with the gear of those the ants killed, dug earth heaped where other dungeons have fallen rock, roots through its roof, a web about each widow", async ({ page }) => {
+test("an ants' nest: its creatures' models got ready at its door, the card naming them; gone in, its ants drawn from their model, lent the Ant Monster's fall; its fallen lying about it, one searched; lit by the fungus on its walls and the light the player carries, in its own close dusty air, spores drifting, soil trickling; heard in its own still earth, its colony murmuring round about, something chittering far off, the soil heard where it falls; its midden heaped with the gear of those the ants killed, dug earth heaped where other dungeons have fallen rock, roots through its roof, a web about each widow", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
@@ -9199,11 +9199,18 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
         const at = game.avatars.get(game.me).object.position;
         const fungus = meshes.find(({ name }) => name === "fungus");
 
-        // (A trickle let start now, and a frame or two of its grains)
+        // (A trickle let start now, and a frame or two of its grains; what's played meanwhile)
         const before = game.effects.dust.live.length;
+        const asked = [];
+        const play = game.sound.play.bind(game.sound);
 
+        game.sound.play = (name, options = {}) => (asked.push({ name, at: options.at ? { x: options.at.x, z: options.at.z } : null, far: options.far }), play(name, options));
         game.trickles.wait = 0;
         await step(3);
+        game.sound.play = play;
+
+        const fell = asked.find(({ name }) => name === "soilTrickle");
+        const sound = session.sound;
 
         return {
             glows: level.lights.filter(({ kind }) => kind === "glow").length,
@@ -9215,6 +9222,13 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
             air: { near: view.scene.fog.near, far: view.scene.fog.far, colour: view.scene.fog.color.getHex(), sees: view.camera.far, dust: [MIST.value.x, MIST.value.w] },
             motes: { kind: game.motes.kind, shown: game.motes.object.visible },
             trickle: { running: Boolean(game.trickles.running), grains: game.effects.dust.live.length - before, under: game.trickles.running ? interior.roof(game.trickles.running.x, game.trickles.running.z) - game.trickles.running.top : null },
+            heard: {
+                place: sound.place,
+                beds: [...sound.beds].filter(([, { gain }]) => gain > 0).map(([name]) => name).sort(),
+                calls: Object.keys(sound.calls),
+                murmur: sound.murmur,
+                fell: fell ? { far: fell.far, where: game.trickles.running ? Math.hypot(fell.at.x - game.trickles.running.x, fell.at.z - game.trickles.running.z) : null } : null,
+            },
         };
     });
 
@@ -9232,6 +9246,7 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
     expect(lit.trickle.running).toBe(true);
     expect(lit.trickle.grains).toBeGreaterThan(0);
     expect(lit.trickle.under).toBeCloseTo(0.05, 2);
+    expect(lit.heard).toMatchObject({ place: "nest", beds: ["caveDrips", "cryptLoop"], calls: ["spiderCall"], murmur: "colonyRustle", fell: { far: 16, where: 0 } });
 
     // (Its story: the heap of what it's thrown out in its midden, the gear of those the ants
     // killed on it; heaps of the earth they've dug where other dungeons have fallen rock, no

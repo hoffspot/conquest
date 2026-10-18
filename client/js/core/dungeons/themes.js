@@ -196,7 +196,7 @@ export const THEMES = {
         lands: { savannah: 4, badlands: 3, meadow: 2, farmland: 2, heath: 2, jungle: 2 },
         style: "dungeon-caves",
         ground: GROUND.soil,
-        sound: "cave",
+        sound: "nest",
         names: {
             forms: ["the {adj} Nest", "the {adj} Mound", "the Ant Hills of {place}", "{place} Warrens", "the {adj} Hive", "the Brood Halls of {place}"],
             adj: ["Teeming", "Seething", "Red", "Biting", "Swarming", "Crawling", "Hollow", "Amber"],

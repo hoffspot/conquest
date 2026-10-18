@@ -9,7 +9,8 @@
 //    round, each as loud as where the player is makes it (a land's wind, water near, the night's
 //    crickets, a town's bustle; indoors, a taproom's crowd, a temple's hush, a cave's drips),
 //    each copy crossfaded into the next; and calls now and then from round about (birds by the
-//    time of day, a town's dogs, a farm's cattle). Downloaded as they're wanted where the player
+//    time of day, a town's dogs, a farm's cattle); in an ants' nest, its colony's murmur, made, one
+//    after another from round about (MURMUR). Downloaded as they're wanted where the player
 //    is, and let go of a minute after they're last heard. Till they're in, the made wind blows
 //    and a made bird sings; and leaves rustle in nearby trees.
 //  - Music: the town's score (score.js), or, in the tavern, its jig (tavern.js), played on
@@ -77,6 +78,8 @@ export const PLACES = Object.freeze({
     // through its stones)
     cave: { score: "town", level: 0.12, muffle: 300 },
     lair: { score: "town", level: 0.1, muffle: 250 },
+    // (In an ants' nest, as deep in the earth as a lair)
+    nest: { score: "town", level: 0.1, muffle: 250 },
     // (In a crypt, the world above barely heard through the hall's floor)
     crypt: { score: "town", level: 0.1, muffle: 280 },
     // (In a ruined keep, open to the sky, the world outside through its broken walls)
@@ -628,6 +631,13 @@ const DRAWN = 0.12;
 // How long between the hearth's crackles (seconds, from and to)
 const CRACKLES = [0.2, 0.9];
 
+/**
+ * A place's murmur (setAmbience's `murmur`: a made sound heard over and over, each overlapping
+ * the last): how long between (seconds, from and to), from how far off round the player (metres),
+ * how far it's heard at all (metres), and muffled through the earth (a low-pass's frequency, Hz).
+ */
+export const MURMUR = Object.freeze({ every: [0.8, 1.5], away: [4, 13], heard: 22, muffle: 2600 });
+
 export class Sound {
     /**
      * @param {object} [options]
@@ -708,11 +718,14 @@ export class Sound {
          * The ambience (setAmbience): its beds (name → { gain, level (its GainNode), next (when
          * its next copy starts, the browser's time), copies ([source]), quiet (since when it's
          * been silent) }); its calls (name → ambience.js's), and when each is next heard
-         * (name → seconds from now).
+         * (name → seconds from now); its murmur (a made sound's name, or null), and when it's next
+         * heard (seconds from now).
          */
         this.beds = new Map();
         this.calls = {};
         this.due = new Map();
+        this.murmur = null;
+        this.nextMurmur = 0;
         this.hearth = null;
         this.nextCrackle = 0;
         this.music = null;
@@ -1114,9 +1127,10 @@ export class Sound {
      * What the ambience is where the player is (ambience.js ambienceOf): { beds ({ name: how
      * loud }: each looped, fading to it; any not named fading out), calls ({ name: ambience.js
      * CALLS' with how loud, how often and where from }), wants (more to download: the folk at
-     * work's sounds) }. Each downloaded now if it isn't yet.
+     * work's sounds), murmur (a made sound heard over and over from round about, MURMUR, or
+     * null) }. Each downloaded now if it isn't yet.
      */
-    setAmbience({ beds = {}, calls = {}, wants = [] } = {}) {
+    setAmbience({ beds = {}, calls = {}, wants = [], murmur = null } = {}) {
         // (The beds first, on their own: not to wait behind the calls' many short recordings)
         this.want(Object.keys(beds));
         this.want([...Object.keys(calls), ...wants]);
@@ -1148,6 +1162,7 @@ export class Sound {
         }
 
         this.calls = calls;
+        this.murmur = murmur;
         this.#tendBeds();
     }
 
@@ -1183,6 +1198,19 @@ export class Sound {
                 this.due.set(name, left - dt);
             } else {
                 this.#call(name, this.calls[name]);
+            }
+        }
+
+        // (The murmur, one after another from round about, each overlapping the last)
+        if (this.murmur) {
+            this.nextMurmur -= dt;
+
+            if (this.nextMurmur <= 0) {
+                const angle = Math.random() * 2 * Math.PI;
+                const far = MURMUR.away[0] + Math.random() * (MURMUR.away[1] - MURMUR.away[0]);
+
+                this.nextMurmur = MURMUR.every[0] + Math.random() * (MURMUR.every[1] - MURMUR.every[0]);
+                this.play(this.murmur, { at: { x: this.listener.x + far * Math.cos(angle), z: this.listener.z + far * Math.sin(angle) }, volume: 0.7 + Math.random() * 0.3, rate: 0.9 + Math.random() * 0.15, far: MURMUR.heard, muffle: MURMUR.muffle });
             }
         }
 
@@ -1685,7 +1713,7 @@ export class Sound {
 
     // A call heard now (ambience.js CALLS): from a tree near, if it's a tree's, or from where it's
     // said to be, or from somewhere round the player; and when it's next heard
-    #call(name, { every, often, volume, away, tree, at, heard, muffle = null }) {
+    #call(name, { every, often, volume, away, tree, at, heard, muffle = null, pitch = 1 }) {
         let from = at;
 
         if (tree) {
@@ -1702,7 +1730,7 @@ export class Sound {
         this.due.set(name, (every[0] + Math.random() * (every[1] - every[0])) / often);
 
         if (from) {
-            this.play(name, { at: from, volume: volume * (0.75 + Math.random() * 0.25), rate: 0.94 + Math.random() * 0.12, far: heard, muffle });
+            this.play(name, { at: from, volume: volume * (0.75 + Math.random() * 0.25), rate: pitch * (0.94 + Math.random() * 0.12), far: heard, muffle });
         }
     }
 

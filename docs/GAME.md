@@ -4103,14 +4103,25 @@ from Freesound, the National Park Service's and the Versilian Community Sample L
   quieter upstairs and in an adventurers' guild; a smithy's forge; a temple's hush, quieter in a
   town hall and quieter still in a shop (papers rustling in both); a crypt's still air (with drips; quieter in a keep, with a brazier in a castle's
   undercroft); a cave's drips; the drake's lair's belching spring; wind through a ruined keep and
-  a watchtower.
+  a watchtower; an ants' nest's close, still earth (the crypt's still air, a little of the cave's
+  drips: its own place, `nest`, a dungeon theme's `sound`).
 - **Calls** (`CALLS`), each from somewhere round the player (or a tree near, or its smithy):
   birdsong by day (every 4 to 14 seconds; more in the woods, fewer in a town or on dry land, none
   up high), the dawn chorus from first light to five minutes after sunrise, crows over open land,
   gulls by the sea, an owl at night, a tree creaking in the woods; in a town, dogs (fewer at
   night), hens and horses, the cock crowing at dawn (on a farm too); cattle and sheep on farmland
   and meadow; the smith's hammer from the smithy by day, through a low-pass filter as from off.
-  A made bird's chirp sings in a recorded bird's place till it's in.
+  A made bird's chirp sings in a recorded bird's place till it's in. In an ants' nest, something
+  chittering far off in its tunnels (every 10 to 28 seconds, 16 to 32 m off): a giant ant's or a
+  spider's call slowed (a call's `pitch`, 0.72) and muffled through the earth (1 kHz).
+- **A murmur** (setAmbience's `murmur`, `MURMUR`): in an ants' nest, its colony heard at work in
+  the earth round about: a made sound (synth.js `colonyRustle`: a patter of tiny clicks, 900 a
+  second at 1.3 kHz, over a low rumble, swelling and dying away in under two seconds) played over
+  and over from 4 to 13 m round the player, every 0.8 to 1.5 seconds, each overlapping the last,
+  muffled (2.6 kHz). Made, not recorded: there's nothing to download.
+- **Soil trickling** in an ants' nest is heard where it falls as it starts (synth.js
+  `soilTrickle`: a dry patter of grains over a soft sandy hiss, a clod or two among them; heard
+  up to 16 m off: app/game.js, world/trickles.js `started`).
 - **A church's bell** in a town at the hours of prayer (6, 9, 12, 15 and 18 o'clock: `TOLLS`),
   three strokes 2.4 seconds apart, from 60 to 120 m off.
 - **Leaves** rustle in a tree within 22 metres (every 2.5 to 7 seconds), from where the tree is;
