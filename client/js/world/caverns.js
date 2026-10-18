@@ -29,12 +29,15 @@ export const CAVERNS = Object.freeze({ step: 0.45, back: 0.2, hollow: 0.55, lean
  *
  * An ants' nest's (`nest`) is dug earth: its chambers flat-roofed and low, the roof at its height
  * soon in from the walls and level over the middle, the walls rounding tightly into it, smooth but
- * for the layers of the earth, which run on level through it from one chamber to the next.
+ * for the layers of the earth, which run on level through it from one chamber to the next. A
+ * hell's Halls of Bone (`flesh`) are flesh: swelling and sagging as it does, its walls leaning in
+ * and rounding over into vaulted halls, as a body's insides are.
  */
 export const SHELLS = Object.freeze({
     caves: { rough: 0.55, lean: 0.35, low: 3.4, high: 6.2, roof: 0.7, span: 7 },
     dug: { rough: 0.2, lean: 0.12, low: 2.9, high: 3.5, roof: 0.18, span: 4 },
     nest: { rough: 0.15, hollow: 0.25, lean: 0.3, low: 3.6, high: 4.6, roof: 0.3, span: 3, cove: 0.5, strata: true },
+    flesh: { rough: 0.38, hollow: 0.4, lean: 0.3, low: 3.4, high: 4.8, roof: 0.45, span: 5, cove: 1 },
 });
 
 /**

@@ -85,8 +85,10 @@ const INSIDE = {
     throne: [124, 84, 46],
     "war-table": [150, 112, 64],
     candles: [70, 66, 62],
-    // (A hell's lava)
+    // (A hell's lava, blood and heart)
     lava: [226, 92, 28],
+    blood: [96, 14, 18],
+    heart: [150, 28, 40],
 };
 
 // Pixels to the metre of the painted map

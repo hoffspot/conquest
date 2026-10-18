@@ -77,20 +77,36 @@ export function rockPictures(name) {
 const rocks = new Map();
 
 /**
+ * What glows in the seams of a level's rock (rockMaterial's `seams`: as much as each point's
+ * `seam` says, brighter in the picture's dark grooves), its colour (linear, as it's added to the
+ * light on the rock) and how it pulses (GLSL, 0 to 1, by the veils' clock `veilTime` and where it
+ * is, `vCutWorld`): the Breach's embers (lava.js embersOn), brightening and dimming in slow waves
+ * across the rock; the Halls of Bone's veins of blood (flesh.js veinsOn), beating as a heart
+ * does, twice and then a rest, a beat every 1.2 seconds, the beat running out across the halls.
+ */
+export const SEAMS = Object.freeze({
+    embers: Object.freeze({ colour: [1.2, 0.22, 0.02], pulse: `0.65 + 0.35 * sin(PI2 * 15.0 * veilTime / ${VEIL.loop.toFixed(1)} + dot(vCutWorld, vec3(0.8, 1.0, 0.6)))` }),
+    veins: Object.freeze({
+        colour: [1.6, 0.12, 0.06],
+        pulse: "0.3 + 0.7 * (exp(-pow(fract(veilTime / 1.2 - dot(vCutWorld.xz, vec2(0.04))) / 0.07, 2.0)) + 0.6 * exp(-pow((fract(veilTime / 1.2 - dot(vCutWorld.xz, vec2(0.04))) - 0.24) / 0.08, 2.0)))",
+    }),
+});
+
+/**
  * The material a level's rock is drawn with, with a picture (ROCK_PICTURES' name); `glow`, its
  * points glowing their own colours too (a `glow` attribute, linear r, g, b: glowfungus.js, and a
- * hell's lava, lava.js poolGlowOn); `embers`, embers glowing in its cracks (an `ember` attribute,
- * 0 to 1: lava.js embersOn).
+ * hell's lava, lava.js poolGlowOn); `seams`, what glows in its cracks (SEAMS' name: a `seam`
+ * attribute, 0 to 1), or nothing; `wet`, glistening (flesh's: flesh.js).
  */
-export function rockMaterial(name, { glow = false, embers = false } = {}) {
-    const key = `${name}${glow ? "+glow" : ""}${embers ? "+embers" : ""}`;
+export function rockMaterial(name, { glow = false, seams = null, wet = false } = {}) {
+    const key = `${name}${glow ? "+glow" : ""}${seams ? `+${seams}` : ""}${wet ? "+wet" : ""}`;
 
     if (rocks.has(key)) {
         return rocks.get(key);
     }
 
     const { colour, normal, picture } = rockPictures(name);
-    const result = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 });
+    const result = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: wet ? 0.55 : 0.9, metalness: 0 });
     const uniforms = {
         rockColour: { value: colour },
         rockNormal: { value: normal },
@@ -113,19 +129,16 @@ export function rockMaterial(name, { glow = false, embers = false } = {}) {
             shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vRockGlow;").replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance += vRockGlow;");
         }
 
-        // (Embers glowing in its cracks, the Breach's (lava.js embersOn): only in the picture's
-        // dark grooves, as much as each point's `ember` says, brightening and dimming in slow waves
-        // across the rock)
-        if (embers) {
+        // (What glows in its seams (SEAMS): only in the picture's dark grooves, as much as each
+        // point's `seam` says, pulsing as it does)
+        if (seams) {
+            const { colour, pulse } = SEAMS[seams];
+
             shader.uniforms.veilTime = VEIL.time;
-            shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute float ember;\nvarying float vRockEmber;").replace("#include <project_vertex>", "#include <project_vertex>\nvRockEmber = ember;");
+            shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute float seam;\nvarying float vRockSeam;").replace("#include <project_vertex>", "#include <project_vertex>\nvRockSeam = seam;");
             shader.fragmentShader = shader.fragmentShader
-                .replace("#include <common>", `#include <common>\nvarying float vRockEmber;\nuniform float veilTime;\nfloat rockGroove = 0.6;`)
-                .replace(
-                    "#include <emissivemap_fragment>",
-                    `#include <emissivemap_fragment>
-totalEmissiveRadiance += vec3(1.2, 0.22, 0.02) * vRockEmber * rockGroove * (0.65 + 0.35 * sin(PI2 * 15.0 * veilTime / ${VEIL.loop.toFixed(1)} + dot(vCutWorld, vec3(0.8, 1.0, 0.6))));`,
-                );
+                .replace("#include <common>", `#include <common>\nvarying float vRockSeam;\nuniform float veilTime;\nfloat rockGroove = 0.6;`)
+                .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(${colour.map((c) => c.toFixed(3)).join(", ")}) * vRockSeam * rockGroove * (${pulse});`);
         }
 
         shader.fragmentShader = shader.fragmentShader
@@ -158,7 +171,7 @@ vec3 rockWeights(vec3 n) {
     vec3 grain = texture2D(rockColour, p.zy).rgb * w.x + texture2D(rockColour, p.xz).rgb * w.y + texture2D(rockColour, p.xy).rgb * w.z;
 
     diffuseColor.rgb *= mix(vec3(1.0), clamp(grain / rockMean, 0.0, 2.5), rockLoaded);
-${embers ? "    rockGroove = mix(0.6, 0.35 + 0.65 * smoothstep(0.95, 0.4, dot(grain / rockMean, vec3(1.0 / 3.0))), rockLoaded);" : ""}
+${seams ? "    rockGroove = mix(0.6, 0.35 + 0.65 * smoothstep(0.95, 0.4, dot(grain / rockMean, vec3(1.0 / 3.0))), rockLoaded);" : ""}
 }`,
             )
             .replace(
@@ -185,7 +198,7 @@ if (rockBumps > 0.5) {
             );
         roomLit(shader);
     };
-    result.customProgramCacheKey = () => `rock-triplanar${glow ? "-glow" : ""}${embers ? "-embers" : ""}`;
+    result.customProgramCacheKey = () => `rock-triplanar${glow ? "-glow" : ""}${seams ? `-${seams}` : ""}`;
     rocks.set(key, result);
 
     return result;

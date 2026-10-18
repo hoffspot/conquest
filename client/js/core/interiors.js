@@ -104,8 +104,11 @@ export const PLAN_KEY = Object.freeze({
     // them; and the heap of what they've thrown out in a midden's, their prey's gear on it)
     E: { kind: "brood", blocks: true, joins: true },
     z: { kind: "midden", blocks: true, joins: true },
-    // (A hell's: a pool of lava lying against the rock, the squares it's on all one pool)
+    // (A hell's: a pool of lava lying against the rock, the squares it's on all one pool; blood
+    // pooled on the floor, walked through; and the heart its Halls of Bone beat to)
     "~": { kind: "lava", blocks: true, joins: true },
+    "&": { kind: "blood", joins: true },
+    "@": { kind: "heart", blocks: true, joins: true },
 });
 
 // The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in

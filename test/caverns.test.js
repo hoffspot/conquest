@@ -12,13 +12,15 @@ import { allAtOnce } from "../client/js/core/steps.js";
 import { CAVERNS, cavern, cavernAt, cavernFloor, earthTone, layers, openness, SHELLS, STRATA, tiles } from "../client/js/world/caverns.js";
 import { DUNGEON_PICTURES } from "../client/js/world/dungeonpictures.js";
 
-// A level of a cave's, an outlaws' hideout's and an ants' nest's (each the shell its look has)
+// A level of a cave's, an outlaws' hideout's, an ants' nest's and a hell's Halls of Bone (each the
+// shell its look has)
 const LEVELS = [
     ["caves", "caves"],
     ["hideout", "dug"],
     ["nest", "nest"],
-].map(([theme, shell]) => {
-    const level = buildDungeon({ seed: 3, theme, tier: 2 }).levels[0];
+    ["hell", "flesh", 1],
+].map(([theme, shell, index = 0]) => {
+    const level = buildDungeon({ seed: 3, theme, tier: 2 }).levels[index];
 
     return { theme, shell: SHELLS[shell], level, rock: (x, y) => level.rows[y][x] === "#" };
 });

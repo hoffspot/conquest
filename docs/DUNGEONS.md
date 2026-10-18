@@ -92,16 +92,17 @@ wilds, and only by night, once the cult keeping its rite there is slain ([The wa
   | Level | Realm | Dug as | Drawn as | Heard as | Who's in it | Its master |
   |---|---|---|---|---|---|---|
   | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | a lair | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats | the Breach Priest, a cultist |
-  | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: vaults the colour of old bone | a crypt | skeletons, draugr, wraiths, ghosts, shadow stalkers | the Bone Lord, a wight lord |
+  | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | a crypt | skeletons, draugr, wraiths, ghosts, shadow stalkers | the Bone Lord, a wight lord |
   | 3 | the River of Fire | caves | `hell-fire`: black basalt, embers thick in hot air | a lair | magma slimes, salamanders, black shucks, chimeras, wyverns | the Forge Beast, a chimera |
   | 4 | the Pit | an ancient temple's halls | `hell-pit`: walls dark as dried blood, close black air | a crypt | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders | the Gatekeeper, an ogre; then the Lord of the Pit |
 
   Each realm's rooms are dressed its own way: the cult's altars and candles and pools of lava in
-  the Breach, tombs and charnel heaps in the Halls of Bone, braziers and anvils by the River of
+  the Breach, tombs and charnel heaps and pools of blood in the Halls of Bone, braziers and anvils by the River of
   Fire, watching statues, braziers and the throne in the Pit (`world/dungeondressing.js` `CLUTTER`,
   `STREWN`). The room furthest in on a level, its master's, by the portal down, can have a look of
   its realm's own (its `rooms.goal`: `place.js`): the Breach's is the cult's altar, the rift torn
-  open over it ([The Breach](#the-breach-brimstone-lava-and-the-rift)).
+  open over it ([The Breach](#the-breach-brimstone-lava-and-the-rift)); the Halls of Bone's, the
+  heart they beat to ([The Halls of Bone](#the-halls-of-bone-flesh-blood-and-the-heart)).
 - **Stand-ins for now**: everyone in it but its lord is one of the wild's creatures, till bought
   models of demons take their places (docs/LICENSED_MODELS.md). Each master has a look of its own
   (`beasts/champions.js` `REGALIA`): scorched, burnt, horned or hooded.
@@ -176,13 +177,48 @@ still grey stone, crusted and scorched.
 - **Its rock** (the look's `brimstone`): sulphur crusting it in yellow patches low down, and on the
   floor near the pools (`brimstoneTone`); soot darkening it towards the roof; and embers glowing in
   its cracks (`embersOn`: thin seams where a noise is near its middle, low down, more of them by a
-  pool, each point's `ember`; brighter in the rock picture's dark grooves, brightening and dimming
-  in slow waves across it: `dungeons3d.js` `rockMaterial`'s `embers`).
+  pool, each point's `seam`; brighter in the rock picture's dark grooves, brightening and dimming
+  in slow waves across it: `dungeons3d.js` `rockMaterial`'s `seams`, `SEAMS.embers`).
 - **The rift** (`interiors3d.js` `breachRift`): the room furthest in, by the portal down, where its
   master waits, is always the cult's altar, candles round it. Over the altar, a tear in the air
   2.2 m tall, its edges ragged and bent a little, the swirl of a hell's portal in it
   (`VEILS.hell`, its eye in the tear's middle), a ragged rim of fire round it, lighting the room
   red (its own light, `rift`). It stands across the altar's length, two faces back to back.
+
+### The Halls of Bone: flesh, blood and the heart
+
+The second realm is where the lava gives way to blood (the research: Diablo's Hell, "walls made
+from bone, threaded glowing veins of blood along the walls"). Its halls and rooms are dug as an
+outlaws' hideout's are, but drawn as the inside of some great body: no dressed stone, no lava.
+
+- **Its walls are flesh** (`caverns.js` `SHELLS.flesh`): one surface, as a cave's rock is, swelling
+  and sagging, its walls leaning in and rounding over into vaulted halls 3.4 to 4.8 m high. Raw
+  red (the look's `tint`), darker in patches where blood's dried on it and streaked paler with
+  sinew (`flesh.js` `fleshTone`), wet (the rock's material less rough: the look's `wet`). Its
+  floor's near-black, so the bone-white dead stand out against it.
+- **Veins of blood** glow in the walls and over the roof (`veinsOn`: great veins where a noise is
+  near its middle, lesser ones branching off them, each point's `seam`), beating as a heart does,
+  twice and then a rest, a beat every 1.2 seconds, the beat running out across the halls
+  (`dungeons3d.js` `SEAMS.veins`). A hundred beats to the veils' two-minute loop, so it never
+  jumps.
+- **Ribs** rise out of the walls every other square along them (`ribPaths`), from the wall's foot,
+  a little out of the flesh, up it and on out over the hall under the roof, so its narrower halls
+  are ribcages; each a tube of old bone stained with blood towards its foot, thinning to its tip
+  (`ribGeometry`). Drawn a mesh for each of the rock's 16 m tiles, lit by the room
+  (`lifeMaterial`).
+- **Blood pooled on the floor** (`&`, walked through): one or two in most of its rooms, each a
+  dark pool wandering round its squares' middle, drops splashed round it, wet (`bloodGeometry`).
+  Every pool on a level is one mesh.
+- **The heart** (`@`): the room furthest in, by the portal down, where the Bone Lord waits, is
+  always the heart's (the realm's `rooms.goal`). In its middle the heart stands on the floor, as
+  tall as a man, narrowing to its apex, two chambers swelling at its top under a cap of fat,
+  bruised in patches, veins glowing on it; its arteries rise from its top into the roof, its veins
+  run from its foot across the floor and into the walls; and round it lie the sacs where the
+  hell's demons are born, their membranes dark, glowing from within (`heartParts`). It swells as
+  it beats, with the walls' veins, its glow brightening (`heartMaterial`), and its room light
+  beats with it (`heartLight`).
+- **The player's light** (the look's `carried`) is pale, as bone is, and the Halls have few
+  torches.
 
 ### The way in: a cult's camp by night
 
@@ -357,7 +393,8 @@ square that can be walked on can still be walked to.
 `rows` read with `readPlan` as every building's floors do. The new plan characters are
 `V` stairs down, `^` stairs up, `*` rock standing up from a cave's floor, `%` crates, `y` a
 brazier, `$` a small chest, an ants' nest's `E` brood and `z` midden heap, and a hell's `~` pool
-of lava (blocking, not blocking sight, its squares one pool). The rest are the ones the caves, lair and crypt already use:
+of lava (blocking, not blocking sight, its squares one pool), `&` blood pooled on the floor (walked
+through, its squares one pool) and `@` the heart its Halls of Bone beat to. The rest are the ones the caves, lair and crypt already use:
 `#` rock, `I` pillars, `t` tombs, `m` rubble, `j` bones, `h` the hoard, and so on.
 
 ## Dungeons in play
@@ -803,6 +840,17 @@ code is here.
   down, more by a pool. **`test/hells.test.js`** draws the levels: the Breach's lava (one mesh, its
   banks another, a light each), its rock glowing and with embers, the rift over its altar with its
   own light; on no other level.
+- **`test/flesh.test.js`**, the Halls of Bone: veins of blood in a few of the walls' points, low
+  down and high up; the flesh darker in patches, streaked paler; the veins beating every 1.2
+  seconds, a whole number of beats to the veils' loop. The ribs: dozens on a level, each from
+  its wall's foot up past 2.5 m and on under the roof, every point of them in the open; drawn as
+  tubes, every face facing out, bloodier at the foot. The blood: in the Halls' rooms, flat on the
+  floor in its squares, darker in the middle. The heart: in the last room of every level of the
+  Halls, by the portal down; on the floor, as tall as a man, swelling as it beats, its arteries
+  reaching the roof, glowing; its own material, swelling by the veils' clock, and its light
+  beating with it. **`test/hells.test.js`** draws the Halls: their flesh veined and wet, their
+  ribs, their blood and their heart, its light; on no other level. **`test/caverns.test.js`**
+  checks the flesh as it does every rock.
 - **`test/caverns.test.js`**, the rock as one surface: how far into the open each point is; its
   walls never in the open ground below head height; room to stand under its roof over every open
   square; every triangle facing the open; the floor under all the open ground but the stairs'

@@ -70,7 +70,7 @@ export function brimstoneTone(x, y, z, seed, tint, pools = [], floor = false) {
 
 /**
  * The embers in the Breach's rock at each of its points (`positions`: x, y, z level metres, three
- * a point): how much each glows, a byte (0 to 255: dungeons3d.js rockMaterial's `ember`): in
+ * a point): how much each glows, a byte (0 to 255: dungeons3d.js rockMaterial's `seam`): in
  * cracks running through it (where a noise is near its middle), low down, more of them by a pool
  * of lava (`pools`: poolShape's). The cracks themselves are drawn by the rock's picture: only its
  * dark grooves glow.
