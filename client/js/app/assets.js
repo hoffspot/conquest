@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "0340e5267b",
+    release: "7667020fcc",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2130,6 +2130,78 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/flayed-hierarch.bin",
                     "hash": "0378b4ee40",
                     "bytes": 3003804
+                }
+            ]
+        },
+        "beast-slag-gorger": {
+            "tier": "demand",
+            "label": "The Slag Gorger (Monster2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/slag-gorger.bin",
+                    "hash": "ee6d0886f0",
+                    "bytes": 2071096
+                }
+            ]
+        },
+        "beast-forge-brute": {
+            "tier": "demand",
+            "label": "The Forge Brute (Monster2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/forge-brute.bin",
+                    "hash": "1512947d94",
+                    "bytes": 2206040
+                }
+            ]
+        },
+        "beast-chained-glutton": {
+            "tier": "demand",
+            "label": "The Chained Glutton (Monster2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/chained-glutton.bin",
+                    "hash": "d77306d751",
+                    "bytes": 2501552
+                }
+            ]
+        },
+        "beast-bloat-gorger": {
+            "tier": "demand",
+            "label": "The Bloat Gorger (Monster2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/bloat-gorger.bin",
+                    "hash": "b7dfa9c5de",
+                    "bytes": 2072488
+                }
+            ]
+        },
+        "beast-pit-ravager": {
+            "tier": "demand",
+            "label": "The Pit Ravager (Monster2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/pit-ravager.bin",
+                    "hash": "ef5d1e2174",
+                    "bytes": 2208240
+                }
+            ]
+        },
+        "beast-gorger-warlord": {
+            "tier": "demand",
+            "label": "The Gorger Warlord (Monster2, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/gorger-warlord.bin",
+                    "hash": "b7d4a362fb",
+                    "bytes": 2854240
                 }
             ]
         },

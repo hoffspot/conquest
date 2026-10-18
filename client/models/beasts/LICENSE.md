@@ -303,3 +303,31 @@ from (`docs/LICENSED_MODELS.md`). The model viewer shows them (*Coming to the wi
 they're in the game.
 
 Don't copy them out of this game or use them in anything else.
+
+## slag-gorger.bin, forge-brute.bin, chained-glutton.bin, bloat-gorger.bin, pit-ravager.bin, gorger-warlord.bin
+
+**Monster2** (its Unreal Engine files: its four builds, its textures and its ten animations,
+exported from Unreal Engine by this repository's owner), bought on **Fab** by this repository's
+owner under **Fab's Standard License**: a hell's six gorgers, headless brutes with a maw in the
+belly.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/slagGorger.json` and the others, which stay out of the repository with the bought
+files), their `browser` builds: the Slag Gorger and the Bloat Gorger its fourth build (bare: its
+third skin, burnt, and its fourth, rotten), the Forge Brute and the Pit Ravager its third (a club:
+its fifth skin, and its first with its fourth's gear), the Chained Glutton its second (chains and
+a spiked club, its sixth skin, its gear gilded) and the Gorger Warlord its first (all of it, its
+second skin, its gear gilded). Each is its mesh simplified to 7,995 to 13,843 triangles, with two
+lower details packed in, its materials (body, armour, weapon) baked onto one 1,024-pixel KTX2
+atlas (colour, normal, and occlusion, roughness and metal, and its glow: the pack's own mask,
+tinted ember, bile or gore), and its five clips (an idle, a walk, an attack, a flinch and a death;
+with its club, or without it for the bare two), with a bite, a spew and a roar made from its idle.
+
+They're scrambled as the game serves them, with whose they are in their glTF asset's
+`copyright`. They aren't in this repository, but in the private one the game's builds fetch them
+from (`docs/LICENSED_MODELS.md`). The model viewer shows them (*Coming to the wilds*) until
+they're in the game.
+
+Don't copy them out of this game or use them in anything else.
