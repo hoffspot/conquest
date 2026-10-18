@@ -91,10 +91,10 @@ wilds, and only by night, once the cult keeping its rite there is slain ([The wa
 
   | Level | Realm | Dug as | Drawn as | Heard as | Who's in it | Its master |
   |---|---|---|---|---|---|---|
-  | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | its drone ([The sound of hell](#the-sound-of-hell)); lava belching, hissing close by; drips | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats | the Breach Priest, a cultist |
-  | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | the drone a tone lower; a crypt's still air; the heart, louder nearer it; the dead groaning and wailing far off | skeletons, draugr, wraiths, ghosts, shadow stalkers | the Bone Lord, a wight lord |
-  | 3 | the River of Fire | caves, flooded | `hell-fire`: black basalt, its caverns lakes of lava, causeways across them, embers in its rock and thick in its hot air, the Hellforge in its last room | the drone two tones lower; lava belching and roaring, hissing close by; the Hellforge's hammer | magma slimes, salamanders, black shucks, chimeras, wyverns | the Forge Beast, a chimera |
-  | 4 | the Pit | an ancient temple's halls | `hell-pit`: polished black stone, sigils inlaid in its floor glowing violet, the lord's own colour, his horned throne, its lava only a rim along the throne hall's walls | the drone a fifth lower; a crypt's air, lower; wails far off | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders | the Gatekeeper, an ogre; then the Lord of the Pit |
+  | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | its drone ([The sound of hell](#the-sound-of-hell)); lava belching, hissing close by; drips | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats, fiends | the Breach Priest, a cultist |
+  | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | the drone a tone lower; a crypt's still air; the heart, louder nearer it; the dead groaning and wailing far off | skeletons, draugr, wraiths, ghosts, shadow stalkers, fiends | the Bone Lord, a wight lord |
+  | 3 | the River of Fire | caves, flooded | `hell-fire`: black basalt, its caverns lakes of lava, causeways across them, embers in its rock and thick in its hot air, the Hellforge in its last room | the drone two tones lower; lava belching and roaring, hissing close by; the Hellforge's hammer | magma slimes, salamanders, black shucks, chimeras, wyverns, fiends | the Forge Beast, a chimera |
+  | 4 | the Pit | an ancient temple's halls | `hell-pit`: polished black stone, sigils inlaid in its floor glowing violet, the lord's own colour, his horned throne, its lava only a rim along the throne hall's walls | the drone a fifth lower; a crypt's air, lower; wails far off | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders, fiends | the Gatekeeper, an ogre; then the Lord of the Pit |
 
   Each realm's rooms are dressed its own way: the cult's altars and candles and pools of lava in
   the Breach, tombs and charnel heaps and pools of blood in the Halls of Bone, braziers and anvils and lakes of lava by the River of
@@ -103,8 +103,24 @@ wilds, and only by night, once the cult keeping its rite there is slain ([The wa
   its realm's own (its `rooms.goal`: `place.js`): the Breach's is the cult's altar, the rift torn
   open over it ([The Breach](#the-breach-brimstone-lava-and-the-rift)); the Halls of Bone's, the
   heart they beat to ([The Halls of Bone](#the-halls-of-bone-flesh-blood-and-the-heart)).
-- **Stand-ins for now**: everyone in it but its lord is one of the wild's creatures, till bought
-  models of demons take their places (docs/LICENSED_MODELS.md). Each master has a look of its own
+- **Its fiends** (`creatures.js` `fiend`, tiers 9 and 10, met nowhere else): lean, winged and
+  horned, a head and more taller than a man, they hunt every level in packs of their own, the more
+  of them the deeper down: one or two in the Breach and the Halls of Bone, up to three on the River
+  of Fire, two or three in the Pit, and the likelier to be met each level down. Robust, not
+  champions: 78 hit points at the first tier's (a draugr's 72, a chimera's 85), its hide turning
+  some of every blow (`armor` 0.15), seeing in the dark, never thrown by a blast. It rakes with its
+  claws, or springs on whoever it's after, its wings spread, a heavier blow that staggers and sears
+  (`weapons.js` `fiend`). It's drawn from a bought model, Monster4 (`beasts/model.js`
+  `MODELS.fiend`, `client/models/beasts/LICENSE.md`): 2.4 metres tall, its wings spread 3.7, with
+  its own clips: its claws raked four ways, one at random each time, its spring a leap with its
+  wings spread, its other idle as it rests; its walk at its pace (1.1 m/s, as it's drawn), its run
+  a sprint (5.65 m/s) played slower at its chase; in one of its three skins (its own red, pale or
+  ash) by its seed, so a pack wears them mixed. Till the model's read (and where the licensed
+  models aren't, as in CI) it's a people-shaped stand-in (`beasts/looks.js`): lean, dark red,
+  horned, its eyes burning. It snarls as the big cats do, lowest of them (`audio/sound.js`), and
+  may leave a fire gland, a soul shard or obsidian (`spoils.js`).
+- **Stand-ins for now**: everyone else in it but its lord is one of the wild's creatures, till
+  bought models of more demons take their places (docs/LICENSED_MODELS.md). Each master has a look of its own
   (`beasts/champions.js` `REGALIA`): scorched, burnt, horned or hooded.
 - **The Lord of the Pit** (`creatures.js` `demonLord`, tier 10, met nowhere else): its fists
   burning and hellfire hurled from its hand (`weapons.js`). It's drawn from a bought model, the
@@ -910,6 +926,8 @@ code is here.
   - a master of its realm on every level, by the portal down (on the bottom level, before the
     arena), of a rank between a mini-boss's and a boss's, no pack besides in its room;
   - its packs and mini-bosses its realms' own, the Lord of the Pit at the bottom;
+  - fiends in packs of their own on every level, likelier and more of them each level down, met in
+    the levels made, in no land of the wilds;
   - the way out on the bottom level beyond the lord;
   - never dealt to a wild dungeon's site;
   - in a world, at the nearest hell's way in: shut by day, no one there; by night the cult's high
@@ -921,7 +939,11 @@ code is here.
     its way in.
 - **`e2e/model-viewer.spec.js`**, with the licensed models: the Lord of the Pit drawn from the
   Greater Demon once it's read, not as its people-shaped stand-in: its claws and punch, its
-  hellfire hurled from its fist, its roar; 3.2 metres tall.
+  hellfire hurled from its fist, its roar; 3.2 metres tall. A fiend drawn from Monster4 once it's
+  read: its four rakes, its spring and its rest; 2.4 metres tall; all three of its skins, one each
+  of its kind by its seed.
+- **`test/beast-building.test.js`**: a fiend drawn as its stand-in till its model's read, then from
+  it, and again as its stand-in once that's let go of; a pack of them wearing all three skins.
 - **`test/lava.test.js`**, the Breach's lava: pools on every level of it, each against the rock,
   every open square still walked to; lying in their squares, reaching in only under the rock; hot
   in the middle, cooled at the bank, the bank standing up round them, glowing inside; the rock and

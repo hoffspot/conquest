@@ -261,8 +261,9 @@ export const THEMES = {
     // possessed faithful in them; the Halls of Bone, flesh and bone, the dead walking; the River
     // of Fire, a fortress over it; and the Pit, the demon lord's throne at its heart and, beyond
     // it, the portal back up into the wilds (`exit`). Each level's boss (`warden`) guards its
-    // portal down; the bottom level's before the throne. Stand-ins all, from the wild's
-    // creatures, until bought models of demons are read)
+    // portal down; the bottom level's before the throne. Its fiends hunt every level in packs, more
+    // of them the deeper down (creatures.js `fiend`); the rest are the wild's creatures, until
+    // bought models of more demons are read)
     hell: {
         id: "hell",
         name: "a hell",
@@ -299,6 +300,7 @@ export const THEMES = {
                     { id: "hounds", creatures: ["blackShuck"], size: [2, 3], weight: 2 },
                     { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 1 },
                     { id: "bats", creatures: ["bats"], size: [3, 5], weight: 1 },
+                    { id: "fiends", creatures: ["fiend"], size: [1, 2], weight: 1 },
                 ],
                 minis: [
                     { id: "fireCaller", creature: "cultist", title: "Fire-caller", weight: 2 },
@@ -334,6 +336,7 @@ export const THEMES = {
                     { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 2 },
                     { id: "shades", creatures: ["ghost"], size: [2, 3], weight: 2 },
                     { id: "stalkers", creatures: ["shadowStalker"], size: [1, 2], weight: 1 },
+                    { id: "fiends", creatures: ["fiend"], size: [1, 2], weight: 2 },
                 ],
                 minis: [
                     { id: "boneChampion", creature: "skeleton", title: "Bone champion", weight: 2 },
@@ -372,6 +375,7 @@ export const THEMES = {
                     { id: "hounds", creatures: ["blackShuck"], size: [2, 3], weight: 2 },
                     { id: "chimera", creatures: ["chimera"], size: [1, 1], weight: 1 },
                     { id: "wyverns", creatures: ["wyvern"], size: [1, 2], weight: 1 },
+                    { id: "fiends", creatures: ["fiend"], size: [1, 3], weight: 2 },
                 ],
                 minis: [
                     { id: "moltenLord", creature: "magmaSlime", title: "Molten lord", weight: 1 },
@@ -410,6 +414,7 @@ export const THEMES = {
                     { id: "stalkers", creatures: ["shadowStalker"], size: [1, 2], weight: 1 },
                     { id: "hounds", creatures: ["blackShuck"], size: [2, 3], weight: 1 },
                     { id: "embers", creatures: ["magmaSlime", "salamander"], size: [2, 3], weight: 1 },
+                    { id: "fiends", creatures: ["fiend"], size: [2, 3], weight: 3 },
                 ],
                 minis: [
                     { id: "pitPriest", creature: "cultist", title: "Pit priest", weight: 1 },

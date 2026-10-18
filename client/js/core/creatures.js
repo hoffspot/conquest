@@ -200,6 +200,11 @@ export const CREATURES = Object.freeze({
     // (A cult's high priest, keeping its rite by a hell's portal at night: host.js #lairs, RITES)
     cultLeader: { name: "High priest of the cult", hp: 80, hands: true, weapon: "cultLeader", speed: 1.2, chase: 2.3, temper: "aggressive", roam: 3, leash: 24, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.15, perilous: true, darkSight: true },
     demonLord: { name: "Demon lord", hp: 120, hands: true, weapon: "demonLord", speed: 1.1, chase: 2.4, temper: "aggressive", roam: 4, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.3, perilous: true, darkSight: true, steady: true },
+    // (A fiend of the hells, met in packs on every level of one: core/dungeons/themes.js hell.
+    // Lean, winged and horned, a head and more taller than a man, its claws raking and its spring
+    // heavy; drawn from a bought model of its own once that's read, a horned stand-in till then:
+    // beasts/model.js, beasts/looks.js)
+    fiend: { name: "Fiend", hp: 78, weapon: "fiend", speed: 1.2, chase: 3.1, temper: "aggressive", roam: 8, leash: 24, pack: [1, 3], tiers: [9, 10], biomes: [], blood: "red", armor: 0.15, darkSight: true, steady: true },
 });
 
 /**
