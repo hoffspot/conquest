@@ -340,6 +340,17 @@ export const NATURAL = Object.freeze({
             ),
         ],
     },
+    // (A black widow's fangs, rearing up to bite, or pouncing on whoever it's after (its Attack 3,
+    // a leap of two metres and back), each with its venom, a venom of its own)
+    blackWidow: {
+        label: "Fangs and venom",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", reach: 1.5, damage: [7, 12], hitAt: 450, duration: 1500, interval: 1500, reaction: "pierce", animation: "melee", afflict: { kind: "venom", chance: 0.6 } }),
+                melee({ id: "pounce", reach: 2.4, damage: [10, 17], hitAt: 600, duration: 2000, interval: 2600, stagger: 400, reaction: "hack", animation: "leap", afflict: { kind: "venom", chance: 0.9 } }),
+            ),
+        ],
+    },
     antMonster: {
         label: "Mandibles and acid",
         attacks: [

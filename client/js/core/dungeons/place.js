@@ -362,7 +362,10 @@ export function fillLevel(dug, rooms, links, plan) {
 
         const pack = chooseFoe(seed, slot("pack", one.id), theme.packs, plan.tier, 1);
         const size = Math.min(6, random.int(...pack.size) + (index > 0 ? 1 : 0) + (one.area >= 150 ? 1 : 0));
-        const spots = spotsIn(level, one, size, { doors: SPREAD.doors, fromDoors, random, ways: ways() });
+        // (Those that lurk under the roof, as near the room's middle as they'll go, where it's
+        // highest: creatures.js `lurk`)
+        const lurk = pack.creatures.every((creature) => CREATURES[creature]?.lurk);
+        const spots = spotsIn(level, one, size, { ...(lurk ? { near: one.centre } : {}), doors: SPREAD.doors, fromDoors, random, ways: ways() });
 
         if (!spots.length) {
             continue;

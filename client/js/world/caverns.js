@@ -238,7 +238,8 @@ function smoothMin(a, b, k) {
  * (never into it below CAVERNS.lean), leaning in and bulging above that, rounding over into its
  * roof; the roof kept up to `least(x, z)` metres where it's asked to be higher (over stairs going
  * up). `column(x, z)` sets the column it's in (its openness and its roof's height: those are the
- * same all the way up it); `at(y)` is then the point `y` metres up it.
+ * same all the way up it); `at(y)` is then the point `y` metres up it; `roof(x, z)`, how high
+ * over the ground the rock closes over that column (to a tenth of a metre; 0 in the rock).
  */
 export function cavernAt(open, shell, seed, least = null) {
     const rough = Math.max(shell.rough, CAVERNS.hollow);
@@ -274,6 +275,19 @@ export function cavernAt(open, shell, seed, least = null) {
             const shaped = side + (wall > 0 ? bump * shell.rough : (bump * 0.5 + 0.5) * CAVERNS.hollow);
 
             return smoothMin(shaped, over, 1.2);
+        },
+        roof(x, z) {
+            if (this.column(x, z) <= 0) {
+                return 0;
+            }
+
+            let y = 0.1;
+
+            while (y < shell.high + shell.roof + 2 && this.at(y) > 0) {
+                y += 0.1;
+            }
+
+            return y;
         },
     };
 }
@@ -404,7 +418,8 @@ export function cavernFloor(width, height, open, { hole = null, step = 1 } = {})
  * A level's rock (`width` by `height` squares, `rock(x, y)` whether a square's rock), drawn as
  * one surface for its `shell` (SHELLS), a step at a time: { positions (level metres, y up),
  * indices (each three a triangle, facing the open), shade (0 to 1 at each point: darker where the
- * rock closes round it), floor (cavernFloor's, under it: `hole` where stairs go down through it) }.
+ * rock closes round it), floor (cavernFloor's, under it: `hole` where stairs go down through it),
+ * roof (cavernAt's: how high the rock closes over a point, `roof(x, z)`) }.
  */
 export function* cavern(width, height, rock, shell, { seed = 1, least = null, hole = null } = {}) {
     const open = openness(width, height, rock);
@@ -565,5 +580,5 @@ export function* cavern(width, height, rock, shell, { seed = 1, least = null, ho
 
     floor.normals = normalsOf(floor.positions, floor.indices);
 
-    return { ...surface, floor };
+    return { ...surface, floor, roof: (x, z) => field.roof(x, z) };
 }

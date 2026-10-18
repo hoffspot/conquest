@@ -390,6 +390,13 @@ export const ICONS = Object.freeze({
         <path d="M-4,10 L4,10 M-2,10 L-2,13 M0,10 L0,13 M2,10 L2,13" stroke="#1f3a10" stroke-width="1.2"/>
         <ellipse cx="-6" cy="-4" rx="1.8" ry="3.6" fill="#e4ffb0" opacity="0.6" transform="rotate(25 -6 -4)"/>`,
 
+    // A black widow's venom: a glossy black drop, the widow's red hourglass on it, two fangs over it
+    envenomed: `
+        <path d="M0,-17 C6,-7 13,0 13,8 A13,13 0 0 1 -13,8 C-13,0 -6,-7 0,-17 Z" fill="#16121a" stroke="#000" stroke-width="1.4"/>
+        <path d="M-5,0 L5,0 L1,7 L5,14 L-5,14 L-1,7 Z" fill="#d81c1c" stroke="#5a0606" stroke-width="0.9" stroke-linejoin="round"/>
+        <path d="M-7,-19 C-9,-14 -7,-10 -4,-9 M7,-19 C9,-14 7,-10 4,-9" fill="none" stroke="#e8dcc8" stroke-width="2" stroke-linecap="round"/>
+        <ellipse cx="-6" cy="-1" rx="1.6" ry="3.6" fill="#9a8ab0" opacity="0.5" transform="rotate(25 -6 -1)"/>`,
+
     // A sickly pocked ball, flies about it
     diseased: `
         <circle cy="2" r="14.5" fill="#b8b04a" stroke="#4a4210" stroke-width="1.4"/>

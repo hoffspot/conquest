@@ -211,10 +211,13 @@ export const THEMES = {
             { id: "roaches", creatures: ["giantCockroach"], size: [3, 5], weight: 2 },
             { id: "wasps", creatures: ["dungeonWasp"], size: [2, 4], weight: 2 },
             { id: "scorpions", creatures: ["dungeonScorpion"], size: [1, 2], weight: 1 },
+            // (A black widow, hanging unseen under the roof of a gallery till someone passes beneath)
+            { id: "widow", creatures: ["blackWidow"], size: [1, 1], weight: 2 },
         ],
         minis: [
             { id: "warden", creature: "ant", title: "Brood warden", weight: 2 },
             { id: "crawler", creature: "greatCentipede", title: "Tunnel crawler", weight: 2 },
+            { id: "matriarch", creature: "blackWidow", title: "Widow matriarch", weight: 2 },
         ],
         bosses: [{ id: "antMonster", creature: "antMonster", title: "the Ant Monster", weight: 1, guard: ["ant"] }],
         rooms: {
