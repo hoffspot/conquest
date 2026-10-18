@@ -343,6 +343,7 @@
   },
   "notes": [
     "not exported: Camera, Collider, Light, WGT_root",
+    "Roar: 1 of its object's own keys left out (bonesOnly)",
     "actions not exported: Look (left out)",
     "tangents exported, for the normal maps"
   ],

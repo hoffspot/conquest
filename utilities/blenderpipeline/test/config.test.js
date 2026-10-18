@@ -68,6 +68,8 @@ describe("an asset's config", () => {
         refuses({ source: "a.blend", clips: { fps: 0 } }, /clips.fps is a number of times a second/);
         refuses({ source: "a.blend", clips: { fps: "30" } }, /clips.fps is a number of times a second/);
         refuses({ source: "a.blend", restPose: "" }, /restPose is the name of a clip/);
+        refuses({ source: "a.blend", muteConstraints: "yes" }, /muteConstraints is true or false/);
+        refuses({ source: "a.blend", actions: [{ from: "b.blend", bonesOnly: 1 }] }, /actions\[0\].bonesOnly is true or false/);
         refuses({ source: "a.blend", restPose: 0 }, /restPose is the name of a clip/);
 
         // (Clips made up from others: lib/invent.js)

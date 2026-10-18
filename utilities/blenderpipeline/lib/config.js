@@ -21,9 +21,14 @@ export const DEFAULTS = Object.freeze({
     objects: null,
     collection: null,
     scene: null,
-    // Actions to bring in from other files: [{ from, action?, name? }]: a .blend's, by name, or an
-    // .fbx's, the one moving its skeleton (the objects it brings are left behind)
+    // Actions to bring in from other files: [{ from, action?, name?, bonesOnly? }]: a .blend's, by
+    // name, or an .fbx's, the one moving its skeleton (the objects it brings are left behind);
+    // `bonesOnly`, its bones' keys alone, not the keys of the object it was on (where an importer put
+    // the skeleton it came with, at that skeleton's scale)
     actions: [],
+    // The exported armature's bone constraints muted: a game skeleton made to copy a control rig
+    // (Auto-Rig Pro's, Rigify's) holds still otherwise, whatever its clips say
+    muteConstraints: false,
     // Objects joined into one mesh each before they're exported: { "new name": ["object", "Fur*"] }
     // (one draw call for each material in it; a group kept apart can be shown or hidden alone)
     join: {},
@@ -248,7 +253,11 @@ export function resolveConfig(raw, file) {
     config.source = path.resolve(where, raw.source);
     config.out = path.resolve(where, config.out);
     config.actions = (raw.actions ?? []).map((action, i) => {
-        unknownKeys(action, { from: 0, action: 0, name: 0 }, `actions[${i}].`, fail);
+        unknownKeys(action, { from: 0, action: 0, name: 0, bonesOnly: 0 }, `actions[${i}].`, fail);
+
+        if (action.bonesOnly !== undefined && typeof action.bonesOnly !== "boolean") {
+            fail(`actions[${i}].bonesOnly is true or false`);
+        }
 
         if (typeof action.from !== "string") {
             fail(`actions[${i}].from (the .blend or .fbx it's in) is needed`);
@@ -260,6 +269,10 @@ export function resolveConfig(raw, file) {
 
         return { ...action, from: path.resolve(where, action.from) };
     });
+
+    if (typeof config.muteConstraints !== "boolean") {
+        fail("muteConstraints is true or false");
+    }
 
     if (typeof config.stripNamespaces !== "boolean") {
         fail("stripNamespaces is true or false");
@@ -502,6 +515,7 @@ export function blenderJob(config, { out, report, passes = null, variants = {} }
         materials: config.materials,
         variants: Object.fromEntries(Object.entries(config.variants).map(([name, variant]) => [name, { ...variant, out: variants[name] }])),
         actions: config.actions,
+        muteConstraints: config.muteConstraints,
         clips: { include: config.clips.include, exclude: config.clips.exclude, rename: config.clips.rename },
         deformBonesOnly: config.deformBonesOnly,
         keepBones: config.keepBones,
