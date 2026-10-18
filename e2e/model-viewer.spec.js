@@ -229,9 +229,9 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     await openViewer(page, "/model-viewer.html?model=beast-centipede&clip=Run");
 
     // (In the game now, as are the ant, the spiders, the scorpion, the cockroach, the wasp, the
-    // black widow and the Ant Monster: every bought model is, none listed as to come; read, its
-    // clips listed, the one asked for by its address played)
-    await expect(page.locator("#picker optgroup[label^='Coming to the wilds']")).toHaveCount(0);
+    // black widow and the Ant Monster: every bought model is but the greater demon, the one listed
+    // as to come; read, its clips listed, the one asked for by its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Greater Demon"]);
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Giant cockroach", "Dungeon wasp", "Dungeon scorpion", "Black widow", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
@@ -576,6 +576,32 @@ test("and the Black Widow: its 28 clips that play in place and the flinch made u
     await expect(page.locator("#name")).toHaveText("The Black Widow");
     expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 10468, bones: 56 });
     await expect(page.locator("#details")).toContainText("Medhue's Black Widow, bought on Fab: used with the permission its Standard License gives");
+});
+
+test("and the Greater Demon: its own showcase and the roar cut from it, the human clips played on its skeleton, its one mesh, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-greater-demon&clip=Pound");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        // (Its own: the one clip it came with)
+        "Showcase",
+        // (Mesh2Motion's CC0 human clips, played on its skeleton, its wings beating to them)
+        "Idle",
+        "Walk",
+        "Run",
+        "Claw",
+        "Punch",
+        "Pound",
+        "Hit",
+        "Death",
+        // (Cut from its showcase: crouched, wings spread, its jaw opened)
+        "Roar",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Pound", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Greater Demon");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 83498, bones: 123 });
+    await expect(page.locator("#details")).toContainText("Gloomy Demon, bought on Fab: used with the permission its Standard License gives");
 });
 
 test("the werewolf as the game draws it, from its model once that's read: the game's moves for it, and the skin each one wears", async ({ page }) => {

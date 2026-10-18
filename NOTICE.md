@@ -15,5 +15,5 @@ It doesn't cover:
   Monster-V2; the Ant Monster, Fab's Ant Monster V1b; the ant, Fab's Ant V2; the Dungeon Spider,
   Fab's Spider V3; the Elite Dungeon Spider, Fab's Spider V6a; the Dungeon Scorpion, Fab's
   Scorpion V5d; the Giant Cockroach, Medhue's Cockroach from Fab; the Dungeon Wasp, Fab's Vespa
-  Titanus Giant Wasp; and the Black Widow, Medhue's Black Widow from Fab
-  (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
+  Titanus Giant Wasp; the Black Widow, Medhue's Black Widow from Fab; and the Greater Demon, Fab's
+  Gloomy Demon (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
