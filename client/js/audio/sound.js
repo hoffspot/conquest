@@ -327,7 +327,7 @@ export const CREATURE_VOICES = Object.freeze({
     // (A hell's flayed: flaylings shrieking as goblins do, lower; cinder husks rasping, ossuary
     // priests moaning and hierarchs groaning as wights do, higher and lower; pyre acolytes as men;
     // dirge wardens as trolls, higher)
-    flayling: { family: "goblin", rate: 0.84, fall: "deathThudMid" },
+    flayling: { family: "goblin", rate: 0.76, fall: "deathThudMid" },
     cinderHusk: { family: "wight", rate: 1.22, fall: "deathThudMid" },
     pyreAcolyte: { family: "human", rate: 0.94, fall: "deathThudMid" },
     ossuaryPriest: { family: "wight", rate: 1.05, fall: "deathThudMid" },
