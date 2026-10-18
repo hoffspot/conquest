@@ -636,6 +636,8 @@ export const LOOKS = Object.freeze({
     cultLeader: { body: "humanoid", scale: [1.08, 1.12] },
     // (A hell's lord: a great horned brute, until a bought model of its own is read)
     demonLord: { body: "humanoid", scale: [1.6, 1.65] },
+    // (A hell's fiend: lean, horned and a head and more taller than a man, until its own model's read)
+    fiend: { body: "humanoid", scale: [1.28, 1.33] },
     // (A hell's flayed, gaunt and skinned, a man's height to a head and more taller, until their
     // own models are read: creatures.js)
     flayling: { body: "humanoid", scale: [0.98, 1.02] },
@@ -760,6 +762,18 @@ const BRUTES = {
         slit: true,
         hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
         wear: [["loincloth"], ["belt"], ["bracers"], ["tusks"], ["orcHelm"]],
+        walk: "orc",
+    },
+    // (A hell's fiend, standing in for its own model: lean and long in the arm, its skin a dark red
+    // seamed with black, its eyes burning, horned, in a loincloth)
+    fiend: {
+        macro: { gender: 1, muscle: [0.75, 0.9], weight: [0.2, 0.35], height: [0.95, 1], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { browRidge: [0.8, 1], jawWidth: [0.4, 0.6], headSquare: [0.2, 0.4], eyeSize: [-0.5, -0.2], earPoint: [0.9, 1], earSize: [0.4, 0.7], armLength: [0.85, 1], handSize: [0.8, 1], footSize: [0.6, 0.8], neck: [0.6, 0.9], shoulders: [0.6, 0.8], belly: [0, 0.1] },
+        skin: { tones: ["#6a1812", "#5a1410", "#741c14"], warts: [0.1, 0.3], veins: [0.6, 0.9], blush: [0, 0.05], brows: [0.4, 0.7], warpaint: "#100606" },
+        irises: ["#ffb020", "#ff6a1a"],
+        slit: true,
+        hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
+        wear: [["loincloth"], ["orcHelm"]],
         walk: "orc",
     },
     // (A hell's flayed, standing in for their own models: gaunt, long in the arm, skinned, the

@@ -538,6 +538,17 @@ export const NATURAL = Object.freeze({
             ranged({ id: "hellfire", reach: 9, damage: [6, 10], hitAt: 600, duration: 1100, interval: 2600, stagger: 200, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.6 } }),
         ],
     },
+    // (A fiend's: its claws raked, or a spring on whoever it's after, its wings spread, that
+    // staggers them and sears)
+    fiend: {
+        label: "Claws and spring",
+        attacks: [
+            eitherOf(
+                melee({ id: "claw", damage: [7, 12], hitAt: 450, duration: 950, interval: 1300, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } }),
+                melee({ id: "pounce", damage: [10, 17], hitAt: 900, duration: 1700, interval: 2600, stagger: 450, reaction: "hack", animation: "pounce", afflict: { kind: "burn", chance: 0.35 } }),
+            ),
+        ],
+    },
     // (A demon lord's: its burning fists, and hellfire hurled from its hand)
     // (A hell's flayed: creatures.js)
     flayling: {

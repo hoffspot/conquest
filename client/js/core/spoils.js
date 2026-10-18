@@ -236,6 +236,7 @@ export const SPOILS = Object.freeze({
     wraith: { items: [{ id: "wraithShroud", chance: 0.4 }, { id: "soulShard", chance: 0.3 }] },
     wightLord: { gold: [20, 60], items: [{ id: "crownShard", chance: 0.5 }, { id: "graveIron", chance: 0.5 }] },
     frostTroll: { items: [{ id: "frostHeart", chance: 0.45 }, { id: "frostHide", chance: 0.5 }] },
+    fiend: { gold: [10, 30], items: [{ id: "fireGland", chance: 0.3 }, { id: "soulShard", chance: 0.2 }, { id: "obsidian", chance: 0.25 }] },
     demonLord: { gold: [60, 140], items: [{ id: "obsidian", chance: 0.8, count: [2, 3] }, { id: "soulShard", chance: 0.6 }, { id: "fireGland", chance: 0.5 }] },
     // (A hell's flayed: the Breach's with what the cult gave them and what burnt them, the Halls of
     // Bone's with their bones and their crowns' gold)
