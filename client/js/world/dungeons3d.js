@@ -11,7 +11,7 @@ import { hashed } from "../app/catalog.js";
 import { DUNGEON_PICTURES } from "./dungeonpictures.js";
 import { roomLit } from "./roomlight.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { loadGltf } from "./art/engine/models.js";
+import { loadGltf, readKtx2, readsKtx2 } from "./art/engine/models.js";
 import { CAVERNS } from "./caverns.js";
 
 /**
@@ -24,7 +24,9 @@ import { CAVERNS } from "./caverns.js";
 export const ROCK_PICTURES = DUNGEON_PICTURES;
 
 // A picture's texture, by its file: made at once, and drawn once its picture's come and been
-// decoded (until then `loaded` says it isn't, and the rock's drawn without it)
+// read (until then `loaded` says it isn't, and the rock's drawn without it). Each is a KTX2
+// (scripts/build-textures.js), kept compressed on the graphics card: what's read is put into the
+// texture made at first, which the rock's material already has.
 const textures = new Map();
 
 function pictureTexture(path, colour) {
@@ -32,7 +34,7 @@ function pictureTexture(path, colour) {
         return textures.get(path);
     }
 
-    const texture = new THREE.Texture();
+    const texture = new THREE.CompressedTexture([], 0, 0);
     const loaded = { value: 0 };
     const file = Object.values(ASSETS.models)
         .flatMap(({ files }) => files)
@@ -40,17 +42,16 @@ function pictureTexture(path, colour) {
 
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
     texture.colorSpace = colour ? THREE.SRGBColorSpace : THREE.NoColorSpace;
-    texture.flipY = false;
     texture.anisotropy = 4;
     texture.userData.loaded = loaded;
     textures.set(path, texture);
 
-    if (file && typeof fetch === "function" && typeof createImageBitmap === "function") {
+    if (file && typeof fetch === "function" && readsKtx2()) {
         fetch(new URL(hashed(file.path, file.hash), globalThis.document?.baseURI ?? globalThis.location?.href).href)
-            .then((response) => (response.ok ? response.blob() : Promise.reject(new Error(`${response.status} ${path}`))))
-            .then((blob) => createImageBitmap(blob))
-            .then((bitmap) => {
-                texture.image = bitmap;
+            .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(`${response.status} ${path}`))))
+            .then((bytes) => readKtx2(bytes))
+            .then((read) => {
+                Object.assign(texture, { mipmaps: read.mipmaps, image: read.image, format: read.format, type: read.type, minFilter: read.minFilter, magFilter: read.magFilter, generateMipmaps: false });
                 texture.needsUpdate = true;
                 loaded.value = 1;
             })

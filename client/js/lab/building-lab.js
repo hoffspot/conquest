@@ -14,6 +14,8 @@
 // middle of the people's homeland; window.buildingLab is there for tests.
 
 import * as THREE from "three";
+import { ASSETS } from "../app/assets.js";
+import { filesOf } from "../app/catalog.js";
 import { createRandom } from "../core/random.js";
 import { nameTavern } from "../core/lore/taverns.js";
 import { GOD_IDS } from "../core/lore/gods.js";
@@ -34,6 +36,7 @@ import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { STYLES, TRADES } from "../world/art/kits/house.js";
 import { buildGround, landColour } from "../world/ground.js";
 import { PEOPLE_KITS } from "../world/art/peoples/index.js";
+import { readKtx2With } from "../world/art/engine/models.js";
 import { buildTown } from "../world/town3d.js";
 import { View } from "../world/view.js";
 
@@ -56,6 +59,10 @@ const state = {
 };
 
 const view = new View($("#map"));
+
+// (The shops' wares' KTX2 pictures read for this renderer, as the game reads them: app/session.js)
+readKtx2With(view.renderer, filesOf(ASSETS, "basis-transcoder", document.baseURI));
+
 const orbit = { yaw: 0.5, pitch: 32, distance: 26, focus: new THREE.Vector3() };
 
 view.setShadows(true);

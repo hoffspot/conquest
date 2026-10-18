@@ -8775,7 +8775,7 @@ test("a cave held by outlaws is gone into by its mouth: within, the rock all rou
     expect(within.lit).toBeGreaterThan(1);
 });
 
-test("a dungeon's way in out in the wilds is gone into: its first level drawn and lit by its torches, its foes woken, down its stairs to the next, and out again the same way", async ({ page }) => {
+test("a dungeon's way in out in the wilds is gone into: its first level drawn and lit by its torches, its pictures kept compressed, nothing drawn past its fog, its foes woken, down its stairs to the next, and out again the same way", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
@@ -8829,7 +8829,25 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
         Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
         await through(building.door);
 
-        const first = { map: player.map, drawn: Boolean(game.interiors.get(player.map)?.object.visible), lit: session.view.room?.lights.length ?? 0, foes: game.host.dungeons.get(site.id).awake[0]?.length ?? 0 };
+        const first = { map: player.map, drawn: Boolean(game.interiors.get(player.map)?.object.visible), lit: session.view.room?.lights.length ?? 0, foes: game.host.dungeons.get(site.id).awake[0]?.length ?? 0, sees: session.view.camera.far, fog: session.view.scene.fog.far };
+
+        // (Its rock's pictures and its things' come and read: KTX2, kept compressed, with their
+        // mipmaps)
+        const { rockPictures } = await import("/js/world/dungeons3d.js");
+        const level = game.interiors.get(player.map).object;
+        const meshes = () => {
+            const found = [];
+
+            level.traverse((node) => node.isMesh && found.push(node));
+
+            return found;
+        };
+        const pictures = [...new Set(meshes().flatMap(({ material }) => (material.name?.startsWith("rock-") ? [material.name.slice("rock-".length)] : [])))].flatMap((name) => Object.values(rockPictures(name)).filter((each) => each?.isTexture));
+        const props = () => meshes().flatMap(({ material }) => (material.name?.startsWith("prop-") && material.map ? [material.map] : []));
+        const compressed = (texture) => Boolean(texture.isCompressedTexture) && texture.mipmaps.length > 1;
+
+        await until(() => pictures.every(({ userData }) => userData.loaded?.value === 1) && props().length > 0, 300);
+        Object.assign(first, { pictures: pictures.length, compressed: pictures.every((texture) => texture.userData.loaded.value === 1 && compressed(texture)), props: props().length, propsCompressed: props().every(compressed) });
 
         await through(building.flights[0]);
 
@@ -8838,16 +8856,22 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
         await through(building.flights[0]);
         await through(building.door);
 
-        return { icon: Boolean(icon), maps: building.maps, first, second, out: player.map, by: Math.hypot(player.x - ox - 0.5, player.y - oy - 0.5) < 3 };
+        return { icon: Boolean(icon), maps: building.maps, first, second, out: player.map, by: Math.hypot(player.x - ox - 0.5, player.y - oy - 0.5) < 3, sees: session.view.camera.far };
     });
 
     expect(delved.icon).toBe(true);
     expect(delved.first).toMatchObject({ map: delved.maps[0], drawn: true });
     expect(delved.first.lit).toBeGreaterThan(1);
     expect(delved.first.foes).toBeGreaterThan(0);
+    // (Inside, nothing drawn much further off than the fog's thickest; out again, as far as ever)
+    expect(delved.first.sees).toBe(delved.first.fog + 4);
+    // (Its rock's colour picture and normal map, and its things' pictures, kept compressed)
+    expect(delved.first.pictures).toBeGreaterThanOrEqual(2);
+    expect(delved.first.props).toBeGreaterThan(0);
+    expect(delved.first).toMatchObject({ compressed: true, propsCompressed: true });
     expect(delved.second).toMatchObject({ map: delved.maps[1], drawn: true });
     expect(delved.second.woken).toBeGreaterThan(0);
-    expect(delved).toMatchObject({ out: "town", by: true });
+    expect(delved).toMatchObject({ out: "town", by: true, sees: 160 });
 });
 
 test("a dungeon whose creatures are drawn from models: theirs fetched, not read, as the player nears its way in; waited for at its door, the world stopped, a card saying how far they've got, Not now staying out and Go in now offered after a while; gone in once they're read; let go of a little after the player's left", async ({ page }) => {

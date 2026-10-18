@@ -4,7 +4,7 @@
 // what it's on; and the models placed as asked, their feet on the floor or on what's under them,
 // sized and turned, drawn a tile of the level at a time
 import assert from "node:assert/strict";
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { describe, it } from "node:test";
 import * as THREE from "three";
 
@@ -71,6 +71,24 @@ describe("the scanned models a dungeon's furnished with (scripts/build-props.js)
         }
 
         assert.ok(all < MOST.all, `${all} bytes in all`);
+    });
+
+    it("has its pictures each a KTX2, which the graphics card keeps compressed, and none that nothing's drawn with", () => {
+        for (const file of Object.keys(PROPS)) {
+            // (A GLB's JSON: its first chunk, after the file's header and the chunk's own)
+            const bytes = readFileSync(new URL(`../client/models/dungeons/${file}.glb`, import.meta.url));
+            const gltf = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString("utf8"));
+            const images = gltf.images ?? [];
+            const used = new Set((gltf.materials ?? []).flatMap(({ pbrMetallicRoughness: pbr = {}, normalTexture, emissiveTexture }) => [pbr.baseColorTexture, normalTexture, emissiveTexture].filter(Boolean).map(({ index }) => index)));
+
+            assert.ok(
+                images.every(({ mimeType }) => mimeType === "image/ktx2"),
+                `${file}: ${images.map(({ mimeType }) => mimeType)}`,
+            );
+            assert.ok((gltf.textures ?? []).every(({ source, extensions }) => source === undefined && Number.isInteger(extensions?.KHR_texture_basisu?.source)), file);
+            assert.equal(images.length > 0, (gltf.extensionsRequired ?? []).includes("KHR_texture_basisu"), file);
+            assert.equal(used.size, (gltf.textures ?? []).length, `${file}: a picture nothing's drawn with`);
+        }
     });
 });
 

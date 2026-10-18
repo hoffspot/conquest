@@ -171,14 +171,14 @@ describe("a dungeon's rock as one surface (world/caverns.js)", () => {
 });
 
 describe("the photographs a dungeon's drawn with (world/dungeonpictures.js, scripts/build-textures.js)", () => {
-    it("are each in the catalog, downloaded only once a dungeon's wanted: a colour picture and a normal map, there on disk", () => {
+    it("are each in the catalog, downloaded only once a dungeon's wanted: a colour picture and a normal map, each a KTX2, there on disk", () => {
         for (const [name, { entry, metres, mean }] of Object.entries(DUNGEON_PICTURES)) {
             const model = ASSETS.models[entry];
 
             assert.ok(model, `${name}: ${entry} isn't in the catalog`);
             assert.equal(model.tier, "demand");
             assert.deepEqual(
-                model.files.map(({ path }) => path.match(/-(colour|normal)\.jpg$/)?.[1]),
+                model.files.map(({ path }) => path.match(/-(colour|normal)\.ktx2$/)?.[1]),
                 ["colour", "normal"],
             );
 

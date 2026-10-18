@@ -16,20 +16,22 @@
 // simpler where it has more triangles than it needs seen from a few metres off (PROPS'
 // `triangles`, by meshoptimizer's simplifier, keeping its outline, its seams and where its
 // pictures lie on it: SIMPLER), and the whole saved as one GLB, each of its materials' colour
-// picture and normal map in it, how rough and how metal it is kept as a number (its picture's
-// average). Bones (`bone`), whoever scanned or painted them, are all made one colour: BONE. Some
-// models are sets (three candleholders, a heap of rocks, skulls and bones): each thing in a set is
-// a prop of its own (`pieces`: its nodes), all of them in one file, sharing its pictures. Each file
+// picture and normal map in it as KTX2 (ETC1S, which the graphics card keeps compressed:
+// lib/ktx2.js), how rough and how metal it is kept as a number (its picture's average). Bones
+// (`bone`), whoever scanned or painted them, are all made one colour: BONE. Some models are sets
+// (three candleholders, a heap of rocks, skulls and bones): each thing in a set is a prop of its
+// own (`pieces`: its nodes), all of them in one file, sharing its pictures. Each file
 // is listed in client/models/assets.json's catalog, with its pieces and whose it is, downloaded
 // only once a dungeon's wanted (then: npm run build:manifest); and in that folder's LICENSE.md,
 // with its licence and where it came from.
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { Document, NodeIO, getBounds } from "@gltf-transform/core";
-import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
+import { ALL_EXTENSIONS, KHRTextureBasisu } from "@gltf-transform/extensions";
 import draco3d from "draco3dgltf";
 import jpeg from "jpeg-js";
 import { MeshoptDecoder, MeshoptSimplifier } from "meshoptimizer";
+import { encodeKtx2 } from "./lib/ktx2.js";
 import { readObj, readStl } from "./lib/meshes.js";
 import { readPng } from "./lib/png.js";
 import { fetchSource } from "./sounds/sources.js";
@@ -591,7 +593,7 @@ async function fromFiles(name, { from, scale = 1, size = null, up = "y", rough =
 export async function make(name, prop, { out = OUT } = {}) {
     await MeshoptSimplifier.ready;
 
-    const io = new NodeIO();
+    const io = new NodeIO().registerExtensions([KHRTextureBasisu]);
     const { document, arms } = prop.from ? await fromFiles(name, prop) : { document: await io.readJSON(await readSource(prop)), arms: new Map() };
     const root = document.getRoot();
     const dropped = new Set(prop.drop ?? []);
@@ -693,23 +695,30 @@ export async function make(name, prop, { out = OUT } = {}) {
         if (colour && !done.has(colour)) {
             const picture = shrunk(decode(colour), prop.pixels, "colour", a, prop.saturation);
 
-            colour.setImage(new Uint8Array(jpeg.encode(prop.bone ? boned(picture, material, prop.bone === true ? 0.5 : prop.bone) : picture, 82).data)).setMimeType("image/jpeg").setURI(`${name}-${material.getName()}-colour.jpg`);
+            colour.setImage(await encodeKtx2(prop.bone ? boned(picture, material, prop.bone === true ? 0.5 : prop.bone) : picture, { kind: "colour" })).setMimeType("image/ktx2").setURI(`${name}-${material.getName()}-colour.ktx2`);
             done.add(colour);
         }
 
         if (normal && prop.normals === false) {
             material.setNormalTexture(null);
         } else if (normal && !done.has(normal)) {
-            normal.setImage(new Uint8Array(jpeg.encode(shrunk(decode(normal), prop.pixels, "normal"), 86).data)).setMimeType("image/jpeg").setURI(`${name}-${material.getName()}-normal.jpg`);
+            normal.setImage(await encodeKtx2(shrunk(decode(normal), prop.pixels, "normal"), { kind: "normal" })).setMimeType("image/ktx2").setURI(`${name}-${material.getName()}-normal.ktx2`);
             done.add(normal);
         }
 
         if (glow && !done.has(glow)) {
-            glow.setImage(new Uint8Array(jpeg.encode(shrunk(decode(glow), 64, "colour"), 82).data)).setMimeType("image/jpeg").setURI(`${name}-${material.getName()}-glow.jpg`);
+            glow.setImage(await encodeKtx2(shrunk(decode(glow), 64, "colour"), { kind: "colour" })).setMimeType("image/ktx2").setURI(`${name}-${material.getName()}-glow.ktx2`);
             done.add(glow);
         }
 
         material.setOcclusionTexture(null).setMetallicRoughnessTexture(null);
+    }
+
+    // (A material no longer drawn with, a candle's flame left out, let go of with its pictures)
+    for (const material of root.listMaterials()) {
+        if (!material.listParents().some((parent) => parent !== root)) {
+            material.dispose();
+        }
     }
 
     for (const texture of root.listTextures()) {
@@ -722,6 +731,11 @@ export async function make(name, prop, { out = OUT } = {}) {
         if (!accessor.listParents().some((parent) => parent !== root)) {
             accessor.dispose();
         }
+    }
+
+    // (Its pictures KTX2, which the graphics card keeps compressed: lib/ktx2.js)
+    if (root.listTextures().length > 0) {
+        document.createExtension(KHRTextureBasisu).setRequired(true);
     }
 
     const glb = await io.writeBinary(document);

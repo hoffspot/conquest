@@ -7,21 +7,21 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "1ee74d1273",
+    release: "b6b0828965",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
             "label": "A cave's rock (ambientCG Rock028, CC0)",
             "files": [
                 {
-                    "path": "textures/dungeons/rock-cave-colour.jpg",
-                    "hash": "a1b4fa146a",
-                    "bytes": 80290
+                    "path": "textures/dungeons/rock-cave-colour.ktx2",
+                    "hash": "e40e48d9ba",
+                    "bytes": 73932
                 },
                 {
-                    "path": "textures/dungeons/rock-cave-normal.jpg",
-                    "hash": "ac9cc28dff",
-                    "bytes": 275323
+                    "path": "textures/dungeons/rock-cave-normal.ktx2",
+                    "hash": "bd0c2e356e",
+                    "bytes": 341588
                 }
             ]
         },
@@ -30,14 +30,14 @@ export const ASSETS = Object.freeze({
             "label": "A cave's floor (ambientCG Ground022, CC0)",
             "files": [
                 {
-                    "path": "textures/dungeons/ground-cave-colour.jpg",
-                    "hash": "2557da5ccd",
-                    "bytes": 99238
+                    "path": "textures/dungeons/ground-cave-colour.ktx2",
+                    "hash": "a8bcf0ec18",
+                    "bytes": 77853
                 },
                 {
-                    "path": "textures/dungeons/ground-cave-normal.jpg",
-                    "hash": "a58a03c89b",
-                    "bytes": 284952
+                    "path": "textures/dungeons/ground-cave-normal.ktx2",
+                    "hash": "c076b4faf1",
+                    "bytes": 337974
                 }
             ]
         },
@@ -46,14 +46,14 @@ export const ASSETS = Object.freeze({
             "label": "An outlaws' hideout's trodden earth (ambientCG Ground048, CC0)",
             "files": [
                 {
-                    "path": "textures/dungeons/ground-dug-colour.jpg",
-                    "hash": "5f15d17297",
-                    "bytes": 113313
+                    "path": "textures/dungeons/ground-dug-colour.ktx2",
+                    "hash": "148ac69cef",
+                    "bytes": 75189
                 },
                 {
-                    "path": "textures/dungeons/ground-dug-normal.jpg",
-                    "hash": "7d1449ec05",
-                    "bytes": 225547
+                    "path": "textures/dungeons/ground-dug-normal.ktx2",
+                    "hash": "9cfc0fdf84",
+                    "bytes": 330692
                 }
             ]
         },
@@ -62,14 +62,14 @@ export const ASSETS = Object.freeze({
             "label": "An outlaws' hideout's rock, dug out (Poly Haven quarry_wall, CC0)",
             "files": [
                 {
-                    "path": "textures/dungeons/rock-dug-colour.jpg",
-                    "hash": "609aa51187",
-                    "bytes": 64615
+                    "path": "textures/dungeons/rock-dug-colour.ktx2",
+                    "hash": "d855a98de4",
+                    "bytes": 70235
                 },
                 {
-                    "path": "textures/dungeons/rock-dug-normal.jpg",
-                    "hash": "37450dc546",
-                    "bytes": 147824
+                    "path": "textures/dungeons/rock-dug-normal.ktx2",
+                    "hash": "b2cf005f01",
+                    "bytes": 330119
                 }
             ]
         },
@@ -78,14 +78,14 @@ export const ASSETS = Object.freeze({
             "label": "Rough timber, its posts and beams (Poly Haven rough_wood, CC0)",
             "files": [
                 {
-                    "path": "textures/dungeons/timber-colour.jpg",
-                    "hash": "bb19d05572",
-                    "bytes": 64708
+                    "path": "textures/dungeons/timber-colour.ktx2",
+                    "hash": "43c19d50a3",
+                    "bytes": 70776
                 },
                 {
-                    "path": "textures/dungeons/timber-normal.jpg",
-                    "hash": "30b0ff278c",
-                    "bytes": 92592
+                    "path": "textures/dungeons/timber-normal.ktx2",
+                    "hash": "dfc1005f28",
+                    "bytes": 292993
                 }
             ]
         },
@@ -94,14 +94,14 @@ export const ASSETS = Object.freeze({
             "label": "An ancient temple's dressed stone (Poly Haven stone_brick_wall_001, CC0)",
             "files": [
                 {
-                    "path": "textures/dungeons/stone-temple-colour.jpg",
-                    "hash": "1d894bf5d5",
-                    "bytes": 66804
+                    "path": "textures/dungeons/stone-temple-colour.ktx2",
+                    "hash": "d2f5b31d4f",
+                    "bytes": 71067
                 },
                 {
-                    "path": "textures/dungeons/stone-temple-normal.jpg",
-                    "hash": "ac2a1753a2",
-                    "bytes": 163079
+                    "path": "textures/dungeons/stone-temple-normal.ktx2",
+                    "hash": "a8113370f4",
+                    "bytes": 331851
                 }
             ]
         },
@@ -110,14 +110,14 @@ export const ASSETS = Object.freeze({
             "label": "An ancient temple's flagstones (Poly Haven large_grey_tiles, CC0)",
             "files": [
                 {
-                    "path": "textures/dungeons/floor-temple-colour.jpg",
-                    "hash": "48e15be912",
-                    "bytes": 49322
+                    "path": "textures/dungeons/floor-temple-colour.ktx2",
+                    "hash": "fc8f0a3df1",
+                    "bytes": 68164
                 },
                 {
-                    "path": "textures/dungeons/floor-temple-normal.jpg",
-                    "hash": "feb9a0be71",
-                    "bytes": 45878
+                    "path": "textures/dungeons/floor-temple-normal.ktx2",
+                    "hash": "f54249fcd4",
+                    "bytes": 164892
                 }
             ]
         },
@@ -127,8 +127,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/barrel.glb",
-                    "hash": "027e749579",
-                    "bytes": 393008
+                    "hash": "7f31f6850e",
+                    "bytes": 336240
                 }
             ]
         },
@@ -138,8 +138,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/crate.glb",
-                    "hash": "ff5548f51a",
-                    "bytes": 206440
+                    "hash": "64859d5ea0",
+                    "bytes": 171856
                 }
             ]
         },
@@ -149,8 +149,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/table.glb",
-                    "hash": "fdfd716b35",
-                    "bytes": 117828
+                    "hash": "ef90ea52e4",
+                    "bytes": 88372
                 }
             ]
         },
@@ -160,8 +160,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/fire-pit.glb",
-                    "hash": "2577c9689b",
-                    "bytes": 272440
+                    "hash": "c4bf5d7e55",
+                    "bytes": 181832
                 }
             ]
         },
@@ -171,8 +171,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/boulder.glb",
-                    "hash": "ee7e62d4f1",
-                    "bytes": 145780
+                    "hash": "cd4ce0964a",
+                    "bytes": 125108
                 }
             ]
         },
@@ -182,8 +182,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bust.glb",
-                    "hash": "35c9adaac9",
-                    "bytes": 216976
+                    "hash": "6e26603511",
+                    "bytes": 196328
                 }
             ]
         },
@@ -193,8 +193,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/axe.glb",
-                    "hash": "b534980394",
-                    "bytes": 67180
+                    "hash": "ec9bf30477",
+                    "bytes": 63124
                 }
             ]
         },
@@ -204,8 +204,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/vase.glb",
-                    "hash": "7f04fc11cf",
-                    "bytes": 61056
+                    "hash": "9624444604",
+                    "bytes": 60480
                 }
             ]
         },
@@ -215,8 +215,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/table-plank.glb",
-                    "hash": "29a394ec74",
-                    "bytes": 174972
+                    "hash": "31779a2ce4",
+                    "bytes": 126824
                 }
             ]
         },
@@ -226,8 +226,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/table-low.glb",
-                    "hash": "26952e6c73",
-                    "bytes": 60180
+                    "hash": "9463e4796f",
+                    "bytes": 60932
                 }
             ]
         },
@@ -237,8 +237,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/stool.glb",
-                    "hash": "939fbc1b45",
-                    "bytes": 83736
+                    "hash": "835d17ca86",
+                    "bytes": 71400
                 }
             ]
         },
@@ -248,8 +248,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/stool-low.glb",
-                    "hash": "63e1ca2737",
-                    "bytes": 83332
+                    "hash": "8efd52b629",
+                    "bytes": 66772
                 }
             ]
         },
@@ -259,8 +259,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/stool-folding.glb",
-                    "hash": "05607dada6",
-                    "bytes": 95464
+                    "hash": "f094aaa4a0",
+                    "bytes": 86720
                 }
             ]
         },
@@ -270,8 +270,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bench.glb",
-                    "hash": "2f9bc7092d",
-                    "bytes": 60472
+                    "hash": "c35507a598",
+                    "bytes": 53576
                 }
             ]
         },
@@ -281,8 +281,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/chair-gothic.glb",
-                    "hash": "094368065f",
-                    "bytes": 301876
+                    "hash": "7e9f008967",
+                    "bytes": 240728
                 }
             ]
         },
@@ -292,8 +292,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bookshelf.glb",
-                    "hash": "94f7300597",
-                    "bytes": 295968
+                    "hash": "071e350762",
+                    "bytes": 210464
                 }
             ]
         },
@@ -303,8 +303,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/shelf.glb",
-                    "hash": "0ace7ac831",
-                    "bytes": 49188
+                    "hash": "63dcf334eb",
+                    "bytes": 40340
                 }
             ]
         },
@@ -314,8 +314,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/cabinet-gothic.glb",
-                    "hash": "2a9b49959f",
-                    "bytes": 386912
+                    "hash": "9ca3da8a12",
+                    "bytes": 337880
                 }
             ]
         },
@@ -325,8 +325,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/ladder.glb",
-                    "hash": "a271c847be",
-                    "bytes": 94048
+                    "hash": "e6cc098fc4",
+                    "bytes": 89968
                 }
             ]
         },
@@ -336,8 +336,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/barrels.glb",
-                    "hash": "62d8951ab0",
-                    "bytes": 438672
+                    "hash": "dc0fe4dabd",
+                    "bytes": 426784
                 }
             ],
             "pieces": {
@@ -374,8 +374,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/crate-long.glb",
-                    "hash": "66f9c46d3e",
-                    "bytes": 207224
+                    "hash": "42f564dbfd",
+                    "bytes": 177448
                 }
             ]
         },
@@ -385,8 +385,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/crate-big.glb",
-                    "hash": "3d9eb6318c",
-                    "bytes": 283184
+                    "hash": "86b05942c7",
+                    "bytes": 239848
                 }
             ]
         },
@@ -396,8 +396,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bucket.glb",
-                    "hash": "28bc58d988",
-                    "bytes": 115248
+                    "hash": "f1ac46bcc0",
+                    "bytes": 103080
                 }
             ]
         },
@@ -407,8 +407,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bucket-wide.glb",
-                    "hash": "f28638bd2d",
-                    "bytes": 158016
+                    "hash": "191e44f12c",
+                    "bytes": 143608
                 }
             ]
         },
@@ -418,8 +418,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/basket.glb",
-                    "hash": "de11e75997",
-                    "bytes": 119024
+                    "hash": "0bfac29109",
+                    "bytes": 116156
                 }
             ]
         },
@@ -429,8 +429,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/basket-lidded.glb",
-                    "hash": "106aca5c9a",
-                    "bytes": 134784
+                    "hash": "de6c3618e4",
+                    "bytes": 103856
                 }
             ]
         },
@@ -440,8 +440,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/goblets.glb",
-                    "hash": "b05600e0d5",
-                    "bytes": 190748
+                    "hash": "9076db45fd",
+                    "bytes": 147632
                 }
             ],
             "pieces": {
@@ -462,8 +462,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bowl.glb",
-                    "hash": "393bd91ba4",
-                    "bytes": 51472
+                    "hash": "465513df9e",
+                    "bytes": 46464
                 }
             ]
         },
@@ -473,8 +473,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bowl-small.glb",
-                    "hash": "b18c1ecdd4",
-                    "bytes": 45812
+                    "hash": "d11248f810",
+                    "bytes": 37912
                 }
             ]
         },
@@ -484,8 +484,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/spoon.glb",
-                    "hash": "dae5b01476",
-                    "bytes": 13508
+                    "hash": "38d94fe2f6",
+                    "bytes": 14208
                 }
             ]
         },
@@ -495,8 +495,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/plate.glb",
-                    "hash": "13fbe4260f",
-                    "bytes": 25080
+                    "hash": "843fc9554e",
+                    "bytes": 27256
                 }
             ]
         },
@@ -506,8 +506,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/board.glb",
-                    "hash": "bc41deb5ad",
-                    "bytes": 33224
+                    "hash": "292d2ef07d",
+                    "bytes": 31172
                 }
             ]
         },
@@ -517,8 +517,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/pot.glb",
-                    "hash": "370ead9e28",
-                    "bytes": 71028
+                    "hash": "8ecde0854b",
+                    "bytes": 65308
                 }
             ]
         },
@@ -528,8 +528,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/pot-brass.glb",
-                    "hash": "5c31abcd05",
-                    "bytes": 59108
+                    "hash": "d7dc6a6d1f",
+                    "bytes": 56796
                 }
             ]
         },
@@ -539,8 +539,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/pot-flat.glb",
-                    "hash": "a775e57955",
-                    "bytes": 57280
+                    "hash": "6401cac5d8",
+                    "bytes": 55184
                 }
             ]
         },
@@ -550,8 +550,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/pot-clay.glb",
-                    "hash": "ae037bf30c",
-                    "bytes": 54636
+                    "hash": "187a3b2219",
+                    "bytes": 52228
                 }
             ]
         },
@@ -561,8 +561,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/apple.glb",
-                    "hash": "309d9d6c38",
-                    "bytes": 25760
+                    "hash": "476bfaf9fc",
+                    "bytes": 23452
                 }
             ]
         },
@@ -572,8 +572,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/onion.glb",
-                    "hash": "a5cd8d6d10",
-                    "bytes": 24220
+                    "hash": "48cb7ae584",
+                    "bytes": 24656
                 }
             ]
         },
@@ -583,8 +583,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/sweet-potato.glb",
-                    "hash": "d0fa315917",
-                    "bytes": 14452
+                    "hash": "e673a5ec82",
+                    "bytes": 14368
                 }
             ]
         },
@@ -594,8 +594,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/pomegranate.glb",
-                    "hash": "511679e3f2",
-                    "bytes": 25320
+                    "hash": "8068b71013",
+                    "bytes": 23528
                 }
             ]
         },
@@ -605,8 +605,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/vase-antique.glb",
-                    "hash": "d66228fafa",
-                    "bytes": 76600
+                    "hash": "f40d544c0c",
+                    "bytes": 67912
                 }
             ]
         },
@@ -616,8 +616,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/vase-tall.glb",
-                    "hash": "eaf2b79978",
-                    "bytes": 80576
+                    "hash": "128e0a3a6d",
+                    "bytes": 79504
                 }
             ]
         },
@@ -627,8 +627,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/vase-brass.glb",
-                    "hash": "83d036ed0f",
-                    "bytes": 74524
+                    "hash": "1d2b8d9a94",
+                    "bytes": 67540
                 }
             ]
         },
@@ -638,8 +638,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/vase-small.glb",
-                    "hash": "1dd1dad956",
-                    "bytes": 51584
+                    "hash": "0e4e00e2f9",
+                    "bytes": 48272
                 }
             ]
         },
@@ -649,8 +649,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/candlestick.glb",
-                    "hash": "2459207cd8",
-                    "bytes": 80356
+                    "hash": "86bca99b8a",
+                    "bytes": 75796
                 }
             ]
         },
@@ -660,8 +660,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/candleholders.glb",
-                    "hash": "7b4102fb07",
-                    "bytes": 516552
+                    "hash": "22d54405b8",
+                    "bytes": 257060
                 }
             ],
             "pieces": {
@@ -682,8 +682,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/lantern.glb",
-                    "hash": "8527423a15",
-                    "bytes": 124736
+                    "hash": "65dfbcc337",
+                    "bytes": 113396
                 }
             ]
         },
@@ -693,8 +693,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/axe-long.glb",
-                    "hash": "9720d92798",
-                    "bytes": 49628
+                    "hash": "1e4605f297",
+                    "bytes": 47532
                 }
             ]
         },
@@ -704,8 +704,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/axe-old.glb",
-                    "hash": "0c00ff9992",
-                    "bytes": 61628
+                    "hash": "486ef96324",
+                    "bytes": 54652
                 }
             ]
         },
@@ -715,8 +715,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/hatchet.glb",
-                    "hash": "88b35d0c12",
-                    "bytes": 73276
+                    "hash": "49ec39bd1b",
+                    "bytes": 65852
                 }
             ]
         },
@@ -726,8 +726,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/pickaxe.glb",
-                    "hash": "2546182cdf",
-                    "bytes": 64108
+                    "hash": "b0c94519d0",
+                    "bytes": 56804
                 }
             ]
         },
@@ -737,8 +737,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/spade.glb",
-                    "hash": "4e00ff76ae",
-                    "bytes": 63256
+                    "hash": "0ec7499fcd",
+                    "bytes": 58288
                 }
             ]
         },
@@ -748,8 +748,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/hammer.glb",
-                    "hash": "7ace91df8f",
-                    "bytes": 26188
+                    "hash": "22ed81c31a",
+                    "bytes": 26396
                 }
             ]
         },
@@ -759,8 +759,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/mallet.glb",
-                    "hash": "f56f26c022",
-                    "bytes": 29076
+                    "hash": "f86abb3e36",
+                    "bytes": 28956
                 }
             ]
         },
@@ -770,8 +770,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/saw.glb",
-                    "hash": "e8121d2f57",
-                    "bytes": 84292
+                    "hash": "64e156546f",
+                    "bytes": 69140
                 }
             ]
         },
@@ -781,8 +781,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/estoc.glb",
-                    "hash": "fe59da59b5",
-                    "bytes": 89824
+                    "hash": "634cfd0a17",
+                    "bytes": 75552
                 }
             ]
         },
@@ -792,8 +792,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/dagger.glb",
-                    "hash": "867150c6e9",
-                    "bytes": 77420
+                    "hash": "02e7c2e586",
+                    "bytes": 61508
                 }
             ]
         },
@@ -803,8 +803,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/mace.glb",
-                    "hash": "2ee40f64fd",
-                    "bytes": 106908
+                    "hash": "c736561d52",
+                    "bytes": 90988
                 }
             ]
         },
@@ -814,8 +814,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/war-hammer.glb",
-                    "hash": "6ee8d4c012",
-                    "bytes": 79416
+                    "hash": "70e9c70a04",
+                    "bytes": 68688
                 }
             ]
         },
@@ -825,8 +825,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/saber.glb",
-                    "hash": "56fa8b4384",
-                    "bytes": 54584
+                    "hash": "927feb4b5d",
+                    "bytes": 49960
                 }
             ]
         },
@@ -836,8 +836,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/shield-kite.glb",
-                    "hash": "59449a02a8",
-                    "bytes": 338300
+                    "hash": "461388a9d8",
+                    "bytes": 238800
                 }
             ]
         },
@@ -847,8 +847,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/statue-gothic.glb",
-                    "hash": "62bcb24a8f",
-                    "bytes": 647020
+                    "hash": "f4cb79f4e6",
+                    "bytes": 455296
                 }
             ]
         },
@@ -858,8 +858,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/lion-head.glb",
-                    "hash": "5cf7c3abf5",
-                    "bytes": 237124
+                    "hash": "cc99a30f87",
+                    "bytes": 185592
                 }
             ]
         },
@@ -869,8 +869,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bull-head.glb",
-                    "hash": "1c33b021ac",
-                    "bytes": 166196
+                    "hash": "e586d52d0e",
+                    "bytes": 149172
                 }
             ]
         },
@@ -880,8 +880,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/horse-head.glb",
-                    "hash": "6c9560af9d",
-                    "bytes": 170736
+                    "hash": "aa50a9823d",
+                    "bytes": 152904
                 }
             ]
         },
@@ -891,8 +891,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/cat-statue.glb",
-                    "hash": "458f1e804b",
-                    "bytes": 115236
+                    "hash": "5e21b1dff6",
+                    "bytes": 90636
                 }
             ]
         },
@@ -902,8 +902,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/boulder-02.glb",
-                    "hash": "977be577df",
-                    "bytes": 362964
+                    "hash": "95a964d76c",
+                    "bytes": 247844
                 }
             ]
         },
@@ -913,8 +913,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/boulder-03.glb",
-                    "hash": "953a589572",
-                    "bytes": 261352
+                    "hash": "698dae56df",
+                    "bytes": 180604
                 }
             ]
         },
@@ -924,8 +924,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/boulder-04.glb",
-                    "hash": "663076bbe3",
-                    "bytes": 294976
+                    "hash": "2000146953",
+                    "bytes": 193496
                 }
             ]
         },
@@ -935,8 +935,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/boulder-06.glb",
-                    "hash": "a45e73c076",
-                    "bytes": 335892
+                    "hash": "59c1afb148",
+                    "bytes": 216364
                 }
             ]
         },
@@ -946,8 +946,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/mossy-rocks.glb",
-                    "hash": "3043e7baee",
-                    "bytes": 442392
+                    "hash": "32e919dd65",
+                    "bytes": 391952
                 }
             ],
             "pieces": {
@@ -977,8 +977,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/mossy-rocks-2.glb",
-                    "hash": "50b63810c6",
-                    "bytes": 531564
+                    "hash": "0a6ad08773",
+                    "bytes": 442212
                 }
             ],
             "pieces": {
@@ -1011,8 +1011,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/rock-a.glb",
-                    "hash": "633f52a0f4",
-                    "bytes": 268404
+                    "hash": "51f6caf41a",
+                    "bytes": 266804
                 }
             ]
         },
@@ -1022,8 +1022,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/rock-b.glb",
-                    "hash": "861afab1d0",
-                    "bytes": 52500
+                    "hash": "16c4bab31d",
+                    "bytes": 48596
                 }
             ]
         },
@@ -1033,8 +1033,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/rock-c.glb",
-                    "hash": "2a0799d037",
-                    "bytes": 53468
+                    "hash": "0d1c4a480f",
+                    "bytes": 48508
                 }
             ]
         },
@@ -1044,8 +1044,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/rock-d.glb",
-                    "hash": "16b613993f",
-                    "bytes": 57012
+                    "hash": "d560896a49",
+                    "bytes": 53900
                 }
             ]
         },
@@ -1055,8 +1055,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/rock-e.glb",
-                    "hash": "6a0da7cffa",
-                    "bytes": 53632
+                    "hash": "557fbe5d49",
+                    "bytes": 51576
                 }
             ]
         },
@@ -1066,8 +1066,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/rock-f.glb",
-                    "hash": "c221d354ef",
-                    "bytes": 50276
+                    "hash": "de0b1f668e",
+                    "bytes": 49684
                 }
             ]
         },
@@ -1077,8 +1077,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/rock-flat.glb",
-                    "hash": "0ac713aead",
-                    "bytes": 84440
+                    "hash": "0f507e4e0e",
+                    "bytes": 71032
                 }
             ]
         },
@@ -1088,8 +1088,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/rock-shard.glb",
-                    "hash": "ae43f3d00d",
-                    "bytes": 73856
+                    "hash": "d72afb4587",
+                    "bytes": 57832
                 }
             ]
         },
@@ -1099,8 +1099,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/stone.glb",
-                    "hash": "e0bcdb5f80",
-                    "bytes": 79116
+                    "hash": "b44591134d",
+                    "bytes": 58004
                 }
             ]
         },
@@ -1110,8 +1110,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/pebbles.glb",
-                    "hash": "bfa1ab2a03",
-                    "bytes": 72052
+                    "hash": "e699f14738",
+                    "bytes": 71320
                 }
             ],
             "pieces": {
@@ -1138,8 +1138,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/stones.glb",
-                    "hash": "b2a06f2dc1",
-                    "bytes": 70988
+                    "hash": "8b9301a211",
+                    "bytes": 69112
                 }
             ],
             "pieces": {
@@ -1163,8 +1163,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/log.glb",
-                    "hash": "5f40728594",
-                    "bytes": 289828
+                    "hash": "9dc362ad42",
+                    "bytes": 189176
                 }
             ]
         },
@@ -1174,8 +1174,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/log-big.glb",
-                    "hash": "0368730bc7",
-                    "bytes": 387172
+                    "hash": "942926a04a",
+                    "bytes": 243200
                 }
             ]
         },
@@ -1185,8 +1185,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/root-single.glb",
-                    "hash": "033b935154",
-                    "bytes": 122344
+                    "hash": "87fe94a316",
+                    "bytes": 115592
                 }
             ]
         },
@@ -1196,8 +1196,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/stump.glb",
-                    "hash": "da30f8854f",
-                    "bytes": 393600
+                    "hash": "2c8688cc56",
+                    "bytes": 213536
                 }
             ]
         },
@@ -1207,8 +1207,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/stump-2.glb",
-                    "hash": "6428c2ff23",
-                    "bytes": 398552
+                    "hash": "76492c0130",
+                    "bytes": 208392
                 }
             ]
         },
@@ -1218,8 +1218,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/branches.glb",
-                    "hash": "876a6d1492",
-                    "bytes": 209872
+                    "hash": "ab6ae458a7",
+                    "bytes": 176936
                 }
             ],
             "pieces": {
@@ -1240,8 +1240,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bark.glb",
-                    "hash": "8c220bd95e",
-                    "bytes": 222748
+                    "hash": "8ffc0ae848",
+                    "bytes": 220280
                 }
             ],
             "pieces": {
@@ -1265,8 +1265,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/skull.glb",
-                    "hash": "ebe1b076ae",
-                    "bytes": 84996
+                    "hash": "e6acd8d4b2",
+                    "bytes": 72956
                 }
             ]
         },
@@ -1276,8 +1276,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bones.glb",
-                    "hash": "3cd14b1945",
-                    "bytes": 188456
+                    "hash": "08203b9aa6",
+                    "bytes": 176008
                 }
             ],
             "pieces": {
@@ -1307,8 +1307,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/rat.glb",
-                    "hash": "b74380aa7b",
-                    "bytes": 73748
+                    "hash": "922a6588c3",
+                    "bytes": 69292
                 }
             ]
         },
@@ -1318,8 +1318,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/cart.glb",
-                    "hash": "5d0bd16b68",
-                    "bytes": 350728
+                    "hash": "5075f6df8d",
+                    "bytes": 348000
                 }
             ]
         },
@@ -1329,8 +1329,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/wheelbarrow.glb",
-                    "hash": "de96a9da1b",
-                    "bytes": 150532
+                    "hash": "c59b676a15",
+                    "bytes": 146804
                 }
             ]
         },
@@ -1340,8 +1340,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/cauldron.glb",
-                    "hash": "afb38562de",
-                    "bytes": 106912
+                    "hash": "db532e3d57",
+                    "bytes": 103404
                 }
             ]
         },
@@ -1351,8 +1351,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/chest-old.glb",
-                    "hash": "bb6a6074b0",
-                    "bytes": 219968
+                    "hash": "4ceadb0870",
+                    "bytes": 193152
                 }
             ]
         },
@@ -1362,8 +1362,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/weapon-rack.glb",
-                    "hash": "435081d328",
-                    "bytes": 54480
+                    "hash": "a4c795b183",
+                    "bytes": 55744
                 }
             ]
         },
@@ -1373,8 +1373,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/sword.glb",
-                    "hash": "5f886583ba",
-                    "bytes": 69196
+                    "hash": "b9fab965ba",
+                    "bytes": 63800
                 }
             ]
         },
@@ -1384,8 +1384,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/pelt.glb",
-                    "hash": "ac09a63097",
-                    "bytes": 71220
+                    "hash": "b1b288d862",
+                    "bytes": 72528
                 }
             ]
         },
@@ -1395,8 +1395,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/sarcophagus-stone.glb",
-                    "hash": "b2d50f1070",
-                    "bytes": 271028
+                    "hash": "ad34edf877",
+                    "bytes": 273172
                 }
             ]
         },
@@ -1406,8 +1406,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/sarcophagus-painted.glb",
-                    "hash": "4bba0e3152",
-                    "bytes": 224700
+                    "hash": "a0eab7c00a",
+                    "bytes": 217476
                 }
             ]
         },
@@ -1417,8 +1417,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/guardian.glb",
-                    "hash": "92b040bbe0",
-                    "bytes": 326512
+                    "hash": "a51fbe1d5d",
+                    "bytes": 260288
                 }
             ]
         },
@@ -1428,8 +1428,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/urn-face.glb",
-                    "hash": "4151bb9c7e",
-                    "bytes": 221624
+                    "hash": "a00ff74bb0",
+                    "bytes": 224628
                 }
             ]
         },
@@ -1439,8 +1439,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/urn-carved.glb",
-                    "hash": "de5b9b8891",
-                    "bytes": 77572
+                    "hash": "9bba57731c",
+                    "bytes": 77300
                 }
             ]
         },
@@ -1450,8 +1450,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bronze-vessel.glb",
-                    "hash": "f550d9558e",
-                    "bytes": 178864
+                    "hash": "cd0b858f83",
+                    "bytes": 166532
                 }
             ]
         },
@@ -1461,8 +1461,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/basin.glb",
-                    "hash": "7520bdddba",
-                    "bytes": 166264
+                    "hash": "8ffaa3fe4e",
+                    "bytes": 168440
                 }
             ]
         },
@@ -1472,8 +1472,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/mushrooms.glb",
-                    "hash": "6d8e827738",
-                    "bytes": 254784
+                    "hash": "cb758f07c0",
+                    "bytes": 229612
                 }
             ]
         },
@@ -1483,8 +1483,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/fungus.glb",
-                    "hash": "ed4075483a",
-                    "bytes": 82688
+                    "hash": "62ce8c1a58",
+                    "bytes": 78548
                 }
             ]
         },
@@ -1494,8 +1494,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/wolf-skull.glb",
-                    "hash": "550869e33b",
-                    "bytes": 306872
+                    "hash": "26a8003ad8",
+                    "bytes": 252788
                 }
             ]
         },
@@ -1505,8 +1505,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bear-skull.glb",
-                    "hash": "7e1585c5e2",
-                    "bytes": 158308
+                    "hash": "c48a45cd6d",
+                    "bytes": 149968
                 }
             ]
         },
@@ -1516,8 +1516,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/cow-skull.glb",
-                    "hash": "b8f739da6f",
-                    "bytes": 150428
+                    "hash": "7d3667b6e8",
+                    "bytes": 130004
                 }
             ]
         },
@@ -1527,8 +1527,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/stag-skull.glb",
-                    "hash": "e4694e875a",
-                    "bytes": 153068
+                    "hash": "55dbb5a11f",
+                    "bytes": 136772
                 }
             ]
         },
@@ -1538,8 +1538,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/sheep-skull.glb",
-                    "hash": "0ce545c7ba",
-                    "bytes": 277396
+                    "hash": "d644ee69bd",
+                    "bytes": 267388
                 }
             ]
         },
@@ -1571,8 +1571,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/sword-arming.glb",
-                    "hash": "fa2e4779dd",
-                    "bytes": 78968
+                    "hash": "0e69768d29",
+                    "bytes": 74488
                 }
             ]
         },
@@ -1582,8 +1582,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/sword-long.glb",
-                    "hash": "8b01d87489",
-                    "bytes": 57132
+                    "hash": "e8cce20d4d",
+                    "bytes": 55916
                 }
             ]
         },
@@ -1593,8 +1593,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/claymore.glb",
-                    "hash": "bf667299d9",
-                    "bytes": 105664
+                    "hash": "12e5427bdf",
+                    "bytes": 102132
                 }
             ]
         },
@@ -1604,8 +1604,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/zweihander.glb",
-                    "hash": "eefce275c4",
-                    "bytes": 101776
+                    "hash": "ea8e247f2e",
+                    "bytes": 96840
                 }
             ]
         },
@@ -1615,8 +1615,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/sword-chevalier.glb",
-                    "hash": "863ab96bde",
-                    "bytes": 159908
+                    "hash": "0eb1c0b6df",
+                    "bytes": 153200
                 }
             ]
         },
@@ -1626,8 +1626,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/sword-rack.glb",
-                    "hash": "29ac35149f",
-                    "bytes": 170888
+                    "hash": "bf260dd4e8",
+                    "bytes": 147384
                 }
             ]
         },
@@ -1637,8 +1637,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/grindstone.glb",
-                    "hash": "426c16fa12",
-                    "bytes": 132188
+                    "hash": "a0040c7c88",
+                    "bytes": 119516
                 }
             ]
         },
@@ -1648,8 +1648,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/barbuta.glb",
-                    "hash": "3c92331fff",
-                    "bytes": 76212
+                    "hash": "1745fe6fd4",
+                    "bytes": 76572
                 }
             ]
         },
@@ -1659,8 +1659,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/barbuta-visored.glb",
-                    "hash": "deb6dd9c23",
-                    "bytes": 114348
+                    "hash": "4da3f04b82",
+                    "bytes": 109492
                 }
             ]
         },
@@ -1670,8 +1670,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/great-helm.glb",
-                    "hash": "a5579b484f",
-                    "bytes": 126396
+                    "hash": "40ae866129",
+                    "bytes": 125092
                 }
             ]
         },
@@ -1681,8 +1681,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/shield-heater.glb",
-                    "hash": "128d9275be",
-                    "bytes": 74200
+                    "hash": "89c7e432b8",
+                    "bytes": 69824
                 }
             ]
         },
@@ -1692,8 +1692,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/book-open.glb",
-                    "hash": "ce223762a0",
-                    "bytes": 76312
+                    "hash": "1aff107711",
+                    "bytes": 68992
                 }
             ]
         },
@@ -1703,8 +1703,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/books.glb",
-                    "hash": "f235bf1459",
-                    "bytes": 225420
+                    "hash": "bea8eeca08",
+                    "bytes": 212236
                 }
             ]
         },
@@ -1714,8 +1714,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/quill.glb",
-                    "hash": "06587b43c5",
-                    "bytes": 43800
+                    "hash": "e262cc528b",
+                    "bytes": 42568
                 }
             ]
         },
@@ -1725,8 +1725,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/scroll.glb",
-                    "hash": "b5f8f646b1",
-                    "bytes": 56980
+                    "hash": "369b8cbf60",
+                    "bytes": 54408
                 }
             ]
         },
@@ -1736,8 +1736,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/hourglass.glb",
-                    "hash": "d50eb51b58",
-                    "bytes": 118744
+                    "hash": "9727003f35",
+                    "bytes": 110216
                 }
             ]
         },
@@ -1747,8 +1747,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/crystal-ball.glb",
-                    "hash": "947ac6180d",
-                    "bytes": 92392
+                    "hash": "da238e588a",
+                    "bytes": 87800
                 }
             ]
         },
@@ -1758,8 +1758,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/globe-celestial.glb",
-                    "hash": "9fd67c915f",
-                    "bytes": 296720
+                    "hash": "d5658cec1d",
+                    "bytes": 294592
                 }
             ]
         },
@@ -1769,8 +1769,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/alembic.glb",
-                    "hash": "9141b9d493",
-                    "bytes": 124176
+                    "hash": "2108da29bb",
+                    "bytes": 113628
                 }
             ]
         },
@@ -1780,8 +1780,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bottle-magic.glb",
-                    "hash": "ae013f2373",
-                    "bytes": 143364
+                    "hash": "71736fe871",
+                    "bytes": 101916
                 }
             ]
         },
@@ -1791,8 +1791,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/bottle-magic-2.glb",
-                    "hash": "f597228cc0",
-                    "bytes": 131576
+                    "hash": "1dfbf2f726",
+                    "bytes": 101552
                 }
             ]
         },
@@ -1802,8 +1802,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/mortar.glb",
-                    "hash": "64797d6c49",
-                    "bytes": 58628
+                    "hash": "2a7ad80053",
+                    "bytes": 60020
                 }
             ]
         },
@@ -1813,8 +1813,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/albarello.glb",
-                    "hash": "7637e55802",
-                    "bytes": 58152
+                    "hash": "cc22332d0e",
+                    "bytes": 52844
                 }
             ]
         },
@@ -1824,8 +1824,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/dungeons/hauberk.glb",
-                    "hash": "0571bd5382",
-                    "bytes": 78776
+                    "hash": "c76c60fdd1",
+                    "bytes": 58576
                 }
             ]
         },

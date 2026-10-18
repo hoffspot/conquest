@@ -2392,8 +2392,9 @@ that), so nothing of one (shadows, blood, sounds) is ever seen or heard on anoth
 character's place on its map is offset by its map's origin. Only the map the player is on is
 shown: the world outside and the town, or one floor inside. Going
 through, the screen dips to black and fades back in over 0.45 s, the camera behind the player
-the way they face. Indoors, the view (`setIndoors`) has a dark background and closer fog, the
-light from all round dimmed, the sun shining in at the room's windows on its sunny side (none for
+the way they face. Indoors, the view (`setIndoors`) has a dark background and closer fog (all
+the fog's colour by 38 m, and the camera sees no further than 4 m past that, `INDOORS.clip`, so
+a dungeon's rock and what's in it beyond isn't drawn at all), the light from all round dimmed, the sun shining in at the room's windows on its sunny side (none for
 a room without windows), and the room's flames flickering, each lighting it
 (world/roomlight.js): the two lighting the player most are the view's two point lights, lighting
 the folk and everything else too, and the rest light the room's walls, floor, ceiling and
