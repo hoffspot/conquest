@@ -103,6 +103,16 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         assert.equal(newsSince(war, here.at, { turn: 5, seen: 3 }).rolled, true);
         assert.equal(newsSince(war, here.at, { turn: 10, seen: 1 }).rolled, false);
         assert.ok(CRY.page >= 2 && CRY.page < CRY.first);
+
+        // (A listener's own people's news, wherever it happened: their army short of supplies, their
+        // convoy fallen on; not to anyone else so far off)
+        const since = { turn: war.turn, seen: war.log.filter(({ turn }) => turn === war.turn).length };
+
+        say({ type: "unsupplied", realm: "orc", army: "army-1", missed: 2, deserted: 30, why: "cut off" });
+        say({ type: "breached", realm: "elf", by: "orc", camp: "camp-1", at: [...far.at], breaches: 1 });
+        assert.deepEqual(newsSince(war, here.at, since, { realm: "orc" }).told.map(({ words }) => words), [tell(war.log.at(-2), war), tell(war.log.at(-1), war)]);
+        assert.deepEqual(newsSince(war, here.at, since, { realm: "human" }).told, []);
+        assert.match(tell(war.log.at(-1), war), /^The Orcs have broken through the palisade of the Elves' camp/);
         assert.deepEqual([0, 1, 3, 20].map(newsCount), ["no pieces of news", "a piece of news", "three pieces of news", "a great deal of news"]);
     });
 

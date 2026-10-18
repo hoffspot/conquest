@@ -153,6 +153,12 @@ export function tell(event, war) {
 
             return `${who} fell upon ${camp} and was beaten off${event.breaches ? `, its palisade breached in ${event.breaches === 1 ? "one place" : `${event.breaches} places`}` : ""}.`;
         }
+        case "breached": {
+            const camp = war.camp?.(event.camp);
+            const before = war.town(camp?.toward) ? ` before ${war.town(camp.toward).name}` : "";
+
+            return `${People(event.by)} have broken through the palisade of the ${own(event.realm)} camp${before}.`;
+        }
         case "mended":
             return `${People(event.realm)} have mended their camp's palisade.`;
         case "scattered":
@@ -243,16 +249,20 @@ const EVERYWHERE = new Set(["stage", "declared", "joined", "broke", "treaty", "s
 const UNTOLD = new Set(["met", "counsel", "unpaid", "envoy", "delivered", "assailed", "ordered", "struck", "skirmishers", "skirmish", "intercepted", "supplied", "provisioned", "mended", "scattered"]);
 
 // Whether an event's talked of at `at` ([x, y] metres): what's happened within `reach` metres of
-// it, and what's heard everywhere (not what's never talked of)
-function heardAt(war, at, reach) {
+// it, and what's heard everywhere (not what's never talked of); and wherever it happened, what
+// concerns `realm`, if there's one (a people's own: its army, its towns and works, its foes')
+function heardAt(war, at, reach, realm = null) {
     const near = (id, there) => {
         const place = war.town(id) ?? war.workAt?.(id) ?? war.fort?.(id) ?? war.camp?.(id) ?? war.depot?.(id) ?? (there ? { at: there } : null);
 
         return Boolean(place) && hypot(place.at[0] - at[0], place.at[1] - at[1]) <= reach;
     };
 
-    return (event) => !UNTOLD.has(event.type) && (EVERYWHERE.has(event.type) || near(event.town ?? event.works ?? event.target ?? event.about ?? event.from, event.at));
+    return (event) => !UNTOLD.has(event.type) && (EVERYWHERE.has(event.type) || concerns(event, realm) || near(event.town ?? event.works ?? event.target ?? event.about ?? event.from, event.at));
 }
+
+// Whether an event concerns a people (`realm`): theirs, done by them, to them, or against them
+const concerns = (event, realm) => Boolean(realm) && [event.realm, event.by, event.to, event.owner, event.against, event.from].includes(realm);
 
 /**
  * The war's news as it's heard at `at` ([x, y] metres: a town's), newest first (docs/WAR.md M8):
@@ -296,15 +306,16 @@ export function newsCount(count) {
 /**
  * The war's news as a town's crier cries it at `at` ([x, y] metres: his town's, docs/WAR.md *The
  * crier*), since a listener last heard it, oldest first: what's talked of there (as rumoursAt,
- * within `reach` metres, or heard everywhere), told in words, no two the same (the later kept).
+ * within `reach` metres, or heard everywhere), and anything of the listener's own people
+ * (`realm`), wherever it happened; told in words, no two the same (the later kept).
  * Where they last listened is their cursor (`since`: the turn of the last event they heard, and
  * how many of that turn's events they had: war events carry their turn alone); never having
  * listened (null), only the last `first` of it. { told: [{ words, after (their cursor, once
  * they've heard it) }], rolled (the war's log has gone on past where they last listened: it's
  * full, KEEP_LOG, the oldest let go, and its oldest kept is newer) }.
  */
-export function newsSince(war, at, since = null, { reach = 5000, first = CRY.first } = {}) {
-    const heard = heardAt(war, at, reach);
+export function newsSince(war, at, since = null, { reach = 5000, first = CRY.first, realm = null } = {}) {
+    const heard = heardAt(war, at, reach, realm);
     const told = [];
     const counts = new Map();
 

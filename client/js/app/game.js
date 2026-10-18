@@ -67,6 +67,8 @@ import { WorldRunner } from "../core/runner.js";
 import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
 import { CRY, newsCount, newsSince, peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
+import { bubbleSeconds, CALLING, callOf } from "../core/crying.js";
+import { createRandom } from "../core/random.js";
 import { cultNear, cultWays, cultWord } from "../core/cultword.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { RESOURCES, RISING, STAGES } from "../core/war/war.js";
@@ -672,6 +674,15 @@ const SHAKE_DIES = 4;
 
 // A place's crier, by his id (core/townsfolk.js crierOf)
 const CRIER = /^crier:/;
+
+// How near the player the war's news happens (metres, out in the world) to be told them there and
+// then, in a message box; further off, a town's crier cries it (#crierOf: news.js newsSince)
+const NEWS_NEAR = 300;
+
+// A crier's bell rung to bring the player to him while there's news they've yet to hear from one:
+// heard as far off as this (metres: no nearer than he calls out to them, core/crying.js CALLING),
+// no oftener than this (seconds), and a little louder than as he rests
+const BELL = Object.freeze({ reach: 160, every: 180, volume: 1.6 });
 
 // What the host tells of besides the battle's events (#hear)
 const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party"]);
@@ -3010,6 +3021,14 @@ export class Game {
         this.sound?.setListener(me.object.position.x, me.object.position.z);
         this.#hearAround(dt);
         this.sound?.update(dt);
+
+        // (The criers near calling out, as often as what's heard is worked out)
+        this.crying = (this.crying ?? 0) - dt;
+
+        if (this.crying <= 0) {
+            this.crying = HEARD_EVERY;
+            this.#cryOut();
+        }
         this.#castsHeard();
 
         // The enemy the player is set to fight, ringed, with its bar lit
@@ -3146,6 +3165,14 @@ export class Game {
 
                 hud.place(actor.id, actor.dead || actor.map !== this.mapId ? null : view.toScreen(head), { scale, depth });
             }
+        }
+
+        // (What the criers are calling out, over their heads: #cryOut)
+        for (const id of hud.said?.keys() ?? []) {
+            const avatar = this.avatars.get(id);
+            const head = avatar && battle.actor(id)?.map === this.mapId ? avatar.point(1.18, _head) : null;
+
+            hud.placeSaid(id, head ? view.toScreen(head) : null, { depth: head ? eye.distanceTo(head) : 0 });
         }
 
         // Skin flushing red where hit, and tinged by what lingers on them (green with venom, a
@@ -4456,7 +4483,8 @@ export class Game {
         const me = this.battle.actor(this.me);
         const ours = by === this.self?.realm;
 
-        if (!works || (!ours && (!me || me.map !== "town" || Math.hypot(me.x - works.at[0], me.y - works.at[1]) > WORKS_OUT.far))) {
+        // (Further off, even the player's people's: a crier cries it)
+        if (!works || !me || me.map !== "town" || Math.hypot(me.x - works.at[0], me.y - works.at[1]) > WORKS_OUT.far) {
             return;
         }
 
@@ -4522,7 +4550,8 @@ export class Game {
         const town = this.host?.war?.town(id);
         const me = this.battle.actor(this.me);
 
-        if (!town || by !== this.self?.realm || this.host?.quartered.get(id)?.map === me?.map) {
+        // (Further off: a crier cries it)
+        if (!town || by !== this.self?.realm || this.host?.quartered.get(id)?.map === me?.map || !this.#nearNews(town.at)) {
             return;
         }
 
@@ -5351,22 +5380,22 @@ export class Game {
 
     // A crier's talk (docs/GAME.md *The crier*), as an official's is (#officialOf's: { words,
     // check, handles, effect }): the war's news since the player last listened to any crier, as
-    // it's cried where he stands (news.js newsSince), how much of it there is ({newsCount}), and a
+    // it's cried where he stands, and their own people's wherever it happened (news.js newsSince:
+    // what's no longer told them in a box, far off), how much of it there is ({newsCount}), and a
     // few pieces of it at a time ({news}, CRY.page, each `hear` of it: the player's cursor moved on
     // past them, kept with what they've talked of, memory.news); whether there's more ({ news }),
     // and whether the war's gone on past where they last listened ({ rolled }). Null for anyone
     // else, or with no war
     #crierOf(npc, out, names) {
         const war = this.host.war;
-        const plan = this.world.plan;
-        const at = out && ([...(plan?.places ?? []), ...(plan?.sites ?? [])].find(({ id }) => id === out.place)?.at ?? this.world.start?.at);
+        const at = out && this.#crierAt(out);
 
         if (npc.role !== "crier" || !war || !at) {
             return null;
         }
 
         const memory = this.memory;
-        const { told, rolled } = newsSince(war, at, memory.news ?? null);
+        const { told, rolled } = this.#crierNews(at);
         let heard = 0;
 
         return {
@@ -5385,6 +5414,74 @@ export class Game {
                 }
             },
         };
+    }
+
+    // Where a crier cries the news ([x, y] metres: his place's, `out` his record, host.js folk), and
+    // what of it the player's yet to hear there (news.js newsSince: since they last listened to any
+    // crier, and their own people's from anywhere)
+    #crierAt(out) {
+        const plan = this.world.plan;
+
+        return [...(plan?.places ?? []), ...(plan?.sites ?? [])].find(({ id }) => id === out.place)?.at ?? this.world.start?.at ?? null;
+    }
+
+    #crierNews(at) {
+        return newsSince(this.host.war, at, this.memory.news ?? null, { realm: this.self?.realm });
+    }
+
+    // The criers out near the player (docs/GAME.md *The crier*): each one within CALLING.near
+    // calling out to them now and then (core/crying.js callOf: "Oyez!", and the latest news they've
+    // yet to hear, else one of the town's own cries), over his head (hud.say), ringing his bell as
+    // he does; not while they're talking or fighting. The news they've yet to hear from the
+    // nearest, on the compass; and while there's some, his bell rung now and then from where he
+    // is, to bring them to him (BELL). Every HEARD_EVERY seconds
+    #cryOut() {
+        const player = this.battle.actor(this.me);
+        const war = this.host.war;
+        const now = this.clock;
+        const near = (this.battle.actors ?? [])
+            .filter((one) => CRIER.test(one.id) && one.map === this.mapId && player && !player.dead && player.map === one.map)
+            .map((one) => ({ one, far: Math.hypot(one.x - player.x, one.y - player.y) }))
+            .filter(({ far }) => far <= BELL.reach)
+            .sort((a, b) => a.far - b.far);
+        const nearest = near[0];
+        const out = nearest && this.host.folk.get(nearest.one.id);
+        const at = out && war ? this.#crierAt(out) : null;
+        const unheard = at ? this.#crierNews(at).told : [];
+
+        this.hud.newsUnread(unheard.length);
+
+        if (!nearest || this.talking || this.#fighting(player) || this.#threatened(player)) {
+            return;
+        }
+
+        const avatar = this.avatars.get(nearest.one.id);
+
+        // (Close enough: he calls out to them)
+        if (nearest.far <= CALLING.near && avatar?.object.visible) {
+            this.crierCalls ??= new Map();
+            this.cryRandom ??= createRandom(Math.floor(Math.random() * 2 ** 31));
+
+            const state = this.crierCalls.get(nearest.one.id) ?? {};
+            const call = callOf({ now: now * 1000, state, headline: unheard.at(-1)?.words ?? null, night: torchesLit(elapsedOf(war)), random: this.cryRandom });
+
+            this.crierCalls.set(nearest.one.id, state);
+
+            if (call) {
+                const [oyez, words] = call.lines;
+
+                this.hud.say(nearest.one.id, `${oyez}\n${words}`, 1 + bubbleSeconds(words));
+                this.#rest({ id: nearest.one.id, role: "crier", rest: 0 }, avatar);
+            }
+
+            return;
+        }
+
+        // (Further off, with news for them: his bell, from where he is)
+        if (unheard.length && avatar && now >= (this.bellNext ?? 0)) {
+            this.bellNext = now + BELL.every;
+            this.sound?.play(ROLES.crier.rests[0].sound, { at: avatar.object.position, volume: BELL.volume, far: BELL.reach });
+        }
     }
 
     // The war's news as it's heard where the player's talking (docs/WAR.md M8): {rumour1} to
@@ -7879,22 +7976,19 @@ export class Game {
         }
     }
 
-    // The player's people's army's supplies not getting through (docs/WAR.md *Supply*): told, to a
-    // Knight or above (who counsel where it marches, and from a Lord order it)
-    #supplyCut({ type, realm, missed, deserted, why }) {
-        if (!["unsupplied", "starved"].includes(type) || realm !== this.self?.realm || this.standing.rank() < OPENS.march) {
-            return;
-        }
+    // Where a supply wagon is (its id: host.js supplies), [x, y] metres; or null, gone
+    #wagonAt(id) {
+        const wagon = this.battle.actor(this.host.supplies?.get(id)?.wagon);
 
-        const said =
-            type === "starved"
-                ? "Our army's supplies were cut off too long: it has broken up."
-                : missed === 1
-                  ? `Our army's supplies haven't got through${why === "unpaid" ? ": there's no gold to pay for them" : why === "cut off" ? ": there's nowhere to send them from" : ""}.`
-                  : `Our army's supplies are cut off again: ${deserted} have deserted.`;
+        return wagon ? [wagon.x, wagon.y] : null;
+    }
 
-        this.hud.message(said, 4);
-        this.sound?.play("newsHeard");
+    // Whether the war's news at `at` ([x, y] metres, out in the world) is near enough the player to
+    // be told them there and then (NEWS_NEAR); further off, a crier cries it
+    #nearNews(at) {
+        const me = this.battle.actor(this.me);
+
+        return Boolean(at) && me?.map === "town" && Math.hypot(me.x - at[0], me.y - at[1]) <= NEWS_NEAR;
     }
 
     // An envoy near the player at the end of their road, or waylaid on it: the player told
@@ -8028,6 +8122,12 @@ export class Game {
             return;
         }
 
+        // (How a storm or a rout came out: near the player, told; further off, even their
+        // people's, a crier cries it)
+        if (!near) {
+            return;
+        }
+
         if (event.type === "stormed") {
             const Them = event.by ? peopleOf(event.by) : "enemy";
 
@@ -8035,7 +8135,7 @@ export class Game {
                 say(event.held ? `Our camp holds: the ${Them} are beaten off!` : `Our camp has fallen to the ${Them}, and burns!`, 4, true);
             } else if (event.by === mine) {
                 say(event.held ? `We're beaten off from the ${adjective(event.people)} camp!` : `The ${adjective(event.people)} camp is carried, and burns: their army runs!`, 4, true);
-            } else if (near) {
+            } else {
                 say(event.held ? `The ${adjective(event.people)} camp holds: the ${Them} are beaten off.` : `The ${Them} have carried the ${adjective(event.people)} camp, and burn it.`, 4);
             }
 
@@ -8049,7 +8149,7 @@ export class Game {
             say(`Our ${kind} breaks and runs!`, 4, true);
         } else if (event.realm === mine) {
             say(`The ${adjective(event.against)} ${kind} breaks and runs!`, 4, true);
-        } else if (near) {
+        } else {
             say(`The ${adjective(event.against)} ${kind} breaks before the ${peopleOf(event.realm)}, and runs.`, 4);
         }
     }
@@ -8069,7 +8169,8 @@ export class Game {
             }
         }
 
-        if (!met || over === "home" || (!near && !(over === "plundered" && (people === mine || by === mine)))) {
+        // (Further off, even the player's people's fallen on: a crier cries it)
+        if (!met || over === "home" || !near) {
             return;
         }
 
@@ -9106,7 +9207,8 @@ export class Game {
                 // (A supply wagon met near the player: its ox, wagon and guards drawn; or taken)
                 if (event.over === "met") {
                     this.enlisting.push(...event.ids, ...event.wagons);
-                } else if (event.over === "taken" && (event.by === this.self?.realm || event.people === this.self?.realm)) {
+                } else if (event.over === "taken" && (event.by === this.self?.realm || event.people === this.self?.realm) && this.#nearNews(this.#wagonAt(event.wagon))) {
+                    // (Further off: a crier cries it)
                     const adjective = ADJECTIVES[event.people] ?? event.people;
 
                     this.hud.message(event.by === this.self?.realm ? `We've taken the ${adjective} supply wagon: their army goes short.` : "Our supply wagon has been taken!", 4);
@@ -9171,8 +9273,6 @@ export class Game {
                 if (["built", "razed", "abandoned"].includes(event.event.type) && FORTS[event.event.kind]) {
                     this.chunks?.redraw(footprintOf({ kind: event.event.kind, at: event.event.at }, CLEARING));
                 }
-
-                this.#supplyCut(event.event);
 
                 // (A force routed in a fight played out near a player: told, as a storm is)
                 if (event.event.type === "battle" && event.event.routed) {

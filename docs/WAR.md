@@ -2709,6 +2709,9 @@ each once (the later kept, where the same is said again):
 - **Never having listened**, only the latest five (`CRY.first`).
 - **Away so long** that the log's full (`KEEP_LOG`, 300) and its oldest is newer than their
   cursor, he says more's happened than he can cry.
+- **Their own people's news, from anywhere** (`newsSince`'s `realm`): what's theirs, done by them,
+  to them or against them, wherever it happened. It's no longer told them in a message box when
+  it's far off (docs/GAME.md *The crier*): a crier cries it, and his bell's rung to bring them.
 
 **The adventurers' guild's board** (`standing.js` `offerBoard`, `offerContract`, `offerCourier`):
 its receptionist gives contracts to any registered adventurer, of whatever people (no standing

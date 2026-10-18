@@ -692,6 +692,25 @@ world's seed, as they are.
   hand shading his eyes: it would go into his hat's brim), shifting his weight, a glance back.
 - **On the minimap**: each crier out is marked with a bell, at the edge the way he is when he's
   further than it shows (app/minimap.js `criers`, as the wild's elites are).
+- **Calling out** (core/crying.js `callOf`, app/game.js `#cryOut`): as the player comes within
+  25 m of him (`CALLING.near`), out of a talk and a fight, he calls out over his head in a bubble
+  (app/hud.js `say`), ringing his bell as he does: "Oyez! Oyez! Oyez!", then the latest of the
+  war's news they've yet to hear from a crier. He never cries the same news to them again within
+  three minutes (`CALLING.again`), nor calls more often than every 45 to 60 seconds; with no news
+  to cry, one of the town's own cries (`CRIES`: something lost or found, a bylaw, the market; by
+  night, the hour and the watch), each once before any again. A bubble's shown as long as its
+  words take to read (`bubbleSeconds`: 2.5 to 6 seconds), two short lines at most.
+- **His bell from afar** (`BELL`): while there's news the player's yet to hear, his bell is rung
+  from where he stands, heard up to 160 m off, no oftener than every three minutes, to bring them to
+  him; and how much of it there is shows on the compass (the minimap folded into it: a badge, as
+  the party's unread messages are).
+- **Far news is his** (app/game.js `NEWS_NEAR`): the war's outcomes far from the player, even
+  their own people's, are no longer told in a message box but left for a crier to cry, who cries
+  their own people's news wherever it happened (news.js `newsSince`'s `realm`): a town taken, a
+  works seized or cleared, a camp stormed or held, an army routed, a convoy fallen on, a supply
+  wagon taken, their army's supplies not getting through. Near them (300 m, or as near as each was
+  told before), still told there and then; and what calls on them to act now is still a box,
+  wherever it is: a palisade being hacked or breached, a barracks cleared, a last stand at a keep.
 - **Talked to** (`TREES.crier`, app/game.js `#crierOf`): the war's news since the player last
   listened to any crier (docs/WAR.md *The crier*). How much there is, then three pieces of it at
   a time (`CRY.page`), oldest first, as long as the player wants to hear more. Where they've heard
@@ -3514,7 +3533,8 @@ folded compass's rose does (below), so its red end points the way north lies on 
 the minimap under it keeps north up (it stood still, north up, whichever way the camera looked).
 Tapped, it folds the minimap away: in its place, in the top left corner of the
 screen, a small compass (`#compass`, 52 pixels: `--compass-size`), the party's column moving up
-under it. Its rose (a ring, ticks every eighth of the way round, gold points and a red north
+under it. A badge on it (`#newsunread`, as the party button's) says how much of the war's news
+there is to hear from a crier near (*The crier*), none at nothing. Its rose (a ring, ticks every eighth of the way round, gold points and a red north
 needle, an N at its tip) turns with the camera, so its N points the way north lies on the screen:
 looking north, N straight up; looking east, N on the left; looking south, N at the bottom
 (minimap.js `compassTurn`, from which way the camera looks over the ground, as the minimap's wedge
