@@ -3,15 +3,17 @@
 // in code: synth.js), played as the game plays it (audio/sound.js, at the game's own levels, from
 // as far off as asked), each of its variants on its own, and a recorded one's made versions to
 // compare; the ambience's beds, looped round as the game loops them, any of them together; the
-// made wind; the music in each place. Nothing here but the catalog's words: a sound added to the
-// game and described there shows here.
+// made wind, and the beds made in code (a hell's drone, played as low as in each of its realms);
+// the music in each place. Nothing here but the catalog's words: a sound added to the game and
+// described there shows here.
 //
-// window.soundStudio is there for tests ({ sound, play, beds }).
+// window.soundStudio is there for tests ({ sound, play, beds, rates }).
 
+import { INDOORS } from "../audio/ambience.js";
 import { CATALOG, GROUPS, LOOPS, MUSIC } from "../audio/catalog.js";
 import { ON_DEMAND, RECORDED, SOURCES } from "../audio/recorded.js";
-import { GAITS, Sound } from "../audio/sound.js";
-import { SOUNDS } from "../audio/synth.js";
+import { GAITS, PLACES, Sound } from "../audio/sound.js";
+import { BEDS, SOUNDS } from "../audio/synth.js";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -31,8 +33,10 @@ const WALK = { steps: 4, apart: 0.5, speed: 1.5 };
 // while it's decoded again: the game keeps to sound.js DECODED_BUDGET)
 const sound = new Sound({ volumes: VOLUMES, budget: Infinity });
 
-// The ambience's beds playing (name → how loud: as the game plays them at their loudest)
+// The ambience's beds playing (name → how loud: as the game plays them at their loudest), and how
+// fast any's played (name → its rate: as in one of the places it's heard)
 const beds = {};
+const rates = {};
 
 sound.setListener(0, 0);
 sound.prepare();
@@ -169,11 +173,36 @@ function bedToggle(name) {
             beds[name] = 1;
         }
 
-        sound.setAmbience({ beds });
+        sound.setAmbience({ beds, rates });
         toggle.textContent = beds[name] ? "■ Stop" : "▶ Start";
     }, "primary");
 
     return toggle;
+}
+
+// A bed made in code's card (synth.js BEDS): started and stopped, and played as fast as in each
+// place that plays it faster or slower (a hell's drone, lower the deeper its realm)
+function madeBedCard(name) {
+    const { label, about, plays } = LOOPS[name];
+    const toggle = bedToggle(name);
+    const places = Object.entries(INDOORS).filter(([, { rates: own = {} }]) => own[name]);
+    const controls = [row("Hear", [toggle])];
+
+    if (places.length) {
+        controls.push(row("As in", places.map(([place, { rates: own }]) => button(MUSIC[place].label.replace(/^In /, ""), () => {
+            rates[name] = own[name];
+
+            if (!beds[name]) {
+                toggle.click();
+            } else {
+                sound.setAmbience({ beds, rates });
+            }
+        }, "small"))));
+    }
+
+    controls.push(Object.assign(document.createElement("p"), { className: "source", textContent: `Made in code: client/js/audio/synth.js (BEDS.${name}).` }));
+
+    return card({ name, label, about, plays, made: 1, controls });
 }
 
 // The wind's card: started and stopped
@@ -189,9 +218,13 @@ function windCard() {
     return card({ name: "wind", label, about, plays, made: 1, controls: [row("Hear", [toggle]), Object.assign(document.createElement("p"), { className: "source", textContent: "Made in code: client/js/audio/synth.js (wind)." })] });
 }
 
-// The music: each place's, played until stopped
+// The music: each place's, played until stopped (none where none's heard: a hell's realms)
 function musicCard(place) {
     const { label, about, plays } = MUSIC[place];
+
+    if (!PLACES[place].level) {
+        return card({ name: `music:${place}`, label, about, plays, controls: [Object.assign(document.createElement("p"), { className: "source", textContent: "No music here." })] });
+    }
     const start = button("▶ Play", () => {
         sound.setPlace(place);
 
@@ -235,9 +268,10 @@ function build() {
         const names = Object.keys(CATALOG).filter((name) => CATALOG[name].group === group);
         const cards = names.map(soundCard);
 
-        if (LOOPS.wind.group === group) {
-            cards.unshift(windCard());
-        }
+        // (The beds made in code first: the wind, a hell's drone and heart)
+        const made = Object.keys(LOOPS).filter((name) => LOOPS[name].group === group);
+
+        cards.unshift(...made.map((name) => (BEDS[name] ? madeBedCard(name) : windCard())));
 
         catalog.append(section(`group-${k}`, group, cards));
     }
@@ -272,4 +306,4 @@ function wire() {
 
 build();
 wire();
-window.soundStudio = { sound, play, beds };
+window.soundStudio = { sound, play, beds, rates };

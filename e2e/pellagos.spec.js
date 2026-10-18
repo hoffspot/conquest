@@ -9302,7 +9302,7 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
     expect(Object.values(story.named).every((count) => count === 1)).toBe(true);
 });
 
-test("a hell: its way in a cult's camp out in the wilds, shut by day, and by night till the cult keeping its rite there is slain; each of its four levels its realm's, drawn in its realm's own air; its ways down portals of fire, each sealed till its level's master falls; and from beyond its throne a portal out to the wilds, sealed till its lord falls", async ({ page }) => {
+test("a hell: its way in a cult's camp out in the wilds, shut by day, and by night till the cult keeping its rite there is slain; each of its four levels its realm's, drawn in its realm's own air and heard as it; its ways down portals of fire, each sealed till its level's master falls; and from beyond its throne a portal out to the wilds, sealed till its lord falls", async ({ page }) => {
     test.setTimeout(480000);
     await playing(page, "/?play&seed=1");
 
@@ -9358,9 +9358,11 @@ test("a hell: its way in a cult's camp out in the wilds, shut by day, and by nig
 
             return Boolean(id);
         };
-        // (What's drawn on the level the player's on: whether a hell's veil's among it, and the air)
+        // (What's drawn on the level the player's on: whether a hell's veil's among it, and the air;
+        // and what's heard there: its place, the beds sounding, and how fast its drone's played)
         const seen = () => {
             const level = game.interiors.get(player.map).object;
+            const { sound } = session;
             let veils = 0;
 
             level.traverse((node) => {
@@ -9369,7 +9371,13 @@ test("a hell: its way in a cult's camp out in the wilds, shut by day, and by nig
                 }
             });
 
-            return { map: player.map, look: game.world.maps[player.map].look, veils, background: session.view.scene.background?.getHex() ?? null };
+            return {
+                map: player.map,
+                look: game.world.maps[player.map].look,
+                veils,
+                background: session.view.scene.background?.getHex() ?? null,
+                heard: { place: sound.place, beds: [...sound.beds].filter(([, { gain }]) => gain > 0).map(([name]) => name).sort(), drone: sound.beds.get("hellDrone")?.rate ?? null },
+            };
         };
 
         // (The war's clock set to a time of day, a day or more on: the morning, or a little past
@@ -9448,6 +9456,12 @@ test("a hell: its way in a cult's camp out in the wilds, shut by day, and by nig
         expect(level.sealed).toBe(k < 3 ? "sealed" : "throne");
         expect(level.slain).toBe(true);
         expect(level.after).toBe(null);
+
+        // (Heard as its realm: its drone, lower than the realm's above; the Halls' heart)
+        expect(level.heard.place).toBe(["hellBreach", "hellBone", "hellFire", "hellPit"][k]);
+        expect(level.heard.beds).toContain("hellDrone");
+        expect(level.heard.beds.includes("heartbeat")).toBe(k === 1);
+        expect(level.heard.drone).toBeLessThan(k ? hell.levels[k - 1].heard.drone : 1.01);
     });
 
     // (Out beyond the throne to before its way in)

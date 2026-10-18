@@ -4831,7 +4831,10 @@ function dungeon(map) {
         loadProp(name);
     }
 
-    return { solid, moving: [], flames, lights, hearth: null, ceiling: roof / M, shell: shell && rockShell(map, look, shell, life), blocks, props: placed, air: look.air ?? null, carried: look.carried ?? null, motes: look.motes ?? null, trickles: Boolean(look.trickles) };
+    // (Where a hell's heart beats and its Hellforge is, heard from there: audio/ambience.js)
+    const middle = (piece) => (piece ? { x: piece.x + piece.w / 2, z: piece.y + piece.h / 2 } : null);
+
+    return { solid, moving: [], flames, lights, hearth: null, heart: middle(at("heart")[0]), forge: middle(at("forge")[0]), ceiling: roof / M, shell: shell && rockShell(map, look, shell, life), blocks, props: placed, air: look.air ?? null, carried: look.carried ?? null, motes: look.motes ?? null, trickles: Boolean(look.trickles) };
 }
 
 // The four ways round a square (x, y), and whether a square of a level's plan is open floor with
@@ -6154,6 +6157,9 @@ export function* buildingInterior(map) {
         roof: (x, z) => (roof ? roof(x - ox, z - oz) : null),
         props: built.props ?? [],
         hearth: built.hearth ? { x: ox + built.hearth.x, y: built.hearth.y, z: oz + built.hearth.z } : null,
+        /** Where a hell's heart beats and its Hellforge stands (world metres), heard from there; null where there's none. */
+        heart: built.heart ? { x: ox + built.heart.x, z: oz + built.heart.z } : null,
+        forge: built.forge ? { x: ox + built.forge.x, z: oz + built.forge.z } : null,
         update(dt, time) {
             for (const part of built.moving) {
                 // (A named part turns only while it's driven: the grindstone while cranked)

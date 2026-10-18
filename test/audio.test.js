@@ -3,16 +3,16 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
-import { ambienceOf, CALLS, doorOf, INDOORS, TOLLS, tolled } from "../client/js/audio/ambience.js";
+import { ambienceOf, CALLS, doorOf, HELL, INDOORS, TOLLS, tolled } from "../client/js/audio/ambience.js";
 import { CATALOG, GROUPS, LOOPS, MUSIC } from "../client/js/audio/catalog.js";
-import { pluck } from "../client/js/audio/dsp.js";
+import { filter, pluck } from "../client/js/audio/dsp.js";
 import { sampleFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { useSound, wearSound } from "../client/js/audio/handling.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
 import { ARMOUR, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
-import { LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
+import { BEDS, LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { CREATURES } from "../client/js/core/creatures.js";
 import { THEMES } from "../client/js/core/dungeons/themes.js";
 import { GEAR } from "../client/js/core/gear.js";
@@ -99,6 +99,44 @@ describe("making sounds (synth.js)", () => {
         assert.ok(peakOf(samples) <= 0.8 + 1e-6);
         // Round the end to the start is no bigger a step than the wind takes anyway
         assert.ok(step(samples.length - 1) <= steps[Math.floor(steps.length * 0.99)], "seamless");
+    });
+
+    it("makes beds that loop without a seam: a hell's drone, low but heard on a phone, and a heart beating every 1.2 seconds", () => {
+        const rms = (samples) => Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length);
+        const made = Object.fromEntries(Object.entries(BEDS).map(([name, { make }]) => [name, make()]));
+
+        assert.deepEqual(Object.keys(BEDS), ["hellDrone", "heartbeat"]);
+
+        for (const [name, samples] of Object.entries(made)) {
+            const step = (k) => Math.abs(samples[(k + 1) % samples.length] - samples[k]);
+            const steps = Array.from({ length: samples.length }, (_, k) => step(k)).sort((a, b) => a - b);
+
+            assert.ok(Math.abs(peakOf(samples) - 0.8) < 1e-6, name);
+            assert.ok(step(samples.length - 1) <= steps[Math.floor(steps.length * 0.99)], `${name}: seamless`);
+            assert.ok(BEDS[name].volume > 0 && BEDS[name].volume <= 1, name);
+        }
+
+        // (The drone: eight seconds, mostly low, but a good share of it over 200 Hz, where a
+        // phone's speaker plays; dark, little over a kilohertz)
+        const drone = made.hellDrone;
+
+        assert.equal(drone.length, 8 * SAMPLE_RATE);
+        assert.ok(rms(filter(drone, "highpass", 200)) > 0.25 * rms(drone), "heard on a phone");
+        assert.ok(rms(filter(drone, "highpass", 2000)) < 0.05 * rms(drone), "dark");
+
+        // (The heart: four beats, one every 1.2 seconds, silent between them and at each end)
+        const heart = made.heartbeat;
+        const loudAt = (from, to) => rms(heart.subarray(Math.round(from * SAMPLE_RATE), Math.round(to * SAMPLE_RATE)));
+
+        assert.equal(heart.length, 4.8 * SAMPLE_RATE);
+
+        for (let beat = 0; beat < 4; beat++) {
+            const at = beat * 1.2;
+
+            assert.ok(loudAt(at, at + 0.15) > 10 * loudAt(at + 0.75, at + 1.15), `beat ${beat}: loud, then quiet till the next`);
+        }
+
+        assert.ok(Math.abs(heart[0]) < 1e-3 && Math.abs(heart.at(-1)) < 1e-3, "starting and ending in silence");
     });
 
     it("tunes its plucked string between samples, so the bow twangs in tune", () => {
@@ -291,7 +329,7 @@ describe("every sound described, for the sound studio (catalog.js, sound-studio.
         }
 
         assert.ok(GROUPS.every((group) => Object.values(CATALOG).some((entry) => entry.group === group)), "no group empty");
-        assert.deepEqual(Object.keys(LOOPS), ["wind"]);
+        assert.deepEqual(Object.keys(LOOPS), ["wind", ...Object.keys(BEDS)], "the beds made in code");
         assert.deepEqual(Object.keys(MUSIC).sort(), Object.keys(PLACES).sort(), "the music in every place");
         assert.ok(Object.values(MUSIC).every(described));
     });
@@ -1194,7 +1232,7 @@ describe("keeping the sound going (sound.js)", () => {
 function everywhere() {
     const times = [DAY.night + HOUR, DAY.dawn + HOUR / 2, DAY.day + HOUR];
     const near = { water: { stream: 0, river: 0, falls: 0, sea: 0, lake: 0 }, market: 0, fire: 0, brazier: 0, smithy: { x: 0, z: 0, far: 0 } };
-    const indoors = Object.keys(INDOORS).map((place) => ({ place, time: DAY.day, hearth: 0 }));
+    const indoors = Object.keys(INDOORS).map((place) => ({ place, time: DAY.day, hearth: 0, heart: 0, forge: { x: 0, z: 0, far: 0 } }));
     const outdoors = BIOMES.flatMap(({ id }) => times.flatMap((time) => [false, true].flatMap((high) => [0, 1].flatMap((settled) => [{ place: "town", land: id, high, time, settled }, { place: "town", land: id, high, time, settled, ...near }]))));
 
     return [...indoors, ...outdoors];
@@ -1281,6 +1319,58 @@ describe("the ambience (ambience.js)", () => {
         }
     });
 
+    it("hears a hell's realms each its own way: its drone lower the deeper the realm, the Halls' heart, lava hissing, the dead far off, the Hellforge's hammer; none of the world's music", () => {
+        const realms = THEMES.hell.realms.map(({ sound }) => sound);
+        const hear = (place, facts = {}) => ambienceOf({ place, time: DAY.day, ...facts });
+
+        assert.deepEqual(realms, ["hellBreach", "hellBone", "hellFire", "hellPit"]);
+
+        for (const place of realms) {
+            assert.equal(PLACES[place].level, 0, `${place}: no music`);
+            assert.ok(hear(place).beds.hellDrone > 0, `${place}'s drone`);
+            assert.equal(doorOf(place), null, "through a portal");
+        }
+
+        // (Lower each realm down, the Pit's a fifth under the Breach's; a bed slowed is slowed there)
+        const drones = realms.map((place) => hear(place).rates.hellDrone);
+
+        assert.ok(drones.every((rate, k) => k === 0 || rate < drones[k - 1]), drones.join());
+        assert.equal(drones[0], 1);
+        assert.ok(Math.abs(drones[3] - 2 ** (-7 / 12)) < 1e-3);
+
+        for (const place of realms) {
+            const { beds, rates } = hear(place);
+
+            assert.ok(Object.entries(rates).every(([name, rate]) => beds[name] && rate > 0 && rate <= 1), place);
+        }
+
+        // (The Halls' heart, heard all through them, louder nearer it; nowhere else)
+        const heart = (far) => hear("hellBone", { heart: far }).beds.heartbeat;
+
+        assert.ok(heart(0) === INDOORS.hellBone.heart && heart(5) > heart(20) && heart(20) > heart(Infinity));
+        assert.equal(heart(Infinity), HELL.heart.through * INDOORS.hellBone.heart);
+        assert.ok(realms.filter((place) => place !== "hellBone").every((place) => !hear(place, { heart: 0 }).beds.heartbeat));
+
+        // (The Hellforge's hammer in the River of Fire, from the forge: muffled through the rock,
+        // slowed, louder nearer it; none without a forge, or in the other realms)
+        const forge = (far) => hear("hellFire", { forge: { x: 4, z: 5, far } }).calls.distantHammer;
+
+        assert.deepEqual(forge(10).at, { x: 4, z: 5, far: 10 });
+        assert.ok(forge(10).volume > forge(40).volume && forge(10).muffle <= 1000 && forge(10).pitch < 0.8 && forge(10).often === 1);
+        assert.ok(!hear("hellFire").calls.distantHammer && !forge(100));
+        assert.ok(realms.filter((place) => place !== "hellFire").every((place) => !hear(place, { forge: { x: 0, z: 0, far: 0 } }).calls.distantHammer));
+
+        // (Lava hissing close by in the Breach and the River of Fire; the dead groaning and
+        // wailing far off through the rock in the Halls and the Pit, lower, muffled)
+        assert.ok(hear("hellBreach").calls.slimeSizzle && hear("hellFire").calls.slimeSizzle && !hear("hellPit").calls.slimeSizzle);
+
+        for (const place of ["hellBone", "hellPit"]) {
+            const { ghostCall, wightCall } = hear(place).calls;
+
+            assert.ok([ghostCall, wightCall].every((call) => call.volume > 0 && call.away[0] >= 15 && call.muffle <= 1500 && call.pitch < 1), place);
+        }
+    });
+
     it("hears each building's door: a keep's heavy one, a ruin's iron gate, a crypt's trapdoor, none into a cave or an ants' nest", () => {
         assert.equal(doorOf("taproom"), "door");
         assert.equal(doorOf("keep"), "doorHeavy");
@@ -1298,12 +1388,13 @@ describe("the ambience (ambience.js)", () => {
         assert.deepEqual(TOLLS.hours, [6, 9, 12, 15, 18]);
     });
 
-    it("names only recorded sounds, downloaded where they're heard: each bed a loop on the environment's bus, each call a sound of its own", () => {
+    it("names only recorded sounds, downloaded where they're heard, or beds made in code: each bed a loop on the environment's bus, each call a sound of its own", () => {
         for (const facts of everywhere()) {
             const { beds, calls, wants } = ambienceOf(facts);
 
+            // (Or one made in code, made once it's wanted: synth.js BEDS)
             for (const name of Object.keys(beds)) {
-                assert.ok(RECORDED[name]?.[0].loop && RECORDED_ONLY[name]?.bus === "environment" && ON_DEMAND.includes(name), name);
+                assert.ok((RECORDED[name]?.[0].loop && RECORDED_ONLY[name]?.bus === "environment" && ON_DEMAND.includes(name)) || BEDS[name], name);
                 assert.ok(beds[name] > 0 && beds[name] <= 1.1, `${name}: ${beds[name]}`);
             }
 
@@ -1401,6 +1492,78 @@ describe("the ambience played (sound.js setAmbience)", () => {
         sound.tick();
         assert.ok(sound.recorded.has("caveDrips") && sound.beds.get("caveDrips").level, "heard again");
         assert.deepEqual(fetched, []);
+        sound.close();
+    });
+
+    it("makes a made bed once it's wanted (here on the page, with no worker), loops it whole as loud as it's asked, slides it to a new rate, and forgets it a while after it's silent", async () => {
+        const { sound, played } = await started();
+        const drones = () => played.filter(({ source }) => sound.buffers.get("hellDrone")?.includes(source.buffer));
+
+        sound.setAmbience({ beds: { hellDrone: 0.8 }, rates: { hellDrone: 0.9 } });
+        assert.ok(!sound.buffers.has("hellDrone") && !sound.wanted.has("hellDrone"), "made, not downloaded");
+        sound.tick();
+        assert.ok(sound.making.has("hellDrone"), "being made");
+        sound.tick();
+        await tick();
+        sound.tick();
+
+        const bed = sound.beds.get("hellDrone");
+        const [looped] = drones().map(({ source }) => source);
+
+        assert.equal(drones().length, 1, "one copy, looped");
+        assert.ok(looped.loop && looped.buffer.duration === 8 && looped.playbackRate.value === 0.9);
+        assert.ok(Math.abs(bed.level.gain.value - 0.8 * BEDS.hellDrone.volume) < 1e-9, "as loud as asked");
+        assert.equal(route(sound, looped).bus, "environment");
+
+        // (Its loop needs no next copy; down another realm, sliding lower)
+        sound.context.currentTime += 30;
+        sound.tick();
+        assert.equal(drones().length, 1);
+        sound.setAmbience({ beds: { hellDrone: 1 }, rates: { hellDrone: 0.667 } });
+        assert.equal(looped.playbackRate.value, 0.667);
+        assert.equal(drones().length, 1, "the same one, slid down");
+
+        // (Silent: stopped once it's faded, forgotten a minute on, made again if it's wanted again)
+        sound.setAmbience({});
+        sound.context.currentTime += 3;
+        sound.tick();
+        assert.ok(looped.stopped !== undefined && !sound.beds.get("hellDrone").level);
+        sound.context.currentTime += 61;
+        sound.tick();
+        assert.ok(!sound.beds.has("hellDrone") && !sound.buffers.has("hellDrone"), "let go of");
+        sound.setAmbience({ beds: { hellDrone: 1 } });
+        sound.tick();
+        await tick();
+        sound.tick();
+        assert.equal(drones().length, 1, "made again, and looped");
+        assert.equal(drones()[0].source.playbackRate.value, 1);
+        sound.close();
+    });
+
+    it("plays a recorded bed slower and lower where it's asked, each copy at its rate, its loop and crossfade the longer", async () => {
+        const { sound, played } = await started();
+        const [length, crossfade] = RECORDED.cryptLoop[0].loop;
+        const copies = () => played.filter(({ source }) => sound.recorded.get("cryptLoop")?.includes(source.buffer));
+
+        sound.setAmbience({ beds: { cryptLoop: 0.6 }, rates: { cryptLoop: 0.8 } });
+        await sound.want("cryptLoop");
+        await tick();
+        sound.tick();
+
+        const [first] = copies();
+        const [fall] = first.source.outputs[0].gain.curves;
+
+        assert.equal(first.source.playbackRate.value, 0.8);
+        assert.ok(Math.abs(fall.at - (first.when + length / 0.8)) < 1e-9 && Math.abs(fall.duration - crossfade / 0.8) < 1e-9);
+        assert.ok(Math.abs(first.source.stopped - (first.when + (length + crossfade) / 0.8)) < 1e-9);
+
+        // (The next copy, as it's asked now)
+        sound.setAmbience({ beds: { cryptLoop: 0.6 } });
+        sound.context.currentTime = first.when + length / 0.8 - 1;
+        sound.tick();
+        assert.equal(copies().length, 2);
+        assert.ok(Math.abs(copies()[1].when - (first.when + length / 0.8)) < 1e-9);
+        assert.equal(copies()[1].source.playbackRate.value, 1);
         sound.close();
     });
 

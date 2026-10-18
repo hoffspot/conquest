@@ -5793,7 +5793,8 @@ export class Game {
     // treads on what's at the stairs' end (`at`, on the player's floor), coming up to it (`coming`)
     // louder and louder, going away quieter and quieter
     // What's heard round the player (audio/ambience.js), worked out every HEARD_EVERY seconds (or
-    // `now`, on coming to another map): indoors, the place's beds and how far its hearth is; out
+    // `now`, on coming to another map): indoors, the place's beds and how far its hearth is (in a
+    // hell, its heart, and where its Hellforge is); out
     // of doors, the land's, its waters', a settlement's and its fires' (surroundings.js), by the
     // time of day. And on the hours of prayer, a church's bell, if they're in a town
     #hearAround(dt, { now = false } = {}) {
@@ -5813,7 +5814,11 @@ export class Game {
         let facts = { place: this.#soundOf(this.mapId), time };
 
         if (interior) {
-            facts.hearth = interior.hearth ? Math.hypot(interior.hearth.x - me.x, interior.hearth.z - me.z) : Infinity;
+            const far = (at) => (at ? Math.hypot(at.x - me.x, at.z - me.z) : Infinity);
+
+            facts.hearth = far(interior.hearth);
+            facts.heart = far(interior.heart);
+            facts.forge = interior.forge ? { ...interior.forge, far: far(interior.forge) } : null;
         } else if (overworld?.biomeAt) {
             this.surroundings ??= new Surroundings(overworld);
             facts = { ...facts, ...this.surroundings.at(me.x, me.z, { height: me.y, lights: this.nearLights ?? [], lit: torchesLit(elapsedOf(this.host.war)) }) };

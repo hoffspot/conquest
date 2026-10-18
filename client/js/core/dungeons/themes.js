@@ -277,7 +277,7 @@ export const THEMES = {
         exit: true,
         style: "dungeon-caves",
         ground: GROUND.soil,
-        sound: "lair",
+        sound: "hellBreach",
         names: {
             forms: ["the {adj} Pit", "the Gates of {place}", "the {adj} Abyss", "the Descent into {place}", "the Hells of {place}"],
             adj: ["Burning", "Screaming", "Blackened", "Bleeding", "Howling", "Smouldering", "Endless", "Nameless"],
@@ -291,7 +291,7 @@ export const THEMES = {
                 look: "hell-breach",
                 style: "dungeon-caves",
                 ground: GROUND.soil,
-                sound: "lair",
+                sound: "hellBreach",
                 packs: [
                     { id: "faithful", creatures: ["cultist"], size: [3, 5], weight: 3 },
                     { id: "slimes", creatures: ["magmaSlime"], size: [2, 3], weight: 2 },
@@ -327,7 +327,7 @@ export const THEMES = {
                 look: "hell-bone",
                 style: "dungeon-ancient",
                 ground: GROUND.courtyard,
-                sound: "crypt",
+                sound: "hellBone",
                 packs: [
                     { id: "dead", creatures: ["skeleton"], size: [3, 5], weight: 4 },
                     { id: "barrow", creatures: ["draugr"], size: [1, 2], weight: 2 },
@@ -362,7 +362,7 @@ export const THEMES = {
                 look: "hell-fire",
                 style: "dungeon-caves",
                 ground: GROUND.soil,
-                sound: "lair",
+                sound: "hellFire",
                 // (Its caverns and grottos flooded with lava, causeways three squares wide across
                 // them, an island or two off them: place.js flood)
                 lava: { rooms: ["cavern", "grotto"], wide: 3, islands: [1, 2], island: 2 },
@@ -399,7 +399,7 @@ export const THEMES = {
                 look: "hell-pit",
                 style: "dungeon-ancient",
                 ground: GROUND.courtyard,
-                sound: "crypt",
+                sound: "hellPit",
                 hoard: "head",
                 // (Its lava only a rim: its throne hall's side walls lined with it, place.js lavaRim)
                 rim: { doors: 3, clear: 2 },

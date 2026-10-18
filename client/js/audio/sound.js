@@ -12,7 +12,9 @@
 //    time of day, a town's dogs, a farm's cattle); in an ants' nest, its colony's murmur, made, one
 //    after another from round about (MURMUR). Downloaded as they're wanted where the player
 //    is, and let go of a minute after they're last heard. Till they're in, the made wind blows
-//    and a made bird sings; and leaves rustle in nearby trees.
+//    and a made bird sings; and leaves rustle in nearby trees. And in a hell, beds made in code
+//    (synth.js BEDS: its drone, the Halls of Bone's heartbeat), each made in a worker once it's
+//    wanted and looped as the wind is; any bed played lower and slower where a place says.
 //  - Music: the town's score (score.js), or, in the tavern, its jig (tavern.js), played on
 //    recordings of real instruments (instruments.js) as it goes, note by note, a little ahead of
 //    time, so it loops without a seam; with a hall's reverb. Going into the tavern, the town's
@@ -45,7 +47,7 @@ import { baseFor, INSTRUMENTS, sampleFiles } from "./instruments.js";
 import { SPELLS } from "../core/spells.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL } from "./recorded.js";
 import { SCORE } from "./score.js";
-import { LEVEL, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
+import { BEDS, LEVEL, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
 import { TAVERN } from "./tavern.js";
 
 /** The music: the town's, and the tavern's. */
@@ -85,6 +87,12 @@ export const PLACES = Object.freeze({
     // (In a ruined keep, open to the sky, the world outside through its broken walls)
     ruin: { score: "town", level: 0.5, muffle: 1200 },
     tower: { score: "town", level: 0.5, muffle: 1100 },
+    // (In a hell's realms, none of the world's music: another world's, its drone in its place
+    // (ambience.js INDOORS))
+    hellBreach: { score: "town", level: 0, muffle: 250 },
+    hellBone: { score: "town", level: 0, muffle: 250 },
+    hellFire: { score: "town", level: 0, muffle: 250 },
+    hellPit: { score: "town", level: 0, muffle: 250 },
 });
 
 /** The buses, and how loud each is to start with (0 to 1, as the sliders show them). */
@@ -717,13 +725,15 @@ export class Sound {
         this.nextLeaves = LEAVES[0];
 
         /**
-         * The ambience (setAmbience): its beds (name → { gain, level (its GainNode), next (when
-         * its next copy starts, the browser's time), copies ([source]), quiet (since when it's
-         * been silent) }); its calls (name → ambience.js's), and when each is next heard
-         * (name → seconds from now); its murmur (a made sound's name, or null), and when it's next
-         * heard (seconds from now).
+         * The ambience (setAmbience): its beds (name → { gain, rate (how fast it's played), level
+         * (its GainNode), next (when its next copy starts, the browser's time), copies ([source]),
+         * quiet (since when it's been silent) }), and the made beds being made (synth.js BEDS,
+         * by name); its calls (name → ambience.js's), and when each is next heard (name →
+         * seconds from now); its murmur (a made sound's name, or null), and when it's next heard
+         * (seconds from now).
          */
         this.beds = new Map();
+        this.making = new Set();
         this.calls = {};
         this.due = new Map();
         this.murmur = null;
@@ -1127,12 +1137,14 @@ export class Sound {
 
     /**
      * What the ambience is where the player is (ambience.js ambienceOf): { beds ({ name: how
-     * loud }: each looped, fading to it; any not named fading out), calls ({ name: ambience.js
-     * CALLS' with how loud, how often and where from }), wants (more to download: the folk at
-     * work's sounds), murmur (a made sound heard over and over from round about, MURMUR, or
-     * null) }. Each downloaded now if it isn't yet.
+     * loud }: each looped, fading to it; any not named fading out; recorded, or made, synth.js
+     * BEDS), rates ({ name: how fast a bed's played, 1 as it is: lower and slower under 1; a
+     * made bed's sliding to it, a recorded one's from its next copy }), calls ({ name:
+     * ambience.js CALLS' with how loud, how often and where from }), wants (more to download:
+     * the folk at work's sounds), murmur (a made sound heard over and over from round about,
+     * MURMUR, or null) }. Each downloaded now if it isn't yet (a made bed made once it's heard).
      */
-    setAmbience({ beds = {}, calls = {}, wants = [], murmur = null } = {}) {
+    setAmbience({ beds = {}, rates = {}, calls = {}, wants = [], murmur = null } = {}) {
         // (The beds first, on their own: not to wait behind the calls' many short recordings)
         this.want(Object.keys(beds));
         this.want([...Object.keys(calls), ...wants]);
@@ -1144,9 +1156,10 @@ export class Sound {
         }
 
         for (const [name, gain] of Object.entries(beds)) {
-            const bed = this.beds.get(name) ?? { gain: 0, level: null, next: null, copies: [], quiet: null };
+            const bed = this.beds.get(name) ?? { gain: 0, rate: 1, level: null, next: null, copies: [], quiet: null };
 
             bed.gain = gain;
+            bed.rate = rates[name] ?? 1;
             this.beds.set(name, bed);
         }
 
@@ -1737,9 +1750,10 @@ export class Sound {
     }
 
     // The beds: each fading to its loudness; the next copy of each sounding one set going a little
-    // ahead, to fade in as the last fades out (its recording's crossfade longer than its loop);
-    // those silent stopped, and let go of after a while; the made wind blowing until a recorded
-    // one is. Called with every tick, and whenever the ambience changes.
+    // ahead, to fade in as the last fades out (its recording's crossfade longer than its loop), at
+    // its rate; a made one (synth.js BEDS) made once it's wanted, then looped whole, sliding to its
+    // rate; those silent stopped, and let go of after a while; the made wind blowing until a
+    // recorded one is. Called with every tick, and whenever the ambience changes.
     #tendBeds() {
         const context = this.context;
 
@@ -1751,7 +1765,8 @@ export class Sound {
         let blowing = false;
 
         for (const [name, bed] of this.beds) {
-            const buffer = this.recorded.get(name)?.[0];
+            const made = BEDS[name];
+            const buffer = made ? this.buffers.get(name)?.[0] : this.recorded.get(name)?.[0];
             const loop = RECORDED[name]?.[0]?.loop;
 
             if (!bed.level && buffer && bed.gain > 0) {
@@ -1762,9 +1777,14 @@ export class Sound {
             }
 
             if (!bed.level) {
-                // (Heard again, let go of past the budget while it was silent: decoded again)
+                // (Heard again, let go of past the budget while it was silent: decoded again; a
+                // made one, wanted: made)
                 if (bed.gain > 0 && !buffer) {
-                    this.#recall(name);
+                    if (made) {
+                        this.#makeBed(name);
+                    } else {
+                        this.#recall(name);
+                    }
                 }
 
                 // (Silent so long: forgotten)
@@ -1777,7 +1797,7 @@ export class Sound {
                 continue;
             }
 
-            const gain = bed.gain * RECORDED_ONLY[name].volume * (LEVEL / RECORDED_LEVEL);
+            const gain = bed.gain * (made ? made.volume : RECORDED_ONLY[name].volume * (LEVEL / RECORDED_LEVEL));
 
             if (bed.target !== gain) {
                 bed.target = gain;
@@ -1787,7 +1807,9 @@ export class Sound {
                 bed.quiet = gain > 0 ? null : now + BED_FADE;
             }
 
-            if (gain > 0 && (bed.next === null || bed.next - now < BED_AHEAD)) {
+            if (made) {
+                this.#loopMade(bed, buffer, gain, now);
+            } else if (gain > 0 && (bed.next === null || bed.next - now < BED_AHEAD)) {
                 this.#copy(bed, buffer, loop, Math.max(bed.next ?? now, now + 0.02), bed.next === null);
                 this.#hear(name);
             }
@@ -1822,14 +1844,79 @@ export class Sound {
         }
     }
 
+    // A made bed (synth.js BEDS) looped whole once it's sounding, as the wind is (made to loop
+    // without a seam): started as it's first heard, sliding to its rate as that changes
+    #loopMade(bed, buffer, gain, now) {
+        const [source] = bed.copies;
+
+        if (!source && gain > 0) {
+            const looped = this.context.createBufferSource();
+
+            looped.buffer = buffer;
+            looped.loop = true;
+            looped.playbackRate.value = bed.rate;
+            looped.connect(bed.level);
+            looped.start(now + 0.02);
+            looped.addEventListener("ended", () => looped.disconnect());
+            bed.copies = [looped];
+            bed.playing = bed.rate;
+        } else if (source && bed.playing !== bed.rate) {
+            source.playbackRate.cancelScheduledValues(now);
+            source.playbackRate.setValueAtTime(source.playbackRate.value, now);
+            source.playbackRate.linearRampToValueAtTime(bed.rate, now + BED_FADE);
+            bed.playing = bed.rate;
+        }
+    }
+
+    // A made bed wanted (synth.js BEDS): made once, away from the page in a worker (worker.js), or
+    // on it, a moment later, where there's no worker; looped once it's in (#tendBeds)
+    #makeBed(name) {
+        if (this.making.has(name)) {
+            return;
+        }
+
+        // (Unless it's been forgotten meanwhile)
+        const done = (samples) => {
+            this.making.delete(name);
+
+            if (this.beds.has(name)) {
+                this.#receive({ name, variant: 0, samples });
+            }
+        };
+        const here = () => setTimeout(() => done(BEDS[name].make()), 0);
+
+        this.making.add(name);
+
+        try {
+            const worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+
+            worker.addEventListener("message", ({ data }) => {
+                worker.terminate();
+                done(data.samples);
+            });
+            worker.addEventListener("error", (event) => {
+                event.preventDefault();
+                worker.terminate();
+                here();
+            });
+            worker.postMessage({ bed: name });
+        } catch {
+            // (No module workers here)
+            here();
+        }
+    }
+
     // A copy of a bed's recording, starting `at` (the browser's time): fading in over its loop's
     // crossfade (or at once, the first: the bed's own level fades it in), playing its loop's
-    // length, fading out over the crossfade as the next copy fades in
+    // length, fading out over the crossfade as the next copy fades in; each the longer the slower
+    // it's played (its rate: under 1, slower and lower)
     #copy(bed, buffer, [length, crossfade], at, first) {
         const source = this.context.createBufferSource();
         const envelope = this.context.createGain();
 
+        [length, crossfade] = [length / bed.rate, crossfade / bed.rate];
         source.buffer = buffer;
+        source.playbackRate.value = bed.rate;
 
         if (!first) {
             envelope.gain.setValueCurveAtTime(RISE, at, crossfade);
@@ -1852,6 +1939,14 @@ export class Sound {
     // decoded again from its MP3 should it be wanted again
     #letGo(name) {
         this.beds.delete(name);
+
+        // (A made one: made again, should it be wanted again)
+        if (BEDS[name]) {
+            this.buffers.delete(name);
+
+            return;
+        }
+
         this.#release(name);
 
         // (None of it in, as when it couldn't be downloaded: downloaded again, should it be
