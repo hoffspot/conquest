@@ -28,6 +28,12 @@ client/models/beasts/greater-demon.bin
 client/models/beasts/fiend.bin
 client/models/beasts/fiend.pale.bin
 client/models/beasts/fiend.ash.bin
+client/models/beasts/flayling.bin
+client/models/beasts/cinder-husk.bin
+client/models/beasts/pyre-acolyte.bin
+client/models/beasts/ossuary-priest.bin
+client/models/beasts/dirge-warden.bin
+client/models/beasts/flayed-hierarch.bin
 # (A licensed model's earlier builds, kept ignored where a copy's left behind)
 client/models/beasts/werewolf.bin
 client/models/beasts/werewolf.dusk.bin

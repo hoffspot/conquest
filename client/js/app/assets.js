@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "42b3714252",
+    release: "0340e5267b",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2058,6 +2058,78 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/fiend.ash.bin",
                     "hash": "25f4cc4790",
                     "bytes": 174108
+                }
+            ]
+        },
+        "beast-flayling": {
+            "tier": "demand",
+            "label": "The Flayling (Monster1, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/flayling.bin",
+                    "hash": "28d7bef4d5",
+                    "bytes": 1407500
+                }
+            ]
+        },
+        "beast-cinder-husk": {
+            "tier": "demand",
+            "label": "The Cinder Husk (Monster1, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/cinder-husk.bin",
+                    "hash": "fa9aa7b74e",
+                    "bytes": 1515380
+                }
+            ]
+        },
+        "beast-pyre-acolyte": {
+            "tier": "demand",
+            "label": "The Pyre Acolyte (Monster1, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/pyre-acolyte.bin",
+                    "hash": "e857114009",
+                    "bytes": 2612428
+                }
+            ]
+        },
+        "beast-ossuary-priest": {
+            "tier": "demand",
+            "label": "The Ossuary Priest (Monster1, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/ossuary-priest.bin",
+                    "hash": "fb6f75d80a",
+                    "bytes": 2726372
+                }
+            ]
+        },
+        "beast-dirge-warden": {
+            "tier": "demand",
+            "label": "The Dirge Warden (Monster1, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/dirge-warden.bin",
+                    "hash": "bb542886ed",
+                    "bytes": 2720960
+                }
+            ]
+        },
+        "beast-flayed-hierarch": {
+            "tier": "demand",
+            "label": "The Flayed Hierarch (Monster1, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/flayed-hierarch.bin",
+                    "hash": "0378b4ee40",
+                    "bytes": 3003804
                 }
             ]
         },

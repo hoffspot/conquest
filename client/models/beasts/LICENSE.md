@@ -274,3 +274,32 @@ in this repository, but in the private one the game's builds fetch it from
 game.
 
 Don't copy it out of this game or use it in anything else.
+
+## flayling.bin, cinder-husk.bin, pyre-acolyte.bin, ossuary-priest.bin, dirge-warden.bin, flayed-hierarch.bin
+
+**Monster1** (its Unreal Engine files: its six builds, its textures and its 24 animations,
+exported from Unreal Engine by this repository's owner), bought on **Fab** by this repository's
+owner under **Fab's Standard License**: a hell's six flayed.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/flayling.json` and the others, which stay out of the repository with the bought files),
+their `browser` builds, one of each of its six builds: the Flayling (its fifth, bare, its first
+skin), the Cinder Husk (its sixth, bare, its third skin, ash grey), the Pyre Acolyte (its third, a
+plain staff, its second skin), the Ossuary Priest (its fourth, crowned, skulls at its belt, its
+third skin), the Dirge Warden (its second, crowned, shoulder plates, its fourth skin, a drowned
+blue) and the Flayed Hierarch (its first, all of it, its first skin). Each is its mesh simplified
+to 8,422 to 12,099 triangles, with two lower details packed in, its materials (body, head, armour,
+staff) baked onto one 1,024-pixel KTX2 atlas (colour, normal, and occlusion, roughness and metal,
+and its glow: the pack's own masks, tinted ember, bile, rime or gore), and its twelve clips (with
+its staff, or without one for the bare two: two idles, a walk, a run, a run back, strafes, two
+attacks, two flinches and a death), with a lunge cut from its second attack, played where it
+stands, and, for the four with staves, a cast made from its idle.
+
+They're scrambled as the game serves them, with whose they are in their glTF asset's
+`copyright`. They aren't in this repository, but in the private one the game's builds fetch them
+from (`docs/LICENSED_MODELS.md`). The model viewer shows them (*Coming to the wilds*) until
+they're in the game.
+
+Don't copy them out of this game or use them in anything else.

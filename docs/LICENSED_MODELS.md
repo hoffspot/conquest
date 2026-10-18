@@ -8,8 +8,8 @@ Monster V1b; the giant ant, Fab's Ant V2; the dungeon spider, Fab's Spider V3; t
 spider, Fab's Spider V6a; the dungeon scorpion, Fab's Scorpion V5d; the giant cockroach, Medhue's
 Cockroach from Fab; the dungeon wasp, Fab's Vespa Titanus Giant Wasp; the black widow, Medhue's
 Black Widow from Fab; the hells' Lord of the Pit, the greater demon, Fab's Gloomy Demon; and, to
-come to the hells, the fiend, Fab's Monster4, with its two other skins
-(`client/models/beasts/LICENSE.md`). This page is how such
+come to the hells, the fiend, Fab's Monster4, with its two other skins, and its six flayed, Fab's
+Monster1's six builds (`client/models/beasts/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,
