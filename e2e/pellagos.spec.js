@@ -9302,6 +9302,127 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
     expect(Object.values(story.named).every((count) => count === 1)).toBe(true);
 });
 
+test("a hell: gone into (its way in made a hell's here: the pass that lays them out is to come), each of its four levels its realm's, drawn in its realm's own air; its ways down portals of fire, each sealed till its level's master falls; and from beyond its throne a portal out to the wilds, sealed till its lord falls", async ({ page }) => {
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=1");
+
+    const hell = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        const settle = async (steps) => {
+            for (let k = 0; k < steps; k++) {
+                game.advance(0.25, { render: false });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+        const until = async (done, steps = 120) => {
+            for (let k = 0; k < steps && !done(); k++) {
+                player.hp = player.maxHp;
+                game.advance(0.1);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+        const through = async (link) => {
+            const end = link.ends.find(({ map }) => map === player.map);
+            const from = player.map;
+
+            Object.assign(player, { x: end.arrive[0] + 0.5, y: end.arrive[1] + 0.5, path: [], order: null, progress: null });
+
+            const told = game.host.command("player", { type: "enter", link: link.id });
+
+            if (!told.ok) {
+                return told.reason;
+            }
+
+            await until(() => player.map !== from, 300);
+            await until(() => game.interiors.get(player.map)?.object.visible || player.map === "town", 300);
+
+            return null;
+        };
+        // (Slain where it stands, as anyone would slay it)
+        const slay = async (champion) => {
+            const [id] = [...game.host.wild].find(([each, one]) => one.champion === champion && game.battle.actor(each)?.map === player.map) ?? [];
+
+            if (id) {
+                game.battle.afflict(id, "poison", { by: "player", damage: 1e7 });
+                await until(() => game.battle.actor(id)?.dead ?? true, 100);
+            }
+
+            return Boolean(id);
+        };
+        // (What's drawn on the level the player's on: whether a hell's veil's among it, and the air)
+        const seen = () => {
+            const level = game.interiors.get(player.map).object;
+            let veils = 0;
+
+            level.traverse((node) => {
+                if (node.isMesh && node.material?.userData?.veil === "hell") {
+                    veils += 1;
+                }
+            });
+
+            return { map: player.map, look: game.world.maps[player.map].look, veils, background: session.view.scene.background?.getHex() ?? null };
+        };
+
+        // (The nearest dungeon to the start, its levels a hell's: made so before they're made)
+        const site = game.world.plan.sites.filter(({ kind }) => kind === "dungeon").sort((a, b) => Math.hypot(a.at[0] - player.x, a.at[1] - player.y) - Math.hypot(b.at[0] - player.x, b.at[1] - player.y))[0];
+
+        Object.assign(player, { x: site.at[0] + 120, y: site.at[1], path: [], order: null, progress: null });
+        await settle(8);
+
+        const building = game.world.interiors.buildings.get(`site:${site.id}`);
+        const made = building.made;
+        const [ox, oy] = building.entrance.outside;
+
+        building.theme = "hell";
+        Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
+        await settle(4);
+        await through(building.door);
+
+        const levels = [];
+        const downs = building.flights.filter(({ id }) => id.endsWith("/stairs"));
+        const out = building.flights.find(({ id }) => id.endsWith("/exit"));
+
+        for (let k = 0; k < 4; k++) {
+            const level = { ...seen(), sealed: k < 3 ? await through(downs[k]) : await through(out) };
+
+            level.slain = await slay(k < 3 ? "floor" : "boss");
+            await until(() => false, 10);
+            level.after = k < 3 ? await through(downs[k]) : await through(out);
+            levels.push(level);
+        }
+
+        return { made, maps: building.maps, levels, out: player.map, by: Math.hypot(player.x - ox - 0.5, player.y - oy - 0.5) < 3 };
+    });
+
+    // (Not made till the player came near, then four levels deep)
+    expect(hell.made).toBe(false);
+    expect(hell.maps).toHaveLength(4);
+
+    // (Each its realm's, a portal of fire on it, in its own air; sealed till its master's slain,
+    // then through)
+    hell.levels.forEach((level, k) => {
+        expect(level.map).toBe(hell.maps[k]);
+        expect(level.look).toBe(["hell-breach", "hell-bone", "hell-fire", "hell-pit"][k]);
+        expect(level.veils).toBeGreaterThan(0);
+        expect(level.background).toBe([0x140806, 0x120606, 0x1e0804, 0x0a0404][k]);
+        expect(level.sealed).toBe(k < 3 ? "sealed" : "throne");
+        expect(level.slain).toBe(true);
+        expect(level.after).toBe(null);
+    });
+
+    // (Out beyond the throne to before its way in)
+    expect(hell).toMatchObject({ out: "town", by: true });
+});
+
 test("on the world map a pin's dropped where it's held: a column of light where it stands and a line the way there, taken away held again; tapped twice, the player runs there, or is told there's no way", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

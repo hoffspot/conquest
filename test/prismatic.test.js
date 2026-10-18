@@ -153,10 +153,10 @@ describe("a Prismatic chain (core/prismatic.js)", () => {
         }
     });
 
-    it("counts the mightiest as a dungeon's boss, an elite, one of the perilous places' own, a seat's ruler and a player", () => {
+    it("counts the mightiest as a dungeon's boss (or a hell's level's own), an elite, one of the perilous places' own, a seat's ruler and a player", () => {
         assert.deepEqual(
-            [{ kind: "player" }, { kind: "soldier", ruler: true }, { kind: "orc", wild: { elite: true } }, { kind: "orc", wild: { unique: true } }, { kind: "orc", wild: { champion: "boss" } }, { kind: "orc", wild: { champion: "mini" } }, { kind: "soldier" }, { kind: "orc", wild: {} }].map(mighty),
-            [true, true, true, true, true, false, false, false],
+            [{ kind: "player" }, { kind: "soldier", ruler: true }, { kind: "orc", wild: { elite: true } }, { kind: "orc", wild: { unique: true } }, { kind: "orc", wild: { champion: "boss" } }, { kind: "orc", wild: { champion: "floor" } }, { kind: "orc", wild: { champion: "mini" } }, { kind: "soldier" }, { kind: "orc", wild: {} }].map(mighty),
+            [true, true, true, true, true, true, false, false, false],
         );
     });
 });

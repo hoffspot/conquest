@@ -661,6 +661,8 @@ export const REFUSALS = Object.freeze({
     full: "Your pack is full.",
     unwanted: "There's nothing there auto-snag's set to take.",
     locked: "It's locked fast, and its guardians still hold the place.",
+    sealed: "The portal won't let you through while this level's master still stands.",
+    throne: "The way out stays shut while the lord of this place still stands.",
     guarded: "It's locked fast, and those keeping it are still about.",
     kept: "It's locked fast, and the one who keeps it still stands.",
     unknown: "You haven't learnt that.",
@@ -1471,9 +1473,16 @@ export class Host {
             }
             case "enter": {
                 const link = this.battle.links.find(({ id }) => id === command.link);
+                const here = link?.ends.find((end) => end.map === actor.map);
 
-                if (!link?.ends.some((end) => end.map === actor.map)) {
+                // (Not from an end with nothing to go in by: a hell's portal out, outside)
+                if (!here?.squares.length) {
                     return refuse("link");
+                }
+
+                // (A hell's portal, sealed from this side till its level's master falls)
+                if (this.#sealed(link, actor.map)) {
+                    return refuse(link.seal.refusal ?? "sealed");
                 }
 
                 // (Heading into a building: it's got ready now)
@@ -6521,6 +6530,21 @@ export class Host {
         return this.world.plan.sites.find((site) => site.id === id);
     }
 
+    // Is a way on sealed against going through it from a map: a hell's portal (core/insides.js
+    // `seal`), from the level it's sealed from, while the first of the pack it waits on stands
+    #sealed(link, map) {
+        const seal = link?.seal;
+
+        if (!seal || seal.map !== map) {
+            return false;
+        }
+
+        const building = this.world.interiors?.buildings.get(link.building);
+        const delve = building ? this.dungeons.get(building.site) : null;
+
+        return !delve?.dead.includes(foeKey(seal.level, seal.pack, 0));
+    }
+
     // A place worth finding that can be gone into (a cave, the dragon's lair, a broken watchtower,
     // the humans' abbeys and manors: sites.js `entrance`), its floors made: { maps (their ids),
     // leader, chest (where its plan has them: insides.js "l" and "h", { map, square }), guards
@@ -7004,7 +7028,7 @@ export class Host {
         for (const pack of level.packs) {
             const group = `pack-${this.nextWild}`;
             const out = [];
-            const ordinary = pack.foes.filter((foe) => !foe.boss && !foe.mini);
+            const ordinary = pack.foes.filter((foe) => !foe.boss && !foe.mini && !foe.warden);
             const { count, health } = ordinary.length ? this.#scaled(ordinary.length, scale, ordinary[0].at, Infinity, map) : { count: 0, health: 1 };
             const more = Array.from({ length: count - ordinary.length }, (each, n) => ({ ...ordinary[n % ordinary.length], more: true }));
 
@@ -7016,7 +7040,7 @@ export class Host {
                 }
 
                 const id = `wild-${this.nextWild++}`;
-                const champion = foe.boss ? "boss" : foe.mini ? "mini" : null;
+                const champion = foe.boss ? "boss" : foe.warden ? "floor" : foe.mini ? "mini" : null;
                 let square = [...foe.at];
 
                 if (foe.more) {
@@ -7074,7 +7098,8 @@ export class Host {
     }
 
     // One of a dungeon's foes slain (`id`, its wild's record `beast`): slain for good (till it's
-    // made again); the boss: its hoard unlocked
+    // made again); the boss: its hoard unlocked (and a hell's portal out unsealed); a hell's
+    // level's own boss: its portal down unsealed
     #delveFell(beast, id) {
         const delve = this.dungeons.get(beast.dungeon);
 
@@ -7092,6 +7117,8 @@ export class Host {
             }
 
             this.#event("dungeon", { site: beast.dungeon, change: "boss", name: this.#siteOf(beast.dungeon)?.name ?? null, boss: this.battle.actor(id)?.name ?? null });
+        } else if (beast.champion === "floor") {
+            this.#event("dungeon", { site: beast.dungeon, change: "floor", name: this.#siteOf(beast.dungeon)?.name ?? null, boss: this.battle.actor(id)?.name ?? null });
         }
     }
 

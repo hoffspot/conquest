@@ -250,6 +250,31 @@ export const CLUTTER = {
         chamber: [["bones", 3], ["skulls", 3], ["beast-skulls", 3], ["roots", 1]],
         any: [["roots", 3], ["rocks", 3], ["bones", 1], ["fungi", 1]],
     },
+    // (A hell's realms (core/dungeons/themes.js hell): the bones and skulls of the damned all
+    // through it; the cult's candles and cauldrons in the Breach, coffins in the Halls of Bone,
+    // the forge's tools by the River of Fire, vessels of offering in the Pit)
+    "hell-breach": {
+        breach: [["candles", 3], ["skulls", 2], ["bones", 2], ["rocks", 2]],
+        rite: [["candles", 4], ["cauldron", 2], ["skulls", 3], ["vessels", 1]],
+        bonepit: [["skulls", 4], ["bones", 4], ["beast-skulls", 2]],
+        any: [["rocks", 3], ["boulder", 1], ["bones", 2], ["skulls", 1]],
+    },
+    "hell-bone": {
+        gate: [["skulls", 4], ["candles", 2], ["bones", 2]],
+        ossuary: [["skulls", 4], ["bones", 3], ["coffin", 2]],
+        charnel: [["bones", 4], ["skulls", 3], ["beast-skulls", 2]],
+        flaying: [["candles", 2], ["cauldron", 2], ["skulls", 2], ["tools", 1]],
+        any: [["bones", 3], ["skulls", 3], ["coffin", 1], ["rats", 1]],
+    },
+    "hell-fire": {
+        forge: [["tools", 3], ["cauldron", 2], ["rocks", 2]],
+        any: [["rocks", 3], ["boulder", 2], ["bones", 1], ["skulls", 1]],
+    },
+    "hell-pit": {
+        throne: [["skulls", 3], ["candles", 2], ["vessels", 2], ["bones", 2]],
+        altar: [["candles", 3], ["vessels", 2], ["skulls", 2]],
+        any: [["skulls", 2], ["bones", 2], ["vessels", 2], ["candles", 1]],
+    },
 };
 
 /** What's left against a wall at a square (metres: its middle; `wall`, `rough`), for a theme's room's look. */
@@ -483,12 +508,16 @@ export function blockAt(x, z, { rough }) {
 }
 
 // What's strewn along a level's walls, by theme: [what, weight] (an ants' nest, the twigs and
-// bark they've carried in and the bones of what they've eaten)
+// bark they've carried in and the bones of what they've eaten; a hell's realms, bones)
 const STREWN = {
     caves: [[STONES, 4], [BARK, 2], [BRANCHES, 1], [ROCKS, 2], [BONES, 1], [MUSHROOMS, 1]],
     hideout: [[STONES, 2], [BARK, 2], [BRANCHES, 1]],
     ancient: [[STONES, 3], [ROCKS, 1], [BONES, 1]],
     nest: [[STONES, 2], [BARK, 3], [BRANCHES, 2], [BONES, 2]],
+    "hell-breach": [[STONES, 3], [ROCKS, 2], [BONES, 2]],
+    "hell-bone": [[BONES, 4], [STONES, 1]],
+    "hell-fire": [[STONES, 3], [ROCKS, 3], [BONES, 1]],
+    "hell-pit": [[STONES, 2], [BONES, 2], [ROCKS, 1]],
 };
 
 /** Small things along a level's walls to walk over: stones, bark, a branch; by theme, at a square. */

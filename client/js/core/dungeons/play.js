@@ -18,10 +18,10 @@ import { CHEST_GOLD } from "../places.js";
 export const DELVES = Object.freeze({ near: 45, far: 120 });
 
 /**
- * How a dungeon's boss and mini-bosses stand out from their kind (on top of their tiers): `hp`
- * times as many hit points, blows `power` times as hard.
+ * How a dungeon's boss and mini-bosses stand out from their kind (on top of their tiers), and a
+ * hell's levels' own bosses (`floor`): `hp` times as many hit points, blows `power` times as hard.
  */
-export const CHAMPIONS = Object.freeze({ boss: { hp: 4, power: 1.3 }, mini: { hp: 2, power: 1.12 } });
+export const CHAMPIONS = Object.freeze({ boss: { hp: 4, power: 1.3 }, floor: { hp: 3, power: 1.2 }, mini: { hp: 2, power: 1.12 } });
 
 /**
  * What's in a dungeon's small chest (a share for each player near it when it's opened): a little

@@ -23,6 +23,7 @@
 
 import { CREATURES, tierAt } from "./creatures.js";
 import { buildDungeon } from "./dungeons/build.js";
+import { THEMES } from "./dungeons/themes.js";
 import { comeIn, FACING, offStairs, readPlan, tavernFolk, UPSTAIRS_PLAN } from "./interiors.js";
 import { GOD_IDS, GODS } from "./lore/gods.js";
 import { namePeople } from "./names.js";
@@ -1190,28 +1191,31 @@ export function dungeonTier(plan, site) {
     return homes.length ? tierAt(site.at, homes, landAt(plan, ...site.at).biome) : 1;
 }
 
-// Which level of a dungeon a floor is, said ("the second level")
-const DEEP = Object.freeze(["", "the second level", "the third level"]);
+// Which level of a dungeon a floor is, said ("the second level"); a hell's by its realm's name
+const DEEP = Object.freeze(["", "the second level", "the third level", "the fourth level"]);
 const capital = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /**
  * A dungeon's levels (insides.js `rooms`): cooked up by the dungeon builder from its site's seed
- * and theme, its tier and how many times it's been made (`generation`), each level a floor;
- * the dungeon itself kept on the building (`dungeon`).
+ * and theme, its tier and how many times it's been made (`generation`), each level a floor (a
+ * hell's each its realm's: drawn, named and heard as its realm is); the dungeon itself kept on
+ * the building (`dungeon`).
  */
 export function dungeonRooms(building) {
     const dungeon = buildDungeon({ seed: building.seed, theme: building.theme ?? "caves", tier: building.tier ?? 1, generation: building.generation ?? 0 });
+    const realms = THEMES[dungeon.theme]?.realms ?? null;
+    const named = building.name ?? dungeon.name;
 
     building.dungeon = dungeon;
 
     return dungeon.levels.map((level, k) => ({
         suffix: `level-${k + 1}`,
-        style: dungeon.style,
-        look: dungeon.theme,
-        name: capital(k ? `${building.name ?? dungeon.name}, ${DEEP[k]}` : (building.name ?? dungeon.name)),
+        style: level.style ?? dungeon.style,
+        look: level.look ?? dungeon.theme,
+        name: capital(realms ? `${named}: ${realms[k]?.name ?? DEEP[k]}` : k ? `${named}, ${DEEP[k]}` : named),
         rows: level.rows,
-        ground: dungeon.ground,
-        sound: dungeon.sound,
+        ground: level.ground ?? dungeon.ground,
+        sound: level.sound ?? dungeon.sound,
         level,
     }));
 }
@@ -1222,6 +1226,12 @@ export function dungeonRooms(building) {
  * `across` to a row, its levels `step` apart, a row `row` deep.
  */
 export const DUNGEON_ORIGINS = Object.freeze({ x: 20000, step: 120, across: 40, row: 400 });
+
+/**
+ * Where the hells' levels are drawn (a theme never found in a wild dungeon: themes.js `wild`),
+ * beyond the dungeons', as theirs are: four levels deep, so a row the deeper.
+ */
+export const HELL_ORIGINS = Object.freeze({ x: 26000, step: 120, across: 10, row: 600 });
 
 // Each kind's floors (the first is the one its front door opens into) and its folk
 const KINDS = Object.freeze({
@@ -1652,20 +1662,25 @@ export class Interiors {
         return building;
     }
 
-    // A dungeon's levels made (dungeonRooms), each a floor drawn at its column of DUNGEON_ORIGINS,
-    // its front door's inside end on the first, and stairs down from each level to the next (its
-    // stairs down's landing above, the foot of its stairs up below), all among the world's links
+    // A dungeon's levels made (dungeonRooms), each a floor drawn at its column of DUNGEON_ORIGINS
+    // (a hell's of HELL_ORIGINS), its front door's inside end on the first, and stairs down from
+    // each level to the next (its stairs down's landing above, the foot of its stairs up below),
+    // all among the world's links. A hell's go down through portals, each sealed (`seal`: the
+    // level and pack whose first foe's death breaks it, from the map above: host.js `enter`) till
+    // the boss of the level above falls; and from beyond its throne a portal out, back to the
+    // wilds before its way in, one way (no squares outside to go in by), sealed till its lord falls
     #makeDungeon(building) {
         const { key } = building;
         const floors = dungeonRooms(building);
         const number = Number(/(\d+)$/.exec(building.site ?? "")?.[1] ?? 1);
         const column = Math.max(0, number - 1);
-        const origin = [DUNGEON_ORIGINS.x + (column % DUNGEON_ORIGINS.across) * DUNGEON_ORIGINS.step, Math.floor(column / DUNGEON_ORIGINS.across) * DUNGEON_ORIGINS.row];
+        const block = THEMES[building.theme]?.wild === false ? HELL_ORIGINS : DUNGEON_ORIGINS;
+        const origin = [block.x + (column % block.across) * block.step, Math.floor(column / block.across) * block.row];
         const maps = floors.map((floor, k) => {
             const map = readPlan(dungeonLevel(key, building.generation, k), floor.name, floor.rows, { ground: floor.ground });
 
             Object.assign(map, {
-                origin: [origin[0], origin[1] + k * DUNGEON_ORIGINS.step],
+                origin: [origin[0], origin[1] + k * block.step],
                 style: floor.style,
                 look: floor.look,
                 finish: null,
@@ -1677,7 +1692,7 @@ export class Interiors {
                 // (What the art and the minimap want of the level: its theme, how deep, its torches
                 // and fires, its rooms, and where those that lurk under its roof wait: a widow's web
                 // is drawn about each)
-                dungeon: { theme: floor.look, level: k, levels: floors.length, lights: floor.level.lights, rooms: floor.level.rooms, lurks: floor.level.packs.flatMap(({ foes }) => foes).filter(({ creature }) => CREATURES[creature]?.lurk).map(({ at }) => at) },
+                dungeon: { theme: floor.look, level: k, levels: floors.length, lights: floor.level.lights, rooms: floor.level.rooms, lurks: floor.level.packs.flatMap(({ foes }) => foes).filter(({ creature }) => CREATURES[creature]?.lurk).map(({ at }) => at), ...(THEMES[building.theme]?.portals ? { portals: true } : {}) },
             });
 
             return map;
@@ -1692,6 +1707,13 @@ export class Interiors {
         const levels = floors.map(({ level }) => level);
 
         Object.assign(building.door.ends[1], { map: maps[0].id, squares: maps[0].marks.D, arrive: [...levels[0].entry.arrive], facing: levels[0].entry.facing, pending: false });
+        // (What seals a way on: the first of a pack of the level it's gone through from, slain)
+        const sealOf = (k, role, refusal) => {
+            const pack = levels[k].packs.find((one) => one.role === role);
+
+            return pack ? { seal: { map: maps[k].id, level: k, pack: pack.id, refusal } } : {};
+        };
+
         building.flights = levels.slice(0, -1).map((above, k) => {
             const below = levels[k + 1];
 
@@ -1703,8 +1725,25 @@ export class Interiors {
                     { map: maps[k + 1].id, squares: below.entry.squares.map((square) => [...square]), arrive: [...below.entry.arrive], facing: below.entry.facing },
                     { map: maps[k].id, squares: above.down.squares.map((square) => [...square]), arrive: [...above.down.arrive], facing: above.down.facing },
                 ],
+                ...sealOf(k, "warden", "sealed"),
             };
         });
+
+        const last = levels.length - 1;
+        const exit = levels[last].exit;
+
+        if (exit) {
+            building.flights.push({
+                id: `${dungeonLevel(key, building.generation, last)}/exit`,
+                kind: "stairs",
+                building: key,
+                ends: [
+                    { map: building.door.ends[0].map, squares: [], arrive: [...building.door.ends[0].arrive], facing: building.door.ends[0].facing },
+                    { map: maps[last].id, squares: exit.squares.map((square) => [...square]), arrive: [...exit.arrive], facing: exit.facing },
+                ],
+                ...sealOf(last, "boss", "throne"),
+            });
+        }
         this.world.links.push(...building.flights);
         building.made = true;
         this.order.push(key);

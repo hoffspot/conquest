@@ -367,7 +367,8 @@ describe("a guild's portal's veil (interiors3d.js veilShader)", () => {
         assert.match(shader.fragmentShader, /if \(cutInWay && vCutWorld\.y - cutPlayer\.y > cutHeight/);
         assert.equal(shader.uniforms.veilTime, VEIL.time);
         assert.equal(shader.uniforms.cutSquares.value, 1);
-        assert.match(veil.material.customProgramCacheKey(), /-veil$/);
+        assert.match(veil.material.customProgramCacheKey(), /-veil-guild$/);
+        assert.match(shader.fragmentShader, /vec3 middle = vec3\(0\.070, 0\.300, 0\.850\);/);
 
         // (Its time, as the room's drawn, round and round its loop)
         built.update(0.016, VEIL.loop + 5);

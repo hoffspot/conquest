@@ -632,6 +632,8 @@ export const LOOKS = Object.freeze({
         attacks: ["slash", "thrust", "chop"], rests: ["rattle", "look"], specials: ["curse"],
     },
     frostTroll: { body: "humanoid", scale: [1.5, 1.6] },
+    // (A hell's lord: a great horned brute, until a bought model of its own is read)
+    demonLord: { body: "humanoid", scale: [1.6, 1.65] },
 });
 
 // A value between two, from the random numbers
@@ -704,6 +706,18 @@ const BRUTES = {
         irises: ["#5a3a1a", "#c89020"],
         hair: { styles: ["bald", "topknot", "bald"], beards: ["stubble", "none"], colour: HAIR_COLOURS.black },
         wear: [["loincloth"], ["belt"], ["bracers"], ["breeches", null]],
+        walk: "orc",
+    },
+    // (A hell's lord, standing in for its own model: a brute bigger than a troll, its skin red as a
+    // coal and seamed with black, its eyes burning, horned, tusked, in a loincloth and bracers)
+    demonLord: {
+        macro: { gender: 1, muscle: [0.95, 1], weight: [0.6, 0.75], height: [0.95, 1], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { browRidge: [0.9, 1], underbite: [0.5, 0.8], jawWidth: [0.7, 0.9], headSquare: [0.4, 0.7], eyeSize: [-0.6, -0.3], earPoint: [0.9, 1], earSize: [0.4, 0.7], noseHump: [0.4, 0.8], armLength: [0.7, 0.9], handSize: [0.8, 1], footSize: [0.7, 0.9], neck: [0.8, 1], shoulders: [0.9, 1], belly: [0, 0.2] },
+        skin: { tones: ["#8a2216", "#7a1c12", "#962a1a"], warts: [0.2, 0.4], veins: [0.7, 1], blush: [0, 0.05], brows: [0.6, 0.9], warpaint: "#140808" },
+        irises: ["#ffb020", "#ff8a1a"],
+        slit: true,
+        hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
+        wear: [["loincloth"], ["belt"], ["bracers"], ["tusks"], ["orcHelm"]],
         walk: "orc",
     },
 };

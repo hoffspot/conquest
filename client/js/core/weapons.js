@@ -528,6 +528,14 @@ export const NATURAL = Object.freeze({
         ],
     },
     frostTroll: { label: "Frozen club", attacks: [melee({ id: "smash", damage: [6, 12], hitAt: 640, duration: 1100, interval: 1700, stagger: 450, reaction: "crush", animation: "hammer", afflict: { kind: "slow", chance: 0.4, look: "frost" } })] },
+    // (A demon lord's: its burning fists, and hellfire hurled from its hand)
+    demonLord: {
+        label: "Burning fists and hellfire",
+        attacks: [
+            melee({ id: "smash", damage: [9, 15], hitAt: 640, duration: 1100, interval: 1600, stagger: 450, reaction: "crush", animation: "hammer", afflict: { kind: "burn", chance: 0.5 } }),
+            ranged({ id: "hellfire", reach: 8, damage: [7, 12], hitAt: 700, duration: 1300, interval: 3200, stagger: 250, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.8 } }),
+        ],
+    },
 });
 
 /** A weapon (a WEAPONS key) or a creature's own (a NATURAL key), or null. */
