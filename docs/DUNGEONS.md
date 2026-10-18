@@ -93,11 +93,11 @@ wilds, and only by night, once the cult keeping its rite there is slain ([The wa
   |---|---|---|---|---|---|---|
   | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | a lair | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats | the Breach Priest, a cultist |
   | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | a crypt | skeletons, draugr, wraiths, ghosts, shadow stalkers | the Bone Lord, a wight lord |
-  | 3 | the River of Fire | caves | `hell-fire`: black basalt, embers thick in hot air | a lair | magma slimes, salamanders, black shucks, chimeras, wyverns | the Forge Beast, a chimera |
+  | 3 | the River of Fire | caves, flooded | `hell-fire`: black basalt, its caverns lakes of lava, causeways across them, embers in its rock and thick in its hot air, the Hellforge in its last room | a lair | magma slimes, salamanders, black shucks, chimeras, wyverns | the Forge Beast, a chimera |
   | 4 | the Pit | an ancient temple's halls | `hell-pit`: walls dark as dried blood, close black air | a crypt | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders | the Gatekeeper, an ogre; then the Lord of the Pit |
 
   Each realm's rooms are dressed its own way: the cult's altars and candles and pools of lava in
-  the Breach, tombs and charnel heaps and pools of blood in the Halls of Bone, braziers and anvils by the River of
+  the Breach, tombs and charnel heaps and pools of blood in the Halls of Bone, braziers and anvils and lakes of lava by the River of
   Fire, watching statues, braziers and the throne in the Pit (`world/dungeondressing.js` `CLUTTER`,
   `STREWN`). The room furthest in on a level, its master's, by the portal down, can have a look of
   its realm's own (its `rooms.goal`: `place.js`): the Breach's is the cult's altar, the rift torn
@@ -219,6 +219,35 @@ outlaws' hideout's are, but drawn as the inside of some great body: no dressed s
   beats with it (`heartLight`).
 - **The player's light** (the look's `carried`) is pale, as bone is, and the Halls have few
   torches.
+
+### The River of Fire: lakes of lava and the Hellforge
+
+The third realm is where lava's the ground (the research: Diablo II's River of Flame, "mostly
+narrow strips of land connected by bridges"). Still dug as caves, but its caverns and grottos are
+flooded wall to wall (the realm's `lava`: `place.js` `flood`), about a third of the level's open
+ground: causeways three squares wide cross each from its ways in to its middle, an island or two
+off them, so the lava's always to either side of the way through. None in the way in's room or
+the room furthest in.
+
+- **Its lakes** (the look's `lakes`: `lava.js` `lakesOf`): how far into the lava each point is,
+  from the plan (a distance across its squares, smoothed); each body of lava flowing one way,
+  along its length. The floor sinks under them (`caverns.js` `cavernFloor`'s `sink`, drawn half a
+  metre apart there), 0.5 m at most, and their surface lies 0.22 m under the floor
+  (`lakeGeometry`), so the shore's where the two meet, round the lava's edge, never square. The
+  surface is the pools' material: molten, hottest in from the shore; its crust gathered in rafts
+  with open channels between them, all crust at the shore; drifting the way the lake flows, 20 m
+  each two minutes, a whole number of each of its noises' repeats, so it never jumps. Every lake
+  on a level is one mesh.
+- **Its light** is the lava's: a room light over each lake every five squares, the biggest
+  first, twelve a level at most (`lakeLights`), and their glow on the rock and floor round them
+  (`lavaGlowOn`), the floor less. Embers glow in the rock's cracks, more of them by the lava (the
+  look's `embers`). Few torches.
+- **The Hellforge** (`F`): the room furthest in, where the Forge Beast waits by the portal down,
+  is always the forge's (the realm's `rooms.goal`; three squares by two, its back to the rock, or
+  smaller where there's no room: its `tries`). A great furnace of the level's dark rock, banded
+  with black iron, iron horns at its top corners, a chimney rising into the roof; its mouth full
+  of molten metal, standing up, a fire roaring in it, lighting the room; before it a lip, a basin
+  of molten metal in it (`interiors3d.js` `hellforge`). Anvils before it, braziers by it.
 
 ### The way in: a cult's camp by night
 
@@ -370,9 +399,17 @@ each say where they go (`PROP_PLACES`):
 - `corner`: in a corner;
 - `rows`: pillars every third square across a hall, the middle way kept clear;
 - `sides`: tombs along both long sides;
-- `head`: against the north wall, centred on the middle way.
+- `head`: against the north wall, centred on the middle way;
+- `back`: its long side against the rock beside it, whichever way that is.
 
-A look's props can be `mirror`ed across the middle way. Nothing that blocks touches anything else
+A look's props can be `mirror`ed across the middle way, and one can have `tries` (each its own
+`at` and `size`) tried in turn till it's placed. A realm's room furthest in can have a look of its
+own (its `rooms.goal`): its first prop (the Breach's altar, the heart, the Hellforge) is placed
+before the level's master and its guard wait there, the rest of it with the other rooms. A realm
+whose ground is lava (its `lava`: the River of Fire) has its caverns and grottos flooded wall to
+wall before anyone waits in them (`flood`), but for causeways three squares wide from each of a
+room's ways in to its middle and an island or two off them; never the way in's room or the one
+furthest in, and every square that can be walked on still walked to, or the room's left dry. Nothing that blocks touches anything else
 that blocks, none goes within two squares of a room's ways in, and a prop is only put where every
 square that can be walked on can still be walked to.
 
@@ -840,6 +877,14 @@ code is here.
   down, more by a pool. **`test/hells.test.js`** draws the levels: the Breach's lava (one mesh, its
   banks another, a light each), its rock glowing and with embers, the rift over its altar with its
   own light; on no other level.
+- **`test/lava.test.js`**, the River of Fire's lakes: how far into the lava each point is, in it
+  in a lava square's middle, out of it on open floor away from it; the floor sinking under them,
+  under their surface wherever it's lava all round; each lake one body flowing along its length,
+  its surface over all its squares, hotter in from the shore; a light over each, twelve at most,
+  the rock glowing by them; their crust drifting a whole number of each noise's repeats a loop.
+  **`test/hells.test.js`**: the River of Fire about a third lava, none in the way in's room, the
+  Hellforge in the room furthest in, no lava on the Halls or the Pit; drawn, its lakes one mesh,
+  the floor sinking, embers in the rock, the forge's basin and mouth molten.
 - **`test/flesh.test.js`**, the Halls of Bone: veins of blood in a few of the walls' points, low
   down and high up; the flesh darker in patches, streaked paler; the veins beating every 1.2
   seconds, a whole number of beats to the veils' loop. The ribs: dozens on a level, each from

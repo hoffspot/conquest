@@ -1,12 +1,15 @@
 // A hell's molten rock (world/lava.js: docs/DUNGEONS.md *Hells*): the Breach's pools of lava,
 // each lying in its squares against the rock, hot in the middle and cooled at its bank, the rock
-// and floor round it lit by its glow; and the Breach's rock, sulphur low down, soot high up, embers
-// in its cracks
+// and floor round it lit by its glow; the Breach's rock, sulphur low down, soot high up, embers in
+// its cracks; and the River of Fire's lakes of lava, its ground, the floor sinking into them
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buildDungeon } from "../client/js/core/dungeons/build.js";
+import { BLOCKING } from "../client/js/core/dungeons/place.js";
 import { readPlan } from "../client/js/core/interiors.js";
-import { BRIMSTONE, brimstoneTone, embersOn, LAVA, lavaMaterial, outOfPool, poolGeometries, poolGlowOn, poolLight, poolRim, poolShape } from "../client/js/world/lava.js";
+import { allAtOnce } from "../client/js/core/steps.js";
+import { cavern, SHELLS } from "../client/js/world/caverns.js";
+import { awayFromPools, BRIMSTONE, brimstoneTone, embersOn, LAKES, lakeGeometry, lakeLights, lakesOf, LAVA, lavaGlowOn, lavaMaterial, outOfPool, poolGeometries, poolGlowOn, poolLight, poolRim, poolShape } from "../client/js/world/lava.js";
 
 const THREE = await import("three");
 
@@ -33,8 +36,8 @@ describe("the Breach's pools of lava (world/lava.js poolShape, poolGeometries)",
             assert.ok(pools.length >= 2, `seed ${seed}: ${pools.length} pools`);
             assert.ok(pools.every(({ wall }) => wall !== null), `seed ${seed}: a pool not against the rock`);
 
-            // (Every open square reached from the way in, walking round the pools)
-            const open = (x, y) => level.rows[y]?.[x] === "." || level.rows[y]?.[x] === "D";
+            // (Every square that can be walked on reached from the way in, walking round the pools)
+            const open = (x, y) => level.rows[y]?.[x] !== undefined && level.rows[y][x] !== "#" && !BLOCKING.has(level.rows[y][x]);
             const start = [...level.rows.join("")].findIndex((c) => c === "D");
             const seen = new Set([start]);
             const queue = [start];
@@ -53,7 +56,7 @@ describe("the Breach's pools of lava (world/lava.js poolShape, poolGeometries)",
                 }
             }
 
-            const opens = [...level.rows.join("")].filter((c) => c === "." || c === "D").length;
+            const opens = [...level.rows.join("")].filter((c) => c !== "#" && !BLOCKING.has(c)).length;
 
             assert.equal(seen.size, opens, `seed ${seed}: an open square cut off`);
         }
@@ -176,7 +179,7 @@ describe("the Breach's rock (world/lava.js brimstoneTone, embersOn)", () => {
 
         // (On the floor far from any pool, none)
         for (let x = 30; x < 40; x += 0.5) {
-            assert.deepEqual(brimstoneTone(x, 0, 30, 5, tint, [pool], true), [1, 1, 1]);
+            assert.deepEqual(brimstoneTone(x, 0, 30, 5, tint, awayFromPools([pool]), true), [1, 1, 1]);
         }
     });
 
@@ -192,11 +195,115 @@ describe("the Breach's rock (world/lava.js brimstoneTone, embersOn)", () => {
 
         const low = embersOn(new Float32Array(points), 9);
         const high = embersOn(new Float32Array(points.map((v, k) => (k % 3 === 1 ? BRIMSTONE.embers.high + 1 : v))), 9);
-        const near = embersOn(new Float32Array(points), 9, [pool]);
+        const near = embersOn(new Float32Array(points), 9, awayFromPools([pool]));
         const share = (list) => [...list].filter((e) => e > 0).length / list.length;
 
         assert.ok(share(low) > 0.01 && share(low) < 0.3, `${(share(low) * 100).toFixed(0)}%`);
         assert.equal(share(high), 0);
         assert.ok([...near].reduce((sum, e) => sum + e, 0) >= [...low].reduce((sum, e) => sum + e, 0));
+    });
+});
+
+// (The River of Fire, a hell's third level: its plan read, its lakes)
+const RIVERS = [11, 12, 13].map((seed) => {
+    const level = buildDungeon({ seed, theme: "hell", tier: 9 }).levels[2];
+    const map = readPlan(`river-${seed}`, "The River of Fire", level.rows);
+
+    return { seed, level, map, lakes: lakesOf(map) };
+});
+
+describe("the River of Fire's lakes of lava (world/lava.js lakesOf, lakeGeometry, lakeLights)", () => {
+    it("know how far into the lava each point is: in the middle of a lava square, in it; in the middle of open floor away from it, out of it", () => {
+        for (const { map, lakes } of RIVERS) {
+            for (let y = 0; y < map.height; y++) {
+                for (let x = 0; x < map.width; x++) {
+                    const char = map.plan[y][x];
+                    const lavaAround = [-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => map.plan[y + dy]?.[x + dx] === "~"));
+                    const floorAround = [-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => (map.plan[y + dy]?.[x + dx] ?? "#") !== "~"));
+
+                    if (char === "~" && lavaAround) {
+                        assert.ok(lakes.into(x + 0.5, y + 0.5) > 0.5 && lakes.away(x + 0.5, y + 0.5) === 0);
+                    } else if (char !== "~" && floorAround) {
+                        assert.ok(lakes.into(x + 0.5, y + 0.5) < -0.5 && lakes.sink(x + 0.5, y + 0.5) === 0);
+                    }
+                }
+            }
+        }
+    });
+
+    it("have the floor sink under them, its shore where it meets their surface at the lava's edge", () => {
+        for (const { map, lakes } of RIVERS) {
+            for (let y = 0; y < map.height; y++) {
+                for (let x = 0; x < map.width; x++) {
+                    if (map.plan[y][x] === "~" && [-1, 0, 1].every((dy) => [-1, 0, 1].every((dx) => map.plan[y + dy]?.[x + dx] === "~"))) {
+                        assert.ok(-lakes.sink(x + 0.5, y + 0.5) < LAKES.surface, "under the lava");
+                    }
+                }
+            }
+        }
+
+        // (And a cave's floor sinking as it's told)
+        const { map, lakes } = RIVERS[0];
+        const made = allAtOnce(cavern(map.width, map.height, (x, y) => map.plan[y][x] === "#", SHELLS.caves, { seed: 7, sink: lakes.sink, floorStep: LAKES.step }));
+        const ys = made.floor.positions.filter((_, k) => k % 3 === 1);
+
+        assert.ok(Math.min(...ys) <= -LAKES.sink + 0.01 && Math.max(...ys) === 0);
+    });
+
+    it("are each one body of lava flowing one way, along its length, its surface over all its squares, hotter in from its shore", () => {
+        for (const { map, lakes } of RIVERS) {
+            const squares = lakes.regions.reduce((sum, { squares }) => sum + squares.length, 0);
+
+            assert.equal(squares, map.plan.join("").split("").filter((c) => c === "~").length);
+            assert.ok(lakes.regions.length >= 2);
+
+            for (const region of lakes.regions) {
+                // (Along its length: the way its squares spread furthest)
+                const spread = (angle) => region.squares.reduce((sum, [x, y]) => sum + ((x + 0.5 - region.x) * Math.cos(angle) + (y + 0.5 - region.z) * Math.sin(angle)) ** 2, 0);
+
+                assert.ok(spread(region.flow) >= spread(region.flow + Math.PI / 2) - 1e-6);
+            }
+
+            const geometry = lakeGeometry(lakes);
+            const position = geometry.attributes.position.array;
+            const heat = geometry.attributes.heat.array;
+
+            assert.ok(position.filter((_, k) => k % 3 === 1).every((y) => Math.abs(y - LAKES.surface) < 1e-6));
+            assert.ok(heat.every((h) => h >= 0 && h <= 1) && heat.some((h) => h > 0.95) && heat.some((h) => h === 0));
+            assert.ok(geometry.attributes.spin.array.every((v) => v === 0));
+
+            // (Over every lava square's middle)
+            for (const { squares } of lakes.regions) {
+                for (const [x, y] of squares) {
+                    let near = false;
+
+                    for (let k = 0; k < position.length && !near; k += 3) {
+                        near = Math.abs(position[k] - (x + 0.5)) <= 0.5 && Math.abs(position[k + 2] - (y + 0.5)) <= 0.5;
+                    }
+
+                    assert.ok(near, `${x},${y}`);
+                }
+            }
+        }
+    });
+
+    it("light the level: a light over each lake, more over the bigger ones, as many as a level has at most; the rock and floor glowing by them", () => {
+        for (const { map, lakes } of RIVERS) {
+            const lights = lakeLights(lakes);
+
+            assert.ok(lights.length >= Math.min(lakes.regions.length, LAKES.lights.most) && lights.length <= LAKES.lights.most);
+            assert.ok(lights.every(({ x, z, kind, intensity }) => kind === "lava" && intensity === LAKES.lights.intensity && map.plan[Math.floor(z)][Math.floor(x)] === "~"));
+
+            const [x, y] = lakes.regions[0].squares[0];
+            const glow = (dx) => lavaGlowOn(new Float32Array([x + 0.5 + dx, 0.5, y + 0.5]), lakes.away)[0];
+
+            assert.ok(glow(0) > 0);
+        }
+
+        // (Its lava flowing and its crust drifting a whole number of each of its noises' repeats
+        // each of the veils' loops, so it comes round whole)
+        for (const frequency of [LAVA.plates, 1.3, 3.1, 7.3, 0.6]) {
+            assert.ok(Math.abs(LAKES.drift * frequency - Math.round(LAKES.drift * frequency)) < 1e-9, `${frequency}`);
+        }
     });
 });
