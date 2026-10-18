@@ -57,6 +57,28 @@ describe("soil trickling from an ants' nest's roof (world/trickles.js)", () => {
         assert.ok(sifts.every(({ x, z }) => grains.some((grain) => Math.hypot(grain.x - x, grain.z - z) < 0.1)));
     });
 
+    it("says when one starts, the frame it does, to be heard where it falls (app/game.js)", () => {
+        const trickles = new Trickles(seeded(9));
+        let starts = 0;
+
+        for (let t = 0; t < 120; t += 0.1) {
+            const before = trickles.running;
+
+            trickles.update(0.1, { x: 50, z: 50 }, roof);
+
+            if (trickles.started) {
+                starts++;
+                assert.equal(before, null);
+                assert.equal(trickles.started, trickles.running);
+                assert.ok(Math.hypot(trickles.started.x - 50, trickles.started.z - 50) <= TRICKLE.near[1] + 1e-9);
+            } else {
+                assert.ok(!trickles.running || trickles.running === before, "started unsaid");
+            }
+        }
+
+        assert.ok(starts >= 120 / TRICKLE.every[1] - 1, `${starts} started`);
+    });
+
     it("runs each for a second or two, as many grains a second as it has, and waits as long as it says between", () => {
         const trickles = new Trickles(seeded(9));
         const drawn = play(trickles, 600, roof).filter(({ kind }) => kind === "trickle");

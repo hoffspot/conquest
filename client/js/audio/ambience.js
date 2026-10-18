@@ -2,13 +2,16 @@
 //
 //  - Beds, each a recording looped round and round (recorded.js loop), as loud as where the player
 //    is makes it. Indoors, each place's (INDOORS): a taproom's crowd and its hearth, a temple's
-//    hush, a crypt's still air, a cave's drips. Out in the world, its land's wind (on open land,
+//    hush, a crypt's still air, a cave's drips, an ants' nest's close earth. Out in the world, its land's wind (on open land,
 //    in the woods, up high), water near (a stream, a river, a waterfall, the sea's surf, a lake
 //    lapping), the crickets after dark and the marsh's frogs, a town's bustle and its market's by
 //    day, a camp fire's or a brazier's crackle close by.
 //  - Calls now and then (CALLS), each from somewhere round the player: birds by the time of day,
 //    crows, gulls, an owl at night, a tree creaking in the woods, a town's dogs, hens and horses,
 //    a farm's cattle and sheep, the smith's hammer near a smithy.
+//    In an ants' nest, something chittering far off through the earth.
+//  - A murmur: a made sound heard one after another from round about, overlapping (an ants'
+//    nest's colony at work in the earth: synth.js colonyRustle).
 //  - A church's bell at the hours of prayer (TOLLS), heard in a town.
 //
 // What's round the player is the game's to say (app/surroundings.js): this only says what's heard.
@@ -34,7 +37,8 @@ const CHORUS = DAY.rises + 2 * HOUR;
 /**
  * Each place indoors (sound.js PLACES), and what's heard there: its beds, each at how loud
  * (1: as recorded, about as loud as the wind out of doors), and the sounds of the folk at work
- * there, downloaded as the player comes in (`wants`).
+ * there, downloaded as the player comes in (`wants`); its calls (CALLS', each as loud as it says),
+ * and its murmur (a made sound: sound.js setAmbience).
  */
 export const INDOORS = Object.freeze({
     taproom: { beds: { tavernLoop: 0.9 }, hearth: 0.6, wants: ["clink", "pour", "crackle", "stairs"] },
@@ -47,6 +51,9 @@ export const INDOORS = Object.freeze({
     keep: { beds: { cryptLoop: 0.5 } },
     undercroft: { beds: { cryptLoop: 0.8, brazierLoop: 0.35 } },
     cave: { beds: { caveDrips: 1 } },
+    // (An ants' nest: close, still earth, damp, its colony heard at work in it round about, and
+    // now and then something chittering far off through it)
+    nest: { beds: { cryptLoop: 0.7, caveDrips: 0.25 }, calls: { spiderCall: 0.8 }, murmur: "colonyRustle" },
     lair: { beds: { lairLoop: 1 } },
     crypt: { beds: { cryptLoop: 0.9, caveDrips: 0.4 } },
     ruin: { beds: { windHigh: 0.6, caveDrips: 0.3 } },
@@ -56,8 +63,8 @@ export const INDOORS = Object.freeze({
 /**
  * The calls: how often each is heard (`every` [from, to] seconds, at its usual), from how far off
  * round the player (`away` [from, to] metres; or from a tree near, `tree`), and how far off it can
- * be heard at all (`heard`, metres: sound.js play's `far`); some through the air as from far off
- * (`muffle`: a low-pass filter's frequency, Hz).
+ * be heard at all (`heard`, metres: sound.js play's `far`); some through the air or the earth as
+ * from far off (`muffle`: a low-pass filter's frequency, Hz), some slowed (`pitch`: its rate).
  */
 export const CALLS = Object.freeze({
     birdDay: { every: [4, 14], away: [8, 30], heard: 40 },
@@ -73,6 +80,9 @@ export const CALLS = Object.freeze({
     cowMoo: { every: [25, 70], away: [30, 80], heard: 110 },
     sheepBleat: { every: [20, 60], away: [20, 60], heard: 80 },
     distantHammer: { every: [5, 12], heard: 80, muffle: 1800 },
+    // (In an ants' nest, something chittering far off in its tunnels, through the earth: a giant
+    // ant's or a spider's call, slowed and muffled)
+    spiderCall: { every: [10, 28], away: [16, 32], heard: 40, muffle: 1000, pitch: 0.72 },
 });
 
 /**
@@ -88,7 +98,8 @@ const near = (far, reach) => Math.max(0, 1 - far / reach) ** 2;
 /**
  * What's heard where the player is: { beds ({ name: how loud }), calls ({ name: CALLS' with how
  * loud (`volume`), how much oftener than usual (`often`), and where from (`at`, if anywhere in
- * particular) }), wants (more to download now: the folk at work's sounds, the doors') }. `facts` (app/surroundings.js):
+ * particular) }), wants (more to download now: the folk at work's sounds, the doors'), murmur (a
+ * made sound heard over and over from round about, or null) }. `facts` (app/surroundings.js):
  * { place (sound.js PLACES: "town" out of doors), time (of day, ms from midnight: daytime.js
  * timeOfDay); indoors, how far the hearth is (`hearth`, metres); out of doors, the land (`land`,
  * a BIOMES id), whether it's high (`high`), how far each of the waters is (`water`: { stream,
@@ -101,14 +112,14 @@ export function ambienceOf(facts) {
 }
 
 function indoors({ place, hearth = Infinity }) {
-    const { beds, wants = [], hearth: fire = 0 } = INDOORS[place];
+    const { beds, calls = {}, murmur = null, wants = [], hearth: fire = 0 } = INDOORS[place];
     const heard = { ...beds };
 
     if (fire && near(hearth, REACH.hearth) > 0.01) {
         heard.hearthLoop = round(fire * near(hearth, REACH.hearth));
     }
 
-    return { beds: heard, calls: {}, wants: [...wants, doorOf(place)].filter(Boolean) };
+    return { beds: heard, calls: Object.fromEntries(Object.entries(calls).map(([name, volume]) => [name, { ...CALLS[name], volume, often: 1 }])), wants: [...wants, doorOf(place)].filter(Boolean), murmur };
 }
 
 function outdoors({ land = "meadow", high = false, water = {}, settled = 0, market = Infinity, fire = Infinity, brazier = Infinity, smithy = null, time = DAY.day }) {
@@ -167,7 +178,7 @@ function outdoors({ land = "meadow", high = false, water = {}, settled = 0, mark
     call("distantHammer", smithy && light > 0.25 ? near(smithy.far, REACH.smithy) ** 0.5 : 0, { at: smithy });
 
     // (And downloaded now: the leaves in the trees; in a town, its doors and its church's bell)
-    return { beds, calls, wants: ["leaves", ...(town > 0 ? ["door", "churchBell"] : [])] };
+    return { beds, calls, wants: ["leaves", ...(town > 0 ? ["door", "churchBell"] : [])], murmur: null };
 }
 
 /**
@@ -184,14 +195,14 @@ export function tolled(before, now) {
 
 /**
  * The door heard going in or out of a place (sound.js PLACES): a heavy one into a keep, a temple,
- * a hall or a tower; an iron gate into a ruin; none into a cave or the lair (an open mouth); a
- * house's door anywhere else.
+ * a hall or a tower; an iron gate into a ruin; none into a cave, the lair or an ants' nest (an
+ * open mouth); a house's door anywhere else.
  */
 export function doorOf(place) {
     return DOORS[place] === undefined ? "door" : DOORS[place];
 }
 
-const DOORS = { keep: "doorHeavy", temple: "doorHeavy", hall: "doorHeavy", undercroft: "doorHeavy", tower: "doorHeavy", ruin: "gate", crypt: "trapdoor", cave: null, lair: null };
+const DOORS = { keep: "doorHeavy", temple: "doorHeavy", hall: "doorHeavy", undercroft: "doorHeavy", tower: "doorHeavy", ruin: "gate", crypt: "trapdoor", cave: null, lair: null, nest: null };
 
 // (Rounded, for steady numbers to compare)
 const round = (value) => Math.round(value * 1000) / 1000;

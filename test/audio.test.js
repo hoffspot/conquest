@@ -10,10 +10,11 @@ import { sampleFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { useSound, wearSound } from "../client/js/audio/handling.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
-import { ARMOUR, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, PLACES, RECORDED_ONLY, recordedFiles, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { ARMOUR, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { CREATURES } from "../client/js/core/creatures.js";
+import { THEMES } from "../client/js/core/dungeons/themes.js";
 import { GEAR } from "../client/js/core/gear.js";
 import { ITEMS } from "../client/js/core/progress.js";
 import { DAY, HOUR } from "../client/js/core/daytime.js";
@@ -83,9 +84,9 @@ describe("making sounds (synth.js)", () => {
         }
     });
 
-    it("puts every sound on the effects bus but for the town's and the tavern's: birds, leaves and the hearth crackling", () => {
+    it("puts every sound on the effects bus but for the town's, the tavern's and an ants' nest's: birds, leaves, the hearth crackling, a colony's murmur and soil trickling", () => {
         for (const [name, sound] of Object.entries(SOUNDS)) {
-            assert.equal(sound.bus ?? "effects", ["bird", "leaves", "crackle"].includes(name) ? "environment" : "effects", name);
+            assert.equal(sound.bus ?? "effects", ["bird", "leaves", "crackle", "colonyRustle", "soilTrickle"].includes(name) ? "environment" : "effects", name);
         }
     });
 
@@ -1262,13 +1263,32 @@ describe("the ambience (ambience.js)", () => {
         assert.ok(Object.keys(PLACES).every((place) => place === "town" || INDOORS[place]), "every place indoors heard");
     });
 
-    it("hears each building's door: a keep's heavy one, a ruin's iron gate, a crypt's trapdoor, none into a cave", () => {
+    it("hears an ants' nest's close, still earth, its colony murmuring round about and something chittering far off through it, slowed and muffled", () => {
+        const nest = ambienceOf({ place: "nest", time: DAY.day });
+        const { spiderCall } = nest.calls;
+
+        assert.equal(THEMES.nest.sound, "nest");
+        assert.ok(PLACES.nest);
+        assert.deepEqual(nest.beds, { cryptLoop: 0.7, caveDrips: 0.25 });
+        assert.deepEqual(Object.keys(nest.calls), ["spiderCall"]);
+        assert.ok(spiderCall.volume > 0 && spiderCall.often === 1 && spiderCall.away[0] >= 15 && spiderCall.muffle <= 1200 && spiderCall.pitch < 0.8, JSON.stringify(spiderCall));
+        assert.equal(nest.murmur, "colonyRustle");
+        assert.equal(SOUNDS.colonyRustle.bus, "environment");
+
+        // (Nowhere else murmurs)
+        for (const facts of everywhere().filter(({ place }) => place !== "nest")) {
+            assert.equal(ambienceOf(facts).murmur, null, facts.place);
+        }
+    });
+
+    it("hears each building's door: a keep's heavy one, a ruin's iron gate, a crypt's trapdoor, none into a cave or an ants' nest", () => {
         assert.equal(doorOf("taproom"), "door");
         assert.equal(doorOf("keep"), "doorHeavy");
         assert.equal(doorOf("temple"), "doorHeavy");
         assert.equal(doorOf("ruin"), "gate");
         assert.equal(doorOf("crypt"), "trapdoor");
         assert.equal(doorOf("cave"), null);
+        assert.equal(doorOf("nest"), null);
     });
 
     it("rings a church's bell at the hours of prayer, once as each comes", () => {
@@ -1402,6 +1422,68 @@ describe("the ambience played (sound.js setAmbience)", () => {
         sound.setAmbience({});
         sound.update(60);
         assert.equal(birds().length, 1);
+        sound.close();
+    });
+
+    it("calls slowed where a call says so: something chittering far off in an ants' nest", async () => {
+        const { sound } = await started();
+        const { pitch } = CALLS.spiderCall;
+
+        const asked = [];
+        const play = sound.play.bind(sound);
+
+        sound.play = (name, options) => (asked.push({ name, ...options }), play(name, options));
+        sound.setPaused(false);
+        sound.setListener(100, 100);
+        sound.setAmbience({ calls: { spiderCall: { ...CALLS.spiderCall, volume: 1, often: 1 } } });
+        sound.update(CALLS.spiderCall.every[1] + 0.1);
+
+        const [chitter] = asked.filter(({ name }) => name === "spiderCall");
+
+        assert.ok(chitter.rate >= pitch * 0.94 - 1e-9 && chitter.rate <= pitch * 1.06 + 1e-9, `at ${chitter.rate}`);
+        assert.equal(chitter.muffle, CALLS.spiderCall.muffle);
+        assert.ok(Math.hypot(chitter.at.x - 100, chitter.at.z - 100) >= CALLS.spiderCall.away[0] - 1e-9);
+        sound.close();
+    });
+
+    it("murmurs an ants' nest's colony over and over from round about, each overlapping the last, on the environment's bus; and stops once out of it", async () => {
+        const { sound, played } = await started();
+        const murmurs = () => played.filter(({ source }) => sound.buffers.get("colonyRustle").includes(source.buffer));
+        // (Along its way out, muffled on the way: the first pan it's through, and the bus it ends on)
+        const along = (source) => {
+            const way = [];
+
+            for (let node = source; node; node = node.outputs?.[0]) {
+                way.push(node);
+            }
+
+            return way;
+        };
+        const busOf = (source) => along(source).map((node) => Object.entries(sound.buses).find(([, gain]) => gain === node)?.[0]).find(Boolean);
+        const panOf = (source) => along(source).find((node) => node.pan)?.pan.value ?? 0;
+
+        sound.setPaused(false);
+        sound.setListener(100, 100);
+        sound.setAmbience({ murmur: "colonyRustle" });
+
+        for (let t = 0; t < 30; t += 0.1) {
+            sound.update(0.1);
+        }
+
+        const heard = murmurs().length;
+
+        assert.ok(heard >= 30 / MURMUR.every[1] - 1 && heard <= 30 / MURMUR.every[0] + 1, `${heard} in 30 s`);
+        assert.ok(sound.buffers.get("colonyRustle").every(({ duration }) => duration > MURMUR.every[1]), "each longer than the longest wait");
+        assert.ok(murmurs().every(({ source }) => busOf(source) === "environment"));
+
+        // (From all round: to the left and to the right)
+        const pans = murmurs().map(({ source }) => panOf(source));
+
+        assert.ok(pans.some((pan) => pan < -0.2) && pans.some((pan) => pan > 0.2), pans.map((pan) => pan.toFixed(2)).join());
+
+        sound.setAmbience({});
+        sound.update(10);
+        assert.equal(murmurs().length, heard);
         sound.close();
     });
 });

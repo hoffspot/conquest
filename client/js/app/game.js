@@ -349,6 +349,9 @@ const SLEEP_FADE = 2.4;
 // Embers rise from the hearth this often (a second)
 const EMBERS = 5;
 
+// How far off soil trickling from an ants' nest's roof is heard (metres)
+const TRICKLE_HEARD = 16;
+
 // The buildings the host has got ready to go into (those near any player: core/host.js
 // RELEVANCE), their floors and folk built a piece at a time, for at most `budget` ms a frame; and
 // how often (s) the doors of the settlements come to since are picked up
@@ -8314,12 +8317,17 @@ export class Game {
                 this.motes.update(at.x, at.y, at.z, dt, interior.motes, renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)));
             }
 
-            // (Soil trickling from its roof now and then, where it does: an ants' nest's)
+            // (Soil trickling from its roof now and then, where it does: an ants' nest's; heard where
+            // it falls as it starts)
             if (interior.trickles && this.effects) {
                 this.trickles ??= new Trickles();
 
                 for (const { kind, at: from } of this.trickles.update(dt, at, interior.roof)) {
                     this.effects.burst(kind, from);
+                }
+
+                if (this.trickles.started) {
+                    this.sound?.play("soilTrickle", { at: this.trickles.started, far: TRICKLE_HEARD });
                 }
             }
 

@@ -413,7 +413,13 @@ brazier, `$` a small chest, and an ants' nest's `E` brood and `z` midden heap. T
     fog). Spores drift in it, rising slowly, faintly glowing green (`motes.js` `MOTES.spores`;
     none on low quality), and now and then, somewhere near the player under the roof, soil
     trickles from it for a second or two, its dust sifting up off the floor (`trickles.js`,
-    drawn as the fights' sparks and dust are: `effects.js` `trickle`, `sift`).
+    drawn as the fights' sparks and dust are: `effects.js` `trickle`, `sift`), heard where it
+    falls.
+  - **Its sound** (its theme's `sound`, `nest`: docs/GAME.md *The environment*): close, still
+    earth, a little damp; its colony heard at work in it round about, one made murmur after
+    another overlapping; now and then something chittering far off in its tunnels, slowed and
+    muffled; the soil trickling where it falls. All of it either recorded already or made in
+    code, so nothing more's downloaded.
 - **An ants' nest's story** (`nestlife.js`, `dungeondressing.js`, drawn with its rock: `interiors3d.js`
   `nestLife`), told in what's left about it, in nine meshes at most a level, whatever's in it:
   - **Its brood**, round the middle of each brood chamber (`broodIn`, `NEST_LIFE.brood`): 18 to 26
