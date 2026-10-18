@@ -229,9 +229,9 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     await openViewer(page, "/model-viewer.html?model=beast-centipede&clip=Run");
 
     // (In the game now, as are the ant, the spiders and the Ant Monster: every bought model is but
-    // the scorpion, the cockroach and the wasp, the creatures to come listed; read, its clips
-    // listed, the one asked for by its address played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Dungeon Scorpion", "Giant Cockroach", "Dungeon Wasp"]);
+    // the scorpion, the cockroach, the wasp and the black widow, the creatures to come listed; read,
+    // its clips listed, the one asked for by its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Dungeon Scorpion", "Giant Cockroach", "Dungeon Wasp", "Black Widow"]);
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
@@ -533,6 +533,49 @@ test("and the Dungeon Wasp: its 9 clips and the flinch made up for it, standing 
     expect(await page.evaluate(() => window.lab.avatar().object.children[0].position.y)).toBe(0);
     expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 15960, bones: 50 });
     await expect(page.locator("#details")).toContainText("Vespa Titanus Giant Wasp, bought on Fab: used with the permission its Standard License gives");
+});
+
+test("and the Black Widow: its 28 clips that play in place and the flinch made up for it, its hairy mesh, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-black-widow&clip=Web%20Ground");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack",
+        "Attack 2",
+        "Attack 3",
+        "Dead",
+        "Death",
+        "Idle",
+        "Idle 2",
+        "Idle 3",
+        "Idle 4",
+        "Idle 5",
+        "Idle 6",
+        "Jump",
+        "Jump Loop",
+        "Land",
+        "Run",
+        "Turn Left",
+        "Turn Right",
+        "Walk",
+        "Web Down",
+        "Web Down Idle",
+        "Web Down Idle 2",
+        "Web Ground",
+        "Web Idle",
+        "Web Idle 2",
+        "Web Idle 3",
+        "Web Idle 4",
+        "Web Idle 5",
+        "Web Up",
+        // (Made up from its idle: it had no flinch)
+        "Hit React",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Web Ground", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Black Widow");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 10468, bones: 56 });
+    await expect(page.locator("#details")).toContainText("Medhue's Black Widow, bought on Fab: used with the permission its Standard License gives");
 });
 
 test("the werewolf as the game draws it, from its model once that's read: the game's moves for it, and the skin each one wears", async ({ page }) => {

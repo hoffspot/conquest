@@ -200,3 +200,26 @@ in this repository, but in the private one the game's builds fetch it from
 game.
 
 Don't copy it out of this game or use it in anything else.
+
+## black-widow.bin
+
+**Medhue's Black Widow** (`medhue_blackwidow.blend`), bought on **Fab** by this repository's owner
+under **Fab's Standard License**: the Black Widow.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought `.blend` put through `utilities/blenderpipeline`
+(`private/black-widow.json`, which stays out of the repository with the bought files), its
+`browser` build. That's 10 times its own size (1.78 m long, legs and all), its hairy mesh (10,468
+triangles, with no lower details: its 810 bristles don't simplify), its own three textures as
+1,024-pixel KTX2, all 28 of its clips that play in place (their copies with root motion left out;
+the one called Action, a quiet idle, as Idle 6), at 30 keyframes a second, and a flinch made from
+its idle by the pipeline (`clips.invent`: Hit React). Its web, a separate prop in the `.blend`,
+isn't in it.
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`). The model viewer shows it (*Coming to the wilds*) until it's in the
+game.
+
+Don't copy it out of this game or use it in anything else.

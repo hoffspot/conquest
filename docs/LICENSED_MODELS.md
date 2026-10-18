@@ -5,9 +5,10 @@ seller's permission, or under a licence that gives it. Today they're the Dreadth
 Dreadthorn Dragon; the werewolf, Fab's Werewolf - Mythical Creature, with its five other skins; the
 ants' nests' five: the great centipede, Fab's Centipede Monster-V2; the Ant Monster, Fab's Ant
 Monster V1b; the giant ant, Fab's Ant V2; the dungeon spider, Fab's Spider V3; and the elite
-dungeon spider, Fab's Spider V6a; and three not in the game yet: the Dungeon Scorpion, Fab's
-Scorpion V5d; the Giant Cockroach, Medhue's Cockroach from Fab; and the Dungeon Wasp, Fab's Vespa
-Titanus Giant Wasp (`client/models/beasts/LICENSE.md`). This page is how such
+dungeon spider, Fab's Spider V6a; and four not in the game yet: the Dungeon Scorpion, Fab's
+Scorpion V5d; the Giant Cockroach, Medhue's Cockroach from Fab; the Dungeon Wasp, Fab's Vespa
+Titanus Giant Wasp; and the Black Widow, Medhue's Black Widow from Fab
+(`client/models/beasts/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,
