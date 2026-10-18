@@ -38,6 +38,20 @@ describe("what the player's found (explored.js)", () => {
         assert.equal(explored.chunksVisited, 3);
     });
 
+    it("has found somewhere once the player's been in its chunk or one of the eight round it (the maps' rule, and the rumours')", () => {
+        const explored = new Explored();
+        const [x, y] = [CHUNK * 40 + 10, CHUNK * 71 + 50];
+
+        assert.ok(!explored.sighted(x, y));
+        explored.visit(CHUNK * 41 + 5, CHUNK * 72 + 5);
+        assert.ok(explored.sighted(x, y), "a chunk off, corner to corner");
+        assert.ok(explored.sighted(CHUNK * 42 + 1, CHUNK * 73 + 1) && !explored.sighted(CHUNK * 43 + 1, CHUNK * 72 + 1), "but not two");
+
+        // (Off the world's edge, nothing's been)
+        explored.visit(1, 1);
+        assert.ok(explored.sighted(-10, -10) && explored.sighted(1, 1));
+    });
+
     it("is kept and read back just as it was", () => {
         const explored = new Explored();
 

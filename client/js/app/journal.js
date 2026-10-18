@@ -12,6 +12,9 @@
 // - where their people stand at the war's end: serving another and how near to rising, fallen, or
 //   ruling the continent (docs/WAR.md M10);
 // - their company: the followers they lead (docs/WAR.md M9), and how many more they could;
+// - what they've heard tell of (docs/GAME.md *Rumours of places*): what the criers have told of
+//   the places round their towns, and what's said of the hells' cults, as it was said, who said
+//   it, and which way it is, till each is found;
 // - and, by a button at its top, the last messages they were told across the screen (the HUD's
 //   banner: hud.js message), the newest first, and how long ago.
 //
@@ -174,10 +177,11 @@ export class JournalPanel {
      * next }, or null till they register), requests: [{ id, title, from, text, progress, where, left }], people: { name,
      * ruler, war: [names], allies: [names], towns, regard: [{ name, words, tone }], fate (a line, or
      * null: serving another, fallen, ruling the continent) }, done: [{
-     * title, from, state }], messages: the last told, oldest first (keepMessage) }.
+     * title, from, state }], heard: [{ words, from, where, found }] (what they've heard tell of:
+     * those still to find first), messages: the last told, oldest first (keepMessage) }.
      */
     show(shown) {
-        const { standing, guild = null, requests, people, done, company = [], most = 1, messages = [] } = shown;
+        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], messages = [] } = shown;
 
         this.shown = shown;
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
@@ -254,6 +258,25 @@ export class JournalPanel {
         }
 
         sections.push(this.#section("Requests", list));
+
+        // What they've heard tell of, and where
+        const told = element("ul", "journal-list heard");
+
+        told.append(
+            ...heard.map(({ words, from, where, found }) => {
+                const row = element("li", `journal-heard${found ? " found" : ""}`);
+
+                row.append(element("p", "journal-heard-words", `\u201c${words}\u201d`), element("p", "journal-heard-from", [from, found ? "Found" : where].filter(Boolean).join(" · ")));
+
+                return row;
+            }),
+        );
+
+        if (!heard.length) {
+            told.append(element("li", "journal-empty", "Nothing heard yet. Ask the criers in the towns' squares what's said of the country round about."));
+        }
+
+        sections.push(this.#section("Heard tell", told));
 
         // Their people
         if (people) {

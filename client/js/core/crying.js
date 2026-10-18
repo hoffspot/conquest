@@ -24,6 +24,7 @@ export const CRIES = Object.freeze({
         "Wanted at the smithy: a strong pair of hands. Good wages, and a bed!",
         "Lost: a child's wooden horse, painted red. If you've seen it, tell me!",
         "The guild wants hands against the beasts on the roads. Ask within!",
+        "Strange doings out in the country! Stop and ask, and I'll tell you what's said.",
     ]),
     night: Object.freeze(["The torches are lit, and all's well!", "Lock your doors and bank your fires, good folk! All's well!", "Keep to the light after dark, good folk!", "The watch is set, and all's well!"]),
 });

@@ -83,6 +83,17 @@ export class Explored {
     }
 
     /**
+     * Has the player found somewhere (x, y: metres, the world's): been in the chunk it's in, or in
+     * one of the eight round it. The one rule for it: the maps' icons of places (app/game.js
+     * worldMapView) and the rumours of those still to find (core/rumours.js) alike.
+     */
+    sighted(x, y) {
+        const [cx, cy] = [Math.floor(x / CHUNK), Math.floor(y / CHUNK)];
+
+        return [-1, 0, 1].some((dy) => [-1, 0, 1].some((dx) => this.isVisited(cx + dx, cy + dy)));
+    }
+
+    /**
      * The player is at x, y (metres, the world's): the chunk they're in is visited. Returns
      * whether it's the first time.
      */
