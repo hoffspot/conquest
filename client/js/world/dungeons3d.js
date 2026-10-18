@@ -395,6 +395,37 @@ function propMaterial(name, part, source, tint) {
     return result;
 }
 
+// The materials of what's made for a level in code rather than scanned (an ants' nest's brood, its
+// midden heap, roots, cocoons: nestlife.js), each its own points' colours, lit as the props are by
+// the room's flames (roomlight.js), whether drawn many times over (instanced) or once
+const lifeMaterials = new Map();
+
+/**
+ * A material for what's made in code for a level (nestlife.js), by name: its points' colours, how
+ * rough it is and how much it glows of itself (`glow`: a colour, linear), lit by the room's flames.
+ */
+export function lifeMaterial(name, { roughness = 0.85, glow = 0x000000 } = {}) {
+    if (lifeMaterials.has(name)) {
+        return lifeMaterials.get(name);
+    }
+
+    const result = new THREE.MeshStandardMaterial({ vertexColors: true, roughness, metalness: 0, emissive: new THREE.Color(glow) });
+
+    result.name = `life-${name}`;
+    result.userData.shared = true;
+    result.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader
+            .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;")
+            .replace("#include <project_vertex>", "#include <project_vertex>\n#ifdef USE_INSTANCING\nvCutWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;\n#else\nvCutWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#endif");
+        shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;");
+        roomLit(shader);
+    };
+    result.customProgramCacheKey = () => "dungeon-life";
+    lifeMaterials.set(name, result);
+
+    return result;
+}
+
 // How big a thing placed must be to cast a shadow (metres, its longest side): the small things
 // strewn about cast none (a light's shadows are drawn six ways round, each thing in reach once
 // for each)

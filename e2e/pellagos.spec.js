@@ -9062,7 +9062,7 @@ test("a dungeon whose creatures are drawn from models: theirs fetched, not read,
     expect(near).toEqual({ fetching: true, hurried: 0, read: false, made: false });
 });
 
-test("an ants' nest: its creatures' models got ready at its door, the card naming them; gone in, its ants drawn from their model, lent the Ant Monster's fall; its fallen lying about it, one searched; lit by the fungus on its walls and the light the player carries, in its own close dusty air, spores drifting, soil trickling", async ({ page }) => {
+test("an ants' nest: its creatures' models got ready at its door, the card naming them; gone in, its ants drawn from their model, lent the Ant Monster's fall; its fallen lying about it, one searched; lit by the fungus on its walls and the light the player carries, in its own close dusty air, spores drifting, soil trickling; its midden heaped with the gear of those the ants killed, dug earth heaped where other dungeons have fallen rock, roots through its roof, a web about each widow", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
@@ -9232,6 +9232,59 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
     expect(lit.trickle.running).toBe(true);
     expect(lit.trickle.grains).toBeGreaterThan(0);
     expect(lit.trickle.under).toBeCloseTo(0.05, 2);
+
+    // (Its story: the heap of what it's thrown out in its midden, the gear of those the ants
+    // killed on it; heaps of the earth they've dug where other dungeons have fallen rock, no
+    // boulders; roots through its roof, clear of anyone's head; a web about each widow hanging under
+    // its roof, the prey it's hung by the walls; all of it a few meshes)
+    const story = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const interior = game.interiors.get(player.map);
+        const { map } = interior;
+        const named = {};
+
+        interior.object.traverse((node) => {
+            if (["eggs", "larvae", "pupae", "midden", "spoil", "roots", "rootlets", "webs", "cocoons"].includes(node.name)) {
+                named[node.name] = (named[node.name] ?? 0) + 1;
+            }
+        });
+
+        const widows = [...game.host.wild].filter(([id, one]) => one.creature === "blackWidow" && game.battle.actor(id)?.map === player.map).map(([id]) => game.battle.actor(id));
+        const roots = interior.object.getObjectByName("roots");
+        let lowest = Infinity;
+
+        if (roots) {
+            const { array } = roots.geometry.attributes.position;
+
+            for (let k = 1; k < array.length; k += 3) {
+                lowest = Math.min(lowest, array[k]);
+            }
+        }
+
+        return {
+            named,
+            middens: map.pieces.filter(({ kind }) => kind === "midden").length,
+            rubble: map.pieces.filter(({ kind }) => kind === "rubble").length,
+            gear: interior.props.filter(({ model }) => ["shield-kite", "shield-heater", "barbuta", "great-helm", "hauberk"].includes(model)).length,
+            boulders: interior.props.filter(({ model }) => model.startsWith("boulder")).length,
+            lowest,
+            lurks: map.dungeon.lurks.length,
+            widows: widows.length,
+            webbed: widows.every((widow) => map.dungeon.lurks.some(([x, y]) => Math.hypot(x + 0.5 - widow.x, y + 0.5 - widow.y) < 1.5)),
+        };
+    });
+
+    expect(story.middens).toBeGreaterThan(0);
+    expect(story.named).toMatchObject({ midden: 1, roots: 1, rootlets: 1 });
+    expect(story.gear).toBeGreaterThan(0);
+    expect(story.named.spoil ?? 0).toBe(story.rubble > 0 ? 1 : 0);
+    expect(story.boulders).toBe(0);
+    expect(story.lowest).toBeGreaterThan(2.0);
+    expect(story.lurks).toBe(story.widows);
+    expect(story.webbed).toBe(true);
+    expect(story.named.webs ?? 0).toBe(story.lurks > 0 ? 1 : 0);
+    expect(Object.values(story.named).every((count) => count === 1)).toBe(true);
 });
 
 test("on the world map a pin's dropped where it's held: a column of light where it stands and a line the way there, taken away held again; tapped twice, the player runs there, or is told there's no way", async ({ page }) => {

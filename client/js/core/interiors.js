@@ -100,6 +100,10 @@ export const PLAN_KEY = Object.freeze({
     i: { kind: "remains", blocks: true },
     // (And a cart or a barrow left by a wall, the length of the squares it's on)
     J: { kind: "wagon", blocks: true, joins: true },
+    // (An ants' nest's: the eggs heaped in a brood chamber's middle, the larvae and pupae round
+    // them; and the heap of what they've thrown out in a midden's, their prey's gear on it)
+    E: { kind: "brood", blocks: true, joins: true },
+    z: { kind: "midden", blocks: true, joins: true },
 });
 
 // The taproom, 18 by 15 metres (roomier than the tavern looks from outside, to walk about in

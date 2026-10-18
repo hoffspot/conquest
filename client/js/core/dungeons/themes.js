@@ -235,11 +235,12 @@ export const THEMES = {
         rooms: {
             mouth: [{ id: "mouth", props: [{ char: "m", count: [1, 3], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [1, 1], at: "open" }, { char: "d", count: [2, 4], at: "wall" }], torches: [1, 1], glows: [0, 1] }],
             // (Its rooms by their part in the nest, as its layout has them: layouts.js nest. A
-            // gallery's stretch is narrow: a pillar of earth at most in it)
+            // gallery's stretch is narrow: a pillar of earth at most in it. Its brood heaped in
+            // the middle of a brood chamber, `E`; the heap of what it's thrown out in a midden's, `z`)
             gallery: [{ id: "galleries", props: [{ char: "*", count: [0, 1], at: "open" }, { char: "j", count: [1, 3], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "m", count: [1, 3], at: "wall" }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 0], glows: [1, 2] }],
             larder: [{ id: "larder", props: [{ char: "j", count: [4, 7], at: "open" }, { char: "i", count: [2, 4], at: "open" }, { char: "m", count: [0, 2], at: "wall" }, { char: "d", count: [2, 3], at: "wall" }], torches: [0, 0], glows: [1, 2] }],
-            brood: [{ id: "brood", props: [{ char: "m", count: [2, 4], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 0], glows: [1, 2] }],
-            midden: [{ id: "midden", props: [{ char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0], glows: [2, 3] }],
+            brood: [{ id: "brood", props: [{ char: "E", count: [1, 1], at: "centre", size: [2, 2] }, { char: "m", count: [2, 4], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 0], glows: [1, 2] }],
+            midden: [{ id: "midden", props: [{ char: "z", count: [1, 1], at: "centre", size: [2, 2] }, { char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0], glows: [2, 3] }],
             nook: [{ id: "nook", props: [{ char: "m", count: [0, 2], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 0], glows: [0, 1] }],
             arena: [{ id: "chamber", props: [{ char: "*", count: [3, 5], at: "open" }, { char: "j", count: [5, 8], at: "open" }, { char: "i", count: [3, 5], at: "open" }, { char: "m", count: [2, 4], at: "wall" }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 0], glows: [4, 5] }],
         },

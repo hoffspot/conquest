@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { buildDungeon } from "../client/js/core/dungeons/build.js";
+import { GLOW_LEAST } from "../client/js/core/dungeons/place.js";
 import { allAtOnce } from "../client/js/core/steps.js";
 import { cavern, SHELLS } from "../client/js/world/caverns.js";
 import { colonyAt, colourOf, FUNGUS, glowOf, threadsOn } from "../client/js/world/glowfungus.js";
@@ -135,5 +136,15 @@ describe("the glowing fungus an ants' nest's lit by (world/glowfungus.js)", () =
 
         // (In patches: some of the earth near each glowing, not all of it)
         assert.ok(lit > 0 && lit < near, `${lit} of ${near}`);
+    });
+
+    it("never leaves a level dark through: as many colonies as GLOW_LEAST says for its rooms, however few each of its rooms has (place.js)", () => {
+        for (let seed = 1; seed <= 40; seed++) {
+            for (const level of buildDungeon({ seed, theme: "nest", tier: 1 + (seed % 7), levels: 3 }).levels) {
+                const glows = level.lights.filter(({ kind }) => kind === "glow");
+
+                assert.ok(glows.length >= Math.ceil(level.rooms.length * GLOW_LEAST), `${seed}/${level.index}: ${glows.length} colonies in ${level.rooms.length} rooms`);
+            }
+        }
     });
 });

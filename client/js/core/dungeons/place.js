@@ -15,7 +15,7 @@ import { WAY_IN } from "./layouts.js";
 import { pickStable } from "./seeds.js";
 
 /** Characters a level's plan uses beyond floor and rock, that block walking (interiors.js PLAN_KEY). */
-export const BLOCKING = new Set(["*", "%", "V", "^", "x", "y", "u", "K", "T", "R", "Y", "I", "t", "Z", "a", "s", "k", "m", "d", "i", "e", "o", "n", "v", "X", "A", "J"]);
+export const BLOCKING = new Set(["*", "%", "V", "^", "x", "y", "u", "K", "T", "R", "Y", "I", "t", "Z", "a", "s", "k", "m", "d", "i", "e", "o", "n", "v", "X", "A", "J", "E", "z"]);
 
 /**
  * How far (rings of squares) no one waits from where anyone comes onto a level: as the places
@@ -29,6 +29,12 @@ export const ARRIVE_CLEAR = 5;
  * other and its torches (a theme `lit` by them: themes.js).
  */
 export const GLOW_APART = 3;
+
+/**
+ * How many colonies of glowing fungus a level lit by them has at least, for each of its rooms: so a
+ * level of nooks, each with none or one, is never dark through.
+ */
+export const GLOW_LEAST = 0.8;
 
 /** Floor lights from props: their plan character and the kind of light. */
 export const FIRES = Object.freeze({ x: "campfire", y: "brazier", k: "candles" });
@@ -455,6 +461,24 @@ export function fillLevel(dug, rooms, links, plan) {
         // and from its torches)
         if (look.glows) {
             lights.push(...onWalls(level, one, random.int(...look.glows), random, { kind: "glow", apart: GLOW_APART, taken: lit, deep: true }));
+        }
+    }
+
+    // (Too few for its rooms (GLOW_LEAST): one more in each of those with fewest, apart from all
+    // the rest, till there are enough)
+    if (theme.lit === "glow") {
+        const least = Math.ceil(rooms.length * GLOW_LEAST);
+        const glows = () => lights.filter(({ kind }) => kind === "glow");
+        const fewest = (one) => glows().filter(({ at: [x, y] }) => roomOf(x, y) === one.id).length;
+
+        for (let pass = 0; pass < 2 && glows().length < least; pass++) {
+            for (const one of [...rooms].sort((a, b) => fewest(a) - fewest(b))) {
+                if (glows().length >= least) {
+                    break;
+                }
+
+                lights.push(...onWalls(level, one, 1, random, { kind: "glow", apart: GLOW_APART, taken: lights, deep: true }));
+            }
         }
     }
 

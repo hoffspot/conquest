@@ -71,7 +71,7 @@ function leaningBack(spot, model, { length, tilt = 0.2, side = 0, tint = null })
 }
 
 // The models whose length runs along their own z (the rest that are long run along x)
-const LONG_Z = new Set(["branches-a", "branches-b", "branches-c", "root-single", "estoc", "saw", "bark-a", "bark-b", "bark-c", "bark-d", "sword"]);
+const LONG_Z = new Set(["branches-a", "branches-b", "branches-c", "root-single", "saw", "bark-a", "bark-b", "bark-c", "bark-d", "sword"]);
 
 // Laid down flat along the wall (a log, a branch), `out` metres from the middle towards it
 const lying = (spot, model, { size, out = 0.15, side = 0, tint = null, turn = 0 }) => {
@@ -100,7 +100,7 @@ const BONES = ["bone"];
 const MUSHROOMS = ["mushrooms"];
 const TABLEWARE = ["goblet-a", "goblet-b", "goblet-c", "bowl", "bowl-small", "plate", "plate", "board", "apple", "onion", "sweet-potato", "pomegranate", "candlestick", "spoon", "pot-clay"];
 const VESSELS = ["vase-antique", "vase-tall", "vase-brass", "vase-small", "vase", "pot-clay", "pot-brass", "pot-flat", "goblet-a", "goblet-b", "urn-face", "urn-carved", "bronze-vessel"];
-// (Those that stand on end: the estoc, its length along z, is laid down)
+// (Those that stand on end: the estoc, its length up its own y, is laid down, pitched back)
 const WEAPONS = ["saber", "mace", "war-hammer", "axe-long", "axe-old", "axe"];
 const TOOLS = ["saw", "hammer", "mallet", "hatchet", "dagger", "axe-old"];
 
@@ -243,7 +243,7 @@ export const CLUTTER = {
     // through the earth)
     nest: {
         mouth: [["branches", 3], ["roots", 3], ["rocks", 2], ["log", 1]],
-        galleries: [["roots", 3], ["rocks", 3], ["boulder", 1], ["fungi", 1]],
+        galleries: [["roots", 3], ["rocks", 3], ["fungi", 1], ["bones", 1]],
         larder: [["bones", 4], ["beast-skulls", 3], ["skulls", 2], ["branches", 1]],
         brood: [["roots", 2], ["fungi", 2], ["rocks", 2], ["bones", 1]],
         midden: [["bones", 3], ["beast-skulls", 2], ["branches", 2], ["rats", 1]],
@@ -460,7 +460,7 @@ export function remainsAt(x, z, { rough }) {
     }
 
     if (rough > 0.35) {
-        placed.push(r(40) < 0.5 ? { model: "estoc", ...xz(at(0.2, 0.45)), size: 1.2, turn: rough * 6, shadow: false } : { model: "sword", ...xz(at(0.2, 0.45)), size: 0.95, turn: rough * 6, roll: Math.PI / 2, shadow: false });
+        placed.push(r(40) < 0.5 ? { model: "estoc", ...xz(at(0.2, 0.45)), size: 1.2, turn: rough * 6, pitch: -Math.PI / 2, shadow: false } : { model: "sword", ...xz(at(0.2, 0.45)), size: 0.95, turn: rough * 6, roll: Math.PI / 2, shadow: false });
     }
 
     if (rough > 0.6) {
@@ -501,4 +501,126 @@ export function strewnAt(x, z, { theme, wall, rough, tint = null }) {
     const [sx, sz] = along(spot, 0.3 * spot.r(4), (spot.r(5) - 0.5) * 0.6);
 
     return [{ model: name, x: sx, z: sz, size, turn: spot.r(6) * 6, tint: list === STONES || list === ROCKS ? tint : null, shadow: false }];
+}
+
+// --- An ants' nest's midden, and what its fallen were doing when they fell ---
+
+// The gear of those the ants killed, thrown out on the midden: [model, how big (metres; null, its
+// own size), how it lies]
+const GEAR = [
+    ["shield-kite", 0.95, { pitch: -1.45 }],
+    ["shield-heater", 0.8, { pitch: -Math.PI / 2 }],
+    ["barbuta", null, { roll: 1.3 }],
+    ["great-helm", null, { roll: -1.2 }],
+    ["hauberk", null, { pitch: -Math.PI / 2 }],
+    ["sword", 0.95, { roll: Math.PI / 2 }],
+    ["saber", null, { roll: Math.PI / 2 }],
+    ["estoc", 1.2, { pitch: -Math.PI / 2 }],
+    ["lantern", 0.42, { roll: Math.PI / 2 }],
+];
+
+/**
+ * What's thrown out on a midden's heap (nestlife.js heapOf: its middle, metres, and how far it
+ * spreads; `heightAt(x, z)`, how high it is there) and round its foot: the gear of those the ants
+ * killed (shields, helms, a mail shirt, blades, a lantern), skulls and long bones; half of it on
+ * the heap, sunk a little into it, half round its foot.
+ */
+export function middenGearAt(heap, heightAt, rough) {
+    const r = (k) => hashOf(heap.x, heap.z, k + rough * 13);
+    const count = 8 + Math.floor(r(0) * 5);
+    const placed = [];
+
+    for (let k = 0; k < count; k++) {
+        const a = r(k * 7 + 1) * Math.PI * 2;
+        const out = (k % 2 ? 0.3 + 0.5 * r(k * 7 + 2) : 1 + 0.3 * r(k * 7 + 2)) * heap.radius;
+        const [x, z] = [heap.x + Math.cos(a) * out, heap.z + Math.sin(a) * out];
+        const y = Math.max(0, heightAt(x, z) - 0.05);
+        const what = r(k * 7 + 3);
+
+        if (what < 0.6) {
+            const [model, size, how] = GEAR[Math.floor(r(k * 7 + 4) * GEAR.length)];
+
+            placed.push({ model, x, z, y, ...(size ? { size } : {}), turn: r(k * 7 + 5) * 6, ...how, shadow: false });
+        } else if (what < 0.82) {
+            placed.push({ ...skullAt(x, z, r, k * 7 + 6), y });
+        } else {
+            placed.push({ ...boneAt(x, z, r, k * 7 + 6), y });
+        }
+    }
+
+    // (And on its side, what's left of one of them: ribs and hips)
+    const a = r(99) * Math.PI * 2;
+    const [x, z] = [heap.x + Math.cos(a) * heap.radius * 0.55, heap.z + Math.sin(a) * heap.radius * 0.55];
+
+    placed.push({ model: "ribcage", x, z, y: Math.max(0, heightAt(x, z) - 0.08), size: 0.36, turn: a, shadow: false });
+
+    return placed;
+}
+
+/**
+ * What one of the fallen was doing when they fell, told by what's left (an ants' nest's, a scene a
+ * level: interiors3d.js chooses where), at a spot (metres: its middle; `wall`, the way to the rock
+ * beside it, or null; `toward`, the way to what they were making for):
+ * - `reaching`: face down a few steps from the stairs up, an arm stretched out towards them, their
+ *   lantern fallen from their hand and their sword dropped behind them;
+ * - `digger`: against the wall where they'd begun to dig themselves a way out, pick and spade leant
+ *   on it, the earth they'd dug heaped, their lantern guttered out;
+ * - `camp`: where they made camp for the last time: a cold fire, a sheepskin by it, their pack, and
+ *   two of them lying by it.
+ */
+export function fallenScene(kind, x, z, { wall = null, toward = [0, -1], rough }) {
+    const spot = spotOf(x, z, wall, rough);
+    const r = spot.r;
+
+    if (kind === "reaching") {
+        // (Lying along the way to the stairs, the skull foremost, one arm out past it)
+        const [ux, uz] = toward;
+        const at = (down, across) => [x - ux * down - uz * across, z - uz * down + ux * across];
+        const turn = Math.atan2(ux, uz);
+
+        return [
+            { ...skullAt(...at(-0.6, 0), r, 1), roll: 0.4 },
+            { model: "ribcage", ...xz(at(-0.25, 0)), size: 0.36, turn: turn + Math.PI / 2, shadow: false },
+            { model: "pelvis", ...xz(at(0.15, 0)), size: 0.28, turn: turn + Math.PI / 2, shadow: false },
+            { ...boneAt(...at(-0.95, 0.12), r, 3), turn: turn + Math.PI / 2 },
+            { ...boneAt(...at(-0.75, 0.18), r, 5), turn: turn + Math.PI / 2 + 0.1 },
+            { ...boneAt(...at(-0.2, -0.25), r, 7), turn: turn + Math.PI / 2 - 0.3 },
+            { ...boneAt(...at(0.45, -0.1), r, 9), turn: turn + Math.PI / 2 },
+            { ...boneAt(...at(0.5, 0.12), r, 11), turn: turn + Math.PI / 2 + 0.15 },
+            { model: "lantern", ...xz(at(-1.25, 0.35)), size: 0.42, roll: Math.PI / 2, turn: turn + 0.8, shadow: false },
+            { model: "sword", ...xz(at(1.1, 0.4)), size: 0.95, roll: Math.PI / 2, turn: turn + 0.4, shadow: false },
+        ];
+    }
+
+    if (kind === "digger") {
+        // (Pick and spade leant on the rock, the earth they dug heaped beside them, their remains
+        // against the wall, their lantern out)
+        return [
+            leaning(spot, "pickaxe", { length: 0.95, side: -0.45, tilt: 0.3 }),
+            leaning(spot, "spade", { length: 1.1, side: -0.8, tilt: 0.22 }),
+            ...[0, 1, 2, 3].map((k) => standing(spot, pick(ROCKS, r(k + 20)), { size: 0.22 + 0.2 * r(k + 24), out: 0.18 + 0.12 * k, side: 0.55 + (r(k + 28) - 0.5) * 0.5, turn: r(k + 32) * 6, tint: 0x8a6448 })),
+            { ...skullAt(...along(spot, 0.3, 0.1), r, 40), y: 0.05 },
+            standing(spot, "ribcage", { size: 0.34, out: 0.18, side: -0.05 }),
+            ...[0, 1].map((k) => boneAt(...along(spot, -0.25 - 0.2 * k, 0.05 + 0.2 * k), r, 44 + k * 2)),
+            standing(spot, "lantern", { size: 0.42, out: -0.3, side: 0.35, turn: r(50) * 6 }),
+        ];
+    }
+
+    // (A camp: a ring of stones round cold ash and charred sticks, a sheepskin, a pack, two dead)
+    const ring = Array.from({ length: 8 }, (_, k) => {
+        const a = (k / 8) * Math.PI * 2;
+
+        return { model: pick(STONES, r(k + 60)), x: x + Math.cos(a) * 0.42, z: z + Math.sin(a) * 0.42, size: 0.16 + 0.08 * r(k + 70), turn: r(k + 80) * 6, shadow: false };
+    });
+    const by = (a, out) => [x + Math.cos(a + rough * 6) * out, z + Math.sin(a + rough * 6) * out];
+
+    return [
+        ...ring,
+        { model: "branches-a", x, z, size: 0.5, turn: rough * 6, tint: 0x2a2420, shadow: false },
+        { model: "branches-b", x: x + 0.05, z: z - 0.04, size: 0.45, turn: rough * 6 + 1.4, tint: 0x2a2420, shadow: false },
+        { model: "pelt", ...xz(by(0, 1.1)), size: 1.1, pitch: -Math.PI / 2, turn: rough * 6, shadow: false },
+        { model: "basket-lidded", ...xz(by(0.9, 1.15)), size: 0.32, turn: rough * 9, shadow: false },
+        ...remainsAt(...by(2.3, 1.3), { rough: (rough * 7) % 1 }),
+        ...remainsAt(...by(4, 1.4), { rough: (rough * 13) % 1 }),
+    ];
 }

@@ -40,9 +40,10 @@ import { fireMaterials, FIRES, firesMesh } from "./fire.js";
 import { allAtOnce } from "../core/steps.js";
 import { WATER_DETAIL } from "./water.js";
 import { cavern, earthTone, layers, SHELLS, tiles } from "./caverns.js";
-import { Blocks, furnish, loadProp, ROCK_PICTURES, rockMaterial } from "./dungeons3d.js";
+import { Blocks, furnish, lifeMaterial, loadProp, ROCK_PICTURES, rockMaterial } from "./dungeons3d.js";
 import { colonyAt, glowOf, threadsOn } from "./glowfungus.js";
-import { blockAt, bonesAt, clutterAt, hashOf, onTable, remainsAt, seatsAt, shelvesAt, sideTableAt, standAt, strewnAt, vesselsAt, workbenchAt } from "./dungeondressing.js";
+import { blockAt, bonesAt, clutterAt, fallenScene, hashOf, middenGearAt, onTable, remainsAt, seatsAt, shelvesAt, sideTableAt, standAt, strewnAt, vesselsAt, workbenchAt } from "./dungeondressing.js";
+import { broodIn, cocoonGeometry, eggGeometry, heapGeometry, heapHeightAt, heapOf, larvaGeometry, NEST_LIFE, pupaGeometry, randomOf, rootsUnder, webAround } from "./nestlife.js";
 
 /** How high a floor's walls are, and how far above it the next floor is (metres). */
 export const STOREY = 3;
@@ -3661,8 +3662,10 @@ function towerTop(map) {
 // every inside's (`air`: { background, fog: [near, far] metres, mist: [how thick a metre at the
 // floor, how far up it thins by e, metres]: the dust settled low, view.js setIndoors), the light
 // the player carries in it (`carried`: { colour, intensity, distance metres, up: metres over their
-// middle }, view.js flicker), what drifts in its air (`motes`: motes.js MOTES) and whether soil
-// trickles from its roof now and then (`trickles`: trickles.js)
+// middle }, view.js flicker), what drifts in its air (`motes`: motes.js MOTES), whether soil
+// trickles from its roof now and then (`trickles`: trickles.js), and whether it holds an ants'
+// nest's life (`life`: its brood, its middens' heaps, roots through its roof, its widows' webs and
+// their prey, and what its fallen were doing when they fell: nestlife.js, dungeondressing.js)
 const DUNGEON_LOOKS = Object.freeze({
     caves: { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x6f665c, ground: 0x5d554b },
     hideout: { rock: "rock", shell: "dug", picture: "rock-dug", underfoot: "ground-dug", rubble: "rock", shored: true, ground: 0x6e5440 },
@@ -3685,6 +3688,7 @@ const DUNGEON_LOOKS = Object.freeze({
         carried: { colour: 0xffc890, intensity: 3.2, distance: 9, up: 1.2 },
         motes: "spores",
         trickles: true,
+        life: true,
     },
 });
 
@@ -4003,6 +4007,21 @@ function fallenRocks(x, z, rough, tint) {
     return placed;
 }
 
+// Clods of earth round a heap of what an ants' nest has dug out (`heap`: nestlife.js heapOf's),
+// lying where they rolled off it, the earth's colour
+function spoilClods(heap, rough) {
+    const [least, most] = NEST_LIFE.spoil.clods;
+    const count = least + Math.floor(hashOf(heap.x, heap.z, 7) * (most - least + 1));
+    const clods = ["rock-a", "rock-b", "rock-c", "rock-d", "stone"];
+
+    return Array.from({ length: count }, (_, k) => {
+        const a = rough * 9 + k * 2.4;
+        const out = heap.radius * (0.85 + 0.35 * roughOf(k, heap.x));
+
+        return { model: clods[Math.floor(hashOf(heap.x + k, heap.z, 8) * clods.length)], x: heap.x + Math.cos(a) * out, z: heap.z + Math.sin(a) * out, size: 0.12 + 0.12 * roughOf(heap.z, k), turn: a * 3, tint: 0x8a6448, shadow: false };
+    });
+}
+
 // Blocks of dressed stone fallen from an ancient temple's vault (`blocks`: dungeons3d.js's,
 // metres: where), lying in a heap, one on another
 function fallenStones(blocks, x, z, rough) {
@@ -4063,6 +4082,9 @@ function dungeon(map) {
         flames.push(fire);
         lights.push(light);
     };
+    // (An ants' nest's own, drawn with its rock (rockShell): its brood chambers' brood, its middens'
+    // heaps, the prey its widows have hung up)
+    const life = look.life ? { brood: [], heaps: [], cocoons: [] } : null;
 
     // (What's drawn with the pictures as boxes: a temple's walls, floor and vault, a hideout's
     // timbers)
@@ -4111,6 +4133,14 @@ function dungeon(map) {
             case "rubble":
                 if (look.walls) {
                     fallenStones(walls, x / M, z / M, rough);
+                } else if (life) {
+                    // (In an ants' nest, no fallen rock: a heap of the earth they've dug out, piled
+                    // against the rock, clods of it round it)
+                    const wall = spot.wall ?? [0, 0];
+                    const heap = heapOf(piece, rough, { kind: "spoil", out: [wall[0] * 0.25, wall[1] * 0.25] });
+
+                    life.heaps.push(heap);
+                    props.push(...spoilClods(heap, rough).filter(({ x: rx, z: rz }) => (map.plan[Math.floor(rz)]?.[Math.floor(rx)] ?? "#") !== "#"));
                 } else {
                     props.push(...fallenRocks(x / M, z / M, rough, FALLEN[look.rubble] ?? null).filter(({ x: rx, z: rz }) => (map.plan[Math.floor(rz)]?.[Math.floor(rx)] ?? "#") !== "#"));
                 }
@@ -4177,7 +4207,7 @@ function dungeon(map) {
                 const along = piece.w >= piece.h;
 
                 props.push({ model: "shield-kite", x: along ? piece.x + piece.w - 0.2 : x / M, z: along ? z / M : piece.y + piece.h - 0.2, size: 1, turn: along ? Math.PI / 2 : 0, pitch: -0.15 });
-                props.push({ model: rough < 0.5 ? "sword" : "estoc", x: x / M, z: z / M, size: rough < 0.5 ? 0.95 : 1.3, turn: along ? Math.PI / 2 : 0, shadow: false });
+                props.push({ model: rough < 0.5 ? "sword" : "estoc", x: x / M, z: z / M, size: rough < 0.5 ? 0.95 : 1.3, turn: along ? Math.PI / 2 : 0, ...(rough < 0.5 ? {} : { pitch: -Math.PI / 2 }), shadow: false });
                 break;
             }
             case "throne": {
@@ -4322,9 +4352,32 @@ function dungeon(map) {
                 }
 
                 break;
+            case "brood": {
+                // (Its brood heaped and ringed round its middle, glowing faintly warm)
+                const { light } = NEST_LIFE.brood;
+
+                life?.brood.push(piece);
+                lights.push({ kind: "brood", x: piece.x + piece.w / 2, y: light.y, z: piece.y + piece.h / 2, colour: light.colour, intensity: light.intensity, distance: light.distance, flicker: 0, breathe: light.breathe, pace: light.pace, rate: 0, seed: rough * 40 });
+                break;
+            }
+            case "midden": {
+                // (Its heap, and the gear of those the ants killed thrown out on it)
+                const heap = heapOf(piece, rough);
+
+                life?.heaps.push(heap);
+                props.push(...middenGearAt(heap, (hx, hz) => heapHeightAt(heap, hx, hz), rough));
+                break;
+            }
             default:
                 break;
         }
+    }
+
+    // An ants' nest's widows' prey, hung wrapped in silk by the walls where they wait, and what one of
+    // its fallen was doing when they fell
+    if (life) {
+        life.cocoons.push(...cocoonsOf(map));
+        props.push(...scenesOf(map));
     }
 
     // Small things strewn along the walls to walk over (dungeondressing.js): on open ground by the
@@ -4363,7 +4416,245 @@ function dungeon(map) {
         loadProp(name);
     }
 
-    return { solid, moving: [], flames, lights, hearth: null, ceiling: roof / M, shell: shell && rockShell(map, look, shell), blocks, props: placed, air: look.air ?? null, carried: look.carried ?? null, motes: look.motes ?? null, trickles: Boolean(look.trickles) };
+    return { solid, moving: [], flames, lights, hearth: null, ceiling: roof / M, shell: shell && rockShell(map, look, shell, life), blocks, props: placed, air: look.air ?? null, carried: look.carried ?? null, motes: look.motes ?? null, trickles: Boolean(look.trickles) };
+}
+
+// The four ways round a square (x, y), and whether a square of a level's plan is open floor with
+// nothing on it
+const ROUND = Object.freeze([[1, 0], [-1, 0], [0, 1], [0, -1]]);
+const bare = (map, x, y) => map.plan[y]?.[x] === ".";
+
+// The prey an ants' nest's widows have hung up wrapped in silk: one or two by the walls near where
+// each waits under the roof (its level's `lurks`), each on a bare square beside the rock, out from
+// it a little ([{ x, z, long, turn }], level metres)
+function cocoonsOf(map) {
+    const placed = [];
+
+    for (const [lx, ly] of map.dungeon?.lurks ?? []) {
+        const near = [];
+
+        for (let y = ly - 4; y <= ly + 4; y++) {
+            for (let x = lx - 4; x <= lx + 4; x++) {
+                const wall = bare(map, x, y) && ROUND.find(([dx, dy]) => map.plan[y + dy]?.[x + dx] === "#");
+
+                if (wall && !placed.some((one) => Math.hypot(one.x - x - 0.5, one.z - y - 0.5) < 1.5)) {
+                    near.push({ x, y, wall, order: hashOf(x, y, 61) });
+                }
+            }
+        }
+
+        near.sort((a, b) => a.order - b.order);
+
+        for (const { x, y, wall } of near.slice(0, 1 + Math.floor(hashOf(lx, ly, 62) * NEST_LIFE.cocoons.count[1]))) {
+            placed.push({ x: x + 0.5 + wall[0] * 0.3, z: y + 0.5 + wall[1] * 0.3, long: NEST_LIFE.cocoons.long[0] + hashOf(x, y, 63) * (NEST_LIFE.cocoons.long[1] - NEST_LIFE.cocoons.long[0]), turn: hashOf(x, y, 64) * Math.PI * 2 });
+        }
+    }
+
+    return placed;
+}
+
+// What one of an ants' nest's fallen was doing when they fell (dungeondressing.js fallenScene), a
+// scene or two a level: below its top level, one reaching for the stairs up, a few steps short of
+// them; and on any level, in a nook or a larder (as the level's seed has it), one who'd begun to
+// dig themselves a way out, or a last camp. Each on bare floor, nothing on it or about it
+function scenesOf(map) {
+    const placed = [];
+    const rooms = map.dungeon?.rooms ?? [];
+    const clearRound = (x, y, reach) => {
+        for (let j = y - reach; j <= y + reach; j++) {
+            for (let i = x - reach; i <= x + reach; i++) {
+                if (!bare(map, i, j)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    };
+
+    // (Reaching for the stairs up: two or three squares from the landing, on clear floor)
+    const landing = map.marks["<"];
+
+    if (landing?.length) {
+        const [ax, ay] = [landing.reduce((sum, [x]) => sum + x, 0) / landing.length, landing.reduce((sum, [, y]) => sum + y, 0) / landing.length];
+        const spots = [];
+
+        for (let y = Math.floor(ay) - 3; y <= Math.ceil(ay) + 3; y++) {
+            for (let x = Math.floor(ax) - 3; x <= Math.ceil(ax) + 3; x++) {
+                const away = Math.max(Math.abs(x - ax), Math.abs(y - ay));
+
+                if (away >= 2 && away <= 3 && clearRound(x, y, 1)) {
+                    spots.push({ x, y, order: hashOf(x, y, 71) });
+                }
+            }
+        }
+
+        const [spot] = spots.sort((a, b) => a.order - b.order);
+
+        if (spot) {
+            const apart = Math.hypot(ax - spot.x, ay - spot.y) || 1;
+
+            placed.push(...fallenScene("reaching", spot.x + 0.5, spot.y + 0.5, { toward: [(ax - spot.x) / apart, (ay - spot.y) / apart], rough: spot.order }));
+        }
+    }
+
+    // (A digger or a camp, in a nook or a larder)
+    const camp = hashOf(map.width, map.height, (map.dungeon?.level ?? 0) + 73) < 0.5;
+
+    for (const room of rooms.filter(({ kind }) => kind === "nook" || kind === "larder").sort((a, b) => hashOf(a.x, a.y, 74) - hashOf(b.x, b.y, 74))) {
+        const squares = [];
+
+        for (let y = room.y; y < room.y + room.h; y++) {
+            for (let x = room.x; x < room.x + room.w; x++) {
+                const wall = ROUND.find(([dx, dy]) => map.plan[y + dy]?.[x + dx] === "#");
+
+                if (camp ? clearRound(x, y, 1) && !wall : bare(map, x, y) && wall && clearRound(x - wall[0], y - wall[1], 0) && bare(map, x - wall[0] * 2, y - wall[1] * 2)) {
+                    squares.push({ x, y, wall, order: hashOf(x, y, 75) });
+                }
+            }
+        }
+
+        const [spot] = squares.sort((a, b) => a.order - b.order);
+
+        if (spot) {
+            // (A digger's spot out by the rock: a nest's earth stands back from its open squares)
+            const out = camp ? 0 : 0.45;
+
+            placed.push(...fallenScene(camp ? "camp" : "digger", spot.x + 0.5 + (spot.wall?.[0] ?? 0) * out, spot.y + 0.5 + (spot.wall?.[1] ?? 0) * out, { wall: camp ? null : spot.wall, rough: spot.order }));
+            break;
+        }
+    }
+
+    return placed;
+}
+
+// The lines a nest's roots' rootlets and its widows' silk are drawn with (each point its own
+// colour; the silk pale and faint): one each for every level
+let rootletMaterial = null;
+let silkMaterial = null;
+
+// An ants' nest's life, drawn on its rock (`made`: caverns.js cavern's, how far into the open each
+// point is and how high its roof over it; `life`: dungeon's), a level metre a unit: its brood (an
+// instanced mesh for each of its eggs, larvae and pupae), its middens' heaps and the heaps of earth
+// it's dug out (drawn with the picture underfoot, `underfoot`), the roots through its roof and their
+// rootlets, its widows' webs and the prey hung in them
+function nestLife(map, made, life, seed, depth, underfoot) {
+    const meshes = [];
+    const random = randomOf(seed ^ 0x2f6b1c3d);
+    const placed = { eggs: [], larvae: [], pupae: [] };
+    const matrix = new THREE.Matrix4();
+    const turned = new THREE.Quaternion();
+    const euler = new THREE.Euler(0, 0, 0, "YXZ");
+
+    // (The brood, round each brood chamber's middle, on its free floor)
+    for (const piece of life.brood) {
+        const free = (x, z) => bare(map, Math.floor(x), Math.floor(z)) && made.open(x, 0.3, z) > 0.35;
+        const brood = broodIn([piece.x + piece.w / 2, piece.y + piece.h / 2], free, random, { pile: Math.min(piece.w, piece.h) / 2 });
+
+        for (const kind of ["eggs", "larvae", "pupae"]) {
+            placed[kind].push(...brood[kind]);
+        }
+    }
+
+    for (const [kind, geometry, material, lift] of [
+        ["eggs", eggGeometry(), lifeMaterial("egg", { roughness: 0.35, glow: 0x1c140a }), 0],
+        ["larvae", larvaGeometry(), lifeMaterial("larva", { roughness: 0.55, glow: 0x120c06 }), 0.19],
+        ["pupae", pupaGeometry(), lifeMaterial("pupa", { roughness: 0.8 }), 0.18],
+    ]) {
+        const each = placed[kind];
+
+        if (!each.length) {
+            continue;
+        }
+
+        const mesh = new THREE.InstancedMesh(geometry, material, each.length);
+
+        each.forEach(({ x, y, z, turn, tilt, size }, k) => {
+            turned.setFromEuler(euler.set(tilt, turn, 0));
+            mesh.setMatrixAt(k, matrix.compose(new THREE.Vector3(x, y + lift * size, z), turned, new THREE.Vector3(size, size, size)));
+        });
+        mesh.name = kind;
+        mesh.userData.shadowless = kind === "eggs";
+        mesh.computeBoundingSphere();
+        meshes.push(mesh);
+    }
+
+    // (The middens' heaps, and the heaps of earth dug out: one mesh for each kind, of the earth
+    // underfoot heaped up)
+    for (const [kind, name] of [["heap", "midden"], ["spoil", "spoil"]]) {
+        const heaps = life.heaps.filter((heap) => heap.kind === kind);
+
+        if (heaps.length) {
+            meshes.push(Object.assign(new THREE.Mesh(heapGeometry(heaps), rockMaterial(underfoot)), { name }));
+        }
+    }
+
+    // (Roots through the roof, the more the nearer the meadow, over the open squares)
+    const squares = [];
+
+    for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+            if (map.plan[y][x] !== "#") {
+                squares.push([x + 0.5, y + 0.5]);
+            }
+        }
+    }
+
+    const roots = rootsUnder(squares, made.roof, depth, random);
+
+    if (roots.tubes.indices.length) {
+        const geometry = new THREE.BufferGeometry();
+
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(roots.tubes.positions, 3));
+        geometry.setAttribute("color", new THREE.Float32BufferAttribute(roots.tubes.colours, 3));
+        geometry.setIndex(roots.tubes.indices);
+        geometry.computeVertexNormals();
+
+        const mesh = new THREE.Mesh(geometry, lifeMaterial("root", { roughness: 0.9 }));
+
+        mesh.name = "roots";
+        meshes.push(mesh);
+
+        const lines = new THREE.BufferGeometry();
+
+        lines.setAttribute("position", new THREE.Float32BufferAttribute(roots.lines.positions, 3));
+        lines.setAttribute("color", new THREE.Float32BufferAttribute(roots.lines.colours, 3));
+        rootletMaterial ??= Object.assign(new THREE.LineBasicMaterial({ vertexColors: true }), { name: "rootlets" });
+        meshes.push(Object.assign(new THREE.LineSegments(lines, rootletMaterial), { name: "rootlets" }));
+    }
+
+    // (Each widow's web where it waits; and its prey, hung by a thread from the roof)
+    const silk = [];
+
+    for (const [x, y] of map.dungeon?.lurks ?? []) {
+        silk.push(...webAround([x + 0.5, y + 0.5], made.open, made.roof, random));
+    }
+
+    if (life.cocoons.length) {
+        const mesh = new THREE.InstancedMesh(cocoonGeometry(), lifeMaterial("cocoon", { roughness: 0.95 }), life.cocoons.length);
+
+        life.cocoons.forEach(({ x, z, long, turn }, k) => {
+            const roof = made.roof(x, z);
+            const top = Math.max(long + 0.6, roof - 0.35 - 0.3 * hashOf(x, z, 66));
+
+            turned.setFromEuler(euler.set(0, turn, 0));
+            mesh.setMatrixAt(k, matrix.compose(new THREE.Vector3(x, top, z), turned, new THREE.Vector3(long, long, long * 0.8)));
+            silk.push(x, top, z, x, roof + 0.05, z);
+        });
+        mesh.name = "cocoons";
+        mesh.computeBoundingSphere();
+        meshes.push(mesh);
+    }
+
+    if (silk.length) {
+        const lines = new THREE.BufferGeometry();
+
+        lines.setAttribute("position", new THREE.Float32BufferAttribute(silk, 3));
+        silkMaterial ??= Object.assign(new THREE.LineBasicMaterial({ color: 0xa8a396, transparent: true, opacity: 0.24, depthWrite: false }), { name: "silk" });
+        meshes.push(Object.assign(new THREE.LineSegments(lines, silkMaterial), { name: "webs" }));
+    }
+
+    return meshes;
 }
 
 // The colonies of glowing fungus on a level's rock, drawn in their own light whatever's on them,
@@ -4375,7 +4666,7 @@ let fungusMaterial = null;
 // cut away (the camera's kept out of the rock instead: view.js); its roof kept clear over stairs
 // going up; and the glowing fungus growing on it (place.js's colonies: glowfungus.js), its threads
 // glowing in the earth round each
-function* rockShell(map, look, shell) {
+function* rockShell(map, look, shell, life = null) {
     const rock = (x, y) => map.plan[y][x] === "#";
     const ups = map.pieces.filter((piece) => piece.kind === "stairs-up");
     const least = (x, z) => (ups.some((piece) => x > piece.x - 1 && x < piece.x + piece.w + 1 && z > piece.y - 1 && z < piece.y + piece.h + 1) ? FLIGHT.rise * FLIGHT.steps + 2.6 : 0);
@@ -4442,6 +4733,15 @@ function* rockShell(map, look, shell) {
         fungus.userData.shadowless = true;
         group.add(fungus);
     }
+    // (An ants' nest's life: its brood, heaps, roots, webs and the prey hung in them)
+    if (life) {
+        yield;
+
+        for (const each of nestLife(map, made, life, seed, depth, look.underfoot)) {
+            group.add(each);
+        }
+    }
+
     // (How high the rock closes over a point of the level, its metres: a lurker hangs under it)
     group.userData.roof = made.roof;
 
