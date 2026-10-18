@@ -145,6 +145,7 @@ export const PARTS = Object.freeze({
     nightglowGland: { label: "Nightglow gland", worth: 22, icon: "gland", tint: "#ff6040" },
     waspStinger: { label: "Wasp's stinger", worth: 8, icon: "sting", tint: "#2a2018" },
     waspWing: { label: "Wasp's wing", worth: 4, icon: "wing", tint: "#b0a8d0" },
+    widowGland: { label: "Black widow's venom gland", worth: 18, icon: "gland", tint: "#c81818" },
     frostHide: { label: "Frost troll hide", worth: 70, icon: "hide", tint: "#b8c8d8" },
 });
 
@@ -201,6 +202,7 @@ export const SPOILS = Object.freeze({
     dungeonScorpion: { items: [{ id: "scorpionSting", chance: 0.6 }, { id: "carapace", chance: 0.5, count: [1, 2] }] },
     giantCockroach: { items: [{ id: "carapace", chance: 0.3 }] },
     dungeonWasp: { items: [{ id: "waspStinger", chance: 0.45 }, { id: "waspWing", chance: 0.5, count: [1, 2] }] },
+    blackWidow: { items: [{ id: "spiderSilk", chance: 0.7, count: [1, 3] }, { id: "widowGland", chance: 0.5 }] },
     // (What's left in the Ant Monster's nest of those it's eaten, besides its mandibles and jelly)
     antMonster: { gold: [10, 30], items: [{ id: "queenMandible", chance: 0.8 }, { id: "royalJelly", chance: 0.6, count: [1, 2] }, { id: "acidGland", chance: 0.7, count: [1, 2] }] },
     basilisk: { items: [{ id: "basiliskEye", chance: 0.3 }, { id: "crownScale", chance: 0.4 }] },

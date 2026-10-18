@@ -66,7 +66,7 @@ On anyone at all, friend, neutral or foe: it never counts as an attack.
 | Vigor | 500 ms | 4 s | 8–12 | |
 | Mend Wounds | 700 ms | 12 s | 16–24 | |
 | Detraumatize | 900 ms | 24 s | 28–40 | stops bleeding |
-| Renewal | 1100 ms | 45 s | 45–65 | ends bleeding, poison and disease |
+| Renewal | 1100 ms | 45 s | 45–65 | ends bleeding, poison (and a black widow's venom) and disease |
 | Astral Heal | 1400 ms | 3 min | all | ends everything lingering |
 
 Each heal past Vigor heals more at once, for an emergency, but over a fight no more than Vigor does
@@ -251,8 +251,8 @@ tomes, above, are the guild's to sell, never found or given.)
 | --- | --- | --- | --- | --- | --- |
 | Resist Fire, Water, Air, Earth | common | oneself or a friend | 700 ms | 15 s | an hour (`WARDING`; five minutes till the user had it an hour: `NET_VERSION` 86): 30% less from that element's spells and creatures' blows, and what it sets on them ends sooner |
 | Resist Magic | common | oneself or a friend | 700 ms | 15 s | an hour: 30% less from every spell, curses and wisps' bolts; hexes hold less long |
-| Resist Poison, Disease | common | oneself or a friend | 700 ms | 15 s | an hour: poison (or disease) hurts 30% less and ends sooner |
-| Cure Poison, Cure Disease, Lift Curse, Quench, Staunch, Unbind | common | anyone | 500 ms | 6 s | ends poisoning, disease, withering, burning, bleeding, being slowed |
+| Resist Poison, Disease | common | oneself or a friend | 700 ms | 15 s | an hour: poison and a black widow's venom (or disease) hurt 30% less and end sooner |
+| Cure Poison, Cure Disease, Lift Curse, Quench, Staunch, Unbind | common | anyone | 500 ms | 6 s | ends poisoning (and a black widow's venom), disease, withering, burning, bleeding, being slowed |
 | Embolden | common | anyone | 500 ms | 6 s | ends Fear |
 | Zombify | uncommon | one fallen | 1200 ms | 30 s | an enemy fallen in the last half minute rises to follow and fight for you, an hour; as many at once as its level, 1 to 5 (a grimoire) |
 | Teleport | uncommon | oneself | 1500 ms | 60 s | anywhere in the world, in an instant |

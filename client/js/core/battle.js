@@ -823,6 +823,11 @@ export class Battle {
             // when it may go up again: #hover)
             aloft: null,
             hoverAt: 0,
+            // (One that lurks, a black widow (its wild's `lurk`): hanging unseen under the roof, no
+            // one's enemy nor anyone its, till it drops on whoever comes beneath it, when it
+            // dropped (ms): #lurk)
+            lurking: Boolean(wild?.lurk),
+            droppedAt: null,
             // (In a formation: its place in it, { id, slot: [right, back], role }: core/formation.js;
             // and when it next looks for whom to fight, RETHINK_MS)
             formation: formation ? { id: formation.id, slot: [...formation.slot], role: formation.role ?? null } : null,
@@ -989,6 +994,11 @@ export class Battle {
      * otherwise as their teams stand (`relations`: the peoples' war), or always, without that.
      */
     hostile(a, b) {
+        // (Nor one lurking unseen overhead, till it drops: #lurk)
+        return !a.lurking && !b.lurking && this.#hostile(a, b);
+    }
+
+    #hostile(a, b) {
         if (a === b || a.neutral || b.neutral) {
             return false;
         }
@@ -1861,6 +1871,13 @@ export class Battle {
             if (this.time >= actor.respawnAt) {
                 this.#respawn(actor);
             }
+
+            return;
+        }
+
+        // (Lurking overhead: only watching for whoever comes beneath it)
+        if (actor.lurking) {
+            this.#lurk(actor);
 
             return;
         }
@@ -2759,6 +2776,29 @@ export class Battle {
     }
 
     /**
+     * One of the wild's creatures that lurks (its `wild.lurk`: creatures.js `lurk`, a black
+     * widow), hanging unseen under the roof over where it is: no one's enemy, nor anyone its
+     * (hostile), till an enemy it can see (and has noticed: not Invisible) comes within `within`
+     * squares of beneath it. Then it drops on its thread, landing `drop` ms later where it is,
+     * stunned till then, and sets on them. Told as "drop": { id, target, until (ms) }.
+     */
+    #lurk(actor) {
+        const { within, drop } = actor.wild.lurk;
+        const prey = this.#nearestEnemy(actor, (other) => this.canSee(actor, other), within, (other) => this.#hostile(other, actor));
+
+        if (!prey) {
+            return;
+        }
+
+        actor.lurking = false;
+        actor.droppedAt = this.time;
+        actor.stunnedUntil = Math.max(actor.stunnedUntil, this.time + drop);
+        actor.target = prey.id;
+        actor.path = [];
+        this.#emit("drop", { id: actor.id, target: prey.id, until: this.time + drop });
+    }
+
+    /**
      * One of the wild's creatures that takes to the air once it's badly hurt (its `wild.hover`:
      * creatures.js `hover`): at `below` its hit points or fewer, fighting someone, between blows
      * and free to, it goes up (`rise` ms), stays up there (`ms`), and comes down again (`rise`),
@@ -3486,7 +3526,7 @@ export class Battle {
 
         actor.pace = want > actor.pace ? Math.min(want, actor.pace + ACCELERATION * seconds) : Math.max(want, actor.pace - BRAKING * seconds);
 
-        const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting || this.#rising(actor);
+        const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting || this.#rising(actor) || actor.lurking;
         const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds * shareOf(actor, "speed"));
 
         // Getting nowhere, jostling: squeezing past (#bumps)
@@ -3680,7 +3720,8 @@ export class Battle {
         for (const k of this.#within(actor.map, x, y, 2 * BODY)) {
             const other = this.actors[k];
 
-            if (other === actor || other.dead || other.map !== actor.map || Math.abs(other.x - x) >= 2 * BODY || Math.abs(other.y - y) >= 2 * BODY) {
+            // (Nor one lurking overhead: #lurk)
+            if (other === actor || other.dead || other.lurking || other.map !== actor.map || Math.abs(other.x - x) >= 2 * BODY || Math.abs(other.y - y) >= 2 * BODY) {
                 continue;
             }
 

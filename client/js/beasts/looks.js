@@ -567,6 +567,14 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0x2a2018, wings: 0xb0a8d0, eyes: 0x0a0806 },
         attacks: ["dive", "swirl"], rests: ["settle", "scatter"],
     },
+    // (A black widow's stand-in: a glossy black spider, the widow's red mark on it)
+    blackWidow: {
+        body: "arachnid",
+        scale: [0.95, 1.05],
+        size: 1,
+        colours: { shell: 0x141018, dark: 0x060408, marks: 0xc81818, eyes: 0x200808 },
+        attacks: ["bite", "leap"], rests: ["groom", "crouch", "twitch"],
+    },
     antMonster: {
         body: "arachnid",
         scale: [1, 1],

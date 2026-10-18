@@ -92,6 +92,7 @@ two tiers above it, up to their most.
 | Giant cockroach | 22 | aggressive | an ants' nest's packs, 3–5 | 1–8 | the ants' nests only |
 | Dungeon wasp | 26 | aggressive | an ants' nest's packs, 2–4 | 2–10 | the ants' nests only |
 | Dungeon scorpion | 64 | aggressive | an ants' nest's packs, 1–2 | 3–10 | the ants' nests only |
+| Black widow | 54 | aggressive | alone under a gallery's roof, lurking; or a mini-boss, the Widow matriarch | 3–10 | the ants' nests only |
 | Ant Monster | 96 | aggressive | 1, calling its flock | 4–10 | the ants' nests: their boss |
 | Restless ghost | 26 | aggressive | 1–2 | 3–9 | the ruins, ruined castles and graveyards, with their dead |
 | Wraith | 46 | aggressive | 1 | 5–10 | the ruins and ruined castles, with their dead |
@@ -568,6 +569,7 @@ an adder's near home.
 
 | Affliction | Lasts | Hurts | Besides | From | Cure (at the guild) |
 | --- | --- | --- | --- | --- | --- |
+| Envenomed | 12 s | 2 every 1.2 s | moving at three quarters' pace | a black widow's bite and pounce | Cure poison draught, 12 gold |
 | Poisoned | 9 s | 1 every 1.5 s | | adder, bog frog (spit), wyvern and scorpion stings, cave spider's bite, Gila monster's bite, death worm's bite and acid, a spitting cobra's, a basilisk's and a giant centipede's bite, cobra and knucker venom, a chimera's serpent tail | Cure poison draught, 12 gold |
 | Diseased | 45 s | 1 every 5 s | stamina comes back at 40% | rats, bats, hyenas, jackals, cave olms, bloodflies, skeletons, draugar, boggarts | Cure disease draught, 18 gold |
 | Withered | 20 s | 1 every 2.5 s | healing takes half as well | the wight lord's curse and a draugr's, the black shuck's bite, a wraith's claws and draining, a mare's nightmares | Invigorating draught, 22 gold |
@@ -583,7 +585,8 @@ A cure ends it at once (and only it: used with nothing to cure, it isn't used). 
 action wheel, as a draught can.
 
 **How it shows.**
-- **On the player's plate**, an icon for each (a venom drop with a skull in it, a pocked ball with
+- **On the player's plate**, an icon for each (a venom drop with a skull in it, a black drop with
+  a widow's red hourglass and two fangs over it, a pocked ball with
   flies, a cracked grey heart, a flame, a drop of blood, a web or roots or a snowflake for what's
   slowing them), on a blood-red disc ringed in its colour, darkening round as it wears off, the
   soonest over first (before the gold-rimmed sapphire tiles of what does them good, in one row:
@@ -591,7 +594,7 @@ action wheel, as a draught can.
   else with something on them, the same, smaller. The player's told when something takes hold
   ("You're poisoned!"), the first time with the cure and where it's sold, and when it's over.
 - **On whoever has it:** venom's bubbles rising and green drips falling, and their skin tinged
-  green; a sickness's flies circling and a yellow miasma; a curse's violet motes circling them,
+  green (a widow's venom thicker and faster, darker in the skin); a sickness's flies circling and a yellow miasma; a curse's violet motes circling them,
   dark shadow rising, a shadow pooled under them; flames licking up them, smoke rising, their skin
   aglow; blood dripping; a web wound round their legs and anchored to the ground; roots burst up
   round their feet and coiled up their legs; ice crusting their feet, frost glittering. Each hurt,
@@ -1003,6 +1006,28 @@ back along the ground while planted.
   sting brought over its back (`sting`: Attack 3), staggering, venomous. It rests rearing up, its
   pincers raised; it flinches to its left, and dies flipped onto its back (Death 2). Its walk is a
   slow creep, 0.17 m/s as it's drawn; its run, 0.66, is what carries it after anyone.
+- **The black widow** (`blackWidow`): made 1.79 m long, legs and all, drawn 2.2 m; its full detail
+  only (its bristles don't simplify, so its model has no lower details: `detail: 1`). It rears up
+  to bite (Attack), or pounces (`leap`: Attack 3, a leap of 1.7 m as it's made and back), each with
+  a venom of its own (*Envenomed*, above: over three times poison's hurt, slowing). It rests
+  shifting its legs, and dies flipped onto its back, its legs curled. Its walk is 0.68 m/s as it's
+  drawn, its run 1.83.
+  - **It lurks** (`creatures.js` `lurk`, `battle.js` `#lurk`): put out hanging unseen under the
+    roof over where it stands, near the middle of its room where the roof's highest (`place.js`).
+    While it lurks it's no one's enemy nor anyone its: nothing sets on it, no blow, spell or blast
+    reaches it, no one bumps into it, and it isn't on the minimap. Once an enemy it can see (and
+    has noticed: not Invisible) comes within 3.5 m of beneath it, it drops on its thread: 1.8 s
+    coming down, stunned till it lands, then at them. It's told ("… drops on you from the dark
+    above!") and heard.
+  - **Drawn hanging** (`game.js` `#hanging`, `HANG`; `BeastAvatar.hang`): its middle 0.9 m under
+    the rock over it (`caverns.js` `roof`: how high the rock closes over a point), never lower
+    than 3.4 m (its lowest out of a blade's reach) nor higher than 6. Its model hangs and drops by
+    its own clip (Web Ground: made hanging from a thread 6 m up and sliding down it, touching the
+    ground and turning onto its feet; held from where it hangs that high, and played on from there
+    over its drop: `model.js` `lurk`, `poseOf`); its thread runs up into the rock. Its stand-in
+    hangs upside down under a thread of its own, let down on it and turned over onto its feet. While
+    it's up there it's drawn wherever the camera looks (its culling sphere is round where it
+    stands, not up there).
 - **The Ant Monster** (`antMonster`): made 6.8 m long, drawn 4.2 and 1.5 m tall (1.22 times that
   as a boss). Its mandibles (Attack, Attack 5), rearing to slam down (`slam`: Attack 2), its acid
   spat (`spit`: Attack 3, a pool of venom where it lands) and its flock called (`call`: Call

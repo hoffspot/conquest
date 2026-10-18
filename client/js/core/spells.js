@@ -80,7 +80,7 @@ const tome = (label, rarity, settings) => ({ label, tome: rarity, reach: SPELL_R
 const ward = (label, about, against) => tome(label, "common", { about, target: "friend", cooldown: 15000, lasts: WARDING, ward: { schools: [], elements: [], afflictions: [], looks: [], ...against } });
 
 // A cure (a tome's): on anyone, friend or foe (never taken as an attack), ending an affliction
-const cure = (label, about, kind) => tome(label, "common", { about, target: "any", castTime: 500, cooldown: 6000, cures: [kind] });
+const cure = (label, about, ...kinds) => tome(label, "common", { about, target: "any", castTime: 500, cooldown: 6000, cures: kinds });
 
 // A spell that grows as it's used (a tome's): its own experience (progress.js spellXp), each that
 // lands SPELL_XP more, reaching each of five levels at these
@@ -118,7 +118,7 @@ export const SPELLS = Object.freeze({
     vigor: healing(1, "Vigor", { about: "A breath of strength: heals a little.", castTime: 500, cooldown: 4000, heal: [8, 12] }),
     mendWounds: healing(2, "Mend Wounds", { about: "Knits cuts and bruises: heals a fair deal.", castTime: 700, cooldown: 12000, heal: [16, 24] }),
     detraumatize: healing(3, "Detraumatize", { about: "Soothes body and mind: heals well, and stops bleeding.", castTime: 900, cooldown: 24000, heal: [28, 40], cures: ["bleed"] }),
-    renewal: healing(4, "Renewal", { about: "Renews the flesh: heals greatly, and purges poison, sickness and bleeding.", castTime: 1100, cooldown: 45000, heal: [45, 65], cures: ["bleed", "poison", "disease"] }),
+    renewal: healing(4, "Renewal", { about: "Renews the flesh: heals greatly, and purges poison, venom, sickness and bleeding.", castTime: 1100, cooldown: 45000, heal: [45, 65], cures: ["bleed", "poison", "venom", "disease"] }),
     astralHeal: healing(5, "Astral Heal", { about: "Light from beyond the stars: heals fully, and ends everything lingering.", castTime: 1400, cooldown: 180000, full: true, cures: "all" }),
 
     // --- Fire: burning ---
@@ -168,11 +168,11 @@ export const SPELLS = Object.freeze({
     resistAir: ward("Resist Air", "Wards against wind and lightning, an hour: 30% less from air spells, and stuns from them end sooner.", { schools: ["air"], elements: ["air"] }),
     resistEarth: ward("Resist Earth", "Wards against stone and soil, an hour: 30% less from earth spells, and roots and rubble hold them less long.", { schools: ["earth"], elements: ["earth"], looks: ["roots", "rubble", "earth", "acid"] }),
     resistMagic: ward("Resist Magic", "Wards against all magic, an hour: 30% less from every spell, curses and wisps' bolts, and hexes hold less long.", { schools: ["fire", "water", "air", "earth", "magic"], elements: ["magic"], afflictions: ["wither"] }),
-    resistPoison: ward("Resist Poison", "Wards against venom, an hour: poison hurts 30% less, and ends sooner.", { afflictions: ["poison"] }),
+    resistPoison: ward("Resist Poison", "Wards against venom, an hour: poison and a black widow's venom hurt 30% less, and end sooner.", { afflictions: ["poison", "venom"] }),
     resistDisease: ward("Resist Disease", "Wards against sickness, an hour: disease hurts 30% less, and ends sooner.", { afflictions: ["disease"] }),
 
     // Cures: on anyone
-    curePoison: cure("Cure Poison", "Draws the venom out: ends poisoning, on anyone.", "poison"),
+    curePoison: cure("Cure Poison", "Draws the venom out: ends poisoning, and a black widow's venom, on anyone.", "poison", "venom"),
     cureSickness: cure("Cure Disease", "Purges a sickness: ends disease, on anyone.", "disease"),
     liftCurse: cure("Lift Curse", "Breaks a curse: ends withering, on anyone.", "wither"),
     quench: cure("Quench", "Puts out the flames: ends burning, on anyone.", "burn"),

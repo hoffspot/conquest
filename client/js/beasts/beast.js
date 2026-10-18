@@ -102,6 +102,10 @@ function levelsOf(geometry, lods) {
 
 const wrapAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 const smoothstep = (u) => u * u * (3 - 2 * u);
+const clamp01 = (u) => Math.min(1, Math.max(0, u));
+
+// A stand-in's thread, hanging from the roof as it lurks (BeastAvatar.hang): one for all of them
+let THREAD = null;
 
 // Which of a creature's joints stands for each of a person's bones the game asks for
 const BONES = { Spine2: "torso", Spine1: "torso", Spine: "body", Head: "head", Neck: "head", RightHand: "mouth", LeftHand: "left" };
@@ -247,6 +251,10 @@ export class BeastAvatar {
         this.flight = null;
         this.arrival = null;
         this.winged = Boolean(look.wings);
+        /** Lurking under the roof or dropping from it on its thread, if it is: { height, roof, u } (hang). */
+        this.hanging = null;
+        this.hung = false;
+        this.thread = null;
         this.object.rotation.order = "YXZ";
 
         // Its ways of attacking and of resting (LOOKS: those its body can do)
@@ -469,6 +477,17 @@ export class BeastAvatar {
      */
     hover(share) {
         this.flight = share > 0 ? { amount: Math.min(1, share * 4), beat: share < 1 ? 1 : 0.7, hover: true } : null;
+    }
+
+    /**
+     * Lurking under the roof (battle.js #lurk: a black widow), hanging from its thread, its middle
+     * `height` metres up, still (`u` null), or dropping on it (`u`, 0 to 1 of the way: on its feet
+     * at 1), the rock `roof` metres up over it; or not (null). Said each moment, before update, as
+     * hover is. One drawn from a model hangs and drops by its own clip (model.js poseOf); a stand-in
+     * is drawn upside down under its thread, let down on it and turned over onto its feet (#hangs).
+     */
+    hang(state) {
+        this.hanging = state;
     }
 
     /**
@@ -741,7 +760,7 @@ export class BeastAvatar {
 
         // Standing a while, it rests one of its ways; moving, fighting or struck, it stops, easing
         // out of it
-        const busy = speed > 0.15 || doing.attack || doing.react || doing.dead;
+        const busy = speed > 0.15 || doing.attack || doing.react || doing.dead || this.hanging;
 
         this.still = busy ? 0 : this.still + dt;
 
@@ -775,18 +794,23 @@ export class BeastAvatar {
             dead: doing.dead ? { u: Math.min(1, doing.dead.u ?? 0), side: doing.dead.side } : null,
             onStep: (foot, pace) => this.walker.onStep?.(foot, pace * this.scale),
             fly: this.flight,
+            hang: this.hanging,
             seen: this.seen,
         });
+
+        this.#hangs();
 
         // (Attacking, it may reach further than its body: BOUNDS)
         if (this.bounds) {
             this.bounds.radius = this.reachless + (doing.attack ? Math.max(doing.attack.reach ?? 0, BOUNDS.reach) : 0);
         }
 
-        // (Flying only while it's told to: soar and arrive say so each moment)
+        // (Flying, and hanging, only while it's told to: soar, arrive and hang say so each moment)
         if (!this.arrival) {
             this.flight = null;
         }
+
+        this.hanging = null;
 
         // Its glow, and any flush of red on it (on all of it: a model's fur too)
         const skin = this.plan.materials.body;
@@ -796,6 +820,65 @@ export class BeastAvatar {
         for (const { material, glow } of this.others) {
             material.emissive.copy(glow).add(this.flush.emissive).multiplyScalar(1 / Math.max(0.001, material.emissiveIntensity));
         }
+    }
+
+    // Lurking (hang): drawn wherever the camera looks, its sphere being round where it stands, not
+    // up there; a stand-in upside down under its thread, its middle as high as it's told, let down
+    // on it over the first two thirds of its drop and turned over onto its feet over the last half,
+    // its thread from its feet up to the roof. Put back as it was once it's down
+    #hangs() {
+        const hanging = this.hanging;
+        const body = this.plan.object;
+
+        if (hanging || this.hung) {
+            body.traverse((node) => {
+                if (node.isSkinnedMesh) {
+                    node.frustumCulled = !hanging;
+                }
+            });
+        }
+
+        if (!hanging) {
+            if (this.hung) {
+                body.position.y = 0;
+                body.rotation.x = 0;
+                this.hung = false;
+
+                if (this.thread) {
+                    this.thread.visible = false;
+                }
+            }
+
+            return;
+        }
+
+        this.hung = true;
+
+        if (this.plan.lurks) {
+            return;
+        }
+
+        const half = this.character.height / 2;
+        const down = hanging.u === null ? 0 : smoothstep(clamp01(hanging.u / 0.65));
+        const over = hanging.u === null ? 1 : 1 - smoothstep(clamp01((hanging.u - 0.5) / 0.4));
+        const middle = half + (hanging.height - half) * (1 - down);
+        const feet = middle + half;
+        const top = hanging.roof ?? feet + 3;
+
+        body.position.y = middle - half * Math.cos(Math.PI * over);
+        body.rotation.x = Math.PI * over;
+
+        THREAD ??= { geometry: new THREE.CylinderGeometry(0.012, 0.012, 1, 4, 1, true), material: new THREE.MeshBasicMaterial({ color: 0xdcdce4, transparent: true, opacity: 0.5, depthWrite: false }) };
+
+        if (!this.thread) {
+            this.thread = new THREE.Mesh(THREAD.geometry, THREAD.material);
+            this.thread.frustumCulled = false;
+            this.object.add(this.thread);
+        }
+
+        this.thread.visible = top > feet && over > 0.5;
+        this.thread.position.set(0, (feet + top) / 2, 0);
+        this.thread.scale.set(1, Math.max(0.01, top - feet), 1);
     }
 
     /** As Avatar.angleTo: which way a point is from it (0 ahead, positive to its left). */

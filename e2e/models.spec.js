@@ -495,6 +495,117 @@ test("draws what else has crept into the ants' nests from their models: a dungeo
     expect(drawn.error).toBe(0);
 });
 
+test("draws the black widow from its model: on the ground, as long as it's drawn; lurking, hanging from its thread out of a blade's reach, drawn wherever the camera looks; dropping on it to the ground; its stand-in hanging upside down under its own thread", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await page.goto("/");
+    await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
+
+    const drawn = await page.evaluate(async () => {
+        const THREE = await import("three");
+        const { BeastAvatar } = await import("./js/beasts/beast.js");
+        const { wantModel } = await import("./js/beasts/model.js");
+        const { renderer } = window.pellagos.session.view;
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
+        const boxOf = (object) => new THREE.Box3().setFromObject(object, true);
+        const culled = (beast) => {
+            const meshes = [];
+
+            beast.plan.object.traverse((node) => node.isSkinnedMesh && meshes.push(node.frustumCulled));
+
+            return meshes.every(Boolean);
+        };
+        // (Posed a moment as it's told to hang, or not)
+        const pose = (beast, hang) => {
+            beast.hang(hang);
+            beast.update(1 / 30, 0, 0, 0);
+            beast.object.updateMatrixWorld(true);
+        };
+
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x404040, 2));
+        camera.position.set(6, 4, 8);
+        camera.lookAt(0, 1.5, 0);
+
+        // Its stand-in first (before its model's read): upside down, under its thread
+        const standIn = new BeastAvatar("blackWidow", { seed: 3 });
+
+        scene.add(standIn.object);
+        pose(standIn, { height: 4, roof: 4.9, u: null });
+
+        const hungIn = { model: standIn.model, low: boxOf(standIn.plan.object).min.y, upside: Math.abs(standIn.plan.object.rotation.x - Math.PI) < 0.01, thread: Boolean(standIn.thread?.visible) };
+
+        for (let k = 0; k <= 30; k++) {
+            pose(standIn, { height: 4, roof: 4.9, u: k / 30 });
+        }
+
+        pose(standIn, null);
+        hungIn.landed = boxOf(standIn.plan.object).min.y;
+        hungIn.righted = standIn.plan.object.rotation.x;
+        hungIn.threadGone = !standIn.thread.visible;
+        scene.remove(standIn.object);
+        standIn.dispose();
+
+        // Then drawn from its model
+        await wantModel("blackWidow");
+
+        const beast = new BeastAvatar("blackWidow", { seed: 3 });
+
+        scene.add(beast.object);
+        pose(beast, null);
+        renderer.render(scene, camera);
+
+        const body = beast.plan.levels[0][0];
+        const standing = boxOf(body);
+        const seen = { model: beast.model, long: standing.max.z - standing.min.z, low: standing.min.y, ways: [...beast.plan.attacks].sort(), culled: culled(beast) };
+
+        // (Hanging, its middle 4 metres up under a roof at 4.9: the lowest of it out of reach)
+        pose(beast, { height: 4, roof: 4.9, u: null });
+        renderer.render(scene, camera);
+        seen.hanging = { low: boxOf(body).min.y, culled: culled(beast) };
+
+        // (Dropping: halfway, on its way down; at its end, on its feet on the ground)
+        pose(beast, { height: 4, roof: 4.9, u: 0.3 });
+        seen.dropping = boxOf(body).min.y;
+        pose(beast, { height: 4, roof: 4.9, u: 1 });
+        seen.landed = boxOf(body).min.y;
+        pose(beast, null);
+        seen.after = { low: boxOf(body).min.y, culled: culled(beast) };
+        scene.remove(beast.object);
+        beast.dispose();
+
+        return { standIn: hungIn, widow: seen, error: renderer.getContext().getError() };
+    });
+
+    // (Its stand-in: upside down, its lowest well over a head, its thread up to the roof; let down
+    // onto its feet, its thread gone)
+    expect(drawn.standIn.model).toBe(false);
+    expect(drawn.standIn.upside).toBe(true);
+    expect(drawn.standIn.low).toBeGreaterThan(2.5);
+    expect(drawn.standIn.thread).toBe(true);
+    expect(Math.abs(drawn.standIn.landed)).toBeLessThan(0.2);
+    expect(drawn.standIn.righted).toBe(0);
+    expect(drawn.standIn.threadGone).toBe(true);
+
+    // (The black widow: 2.2 metres long, legs and all, on the ground; its bite and its pounce)
+    expect(drawn.widow.model).toBe(true);
+    expect(drawn.widow.long).toBeGreaterThan(1.8);
+    expect(drawn.widow.long).toBeLessThan(2.6);
+    expect(Math.abs(drawn.widow.low)).toBeLessThan(0.1);
+    expect(drawn.widow.ways).toEqual(["bite", "leap"]);
+    expect(drawn.widow.culled).toBe(true);
+
+    // (Hanging out of a blade's reach, drawn wherever the camera looks; dropping, lower; down, on
+    // the ground, culled as it was)
+    expect(drawn.widow.hanging.low).toBeGreaterThan(2.2);
+    expect(drawn.widow.hanging.low).toBeLessThan(4);
+    expect(drawn.widow.hanging.culled).toBe(false);
+    expect(drawn.widow.dropping).toBeLessThan(drawn.widow.hanging.low);
+    expect(Math.abs(drawn.widow.landed)).toBeLessThan(0.15);
+    expect(Math.abs(drawn.widow.after.low)).toBeLessThan(0.1);
+    expect(drawn.widow.after.culled).toBe(true);
+    expect(drawn.error).toBe(0);
+});
+
 test("lets a model go off the graphics card once none's drawn from it, and reads it again, without downloading it again, when it's wanted", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await page.goto("/");

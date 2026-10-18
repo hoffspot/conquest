@@ -64,12 +64,12 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
     });
 
     it("has every clip and bone it names in its model, as the glTF loader names them (a clip it borrows, and the bones it's played on, in the lender's), its detail packed in, its skins' materials its own", { skip: licensed !== true && licensed }, async () => {
-        for (const { asset, skins = [""], clips, attacks, specials, aloft, rests, fire, joints, mouth, borrows } of Object.values(MODELS)) {
+        for (const { asset, skins = [""], clips, attacks, specials, aloft, rests, lurk, fire, joints, mouth, borrows, detail = 3 } of Object.values(MODELS)) {
             const gltf = await gltfOf(ASSETS.models[asset].files[0].path);
             const named = new Set(gltf.animations.map(({ name }) => name));
             const nodes = new Set(gltf.nodes.map(({ name }) => PropertyBinding.sanitizeNodeName(name)));
 
-            for (const clip of [...Object.values(clips), ...Object.values(attacks), ...Object.values(specials), ...Object.values(aloft ?? {}), ...Object.values(rests), ...Object.keys(fire)].filter((each) => !borrows?.clips.includes(each))) {
+            for (const clip of [...Object.values(clips), ...Object.values(attacks), ...Object.values(specials), ...Object.values(aloft ?? {}), ...Object.values(rests), ...(lurk ? [lurk.clip] : []), ...Object.keys(fire)].filter((each) => !borrows?.clips.includes(each))) {
                 assert.ok(named.has(clip), clip);
             }
 
@@ -91,13 +91,15 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
             }
 
             // (Its detail packed in: three levels, each of as many meshes as the full one, one for
-            // each of its parts)
+            // each of its parts; or as many as it says it has, `detail`: the black widow's full
+            // detail only)
             const levels = gltf.nodes.filter(({ mesh }) => mesh !== undefined).map(({ extras }) => extras?.lod ?? 0);
             const parts = levels.filter((level) => level === 0).length;
 
             assert.deepEqual(
                 [0, 1, 2].map((level) => levels.filter((each) => each === level).length),
-                [parts, parts, parts],
+                [0, 1, 2].map((level) => (level < detail ? parts : 0)),
+                asset,
             );
 
             // (Each skin's materials some of its model's, by name: put on in their place)
