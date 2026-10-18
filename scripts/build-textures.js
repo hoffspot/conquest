@@ -8,7 +8,9 @@
 // Each material's colour, its ambient occlusion and its normal map (OpenGL's way up) are
 // downloaded once (into .cache: ambientCG's 1K archive, Poly Haven's 1K pictures), the colour
 // darkened by the occlusion (so its cracks stay dark under any light), both made half the size
-// (512 pixels: a few metres of rock each, seen from a few metres off), and saved as JPEGs. Each
+// (512 pixels: a few metres of rock each, seen from a few metres off), and saved as KTX2, which
+// the graphics card keeps compressed (lib/ktx2.js: the colour ETC1S, the normal map UASTC, the
+// rock being seen close to; with their mipmaps). Each
 // picture's average colour (in linear light) is written with it into
 // client/js/world/dungeonpictures.js, as the colour the theme's own is put in place of; and each
 // material's files into client/models/assets.json's catalog, downloaded only once a dungeon's
@@ -16,15 +18,16 @@
 
 import { readFile, writeFile } from "node:fs/promises";
 import jpeg from "jpeg-js";
+import { encodeKtx2 } from "./lib/ktx2.js";
 import { fetchSource } from "./sounds/sources.js";
 
 const OUT = new URL("../client/textures/dungeons/", import.meta.url);
 const LIST = new URL("../client/js/world/dungeonpictures.js", import.meta.url);
 const CATALOG = new URL("../client/models/assets.json", import.meta.url);
 
-// The pictures' size (pixels) and the JPEGs' quality
+// The pictures' size (pixels), and how each is compressed (lib/ktx2.js: ETC1S's quality, if it is)
 const SIZE = 512;
-const QUALITY = { colour: 82, normal: 88 };
+const KTX2 = { colour: { mode: "etc1s", quality: 192 }, normal: { mode: "uastc" } };
 
 // ambientCG's 1K archive of a material, and the files in it; Poly Haven's 1K pictures of one
 const ambientCG = (id) => ({
@@ -127,8 +130,8 @@ async function make(name, { from }) {
     const [colour, ao, normal] = await Promise.all([decode("colour"), decode("ao"), decode("normal")]);
     const small = shrink(occluded(colour, ao), SIZE, "colour");
 
-    await writeFile(new URL(`${name}-colour.jpg`, OUT), jpeg.encode(small, QUALITY.colour).data);
-    await writeFile(new URL(`${name}-normal.jpg`, OUT), jpeg.encode(shrink(normal, SIZE, "normal"), QUALITY.normal).data);
+    await writeFile(new URL(`${name}-colour.ktx2`, OUT), await encodeKtx2(small, { kind: "colour", ...KTX2.colour }));
+    await writeFile(new URL(`${name}-normal.ktx2`, OUT), await encodeKtx2(shrink(normal, SIZE, "normal"), { kind: "normal", ...KTX2.normal }));
 
     return meanOf(small);
 }
@@ -163,7 +166,7 @@ ${lines.join("\n")}
         catalog.models[`dungeon-${name}`] = {
             tier: "demand",
             label: `${of[0].toUpperCase()}${of.slice(1)} (${from.credit}, CC0)`,
-            files: ["colour", "normal"].map((kind) => ({ path: `textures/dungeons/${name}-${kind}.jpg` })),
+            files: ["colour", "normal"].map((kind) => ({ path: `textures/dungeons/${name}-${kind}.ktx2` })),
         };
     }
 

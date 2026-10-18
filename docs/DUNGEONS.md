@@ -285,7 +285,11 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
   and a normal map, laid over the surface from all three sides at once (triplanar: never
   stretched however the rock turns), the picture's grain under the theme's own colour. They're
   in the catalog (`client/models/assets.json`), downloaded only once a dungeon's wanted (about
-  1.8 MB in all); until they've come, the rock's drawn in its colours alone.
+  2.6 MB in all); until they've come, the rock's drawn in its colours alone. Each is a KTX2,
+  which the graphics card keeps compressed (`scripts/lib/ktx2.js`): the colour ETC1S, the normal
+  map UASTC (sharper, the rock being seen close to), each with its mipmaps, read by three.js's
+  `KTX2Loader` (`art/engine/models.js` `readKtx2`). A picture and its normal map take about
+  0.5 MB of a phone's graphics memory, where as JPEGs, decoded, they took 2.8 MB.
 - **Never cut away**: the rock and the temple's walls stand whole however the camera looks,
   since the camera's kept out of them (below), so nothing's ever seen from inside.
 - **What's in its rooms**, by plan character: rock, bones, rubble, camp fires, bedrolls, barrels,
@@ -300,11 +304,14 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
   handcart, a wheelbarrow, an old chest, a weapon rack, a sword, a painted coffin, a carved urn, a
   clay basin, mushrooms, bracket fungus, a cow's, a stag's and a ram's skulls), and a ribcage and a
   pelvis from anatomy scans (NIH 3D, the Human Reference Atlas: CC BY 4.0, without pictures,
-  coloured as bone), each maker named in the catalog and the README. Every bone among them, whoever
-  scanned or painted it, is made one aged bone's colour (`build-props.js` `BONE`, sRGB 206, 192,
-  166): its picture's lighter half (a quarter of the ram's, half of it horn) brought to that colour
-  and every pixel drawn halfway to bone's hue as light as it is, so its light and shade, stains and
-  horn stay darker. A model that's a set (three candleholders, a heap of rocks, skulls and bones) is
+  coloured as bone), each maker named in the catalog and the README. Their pictures are KTX2
+  (ETC1S, colour and normal map alike: `scripts/lib/ktx2.js`), kept compressed on the graphics
+  card: every one of them together takes about 20 MB of a phone's graphics memory (ETC1; 41 MB as
+  a desktop's BC7) where, decoded from JPEGs, they took 163 MB, and their files are 17.7 MB where
+  they were 21.1 MB. Every bone among them, whoever scanned or painted it, is made one aged
+  bone's colour (`build-props.js` `BONE`, sRGB 206, 192, 166): its picture's lighter half (a
+  quarter of the ram's, half of it horn) brought to that colour and every pixel drawn halfway to
+  bone's hue as light as it is, so its light and shade, stains and horn stay darker. A model that's a set (three candleholders, a heap of rocks, skulls and bones) is
   a prop for each thing in it, one file between them. The level's built with them placed
   (`dungeon`'s `props`: in metres, each `x`, `z`, its `size`, `fit` or `scale`, its `turn`, `pitch`
   and `roll`, `on` what it stands on, its `tint`, whether it casts a `shadow`), and they're added

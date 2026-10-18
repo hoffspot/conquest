@@ -86,6 +86,20 @@ export function readKtx2With(renderer, transcoder) {
     loader.setKTX2Loader(ktx2);
 }
 
+/** Whether KTX2 pictures can be read (readKtx2With's been said). */
+export function readsKtx2() {
+    return ktx2 !== null;
+}
+
+/**
+ * A KTX2 picture's texture, read from its file's bytes (an ArrayBuffer, handed on to the
+ * transcoder's worker: it's emptied): a CompressedTexture, its mipmaps in it, as the graphics
+ * card takes it. Rejected if KTX2 pictures can't be read yet (readKtx2With).
+ */
+export function readKtx2(bytes) {
+    return ktx2 ? new Promise((resolve, reject) => ktx2.parse(bytes, resolve, reject)) : Promise.reject(new Error("KTX2 pictures can't be read before readKtx2With"));
+}
+
 /** A copy of the model in a glTF file, with materials the art's lights work with. */
 export async function loadModel(url) {
     if (!loaded.has(url)) {

@@ -11,7 +11,9 @@
 // horizon: far/far.js), with a camera of its own that sees from FAR.from metres to the far land's
 // edge; then, its depths forgotten, everything near, with the camera that sees to FAR.nearFar
 // metres. What's near fades out before that (fog.js), but the ground, which goes on into the far
-// land; and the haze thickens the further off, to all but gone at the far land's edge.
+// land; and the haze thickens the further off, to all but gone at the far land's edge. Indoors
+// it's drawn once, by the near camera seeing only to just past where the fog's thickest
+// (INDOORS.clip).
 
 import * as THREE from "three";
 import { daylight } from "../core/daytime.js";
@@ -239,7 +241,9 @@ const OUTDOORS = Object.freeze({ background: SKY, fog: [55, 130], haze: 20, sun:
 // (Outdoors as it is with no land's look: look.js Look's form, sRGB colours 0 to 1)
 const srgbOf = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255].map((byte) => byte / 255);
 const PLAIN = Object.freeze({ zenith: srgbOf(SKY_COLOURS.zenith), horizon: srgbOf(SKY), sun: srgbOf(OUTDOORS.sun[0]), strength: OUTDOORS.sun[1], mist: [0, 0, 20], grade: [0, 0, 0, 0] });
-const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], sun: [0xffecd0, 4], sunFrom: [0.25, 1, 0.35], environment: 0.55 });
+// (Indoors nothing's drawn further off than `clip` metres past where the fog's thickest, where
+// all is the fog's colour: a dungeon's rock and what's in it beyond that isn't drawn at all)
+const INDOORS = Object.freeze({ background: 0x140e0a, fog: [16, 38], clip: 4, sun: [0xffecd0, 4], sunFrom: [0.25, 1, 0.35], environment: 0.55 });
 const LAMPS = 2;
 
 /**
@@ -1163,6 +1167,9 @@ export class View {
         } else {
             this.#haze();
         }
+
+        this.camera.far = interior ? look.fog[1] + look.clip : FAR.nearFar;
+        this.camera.updateProjectionMatrix();
 
         this.sun.color.set(look.sun[0]);
         this.sun.intensity = look.sun[1];

@@ -635,11 +635,12 @@ client/                 The game (static files served to the browser)
   models/dungeons/      The scanned and modelled things a dungeon's furnished and dressed with
                         (furniture, barrels, crates, tableware, tools and arms, statues, rocks,
                         logs, skulls and bones, a cart, a sarcophagus, urns), each a GLB with its
-                        colour picture and normal map (made by npm run build:props from Poly
-                        Haven's, OpenGameArt's and museums' CC0 models and makers' CC BY ones)
+                        colour picture and normal map in it as KTX2 (made by npm run build:props
+                        from Poly Haven's, OpenGameArt's and museums' CC0 models and makers' CC BY
+                        ones)
   textures/dungeons/    The photographs a dungeon's rock, earth, stone and timber are drawn with,
-                        each a colour picture and a normal map (made by npm run build:textures
-                        from ambientCG's and Poly Haven's CC0 scans)
+                        each a colour picture and a normal map, as KTX2 (made by npm run
+                        build:textures from ambientCG's and Poly Haven's CC0 scans)
   models/kaykit/        KayKit Medieval Hexagon models (CC0), no longer used by the game (its props
                         are its own now), kept for serving glTF
   fonts/                UnifrakturMaguntia, the blackletter of the tavern's signs (SIL OFL)
