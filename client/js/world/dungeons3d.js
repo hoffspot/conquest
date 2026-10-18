@@ -217,7 +217,8 @@ const FACES = [
 
 /**
  * Boxes drawn with one of the pictures (ROCK_PICTURES), each its own shade of the colour it's
- * given (a temple's walls and floor, a hideout's timbers): metres, as the level's laid out.
+ * given (a temple's walls and floor, a hideout's timbers; polished, if `wet`: the Pit's): metres,
+ * as the level's laid out.
  */
 export class Blocks {
     constructor() {
@@ -265,7 +266,7 @@ export class Blocks {
      * The boxes as a mesh drawn with a picture (ROCK_PICTURES' name) in `colour` (a hex colour;
      * the picture's own, if none), or null if there are none.
      */
-    mesh(picture, colour = null, name = picture) {
+    mesh(picture, colour = null, name = picture, { wet = false } = {}) {
         if (!this.indices.length) {
             return null;
         }
@@ -280,7 +281,7 @@ export class Blocks {
         geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
         geometry.setIndex(this.positions.length / 3 > 65535 ? new THREE.Uint32BufferAttribute(this.indices, 1) : new THREE.Uint16BufferAttribute(this.indices, 1));
 
-        const result = new THREE.Mesh(geometry, rockMaterial(picture));
+        const result = new THREE.Mesh(geometry, rockMaterial(picture, { wet }));
 
         result.name = name;
         // (A floor casts no shadow on anything)

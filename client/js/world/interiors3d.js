@@ -44,6 +44,7 @@ import { Blocks, furnish, lifeMaterial, loadProp, ROCK_PICTURES, rockMaterial } 
 import { colonyAt, glowOf, threadsOn } from "./glowfungus.js";
 import { awayFromPools, brimstoneTone, embersOn, LAKES, LAVA, lakeGeometry, lakeLights, lakesOf, lavaGlowOn, lavaMaterial, poolGeometries, poolLight, poolShape } from "./lava.js";
 import { bloodGeometry, fleshTone, heartLight, heartMaterial, heartParts, ribGeometry, ribPaths, veinsOn } from "./flesh.js";
+import { PIT, sigilGeometry, sigilMaterial, throneParts } from "./pit.js";
 import { blockAt, bonesAt, clutterAt, fallenScene, hashOf, middenGearAt, onTable, remainsAt, seatsAt, shelvesAt, sideTableAt, standAt, strewnAt, vesselsAt, workbenchAt } from "./dungeondressing.js";
 import { broodIn, cocoonGeometry, eggGeometry, heapGeometry, heapHeightAt, heapOf, larvaGeometry, NEST_LIFE, pupaGeometry, randomOf, rootsUnder, webAround } from "./nestlife.js";
 
@@ -219,6 +220,10 @@ function material(asked, how = {}) {
             result = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
             result.name = name;
             result.userData.veil = name === "portal-veil" ? "guild" : "hell";
+        } else if (name === "pit-rune") {
+            // (The runes cut in the lord's throne, glowing his colour: pit.js)
+            result = new THREE.MeshBasicMaterial({ color: new THREE.Color(...PIT.sigils.colour), toneMapped: false });
+            result.name = name;
         } else if (name === "portal-rune" || name === "portal-rune-hell") {
             // (The runes round a portal, glowing: a hell's like coals)
             result = new THREE.MeshBasicMaterial({ color: name === "portal-rune" ? 0xb8e6ff : 0xff6a2a, toneMapped: false });
@@ -662,6 +667,8 @@ const FLAMES = Object.freeze({
     // (The rift torn open over the Breach's altar: a hell's portal's light, wilder, the room's
     // master stood in it)
     rift: { intensity: 4.2, distance: 10, flicker: 0.1, colour: 0xff5020, glow: 0.7 },
+    // (The lord of the Pit's throne: his own colour, violet, all but steady)
+    lord: { intensity: 2.6, distance: 9, flicker: 0.03, colour: 0x9a48ff, glow: 0.55 },
 });
 
 /**
@@ -3556,7 +3563,9 @@ function towerTop(map) {
 // look, breachRift); whether it's the Halls of Bone's flesh (`veins`: veins of blood beating in it,
 // `wet`: glistening, `ribs`: bone ribs rising out of it and arching over: flesh.js); and whether
 // its ground's lava (`lakes`: its "~" lakes, the floor sinking into them: lava.js lakesOf), embers
-// in its rock's cracks (`embers`). A hell's levels' ways down and out are portals where other dungeons' are
+// in its rock's cracks (`embers`); and the Pit's: polished (`wet`, its walls and floor too), its
+// throne the lord's (`throne`: lordThrone), its statues the dread ones only (`statues`), sigils
+// inlaid in its floor (`sigils`: pit.js). A hell's levels' ways down and out are portals where other dungeons' are
 // stairs (the level's `dungeon.portals`: riftPortal); its pools of lava, wherever its plan has
 // them (lava.js)
 const DUNGEON_LOOKS = Object.freeze({
@@ -3589,12 +3598,12 @@ const DUNGEON_LOOKS = Object.freeze({
     // SHELLS.flesh, flesh.js), veins of blood beating in it, bone ribs arching over, blood pooled on
     // its near-black floor, the heart in its last room, lit by the player's pale light; the River
     // of Fire, black basalt, its caverns lakes of lava, embers in its rock and thick in its hot air,
-    // the Hellforge in its last room;
-    // and the Pit, its walls dark as dried blood, its air close and black)
+    // the Hellforge in its last room; and the Pit, polished black stone, sigils glowing violet in
+    // its floor, the lord's horned throne, its lava a rim, its air close and black)
     "hell-breach": { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x5c4a42, ground: 0x4a3a32, air: { background: 0x140806, fog: [10, 36], mist: [0.07, 1.2] }, carried: { colour: 0xffb07a, intensity: 3, distance: 9, up: 1.2 }, motes: "embers", brimstone: true, rift: "rift" },
     "hell-bone": { rock: "stone-old", shell: "flesh", picture: "earth-nest", underfoot: "ground-dug", rubble: "rock", tint: 0x5a1e1c, ground: 0x221614, air: { background: 0x120606, fog: [9, 34], mist: [0.08, 1] }, carried: { colour: 0xdcd2c4, intensity: 2.2, distance: 8, up: 1.2 }, veins: true, wet: true, ribs: true },
     "hell-fire": { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x3c3230, ground: 0x2e2422, air: { background: 0x1e0804, fog: [12, 40], mist: [0.05, 1.4] }, carried: { colour: 0xffa060, intensity: 2.6, distance: 8, up: 1.2 }, motes: "embers", lakes: true, embers: true },
-    "hell-pit": { walls: "stone-old", tall: 4.6, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple", tint: 0x6a4644, ground: 0x3a2826, air: { background: 0x0a0404, fog: [8, 30], mist: [0.1, 0.9] } },
+    "hell-pit": { walls: "stone-old", tall: 4.6, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple", tint: 0x2a1c26, ground: 0x161016, air: { background: 0x0a0404, fog: [7, 26], mist: [0.1, 0.9] }, wet: true, throne: "lord", statues: "dread", sigils: true },
 });
 
 // A flight of a dungeon's stairs: how many steps, how far each goes up or down, and how deep the
@@ -3795,6 +3804,78 @@ function riftPortal(solid, map, piece, stuff, { down }) {
     const [gx, gz] = [m(cx + out[0] * 0.2), m(cz + out[1] * 0.2)];
 
     lit("portal-hell", gx, spring - m(0.3), gz, { glows: [[gx, spring - m(0.3), gz]] });
+}
+
+// The lord of the Pit's throne (pit.js throneParts: black stone, horned, its runes glowing his
+// colour), its middle at (x, z) (level metres), facing `facing` (radians, from +z towards +x), and
+// his light over it; into `solid` (art pixels)
+function lordThrone(solid, x, z, facing) {
+    const { boxes, horns } = throneParts();
+    const group = new THREE.Group();
+
+    for (const { at: [x0, y0, z0, x1, y1, z1], stuff } of boxes) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(m(x1 - x0), m(y1 - y0), m(z1 - z0)), material(stuff === "rune" ? "pit-rune" : "iron-black"));
+
+        mesh.position.set(m((x0 + x1) / 2), m((y0 + y1) / 2), m((z0 + z1) / 2));
+        group.add(mesh);
+    }
+
+    for (const { base, tip, radius } of horns) {
+        const way = new THREE.Vector3(...tip).sub(new THREE.Vector3(...base));
+        const geometry = new THREE.ConeGeometry(m(radius), m(way.length()), 8).translate(0, m(way.length()) / 2, 0);
+        const horn = new THREE.Mesh(geometry, material("iron-black"));
+
+        horn.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), way.normalize());
+        horn.position.set(m(base[0]), m(base[1]), m(base[2]));
+        group.add(horn);
+    }
+
+    group.rotation.y = facing;
+    group.position.set(m(x), 0, m(z));
+    group.updateMatrixWorld(true);
+
+    const flat = new THREE.Group();
+
+    for (const part of group.children) {
+        part.geometry.applyMatrix4(part.matrixWorld);
+        flat.add(new THREE.Mesh(part.geometry, part.material));
+    }
+
+    flat.updateMatrixWorld(true);
+    solid.add(objectSolid(flat));
+    lit("lord", m(x), m(2.6), m(z));
+}
+
+// The Pit's sigils inlaid in its floor (its look's `sigils`: pit.js), every one in one mesh: a
+// seal in the middle of each of its halls, and the great pentagram before the lord's throne; in
+// level metres
+function sigilsDrawn(map) {
+    const halls = new Set(["vestibule", "hypostyle", "gallery", "rotunda", "chapel", "stairhall"]);
+    const sigils = (map.dungeon?.rooms ?? []).filter(({ kind }) => halls.has(kind)).map(({ centre: [cx, cy] }) => sigilGeometry("seal", cx + 0.5, cy + 0.5, PIT.seal.radius));
+
+    for (const throne of map.pieces.filter(({ kind }) => kind === "throne")) {
+        const [dx, dy] = rockBeside(map, throne.x, throne.y) ?? [0, -1];
+        const [x, z] = [throne.x + 0.5 - dx * PIT.pentagram.out, throne.y + 0.5 - dy * PIT.pentagram.out];
+
+        sigils.push(sigilGeometry("pentagram", x, z, PIT.pentagram.radius, Math.atan2(-dy, -dx) + Math.PI / 2));
+    }
+
+    if (!sigils.length) {
+        return null;
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    const offsets = sigils.reduce((list, each) => [...list, list.at(-1) + each.positions.length / 3], [0]);
+
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(sigils.flatMap(({ positions }) => positions), 3));
+    geometry.setIndex(sigils.flatMap(({ indices }, k) => indices.map((index) => index + offsets[k])));
+
+    const mesh = new THREE.Mesh(geometry, sigilMaterial());
+
+    mesh.name = "sigils";
+    mesh.userData.shadowless = true;
+
+    return mesh;
 }
 
 // The Hellforge, in the River of Fire's last room, where the Forge Beast waits by the portal down
@@ -4524,9 +4605,15 @@ function dungeon(map) {
                 break;
             }
             case "throne": {
-                // (The chief's: a tall carved chair, its back to the rock)
                 const back = rockBeside(map, piece.x, piece.y) ?? [0, -1];
 
+                // (The lord of the Pit's: pit.js)
+                if (look.throne === "lord") {
+                    lordThrone(solid, x / M, z / M, facingFrom(back));
+                    break;
+                }
+
+                // (The chief's: a tall carved chair, its back to the rock)
                 props.push({ model: "chair-gothic", x: x / M, z: z / M, size: 1.9, turn: facingFrom(back) });
 
                 // (A sheepskin before it)
@@ -4535,7 +4622,8 @@ function dungeon(map) {
             }
             case "statue": {
                 const turn = facingFrom(rockBeside(map, piece.x, piece.y) ?? [0, -1]);
-                const which = hashOf(piece.x, piece.y, 7);
+                // (The Pit's only the cloaked figures and the winged beasts: its look's `statues`)
+                const which = look.statues === "dread" ? 0.38 + hashOf(piece.x, piece.y, 7) * 0.38 : hashOf(piece.x, piece.y, 7);
 
                 if (which < 0.38) {
                     props.push(bustOnPedestal(walls, x / M, z / M, { high: 1.2, size: 0.95, turn }));
@@ -4732,7 +4820,7 @@ function dungeon(map) {
         }
     }
 
-    const blocks = [walls.mesh(look.picture, look.tint ?? null, "walls"), floor.mesh(look.underfoot, look.ground ?? null, "floor"), timber.mesh("timber", 0x8a7a66, "timbers"), pools.length ? poolsDrawn(pools, look) : null, lakes?.regions.length ? lakesDrawn(lakes) : null, basins.length ? basinsDrawn(basins, mouths) : null, bloodDrawn(at("blood"))].filter(Boolean);
+    const blocks = [walls.mesh(look.picture, look.tint ?? null, "walls", { wet: Boolean(look.wet) }), floor.mesh(look.underfoot, look.ground ?? null, "floor", { wet: Boolean(look.wet) }), timber.mesh("timber", 0x8a7a66, "timbers"), look.sigils ? sigilsDrawn(map) : null, pools.length ? poolsDrawn(pools, look) : null, lakes?.regions.length ? lakesDrawn(lakes) : null, basins.length ? basinsDrawn(basins, mouths) : null, bloodDrawn(at("blood"))].filter(Boolean);
 
     // (What's set about a piece and come out over the rock left out: a lantern by a bedroll in a
     // corner)
