@@ -141,6 +141,7 @@ const ABOUT = {
     wightLord: ["Wight lord", "Ruined castles: for the mightiest"],
     frostTroll: ["Frost troll", "The snows: for the mightiest", "hammer"],
     demonLord: ["Demon lord", "A hell's throne, at the bottom of its pit"],
+    fiend: ["Fiend", "A hell's every level, in packs: the more of them the deeper down"],
 };
 
 // --- The scene ---
@@ -1248,6 +1249,7 @@ const groups = [
     ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "knucker", "hodmedod", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "hart", "kelpie", "caveSpider", "shadowStalker", "olm", "centipede", "basilisk", "draugr", "mare", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "spittingCobra", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "ahuizotl", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock", "chimera"]],
     ["The restless dead", ["ghost", "wraith"]],
     ["The ants' nests", ["ant", "greatCentipede", "dungeonSpider", "eliteDungeonSpider", "giantCockroach", "dungeonWasp", "dungeonScorpion", "blackWidow", "antMonster"]],
+    ["The hells", ["fiend"]],
     ["For the mightiest", ["dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "cultLeader", "demonLord"]],
 ];
 

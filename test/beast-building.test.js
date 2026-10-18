@@ -22,7 +22,7 @@ const context = () =>
 
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
-const { BeastAvatar, BUILDERS, drawnAsBeast, dressingCreature } = await import("../client/js/beasts/beast.js");
+const { BeastAvatar, BUILDERS, drawnAsBeast, dressingCreature, skinOf } = await import("../client/js/beasts/beast.js");
 const { forgetModels, holdModel, releaseModel, useModel } = await import("../client/js/beasts/model.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
 const { fold, forget, kept, LINGER, sculpting } = await import("../client/js/beasts/sculpt.js");
@@ -136,6 +136,20 @@ describe("creatures built a step at a time (sculpt.js, beast.js)", () => {
         releaseModel("demonLord", 0);
         forgetModels(1e9, 1000);
         assert.equal(drawnAsBeast("demonLord"), false);
+    });
+
+    it("draws a hell's fiend as a character till its model's read, then from the model, in one of its three skins by its seed", () => {
+        assert.equal(drawnAsBeast("fiend"), false);
+        useModel("fiend", { scene: new Group(), animations: [] });
+        assert.equal(drawnAsBeast("fiend"), true);
+
+        // (A pack of them in all three: its own red, pale and ash)
+        assert.deepEqual(new Set(Array.from({ length: 12 }, (_, seed) => skinOf("fiend", seed + 1))), new Set(["", "pale", "ash"]));
+
+        holdModel("fiend");
+        releaseModel("fiend", 0);
+        forgetModels(1e9, 1000);
+        assert.equal(drawnAsBeast("fiend"), false);
     });
 
     it("lets any other error through, and makes what's wanted there and then after", () => {
