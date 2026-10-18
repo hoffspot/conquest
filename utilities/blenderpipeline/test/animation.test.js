@@ -6,7 +6,7 @@ import { Quaternion, Vector3 } from "three";
 import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices, worldMatrix } from "../lib/animation.js";
 import { eased, inventClip } from "../lib/invent.js";
 import { decodeImage, encodeImage, shrinkImage, textureUses } from "../lib/ktx2.js";
-import { mendTangents, packLod, restFromClip, thinKeys, trimStill } from "../lib/optimize.js";
+import { inventClips, mendTangents, packLod, restFromClip, thinKeys, trimStill } from "../lib/optimize.js";
 import { moveDocument, scaleDocument } from "../lib/transform.js";
 import { near, skinnedDocument, vertices } from "./helpers.js";
 
@@ -309,6 +309,20 @@ describe("clips made up from others", () => {
         // half; turned about its axes where the stretch starts, standing up, it swings round level)
         assert.ok(near(tip(document, laid, 1).y, 0.5, 1e-3));
         assert.ok(near(tip(document, turned, 1).y, 0, 1e-3));
+    });
+
+    it("makes one in the place of the clip of its name it's made from, and no other of a name there is", () => {
+        const document = skinnedDocument();
+        const made = inventClips(document, [{ name: "Wave", from: "Wave", layers: [{ bone: "root", move: [[0, [0, 0, 0]], [1, [0, 0, 1]]] }] }]);
+        const waves = document
+            .getRoot()
+            .listAnimations()
+            .filter((animation) => animation.getName() === "Wave");
+
+        assert.deepEqual(made, [{ name: "Wave", from: "Wave" }]);
+        assert.equal(waves.length, 1);
+        assert.ok(near(sampleChannel(channelsByNode(waves[0]).get(document.getRoot().listNodes().find((node) => node.getName() === "root")).translation, 1), [0, 0, 1]));
+        assert.throws(() => inventClips(document, [{ name: "Walk", from: "Wave", layers: [] }]), /clips.invent Walk: there's a clip Walk already/);
     });
 
     it("says which clip or bone isn't there", () => {

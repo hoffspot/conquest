@@ -12,6 +12,7 @@ import { findBlender, HERE } from "../lib/blender.js";
 import { loadConfig, loadConfigs } from "../lib/config.js";
 import { createIO } from "../lib/gltf.js";
 import { decodeImage } from "../lib/ktx2.js";
+import { figureDocument } from "./helpers.js";
 
 const blender = findBlender();
 const work = mkdtempSync(path.join(os.tmpdir(), "blenderpipeline-test-"));
@@ -387,6 +388,42 @@ describe("a skeleton made to copy a control rig (muteConstraints)", () => {
     });
 });
 
+describe("clips from another skeleton's file (retarget), and a bone's vertices given to another (reweight)", () => {
+    // (A stick figure's, written as a GLB with four of its bones named as the creature's: its arm,
+    // raised, is the creature's body; its legs the creature hasn't got)
+    it("plays the figure's raise on the creature, its head moved by its chest", async () => {
+        const figure = figureDocument({ clips: true, names: { hips: "root", spine: "tail", arm: "body", hand: "chest" } });
+        const from = path.join(work, "figure.glb");
+        const file = path.join(work, "retarget.json");
+        const out = path.join(work, "retarget");
+
+        writeFileSync(from, await (await createIO()).writeBinary(figure));
+        writeFileSync(file, JSON.stringify({ source: path.join(HERE, "fixtures", "udim-creature", "udim-creature.blend"), clips: { include: ["Idle"] }, retarget: [{ from, clips: { Raise: "Raising" } }], reweight: { head: "chest" }, textures: { atlasSize: 256 }, compress: "none", resample: 0 }));
+
+        const { report } = await buildAsset(loadConfig(file), { blender, out, log: () => {} });
+        const document = await (await createIO()).read(path.join(out, `${report.name}.glb`));
+        const raising = document
+            .getRoot()
+            .listAnimations()
+            .find((clip) => clip.getName() === "Raising");
+        const body = raising.listChannels().find((channel) => channel.getTargetNode().getName() === "body" && channel.getTargetPath() === "rotation");
+        const turns = body.getSampler().getOutput();
+        const [first, last] = [turns.getElement(0, []), turns.getElement(turns.getCount() - 1, [])];
+
+        assert.deepEqual(
+            report.clips.map((clip) => [clip.name, clip.from]),
+            [
+                ["Idle", null],
+                ["Raising", "figure.glb: Raise"],
+            ],
+        );
+        assert.deepEqual(report.exported.retargeted, [{ from: "figure.glb", bones: 4, hips: "root", scale: report.exported.retargeted[0].scale }]);
+        assert.ok(report.exported.verticesReweighted > 0);
+        assert.ok(near(2 * Math.acos(Math.min(1, Math.abs(first.reduce((sum, v, i) => sum + v * last[i], 0)))), Math.PI / 2, 1e-3), "the body turned a quarter as the figure's arm does");
+        assert.equal(raising.listChannels().filter((channel) => channel.getTargetPath() === "translation").length, 1);
+    });
+});
+
 describe("saying what's wrong", () => {
     const fails = async (raw, message) => {
         const file = path.join(work, "broken.json");
@@ -397,6 +434,13 @@ describe("saying what's wrong", () => {
     const fixture = path.join(HERE, "fixtures", "udim-creature", "udim-creature.blend");
 
     it("a .blend that isn't there", () => fails({ source: path.join(HERE, "nothing.blend") }, /no such file/));
+
+    it("a clip another skeleton's file hasn't got", async () => {
+        const from = path.join(work, "figure-to-fail.glb");
+
+        writeFileSync(from, await (await createIO()).writeBinary(figureDocument({ clips: true, names: { hips: "root", spine: "tail" } })));
+        await fails({ source: fixture, retarget: [{ from, clips: ["Run"] }] }, /retarget\[0\] \(figure-to-fail.glb\): its file has no clip Run \(it has Raise, Bob\)/);
+    });
 
     it("an action a file doesn't have", () => fails({ source: fixture, actions: [{ from: fixture.replace("creature.blend", "creature-extra.blend"), action: "Fly" }] }, /has no action Fly \(it has: Crawl, Idle, Look, Rear, Roar\)/));
 
