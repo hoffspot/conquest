@@ -1709,6 +1709,35 @@
                 }
             ]
         },
+        "beast-fiend": {
+            "tier": "demand",
+            "label": "The Fiend (Monster4, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/fiend.bin",
+                    "hash": "a576200042",
+                    "bytes": 3821552
+                }
+            ]
+        },
+        "beast-fiend-skins": {
+            "tier": "demand",
+            "label": "The Fiend's other skins: ember and ash (Monster4, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/fiend.ember.bin",
+                    "hash": "0355d9921b",
+                    "bytes": 175724
+                },
+                {
+                    "path": "models/beasts/fiend.ash.bin",
+                    "hash": "25f4cc4790",
+                    "bytes": 174108
+                }
+            ]
+        },
         "dungeon-earth-nest": {
             "tier": "demand",
             "label": "An ants' nest's dug earth, scored by their digging (Poly Haven excavated_soil_wall, CC0)",
