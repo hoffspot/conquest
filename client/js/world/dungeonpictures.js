@@ -12,4 +12,6 @@ export const DUNGEON_PICTURES = Object.freeze({
     "timber": { entry: "dungeon-timber", metres: 1.6, mean: [0.1208, 0.1009, 0.0793] },
     "stone-temple": { entry: "dungeon-stone-temple", metres: 2.4, mean: [0.0655, 0.0476, 0.0267] },
     "floor-temple": { entry: "dungeon-floor-temple", metres: 2.8, mean: [0.1897, 0.1723, 0.1427] },
+    "earth-nest": { entry: "dungeon-earth-nest", metres: 2, mean: [0.1244, 0.0619, 0.0198] },
+    "ground-nest": { entry: "dungeon-ground-nest", metres: 1.5, mean: [0.0917, 0.0337, 0.0136] },
 });

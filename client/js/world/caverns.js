@@ -20,15 +20,31 @@
 export const CAVERNS = Object.freeze({ step: 0.45, back: 0.2, hollow: 0.55, lean: 2.3, below: 0.8, tile: 16 });
 
 /**
- * Each kind of rock's way (by a look's `shell`): how much it bulges and hollows (`rough`, metres),
- * how far its walls lean in towards its roof (`lean`), how high its roof is over a tunnel (`low`)
- * and over a cavern's middle (`high`), how rough its roof is (`roof`), and how far across the open
- * ground has to be before its roof's at its highest (`span`).
+ * Each kind of rock's way (by a look's `shell`): how much it bulges and hollows (`rough`, metres;
+ * and below head height, `hollow`, CAVERNS' if it doesn't say), how far its walls lean in towards
+ * its roof (`lean`), how high its roof is over a tunnel (`low`) and over a cavern's middle
+ * (`high`), how rough its roof is (`roof`), how far across the open ground has to be before its
+ * roof's at its highest (`span`), how far its walls round over into its roof (`cove`, metres: 1.2
+ * if it doesn't say); and whether it's laid down in layers (`strata`: STRATA).
+ *
+ * An ants' nest's (`nest`) is dug earth: its chambers flat-roofed and low, the roof at its height
+ * soon in from the walls and level over the middle, the walls rounding tightly into it, smooth but
+ * for the layers of the earth, which run on level through it from one chamber to the next.
  */
 export const SHELLS = Object.freeze({
     caves: { rough: 0.55, lean: 0.35, low: 3.4, high: 6.2, roof: 0.7, span: 7 },
     dug: { rough: 0.2, lean: 0.12, low: 2.9, high: 3.5, roof: 0.18, span: 4 },
+    nest: { rough: 0.15, hollow: 0.25, lean: 0.3, low: 3.6, high: 4.6, roof: 0.3, span: 3, cove: 0.5, strata: true },
 });
+
+/**
+ * How a shell that's laid down in layers (`strata`) has them: as far apart as `period` (metres,
+ * each level its own), level across the level but for a gentle `dip` (metres a metre) and a little
+ * `warp` (metres, over `wide` metres), each layer's foot set back into the rock a `ledge` (metres)
+ * and a pale band of sand at it (`pale`: of the layer); the rock's bumps drawn out level, `drawn`
+ * times as wide as they're high.
+ */
+export const STRATA = Object.freeze({ period: [0.9, 1.4], dip: 0.06, warp: 0.25, wide: 9, ledge: 0.07, pale: 0.3, drawn: 2.5 });
 
 // How finely the open ground's edge is found (samples a metre), and how far it's smoothed
 // (metres): corners rounded as water and picks round them
@@ -67,6 +83,44 @@ function rough3(x, y, z, seed) {
 
 // The same over the ground (one plane of it)
 const rough2 = (x, z, seed) => rough3(x, 0.5, z, seed);
+
+// --- the earth's layers ---
+
+/**
+ * A level's layers (STRATA): `layer(x, y, z)`, how far up through them a point is (metres: its
+ * height, dipping gently one way across the level and warped a little, so a layer runs on through
+ * the rock from one room to the next), and `period`, how far apart they are. `seed`: the level's.
+ */
+export function layers(seed) {
+    const period = STRATA.period[0] + (STRATA.period[1] - STRATA.period[0]) * hash3(seed, 3, 5, 7);
+    const [a, b] = [hash3(seed, 11, 13, 17) * 2 - 1, hash3(seed, 19, 23, 29) * 2 - 1];
+
+    return {
+        period,
+        layer: (x, y, z) => y + (x * a + z * b) * STRATA.dip + (noise3(x / STRATA.wide, 0.5, z / STRATA.wide, seed + 31) * 2 - 1) * STRATA.warp,
+    };
+}
+
+/**
+ * The colour of the earth at a point of a layered shell's rock, as a tint over its own ([r, g, b],
+ * about 1 each): a band of pale sand at each layer's foot (`pale`, more of it the deeper the level:
+ * `depth`, 0 the top), orange where iron's stained it, a speckle of grit; and near the top of the
+ * top level's roof (`humus`, 0 to 1), the dark of the soil the meadow grows in.
+ */
+export function earthTone({ layer, period }, [x, y, z], seed, { depth = 0, humus = 0 } = {}) {
+    const t = (((layer(x, y, z) / period) % 1) + 1) % 1;
+    const pale = (1 - smoothstep(STRATA.pale * (1 + depth * 0.25), STRATA.pale * (1 + depth * 0.25) + 0.12, t)) * smoothstep(0, 0.06, t);
+    const iron = smoothstep(0.6, 0.78, noise3(x / 0.9, y / 0.45, z / 0.9, seed + 37));
+    const grit = (noise3(x * 2.7, y * 2.7, z * 2.7, seed + 41) - 0.5) * 0.18;
+    const tone = [1 + grit, 1 + grit, 1 + grit];
+    const mix = (into, by) => tone.forEach((value, c) => (tone[c] = value + (into[c] - value) * by));
+
+    mix([1.5, 1.38, 1.12], pale * 0.8);
+    mix([1.3, 0.92, 0.62], iron * 0.55);
+    mix([0.45, 0.36, 0.3], humus);
+
+    return tone;
+}
 
 // --- how far into the open ---
 
@@ -242,7 +296,11 @@ function smoothMin(a, b, k) {
  * over the ground the rock closes over that column (to a tenth of a metre; 0 in the rock).
  */
 export function cavernAt(open, shell, seed, least = null) {
-    const rough = Math.max(shell.rough, CAVERNS.hollow);
+    const hollow = shell.hollow ?? CAVERNS.hollow;
+    const rough = Math.max(shell.rough, hollow);
+    // (A layered shell's layers: a ledge at the foot of each, its bumps drawn out level)
+    const strata = shell.strata ? layers(seed) : null;
+    const drawn = strata ? STRATA.drawn : 1;
     let [cx, cz, d, top] = [0, 0, 0, 0];
 
     return {
@@ -270,11 +328,12 @@ export function cavernAt(open, shell, seed, least = null) {
                 return side;
             }
 
-            const bump = rough3(cx, y, cz, seed);
+            const bump = rough3(cx / drawn, y, cz / drawn, seed);
+            const ledge = strata ? ((((strata.layer(cx, y, cz) / strata.period) % 1) + 1) % 1) ** 2 * STRATA.ledge : 0;
             // (Below head height only ever further into the rock; above, either way)
-            const shaped = side + (wall > 0 ? bump * shell.rough : (bump * 0.5 + 0.5) * CAVERNS.hollow);
+            const shaped = side - ledge + (wall > 0 ? bump * shell.rough : (bump * 0.5 + 0.5) * hollow);
 
-            return smoothMin(shaped, over, 1.2);
+            return smoothMin(shaped, over, shell.cove ?? 1.2);
         },
         roof(x, z) {
             if (this.column(x, z) <= 0) {
@@ -428,7 +487,7 @@ export function* cavern(width, height, rock, shell, { seed = 1, least = null, ho
 
     const step = CAVERNS.step;
     const field = cavernAt(open, shell, seed, least);
-    const deepest = -CAVERNS.back - Math.max(shell.rough, CAVERNS.hollow) - step * 2;
+    const deepest = -CAVERNS.back - Math.max(shell.rough, shell.hollow ?? CAVERNS.hollow) - STRATA.ledge - step * 2;
     const [x0, z0] = [-1, -1];
     const y0 = -CAVERNS.below;
     const [nx, nz] = [Math.ceil((width + 2) / step) + 1, Math.ceil((height + 2) / step) + 1];

@@ -950,8 +950,8 @@ what it doesn't cover.
   (`client/models/kaykit/LICENSE.txt`): the town's props were these until the game built its own.
 - The dungeons' rock, earth, stone and timber are photographs scanned by ambientCG
   (<https://ambientcg.com>: Rock028, Ground022, Ground048) and Poly Haven
-  (<https://polyhaven.com>: quarry_wall, rough_wood, stone_brick_wall_001, large_grey_tiles),
-  CC0, made smaller by `scripts/build-textures.js`.
+  (<https://polyhaven.com>: quarry_wall, rough_wood, stone_brick_wall_001, large_grey_tiles,
+  excavated_soil_wall, red_mud_stones), CC0, made smaller by `scripts/build-textures.js`.
 - The dungeons' furniture and dressing, made simpler and smaller by `scripts/build-props.js`
   (each listed in `client/models/assets.json` with whose it is):
   - scanned or made by Poly Haven (<https://polyhaven.com>), CC0: its tables, stools, benches,

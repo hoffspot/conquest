@@ -365,10 +365,10 @@ export function fillLevel(dug, rooms, links, plan) {
 
         const pack = chooseFoe(seed, slot("pack", one.id), theme.packs, plan.tier, 1);
         const size = Math.min(6, random.int(...pack.size) + (index > 0 ? 1 : 0) + (one.area >= 150 ? 1 : 0));
-        // (Those that lurk under the roof, as near the room's middle as they'll go, where it's
-        // highest: creatures.js `lurk`)
+        // (Those that lurk under the roof, as near as they'll go to where it's highest, furthest
+        // from the rock, and never at its edge, where it comes down: creatures.js `lurk`)
         const lurk = pack.creatures.every((creature) => CREATURES[creature]?.lurk);
-        const spots = spotsIn(level, one, size, { ...(lurk ? { near: one.centre } : {}), doors: SPREAD.doors, fromDoors, random, ways: ways() });
+        const spots = spotsIn(level, one, size, { ...(lurk ? { first: openestFirst(level, one) } : {}), doors: SPREAD.doors, fromDoors, random, ways: ways() }).filter((at) => !lurk || clearOfRock((u, v) => level.grid.open(u, v), at) >= 1);
 
         if (!spots.length) {
             continue;
@@ -469,11 +469,12 @@ export function fillLevel(dug, rooms, links, plan) {
  * Up to `count` squares in a room for those in it to stand on: free, with ground all round, at
  * least SPREAD.apart rings from each other and `doors` from its ways in (relaxed if there aren't
  * enough), and ARRIVE_CLEAR rings from where anyone comes onto the level (`ways`: the squares
- * arrived on); nearest `near` first, or else in an order from `random`, else along the rows.
+ * arrived on); in the order `first` sorts them (a comparator of [x, y]s), or nearest `near` first,
+ * or else in an order from `random`, else along the rows.
  */
-export function spotsIn(level, room, count, { near = null, doors = SPREAD.doors, fromDoors, random = null, apart = SPREAD.apart, ways = [] }) {
+export function spotsIn(level, room, count, { near = null, first = null, doors = SPREAD.doors, fromDoors, random = null, apart = SPREAD.apart, ways = [] }) {
     const squares = room.cells.map((k) => [k % level.width, Math.floor(k / level.width)]);
-    const ordered = near ? squares.sort((a, b) => Math.max(Math.abs(a[0] - near[0]), Math.abs(a[1] - near[1])) - Math.max(Math.abs(b[0] - near[0]), Math.abs(b[1] - near[1])) || a[1] - b[1] || a[0] - b[0]) : random ? random.shuffle(squares) : squares;
+    const ordered = first ? squares.sort(first) : near ? squares.sort((a, b) => Math.max(Math.abs(a[0] - near[0]), Math.abs(a[1] - near[1])) - Math.max(Math.abs(b[0] - near[0]), Math.abs(b[1] - near[1])) || a[1] - b[1] || a[0] - b[0]) : random ? random.shuffle(squares) : squares;
     const picked = [];
 
     for (const [strict, keep] of [[true, doors], [false, Math.min(doors, 1)]]) {
@@ -494,6 +495,34 @@ export function spotsIn(level, room, count, { near = null, doors = SPREAD.doors,
     }
 
     return picked;
+}
+
+/**
+ * How far a square is from the rock round it (squares, eight ways: the rings round it that are all
+ * open ground, `open(x, y)` saying which is), up to `most`.
+ */
+export function clearOfRock(open, [x, y], most = 8) {
+    let d = 0;
+
+    for (let r = 1; r <= most; r++) {
+        for (let i = -r; i <= r; i++) {
+            if (![[x + i, y - r], [x + i, y + r], [x - r, y + i], [x + r, y + i]].every(([u, v]) => open(u, v))) {
+                return d;
+            }
+        }
+
+        d = r;
+    }
+
+    return d;
+}
+
+// A room's squares, those furthest from the rock first (where a cave's roof is highest), then
+// the nearest its middle (spotsIn's `first`)
+function openestFirst(level, room) {
+    const open = (u, v) => level.grid.open(u, v);
+
+    return (a, b) => clearOfRock(open, b) - clearOfRock(open, a) || Math.max(Math.abs(a[0] - room.centre[0]), Math.abs(a[1] - room.centre[1])) - Math.max(Math.abs(b[0] - room.centre[0]), Math.abs(b[1] - room.centre[1])) || a[1] - b[1] || a[0] - b[0];
 }
 
 // The stairs down: three squares long and two wide (`V`), dug into the wall of the room furthest

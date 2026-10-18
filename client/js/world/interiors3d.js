@@ -39,7 +39,7 @@ import { gather, roomLit } from "./roomlight.js";
 import { fireMaterials, FIRES, firesMesh } from "./fire.js";
 import { allAtOnce } from "../core/steps.js";
 import { WATER_DETAIL } from "./water.js";
-import { cavern, SHELLS, tiles } from "./caverns.js";
+import { cavern, earthTone, layers, SHELLS, tiles } from "./caverns.js";
 import { Blocks, furnish, loadProp, ROCK_PICTURES, rockMaterial } from "./dungeons3d.js";
 import { blockAt, bonesAt, clutterAt, hashOf, onTable, remainsAt, seatsAt, shelvesAt, sideTableAt, standAt, strewnAt, vesselsAt, workbenchAt } from "./dungeondressing.js";
 
@@ -3661,8 +3661,10 @@ const DUNGEON_LOOKS = Object.freeze({
     caves: { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x6f665c, ground: 0x5d554b },
     hideout: { rock: "rock", shell: "dug", picture: "rock-dug", underfoot: "ground-dug", rubble: "rock", shored: true, ground: 0x6e5440 },
     ancient: { walls: "stone-old", tall: 4.2, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple" },
-    // (An ants' nest: the caves' rock, its earth reddened, the ground the hideout's dug earth)
-    nest: { rock: "rock", shell: "caves", picture: "rock-cave", underfoot: "ground-dug", rubble: "rock", tint: 0x8a6448, ground: 0x6e4c34 },
+    // (An ants' nest: dug earth (caverns.js SHELLS.nest), scored by their digging, red clay in
+    // layers, pale sand at the foot of each, stained with iron, the meadow's dark soil at the top
+    // level's roof; underfoot trodden red earth, cracked and stony)
+    nest: { rock: "rock", shell: "nest", picture: "earth-nest", underfoot: "ground-nest", rubble: "rock", tint: 0x8a6448, ground: 0x6e4c34, earth: true },
 });
 
 // A flight of a dungeon's stairs: how many steps, how far each goes up or down, and how deep the
@@ -4349,8 +4351,14 @@ function* rockShell(map, look, shell) {
     const ups = map.pieces.filter((piece) => piece.kind === "stairs-up");
     const least = (x, z) => (ups.some((piece) => x > piece.x - 1 && x < piece.x + piece.w + 1 && z > piece.y - 1 && z < piece.y + piece.h + 1) ? FLIGHT.rise * FLIGHT.steps + 2.6 : 0);
     const hole = map.pieces.find((piece) => piece.kind === "stairs-down") ?? null;
-    const made = yield* cavern(map.width, map.height, rock, shell, { seed: [...map.id].reduce((hash, c) => Math.imul(hash, 31) + c.charCodeAt(0), 7), least, hole });
+    const seed = [...map.id].reduce((hash, c) => Math.imul(hash, 31) + c.charCodeAt(0), 7);
+    const made = yield* cavern(map.width, map.height, rock, shell, { seed, least, hole });
     const group = new THREE.Group();
+    // (Earth in layers, its own colour at each point: caverns.js earthTone; the top level's roof
+    // darkest, the meadow's soil over it)
+    const earth = look.earth && shell.strata ? layers(seed) : null;
+    const depth = map.dungeon?.level ?? 0;
+    const toneAt = (x, y, z) => earthTone(earth, [x, y, z], seed, { depth, humus: depth === 0 ? THREE.MathUtils.smoothstep(y, shell.low - 0.4, shell.high - 0.2) * 0.8 : 0 });
 
     // (Its points coloured as the theme has it, shaded as caverns.js has them, a tile at a time)
     const meshesOf = (surface, colour, picture, name) => {
@@ -4360,7 +4368,11 @@ function* rockShell(map, look, shell) {
             const geometry = new THREE.BufferGeometry();
             const colours = new Float32Array(shade.length * 3);
 
-            shade.forEach((each, k) => colours.set([tint.r * each, tint.g * each, tint.b * each], k * 3));
+            shade.forEach((each, k) => {
+                const tone = earth && name === "rock" ? toneAt(positions[k * 3], positions[k * 3 + 1], positions[k * 3 + 2]) : [1, 1, 1];
+
+                colours.set([tint.r * each * tone[0], tint.g * each * tone[1], tint.b * each * tone[2]], k * 3);
+            });
             geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
             geometry.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
             geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));

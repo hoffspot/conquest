@@ -9,13 +9,14 @@ import { before, describe, it } from "node:test";
 import { ASSETS } from "../client/js/app/assets.js";
 import { buildDungeon } from "../client/js/core/dungeons/build.js";
 import { allAtOnce } from "../client/js/core/steps.js";
-import { CAVERNS, cavern, cavernAt, cavernFloor, openness, SHELLS, tiles } from "../client/js/world/caverns.js";
+import { CAVERNS, cavern, cavernAt, cavernFloor, earthTone, layers, openness, SHELLS, STRATA, tiles } from "../client/js/world/caverns.js";
 import { DUNGEON_PICTURES } from "../client/js/world/dungeonpictures.js";
 
-// A level of a cave's and of an outlaws' hideout's (each the shell its look has)
+// A level of a cave's, an outlaws' hideout's and an ants' nest's (each the shell its look has)
 const LEVELS = [
     ["caves", "caves"],
     ["hideout", "dug"],
+    ["nest", "nest"],
 ].map(([theme, shell]) => {
     const level = buildDungeon({ seed: 3, theme, tier: 2 }).levels[0];
 
@@ -167,6 +168,36 @@ describe("a dungeon's rock as one surface (world/caverns.js)", () => {
                 }
             }
         }
+    });
+});
+
+describe("an ants' nest's earth, laid down in layers (world/caverns.js STRATA, earthTone)", () => {
+    const brightness = (tone) => tone[0] + tone[1] + tone[2];
+
+    it("has its layers as far apart as STRATA says, level but for a gentle dip, a pale band of sand at the foot of each", () => {
+        for (const seed of [3, 7, 11]) {
+            const earth = layers(seed);
+            // (Up a wall: as many pale bands as layers it passes through)
+            const tones = Array.from({ length: 400 }, (_, k) => brightness(earthTone(earth, [5, k * 0.01, 5], seed)));
+            const pale = tones.filter((value, k) => k > 0 && value > 3.6 && tones[k - 1] <= 3.6).length;
+
+            assert.ok(earth.period >= STRATA.period[0] && earth.period <= STRATA.period[1]);
+            assert.ok(Math.abs(pale - 4 / earth.period) <= 1.5, `${seed}: ${pale} pale bands in 4 m, a layer every ${earth.period.toFixed(2)} m`);
+
+            // (A layer runs on across the level: ten metres off, no more than its dip and warp
+            // higher or lower)
+            const drift = Math.abs(earth.layer(15, 1, 5) - earth.layer(5, 1, 5));
+
+            assert.ok(drift <= 10 * STRATA.dip + 2 * STRATA.warp, `${seed}: ${drift}`);
+        }
+    });
+
+    it("is paler and sandier the deeper the level, and darkest under the top level's roof, the meadow's soil over it", () => {
+        const earth = layers(5);
+        const mean = (options) => Array.from({ length: 300 }, (_, k) => brightness(earthTone(earth, [3 + (k % 7), k * 0.013, 4], 5, options))).reduce((a, b) => a + b) / 300;
+
+        assert.ok(mean({ depth: 2 }) > mean({ depth: 0 }));
+        assert.ok(mean({ humus: 1 }) < mean({}) * 0.6);
     });
 });
 

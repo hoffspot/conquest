@@ -11,11 +11,16 @@
 // - accretion (an outlaws' hideout): rooms dug one by one, each off one already dug down a short
 //   tunnel, then a few walls broken through where that saves a long way round (Brogue's way);
 // - axial (an ancient temple or tomb): halls one after another up a straight middle way, rooms off
-//   them either side, mirrored, then a breach or two where it's fallen in.
+//   them either side, mirrored, then a breach or two where it's fallen in;
+// - nest (an ants' nest): a gallery of steady width winding up from the mouth, each stretch of it
+//   a room of its own, and lobed chambers off it on short stalks like grapes, big near the
+//   surface and smaller and further apart deeper down, middens out at the edges near the top,
+//   larders in the middle and brood at the bottom, the queen's chamber at the gallery's far end.
 //
 // More can be added (registerLayout) and named by a theme (themes.js). Whole numbers and seeded
 // streams only: the same on every machine.
 
+import { cos, sin, sqrt, TAU } from "../exact.js";
 import { noise } from "../random.js";
 import { gabriel, loopsFor, spanningTree } from "./graph.js";
 import { EIGHT, FOUR, Grid } from "./grid.js";
@@ -614,10 +619,247 @@ export function axial({ width, height, rooms, arena, random }) {
     return { grid, count: placed.length, entryRoom: 0, goalRoom: arena || placed.length > 1 ? goalRoom : -1, kinds, entrance, loops, shapes: placed.map(({ shape }) => shape ?? "rect"), boxes: placed };
 }
 
-/** The ways a level can be dug, by name (a theme's `layout`): add more with registerLayout. */
-export const LAYOUTS = { caves, accretion, axial };
+// --- An ants' nest ---
 
-/** Add a way to dig a level (`dig({ width, height, rooms, arena, random })`, as `caves`'s). */
+/**
+ * How an ants' nest's levels are dug (nest), in squares (metres), by how deep a level is (`by`:
+ * the top level, those between, the bottom; a nest one level deep is all three at once): its
+ * gallery (how far round from its middle it's dug, `r`; how long each stretch of it that's a room of
+ * its own, `stretch`, a third of the level's rooms at most; how many bends it has on its way up the
+ * level, `bends`, fewer deeper, and how far across the level they swing, `swing`, of its width); the
+ * chambers off it (`apart`: how far along it from one to the next, alternately either side; `size`:
+ * how far round a chamber's middle is, with lobes round it as big as `lobe` of it, as far out as
+ * `out`; `neck`: how long the stalk it hangs off the gallery by); and the queen's chamber at the
+ * gallery's far end (`queen`: how far round, and its stalk).
+ */
+export const NEST = Object.freeze({
+    r: [2, 2.4],
+    stretch: [14, 18],
+    bends: [[3, 4], [2, 3], [2, 2]],
+    swing: [0.25, 0.18, 0.12],
+    apart: [[9, 12], [12, 16], [15, 20]],
+    size: [[4, 5.5], [3.5, 4.5], [3, 4]],
+    lobe: [0.5, 0.75],
+    out: [0.65, 0.9],
+    neck: [2, 4],
+    queen: { size: [7, 8], neck: [5, 7] },
+});
+
+// How far apart two points are (squares)
+const apart = (ax, ay, bx, by) => sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by));
+
+// A point on the Catmull-Rom spline through p0..p3, `t` of the way from p1 to p2
+const spline = (p0, p1, p2, p3, t) =>
+    [0, 1].map((c) => 0.5 * (2 * p1[c] + (p2[c] - p0[c]) * t + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * t * t + (3 * p1[c] - p0[c] - 3 * p2[c] + p3[c]) * t * t * t));
+
+// A chamber dug: a round `r` across its middle (in the room `id`) and `lobes` more round it, each
+// `lobe` of its size and `out` of it from its middle, at even turns from where it's started
+function digChamber(grid, [x, y], r, id, random, lobes) {
+    grid.digRound(x, y, r, id);
+
+    const start = random.range(0, TAU);
+
+    for (let k = 0; k < lobes; k++) {
+        const turn = start + (TAU * k) / lobes + random.range(-0.4, 0.4);
+        const out = r * random.range(...NEST.out);
+
+        grid.digRound(Math.round(x + cos(turn) * out), Math.round(y + sin(turn) * out), r * random.range(...NEST.lobe), id);
+    }
+}
+
+// A stalk dug straight from one point to another, `r` squares round, a passage
+function digNeck(grid, [ax, ay], [bx, by], r) {
+    const steps = Math.ceil(Math.max(Math.abs(bx - ax), Math.abs(by - ay)) * 2);
+
+    for (let k = 0; k <= steps; k++) {
+        grid.digRound(Math.round(ax + ((bx - ax) * k) / steps), Math.round(ay + ((by - ay) * k) / steps), r, -1);
+    }
+}
+
+// A gallery dug through `points` (a Catmull-Rom spline through them), `r` squares round, its width
+// a little wavering, in `stretches` rooms (their ids pushed onto `kinds`, each "gallery"), each as
+// near the same length as they'll go: its points along the way ([{ x, y, along }], along: squares
+// from its start)
+function digGallery(grid, points, r, kinds, stretches, random) {
+    const ends = [points[0], ...points, points.at(-1)];
+    const at = [];
+
+    for (let k = 1; k < ends.length - 2; k++) {
+        const [a, b] = [ends[k], ends[k + 1]];
+        const steps = Math.ceil((Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1])) * 2);
+
+        for (let s = 0; s < steps; s++) {
+            const [x, y] = spline(ends[k - 1], a, b, ends[k + 2], s / steps);
+
+            at.push({ x, y, along: at.length ? at.at(-1).along + apart(x, y, at.at(-1).x, at.at(-1).y) : 0 });
+        }
+    }
+
+    const first = kinds.length;
+    const wobble = random.seed() % 100000;
+    const total = at.at(-1).along || 1;
+
+    for (let k = 0; k < stretches; k++) {
+        kinds.push("gallery");
+    }
+
+    for (const { x, y, along } of at) {
+        const room = first + Math.min(stretches - 1, Math.floor((along / total) * stretches));
+
+        grid.digRound(Math.round(x), Math.round(y), r * (0.9 + noise(Math.round(x), Math.round(y), wobble, 6, 2) * 0.2), room);
+    }
+
+    return at;
+}
+
+/**
+ * An ants' nest's level: the mouth by the way in, a gallery winding up from it to the far side
+ * (each stretch a room), chambers off it (NEST), and on the bottom level (`arena`) the queen's
+ * chamber at its far end down a long stalk, a dead end; then, where that's too few rooms (the deeper
+ * levels' chambers further apart), a side gallery or two off it, out to the level's sides, with
+ * chambers of their own. `depth` and `levels`: which level of how many it is. Some `rooms` in all,
+ * give or take what fits.
+ */
+export function nest({ width, height, rooms, arena, random, depth = 0, levels = 1 }) {
+    const grid = new Grid(width, height);
+    const cx = Math.floor(width / 2);
+    const bottom = height - 1 - WAY_IN;
+    // (How deep it is: 0 the top, 1 between, 2 the bottom; a level of its own, the top's look with
+    // the bottom's brood)
+    const band = depth === 0 ? 0 : depth === levels - 1 ? 2 : 1;
+    const kinds = [];
+    const mouth = random.int(4, 5);
+    const r = random.range(...NEST.r);
+
+    grid.digRound(cx, bottom - mouth + 1, mouth, 0);
+    kinds.push("mouth");
+
+    // The gallery: from the mouth up to the far side, bending to and fro across the level, a third
+    // of the rooms at most
+    const queen = arena ? { size: random.range(...NEST.queen.size), neck: random.int(...NEST.queen.neck) } : null;
+    const top = queen ? Math.ceil(queen.size * 2 + queen.neck + r + 4) : random.int(8, 11);
+    const bends = random.int(...NEST.bends[band]);
+    const swing = width * NEST.swing[band];
+    const points = [[cx, bottom - mouth + 1]];
+
+    for (let k = 1; k <= bends; k++) {
+        const y = Math.round(bottom - mouth + 1 - ((bottom - mouth + 1 - top) * k) / bends);
+        const side = (k % 2 === 0 ? 1 : -1) * (random.chance(0.8) ? 1 : -1);
+
+        points.push([Math.max(r + 6, Math.min(width - r - 7, Math.round(cx + side * swing * random.range(0.5, 1)))), y]);
+    }
+
+    const length = points.slice(1).reduce((sum, [x, y], k) => sum + Math.abs(x - points[k][0]) + Math.abs(y - points[k][1]), 0);
+    const main = digGallery(grid, points, r, kinds, Math.max(2, Math.min(Math.floor(rooms / 3), Math.round(length / random.int(...NEST.stretch)))), random);
+    const galleries = [main];
+    const near = () => galleries.flat();
+
+    // The chambers off it, like grapes on stalks: alternately either side, as far apart as the
+    // level's depth has them, each where it's clear of the galleries and the others
+    const chambers = [];
+    const room = () => rooms - kinds.length - (queen ? 1 : 0);
+    const clear = (c, size) =>
+        grid.inside(Math.round(c[0]), Math.round(c[1]), Math.ceil(size * 1.6) + 2) &&
+        c[1] + size * 1.6 < bottom - 1 &&
+        (!queen || c[1] - size * 1.6 > queen.size * 2 + 6 || Math.abs(c[0] - main.at(-1).x) > queen.size * 2 + size * 1.6 + 4) &&
+        chambers.every((one) => apart(one.at[0], one.at[1], c[0], c[1]) >= (one.size + size) * 1.6 + 2) &&
+        near().every((p) => apart(p.x, p.y, c[0], c[1]) >= r + size * 1.5 + 1);
+    const grapes = (at, from) => {
+        let side = random.chance(0.5) ? 1 : -1;
+        let next = from;
+
+        for (let k = 1; k < at.length - 1 && room() > 0; k++) {
+            if (at[k].along < next) {
+                continue;
+            }
+
+            const [dx, dy] = [at[k + 1].x - at[k - 1].x, at[k + 1].y - at[k - 1].y];
+            const long = sqrt(dx * dx + dy * dy) || 1;
+            const size = random.range(...NEST.size[band]);
+            const neck = random.int(...NEST.neck);
+
+            for (const way of [side, -side]) {
+                const [nx, ny] = [(-dy / long) * way, (dx / long) * way];
+                const c = [at[k].x + nx * (r + neck + size), at[k].y + ny * (r + neck + size)];
+
+                if (clear(c, size)) {
+                    const id = kinds.length;
+
+                    kinds.push("chamber");
+                    chambers.push({ id, at: c, size, along: at[k].along / (at.at(-1).along || 1) });
+                    digChamber(grid, [Math.round(c[0]), Math.round(c[1])], size, id, random, size >= 4.5 ? random.int(3, 4) : random.int(2, 3));
+                    digNeck(grid, [at[k].x + nx * (r - 0.5), at[k].y + ny * (r - 0.5)], [c[0] - nx * (size - 0.5), c[1] - ny * (size - 0.5)], random.range(1.2, 1.5));
+                    side = -way;
+                    next = at[k].along + random.int(...NEST.apart[band]);
+                    break;
+                }
+            }
+        }
+    };
+
+    grapes(main, random.int(...NEST.apart[band]) * 0.6);
+
+    // (Too few rooms: side galleries off the main one, out to whichever side of the level's the
+    // further, each with chambers of its own)
+    for (let tries = 0; tries < 4 && room() > 1; tries++) {
+        const from = main[Math.floor(main.length * random.range(0.2, 0.75))];
+        const out = from.x < cx ? 1 : -1;
+        const to = [out > 0 ? width - r - 8 : r + 7, Math.max(top, Math.min(bottom - 8, Math.round(from.y + random.int(-10, 10))))];
+
+        if (Math.abs(to[0] - from.x) < 16) {
+            continue;
+        }
+
+        const mid = [Math.round((from.x + to[0]) / 2), Math.round((from.y + to[1]) / 2 + random.int(-5, 5))];
+        const side = digGallery(grid, [[Math.round(from.x), Math.round(from.y)], mid, to], r, kinds, 1, random);
+
+        galleries.push(side);
+        grapes(side, r * 2 + 4);
+    }
+
+    // The queen's chamber, on the bottom level: past the gallery's far end, up a long stalk
+    let goalRoom = -1;
+
+    if (queen) {
+        const end = main.at(-1);
+        const c = [Math.round(end.x), Math.round(end.y - r - queen.neck - queen.size)];
+
+        goalRoom = kinds.length;
+        kinds.push("arena");
+        digChamber(grid, c, queen.size, goalRoom, random, random.int(3, 4));
+        digNeck(grid, [end.x, end.y - r + 0.5], [c[0], c[1] + queen.size - 0.5], 1.4);
+    }
+
+    // Each chamber's part by how deep it is and where it lies: middens out at the edges, kept to
+    // the upper levels; larders between; the brood deep down (a level of its own: the far half's)
+    const outward = [...chambers].sort((a, b) => Math.abs(b.at[0] - cx) - Math.abs(a.at[0] - cx) || a.id - b.id);
+    const middens = band === 0 ? Math.min(2, Math.floor(chambers.length / 3)) : band === 1 ? 1 : 0;
+
+    for (const one of chambers) {
+        const rank = outward.indexOf(one);
+
+        kinds[one.id] = rank < middens ? "midden" : one.size < NEST.size[band][0] + 0.3 ? "nook" : band === 2 || (levels === 1 && one.along > 0.55) ? "brood" : band === 1 || random.chance(0.6) ? "larder" : "nook";
+    }
+
+    smooth(grid, 1);
+
+    // A way round: a wall or two broken through where that saves a long walk (never into the
+    // queen's chamber, which stays a dead end)
+    const loops = breakThrough(grid, random, { count: random.int(1, 2), avoid: queen ? [goalRoom] : [], below: bottom });
+    const entrance = digWayIn(grid, bottom - 1);
+
+    grid.keepReachable([[cx - 1, height - 2]]);
+
+    return { grid, count: kinds.length, entryRoom: 0, goalRoom, kinds, entrance, loops };
+}
+
+/** The ways a level can be dug, by name (a theme's `layout`): add more with registerLayout. */
+export const LAYOUTS = { caves, accretion, axial, nest };
+
+/**
+ * Add a way to dig a level (`dig({ width, height, rooms, arena, random, depth, levels })`, as
+ * `caves`'s: `depth`, which level it is of how many, `levels`).
+ */
 export function registerLayout(name, dig) {
     LAYOUTS[name] = dig;
 }

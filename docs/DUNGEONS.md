@@ -26,7 +26,8 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
     bandits, their hounds, hired ogres and hedge priests;
   - **an ancient temple** (`ancient`): pillared halls up a straight middle way, rooms off them
     either side, mirrored; the dead, cultists, wraiths, serpents and scorpions;
-  - **an ants' nest** (`nest`): dug as the caves are, through reddened earth; giant ants in their
+  - **an ants' nest** (`nest`): dug as ants dig, a gallery winding up through layered earth with
+    chambers off it on short stalks, middens near the top and brood deep down; giant ants in their
     numbers, great centipedes in its deeper tunnels, packs of dungeon spiders each led by an elite
     dungeon spider, black widows hanging unseen under its galleries' roofs to drop on whoever passes
     beneath (a Widow matriarch among its mini-bosses), giant cockroaches at what the ants leave, dungeon wasps hovering in its
@@ -113,6 +114,27 @@ coming in arrives two steps off the landing or door, facing into the level. No o
   on the bottom level the sanctum. Rooms come off the halls either side, mirrored (shrines,
   ossuaries, cells), with a further cell up from some. Then comes a breach, a rough tunnel between
   two rooms on one side where the rock's broken in, or a wall broken through.
+- **`nest`** (an ants' nest, as real ones are dug: tunnels of near-steady width, flat-floored
+  chambers budding off them like grapes on short stalks, big near the surface and smaller and
+  further apart deeper down, refuse kept apart from brood; `NEST`):
+  - **its gallery**: from the mouth by the way in, up to the far side of the level, bending to and
+    fro across it (three or four bends on the top level, two deeper, and swinging less wide), 4 to
+    5 m across, its width wavering a little. It's cut into stretches of 14 to 18 m, each a room of
+    its own (a third of the level's rooms at most), so the way through runs from room to room.
+  - **its chambers**: off the gallery every 9 to 12 m on the top level, 12 to 16 m between, 15 to
+    20 m at the bottom, alternately either side, each where it's clear of the galleries and the
+    others: a round 4 to 5.5 m across its middle on the top level, 3.5 to 4.5 between, 3 to 4 at the
+    bottom, with two to four lobes round it, down a stalk 2 to 4 m long and 2.5 to 3 m wide (a
+    passage). Where that's too few rooms, a side gallery or two runs off the main one out to the
+    level's sides, with chambers of their own.
+  - **the queen's chamber**, on the bottom level: past the gallery's far end, up a stalk 5 to 7 m
+    long, 7 to 8 m round its middle with three or four lobes: a dead end.
+  - **what each chamber is** (its kind, which its look follows: `themes.js` `nest.rooms`): the one
+    or two out furthest to the level's sides middens on the top level, one between, none at the
+    bottom; the smallest nooks; the rest larders, but at the bottom (and in the far half of a nest
+    one level deep) brood.
+  - then smoothed once, so the lobes stay crisp, and one or two walls broken through where that
+    saves 25 m or more, never into the queen's chamber.
 
 ### What's put in (`place.js`)
 
@@ -269,9 +291,17 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
     trodden earth, its tunnels shored up with timber posts and caps every few squares;
   - an ancient temple: walls of dressed stone on a darker plinth under a cornice, flagstones, a
     vault over all;
-  - an ants' nest: the caves' rock as one surface, reddened as earth is, over dug earth; its
-    chambers strewn with what the ants have dragged in, the bones of what they've eaten, roots
-    through the earth (`dungeondressing.js` `CLUTTER.nest`, `STREWN`).
+  - an ants' nest: dug earth (`SHELLS.nest`): low, flat roofs (3.6 m over a gallery, 4.6 m over a
+    chamber's middle, at their height soon in from the walls), the walls smooth, leaning in a little
+    and rounding tightly into the roof. The earth's laid down in layers (`STRATA`): every 0.9 to
+    1.4 m up (each level its own), level across the level but for a gentle dip and a little warp,
+    so a layer runs on through the rock from one chamber to the next; each layer's foot set back a
+    few centimetres, the rock's bumps drawn out level. Its colour's the earth's (`earthTone`, on the
+    reddened clay of the look's tint): a band of pale sand at each layer's foot, more of it the
+    deeper the level, orange where iron's stained it, a speckle of grit, and the meadow's dark soil
+    under the top level's roof. Its chambers are strewn with what the ants have dragged in, the
+    bones of what they've eaten, roots through the earth (`dungeondressing.js` `CLUTTER.nest`,
+    `STREWN`).
 - **The rock as one surface** (`caverns.js`): how far into the open each point of the level is,
   from its plan's squares (a distance transform, a quarter of a metre at a time, its corners
   rounded), shapes walls and roof together, with noise for the rock's bulges; the surface is
@@ -283,9 +313,10 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
 - **Drawn with photographs** (`dungeons3d.js`, CC0, from ambientCG and Poly Haven, made by
   `npm run build:textures`): the rock, earth, stone, flagstones and timber each a colour picture
   and a normal map, laid over the surface from all three sides at once (triplanar: never
-  stretched however the rock turns), the picture's grain under the theme's own colour. They're
-  in the catalog (`client/models/assets.json`), downloaded only once a dungeon's wanted (about
-  2.6 MB in all); until they've come, the rock's drawn in its colours alone. Each is a KTX2,
+  stretched however the rock turns), the picture's grain under the theme's own colour; an ants'
+  nest's walls an excavated soil wall's, scored by digging, and its floor red mud and stones.
+  They're in the catalog (`client/models/assets.json`), downloaded only once a dungeon's wanted
+  (about 3.4 MB in all); until they've come, the rock's drawn in its colours alone. Each is a KTX2,
   which the graphics card keeps compressed (`scripts/lib/ktx2.js`): the colour ETC1S, the normal
   map UASTC (sharper, the rock being seen close to), each with its mipmaps, read by three.js's
   `KTX2Loader` (`art/engine/models.js` `readKtx2`). A picture and its normal map take about

@@ -53,6 +53,8 @@ export const PICTURES = {
     timber: { from: polyHaven("rough_wood"), of: "rough timber, its posts and beams", metres: 1.6 },
     "stone-temple": { from: polyHaven("stone_brick_wall_001"), of: "an ancient temple's dressed stone", metres: 2.4 },
     "floor-temple": { from: polyHaven("large_grey_tiles"), of: "an ancient temple's flagstones", metres: 2.8 },
+    "earth-nest": { from: polyHaven("excavated_soil_wall"), of: "an ants' nest's dug earth, scored by their digging", metres: 2 },
+    "ground-nest": { from: polyHaven("red_mud_stones"), of: "an ants' nest's trodden red earth, cracked and stony", metres: 1.5 },
 };
 
 const linear = (value) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);

@@ -23,7 +23,7 @@ export { dungeonName };
  * Bumped whenever what a seed makes changes (a dungeon saved with another is made again from its
  * seed as this one makes it, not mixed).
  */
-export const DUNGEON_VERSION = 6;
+export const DUNGEON_VERSION = 7;
 
 /** How likely a dungeon is to be one, two or three levels deep. */
 export const LEVEL_ODDS = Object.freeze({ 1: 3, 2: 4, 3: 3 });
@@ -91,7 +91,7 @@ export function buildDungeon({ seed, theme: themeId, tier = 1, levels = null, ge
             const width = size.side + random.int(-size.vary, size.vary);
             const height = size.side + random.int(-size.vary, size.vary);
             const wanted = random.int(...size.rooms);
-            const dug = dig({ width, height, rooms: wanted, arena: bottom, random });
+            const dug = dig({ width, height, rooms: wanted, arena: bottom, random, depth: index, levels: count });
             const level = finish(dug, {
                 index,
                 levels: count,
