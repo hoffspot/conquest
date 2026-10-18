@@ -252,7 +252,7 @@ in this repository, but in the private one the game's builds fetch it from
 
 Don't copy it out of this game or use it in anything else.
 
-## fiend.bin, fiend.ember.bin, fiend.ash.bin
+## fiend.bin, fiend.pale.bin, fiend.ash.bin
 
 **Monster4** (its Unreal Engine files: its skeletal mesh, its textures and its 25 animations,
 exported from Unreal Engine by this repository's owner), bought on **Fab** by this repository's
@@ -265,8 +265,8 @@ served scrambled as part of the game: the bought files put through `utilities/bl
 build. That's its mesh simplified to 20,952 triangles, with two lower details packed in (8,270
 and 3,834), its own skin's textures (colour, normal, and occlusion, roughness and metal) as
 1,024-pixel KTX2, and all 25 of its own clips: five attacks, two idles, walks every way, a run,
-two flinches, three deaths, a jump, a turn and five ways of flying. Its other two skins, ember and
-ash, are their colour textures alone (`fiend.ember.bin`, `fiend.ash.bin`).
+two flinches, three deaths, a jump, a turn and five ways of flying. Its other two skins, pale and
+ash, are their colour textures alone (`fiend.pale.bin`, `fiend.ash.bin`).
 
 It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
 in this repository, but in the private one the game's builds fetch it from
