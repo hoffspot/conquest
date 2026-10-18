@@ -30,7 +30,7 @@ import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, memberOf, menaces, outByDay, packOf, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
+import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, lairOf, memberOf, menaces, outByDay, packOf, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
 import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from "./insides.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -663,6 +663,8 @@ export const REFUSALS = Object.freeze({
     locked: "It's locked fast, and its guardians still hold the place.",
     sealed: "The portal won't let you through while this level's master still stands.",
     throne: "The way out stays shut while the lord of this place still stands.",
+    riteDay: "The portal stands cold and dark: whatever the cult calls through it, it calls after nightfall.",
+    rite: "The cult's rite holds the portal shut while its keepers still stand.",
     guarded: "It's locked fast, and those keeping it are still about.",
     kept: "It's locked fast, and the one who keeps it still stands.",
     unknown: "You haven't learnt that.",
@@ -1485,6 +1487,14 @@ export class Host {
                     return refuse(link.seal.refusal ?? "sealed");
                 }
 
+                // (A hell's way in from the wilds: only by night, and only once its cult's rite is
+                // broken)
+                const rite = this.#riteHolds(link, actor.map);
+
+                if (rite) {
+                    return refuse(rite);
+                }
+
                 // (Heading into a building: it's got ready now)
                 if (link.building) {
                     this.#openBuilding(link.building);
@@ -1760,7 +1770,10 @@ export class Host {
                 this.#fall(event.id, CORPSE_MS);
                 this.#spoils(event.id, beast);
 
-                if (beast.lair && beast.master) {
+                // (One of a rite's: broken once the last of them falls)
+                if (beast.lair && lairOf(this.#siteOf(beast.lair))?.night) {
+                    this.#riteFell(beast.lair);
+                } else if (beast.lair && beast.master) {
                     const heart = this.world.maps.town?.sites?.heartOf(this.#siteOf(beast.lair)) ?? this.#siteOf(beast.lair).at;
                     const lair = this.lairs.get(beast.lair);
 
@@ -6446,14 +6459,18 @@ export class Host {
     }
 
     // The perilous sites (a dragon's lair, the ruined castles) near a player: their master (unless
-    // slain lately) and its guards there; let go once every player's far
+    // slain lately) and its guards there; let go once every player's far. And the rites kept at the
+    // hells' ways in (RITES), the same way but only after dark: let go at daybreak, once no player's
+    // close by, and not held again the night they're slain to the last
     #lairs(places) {
         const near = (at, within) => places.some(([x, y]) => hypot(x - at[0], y - at[1]) < within);
+        const dark = this.#dark();
 
         for (const [id, held] of [...this.lairs]) {
             const site = this.#siteOf(id);
+            const lair = lairOf(site);
 
-            if (!near(site.at, LAIRS[site.kind].near * 2)) {
+            if (!near(site.at, lair.near * 2) || (lair.night && !dark && !near(site.at, lair.near / 3))) {
                 for (const each of [...held.ids]) {
                     if (!this.battle.actor(each)?.dead) {
                         this.#release(each);
@@ -6466,9 +6483,9 @@ export class Host {
         }
 
         for (const site of this.world.plan.sites) {
-            const lair = LAIRS[site.kind];
+            const lair = lairOf(site);
 
-            if (!lair || this.lairs.has(site.id) || !near(site.at, lair.near)) {
+            if (!lair || this.lairs.has(site.id) || !near(site.at, lair.near) || (lair.night && (!dark || this.#riteBroken(site.id)))) {
                 continue;
             }
 
@@ -6482,8 +6499,8 @@ export class Host {
             const cleared = this.war && place && holderOf(this.world.plan, place, this.war.places[site.id], this.war.turn) === "cleared";
 
             // (And, a lair that can be gone into, its hoard at the back of it: a chest, locked while
-            // its master lives)
-            const inside = this.#inside(site);
+            // its master lives; not a rite's, at the way into its hell, its faithful all without)
+            const inside = lair.night ? null : this.#inside(site);
             const hoard = inside?.chest ?? null;
 
             // (A master that keeps within, by its hoard: a ruined castle's wight lord in its keep)
@@ -6494,7 +6511,7 @@ export class Host {
             const side = this.#sideOn(inside?.maps ?? [], site.at, lair.near);
             const scale = side ? scalingOf(side.opposition) : null;
 
-            if ((this.slain[site.id] ?? -Infinity) <= this.battle.time && !cleared) {
+            if ((lair.night || (this.slain[site.id] ?? -Infinity) <= this.battle.time) && !cleared) {
                 ids.push(...this.#pack({ creature: master, tier, count: 1 }, keeps?.square ?? at, { lair: site.id, master: true, roam: 3, map: keeps?.map ?? "town", health: scale?.leader ?? 1 }));
 
                 if (hoard) {
@@ -6502,8 +6519,8 @@ export class Host {
                 }
             }
 
-            // (Its guards round its heart; half of each kind within with it, if it keeps within,
-            // each at a post of their own)
+            // (Its guards round its heart (a rite's round its ring, facing in); half of each kind
+            // within with it, if it keeps within, each at a post of their own)
             let post = 0;
 
             lair.guards.forEach(([creature, least, guardTier], k) => {
@@ -6528,6 +6545,46 @@ export class Host {
 
     #siteOf(id) {
         return this.world.plan.sites.find((site) => site.id === id);
+    }
+
+    // One of a rite's keepers fallen (RITES: a hell's way in's): once none of them stands, the rite's
+    // broken, its portal letting anyone through till daybreak (`enter`: #riteHolds), and it isn't
+    // held again before the next night (#lairs); told to those near. (Kept with the lairs' slain,
+    // but by the war's clock, as the night is: till the coming sunrise)
+    #riteFell(id) {
+        const held = this.lairs.get(id);
+
+        if (!held || this.#riteBroken(id) || held.ids.some((each) => this.battle.actor(each) && !this.battle.actor(each).dead)) {
+            return;
+        }
+
+        const now = elapsedOf(this.war);
+
+        this.slain[id] = now + untilTime(now, DAY.rises);
+        this.#event("dungeon", { site: id, change: "rite", name: this.#siteOf(id)?.name ?? null });
+    }
+
+    // Is a rite (RITES) broken tonight: its keepers slain to the last since sunset (#riteFell)?
+    #riteBroken(id) {
+        return (this.slain[id] ?? -Infinity) > elapsedOf(this.war);
+    }
+
+    // Why going in by a link from a map isn't let through, if it's a hell's way in from the wilds
+    // (RITES): by day its portal stands cold; by night, till every one of the cult keeping its rite
+    // is slain (#riteFell). Null if it's let through
+    #riteHolds(link, map) {
+        const building = link.building ? this.world.interiors?.buildings.get(link.building) : null;
+        const site = map === "town" && building?.site ? this.#siteOf(building.site) : null;
+
+        if (!site || !lairOf(site)?.night) {
+            return null;
+        }
+
+        if (!this.#dark()) {
+            return "riteDay";
+        }
+
+        return this.#riteBroken(site.id) ? null : "rite";
     }
 
     // Is a way on sealed against going through it from a map: a hell's portal (core/insides.js

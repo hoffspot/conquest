@@ -67,6 +67,7 @@ import { WorldRunner } from "../core/runner.js";
 import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
 import { peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
+import { cultNear, cultWays, cultWord } from "../core/cultword.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { RESOURCES, RISING, STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
@@ -122,6 +123,7 @@ import { buildTown } from "../world/town3d.js";
 import { prepareAtlas } from "../world/art/engine/atlas.js";
 import { buildInterior, buildingInterior, cutFor, INTERIOR_GLOW } from "../world/interiors3d.js";
 import { TREE_WIND } from "../world/art/kits/trees.js";
+import { VEIL } from "../world/veil.js";
 import { hitch } from "../world/art/kits/wagon.js";
 import { compassTurn, Minimap, treesOf } from "./minimap.js";
 import { CameraFollow } from "./camera.js";
@@ -445,6 +447,16 @@ const MODELLING = 2;
 // again (ms)
 const APPROACH = 150;
 const APPROACH_RETRY = 60000;
+
+// How near a hell's way in the player must be (metres, out in the world) to be told its cult's
+// rite is broken (#delved): as near as the rite's kept for (core/creatures.js RITES)
+const RITE_HEARD = 110;
+
+// Who's heard of the nearest hell's cult, and will say (#cultWords): those whose trade it is to
+// hear things, always; of the rest who'd say (dialogue.js: those asked "Anything strange out
+// there?"), one in so many
+const CULT_KNOW = new Set(["receptionist", "barkeep", "adventurer"]);
+const CULT_KNOWN = 2;
 
 // How far from the camera anyone with a crowd to be drawn in (the soldiers; the players' hired
 // adventurers and the wild's creatures: #thronging) is drawn in full at most (metres), however
@@ -2816,6 +2828,8 @@ export class Game {
 
         this.clock += dt;
         TREE_WIND.time.value = this.clock;
+        // (A hell's way in standing in the open swirling by the same clock as the veils indoors: veil.js)
+        VEIL.time.value = this.clock % VEIL.loop;
 
         // (The fortifications and the camps' stockades standing near the player drawn, a couple of
         // times a second, named in the debug log if that's slow; a stockade's mended stakes rising
@@ -3906,7 +3920,7 @@ export class Game {
         const creature = actor.wild.creature;
         const seed = this.#seedOf(actor);
         // (A bandit's, a chief's or a cultist's sex as its seed has it: humanoidLook)
-        const kind = ["bandit", "banditChief", "cultist"].includes(creature) && seed % 4 === 0 ? 4 : 1;
+        const kind = ["bandit", "banditChief", "cultist", "cultLeader"].includes(creature) && seed % 4 === 0 ? 4 : 1;
         const look = humanoidLook(creature, kind);
 
         return {
@@ -4569,12 +4583,24 @@ export class Game {
 
     // A dungeon's boss slain (or a hell's level's own, its portal down unsealed), or its hoard
     // opened (host.js #delveFell, #openDungeonChest): said to whoever's in it; its icon greyed once
-    // it's cleared, and made again (#remakeDungeon) back as it was, nothing said
+    // it's cleared, and made again (#remakeDungeon) back as it was, nothing said. A hell's cult's
+    // rite broken at its way in (host.js #riteFell): said to whoever's out there near it
     #delved({ site, change, name, boss = null }) {
         const me = this.battle.actor(this.me);
         const building = this.world.interiors?.buildings.get(`site:${site}`);
         const within = me && building?.maps.includes(me.map);
         const called = name ? `${name[0].toUpperCase()}${name.slice(1)}` : "The dungeon";
+
+        if (change === "rite") {
+            const at = this.world.plan?.sites.find((each) => each.id === site)?.at;
+
+            if (me?.map === "town" && at && Math.hypot(me.x - at[0], me.y - at[1]) < RITE_HEARD) {
+                this.hud.message("The last of the cult falls, and their rite is broken: the portal stands open till daybreak.", 4);
+                this.sound?.play("wake");
+            }
+
+            return;
+        }
 
         if (!within) {
             return;
@@ -5216,7 +5242,9 @@ export class Game {
             names.patronTitle = GODS[building.patron].title;
         }
 
-        Object.assign(names, soldier?.names, official?.words, this.#rumours(building ?? (out ? { place: out.place === this.world.start?.id ? "home" : out.place } : null)), this.#guildWords());
+        const heardAt = building ?? (out ? { place: out.place === this.world.start?.id ? "home" : out.place } : null);
+
+        Object.assign(names, soldier?.names, official?.words, this.#rumours(heardAt), this.#cultWords(heardAt, npc), this.#guildWords());
 
         // (An adventurer who could be hired, and for how much; a follower waiting or following)
         const one = folk.find(({ id }) => id === npc.id);
@@ -5255,19 +5283,21 @@ export class Game {
                       ? soldier?.stance === condition.stance
                       : "rumour" in condition
                         ? Boolean(names.rumour1) === condition.rumour
-                        : "hire" in condition
-                          ? Boolean(hire && company < this.host.mostFollowers(this.me)) === condition.hire
-                          : "purse" in condition
-                            ? (this.progress.gold >= (hire?.price ?? 0)) === condition.purse
-                            : "waiting" in condition
-                              ? Boolean(following?.waiting) === condition.waiting
-                              : "member" in condition
-                                ? (this.standing.guildRank() !== null) === condition.member
-                                : "special" in condition
-                                  ? Boolean(stock?.specialLeft) === condition.special
-                                : official
-                                  ? official.check(condition)
-                                  : true,
+                        : "hell" in condition
+                          ? Boolean(names.hellRumour) === condition.hell
+                          : "hire" in condition
+                            ? Boolean(hire && company < this.host.mostFollowers(this.me)) === condition.hire
+                            : "purse" in condition
+                              ? (this.progress.gold >= (hire?.price ?? 0)) === condition.purse
+                              : "waiting" in condition
+                                ? Boolean(following?.waiting) === condition.waiting
+                                : "member" in condition
+                                  ? (this.standing.guildRank() !== null) === condition.member
+                                  : "special" in condition
+                                    ? Boolean(stock?.specialLeft) === condition.special
+                                  : official
+                                    ? official.check(condition)
+                                    : true,
             memory: this.memory[npc.id],
             knowledge: this.knowledge,
             variety: this.talkVariety,
@@ -5338,6 +5368,24 @@ export class Game {
         const said = heard.length ? heard : [ruler];
 
         return { rumour1: said[0], rumour2: said[1] ?? said[0], rumour3: said[2] ?? said[0], rumourRuler: ruler ?? said[0] };
+    }
+
+    // What's said of the nearest hell's cult where the player's talking (core/cultword.js), as
+    // {hellRumour}: which way it is from the town, more of it the nearer; known to the guild's
+    // receptionists, the barkeeps and the adventurers, and to one in each CULT_KNOWN of the others
+    // who'd say (by who they are and which hell, so the same ones know it every time). None in a
+    // world with no hell, nor where it's heard of nowhere
+    #cultWords(building, npc) {
+        const place = building?.place === "home" ? this.world.start : this.world.plan?.places.find(({ id }) => id === building?.place);
+        const near = place && this.world.plan ? cultNear(this.world.plan, place.at) : null;
+        const role = this.world.interiors?.of(npc.map)?.folk?.find(({ id }) => id === npc.id)?.role ?? npc.role;
+        const knows = (salt) => [...`${npc.id}:${salt}`].reduce((sum, letter) => (sum * 31 + letter.charCodeAt(0)) >>> 0, 7) % CULT_KNOWN === 0;
+
+        if (!near || !(CULT_KNOW.has(role) || knows(near.site.id))) {
+            return {};
+        }
+
+        return { hellRumour: cultWord(near, place.name, this.talkVariety.next(`hellRumour:${near.band}`, cultWays(near.band))) };
     }
 
     // Which settlement a building's in (its id: insides.js townOf; a manor's, a watchtower's, a

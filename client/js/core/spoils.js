@@ -174,6 +174,7 @@ export const SPOILS = Object.freeze({
     goblinKing: { gold: [10, 30], items: [{ id: "goblinBomb", chance: 0.9, count: [3, 5] }, { id: "tomeExplosion", chance: 0.05 }, { id: "goblinEar", chance: 0.9 }] },
     skeleton: { gold: [1, 6], items: [{ id: "boneDust", chance: 0.5 }, { id: "oldSkull", chance: 0.2 }] },
     cultist: { gold: [4, 12], items: [{ id: "cultSigil", chance: 0.3 }, { id: "potion", chance: 0.15 }] },
+    cultLeader: { gold: [30, 70], items: [{ id: "cultSigil", chance: 0.9, count: [1, 2] }, { id: "soulShard", chance: 0.4 }, { id: "potion", chance: 0.5 }] },
     troll: { items: [{ id: "trollHide", chance: 0.35 }, { id: "trollBlood", chance: 0.3 }] },
     ogre: { gold: [6, 20], items: [{ id: "ogreTooth", chance: 0.4 }, { id: "ogreHide", chance: 0.25 }] },
     wyvern: { items: [{ id: "wyvernScale", chance: 0.45, count: [1, 3] }, { id: "wyvernSting", chance: 0.25 }] },

@@ -9302,8 +9302,8 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
     expect(Object.values(story.named).every((count) => count === 1)).toBe(true);
 });
 
-test("a hell: gone into (its way in made a hell's here: the pass that lays them out is to come), each of its four levels its realm's, drawn in its realm's own air; its ways down portals of fire, each sealed till its level's master falls; and from beyond its throne a portal out to the wilds, sealed till its lord falls", async ({ page }) => {
-    test.setTimeout(300000);
+test("a hell: its way in a cult's camp out in the wilds, shut by day, and by night till the cult keeping its rite there is slain; each of its four levels its realm's, drawn in its realm's own air; its ways down portals of fire, each sealed till its level's master falls; and from beyond its throne a portal out to the wilds, sealed till its lord falls", async ({ page }) => {
+    test.setTimeout(480000);
     await playing(page, "/?play&seed=1");
 
     const hell = await page.evaluate(async () => {
@@ -9372,9 +9372,17 @@ test("a hell: gone into (its way in made a hell's here: the pass that lays them 
             return { map: player.map, look: game.world.maps[player.map].look, veils, background: session.view.scene.background?.getHex() ?? null };
         };
 
-        // (The nearest dungeon to the start, its levels a hell's: made so before they're made)
-        const site = game.world.plan.sites.filter(({ kind }) => kind === "dungeon").sort((a, b) => Math.hypot(a.at[0] - player.x, a.at[1] - player.y) - Math.hypot(b.at[0] - player.x, b.at[1] - player.y))[0];
+        // (The war's clock set to a time of day, a day or more on: the morning, or a little past
+        // sunset)
+        const at = (when) => {
+            game.host.war.turn = Math.ceil(game.host.war.turn / 60) * 60 + (when === "night" ? 34 : 60);
+            game.host.war.clock = 0;
+        };
 
+        // (The nearest hell's way in to the start, by day: worldplan/settle.js HELLS)
+        const site = game.world.plan.sites.filter(({ theme }) => theme === "hell").sort((a, b) => Math.hypot(a.at[0] - player.x, a.at[1] - player.y) - Math.hypot(b.at[0] - player.x, b.at[1] - player.y))[0];
+
+        at("day");
         Object.assign(player, { x: site.at[0] + 120, y: site.at[1], path: [], order: null, progress: null });
         await settle(8);
 
@@ -9382,10 +9390,27 @@ test("a hell: gone into (its way in made a hell's here: the pass that lays them 
         const made = building.made;
         const [ox, oy] = building.entrance.outside;
 
-        building.theme = "hell";
         Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
         await settle(4);
-        await through(building.door);
+
+        // (Shut by day, no one there; by night the cult at its rite, and shut till it's slain to
+        // the last, then in)
+        const camp = { day: await through(building.door), cultByDay: game.host.lairs.has(site.id) };
+
+        at("night");
+        await settle(6);
+
+        const cult = game.host.lairs.get(site.id)?.ids ?? [];
+
+        camp.cult = cult.map((id) => game.host.wild.get(id)?.creature);
+        camp.night = await through(building.door);
+
+        for (const id of cult) {
+            game.battle.afflict(id, "poison", { by: "player", damage: 1e7 });
+        }
+
+        await until(() => cult.every((id) => game.battle.actor(id)?.dead ?? true), 200);
+        camp.slain = await through(building.door);
 
         const levels = [];
         const downs = building.flights.filter(({ id }) => id.endsWith("/stairs"));
@@ -9400,12 +9425,18 @@ test("a hell: gone into (its way in made a hell's here: the pass that lays them 
             levels.push(level);
         }
 
-        return { made, maps: building.maps, levels, out: player.map, by: Math.hypot(player.x - ox - 0.5, player.y - oy - 0.5) < 3 };
+        return { made, camp, maps: building.maps, levels, out: player.map, by: Math.hypot(player.x - ox - 0.5, player.y - oy - 0.5) < 3 };
     });
 
     // (Not made till the player came near, then four levels deep)
     expect(hell.made).toBe(false);
     expect(hell.maps).toHaveLength(4);
+
+    // (Shut by day, the cult not there; by night its high priest and its faithful at their rite,
+    // the way shut till they're slain, then in)
+    expect(hell.camp).toMatchObject({ day: "riteDay", cultByDay: false, night: "rite", slain: null });
+    expect(hell.camp.cult[0]).toBe("cultLeader");
+    expect(hell.camp.cult.slice(1).every((kind) => kind === "cultist")).toBe(true);
 
     // (Each its realm's, a portal of fire on it, in its own air; sealed till its master's slain,
     // then through)

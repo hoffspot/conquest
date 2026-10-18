@@ -61,5 +61,8 @@ describe("what's round the player (surroundings.js)", () => {
         assert.equal(surroundings.at(0, 0, { lights }).fire, 5);
         assert.equal(surroundings.at(0, 0, { lights }).brazier, Infinity);
         assert.equal(surroundings.at(0, 0, { lights, lit: true }).brazier, 2);
+
+        // (And a hell's camp's, lit only at night: art/kits/neutral.js)
+        assert.equal(surroundings.at(0, 0, { lights: [{ x: 0, z: 3, kind: "brazier-night" }], lit: true }).brazier, 3);
     });
 });

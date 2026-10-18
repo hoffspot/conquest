@@ -99,6 +99,7 @@ two tiers above it, up to their most.
 | Drake | 90 | aggressive | 1 | 10 | the drake's lair |
 | Dreadthorn | 220 | aggressive | 1 | 10 | a Dreadthorn's lair |
 | Wight lord | 70 | aggressive | 1 | 9–10 | the ruined castles |
+| High priest of the cult | 80 | aggressive | 1, with six of the faithful | 10 | a hell's way in, by night (docs/DUNGEONS.md *Hells*) |
 | Frost troll | 75 | aggressive | 1 | 9–10 | the high snows |
 
 A few do something besides biting and clawing: the adder, bog frog, magma slime, salamander,
@@ -210,7 +211,10 @@ The perilous places hold the mightiest, each a master and its guards (`LAIRS`): 
 drake's lair, with two wyverns; a Dreadthorn at each of its own lairs, with three wyverns; the
 Moonfang at each werewolves' den, with two werewolves and three dire wolves; a wight
 lord and its dead in each ruined castle (three skeletons, two ghosts and a wraith); the frost troll
-in the snows. The Dreadthorn is the mightiest of all, a fight for a party: its hide turns a third of
+in the snows. And by night at each hell's way in, its cult at their rite (`RITES`: kept as a lair
+is, but only after dark): a high priest of the cult, robed and a head taller than its faithful,
+swinging its staff and calling hellfire down from nine metres, with six of the faithful round its
+ring (docs/DUNGEONS.md *Hells*). The Dreadthorn is the mightiest of all, a fight for a party: its hide turns a third of
 every blow (armour 0.35), its bite reaches two metres and lays a wound open, and its breath reaches
 nine, setting whatever it reaches burning. Its hoard is greater than a drake's (`LOOT.greatHoard`,
 500 to 900 gold and masterwork things), with an old relic in it as a ruined castle's has. Its

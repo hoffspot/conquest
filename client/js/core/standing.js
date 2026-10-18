@@ -868,8 +868,8 @@ function heldNear(war, town) {
         .map(({ place, holder }) => ({ place, holder, tier: tierAt(place.at, [town.at], landAt(war.plan, ...place.at).biome) }));
 }
 
-// Which way one place is from another, by the compass (north up the map, as y falls)
-function compass([fx, fy], [tx, ty]) {
+/** Which way one place is from another ([x, y] metres), by the compass (north up the map, as y falls): "north", "south-east"... */
+export function compass([fx, fy], [tx, ty]) {
     const [dx, dy] = [tx - fx, ty - fy];
     const ns = dy < 0 ? "north" : "south";
     const ew = dx > 0 ? "east" : "west";

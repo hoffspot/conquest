@@ -35,16 +35,23 @@ import { BREEZE } from "./cloth.js";
  * speed at which it starts to: metres a second; a fire indoors none), how hot it burns (its
  * heart's brightness, times a torch's), how many embers rise from it, the smoke over it (smoke.js
  * SMOKES: none, or which), and whether it's lit only at night (as the windows are) or always.
+ * A hell's way in, out in the wilds, burns only at night (art/kits/neutral.js): its candles, short
+ * thick ones of tallow, their wicks thicker; its braziers, cold by day (no smoke rising from them
+ * then: smoke's drawn day and night); and its portal's light, not drawn (its veil is: veil.js),
+ * rising and falling slowly as its veil breathes.
  */
 export const FIRES = Object.freeze({
     candle: { width: 0.022, height: 0.06, tongues: 1, spread: 0, rate: 9, steady: 0.25, lean: 0.15, heat: 0.85, embers: 0, smoke: null, night: false, twist: 0 },
+    "candle-night": { width: 0.032, height: 0.085, tongues: 1, spread: 0, rate: 8.5, steady: 0.4, lean: 0.15, heat: 0.85, embers: 0, smoke: null, night: true, twist: 0 },
     lantern: { width: 0.03, height: 0.07, tongues: 1, spread: 0, rate: 7, steady: 0.35, lean: 1e3, heat: 0.85, embers: 0, smoke: null, night: true, twist: 0 },
     torch: { width: 0.24, height: 0.46, tongues: 3, spread: 0.035, rate: 5.6, steady: 1, lean: 0.28, heat: 0.9, embers: 8, smoke: "torch", night: true, twist: 1 },
     brazier: { width: 0.5, height: 0.66, tongues: 6, spread: 0.13, rate: 2.9, steady: 1, lean: 0.4, heat: 1, embers: 18, smoke: "torch", night: false, twist: 1 },
+    "brazier-night": { width: 0.5, height: 0.66, tongues: 6, spread: 0.13, rate: 2.9, steady: 1, lean: 0.4, heat: 1, embers: 18, smoke: null, night: true, twist: 1 },
     fire: { width: 0.85, height: 1.05, tongues: 8, spread: 0.24, rate: 1.8, steady: 1, lean: 0.52, heat: 0.92, embers: 36, smoke: "fire", night: false, twist: 1 },
     hearth: { width: 0.8, height: 0.62, tongues: 7, spread: 0.26, rate: 2.1, steady: 0.9, lean: 1e3, heat: 1, embers: 0, smoke: null, night: false, twist: 0.8 },
     forge: { width: 0.7, height: 0.5, tongues: 6, spread: 0.2, rate: 2.6, steady: 1, lean: 1e3, heat: 1.15, embers: 0, smoke: null, night: false, twist: 0.6 },
     spell: { width: 0.6, height: 1, tongues: 6, spread: 0.2, rate: 3, steady: 1.2, lean: 0.6, heat: 1.25, embers: 20, smoke: null, night: false, twist: 3 },
+    hellgate: { width: 2.4, height: 3.4, tongues: 0, spread: 0, rate: 1, steady: 0.5, lean: 1e3, heat: 1, embers: 0, smoke: null, night: true, twist: 0 },
 });
 
 /** The breeze fires lean in: the way it blows (east, south: a unit, as the smoke and flags lean) and how hard (metres a second, before its gusts). */

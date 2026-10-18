@@ -35,14 +35,18 @@ const { Shapes, siteShapes } = await import("../client/js/world/far/shapes.js");
 const { createRandom } = await import("../client/js/core/random.js");
 const { Solid } = await import("../client/js/world/art/engine/solid.js");
 const { archOf, brokenRim, brokenTop, buttress, crumbledWall, stringCourse, talus, topAt } = await import("../client/js/world/art/kits/decay.js");
-const { GRAVE, HALL, hallWindows, LICHENS } = await import("../client/js/world/art/kits/neutral.js");
+const { GRAVE, HALL, hallWindows, LICHENS, SMOULDERS, smoulder } = await import("../client/js/world/art/kits/neutral.js");
+const { HELL_CAMP } = await import("../client/js/core/setpieces/neutral.js");
+const { FIRES } = await import("../client/js/world/fire.js");
+const { LIGHTS, lightNow } = await import("../client/js/world/lights.js");
+const { openVeil, VEIL, VEILS } = await import("../client/js/world/veil.js");
 const { brokenCart, fallenTimbers, oldBarrel, oldBeam, oldCrate } = await import("../client/js/world/art/kits/leftovers.js");
 const { IVY, ivyAlong, ivyCurtain, ivyMaterial, ringFace, wallFace } = await import("../client/js/world/art/kits/ivy.js");
 const { hedgeMaterials } = await import("../client/js/world/art/kits/hedges.js");
 const { merge } = await import("../client/js/world/town3d.js");
 const { material } = await import("../client/js/world/art/engine/materials.js");
 const { MATERIALS, OLD_STONE, paintLayer, SIZE } = await import("../client/js/world/art/engine/painters.js");
-const { AGED, atlasMaterial, LAYERS, layerOf } = await import("../client/js/world/art/engine/atlas.js");
+const { AGED, atlasMaterial, LAYERS, layerOf, WINDOW_LIGHT } = await import("../client/js/world/art/engine/atlas.js");
 
 function trianglesOf(object) {
     let count = 0;
@@ -306,11 +310,15 @@ describe("the sites no people keeps in the world (sites.js)", () => {
         // the ivy hanging from their tops, M7b-3c, about 200 and 2,400 more)
         // (An old graveyard's sixty graves or so, its walls, gates, path, tombs and mausoleum: as much as
         // a house)
-        const budget = { ruins: 5000, "ruined castle": 18000, "dragon's lair": 3000, "dreadthorn's lair": 3000, "werewolf's den": 3000, graveyard: 6000 };
+        // (A hell's way in a dungeon's site, but a cult's camp, not a mouth in the rock: its pentagram,
+        // candles, portal, stakes, hovels and cage, and the altar, braziers, cart and stores other
+        // sites have too, as much as a graveyard)
+        const budget = { ruins: 5000, "ruined castle": 18000, "dragon's lair": 3000, "dreadthorn's lair": 3000, "werewolf's den": 3000, graveyard: 6000, hell: 6000 };
         const most = new Map();
 
         for (const site of sites) {
             const down = overworld.sites.set.get(site.id);
+            const kind = site.theme === "hell" ? "hell" : site.kind;
             let triangles = 0;
 
             for (const piece of down?.pieces ?? []) {
@@ -321,12 +329,125 @@ describe("the sites no people keeps in the world (sites.js)", () => {
                 triangles += trianglesOf(builderOf(piece)(piece));
             }
 
-            most.set(site.kind, Math.max(most.get(site.kind) ?? 0, triangles));
+            most.set(kind, Math.max(most.get(kind) ?? 0, triangles));
         }
+
+        assert.ok(most.has("hell"), "a hell's camp among them");
 
         for (const [kind, triangles] of most) {
             assert.ok(triangles > 0 && triangles <= (budget[kind] ?? 1500), `${kind}: ${triangles} triangles at most`);
         }
+    });
+});
+
+describe("a hell's way in, a cult's camp in the wilds (art/kits/neutral.js, veil.js)", () => {
+    let camps;
+    // (A piece of a site, as sites.js makes them)
+    const pieceOf = (name, part) => ({ kind: "neutral", name, key: `neutral-${part.part}`, part, x: 0, y: 0, w: 0.5, h: 0.5, facing: 0 });
+
+    before(() => {
+        const overworld = buildWorld({ seed: 1 }).maps.town;
+
+        camps = overworld.plan.sites
+            .filter((site) => site.theme === "hell")
+            .map((site) => {
+                overworld.sites.heartOf(site);
+
+                return overworld.sites.set.get(site.id);
+            });
+    });
+
+    it("draws every part of it, burning only at night: its candles (the tallest of each cluster lighting them), its braziers, and its portal, red", () => {
+        assert.ok(camps.length >= 1, `${camps.length} camps`);
+
+        for (const camp of camps) {
+            const lit = [];
+
+            for (const piece of camp.pieces) {
+                const built = builderOf(piece)(piece);
+
+                assert.ok(trianglesOf(built) > 0, `${camp.site.id}: its ${piece.part.part} drawn`);
+                lit.push(...(built.userData.lights ?? []).map(([, , , kind]) => kind));
+            }
+
+            const count = (kind) => lit.filter((each) => each === kind).length;
+            const candles = camp.pieces.filter(({ part }) => part.part === "candles").reduce((sum, { part }) => sum + part.count, 0);
+
+            assert.deepEqual([...new Set(lit)].sort(), ["brazier-night", "candle-night", "candles-night", "hellgate"], camp.site.id);
+            assert.deepEqual([count("candles-night"), count("candle-night") + count("candles-night"), count("brazier-night"), count("hellgate")], [5, candles, HELL_CAMP.braziers.count, 1], camp.site.id);
+
+            for (const kind of new Set(lit)) {
+                const light = { x: 1, y: 1, z: 1, kind };
+
+                assert.ok(FIRES[LIGHTS[kind].fire].night, `${kind}: lit only at night`);
+                assert.equal(lightNow(light, 3, 0).strength, 0, `${kind}: out by day`);
+                // (Each candle's flame drawn, but only the tallest's lighting what's round them)
+                assert.equal(lightNow(light, 3, 1).strength > 0, kind !== "candle-night", `${kind}: by night`);
+            }
+        }
+
+        assert.ok(LIGHTS.hellgate.colour >> 16 > 4 * ((LIGHTS.hellgate.colour >> 8) & 0xff), "the portal's light red");
+
+        // (A shrine's braziers burning day and night, as they did)
+        const shrine = pieceOf("shrine", layoutNeutral({ kind: "shrine", seed: 3 }).parts.find(({ part }) => part === "brazier"));
+        const [kind] = builderOf(shrine)(shrine).userData.lights.map(([, , , each]) => each);
+
+        assert.equal(kind, "brazier");
+        assert.ok(lightNow({ x: 0, y: 0, z: 0, kind }, 3, 0).strength > 0);
+    });
+
+    it("scorches its pentagram into the ground, and its runes and its braziers' coals smoulder at night; its portal's veil swirls only then, drawn out of doors as itself", () => {
+        const gate = camps[0].pieces.find(({ part }) => part.part === "hellgate");
+        const pentagram = camps[0].pieces.find(({ part }) => part.part === "pentagram");
+        const merged = merge(builderOf(gate)(gate), { atlas: true });
+        const names = merged.children.map(({ material: own }) => own.name);
+
+        // (Merged as the chunks merge it: the veil and the runes each their own material, the
+        // stone the atlas's; the veil casting no shadow)
+        assert.ok(names.includes("veil-hell-open") && names.includes("smoulder-runes") && names.includes("atlas"), names.join(", "));
+        assert.equal(merged.children.find(({ material: own }) => own === openVeil("hell")).castShadow, false);
+
+        // (Its veil the hell's, swirling in time with the veils indoors, only as the windows are lit)
+        const veil = { uniforms: {}, vertexShader: THREE.ShaderLib.basic.vertexShader, fragmentShader: THREE.ShaderLib.basic.fragmentShader };
+
+        openVeil("hell").onBeforeCompile(veil);
+        assert.ok(veil.fragmentShader.includes("vec4 diffuseColor = vec4( veilAtNight(vVeil / 5.0), opacity );"));
+        assert.ok(veil.fragmentShader.includes("windowLight.x > 0.0 ? mix(still, veilAt(at), windowLight.x) : still"));
+        assert.ok(veil.fragmentShader.includes(`vec3 middle = vec3(${VEILS.hell.middle.map((c) => c.toFixed(3)).join(", ")});`));
+        assert.equal(veil.uniforms.windowLight, WINDOW_LIGHT);
+        assert.equal(veil.uniforms.veilTime, VEIL.time);
+        assert.equal(openVeil("hell").customProgramCacheKey(), "veil-hell-open");
+
+        // (Its pentagram lying just over the ground)
+        const lines = new THREE.Box3().setFromObject(builderOf(pentagram)(pentagram));
+
+        assert.ok(lines.min.y > 0 && lines.max.y < 0.5, `${lines.min.y} to ${lines.max.y} over the ground`);
+
+        // (What smoulders lit as the land is, glowing only at night, one program for all of it)
+        for (const name of Object.keys(SMOULDERS)) {
+            const own = smoulder(name);
+            const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.lambert.vertexShader, fragmentShader: THREE.ShaderLib.lambert.fragmentShader };
+
+            own.onBeforeCompile(shader);
+            assert.equal(layerOf(own), -1, `${name}: its own material`);
+            assert.ok(shader.fragmentShader.includes("totalEmissiveRadiance += smoulderGlow * windowLight.x"), name);
+            assert.ok(shader.fragmentShader.includes("fireAt["), `${name}: lit by the fires near`);
+            assert.equal(shader.uniforms.windowLight, WINDOW_LIGHT);
+            assert.equal(own.customProgramCacheKey(), "smoulder");
+        }
+
+        // (A camp's braziers' coals of it, a shrine's glowing day and night as they did)
+        const coals = (night) => {
+            const piece = pieceOf("dungeon", { part: "brazier", x: 1, y: 1, ...(night ? { night } : {}) });
+            const names = [];
+
+            builderOf(piece)(piece).traverse((node) => node.isMesh && names.push(node.material.name));
+
+            return names;
+        };
+
+        assert.ok(coals(true).includes("smoulder-coals") && !coals(true).includes("embers"));
+        assert.ok(coals(false).includes("embers") && !coals(false).includes("smoulder-coals"));
     });
 });
 
