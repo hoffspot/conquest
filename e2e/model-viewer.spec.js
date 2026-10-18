@@ -229,9 +229,10 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     await openViewer(page, "/model-viewer.html?model=beast-centipede&clip=Run");
 
     // (In the game now, as are the ant, the spiders, the scorpion, the cockroach, the wasp, the
-    // black widow, the Ant Monster and the greater demon (a hell's lord): every bought model is,
-    // none listed as to come; read, its clips listed, the one asked for by its address played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual([]);
+    // black widow, the Ant Monster and the greater demon (a hell's lord): every bought model is but
+    // the fiend, the one listed as to come; read, its clips listed, the one asked for by its address
+    // played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Fiend"]);
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Giant cockroach", "Dungeon wasp", "Dungeon scorpion", "Black widow", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
@@ -628,6 +629,44 @@ test("the werewolf as the game draws it, from its model once that's read: the ga
     }
 
     expect([...skins].sort()).toEqual(["", "ash", "dusk", "russet"]);
+});
+
+test("and the Fiend: all 25 of its own clips, its one simplified mesh, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-fiend&clip=Attack%203");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack",
+        "Attack 2",
+        "Attack 3",
+        "Attack 4",
+        "Attack 5",
+        "Crouch Walk",
+        "Death",
+        "Death 2",
+        "Death 3",
+        "Fly Back",
+        "Fly Down",
+        "Fly Left",
+        "Fly Right",
+        "Fly Up",
+        "Hit",
+        "Hit 2",
+        "Idle",
+        "Idle 2",
+        "Jump",
+        "Run",
+        "Turn 180",
+        "Walk",
+        "Walk Back",
+        "Walk Left",
+        "Walk Right",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Attack 3", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Fiend");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 20952, bones: 86 });
+    await expect(page.locator("#details")).toContainText("Monster4, bought on Fab: used with the permission its Standard License gives");
 });
 
 test("a hell's lord as the game draws it: a people-shaped brute till the Greater Demon's read, then the demon, its claws, its punch, hellfire hurled from its fist, and its roar", async ({ page }) => {

@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "d56e08f432",
+    release: "42b3714252",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2029,6 +2029,35 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/greater-demon.bin",
                     "hash": "aeeec643c3",
                     "bytes": 2365312
+                }
+            ]
+        },
+        "beast-fiend": {
+            "tier": "demand",
+            "label": "The Fiend (Monster4, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/fiend.bin",
+                    "hash": "a576200042",
+                    "bytes": 3821552
+                }
+            ]
+        },
+        "beast-fiend-skins": {
+            "tier": "demand",
+            "label": "The Fiend's other skins: pale and ash (Monster4, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/fiend.pale.bin",
+                    "hash": "0355d9921b",
+                    "bytes": 175724
+                },
+                {
+                    "path": "models/beasts/fiend.ash.bin",
+                    "hash": "25f4cc4790",
+                    "bytes": 174108
                 }
             ]
         },
