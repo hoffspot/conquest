@@ -13,6 +13,7 @@ import { roomLit } from "./roomlight.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { loadGltf, readKtx2, readsKtx2 } from "./art/engine/models.js";
 import { CAVERNS } from "./caverns.js";
+import { VEIL } from "./veil.js";
 
 /**
  * The pictures a dungeon's rock and stone can be drawn with, by name (dungeonpictures.js, made by
@@ -77,10 +78,12 @@ const rocks = new Map();
 
 /**
  * The material a level's rock is drawn with, with a picture (ROCK_PICTURES' name); `glow`, its
- * points glowing their own colours too (a `glow` attribute, linear r, g, b: glowfungus.js).
+ * points glowing their own colours too (a `glow` attribute, linear r, g, b: glowfungus.js, and a
+ * hell's lava, lava.js poolGlowOn); `embers`, embers glowing in its cracks (an `ember` attribute,
+ * 0 to 1: lava.js embersOn).
  */
-export function rockMaterial(name, { glow = false } = {}) {
-    const key = glow ? `${name}+glow` : name;
+export function rockMaterial(name, { glow = false, embers = false } = {}) {
+    const key = `${name}${glow ? "+glow" : ""}${embers ? "+embers" : ""}`;
 
     if (rocks.has(key)) {
         return rocks.get(key);
@@ -108,6 +111,21 @@ export function rockMaterial(name, { glow = false } = {}) {
         if (glow) {
             shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute vec3 glow;\nvarying vec3 vRockGlow;").replace("#include <project_vertex>", "#include <project_vertex>\nvRockGlow = glow;");
             shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vRockGlow;").replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance += vRockGlow;");
+        }
+
+        // (Embers glowing in its cracks, the Breach's (lava.js embersOn): only in the picture's
+        // dark grooves, as much as each point's `ember` says, brightening and dimming in slow waves
+        // across the rock)
+        if (embers) {
+            shader.uniforms.veilTime = VEIL.time;
+            shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute float ember;\nvarying float vRockEmber;").replace("#include <project_vertex>", "#include <project_vertex>\nvRockEmber = ember;");
+            shader.fragmentShader = shader.fragmentShader
+                .replace("#include <common>", `#include <common>\nvarying float vRockEmber;\nuniform float veilTime;\nfloat rockGroove = 0.6;`)
+                .replace(
+                    "#include <emissivemap_fragment>",
+                    `#include <emissivemap_fragment>
+totalEmissiveRadiance += vec3(1.2, 0.22, 0.02) * vRockEmber * rockGroove * (0.65 + 0.35 * sin(PI2 * 15.0 * veilTime / ${VEIL.loop.toFixed(1)} + dot(vCutWorld, vec3(0.8, 1.0, 0.6))));`,
+                );
         }
 
         shader.fragmentShader = shader.fragmentShader
@@ -140,6 +158,7 @@ vec3 rockWeights(vec3 n) {
     vec3 grain = texture2D(rockColour, p.zy).rgb * w.x + texture2D(rockColour, p.xz).rgb * w.y + texture2D(rockColour, p.xy).rgb * w.z;
 
     diffuseColor.rgb *= mix(vec3(1.0), clamp(grain / rockMean, 0.0, 2.5), rockLoaded);
+${embers ? "    rockGroove = mix(0.6, 0.35 + 0.65 * smoothstep(0.95, 0.4, dot(grain / rockMean, vec3(1.0 / 3.0))), rockLoaded);" : ""}
 }`,
             )
             .replace(
@@ -166,7 +185,7 @@ if (rockBumps > 0.5) {
             );
         roomLit(shader);
     };
-    result.customProgramCacheKey = () => (glow ? "rock-triplanar-glow" : "rock-triplanar");
+    result.customProgramCacheKey = () => `rock-triplanar${glow ? "-glow" : ""}${embers ? "-embers" : ""}`;
     rocks.set(key, result);
 
     return result;

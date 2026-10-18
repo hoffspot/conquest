@@ -42,6 +42,7 @@ import { VEIL, veilShader } from "./veil.js";
 import { cavern, earthTone, layers, SHELLS, tiles } from "./caverns.js";
 import { Blocks, furnish, lifeMaterial, loadProp, ROCK_PICTURES, rockMaterial } from "./dungeons3d.js";
 import { colonyAt, glowOf, threadsOn } from "./glowfungus.js";
+import { brimstoneTone, embersOn, lavaMaterial, poolGeometries, poolGlowOn, poolLight, poolShape } from "./lava.js";
 import { blockAt, bonesAt, clutterAt, fallenScene, hashOf, middenGearAt, onTable, remainsAt, seatsAt, shelvesAt, sideTableAt, standAt, strewnAt, vesselsAt, workbenchAt } from "./dungeondressing.js";
 import { broodIn, cocoonGeometry, eggGeometry, heapGeometry, heapHeightAt, heapOf, larvaGeometry, NEST_LIFE, pupaGeometry, randomOf, rootsUnder, webAround } from "./nestlife.js";
 
@@ -211,12 +212,12 @@ function material(asked, how = {}) {
         } else if (name === "candle-flame" || name.startsWith("sconce")) {
             result = new THREE.MeshBasicMaterial({ color: { sconce: 0xff5a4a, "sconce-warm": 0xffb45a }[name] ?? 0xffd27a, toneMapped: false });
             result.name = name;
-        } else if (name === "portal-veil" || name === "portal-veil-hell") {
+        } else if (name === "portal-veil" || name === "portal-veil-hell" || name === "rift-veil") {
             // (A guild's portal's veil: its swirling light worked out as it's drawn, veilShader; or
-            // a hell's, in its colours)
+            // a hell's, in its colours; or the rift's over the Breach's altar, a hell's too)
             result = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
             result.name = name;
-            result.userData.veil = name === "portal-veil-hell" ? "hell" : "guild";
+            result.userData.veil = name === "portal-veil" ? "guild" : "hell";
         } else if (name === "portal-rune" || name === "portal-rune-hell") {
             // (The runes round a portal, glowing: a hell's like coals)
             result = new THREE.MeshBasicMaterial({ color: name === "portal-rune" ? 0xb8e6ff : 0xff6a2a, toneMapped: false });
@@ -657,6 +658,9 @@ const FLAMES = Object.freeze({
     // (A guild's portal: its veil's cold light, all but steady; a hell's, the red of its fire)
     portal: { intensity: 3.4, distance: 8, flicker: 0.04, colour: 0x7fb2ff, glow: 0.45 },
     "portal-hell": { intensity: 3.8, distance: 9, flicker: 0.07, colour: 0xff5a24, glow: 0.5 },
+    // (The rift torn open over the Breach's altar: a hell's portal's light, wilder, the room's
+    // master stood in it)
+    rift: { intensity: 4.2, distance: 10, flicker: 0.1, colour: 0xff5020, glow: 0.7 },
 });
 
 /**
@@ -3545,9 +3549,12 @@ function towerTop(map) {
 // middle }, view.js flicker), what drifts in its air (`motes`: motes.js MOTES), whether soil
 // trickles from its roof now and then (`trickles`: trickles.js), and whether it holds an ants'
 // nest's life (`life`: its brood, its middens' heaps, roots through its roof, its widows' webs and
-// their prey, and what its fallen were doing when they fell: nestlife.js, dungeondressing.js). A
-// hell's levels' ways down and out are portals where other dungeons' are stairs (the level's
-// `dungeon.portals`: riftPortal)
+// their prey, and what its fallen were doing when they fell: nestlife.js, dungeondressing.js);
+// whether its rock is the Breach's (`brimstone`: sulphur low down, soot high up, embers in its
+// cracks: lava.js), and which room's altar has the rift torn open over it (`rift`: its room's
+// look, breachRift). A hell's levels' ways down and out are portals where other dungeons' are
+// stairs (the level's `dungeon.portals`: riftPortal); its pools of lava, wherever its plan has
+// them (lava.js)
 const DUNGEON_LOOKS = Object.freeze({
     caves: { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x6f665c, ground: 0x5d554b },
     hideout: { rock: "rock", shell: "dug", picture: "rock-dug", underfoot: "ground-dug", rubble: "rock", shored: true, ground: 0x6e5440 },
@@ -3573,10 +3580,11 @@ const DUNGEON_LOOKS = Object.freeze({
         life: true,
     },
     // (A hell's realms (core/dungeons/themes.js hell), each its own: the Breach, caves of sooty
-    // rock where hell breaks through, embers drifting in its air; the Halls of Bone, vaulted in
+    // rock where hell breaks through, crusted with sulphur, embers in its cracks and drifting in its
+    // air, pools of lava against it, the rift over its altar; the Halls of Bone, vaulted in
     // stone the colour of old bone; the River of Fire, black basalt, embers thick in its hot air;
     // and the Pit, its walls dark as dried blood, its air close and black)
-    "hell-breach": { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x5c4a42, ground: 0x4a3a32, air: { background: 0x140806, fog: [10, 36], mist: [0.07, 1.2] }, carried: { colour: 0xffb07a, intensity: 3, distance: 9, up: 1.2 }, motes: "embers" },
+    "hell-breach": { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x5c4a42, ground: 0x4a3a32, air: { background: 0x140806, fog: [10, 36], mist: [0.07, 1.2] }, carried: { colour: 0xffb07a, intensity: 3, distance: 9, up: 1.2 }, motes: "embers", brimstone: true, rift: "rift" },
     "hell-bone": { walls: "stone-old", tall: 4.2, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple", tint: 0xc8b49a, ground: 0x6a4a40, air: { background: 0x120606, fog: [9, 34], mist: [0.08, 1] } },
     "hell-fire": { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x3c3230, ground: 0x2e2422, air: { background: 0x1e0804, fog: [12, 40], mist: [0.05, 1.4] }, carried: { colour: 0xffa060, intensity: 2.6, distance: 8, up: 1.2 }, motes: "embers" },
     "hell-pit": { walls: "stone-old", tall: 4.6, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple", tint: 0x6a4644, ground: 0x3a2826, air: { background: 0x0a0404, fog: [8, 30], mist: [0.1, 0.9] } },
@@ -3782,6 +3790,110 @@ function riftPortal(solid, map, piece, stuff, { down }) {
     lit("portal-hell", gx, spring - m(0.3), gz, { glows: [[gx, spring - m(0.3), gz]] });
 }
 
+// The rift torn open over the Breach's altar (a look's `rift`: the altar in the room of that look,
+// themes.js's Breach's `goal`), where hell breaks through: a tear in the air over the altar, as
+// tall as a man and more (RIFT: how high its middle is, how tall and how wide it is, metres), its
+// edges ragged and bent a little, the swirl of a hell's portal in it (veil.js VEILS.hell: its eye
+// in the tear's middle), a ragged rim of fire round it, lighting the room red; across the altar's
+// length, seen from before and behind it
+const RIFT = Object.freeze({ high: 2.4, tall: 2.2, wide: 1.05, points: 12, rim: [0.05, 0.16] });
+
+function breachRift(solid, piece) {
+    const along = piece.w >= piece.h;
+    const [cx, cz] = [piece.x + piece.w / 2, piece.y + piece.h / 2];
+    const { high, tall, wide, points, rim } = RIFT;
+    // (The veil's eye is 1.35 m up its own coordinates (veil.js), so the tear's drawn about it
+    // there and lifted to its height)
+    const eye = 1.35;
+    const jag = (k, side) => roughOf(piece.x * 13 + k, piece.y * 7 + side * 31);
+    const edge = [];
+
+    // (Up its right side and down its left, ragged, bent a little as torn cloth is)
+    for (const side of [1, -1]) {
+        for (let k = side > 0 ? 0 : points - 1; side > 0 ? k <= points : k >= 1; k += side > 0 ? 1 : -1) {
+            const t = k / points;
+            const half = (wide / 2) * Math.sin(Math.PI * t) ** 0.7 * (k % 2 ? 1 : 0.55 + 0.35 * jag(k, side));
+            const bend = 0.14 * Math.sin(Math.PI * 2 * t + 0.6);
+
+            edge.push([bend + side * half, eye - tall / 2 + t * tall]);
+        }
+    }
+
+    const shape = new THREE.Shape(edge.map(([x, y]) => new THREE.Vector2(m(x), m(y))));
+    const veil = new THREE.ShapeGeometry(shape);
+    // (Its rim: from the tear's edge out, each point as far as it's ragged)
+    const positions = [];
+    const indices = [];
+
+    edge.forEach(([x, y], k) => {
+        const [px, py] = edge[(k + edge.length - 1) % edge.length];
+        const [nx, ny] = edge[(k + 1) % edge.length];
+        const [tx, ty] = [nx - px, ny - py];
+        const length = Math.hypot(tx, ty) || 1;
+        const out = rim[0] + (rim[1] - rim[0]) * jag(k, 5) * (k % 3 ? 0.6 : 1);
+
+        positions.push(m(x), m(y), 0, m(x + (ty / length) * out), m(y - (tx / length) * out), 0);
+    });
+
+    for (let k = 0; k < edge.length; k++) {
+        const j = (k + 1) % edge.length;
+
+        indices.push(k * 2, j * 2 + 1, j * 2, k * 2, k * 2 + 1, j * 2 + 1);
+    }
+
+    const ring = new THREE.BufferGeometry();
+
+    ring.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    ring.setIndex(indices);
+    ring.computeVertexNormals();
+
+    const tear = new THREE.Group();
+
+    // (Two faces back to back, a little apart, the same outline each, each seen from its own side:
+    // an inside's back faces are drawn as the dark of a cut, cutShader's)
+    const backward = (geometry) => {
+        const turned = geometry.clone();
+        const index = [...turned.index.array];
+
+        for (let k = 0; k < index.length; k += 3) {
+            [index[k + 1], index[k + 2]] = [index[k + 2], index[k + 1]];
+        }
+
+        turned.setIndex(index);
+        turned.computeVertexNormals();
+
+        return turned;
+    };
+
+    for (const side of [1, -1]) {
+        const face = new THREE.Group();
+        const [front, edge] = side > 0 ? [veil, ring] : [backward(veil), backward(ring)];
+
+        face.add(new THREE.Mesh(front, material("rift-veil")), new THREE.Mesh(edge, material("portal-rune-hell")));
+        face.position.z = side * m(0.005);
+        tear.add(face);
+    }
+
+    tear.rotation.y = along ? 0 : Math.PI / 2;
+    tear.position.set(m(cx), m(high - eye), m(cz));
+    tear.updateMatrixWorld(true);
+
+    const parts = tear.children.flatMap((face) => face.children);
+
+    for (const part of parts) {
+        part.geometry.applyMatrix4(part.matrixWorld);
+    }
+
+    const flat = new THREE.Group();
+
+    flat.add(...parts.map((part) => new THREE.Mesh(part.geometry, part.material)));
+    flat.updateMatrixWorld(true);
+    solid.add(objectSolid(flat));
+
+    // (Its light, the colour of its swirl)
+    lit("rift", m(cx), m(high), m(cz));
+}
+
 // An outlaws' hideout's tunnels shored up: every few squares along a tunnel (open ground between
 // rock, clear of every room's bounds), a post against the rock either side and a cap across between
 // them (`blocks`: dungeons3d.js's, metres)
@@ -3930,6 +4042,35 @@ function rockBeside(map, x, y) {
     return [[0, -1], [-1, 0], [1, 0], [0, 1]].find(([dx, dy]) => map.plan[y + dy]?.[x + dx] === "#") ?? null;
 }
 
+// A level's pools of lava (a plan's "~" runs: lava.js poolShape), each lying against the rock
+// beside the most of its squares
+function poolsOf(map) {
+    return map.pieces
+        .filter((piece) => piece.kind === "lava")
+        .map((piece) => {
+            const [way, count] = [[0, -1], [-1, 0], [1, 0], [0, 1]].map((side) => [side, piece.squares.filter(([x, y]) => map.plan[y + side[1]]?.[x + side[0]] === "#").length]).sort((a, b) => b[1] - a[1])[0];
+
+            return poolShape(piece, count > 0 ? way : null);
+        });
+}
+
+// A level's pools of lava drawn (lava.js): their surfaces, one mesh, and their banks of the rock's
+// crust, another, its picture's (`look`'s), darker than its rock; in level metres
+function poolsDrawn(pools, look) {
+    const tint = new THREE.Color(look.tint ?? 0x5c4a42).multiplyScalar(0.32);
+    const { surface, bank } = poolGeometries(pools, [tint.r, tint.g, tint.b]);
+    const group = new THREE.Group();
+    const lava = new THREE.Mesh(surface, lavaMaterial());
+    const crust = new THREE.Mesh(bank, rockMaterial(look.picture, { glow: true }));
+
+    lava.name = "lava";
+    crust.name = "lava-bank";
+    lava.userData.shadowless = crust.userData.shadowless = true;
+    group.add(lava, crust);
+
+    return group;
+}
+
 const facingFrom = ([dx, dy]) => Math.atan2(-dx, -dy);
 
 // Rough tables along a plan's table piece, end to end, each a scanned table (the rough one or the
@@ -4070,6 +4211,10 @@ function dungeon(map) {
     // (An ants' nest's own, drawn with its rock (rockShell): its brood chambers' brood, its middens'
     // heaps, the prey its widows have hung up)
     const life = look.life ? { brood: [], heaps: [], cocoons: [] } : null;
+    // (A hell's pools of lava, each lighting the rock round it: lava.js)
+    const pools = poolsOf(map);
+
+    lights.push(...pools.map(poolLight));
 
     // (What's drawn with the pictures as boxes: a temple's walls, floor and vault, a hideout's
     // timbers)
@@ -4291,6 +4436,11 @@ function dungeon(map) {
             case "altar": {
                 altarStone(walls, solid, piece);
 
+                // (The Breach's, torn open over it)
+                if (look.rift && spot.look === look.rift) {
+                    breachRift(solid, piece);
+                }
+
                 // (Brass vases on it, between its candles)
                 const along = piece.w >= piece.h;
 
@@ -4397,7 +4547,7 @@ function dungeon(map) {
         }
     }
 
-    const blocks = [walls.mesh(look.picture, look.tint ?? null, "walls"), floor.mesh(look.underfoot, look.ground ?? null, "floor"), timber.mesh("timber", 0x8a7a66, "timbers")].filter(Boolean);
+    const blocks = [walls.mesh(look.picture, look.tint ?? null, "walls"), floor.mesh(look.underfoot, look.ground ?? null, "floor"), timber.mesh("timber", 0x8a7a66, "timbers"), pools.length ? poolsDrawn(pools, look) : null].filter(Boolean);
 
     // (What's set about a piece and come out over the rock left out: a lantern by a bedroll in a
     // corner)
@@ -4672,17 +4822,23 @@ function* rockShell(map, look, shell, life = null) {
     const depth = map.dungeon?.level ?? 0;
     const toneAt = (x, y, z) => earthTone(earth, [x, y, z], seed, { depth, humus: depth === 0 ? THREE.MathUtils.smoothstep(y, shell.low - 0.4, shell.high - 0.2) * 0.8 : 0 });
     const colonies = (map.dungeon?.lights ?? []).filter(({ kind }) => kind === "glow").map(({ at, wall }) => colonyAt(made.open, at, wall));
+    // (A hell's pools of lava, lighting the rock and floor round them: lava.js poolGlowOn)
+    const pools = poolsOf(map);
+    const glows = colonies.length > 0 || pools.length > 0;
 
     // (Its points coloured as the theme has it, shaded as caverns.js has them, a tile at a time)
     const meshesOf = (surface, colour, picture, name) => {
         const tint = colour === null ? new THREE.Color().setRGB(...ROCK_PICTURES[picture].mean, THREE.LinearSRGBColorSpace) : new THREE.Color(colour);
+        // (The Breach's: sulphur low down, soot high up, embers in its cracks: lava.js)
+        const brimstone = Boolean(look.brimstone);
 
         for (const { positions, normals, indices, shade } of tiles(surface)) {
             const geometry = new THREE.BufferGeometry();
             const colours = new Float32Array(shade.length * 3);
 
             shade.forEach((each, k) => {
-                const tone = earth && name === "rock" ? toneAt(positions[k * 3], positions[k * 3 + 1], positions[k * 3 + 2]) : [1, 1, 1];
+                const at = [positions[k * 3], positions[k * 3 + 1], positions[k * 3 + 2]];
+                const tone = earth && name === "rock" ? toneAt(...at) : brimstone ? brimstoneTone(...at, seed, [tint.r, tint.g, tint.b], pools, name === "floor") : [1, 1, 1];
 
                 colours.set([tint.r * each * tone[0], tint.g * each * tone[1], tint.b * each * tone[2]], k * 3);
             });
@@ -4691,12 +4847,19 @@ function* rockShell(map, look, shell, life = null) {
             geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
             geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
-            // (The fungus's threads glowing in it: a byte a colour a point)
-            if (colonies.length) {
-                geometry.setAttribute("glow", new THREE.BufferAttribute(threadsOn(positions, colonies, seed), 3, true));
+            // (The fungus's threads glowing in it, and the lava's glow on it: a byte a colour a
+            // point)
+            if (glows) {
+                const glow = colonies.length ? threadsOn(positions, colonies, seed) : new Uint8Array(positions.length);
+
+                geometry.setAttribute("glow", new THREE.BufferAttribute(pools.length ? poolGlowOn(positions, pools, glow, normals) : glow, 3, true));
             }
 
-            const mesh = new THREE.Mesh(geometry, rockMaterial(picture, { glow: colonies.length > 0 }));
+            if (brimstone && name === "rock") {
+                geometry.setAttribute("ember", new THREE.BufferAttribute(embersOn(positions, seed, pools), 1, true));
+            }
+
+            const mesh = new THREE.Mesh(geometry, rockMaterial(picture, { glow: glows, embers: brimstone && name === "rock" }));
 
             mesh.name = name;
             // (A floor casts no shadow on anything)

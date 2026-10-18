@@ -91,14 +91,17 @@ wilds, and only by night, once the cult keeping its rite there is slain ([The wa
 
   | Level | Realm | Dug as | Drawn as | Heard as | Who's in it | Its master |
   |---|---|---|---|---|---|---|
-  | 1 | the Breach | caves | `hell-breach`: sooty caves, embers drifting | a lair | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats | the Breach Priest, a cultist |
+  | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | a lair | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats | the Breach Priest, a cultist |
   | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: vaults the colour of old bone | a crypt | skeletons, draugr, wraiths, ghosts, shadow stalkers | the Bone Lord, a wight lord |
   | 3 | the River of Fire | caves | `hell-fire`: black basalt, embers thick in hot air | a lair | magma slimes, salamanders, black shucks, chimeras, wyverns | the Forge Beast, a chimera |
   | 4 | the Pit | an ancient temple's halls | `hell-pit`: walls dark as dried blood, close black air | a crypt | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders | the Gatekeeper, an ogre; then the Lord of the Pit |
 
-  Each realm's rooms are dressed its own way: the cult's altars and candles in the Breach, tombs
-  and charnel heaps in the Halls of Bone, braziers and anvils by the River of Fire, watching statues,
-  braziers and the throne in the Pit (`world/dungeondressing.js` `CLUTTER`, `STREWN`).
+  Each realm's rooms are dressed its own way: the cult's altars and candles and pools of lava in
+  the Breach, tombs and charnel heaps in the Halls of Bone, braziers and anvils by the River of
+  Fire, watching statues, braziers and the throne in the Pit (`world/dungeondressing.js` `CLUTTER`,
+  `STREWN`). The room furthest in on a level, its master's, by the portal down, can have a look of
+  its realm's own (its `rooms.goal`: `place.js`): the Breach's is the cult's altar, the rift torn
+  open over it ([The Breach](#the-breach-brimstone-lava-and-the-rift)).
 - **Stand-ins for now**: everyone in it but its lord is one of the wild's creatures, till bought
   models of demons take their places (docs/LICENSED_MODELS.md). Each master has a look of its own
   (`beasts/champions.js` `REGALIA`): scorched, burnt, horned or hooded.
@@ -146,6 +149,40 @@ wilds, and only by night, once the cult keeping its rite there is slain ([The wa
   has nothing to go in by (no squares), so no one's led in by it (`interiors.js` `routeBetween`,
   `battle.js`, `app/doors.js`), and the host won't send anyone in through it. It's sealed till
   the lord falls ("The way out stays shut while the lord of this place still stands.").
+
+### The Breach: brimstone, lava and the rift
+
+The first realm is where hell breaks through mortal rock (the research's "brimstone caves": Diablo's
+Caves, its Outer Steppes), so its lava comes in small pools, never as the ground, and its rock is
+still grey stone, crusted and scorched.
+
+- **Its pools of lava** (`~`): in its grottos (one each), and now and then in its other caverns
+  and nooks, two or three squares against the rock (`themes.js`, its rooms' `props`). Placed as
+  any blocking thing is, so they never cut a way off; nothing else that blocks stands beside one.
+  Drawn (`world/lava.js`, the research's phone recipe: a texture trick, not a simulation):
+  - each pool a rounded shape in its squares, reaching in under the rock it lies against, its rim
+    wandering in and out (`poolShape`);
+  - its surface one material for every pool, worked out as it's drawn (`lavaMaterial`): molten,
+    orange to yellow-white where it's hottest and churning; plates of black crust floating on it,
+    their edges ragged and still glowing, every one of them crusted over at the bank and fewer
+    towards the middle; the plates turning slowly round the pool, a whole turn each two minutes
+    (the veils' clock, `VEIL`, so it never jumps); breathing slowly. About five texture-free noise
+    lookups a pixel, its finer churning at medium quality and up;
+  - its bank a low ridge of the rock's crust round it, darker than the rock, glowing on the inside;
+  - its light a room's (`roomlight.js`), breathing slowly, and its glow on the rock and floor round
+    it baked into their points (`poolGlowOn`: the rock's `glow`), brightest at the rim, out to
+    2.2 m and up to 2.6 m, the floor less than the walls: the walls by a pool lit from below for
+    nothing. The level's pools are two draws between them.
+- **Its rock** (the look's `brimstone`): sulphur crusting it in yellow patches low down, and on the
+  floor near the pools (`brimstoneTone`); soot darkening it towards the roof; and embers glowing in
+  its cracks (`embersOn`: thin seams where a noise is near its middle, low down, more of them by a
+  pool, each point's `ember`; brighter in the rock picture's dark grooves, brightening and dimming
+  in slow waves across it: `dungeons3d.js` `rockMaterial`'s `embers`).
+- **The rift** (`interiors3d.js` `breachRift`): the room furthest in, by the portal down, where its
+  master waits, is always the cult's altar, candles round it. Over the altar, a tear in the air
+  2.2 m tall, its edges ragged and bent a little, the swirl of a hell's portal in it
+  (`VEILS.hell`, its eye in the tear's middle), a ragged rim of fire round it, lighting the room
+  red (its own light, `rift`). It stands across the altar's length, two faces back to back.
 
 ### The way in: a cult's camp by night
 
@@ -319,7 +356,8 @@ square that can be walked on can still be walked to.
 
 `rows` read with `readPlan` as every building's floors do. The new plan characters are
 `V` stairs down, `^` stairs up, `*` rock standing up from a cave's floor, `%` crates, `y` a
-brazier, `$` a small chest, and an ants' nest's `E` brood and `z` midden heap. The rest are the ones the caves, lair and crypt already use:
+brazier, `$` a small chest, an ants' nest's `E` brood and `z` midden heap, and a hell's `~` pool
+of lava (blocking, not blocking sight, its squares one pool). The rest are the ones the caves, lair and crypt already use:
 `#` rock, `I` pillars, `t` tombs, `m` rubble, `j` bones, `h` the hoard, and so on.
 
 ## Dungeons in play
@@ -756,6 +794,15 @@ code is here.
 - **`e2e/model-viewer.spec.js`**, with the licensed models: the Lord of the Pit drawn from the
   Greater Demon once it's read, not as its people-shaped stand-in: its claws and punch, its
   hellfire hurled from its fist, its roar; 3.2 metres tall.
+- **`test/lava.test.js`**, the Breach's lava: pools on every level of it, each against the rock,
+  every open square still walked to; lying in their squares, reaching in only under the rock; hot
+  in the middle, cooled at the bank, the bank standing up round them, glowing inside; the rock and
+  floor lit round them, brightest at the rim, none beyond its reach, the floor less than the
+  walls; one material, worked out by the veils' clock. Its rock: sulphur in patches low down,
+  soot higher up, sulphur on the floor only near a pool; embers only in a few points' cracks, low
+  down, more by a pool. **`test/hells.test.js`** draws the levels: the Breach's lava (one mesh, its
+  banks another, a light each), its rock glowing and with embers, the rift over its altar with its
+  own light; on no other level.
 - **`test/caverns.test.js`**, the rock as one surface: how far into the open each point is; its
   walls never in the open ground below head height; room to stand under its roof over every open
   square; every triangle facing the open; the floor under all the open ground but the stairs'

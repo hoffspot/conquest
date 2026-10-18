@@ -16,7 +16,7 @@ import { WAY_IN } from "./layouts.js";
 import { pickStable } from "./seeds.js";
 
 /** Characters a level's plan uses beyond floor and rock, that block walking (interiors.js PLAN_KEY). */
-export const BLOCKING = new Set(["*", "%", "V", "^", "x", "y", "u", "K", "T", "R", "Y", "I", "t", "Z", "a", "s", "k", "m", "d", "i", "e", "o", "n", "v", "X", "A", "J", "E", "z"]);
+export const BLOCKING = new Set(["*", "%", "V", "^", "x", "y", "u", "K", "T", "R", "Y", "I", "t", "Z", "a", "s", "k", "m", "d", "i", "e", "o", "n", "v", "X", "A", "J", "E", "z", "~"]);
 
 /**
  * How far (rings of squares) no one waits from where anyone comes onto a level: as the places
@@ -491,7 +491,9 @@ export function fillLevel(dug, rooms, links, plan) {
     const looks = {};
 
     for (const one of rooms) {
-        const kind = dug.kinds[one.id];
+        // (The room furthest in a look of its own, if the theme has one for it: the Breach's altar,
+        // the rift torn open over it)
+        const kind = one.id === goal && theme.rooms.goal ? "goal" : dug.kinds[one.id];
         const look = pickStable(seed, slot("room", one.id), theme.rooms[kind] ?? theme.rooms.any ?? []);
 
         if (!look) {
