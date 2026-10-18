@@ -70,6 +70,7 @@ import { CRY, newsCount, newsSince, peopleOf, rumourOfRuler, rumoursAt } from ".
 import { bubbleSeconds, CALLING, callOf } from "../core/crying.js";
 import { createRandom } from "../core/random.js";
 import { cultNear, cultWays, cultWord } from "../core/cultword.js";
+import { circleOf, rumouredBy, rumoursNear, rumourWord, RUMOURS } from "../core/rumours.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { RESOURCES, RISING, STAGES } from "../core/war/war.js";
 import { GODS } from "../core/lore/gods.js";
@@ -683,6 +684,9 @@ const NEWS_NEAR = 300;
 // heard as far off as this (metres: no nearer than he calls out to them, core/crying.js CALLING),
 // no oftener than this (seconds), and a little louder than as he rests
 const BELL = Object.freeze({ reach: 160, every: 180, volume: 1.6 });
+
+// How many of the places the player's heard tell of and found since the journal keeps (the last)
+const HEARD_FOUND = 5;
 
 // What the host tells of besides the battle's events (#hear)
 const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party"]);
@@ -4724,9 +4728,31 @@ export class Game {
         const actor = this.battle.actor(this.me);
         const outside = this.#outside(actor);
         const facing = this.avatars.get(this.me)?.facing ?? actor.facing;
-        const seen = ({ x, z }) => [-1, 0, 1].some((dz) => [-1, 0, 1].some((dx) => this.explored.visitedAt(x + dx * CHUNK, z + dz * CHUNK)));
+        const seen = ({ x, z }) => this.explored.sighted(x, z);
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen), ...this.dungeonIcons().filter(seen), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen), ...this.dungeonIcons().filter(seen), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), ...this.pinView() };
+    }
+
+    /**
+     * The places the player's heard tell of and is still to find, as faint circles on the world
+     * map round about where each is (core/rumours.js circleOf): [{ x, z, radius (metres), hell (a
+     * hell's cult's, said to be near: violet) }]. The newest RUMOURS.kept of the criers', and every
+     * hell's; each gone once its place is found, and its icon shown.
+     */
+    heardCircles() {
+        const plan = this.world.plan;
+        const open = (this.memory.heard ?? []).filter((one) => (!one.hell || one.hell === "near") && !this.#foundOf(one));
+        const hells = new Set(open.filter(({ hell }) => hell).map(({ id }) => id));
+        const told = [...new Set(open.filter(({ hell }) => !hell).map(({ id }) => id))].slice(-RUMOURS.kept);
+
+        return plan
+            ? [...told, ...hells].map((id) => {
+                  const place = rumouredBy(plan, id) ?? plan.sites.find((site) => site.id === id);
+                  const { at, radius } = circleOf(id, place.at);
+
+                  return { x: at[0], z: at[1], radius, hell: hells.has(id) };
+              })
+            : [];
     }
 
     // --- The world map's pin ---
@@ -5345,6 +5371,13 @@ export class Game {
                     return;
                 }
 
+                // (A hell's cult heard of: in the journal)
+                if (effect.heard === "hell") {
+                    this.#heardOfCult(heardAt);
+
+                    return;
+                }
+
                 // (What can't be paid for, said; what is, the gold heard counted out)
                 this.#command({ type: "effect", effect }, (result) => {
                     if (!result.ok) {
@@ -5384,8 +5417,8 @@ export class Game {
     // what's no longer told them in a box, far off), how much of it there is ({newsCount}), and a
     // few pieces of it at a time ({news}, CRY.page, each `hear` of it: the player's cursor moved on
     // past them, kept with what they've talked of, memory.news); whether there's more ({ news }),
-    // and whether the war's gone on past where they last listened ({ rolled }). Null for anyone
-    // else, or with no war
+    // and whether the war's gone on past where they last listened ({ rolled }). And what's said of
+    // the country round about (#hearsayOf). Null for anyone else, or with no war
     #crierOf(npc, out, names) {
         const war = this.host.war;
         const at = out && this.#crierAt(out);
@@ -5396,13 +5429,20 @@ export class Game {
 
         const memory = this.memory;
         const { told, rolled } = this.#crierNews(at);
+        const hearsay = this.#hearsayOf({ id: out.place, at }, names);
         let heard = 0;
 
         return {
-            words: { newsCount: newsCount(told.length), news: "" },
-            check: (condition) => ("news" in condition ? (heard < told.length) === condition.news : "rolled" in condition ? rolled === condition.rolled : true),
+            words: { newsCount: newsCount(told.length), news: "", hearsay: "" },
+            check: (condition) => ("news" in condition ? (heard < told.length) === condition.news : "rolled" in condition ? rolled === condition.rolled : hearsay.check(condition)),
             handles: (effect) => Boolean(effect.hear),
-            effect: () => {
+            effect: (effect) => {
+                if (effect.hear === "hearsay") {
+                    hearsay.tell();
+
+                    return;
+                }
+
                 const cried = told.slice(heard, heard + CRY.page);
 
                 heard += cried.length;
@@ -5414,6 +5454,51 @@ export class Game {
                 }
             },
         };
+    }
+
+    // What a crier tells of the country round his town (`town`: { id, at }; docs/GAME.md *Rumours
+    // of places*): the nearest place there the player's still to find and hasn't heard of
+    // (core/rumours.js rumoursNear), as it's said there ({hearsay}: rumourWord), each `tell` of it
+    // written in their journal and drawn on their map (memory.heard: { id, town, turn }). The first
+    // time he's asked, RUMOURS.first of them; after, one a talk; and none while RUMOURS.open of
+    // those he's told of are still to be found. { check (`hearsay`: one to tell; `toldAll`: all
+    // he will this talk; `heardAll`: all he will till they've found some), tell }
+    #hearsayOf(town, names) {
+        const plan = this.world.plan;
+        const heard = () => this.memory.heard ?? [];
+        const here = heard().filter((one) => one.town === town.id);
+        const most = here.length ? 1 : RUMOURS.first;
+        const open = () => heard().filter((one) => one.town === town.id && !this.#foundOf(one)).length;
+        const next = () => (plan ? (rumoursNear(plan, town.at, this.explored).find(({ id }) => !heard().some((one) => one.id === id)) ?? null) : null);
+        let told = 0;
+        const can = () => told < most && open() < RUMOURS.open && Boolean(next());
+
+        return {
+            check: (condition) =>
+                "hearsay" in condition ? can() === condition.hearsay : "toldAll" in condition ? (told >= most) === condition.toldAll : "heardAll" in condition ? (open() >= RUMOURS.open) === condition.heardAll : true,
+            tell: () => {
+                const place = can() ? next() : null;
+
+                if (!place) {
+                    return;
+                }
+
+                told++;
+                names.hearsay = rumourWord(plan, place, town);
+                this.memory.heard = [...heard(), { id: place.id, town: town.id, turn: this.host.war?.turn ?? 0 }];
+                this.#keepTalks();
+                this.sound?.play("quill");
+            },
+        };
+    }
+
+    // Whether the place a rumour heard is of (memory.heard's: a place's id, core/rumours.js
+    // rumouredBy; or a hell's, the plan's site) has been found (Explored sighted: the maps' rule)
+    #foundOf({ id }) {
+        const plan = this.world.plan;
+        const place = plan ? (rumouredBy(plan, id) ?? plan.sites.find((site) => site.id === id)) : null;
+
+        return !place || this.explored.sighted(place.at[0], place.at[1]);
     }
 
     // Where a crier cries the news ([x, y] metres: his place's, `out` his record, host.js folk), and
@@ -5528,6 +5613,24 @@ export class Game {
         }
 
         return { hellRumour: cultWord(near, place.name, this.talkVariety.next(`hellRumour:${near.band}`, cultWays(near.band))) };
+    }
+
+    // The nearest hell's cult heard of where the player's talking (#cultWords'), written in their
+    // journal (memory.heard: { id, town, turn, hell: how near it's said to be, cultword.js's band }):
+    // near, drawn on their map too; far off, it's hearsay, and not written. Once a town
+    #heardOfCult(building) {
+        const plan = this.world.plan;
+        const place = building?.place === "home" ? this.world.start : plan?.places.find(({ id }) => id === building?.place);
+        const near = place && plan ? cultNear(plan, place.at) : null;
+        const heard = this.memory.heard ?? [];
+
+        if (!near || near.band === "far" || heard.some((one) => one.id === near.site.id && one.town === place.id)) {
+            return;
+        }
+
+        this.memory.heard = [...heard, { id: near.site.id, town: place.id, turn: this.host.war?.turn ?? 0, hell: near.band }];
+        this.#keepTalks();
+        this.sound?.play("quill");
     }
 
     // Which settlement a building's in (its id: insides.js townOf; a manor's, a watchtower's, a
@@ -7380,8 +7483,40 @@ export class Game {
                     return { name, calling, hp: actor?.hp ?? 0, maxHp: actor?.maxHp ?? 1, waiting };
                 }),
             most: this.host.mostFollowers(this.me),
+            heard: this.#heardTell(at),
             messages: this.messages,
         });
+    }
+
+    // What the player's heard tell of (memory.heard: from the criers, core/rumours.js; of the
+    // hells' cults, core/cultword.js), for the journal: [{ words (as it was said), from (who
+    // said it, where), where (which way and how far it is from them now, roughly: the middle of its
+    // circle, journal.js bearing), found }], those still to find first, the newest first; and of
+    // those found, the last few
+    #heardTell(at) {
+        const plan = this.world.plan;
+
+        if (!plan) {
+            return [];
+        }
+
+        const towns = [...plan.places, ...plan.sites];
+        const told = [...(this.memory.heard ?? [])].reverse().flatMap((one) => {
+            const town = towns.find(({ id }) => id === one.town);
+            const place = one.hell ? plan.sites.find(({ id }) => id === one.id) : rumouredBy(plan, one.id);
+
+            if (!town || !place) {
+                return [];
+            }
+
+            const words = one.hell ? cultWord(cultNear(plan, town.at), town.name) : rumourWord(plan, place, town);
+            const found = this.#foundOf(one);
+            const circle = !one.hell || one.hell === "near" ? circleOf(place.id, place.at) : null;
+
+            return [{ words, from: one.hell ? `Said in ${town.name}` : `The crier in ${town.name}`, where: circle && at && !found ? `About ${bearing(at, circle.at)}` : "", found }];
+        });
+
+        return [...told.filter(({ found }) => !found), ...told.filter(({ found }) => found).slice(0, HEARD_FOUND)];
     }
 
     // Whether the character's yet to be told something told only once (`what`: "spoils", the first

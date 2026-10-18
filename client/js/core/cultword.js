@@ -7,7 +7,7 @@
 // Pure, and the same on every machine: the plan's sites only.
 
 import { hypot } from "./exact.js";
-import { compass } from "./standing.js";
+import { compass } from "./ways.js";
 
 /**
  * How near (metres, from the town to the camp) a hell's cult is spoken of as near (`near`: which

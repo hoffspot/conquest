@@ -1457,6 +1457,42 @@ async function keyOf() {
     fog.append(Object.assign(document.createElement("span"), { className: "fog" }), "Not yet explored");
     list.append(fog);
 
+    // (What's been heard tell of: somewhere in its circle; a hell's cult's violet, with a moon)
+    for (const [hell, label] of [[false, "Heard tell of: somewhere in it"], [true, "Strange lights by night"]]) {
+        const item = document.createElement("li");
+        const glyph = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });
+        const context = glyph.getContext("2d");
+        const colour = hell ? "190, 140, 255" : "236, 214, 150";
+
+        context.beginPath();
+        context.arc(22, 22, 17, 0, Math.PI * 2);
+        context.fillStyle = `rgba(${colour}, 0.12)`;
+        context.fill();
+        context.setLineDash([5, 5]);
+        context.lineWidth = 2;
+        context.strokeStyle = `rgba(${colour}, 0.85)`;
+        context.stroke();
+        context.fillStyle = `rgb(${colour})`;
+
+        if (hell) {
+            context.beginPath();
+            context.rect(10, 10, 24, 24);
+            context.arc(24.7, 20.4, 5.1, 0, Math.PI * 2);
+            context.clip("evenodd");
+            context.beginPath();
+            context.arc(22, 22, 6, 0, Math.PI * 2);
+            context.fill();
+        } else {
+            context.font = "bold 14px sans-serif";
+            context.textAlign = "center";
+            context.textBaseline = "middle";
+            context.fillText("?", 22, 23);
+        }
+
+        item.append(glyph, label);
+        list.append(item);
+    }
+
     // (The pin: held down to drop it; and tapping twice to run)
     const pin = document.createElement("li");
     const glyph = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });
