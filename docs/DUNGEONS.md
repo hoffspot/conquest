@@ -57,8 +57,12 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
   the bottom level (a dead end, 160 m² and more). Two or three of a pack stand about it. In an
   ancient temple the hoard's at the head of the sanctum, before the altar on the middle way.
   Elsewhere it's at the furthest walk in.
-- **Small chests**: two to four on each level (two or three on the bottom level). They're likeliest
-  in dead ends, then in rooms off the way through, and never in the room you come in by.
+- **Small chests**: two to four on each level (two or three on the bottom level); twice as many in
+  an ants' nest (four to eight, four to six on the bottom level: its theme's `chests`). They're
+  likeliest in dead ends, then in rooms off the way through, and never in the room you come in by.
+- **The fallen** (an ants' nest's: its theme's `fallen`): the remains of the adventurers who died
+  in it, many of them (one or more in most rooms, three to five in the queen's chamber, beside the
+  bones of what the ants have eaten), each searched once for what was left on them (*Its chests*).
 - **Torches** on the walls of most rooms, and on the floor camp fires, braziers and candles.
 - **Its name** comes from its theme's words: "the Glittering Deeps", "the Rat's Den", "the Halls of
   Ur-Kalath".
@@ -138,7 +142,7 @@ square that can be walked on can still be walked to.
              entry: { squares, arrive, facing }, down: { ... } | null,
              packs: [{ id, role: "pack" | "mini" | "boss", room, title,
                        foes: [{ creature, tier, at, boss?, mini?, title? }] }],
-             chests: [{ id, at, kind: "small" | "hoard", room }],
+             chests: [{ id, at, kind: "small" | "hoard" | "remains", room }],
              lights: [{ at, kind: "torch" | "campfire" | "brazier" | "candles", wall? }] }] }
 ```
 
@@ -162,6 +166,11 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
   the farmland and the meadows; an ancient temple in the jungle and the savannah; an ants' nest in
   the savannah and the badlands, and the meadows, farmland, heath and jungle. Any theme can turn up
   anywhere, less often.
+- **At least two ants' nests in each people's lands** (`settle.js` `NESTS`): where a people's lands
+  have fewer, those of their dungeons on the land a nest's likeliest in are made nests (named as
+  nests are); and where they haven't enough dungeons for that, more ways in are thrown at their
+  lands, 16 cells at least from the others. The rest of the world is as it was (the dungeons have
+  their own stream of numbers): some 15 to 22 nests in a world, against 5 to 15 before.
 - **Its name** from its theme's names, each its own in the world.
 - **Its way in**, set down into a hillside as a cave mouth is (`sites.js` `HILLSIDE.dungeon`), a
   mouth in the rock (`layoutNeutral({ kind: "dungeon", theme })`), dressed by its theme: stores
@@ -239,6 +248,12 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
   dungeon gets a share at their own power (`hoardTier`: their might plus one, or the bottom level's
   tier, whichever's higher; `HOARD`, `rollHoard`): 80 to 150 gold, more each tier; three to five
   pieces of gear made two tiers better than a cache's; one or two healing draughts.
+- **The fallen** in an ants' nest, set out with their level as its small chests are, each a coin
+  glinting over the remains (`world/drops3d.js`). Searched (tapped, from beside them), each player
+  near them gets a share of their own of what was left on them (`FALLEN`, `rollFallen` at the
+  level's tier): 3 to 10 gold, more each tier, a piece of their gear 20% of the time, a healing
+  draught 20% of the time, a cure poison draught 15% of the time. Once each, as a chest's opened
+  once (kept with the chests opened).
 - **Opening the hoard clears the dungeon.** Its icon goes grey. Once every player's left it and is
   `DELVES.far` (120 m) from its way in, it's made again: its foes and what's left on its floors
   gone, its levels thrown away and made anew from the next generation (`Interiors.remake`), with

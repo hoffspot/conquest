@@ -264,10 +264,11 @@ describe("buildDungeon", () => {
                     assert.ok(rings(boss.foes[0].at, hoard.at) <= 8, "the boss stands before the hoard");
                 }
 
-                // (Small chests here and there, none in the way in's room, each marked)
+                // (Small chests here and there, none in the way in's room, each marked; as many
+                // again for a theme that has more of them, its `chests`: an ants' nest's twice)
                 const small = level.chests.filter(({ kind }) => kind === "small");
 
-                assert.ok(small.length >= 1 && small.length <= 4, `${small.length} small chests`);
+                assert.ok(small.length >= 1 && small.length <= 4 * (THEMES[theme].chests ?? 1), `${small.length} small chests`);
                 assert.equal((map.marks.$ ?? []).length, small.length);
 
                 for (const chest of small) {

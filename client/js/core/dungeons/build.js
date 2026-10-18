@@ -23,7 +23,7 @@ export { dungeonName };
  * Bumped whenever what a seed makes changes (a dungeon saved with another is made again from its
  * seed as this one makes it, not mixed).
  */
-export const DUNGEON_VERSION = 5;
+export const DUNGEON_VERSION = 6;
 
 /** How likely a dungeon is to be one, two or three levels deep. */
 export const LEVEL_ODDS = Object.freeze({ 1: 3, 2: 4, 3: 3 });
@@ -57,7 +57,7 @@ export const CHECKS = Object.freeze({ rooms: 0.8, path: { 1: 5, 2: 4, 3: 3 }, fa
  * (room ids from the way in to the room furthest in), entry ({ squares, arrive, facing }: the
  * front door's or the foot of the stairs up's), down (the same for the stairs down, or null on the
  * bottom level), packs ([{ id, role: "pack" | "mini" | "boss", room, title, foes: [{ creature,
- * tier, at: [x, y], boss?, mini?, title? }] }]), chests ([{ id, at, kind: "small" | "hoard", room }]),
+ * tier, at: [x, y], boss?, mini?, title? }] }]), chests ([{ id, at, kind: "small" | "hoard" | "remains", room }]),
  * lights ([{ at, kind, wall? }]), attempt }] }.
  *
  * `theme`: a THEMES id; `tier`: how strong it is (1 to 10: the land's or its finders', the first

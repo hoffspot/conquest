@@ -220,18 +220,22 @@ export const THEMES = {
             { id: "matriarch", creature: "blackWidow", title: "Widow matriarch", weight: 2 },
         ],
         bosses: [{ id: "antMonster", creature: "antMonster", title: "the Ant Monster", weight: 1, guard: ["ant"] }],
+        // (Twice the small chests other dungeons have, and the adventurers who died in it, many of
+        // them, each to be searched for what's left on them: place.js, play.js FALLEN)
+        chests: 2,
+        fallen: true,
         rooms: {
-            mouth: [{ id: "mouth", props: [{ char: "m", count: [1, 3], at: "wall" }, { char: "j", count: [0, 1], at: "open" }, { char: "d", count: [2, 4], at: "wall" }], torches: [1, 1] }],
+            mouth: [{ id: "mouth", props: [{ char: "m", count: [1, 3], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [1, 1], at: "open" }, { char: "d", count: [2, 4], at: "wall" }], torches: [1, 1] }],
             cavern: [
-                { id: "galleries", weight: 2, props: [{ char: "*", count: [2, 4], at: "open" }, { char: "m", count: [1, 3], at: "wall" }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 1] },
-                { id: "larder", weight: 1, props: [{ char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "m", count: [0, 2], at: "wall" }, { char: "d", count: [2, 3], at: "wall" }], torches: [0, 0] },
+                { id: "galleries", weight: 2, props: [{ char: "*", count: [2, 4], at: "open" }, { char: "j", count: [1, 3], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "m", count: [1, 3], at: "wall" }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 1] },
+                { id: "larder", weight: 1, props: [{ char: "j", count: [4, 7], at: "open" }, { char: "i", count: [2, 4], at: "open" }, { char: "m", count: [0, 2], at: "wall" }, { char: "d", count: [2, 3], at: "wall" }], torches: [0, 0] },
             ],
             grotto: [
-                { id: "brood", weight: 2, props: [{ char: "m", count: [2, 4], at: "wall" }, { char: "j", count: [0, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] },
-                { id: "midden", weight: 1, props: [{ char: "j", count: [2, 4], at: "open" }, { char: "i", count: [0, 2], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0] },
+                { id: "brood", weight: 2, props: [{ char: "m", count: [2, 4], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] },
+                { id: "midden", weight: 1, props: [{ char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0] },
             ],
-            nook: [{ id: "nook", props: [{ char: "m", count: [0, 2], at: "wall" }, { char: "j", count: [0, 1], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 0] }],
-            arena: [{ id: "chamber", props: [{ char: "*", count: [3, 5], at: "open" }, { char: "j", count: [4, 7], at: "open" }, { char: "i", count: [2, 4], at: "open" }, { char: "m", count: [2, 4], at: "wall" }, { char: "d", count: [2, 4], at: "wall" }], torches: [2, 3] }],
+            nook: [{ id: "nook", props: [{ char: "m", count: [0, 2], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 0] }],
+            arena: [{ id: "chamber", props: [{ char: "*", count: [3, 5], at: "open" }, { char: "j", count: [5, 8], at: "open" }, { char: "i", count: [3, 5], at: "open" }, { char: "m", count: [2, 4], at: "wall" }, { char: "d", count: [2, 4], at: "wall" }], torches: [2, 3] }],
         },
     },
 };
