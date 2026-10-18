@@ -69,7 +69,9 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
   it's lit by **colonies of glowing fungus** on its walls instead (each room's look's `glows`: one
   or two in a gallery, larder or brood chamber, two or three on a midden heap, four or five round
   the queen's chamber, none or one in a nook), each against rock two squares deep, at least three
-  rings from the next (`place.js` `GLOW_APART`), dark between.
+  rings from the next (`place.js` `GLOW_APART`), dark between. A level whose rooms come to fewer
+  than 0.8 colonies a room (`GLOW_LEAST`: a level of nooks, each with none or one) gets one more in
+  each of those with fewest till it has that many, so it's never dark through.
 - **Its name** comes from its theme's words: "the Glittering Deeps", "the Rat's Den", "the Halls of
   Ur-Kalath".
 
@@ -137,7 +139,9 @@ coming in arrives two steps off the landing or door, facing into the level. No o
   - **what each chamber is** (its kind, which its look follows: `themes.js` `nest.rooms`): the one
     or two out furthest to the level's sides middens on the top level, one between, none at the
     bottom; the smallest nooks; the rest larders, but at the bottom (and in the far half of a nest
-    one level deep) brood.
+    one level deep) brood. Its brood is heaped in the middle of a brood chamber (`E`), and what it's
+    thrown out in the middle of a midden (`z`), each two squares by two that can't be walked over
+    (but where a chamber has no room for it at its middle, about one in a hundred).
   - then smoothed once, so the lobes stay crisp, and one or two walls broken through where that
     saves 25 m or more, never into the queen's chamber.
 
@@ -175,7 +179,7 @@ square that can be walked on can still be walked to.
 
 `rows` read with `readPlan` as every building's floors do. The new plan characters are
 `V` stairs down, `^` stairs up, `*` rock standing up from a cave's floor, `%` crates, `y` a
-brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt already use:
+brazier, `$` a small chest, and an ants' nest's `E` brood and `z` midden heap. The rest are the ones the caves, lair and crypt already use:
 `#` rock, `I` pillars, `t` tombs, `m` rubble, `j` bones, `h` the hoard, and so on.
 
 ## Dungeons in play
@@ -306,7 +310,8 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
     deeper the level, orange where iron's stained it, a speckle of grit, and the meadow's dark soil
     under the top level's roof. Its chambers are strewn with what the ants have dragged in, the
     bones of what they've eaten, roots through the earth (`dungeondressing.js` `CLUTTER.nest`,
-    `STREWN`).
+    `STREWN`); where other dungeons have fallen rock (`m`), it has heaps of the earth the ants have
+    dug out, no boulders (*An ants' nest's story*).
 - **The rock as one surface** (`caverns.js`): how far into the open each point of the level is,
   from its plan's squares (a distance transform, a quarter of a metre at a time, its corners
   rounded), shapes walls and roof together, with noise for the rock's bulges; the surface is
@@ -409,6 +414,39 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
     none on low quality), and now and then, somewhere near the player under the roof, soil
     trickles from it for a second or two, its dust sifting up off the floor (`trickles.js`,
     drawn as the fights' sparks and dust are: `effects.js` `trickle`, `sift`).
+- **An ants' nest's story** (`nestlife.js`, `dungeondressing.js`, drawn with its rock: `interiors3d.js`
+  `nestLife`), told in what's left about it, in nine meshes at most a level, whatever's in it:
+  - **Its brood**, round the middle of each brood chamber (`broodIn`, `NEST_LIFE.brood`): 18 to 26
+    glossy ivory eggs heaped there, 8 to 13 cream larvae curled on their sides in a ring round them,
+    their small heads amber, and 7 to 11 pupae in their papery tan cocoons round those, none on
+    another or on what else is there; one instanced mesh for each kind, a shape made once and
+    shared. A faint warm light breathes over it (a room's light, 1.4 strong, reaching 5 m).
+  - **A midden's heap** (`heapOf`, `heapGeometry`): a lumpy mound 1.35 to 1.75 m out from its
+    middle and 0.55 to 0.85 m high, rounded over its top and spread soft into the floor, of the
+    floor's own earth (its picture, laid on as the floor's is) grey-brown with refuse, the dark of
+    the ants' husks and the pale of bone. The gear of those the ants killed is thrown out on it
+    and round its foot (`middenGearAt`: shields, helms, a mail shirt, blades laid flat, a lantern,
+    skulls and long bones), lying on it, sunk a little, and a ribcage on its side.
+  - **Dug earth** where other dungeons have fallen rock (`m`, in the gallery, the mouth, the
+    chambers): a heap of what the ants have dug out (`heapOf` `"spoil"`), 0.6 to 0.85 m out and
+    0.4 to 0.62 m high, piled against the rock, of the same earth, ochre and umber, fresher than
+    the trodden floor, with three to five clods round it. All a level's heaps of a kind are one
+    mesh.
+  - **Roots through its roof** (`rootsUnder`): clusters of twisting tapered roots and their fine
+    rootlets, over 1 open square in 20 on the top level, 1 in 67 below it and 1 in 125 at the
+    bottom, none of them lower than 2.1 m over the floor and none under a roof lower than 2.6 m.
+  - **A widow's web** where each black widow waits under the roof (its level's `lurks`: where those
+    that lurk overhead are, `insides.js`): a tangle of 80 to 110 faint silk threads under the roof,
+    each sagging, some anchored high on the walls, and 6 to 10 sticky threads hanging from it to
+    the floor (`webAround`); one line mesh for all of them. And by the walls near each, one or two
+    of its prey (`cocoonsOf`): a body 1.35 to 1.75 m long bound round and round in dusty silk,
+    widest at its shoulders, hung by a thread from the roof, its feet clear of the floor.
+  - **What the fallen were doing when they fell** (`fallenScene`), a scene or two a level: below
+    its top level, one face down a few steps from the stairs up, an arm out towards them, their
+    lantern fallen ahead of them and their sword dropped behind; and in a nook or a larder, one
+    who'd begun to dig themselves a way out (pick and spade leant on the rock, the earth they'd
+    dug heaped by them, their lantern out) or a last camp (a ring of stones round a cold fire, a
+    sheepskin, a pack, two dead).
 - **The camera kept out of the rock**: it comes in closer rather than go into a level's rock, and
   stays under its roof (never over it, as it can go over a building's ceiling).
 - **Messages**: a slain boss ("… is slain, and the hoard it kept lies unlocked"), the hoard opened,

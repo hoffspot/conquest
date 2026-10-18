@@ -21,7 +21,7 @@
 // (taproom, upstairs, tavern-door, tavern-stairs) and its folk; it's registered here as made.
 // Pure data, no DOM.
 
-import { tierAt } from "./creatures.js";
+import { CREATURES, tierAt } from "./creatures.js";
 import { buildDungeon } from "./dungeons/build.js";
 import { comeIn, FACING, offStairs, readPlan, tavernFolk, UPSTAIRS_PLAN } from "./interiors.js";
 import { GOD_IDS, GODS } from "./lore/gods.js";
@@ -1675,8 +1675,9 @@ export class Interiors {
                 layout: null,
                 people: "human",
                 // (What the art and the minimap want of the level: its theme, how deep, its torches
-                // and fires, its rooms)
-                dungeon: { theme: floor.look, level: k, levels: floors.length, lights: floor.level.lights, rooms: floor.level.rooms },
+                // and fires, its rooms, and where those that lurk under its roof wait: a widow's web
+                // is drawn about each)
+                dungeon: { theme: floor.look, level: k, levels: floors.length, lights: floor.level.lights, rooms: floor.level.rooms, lurks: floor.level.packs.flatMap(({ foes }) => foes).filter(({ creature }) => CREATURES[creature]?.lurk).map(({ at }) => at) },
             });
 
             return map;

@@ -11,7 +11,7 @@ import { ATTEMPTS, buildDungeon, checkLevel, DUNGEON_VERSION, dungeonName, LEVEL
 import { gabriel, loopsFor, roomsOf, spanningTree } from "../client/js/core/dungeons/graph.js";
 import { Grid } from "../client/js/core/dungeons/grid.js";
 import { LAYOUTS, registerLayout, WAY_IN } from "../client/js/core/dungeons/layouts.js";
-import { ARRIVE_CLEAR, BLOCKING } from "../client/js/core/dungeons/place.js";
+import { ARRIVE_CLEAR, BLOCKING, GLOW_LEAST } from "../client/js/core/dungeons/place.js";
 import { mix, pickStable, streamOf } from "../client/js/core/dungeons/seeds.js";
 import { registerTheme, THEMES } from "../client/js/core/dungeons/themes.js";
 import { WAY_IN_CLEAR } from "../client/js/core/insides.js";
@@ -289,7 +289,7 @@ describe("buildDungeon", () => {
                 const glows = level.lights.filter(({ kind }) => kind === "glow");
 
                 if (THEMES[theme].lit === "glow") {
-                    assert.ok(glows.length >= level.rooms.length * 0.8, `${glows.length} colonies in ${level.rooms.length} rooms`);
+                    assert.ok(glows.length >= level.rooms.length * GLOW_LEAST, `${glows.length} colonies in ${level.rooms.length} rooms`);
                     assert.equal(level.lights.filter(({ kind }) => kind === "torch").length, 1, "the one torch, at its mouth");
                     assert.equal(new Set(glows.map(({ at }) => at.join())).size, glows.length);
 

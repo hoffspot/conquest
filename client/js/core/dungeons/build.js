@@ -24,7 +24,7 @@ export { dungeonName };
  * Bumped whenever what a seed makes changes (a dungeon saved with another is made again from its
  * seed as this one makes it, not mixed).
  */
-export const DUNGEON_VERSION = 8;
+export const DUNGEON_VERSION = 9;
 
 /** How likely a dungeon is to be one, two or three levels deep. */
 export const LEVEL_ODDS = Object.freeze({ 1: 3, 2: 4, 3: 3 });
