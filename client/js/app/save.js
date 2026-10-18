@@ -16,6 +16,7 @@
 // Storage can be missing or refuse to work (private browsing, blocked site data), so every read
 // and write is guarded: without it the game still plays, it just doesn't remember.
 
+import { isGuid, withGuid } from "../core/guid.js";
 import { ELEMENT_TOMES } from "../core/spells.js";
 import { MESSAGES_KEPT } from "./journal.js";
 import { decode, encode } from "../core/wire.js";
@@ -174,11 +175,21 @@ function newId(ids, random = Math.random) {
 }
 
 // A character as kept ({ version, id, hero, seed, created, played }), or null (none, or one
-// that's no good)
+// that's no good). One kept before characters had ids of their own (core/guid.js) is given one,
+// and kept with it
 function characterOf(id, weapons) {
     const save = read(`pellagos.${id}.save`);
 
-    return save?.version === SAVE_VERSION && save.id === id && Number.isInteger(save.seed) && typeof save.created === "string" && isHero(save.hero, weapons) ? save : null;
+    if (!(save?.version === SAVE_VERSION && save.id === id && Number.isInteger(save.seed) && typeof save.created === "string" && isHero(save.hero, weapons))) {
+        return null;
+    }
+
+    if (!isGuid(save.hero.guid)) {
+        save.hero = withGuid(save.hero);
+        write(keyOf(save, "save"), save);
+    }
+
+    return save;
 }
 
 /** The characters kept that can be played ({ version, id, hero, seed, created, played }), the one played last first. */
@@ -204,8 +215,9 @@ export function loadSave(weapons) {
 /**
  * Keep a character ({ hero, seed, created }, and `played`, when they last were), as the one played
  * last. A new one (no `id` yet) is given its id and kept with the others, unless MOST_CHARACTERS
- * are kept already (one of them must go first: forgetCharacter). Returns false if it isn't kept
- * (that, or the browser wouldn't store it).
+ * are kept already (one of them must go first: forgetCharacter); and its hero, its own id, the
+ * same wherever they go, if it hasn't one (core/guid.js). Returns false if it isn't kept (that,
+ * or the browser wouldn't store it).
  */
 export function writeSave(save) {
     const { ids } = roster();
@@ -219,6 +231,7 @@ export function writeSave(save) {
     }
 
     save.created ??= new Date().toISOString();
+    save.hero = isGuid(save.hero?.guid) ? save.hero : withGuid(save.hero);
 
     const kept = write(keyOf(save, "save"), { version: SAVE_VERSION, id: save.id, hero: save.hero, seed: save.seed, created: save.created, played: save.played ?? save.created });
 
@@ -671,8 +684,9 @@ export function importCharacter(given) {
  * app/character-file.js) kept on this device as a new character, under an id of its own, with
  * their world and all that's kept of them: { save } (as loadCharacters gives one); or { error:
  * "full" } with MOST_CHARACTERS kept already (one must go first: forgetCharacter), "here" if the
- * same character's kept already (the same hero, started at the same moment in the same world),
- * or "storage" if the browser wouldn't keep them.
+ * same character's kept already (their own id, core/guid.js; or, kept before characters had ids,
+ * the same hero started at the same moment in the same world), or "storage" if the browser
+ * wouldn't keep them. One without an id of its own is given one.
  */
 export function keepCharacter(exported) {
     const { ids, last } = roster();
@@ -681,7 +695,7 @@ export function keepCharacter(exported) {
     if (ids.some((id) => {
         const kept = read(`pellagos.${id}.save`);
 
-        return kept?.created === from.created && kept?.seed === from.seed && kept?.hero?.name === from.hero?.name;
+        return (isGuid(from.hero?.guid) && kept?.hero?.guid === from.hero.guid) || (kept?.created === from.created && kept?.seed === from.seed && kept?.hero?.name === from.hero?.name);
     })) {
         return { error: "here" };
     }
@@ -690,7 +704,7 @@ export function keepCharacter(exported) {
         return { error: "full" };
     }
 
-    const save = { version: SAVE_VERSION, id: newId(ids), hero: from.hero, seed: from.seed, created: from.created, played: from.played ?? from.created };
+    const save = { version: SAVE_VERSION, id: newId(ids), hero: withGuid(from.hero), seed: from.seed, created: from.created, played: from.played ?? from.created };
     let kept = true;
 
     for (const kind of KINDS.filter((each) => each !== "save" && each !== "world" && isObject(exported[each]))) {

@@ -11,6 +11,7 @@ import { after, describe, it } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { MOST_CHARACTERS, SAVE_VERSION } from "../client/js/app/save.js";
+import { isGuid } from "../client/js/core/guid.js";
 import { readGzip, readJSON, writeGzip, writeJSON } from "../server/storage/files.js";
 import { DataFolder } from "../server/storage/folder.js";
 import { MOST_HEROES } from "../server/storage/heroes.js";
@@ -188,6 +189,21 @@ describe("the heroes a world keeps (server/storage/heroes.js)", () => {
 
         assert.equal(stored.saveVersion, SAVE_VERSION);
         assert.equal(stored.character.hero.name, "Ada 1");
+
+        // (Each with its own id, the same every time it's given back: client/js/core/guid.js)
+        const ids = await Promise.all([1, 3, 4].map(async (slot) => (await world.heroes.get("p-ada", slot)).hero.guid));
+
+        assert.ok(ids.every(isGuid) && new Set(ids).size === 3);
+        assert.equal(stored.character.hero.guid, ids[0]);
+        assert.equal((await world.heroes.get("p-ada", 1)).hero.guid, ids[0]);
+
+        // (One kept before heroes had ids: given one, and kept with it)
+        await writeJSON(path.join(world.folder, "heroes", "p-ada", "5.json"), { ...stored, character: { ...stored.character, hero: { ...stored.character.hero, guid: undefined, name: "Ada 5" } } });
+
+        const old = (await world.heroes.get("p-ada", 5)).hero.guid;
+
+        assert.ok(isGuid(old));
+        assert.equal((await world.heroes.get("p-ada", 5)).hero.guid, old);
     });
 
     it("refuses a player id that couldn't be one, and a hero kept by a newer server", async () => {

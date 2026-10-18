@@ -17,6 +17,7 @@ import { exportOfKept } from "../client/js/app/character-file.js";
 import { defaultHero } from "../client/js/app/heroes.js";
 import { SAVE_VERSION } from "../client/js/app/save.js";
 import { addressOf, BRING_FORMAT as GAME_FORMAT, KnownServers, ServerClient, ServerRefusal } from "../client/js/app/servers.js";
+import { isGuid } from "../client/js/core/guid.js";
 import { Host } from "../client/js/core/host.js";
 import { NET_VERSION } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -64,6 +65,9 @@ function upload(port, route, bytes, headers = {}) {
     });
 }
 
+// The character's own id, as kept on their device (core/guid.js)
+const ADA = "3f2b1c9e-7a4d-4e0f-9b21-5c6d7e8f9a0b";
+
 // localStorage, in memory
 function memory() {
     const kept = new Map();
@@ -76,7 +80,7 @@ function memory() {
 function solo(name = "Ada") {
     const war = { ...new Host(buildWorld({ seed: 21, race: "elf" })).snapshot().war, turn: 4 };
     const kept = {
-        hero: { ...defaultHero(), name, race: "elf", weapon: "bow" },
+        hero: { ...defaultHero(), name, race: "elf", weapon: "bow", guid: ADA },
         talks: { memory: { barkeep: { talks: 1, flags: [] } }, knowledge: ["the ford"] },
         explored: { entered: [], visited: "" },
         progress: { skills: { marksman: 200 }, schools: { healing: 0, fire: 0, earth: 0, air: 0, water: 0 }, spells: [], spellXp: {}, gold: 75, pack: [{ id: "potion", quality: "common", count: 2 }, { id: "oldBlade", count: 1 }], gear: { mainHand: { id: "bow", quality: "common" } } },
@@ -158,6 +162,9 @@ describe("a player's own world brought to a world server", () => {
 
         assert.equal(hero.progress.gold, 75);
         assert.deepEqual(hero.progress.pack.filter(Boolean).map(({ id }) => id), ["potion"]);
+        // (A copy, the world's own: an id of its own, and theirs as its origin, as they're still on their device)
+        assert.ok(isGuid(hero.hero.guid) && hero.hero.guid !== ADA);
+        assert.equal(hero.hero.origin, ADA);
         assert.deepEqual(hero.talks.knowledge, ["the ford"]);
         assert.match(await readFile(path.join(stored.folder, "journal.log"), "utf8"), new RegExp(`Brought from a solo game by Sam, its owner now, as player ${json.player}: Ada, its first kept hero; its war carried on, at turn 4\\. Of Ada, as this version of the game plays them: 1 thing the game no longer has: old blade\\.`));
     });

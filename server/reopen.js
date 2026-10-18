@@ -14,6 +14,7 @@ import { rm } from "node:fs/promises";
 import { salvage } from "../client/js/app/character-file.js";
 import { ExportError, forwardExport, importCharacter } from "../client/js/app/save.js";
 import { Host, SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
+import { copyOf } from "../client/js/core/guid.js";
 import { characterFrom } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { NewerDataError } from "./storage/versions.js";
@@ -182,6 +183,10 @@ export async function importSolo(store, exported, { name = null, creator = null,
     if (!character) {
         throw new SoloError("Its hero couldn't be brought in.");
     }
+
+    // (A copy, the world's own from now on: the character stays on their device too, so it has an
+    // id of its own, and theirs as its origin: core/guid.js)
+    character.hero = copyOf(character.hero);
 
     const { hero } = character;
     const kept = { ...character, explored: imported.explored, wheels: imported.wheels, pin: imported.pin, place: imported.place, vitals: imported.vitals, messages: imported.messages, told: imported.told };

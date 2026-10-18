@@ -61,6 +61,7 @@
 // Pure: no DOM, no network. Hosting and Joining are given how to send, and told what's heard.
 
 import { STEP_MS } from "./battle.js";
+import { isGuid } from "./guid.js";
 import { HIRES, HOST_PLAYER } from "./host.js";
 import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
 import { STARTING_WEAPONS } from "./weapons.js";
@@ -170,7 +171,8 @@ const isObject = (value) => value !== null && typeof value === "object" && !Arra
 
 /**
  * A character as one who's joining brings it (as Host.join takes it: { hero, talks, explored,
- * progress, standing, followers }), made safe to bring in: or null if it isn't one.
+ * progress, standing, followers }), made safe to bring in: or null if it isn't one. Their hero's
+ * own id and whose copy they are (`guid`, `origin`: core/guid.js) kept only if they're ids.
  */
 export function characterFrom(character) {
     const hero = character?.hero;
@@ -183,8 +185,17 @@ export function characterFrom(character) {
     const talks = isObject(character.talks) ? character.talks : {};
     const followers = Array.isArray(character.followers) ? character.followers.filter((one) => isObject(one) && typeof one.name === "string" && HIRES[one.calling]).slice(0, 8) : [];
 
+    const kept = { ...structuredClone(hero), name: hero.name.trim().slice(0, 20).trim(), race, parts: Array.isArray(hero.parts) ? hero.parts.filter((part) => typeof part === "string").slice(0, 4) : [] };
+
+    // (Their own id, and whose copy they are, only if they're ids: core/guid.js)
+    for (const key of ["guid", "origin"]) {
+        if (!isGuid(kept[key])) {
+            delete kept[key];
+        }
+    }
+
     return {
-        hero: { ...structuredClone(hero), name: hero.name.trim().slice(0, 20).trim(), race, parts: Array.isArray(hero.parts) ? hero.parts.filter((part) => typeof part === "string").slice(0, 4) : [] },
+        hero: kept,
         talks: { memory: isObject(talks.memory) ? structuredClone(talks.memory) : {}, knowledge: Array.isArray(talks.knowledge) ? talks.knowledge.filter((each) => typeof each === "string") : [] },
         explored: {},
         progress: isObject(character.progress) ? structuredClone(character.progress) : {},
