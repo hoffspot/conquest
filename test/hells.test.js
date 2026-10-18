@@ -217,7 +217,7 @@ describe("a hell as it's made (dungeons/build.js, place.js, themes.js hell)", ()
     });
 });
 
-describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, breachRift, VEILS)", () => {
+describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, breachRift, VEILS; lava.js; flesh.js)", () => {
     it("has a portal of fire where other dungeons have stairs: an arch on each way up or down (and out), its veil in a hell's colours, lighting the room red; the guild's portals as they were", () => {
         const floors = dungeonRooms({ seed: 11, theme: "hell", tier: 9 });
         // (How many points one portal's veil has: those drawn alike are drawn as one)
@@ -267,11 +267,24 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, bre
             assert.equal(named("lava-bank").length, k === 0 ? 1 : 0);
             assert.equal(built.lights.filter(({ kind }) => kind === "lava").length, pools);
 
+            // (The Halls of Bone's: their walls of flesh, veins beating in them, ribs rising out of
+            // them, blood pooled on the floor, and the heart in the last room, beating, its light
+            // with it)
+            assert.equal(named("ribs").length > 0, k === 1);
+            assert.equal(named("blood").length, k === 1 ? 1 : 0);
+            assert.equal(named("heart").length, k === 1 ? 1 : 0);
+            assert.equal(built.lights.filter(({ kind }) => kind === "heart").length, k === 1 ? 1 : 0);
+
+            if (k === 1) {
+                assert.ok(named("rock").every((mesh) => mesh.geometry.attributes.seam && mesh.material.roughness < 0.9), "veins in wet flesh");
+                assert.ok(map.pieces.some(({ kind }) => kind === "blood") && map.pieces.some(({ kind }) => kind === "heart"));
+            }
+
             if (k === 0) {
                 const rock = named("rock");
 
-                assert.ok(rock.length > 0 && rock.every((mesh) => mesh.geometry.attributes.ember && mesh.geometry.attributes.glow), "embers and glow in the rock");
-                assert.ok(named("floor").every((mesh) => mesh.geometry.attributes.glow && !mesh.geometry.attributes.ember), "the floor glowing by the pools");
+                assert.ok(rock.length > 0 && rock.every((mesh) => mesh.geometry.attributes.seam && mesh.geometry.attributes.glow), "embers and glow in the rock");
+                assert.ok(named("floor").every((mesh) => mesh.geometry.attributes.glow && !mesh.geometry.attributes.seam), "the floor glowing by the pools");
                 assert.ok(rock.some((mesh) => mesh.geometry.attributes.glow.array.some((byte) => byte > 0)));
             }
 

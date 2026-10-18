@@ -251,7 +251,7 @@ export const THEMES = {
     // highest tiers (`tiers`), whoever's in it suiting them all (`tiered: false`: its packs are
     // its own, not chosen by tier). Its realms, top to bottom (`realms`, each as a theme's fields
     // for its level): the Breach, brimstone caves where hell breaks through the rock, the cult's
-    // possessed faithful in them; the Halls of Bone, vaulted in bone, the dead walking; the River
+    // possessed faithful in them; the Halls of Bone, flesh and bone, the dead walking; the River
     // of Fire, a fortress over it; and the Pit, the demon lord's throne at its heart and, beyond
     // it, the portal back up into the wilds (`exit`). Each level's boss (`warden`) guards its
     // portal down; the bottom level's before the throne. Stand-ins all, from the wild's
@@ -335,14 +335,17 @@ export const THEMES = {
                 ],
                 warden: { id: "boneLord", creature: "wightLord", title: "the Bone Lord", guard: ["skeleton"] },
                 rooms: {
-                    gate: [{ id: "gate", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "j", count: [1, 3], at: "open" }, { char: "k", count: [0, 2], at: "corner" }, { char: "d", count: [1, 2], at: "wall" }], torches: [2, 2] }],
+                    gate: [{ id: "gate", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "&", count: [0, 1], at: "open", size: [2, 2] }, { char: "j", count: [1, 3], at: "open" }, { char: "k", count: [0, 2], at: "corner" }, { char: "d", count: [1, 2], at: "wall" }], torches: [1, 1] }],
                     hall: [
-                        { id: "ossuary", weight: 2, props: [{ char: "t", count: [2, 4], at: "sides", size: [2, 1] }, { char: "j", count: [2, 4], at: "open" }, { char: "i", count: [0, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [1, 2] },
-                        { id: "charnel", weight: 1, props: [{ char: "I", count: [2, 4], at: "open" }, { char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 2], at: "open" }, { char: "y", count: [0, 1], at: "wall" }], torches: [1, 2] },
+                        { id: "ossuary", weight: 2, props: [{ char: "t", count: [2, 4], at: "sides", size: [2, 1] }, { char: "&", count: [0, 1], at: "open", size: [2, 2] }, { char: "j", count: [2, 4], at: "open" }, { char: "i", count: [0, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] },
+                        { id: "charnel", weight: 1, props: [{ char: "I", count: [2, 4], at: "open" }, { char: "&", count: [1, 2], at: "open", size: [2, 2] }, { char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 2], at: "open" }, { char: "y", count: [0, 1], at: "wall" }], torches: [0, 1] },
                     ],
-                    quarters: [{ id: "pens", props: [{ char: "j", count: [2, 4], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "m", count: [0, 1], at: "wall" }, { char: "d", count: [2, 3], at: "wall" }], torches: [0, 1] }],
+                    quarters: [{ id: "pens", props: [{ char: "&", count: [1, 1], at: "open", size: [2, 2] }, { char: "j", count: [2, 4], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "m", count: [0, 1], at: "wall" }, { char: "d", count: [2, 3], at: "wall" }], torches: [0, 1] }],
                     store: [{ id: "bonestore", props: [{ char: "j", count: [4, 7], at: "open" }, { char: "t", count: [1, 2], at: "wall", size: [2, 1] }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 1] }],
-                    den: [{ id: "flaying", props: [{ char: "a", count: [1, 1], at: "centre", size: [2, 1] }, { char: "k", count: [2, 3], at: "corner" }, { char: "i", count: [1, 2], at: "open" }, { char: "j", count: [1, 3], at: "open" }], torches: [1, 1] }],
+                    // (The room furthest in, its master's, by the portal down: the heart the halls
+                    // beat to, the sacs where its demons are born round it, world/flesh.js)
+                    goal: [{ id: "heart", props: [{ char: "@", count: [1, 1], at: "centre", size: [2, 2] }, { char: "&", count: [1, 2], at: "open", size: [2, 2] }, { char: "j", count: [1, 3], at: "open" }, { char: "i", count: [0, 1], at: "open" }], torches: [0, 0] }],
+                    den: [{ id: "flaying", props: [{ char: "a", count: [1, 1], at: "centre", size: [2, 1] }, { char: "&", count: [1, 2], at: "open", size: [2, 2] }, { char: "k", count: [2, 3], at: "corner" }, { char: "i", count: [1, 2], at: "open" }, { char: "j", count: [1, 3], at: "open" }], torches: [0, 1] }],
                 },
             },
             {
