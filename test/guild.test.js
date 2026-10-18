@@ -10,14 +10,16 @@ import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { candidatesAt, CREATURES, TIER_LAND, tierAt } from "../client/js/core/creatures.js";
 import { Conversation, TREES } from "../client/js/core/dialogue.js";
+import { Explored } from "../client/js/core/explored.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { createRandom } from "../client/js/core/random.js";
 import { PARTS, SPOILS } from "../client/js/core/spoils.js";
 import { bandOf, holderOf, placesOf } from "../client/js/core/places.js";
-import { BOARD_SIZE, briefOf, FAILED, GUILD_DEARER, GUILD_FAILED, GUILD_RANKS, GUILD_REACH, GUILD_SIZES, meritIn, MOST_REQUESTS, objectiveOf, offerBoard, offerContract, offerCourier, progressOf, REQUESTS, SOLDIERS_OUT, Standing, WANTED_PARTS } from "../client/js/core/standing.js";
+import { circleOf, rumoursNear, rumourWord, warningOf } from "../client/js/core/rumours.js";
+import { BOARD_SIZE, briefOf, FAILED, GUILD_DEARER, GUILD_FAILED, GUILD_RANKS, GUILD_REACH, GUILD_SIZES, HUNTING, meritIn, MOST_REQUESTS, objectiveOf, offerBoard, offerContract, offerCourier, progressOf, REQUESTS, SOLDIERS_OUT, Standing, whereTo, WANTED_PARTS } from "../client/js/core/standing.js";
 import { War } from "../client/js/core/war/war.js";
-import { landAt, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
+import { CHUNK, landAt, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const giver = Object.freeze({ id: "guild/receptionist", name: "Mirabel Wren", title: "" });
@@ -111,6 +113,84 @@ describe("the guilds' contracts, all within reach of their towns (standing.js of
             assert.deepEqual(target.near, { town: town.id, name: town.name, at: town.at, reach: GUILD_REACH });
             assert.match(text, new RegExp(`within 1.5 km of ${town.name}`));
         }
+    });
+
+    it("sends the beasts out towards the nearest place the player's still to find, none too far past their rank: a hunting ground most of the way there, the place a little past it, the clerk warning of it; round the town once they've found them all", () => {
+        const war = new War(plan);
+        const town = war.towns.find(({ kind }) => kind === "city");
+        const home = startFor(plan, "human").at;
+        const explored = new Explored();
+        const tier = (place) => tierAt(place.at, [home], landAt(plan, ...place.at).biome);
+        const routed = (seen, guildRank = 0) => {
+            const random = createRandom(5);
+
+            return Array.from({ length: 120 }, () => offerContract({ war, town: town.id, giver, home, guildRank, explored: seen, random })).filter((one) => one?.kind === "beasts");
+        };
+        const [first] = rumoursNear(plan, town.at, explored).filter((place) => tier(place) <= GUILD_RANKS[0].level + HUNTING.above && place.far >= HUNTING.least);
+        const beasts = routed(explored);
+
+        assert.ok(first, "(a place near to find)");
+        assert.ok(beasts.length > 10);
+
+        for (const { target, text } of beasts) {
+            const ground = target.at;
+
+            assert.equal(target.towards, first.id);
+            assert.deepEqual(target.near, { town: null, name: "the hunting ground", at: ground, reach: HUNTING.reach });
+            assert.ok(apart(ground, town.at) <= GUILD_REACH && apart(ground, town.at) < apart(first.at, town.at), "out towards it, within reach");
+            assert.ok(apart(ground, first.at) <= Math.max(HUNTING.beyond, apart(first.at, town.at) * (1 - HUNTING.share)) + 1e-6, "the place a little past it");
+            assert.ok(text.endsWith(`Don't go much further out, mind. ${warningOf(first)}`), text);
+            assert.ok(apart(ground, town.at) >= HUNTING.least * HUNTING.share - 1e-6, "out past the town");
+            assert.match(progressOf({ kind: "beasts", target, state: "open", count: 0 }), new RegExp(`^0 of ${target.need} brought down within 0.5 km of the hunting ground\\.$`));
+            assert.deepEqual(whereTo({ kind: "beasts", target, state: "open", from: {} }, war), { at: ground, name: "the hunting ground" });
+        }
+
+        // (A higher rank's sent against stronger, the places further out with it; none sent
+        // anywhere past what it's sent against)
+        for (const { target } of routed(explored, 4)) {
+            const towards = rumoursNear(plan, town.at, explored).find(({ id }) => id === target.towards);
+
+            assert.ok(tier(towards) <= GUILD_RANKS[4].level + HUNTING.above && towards.far >= HUNTING.least);
+        }
+
+        // Found: out towards the next; every one near found, round the town
+        explored.visit(...first.at);
+        assert.ok(routed(explored).every(({ target }) => target.towards && target.towards !== first.id));
+
+        for (const place of rumoursNear(plan, town.at, explored)) {
+            explored.visit(...place.at);
+        }
+
+        assert.ok(routed(explored).every(({ target }) => !target.towards && target.near.town === town.id));
+        assert.ok(offers(war, town).filter(({ kind }) => kind === "beasts").every(({ target }) => target.near.town === town.id), "none without what they've found");
+    });
+
+    it("asks for a look round where the nearest place the player's still to find is said to be: its circle; none for one asked of already, nor without what they've found", () => {
+        const war = new War(plan);
+        const town = war.towns.find(({ kind }) => kind === "city");
+        const home = startFor(plan, "human").at;
+        const explored = new Explored();
+        const random = createRandom(9);
+        const surveys = Array.from({ length: 200 }, () => offerContract({ war, town: town.id, giver, home, explored, random })).filter((one) => one?.kind === "survey");
+        const [first] = rumoursNear(plan, town.at, explored).filter((place) => tierAt(place.at, [home], landAt(plan, ...place.at).biome) <= GUILD_RANKS[0].level + HUNTING.above);
+
+        assert.ok(surveys.length > 5, `${surveys.length} surveys`);
+        assert.ok(!offers(war, town).some(({ kind }) => kind === "survey"));
+
+        for (const survey of surveys) {
+            assert.equal(survey.key, first.id);
+            assert.deepEqual(survey.target, { place: first.id, ...circleOf(first.id, first.at), name: survey.target.name });
+            assert.ok(survey.text.includes(rumourWord(plan, first, town)), survey.text);
+            assert.equal(survey.reward.merit, REQUESTS.survey.reward.merit);
+            assert.equal(progressOf(survey), "Go near enough to see what's there.");
+            assert.equal(briefOf(survey), `A look round out past ${town.name}`);
+        }
+
+        // (Asked of already: the next nearest)
+        const next = offerContract({ war, town: town.id, giver, home, explored, also: [surveys[0]], random: { pick: (list) => (list.includes("survey") ? "survey" : list[0]), int: () => 0, chance: () => false } });
+
+        assert.equal(next.kind, "survey");
+        assert.notEqual(next.key, first.id);
     });
 
     it("wants only the parts of what's found within reach, as strong as it is there for whoever's asking: tiers from their home", () => {
@@ -741,6 +821,39 @@ describe("the guilds' ranks at their counters (host.js)", () => {
         assert.equal(host.command(HOST_PLAYER, { type: "abandon", request: reeve.id }).ok, true);
         assert.equal(player.standing.points, 50 - FAILED);
         assert.equal(player.standing.guild.merit, GUILD_RANKS[1].merit);
+    });
+
+    it("sees a look round done once the player's been near enough to see the place; nothing lost if it runs out", () => {
+        const { host, player } = world();
+        const home = host.war.town(host.world.start.id);
+        const [place] = rumoursNear(host.world.plan, home.at, player.explored);
+        const survey = (extra = {}) => ({ kind: "survey", title: "A look round", from: { id: "guild/receptionist", name: "Mira", title: "", town: home.id, townName: home.name, post: "guild" }, given: 0, state: "open", count: 0, until: 999, text: "", key: place.id, target: { place: place.id, ...circleOf(place.id, place.at), name: "somewhere" }, reward: { standing: 0, gold: 12, merit: 2 }, ...extra });
+
+        counter(host);
+        host.command(HOST_PLAYER, { type: "effect", effect: { guild: "register" } });
+        player.standing.earn(GUILD_FAILED * 3);
+
+        const merit = player.standing.guild.merit;
+        const looked = player.standing.take(survey());
+
+        run(host, 2000);
+        assert.equal(looked.state, "open");
+
+        // (Near enough: been by it, a chunk off, as the maps have it found)
+        player.explored.visit(place.at[0] + CHUNK, place.at[1]);
+        run(host, 2000);
+        assert.equal(looked.state, "done");
+
+        // Let run out, and given up: nothing lost
+        player.standing.close(looked.id, "done");
+        player.standing.take(survey({ key: "other", until: host.war.turn - 1 }));
+        run(host, 2000);
+        assert.equal(player.standing.guild.merit, merit);
+
+        const given = player.standing.take(survey({ key: "another" }));
+
+        assert.equal(host.command(HOST_PLAYER, { type: "abandon", request: given.id }).ok, true);
+        assert.equal(player.standing.guild.merit, merit);
     });
 
     it("counts only beasts of the level a contract asks for", () => {

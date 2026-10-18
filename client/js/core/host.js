@@ -21,6 +21,7 @@ import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
+import { rumouredBy } from "./rumours.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFits, SHIELD_ARMS } from "./gear.js";
 import { carriesTorch, lighting, skyLight, torchesLit } from "./light.js";
@@ -8886,7 +8887,7 @@ export class Host {
             if (effect.work === "ask") {
                 // (The parts a guild wants are what's found near it for them: as strong as it is
                 // that far from their home)
-                const asked = { war: this.war, realm: player.realm, town: post.town, post: post.post, giver: post, rank, guildRank: standing.guildRank() ?? 0, home: this.#homeOf(player), held: standing.requests, random: this.random };
+                const asked = { war: this.war, realm: player.realm, town: post.town, post: post.post, giver: post, rank, guildRank: standing.guildRank() ?? 0, home: this.#homeOf(player), held: standing.requests, explored: player.explored, random: this.random };
                 const board = kept?.turn === this.war.turn && kept.board.length ? kept.board : post.post === "guild" ? offerBoard(asked) : [offerRequest(asked)].filter(Boolean);
 
                 player.offers[post.id] = { turn: this.war.turn, board };
@@ -9213,6 +9214,13 @@ export class Host {
 
                 return to && war.liege(to.owner) === liege ? null : "void";
             }
+            // (A guild's look round: seen once the player's been near enough, by the maps' rule,
+            // or within REQUEST_REACH.survey of it)
+            case "survey": {
+                const place = rumouredBy(this.world.plan, request.target.place);
+
+                return !place ? "void" : player.explored?.sighted(...place.at) || near(place.at, REQUEST_REACH.survey) ? "ready" : null;
+            }
             case "scout": {
                 if (request.target.force) {
                     const force = war.force(request.target.force) ?? war.camp(request.target.force);
@@ -9383,8 +9391,13 @@ export class Host {
     }
 
     // A request failed or given up: a people's costs a little standing with them; a guild's, a
-    // little of the guilds' merit (never their standing: guild work neither gives nor takes it)
+    // little of the guilds' merit (never their standing: guild work neither gives nor takes it);
+    // a guild's look round, nothing (standing.js REQUESTS.survey)
     #failed(player, request) {
+        if (request.kind === "survey") {
+            return;
+        }
+
         if (request.from.post === "guild") {
             player.standing.earn(-GUILD_FAILED);
         } else {

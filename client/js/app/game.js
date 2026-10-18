@@ -5746,7 +5746,7 @@ export class Game {
                 const first = handed[0];
 
                 state.reported = result.ok;
-                names.reported = !first ? "" : `${first.kind === "message" ? `A letter from ${first.from.townName}? I'll see it read.` : first.kind === "courier" ? `The package from ${first.from.townName}! Seal unbroken, too.` : first.kind === "tithe" ? "The treasury thanks you." : "Done, and well done."}${handed.length > 1 ? " And the rest besides." : ""}${paid ? ` ${paid} gold, for your trouble.` : ""}`;
+                names.reported = !first ? "" : `${first.kind === "message" ? `A letter from ${first.from.townName}? I'll see it read.` : first.kind === "courier" ? `The package from ${first.from.townName}! Seal unbroken, too.` : first.kind === "tithe" ? "The treasury thanks you." : first.kind === "survey" ? "Seen it with your own eyes? Good. That's one less tale." : "Done, and well done."}${handed.length > 1 ? " And the rest besides." : ""}${paid ? ` ${paid} gold, for your trouble.` : ""}`;
             } else if (effect.guild) {
                 if (!result.ok) {
                     this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
@@ -6811,7 +6811,7 @@ export class Game {
             const told = {
                 taken: `New request: ${request.title}. (J for your journal.)`,
                 count: `${request.title}: ${request.count} of ${request.target.need}.`,
-                ready: request.kind === "scout" ? `You've seen enough. ${back}` : `${request.title}: done. ${back}`,
+                ready: request.kind === "scout" || request.kind === "survey" ? `You've seen enough. ${back}` : `${request.title}: done. ${back}`,
                 there: {
                     escort: `You've found ${request.target.name}. Stay with them to the end of the road.`,
                     convoy: `You've found ${request.target.name}. Stay with it to the end of the road.`,

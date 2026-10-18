@@ -216,6 +216,39 @@ export function rumourWord(plan, place, town) {
     return `${lines.hooks[which % lines.hooks.length].replace("{where}", where)} ${lines.tales[Math.floor(which / 7) % lines.tales.length]}`;
 }
 
+// What's said of each kind of place out beyond somewhere, without saying what it is (an
+// adventurers' guild's clerk's warning: standing.js offerContract, its beasts out towards it)
+const WARNINGS = Object.freeze({
+    nest: "There's holes in the ground out that way, wide as a cart, and something clicking down them at night.",
+    caves: "There's a hole in the hills out that way that goes down further than anyone's followed it.",
+    hideout: "Folk who take the road on out that way get robbed, and the robbers vanish like the ground swallowed them.",
+    ancient: "There's old stonework in the hills out that way. Folk say it goes down further than it should.",
+    ruins: "There's old walls out that way, and folk say the dead walk there.",
+    "ruined castle": "There's an old castle out that way, and lights on its walls at night.",
+    cave: "There's rough men out that way who come and go from the rocks.",
+    "dragon's lair": "The hills out that way are scorched black, and the sheep there get taken whole.",
+    "dreadthorn's lair": "Something with wings nests in the crags out that way.",
+    "werewolf's den": "Out that way, the wolves howl at the full moon, and their tracks end up a man's.",
+    shrine: "There's an old altar out that way. Harmless, they say, but folk speak low there.",
+    "standing stones": "There's old stones stood in a ring out that way, that hum on still nights.",
+    watchtower: "There's an old tower out that way, and outlaws watching from it.",
+    bandits: "There's a fire out that way at night, and armed men round it.",
+    wolves: "There's a wolf pack denned up out that way.",
+    goblins: "Something small and green's been raiding the hen-houses out that way.",
+    spiders: "There's webs in the trees out that way as thick as rope.",
+    undead: "The dead walk out that way. Don't be there after dark.",
+    trolls: "There's footprints out that way you could bathe in.",
+    raiders: "There's smoke out that way every night, and riders with painted faces.",
+    cultists: "There's robed folk out that way, chanting all night.",
+});
+
+/**
+ * What's said of a place (`place`: rumouredOf's) out beyond somewhere, without saying what it
+ * is: as an adventurers' guild's clerk warns of it (standing.js offerContract, its beasts
+ * on a hunting ground short of it).
+ */
+export const warningOf = (place) => WARNINGS[place.kind];
+
 /**
  * The circle a rumour of a place (`id`, at `at`: [x, y] metres) draws on the world map: round
  * about where it is, never on it, RUMOURS.radius across, its middle off the place's by a share of

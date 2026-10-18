@@ -19,7 +19,8 @@ import { rollTome, SPELLS } from "./spells.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { STAGES } from "./war/war.js";
 import { hypot } from "./exact.js";
-import { wayOf } from "./ways.js";
+import { circleOf, rumoursNear, rumourWord, warningOf } from "./rumours.js";
+import { compass, wayOf } from "./ways.js";
 import { landAt } from "./worldplan/plan.js";
 
 /** The ranks: each one's title, the standing it takes, and what it opens. */
@@ -73,6 +74,9 @@ export const REQUESTS = Object.freeze({
     hunt: { title: "A bounty", rank: 1, turns: 60, reward: { standing: 0, gold: 8, each: { standing: 0, gold: 6 }, merit: 4 } },
     camp: { title: "The camp outside the walls", rank: 2, turns: 40, reward: { standing: 0, gold: 70, merit: 6 } },
     parts: { title: "Wanted at the guild", rank: 0, turns: 60, reward: { standing: 0, gold: 4, share: 1.6, merit: 2 } },
+    // (A place said to be out there, still to be found, gone near enough to see: what's said of it,
+    // core/rumours.js; nothing lost for letting it run out)
+    survey: { title: "A look round", rank: 0, turns: 45, reward: { standing: 0, gold: 12, merit: 2 } },
     // (A sealed package to another town's guild, on the way to strangers: offerCourier)
     courier: { title: "A sealed package", rank: 0, turns: 12, perKm: 10, reward: { standing: 0, gold: 8, perKm: { standing: 0, gold: 6 }, merit: 3 } },
     // (A place held by outlaws or the dead put to the sword: more for a bigger place, and more for
@@ -97,6 +101,16 @@ export const GUILD_RANKS = Object.freeze([
     { title: "Gold", merit: 140, more: 3, level: 4, pay: 1.6, fare: 0.2, opens: "The great places to clear, beasts of level 4 or more, more of everything asked, and four fifths off the portals." },
     { title: "Mithril", merit: 250, more: 4, level: 5, pay: 1.8, fare: 0, opens: "The hardest work the guilds have, beasts of level 5 or more, the best pay, and the portals free." },
 ]);
+
+/**
+ * A guild's beasts out towards a place round its town the player's still to find (offerContract):
+ * their hunting ground `share` of the way there from the town, or nearer the place if that leaves
+ * it more than `beyond` metres past it (m), and never further out than GUILD_REACH; those brought
+ * down counted within `reach` of it (m). Towards places at least `least` metres from the town (any
+ * nearer, the town's own beasts are hunted near enough), and no more than `above` tiers past the
+ * beasts the player's guild rank sends them against (GUILD_RANKS' `level`): never the hells.
+ */
+export const HUNTING = Object.freeze({ share: 0.6, beyond: 350, reach: 500, least: 700, above: 1 });
 
 /** The guild rank at which each size of place held is first given to clear (and from it, the biggest near). */
 export const GUILD_SIZES = Object.freeze({ small: 0, medium: 2, large: 4 });
@@ -148,7 +162,7 @@ const many = (label) => (/(s|y|dust|silk|meat|jelly|blood|skin)$/i.test(label) ?
  * How near (m) a player goes to see what they're scouting, to be there to hold a town (from its
  * middle), to be with an envoy or a convoy, and at a works to win it.
  */
-export const REQUEST_REACH = Object.freeze({ scout: 220, defend: 180, rout: 150, escort: 60, convoy: 60, works: 120, take: 150 });
+export const REQUEST_REACH = Object.freeze({ scout: 220, defend: 180, rout: 150, escort: 60, convoy: 60, works: 120, take: 150, survey: 150 });
 
 /** What the keep's gift is worth more than a reeve's (its rewards, times this). */
 export const KEEP_REWARD = 1.5;
@@ -510,7 +524,10 @@ const fromTheLibrary = (tome) => `The guild will add the Tome of ${SPELLS[tome].
 /**
  * A contract from an adventurers' guild's board in a town (docs/WAR.md M8), for anyone of any
  * people (no standing needed, and none given: gold), everything it asks for within GUILD_REACH of
- * the town: beasts off the roads round it; a bounty on the soldiers of a people at war with those
+ * the town: beasts off the roads round it (or, with a place out there the player's still to find,
+ * on a hunting ground most of the way to it: HUNTING, the clerk warning of what's past it:
+ * core/rumours.js warningOf); a
+ * look round where a place they're still to find is said to be (`survey`); a bounty on the soldiers of a people at war with those
  * who hold it, who have a town or a camp near; creatures' parts, of those found near (as strong as
  * they are there for whoever's asking: as far from their `home`); the camp outside it broken up; a place near held by outlaws or the dead put to the sword, its leader with
  * them (core/places.js). Null if there's nothing on the board they haven't got already.
@@ -524,9 +541,11 @@ const fromTheLibrary = (tome) => `The guild will add the Tome of ${SPELLS[tome].
  * @param {object[]} [options.also] - What's on the board already (none of it offered twice).
  * @param {number} [options.guildRank] - Their rank in the guilds (GUILD_RANKS): the work it opens,
  *   and how hard it is.
+ * @param {object} [options.explored] - What they've found of the world (core/explored.js): the
+ *   places round the town still to find (core/rumours.js rumoursNear). None without it.
  * @param {object} options.random - Random numbers (random.js).
  */
-export function offerContract({ war, town: townId, giver, home = null, held = [], also = [], guildRank = 0, random }) {
+export function offerContract({ war, town: townId, giver, home = null, held = [], also = [], guildRank = 0, explored = null, random }) {
     const town = war.town(townId);
 
     if (!town || held.length >= MOST_REQUESTS) {
@@ -542,7 +561,11 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
     const camps = opened("camp") ? war.camps.filter((camp) => war.hostile(camp.realm, town.owner) && apart(camp.at, town.at) <= THREAT && apart(camp.at, town.at) + SOLDIERS_OUT.camp <= GUILD_REACH && !has("camp", camp.id)) : [];
     const wanted = dearest(wantedNear(war, town, home ?? town.at), grade.rank >= GUILD_DEARER).filter((part) => !has("parts", part));
     const occupied = biggest(heldNear(war, town).filter(({ place }) => GUILD_SIZES[place.size] <= grade.rank)).filter(({ place }) => !has("clear", place.id));
-    const kinds = [...(has("beasts", town.id) ? [] : ["beasts", "beasts"]), ...(foes.length ? ["hunt"] : []), ...(camps.length ? ["camp", "camp"] : []), ...(wanted.length ? ["parts", "parts"] : []), ...(occupied.length ? ["clear", "clear"] : [])];
+    // (The places round the town they're still to find, none too far past what their rank sends
+    // them against, the nearest first; and those not yet asked to be looked at)
+    const unfound = explored && war.plan ? rumoursNear(war.plan, town.at, explored).filter((place) => tierAt(place.at, [home ?? town.at], landAt(war.plan, ...place.at).biome) <= grade.level + HUNTING.above) : [];
+    const unseen = unfound.filter(({ id }) => !has("survey", id));
+    const kinds = [...(has("beasts", town.id) ? [] : ["beasts", "beasts"]), ...(foes.length ? ["hunt"] : []), ...(camps.length ? ["camp", "camp"] : []), ...(wanted.length ? ["parts", "parts"] : []), ...(occupied.length ? ["clear", "clear"] : []), ...(unseen.length ? ["survey"] : [])];
 
     if (!kinds.length) {
         return null;
@@ -561,12 +584,45 @@ export function offerContract({ war, town: townId, giver, home = null, held = []
 
     switch (kind) {
         case "beasts": {
+            // (Out towards the nearest place they're still to find, if there's one: on a hunting
+            // ground most of the way there, the clerk warning of what's past it)
+            const towards = unfound.find((place) => place.far >= HUNTING.least);
+            const ground = towards ? groundTowards(town.at, towards.at) : null;
             // (Of the level the rank asks for, as near as the land within reach has it)
-            const level = grade.level > 1 ? Math.min(grade.level, levelNear(war.plan, town.at, home ?? town.at)) : 1;
+            const level = grade.level > 1 ? Math.min(grade.level, levelNear(war.plan, ground ?? town.at, home ?? town.at)) : 1;
             const need = asked(2);
             const strong = level > 1 ? `, level ${level} or more` : "";
+            const paid = pay(reward.gold + reward.each.gold * need);
 
-            return { ...base, key: town.id, target: { wild: true, need, level, near }, text: `Wanted: someone to see off the beasts on the roads round ${town.name}. ${need} of them${strong}, ${within}, and the carters will breathe again.`, until: war.turn + turns, reward: pay(reward.gold + reward.each.gold * need) };
+            if (ground) {
+                const hunting = { town: null, name: "the hunting ground", at: ground, reach: HUNTING.reach };
+
+                return {
+                    ...base,
+                    key: town.id,
+                    target: { wild: true, need, level, near: hunting, at: [...ground], name: hunting.name, towards: towards.id },
+                    text: `Wanted: someone to see off the beasts troubling the farms out ${wayOf(town, ground)}. ${need} of them${strong}, within ${HUNTING.reach} m of there, and the farmers will breathe again. Don't go much further out, mind. ${warningOf(towards)}`,
+                    until: war.turn + turns,
+                    reward: paid,
+                };
+            }
+
+            return { ...base, key: town.id, target: { wild: true, need, level, near }, text: `Wanted: someone to see off the beasts on the roads round ${town.name}. ${need} of them${strong}, ${within}, and the carters will breathe again.`, until: war.turn + turns, reward: paid };
+        }
+        case "survey": {
+            // (The nearest place they're still to find, round about where it's said to be: its
+            // circle on the world map, core/rumours.js circleOf)
+            const [place] = unseen;
+            const { at, radius } = circleOf(place.id, place.at);
+
+            return {
+                ...base,
+                key: place.id,
+                target: { place: place.id, at, radius, name: `somewhere ${compass(town.at, at)} of ${town.name}` },
+                text: `Folk in ${town.name} are saying: "${rumourWord(war.plan, place, town)}" The guild wants to know what's out there. Go near enough to see it, then come back and tell us. No need to fight it.`,
+                until: war.turn + turns,
+                reward: pay(reward.gold),
+            };
         }
         case "hunt": {
             const foe = random.pick(foes);
@@ -675,12 +731,12 @@ export const BOARD_SIZE = 4;
  * the player carries already. Empty if there's nothing.
  * @param {object} options - As offerContract's and offerCourier's.
  */
-export function offerBoard({ war, realm, town, giver, home = null, held = [], guildRank = 0, random }) {
+export function offerBoard({ war, realm, town, giver, home = null, held = [], guildRank = 0, explored = null, random }) {
     const courier = offerCourier({ war, realm, town, giver, held, guildRank });
     const board = [];
 
     while (board.length < BOARD_SIZE - (courier ? 1 : 0)) {
-        const contract = offerContract({ war, town, giver, home, held, also: board, guildRank, random });
+        const contract = offerContract({ war, town, giver, home, held, also: board, guildRank, explored, random });
 
         if (!contract) {
             break;
@@ -704,7 +760,9 @@ export function briefOf(request) {
 
     switch (kind) {
         case "beasts":
-            return `${target.level > 1 ? `Beasts of level ${target.level}+` : "Beasts"} round ${target.near?.name ?? request.from.townName}`;
+            return `${target.level > 1 ? `Beasts of level ${target.level}+` : "Beasts"} ${target.towards ? `out from ${request.from.townName}` : `round ${target.near?.name ?? request.from.townName}`}`;
+        case "survey":
+            return `A look round out past ${request.from.townName}`;
         case "hunt":
             return `A bounty on ${soldiersOf(target.realm)}`;
         case "parts":
@@ -789,6 +847,15 @@ function levelNear(plan, [x, y], home) {
     }
 
     return tiers.sort((a, b) => b - a)[Math.floor(tiers.length / 4)];
+}
+
+// A guild's hunting ground out towards a place (HUNTING): `share` of the way from the town (`from`)
+// to it (`to`), or nearer it if that leaves it more than `beyond` past it; within GUILD_REACH
+function groundTowards(from, to) {
+    const far = apart(from, to);
+    const out = Math.min(GUILD_REACH, Math.max(far * HUNTING.share, far - HUNTING.beyond));
+
+    return [from[0] + ((to[0] - from[0]) * out) / far, from[1] + ((to[1] - from[1]) * out) / far];
 }
 
 // Where each people's soldiers are within a guild's reach of its town (SOLDIERS_OUT): their towns
@@ -946,6 +1013,8 @@ export function progressOf(request) {
             return `Bring ${target.need} ${many(target.name)} to ${request.from.name} in ${request.from.townName}.`;
         case "scout":
             return "Go near enough to see them.";
+        case "survey":
+            return "Go near enough to see what's there.";
         case "defend":
             return request.there ? "Hold on until they're gone." : `Get to ${target.name}.`;
         case "rout":

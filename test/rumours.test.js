@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Explored } from "../client/js/core/explored.js";
-import { circleOf, landmarkOf, RUMOURED, rumouredBy, rumouredOf, RUMOURS, rumoursNear, rumourWord } from "../client/js/core/rumours.js";
+import { circleOf, landmarkOf, RUMOURED, rumouredBy, rumouredOf, RUMOURS, rumoursNear, rumourWord, warningOf } from "../client/js/core/rumours.js";
 import { compass } from "../client/js/core/ways.js";
 import { CHUNK, planWorld } from "../client/js/core/worldplan/plan.js";
 
@@ -82,6 +82,15 @@ describe("rumours of places nearby (rumours.js)", () => {
         }
 
         assert.ok(farms > 20, `farms named: ${farms}`);
+    });
+
+    it("has a clerk's warning of every kind of place, out that way, never saying what it is", () => {
+        for (const kind of RUMOURED) {
+            const warning = warningOf({ kind });
+
+            assert.match(warning, /out that way/i, kind);
+            assert.doesNotMatch(warning, new RegExp(`\\b${kind}\\b`, "i"), warning);
+        }
     });
 
     it("draws a circle round about each place on the world map, the place always inside it, never at its middle; the same for everyone", () => {
