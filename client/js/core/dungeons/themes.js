@@ -34,7 +34,9 @@ export const PROP_PLACES = Object.freeze(["wall", "open", "centre", "corner", "r
  * room a layout digs, and "any" for kinds not listed; "goal", the room furthest in, if it's to have
  * a look of its own, its first prop placed before anyone waits there), lava (its caverns flooded
  * with lava: { rooms (which kinds), wide (how wide its causeways are), islands: [least, most],
- * island (how far across each is) }: place.js flood), lit
+ * island (how far across each is) }: place.js flood), rim (its throne hall's side walls lined with
+ * lava, on its bottom level: { doors, clear: how far from its ways in and anything else that
+ * blocks, squares }: place.js lavaRim), lit
  * (how its rooms are lit: by torches on their walls, one more in the way in's room and the
  * arena's; or "glow", by colonies of glowing fungus on their walls, each room's look's `glows`,
  * torches only where its look has them) }.
@@ -399,6 +401,8 @@ export const THEMES = {
                 ground: GROUND.courtyard,
                 sound: "crypt",
                 hoard: "head",
+                // (Its lava only a rim: its throne hall's side walls lined with it, place.js lavaRim)
+                rim: { doors: 3, clear: 2 },
                 packs: [
                     { id: "legion", creatures: ["wraith", "skeleton", "skeleton"], size: [3, 5], weight: 2 },
                     { id: "faithful", creatures: ["cultist"], size: [3, 5], weight: 2 },

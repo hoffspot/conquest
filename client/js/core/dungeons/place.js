@@ -347,6 +347,14 @@ export function fillLevel(dug, rooms, links, plan) {
         far = level.distances(start);
     }
 
+    // --- A realm whose lava's only a rim (its `rim`: the Pit's), its throne hall's side walls
+    // lined with it, clear of its ways in, the throne and the way out ---
+
+    if (theme.rim && index === plan.levels - 1 && room.has(goal)) {
+        lavaRim(level, room.get(goal), fromDoors, start, theme.rim);
+        far = level.distances(start);
+    }
+
     // --- How each room's dressed: as its theme has that kind of room; torches on its walls ---
 
     const lights = [];
@@ -843,6 +851,40 @@ function flood(level, room, doors, random, lava, start) {
 
 // (Lava's plan character, as it's kept)
 const LAVA = "~".charCodeAt(0);
+
+// Line a room's side walls (west and east) with lava, a square deep: on every square by them that's
+// free, at least `rim.doors` squares from its ways in and `rim.clear` from anything else that blocks
+// (the throne, the way out); so long as every square that can be walked on is still walked to
+// from the way in (`start`), or none
+function lavaRim(level, room, fromDoors, start, rim) {
+    const { grid, width } = level;
+    const near = (x, y) => {
+        for (let dy = -rim.clear; dy <= rim.clear; dy++) {
+            for (let dx = -rim.clear; dx <= rim.clear; dx++) {
+                if (BLOCKING.has(level.char(x + dx, y + dy)) && level.char(x + dx, y + dy) !== "~") {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    };
+    const lined = room.cells.filter((k) => {
+        const [x, y] = [k % width, Math.floor(k / width)];
+
+        return level.free(x, y) && (!grid.open(x - 1, y) || !grid.open(x + 1, y)) && grid.open(x, y - 1) && grid.open(x, y + 1) && fromDoors(room.id, [x, y]) >= rim.doors && !near(x, y);
+    });
+
+    for (const k of lined) {
+        level.chars[k] = LAVA;
+    }
+
+    if (!level.connected(start)) {
+        for (const k of lined) {
+            level.chars[k] = 0;
+        }
+    }
+}
 
 // Dress a room with one of its look's props, `count` of it, `size` squares, each where `prop.at`
 // says ("back": its long side against the rock whichever way it is, as no other does; mirrored

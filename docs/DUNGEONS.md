@@ -94,11 +94,11 @@ wilds, and only by night, once the cult keeping its rite there is slain ([The wa
   | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | a lair | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats | the Breach Priest, a cultist |
   | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | a crypt | skeletons, draugr, wraiths, ghosts, shadow stalkers | the Bone Lord, a wight lord |
   | 3 | the River of Fire | caves, flooded | `hell-fire`: black basalt, its caverns lakes of lava, causeways across them, embers in its rock and thick in its hot air, the Hellforge in its last room | a lair | magma slimes, salamanders, black shucks, chimeras, wyverns | the Forge Beast, a chimera |
-  | 4 | the Pit | an ancient temple's halls | `hell-pit`: walls dark as dried blood, close black air | a crypt | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders | the Gatekeeper, an ogre; then the Lord of the Pit |
+  | 4 | the Pit | an ancient temple's halls | `hell-pit`: polished black stone, sigils inlaid in its floor glowing violet, the lord's own colour, his horned throne, its lava only a rim along the throne hall's walls | a crypt | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders | the Gatekeeper, an ogre; then the Lord of the Pit |
 
   Each realm's rooms are dressed its own way: the cult's altars and candles and pools of lava in
   the Breach, tombs and charnel heaps and pools of blood in the Halls of Bone, braziers and anvils and lakes of lava by the River of
-  Fire, watching statues, braziers and the throne in the Pit (`world/dungeondressing.js` `CLUTTER`,
+  Fire, watching statues (winged guardians and cloaked figures only), braziers and the throne in the Pit (`world/dungeondressing.js` `CLUTTER`,
   `STREWN`). The room furthest in on a level, its master's, by the portal down, can have a look of
   its realm's own (its `rooms.goal`: `place.js`): the Breach's is the cult's altar, the rift torn
   open over it ([The Breach](#the-breach-brimstone-lava-and-the-rift)); the Halls of Bone's, the
@@ -248,6 +248,28 @@ the room furthest in.
   with black iron, iron horns at its top corners, a chimney rising into the roof; its mouth full
   of molten metal, standing up, a fire roaring in it, lighting the room; before it a lip, a basin
   of molten metal in it (`interiors3d.js` `hellforge`). Anvils before it, braziers by it.
+
+### The Pit: sigils, the rim and the throne
+
+The last realm is darker and stranger than the River of Fire above it (the research: Diablo II's
+Chaos Sanctuary, Diablo I's pentagram before Diablo): its lava pushed out to a rim, its light
+the lord's own colour, violet, where every realm above was red and orange.
+
+- **Its stone** is polished black (the look's `tint`, near black, and `wet`, glossy: walls and
+  floor alike), its air close and its fog near. Its statues are only the winged guardians and the
+  cloaked figures (the look's `statues`).
+- **Its sigils** (the look's `sigils`: `world/pit.js`), inlaid in the floor and glowing violet,
+  breathing slowly by the veils' clock: a seal in the middle of each of its halls (two rings,
+  runes between them, a ring in the middle and spokes out to it), and before the throne a great
+  pentagram, its one point towards whoever comes in. Every sigil on a level is one mesh.
+- **Its lava only a rim** (the realm's `rim`: `place.js` `lavaRim`): the throne hall's side walls
+  lined with it, a square deep, clear of its ways in by three squares and of the throne and the
+  way out by two, every square that can be walked on still walked to. Drawn as the Breach's pools
+  are, long and narrow.
+- **The lord's throne** (the look's `throne`: `pit.js` `throneParts`, `interiors3d.js`
+  `lordThrone`): on a plinth with a step before it, of black stone, its back rising 3.4 m to a
+  crest, runes cut down each side of it glowing violet, two great horns rising from it, and his
+  light over it, violet.
 
 ### The way in: a cult's camp by night
 
@@ -877,6 +899,11 @@ code is here.
   down, more by a pool. **`test/hells.test.js`** draws the levels: the Breach's lava (one mesh, its
   banks another, a light each), its rock glowing and with embers, the rift over its altar with its
   own light; on no other level.
+- **`test/pit.test.js`**, the Pit: its sigils flat on the floor, facing up, within their rings,
+  the pentagram's star across its middle; violet, breathing a whole number of times each loop;
+  the lord's throne on its plinth, its back tall, its runes and horns; its lava only along its
+  throne hall's side walls, clear of the throne and the way out. **`test/hells.test.js`** draws
+  the Pit's sigils and the lord's light, on no other level.
 - **`test/lava.test.js`**, the River of Fire's lakes: how far into the lava each point is, in it
   in a lava square's middle, out of it on open floor away from it; the floor sinking under them,
   under their surface wherever it's lava all round; each lake one body flowing along its length,

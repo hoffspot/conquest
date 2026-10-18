@@ -220,8 +220,9 @@ describe("a hell as it's made (dungeons/build.js, place.js, themes.js hell)", ()
             assert.equal(goal.look, "hellforge");
             assert.ok(cells(goal).some((k) => at(k) === "F"), "the Hellforge");
 
-            // (None on the Halls of Bone or the Pit: the Breach's lava only in its pools)
-            assert.ok([1, 3].every((k) => !dungeon.levels[k].rows.join("").includes("~")));
+            // (None on the Halls of Bone: the Breach's lava only in its pools, the Pit's only a rim
+            // along its throne hall's walls, test/pit.test.js)
+            assert.ok(!dungeon.levels[1].rows.join("").includes("~"));
         }
     });
 
@@ -283,8 +284,8 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, bre
             assert.equal(built.lights.filter(({ kind }) => kind === "rift").length, k === 0 ? 1 : 0);
 
             // (The Breach's pools of lava, every one in one mesh and their banks in another, each
-            // pool its light; and its rock and floor glowing by them, embers in its cracks; on no
-            // other level, the River of Fire's lava its lakes)
+            // pool its light, and the Pit's rim drawn as they are; the Breach's rock and floor
+            // glowing by them, embers in its cracks; the River of Fire's lava its lakes)
             const named = (name) => {
                 const found = [];
 
@@ -294,9 +295,9 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, bre
             };
             const pools = map.pieces.filter(({ kind }) => kind === "lava").length;
 
-            assert.equal(pools > 0, k === 0 || k === 2, `${floor.look}: ${pools} pools`);
-            assert.equal(named("lava").length, k === 0 ? 1 : 0);
-            assert.equal(named("lava-bank").length, k === 0 ? 1 : 0);
+            assert.equal(pools > 0, k !== 1, `${floor.look}: ${pools} pools`);
+            assert.equal(named("lava").length, k === 0 || k === 3 ? 1 : 0);
+            assert.equal(named("lava-bank").length, k === 0 || k === 3 ? 1 : 0);
 
             if (k !== 2) {
                 assert.equal(built.lights.filter(({ kind }) => kind === "lava").length, pools);
@@ -314,6 +315,11 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, bre
             // them, embers in its rock, their lights; and the Hellforge, its basin and its mouth
             // molten, its fire's light)
             assert.equal(named("lava-lakes").length, k === 2 ? 1 : 0);
+
+            // (The Pit's: its sigils inlaid in its floor, every one in one mesh, and the lord's
+            // throne, his light over it)
+            assert.equal(named("sigils").length, k === 3 ? 1 : 0);
+            assert.equal(built.lights.filter(({ kind }) => kind === "lord").length, k === 3 ? 1 : 0);
             assert.equal(named("forge-basin").length, k === 2 ? 1 : 0);
             assert.equal(named("forge-mouth").length, k === 2 ? 1 : 0);
 
