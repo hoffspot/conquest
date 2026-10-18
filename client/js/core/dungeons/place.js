@@ -16,7 +16,7 @@ import { WAY_IN } from "./layouts.js";
 import { pickStable } from "./seeds.js";
 
 /** Characters a level's plan uses beyond floor and rock, that block walking (interiors.js PLAN_KEY). */
-export const BLOCKING = new Set(["*", "%", "V", "^", "x", "y", "u", "K", "T", "R", "Y", "I", "t", "Z", "a", "s", "k", "m", "d", "i", "e", "o", "n", "v", "X", "A", "J", "E", "z", "~", "@"]);
+export const BLOCKING = new Set(["*", "%", "V", "^", "x", "y", "u", "K", "T", "R", "Y", "I", "t", "Z", "a", "s", "k", "m", "d", "i", "e", "o", "n", "v", "X", "A", "J", "E", "z", "~", "@", "F"]);
 
 /**
  * How far (rings of squares) no one waits from where anyone comes onto a level: as the places
@@ -334,6 +334,82 @@ export function fillLevel(dug, rooms, links, plan) {
         });
     }
 
+    // --- A realm whose ground is lava (its `lava`: the River of Fire's), its caverns flooded with
+    // it wall to wall but for causeways across them, never the way in's room or the one furthest in ---
+
+    if (theme.lava) {
+        for (const one of rooms) {
+            if (one.id !== entryRoom && one.id !== goal && theme.lava.rooms.includes(dug.kinds[one.id])) {
+                flood(level, one, doorways.get(one.id), random, theme.lava, start);
+            }
+        }
+
+        far = level.distances(start);
+    }
+
+    // --- How each room's dressed: as its theme has that kind of room; torches on its walls ---
+
+    const lights = [];
+    // (Which of its kind's looks each room has: its art's, world/interiors3d.js, by it)
+    const looks = {};
+    // (Each room's look, and how many of its props are placed already)
+    const placed = new Map();
+    const dressRoom = (one, most = Infinity) => {
+        // (The room furthest in a look of its own, if the theme has one for it: the Breach's altar,
+        // the rift torn open over it; the Halls of Bone's heart; the Hellforge)
+        const kind = one.id === goal && theme.rooms.goal ? "goal" : dug.kinds[one.id];
+        const look = pickStable(seed, slot("room", one.id), theme.rooms[kind] ?? theme.rooms.any ?? []);
+
+        if (!look) {
+            return;
+        }
+
+        looks[one.id] = look.id;
+
+        const props = look.props ?? [];
+        const from = placed.get(one.id) ?? 0;
+
+        // (Dressed already)
+        if (from > props.length) {
+            return;
+        }
+
+        const to = Math.min(props.length, from + most);
+
+        for (let n = from; n < to; n++) {
+            const prop = props[n];
+
+            dress(level, one, prop, { random, putProp, fromDoors, count: random.int(...prop.count), axis: Math.floor(level.width / 2), tag: n });
+        }
+
+        // (Its props placed so far; once it's done, one past them all)
+        placed.set(one.id, to < props.length ? to : props.length + 1);
+
+        if (to < props.length) {
+            return;
+        }
+
+        // (Torches on the walls, spread round the room; the arena's and the way in's at least two,
+        // but in a theme lit by what grows on its walls)
+        const torches = random.int(...(look.torches ?? [0, 1])) + (theme.lit !== "glow" && (one.id === entryRoom || one.id === goal) ? 1 : 0);
+        const lit = onWalls(level, one, torches, random, { kind: "torch", apart: 4 });
+
+        lights.push(...lit);
+
+        // (And the colonies of glowing fungus on its walls, the room's look's, apart from each other
+        // and from its torches)
+        if (look.glows) {
+            lights.push(...onWalls(level, one, random.int(...look.glows), random, { kind: "glow", apart: GLOW_APART, taken: lit, deep: true }));
+        }
+    };
+
+    // (What stands in the room furthest in placed first, if its realm has a look of its own for it
+    // (its first prop: the altar, the heart, the Hellforge), so it has the room before anyone waits
+    // in it; the rest of the room's dressed with the others)
+    if (theme.rooms.goal && room.has(goal)) {
+        dressRoom(room.get(goal), 1);
+    }
+
     // --- A hell's level's own boss (its realm's `warden`), guarding its way on: in the room
     // furthest in, as near its portal down as anyone waits; on the bottom level, in the last room
     // on the way through before the arena ---
@@ -484,40 +560,11 @@ export function fillLevel(dug, rooms, links, plan) {
         }
     }
 
-    // --- Dressing: each room as its theme has that kind of room; torches on its walls ---
-
-    const lights = [];
-    // (Which of its kind's looks each room has: its art's, world/interiors3d.js, by it)
-    const looks = {};
+    // --- Dressing: each room as its theme has that kind of room (the rest of the one furthest
+    // in, if what stands in it is placed already); torches on its walls ---
 
     for (const one of rooms) {
-        // (The room furthest in a look of its own, if the theme has one for it: the Breach's altar,
-        // the rift torn open over it)
-        const kind = one.id === goal && theme.rooms.goal ? "goal" : dug.kinds[one.id];
-        const look = pickStable(seed, slot("room", one.id), theme.rooms[kind] ?? theme.rooms.any ?? []);
-
-        if (!look) {
-            continue;
-        }
-
-        looks[one.id] = look.id;
-
-        for (const [n, prop] of (look.props ?? []).entries()) {
-            dress(level, one, prop, { random, putProp, fromDoors, count: random.int(...prop.count), axis: Math.floor(level.width / 2), tag: n });
-        }
-
-        // (Torches on the walls, spread round the room; the arena's and the way in's at least two,
-        // but in a theme lit by what grows on its walls)
-        const torches = random.int(...(look.torches ?? [0, 1])) + (theme.lit !== "glow" && (one.id === entryRoom || one.id === goal) ? 1 : 0);
-        const lit = onWalls(level, one, torches, random, { kind: "torch", apart: 4 });
-
-        lights.push(...lit);
-
-        // (And the colonies of glowing fungus on its walls, the room's look's, apart from each other
-        // and from its torches)
-        if (look.glows) {
-            lights.push(...onWalls(level, one, random.int(...look.glows), random, { kind: "glow", apart: GLOW_APART, taken: lit, deep: true }));
-        }
+        dressRoom(one);
     }
 
     // (Too few for its rooms (GLOW_LEAST): one more in each of those with fewest, apart from all
@@ -684,9 +731,137 @@ function stairsDown(level, goal, far, putProp) {
 /** The facing (radians from south, towards east: interiors.js FACING) of a step (dx, dy). */
 export const facingOf = (dx, dy) => (dy > 0 ? 0 : dy < 0 ? Math.PI : dx > 0 ? Math.PI / 2 : -Math.PI / 2);
 
-// Dress a room with one of its look's props, `count` of it (each where `prop.at` says; mirrored
-// across the middle way too if `mirror`), as many as fit
+// Flood a room with lava (`~`) wall to wall but for causeways (`lava.wide` squares) from each of its
+// ways in (`doors`) to its middle, and an island or two off them (`lava.islands`, as many; each
+// `lava.island` squares across), so every square that can still be walked on is still walked to
+// from the way in (`start`); if it can't be, the room's left as it was. The causeways are the
+// shortest ways across the room, so the lava's always to either side of the way through
+function flood(level, room, doors, random, lava, start) {
+    const { width } = level;
+    const inRoom = new Set(room.cells);
+    const open = (k) => inRoom.has(k) && level.walkable(k % width, Math.floor(k / width));
+    const [mx, my] = room.centre;
+    // (Its middle: the open square nearest its centre)
+    const apart = (k) => ((k % width) - mx) * ((k % width) - mx) + (Math.floor(k / width) - my) * (Math.floor(k / width) - my);
+    const middle = room.cells.filter(open).sort((a, b) => apart(a) - apart(b) || a - b)[0];
+
+    if (middle === undefined) {
+        return;
+    }
+
+    // (The shortest ways from the middle to each way in, within the room)
+    const from = new Map([[middle, -1]]);
+    const queue = [middle];
+
+    for (let head = 0; head < queue.length; head++) {
+        const k = queue[head];
+
+        for (const [dx, dy] of FOUR) {
+            const j = k + dy * width + dx;
+
+            if (!from.has(j) && open(j) && Math.abs((j % width) - (k % width)) <= 1) {
+                from.set(j, k);
+                queue.push(j);
+            }
+        }
+    }
+
+    // (Its ways in, each run of squares by another room or a passage one way in, from its middle
+    // square)
+    const runs = [];
+    const seen = new Set();
+
+    for (const [x, y] of doors) {
+        if (seen.has(level.key(x, y))) {
+            continue;
+        }
+
+        const run = [[x, y]];
+
+        seen.add(level.key(x, y));
+
+        for (let head = 0; head < run.length; head++) {
+            for (const [u, v] of doors) {
+                if (!seen.has(level.key(u, v)) && Math.max(Math.abs(u - run[head][0]), Math.abs(v - run[head][1])) <= 1) {
+                    seen.add(level.key(u, v));
+                    run.push([u, v]);
+                }
+            }
+        }
+
+        runs.push(run[Math.floor(run.length / 2)]);
+    }
+
+    const keep = new Set();
+    const way = [];
+
+    for (const [x, y] of runs) {
+        for (let k = level.key(x, y); k >= 0 && from.has(k); k = from.get(k)) {
+            way.push(k);
+        }
+    }
+
+    // (Islands off the way, away from its ways in)
+    const along = way.filter((k) => !runs.some(([x, y]) => Math.max(Math.abs(x - (k % width)), Math.abs(y - Math.floor(k / width))) < 3));
+    const islands = Math.min(along.length, random.int(...lava.islands));
+
+    for (let n = 0; n < islands; n++) {
+        const k = along[random.int(0, along.length - 1)];
+
+        for (let dy = -lava.island; dy <= lava.island; dy++) {
+            for (let dx = -lava.island; dx <= lava.island; dx++) {
+                if (dx * dx + dy * dy <= lava.island * lava.island + 1) {
+                    keep.add(k + dy * width + dx);
+                }
+            }
+        }
+    }
+
+    // (The causeways as wide as they're to be, and everything reserved or with something on it)
+    const half = Math.floor(lava.wide / 2);
+
+    for (const k of way) {
+        for (let dy = -half; dy <= half; dy++) {
+            for (let dx = -half; dx <= half; dx++) {
+                keep.add(k + dy * width + dx);
+            }
+        }
+    }
+
+    const flooded = room.cells.filter((k) => open(k) && !keep.has(k) && !level.reserved[k] && !level.chars[k]);
+
+    for (const k of flooded) {
+        level.chars[k] = LAVA;
+    }
+
+    if (!level.connected(start)) {
+        for (const k of flooded) {
+            level.chars[k] = 0;
+        }
+    }
+}
+
+// (Lava's plan character, as it's kept)
+const LAVA = "~".charCodeAt(0);
+
+// Dress a room with one of its look's props, `count` of it, `size` squares, each where `prop.at`
+// says ("back": its long side against the rock whichever way it is, as no other does; mirrored
+// across the middle way too if `mirror`), as many as fit; or, for one with `tries` (each its own
+// `at` and `size`), each of them in turn till that many are
 function dress(level, room, prop, { random, putProp, fromDoors, count, axis }) {
+    // (One with ways to try (where, how big), each in turn till as many as it wants are placed)
+    if (prop.tries) {
+        let placed = 0;
+
+        for (const each of prop.tries) {
+            if (placed < count) {
+                placed += dress(level, room, { ...prop, tries: null, ...each }, { random, putProp, fromDoors, count: count - placed, axis });
+            }
+        }
+
+        return placed;
+    }
+
     const { grid } = level;
     const [w, h] = prop.size ?? [1, 1];
     const squares = room.cells.map((k) => [k % level.width, Math.floor(k / level.width)]);
@@ -730,6 +905,26 @@ function dress(level, room, prop, { random, putProp, fromDoors, count, axis }) {
         case "sides":
             candidates = squares.filter(([x, y]) => x === room.x && (y - room.y) % 3 === 2 && y < room.y + room.h - 2);
             break;
+        case "back":
+            // (Its long side against the rock beside a square by it, whichever way that is, out
+            // from it into the room: each a whole footprint)
+            candidates = squares
+                .map((at) => [at, wallSide(at)])
+                .filter(([, side]) => side)
+                .map(([[x, y], [dx, dy]]) => {
+                    const cells = [];
+
+                    for (let i = 0; i < w; i++) {
+                        for (let j = 0; j < h; j++) {
+                            const along = i - Math.floor((w - 1) / 2);
+
+                            cells.push(dy !== 0 ? [x + along, y - dy * j] : [x - dx * j, y + along]);
+                        }
+                    }
+
+                    return cells;
+                });
+            break;
         default:
             candidates = squares.filter(([x, y]) => EIGHT.every(([dx, dy]) => level.walkable(x + dx, y + dy)));
     }
@@ -745,7 +940,7 @@ function dress(level, room, prop, { random, putProp, fromDoors, count, axis }) {
             break;
         }
 
-        const cells = footprint(at);
+        const cells = prop.at === "back" ? at : footprint(at);
         const twin = prop.mirror || prop.at === "rows" || prop.at === "sides" ? mirrorOf(cells) : null;
         const same = twin && twin.every(([x, y], k) => x === cells[k][0] && y === cells[k][1]);
 

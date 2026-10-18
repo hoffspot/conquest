@@ -11,7 +11,7 @@
 // bank of the rock's own crust, lit from within.
 
 import * as THREE from "three";
-import { noise3 } from "./caverns.js";
+import { noise3, openness } from "./caverns.js";
 import { VEIL } from "./veil.js";
 import { WATER_DETAIL } from "./water.js";
 
@@ -31,9 +31,158 @@ export const LAVA = Object.freeze({
     pool: Object.freeze({ inset: 0.14, under: 0.24, sides: 28, wobble: 0.12, square: 2.6, rings: Object.freeze([1, 0.82, 0.58, 0.32]), y: 0.03 }),
     bank: Object.freeze({ inside: 0.1, out: 0.4, high: 0.08 }),
     light: Object.freeze({ colour: 0xff5a1c, intensity: 1.8, distance: 6, y: 0.45, breathe: 0.14, pace: 0.6 }),
-    glow: Object.freeze({ colour: 0xff6a24, reach: 2.2, high: 2.6, bright: 0.45, floor: 0.35 }),
+    glow: Object.freeze({ colour: 0xff6a24, reach: 2.2, high: 2.6, bright: 0.45, floor: 0.22 }),
     plates: 3.2,
 });
+
+/**
+ * A level whose ground is lava (the River of Fire's: core/dungeons/place.js flood; a look's
+ * `lakes`), its lakes: how high their surface lies (`surface`, metres: under the floor, the floor
+ * sinking down into it at their shores), how far the floor sinks under them (`sink`, metres) and
+ * over what (`shore`: from how far out of the lava to how far into it, metres), how far in from
+ * the shore they're at their hottest (`hot`: from, to, metres), how finely they're drawn (`step`,
+ * metres), their lights (`lights`: `apart` squares, `most` a level, each as bright as `intensity`), and how far
+ * their crust drifts the way they flow each veils' loop (`drift`, metres: a whole number of every
+ * noise's repeats, so it comes round whole).
+ */
+export const LAKES = Object.freeze({ surface: -0.22, sink: 0.5, shore: Object.freeze([-0.3, 0.6]), hot: Object.freeze([0.1, 1.5]), step: 0.5, lights: Object.freeze({ apart: 5, most: 12, intensity: 1.3 }), drift: 20 });
+
+/**
+ * The lakes of a level whose ground is lava (its plan's "~" squares, `map.plan`): { into(x, z)
+ * (how far into the lava a point is, metres, level metres; negative out of it), away(x, z) (how
+ * far out of it, 0 in it), sink(x, z) (how far the floor sinks there, metres), regions: [{
+ * squares: [[x, y]...], x, z (its middle, level metres), flow (which way it flows, radians: along
+ * its length, one way or the other) }] }.
+ */
+export function lakesOf(map) {
+    const lava = (x, y) => map.plan[y]?.[x] === "~";
+    const field = openness(map.width, map.height, (x, y) => !lava(x, y));
+    const seen = new Set();
+    const regions = [];
+
+    for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+            if (!lava(x, y) || seen.has(y * map.width + x)) {
+                continue;
+            }
+
+            const squares = [[x, y]];
+
+            seen.add(y * map.width + x);
+
+            for (let head = 0; head < squares.length; head++) {
+                const [u, v] = squares[head];
+
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (lava(u + dx, v + dy) && !seen.has((v + dy) * map.width + u + dx)) {
+                            seen.add((v + dy) * map.width + u + dx);
+                            squares.push([u + dx, v + dy]);
+                        }
+                    }
+                }
+            }
+
+            // (Its middle, and its length's way: the way its squares lie spread furthest)
+            const [cx, cz] = [squares.reduce((sum, [u]) => sum + u + 0.5, 0) / squares.length, squares.reduce((sum, [, v]) => sum + v + 0.5, 0) / squares.length];
+            const [sxx, szz, sxz] = squares.reduce(([a, b, c], [u, v]) => [a + (u + 0.5 - cx) ** 2, b + (v + 0.5 - cz) ** 2, c + (u + 0.5 - cx) * (v + 0.5 - cz)], [0, 0, 0]);
+            const flow = 0.5 * Math.atan2(2 * sxz, sxx - szz) + (hashOf(x, y, 6) < 0.5 ? Math.PI : 0);
+
+            regions.push({ squares, x: cx, z: cz, flow });
+        }
+    }
+
+    const { sink, shore } = LAKES;
+
+    return { into: field.at, away: (x, z) => Math.max(0, -field.at(x, z)), sink: (x, z) => sink * smoothstep(shore[0], shore[1], field.at(x, z)), regions };
+}
+
+/**
+ * A level's lakes of lava (lakesOf's) drawn: their surface, a lattice LAKES.step apart over their
+ * squares and the squares round them (the floor sinking under it at their shores, so the shore's
+ * where the two meet), as hot as it's far in from the shore, flowing the way its lake does: a
+ * geometry in level metres, for lavaMaterial.
+ */
+export function lakeGeometry(lakes) {
+    const { surface, step, hot } = LAKES;
+    const [positions, lava, heat, spin, flow, indices] = [[], [], [], [], [], []];
+    const per = Math.round(1 / step);
+
+    for (const region of lakes.regions) {
+        const points = new Map();
+        const point = (i, j) => {
+            const key = `${i},${j}`;
+
+            if (!points.has(key)) {
+                const [x, z] = [i * step, j * step];
+
+                points.set(key, positions.length / 3);
+                positions.push(x, surface, z);
+                lava.push(x - region.x, z - region.z);
+                heat.push(smoothstep(hot[0], hot[1], lakes.into(x, z)));
+                spin.push(0);
+                flow.push(region.flow);
+            }
+
+            return points.get(key);
+        };
+        const cover = new Set();
+
+        for (const [x, y] of region.squares) {
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    cover.add(`${x + dx},${y + dy}`);
+                }
+            }
+        }
+
+        for (const key of cover) {
+            const [x, y] = key.split(",").map(Number);
+
+            for (let b = 0; b < per; b++) {
+                for (let a = 0; a < per; a++) {
+                    const [i, j] = [x * per + a, y * per + b];
+                    const [p, q, r, t] = [point(i, j), point(i + 1, j), point(i + 1, j + 1), point(i, j + 1)];
+
+                    indices.push(p, r, q, p, t, r);
+                }
+            }
+        }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("lava", new THREE.Float32BufferAttribute(lava, 2));
+    geometry.setAttribute("heat", new THREE.Float32BufferAttribute(heat, 1));
+    geometry.setAttribute("spin", new THREE.Float32BufferAttribute(spin, 1));
+    geometry.setAttribute("flow", new THREE.Float32BufferAttribute(flow, 1));
+    geometry.setIndex(indices);
+
+    return geometry;
+}
+
+/**
+ * A level's lakes' lights (rooms', roomlight.js, as a pool's): over each lake, LAKES.lights.apart
+ * squares apart (or over its middle, if it's smaller), the biggest lakes' first, as many as a level
+ * has at most.
+ */
+export function lakeLights(lakes) {
+    const { apart, most } = LAKES.lights;
+    const lights = [];
+
+    for (const region of [...lakes.regions].sort((a, b) => b.squares.length - a.squares.length)) {
+        const spots = region.squares.filter(([x, y]) => x % apart === 2 && y % apart === 2);
+        const [mx, my] = [Math.floor(region.x), Math.floor(region.z)];
+        const middle = [...region.squares].sort((a, b) => Math.hypot(a[0] - mx, a[1] - my) - Math.hypot(b[0] - mx, b[1] - my))[0];
+
+        for (const [x, y] of spots.length ? spots : [middle]) {
+            lights.push({ ...poolLight({ x: x + 0.5, z: y + 0.5, seed: x * 31 + y }), intensity: LAKES.lights.intensity });
+        }
+    }
+
+    return lights.slice(0, most);
+}
 
 /**
  * The Breach's rock (a look's `brimstone`: interiors3d.js DUNGEON_LOOKS), where hell breaks
@@ -53,13 +202,13 @@ export const BRIMSTONE = Object.freeze({
 
 /**
  * How the Breach's rock or floor (`floor`) is coloured at a point (level metres) by the sulphur
- * crusting it in patches low down (on the floor, only near a pool of lava: `pools`, poolShape's)
- * and the soot darkening it higher up: a multiplier for its colour (linear r, g, b), which is
- * `tint` (linear r, g, b) where the sulphur's not.
+ * crusting it in patches low down (on the floor, only near lava: `away(x, z)`, how far a point is
+ * from it, metres, awayFromPools') and the soot darkening it higher up: a multiplier for its colour
+ * (linear r, g, b), which is `tint` (linear r, g, b) where the sulphur's not.
  */
-export function brimstoneTone(x, y, z, seed, tint, pools = [], floor = false) {
+export function brimstoneTone(x, y, z, seed, tint, away = null, floor = false) {
     const { sulphur, soot } = BRIMSTONE;
-    const near = floor ? Math.max(0, ...pools.map((pool) => 1 - Math.max(0, outOfPool(pool, x, z)) / sulphur.near)) : 1;
+    const near = floor ? (away ? Math.max(0, 1 - away(x, z) / sulphur.near) : 0) : 1;
     const patch = smoothstep(sulphur.cover[0], sulphur.cover[1], noise3(x / sulphur.size, y / sulphur.size, z / sulphur.size, seed + 71)) * near * (1 - smoothstep(0.2, sulphur.high, y));
     const dark = 1 - soot.dark * smoothstep(soot.from, soot.to, y);
     // (Its crust darker than sulphur's own yellow, its grain drawn over it as the rock's is)
@@ -71,17 +220,17 @@ export function brimstoneTone(x, y, z, seed, tint, pools = [], floor = false) {
 /**
  * The embers in the Breach's rock at each of its points (`positions`: x, y, z level metres, three
  * a point): how much each glows, a byte (0 to 255: dungeons3d.js rockMaterial's `seam`): in
- * cracks running through it (where a noise is near its middle), low down, more of them by a pool
- * of lava (`pools`: poolShape's). The cracks themselves are drawn by the rock's picture: only its
- * dark grooves glow.
+ * cracks running through it (where a noise is near its middle), low down, more of them by lava
+ * (`away(x, z)`: how far a point is from it, metres: awayFromPools', lakesOf's). The cracks
+ * themselves are drawn by the rock's picture: only its dark grooves glow.
  */
-export function embersOn(positions, seed, pools = []) {
+export function embersOn(positions, seed, away = null) {
     const { across, up, band, high, pools: more, near } = BRIMSTONE.embers;
     const ember = new Uint8Array(positions.length / 3);
 
     for (let p = 0, k = 0; p < positions.length; p += 3, k++) {
         const [x, y, z] = [positions[p], positions[p + 1], positions[p + 2]];
-        const by = Math.max(0, ...pools.map((pool) => 1 - Math.max(0, outOfPool(pool, x, z)) / near));
+        const by = away ? Math.max(0, 1 - away(x, z) / near) : 0;
         const crack = 1 - Math.abs(2 * noise3(x / across, y / up, z / across, seed + 91) - 1);
         const lit = smoothstep(band[0], band[1], crack) * Math.min(1, 1 - smoothstep(0.4, high, y) + by * more);
 
@@ -171,34 +320,27 @@ export function outOfPool(pool, x, z) {
     return (e - 1) * Math.min(pool.rx, pool.rz);
 }
 
+/** How far a point (level metres) is from the nearest of a level's pools (metres; 0 in one). */
+export const awayFromPools = (pools) => (x, z) => pools.reduce((least, pool) => Math.min(least, Math.max(0, outOfPool(pool, x, z))), Infinity);
+
 /**
- * The glow a level's pools cast on the points of its rock or floor (`positions`: x, y, z level
- * metres, three a point; `normals`, which way each faces, if known), each point's linear r, g, b
- * as bytes (0 to 255: a `glow` attribute, dungeons3d.js rockMaterial): brightest at the rim,
- * falling off as the square of the way out to LAVA.glow's reach, and up the walls to its height;
- * what faces up (the floor) lit less than the walls and the rock over the pool (LAVA.glow's
- * `floor`: the room's light lights it already). Added to `into` (bytes as these), if given.
+ * The glow lava casts on the points of a level's rock or floor (`positions`: x, y, z level metres,
+ * three a point; `normals`, which way each faces, if known; `away(x, z)`, how far a point is from
+ * the lava, metres), each point's linear r, g, b as bytes (0 to 255: a `glow` attribute,
+ * dungeons3d.js rockMaterial): brightest at its edge, falling off as the square of the way out to
+ * LAVA.glow's reach, and up the walls to its height; what faces up (the floor) lit less than the
+ * walls and the rock over the lava (LAVA.glow's `floor`: the room's light lights it already).
+ * Added to `into` (bytes as these), if given.
  */
-export function poolGlowOn(positions, pools, into = null, normals = null) {
+export function lavaGlowOn(positions, away, into = null, normals = null) {
     const glow = into ?? new Uint8Array(positions.length);
     const { colour, reach, high, bright, floor } = LAVA.glow;
     const [r, g, b] = linear(colour);
 
     for (let p = 0; p < positions.length; p += 3) {
         const [x, y, z] = [positions[p], positions[p + 1], positions[p + 2]];
-        let share = 0;
-
-        for (const pool of pools) {
-            if (Math.abs(x - pool.x) > pool.rx + reach || Math.abs(z - pool.z) > pool.rz + reach) {
-                continue;
-            }
-
-            const away = Math.max(0, outOfPool(pool, x, z)) / reach;
-
-            if (away < 1) {
-                share += (1 - away) * (1 - away) * (1 - smoothstep(0.2, high, y));
-            }
-        }
+        const out = away(x, z) / reach;
+        let share = out < 1 ? (1 - out) * (1 - out) * (1 - smoothstep(0.2, high, y)) : 0;
 
         if (share > 0) {
             share = Math.min(1, share) * bright * (normals ? floor + (1 - floor) * (1 - Math.max(0, normals[p + 1])) : 1);
@@ -210,6 +352,9 @@ export function poolGlowOn(positions, pools, into = null, normals = null) {
 
     return glow;
 }
+
+/** The glow a level's pools cast on the points of its rock or floor: lavaGlowOn's, from them. */
+export const poolGlowOn = (positions, pools, into = null, normals = null) => lavaGlowOn(positions, awayFromPools(pools), into, normals);
 
 /**
  * A pool's light (a room's: roomlight.js), over its middle, in level metres.
@@ -231,8 +376,8 @@ export function poolLight(pool) {
 function lavaShader(shader) {
     Object.assign(shader.uniforms, { veilTime: VEIL.time, lavaDetail: WATER_DETAIL });
     shader.vertexShader = shader.vertexShader
-        .replace("#include <common>", "#include <common>\nattribute vec2 lava;\nattribute float heat;\nattribute float spin;\nvarying vec2 vLava;\nvarying float vHeat;\nvarying float vSpin;")
-        .replace("#include <uv_vertex>", "#include <uv_vertex>\nvLava = lava;\nvHeat = heat;\nvSpin = spin;");
+        .replace("#include <common>", "#include <common>\nattribute vec2 lava;\nattribute float heat;\nattribute float spin;\nattribute float flow;\nvarying vec2 vLava;\nvarying float vHeat;\nvarying float vSpin;\nvarying float vFlow;")
+        .replace("#include <uv_vertex>", "#include <uv_vertex>\nvLava = lava;\nvHeat = heat;\nvSpin = spin;\nvFlow = flow;");
     shader.fragmentShader = shader.fragmentShader
         .replace(
             "#include <common>",
@@ -240,11 +385,13 @@ function lavaShader(shader) {
 varying vec2 vLava;
 varying float vHeat;
 varying float vSpin;
+varying float vFlow;
 uniform float veilTime;
 uniform float lavaDetail;
 
 const float LAVA_LOOP = ${VEIL.loop.toFixed(1)};
 const float LAVA_PLATES = ${LAVA.plates.toFixed(2)};
+const float LAVA_DRIFT = ${LAKES.drift.toFixed(1)};
 
 // (A hash without sines, Dave Hoskins's: one number, and two)
 float lavaHash(vec2 p) {
@@ -287,13 +434,15 @@ vec2 lavaPlates(vec2 p) {
     for (int y = -1; y <= 1; y++) {
         for (int x = -1; x <= 1; x++) {
             vec2 cell = vec2(float(x), float(y));
-            vec2 o = 0.15 + 0.7 * lavaHash2(i + cell);
+            // (Wrapped round as far as a lake's crust drifts each loop, so it comes round whole)
+            vec2 at = vec2(mod(i.x + cell.x, LAVA_DRIFT * LAVA_PLATES), i.y + cell.y);
+            vec2 o = 0.15 + 0.7 * lavaHash2(at);
             float d = length(cell + o - f);
 
             if (d < first) {
                 second = first;
                 first = d;
-                which = lavaHash(i + cell + 17.0);
+                which = lavaHash(at + 17.0);
             } else if (d < second) {
                 second = d;
             }
@@ -304,25 +453,34 @@ vec2 lavaPlates(vec2 p) {
 }
 
 vec3 lavaAt() {
-    float turn = PI2 * vSpin * veilTime / LAVA_LOOP;
+    // (A pool's crust turning round its middle, a whole turn each loop; a lake's drifting the way
+    // it flows, as far each loop as its noises repeat)
+    float turn = abs(vSpin) > 0.5 ? PI2 * vSpin * veilTime / LAVA_LOOP : -vFlow;
     float c = cos(turn);
     float s = sin(turn);
     vec2 p = mat2(c, -s, s, c) * vLava;
-    float hot = lavaNoise(vLava * 1.3 + vec2(0.0, veilTime / LAVA_LOOP * 6.0), vec2(64.0, 6.0));
-    float churn = lavaNoise(p * 3.1 + 4.0, vec2(64.0));
-    float twist = lavaNoise(p * 3.1 + 9.0, vec2(64.0));
+
+    if (abs(vSpin) < 0.5) {
+        p.x -= LAVA_DRIFT * veilTime / LAVA_LOOP;
+    }
+
+    float hot = lavaNoise(p * 1.3 + vec2(0.0, veilTime / LAVA_LOOP * 6.0), vec2(LAVA_DRIFT * 1.3, 6.0));
+    float churn = lavaNoise(p * 3.1 + 4.0, vec2(LAVA_DRIFT * 3.1, 64.0));
+    float twist = lavaNoise(p * 3.1 + 9.0, vec2(LAVA_DRIFT * 3.1, 64.0));
     // (The plates' edges ragged: where they're looked for warped by the churning)
     vec2 plates = lavaPlates(p * LAVA_PLATES + 0.45 * vec2(churn, twist));
     float cool = 1.0 - vHeat;
-    // (Whether a plate's crusted over: all of them at the bank, a few in the middle, fewer where
-    // it's hotter; and in from its edges, where it's cooled)
-    float crusted = smoothstep(-0.04, 0.04, plates.y - 0.78 + 0.95 * cool + 0.3 * (0.5 - hot));
+    // (Whether a plate's crusted over: all of them at the bank, fewer towards the middle, fewer
+    // where it's hotter, and the crust gathered into rafts with open channels between them; and
+    // in from its edges, where it's cooled)
+    float raft = lavaNoise(p * 0.6 + 2.0, vec2(LAVA_DRIFT * 0.6, 64.0));
+    float crusted = smoothstep(-0.04, 0.04, 0.35 * plates.y + 0.65 * raft - 0.78 + 0.95 * cool + 0.3 * (0.5 - hot));
     float inside = smoothstep(0.03, 0.14, plates.x);
-    float molten = 0.5 + 0.32 * hot + 0.3 * (churn - 0.5) + 0.12 * (twist - 0.5);
+    float molten = 0.42 + 0.3 * hot + 0.3 * (churn - 0.5) + 0.12 * (twist - 0.5);
 
     // (Its finer churning, where there's room to draw it)
     if (lavaDetail > 0.5) {
-        molten += 0.08 * (lavaNoise(p * 7.3 + vec2(veilTime / LAVA_LOOP * 18.0, 0.0), vec2(18.0, 64.0)) - 0.5);
+        molten += 0.08 * (lavaNoise(p * 7.3, vec2(LAVA_DRIFT * 7.3, 64.0)) - 0.5);
     }
 
     float heat = mix(molten, 0.05 + 0.08 * plates.y, crusted * inside) + crusted * (1.0 - inside) * 0.12;
@@ -333,7 +491,7 @@ vec3 lavaAt() {
     vec3 colour = mix(vec3(0.016, 0.009, 0.007), vec3(0.32, 0.022, 0.0), smoothstep(0.05, 0.32, heat));
 
     colour = mix(colour, vec3(1.45, 0.3, 0.025), smoothstep(0.28, 0.6, heat));
-    colour = mix(colour, vec3(2.4, 1.15, 0.28), smoothstep(0.7, 1.0, heat));
+    colour = mix(colour, vec3(2.4, 1.15, 0.28), smoothstep(0.74, 1.05, heat));
 
     return colour;
 }`,
@@ -376,7 +534,10 @@ export function poolGeometries(pools, tint = [0.16, 0.13, 0.12]) {
         // (Its middle, then each ring out from it)
         const base = surface.positions.length / 3;
 
-        surface.positions.push(pool.x, y, pool.z);
+        // (Where it lies: a pool's own height, if it has one, a forge's basin)
+        const level = pool.y ?? y;
+
+        surface.positions.push(pool.x, level, pool.z);
         surface.lava.push(0, 0);
         surface.heat.push(1);
         surface.spin.push(pool.spin);
@@ -385,7 +546,7 @@ export function poolGeometries(pools, tint = [0.16, 0.13, 0.12]) {
             for (let k = 0; k < sides; k++) {
                 const [px, pz] = rimPoint(pool, k, share);
 
-                surface.positions.push(px, y, pz);
+                surface.positions.push(px, level, pz);
                 surface.lava.push(px - pool.x, pz - pool.z);
                 surface.heat.push(1 - share);
                 surface.spin.push(pool.spin);
@@ -440,6 +601,7 @@ export function poolGeometries(pools, tint = [0.16, 0.13, 0.12]) {
     lavaGeometry.setAttribute("lava", new THREE.Float32BufferAttribute(surface.lava, 2));
     lavaGeometry.setAttribute("heat", new THREE.Float32BufferAttribute(surface.heat, 1));
     lavaGeometry.setAttribute("spin", new THREE.Float32BufferAttribute(surface.spin, 1));
+    lavaGeometry.setAttribute("flow", new THREE.Float32BufferAttribute(new Float32Array(surface.spin.length), 1));
     lavaGeometry.setIndex(surface.indices);
 
     const bankGeometry = new THREE.BufferGeometry();

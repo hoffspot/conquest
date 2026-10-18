@@ -193,6 +193,38 @@ describe("a hell as it's made (dungeons/build.js, place.js, themes.js hell)", ()
         }
     });
 
+    it("floods the River of Fire's caverns and grottos with lava, wall to wall but for causeways across them; never the way in's room nor the one furthest in, where the Hellforge stands", () => {
+        for (const dungeon of made) {
+            const level = dungeon.levels[2];
+            const at = (k) => level.rows[Math.floor(k / level.width)][k % level.width];
+            const cells = (room) => {
+                const list = [];
+
+                for (let y = room.y; y < room.y + room.h; y++) {
+                    for (let x = room.x; x < room.x + room.w; x++) {
+                        list.push(y * level.width + x);
+                    }
+                }
+
+                return list;
+            };
+            const lava = [...level.rows.join("")].filter((c) => c === "~").length;
+            const open = [...level.rows.join("")].filter((c) => c !== "#").length;
+
+            assert.ok(lava / open > 0.15 && lava / open < 0.5, `${((lava / open) * 100).toFixed(0)}% lava`);
+
+            const entry = level.rooms.find(({ role }) => role === "entry");
+            const goal = level.rooms.find(({ role }) => role === "stairs");
+
+            assert.ok(!cells(entry).some((k) => at(k) === "~"), "none in the way in's room");
+            assert.equal(goal.look, "hellforge");
+            assert.ok(cells(goal).some((k) => at(k) === "F"), "the Hellforge");
+
+            // (None on the Halls of Bone or the Pit: the Breach's lava only in its pools)
+            assert.ok([1, 3].every((k) => !dungeon.levels[k].rows.join("").includes("~")));
+        }
+    });
+
     it("is never dealt to a wild dungeon's site, whatever the land", () => {
         assert.equal(HELL.wild, false);
 
@@ -252,7 +284,7 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, bre
 
             // (The Breach's pools of lava, every one in one mesh and their banks in another, each
             // pool its light; and its rock and floor glowing by them, embers in its cracks; on no
-            // other level, yet)
+            // other level, the River of Fire's lava its lakes)
             const named = (name) => {
                 const found = [];
 
@@ -262,10 +294,13 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, bre
             };
             const pools = map.pieces.filter(({ kind }) => kind === "lava").length;
 
-            assert.equal(pools > 0, k === 0, `${floor.look}: ${pools} pools`);
+            assert.equal(pools > 0, k === 0 || k === 2, `${floor.look}: ${pools} pools`);
             assert.equal(named("lava").length, k === 0 ? 1 : 0);
             assert.equal(named("lava-bank").length, k === 0 ? 1 : 0);
-            assert.equal(built.lights.filter(({ kind }) => kind === "lava").length, pools);
+
+            if (k !== 2) {
+                assert.equal(built.lights.filter(({ kind }) => kind === "lava").length, pools);
+            }
 
             // (The Halls of Bone's: their walls of flesh, veins beating in them, ribs rising out of
             // them, blood pooled on the floor, and the heart in the last room, beating, its light
@@ -274,6 +309,21 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, bre
             assert.equal(named("blood").length, k === 1 ? 1 : 0);
             assert.equal(named("heart").length, k === 1 ? 1 : 0);
             assert.equal(built.lights.filter(({ kind }) => kind === "heart").length, k === 1 ? 1 : 0);
+
+            // (The River of Fire's: its lakes of lava, every one in one mesh, the floor sinking into
+            // them, embers in its rock, their lights; and the Hellforge, its basin and its mouth
+            // molten, its fire's light)
+            assert.equal(named("lava-lakes").length, k === 2 ? 1 : 0);
+            assert.equal(named("forge-basin").length, k === 2 ? 1 : 0);
+            assert.equal(named("forge-mouth").length, k === 2 ? 1 : 0);
+
+            if (k === 2) {
+                const floorYs = named("floor").flatMap((mesh) => [...mesh.geometry.attributes.position.array].filter((_, j) => j % 3 === 1));
+
+                assert.ok(Math.min(...floorYs) < -0.3, "the floor sinking under the lava");
+                assert.ok(named("rock").every((mesh) => mesh.geometry.attributes.seam), "embers in the rock");
+                assert.ok(built.lights.filter(({ kind }) => kind === "lava").length >= 2);
+            }
 
             if (k === 1) {
                 assert.ok(named("rock").every((mesh) => mesh.geometry.attributes.seam && mesh.material.roughness < 0.9), "veins in wet flesh");

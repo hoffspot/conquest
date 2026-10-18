@@ -436,10 +436,11 @@ export function tiles({ positions, normals, indices, shade }, size = CAVERNS.til
  * A level's floor under its rock (`open`: openness's), as a lattice of squares a `step` across
  * (metres): all of it that's within reach of the open ground (on under the walls, so they stand
  * on it), but not where a hole (`hole`: { x, y, w, h } squares, or null) goes down through it; its
- * points shaded darker towards the walls, as the light that reaches them is: { positions,
+ * points shaded darker towards the walls, as the light that reaches them is; sinking where
+ * `sink(x, z)` says (metres down, if it's given: under a lake of lava, lava.js); { positions,
  * indices, shade } as cavern's.
  */
-export function cavernFloor(width, height, open, { hole = null, step = 1 } = {}) {
+export function cavernFloor(width, height, open, { hole = null, step = 1, sink = null } = {}) {
     const [nx, nz] = [Math.ceil((width + 2) / step) + 1, Math.ceil((height + 2) / step) + 1];
     const positions = new Float32Array(nx * nz * 3);
     const shade = new Float32Array(nx * nz);
@@ -453,7 +454,7 @@ export function cavernFloor(width, height, open, { hole = null, step = 1 } = {})
             const d = open.at(x, z);
             const p = k * nx + i;
 
-            positions.set([x, 0, z], p * 3);
+            positions.set([x, sink ? -sink(x, z) : 0, z], p * 3);
             near[p] = d;
             shade[p] = 0.45 + 0.55 * smoothstep(-0.3, 2.2, d);
         }
@@ -480,11 +481,12 @@ export function cavernFloor(width, height, open, { hole = null, step = 1 } = {})
  * A level's rock (`width` by `height` squares, `rock(x, y)` whether a square's rock), drawn as
  * one surface for its `shell` (SHELLS), a step at a time: { positions (level metres, y up),
  * indices (each three a triangle, facing the open), shade (0 to 1 at each point: darker where the
- * rock closes round it), floor (cavernFloor's, under it: `hole` where stairs go down through it),
- * roof (cavernAt's: how high the rock closes over a point, `roof(x, z)`), open (how far into the
- * open a point is, `open(x, y, z)`: metres, less than 0 in the rock) }.
+ * rock closes round it), floor (cavernFloor's, under it: `hole` where stairs go down through it,
+ * sinking as `sink` says, its points `floorStep` metres apart), roof (cavernAt's: how high the
+ * rock closes over a point, `roof(x, z)`), open (how far into the open a point is, `open(x, y,
+ * z)`: metres, less than 0 in the rock) }.
  */
-export function* cavern(width, height, rock, shell, { seed = 1, least = null, hole = null } = {}) {
+export function* cavern(width, height, rock, shell, { seed = 1, least = null, hole = null, sink = null, floorStep = 1 } = {}) {
     const open = openness(width, height, rock);
 
     yield;
@@ -639,7 +641,7 @@ export function* cavern(width, height, rock, shell, { seed = 1, least = null, ho
 
     yield;
 
-    const floor = cavernFloor(width, height, open, { hole });
+    const floor = cavernFloor(width, height, open, { hole, sink, step: floorStep });
 
     floor.normals = normalsOf(floor.positions, floor.indices);
 

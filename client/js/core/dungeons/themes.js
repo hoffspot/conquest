@@ -16,9 +16,10 @@ import { pickStable } from "./seeds.js";
  * standing with ground all round ("open"); as near the room's middle as it can ("centre"); in a
  * corner ("corner"); in rows across a hall, aisles kept clear ("rows": a pillared hall's pillars);
  * along both long sides ("sides": a gallery's tombs); at the head of a hall, against its north
- * wall on the middle way ("head": a sanctum's altar).
+ * wall on the middle way ("head": a sanctum's altar); its long side against the rock, whichever
+ * way that is ("back": the Hellforge).
  */
-export const PROP_PLACES = Object.freeze(["wall", "open", "centre", "corner", "rows", "sides", "head"]);
+export const PROP_PLACES = Object.freeze(["wall", "open", "centre", "corner", "rows", "sides", "head", "back"]);
 
 /**
  * The themes, by id: { id, name (what the kind's called), layout (layouts.js LAYOUTS), lands (how
@@ -28,8 +29,12 @@ export const PROP_PLACES = Object.freeze(["wall", "open", "centre", "corner", "r
  * place }: what one's called), packs ([{ id, creatures, size: [least, most], weight }]), minis
  * ([{ id, creature, title, weight }]), bosses (as minis, and `guard`: the creatures about it, in
  * turn, if not one of the theme's packs), rooms ({ kind: [{ id, weight, props:
- * [{ char, count: [least, most], at (PROP_PLACES), size: [w, h], mirror }], torches: [least, most],
- * glows: [least, most] }] }: each kind of room a layout digs, and "any" for kinds not listed), lit
+ * [{ char, count: [least, most], at (PROP_PLACES), size: [w, h], mirror; or `tries`, each its own
+ * at and size, tried in turn }], torches: [least, most], glows: [least, most] }] }: each kind of
+ * room a layout digs, and "any" for kinds not listed; "goal", the room furthest in, if it's to have
+ * a look of its own, its first prop placed before anyone waits there), lava (its caverns flooded
+ * with lava: { rooms (which kinds), wide (how wide its causeways are), islands: [least, most],
+ * island (how far across each is) }: place.js flood), lit
  * (how its rooms are lit: by torches on their walls, one more in the way in's room and the
  * arena's; or "glow", by colonies of glowing fungus on their walls, each room's look's `glows`,
  * torches only where its look has them) }.
@@ -356,6 +361,9 @@ export const THEMES = {
                 style: "dungeon-caves",
                 ground: GROUND.soil,
                 sound: "lair",
+                // (Its caverns and grottos flooded with lava, causeways three squares wide across
+                // them, an island or two off them: place.js flood)
+                lava: { rooms: ["cavern", "grotto"], wide: 3, islands: [1, 2], island: 2 },
                 packs: [
                     { id: "slimes", creatures: ["magmaSlime"], size: [2, 4], weight: 3 },
                     { id: "salamanders", creatures: ["salamander"], size: [2, 3], weight: 3 },
@@ -376,6 +384,9 @@ export const THEMES = {
                         { id: "slag", weight: 2, props: [{ char: "*", count: [3, 6], at: "open" }, { char: "m", count: [1, 3], at: "wall" }, { char: "j", count: [0, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] },
                     ],
                     grotto: [{ id: "cinders", props: [{ char: "*", count: [1, 3], at: "open" }, { char: "y", count: [0, 1], at: "open" }, { char: "m", count: [1, 2], at: "wall" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 1] }],
+                    // (The room furthest in, its master's, by the portal down: the Hellforge,
+                    // world/interiors3d.js hellforge, its anvils before it)
+                    goal: [{ id: "hellforge", props: [{ char: "F", count: [1, 1], tries: [{ at: "back", size: [3, 2] }, { at: "back", size: [2, 2] }, { at: "open", size: [2, 2] }] }, { char: "A", count: [1, 2], at: "open" }, { char: "y", count: [1, 2], at: "open" }, { char: "m", count: [1, 2], at: "wall" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0] }],
                     nook: [{ id: "nook", props: [{ char: "m", count: [1, 2], at: "wall" }, { char: "j", count: [0, 1], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0] }],
                 },
             },
