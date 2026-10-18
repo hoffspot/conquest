@@ -60,11 +60,12 @@ export const REGALIA = Object.freeze({
     wraith: {},
     highPriest: { wear: ["darkHood"] },
     // An ants' nest's: the Ant Monster its own size (the biggest it's drawn already: beasts/model.js),
-    // its eyes the brighter; the brood warden a soldier of the nest, bigger and redder, and the
-    // tunnel crawler grey with age
+    // its eyes the brighter; the brood warden a soldier of the nest, bigger and redder, the
+    // tunnel crawler grey with age, and the widow matriarch bigger, blacker and glossier
     antMonster: { glow: 1.2 },
     warden: { tint: 0xd8906a, scale: 1.25 },
     crawler: { tint: 0xa8a098, scale: 1.05 },
+    matriarch: { tint: 0x8a7a90, scale: 1.3, glow: 1.3 },
 });
 
 /**

@@ -559,6 +559,8 @@ export function aboutOf({ id, quality, bonuses }) {
 // (`hurt`: a burst there too), and what's drawn on them (world/ailments3d.js), by its look
 const AILING = Object.freeze({
     poison: { bursts: ["venomBubbles", "venomDrip"], every: 0.18, at: [0.3, 0.8], round: 0.2, tint: [0, 0.1, 0], hurt: "venomBubbles" },
+    // (A black widow's venom: as poison, thicker and faster, darker in the skin)
+    venom: { bursts: ["venomBubbles", "venomDrip"], every: 0.1, at: [0.25, 0.85], round: 0.22, tint: [0.03, 0.08, 0.02], hurt: "venomBubbles" },
     disease: { bursts: ["flies", "miasma"], every: 0.35, at: [0.75, 0.95], round: 0.3, tint: [0.07, 0.06, 0], hurt: "miasma" },
     // (What's caught at a bordello: a fly now and then, and a little sallow)
     pox: { bursts: ["flies"], every: 0.9, at: [0.75, 0.95], round: 0.3, tint: [0.04, 0.035, 0], hurt: null },
@@ -577,12 +579,12 @@ const HELD = Object.freeze({
 });
 
 // What the player's told when something takes hold of them
-const TAKEN = Object.freeze({ poison: "You're poisoned!", disease: "You've caught a sickness!", pox: "You've caught something upstairs: you're diseased!", wither: "A curse withers you!", burn: "You're on fire!", bleed: "You're bleeding!", slow: "You're slowed!", fear: "You're terrified!" });
+const TAKEN = Object.freeze({ poison: "You're poisoned!", venom: "A black widow's venom burns in your veins!", disease: "You've caught a sickness!", pox: "You've caught something upstairs: you're diseased!", wither: "A curse withers you!", burn: "You're on fire!", bleed: "You're bleeding!", slow: "You're slowed!", fear: "You're terrified!" });
 
 // The icon, words and what's drawn for what's lingering on someone (its kind, and look)
 function ailmentOf(kind, look = null) {
     const held = kind === "slow" ? HELD[look] : null;
-    const icons = { poison: "poisoned", disease: "diseased", pox: "diseased", wither: "withered", burn: "burning", bleed: "bleeding", slow: "slowed", fear: "fear" };
+    const icons = { poison: "poisoned", venom: "envenomed", disease: "diseased", pox: "diseased", wither: "withered", burn: "burning", bleed: "bleeding", slow: "slowed", fear: "fear" };
 
     return {
         icon: held?.icon ?? icons[kind],
@@ -644,6 +646,10 @@ const LIFT = Object.freeze({ height: 0.35, swing: 0.06, bob: 2.2 });
 // Taken to the air over a fight (battle.js #hover: a Dreadthorn badly hurt): how high it hangs
 // (m), rising and falling so much (m), so fast (radians a second)
 const HOVERING = Object.freeze({ height: 7, swing: 0.4, bob: 1.6 });
+// How a black widow hangs under the roof as it lurks (battle.js #lurk, #hanging): its middle
+// `under` metres below the rock over it, never lower than `least` (out of a blade's reach) nor
+// higher than `most`; under a roof not yet known, as high as `roof`
+const HANG = Object.freeze({ under: 0.9, least: 3.4, most: 6, roof: 4.6 });
 
 // How fast the camera's shaking dies away (a share of it, a second)
 const SHAKE_DIES = 4;
@@ -2897,6 +2903,11 @@ export class Game {
                 this.#hovering(actor, avatar);
             }
 
+            // (Lurking under the roof, or dropping from it on its thread: battle.js #lurk)
+            if (actor.wild?.lurk) {
+                avatar.hang?.(this.#hanging(actor, avatar, ox + x, oz + z));
+            }
+
             avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
 
             if (!thronged) {
@@ -4122,6 +4133,25 @@ export class Game {
 
     // Standing on the ground (stepping up onto a bridge's deck, and down off it); or, dead, lying
     // still a while, then sinking out of sight until they come back to life
+    // How a black widow lurking hangs under the roof over where it is, and how far down its thread
+    // it's dropped (battle.js #lurk): its middle as high as the rock over it lets it be (HANG), and
+    // how high that is; null once it's down, or dead
+    #hanging(actor, avatar, x, z) {
+        const drop = actor.wild.lurk.drop;
+        const since = actor.droppedAt === null || actor.droppedAt === undefined ? Infinity : this.battle.time - actor.droppedAt;
+
+        if (actor.dead || (!actor.lurking && since >= drop)) {
+            return null;
+        }
+
+        // (The rock over it, once its level's is built: till then, as high as a cavern's middle)
+        avatar.lurkRoof ??= this.interiors.get(actor.map)?.roof?.(x, z) ?? null;
+
+        const roof = avatar.lurkRoof ?? HANG.roof;
+
+        return { height: Math.min(HANG.most, Math.max(HANG.least, roof - HANG.under)), roof, u: actor.lurking ? null : since / drop };
+    }
+
     #updateBody(actor, avatar, dt, ground = 0) {
         const object = avatar.object;
 
@@ -4297,7 +4327,8 @@ export class Game {
 
         minimap.draw({
             player: actor.dead ? null : { x: me.object.position.x - ox, z: me.object.position.z - oz, facing: me.facing },
-            others: battle.actors.filter((other) => other !== actor && !other.dead && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite).map((other) => {
+            // (Not one lurking unseen overhead: battle.js #lurk)
+            others: battle.actors.filter((other) => other !== actor && !other.dead && !other.lurking && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite).map((other) => {
                 const position = this.avatars.get(other.id).object.position;
 
                 return { x: position.x - ox, z: position.z - oz, hostile: this.battle.hostile(other, actor), targeted: other === target, ally: Boolean(this.allied?.has(other.id)) };
@@ -8430,6 +8461,22 @@ export class Game {
 
                     if (event.target === this.me) {
                         this.hud.message(`${actor.name[0].toUpperCase()}${actor.name.slice(1)} calls its flock: more ${CREATURES[event.kind]?.name.toLowerCase() ?? "creature"}s are coming!`, 2.5);
+                    }
+
+                    break;
+                }
+                case "drop": {
+                    // (A black widow dropping on its thread from where it lurked, unseen, onto
+                    // whoever came beneath it: battle.js #lurk; heard, and told to them)
+                    const actor = battle.actor(event.id);
+                    const creature = this.#voiced(actor, avatar);
+
+                    if (creature) {
+                        this.sound?.voice(creature, "attack", avatar.object.position);
+                    }
+
+                    if (event.target === this.me) {
+                        this.hud.message(`${actor.name[0].toUpperCase()}${actor.name.slice(1)} drops on you from the dark above!`, 2.5);
                     }
 
                     break;

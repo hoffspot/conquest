@@ -57,7 +57,8 @@ describe("what lingers after some blows (afflictions.js)", () => {
 
         // (The pox, the one draught's as the wild's sickness is: only those two)
         assert.deepEqual(curedWith("disease"), ["disease", "pox"]);
-        assert.deepEqual(curedWith("poison"), ["poison"]);
+        // (A black widow's venom, the one draught's as poison is)
+        assert.deepEqual(curedWith("poison"), ["poison", "venom"]);
         assert.deepEqual(curedWith("fear"), []);
         assert.equal(ITEMS.antidote.label, "Cure poison draught");
         assert.equal(ITEMS.cureDisease.label, "Cure disease draught");
@@ -140,6 +141,38 @@ describe("what lingers after some blows (afflictions.js)", () => {
         player.stamina = 0;
         run(battle, 1000);
         assert.ok(Math.abs(player.stamina - AFFLICTIONS.disease.recovery) < 0.02, `${player.stamina}`);
+    });
+
+    it("a black widow's venom: over three times poison's hurt, longer, slowing by a quarter; ended and warded as poison is", () => {
+        const { battle, player } = field();
+        const over = ({ ms, every, damage }) => (ms / every) * damage;
+
+        assert.ok(over(AFFLICTIONS.venom) >= 3 * over(AFFLICTIONS.poison), `${over(AFFLICTIONS.venom)} against ${over(AFFLICTIONS.poison)}`);
+        assert.ok(AFFLICTIONS.venom.ms > AFFLICTIONS.poison.ms);
+
+        player.hp = player.maxHp = 500;
+        battle.afflict("p", "venom", { by: "widow" });
+        assert.equal(shareOf(player, "speed"), 0.75);
+
+        const ails = run(battle, AFFLICTIONS.venom.ms + 200).filter(({ type }) => type === "ail");
+
+        assert.equal(ails.length, AFFLICTIONS.venom.ms / AFFLICTIONS.venom.every);
+        assert.ok(ails.every(({ kind, by }) => kind === "venom" && by === "widow"));
+        assert.equal(player.hp, 500 - over(AFFLICTIONS.venom));
+        assert.equal(shareOf(player, "speed"), 1, "the cramps gone with it");
+
+        // (Bitten again while it's on: it lasts from then)
+        battle.afflict("p", "venom");
+        run(battle, 5000);
+        battle.afflict("p", "venom");
+        assert.equal(player.afflictions[0].until, battle.time + AFFLICTIONS.venom.ms);
+
+        // (The guild's cure poison draught, Cure Poison and Renewal end it; Resist Poison wards it)
+        assert.equal(AFFLICTIONS.venom.cure, "antidote");
+        assert.ok(SPELLS.curePoison.cures.includes("venom") && SPELLS.renewal.cures.includes("venom"));
+        assert.ok(SPELLS.resistPoison.ward.afflictions.includes("venom"));
+        assert.equal(battle.cure("p", "venom"), true);
+        assert.deepEqual(player.afflictions, []);
     });
 
     it("comes of the creatures' blows as their weapons say", () => {

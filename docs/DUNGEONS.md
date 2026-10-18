@@ -28,7 +28,8 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
     either side, mirrored; the dead, cultists, wraiths, serpents and scorpions;
   - **an ants' nest** (`nest`): dug as the caves are, through reddened earth; giant ants in their
     numbers, great centipedes in its deeper tunnels, packs of dungeon spiders each led by an elite
-    dungeon spider, giant cockroaches at what the ants leave, dungeon wasps hovering in its
+    dungeon spider, black widows hanging unseen under its galleries' roofs to drop on whoever passes
+    beneath (a Widow matriarch among its mini-bosses), giant cockroaches at what the ants leave, dungeon wasps hovering in its
     galleries, a dungeon scorpion or two, and the Ant Monster, their great queen, at the bottom,
     calling her flock to her
     (*Who's in it*, below). All of them are drawn from models
@@ -205,7 +206,7 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
   way (`REGALIA`): the Troll King and the Outlaw King crowned (the Goblin King in its own crown
   and cape, 15% bigger again), the Frost Troll in
   a silver circlet, the ogres in horned helms, the outlaw lieutenant in a soldier's helm, the
-  priests hooded in black; the Broodmother vast and blood-marked, the cave bear and the old tusker
+  priests hooded in black; the Broodmother vast and blood-marked, the Widow matriarch bigger, blacker and glossier, the cave bear and the old tusker
   grizzled, the tomb champion's bones gilded, the Tomb Lord's eyes and the Dread Wraith's light
   burning brighter. What's worn takes the place of whatever was in its slot. The rules know
   nothing of it.

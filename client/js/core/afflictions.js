@@ -15,6 +15,9 @@
  */
 export const AFFLICTIONS = Object.freeze({
     poison: { label: "Poisoned", about: "Venom in the blood: it hurts every moment or two, a while.", ms: 9000, every: 1500, damage: 1, cure: "antidote" },
+    // (A black widow's: three times poison's hurt and more, longer, the cramps it brings slowing
+    // them by a quarter; the same draught cures it)
+    venom: { label: "Envenomed", about: "A black widow's venom: it burns and cramps, hurting every moment and slowing you by a quarter, a while.", ms: 12000, every: 1200, damage: 2, speed: 0.75, cure: "antidote" },
     disease: { label: "Diseased", about: "A sickness: it hurts now and then, and the breath's slow to come back.", ms: 45000, every: 5000, damage: 1, recovery: 0.4, cure: "cureDisease" },
     // (Caught at a bordello: diseased an hour, and as the wild's sickness the breath's slow to
     // come back; but it doesn't hurt, as an hour of that would be the end of anyone. The same

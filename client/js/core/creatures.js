@@ -174,6 +174,9 @@ export const CREATURES = Object.freeze({
     dungeonScorpion: { name: "Dungeon scorpion", hp: 64, weapon: "dungeonScorpion", speed: 0.9, chase: 2.2, temper: "aggressive", roam: 6, leash: 18, pack: [1, 2], tiers: [3, 10], biomes: [], blood: "ichor", armor: 0.25, darkSight: true, steady: true },
     giantCockroach: { name: "Giant cockroach", hp: 22, weapon: "giantCockroach", speed: 1.4, chase: 3.2, temper: "aggressive", roam: 10, leash: 18, pack: [2, 4], tiers: [1, 8], biomes: [], blood: "ichor", armor: 0.1, darkSight: true },
     dungeonWasp: { name: "Dungeon wasp", hp: 26, weapon: "dungeonWasp", speed: 1.4, chase: 3.4, temper: "aggressive", roam: 10, leash: 22, pack: [2, 3], tiers: [2, 10], biomes: [], blood: "ichor", darkSight: true },
+    // (A black widow: hanging unseen in the dark under a nest's roof, dropping on its thread onto
+    // whoever passes beneath (`lurk`: battle.js #lurk), its bite a venom of its own)
+    blackWidow: { name: "Black widow", hp: 54, weapon: "blackWidow", speed: 1, chase: 2.6, temper: "aggressive", roam: 4, leash: 18, pack: [1, 1], tiers: [3, 10], biomes: [], blood: "ichor", armor: 0.1, darkSight: true, lurk: { within: 3.5, drop: 1800 } },
     antMonster: { name: "Ant Monster", hp: 96, weapon: "antMonster", speed: 1.4, chase: 2.8, temper: "aggressive", roam: 6, leash: 24, pack: [1, 1], tiers: [4, 10], biomes: [], blood: "ichor", armor: 0.2, darkSight: true, steady: true, call: { kind: "ant", count: [2, 3], most: 4, every: 20000, first: 6000 }, boss: { call: { count: [2, 4], most: 6, every: 15000 } } },
     // The mightiest: only in the perilous places
     dragon: { name: "Drake", hp: 90, weapon: "dragon", speed: 1, chase: 2.2, temper: "aggressive", roam: 6, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true , steady: true },
@@ -356,13 +359,13 @@ export function notable(wild, { master = false } = {}) {
 
 /**
  * How a creature fights besides its weapon (battle.js, its actor's `wild`): `steady`, `keep`,
- * `bomb`, `hover` and, one that has it, `call` (CREATURES); as a dungeon's boss (`boss`), its
- * bomb and its call as its `boss` has them.
+ * `bomb`, `hover` and, one that has them, `call` and `lurk` (CREATURES); as a dungeon's boss
+ * (`boss`), its bomb and its call as its `boss` has them.
  */
 export function traitsOf(creature, { boss = false } = {}) {
-    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null } = CREATURES[creature] ?? {};
+    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null, lurk = null } = CREATURES[creature] ?? {};
 
-    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}) };
+    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}), ...(lurk ? { lurk: { ...lurk } } : {}) };
 }
 
 /** The round an elite walks ([[x, y], ...] metres): ELITES.stops evenly about where it was put out (`at`), ELITES.loop metres off. */

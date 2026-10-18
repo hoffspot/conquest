@@ -243,6 +243,30 @@ export const MODELS = Object.freeze({
         pace: 1.4,
         flinch: 0.5,
     }),
+    // (A black widow: made 1.79 metres long, legs and all, drawn 2.2; rearing to bite, or pouncing
+    // (Attack 3: a leap of 1.7 metres as it's made, and back); resting, shifting its legs; dead,
+    // flipped onto its back, its legs curled. Lurking, hanging from its thread in the dark under
+    // a nest's roof, and dropping on it onto whoever passes beneath (`lurk`: its Web Ground, made
+    // hanging with its middle `top` metres up, sliding down its thread `fall` metres a second,
+    // touching the ground `lands` seconds in, on its feet by its `end`; battle.js #lurk))
+    blackWidow: Object.freeze({
+        asset: "beast-black-widow",
+        length: 2.2,
+        made: Object.freeze({ long: 1.79, tall: 0.37 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit React", dead: "Death" }),
+        attacks: Object.freeze({ bite: "Attack" }),
+        specials: Object.freeze({ leap: "Attack 3" }),
+        rests: Object.freeze({ shift: "Idle 3", feel: "Idle 4" }),
+        lurk: Object.freeze({ clip: "Web Ground", top: 4.92, fall: 1.163, lands: 3.45, end: 4.97 }),
+        // (Its full detail only: its bristles don't simplify, so the pipeline packs no lower ones)
+        detail: 1,
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "Torso", body: "COG", head: "Head", mouth: "Fang2R", left: "FrontLeg4L" }),
+        mouth: null,
+        pace: 0.68,
+        runPace: 1.83,
+        flinch: 0.6,
+    }),
     // (The Ant Monster, the nests' great queen: made 6.8 metres long, drawn 4.2, 1.5 metres tall;
     // its mandibles, rearing to slam down, its acid spat, and its flock called (its call: battle.js
     // #calls); resting, looking about, swaying, rearing in threat. Its walk carries it as fast as
@@ -823,12 +847,13 @@ export function clipOf(model, style, aloft = false) {
 /**
  * How a model's clips are posed for what the game asks of a body (BeastAvatar's plan.pose: its
  * `speed`, `attack`, `rest`, `react`, `dead`, `fly` (hanging in the air, `hover`: its hover clip);
- * `t`, the beast's own clock, seconds): each
+ * `hang`, one that lurks hanging from its thread (its `lurk`), its middle `height` metres up as it's
+ * drawn, still, or dropping (`u`, 0 to 1 of the way); `t`, the beast's own clock, seconds): each
  * clip (by name) with its weight (all of them adding up to 1) and how far in it is (seconds).
  * `lengths`: each clip's length (seconds); `died`: how long it's been dead (seconds: its fall
  * plays at its own pace, longer than the game's). A pure function.
  */
-export function poseOf(model, { speed = 0, attack = null, rest = null, react = null, dead = null, fly = null, t = 0 }, { lengths, died = 0 }) {
+export function poseOf(model, { speed = 0, attack = null, rest = null, react = null, dead = null, fly = null, hang = null, t = 0 }, { lengths, died = 0 }) {
     const { clips } = model;
     // (A clip it has: one it borrows only once it's been lent it, borrowClips)
     const has = (clip) => Boolean(clip) && lengths[clip] !== undefined;
@@ -847,6 +872,16 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
     // fallOf)
     if (dead) {
         return has(clips.dead) ? [{ clip: clips.dead, weight: 1, time: at(clips.dead, died) }] : [{ clip: clips.idle, weight: 1, time: 0 }];
+    }
+
+    // (Lurking, hanging from its thread as high as it's told (its lurk's clip held from where it's
+    // hanging that high: its middle `top` metres up as it's made at its start, sliding down `fall`
+    // a second); dropping on it, played from there to its end, touching the ground and onto its feet)
+    if (hang && model.lurk && has(model.lurk.clip)) {
+        const { clip, top, fall, lands, end } = model.lurk;
+        const from = Math.min(lands - 0.3, Math.max(0, (top - (hang.height * model.made.long) / model.length) / fall));
+
+        return [{ clip, weight: 1, time: at(clip, hang.u === null ? from : from + Math.min(1, hang.u) * (end - from)) }];
     }
 
     // On the ground: standing, or walking as fast as it goes (its walk's pace); one that has a run
@@ -1073,6 +1108,8 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
         rests: Object.keys(model.rests),
         look: { attacks: Object.keys(model.attacks), specials: Object.keys(model.specials), rests: Object.keys(model.rests) },
         model: id,
+        // (Hanging and dropping from its thread its own way, its lurk's clip: poseOf)
+        lurks: Boolean(model.lurk),
         levels,
         showLevel,
         breath,

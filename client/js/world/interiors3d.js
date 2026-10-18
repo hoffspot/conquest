@@ -4378,6 +4378,8 @@ function* rockShell(map, look, shell) {
     meshesOf(made, look.tint ?? null, look.picture, "rock");
     yield;
     meshesOf(made.floor, look.ground ?? null, look.underfoot, "floor");
+    // (How high the rock closes over a point of the level, its metres: a lurker hangs under it)
+    group.userData.roof = made.roof;
 
     return group;
 }
@@ -5192,8 +5194,14 @@ export function* buildingInterior(map) {
 
     object.add(merged);
 
+    // (Its rock's roof, how high over a point of the level: caverns.js)
+    let roof = null;
+
     if (built.shell) {
-        object.add(yield* built.shell);
+        const shell = yield* built.shell;
+
+        object.add(shell);
+        roof = shell.userData.roof ?? null;
     }
 
     for (const each of built.blocks ?? []) {
@@ -5286,6 +5294,8 @@ export function* buildingInterior(map) {
         daylight: lit.daylight,
         open: Boolean(built.open),
         ceiling: built.ceiling ?? STOREY,
+        /** How high over the ground the rock closes over a point (world metres), a dungeon's level's; null for anywhere else. */
+        roof: (x, z) => (roof ? roof(x - ox, z - oz) : null),
         props: built.props ?? [],
         hearth: built.hearth ? { x: ox + built.hearth.x, y: built.hearth.y, z: oz + built.hearth.z } : null,
         update(dt, time) {

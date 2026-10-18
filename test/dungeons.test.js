@@ -343,7 +343,7 @@ describe("themes", () => {
         const kinds = [...nest.packs.flatMap(({ creatures }) => creatures), ...nest.minis.map(({ creature }) => creature), ...nest.bosses.flatMap(({ creature, guard = [] }) => [creature, ...guard])];
 
         assert.equal(nest.layout, "caves");
-        assert.deepEqual([...new Set(kinds)].sort(), ["ant", "antMonster", "dungeonScorpion", "dungeonSpider", "dungeonWasp", "eliteDungeonSpider", "giantCockroach", "greatCentipede"]);
+        assert.deepEqual([...new Set(kinds)].sort(), ["ant", "antMonster", "blackWidow", "dungeonScorpion", "dungeonSpider", "dungeonWasp", "eliteDungeonSpider", "giantCockroach", "greatCentipede"]);
         assert.ok(kinds.every((kind) => MODELS[kind]), "each drawn from a model");
 
         // (Each pack of spiders led by an elite)
