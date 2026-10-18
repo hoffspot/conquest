@@ -3,7 +3,8 @@
 // rooms dug as its theme digs them (layouts.js), checked (enough rooms, a long enough way through,
 // the room furthest in far enough in) and dug again from the next attempt's numbers if not, then
 // filled (place.js): stairs down in the room furthest in, the final boss before its hoard at the
-// far end of the bottom level, mini-bosses along the way, packs, small chests, props and torches.
+// far end of the bottom level, mini-bosses along the way, packs, small chests, props and torches
+// (or the glowing fungus a theme's lit by).
 // Each level comes back as plan rows (interiors.js readPlan reads them, as every building's floor)
 // and what's in it, for the game to make (core/insides.js, core/host.js).
 //
@@ -23,7 +24,7 @@ export { dungeonName };
  * Bumped whenever what a seed makes changes (a dungeon saved with another is made again from its
  * seed as this one makes it, not mixed).
  */
-export const DUNGEON_VERSION = 7;
+export const DUNGEON_VERSION = 8;
 
 /** How likely a dungeon is to be one, two or three levels deep. */
 export const LEVEL_ODDS = Object.freeze({ 1: 3, 2: 4, 3: 3 });
@@ -58,7 +59,8 @@ export const CHECKS = Object.freeze({ rooms: 0.8, path: { 1: 5, 2: 4, 3: 3 }, fa
  * front door's or the foot of the stairs up's), down (the same for the stairs down, or null on the
  * bottom level), packs ([{ id, role: "pack" | "mini" | "boss", room, title, foes: [{ creature,
  * tier, at: [x, y], boss?, mini?, title? }] }]), chests ([{ id, at, kind: "small" | "hoard" | "remains", room }]),
- * lights ([{ at, kind, wall? }]), attempt }] }.
+ * lights ([{ at, kind: "torch" | "glow" (a colony of glowing fungus) | a fire's (place.js FIRES),
+ * wall? }]), attempt }] }.
  *
  * `theme`: a THEMES id; `tier`: how strong it is (1 to 10: the land's or its finders', the first
  * level's packs; deeper levels a tier up, mini-bosses a tier over their level, the boss two over

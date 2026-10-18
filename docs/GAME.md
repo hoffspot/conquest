@@ -2349,7 +2349,8 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   hash of its own puts it in a box 28 metres across round the player, drifting on its land's
   breeze and wandering about it, wrapping round the box as the player goes and fading towards
   its edges; fireflies and embers flicker. Crossing into another land, one kind fades out and the
-  next in; none indoors.
+  next in; none indoors, but where a place's look has its own (an ants' nest's spores, glowing
+  faintly green: docs/DUNGEONS.md), and through a door the last place's are gone at once.
 
 The chunks also say how tall their trees, features and buildings are on each square, for the
 cutaway. The minimap is painted from the same chunks.
@@ -2394,11 +2395,13 @@ shown: the world outside and the town, or one floor inside. Going
 through, the screen dips to black and fades back in over 0.45 s, the camera behind the player
 the way they face. Indoors, the view (`setIndoors`) has a dark background and closer fog (all
 the fog's colour by 38 m, and the camera sees no further than 4 m past that, `INDOORS.clip`, so
-a dungeon's rock and what's in it beyond isn't drawn at all), the light from all round dimmed, the sun shining in at the room's windows on its sunny side (none for
+a dungeon's rock and what's in it beyond isn't drawn at all; a dungeon's level whose look has its
+own air, an ants' nest's, its own, closer, and dust lying low over its floor), the light from all round dimmed, the sun shining in at the room's windows on its sunny side (none for
 a room without windows), and the room's flames flickering, each lighting it
 (world/roomlight.js): the two lighting the player most are the view's two point lights, lighting
 the folk and everything else too, and the rest light the room's walls, floor, ceiling and
-furniture from a list in their shaders. The two point lights are always in the scene, out (at no
+furniture from a list in their shaders. Where the player carries a light (an ants' nest), it's
+the second point light, over them wherever they go. The two point lights are always in the scene, out (at no
 intensity) outdoors, so that going in and out never makes Three.js recompile every lit material's
 shaders.
 

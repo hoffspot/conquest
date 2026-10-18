@@ -264,6 +264,17 @@ describe("the flames lighting the rooms (roomlight.js, interiors3d.js)", () => {
         assert.equal(strengthOf({ intensity: 10 }, 4.5, { amount: 0.8, at: 3 }), 10);
     });
 
+    it("breathes a glowing fungus's light slowly, no more than its breath either way, never flickering as a flame does", () => {
+        const light = { intensity: 2.4, flicker: 0, breathe: 0.12, pace: 1.4, seed: 7 };
+        const strengths = Array.from({ length: 400 }, (_, k) => strengthOf(light, k * 0.05));
+
+        assert.ok(Math.min(...strengths) >= 2.4 * 0.88 - 1e-9 && Math.max(...strengths) <= 2.4 * 1.12 + 1e-9);
+        assert.ok(Math.max(...strengths) - Math.min(...strengths) > 2.4 * 0.2, "it breathes");
+        // (Slowly: a twentieth of a second makes next to no difference)
+        assert.ok(strengths.slice(1).every((value, k) => Math.abs(value - strengths[k]) < 2.4 * 0.12 * 1.4 * 0.05 + 1e-9));
+        assert.equal(strengthOf({ intensity: 2.4 }, 3), 2.4);
+    });
+
     it("burns each hearth, forge and candle as fire.js's fire, its light rising and falling with the flame drawn", () => {
         for (const kind of ["taproom", "smithy", "temple"]) {
             const built = insideOf(kind);
@@ -390,6 +401,27 @@ describe("the camera indoors (view.js)", () => {
         assert.deepEqual(stand.lamps.map(({ light }) => light.position.x), [104, 108]);
         assert.equal(ROOM_LIGHT.count.value, 3, "only those not the lamps, each costing every pixel");
         assert.deepEqual(ROOM_LIGHT.at.value.slice(0, 3).map(({ x, w }) => [x, w]), [[101, 6], [112, 6], [116, 6]]);
+    });
+
+    it("lights a place where the player carries a light (an ants' nest's) by it as the last lamp, over them wherever they go, and the room's lights the rest", () => {
+        const glow = (x, intensity) => ({ kind: "glow", x, y: 0.8, z: 5, intensity, distance: 6, colour: 0x5cf08c });
+        const lights = [glow(101, 2), glow(104, 2), glow(108, 2), glow(112, 2)];
+        const carried = { colour: new THREE.Color(0xffc890), intensity: 3.2, distance: 9, up: 1.2 };
+        const stand = { room: { ...room, lights, colours: lights.map(({ colour }) => new THREE.Color(colour)), strengths: [], flares: [], lamps: [], carried }, lamps: [{ light: new THREE.PointLight() }, { light: new THREE.PointLight() }] };
+
+        for (const x of [107, 111]) {
+            View.prototype.flicker.call(stand, 0, new THREE.Vector3(x, 1.2, 5));
+
+            const [first, last] = stand.lamps.map(({ light }) => light);
+
+            // (The nearest of the room's lights the first lamp; the carried one over the player)
+            assert.deepEqual(stand.room.lamps, [x === 107 ? 2 : 3]);
+            assert.equal(first.position.x, x === 107 ? 108 : 112);
+            assert.deepEqual(last.position.toArray(), [x, 2.4, 5]);
+            assert.deepEqual([last.intensity, last.distance], [3.2, 9]);
+            assert.ok(last.color.equals(carried.colour));
+            assert.equal(ROOM_LIGHT.count.value, 3, "the room's others listed for its own shaders");
+        }
     });
 
     it("keeps the camera inside the walls under the ceiling, and anywhere over it", () => {

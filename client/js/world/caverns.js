@@ -62,8 +62,8 @@ function hash3(x, y, z, seed) {
 
 const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
 
-// Value noise in three dimensions, from 0 to 1, each lattice point its own
-function noise3(x, y, z, seed) {
+/** Value noise in three dimensions, from 0 to 1, each lattice point its own (a metre apart). */
+export function noise3(x, y, z, seed) {
     const [xi, yi, zi] = [Math.floor(x), Math.floor(y), Math.floor(z)];
     const [u, v, w] = [fade(x - xi), fade(y - yi), fade(z - zi)];
     const at = (dx, dy, dz) => hash3(xi + dx, yi + dy, zi + dz, seed);
@@ -478,7 +478,8 @@ export function cavernFloor(width, height, open, { hole = null, step = 1 } = {})
  * one surface for its `shell` (SHELLS), a step at a time: { positions (level metres, y up),
  * indices (each three a triangle, facing the open), shade (0 to 1 at each point: darker where the
  * rock closes round it), floor (cavernFloor's, under it: `hole` where stairs go down through it),
- * roof (cavernAt's: how high the rock closes over a point, `roof(x, z)`) }.
+ * roof (cavernAt's: how high the rock closes over a point, `roof(x, z)`), open (how far into the
+ * open a point is, `open(x, y, z)`: metres, less than 0 in the rock) }.
  */
 export function* cavern(width, height, rock, shell, { seed = 1, least = null, hole = null } = {}) {
     const open = openness(width, height, rock);
@@ -639,5 +640,13 @@ export function* cavern(width, height, rock, shell, { seed = 1, least = null, ho
 
     floor.normals = normalsOf(floor.positions, floor.indices);
 
-    return { ...surface, floor, roof: (x, z) => field.roof(x, z) };
+    // (And how far into the open any point is, as the surface was drawn from: what grows on it is
+    // put on it by that, glowfungus.js)
+    const into = (x, y, z) => {
+        field.column(x, z);
+
+        return field.at(y);
+    };
+
+    return { ...surface, floor, roof: (x, z) => field.roof(x, z), open: into };
 }

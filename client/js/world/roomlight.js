@@ -150,12 +150,13 @@ const _signal = { puff: 0, gust: 0 };
 
 /**
  * How bright a light is at `time` (seconds): its `intensity`, flickering by its `flicker` (a
- * share of it: a fire's lively, a lamp's steadier), each its own way (`seed`), flared up by
- * `flare` ({ amount, at }: that much brighter at `at`, dying down over a second). A light with
- * a flame drawn (its `rate`, a second, and `steady`: fire.js's) rises and falls as that flame
- * does, by the drawing's clock (`fireTime`: WINDOW_LIGHT.z, as the flame has it).
+ * share of it: a fire's lively, a lamp's steadier), each its own way (`seed`), breathing slowly
+ * by its `breathe` (a share of it, at `pace` radians a second: glowing fungus, glowfungus.js),
+ * flared up by `flare` ({ amount, at }: that much brighter at `at`, dying down over a second). A
+ * light with a flame drawn (its `rate`, a second, and `steady`: fire.js's) rises and falls as that
+ * flame does, by the drawing's clock (`fireTime`: WINDOW_LIGHT.z, as the flame has it).
  */
-export function strengthOf({ intensity, flicker = 0, seed = 0, rate = 0, steady = 1 }, time, flare = null, fireTime = time) {
+export function strengthOf({ intensity, flicker = 0, seed = 0, rate = 0, steady = 1, breathe = 0, pace = 1 }, time, flare = null, fireTime = time) {
     const flaring = flare ? flare.amount * Math.max(0, 1 - (time - flare.at) / FLARE) : 0;
 
     if (rate > 0) {
@@ -164,7 +165,7 @@ export function strengthOf({ intensity, flicker = 0, seed = 0, rate = 0, steady 
 
     const wave = Math.sin(time * 9.1 + seed) * 0.5 + Math.sin(time * 23.7 + seed * 2) * 0.3 + Math.sin(time * 4.3 + seed * 0.5) * 0.2;
 
-    return intensity * (1 + flicker * wave) * (1 + flaring);
+    return intensity * (1 + flicker * wave) * (1 + breathe * Math.sin(time * pace + seed)) * (1 + flaring);
 }
 
 /**

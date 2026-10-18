@@ -9062,7 +9062,7 @@ test("a dungeon whose creatures are drawn from models: theirs fetched, not read,
     expect(near).toEqual({ fetching: true, hurried: 0, read: false, made: false });
 });
 
-test("an ants' nest: its creatures' models got ready at its door, the card naming them; gone in, its ants drawn from their model, lent the Ant Monster's fall; its fallen lying about it, one searched", async ({ page }) => {
+test("an ants' nest: its creatures' models got ready at its door, the card naming them; gone in, its ants drawn from their model, lent the Ant Monster's fall; its fallen lying about it, one searched; lit by the fungus on its walls and the light the player carries, in its own close dusty air, spores drifting, soil trickling", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
@@ -9171,6 +9171,67 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
     expect(inside.fallen).toBeGreaterThan(2);
     expect(inside.searched).toMatchObject({ lying: true, gone: true, drawn: true, said: true });
     expect(inside.searched.gold).toBeGreaterThan(0);
+
+    // (Lit by the colonies of glowing fungus on its walls, each grown on the rock and its light, a
+    // torch only at its mouth; the earth round each glowing; the light the player carries the last
+    // lamp, over them; its own air, close, warm and dusty, nothing drawn past it; spores drifting in
+    // it; soil trickling from the roof now and then, its grains falling from under it)
+    const lit = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { MIST } = await import("/js/world/fog.js");
+        const player = game.battle.actor("player");
+        const interior = game.interiors.get(player.map);
+        const step = async (frames) => {
+            for (let k = 0; k < frames; k++) {
+                player.hp = player.maxHp;
+                game.advance(0.05);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+        const level = interior.map.dungeon;
+        const meshes = [];
+
+        interior.object.traverse((node) => node.isMesh && meshes.push(node));
+        await step(40);
+
+        const { view } = session;
+        const [, carried] = view.lamps.map(({ light }) => light);
+        const at = game.avatars.get(game.me).object.position;
+        const fungus = meshes.find(({ name }) => name === "fungus");
+
+        // (A trickle let start now, and a frame or two of its grains)
+        const before = game.effects.dust.live.length;
+
+        game.trickles.wait = 0;
+        await step(3);
+
+        return {
+            glows: level.lights.filter(({ kind }) => kind === "glow").length,
+            torches: level.lights.filter(({ kind }) => kind === "torch").length,
+            lights: interior.lights.filter(({ kind }) => kind === "glow").length,
+            fungus: fungus ? { triangles: fungus.geometry.index.count / 3, glowing: fungus.material.type === "MeshBasicMaterial" && fungus.geometry.attributes.color.count > 0 } : null,
+            threads: meshes.filter(({ name }) => name === "rock").every(({ geometry }) => geometry.attributes.glow?.itemSize === 3),
+            carried: { above: carried.position.y - at.y, over: Math.hypot(carried.position.x - at.x, carried.position.z - at.z), intensity: carried.intensity, shadows: carried.castShadow },
+            air: { near: view.scene.fog.near, far: view.scene.fog.far, colour: view.scene.fog.color.getHex(), sees: view.camera.far, dust: [MIST.value.x, MIST.value.w] },
+            motes: { kind: game.motes.kind, shown: game.motes.object.visible },
+            trickle: { running: Boolean(game.trickles.running), grains: game.effects.dust.live.length - before, under: game.trickles.running ? interior.roof(game.trickles.running.x, game.trickles.running.z) - game.trickles.running.top : null },
+        };
+    });
+
+    expect(lit.glows).toBeGreaterThan(5);
+    expect(lit.torches).toBeLessThanOrEqual(1);
+    expect(lit.lights).toBe(lit.glows);
+    expect(lit.fungus).toMatchObject({ glowing: true });
+    expect(lit.fungus.triangles).toBeGreaterThan(lit.glows * 100);
+    expect(lit.threads).toBe(true);
+    expect(lit.carried).toMatchObject({ intensity: 3.2, shadows: false });
+    expect(lit.carried.above).toBeCloseTo(2.4, 1);
+    expect(lit.carried.over).toBeLessThan(0.01);
+    expect(lit.air).toEqual({ near: 9, far: 30, colour: 0x1b120c, sees: 34, dust: [0.09, 1] });
+    expect(lit.motes).toEqual({ kind: "spores", shown: true });
+    expect(lit.trickle.running).toBe(true);
+    expect(lit.trickle.grains).toBeGreaterThan(0);
+    expect(lit.trickle.under).toBeCloseTo(0.05, 2);
 });
 
 test("on the world map a pin's dropped where it's held: a column of light where it stands and a line the way there, taken away held again; tapped twice, the player runs there, or is told there's no way", async ({ page }) => {

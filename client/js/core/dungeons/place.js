@@ -3,7 +3,8 @@
 // furthest in (or on the bottom level, the boss before its hoard there), the mini-bosses along the
 // way, packs in the other rooms, chests here and there (likelier off the way through, in dead
 // ends), each room dressed as its theme has that kind of room (themes.js) and lit by torches on its
-// walls. Every square of open ground can still be walked to when it's done.
+// walls (or, in a theme lit by them, the colonies of glowing fungus growing there). Every square
+// of open ground can still be walked to when it's done.
 //
 // Pure: whole numbers and the level's own random stream (seeds.js), the same on every machine.
 
@@ -22,6 +23,12 @@ export const BLOCKING = new Set(["*", "%", "V", "^", "x", "y", "u", "K", "T", "R
  * comes in, nor of their followers.
  */
 export const ARRIVE_CLEAR = 5;
+
+/**
+ * How far apart (rings of squares) the colonies of glowing fungus on a room's walls grow, from each
+ * other and its torches (a theme `lit` by them: themes.js).
+ */
+export const GLOW_APART = 3;
 
 /** Floor lights from props: their plan character and the kind of light. */
 export const FIRES = Object.freeze({ x: "campfire", y: "brazier", k: "candles" });
@@ -437,10 +444,18 @@ export function fillLevel(dug, rooms, links, plan) {
             dress(level, one, prop, { random, putProp, fromDoors, count: random.int(...prop.count), axis: Math.floor(level.width / 2), tag: n });
         }
 
-        // (Torches on the walls, spread round the room; the arena's and the way in's at least two)
-        const torches = random.int(...(look.torches ?? [0, 1])) + (one.id === entryRoom || one.id === goal ? 1 : 0);
+        // (Torches on the walls, spread round the room; the arena's and the way in's at least two,
+        // but in a theme lit by what grows on its walls)
+        const torches = random.int(...(look.torches ?? [0, 1])) + (theme.lit !== "glow" && (one.id === entryRoom || one.id === goal) ? 1 : 0);
+        const lit = onWalls(level, one, torches, random, { kind: "torch", apart: 4 });
 
-        lights.push(...torchesIn(level, one, torches, random));
+        lights.push(...lit);
+
+        // (And the colonies of glowing fungus on its walls, the room's look's, apart from each other
+        // and from its torches)
+        if (look.glows) {
+            lights.push(...onWalls(level, one, random.int(...look.glows), random, { kind: "glow", apart: GLOW_APART, taken: lit, deep: true }));
+        }
     }
 
     // (A theme whose fallen can be searched (its `fallen`: the ants' nests'): each one's remains
@@ -680,9 +695,12 @@ function dress(level, room, prop, { random, putProp, fromDoors, count, axis }) {
     return placed;
 }
 
-// Torches on a room's walls: `count`, spread round it (at least four rings apart), each on a square
-// against the rock with ground before it. [{ at, kind: "torch", wall: [dx, dy] (towards the wall) }]
-function torchesIn(level, room, count, random) {
+// Lights on a room's walls (torches, or colonies of glowing fungus: `kind`): `count`, spread round
+// it (at least `apart` rings from each other and from those `taken` already), each on a square
+// against the rock with ground before it (and, if `deep`, rock two squares deep behind it: not a
+// sliver the rock's drawn worn through, world/caverns.js). [{ at, kind, wall: [dx, dy] (towards
+// the wall) }]
+function onWalls(level, room, count, random, { kind, apart, taken = [], deep = false }) {
     const { grid } = level;
     const lit = [];
 
@@ -692,13 +710,13 @@ function torchesIn(level, room, count, random) {
         }
 
         const [x, y] = [k % level.width, Math.floor(k / level.width)];
-        const wall = FOUR.find(([dx, dy]) => !grid.open(x + dx, y + dy));
+        const wall = FOUR.find(([dx, dy]) => !grid.open(x + dx, y + dy) && (!deep || !grid.open(x + dx * 2, y + dy * 2)));
 
-        if (!wall || !level.walkable(x, y) || level.char(x, y) || !level.walkable(x - wall[0], y - wall[1]) || lit.some(({ at: [u, v] }) => Math.max(Math.abs(u - x), Math.abs(v - y)) < 4)) {
+        if (!wall || !level.walkable(x, y) || level.char(x, y) || !level.walkable(x - wall[0], y - wall[1]) || [...taken, ...lit].some(({ at: [u, v] }) => Math.max(Math.abs(u - x), Math.abs(v - y)) < apart)) {
             continue;
         }
 
-        lit.push({ at: [x, y], kind: "torch", wall });
+        lit.push({ at: [x, y], kind, wall });
     }
 
     return lit;
