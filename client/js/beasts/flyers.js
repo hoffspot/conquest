@@ -104,9 +104,10 @@ export function swarm(look, random) {
         attacks: ["dive", "swirl"],
         rests: ["settle", "scatter"],
         // (Where its bats fly, round its middle: as far out as 0.7 m, twice that and more scattered,
-        // and more again startled, as far again for a wider swarm; drawn if any of that's in view,
-        // beast.js BOUNDS)
-        spread: { centre: [0, 1.4, 0], radius: 3 * spread },
+        // and more again startled, as far again for a wider swarm; and never less than down to the
+        // ground they fall to dead and a body more, for a lone big one; drawn if any of that's in
+        // view, beast.js BOUNDS)
+        spread: { centre: [0, 1.4, 0], radius: Math.max(3 * spread, 1.4 + size) },
 
         pose({ t, speed, attack, react, dead, rest }) {
             const style = attack?.style ?? "dive";

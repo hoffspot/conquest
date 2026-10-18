@@ -9094,7 +9094,7 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
 
     expect(named).toContain("Giant ant");
     expect(named).toContain("Ant Monster");
-    expect(named.every((name) => ["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Ant Monster"].includes(name))).toBe(true);
+    expect(named.every((name) => ["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Giant cockroach", "Dungeon wasp", "Dungeon scorpion", "Ant Monster"].includes(name))).toBe(true);
 
     // (In, of itself, once they're read; its first level's ants drawn from their model, the ant's
     // model lent the Ant Monster's fall and flinch)

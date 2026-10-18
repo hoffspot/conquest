@@ -310,6 +310,36 @@ export const NATURAL = Object.freeze({
             ranged({ id: "web", reach: 7, damage: [3, 6], hitAt: 1000, duration: 2000, interval: 3600, stagger: 500, reaction: "punch", animation: "web", projectile: { kind: "web", speed: 11 }, afflict: { kind: "slow", chance: 1, look: "web" } }),
         ],
     },
+    // (A dungeon scorpion's pincers, or its sting brought over its back, staggering, venomous; a
+    // giant cockroach's bite, carrying sickness, or rearing up to strike down; a dungeon wasp's
+    // sting, or diving in to drive it home)
+    dungeonScorpion: {
+        label: "Pincers and sting",
+        attacks: [
+            eitherOf(
+                melee({ id: "pinch", reach: 1.6, damage: [7, 12], hitAt: 800, duration: 1500, interval: 1700, reaction: "slash", animation: "melee" }),
+                melee({ id: "sting", reach: 1.9, damage: [10, 16], hitAt: 1000, duration: 1800, interval: 2400, stagger: 400, reaction: "pierce", animation: "sting", afflict: { kind: "poison", chance: 0.8 } }),
+            ),
+        ],
+    },
+    giantCockroach: {
+        label: "Mandibles",
+        attacks: [
+            eitherOf(
+                melee({ id: "bite", damage: [3, 6], hitAt: 550, duration: 1100, interval: 1300, reaction: "pierce", animation: "melee", afflict: { kind: "disease", chance: 0.2 } }),
+                melee({ id: "rear", damage: [5, 9], hitAt: 900, duration: 1500, interval: 2000, stagger: 300, reaction: "punch", animation: "rear" }),
+            ),
+        ],
+    },
+    dungeonWasp: {
+        label: "Sting",
+        attacks: [
+            eitherOf(
+                melee({ id: "sting", damage: [4, 8], hitAt: 700, duration: 1300, interval: 1400, reaction: "pierce", animation: "melee", afflict: { kind: "poison", chance: 0.5 } }),
+                melee({ id: "dive", reach: 2.2, damage: [7, 12], hitAt: 1000, duration: 1700, interval: 2400, stagger: 300, reaction: "pierce", animation: "dive", afflict: { kind: "poison", chance: 0.7 } }),
+            ),
+        ],
+    },
     antMonster: {
         label: "Mandibles and acid",
         attacks: [

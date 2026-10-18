@@ -143,6 +143,8 @@ export const PARTS = Object.freeze({
     queenMandible: { label: "Ant Monster's mandible", worth: 45, icon: "fang", tint: "#1c1618" },
     royalJelly: { label: "Royal jelly", worth: 30, icon: "gland", tint: "#f0d890", use: { heal: 40 } },
     nightglowGland: { label: "Nightglow gland", worth: 22, icon: "gland", tint: "#ff6040" },
+    waspStinger: { label: "Wasp's stinger", worth: 8, icon: "sting", tint: "#2a2018" },
+    waspWing: { label: "Wasp's wing", worth: 4, icon: "wing", tint: "#b0a8d0" },
     frostHide: { label: "Frost troll hide", worth: 70, icon: "hide", tint: "#b8c8d8" },
 });
 
@@ -196,6 +198,9 @@ export const SPOILS = Object.freeze({
     greatCentipede: { items: [{ id: "centipedeFang", chance: 0.6, count: [1, 2] }, { id: "carapace", chance: 0.45 }] },
     dungeonSpider: { items: [{ id: "spiderSilk", chance: 0.5, count: [1, 2] }, { id: "venomGland", chance: 0.3 }] },
     eliteDungeonSpider: { items: [{ id: "spiderSilk", chance: 0.8, count: [2, 3] }, { id: "venomGland", chance: 0.6 }, { id: "nightglowGland", chance: 0.35 }] },
+    dungeonScorpion: { items: [{ id: "scorpionSting", chance: 0.6 }, { id: "carapace", chance: 0.5, count: [1, 2] }] },
+    giantCockroach: { items: [{ id: "carapace", chance: 0.3 }] },
+    dungeonWasp: { items: [{ id: "waspStinger", chance: 0.45 }, { id: "waspWing", chance: 0.5, count: [1, 2] }] },
     // (What's left in the Ant Monster's nest of those it's eaten, besides its mandibles and jelly)
     antMonster: { gold: [10, 30], items: [{ id: "queenMandible", chance: 0.8 }, { id: "royalJelly", chance: 0.6, count: [1, 2] }, { id: "acidGland", chance: 0.7, count: [1, 2] }] },
     basilisk: { items: [{ id: "basiliskEye", chance: 0.3 }, { id: "crownScale", chance: 0.4 }] },

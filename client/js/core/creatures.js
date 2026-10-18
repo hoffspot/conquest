@@ -168,6 +168,12 @@ export const CREATURES = Object.freeze({
     // its web sprayed from its spinnerets, bursting apart as it dies)
     dungeonSpider: { name: "Dungeon spider", hp: 32, weapon: "dungeonSpider", speed: 1.1, chase: 2.2, temper: "aggressive", roam: 8, leash: 18, pack: [1, 3], tiers: [2, 10], biomes: [], blood: "ichor", armor: 0.05, darkSight: true, elite: "eliteDungeonSpider" },
     eliteDungeonSpider: { name: "Elite dungeon spider", hp: 72, weapon: "eliteDungeonSpider", speed: 1, chase: 1.9, temper: "aggressive", roam: 8, leash: 20, pack: [1, 1], tiers: [3, 10], biomes: [], blood: "ichor", armor: 0.15, darkSight: true, steady: true, king: true },
+    // (And what else has crept into the tunnels, each drawn from a model of its own: a dungeon
+    // scorpion, armoured, its pincers and its sting; giant cockroaches, quick, in their numbers,
+    // carrying sickness; dungeon wasps, hovering, diving to sting)
+    dungeonScorpion: { name: "Dungeon scorpion", hp: 64, weapon: "dungeonScorpion", speed: 0.9, chase: 2.2, temper: "aggressive", roam: 6, leash: 18, pack: [1, 2], tiers: [3, 10], biomes: [], blood: "ichor", armor: 0.25, darkSight: true, steady: true },
+    giantCockroach: { name: "Giant cockroach", hp: 22, weapon: "giantCockroach", speed: 1.4, chase: 3.2, temper: "aggressive", roam: 10, leash: 18, pack: [2, 4], tiers: [1, 8], biomes: [], blood: "ichor", armor: 0.1, darkSight: true },
+    dungeonWasp: { name: "Dungeon wasp", hp: 26, weapon: "dungeonWasp", speed: 1.4, chase: 3.4, temper: "aggressive", roam: 10, leash: 22, pack: [2, 3], tiers: [2, 10], biomes: [], blood: "ichor", darkSight: true },
     antMonster: { name: "Ant Monster", hp: 96, weapon: "antMonster", speed: 1.4, chase: 2.8, temper: "aggressive", roam: 6, leash: 24, pack: [1, 1], tiers: [4, 10], biomes: [], blood: "ichor", armor: 0.2, darkSight: true, steady: true, call: { kind: "ant", count: [2, 3], most: 4, every: 20000, first: 6000 }, boss: { call: { count: [2, 4], most: 6, every: 15000 } } },
     // The mightiest: only in the perilous places
     dragon: { name: "Drake", hp: 90, weapon: "dragon", speed: 1, chase: 2.2, temper: "aggressive", roam: 6, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true , steady: true },
