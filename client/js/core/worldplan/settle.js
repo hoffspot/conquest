@@ -92,6 +92,13 @@ const GRAVEYARD = Object.freeze({ out: [8, 17], road: 2, look: 8 });
 export const DUNGEON_SITES = Object.freeze({ per: 1, apart: 26, clear: 6, sites: 8, camps: 5, road: 1, tries: 30000 });
 
 /**
+ * The ants' nests in each people's lands: at least `least` of them (of the dungeons there, the
+ * likeliest for one by its land made nests; failing those, more ways in thrown at its lands, at
+ * least `apart` cells from the others, `tries` darts at most).
+ */
+export const NESTS = Object.freeze({ least: 2, apart: 16, tries: 8000 });
+
+/**
  * The Dreadthorns' lairs (core/creatures.js LAIRS: the mightiest of the wild, each in its own):
  * `count` of them, one or two a world, out in the wild (no people's lands) on volcanic ground or
  * high in the mountains (`biomes`, on a hillside, `hills` high at least: or, if a world has too
@@ -1034,9 +1041,10 @@ function beastLairs(land, places, sites, camps, random, used, { kind = "dreadtho
 // The dungeons' ways in (DUNGEON_SITES): darts thrown at the land, each kept where it's dry land,
 // off the beach and the roads, clear of the settlements, the sites and the camps, and far enough
 // from every way in kept already; as many as the land's square kilometres (`per` each). Each a
-// theme by its land (core/dungeons/themes.js themeFor) and a name by its theme
+// theme by its land (core/dungeons/themes.js themeFor) and a name by its theme; and at least
+// NESTS.least of them ants' nests in each people's lands
 function dungeons(land, road, places, sites, camps, random) {
-    const { biome, water } = land;
+    const { biome, water, territory } = land;
     const { per, apart: away, clear, sites: fromSites, camps: fromCamps, road: fromRoad, tries } = DUNGEON_SITES;
     let dry = 0;
 
@@ -1077,6 +1085,47 @@ function dungeons(land, road, places, sites, camps, random) {
         const name = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => dungeonName(THEMES[theme], seed + k * 7919)).find((one) => !names.includes(one)) ?? dungeonName(THEMES[theme], seed);
 
         found.push({ id: `dungeon-${found.length + 1}`, kind: "dungeon", theme, race: null, name, cell, at: centre(...cell), seed });
+    }
+
+    // At least NESTS.least ants' nests in each people's lands: those of its dungeons on the land a
+    // nest's likeliest in made nests first (named as nests are, none the same as another's); and
+    // if it hasn't enough dungeons, more ways in thrown at its lands
+    const nestIn = (one) => THEMES.nest.lands?.[BIOMES[biome[cellIndex(...one.cell)]].id] ?? 1;
+    const nested = (one) => {
+        const names = found.filter((other) => other !== one).map(({ name }) => name);
+
+        one.theme = "nest";
+        one.name = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => dungeonName(THEMES.nest, one.seed + k * 7919)).find((each) => !names.includes(each)) ?? dungeonName(THEMES.nest, one.seed);
+    };
+
+    for (let r = 1; r <= RACES.length; r++) {
+        const theirs = found.filter((one) => territory[cellIndex(...one.cell)] === r);
+        const others = theirs.filter(({ theme }) => theme !== "nest").sort((a, b) => nestIn(b) - nestIn(a) || a.seed - b.seed);
+        let nests = theirs.length - others.length;
+
+        for (const one of others.slice(0, Math.max(0, NESTS.least - nests))) {
+            nested(one);
+            nests += 1;
+        }
+
+        for (let k = 0; k < NESTS.tries && nests < NESTS.least; k++) {
+            const cell = [random.int(5, CELLS - 6), random.int(5, CELLS - 6)];
+            const at = cellIndex(...cell);
+
+            if (territory[at] !== r || water[at] || biome[at] === BIOME.beach || !offRoad(cell) || !clearOf(places, cell, clear)) {
+                continue;
+            }
+
+            if (found.some((one) => apart(one.cell, cell) < NESTS.apart) || sites.some((site) => apart(site.cell, cell) < fromSites) || camps.some((camp) => apart(camp.cell, cell) < fromCamps)) {
+                continue;
+            }
+
+            const one = { id: `dungeon-${found.length + 1}`, kind: "dungeon", theme: "nest", race: null, name: null, cell, at: centre(...cell), seed: random.seed() };
+
+            found.push(one);
+            nested(one);
+            nests += 1;
+        }
     }
 
     return found;

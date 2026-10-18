@@ -18,7 +18,7 @@ import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
 import { cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
-import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollHoard } from "./dungeons/play.js";
+import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
@@ -7046,7 +7046,7 @@ export class Host {
             const id = `chest-${site.id}/${chest.id}`;
 
             if (!delve.opened.includes(chest.id) && !this.ground.has(id)) {
-                this.ground.set(id, { id, chest: true, locked: chest.kind === "hoard" && !bossDown, dungeon: site.id, coffer: chest.id, hoard: chest.kind === "hoard", for: null, map, square: [...chest.at], until: null });
+                this.ground.set(id, { id, chest: true, locked: chest.kind === "hoard" && !bossDown, dungeon: site.id, coffer: chest.id, hoard: chest.kind === "hoard", ...(chest.kind === "remains" ? { remains: true } : {}), for: null, map, square: [...chest.at], until: null });
             }
         }
     }
@@ -7096,10 +7096,10 @@ export class Host {
     }
 
     // A dungeon's chest opened (`dropped`, its ground's): in its stead a share of what's in it for
-    // each player there (a small chest's for those near it, rollCoffer at its level's tier; the
-    // hoard's for everyone in the dungeon, rollHoard at each one's own power), theirs alone to
-    // take, where it stood; the hoard opened, the dungeon cleared, to be made again once
-    // everyone's left
+    // each player there (a small chest's for those near it, rollCoffer at its level's tier; one of
+    // the fallen's remains searched, rollFallen; the hoard's for everyone in the dungeon,
+    // rollHoard at each one's own power), theirs alone to take, where it stood; the hoard opened,
+    // the dungeon cleared, to be made again once everyone's left
     #openDungeonChest(dropped) {
         const delve = this.dungeons.get(dropped.dungeon);
         const building = this.world.interiors?.buildings.get(`site:${dropped.dungeon}`);
@@ -7121,11 +7121,12 @@ export class Host {
                 continue;
             }
 
-            const bundle = dropped.hoard ? rollHoard(hoardTier(level.tier, player.progress.might()), this.random) : rollCoffer(level.tier, this.random);
+            const bundle = dropped.hoard ? rollHoard(hoardTier(level.tier, player.progress.might()), this.random) : dropped.remains ? rollFallen(level.tier, this.random) : rollCoffer(level.tier, this.random);
             const ground = `ground-${this.nextGround++}`;
+            const from = dropped.remains ? "remains" : "chest";
 
-            this.ground.set(ground, { id: ground, bundle, for: player.id, from: "chest", map: dropped.map, square: [...dropped.square], until: this.battle.time + GROUND_MS });
-            this.#event("spoils", { id: player.id, ground, from: dropped.id, creature: "chest", dungeon: dropped.dungeon, ...(dropped.hoard ? { hoard: true } : {}) });
+            this.ground.set(ground, { id: ground, bundle, for: player.id, from, map: dropped.map, square: [...dropped.square], until: this.battle.time + GROUND_MS });
+            this.#event("spoils", { id: player.id, ground, from: dropped.id, creature: from, dungeon: dropped.dungeon, ...(dropped.hoard ? { hoard: true } : {}) });
         }
 
         if (dropped.hoard) {
