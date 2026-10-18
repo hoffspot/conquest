@@ -157,7 +157,8 @@ error, so a misspelt one isn't silently ignored.
 | `materials` | `{}` | Materials made from texture files, in place of the source's of these names (*Materials from textures*, below) |
 | `variants` | `{}` | `{ "pale": { "materials": { "skin": { ... } } } }`: other looks, each `<name>.<variant>.glb` (*Variants*, below) |
 | `profiles` | `{}` | `{ "full": { ... }, "phone": { ... } }`: ways to build it, each a set of these settings merged over the rest, into `<out>/<profile>/` (*Profiles*, below) |
-| `actions` | `[]` | `[{ "from": "other.blend", "action": "Walk", "name": "Crawling" }]`: actions to bring in (`action` left out: all of that file's); or `{ "from": "Wolf@walk.fbx", "name": "Walk" }`: an FBX's clip that moves its skeleton |
+| `actions` | `[]` | `[{ "from": "other.blend", "action": "Walk", "name": "Crawling" }]`: actions to bring in (`action` left out: all of that file's); or `{ "from": "Wolf@walk.fbx", "name": "Walk" }`: an FBX's clip that moves its skeleton. `"bonesOnly": true` brings its bones' keys alone, not the keys of the object it was on (where an importer put the skeleton it came with, at that skeleton's scale) |
+| `muteConstraints` | `false` | The exported armature's bone constraints muted: a game skeleton made to copy a control rig (Auto-Rig Pro's export skeleton, Rigify's) otherwise holds still whatever its clips say |
 | `clips.include` / `clips.exclude` | all / none | Which actions are exported (names; `*` and `?` wildcards) |
 | `clips.rename` | `{}` | `{ "Blender name": "clip name" }` |
 | `clips.inPlace` | `[]` | Clips to play in place (names, or `true` for all) |
