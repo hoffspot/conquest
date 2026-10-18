@@ -1697,6 +1697,18 @@
                 }
             ]
         },
+        "beast-greater-demon": {
+            "tier": "demand",
+            "label": "The Greater Demon (Gloomy Demon, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/greater-demon.bin",
+                    "hash": "aeeec643c3",
+                    "bytes": 2365312
+                }
+            ]
+        },
         "dungeon-earth-nest": {
             "tier": "demand",
             "label": "An ants' nest's dug earth, scored by their digging (Poly Haven excavated_soil_wall, CC0)",
