@@ -187,6 +187,62 @@ export const MODELS = Object.freeze({
         pace: 0.87,
         flinch: 0.6,
     }),
+    // (A dungeon scorpion: made 1.95 metres long, its tail raised over its back, drawn 2.4; its
+    // pincers thrust out or snapping, its sting brought over (Attack 3); resting, rearing up, its
+    // pincers raised; flinching to its left; dead, flipped onto its back (Death 2). Its walk a slow
+    // creep, its run what carries it after anyone)
+    dungeonScorpion: Object.freeze({
+        asset: "beast-dungeon-scorpion",
+        length: 2.4,
+        made: Object.freeze({ long: 1.95, tall: 1.25 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit React Left", dead: "Death 2" }),
+        attacks: Object.freeze({ pinch: "Attack", grab: "Attack 2", snap: "Attack 4" }),
+        specials: Object.freeze({ sting: "Attack 3" }),
+        rests: Object.freeze({ rear: "Roar" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "Bip001_Spine", body: "Bip001_Pelvis", head: "Bip001_Neck", mouth: "Bone_mouth00", left: "Bip001_L_Hand" }),
+        mouth: null,
+        pace: 0.17,
+        runPace: 0.66,
+        flinch: 0.6,
+    }),
+    // (A giant cockroach: made 2.3 metres long, its feelers and all, drawn 2; biting (its Bite,
+    // lunging, head down, made for it), pawing with its forelegs, or rearing up to strike down
+    // (its Rear Strike, made for it); resting, eating, feeling about or cleaning itself; dead, on
+    // its back, its legs twitching)
+    giantCockroach: Object.freeze({
+        asset: "beast-giant-cockroach",
+        length: 2,
+        made: Object.freeze({ long: 2.32, tall: 1.07 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit React", dead: "Death" }),
+        attacks: Object.freeze({ bite: "Bite", paw: "Attack" }),
+        specials: Object.freeze({ rear: "Rear Strike" }),
+        rests: Object.freeze({ eat: "Eating", feel: "Idle 4", clean: "Idle 2" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "Torso", body: "COG", head: "Head", mouth: "Head", left: "Legs_Front4L" }),
+        mouth: null,
+        pace: 0.96,
+        runPace: 1.66,
+        flinch: 0.5,
+    }),
+    // (A dungeon wasp: made 0.8 metres long, its abdomen curled under it, drawn 1.3, hovering over
+    // where it is as it's made (its falls drop it to the ground there); stinging, jabbing, lunging,
+    // or diving in from above (Attack 3); resting, hanging there, its sting out (Idle 2); its flight
+    // what carries it, its wings beating the faster the faster it goes)
+    dungeonWasp: Object.freeze({
+        asset: "beast-dungeon-wasp",
+        length: 1.3,
+        made: Object.freeze({ long: 0.8, tall: 1.34 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Fly", react: "Hit React", dead: "Death" }),
+        attacks: Object.freeze({ sting: "Attack", jab: "Attack 2", lunge: "Attack 4" }),
+        specials: Object.freeze({ dive: "Attack 3" }),
+        rests: Object.freeze({ hang: "Idle 2" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "Bip01_Spine", body: "Bip01_Pelvis", head: "Bip01_Head", mouth: "Bip01_Head", left: "BN_Foot_L_01" }),
+        mouth: null,
+        pace: 1.4,
+        flinch: 0.5,
+    }),
     // (The Ant Monster, the nests' great queen: made 6.8 metres long, drawn 4.2, 1.5 metres tall;
     // its mandibles, rearing to slam down, its acid spat, and its flock called (its call: battle.js
     // #calls); resting, looking about, swaying, rearing in threat. Its walk carries it as fast as

@@ -28,7 +28,9 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
     either side, mirrored; the dead, cultists, wraiths, serpents and scorpions;
   - **an ants' nest** (`nest`): dug as the caves are, through reddened earth; giant ants in their
     numbers, great centipedes in its deeper tunnels, packs of dungeon spiders each led by an elite
-    dungeon spider, and the Ant Monster, their great queen, at the bottom, calling her flock to her
+    dungeon spider, giant cockroaches at what the ants leave, dungeon wasps hovering in its
+    galleries, a dungeon scorpion or two, and the Ant Monster, their great queen, at the bottom,
+    calling her flock to her
     (*Who's in it*, below). All of them are drawn from models
     of their own, got ready at its door (docs/WILDS.md, *A place's creatures, ready before they're
     met*).

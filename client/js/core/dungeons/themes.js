@@ -180,8 +180,9 @@ export const THEMES = {
     },
     // (An ants' nest: the caves' layout dug through earth, its chambers heaped with what the ants
     // have dragged in; giant ants in their numbers, great centipedes in its deeper tunnels, packs of
-    // dungeon spiders each led by an elite dungeon spider, and the Ant Monster, their great queen,
-    // calling her flock to her in her chamber at the bottom
+    // dungeon spiders each led by an elite dungeon spider, giant cockroaches, dungeon wasps and
+    // dungeon scorpions, and the Ant Monster, their great queen, calling her flock to her in her
+    // chamber at the bottom
     // (creatures.js). All of them drawn from models of their own, read at its door: beasts/model.js
     // modelsInside, app/readying.js)
     nest: {
@@ -205,6 +206,11 @@ export const THEMES = {
             { id: "hunted", creatures: ["ant", "ant", "ant", "greatCentipede"], size: [3, 5], weight: 1 },
             // (The spiders that hunt its tunnels, each pack led by an elite dungeon spider)
             { id: "spiders", creatures: ["eliteDungeonSpider", "dungeonSpider", "dungeonSpider", "dungeonSpider"], size: [3, 5], weight: 2 },
+            // (What else has crept in: giant cockroaches at what the ants leave, dungeon wasps
+            // hovering in its galleries, a dungeon scorpion or two in its deeper tunnels)
+            { id: "roaches", creatures: ["giantCockroach"], size: [3, 5], weight: 2 },
+            { id: "wasps", creatures: ["dungeonWasp"], size: [2, 4], weight: 2 },
+            { id: "scorpions", creatures: ["dungeonScorpion"], size: [1, 2], weight: 1 },
         ],
         minis: [
             { id: "warden", creature: "ant", title: "Brood warden", weight: 2 },
