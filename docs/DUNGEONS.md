@@ -64,7 +64,12 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
 - **The fallen** (an ants' nest's: its theme's `fallen`): the remains of the adventurers who died
   in it, many of them (one or more in most rooms, three to five in the queen's chamber, beside the
   bones of what the ants have eaten), each searched once for what was left on them (*Its chests*).
-- **Torches** on the walls of most rooms, and on the floor camp fires, braziers and candles.
+- **Torches** on the walls of most rooms, and on the floor camp fires, braziers and candles. An
+  ants' nest has none but at its mouth (no ant lights a torch: its theme's `lit` is `"glow"`):
+  it's lit by **colonies of glowing fungus** on its walls instead (each room's look's `glows`: one
+  or two in a gallery, larder or brood chamber, two or three on a midden heap, four or five round
+  the queen's chamber, none or one in a nook), each against rock two squares deep, at least three
+  rings from the next (`place.js` `GLOW_APART`), dark between.
 - **Its name** comes from its theme's words: "the Glittering Deeps", "the Rat's Den", "the Halls of
   Ur-Kalath".
 
@@ -165,7 +170,7 @@ square that can be walked on can still be walked to.
              packs: [{ id, role: "pack" | "mini" | "boss", room, title,
                        foes: [{ creature, tier, at, boss?, mini?, title? }] }],
              chests: [{ id, at, kind: "small" | "hoard" | "remains", room }],
-             lights: [{ at, kind: "torch" | "campfire" | "brazier" | "candles", wall? }] }] }
+             lights: [{ at, kind: "torch" | "glow" | "campfire" | "brazier" | "candles", wall? }] }] }
 ```
 
 `rows` read with `readPlan` as every building's floors do. The new plan characters are
@@ -382,6 +387,28 @@ brazier, and `$` a small chest. The rest are the ones the caves, lair and crypt 
 - **Lit by what's near the player**: a level has more flames than the view's list of lights holds
   (`ROOM_LIGHTS`, 16), so each frame the 16 nearest the player light it, and the light all round
   comes from those within 18 m (`roomlight.js` `NEAR_FILL`).
+- **An ants' nest's light and air** (`glowfungus.js`, `interiors3d.js` `DUNGEON_LOOKS.nest`):
+  - **Its glowing fungus**: each colony grown on the rock where the rock is drawn (`caverns.js`
+    `cavern`'s `open`: how far into the open a point is), seven to twelve little bell-capped
+    mushrooms (as Mycena grow) on the wall round its middle, a hand's to a stride's height up,
+    and at its foot, with two to four brackets (as Panellus grow) one over another. They glow
+    their own cold green (fungi glow about 520 to 530 nm; a few colonies yellower, a few bluer),
+    dim at their stems and brightest under their caps, where the gills are: drawn in their own
+    light whatever's on them (one mesh for the level's, about 400 triangles a colony). Each is a
+    room's light of its colour (`glowOf`: 2.4 strong, reaching 6 m), steady but for a slow breath
+    (`roomlight.js` `strengthOf` `breathe`), and its threads glow faintly in patches in the earth
+    round it, out to 1.4 m (`threadsOn`: a byte a colour at each of the rock's points, drawn by its
+    material's glowing variant, `dungeons3d.js` `rockMaterial`).
+  - **The light the player carries**: warm, over them (1.2 m over their middle), reaching 9 m, the
+    view's second lamp wherever they go, casting no shadows (`view.js` `flicker`); the first lamp
+    is still whichever of the level's lights lights them most.
+  - **Its own air**: close, warm and dusty: the fog an umber dark (`0x1b120c`), from 9 m to all of
+    it by 30 m (so nothing's drawn past 34 m), and dust lying low over its floor, thickest at it
+    and thinning by e every 1.1 m up (`fog.js` `MIST`'s `w`: the low ground's mist, under a near
+    fog). Spores drift in it, rising slowly, faintly glowing green (`motes.js` `MOTES.spores`;
+    none on low quality), and now and then, somewhere near the player under the roof, soil
+    trickles from it for a second or two, its dust sifting up off the floor (`trickles.js`,
+    drawn as the fights' sparks and dust are: `effects.js` `trickle`, `sift`).
 - **The camera kept out of the rock**: it comes in closer rather than go into a level's rock, and
   stays under its roof (never over it, as it can go over a building's ceiling).
 - **Messages**: a slain boss ("… is slain, and the hoard it kept lies unlocked"), the hoard opened,
@@ -428,7 +455,8 @@ registerTheme({
     packs: [{ id, creatures: [...], size: [2, 4], weight }],
     minis: [{ id, creature, title, weight }],
     bosses: [{ id, creature, title, weight }],
-    rooms: { kind: [{ id, weight, props: [{ char, count, at, size, mirror }], torches: [0, 2] }], any: [...] },
+    rooms: { kind: [{ id, weight, props: [{ char, count, at, size, mirror }], torches: [0, 2], glows: [0, 1] }], any: [...] },
+    lit: "glow", // (or left out: torches, one more in the way in's room and the arena's)
 });
 ```
 

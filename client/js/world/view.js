@@ -767,6 +767,7 @@ export class View {
         MIST.value.x = mist[0];
         MIST.value.y = mist[1];
         MIST.value.z = mist[2];
+        MIST.value.w = 0;
         GRADE.value.x = grade[0];
         GRADE.value.y = grade[1];
         GRADE.value.z = grade[2];
@@ -1151,24 +1152,29 @@ export class View {
     /**
      * Light the scene for being indoors (`interior`: interiors3d.js's: its map's place and size,
      * its ceiling's height, its flames as lights, the way towards the sun shining in at its
-     * windows) or out (null).
+     * windows; a dungeon's level's own air and the light the player carries in it, if its look
+     * has them) or out (null).
      */
     setIndoors(interior) {
         const look = interior ? INDOORS : OUTDOORS;
         // (A place inside that's open to the sky, a broken tower's top: the sky over it)
         const open = Boolean(interior?.open);
+        // (A place with its own air, closer and warmer, dust lying low in it: an ants' nest's)
+        const air = interior?.air ?? null;
+        const background = air?.background ?? look.background;
+        const fog = air?.fog ?? look.fog;
 
         this.indoors = Boolean(interior);
-        this.scene.background.set(open ? OUTDOORS.background : look.background);
-        this.scene.fog.color.set(open ? OUTDOORS.background : look.background);
+        this.scene.background.set(open ? OUTDOORS.background : background);
+        this.scene.fog.color.set(open ? OUTDOORS.background : background);
 
         if (interior) {
-            [this.scene.fog.near, this.scene.fog.far] = look.fog;
+            [this.scene.fog.near, this.scene.fog.far] = fog;
         } else {
             this.#haze();
         }
 
-        this.camera.far = interior ? look.fog[1] + look.clip : FAR.nearFar;
+        this.camera.far = interior ? fog[1] + look.clip : FAR.nearFar;
         this.camera.updateProjectionMatrix();
 
         this.sun.color.set(look.sun[0]);
@@ -1182,10 +1188,11 @@ export class View {
         this.horizon.near.visible = !interior;
         this.sky.setSun(this.sunDirection);
 
-        // (Indoors no mist, no grade, the daylight at the windows as the time of day has it; out
-        // again, the land's look at the time of day)
+        // (Indoors no grade, the daylight at the windows as the time of day has it, and no mist but
+        // the dust lying low over the floor where its air has that (fog.js MIST: from the floor,
+        // under the near fog); out again, the land's look at the time of day)
         if (interior) {
-            MIST.value.x = 0;
+            [MIST.value.x, MIST.value.y, MIST.value.z, MIST.value.w] = air?.mist ? [air.mist[0], 0, air.mist[1], 1] : [0, 0, MIST.value.z, 0];
             [GRADE.value.x, GRADE.value.y, GRADE.value.z, GRADE.value.w] = [0, 0, 0, 0];
         }
 
@@ -1198,7 +1205,7 @@ export class View {
 
             // (One with more flames than the list holds, a dungeon's level, lit by those nearest
             // the player: roomlight.js NEAR_FILL)
-            this.room = { x0: origin[0], z0: origin[1], x1: origin[0] + width, z1: origin[1] + height, ceiling: interior.ceiling ?? 3, open: Boolean(interior.open), over: null, lights: interior.lights, colours: interior.lights.map(({ colour }) => new THREE.Color(colour)), strengths: [], flares: [], lamps: [], near: interior.lights.length > ROOM_LIGHTS ? [] : null, rock: rockOf(interior.map) };
+            this.room = { x0: origin[0], z0: origin[1], x1: origin[0] + width, z1: origin[1] + height, ceiling: interior.ceiling ?? 3, open: Boolean(interior.open), over: null, lights: interior.lights, colours: interior.lights.map(({ colour }) => new THREE.Color(colour)), strengths: [], flares: [], lamps: [], near: interior.lights.length > ROOM_LIGHTS ? [] : null, rock: rockOf(interior.map), carried: interior.carried ? { ...interior.carried, colour: new THREE.Color(interior.carried.colour) } : null };
         } else {
             this.room = null;
         }
@@ -1308,7 +1315,9 @@ export class View {
     /**
      * Make the room's flames flicker, as flames do (`time` in seconds): each lighting the room,
      * the two lighting `near` most (the player: world metres) the view's lamps, lighting
-     * everything else there too.
+     * everything else there too. Where the player carries a light (a dungeon's level's look's
+     * `carried`), it's the last lamp, over them wherever they go (casting no shadows: QUALITY
+     * lampShadows has only the first cast them), and the room's flames have the rest.
      */
     flicker(time, near = this.focus) {
         const room = this.room;
@@ -1317,12 +1326,15 @@ export class View {
             return;
         }
 
+        const carried = room.carried;
+        const lamps = carried ? LAMPS - 1 : LAMPS;
+
         room.lights.forEach((light, k) => {
             room.strengths[k] = strengthOf(light, time, room.flares[k], WINDOW_LIGHT.value.z);
         });
-        room.lamps = pickLamps(room.lights, room.strengths, near, LAMPS, room.lamps);
+        room.lamps = pickLamps(room.lights, room.strengths, near, lamps, room.lamps);
         for (let k = 0; k < LAMPS; k++) {
-            _lampFrom[k] = room.lights[room.lamps[k]] ?? null;
+            _lampFrom[k] = k < lamps ? (room.lights[room.lamps[k]] ?? null) : carried;
         }
 
         lampShadows(this);
@@ -1333,6 +1345,15 @@ export class View {
         }
 
         this.lamps.forEach(({ light }, k) => {
+            if (k >= lamps) {
+                light.intensity = carried.intensity;
+                light.color.copy(carried.colour);
+                light.distance = carried.distance;
+                light.position.set(near.x, near.y + carried.up, near.z);
+
+                return;
+            }
+
             const index = room.lamps[k];
             const flame = room.lights[index];
 

@@ -275,13 +275,34 @@ describe("buildDungeon", () => {
                     assert.notEqual(chest.room, level.path[0]);
                 }
 
-                // (Torches on walls, fires on the floor)
+                // (Torches on walls, fires on the floor; in a theme lit by what grows on its walls,
+                // the colonies of glowing fungus there, rock two deep behind each, apart, and a
+                // torch only in its mouth)
                 assert.ok(level.lights.some(({ kind }) => kind === "torch"));
 
-                for (const light of level.lights.filter(({ kind }) => kind === "torch")) {
+                for (const light of level.lights.filter(({ kind }) => kind === "torch" || kind === "glow")) {
                     const [x, y] = light.at;
 
-                    assert.equal(map.blocked[y + light.wall[1]][x + light.wall[0]], 1, "a torch hangs on a wall");
+                    assert.equal(map.blocked[y + light.wall[1]][x + light.wall[0]], 1, `a ${light.kind} on a wall`);
+                }
+
+                const glows = level.lights.filter(({ kind }) => kind === "glow");
+
+                if (THEMES[theme].lit === "glow") {
+                    assert.ok(glows.length >= level.rooms.length * 0.8, `${glows.length} colonies in ${level.rooms.length} rooms`);
+                    assert.equal(level.lights.filter(({ kind }) => kind === "torch").length, 1, "the one torch, at its mouth");
+                    assert.equal(new Set(glows.map(({ at }) => at.join())).size, glows.length);
+
+                    for (const glow of glows) {
+                        const [x, y] = glow.at;
+
+                        assert.equal(map.blocked[y + glow.wall[1] * 2]?.[x + glow.wall[0] * 2] ?? 1, 1, "rock two deep behind it");
+                        // (Each with ground before it, and nothing on its square)
+                        assert.equal(map.blocked[y - glow.wall[1]][x - glow.wall[0]], 0);
+                        assert.equal(level.rows[y][x], ".");
+                    }
+                } else {
+                    assert.deepEqual(glows, []);
                 }
             }
 

@@ -71,13 +71,19 @@ export function rockPictures(name) {
 }
 
 // The rock's material for each picture: its points' colours (the theme's, shaded: caverns.js),
-// the picture's grain and bumps over them
+// the picture's grain and bumps over them; and, where something grows on it that glows, each
+// point's glow (glowfungus.js threadsOn)
 const rocks = new Map();
 
-/** The material a level's rock is drawn with, with a picture (ROCK_PICTURES' name). */
-export function rockMaterial(name) {
-    if (rocks.has(name)) {
-        return rocks.get(name);
+/**
+ * The material a level's rock is drawn with, with a picture (ROCK_PICTURES' name); `glow`, its
+ * points glowing their own colours too (a `glow` attribute, linear r, g, b: glowfungus.js).
+ */
+export function rockMaterial(name, { glow = false } = {}) {
+    const key = glow ? `${name}+glow` : name;
+
+    if (rocks.has(key)) {
+        return rocks.get(key);
     }
 
     const { colour, normal, picture } = rockPictures(name);
@@ -97,6 +103,13 @@ export function rockMaterial(name) {
         shader.vertexShader = shader.vertexShader
             .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nvarying vec3 vRockNormal;")
             .replace("#include <project_vertex>", "#include <project_vertex>\nvCutWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvRockNormal = normalize(mat3(modelMatrix) * objectNormal);");
+
+        // (Its points' own glow, added to whatever light's on them)
+        if (glow) {
+            shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute vec3 glow;\nvarying vec3 vRockGlow;").replace("#include <project_vertex>", "#include <project_vertex>\nvRockGlow = glow;");
+            shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying vec3 vRockGlow;").replace("#include <emissivemap_fragment>", "#include <emissivemap_fragment>\ntotalEmissiveRadiance += vRockGlow;");
+        }
+
         shader.fragmentShader = shader.fragmentShader
             .replace(
                 "#include <common>",
@@ -153,8 +166,8 @@ if (rockBumps > 0.5) {
             );
         roomLit(shader);
     };
-    result.customProgramCacheKey = () => "rock-triplanar";
-    rocks.set(name, result);
+    result.customProgramCacheKey = () => (glow ? "rock-triplanar-glow" : "rock-triplanar");
+    rocks.set(key, result);
 
     return result;
 }

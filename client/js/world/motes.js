@@ -1,7 +1,9 @@
 // Motes drifting in the air round the player (terrain plan M7b; the research report's step 8): each
 // land's own (MOTES_OF): pollen over the meadows and fields, dust over the dry lands and in the
 // woods, fireflies over the marsh and in the jungle, pale wisps in the elves' woods and the
-// darkwood, embers rising over the volcano's ash, snow falling on the snowfields.
+// darkwood, embers rising over the volcano's ash, snow falling on the snowfields. Indoors none, but
+// where a place's look has them: spores rising off the glowing fungus in an ants' nest
+// (interiors3d.js DUNGEON_LOOKS `motes`).
 // - One draw: a few hundred points, each a soft dot, where in a box round the player a hash of its
 //   own says, drifting with the land's breeze (worked out here, so the breeze can change without
 //   the motes jumping) and wandering about that, wrapping round the box as the player goes.
@@ -26,6 +28,8 @@ export const MOTES = Object.freeze({
     wisps: { colour: 0xa9d6ff, size: 0.15, breeze: [0.03, 0.04, 0.02], wander: 1, glow: 0.9, flicker: 0.6, amount: 0.4, lit: false },
     embers: { colour: 0xff8a33, size: 0.08, breeze: [0.3, 0.8, 0.2], wander: 0.5, glow: 1, flicker: 3, amount: 0.7, lit: false },
     snow: { colour: 0xffffff, size: 0.07, breeze: [0.3, -0.6, 0.12], wander: 0.4, glow: 0.7, flicker: 0, amount: 0.9, lit: true },
+    // (Off the glowing fungus, in the still air underground: rising slowly, cold green, faint)
+    spores: { colour: 0xa8ffc8, size: 0.05, breeze: [0.015, 0.05, 0.01], wander: 0.7, glow: 0.55, flicker: 0.45, amount: 0.55, lit: false },
 });
 
 /** Each land's motes (a MOTES kind); lands not here have none. */
@@ -116,9 +120,10 @@ void main() {
 
 /**
  * The motes: `object` to add to the scene; `setQuality(count)` (QUALITY's `motes`: how many, 0 for
- * none); `update(x, y, z, dt, land, scale)` each frame (where the player's feet are, metres; the
- * land there, a BIOMES id or null indoors; how many pixels a metre is at a metre off: the
- * drawing's height over twice the tangent of half the camera's view).
+ * none); `update(x, y, z, dt, kind, scale)` each frame (where the player's feet are, metres; the
+ * kind of mote there, a MOTES id: MOTES_OF the land's, or a place's own indoors, or null for none;
+ * how many pixels a metre is at a metre off: the drawing's height over twice the tangent of half
+ * the camera's view); `cut()`, none at once (going in or out: no fading across the door).
  */
 export class Motes {
     constructor() {
@@ -193,8 +198,8 @@ export class Motes {
         this.object.geometry = geometry;
     }
 
-    update(x, y, z, dt, land, scale) {
-        const wanted = land ? (MOTES_OF[land] ?? null) : null;
+    update(x, y, z, dt, kind, scale) {
+        const wanted = MOTES[kind] ? kind : null;
         const { uniforms } = this;
 
         // (Fading the kind shown out, if it's not the land's, then the land's in)
@@ -230,6 +235,12 @@ export class Motes {
         uniforms.moteColour.value.set(spec.colour);
         uniforms.moteGlow.value = spec.glow;
         uniforms.moteLit.value = spec.lit ? 1 : 0;
+    }
+
+    cut() {
+        this.kind = null;
+        this.level = 0;
+        this.object.visible = false;
     }
 
     dispose() {

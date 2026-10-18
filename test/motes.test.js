@@ -1,7 +1,7 @@
 // The motes drifting in the air round the player (client/js/world/motes.js): each land's own kind,
 // as many as the quality has (none on low), fading from one kind to the next as the player crosses
-// from land to land, none indoors, and drifting without their breeze ever carrying them out of the
-// box round the player
+// from land to land, none indoors but a place's own (an ants' nest's spores), gone at once through
+// a door, and drifting without their breeze ever carrying them out of the box round the player
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { MOTES, MOTES_OF, Motes } from "../client/js/world/motes.js";
@@ -44,9 +44,10 @@ describe("the motes (world/motes.js)", () => {
     it("fade in on the land's kind, fade out and the next in crossing into another land, and none indoors", () => {
         const motes = new Motes();
         const { uniforms } = motes;
+        // (A land's, as the game gives them: MOTES_OF its kind)
         const step = (land, seconds) => {
             for (let t = 0; t < seconds; t += 0.1) {
-                motes.update(100, 20, 100, 0.1, land, 800);
+                motes.update(100, 20, 100, 0.1, MOTES_OF[land] ?? null, 800);
             }
         };
 
@@ -75,6 +76,49 @@ describe("the motes (world/motes.js)", () => {
         step(null, 3);
         assert.equal(motes.object.visible, false);
         step("beach", 3);
+        assert.equal(motes.object.visible, false);
+        motes.dispose();
+    });
+
+    it("drift indoors only where the place has its own (an ants' nest's spores, glowing), and are gone at once through a door", () => {
+        const motes = new Motes();
+        const scale = 800;
+
+        motes.setQuality(QUALITY.medium.motes);
+
+        for (let t = 0; t < 3; t += 0.1) {
+            motes.update(100, 0, 100, 0.1, MOTES_OF.meadow, scale);
+        }
+
+        assert.ok(motes.object.visible);
+
+        // (In through the nest's way in: the pollen gone at once, the spores fading in)
+        motes.cut();
+        assert.equal(motes.object.visible, false);
+        assert.equal(motes.level, 0);
+
+        for (let t = 0; t < 0.5; t += 0.1) {
+            motes.update(40, 0, 40, 0.1, "spores", scale);
+        }
+
+        assert.equal(motes.kind, "spores");
+        assert.ok(motes.object.visible && motes.uniforms.moteAmount.value < MOTES.spores.amount);
+
+        for (let t = 0; t < 3; t += 0.1) {
+            motes.update(40, 0, 40, 0.1, "spores", scale);
+        }
+
+        assert.ok(Math.abs(motes.uniforms.moteAmount.value - MOTES.spores.amount) < 1e-9);
+        // (Their own light, not the sky's: underground, the same by night as by day; rising)
+        assert.equal(MOTES.spores.lit, false);
+        assert.ok(MOTES.spores.breeze[1] > 0);
+
+        // (No land has them)
+        assert.ok(!Object.values(MOTES_OF).includes("spores"));
+
+        // (Something not a kind: none)
+        motes.cut();
+        motes.update(40, 0, 40, 0.1, "meadow", scale);
         assert.equal(motes.object.visible, false);
         motes.dispose();
     });

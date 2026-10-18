@@ -103,7 +103,8 @@ import { QUALITY, ROOM_VIEW } from "../world/view.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { TallGrass } from "../world/grass.js";
-import { Motes } from "../world/motes.js";
+import { Motes, MOTES_OF } from "../world/motes.js";
+import { Trickles } from "../world/trickles.js";
 import { EMBER_SCALE } from "../world/fire.js";
 import { GLOW_SCALE } from "../world/lights.js";
 import { CarriedTorches } from "../world/carried.js";
@@ -1418,12 +1419,13 @@ export class Game {
             this.grass = new TallGrass(this.chunks.overworld, { ready: (cx, cy) => this.chunks.isDrawn(cx, cy) });
             this.grass.setQuality(view.quality.grass);
             this.chunks.object.add(this.grass.object);
-            // (And the land's motes drifting in the air round them)
+            // (And the land's motes drifting in the air round them; indoors a place's own, if it
+            // has any: an ants' nest's spores)
             this.motes = new Motes();
             this.motes.setQuality(view.quality.motes);
             // (As much of the chimneys' smoke as the quality draws)
             SMOKE_SHARE.value = view.quality.smoke;
-            this.chunks.object.add(this.motes.object);
+            view.scene.add(this.motes.object);
             this.#farLand(x + 0.5, y + 0.5);
             this.#daytime();
             this.#landLook(x + 0.5, y + 0.5, 0);
@@ -2238,6 +2240,7 @@ export class Game {
         this.ground?.geometry.dispose();
         this.ground?.material.dispose();
         this.grass?.dispose();
+        this.motes?.object.removeFromParent();
         this.motes?.dispose();
         this.chunks?.dispose();
         this.far?.dispose();
@@ -3070,7 +3073,7 @@ export class Game {
                 const { camera, renderer } = this.view;
 
                 this.motes.setQuality(this.view.quality.motes);
-                this.motes.update(x, this.avatars.get(this.me).object.position.y, z, dt, this.chunks.overworld.biomeAt(Math.floor(x), Math.floor(z)), renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)));
+                this.motes.update(x, this.avatars.get(this.me).object.position.y, z, dt, MOTES_OF[this.chunks.overworld.biomeAt(Math.floor(x), Math.floor(z))] ?? null, renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)));
             }
 
             this.#farLand(x, z);
@@ -8258,6 +8261,10 @@ export class Game {
 
         this.view.setIndoors(interior);
         this.view.setOccluders(interior ? null : this.occluders);
+        // (The motes in the air gone at once through the door: the next place's own drift in; and
+        // no soil trickling till a while after coming in)
+        this.motes?.cut();
+        this.trickles?.reset();
         this.#setGround(interior ? null : this.groundOf(mapId));
         this.minimap?.setMap(this.world.maps[mapId]);
 
@@ -8298,6 +8305,23 @@ export class Game {
             interior.update(dt, this.clock);
             INTERIOR_GLOW.scale.value = this.view.pixelsPerMetre();
             this.view.flicker(this.clock, _lit.set(at.x, at.y + 1.2, at.z));
+
+            // (What drifts in its air, if anything: an ants' nest's spores)
+            if (this.motes) {
+                const { camera, renderer } = this.view;
+
+                this.motes.setQuality(this.view.quality.motes);
+                this.motes.update(at.x, at.y, at.z, dt, interior.motes, renderer.domElement.height / (2 * Math.tan((camera.fov * Math.PI) / 360)));
+            }
+
+            // (Soil trickling from its roof now and then, where it does: an ants' nest's)
+            if (interior.trickles && this.effects) {
+                this.trickles ??= new Trickles();
+
+                for (const { kind, at: from } of this.trickles.update(dt, at, interior.roof)) {
+                    this.effects.burst(kind, from);
+                }
+            }
 
             if (interior.hearth && Math.random() < dt * EMBERS) {
                 const { x, y, z } = interior.hearth;

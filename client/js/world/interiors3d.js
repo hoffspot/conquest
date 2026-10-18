@@ -41,6 +41,7 @@ import { allAtOnce } from "../core/steps.js";
 import { WATER_DETAIL } from "./water.js";
 import { cavern, earthTone, layers, SHELLS, tiles } from "./caverns.js";
 import { Blocks, furnish, loadProp, ROCK_PICTURES, rockMaterial } from "./dungeons3d.js";
+import { colonyAt, glowOf, threadsOn } from "./glowfungus.js";
 import { blockAt, bonesAt, clutterAt, hashOf, onTable, remainsAt, seatsAt, shelvesAt, sideTableAt, standAt, strewnAt, vesselsAt, workbenchAt } from "./dungeondressing.js";
 
 /** How high a floor's walls are, and how far above it the next floor is (metres). */
@@ -3655,16 +3656,36 @@ function towerTop(map) {
 // (`shell`: caverns.js SHELLS) or its walls of dressed stone (`walls`, `tall` metres high, a vault
 // over them); the pictures they're drawn with (`picture`, and underfoot `underfoot`: dungeons3d.js
 // ROCK_PICTURES) in the colours `tint` and `ground` (the pictures' own, if not given); what its
-// heaps of fallen stuff are (`rubble`, and `rock` the stuff of what stands up from its floor); and
-// whether its tunnels are shored up with timber (an outlaws' hideout's)
+// heaps of fallen stuff are (`rubble`, and `rock` the stuff of what stands up from its floor);
+// whether its tunnels are shored up with timber (an outlaws' hideout's); and its own air, if not
+// every inside's (`air`: { background, fog: [near, far] metres, mist: [how thick a metre at the
+// floor, how far up it thins by e, metres]: the dust settled low, view.js setIndoors), the light
+// the player carries in it (`carried`: { colour, intensity, distance metres, up: metres over their
+// middle }, view.js flicker), what drifts in its air (`motes`: motes.js MOTES) and whether soil
+// trickles from its roof now and then (`trickles`: trickles.js)
 const DUNGEON_LOOKS = Object.freeze({
     caves: { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x6f665c, ground: 0x5d554b },
     hideout: { rock: "rock", shell: "dug", picture: "rock-dug", underfoot: "ground-dug", rubble: "rock", shored: true, ground: 0x6e5440 },
     ancient: { walls: "stone-old", tall: 4.2, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple" },
     // (An ants' nest: dug earth (caverns.js SHELLS.nest), scored by their digging, red clay in
     // layers, pale sand at the foot of each, stained with iron, the meadow's dark soil at the top
-    // level's roof; underfoot trodden red earth, cracked and stony)
-    nest: { rock: "rock", shell: "nest", picture: "earth-nest", underfoot: "ground-nest", rubble: "rock", tint: 0x8a6448, ground: 0x6e4c34, earth: true },
+    // level's roof; underfoot trodden red earth, cracked and stony. Lit by the fungus on its walls
+    // (glowfungus.js) and the light the player carries, close, warm and dusty, the dust lying low,
+    // spores drifting)
+    nest: {
+        rock: "rock",
+        shell: "nest",
+        picture: "earth-nest",
+        underfoot: "ground-nest",
+        rubble: "rock",
+        tint: 0x8a6448,
+        ground: 0x6e4c34,
+        earth: true,
+        air: { background: 0x1b120c, fog: [9, 30], mist: [0.09, 1.1] },
+        carried: { colour: 0xffc890, intensity: 3.2, distance: 9, up: 1.2 },
+        motes: "spores",
+        trickles: true,
+    },
 });
 
 // A flight of a dungeon's stairs: how many steps, how far each goes up or down, and how deep the
@@ -4318,13 +4339,16 @@ function dungeon(map) {
         }
     }
 
-    // Torches on the walls (place.js's: each by a wall, and which way it is)
+    // Torches on the walls (place.js's: each by a wall, and which way it is); and the colonies of
+    // glowing fungus on them, each its light (grown on the rock as it's drawn: rockShell)
     for (const torch of map.dungeon?.lights ?? []) {
         if (torch.kind === "torch") {
             const [x, y] = torch.at;
             const [dx, dy] = torch.wall ?? [0, 0];
 
             burning(wallTorch(solid, m(x + 0.5 + dx * 0.42), m(y + 0.5 + dy * 0.42)));
+        } else if (torch.kind === "glow") {
+            lights.push(glowOf(torch.at, torch.wall));
         }
     }
 
@@ -4339,13 +4363,18 @@ function dungeon(map) {
         loadProp(name);
     }
 
-    return { solid, moving: [], flames, lights, hearth: null, ceiling: roof / M, shell: shell && rockShell(map, look, shell), blocks, props: placed };
+    return { solid, moving: [], flames, lights, hearth: null, ceiling: roof / M, shell: shell && rockShell(map, look, shell), blocks, props: placed, air: look.air ?? null, carried: look.carried ?? null, motes: look.motes ?? null, trickles: Boolean(look.trickles) };
 }
+
+// The colonies of glowing fungus on a level's rock, drawn in their own light whatever's on them,
+// each point its own colour (glowfungus.js): one material for all of them
+let fungusMaterial = null;
 
 // The rock round a dungeon's level as one surface (caverns.js), a step at a time: its walls and
 // roof, shaded darker where the rock closes in, drawn as the rest is lit (roomlight.js) but never
 // cut away (the camera's kept out of the rock instead: view.js); its roof kept clear over stairs
-// going up
+// going up; and the glowing fungus growing on it (place.js's colonies: glowfungus.js), its threads
+// glowing in the earth round each
 function* rockShell(map, look, shell) {
     const rock = (x, y) => map.plan[y][x] === "#";
     const ups = map.pieces.filter((piece) => piece.kind === "stairs-up");
@@ -4359,6 +4388,7 @@ function* rockShell(map, look, shell) {
     const earth = look.earth && shell.strata ? layers(seed) : null;
     const depth = map.dungeon?.level ?? 0;
     const toneAt = (x, y, z) => earthTone(earth, [x, y, z], seed, { depth, humus: depth === 0 ? THREE.MathUtils.smoothstep(y, shell.low - 0.4, shell.high - 0.2) * 0.8 : 0 });
+    const colonies = (map.dungeon?.lights ?? []).filter(({ kind }) => kind === "glow").map(({ at, wall }) => colonyAt(made.open, at, wall));
 
     // (Its points coloured as the theme has it, shaded as caverns.js has them, a tile at a time)
     const meshesOf = (surface, colour, picture, name) => {
@@ -4378,7 +4408,12 @@ function* rockShell(map, look, shell) {
             geometry.setAttribute("color", new THREE.BufferAttribute(colours, 3));
             geometry.setIndex(new THREE.BufferAttribute(indices, 1));
 
-            const mesh = new THREE.Mesh(geometry, rockMaterial(picture));
+            // (The fungus's threads glowing in it: a byte a colour a point)
+            if (colonies.length) {
+                geometry.setAttribute("glow", new THREE.BufferAttribute(threadsOn(positions, colonies, seed), 3, true));
+            }
+
+            const mesh = new THREE.Mesh(geometry, rockMaterial(picture, { glow: colonies.length > 0 }));
 
             mesh.name = name;
             // (A floor casts no shadow on anything)
@@ -4390,6 +4425,23 @@ function* rockShell(map, look, shell) {
     meshesOf(made, look.tint ?? null, look.picture, "rock");
     yield;
     meshesOf(made.floor, look.ground ?? null, look.underfoot, "floor");
+
+    // (The colonies' caps and brackets, all of them one mesh)
+    if (colonies.length) {
+        const geometry = new THREE.BufferGeometry();
+        const offsets = colonies.reduce((list, each) => [...list, list.at(-1) + each.positions.length / 3], [0]);
+
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute(colonies.flatMap(({ positions }) => positions), 3));
+        geometry.setAttribute("color", new THREE.Float32BufferAttribute(colonies.flatMap(({ colours }) => colours), 3));
+        geometry.setIndex(colonies.flatMap(({ indices }, k) => indices.map((index) => index + offsets[k])));
+        fungusMaterial ??= Object.assign(new THREE.MeshBasicMaterial({ vertexColors: true }), { name: "glow-fungus" });
+
+        const fungus = new THREE.Mesh(geometry, fungusMaterial);
+
+        fungus.name = "fungus";
+        fungus.userData.shadowless = true;
+        group.add(fungus);
+    }
     // (How high the rock closes over a point of the level, its metres: a lurker hangs under it)
     group.userData.roof = made.roof;
 
@@ -5304,6 +5356,12 @@ export function* buildingInterior(map) {
         // (A dungeon's level's lights each its own, however many: the view lights it by those nearest)
         lights: gather([...built.lights, ...lit.flames], map.dungeon ? Infinity : undefined).map((light, k) => ({ ...light, colour: ((light.kind === "lamp" || light.kind === "candle") && LAMPLIGHT[own]) || light.colour, x: ox + light.x, z: oz + light.z, seed: light.seed ?? k * 17.3 })),
         daylight: lit.daylight,
+        // (A dungeon's level's own air, the light carried in it, what drifts in it and whether soil
+        // trickles from its roof, its look's: DUNGEON_LOOKS)
+        air: built.air ?? null,
+        carried: built.carried ?? null,
+        motes: built.motes ?? null,
+        trickles: Boolean(built.trickles),
         open: Boolean(built.open),
         ceiling: built.ceiling ?? STOREY,
         /** How high over the ground the rock closes over a point (world metres), a dungeon's level's; null for anywhere else. */

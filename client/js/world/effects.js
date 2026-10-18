@@ -61,6 +61,10 @@ const BURSTS = {
     lavaSplash: { count: 24, colours: [0xffe080, 0xa01800], size: [0.04, 0.1], speed: [1.4, 3.2], life: [0.4, 0.8], gravity: 9, spread: 1.4, glow: true, drag: 0.5 },
     webSplat: { count: 20, colours: [0xffffff, 0xd8d8cc], size: [0.03, 0.07], speed: [0.8, 2.2], life: [0.3, 0.6], gravity: 3, spread: 1.8, glow: false, opacity: 0.95 },
     earth: { count: 26, colours: [0x6a5438, 0x3a2a18], size: [0.05, 0.12], speed: [1.6, 3.6], life: [0.5, 0.9], gravity: 9, spread: 0.7, glow: false, opacity: 0.95, late: true, drag: 0.4 },
+    // Soil trickling from an ants' nest's roof (trickles.js): its grains falling, a stream of them;
+    // and the dust sifting up where they land
+    trickle: { count: 2, colours: [0x5a4030, 0x2e2018], size: [0.018, 0.04], speed: [0.05, 0.35], life: [0.95, 1.2], gravity: 9.8, spread: 0.12, glow: false, opacity: 0.95, late: true, drag: 0.2 },
+    sift: { count: 3, colours: [0x6a5440, 0x3a2c20], size: [0.12, 0.26], speed: [0.2, 0.6], life: [0.7, 1.2], gravity: -0.15, spread: 1.8, glow: false, opacity: 0.32, grow: 1.6 },
     // What lingers on someone, rising off them now and then (core/afflictions.js)
     venomBubbles: { count: 2, colours: [0xc8f47a, 0x3a8a10], size: [0.045, 0.085], speed: [0.2, 0.45], life: [0.6, 1], gravity: -0.6, spread: 1.4, glow: false, opacity: 0.9, late: true, drag: 1.5 },
     venomDrip: { count: 1, colours: [0x9ad83a, 0x2a5a08], size: [0.025, 0.04], speed: [0, 0.1], life: [0.5, 0.7], gravity: 9.8, spread: 0.3, glow: false, opacity: 0.95, late: true, drag: 0.2 },

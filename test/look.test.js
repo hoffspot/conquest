@@ -138,6 +138,20 @@ describe("the mist and the grade (fog.js)", () => {
         assert.ok(down > hazeAt(300, 20, far, { mist, eye: 250, rise: 0 }) && down < hazeAt(300, 20, far, { mist, eye: 5, rise: 0 }));
     });
 
+    it("lies low over a place's floor indoors only where its air has it (an ants' nest's dust: MIST's w), under the near fog too", () => {
+        const dust = { x: 0.09, y: 0, z: 1.1, w: 1 };
+        const near = [9, 30];
+
+        // (None but the fog with none, or with it only for under the far haze)
+        assert.equal(hazeAt(12, ...near, { mist: { ...dust, x: 0 }, eye: 6, rise: -6 }), hazeAt(12, ...near));
+        assert.equal(hazeAt(12, ...near, { mist: { ...dust, w: 0 }, eye: 6, rise: -6 }), hazeAt(12, ...near));
+        // (Looking down at the floor, thicker than the fog alone; along the roof, next to none)
+        assert.ok(hazeAt(12, ...near, { mist: dust, eye: 6, rise: -6 }) > hazeAt(12, ...near) + 0.1);
+        assert.ok(hazeAt(12, ...near, { mist: dust, eye: 6, rise: 0 }) - hazeAt(12, ...near) < 0.01);
+        // (Nearer the camera, there's still some dust between it and the floor)
+        assert.ok(hazeAt(4, ...near, { mist: dust, eye: 4, rise: -4 }) > 0.05 && hazeAt(4, ...near) === 0);
+    });
+
     it("goes through as much mist as the line of sight does: the thickness's integral from the eye to the point", () => {
         for (const [eye, rise] of [
             [30, 40],

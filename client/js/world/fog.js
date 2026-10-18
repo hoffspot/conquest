@@ -9,7 +9,9 @@
 // - Under the far haze, mist lies in the low ground (MIST): thickest at and below its floor, thinning
 //   by half every so many metres up, so valleys and marshes are hazy and the heights clear. How much
 //   of it a line of sight goes through is worked out exactly for that (an exponential's integral
-//   from the eye's height to the point's), so it's one sum per pixel.
+//   from the eye's height to the point's), so it's one sum per pixel. Indoors there's none, but
+//   where a place's air has dust lying low over its floor (an ants' nest's: MIST's `w`), under its
+//   nearer fog, the same way.
 // - Under the far haze, what's drawn near the player and stands up from the ground (buildings,
 //   trees, rocks, folk) fades out, a few pixels at a time (dithered), from FADE.from to FADE.to
 //   metres in front of the camera, before the near camera stops (at world/far/levels.js
@@ -41,7 +43,8 @@ export const FADE_NOISE = "fract( 52.9829189 * fract( dot( gl_FragCoord.xy, vec2
 
 /**
  * The mist in the low ground: x, how thick (a metre, at its floor); y, its floor's height (metres);
- * z, how far up it thins by e (metres). None to start with.
+ * z, how far up it thins by e (metres); w, 1 for it under a nearer fog too (indoors: dust lying
+ * low), 0 for it only under the far haze. None to start with.
  */
 export const MIST = { value: { x: 0, y: 0, z: 20, w: 0 } };
 
@@ -58,7 +61,7 @@ const FOG = `#ifdef USE_FOG
 		float fogFactor = fogFar > ${FAR_FOG.toFixed(1)}
 			? 1.0 - exp( - ${THICK.toFixed(1)} * max( 0.0, vFogDepth - fogNear ) / ( fogFar - fogNear ) )
 			: smoothstep( fogNear, fogFar, vFogDepth );
-		if ( fogFar > ${FAR_FOG.toFixed(1)} && fogMist.x > 0.0 ) {
+		if ( fogMist.x > 0.0 && ( fogFar > ${FAR_FOG.toFixed(1)} || fogMist.w > 0.5 ) ) {
 			// (The mist along the line of sight: its thickness, e^-(height - floor)/scale, averaged
 			// from the eye's height to the point's)
 			float mistEye = exp( - clamp( ( cameraPosition.y - fogMist.y ) / fogMist.z, - 1.0, 30.0 ) );
@@ -150,20 +153,26 @@ export function farHaze() {
 
 /**
  * How thick the haze is `depth` metres in front of the camera, as the shader has it (0 to 1);
- * with the mist (MIST's values: { x, y, z }), from an eye at `eye` metres up to a point `rise`
+ * with the mist (MIST's values: { x, y, z, w }), from an eye at `eye` metres up to a point `rise`
  * metres above it.
  */
 export function hazeAt(depth, near, far, { mist = null, eye = 0, rise = 0 } = {}) {
+    let haze;
+
     if (far <= FAR_FOG) {
         const t = Math.min(1, Math.max(0, (depth - near) / (far - near)));
 
-        return t * t * (3 - 2 * t);
-    }
+        haze = t * t * (3 - 2 * t);
 
-    const haze = 1 - Math.exp((-THICK * Math.max(0, depth - near)) / (far - near));
+        if (!mist?.x || !(mist.w > 0.5)) {
+            return haze;
+        }
+    } else {
+        haze = 1 - Math.exp((-THICK * Math.max(0, depth - near)) / (far - near));
 
-    if (!mist?.x) {
-        return haze;
+        if (!mist?.x) {
+            return haze;
+        }
     }
 
     const thickness = (height) => Math.exp(-Math.min(30, Math.max(-1, (height - mist.y) / mist.z)));
