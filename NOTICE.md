@@ -16,5 +16,8 @@ It doesn't cover:
   Fab's Spider V3; the Elite Dungeon Spider, Fab's Spider V6a; the Dungeon Scorpion, Fab's
   Scorpion V5d; the Giant Cockroach, Medhue's Cockroach from Fab; the Dungeon Wasp, Fab's Vespa
   Titanus Giant Wasp; the Black Widow, Medhue's Black Widow from Fab; the Greater Demon, Fab's
-  Gloomy Demon; and the Fiend, Fab's Monster4, with its two other skins
-  (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
+  Gloomy Demon; the Fiend, Fab's Monster4, with its two other skins; and a hell's six flayed (the
+  Flayling, the Cinder Husk, the Pyre Acolyte, the Ossuary Priest, the Dirge Warden and the Flayed
+  Hierarch), Fab's Monster1's six builds; and its six gorgers (the Slag Gorger, the Forge Brute,
+  the Chained Glutton, the Bloat Gorger, the Pit Ravager and the Gorger Warlord), Fab's Monster2's
+  four builds (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.

@@ -230,9 +230,9 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
 
     // (In the game now, as are the ant, the spiders, the scorpion, the cockroach, the wasp, the
     // black widow, the Ant Monster, the greater demon (a hell's lord) and the fiend (its packs):
-    // every bought model is, none listed as to come; read, its clips listed, the one asked for by
-    // its address played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual([]);
+    // every bought model is but a hell's six flayed and its six gorgers, the ones listed as to come;
+    // read, its clips listed, the one asked for by its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Flayling", "Cinder Husk", "Pyre Acolyte", "Ossuary Priest", "Dirge Warden", "Flayed Hierarch", "Slag Gorger", "Forge Brute", "Chained Glutton", "Bloat Gorger", "Pit Ravager", "Gorger Warlord"]);
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Giant cockroach", "Dungeon wasp", "Dungeon scorpion", "Black widow", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
@@ -878,4 +878,56 @@ test("on a phone: the bars a row each and nothing off the screen, the panel unde
     const beside = await page.evaluate(() => window.lab.camera());
 
     expect(Math.abs(beside.aspect - beside.view.fullWidth / beside.view.fullHeight)).toBeLessThan(1e-6);
+});
+
+test("and a hell's six flayed: each one of Monster1's builds, its twelve clips with its lunge (and its cast, one with a staff), its one simplified mesh, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+
+    // (Its own, as their names sort, then those made from them: the lunge, and the cast)
+    const BARE = ["Attack", "Attack 2", "Death", "Hit", "Hit 2", "Idle", "Idle 2", "Run", "Run Back", "Strafe Left", "Strafe Right", "Walk", "Lunge"];
+    const STAFF = [...BARE, "Cast"];
+    const SIX = [
+        ["beast-flayling", "The Flayling", BARE, 8422, 58],
+        ["beast-cinder-husk", "The Cinder Husk", BARE, 8712, 59],
+        ["beast-pyre-acolyte", "The Pyre Acolyte", STAFF, 10575, 109],
+        ["beast-ossuary-priest", "The Ossuary Priest", STAFF, 10709, 109],
+        ["beast-dirge-warden", "The Dirge Warden", STAFF, 10637, 108],
+        ["beast-flayed-hierarch", "The Flayed Hierarch", STAFF, 12099, 119],
+    ];
+
+    for (const [id, name, clips, triangles, bones] of SIX) {
+        await openViewer(page, `/model-viewer.html?model=${id}&clip=Lunge`);
+        await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+        expect(await page.evaluate(() => window.lab.watch().clips)).toEqual(clips);
+        await page.waitForFunction(() => window.lab.watch().clip === "Lunge", null, { timeout: 60000 });
+        await expect(page.locator("#name")).toHaveText(name);
+        expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles, bones });
+        await expect(page.locator("#details")).toContainText("Monster1, bought on Fab: used with the permission its Standard License gives");
+    }
+});
+
+
+test("and a hell's six gorgers: each from one of Monster2's builds, its five clips with its bite, its spew and its roar, its one simplified mesh, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+
+    // (Its own, as their names sort, then those made from its idle)
+    const CLIPS = ["Attack", "Death", "Gethit", "Idle", "Walk", "Bite", "Spew", "Roar"];
+    const SIX = [
+        ["beast-slag-gorger", "The Slag Gorger", 7995],
+        ["beast-forge-brute", "The Forge Brute", 10858],
+        ["beast-chained-glutton", "The Chained Glutton", 13241],
+        ["beast-bloat-gorger", "The Bloat Gorger", 7995],
+        ["beast-pit-ravager", "The Pit Ravager", 10858],
+        ["beast-gorger-warlord", "The Gorger Warlord", 13843],
+    ];
+
+    for (const [id, name, triangles] of SIX) {
+        await openViewer(page, `/model-viewer.html?model=${id}&clip=Bite`);
+        await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+        expect(await page.evaluate(() => window.lab.watch().clips)).toEqual(CLIPS);
+        await page.waitForFunction(() => window.lab.watch().clip === "Bite", null, { timeout: 60000 });
+        await expect(page.locator("#name")).toHaveText(name);
+        expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles });
+        await expect(page.locator("#details")).toContainText("Monster2, bought on Fab: used with the permission its Standard License gives");
+    }
 });
