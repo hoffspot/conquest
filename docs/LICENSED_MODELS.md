@@ -6,7 +6,8 @@ Dreadthorn Dragon; the werewolf, Fab's Werewolf - Mythical Creature, with its fi
 ants' nests' eight: the great centipede, Fab's Centipede Monster-V2; the Ant Monster, Fab's Ant
 Monster V1b; the giant ant, Fab's Ant V2; the dungeon spider, Fab's Spider V3; the elite dungeon
 spider, Fab's Spider V6a; the dungeon scorpion, Fab's Scorpion V5d; the giant cockroach, Medhue's
-Cockroach from Fab; and the dungeon wasp, Fab's Vespa Titanus Giant Wasp
+Cockroach from Fab; and the dungeon wasp, Fab's Vespa Titanus Giant Wasp; and one not in the game
+yet, the Black Widow, Medhue's Black Widow from Fab
 (`client/models/beasts/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
