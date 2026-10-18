@@ -1696,6 +1696,30 @@
                     "bytes": 2743012
                 }
             ]
+        },
+        "dungeon-earth-nest": {
+            "tier": "demand",
+            "label": "An ants' nest's dug earth, scored by their digging (Poly Haven excavated_soil_wall, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/earth-nest-colour.ktx2"
+                },
+                {
+                    "path": "textures/dungeons/earth-nest-normal.ktx2"
+                }
+            ]
+        },
+        "dungeon-ground-nest": {
+            "tier": "demand",
+            "label": "An ants' nest's trodden red earth, cracked and stony (Poly Haven red_mud_stones, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/ground-nest-colour.ktx2"
+                },
+                {
+                    "path": "textures/dungeons/ground-nest-normal.ktx2"
+                }
+            ]
         }
     }
 }

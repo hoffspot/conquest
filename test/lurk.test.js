@@ -1,12 +1,13 @@
 // A creature that lurks (creatures.js `lurk`: the black widow, in the ants' nests): hanging unseen
 // under the roof, no one's enemy nor anyone its, till an enemy it can see comes beneath it; then
 // dropping on its thread, stunned till it lands, and setting on them (battle.js #lurk); put out in
-// a nest near its room's middle, where the roof's highest (dungeons/place.js)
+// a nest where its room's roof is highest, furthest from the rock (dungeons/place.js)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Battle, STEP_MS } from "../client/js/core/battle.js";
 import { CREATURES, traitsOf, WILD } from "../client/js/core/creatures.js";
 import { buildDungeon } from "../client/js/core/dungeons/build.js";
+import { clearOfRock } from "../client/js/core/dungeons/place.js";
 import { encode, decode } from "../client/js/core/wire.js";
 import { parseGrid } from "./helpers.js";
 
@@ -138,9 +139,13 @@ describe("black widows in the ants' nests (dungeons/themes.js, place.js)", () =>
                         widows += 1;
                         assert.ok(pack.foes.every(({ creature }) => creature === "blackWidow"), "a widow's pack all widows");
 
-                        const { centre, w, h } = rooms.get(pack.room);
+                        // (Where its room's roof is high: as far from the rock as its room's
+                        // middle is at least, give or take one for those kept off its doors)
+                        const { centre } = rooms.get(pack.room);
+                        const open = (x, y) => (level.rows[y]?.[x] ?? "#") !== "#";
+                        const [clear, middle] = [clearOfRock(open, foe.at), clearOfRock(open, centre)];
 
-                        assert.ok(Math.max(Math.abs(foe.at[0] - centre[0]), Math.abs(foe.at[1] - centre[1])) <= Math.max(3, Math.min(w, h) / 2), `${seed}: ${foe.at} in a room about ${centre}`);
+                        assert.ok(clear >= Math.max(1, middle - 1), `${seed}: ${foe.at}, ${clear} from the rock, in a room about ${centre}, ${middle} from it`);
                     }
                 }
             }

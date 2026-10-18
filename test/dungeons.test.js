@@ -339,11 +339,11 @@ describe("themes", () => {
         }
     });
 
-    it("has an ants' nest, dug as the caves are: ants, great centipedes, dungeon spiders led by elite dungeon spiders, and the Ant Monster at the bottom with ants about it, all of them drawn from models", () => {
+    it("has an ants' nest, dug as ants dig: ants, great centipedes, dungeon spiders led by elite dungeon spiders, and the Ant Monster at the bottom with ants about it, all of them drawn from models", () => {
         const nest = THEMES.nest;
         const kinds = [...nest.packs.flatMap(({ creatures }) => creatures), ...nest.minis.map(({ creature }) => creature), ...nest.bosses.flatMap(({ creature, guard = [] }) => [creature, ...guard])];
 
-        assert.equal(nest.layout, "caves");
+        assert.equal(nest.layout, "nest");
         assert.deepEqual([...new Set(kinds)].sort(), ["ant", "antMonster", "blackWidow", "dungeonScorpion", "dungeonSpider", "dungeonWasp", "eliteDungeonSpider", "giantCockroach", "greatCentipede"]);
         assert.ok(kinds.every((kind) => MODELS[kind]), "each drawn from a model");
 

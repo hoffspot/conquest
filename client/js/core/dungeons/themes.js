@@ -178,8 +178,9 @@ export const THEMES = {
             arena: [{ id: "sanctum", props: [{ char: "I", count: [6, 10], at: "rows" }, { char: "a", count: [1, 1], at: "head", size: [2, 1] }, { char: "k", count: [2, 4], at: "corner", mirror: true }, { char: "y", count: [2, 2], at: "open", mirror: true }, { char: "v", count: [2, 4], at: "wall", mirror: true }, { char: "i", count: [0, 2], at: "open" }], torches: [2, 4] }],
         },
     },
-    // (An ants' nest: the caves' layout dug through earth, its chambers heaped with what the ants
-    // have dragged in; giant ants in their numbers, great centipedes in its deeper tunnels, packs of
+    // (An ants' nest: dug as ants dig (layouts.js nest), a gallery winding up through the earth and
+    // chambers off it on short stalks, its chambers heaped with what the ants have dragged in, its
+    // middens near the top, its larders between and its brood deep down; giant ants in their numbers, great centipedes in its deeper tunnels, packs of
     // dungeon spiders each led by an elite dungeon spider, giant cockroaches, dungeon wasps and
     // dungeon scorpions, and the Ant Monster, their great queen, calling her flock to her in her
     // chamber at the bottom
@@ -188,7 +189,7 @@ export const THEMES = {
     nest: {
         id: "nest",
         name: "an ants' nest",
-        layout: "caves",
+        layout: "nest",
         lands: { savannah: 4, badlands: 3, meadow: 2, farmland: 2, heath: 2, jungle: 2 },
         style: "dungeon-caves",
         ground: GROUND.soil,
@@ -226,14 +227,12 @@ export const THEMES = {
         fallen: true,
         rooms: {
             mouth: [{ id: "mouth", props: [{ char: "m", count: [1, 3], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [1, 1], at: "open" }, { char: "d", count: [2, 4], at: "wall" }], torches: [1, 1] }],
-            cavern: [
-                { id: "galleries", weight: 2, props: [{ char: "*", count: [2, 4], at: "open" }, { char: "j", count: [1, 3], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "m", count: [1, 3], at: "wall" }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 1] },
-                { id: "larder", weight: 1, props: [{ char: "j", count: [4, 7], at: "open" }, { char: "i", count: [2, 4], at: "open" }, { char: "m", count: [0, 2], at: "wall" }, { char: "d", count: [2, 3], at: "wall" }], torches: [0, 0] },
-            ],
-            grotto: [
-                { id: "brood", weight: 2, props: [{ char: "m", count: [2, 4], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] },
-                { id: "midden", weight: 1, props: [{ char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0] },
-            ],
+            // (Its rooms by their part in the nest, as its layout has them: layouts.js nest. A
+            // gallery's stretch is narrow: a pillar of earth at most in it)
+            gallery: [{ id: "galleries", props: [{ char: "*", count: [0, 1], at: "open" }, { char: "j", count: [1, 3], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "m", count: [1, 3], at: "wall" }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 1] }],
+            larder: [{ id: "larder", props: [{ char: "j", count: [4, 7], at: "open" }, { char: "i", count: [2, 4], at: "open" }, { char: "m", count: [0, 2], at: "wall" }, { char: "d", count: [2, 3], at: "wall" }], torches: [0, 0] }],
+            brood: [{ id: "brood", props: [{ char: "m", count: [2, 4], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] }],
+            midden: [{ id: "midden", props: [{ char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0] }],
             nook: [{ id: "nook", props: [{ char: "m", count: [0, 2], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 0] }],
             arena: [{ id: "chamber", props: [{ char: "*", count: [3, 5], at: "open" }, { char: "j", count: [5, 8], at: "open" }, { char: "i", count: [3, 5], at: "open" }, { char: "m", count: [2, 4], at: "wall" }, { char: "d", count: [2, 4], at: "wall" }], torches: [2, 3] }],
         },

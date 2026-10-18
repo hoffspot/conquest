@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "b6b0828965",
+    release: "0a4f6f052e",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2017,6 +2017,38 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/black-widow.bin",
                     "hash": "061449defd",
                     "bytes": 2743012
+                }
+            ]
+        },
+        "dungeon-earth-nest": {
+            "tier": "demand",
+            "label": "An ants' nest's dug earth, scored by their digging (Poly Haven excavated_soil_wall, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/earth-nest-colour.ktx2",
+                    "hash": "453f9e1be4",
+                    "bytes": 65912
+                },
+                {
+                    "path": "textures/dungeons/earth-nest-normal.ktx2",
+                    "hash": "61cbe1e87d",
+                    "bytes": 338556
+                }
+            ]
+        },
+        "dungeon-ground-nest": {
+            "tier": "demand",
+            "label": "An ants' nest's trodden red earth, cracked and stony (Poly Haven red_mud_stones, CC0)",
+            "files": [
+                {
+                    "path": "textures/dungeons/ground-nest-colour.ktx2",
+                    "hash": "ea189a1f9e",
+                    "bytes": 71155
+                },
+                {
+                    "path": "textures/dungeons/ground-nest-normal.ktx2",
+                    "hash": "4a6c49cef2",
+                    "bytes": 334198
                 }
             ]
         }

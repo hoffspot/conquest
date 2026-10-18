@@ -1013,7 +1013,8 @@ back along the ground while planted.
   shifting its legs, and dies flipped onto its back, its legs curled. Its walk is 0.68 m/s as it's
   drawn, its run 1.83.
   - **It lurks** (`creatures.js` `lurk`, `battle.js` `#lurk`): put out hanging unseen under the
-    roof over where it stands, near the middle of its room where the roof's highest (`place.js`).
+    roof over where it stands, where its room's roof is highest, as far from the rock as it'll go,
+    and never at the rock's edge, where the roof comes down (`place.js` `openestFirst`).
     While it lurks it's no one's enemy nor anyone its: nothing sets on it, no blow, spell or blast
     reaches it, no one bumps into it, and it isn't on the minimap. Once an enemy it can see (and
     has noticed: not Invisible) comes within 3.5 m of beneath it, it drops on its thread: 1.8 s

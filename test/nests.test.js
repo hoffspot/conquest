@@ -9,6 +9,7 @@ import { TIERS } from "../client/js/core/creatures.js";
 import { buildDungeon } from "../client/js/core/dungeons/build.js";
 import { FALLEN, rollFallen } from "../client/js/core/dungeons/play.js";
 import { THEMES } from "../client/js/core/dungeons/themes.js";
+import { NEST } from "../client/js/core/dungeons/layouts.js";
 import { hypot } from "../client/js/core/exact.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -185,5 +186,58 @@ describe("searching the fallen in an ants' nest (host.js #openDungeonChest)", ()
         // (Searched once: gone, and nothing more to be had of it)
         assert.equal(host.ground.has(one.id), false);
         assert.equal(host.command(HOST_PLAYER, { type: "pickUp", ground: one.id }).ok, false);
+    });
+});
+
+describe("an ants' nest dug as ants dig (dungeons/layouts.js nest)", () => {
+    it("winds a gallery up from its mouth, stretch by stretch, chambers off it on stalks, middens kept to the upper levels, brood the bottom's, the queen's chamber a dead end at the far end", () => {
+        const counts = { middens: [0, 0, 0], brood: [0, 0, 0], larders: [0, 0, 0], chambers: [0, 0, 0] };
+
+        assert.equal(THEMES.nest.layout, "nest");
+
+        for (let seed = 1; seed <= 12; seed++) {
+            const dungeon = buildDungeon({ seed, theme: "nest", tier: 4, levels: 3 });
+
+            dungeon.levels.forEach((level, depth) => {
+                const kinds = new Map(level.rooms.map(({ id, kind }) => [id, kind]));
+                const linked = (id) => level.links.filter(([a, b]) => a === id || b === id).map(([a, b]) => (a === id ? b : a));
+                const galleries = level.rooms.filter(({ kind }) => kind === "gallery");
+
+                // (Its mouth, a gallery of two stretches or more, each joined to the next, and
+                // chambers off them)
+                assert.equal(level.rooms.filter(({ kind }) => kind === "mouth").length, 1);
+                assert.ok(galleries.length >= 2, `${seed}/${depth}: ${galleries.length} stretches`);
+                assert.ok(galleries.every(({ id }) => linked(id).some((other) => ["gallery", "mouth"].includes(kinds.get(other)))), `${seed}/${depth}: a stretch on its own`);
+
+                for (const { kind } of level.rooms) {
+                    const band = depth === 0 ? 0 : depth === 2 ? 2 : 1;
+
+                    counts.middens[band] += kind === "midden" ? 1 : 0;
+                    counts.brood[band] += kind === "brood" ? 1 : 0;
+                    counts.larders[band] += kind === "larder" ? 1 : 0;
+                    counts.chambers[band] += ["midden", "brood", "larder", "nook"].includes(kind) ? 1 : 0;
+                }
+
+                // (The queen's chamber on the bottom level only, the way to it its one way in)
+                const queen = level.rooms.filter(({ kind }) => kind === "arena");
+
+                assert.equal(queen.length, depth === 2 ? 1 : 0);
+
+                if (queen.length) {
+                    assert.equal(linked(queen[0].id).length, 1, `${seed}: the queen's chamber has more than one way in`);
+                    assert.equal(level.path.at(-1), queen[0].id);
+                }
+            });
+        }
+
+        // (Middens near the top, none at the bottom; brood at the bottom, none at the top;
+        // larders between)
+        assert.ok(counts.middens[0] > 0 && counts.middens[2] === 0, JSON.stringify(counts));
+        assert.ok(counts.brood[2] > counts.larders[2] && counts.brood[0] === 0, JSON.stringify(counts));
+        assert.ok(counts.larders[1] > counts.brood[1], JSON.stringify(counts));
+
+        // (Smaller and further apart the deeper: fewer chambers a level)
+        assert.ok(counts.chambers[0] > counts.chambers[2], JSON.stringify(counts));
+        assert.ok(NEST.size[0][0] > NEST.size[2][0] && NEST.apart[0][0] < NEST.apart[2][0]);
     });
 });
