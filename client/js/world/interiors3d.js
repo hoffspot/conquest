@@ -208,14 +208,15 @@ function material(asked, how = {}) {
         } else if (name === "candle-flame" || name.startsWith("sconce")) {
             result = new THREE.MeshBasicMaterial({ color: { sconce: 0xff5a4a, "sconce-warm": 0xffb45a }[name] ?? 0xffd27a, toneMapped: false });
             result.name = name;
-        } else if (name === "portal-veil") {
-            // (A guild's portal's veil: its swirling light worked out as it's drawn, veilShader)
+        } else if (name === "portal-veil" || name === "portal-veil-hell") {
+            // (A guild's portal's veil: its swirling light worked out as it's drawn, veilShader; or
+            // a hell's, in its colours)
             result = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
             result.name = name;
-            result.userData.veil = true;
-        } else if (name === "portal-rune") {
-            // (The runes round a portal, glowing)
-            result = new THREE.MeshBasicMaterial({ color: 0xb8e6ff, toneMapped: false });
+            result.userData.veil = name === "portal-veil-hell" ? "hell" : "guild";
+        } else if (name === "portal-rune" || name === "portal-rune-hell") {
+            // (The runes round a portal, glowing: a hell's like coals)
+            result = new THREE.MeshBasicMaterial({ color: name === "portal-rune" ? 0xb8e6ff : 0xff6a2a, toneMapped: false });
             result.name = name;
         } else if (name === "roast") {
             result = new THREE.MeshStandardMaterial({ color: 0x9c5424, roughness: 0.45, metalness: 0 });
@@ -268,10 +269,10 @@ function cutAway(target, cut) {
         }
 
         if (target.userData.veil) {
-            veilShader(shader);
+            veilShader(shader, target.userData.veil);
         }
     };
-    target.customProgramCacheKey = () => `interior-cut-${target.type}${target.userData.leaded ? "-leaded" : ""}${target.userData.veil ? "-veil" : ""}`;
+    target.customProgramCacheKey = () => `interior-cut-${target.type}${target.userData.leaded ? "-leaded" : ""}${target.userData.veil ? `-veil-${target.userData.veil}` : ""}`;
     target.needsUpdate = true;
 }
 
@@ -389,6 +390,19 @@ function leadedShader(shader) {
  */
 export const VEIL = Object.freeze({ loop: 120, time: { value: 0 } });
 
+/**
+ * The colours of a portal's veil, by whose it is (GLSL vec3s, as they'd be seen): its deeps, its
+ * middle and its brightest streaks (`deep`, `middle`, `high`), its eye (`eye`) and the light
+ * churning at its rim (`rim`). A guild's the deep blues of its portals; a hell's (core/dungeons
+ * themes.js `portals`) the reds and golds of a fire seen through smoke.
+ */
+export const VEILS = Object.freeze({
+    guild: { deep: [0.02, 0.05, 0.2], middle: [0.07, 0.3, 0.85], high: [0.45, 0.88, 1], eye: [0.85, 0.97, 1], rim: [0.35, 0.75, 1] },
+    hell: { deep: [0.1, 0.0, 0.0], middle: [0.72, 0.1, 0.02], high: [1, 0.6, 0.16], eye: [1, 0.88, 0.55], rim: [1, 0.32, 0.06] },
+});
+
+const vec3Of = (colour) => `vec3(${colour.map((c) => c.toFixed(3)).join(", ")})`;
+
 // A guild's portal's veil, as fluid swirling into a vortex: worked out for each point of it
 // (its shape's texture coordinates, art pixels: five to a metre from the middle of the opening's
 // foot), in log-polar coordinates about its eye (as far round as it is out, so its eddies stay
@@ -399,8 +413,10 @@ export const VEIL = Object.freeze({ loop: 120, time: { value: 0 } });
 // along the arms, a bright eye, the light drawn inward to it, a churning rim against the stone,
 // and the whole breathing slowly. Every way it moves comes round whole each loop (VEIL), so it
 // never jumps; the noise repeats round the eye, so there's no seam. Its finer fold at medium
-// quality and up (WATER_DETAIL, as the water's ripples)
-function veilShader(shader) {
+// quality and up (WATER_DETAIL, as the water's ripples). In its colours (`kind`: VEILS)
+function veilShader(shader, kind = "guild") {
+    const colours = VEILS[kind] ?? VEILS.guild;
+
     Object.assign(shader.uniforms, { veilTime: VEIL.time, veilDetail: WATER_DETAIL });
     shader.vertexShader = shader.vertexShader
         .replace("#include <common>", "#include <common>\nvarying vec2 vVeil;")
@@ -489,16 +505,16 @@ vec3 veilAt(vec2 at) {
     vec2 swirl = lp + flow + 1.6 * (q - 0.5);
     float f = veilFbm(swirl, VEIL_PERIOD, footprint, octaves);
     float ridge = 1.0 - abs(2.0 * veilNoise(swirl * vec2(1.0, 3.0), VEIL_PERIOD * vec2(1.0, 3.0)) - 1.0);
-    vec3 deep = vec3(0.02, 0.05, 0.20);
-    vec3 middle = vec3(0.07, 0.30, 0.85);
-    vec3 high = vec3(0.45, 0.88, 1.0);
+    vec3 deep = ${vec3Of(colours.deep)};
+    vec3 middle = ${vec3Of(colours.middle)};
+    vec3 high = ${vec3Of(colours.high)};
     vec3 colour = mix(deep, middle, smoothstep(0.25, 0.8, f));
 
     colour = mix(colour, high, 0.8 * smoothstep(0.55, 0.95, f));
     colour += high * 0.6 * pow(ridge, 6.0) * smoothstep(1.0, 0.3, footprint * 3.0);
-    colour = mix(colour, vec3(0.85, 0.97, 1.0), exp(-r / 0.09));
+    colour = mix(colour, ${vec3Of(colours.eye)}, exp(-r / 0.09));
     colour *= (0.75 + 0.5 * exp(-r / 0.45)) * (0.93 + 0.07 * sin(PI2 * 15.0 * veilTime / VEIL_LOOP));
-    colour += vec3(0.35, 0.75, 1.0) * 0.9 * exp((veilEdge(at - vec2(0.0, 1.75), vec2(0.8, 1.75)) + 0.04 * (f - 0.5)) / 0.07);
+    colour += ${vec3Of(colours.rim)} * 0.9 * exp((veilEdge(at - vec2(0.0, 1.75), vec2(0.8, 1.75)) + 0.04 * (f - 0.5)) / 0.07);
 
     // (Worked out as it's to be seen: into the light it's drawn in, as every colour is)
     return pow(max(colour, 0.0), vec3(2.2));
@@ -775,8 +791,9 @@ const FLAMES = Object.freeze({
     // the amethyst shards in their iron cups on the walls, glowing)
     witchlight: { intensity: 4, distance: 9, flicker: 0.03, colour: 0xbc9cff, glow: 0.55 },
     shard: { intensity: 2.6, distance: 6, flicker: 0.02, colour: 0xa898ff, glow: 0.4 },
-    // (A guild's portal: its veil's cold light, all but steady)
+    // (A guild's portal: its veil's cold light, all but steady; a hell's, the red of its fire)
     portal: { intensity: 3.4, distance: 8, flicker: 0.04, colour: 0x7fb2ff, glow: 0.45 },
+    "portal-hell": { intensity: 3.8, distance: 9, flicker: 0.07, colour: 0xff5a24, glow: 0.5 },
 });
 
 /**
@@ -3665,7 +3682,9 @@ function towerTop(map) {
 // middle }, view.js flicker), what drifts in its air (`motes`: motes.js MOTES), whether soil
 // trickles from its roof now and then (`trickles`: trickles.js), and whether it holds an ants'
 // nest's life (`life`: its brood, its middens' heaps, roots through its roof, its widows' webs and
-// their prey, and what its fallen were doing when they fell: nestlife.js, dungeondressing.js)
+// their prey, and what its fallen were doing when they fell: nestlife.js, dungeondressing.js). A
+// hell's levels' ways down and out are portals where other dungeons' are stairs (the level's
+// `dungeon.portals`: riftPortal)
 const DUNGEON_LOOKS = Object.freeze({
     caves: { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x6f665c, ground: 0x5d554b },
     hideout: { rock: "rock", shell: "dug", picture: "rock-dug", underfoot: "ground-dug", rubble: "rock", shored: true, ground: 0x6e5440 },
@@ -3690,6 +3709,14 @@ const DUNGEON_LOOKS = Object.freeze({
         trickles: true,
         life: true,
     },
+    // (A hell's realms (core/dungeons/themes.js hell), each its own: the Breach, caves of sooty
+    // rock where hell breaks through, embers drifting in its air; the Halls of Bone, vaulted in
+    // stone the colour of old bone; the River of Fire, black basalt, embers thick in its hot air;
+    // and the Pit, its walls dark as dried blood, its air close and black)
+    "hell-breach": { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x5c4a42, ground: 0x4a3a32, air: { background: 0x140806, fog: [10, 36], mist: [0.07, 1.2] }, carried: { colour: 0xffb07a, intensity: 3, distance: 9, up: 1.2 }, motes: "embers" },
+    "hell-bone": { walls: "stone-old", tall: 4.2, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple", tint: 0xc8b49a, ground: 0x6a4a40, air: { background: 0x120606, fog: [9, 34], mist: [0.08, 1] } },
+    "hell-fire": { rock: "rock-dark", shell: "caves", picture: "rock-cave", underfoot: "ground-cave", rubble: "rock-dark", tint: 0x3c3230, ground: 0x2e2422, air: { background: 0x1e0804, fog: [12, 40], mist: [0.05, 1.4] }, carried: { colour: 0xffa060, intensity: 2.6, distance: 8, up: 1.2 }, motes: "embers" },
+    "hell-pit": { walls: "stone-old", tall: 4.6, rubble: "rubble-old", picture: "stone-temple", underfoot: "floor-temple", tint: 0x6a4644, ground: 0x3a2826, air: { background: 0x0a0404, fog: [8, 30], mist: [0.1, 0.9] } },
 });
 
 // A flight of a dungeon's stairs: how many steps, how far each goes up or down, and how deep the
@@ -3795,6 +3822,101 @@ function flight(solid, map, piece, stuff, { down, inset }) {
         : [[m(a0), m(foot), m(far)], [m(a1), m(foot), m(far)], [m(a1), m(head), m(far)], [m(a0), m(head), m(far)]];
 
     solid.facing(quad, alongX ? [-sign, 0, 0] : [0, 0, -sign], material("shadow"));
+}
+
+// A hell's portal (core/dungeons/themes.js `portals`), where other dungeons have a flight of
+// stairs (its plan's piece, the landing before it): an arch of the level's rock standing at the
+// landing's edge and facing it, its opening as wide as the landing, runes cut in its face glowing
+// like coals, a worn step before it, and in it a veil of fire swirling into a vortex
+// (veilShader, VEILS.hell), lighting the room round it red; the way down, or the way back up, or
+// on the bottom level beyond the throne, the way out
+function riftPortal(solid, map, piece, stuff, { down }) {
+    const landing = map.marks[down ? ">" : "<"] ?? [];
+    const mean = (k) => landing.reduce((sum, square) => sum + square[k] + 0.5, 0) / Math.max(1, landing.length);
+    const [lx, ly] = landing.length ? [mean(0), mean(1)] : [map.width / 2, map.height / 2];
+    const [px, py] = [piece.x + piece.w / 2, piece.y + piece.h / 2];
+    const alongX = Math.abs(px - lx) > Math.abs(py - ly);
+    const sign = (alongX ? px - lx : py - ly) >= 0 ? 1 : -1;
+    // (Its middle at the piece's edge by the landing, across the middle of it; out towards the
+    // landing)
+    const edge = alongX ? piece.x + (sign > 0 ? 0 : piece.w) : piece.y + (sign > 0 ? 0 : piece.h);
+    const across = alongX ? piece.y + piece.h / 2 : piece.x + piece.w / 2;
+    const [cx, cz] = alongX ? [edge, across] : [across, edge];
+    const out = alongX ? [-sign, 0] : [0, -sign];
+    const [spring, inner, outer, deep] = [m(1.75), m(0.8), m(1.15), m(0.5)];
+    const shape = new THREE.Shape();
+
+    // (Its outline, one piece, as a guild's portal's: up one leg, over the top, down the other, and
+    // back round the opening)
+    shape.moveTo(-outer, 0);
+    shape.lineTo(-outer, spring);
+    shape.absarc(0, spring, outer, Math.PI, 0, true);
+    shape.lineTo(outer, 0);
+    shape.lineTo(inner, 0);
+    shape.lineTo(inner, spring);
+    shape.absarc(0, spring, inner, 0, Math.PI, false);
+    shape.lineTo(-inner, 0);
+    shape.closePath();
+
+    const opening = new THREE.Shape();
+
+    opening.moveTo(-inner, 0);
+    opening.lineTo(inner, 0);
+    opening.lineTo(inner, spring);
+    opening.absarc(0, spring, inner, 0, Math.PI, false);
+    opening.closePath();
+
+    // (Made facing +z, its face at z = 0, then turned to face out and set at its middle)
+    const arch = new THREE.Group();
+    const rune = material("portal-rune-hell", WALL);
+
+    arch.add(new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: deep, bevelEnabled: false, curveSegments: 10 }).translate(0, 0, -deep), material(stuff, WALL)));
+    arch.add(new THREE.Mesh(new THREE.ShapeGeometry(opening, 10).translate(0, 0, -deep * 0.45), material("portal-veil-hell", WALL)));
+
+    for (let k = 0; k < 9; k++) {
+        const angle = Math.PI * (k / 8);
+        const box = new THREE.Mesh(new THREE.BoxGeometry(m(0.1), m(0.14), m(0.06)), rune);
+
+        box.position.set(Math.cos(angle) * (inner + outer) * 0.5, spring + Math.sin(angle) * (inner + outer) * 0.5, m(0.02));
+        box.rotation.z = angle;
+        arch.add(box);
+    }
+
+    for (const side of [-1, 1]) {
+        for (const ry of [m(0.5), m(1.1)]) {
+            const box = new THREE.Mesh(new THREE.BoxGeometry(m(0.1), m(0.16), m(0.06)), rune);
+
+            box.position.set(side * (inner + outer) * 0.5, ry, m(0.02));
+            arch.add(box);
+        }
+    }
+
+    const step = new THREE.Mesh(new THREE.BoxGeometry(outer * 2 + m(0.2), m(0.08), m(0.55)), material("stone-dark", WALL));
+
+    step.position.set(0, m(0.04), m(0.25));
+    arch.add(step);
+    arch.rotation.y = Math.atan2(out[0], out[1]);
+    arch.position.set(m(cx), 0, m(cz));
+    arch.updateMatrixWorld(true);
+
+    // (Each piece where it stands, in its own points: what's drawn alike is drawn as one, its
+    // pieces' places not kept)
+    for (const part of arch.children) {
+        part.geometry.applyMatrix4(part.matrixWorld);
+        part.position.set(0, 0, 0);
+        part.rotation.set(0, 0, 0);
+        part.updateMatrix();
+    }
+
+    arch.position.set(0, 0, 0);
+    arch.rotation.set(0, 0, 0);
+    arch.updateMatrixWorld(true);
+    solid.add(objectSolid(arch));
+
+    // (Its light, the colour of its veil, before it)
+    const [gx, gz] = [m(cx + out[0] * 0.2), m(cz + out[1] * 0.2)];
+
+    lit("portal-hell", gx, spring - m(0.3), gz, { glows: [[gx, spring - m(0.3), gz]] });
 }
 
 // An outlaws' hideout's tunnels shored up: every few squares along a tunnel (open ground between
@@ -4090,8 +4212,11 @@ function dungeon(map) {
     // timbers)
     const [walls, floor, timber] = [new Blocks(), new Blocks(), new Blocks()];
 
+    // (A hell's: its ways down portals, standing on the floor, not stairs going down through it)
+    const portals = Boolean(map.dungeon?.portals);
+
     if (!shell) {
-        floorAround(floor, map, at("stairs-down")[0]);
+        floorAround(floor, map, portals ? null : at("stairs-down")[0]);
     }
 
     if (look.walls) {
@@ -4104,7 +4229,11 @@ function dungeon(map) {
 
     for (const [kind, down] of [["stairs-down", true], ["stairs-up", false]]) {
         for (const piece of at(kind)) {
-            flight(solid, map, piece, stuff, { down, inset: look.walls ? 0.02 : 0.45 });
+            if (portals) {
+                riftPortal(solid, map, piece, stuff, { down });
+            } else {
+                flight(solid, map, piece, stuff, { down, inset: look.walls ? 0.02 : 0.45 });
+            }
         }
     }
 

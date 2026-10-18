@@ -140,9 +140,9 @@ export function nextOf(prism, element) {
 }
 
 /**
- * Is one of the mightiest, whom Prismatic Destruction doesn't kill outright: a dungeon's boss,
- * an elite, one of the perilous places' own, a seat's ruler, or a player.
+ * Is one of the mightiest, whom Prismatic Destruction doesn't kill outright: a dungeon's boss (or
+ * a hell's level's own), an elite, one of the perilous places' own, a seat's ruler, or a player.
  */
 export function mighty(actor) {
-    return actor.kind === "player" || Boolean(actor.ruler) || Boolean(actor.wild?.elite) || Boolean(actor.wild?.unique) || actor.wild?.champion === "boss";
+    return actor.kind === "player" || Boolean(actor.ruler) || Boolean(actor.wild?.elite) || Boolean(actor.wild?.unique) || actor.wild?.champion === "boss" || actor.wild?.champion === "floor";
 }

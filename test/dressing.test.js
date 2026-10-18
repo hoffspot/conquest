@@ -26,9 +26,16 @@ function sound(placed, { x, z, reach, why }) {
 }
 
 describe("a dungeon's rooms dressed (world/dungeondressing.js)", () => {
-    it("leaves each theme's own things against a wall, for every look a theme has, each kind of them by every wall", () => {
+    it("leaves each theme's own things against a wall (each of a hell's realms its own), for every look a theme has, each kind of them by every wall", () => {
+        const realms = new Set(Object.values(THEMES).flatMap(({ realms: each = [] }) => each.map(({ look }) => look)));
+
+        // (Every theme's, and every realm's, its things its own)
+        for (const id of [...Object.keys(THEMES).filter((theme) => !THEMES[theme].realms), ...realms]) {
+            assert.ok(CLUTTER[id], `${id} has things of its own`);
+        }
+
         for (const [theme, looks] of Object.entries(CLUTTER)) {
-            assert.ok(THEMES[theme], theme);
+            assert.ok(THEMES[theme] || realms.has(theme), theme);
             assert.ok(looks.any, `${theme} has things for any room`);
 
             for (const kinds of Object.values(looks)) {

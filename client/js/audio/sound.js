@@ -311,6 +311,7 @@ export const CREATURE_VOICES = Object.freeze({
     troll: { family: "troll" },
     ogre: { family: "troll", rate: 1.05 },
     frostTroll: { family: "troll", rate: 0.95 },
+    demonLord: { family: "troll", rate: 0.72 },
     bandit: { family: "human" },
     cultist: { family: "human", rate: 1.05 },
     banditChief: { family: "humanRough" },

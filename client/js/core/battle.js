@@ -3444,7 +3444,8 @@ export class Battle {
     #goThrough(actor, link) {
         const here = link?.ends.find((end) => end.map === actor.map);
 
-        if (!here) {
+        // (None at this end to go in by: a way only out, a hell's portal out)
+        if (!here?.squares.length) {
             return false;
         }
 
@@ -4463,10 +4464,10 @@ export class Battle {
     }
 
     // Can someone be thrown by a blast (TOSS)? Not too heavy or not solid (`steady`), one of the
-    // perilous places' own, an elite or a dungeon's boss, what stands over more than its square, a
-    // wagon; nor one thrown lately
+    // perilous places' own, an elite or a dungeon's boss (or a hell's level's own), what stands over
+    // more than its square, a wagon; nor one thrown lately
     #throwable(actor) {
-        return !actor.footprint && actor.kind !== "fort" && actor.kind !== "stakes" && actor.kind !== "wagon" && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && actor.wild?.champion !== "boss" && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
+        return !actor.footprint && actor.kind !== "fort" && actor.kind !== "stakes" && actor.kind !== "wagon" && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && actor.wild?.champion !== "boss" && actor.wild?.champion !== "floor" && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
     }
 
     // Thrown by a blast at `at` (TOSS), `out` of the way from its heart to its edge (0 to 1): away

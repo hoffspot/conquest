@@ -90,8 +90,9 @@ describe("dungeons in the wilds (worldplan settle.js)", () => {
             }
         }
 
-        // (All three themes found in one world)
-        assert.deepEqual(new Set(dungeons.map(({ theme }) => theme)), new Set(Object.keys(THEMES)));
+        // (Every theme found in the wilds found in one world; never one that isn't, a hell: its ways
+        // in laid out by a pass of their own)
+        assert.deepEqual(new Set(dungeons.map(({ theme }) => theme)), new Set(Object.keys(THEMES).filter((id) => THEMES[id].wild !== false)));
     });
 
     it("chooses a theme by the land: caves likeliest in the mountains, a hideout in the woods, a temple in the jungle", () => {

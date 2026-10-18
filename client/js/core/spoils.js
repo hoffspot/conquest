@@ -235,6 +235,7 @@ export const SPOILS = Object.freeze({
     wraith: { items: [{ id: "wraithShroud", chance: 0.4 }, { id: "soulShard", chance: 0.3 }] },
     wightLord: { gold: [20, 60], items: [{ id: "crownShard", chance: 0.5 }, { id: "graveIron", chance: 0.5 }] },
     frostTroll: { items: [{ id: "frostHeart", chance: 0.45 }, { id: "frostHide", chance: 0.5 }] },
+    demonLord: { gold: [60, 140], items: [{ id: "obsidian", chance: 0.8, count: [2, 3] }, { id: "soulShard", chance: 0.6 }, { id: "fireGland", chance: 0.5 }] },
 });
 
 /**

@@ -4550,20 +4550,26 @@ export class Game {
         this.sound?.play("wake");
     }
 
-    // A dungeon's boss slain, or its hoard opened (host.js #delveFell, #openDungeonChest): said to
-    // whoever's in it; its icon greyed once it's cleared, and made again (#remakeDungeon) back as
-    // it was, nothing said
+    // A dungeon's boss slain (or a hell's level's own, its portal down unsealed), or its hoard
+    // opened (host.js #delveFell, #openDungeonChest): said to whoever's in it; its icon greyed once
+    // it's cleared, and made again (#remakeDungeon) back as it was, nothing said
     #delved({ site, change, name, boss = null }) {
         const me = this.battle.actor(this.me);
-        const within = me && this.world.interiors?.buildings.get(`site:${site}`)?.maps.includes(me.map);
+        const building = this.world.interiors?.buildings.get(`site:${site}`);
+        const within = me && building?.maps.includes(me.map);
         const called = name ? `${name[0].toUpperCase()}${name.slice(1)}` : "The dungeon";
 
         if (!within) {
             return;
         }
 
+        const hell = Boolean(building?.dungeon?.levels.at(-1)?.exit);
+
         if (change === "boss") {
-            this.hud.message(`${boss ? `${boss[0].toUpperCase()}${boss.slice(1)} is` : "Its master is"} slain, and the hoard it kept lies unlocked.`, 4);
+            this.hud.message(`${boss ? `${boss[0].toUpperCase()}${boss.slice(1)} is` : "Its master is"} slain, and the hoard it kept lies unlocked.${hell ? " The way out beyond it opens." : ""}`, 4);
+            this.sound?.play("wake");
+        } else if (change === "floor") {
+            this.hud.message(`${boss ? `${boss[0].toUpperCase()}${boss.slice(1)} is` : "This level's master is"} slain, and the portal down is open.`, 4);
             this.sound?.play("wake");
         } else if (change === "cleared") {
             this.hud.message(`${called} is cleared. Something new will stir in it once everyone's left.`, 4);

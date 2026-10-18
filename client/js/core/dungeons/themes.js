@@ -245,15 +245,204 @@ export const THEMES = {
             arena: [{ id: "chamber", props: [{ char: "*", count: [3, 5], at: "open" }, { char: "j", count: [5, 8], at: "open" }, { char: "i", count: [3, 5], at: "open" }, { char: "m", count: [2, 4], at: "wall" }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 0], glows: [4, 5] }],
         },
     },
+    // (A hell (docs/DUNGEONS.md *Hells*): four levels deep, each a realm of its own, gone down
+    // through portals, each sealed till its floor's boss falls; never dealt to a wild dungeon's
+    // site (`wild: false`: themeFor), its ways in laid out by a pass of their own. Met only at the
+    // highest tiers (`tiers`), whoever's in it suiting them all (`tiered: false`: its packs are
+    // its own, not chosen by tier). Its realms, top to bottom (`realms`, each as a theme's fields
+    // for its level): the Breach, brimstone caves where hell breaks through the rock, the cult's
+    // possessed faithful in them; the Halls of Bone, vaulted in bone, the dead walking; the River
+    // of Fire, a fortress over it; and the Pit, the demon lord's throne at its heart and, beyond
+    // it, the portal back up into the wilds (`exit`). Each level's boss (`warden`) guards its
+    // portal down; the bottom level's before the throne. Stand-ins all, from the wild's
+    // creatures, until bought models of demons are read)
+    hell: {
+        id: "hell",
+        name: "a hell",
+        // (Each level dug as its realm digs it: `realms`' `layout`; this for whatever asks of the
+        // theme as a whole)
+        layout: "caves",
+        wild: false,
+        levels: 4,
+        tiers: [9, 10],
+        tiered: false,
+        portals: true,
+        exit: true,
+        style: "dungeon-caves",
+        ground: GROUND.soil,
+        sound: "lair",
+        names: {
+            forms: ["the {adj} Pit", "the Gates of {place}", "the {adj} Abyss", "the Descent into {place}", "the Hells of {place}"],
+            adj: ["Burning", "Screaming", "Blackened", "Bleeding", "Howling", "Smouldering", "Endless", "Nameless"],
+            place: ["Gehenna", "Malebolge", "Dis", "Tophet", "Acheron", "Abaddon", "Erebus", "Avernus"],
+        },
+        realms: [
+            {
+                id: "breach",
+                name: "the Breach",
+                layout: "caves",
+                look: "hell-breach",
+                style: "dungeon-caves",
+                ground: GROUND.soil,
+                sound: "lair",
+                packs: [
+                    { id: "faithful", creatures: ["cultist"], size: [3, 5], weight: 3 },
+                    { id: "slimes", creatures: ["magmaSlime"], size: [2, 3], weight: 2 },
+                    { id: "salamanders", creatures: ["salamander"], size: [2, 3], weight: 1 },
+                    { id: "hounds", creatures: ["blackShuck"], size: [2, 3], weight: 2 },
+                    { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 1 },
+                    { id: "bats", creatures: ["bats"], size: [3, 5], weight: 1 },
+                ],
+                minis: [
+                    { id: "fireCaller", creature: "cultist", title: "Fire-caller", weight: 2 },
+                    { id: "magmaHeart", creature: "magmaSlime", title: "Magma heart", weight: 1 },
+                    { id: "breachHound", creature: "blackShuck", title: "Hound of the Breach", weight: 1 },
+                ],
+                warden: { id: "breachPriest", creature: "cultist", title: "the Breach Priest", guard: ["cultist", "magmaSlime"] },
+                rooms: {
+                    mouth: [{ id: "breach", props: [{ char: "*", count: [1, 2], at: "wall" }, { char: "k", count: [2, 2], at: "wall", mirror: true }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [2, 3], at: "wall" }], torches: [1, 1] }],
+                    cavern: [
+                        { id: "rite", weight: 2, props: [{ char: "a", count: [1, 1], at: "centre", size: [2, 1] }, { char: "k", count: [2, 4], at: "open" }, { char: "j", count: [1, 3], at: "open" }, { char: "i", count: [0, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] },
+                        { id: "pillars", weight: 2, props: [{ char: "*", count: [3, 6], at: "open" }, { char: "j", count: [1, 2], at: "open" }, { char: "y", count: [0, 1], at: "open" }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 1] },
+                        { id: "bonepit", weight: 1, props: [{ char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "m", count: [1, 2], at: "wall" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 0] },
+                    ],
+                    grotto: [{ id: "smoke", props: [{ char: "*", count: [1, 3], at: "open" }, { char: "m", count: [0, 2], at: "wall" }, { char: "j", count: [0, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] }],
+                    nook: [{ id: "nook", props: [{ char: "m", count: [0, 2], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0] }],
+                },
+            },
+            {
+                id: "bone",
+                name: "the Halls of Bone",
+                layout: "accretion",
+                look: "hell-bone",
+                style: "dungeon-ancient",
+                ground: GROUND.courtyard,
+                sound: "crypt",
+                packs: [
+                    { id: "dead", creatures: ["skeleton"], size: [3, 5], weight: 4 },
+                    { id: "barrow", creatures: ["draugr"], size: [1, 2], weight: 2 },
+                    { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 2 },
+                    { id: "shades", creatures: ["ghost"], size: [2, 3], weight: 2 },
+                    { id: "stalkers", creatures: ["shadowStalker"], size: [1, 2], weight: 1 },
+                ],
+                minis: [
+                    { id: "boneChampion", creature: "skeleton", title: "Bone champion", weight: 2 },
+                    { id: "flayedKing", creature: "draugr", title: "Flayed king", weight: 1 },
+                    { id: "wailer", creature: "wraith", title: "Wailing shade", weight: 1 },
+                ],
+                warden: { id: "boneLord", creature: "wightLord", title: "the Bone Lord", guard: ["skeleton"] },
+                rooms: {
+                    gate: [{ id: "gate", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "j", count: [1, 3], at: "open" }, { char: "k", count: [0, 2], at: "corner" }, { char: "d", count: [1, 2], at: "wall" }], torches: [2, 2] }],
+                    hall: [
+                        { id: "ossuary", weight: 2, props: [{ char: "t", count: [2, 4], at: "sides", size: [2, 1] }, { char: "j", count: [2, 4], at: "open" }, { char: "i", count: [0, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [1, 2] },
+                        { id: "charnel", weight: 1, props: [{ char: "I", count: [2, 4], at: "open" }, { char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 2], at: "open" }, { char: "y", count: [0, 1], at: "wall" }], torches: [1, 2] },
+                    ],
+                    quarters: [{ id: "pens", props: [{ char: "j", count: [2, 4], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "m", count: [0, 1], at: "wall" }, { char: "d", count: [2, 3], at: "wall" }], torches: [0, 1] }],
+                    store: [{ id: "bonestore", props: [{ char: "j", count: [4, 7], at: "open" }, { char: "t", count: [1, 2], at: "wall", size: [2, 1] }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 1] }],
+                    den: [{ id: "flaying", props: [{ char: "a", count: [1, 1], at: "centre", size: [2, 1] }, { char: "k", count: [2, 3], at: "corner" }, { char: "i", count: [1, 2], at: "open" }, { char: "j", count: [1, 3], at: "open" }], torches: [1, 1] }],
+                },
+            },
+            {
+                id: "fire",
+                name: "the River of Fire",
+                layout: "caves",
+                look: "hell-fire",
+                style: "dungeon-caves",
+                ground: GROUND.soil,
+                sound: "lair",
+                packs: [
+                    { id: "slimes", creatures: ["magmaSlime"], size: [2, 4], weight: 3 },
+                    { id: "salamanders", creatures: ["salamander"], size: [2, 3], weight: 3 },
+                    { id: "hounds", creatures: ["blackShuck"], size: [2, 3], weight: 2 },
+                    { id: "chimera", creatures: ["chimera"], size: [1, 1], weight: 1 },
+                    { id: "wyverns", creatures: ["wyvern"], size: [1, 2], weight: 1 },
+                ],
+                minis: [
+                    { id: "moltenLord", creature: "magmaSlime", title: "Molten lord", weight: 1 },
+                    { id: "brander", creature: "salamander", title: "Fire-brander", weight: 2 },
+                    { id: "forgeChimera", creature: "chimera", title: "Forge chimera", weight: 1 },
+                ],
+                warden: { id: "forgeBeast", creature: "chimera", title: "the Forge Beast", guard: ["salamander"] },
+                rooms: {
+                    mouth: [{ id: "landing", props: [{ char: "*", count: [1, 2], at: "wall" }, { char: "y", count: [1, 2], at: "wall" }, { char: "d", count: [2, 3], at: "wall" }], torches: [1, 1] }],
+                    cavern: [
+                        { id: "forge", weight: 2, props: [{ char: "y", count: [2, 3], at: "open" }, { char: "A", count: [1, 2], at: "open" }, { char: "m", count: [1, 2], at: "wall" }, { char: "d", count: [2, 3], at: "wall" }], torches: [0, 1] },
+                        { id: "slag", weight: 2, props: [{ char: "*", count: [3, 6], at: "open" }, { char: "m", count: [1, 3], at: "wall" }, { char: "j", count: [0, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] },
+                    ],
+                    grotto: [{ id: "cinders", props: [{ char: "*", count: [1, 3], at: "open" }, { char: "y", count: [0, 1], at: "open" }, { char: "m", count: [1, 2], at: "wall" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 1] }],
+                    nook: [{ id: "nook", props: [{ char: "m", count: [1, 2], at: "wall" }, { char: "j", count: [0, 1], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0] }],
+                },
+            },
+            {
+                id: "pit",
+                name: "the Pit",
+                layout: "axial",
+                look: "hell-pit",
+                style: "dungeon-ancient",
+                ground: GROUND.courtyard,
+                sound: "crypt",
+                hoard: "head",
+                packs: [
+                    { id: "legion", creatures: ["wraith", "skeleton", "skeleton"], size: [3, 5], weight: 2 },
+                    { id: "faithful", creatures: ["cultist"], size: [3, 5], weight: 2 },
+                    { id: "doomed", creatures: ["draugr"], size: [1, 2], weight: 2 },
+                    { id: "stalkers", creatures: ["shadowStalker"], size: [1, 2], weight: 1 },
+                    { id: "hounds", creatures: ["blackShuck"], size: [2, 3], weight: 1 },
+                    { id: "embers", creatures: ["magmaSlime", "salamander"], size: [2, 3], weight: 1 },
+                ],
+                minis: [
+                    { id: "pitPriest", creature: "cultist", title: "Pit priest", weight: 1 },
+                    { id: "doomedKnight", creature: "draugr", title: "Doomed knight", weight: 1 },
+                    { id: "herald", creature: "wraith", title: "Herald of the Pit", weight: 1 },
+                ],
+                warden: { id: "gatekeeper", creature: "ogre", title: "the Gatekeeper", guard: ["draugr"] },
+                rooms: {
+                    vestibule: [{ id: "vestibule", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "y", count: [2, 2], at: "open", mirror: true }, { char: "j", count: [0, 2], at: "open" }], torches: [1, 2] }],
+                    hypostyle: [{ id: "pillars", props: [{ char: "I", count: [6, 14], at: "rows" }, { char: "y", count: [1, 2], at: "open" }, { char: "j", count: [0, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }], torches: [1, 3] }],
+                    gallery: [{ id: "watchers", props: [{ char: "Z", count: [2, 4], at: "sides" }, { char: "k", count: [1, 2], at: "wall", mirror: true }, { char: "j", count: [0, 2], at: "open" }], torches: [1, 2] }],
+                    rotunda: [{ id: "rotunda", props: [{ char: "y", count: [1, 1], at: "centre" }, { char: "I", count: [4, 6], at: "wall", mirror: true }, { char: "j", count: [1, 2], at: "open" }], torches: [1, 2] }],
+                    chapel: [{ id: "altar", props: [{ char: "a", count: [1, 1], at: "centre", size: [2, 1] }, { char: "k", count: [2, 2], at: "corner", mirror: true }, { char: "i", count: [0, 2], at: "open" }, { char: "j", count: [1, 2], at: "open" }], torches: [1, 2] }],
+                    shrine: [{ id: "shrine", props: [{ char: "s", count: [1, 1], at: "wall" }, { char: "k", count: [1, 2], at: "corner" }, { char: "j", count: [0, 1], at: "open" }], torches: [1, 1] }],
+                    ossuary: [{ id: "ossuary", props: [{ char: "j", count: [3, 5], at: "open" }, { char: "t", count: [1, 2], at: "wall", size: [2, 1] }, { char: "i", count: [1, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] }],
+                    cell: [{ id: "cell", props: [{ char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 1] }],
+                    stairhall: [{ id: "stairhall", props: [{ char: "Z", count: [2, 2], at: "wall", mirror: true }, { char: "y", count: [0, 2], at: "open" }], torches: [1, 2] }],
+                    arena: [{ id: "throne", props: [{ char: "Y", count: [1, 1], at: "head" }, { char: "I", count: [6, 10], at: "rows" }, { char: "y", count: [2, 2], at: "open", mirror: true }, { char: "Z", count: [2, 4], at: "wall", mirror: true }, { char: "j", count: [2, 4], at: "open" }, { char: "i", count: [0, 2], at: "open" }], torches: [2, 3] }],
+                },
+            },
+        ],
+        bosses: [{ id: "demonLord", creature: "demonLord", title: "the Lord of the Pit", weight: 1, guard: ["wraith", "cultist"] }],
+        // (Its realms' packs, mini-bosses (their wardens among them) and rooms all together, for
+        // whatever asks of the theme as a whole: who may be in it, beasts/model.js modelsInside)
+        get packs() {
+            return this.realms.flatMap(({ id, packs }) => packs.map((pack) => ({ ...pack, id: `${id}-${pack.id}` })));
+        },
+        get minis() {
+            return this.realms.flatMap(({ minis, warden }) => [...minis, { ...warden, weight: 1 }]);
+        },
+        get rooms() {
+            return Object.assign({}, ...this.realms.map(({ rooms }) => rooms));
+        },
+    },
 };
 
 /**
  * Which theme a dungeon found in the wilds has, by its seed and the land its way in's in (a BIOMES
- * id): any of them, the likelier as the theme's `lands` has that land (1 for one it doesn't
- * name), chosen stably as themes are added (seeds.js pickStable).
+ * id): any of them but those never found there (`wild: false`: a hell, laid out by a pass of its
+ * own), the likelier as the theme's `lands` has that land (1 for one it doesn't name), chosen
+ * stably as themes are added (seeds.js pickStable).
  */
 export function themeFor(seed, land) {
-    return pickStable(seed, "theme", Object.values(THEMES), (theme) => theme.lands?.[land] ?? 1).id;
+    return pickStable(seed, "theme", Object.values(THEMES), (theme) => (theme.wild === false ? 0 : (theme.lands?.[land] ?? 1))).id;
+}
+
+/**
+ * A theme as it is on one of its levels (`index`, from the top): the theme, or for one with a
+ * realm on each level (`realms`: a hell's), its realm's fields over its own.
+ */
+export function realmOf(theme, index) {
+    const realm = theme.realms?.[Math.min(index, theme.realms.length - 1)];
+
+    return realm ? { ...theme, ...realm, realm: realm.id } : theme;
 }
 
 /**

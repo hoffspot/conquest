@@ -464,7 +464,8 @@ export function routeBetween(links, from, to) {
             const here = link.ends.find((end) => end.map === map);
             const there = link.ends.find((end) => end !== here);
 
-            if (here && there && !visited.has(there.map)) {
+            // (Not by a way only out, with nothing to go in by at this end: a hell's portal out)
+            if (here?.squares.length && there && !visited.has(there.map)) {
                 visited.add(there.map);
                 queue.push([there.map, [...route, link]]);
             }

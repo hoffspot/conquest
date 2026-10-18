@@ -1,8 +1,8 @@
 # Dungeons
 
 A dungeon is a place under the wilds: a way in above ground (a cave mouth, a hatch, steps down
-into a ruin) that leads to one to three levels underground, each a map of its own, joined by
-stairs, filled with enemies. Mini-bosses wait along the way. At the far end of the bottom level, a
+into a ruin) that leads to one to three levels underground (a hell's four: [Hells](#hells)), each
+a map of its own, joined by stairs, filled with enemies. Mini-bosses wait along the way. At the far end of the bottom level, a
 final boss guards a chest of gold and gear matched to the players' power. Small chests lie about
 the rest of it.
 
@@ -35,7 +35,10 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
     calling her flock to her
     (*Who's in it*, below). All of them are drawn from models
     of their own, got ready at its door (docs/WILDS.md, *A place's creatures, ready before they're
-    met*).
+    met*);
+  - **a hell** (`hell`): four levels deep, each a realm of its own, gone down through portals, a
+    master on every level and the Lord of the Pit at the bottom ([Hells](#hells)). Never dealt to a
+    wild dungeon's way in (its `wild: false`: `themeFor`).
 - **How deep**: one level (30% of dungeons), two (40%) or three (30%), by seed. Fewer levels are
   bigger, so each takes about the same 15 to 25 minutes to clear (`LEVEL_SIZES`):
 
@@ -44,9 +47,10 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
   | 1 | 88 m across (give or take 4) | 12 to 14 |
   | 2 | 78 m | 10 to 12 |
   | 3 | 68 m | 8 to 10 |
+  | 4 (a hell's) | 66 m | 8 or 9 |
 
   In a deeper dungeon, a room is less likely to hold a pack (`PACK_ODDS`: every room that might have
-  one, 90% as often in two levels, 75% in three).
+  one, 90% as often in two levels, 75% in three, 70% in a hell's four).
 - **How strong**: its `tier` (1 to 10: the land's, or its finders', whichever's higher, in play)
   for the first level's packs. Deeper levels' packs are a tier up. A mini-boss is a tier over its
   level, and the boss two over the bottom level's packs. One in ten of a pack is an elite a tier
@@ -74,6 +78,62 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
   each of those with fewest till it has that many, so it's never dark through.
 - **Its name** comes from its theme's words: "the Glittering Deeps", "the Rat's Den", "the Halls of
   Ur-Kalath".
+
+## Hells
+
+A hell (`themes.js` `hell`) is a dungeon four levels deep, each level a realm of its own, met only
+at the highest tiers. Its ways in will be laid out by a pass of their own: a cult's camp in the
+wilds, there only at night. Until that comes, no world has one, and a hell's made only by hand (the
+tests, [the dungeon map](#the-dungeon-map-dungeon-maphtml-jslabdungeon-mapjs)).
+
+- **Its realms**, one a level, top to bottom (its `realms`, each a theme's fields for its level:
+  `themes.js` `realmOf`; each level carries its own `realm`, `look`, `style`, `ground` and
+  `sound`):
+
+  | Level | Realm | Dug as | Drawn as | Heard as | Who's in it | Its master |
+  |---|---|---|---|---|---|---|
+  | 1 | the Breach | caves | `hell-breach`: sooty caves, embers drifting | a lair | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats | the Breach Priest, a cultist |
+  | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: vaults the colour of old bone | a crypt | skeletons, draugr, wraiths, ghosts, shadow stalkers | the Bone Lord, a wight lord |
+  | 3 | the River of Fire | caves | `hell-fire`: black basalt, embers thick in hot air | a lair | magma slimes, salamanders, black shucks, chimeras, wyverns | the Forge Beast, a chimera |
+  | 4 | the Pit | an ancient temple's halls | `hell-pit`: walls dark as dried blood, close black air | a crypt | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders | the Gatekeeper, an ogre; then the Lord of the Pit |
+
+  Each realm's rooms are dressed its own way: the cult's altars and candles in the Breach, tombs
+  and charnel heaps in the Halls of Bone, braziers and anvils by the River of Fire, watching statues,
+  braziers and the throne in the Pit (`world/dungeondressing.js` `CLUTTER`, `STREWN`).
+- **Stand-ins for now**: everyone in it is one of the wild's creatures, and the Lord of the Pit
+  (`creatures.js` `demonLord`, tier 10, met nowhere else) is drawn as a great horned brute, red as
+  a coal (`beasts/looks.js`), its fists burning and hellfire in its hands (`weapons.js`). Bought
+  models of demons will take their places (docs/LICENSED_MODELS.md). Each master has a look of
+  its own (`beasts/champions.js` `REGALIA`): scorched, burnt, horned or hooded.
+- **How strong**: never below tier 9 (its `tiers`), however low it's asked to be made
+  (`buildDungeon`); its packs, mini-bosses and masters its own, whatever the tiers they're met at
+  elsewhere (`tiered: false`: `place.js` `chooseFoe`'s slack).
+- **How deep**: four levels, each 66 m across (give or take 4), with 8 or 9 rooms (`LEVEL_SIZES`);
+  a room 70% as likely to hold a pack as on a dungeon of one level (`PACK_ODDS`); two or three
+  mini-bosses besides its masters (`MINIS`).
+- **A master on every level** (its realm's `warden`; a pack with the role `"warden"`, its first
+  foe `warden`): in the room furthest in, by the portal down, two or three of its guard about it;
+  on the bottom level, in the last room on the way through before the arena. A rank of its own
+  between a mini-boss's and the boss's (`play.js` `CHAMPIONS.floor`: three times the hit points,
+  its blows 1.2 times as hard; drawn 1.16 times its kind's size, its eyes brighter:
+  `beasts/champions.js` `CHAMPION_LOOKS.floor`). Its fall is told to whoever's in the hell: "The
+  Breach Priest is slain, and the portal down is open."
+- **Portals, not stairs**: each level's way down is a portal of fire where other dungeons have
+  stairs (the same squares, the same landing): an arch of the level's rock at the landing's edge,
+  runes cut in its face glowing like coals, a worn step before it, and in it the guild portals'
+  swirl in a hell's reds and golds, lighting the room round it red (`world/interiors3d.js`
+  `riftPortal`, `VEILS.hell`). The way back up is a portal too. Tapped, its arch's face glows
+  (`app/doors.js`).
+- **Sealed till its master falls**: going down a portal, the host asks whether the first of the
+  level's master's pack has fallen (the link's `seal`: the map it's sealed from, the level and the
+  pack; `host.js` `enter`). Till it has, whoever tries is told "The portal won't let you through
+  while this level's master still stands." The way back up is never sealed.
+- **The way out**: on the bottom level, beyond the throne, a portal dug into the arena's far wall
+  as stairs down are (the level's `exit`: `place.js`), the Lord of the Pit between it and the way
+  in. It leads back to the wilds, before the hell's way in. It's a way only out: its end outside
+  has nothing to go in by (no squares), so no one's led in by it (`interiors.js` `routeBetween`,
+  `battle.js`, `app/doors.js`), and the host won't send anyone in through it. It's sealed till
+  the lord falls ("The way out stays shut while the lord of this place still stands.").
 
 ## How a level's made
 
@@ -222,7 +282,9 @@ brazier, `$` a small chest, and an ants' nest's `E` brood and `z` midden heap. T
   the more set on free ground beside those the plan has.
 - **Each level its own map**, `site:dungeon-N/level-K` (`site:dungeon-N/gG/level-K` once it's been
   made again), read from its plan rows as any building's floor is. The levels sit well away from
-  every other inside (`DUNGEON_ORIGINS`: a column of them for each dungeon, from x 20000).
+  every other inside (`DUNGEON_ORIGINS`: a column of them for each dungeon, from x 20000; a hell's
+  in a block of their own, `HELL_ORIGINS`, from x 26000, its rows 600 m apart for its four
+  levels). A hell's level is named for its realm: "The Burning Pit: the Halls of Bone".
 - **Joined by stairs**: a flight for each level but the bottom (`building.flights`), from the
   stairs down on one level to the stairs up on the next, each end where one comes off it, facing
   into the level.
@@ -582,7 +644,21 @@ code is here.
     boss falls; a share of a small chest and of the hoard; cleared; kept in a snapshot and taken up
     again with the player in it; made again once everyone's gone, the next generation.
 - **`e2e/pellagos.spec.js`**: in the game, a dungeon's way in gone into, its first level drawn and
-  lit, down its stairs to the next and out again.
+  lit, down its stairs to the next and out again. And a hell: each level its realm's, drawn in
+  its own air, a portal of fire on it; each portal down sealed till its level's master is slain;
+  out beyond the throne once its lord is, to before its way in.
+- **`test/hells.test.js`**, the hells:
+  - four levels deep, each its realm's (dug, dressed, drawn and heard as its realm has it);
+  - never below tier 9;
+  - a master of its realm on every level, by the portal down (on the bottom level, before the
+    arena), of a rank between a mini-boss's and a boss's, no pack besides in its room;
+  - its packs and mini-bosses its realms' own, the Lord of the Pit at the bottom;
+  - the way out on the bottom level beyond the lord;
+  - never dealt to a wild dungeon's site;
+  - in a world: its levels in a block of their own, named for their realms, each portal down
+    sealed by its level's master and the way out by its lord, no one led in by it; nobody let
+    down a portal till its master falls (and up again whenever), nor out till the lord falls,
+    then out to before its way in.
 - **`test/caverns.test.js`**, the rock as one surface: how far into the open each point is; its
   walls never in the open ground below head height; room to stand under its roof over every open
   square; every triangle facing the open; the floor under all the open ground but the stairs'

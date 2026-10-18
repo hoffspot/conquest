@@ -10,11 +10,12 @@ import { EQUIPMENT } from "../characters/equipment.js";
 /**
  * By rank: how much bigger than others of its kind (`scale`), and how much brighter what glows on
  * it (`glow`: its eyes, a wraith's light); the colour its body's tinted, if any (`tint`). A dungeon's
- * boss or mini-boss; or one of the wild's elites (core/creatures.js ELITES), gilded, and radiant
- * besides (world/ailments3d.js "elite").
+ * boss or mini-boss, or a hell's level's own boss (`floor`); or one of the wild's elites
+ * (core/creatures.js ELITES), gilded, and radiant besides (world/ailments3d.js "elite").
  */
 export const CHAMPION_LOOKS = Object.freeze({
     boss: { scale: 1.22, glow: 1.6 },
+    floor: { scale: 1.16, glow: 1.4 },
     mini: { scale: 1.1, glow: 1.25 },
     elite: { scale: 1.25, glow: 1.8, tint: 0xf4dc9c },
 });
@@ -66,6 +67,27 @@ export const REGALIA = Object.freeze({
     warden: { tint: 0xd8906a, scale: 1.25 },
     crawler: { tint: 0xa8a098, scale: 1.05 },
     matriarch: { tint: 0x8a7a90, scale: 1.3, glow: 1.3 },
+    // A hell's, its levels' masters burnt and blackened by it, horned, their eyes burning: the
+    // Breach Priest hooded, the Bone Lord's bones scorched, the Forge Beast red-hot, the
+    // Gatekeeper helmed; and the lord of the Pit, horned already, its eyes burning brightest. Its
+    // mini-bosses the same way, the less
+    breachPriest: { wear: ["darkHood"], tint: 0xc07060, glow: 1.4 },
+    boneLord: { tint: 0xa08070, glow: 1.4 },
+    forgeBeast: { tint: 0xd07050, scale: 1.1, glow: 1.4 },
+    gatekeeper: { wear: ["orcHelm"], tint: 0xb06050, glow: 1.3 },
+    demonLord: { glow: 1.5 },
+    fireCaller: { wear: ["darkHood"], tint: 0xd08070 },
+    magmaHeart: { tint: 0xe08060, scale: 1.15 },
+    breachHound: { tint: 0xa05040, scale: 1.1 },
+    boneChampion: { tint: 0xa08070 },
+    flayedKing: { tint: 0xb07060 },
+    wailer: { glow: 1.3 },
+    moltenLord: { tint: 0xe09060, scale: 1.2 },
+    brander: { tint: 0xd06040 },
+    forgeChimera: { tint: 0xc06048 },
+    pitPriest: { wear: ["darkHood"], tint: 0xa05050 },
+    doomedKnight: { tint: 0x907070 },
+    herald: { glow: 1.4 },
 });
 
 /**

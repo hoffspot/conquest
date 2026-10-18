@@ -181,8 +181,8 @@ A reason to practise all four elements (core/prismatic.js, kept on the player's 
   from the sigil, on the enemy the player's set to fight, within 20 metres, 1.5 s to cast): on
   them and every enemy of the caster's within **8 metres** of them, past wards, charms, cover,
   shields, dodging and Reflect, never a friend. It kills them outright, all but the mightiest
-  (`mighty`: a dungeon's boss, an elite, one of the perilous places' own, a seat's ruler, a
-  player), who lose **three quarters of their whole health** (and die, if that's all they had);
+  (`mighty`: a dungeon's boss or a hell's level's master, an elite, one of the perilous places'
+  own, a seat's ruler, a player), who lose **three quarters of their whole health** (and die, if that's all they had);
   all of them are thrown down. Cast, the sigil's spent: every stack and piece with it.
 
 On screen (app/game.js; app/sigil.js): while a chain's live, a quick action holding a spell of an

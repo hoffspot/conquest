@@ -1,6 +1,7 @@
 // What's put in a dungeon level once it's dug (core/dungeons: docs/DUNGEONS.md), whatever kind of
 // place it is: its way in (a front door, or the foot of stairs up), the stairs down in the room
-// furthest in (or on the bottom level, the boss before its hoard there), the mini-bosses along the
+// furthest in (or on the bottom level, the boss before its hoard there, and in a hell the portal
+// out beyond them), a hell's level's own boss guarding its way on, the mini-bosses along the
 // way, packs in the other rooms, chests here and there (likelier off the way through, in dead
 // ends), each room dressed as its theme has that kind of room (themes.js) and lit by torches on its
 // walls (or, in a theme lit by them, the colonies of glowing fungus growing there). Every square
@@ -49,7 +50,7 @@ export const SPREAD = Object.freeze({ apart: 2, doors: 3 });
  * How likely a room is to have a pack in it, by how many levels the dungeon has (fewer each the
  * more there are, so a deep one takes about as long to clear as a shallow one).
  */
-export const PACK_ODDS = Object.freeze({ 1: 1, 2: 0.9, 3: 0.75 });
+export const PACK_ODDS = Object.freeze({ 1: 1, 2: 0.9, 3: 0.75, 4: 0.7 });
 
 /** Each level's pack's chance of an elite (a tier up), by how deep it is. */
 export const ELITE = Object.freeze([0.1, 0.2, 0.3]);
@@ -163,11 +164,11 @@ function chooseFoe(seed, slot, list, tier, slack) {
 }
 
 /**
- * Fill a dug level (layouts.js's `dug`): { chars, reserved, entry, down, packs, chests, lights,
- * looks (each room's look's id, by its id), rooms, links, path, goal, arena, hoard } (see
+ * Fill a dug level (layouts.js's `dug`): { chars, reserved, entry, down, exit, packs, chests,
+ * lights, looks (each room's look's id, by its id), rooms, links, path, goal, arena, hoard } (see
  * buildDungeon). `plan`: { index, levels (how many),
- * theme, tier (the level's), boss (on the bottom level: { tier }), minis (how many here), seed,
- * random }.
+ * theme (as it is on this level: themes.js realmOf), tier (the level's), boss (on the bottom
+ * level: { tier }), minis (how many here), seed, random }.
  */
 export function fillLevel(dug, rooms, links, plan) {
     const { grid } = dug;
@@ -176,6 +177,9 @@ export function fillLevel(dug, rooms, links, plan) {
     const [ex, ey] = dug.entrance;
     const slot = (...parts) => [index, ...parts].join(":");
     const roomOf = (x, y) => grid.room[level.key(x, y)];
+    // (How far from its tier a creature may be met: in a theme whose packs are its own, whatever
+    // its tier, `tiered: false`, any)
+    const slack = (most) => (theme.tiered === false ? Infinity : most);
 
     // The way in: the front door on the south edge, or the foot of stairs up (`^`, three squares
     // long, and its landing `<`); the way up to them kept clear, and where anyone coming in stands
@@ -267,6 +271,7 @@ export function fillLevel(dug, rooms, links, plan) {
     const packs = [];
     const chests = [];
     let hoard = null;
+    let exit = null;
 
     if (index === plan.levels - 1) {
         const arena = room.get(goal);
@@ -289,8 +294,18 @@ export function fillLevel(dug, rooms, links, plan) {
         level.reserve(...hoard);
         chests.push({ id: `${index}-hoard`, at: hoard, kind: "hoard", room: goal });
 
+        // (A hell's way out, beyond its throne: a portal dug into the arena's far wall, as stairs
+        // down are, the boss between it and the way in: themes.js `exit`, core/insides.js)
+        if (theme.exit) {
+            exit = stairsDown(level, arena, far, putProp);
+
+            if (exit) {
+                far = level.distances(start);
+            }
+        }
+
         // (The boss a few steps before it, towards the way into the arena, its guard about it)
-        const boss = chooseFoe(seed, slot("boss"), theme.bosses, plan.boss.tier, 3);
+        const boss = chooseFoe(seed, slot("boss"), theme.bosses, plan.boss.tier, slack(3));
         const before = arena.cells
             .map((k) => [k % level.width, Math.floor(k / level.width)])
             .filter(([x, y]) => level.free(x, y) && far[level.key(x, y)] <= far[level.key(...hoard)] - 3)
@@ -300,7 +315,7 @@ export function fillLevel(dug, rooms, links, plan) {
 
         level.reserve(...lord);
 
-        const guard = boss.guard ? { creatures: boss.guard } : chooseFoe(seed, slot("boss-guard"), theme.packs, plan.tier, 1);
+        const guard = boss.guard ? { creatures: boss.guard } : chooseFoe(seed, slot("boss-guard"), theme.packs, plan.tier, slack(1));
         const escorts = spotsIn(level, arena, random.int(2, 3), { near: lord, doors: 3, fromDoors, ways: ways() });
 
         for (const at of escorts) {
@@ -319,10 +334,49 @@ export function fillLevel(dug, rooms, links, plan) {
         });
     }
 
+    // --- A hell's level's own boss (its realm's `warden`), guarding its way on: in the room
+    // furthest in, as near its portal down as anyone waits; on the bottom level, in the last room
+    // on the way through before the arena ---
+
+    const taken = new Set([entryRoom, goal]);
+    let held = null;
+
+    if (theme.warden) {
+        const bottom = index === plan.levels - 1;
+
+        held = bottom ? ([...path].reverse().find((id) => id !== goal && id !== entryRoom) ?? null) : goal;
+
+        const keep = held === null ? null : room.get(held);
+        const [heart] = keep ? spotsIn(level, keep, 1, { near: !bottom && down ? down.arrive : keep.centre, doors: 2, fromDoors, ways: ways() }) : [];
+
+        if (heart) {
+            const { warden } = theme;
+            const tier = Math.min(TIERS, plan.tier + 1);
+
+            level.reserve(...heart);
+            taken.add(held);
+
+            const escorts = spotsIn(level, keep, random.int(2, 3), { near: heart, doors: 3, fromDoors, ways: ways() });
+
+            for (const at of escorts) {
+                level.reserve(...at);
+            }
+
+            packs.push({
+                id: `${index}-warden`,
+                role: "warden",
+                room: held,
+                title: warden.title,
+                foes: [{ creature: warden.creature, tier, at: heart, warden: true, title: warden.title, regalia: warden.id }, ...escorts.map((at, k) => ({ creature: warden.guard[k % warden.guard.length], tier: plan.tier, at }))],
+            });
+        } else {
+            held = null;
+        }
+    }
+
     // --- Mini-bosses along the way through ---
 
     const along = path.slice(1, -1);
-    const taken = new Set([entryRoom, goal]);
 
     for (let k = 0; k < plan.minis; k++) {
         const want = Math.round((0.35 + (0.45 * (k + 0.5)) / plan.minis) * (path.length - 1));
@@ -335,7 +389,7 @@ export function fillLevel(dug, rooms, links, plan) {
 
         taken.add(id);
 
-        const mini = chooseFoe(seed, slot("mini", k), theme.minis, Math.min(TIERS, plan.tier + 1), 2);
+        const mini = chooseFoe(seed, slot("mini", k), theme.minis, Math.min(TIERS, plan.tier + 1), slack(2));
         const [heart] = spotsIn(level, room.get(id), 1, { near: room.get(id).centre, doors: 3, fromDoors, ways: ways() });
 
         if (!heart) {
@@ -344,7 +398,7 @@ export function fillLevel(dug, rooms, links, plan) {
 
         level.reserve(...heart);
 
-        const guard = chooseFoe(seed, slot("mini-guard", k), theme.packs, plan.tier, 1);
+        const guard = chooseFoe(seed, slot("mini-guard", k), theme.packs, plan.tier, slack(1));
         const escorts = spotsIn(level, room.get(id), random.int(1, 2), { near: heart, doors: 3, fromDoors, ways: ways() });
 
         for (const at of escorts) {
@@ -365,7 +419,7 @@ export function fillLevel(dug, rooms, links, plan) {
     const elite = ELITE[Math.min(index, ELITE.length - 1)];
 
     for (const one of rooms) {
-        if (one.id === entryRoom || (taken.has(one.id) && one.id !== goal) || (one.id === goal && index === plan.levels - 1)) {
+        if (one.id === entryRoom || one.id === held || (taken.has(one.id) && one.id !== goal) || (one.id === goal && index === plan.levels - 1)) {
             continue;
         }
 
@@ -376,7 +430,7 @@ export function fillLevel(dug, rooms, links, plan) {
             continue;
         }
 
-        const pack = chooseFoe(seed, slot("pack", one.id), theme.packs, plan.tier, 1);
+        const pack = chooseFoe(seed, slot("pack", one.id), theme.packs, plan.tier, slack(1));
         const size = Math.min(6, random.int(...pack.size) + (index > 0 ? 1 : 0) + (one.area >= 150 ? 1 : 0));
         // (Those that lurk under the roof, as near as they'll go to where it's highest, furthest
         // from the rock, and never at its edge, where it comes down: creatures.js `lurk`)
@@ -501,7 +555,7 @@ export function fillLevel(dug, rooms, links, plan) {
         }
     }
 
-    return { level, entry, down, packs, chests, lights, looks, path, goal, hoard };
+    return { level, entry, down, exit, packs, chests, lights, looks, path, goal, hoard };
 }
 
 /**

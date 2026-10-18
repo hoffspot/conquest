@@ -1,5 +1,6 @@
 // The dungeon builder (core/dungeons: docs/DUNGEONS.md): a whole dungeon cooked up from a seed
-// and a theme, one to three levels deep, each level a map of its own joined to the next by stairs:
+// and a theme, one to three levels deep (a hell four, each level a realm of its own, dug and
+// filled as its realm has it: themes.js realmOf), each level a map of its own joined to the next by stairs:
 // rooms dug as its theme digs them (layouts.js), checked (enough rooms, a long enough way through,
 // the room furthest in far enough in) and dug again from the next attempt's numbers if not, then
 // filled (place.js): stairs down in the room furthest in, the final boss before its hoard at the
@@ -16,7 +17,7 @@ import { linksOf, neighbours, roomPath, roomsOf } from "./graph.js";
 import { LAYOUTS } from "./layouts.js";
 import { fillLevel } from "./place.js";
 import { mix, streamOf } from "./seeds.js";
-import { dungeonName, THEMES } from "./themes.js";
+import { dungeonName, realmOf, THEMES } from "./themes.js";
 
 export { dungeonName };
 
@@ -31,16 +32,18 @@ export const LEVEL_ODDS = Object.freeze({ 1: 3, 2: 4, 3: 3 });
 
 /**
  * How big each level is by how many there are (fewer, bigger levels; about the same time to clear
- * in all, 15 to 25 minutes): squares across (give or take `vary`), and rooms.
+ * in all, 15 to 25 minutes; a hell's four, a boss on each, longer): squares across (give or take
+ * `vary`), and rooms.
  */
 export const LEVEL_SIZES = Object.freeze({
     1: { side: 88, vary: 4, rooms: [12, 14] },
     2: { side: 78, vary: 4, rooms: [10, 12] },
     3: { side: 68, vary: 4, rooms: [8, 10] },
+    4: { side: 66, vary: 4, rooms: [8, 9] },
 });
 
-/** How many mini-bosses a dungeon has, by how many levels deep it is. */
-export const MINIS = Object.freeze({ 1: [2, 2], 2: [2, 3], 3: [3, 4] });
+/** How many mini-bosses a dungeon has, by how many levels deep it is (a hell's besides its levels' bosses). */
+export const MINIS = Object.freeze({ 1: [2, 2], 2: [2, 3], 3: [3, 4], 4: [2, 3] });
 
 /** How many times a level's dug again before the best of its attempts is taken. */
 export const ATTEMPTS = 20;
@@ -50,7 +53,7 @@ export const ATTEMPTS = 20;
  * there are: the deeper the dungeon, the smaller each level), how far in the end is, the arena's
  * size.
  */
-export const CHECKS = Object.freeze({ rooms: 0.8, path: { 1: 5, 2: 4, 3: 3 }, far: 0.6, arena: 160 });
+export const CHECKS = Object.freeze({ rooms: 0.8, path: { 1: 5, 2: 4, 3: 3, 4: 3 }, far: 0.6, arena: 160 });
 
 /**
  * Cook up a dungeon: { version, seed, theme, tier, generation, name, levels: [{ index, width,
@@ -62,10 +65,16 @@ export const CHECKS = Object.freeze({ rooms: 0.8, path: { 1: 5, 2: 4, 3: 3 }, fa
  * lights ([{ at, kind: "torch" | "glow" (a colony of glowing fungus) | a fire's (place.js FIRES),
  * wall? }]), attempt }] }.
  *
+ * A hell's levels each carry its realm's (themes.js realmOf): `realm`, `look`, `style`, `ground`
+ * and `sound`; each has its boss (`role: "warden"`, its foe `warden`) guarding its portal down
+ * (the bottom level's, the way into the arena), and the bottom level its portal out (`exit`, as
+ * `down` is: core/insides.js).
+ *
  * `theme`: a THEMES id; `tier`: how strong it is (1 to 10: the land's or its finders', the first
  * level's packs; deeper levels a tier up, mini-bosses a tier over their level, the boss two over
- * the bottom level's packs); `levels`: how many (1 to 3; by seed if not given); `generation`: how
- * many times it's been cleared and made again.
+ * the bottom level's packs; never below the theme's least, `tiers`, if it has them); `levels`:
+ * how many (1 to 3, by seed, or the theme's own; or as given); `generation`: how many times it's
+ * been cleared and made again.
  */
 export function buildDungeon({ seed, theme: themeId, tier = 1, levels = null, generation = 0 }) {
     const theme = THEMES[themeId];
@@ -75,17 +84,20 @@ export function buildDungeon({ seed, theme: themeId, tier = 1, levels = null, ge
     }
 
     const plan = streamOf(seed, "plan", generation);
-    const count = levels ?? plan.pickWeighted([1, 2, 3], (n) => LEVEL_ODDS[n]);
+    const count = levels ?? theme.levels ?? plan.pickWeighted([1, 2, 3], (n) => LEVEL_ODDS[n]);
     const size = LEVEL_SIZES[count];
     const minis = plan.int(...MINIS[count]);
     // (The mini-bosses shared out between the levels, the deeper getting any left over)
     const share = Array.from({ length: count }, (each, k) => Math.floor(minis / count) + (k >= count - (minis % count) ? 1 : 0));
-    const dig = LAYOUTS[theme.layout];
     const made = [];
+
+    tier = Math.max(tier, theme.tiers?.[0] ?? 1);
 
     for (let index = 0; index < count; index++) {
         const levelTier = Math.min(TIERS, tier + (index > 0 ? 1 : 0));
         const bottom = index === count - 1;
+        const here = realmOf(theme, index);
+        const dig = LAYOUTS[here.layout];
         let best = null;
 
         for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
@@ -97,14 +109,14 @@ export function buildDungeon({ seed, theme: themeId, tier = 1, levels = null, ge
             const level = finish(dug, {
                 index,
                 levels: count,
-                theme,
+                theme: here,
                 tier: levelTier,
                 boss: bottom ? { tier: Math.min(TIERS, levelTier + 2) } : null,
                 minis: share[index],
                 seed: mix(seed, generation, index),
                 random: streamOf(seed, "place", generation, index, attempt),
             });
-            const score = checkLevel(level, { wanted, bottom, levels: count });
+            const score = checkLevel(level, { wanted, bottom, levels: count, warden: Boolean(here.warden), exit: bottom && Boolean(here.exit) });
 
             if (!best || score.passed > best.score.passed) {
                 best = { level: { ...level, attempt }, score };
@@ -156,10 +168,13 @@ function finish(dug, plan) {
         loops: dug.loops,
         entry: filled.entry,
         down: filled.down,
+        ...(filled.exit ? { exit: filled.exit } : {}),
         packs: filled.packs,
         chests: filled.chests,
         lights: filled.lights,
         tier: plan.tier,
+        // (A realm's level: its realm, and how it's drawn and sounds)
+        ...(plan.theme.realm ? { realm: plan.theme.realm, look: plan.theme.look, style: plan.theme.style, ground: plan.theme.ground, sound: plan.theme.sound } : {}),
     };
 }
 
@@ -167,9 +182,10 @@ function finish(dug, plan) {
  * How a level stands against what a level has to have (CHECKS): { ok, passed (how many of the
  * checks), checks: { name: true | false } }. Every room joined up; most of the rooms wanted dug;
  * the way through long enough; the room furthest in far enough in; stairs down where there should
- * be; on the bottom level, an arena big enough with its boss and hoard.
+ * be; on the bottom level, an arena big enough with its boss and hoard; and, for a level that has
+ * them, its boss (`warden`) and its way out (`exit`).
  */
-export function checkLevel(level, { wanted, bottom, levels = 1 }) {
+export function checkLevel(level, { wanted, bottom, levels = 1, warden = false, exit = false }) {
     const ids = level.rooms.map(({ id }) => id);
     const byRoom = neighbours(level.rooms, level.links);
     const joined = ids.every((id) => roomPath(byRoom, ids[0], id));
@@ -182,6 +198,8 @@ export function checkLevel(level, { wanted, bottom, levels = 1 }) {
         stairs: bottom ? true : Boolean(level.down),
         arena: bottom ? Boolean(arena && arena.area >= CHECKS.arena && boss && level.chests.some(({ kind }) => kind === "hoard")) : true,
         far: farEnough(level),
+        warden: warden ? level.packs.some(({ role }) => role === "warden") : true,
+        exit: exit ? Boolean(level.exit) : true,
     };
     const passed = Object.values(checks).filter(Boolean).length;
 

@@ -170,8 +170,8 @@ thrown as anyone is; never the heavy or the unsolid (bats and the other flocks a
 bears, trolls, ogres, wyverns, wisps, treants, crocodiles, rock tuskers, wild bulls, Cape
 buffalo, Nandi bears, great boas, knuckers, kelpies, chimeras, draugar, drakes, ghosts, wraiths,
 mares, frost trolls: creatures.js
-`steady`), the perilous places' own, an elite, a dungeon's boss, a fortification, a palisade or
-a wagon. The thrown body's a ragdoll (docs/CHARACTERS.md *Thrown*); a creature's tumbles whole.
+`steady`), the perilous places' own, an elite, a dungeon's boss (or a hell's level's master), a
+fortification, a palisade or a wagon. The thrown body's a ragdoll (docs/CHARACTERS.md *Thrown*); a creature's tumbles whole.
 
 The goblins' elite (*Elites*, below) is the **Goblin King**, not an "Elite Goblin raider":
 bigger than any of them (as tall as a man), broad, crowned and caped in red edged with gold,

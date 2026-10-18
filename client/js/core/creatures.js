@@ -194,6 +194,10 @@ export const CREATURES = Object.freeze({
     wraith: { name: "Wraith", hp: 46, weapon: "wraith", speed: 1.2, chase: 2.6, temper: "aggressive", roam: 6, leash: 18, pack: [1, 1], tiers: [5, 10], biomes: [], blood: "none", armor: 0.2, night: "only", darkSight: true , steady: true },
     wightLord: { name: "Wight lord", hp: 70, hands: true, weapon: "wightLord", speed: 1.1, chase: 2.2, temper: "aggressive", roam: 4, leash: 26, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "none", armor: 0.25, perilous: true, darkSight: true , steady: true },
     frostTroll: { name: "Frost troll", hp: 75, hands: true, weapon: "frostTroll", speed: 1, chase: 2.2, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [9, 10], biomes: ["snow"], blood: "red", armor: 0.2, perilous: true , steady: true },
+    // (The lord of a hell, on its throne at the bottom of the pit: core/dungeons/themes.js hell. A
+    // great horned brute for now, red as a coal, its fists burning and hellfire in its hands,
+    // until a bought model of its own is read: beasts/looks.js)
+    demonLord: { name: "Demon lord", hp: 120, hands: true, weapon: "demonLord", speed: 1.1, chase: 2.4, temper: "aggressive", roam: 4, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.3, perilous: true, darkSight: true, steady: true },
 });
 
 /**
