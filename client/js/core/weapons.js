@@ -610,7 +610,7 @@ export const NATURAL = Object.freeze({
     pitRavager: {
         label: "Club and teeth",
         attacks: [eitherOf(
-            melee({ id: "rend", reach: 1.6, damage: [8, 13], hitAt: 1100, duration: 2500, interval: 2200, stagger: 300, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.5 } }),
+            melee({ id: "rend", reach: 1.6, damage: [8, 13], hitAt: 1100, duration: 2500, interval: 2500, stagger: 300, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.5 } }),
             melee({ id: "bite", damage: [6, 10], hitAt: 550, duration: 1300, interval: 1400, reaction: "pierce", animation: "bite", afflict: { kind: "bleed", chance: 0.4 } }))],
     },
     gorgerWarlord: {

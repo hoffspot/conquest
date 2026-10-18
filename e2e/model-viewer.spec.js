@@ -904,3 +904,50 @@ test("and a hell's six gorgers: each from one of Monster2's builds, its five cli
         await expect(page.locator("#details")).toContainText("Monster2, bought on Fab: used with the permission its Standard License gives");
     }
 });
+
+// Each of a hell's own kinds (creatures.js) as the game draws it: a stand-in till its model's read,
+// then its model, as tall as MODELS has it, its ways of attacking, its own special one and its
+// rest ([kind, its attacks, a special of its own, its rest, how tall it's drawn])
+async function drawnAsTheGame(page, kinds) {
+    for (const [kind, attacks, special, rest, height] of kinds) {
+        await openViewer(page, `/model-viewer.html?creature=${kind}`);
+        await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+
+        const current = await page.evaluate(() => window.lab.current());
+
+        expect(current, kind).toMatchObject({ humanoid: false, attacks, rests: [rest] });
+
+        if (special) {
+            expect(current.specials, kind).toContain(special);
+            expect(await page.evaluate(() => window.lab.watch().moves), kind).toContain(special);
+        }
+
+        expect(await page.evaluate(() => window.lab.avatar().character.height), kind).toBeCloseTo(height, 1);
+    }
+}
+
+test("a hell's flayed as the game draws them: each its model, as tall as it's drawn, its claws or its staff, its lunge or what its free hand casts, curses, wails or drains, its other idle as it rests", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await drawnAsTheGame(page, [
+        ["flayling", ["rake"], "lunge", "look", 1.85],
+        ["cinderHusk", ["grasp", "lunge"], null, "look", 2],
+        ["pyreAcolyte", ["sweep"], "cast", "look", 1.96],
+        ["ossuaryPriest", ["sweep"], "curse", "look", 2.37],
+        ["dirgeWarden", ["sweep"], "wail", "look", 2.61],
+        ["flayedHierarch", ["sweep"], "drain", "look", 2.73],
+    ]);
+});
+
+test("a hell's gorgers as the game draws them: each its model, as tall as it's drawn, its club or its claws, its maw's bite or spew, its roar as it rests", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await drawnAsTheGame(page, [
+        ["slagGorger", ["claw"], "spew", "roar", 2.06],
+        ["forgeBrute", ["smash"], "bite", "roar", 2.24],
+        ["chainedGlutton", ["smash"], "bite", "roar", 2.47],
+        ["bloatGorger", ["claw"], "spew", "roar", 2.15],
+        ["pitRavager", ["rend"], "bite", "roar", 2.06],
+        ["gorgerWarlord", ["smash"], "bite", "roar", 3.38],
+    ]);
+});
