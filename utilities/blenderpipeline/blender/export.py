@@ -284,6 +284,29 @@ def object_fcurves(action):
         yield from getattr(action, "fcurves", [])
 
 
+def keep_bone_keys(action):
+    """Leaves an action its bones' keys alone: the object's own (where an importer put the
+    skeleton it came on) left out. Returns how many F-curves went."""
+    gone = 0
+    layers = getattr(action, "layers", None)
+    bags = []
+
+    # (Layered actions, with slots: Blender 4.4 and later; an object's slot only)
+    if layers is not None and len(layers):
+        for layer in layers:
+            for strip in layer.strips:
+                bags += [bag.fcurves for bag in getattr(strip, "channelbags", []) if bag.slot is None or bag.slot.target_id_type in ("OBJECT", "UNSPECIFIED")]
+    else:
+        bags.append(action.fcurves)
+
+    for curves in bags:
+        for curve in [curve for curve in curves if not curve.data_path.startswith("pose.bones")]:
+            curves.remove(curve)
+            gone += 1
+
+    return gone
+
+
 def animated_bones(action, armature):
     bones = set(armature.pose.bones.keys())
     found = set()
@@ -409,6 +432,13 @@ def gather_actions(job, armature, scene):
             if job.get("stripNamespaces", True):
                 for action in loaded:
                     strip_action_namespaces(action)
+
+        if spec.get("bonesOnly"):
+            for action in loaded:
+                gone = keep_bone_keys(action)
+
+                if gone:
+                    note(f"{action.name}: {gone} of its object's own keys left out (bonesOnly)")
 
         if spec.get("name"):
             if len(loaded) != 1:
@@ -1764,6 +1794,16 @@ def run(job):
         raise PipelineError(f"textures not found: {', '.join(missing)}")
 
     gather_actions(job, armature, scene)
+
+    # (A game skeleton copying a control rig: its clips are its own keyframes)
+    if armature is not None and job.get("muteConstraints"):
+        muted = [constraint for bone in armature.pose.bones for constraint in bone.constraints if not constraint.mute]
+
+        for constraint in muted:
+            constraint.mute = True
+
+        note(f"{len(muted)} of {armature.name}'s bone constraints muted (muteConstraints)")
+
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
     scene.cycles.use_denoising = False

@@ -201,6 +201,9 @@ describe("what each example's config asks for", () => {
         );
         assert.equal(report.clips.find((clip) => clip.name === "Roaring").from, "udim-creature-extra.blend");
 
+        // (Roar keys the rig object's own place in its file too: brought in, its bones' keys alone)
+        assert.ok(report.notes.includes("Roar: 1 of its object's own keys left out (bonesOnly)"));
+
         // (1.5 m/s as made, scaled from 1.95 m long to 3)
         assert.equal(crawl.inPlace, true);
         assert.ok(near(crawl.rootMotion.speed, (1.5 * 3) / 1.95, 1e-3));
@@ -351,6 +354,36 @@ describe("an asset from FBX files, as a bought one comes (fbx-creature), built f
             report.clips.map((clip) => clip.name),
             ["Idle", "Wave"],
         );
+    });
+});
+
+describe("a skeleton made to copy a control rig (muteConstraints)", () => {
+    // (The extra fixture's chest copies a control's turn: its Idle sways the chest all the same,
+    // but only once the constraint's muted)
+    const sways = async (muteConstraints) => {
+        const file = path.join(work, `copying-${muteConstraints}.json`);
+        const out = path.join(work, `copying-${muteConstraints}`);
+
+        writeFileSync(file, JSON.stringify({ source: path.join(HERE, "fixtures", "udim-creature", "udim-creature-extra.blend"), clips: { include: ["Idle"] }, muteConstraints, textures: { atlasSize: 256 }, compress: "none", resample: 0 }));
+
+        const { report } = await buildAsset(loadConfig(file), { blender, out, log: () => {} });
+        const document = await (await createIO()).read(path.join(out, `${report.name}.glb`));
+        const channel = document
+            .getRoot()
+            .listAnimations()[0]
+            .listChannels()
+            .find((one) => one.getTargetNode().getName() === "chest" && one.getTargetPath() === "rotation");
+        const turns = channel ? Array.from(channel.getSampler().getOutput().getArray()) : [];
+
+        return { report, spread: turns.length ? Math.max(...turns.map((value, i) => Math.abs(value - turns[i % 4]))) : 0 };
+    };
+
+    it("holds the chest still as its control does, and sways it once the constraint's muted", async () => {
+        const [kept, muted] = await Promise.all([sways(false), sways(true)]);
+
+        assert.ok(kept.spread < 1e-4, `the chest moved ${kept.spread} with its constraint`);
+        assert.ok(muted.spread > 0.01, `the chest moved only ${muted.spread} with its constraint muted`);
+        assert.ok(muted.report.notes.includes("1 of Rig's bone constraints muted (muteConstraints)"));
     });
 });
 

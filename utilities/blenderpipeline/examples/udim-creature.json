@@ -2,7 +2,7 @@
     "source": "../fixtures/udim-creature/udim-creature.blend",
     "out": "../dist",
     "actions": [
-        { "from": "../fixtures/udim-creature/udim-creature-extra.blend", "action": "Roar", "name": "Roaring" }
+        { "from": "../fixtures/udim-creature/udim-creature-extra.blend", "action": "Roar", "name": "Roaring", "bonesOnly": true }
     ],
     "clips": {
         "exclude": ["Look"],

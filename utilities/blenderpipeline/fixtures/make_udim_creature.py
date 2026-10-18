@@ -14,7 +14,8 @@ there's a camera, a light and a hidden collider that mustn't be exported either.
 (loops), Crawl (travels 1.5 m forward in its 1 s, and loops), Rear (doesn't loop; never played,
 as a Blender before 4.4 saved one: its slot for no kind of thing), Look (only the control bone).
 
-udim-creature-extra.blend: the same, with one more action, Roar, to be brought in from it.
+udim-creature-extra.blend: the same, with one more action, Roar, to be brought in from it (it keys
+the rig object's own place too), and its chest made to copy a control's turn.
 
 Made in metres, facing -y (Blender's front: +z in glTF).
 """
@@ -323,6 +324,23 @@ def main():
 
     # The extra file: the same, with Roar
     key_action(rig, "Roar", range(0, 31, 2), roar)
+
+    # (Roar keys the rig object's own place too, as a take brought from another rig can:
+    # actions[].bonesOnly leaves those keys out)
+    rig.animation_data.action = bpy.data.actions["Roar"]
+
+    for frame, x in ((0, 0.0), (30, 10.0)):
+        rig.location.x = x
+        rig.keyframe_insert("location", index=0, frame=frame)
+
+    rig.location.x = 0.0
+
+    # (And its chest copies a control's turn, as a game skeleton made to copy a control rig does:
+    # muteConstraints frees it. The chest, whose parent never turns: its own turn is then the
+    # control's alone)
+    control = bpy.data.objects.new("CTRL_chest", None)
+    scene.collection.objects.link(control)
+    rig.pose.bones["chest"].constraints.new("COPY_ROTATION").target = control
     bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "udim-creature-extra.blend"), compress=True, copy=True)
     print(f"made {main_file} and udim-creature-extra.blend", flush=True)
 
