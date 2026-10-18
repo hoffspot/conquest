@@ -82,9 +82,8 @@ open <http://localhost:8080/dungeon-map.html>). Try `?seed=7&theme=caves&levels=
 ## Hells
 
 A hell (`themes.js` `hell`) is a dungeon four levels deep, each level a realm of its own, met only
-at the highest tiers. Its ways in will be laid out by a pass of their own: a cult's camp in the
-wilds, there only at night. Until that comes, no world has one, and a hell's made only by hand (the
-tests, [the dungeon map](#the-dungeon-map-dungeon-maphtml-jslabdungeon-mapjs)).
+at the highest tiers. Two or three are in every world, each gone into from a cult's camp out in the
+wilds, and only by night, once the cult keeping its rite there is slain ([The way in](#the-way-in-a-cults-camp-by-night)).
 
 - **Its realms**, one a level, top to bottom (its `realms`, each a theme's fields for its level:
   `themes.js` `realmOf`; each level carries its own `realm`, `look`, `style`, `ground` and
@@ -135,8 +134,8 @@ tests, [the dungeon map](#the-dungeon-map-dungeon-maphtml-jslabdungeon-mapjs)).
   stairs (the same squares, the same landing): an arch of the level's rock at the landing's edge,
   runes cut in its face glowing like coals, a worn step before it, and in it the guild portals'
   swirl in a hell's reds and golds, lighting the room round it red (`world/interiors3d.js`
-  `riftPortal`, `VEILS.hell`). The way back up is a portal too. Tapped, its arch's face glows
-  (`app/doors.js`).
+  `riftPortal`; `world/veil.js` `VEILS.hell`). The way back up is a portal too. Tapped, its arch's
+  face glows (`app/doors.js`).
 - **Sealed till its master falls**: going down a portal, the host asks whether the first of the
   level's master's pack has fallen (the link's `seal`: the map it's sealed from, the level and the
   pack; `host.js` `enter`). Till it has, whoever tries is told "The portal won't let you through
@@ -147,6 +146,74 @@ tests, [the dungeon map](#the-dungeon-map-dungeon-maphtml-jslabdungeon-mapjs)).
   has nothing to go in by (no squares), so no one's led in by it (`interiors.js` `routeBetween`,
   `battle.js`, `app/doors.js`), and the host won't send anyone in through it. It's sealed till
   the lord falls ("The way out stays shut while the lord of this place still stands.").
+
+### The way in: a cult's camp by night
+
+- **Where** (`worldplan/settle.js` `hells`, `HELLS`): two or three a world, laid out last of all
+  the sites, from numbers of their own, so nothing laid out before moves for them. Each is a
+  dungeon's site of the hell's theme (`kind: "dungeon"`, `theme: "hell"`, ids `hell-1`,
+  `hell-2`...), so everything that knows a dungeon's way in knows a hell's: its models fetched on
+  the way and waited for at its door, its icon, its levels made as the player comes near (in the
+  hells' own block, `HELL_ORIGINS`, by the id's number). Out in the wild (no people's lands), on dry
+  land the cults keep to (the marshes, the jungle, the dark woods, volcanic land: the first three
+  fifths of each round of darts only there, then anywhere wild), as far from every people's start
+  as the wild goes: at least 3.2 km from each, failing that a little nearer each round (85% of the
+  last). Six peoples share an 8 km world, so no wild land is more than about 4 km from every start
+  (tier 4 or 5 from all of them); measured from a single player's home, as the game's tiers are, a
+  hell's far out. Clear of the settlements (10 cells), every other site (8) and the camps (5), and
+  60 cells (about 1.9 km) from each other and from the great lairs and dens. Over thirty seeds,
+  every world got two or three, 1.6 to 3.9 km from the nearest start.
+- **What stands there** (`setpieces/neutral.js` `hellCamp`, `HELL_CAMP`): a hamlet gone wrong,
+  36 m by 32 (bigger than a dungeon's mouth: `neutralSize`), on level ground (its pad), never cut
+  into a hill (`sites.js` `restingOf`). In its middle a pentagram scorched into the ground, 10 m
+  across, candles at its five points; in the pentagram the portal, an arch on two pillars facing
+  the way the camp's come at, gone into through its arch (its `entry`, inside `dungeon`); an altar
+  behind it and four braziers round it; round them the cult's hovels at the back and sides, stakes
+  topped with skulls, a cage, and the cart of what they've taken, its barrels beside it; bones
+  about. Nothing stands across the way in from the front, and the hovels keep to its back and sides,
+  clear of the cage and the cart. The ground round the ring is trodden bare (its `court`, a road's
+  earth: `sites.js`), so nothing grows through the pentagram. Its heart, where the cult's high
+  priest stands, is before the portal, in the ring.
+- **How it's drawn** (`world/art/kits/neutral.js`, `CAMP`): the pentagram's double ring and star
+  burnt black into the ground, ash either side; tallow candles standing in their wax at the
+  star's points; the arch of rough dark stone, seven stones and a keystone, bone horns on it,
+  runes cut in it, a step before it; the hovels, a hut or a lean-to each, hides over their
+  doorways; stakes with skulls; a cage of lashed poles, bones or a slumped body in its straw. By
+  day it's a dead place: cold candles and braziers, the runes and the pentagram dark, the arch's
+  opening still and black. By night (with the evening, as the windows light: `WINDOW_LIGHT`) the
+  candles and braziers burn (night-only fires: `candle-night`, `brazier-night`), the runes and the
+  pentagram's lines smoulder, and in the arch the guild portals' veil swirls in a hell's reds and
+  golds, out of doors (`world/veil.js` `openVeil`), lighting the camp red (the `hellgate` light).
+  About 4,000 triangles a camp.
+- **The rite** (`creatures.js` `RITES`, `lairOf`; `host.js` `#lairs`): kept as a lair's master and
+  guards are, but by the site's theme, not its kind, and only after dark (light.js `torchesLit`:
+  from a little past sunset to sunrise, 19 minutes of every hour). With a player within 110 m, the
+  cult's high priest (`cultLeader`: "High priest of the cult", tier 10, robed as its faithful are
+  and a head taller, its staff in hand, swinging it and calling hellfire down from 9 m, which
+  burns) stands at its heart, six of the faithful (cultists, at tiers 9 and 10) round its ring,
+  more against a bigger party (`strength.js`). At daybreak they're let go once no player's close by
+  (within a third of that). No hoard of theirs: what they keep is the way in.
+- **The gate** (`host.js` `enter`, `#riteHolds`): going in from the wilds by a hell's front door,
+  the host asks the time and the rite. By day: "The portal stands cold and dark: whatever the cult
+  calls through it, it calls after nightfall." By night, till every one of the cult is slain:
+  "The cult's rite holds the portal shut while its keepers still stand." Once the last of them
+  falls (`#riteFell`), it's let through till sunrise, and those near are told "The last of the cult
+  falls, and their rite is broken: the portal stands open till daybreak." (`app/game.js`
+  `#delved`). Its breaking is kept with the lairs' slain, but by the war's clock, as the night is
+  (`#riteBroken`). The next night the cult's back at it, and the way's shut again. Anyone inside at
+  daybreak plays on, and leaves by the way out beyond the throne whenever.
+- **Word of it** (`core/cultword.js`): the nearest hell's cult is spoken of in the towns, which
+  way it is from the town always true, more of it the nearer. Near (within 2.5 km of the town, or
+  among the two settlements nearest the camp, however far): which way, how far on foot ("not an
+  hour's walk", "an hour or two"), what stands by it (a site within 700 m, by its kind or name:
+  "by the old ruins") and that it's after dark ("Robed folk out north-east of Ashford, an hour or
+  two on foot, by the old ruins. Chanting, every night. Don't go after dark."). Farther (5 km):
+  which way and that it's a long way. Far off: which way only, as hearsay. Never what it is: lights,
+  chanting, robed folk, a ring burnt in the grass. Asked in talk (`dialogue.js`: `if: { hell: true
+  }`, `{hellRumour}`) of the guild's receptionists, the barkeeps and the adventurers, who always
+  know, and of the tavern's drinkers and the townsfolk, one in two of whom do (by who they are and
+  which hell, so the same ones know it every time: `app/game.js` `#cultWords`). Each says it in
+  their own voice; which of the band's ways of saying it comes round in turn (`talkVariety`).
 
 ## How a level's made
 
@@ -657,9 +724,20 @@ code is here.
     boss falls; a share of a small chest and of the hoard; cleared; kept in a snapshot and taken up
     again with the player in it; made again once everyone's gone, the next generation.
 - **`e2e/pellagos.spec.js`**: in the game, a dungeon's way in gone into, its first level drawn and
-  lit, down its stairs to the next and out again. And a hell: each level its realm's, drawn in
-  its own air, a portal of fire on it; each portal down sealed till its level's master is slain;
-  out beyond the throne once its lord is, to before its way in.
+  lit, down its stairs to the next and out again. And a hell, the nearest to the start: its way
+  in shut by day, no one there; by night its cult there, shut till they're slain to the last,
+  then in; each level its realm's, drawn in its own air, a portal of fire on it; each portal down
+  sealed till its level's master is slain; out beyond the throne once its lord is, to before its
+  way in.
+- **`test/world-plan.test.js`**: two or three hells' ways in a world, laid out last, out in the
+  wild, at least 1.5 km from every people's start, clear of every other site and far from each
+  other and the great lairs and dens. **`test/delves.test.js`**: a hell's way in laid out as a
+  cult's camp (its pentagram, candles at its points, the portal in its middle gone into from its
+  front, its altar, braziers, hovels, stakes, cage and cart, its ground levelled, nothing across the
+  way in).
+- **`test/cultword.test.js`**, word of the cults: of the nearest hell to a town, which way it is
+  from there always true, more of it the nearer, what stands by it named only near; each hell
+  spoken of as near somewhere; never what it is.
 - **`test/hells.test.js`**, the hells:
   - four levels deep, each its realm's (dug, dressed, drawn and heard as its realm has it);
   - never below tier 9;
@@ -668,10 +746,13 @@ code is here.
   - its packs and mini-bosses its realms' own, the Lord of the Pit at the bottom;
   - the way out on the bottom level beyond the lord;
   - never dealt to a wild dungeon's site;
-  - in a world: its levels in a block of their own, named for their realms, each portal down
-    sealed by its level's master and the way out by its lord, no one led in by it; nobody let
-    down a portal till its master falls (and up again whenever), nor out till the lord falls,
-    then out to before its way in.
+  - in a world, at the nearest hell's way in: shut by day, no one there; by night the cult's high
+    priest and its faithful there, shut while one of them stands, then in, its breaking told;
+    back at it the next night, shut again;
+  - its levels in a block of their own, named for their realms, each portal down sealed by its
+    level's master and the way out by its lord, no one led in by it; nobody let down a portal
+    till its master falls (and up again whenever), nor out till the lord falls, then out to before
+    its way in.
 - **`e2e/model-viewer.spec.js`**, with the licensed models: the Lord of the Pit drawn from the
   Greater Demon once it's read, not as its people-shaped stand-in: its claws and punch, its
   hellfire hurled from its fist, its roar; 3.2 metres tall.

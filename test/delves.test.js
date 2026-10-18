@@ -20,7 +20,7 @@ import { DUNGEON_ORIGINS, dungeonLevel, dungeonTier } from "../client/js/core/in
 import { buildWorld } from "../client/js/core/overworld.js";
 import { CHEST_GOLD } from "../client/js/core/places.js";
 import { createRandom } from "../client/js/core/random.js";
-import { layoutNeutral } from "../client/js/core/setpieces/neutral.js";
+import { HELL_CAMP, layoutNeutral } from "../client/js/core/setpieces/neutral.js";
 import { scalingOf } from "../client/js/core/strength.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { DUNGEON_SITES } from "../client/js/core/worldplan/settle.js";
@@ -69,8 +69,10 @@ describe("dungeons in the wilds (worldplan settle.js)", () => {
 
     it("seeds about one way in to each square kilometre of dry land, apart from each other, the roads and the other places, each named and themed", () => {
         const { plan } = world;
-        const dungeons = plan.sites.filter(({ kind }) => kind === "dungeon");
-        const others = plan.sites.filter(({ kind }) => kind !== "dungeon");
+        // (The hells' ways in are dungeons' sites too, laid out by a pass of their own: worldplan
+        // settle.js HELLS, clear of every other site as theirs are)
+        const dungeons = plan.sites.filter(({ kind, theme }) => kind === "dungeon" && theme !== "hell");
+        const others = plan.sites.filter((site) => !dungeons.includes(site));
 
         assert.ok(dungeons.length >= 30 && dungeons.length <= 120, `${dungeons.length} dungeons`);
         assert.equal(new Set(dungeons.map(({ name }) => name)).size, dungeons.length, "each its own name");
@@ -126,6 +128,42 @@ describe("dungeons in the wilds (worldplan settle.js)", () => {
         assert.ok(kinds("hideout").has("stores") && kinds("hideout").has("timbers"));
         assert.ok(kinds("ancient").has("column"));
         assert.ok(kinds("caves").has("bones"));
+
+        // (A hell's, a cult's camp in the open, bigger than a mouth in the rock: its pentagram,
+        // candles at its points, the portal in its middle gone into from its front, an altar
+        // behind it and braziers round it; the cult's hovels, stakes, cage and cart; the ground
+        // under it levelled, and its heart before the portal, where the cult's keeper stands)
+        const camp = layoutNeutral({ kind: "dungeon", seed: 5, theme: "hell" });
+        const parts = (part) => camp.parts.filter((each) => each.part === part);
+        const [gate] = parts("hellgate");
+
+        assert.deepEqual(camp.size, HELL_CAMP.size);
+        assert.equal(parts("pentagram").length, 1);
+        assert.equal(parts("candles").length, 5);
+        assert.ok(parts("candles").every(({ x, y }) => Math.abs(Math.hypot(x - gate.x, y - gate.y) - HELL_CAMP.ring) < 1e-6), "at the star's points");
+        assert.equal(parts("brazier").length, HELL_CAMP.braziers.count);
+        assert.equal(parts("altar").length, 1);
+        assert.ok(parts("hovel").length >= HELL_CAMP.hovels.count[0] && parts("stake").length >= HELL_CAMP.stakes.count[0]);
+        assert.ok(["cage", "cart", "stores"].every((part) => parts(part).length === 1));
+        assert.deepEqual([camp.entry.x, camp.entry.width, camp.entry.inside], [gate.x, HELL_CAMP.arch.w, "dungeon"]);
+        assert.ok(camp.entry.y > gate.y && camp.heart[1] > camp.entry.y, "gone into from its front, its heart before it");
+        assert.deepEqual(camp.pad.at, [gate.x, gate.y]);
+
+        // (Trodden bare round the ring, nothing growing through the pentagram)
+        assert.deepEqual(camp.court, { at: [gate.x, gate.y], radius: HELL_CAMP.court, ground: "road" });
+        assert.ok(HELL_CAMP.court > HELL_CAMP.ring + 1);
+
+        // (Its hovels at its back and sides, none by the cage or the cart)
+        for (const hovel of parts("hovel")) {
+            for (const by of [...parts("cage"), ...parts("cart")]) {
+                assert.ok(Math.hypot(hovel.x - by.x, hovel.y - by.y) > Math.max(hovel.w, hovel.d) / 2 + 2, `hovel at ${hovel.x.toFixed(1)}, ${hovel.y.toFixed(1)} by the ${by.part}`);
+            }
+        }
+
+        // (Nothing stands in the way in from the front)
+        const front = [gate.x - HELL_CAMP.arch.w / 2, camp.entry.y, gate.x + HELL_CAMP.arch.w / 2, camp.size[1] * 4];
+
+        assert.ok(camp.solid.every(([x0, y0, x1, y1]) => x1 <= front[0] || x0 >= front[2] || y1 <= front[1] || y0 >= front[3]), "its way in clear");
     });
 
     it("has an icon for the maps", () => {

@@ -5,18 +5,25 @@
 // graveyards' low walls, gateposts, tombs and graves. Old and
 // weathered: dark at the foot, moss on what faces up, the tops of walls broken off a course at a
 // time. Each part is a piece of its own (sites.js), stood on the ground where it is, so each
-// reaches down into the ground a little, never floating where the land falls away.
+// reaches down into the ground a little, never floating where the land falls away. And a hell's
+// way in, a cult's camp in the wilds: a pentagram scorched into the ground, candles at its points,
+// the portal standing in its middle, stakes with skulls on them, the cult's hovels and a cage,
+// dead by day and burning only at night.
 //
 // In world pixels as the kits are (a plot, 4 m, is 20), the part in the middle of its piece's
 // plots, facing south.
 
+import * as THREE from "three";
 import { createRandom } from "../../../core/random.js";
 import { fireLight, lightTorch } from "./torches.js";
 import { NEUTRAL, RUINS } from "../../../core/setpieces/neutral.js";
 import { LAIR_KINDS } from "../../../core/places.js";
 import { PLOT } from "../../../core/setpieces/pieces.js";
+import { WINDOW_LIGHT } from "../engine/atlas.js";
 import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
+import { fireLit } from "../../firelight.js";
+import { openVeil } from "../../veil.js";
 import { brokenRim, brokenTop, buttress, crumbledRing, crumbledWall, perched, stringCourse, talus, topAt, tumbled } from "./decay.js";
 import { IVY, ivyAlong, ringFace, wallFace } from "./ivy.js";
 import { brokenCart, fallenTimbers, oldBarrel, oldCrate } from "./leftovers.js";
@@ -128,6 +135,78 @@ export const HALL = Object.freeze({
     ],
     buttresses: { width: 0.7, depths: [0.75, 0.5, 0.3], stages: [0.45, 0.75, 1], tallest: 4.2, end: 0.9, least: 1.8 },
 });
+
+/**
+ * A hell's way in as it's drawn (setpieces/neutral.js HELL_CAMP lays it out), in metres: its
+ * pentagram's lines (`scorch`: how high over the ground the ash lies and the burnt line on it, how
+ * wide the line is about, and how far the ash reaches past it either side, from and to; its inner
+ * ring how far within the outer and how wide; the ash's colour over the burnt earth's), how many
+ * sides its rings have (`sides`); its candles (`candles`: how tall and how thick, from and to);
+ * its portal's arch (`arch`: how many stones, how much higher its keystone stands); and its cage
+ * (`cage`: how wide and high, how many bars to a side).
+ */
+export const CAMP = Object.freeze({
+    scorch: { lift: [0.025, 0.045], line: 0.2, charred: [0.06, 0.2], inner: 0.45, thin: 0.09, ash: [0.5, 0.48, 0.5] },
+    sides: 32,
+    candles: { tall: [0.1, 0.32], thick: [0.035, 0.055] },
+    arch: { stones: 7, keystone: 0.25 },
+    cage: { wide: 1.6, high: 1.8, bars: 3 },
+});
+
+/**
+ * What smoulders round a hell's way in, lit only at night (as the windows are: atlas.js
+ * WINDOW_LIGHT), by day as dark as burnt things are: the lines of its pentagram scorched into the
+ * ground (`scorch`: a dull red), the runes cut in its portal's stones and the coals in its
+ * braziers (`runes`, `coals`: as coals glow). Each its colour by day (sRGB), the light it gives
+ * at night (linear: more than 1, brighter than white) and how much that wavers along it.
+ */
+export const SMOULDERS = Object.freeze({
+    scorch: { colour: 0x1c1714, glow: [0.1, 0.01, 0.002], waver: 0.6 },
+    runes: { colour: 0x262220, glow: [0.42, 0.05, 0.006], waver: 0.25 },
+    coals: { colour: 0x2c2826, glow: [1.5, 0.42, 0.08], waver: 0.35 },
+});
+
+const smouldering = new Map();
+
+// The glow of what smoulders at night (SMOULDERS'), as much as the evening's lit the windows,
+// wavering slowly in patches along it as coals do (where it is in the world, and the drawing's
+// clock: WINDOW_LIGHT's z)
+const SMOULDER_GLSL = `
+if (windowLight.x > 0.0) {
+    float smoulderPatch = 0.5 + 0.25 * sin(vSmoulder.x * 1.7 + vSmoulder.z * 2.3 + windowLight.z * 0.9) + 0.25 * sin(vSmoulder.x * 3.1 - vSmoulder.z * 1.3 - windowLight.z * 1.7);
+
+    totalEmissiveRadiance += smoulderGlow * windowLight.x * (1.0 - smoulderWaver + smoulderWaver * smoulderPatch);
+}`;
+
+/**
+ * What smoulders (SMOULDERS' `name`), a material of its own: lit as the land round it is (the sun,
+ * the fires near: firelight.js), its corners' colours its weathering; and at night glowing too.
+ * One program for every kind of it (its colours its own uniforms).
+ */
+export function smoulder(name) {
+    if (!smouldering.has(name)) {
+        const { colour, glow, waver } = SMOULDERS[name];
+        const result = new THREE.MeshLambertMaterial({ color: colour, vertexColors: true });
+        const uniforms = { windowLight: WINDOW_LIGHT, smoulderGlow: { value: new THREE.Vector3(...glow) }, smoulderWaver: { value: waver } };
+
+        result.name = `smoulder-${name}`;
+        result.shadowSide = THREE.DoubleSide;
+        result.onBeforeCompile = (shader) => {
+            Object.assign(shader.uniforms, uniforms);
+            shader.vertexShader = shader.vertexShader
+                .replace("#include <common>", "#include <common>\nvarying vec3 vSmoulder;")
+                .replace("#include <project_vertex>", "#include <project_vertex>\nvSmoulder = (modelMatrix * vec4(transformed, 1.0)).xyz;");
+            shader.fragmentShader = shader.fragmentShader
+                .replace("#include <common>", "#include <common>\nuniform vec4 windowLight;\nuniform vec3 smoulderGlow;\nuniform float smoulderWaver;\nvarying vec3 vSmoulder;")
+                .replace("#include <emissivemap_fragment>", `#include <emissivemap_fragment>\n${SMOULDER_GLSL}`);
+            fireLit(shader);
+        };
+        result.customProgramCacheKey = () => "smoulder";
+        smouldering.set(name, result);
+    }
+
+    return smouldering.get(name);
+}
 
 /**
  * Weathering (Solid's tone): darker at the foot, moss where it faces up (and a little north),
@@ -297,8 +376,9 @@ const BUILD = {
         solid.box(cx - m(0.34), base + h * 0.5, cz, cx + m(0.34), base + h * 0.6, cz + m(0.42), marble);
     },
 
-    // An iron bowl on three legs, burning
-    brazier(solid, piece) {
+    // An iron bowl on three legs, burning: a shrine's day and night; a hell's camp's only at
+    // night (`night`), its coals cold by day
+    brazier(solid, piece, random, part) {
         const [cx, cz] = middleOf(piece);
         const iron = material("iron-black");
 
@@ -309,9 +389,9 @@ const BUILD = {
         }
 
         solid.lathe(cx, cz, [[m(0.08), m(0.8)], [m(0.34), m(0.95)], [m(0.36), m(1.05)]], iron, { segments: 10 });
-        solid.cylinder(cx, cz, m(0.95), m(1.02), m(0.3), m(0.3), material("embers"), { segments: 10 });
-        // (Its fire, burning day and night: world/fire.js)
-        fireLight(solid, [cx, m(1.02), cz], "brazier");
+        solid.cylinder(cx, cz, m(0.95), m(1.02), m(0.3), m(0.3), part.night ? smoulder("coals") : material("embers"), { segments: 10 });
+        // (Its fire: world/fire.js)
+        fireLight(solid, [cx, m(1.02), cz], part.night ? "brazier-night" : "brazier");
     },
 
     // A curved wall behind the shrine, broken off unevenly
@@ -709,6 +789,407 @@ const BUILD = {
         const [cx, cz] = middleOf(piece);
 
         brokenCart(solid, random, [cx, 0, cz], part.turn ?? 0);
+    },
+
+    // A pentagram scorched into the ground, a hell's portal standing in its middle (a cult's camp:
+    // setpieces/neutral.js HELL_CAMP): a ring, a thinner ring within it, and the star's five lines
+    // from point to point, one point to the back; each line burnt black into the earth, ragged at
+    // its edges, the earth either side of it charred to ash, and smouldering red at night
+    // (SMOULDERS `scorch`). Lying a little over the ground, which is levelled under it
+    pentagram(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const { lift, line, charred, inner, thin, ash } = CAMP.scorch;
+        const [low, high] = lift.map(m);
+        const [burnt, earth] = [smoulder("scorch"), material("earth-sooty")];
+        const r = m(part.r);
+        // (The star's points round the ring, the first at the back, as its candles stand at them)
+        const points = Array.from({ length: 5 }, (_, k) => {
+            const a = Math.PI + part.turn + (k / 5) * Math.PI * 2;
+
+            return [cx + Math.sin(a) * r, cz + Math.cos(a) * r];
+        });
+        // (Round a ring, `out` from the middle, at each of its corners)
+        const round = (out) =>
+            Array.from({ length: CAMP.sides }, (_, k) => {
+                const a = (k / CAMP.sides) * Math.PI * 2;
+
+                return [cx + Math.cos(a) * out, cz + Math.sin(a) * out];
+            });
+        // (From a to b, in so many steps)
+        const straight = (a, b, steps) => Array.from({ length: steps + 1 }, (_, k) => [a[0] + ((b[0] - a[0]) * k) / steps, a[1] + ((b[1] - a[1]) * k) / steps]);
+        // (A ragged strip along the ground through `path` ([x, z] points, round and closed if
+        // `closed`), out to either side of it at each point as far as `half` (metres, from and to)
+        // gives, each side its own; `tone` its colour)
+        const strip = (path, half, y, stuff, tone, closed = false) => {
+            const n = path.length;
+            const edges = path.map(([x, z], k) => {
+                const [before, after] = closed ? [path[(k + n - 1) % n], path[(k + 1) % n]] : [path[Math.max(0, k - 1)], path[Math.min(n - 1, k + 1)]];
+                const [dx, dz] = [after[0] - before[0], after[1] - before[1]];
+                const length = Math.hypot(dx, dz);
+                const [left, right] = [m(random.range(...half)), m(random.range(...half))];
+
+                return [[x + (dz / length) * left, y, z - (dx / length) * left], [x - (dz / length) * right, y, z + (dx / length) * right]];
+            });
+
+            for (let k = 0; k < (closed ? n : n - 1); k++) {
+                const j = (k + 1) % n;
+
+                solid.facing([edges[k][0], edges[j][0], edges[j][1], edges[k][1]], [0, 1, 0], stuff, undefined, tone);
+            }
+        };
+        const lines = [
+            ...points.map((point, k) => ({ path: straight(point, points[(k + 2) % 5], 6), wide: line, closed: false })),
+            { path: round(r), wide: line, closed: true },
+            { path: round(r - m(inner)), wide: thin, closed: true },
+        ];
+
+        // (The ash round each line, then the burnt line on it)
+        for (const { path, wide, closed } of lines) {
+            strip(path, [wide / 2 + charred[0], wide / 2 + charred[1]], low, earth, ash, closed);
+        }
+
+        for (const { path, wide, closed } of lines) {
+            strip(path, [wide * 0.35, wide * 0.65], high, burnt, null, closed);
+        }
+    },
+
+    // A cluster of candles at a point of a pentagram (a hell's camp's), short and thick, of tallow,
+    // standing in a pool of their own wax, the wax run down to their feet; lit only at night
+    // (world/fire.js FIRES `candle-night`), the tallest's light lighting what's round them for
+    // them all (lights.js LIGHTS `candles-night`), cold by day
+    candles(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const { tall, thick } = CAMP.candles;
+        const pool = Array.from({ length: 7 }, (_, k) => {
+            const [a, out] = [(k / 7) * Math.PI * 2, m(random.range(0.2, 0.32))];
+
+            return [cx + Math.cos(a) * out, m(0.015), cz + Math.sin(a) * out];
+        });
+        const stood = Array.from({ length: part.count }, (_, k) => {
+            const [a, out] = [(k / part.count) * Math.PI * 2 + random.range(-0.4, 0.4), m(random.range(0.08, 0.17))];
+
+            return { x: cx + Math.cos(a) * out, z: cz + Math.sin(a) * out, h: m(random.range(...tall)), r: m(random.range(...thick)), wax: random.chance(0.35) ? "parchment" : "candle" };
+        });
+
+        solid.tone = null;
+        solid.facing([[cx, m(0.015), cz], ...pool, pool[0]], [0, 1, 0], material("candle"));
+
+        for (const [k, { x, z, h, r, wax }] of stood.sort((a, b) => b.h - a.h).entries()) {
+            solid.lathe(x, z, [[r * 1.6, 0], [r, m(0.05)], [r, h], [0, h]], material(wax), { segments: k ? 4 : 5 });
+            fireLight(solid, [x, h + m(0.01), z], k ? "candle-night" : "candles-night");
+        }
+    },
+
+    // A hell's way in standing in the open (a cult's camp's, in its pentagram's middle): two
+    // pillars of rough dark stone, each two great blocks one on the other, an arch of rough stones
+    // over them, its keystone standing proud and horns of bone curving up from its shoulders;
+    // runes cut in its stones, glowing like coals at night; and in it the veil, swirling red and
+    // gold at night and lighting the camp red (veil.js openVeil, lights.js LIGHTS `hellgate`), by
+    // day dark and still and the stone cold. Its face to the front, where it's gone into, a worn
+    // step before it
+    hellgate(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const stone = material("rock-dark");
+        const [w, h, p] = [m(part.w), m(part.h), m(part.pillar)];
+        const [inner, outer, spring] = [w / 2, w / 2 + p, h - w / 2];
+        const [front, back] = [cz + p / 2, cz - p / 2];
+        // (Where its runes are cut: [x, y, z, turn])
+        const runes = [];
+
+        solid.tone = weathered(random.int(1, 1e6), { moss: 0.1, dirt: 0.5 });
+
+        // (Its pillars, each a block hewn roughly square and a shorter one on it, a little askew,
+        // neither into the opening)
+        for (const side of [-1, 1]) {
+            const px = cx + side * (inner + p / 2);
+            const split = spring * random.range(0.5, 0.62);
+
+            for (const [y0, y1, grow, cut] of [[-m(FOOTING), split, 1.04, split * 0.55], [split, spring, 0.96, (split + spring) / 2]]) {
+                const [ox, oz] = [side * random.range(0, 0.05) * p, random.range(-0.05, 0.05) * p];
+                const batter = m(0.03);
+
+                solid.extrude(hewn(random, px + ox, cz + oz, (p / 2) * grow), y0, y1, stone, { batter });
+                // (A rune on its face, which leans in as it rises)
+                runes.push([px + ox, cut, cz + oz + (p / 2) * grow - (batter * (cut - y0)) / (y1 - y0), 0]);
+            }
+        }
+
+        // (The arch's stones round the opening's head, as deep as the pillars, each rough-cut: its
+        // face and its back, the soffit under it, its top, and the joints between them)
+        for (let k = 0; k < CAMP.arch.stones; k++) {
+            const [a0, a1] = [(k / CAMP.arch.stones) * Math.PI + 0.012, ((k + 1) / CAMP.arch.stones) * Math.PI - 0.012];
+            const key = k === (CAMP.arch.stones - 1) / 2;
+            const reach = outer + (key ? m(CAMP.arch.keystone) : m(random.range(-0.08, 0.1)));
+            const ring = [[a0, inner], [a1, inner], [a1, reach], [a0, reach]].map(([a, out]) => [cx + Math.cos(a) * out, spring + Math.sin(a) * out]);
+            const [mx, my] = [ring.reduce((sum, [x]) => sum + x / 4, 0), ring.reduce((sum, [, y]) => sum + y / 4, 0)];
+            const face = front + (key ? m(0.08) : m(random.range(-0.03, 0.03)));
+
+            solid.facing(ring.map(([x, y]) => [x, y, face]), [0, 0, 1], stone);
+            solid.facing(ring.map(([x, y]) => [x, y, back]), [0, 0, -1], stone);
+
+            for (let i = 0; i < 4; i++) {
+                const [[xa, ya], [xb, yb]] = [ring[i], ring[(i + 1) % 4]];
+
+                solid.facing([[xa, ya, face], [xb, yb, face], [xb, yb, back], [xa, ya, back]], [(xa + xb) / 2 - mx, (ya + yb) / 2 - my, 0], stone);
+            }
+
+            runes.push([mx, my, face, (a0 + a1) / 2 - Math.PI / 2]);
+        }
+
+        // (Horns of bone curving up and out from its shoulders, and in again at their tips)
+        for (const side of [-1, 1]) {
+            const [rx, ry] = [cx + side * Math.cos(Math.PI / 4) * outer, spring + Math.sin(Math.PI / 4) * outer];
+            const curve = [[0, -0.15], [0.35, 0.25], [0.45, 0.75], [0.25, 1.2]].map(([out, up]) => [rx + side * m(out), ry + m(up), cz]);
+
+            solid.tube(curve, [m(0.17), m(0.14), m(0.08), 0], material("bone"), { sides: 5 });
+        }
+
+        // (The runes, glowing at night: each a stave, and a branch or two struck off it slantwise
+        // from above its middle, to one side or both, as the old runes are cut)
+        const stroke = ([x, y, z], long, angle) => {
+            const [c, s, wide] = [Math.cos(angle), Math.sin(angle), m(0.022)];
+
+            solid.facing([[-wide, -long / 2], [wide, -long / 2], [wide, long / 2], [-wide, long / 2]].map(([u, v]) => [x + u * c - v * s, y + u * s + v * c, z + m(0.015)]), [0, 0, 1], smoulder("runes"), undefined, null);
+        };
+
+        for (const [x, y, z, turn] of runes) {
+            const [long, from] = [m(0.26), random.range(0.05, 0.3)];
+            const [up, way] = [[-Math.sin(turn), Math.cos(turn)], random.pick([-1, 1])];
+
+            stroke([x, y, z], long, turn);
+
+            for (const side of random.chance(0.4) ? [-1, 1] : [way]) {
+                const angle = turn + side * random.range(0.6, 0.9);
+                const [bx, by] = [x + up[0] * long * from - Math.sin(angle) * m(0.07), y + up[1] * long * from + Math.cos(angle) * m(0.07)];
+
+                stroke([bx, by, z], m(0.14), angle);
+            }
+        }
+
+        // (The veil, in the pillars' middle, filling the opening: its legs, and its head a fan;
+        // its texture coordinates the guild's veil's, so its swirl and its rim fit the opening)
+        const veil = openVeil("hell");
+        const shaped = ([x, y]) => [((x - cx) / inner) * m(0.8), y <= spring ? (y / spring) * m(1.75) : m(1.75) + ((y - spring) / inner) * m(0.8)];
+        const sheet = (outline) => solid.face(outline.map(([x, y]) => [x, y, cz]), veil, outline.map(shaped), null);
+
+        sheet([[cx - inner, -m(0.1)], [cx + inner, -m(0.1)], [cx + inner, spring], [cx - inner, spring]]);
+        sheet([[cx, spring], ...Array.from({ length: 11 }, (_, k) => [cx + Math.cos((k / 10) * Math.PI) * inner, spring + Math.sin((k / 10) * Math.PI) * inner])]);
+
+        // (Its worn step, and its light, red as its veil, before it)
+        solid.box(cx - outer, -m(0.3), front, cx + outer, m(0.08), front + m(0.55), stone);
+        fireLight(solid, [cx, spring - m(0.3), front + m(0.4)], "hellgate");
+    },
+
+    // A sharpened stake driven into the ground round a hell's camp, leaning a little, a skull
+    // spitted on its point mostly, looking out the way the camp's come at
+    stake(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const h = m(part.h);
+        const [lx, lz] = [Math.tan(part.lean), random.range(-0.06, 0.06)];
+        const along = (y) => [cx + lx * y, y, cz + lz * y];
+
+        solid.tube([along(-m(0.6)), along(h - m(0.32)), along(h)], [m(0.06), m(0.055), 0], material(random.pick(["timber-grey", "deadwood", "timber"])), { sides: 5, smooth: false });
+
+        if (part.skull) {
+            skull(solid, along(h - m(0.36)), random.range(-0.5, 0.5), 1.4);
+        }
+    },
+
+    // One of a cult's hovels round its camp (a hell's way in), its front to the ring (`turn`):
+    // ramshackle, of whatever they took or found. A hut: poles at its corners, walls of old planks
+    // patched with hides, a dark doorway in its front with a hide hung half across it, a crooked
+    // roof of hides or old thatch on a ridge pole, poles crossed over its gables. Or a lean-to,
+    // its roof sloping down to its back from poles at its front, open to the ring, dark within
+    hovel(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const [w, d, h] = [m(part.w), m(part.d), m(part.h)];
+        const [fx, fz] = [Math.sin(part.turn), Math.cos(part.turn)];
+        // (Across it, up, and towards its front)
+        const at = (u, y, v) => [cx + fz * u + fx * v, y, cz - fx * u + fz * v];
+        const pole = material(random.pick(["timber-grey", "timber-char", "deadwood"]));
+        const boards = material(random.pick(["planks-dark", "planks-char", "timber-grey"]));
+        const roofing = material(random.pick(["hide-dark", "thatch-grey", "hide-dark", "hide"]));
+        const [hw, hd] = [w / 2, d / 2];
+        const foot = -m(0.4);
+        // (Dark within: what's seen of its insides from the open front; and its roof darkened by
+        // the smoke of its fire)
+        const gloom = [0.3, 0.28, 0.27];
+        const smoked = [0.68, 0.64, 0.6];
+
+        solid.tone = weathered(random.int(1, 1e6), { moss: 0.12, dirt: 0.45 });
+
+        if (random.chance(0.35)) {
+            // A lean-to: high at its open front, low at its back
+            const [high, low] = [h, h * random.range(0.42, 0.52)];
+            const roofAt = (v) => low + ((high - low) * (v + hd)) / d;
+            const sag = m(random.range(0.05, 0.15));
+
+            for (const side of [-1, 1]) {
+                solid.beam(at(side * (hw - m(0.08)), foot, hd - m(0.08)), at(side * (hw - m(0.08)) + m(random.range(-0.08, 0.08)), high + m(0.15), hd - m(0.05)), m(0.12), m(0.12), pole, { ends: false });
+
+                // (Its side, inside and out)
+                const wall = [at(side * hw, foot, -hd), at(side * hw, foot, hd), at(side * hw, roofAt(hd) - m(0.1), hd), at(side * hw, roofAt(-hd), -hd)];
+
+                solid.facing(wall, [side * fz, 0, -side * fx], boards);
+                solid.facing(wall, [-side * fz, 0, side * fx], boards, undefined, gloom);
+            }
+
+            const backWall = [at(-hw, foot, -hd), at(hw, foot, -hd), at(hw, low, -hd), at(-hw, low, -hd)];
+
+            solid.facing(backWall, [-fx, 0, -fz], boards);
+            solid.facing(backWall, [fx, 0, fz], boards, undefined, gloom);
+
+            // (Its roof, sagging between its sides, over the eaves a little, its underside dark; held
+            // down)
+            const roof = [at(-hw - m(0.2), low - m(0.08), -hd - m(0.25)), at(hw + m(0.2), low - m(0.05), -hd - m(0.25)), at(hw + m(0.25), high + m(0.05), hd + m(0.3)), at(0, high - sag, hd + m(0.3)), at(-hw - m(0.25), high, hd + m(0.3))];
+
+            solid.facing(roof, [0, 1, 0], roofing, undefined, smoked);
+            solid.facing(roof, [0, -1, 0], roofing, undefined, gloom);
+            heldDown(solid, random, [roof[2], roof[4], roof[0], roof[1]], 3, pole);
+            hidePatch(solid, random, at, [-hw, hw], -hd - m(0.01), [m(0.2), low - m(0.2)], [-fx, -fz]);
+
+            return;
+        }
+
+        // A hut: its eaves front and back, its ridge across it, crooked
+        const eaves = h * random.range(0.58, 0.66);
+        const ridge = [h + m(random.range(-0.15, 0.1)), h + m(random.range(-0.15, 0.1))];
+        const lean = m(random.range(-0.2, 0.2));
+
+        for (const [i, j] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+            solid.beam(at(i * (hw - m(0.06)), foot, j * (hd - m(0.06))), at(i * (hw - m(0.06)) + m(random.range(-0.06, 0.06)), eaves + m(0.1), j * (hd - m(0.06))), m(0.12), m(0.12), pole, { ends: false });
+        }
+
+        // (Its walls: the back, the gabled sides, and the front with its doorway)
+        solid.facing([at(-hw, foot, -hd), at(hw, foot, -hd), at(hw, eaves, -hd), at(-hw, eaves, -hd)], [-fx, 0, -fz], boards);
+
+        for (const [k, side] of [-1, 1].entries()) {
+            solid.facing([at(side * hw, foot, -hd), at(side * hw, foot, hd), at(side * hw, eaves, hd), at(side * hw, ridge[k] - m(0.1), lean), at(side * hw, eaves, -hd)], [side * fz, 0, -side * fx], boards);
+        }
+
+        const door = { wide: m(random.range(0.75, 0.95)), high: Math.min(eaves - m(0.25), m(1.75)) };
+        const doorAt = random.range(-0.25, 0.25) * (w - door.wide);
+
+        solid.wall({ origin: at(-hw, foot, hd), across: [fz, 0, -fx], out: [fx, 0, fz] }, w, eaves - foot, [{ u0: hw + doorAt - door.wide / 2, u1: hw + doorAt + door.wide / 2, v0: -foot, v1: -foot + door.high, depth: m(0.15), back: material("shadow") }], boards);
+
+        // (A hide hung half across its doorway)
+        const hung = random.pick([-1, 1]);
+
+        solid.facing([at(doorAt + hung * door.wide * 0.55, door.high + m(0.08), hd + m(0.04)), at(doorAt - hung * door.wide * 0.05, door.high + m(0.08), hd + m(0.04)), at(doorAt + hung * door.wide * 0.1, m(0.1), hd + m(0.12)), at(doorAt + hung * door.wide * 0.55, m(0.05), hd + m(0.05))], [fx, 0, fz], material("hide-dark"));
+
+        // (Its roof, over the eaves and the gables, sagging between them, its underside dark; held
+        // down)
+        const over = [-hw - m(random.range(0.25, 0.4)), hw + m(random.range(0.25, 0.4))];
+        const sag = m(random.range(0.08, 0.2));
+        const ridgeAt = [at(over[0], ridge[0], lean), at((over[0] + over[1]) / 2, (ridge[0] + ridge[1]) / 2 - sag, lean), at(over[1], ridge[1], lean)];
+        const eavesAt = (j) => [at(over[0], eaves - m(0.15), j * (hd + m(0.35))), at((over[0] + over[1]) / 2, eaves - m(0.18) - sag, j * (hd + m(0.35))), at(over[1], eaves - m(0.21), j * (hd + m(0.35)))];
+
+        for (const j of [-1, 1]) {
+            for (const k of [0, 1]) {
+                const slope = [ridgeAt[k], ridgeAt[k + 1], eavesAt(j)[k + 1], eavesAt(j)[k]];
+
+                solid.facing(slope, [j * fx, 1, j * fz], roofing, undefined, smoked);
+                solid.facing(slope.map(([x, y, z]) => [x, y - m(0.1), z]), [-j * fx, -1, -j * fz], roofing, undefined, gloom);
+                heldDown(solid, random, slope, 1, pole);
+            }
+        }
+
+        // (The ridge pole, sagging with it, and poles crossed over each gable, standing past it)
+        const past = (point, side) => [point[0] + side * fz * m(0.25), point[1] + m(0.08), point[2] - side * fx * m(0.25)];
+
+        solid.beam(past(ridgeAt[0], -1), [ridgeAt[1][0], ridgeAt[1][1] + m(0.08), ridgeAt[1][2]], m(0.12), m(0.12), pole);
+        solid.beam([ridgeAt[1][0], ridgeAt[1][1] + m(0.08), ridgeAt[1][2]], past(ridgeAt[2], 1), m(0.12), m(0.12), pole);
+
+        for (const [k, side] of [-1, 1].entries()) {
+            for (const j of [-1, 1]) {
+                const from = at(side * (hw + m(0.05)), eaves - m(0.2), j * (hd + m(0.1)));
+                const to = at(side * (hw + m(0.05)), ridge[k] + m(0.45), lean - j * m(0.35));
+
+                solid.beam(from, to, m(0.09), m(0.09), pole, { ends: false });
+            }
+        }
+
+        hidePatch(solid, random, at, [-hw, hw], -hd - m(0.01), [m(0.3), eaves - m(0.2)], [-fx, -fz]);
+
+        // (A skull over its door, now and then)
+        if (random.chance(0.4)) {
+            skull(solid, at(doorAt, door.high + m(0.12), hd + m(0.08)), part.turn, 0.9);
+        }
+    },
+
+    // A cage for the cult's captives, of poles lashed together with rope: posts at its corners,
+    // rails round its foot and its top, its bars a hand or so apart, a pole or two across its top;
+    // straw on its floor, and in it bones, or the slumped shape of one who died in it
+    cage(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const [fx, fz] = [Math.sin(part.turn), Math.cos(part.turn)];
+        const at = (u, y, v) => [cx + fz * u + fx * v, y, cz - fx * u + fz * v];
+        const pole = material(random.pick(["timber-grey", "deadwood"]));
+        const [half, high] = [m(CAMP.cage.wide / 2), m(CAMP.cage.high)];
+        const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+
+        solid.tone = weathered(random.int(1, 1e6), { moss: 0.1, dirt: 0.4 });
+
+        for (const [i, j] of corners) {
+            solid.beam(at(i * half, -m(0.4), j * half), at(i * half + m(random.range(-0.05, 0.05)), high + m(0.1), j * half + m(random.range(-0.05, 0.05))), m(0.11), m(0.11), pole);
+        }
+
+        for (let k = 0; k < 4; k++) {
+            const [[i0, j0], [i1, j1]] = [corners[k], corners[(k + 1) % 4]];
+            const side = (t, y) => at(half * (i0 + (i1 - i0) * t), y, half * (j0 + (j1 - j0) * t));
+
+            solid.beam(side(0, m(0.15)), side(1, m(0.15)), m(0.08), m(0.08), pole, { ends: false });
+            solid.beam(side(0, high - m(0.08)), side(1, high - m(0.08)), m(0.08), m(0.08), pole, { ends: false });
+
+            for (let b = 1; b <= CAMP.cage.bars; b++) {
+                const t = b / (CAMP.cage.bars + 1) + random.range(-0.04, 0.04);
+
+                solid.beam(side(t, m(0.1)), side(t + random.range(-0.03, 0.03), high - m(0.04)), m(0.06), m(0.06), pole, { ends: false });
+            }
+        }
+
+        // (Poles across its top; and the rope lashing its corners, only worth drawing near)
+        for (const v of [-0.3, 0.35]) {
+            solid.beam(at(-half - m(0.1), high + m(0.02), half * v), at(half + m(0.1), high + m(0.02), half * v + m(random.range(-0.1, 0.1))), m(0.07), m(0.07), pole);
+        }
+
+        solid.near(() => {
+            for (const [i, j] of corners) {
+                const [x, , z] = at(i * half, 0, j * half);
+
+                solid.box(x - m(0.08), high - m(0.18), z - m(0.08), x + m(0.08), high + m(0.02), z + m(0.08), material("rope"));
+            }
+        });
+
+        // (Straw on its floor)
+        const straw = Array.from({ length: 6 }, (_, k) => {
+            const a = (k / 6) * Math.PI * 2;
+
+            return at(Math.cos(a) * half * random.range(0.6, 0.9), m(0.03), Math.sin(a) * half * random.range(0.6, 0.9));
+        });
+
+        solid.facing([at(0, m(0.03), 0), ...straw, straw[0]], [0, 1, 0], material("thatch-grey"));
+
+        if (random.chance(0.5)) {
+            // (One who died in it, slumped in rags against its back, the head fallen forward)
+            const [bx, , bz] = at(m(random.range(-0.3, 0.3)), 0, -half + m(0.34));
+            const [hx, , hz] = at(m(random.range(-0.3, 0.3)) * 0.2, 0, -half + m(0.5));
+
+            solid.lathe(bx, bz, [[m(0.3), 0], [m(0.31), m(0.2)], [m(0.21), m(0.48)], [m(0.1), m(0.6)], [0, m(0.62)]], material(random.pick(["canvas-sack", "fur"])), { segments: 6 });
+            solid.lathe(hx, hz, [[m(0.08), m(0.52)], [m(0.11), m(0.62)], [0, m(0.74)]], material(random.pick(["fur", "leather"])), { segments: 5 });
+
+            return;
+        }
+
+        // (Or the bones of one: a skull, and long bones about it)
+        skull(solid, at(m(random.range(-0.3, 0.3)), 0, m(random.range(-0.3, 0.3))), random.range(0, Math.PI * 2));
+
+        for (let k = random.int(2, 3); k > 0; k--) {
+            const [a, u, v] = [random.range(0, Math.PI), m(random.range(-0.4, 0.4)), m(random.range(-0.4, 0.4))];
+            const [du, dv] = [Math.cos(a) * m(0.22), Math.sin(a) * m(0.22)];
+
+            solid.tube([at(u - du, m(0.04), v - dv), at(u + du, m(0.04), v + dv)], m(0.025), material("bone"), { sides: 4 });
+        }
     },
 
     // A graveyard's wall of field stone, laid dry, its top uneven where stones have come off
@@ -1203,6 +1684,70 @@ function railing(solid, on, part, stone) {
             solid.turnedBox(a[0] + (b[0] - a[0]) * t, a[2] + (b[2] - a[2]) * t, m(0.012), m(0.012), m(kerb), m(high + 0.06), angle, iron);
         }
     }
+}
+
+// A block's plan hewn roughly square, `half` across from its middle (x, z), its corners knocked
+// off unevenly: its corners in order round it
+function hewn(random, x, z, half) {
+    return [[1, 1], [-1, 1], [-1, -1], [1, -1]].flatMap(([sx, sz]) => {
+        const cut = half * random.range(0.12, 0.35);
+
+        return sx * sz > 0 ? [[x + sx * half, z + sz * (half - cut)], [x + sx * (half - cut), z + sz * half]] : [[x + sx * (half - cut), z + sz * half], [x + sx * half, z + sz * (half - cut)]];
+    });
+}
+
+// A skull, the foot of its cranium at `at` ([x, y, z], world pixels), looking the way `turn` says
+// (radians round from the south, as a part's), `size` times a man's: its cranium, the bone of its
+// face with the dark of its eyes and its nose in it, its upper jaw
+function skull(solid, [x, y, z], turn, size = 1) {
+    const bone = material("bone");
+    const s = (metres) => m(metres * size);
+    const [fx, fz] = [Math.sin(turn), Math.cos(turn)];
+    // (Across it, up, and forward)
+    const on = (u, v, w) => [x + fz * s(u) + fx * s(w), y + s(v), z - fx * s(u) + fz * s(w)];
+    const ahead = [fx, 0, fz];
+    const [jx, , jz] = on(0, 0, 0.045);
+
+    solid.lathe(x, z, [[s(0.06), y], [s(0.09), y + s(0.08)], [s(0.075), y + s(0.16)], [0, y + s(0.2)]], bone, { segments: 6 });
+    solid.facing([on(-0.06, 0.02, 0.075), on(0.06, 0.02, 0.075), on(0.065, 0.13, 0.088), on(-0.065, 0.13, 0.088)], ahead, bone);
+
+    for (const side of [-1, 1]) {
+        solid.facing([on(side * 0.012, 0.072, 0.09), on(side * 0.052, 0.072, 0.09), on(side * 0.05, 0.11, 0.092), on(side * 0.014, 0.11, 0.092)], ahead, material("shadow"));
+    }
+
+    solid.facing([on(-0.013, 0.034, 0.086), on(0.013, 0.034, 0.086), on(0, 0.064, 0.088)], ahead, material("shadow"));
+    solid.turnedBox(jx, jz, s(0.045), s(0.035), y - s(0.03), y + s(0.025), -turn, bone);
+}
+
+// A point on a stretch of a hovel's roof (`slope`: its corners in order round it, the first two
+// along its top), `s` of the way along it and `t` of the way down it, `lift` over it (world pixels)
+function onSlope([a, b, c, d], s, t, lift = 0) {
+    return [0, 1, 2].map((i) => a[i] + (b[i] - a[i]) * s + (d[i] - a[i]) * t + (a[i] - b[i] + c[i] - d[i]) * s * t + (i === 1 ? lift : 0));
+}
+
+// A hovel's roof held down (`slope`, as onSlope's): a hide laid over a hole in it somewhere, and
+// poles laid down it from its top past its foot, to keep the wind from lifting it (`poles` of them)
+function heldDown(solid, random, slope, poles, pole) {
+    const [s0, t0] = [random.range(0.1, 0.5), random.range(0.15, 0.45)];
+    const [s1, t1] = [s0 + random.range(0.25, 0.4), t0 + random.range(0.3, 0.45)];
+
+    solid.facing([onSlope(slope, s0, t0, m(0.04)), onSlope(slope, s1, t0 + random.range(-0.05, 0.05), m(0.04)), onSlope(slope, s1 - random.range(0, 0.08), t1, m(0.04)), onSlope(slope, s0 + random.range(0, 0.08), t1, m(0.04))], [0, 1, 0], material(random.pick(["hide", "fur", "hide-dark", "thatch-grey"])));
+
+    for (let k = 0; k < poles; k++) {
+        const s = (k + random.range(0.3, 0.7)) / poles;
+
+        solid.beam(onSlope(slope, s, -0.04, m(0.07)), onSlope(slope, s + random.range(-0.08, 0.08), random.range(1.02, 1.12), m(0.07)), m(0.09), m(0.09), pole, { ends: false });
+    }
+}
+
+// A hide stretched over a hovel's wall to patch it (`at`: the hovel's, across it, up and towards
+// its front), somewhere between u0 and u1 across and y0 and y1 up, at `v`, facing `out` ([x, z])
+function hidePatch(solid, random, at, [u0, u1], v, [y0, y1], [ox, oz]) {
+    const wide = (u1 - u0) * random.range(0.25, 0.4);
+    const u = random.range(u0 + wide / 2, u1 - wide / 2);
+    const [low, high] = [y0 + (y1 - y0) * random.range(0, 0.3), y0 + (y1 - y0) * random.range(0.65, 1)];
+
+    solid.facing([at(u - wide / 2, low + m(random.range(0, 0.1)), v), at(u + wide / 2, low, v), at(u + wide * 0.45, high, v), at(u - wide * 0.55, high - m(0.08), v)], [ox, 0, oz], material(random.pick(["hide", "fur", "hide-dark"])));
 }
 
 const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];

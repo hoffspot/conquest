@@ -2664,7 +2664,7 @@ of candles hangs over the tables. Beside the hearth stands the portal: an arch o
 (the people's: marble for the elves, basalt for the orcs), nine runes up its face and two on each
 leg glowing pale blue, a worn step before it, and in it a veil of light swirling into a vortex,
 lighting the room round it a cold blue (`FLAMES.portal`). The veil is worked out as it's drawn
-(interiors3d.js `veilShader`, after the way games draw swirling fluid): in log-polar coordinates
+(veil.js `veilShader`, after the way games draw swirling fluid): in log-polar coordinates
 about its eye (so its eddies stay round however near the eye), twisted into five arms that wind
 tighter towards it and stay still, as a galaxy's do, while what's on them flows along, turning and
 falling inward (so it never winds itself up); a noise flowing along them, warped by another (the

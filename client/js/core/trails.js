@@ -18,7 +18,7 @@ import { wayOver, rounded } from "./terrain/ways.js";
 import { wadeable, watersOf } from "./terrain/waters.js";
 import { heightAt, stillLevelAt } from "./terrain/height.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
-import { layoutNeutral, NEUTRAL } from "./setpieces/neutral.js";
+import { layoutNeutral, neutralSize } from "./setpieces/neutral.js";
 import { LAIR_KINDS } from "./places.js";
 import { PLOT } from "./setpieces/pieces.js";
 import { CUT_EASE, cutOf, isNeutral, LIE, restingOf } from "./sites.js";
@@ -85,7 +85,7 @@ export class Trails {
             const rest = restingOf(plan, site);
             const [sx, sy] = rest.at;
             const facing = rest.facing ?? atan2(from[0] - sx, from[1] - sy);
-            const depth = (NEUTRAL[site.kind]?.[1] ?? 0) * PLOT;
+            const depth = (neutralSize(site)?.[1] ?? 0) * PLOT;
             const laid = rest.form === "hillside" ? layoutNeutral({ kind: site.kind, seed: site.seed, form: rest.form }) : null;
             const cut = cutOf(laid, rest.slope);
             const ahead = cut ? Math.max(depth / 2 + TRAILS.front, laid.cut.y + 2 * cut + CUT_EASE - depth / 2) : depth / 2 + TRAILS.front;
@@ -117,7 +117,7 @@ export class Trails {
         const rooms = plan.sites
             .filter((site) => isNeutral(site) && !LIE[site.kind] && near(site.at, 120))
             .map((site) => {
-                const [halfW, halfD] = NEUTRAL[site.kind].map((plots) => (plots * PLOT) / 2 + TRAILS.clear);
+                const [halfW, halfD] = neutralSize(site).map((plots) => (plots * PLOT) / 2 + TRAILS.clear);
                 const facing = this.facings.get(site.id);
                 const [x, y] = restingOf(plan, site).at;
 

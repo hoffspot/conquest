@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { CREATURES } from "../client/js/core/creatures.js";
+import { CREATURES, RITES } from "../client/js/core/creatures.js";
 import { buildDungeon, LEVEL_SIZES, MINIS } from "../client/js/core/dungeons/build.js";
 import { CHAMPIONS, foeKey } from "../client/js/core/dungeons/play.js";
 import { realmOf, themeFor, THEMES } from "../client/js/core/dungeons/themes.js";
@@ -253,7 +253,14 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, VEI
     });
 });
 
-describe("a hell gone down (insides.js, host.js enter, #delveFell)", () => {
+// The war's clock set to a time of day: by day (the morning, as a new world starts) or by night
+// (an hour of the war's turns a day: a little past sunset, dark), a day or more on from where it is
+const at = (host, when) => {
+    host.war.turn = Math.ceil(host.war.turn / 60) * 60 + (when === "night" ? 34 : 60);
+    host.war.clock = 0;
+};
+
+describe("a hell gone down (insides.js, host.js enter, #riteFell, #delveFell)", () => {
     let world;
     let host;
     let me;
@@ -269,16 +276,56 @@ describe("a hell gone down (insides.js, host.js enter, #delveFell)", () => {
         me = host.battle.actor(HOST_PLAYER);
         Object.assign(me, { hp: 1e6, maxHp: 1e6 });
 
-        // (The nearest dungeon's way in to where the player starts, its levels a hell's: made so
-        // before they're made)
+        // (The nearest hell's way in to where the player starts, by day: its cult's camp in the
+        // wilds, worldplan/settle.js HELLS)
         const [sx, sy] = world.start.at;
 
-        site = world.plan.sites.filter(({ kind }) => kind === "dungeon").sort((a, b) => hypot(a.at[0] - sx, a.at[1] - sy) - hypot(b.at[0] - sx, b.at[1] - sy))[0];
+        site = world.plan.sites.filter(({ theme }) => theme === "hell").sort((a, b) => hypot(a.at[0] - sx, a.at[1] - sy) - hypot(b.at[0] - sx, b.at[1] - sy))[0];
         world.maps.town.sites.heartOf(site);
         building = world.interiors.buildings.get(`site:${site.id}`);
-        building.theme = "hell";
+        at(host, "day");
         put(me, world.maps.town.sites.set.get(site.id).entrance.outside);
         run(host, 1500, me);
+    });
+
+    it("won't let anyone in by day, nor by night while its cult keeps its rite there; once the last of them falls, lets them in till daybreak", () => {
+        assert.equal(building.theme, "hell");
+
+        // (By day: the cult's not there, the portal cold)
+        assert.equal(cross(host, me, building.door).reason, "riteDay");
+        assert.ok(!host.lairs.has(site.id), "no rite by day");
+
+        // (By night: its high priest and its faithful round its heart, at the hell's tiers)
+        at(host, "night");
+        run(host, 1500, me);
+
+        const held = host.lairs.get(site.id);
+        const keepers = held.ids.map((id) => host.wild.get(id));
+        const [master, tier] = RITES.hell.master;
+
+        assert.deepEqual(keepers.filter((one) => one.master).map((one) => [one.creature, one.tier]), [[master, tier]]);
+        assert.ok(keepers.filter((one) => !one.master).every((one) => one.creature === "cultist" && one.tier >= 9));
+        assert.ok(keepers.length >= 1 + RITES.hell.guards.reduce((sum, [, count]) => sum + count, 0));
+        assert.equal(cross(host, me, building.door).reason, "rite");
+
+        // (All but one slain: still held)
+        const [last, ...rest] = held.ids;
+
+        for (const id of rest) {
+            host.battle.afflict(id, "poison", { by: HOST_PLAYER, damage: 1e7 });
+        }
+
+        run(host, 2000, me);
+        assert.equal(cross(host, me, building.door).reason, "rite");
+
+        // (The last: broken, said, and in)
+        host.battle.afflict(last, "poison", { by: HOST_PLAYER, damage: 1e7 });
+
+        const events = run(host, 2000, me);
+
+        assert.ok(events.some(({ type, change, site: where }) => type === "dungeon" && change === "rite" && where === site.id));
+        assert.ok(cross(host, me, building.door).ok);
+        assert.equal(me.map, building.maps[0]);
     });
 
     it("draws its four levels in a block of their own, each named for its realm, its ways down portals each sealed by its level's boss, and from beyond its throne a way out to the wilds, sealed by its lord", () => {
@@ -315,7 +362,6 @@ describe("a hell gone down (insides.js, host.js enter, #delveFell)", () => {
     });
 
     it("won't let anyone down a portal till its level's boss falls, then does; nor in by the way out", () => {
-        assert.ok(cross(host, me, building.door).ok);
         assert.equal(host.command(HOST_PLAYER, { type: "enter", link: building.flights.find(({ id }) => id.endsWith("/exit")).id }).ok, false);
 
         for (let k = 0; k < 3; k++) {
@@ -357,5 +403,17 @@ describe("a hell gone down (insides.js, host.js enter, #delveFell)", () => {
         assert.ok(cross(host, me, out).ok);
         assert.equal(me.map, "town");
         assert.ok(hypot(me.x - (out.ends[0].arrive[0] + 0.5), me.y - (out.ends[0].arrive[1] + 0.5)) < 3);
+    });
+
+    it("keeps its rite again the next night, its way in shut again till the cult's slain; by day, none", () => {
+        at(host, "day");
+        run(host, 1500, me);
+        assert.ok(!host.lairs.get(site.id)?.ids.some((id) => !host.battle.actor(id)?.dead), "none of the cult about by day");
+        assert.equal(cross(host, me, building.door).reason, "riteDay");
+
+        at(host, "night");
+        run(host, 1500, me);
+        assert.ok(host.lairs.get(site.id).ids.some((id) => host.wild.get(id)?.master && !host.battle.actor(id).dead), "its high priest back at it");
+        assert.equal(cross(host, me, building.door).reason, "rite");
     });
 });

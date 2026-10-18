@@ -2,7 +2,7 @@
 // their own climate and lands, their settlements (with guilds), roads, rivers, sites and camps
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
-import { BIOME, BIOMES, BUILT, campTier, CELL, CELLS, DREADTHORN_LAIRS, FACTIONS, guildFor, guilds, landAt, layOutWorld, openGround, planWorld, RACES, REACH, ROAD, SETTLEMENTS, SITES, startFor, WATER, WEREWOLF_DENS, WORKS } from "../client/js/core/worldplan/plan.js";
+import { BIOME, BIOMES, BUILT, campTier, CELL, CELLS, DREADTHORN_LAIRS, FACTIONS, guildFor, guilds, HELLS, landAt, layOutWorld, openGround, planWorld, RACES, REACH, ROAD, SETTLEMENTS, SITES, startFor, WATER, WEREWOLF_DENS, WORKS } from "../client/js/core/worldplan/plan.js";
 import { metresOf } from "../client/js/core/terrain/curve.js";
 import { stillWaterAt } from "../client/js/core/terrain/height.js";
 import { watersOf } from "../client/js/core/terrain/waters.js";
@@ -265,15 +265,15 @@ describe("the world plan (worldplan/plan.js)", () => {
         }
     });
 
-    it("puts one or two Dreadthorns' lairs out in the wild, high on volcanic ground or in the mountains, far from each other and the drake's, after every other site but the werewolves' dens", () => {
+    it("puts one or two Dreadthorns' lairs out in the wild, high on volcanic ground or in the mountains, far from each other and the drake's, after every other site but the werewolves' dens and the hells", () => {
         for (const [seed, plan] of plans) {
             const lairs = plan.sites.filter(({ kind }) => kind === "dreadthorn's lair");
             const drake = plan.sites.find(({ kind }) => kind === "dragon's lair");
-            const dens = plan.sites.filter(({ kind }) => kind === "werewolf's den").length;
+            const after = plan.sites.filter(({ kind, theme }) => kind === "werewolf's den" || theme === "hell").length;
             const [least, most] = DREADTHORN_LAIRS.count;
 
             assert.ok(lairs.length >= least && lairs.length <= most, `seed ${seed}: ${lairs.length}`);
-            assert.deepEqual(plan.sites.slice(-lairs.length - dens, plan.sites.length - dens).map(({ kind }) => kind), lairs.map(() => "dreadthorn's lair"), "laid out last but the dens");
+            assert.deepEqual(plan.sites.slice(-lairs.length - after, plan.sites.length - after).map(({ kind }) => kind), lairs.map(() => "dreadthorn's lair"), "laid out last but the dens and the hells");
 
             for (const lair of lairs) {
                 const k = at(...lair.cell);
@@ -294,14 +294,15 @@ describe("the world plan (worldplan/plan.js)", () => {
         }
     });
 
-    it("puts one or two werewolves' dens out in the wild, in the woods where the land rises, far from each other and every great lair, after every other site", () => {
+    it("puts one or two werewolves' dens out in the wild, in the woods where the land rises, far from each other and every great lair, after every other site but the hells", () => {
         for (const [seed, plan] of plans) {
             const dens = plan.sites.filter(({ kind }) => kind === "werewolf's den");
             const lairs = plan.sites.filter(({ kind }) => kind.endsWith("lair") || kind === "werewolf's den");
+            const hells = plan.sites.filter(({ theme }) => theme === "hell").length;
             const [least, most] = WEREWOLF_DENS.count;
 
             assert.ok(dens.length >= least && dens.length <= most, `seed ${seed}: ${dens.length}`);
-            assert.deepEqual(plan.sites.slice(-dens.length).map(({ kind }) => kind), dens.map(() => "werewolf's den"), "laid out last");
+            assert.deepEqual(plan.sites.slice(-dens.length - hells, plan.sites.length - hells).map(({ kind }) => kind), dens.map(() => "werewolf's den"), "laid out last but the hells");
 
             for (const den of dens) {
                 const k = at(...den.cell);
@@ -326,6 +327,36 @@ describe("the world plan (worldplan/plan.js)", () => {
             const chosen = dens.filter((den) => WEREWOLF_DENS.biomes.includes(BIOMES[plan.biome[at(...den.cell)]].id));
 
             assert.ok(chosen.length >= Math.min(1, dens.length), `seed ${seed}`);
+        }
+    });
+
+    it("puts two or three hells' ways in out in the wild, far from every people's start, far from each other and every great lair and den, after every other site", () => {
+        for (const [seed, plan] of plans) {
+            const hells = plan.sites.filter(({ theme }) => theme === "hell");
+            const lairs = plan.sites.filter(({ kind }) => kind.endsWith("lair") || kind === "werewolf's den");
+            const starts = plan.places.filter(({ start }) => start).map(({ at: spot }) => spot);
+            const [least, most] = HELLS.count;
+
+            assert.ok(hells.length >= least && hells.length <= most, `seed ${seed}: ${hells.length}`);
+            assert.deepEqual(plan.sites.slice(-hells.length), hells, "laid out last");
+            assert.equal(new Set(hells.map(({ name }) => name)).size, hells.length, "each its own name");
+
+            hells.forEach((hell, k) => {
+                const cell = at(...hell.cell);
+
+                // (A dungeon's way in, of a hell's theme)
+                assert.deepEqual([hell.id, hell.kind, hell.race], [`hell-${k + 1}`, "dungeon", null]);
+                assert.equal(plan.territory[cell], 0, "in the wild");
+                assert.equal(plan.water[cell], 0, "on dry land");
+                assert.ok(hell.name, hell.id);
+
+                // (Well out into the wild from every people's start: a kilometre and a half or more)
+                const nearest = Math.min(...starts.map(([x, y]) => Math.hypot(x - hell.at[0], y - hell.at[1])));
+
+                assert.ok(nearest >= 1500, `seed ${seed}: ${hell.id} ${Math.round(nearest)} m from a start`);
+                assert.ok(plan.sites.every((site) => site === hell || Math.hypot(site.cell[0] - hell.cell[0], site.cell[1] - hell.cell[1]) >= HELLS.sites), "clear of the other sites");
+                assert.ok([...lairs, ...hells].every((other) => other === hell || Math.hypot(other.cell[0] - hell.cell[0], other.cell[1] - hell.cell[1]) >= HELLS.apart), "far from each other and the great lairs and dens");
+            });
         }
     });
 

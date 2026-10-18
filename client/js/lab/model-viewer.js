@@ -76,6 +76,7 @@ const ABOUT = {
     goblinKing: ["Goblin King", "The goblins' elite, leading their war band: a great cleaver, and a bigger bomb now and then", "cleaver"],
     skeleton: ["Skeleton", "Far out, and in ruins"],
     cultist: ["Cultist", "Far out, in camps", "wand"],
+    cultLeader: ["High priest of the cult", "By a hell's portal, at its rite by night"],
     banditChief: ["Bandit chief", "Leading the outlaws who hold a place", "sword"],
     troll: ["Troll", "The far wilds", "hammer"],
     ogre: ["Ogre", "The far wilds", "hammer"],
@@ -1247,7 +1248,7 @@ const groups = [
     ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "knucker", "hodmedod", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "hart", "kelpie", "caveSpider", "shadowStalker", "olm", "centipede", "basilisk", "draugr", "mare", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "spittingCobra", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "ahuizotl", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock", "chimera"]],
     ["The restless dead", ["ghost", "wraith"]],
     ["The ants' nests", ["ant", "greatCentipede", "dungeonSpider", "eliteDungeonSpider", "giantCockroach", "dungeonWasp", "dungeonScorpion", "blackWidow", "antMonster"]],
-    ["For the mightiest", ["dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "demonLord"]],
+    ["For the mightiest", ["dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "cultLeader", "demonLord"]],
 ];
 
 for (const [label, ids] of groups) {

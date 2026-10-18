@@ -186,6 +186,22 @@ describe("the lights out of doors (world/lights.js)", () => {
         assert.equal(lightsMesh(lights).getObjectByName("flames").material, parts.flames.material, "one material for every chunk's");
     });
 
+    it("draws a hell's camp's fires, all lit only at night: each candle's flame, its portal's glow but no flame (its veil's drawn)", () => {
+        const lights = [
+            { x: 0, y: 0.3, z: 0, kind: "candles-night" },
+            { x: 0.2, y: 0.2, z: 0, kind: "candle-night" },
+            { x: 6, y: 1, z: 0, kind: "brazier-night" },
+            { x: 0, y: 1.9, z: 5, kind: "hellgate" },
+        ];
+        const parts = Object.fromEntries(lightsMesh(lights).children.map((child) => [child.name, child]));
+
+        assert.equal(parts.flames.geometry.getAttribute("position").count, (2 * FIRES["candle-night"].tongues + FIRES["brazier-night"].tongues) * 14, "no flame for the portal");
+        assert.equal(parts.glows.geometry.getAttribute("position").count, 4);
+        assert.ok(lights.every(({ kind }) => FIRES[LIGHTS[kind].fire].night));
+        assert.ok(parts.glows.geometry.getAttribute("glow").array.every((value, k) => k % 4 !== 1 || value === 1), "every glow lit as the evening is");
+        assert.deepEqual(nearestLights(lights, { x: 0.5, y: 0.6, z: 0.4 }, 9).map(({ light }) => light.kind).sort(), ["brazier-night", "candles-night", "hellgate"], "the candles' light the tallest's");
+    });
+
     it("gives the nearest within their reach, nearest first, as many as asked", () => {
         const lights = [
             { x: 30, y: 0, z: 0, kind: "torch" },

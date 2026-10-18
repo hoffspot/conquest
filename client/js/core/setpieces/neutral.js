@@ -39,6 +39,39 @@ export const NEUTRAL = Object.freeze({
 });
 
 /**
+ * A hell's way in (core/dungeons/themes.js `hell`): a cult's camp in the wilds round its portal
+ * (metres), the hamlet gone wrong of docs/DUNGEONS.md's *Hells*:
+ * - its size (`size`: plots across and deep, bigger than a dungeon's mouth);
+ * - its pentagram, scorched into the ground (`ring`: its circle's radius, the star's points on
+ *   it), candles burning at each of its points (`candles`: how many at each, from and to), and in
+ *   its middle the portal, an arch `arch` wide and high within its two pillars (`pillar` wide);
+ * - braziers outside its ring (`braziers`: how many, how far out), and an altar at its back
+ *   (`altar`: how far behind the portal, how wide, deep and high);
+ * - round it, the cult's hovels and lean-tos at its back and sides (`hovels`: how many, across how
+ *   much of the way round, how far out, and how big, wide, deep and high, from and to), a cage, a
+ *   ring of stakes topped with skulls (`stakes`: how many, how far out, how tall), and the cart of
+ *   what they've taken, its barrels and crates beside it;
+ * - the ground under it levelled (`pad`: its radius, and how far round it eases into the land), and
+ *   trodden bare round the pentagram, nothing growing there (`court`: how far out from its middle).
+ */
+export const HELL_CAMP = Object.freeze({
+    size: [9, 8],
+    ring: 5,
+    candles: [3, 5],
+    arch: { w: 2.4, h: 3.4 },
+    pillar: 0.8,
+    braziers: { count: 4, out: 7.6 },
+    altar: { behind: 7.6, w: 2.2, d: 1.2, h: 0.9 },
+    hovels: { count: [3, 5], spread: 2.8, out: [12, 13.5], w: [3, 4.2], d: [2.6, 3.4], h: [2.2, 2.8] },
+    stakes: { count: [5, 8], out: [9.4, 10.2], h: [1.8, 2.4] },
+    pad: { radius: 11, ease: 4 },
+    court: 6.4,
+});
+
+/** The size a site's laid out at (plots across and deep): its kind's; a hell's way in, the cult's camp, its own. */
+export const neutralSize = ({ kind, theme = null }) => (kind === "dungeon" && theme === "hell" ? HELL_CAMP.size : NEUTRAL[kind]);
+
+/**
  * An old graveyard, as old churchyards are (docs/GAME.md, *The sites no people keeps*; the
  * research behind it: graves run east and west, their headstones at their heads, at the west;
  * metres):
@@ -128,7 +161,7 @@ const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
  * a people's works (works.js, its `people`'s) has its yard, posts and round too.
  */
 export function layoutNeutral({ kind, seed, form = null, facing = 0, theme = null, people = null }) {
-    const size = NEUTRAL[kind];
+    const size = neutralSize({ kind, theme });
 
     if (!size) {
         return null;
@@ -176,6 +209,92 @@ function lairLayout(random, width, depth, { mouth, face, back, high, inset, spur
     ];
 
     return { parts, solid, heart: [cx, cy], cut: { x: cx, y: back, face }, entry: { x: cx, y: back + 0.4, width: mouth.w, height: mouth.h, inside: "lair" } };
+}
+
+// A hell's way in (HELL_CAMP): its pentagram in the middle, its candles at the star's points, the
+// portal standing in it facing the way the camp's come at (gone into from its front), the altar
+// behind it and braziers round it; and round all that, the cult's hovels at the back and sides,
+// the stakes with their skulls, the cage and the cart of what they've taken, clear of the way in
+// from the front. Its heart before the portal, in the ring: where its keeper stands at the rite
+function hellCamp(random, width, depth) {
+    const { ring, candles, arch, pillar, braziers, altar, hovels, stakes, pad, court } = HELL_CAMP;
+    const [cx, cy] = [width / 2, depth / 2 - 1];
+    const turn = random.range(-0.2, 0.2);
+    const parts = [{ part: "pentagram", x: cx, y: cy, r: ring, turn }];
+    const solid = [];
+    const keep = (part, w, d) => {
+        parts.push(part);
+        solid.push(box(part.x, part.y, w, d));
+    };
+    // (Round the middle, `angle` from the front, toward the camp's front (south) at 0)
+    const round = (angle, out) => [cx + sin(angle) * out, cy + cos(angle) * out];
+
+    // (The candles at the star's points, one point at its back, as the arch stands in it)
+    for (let k = 0; k < 5; k++) {
+        const [x, y] = round(PI + turn + (k / 5) * TAU, ring);
+
+        parts.push({ part: "candles", x, y, count: random.int(...candles), seed: random.seed() });
+    }
+
+    // (The portal in the middle, its face to the front: its pillars stand in the way, its arch
+    // is gone into)
+    for (const side of [-1, 1]) {
+        solid.push(box(cx + side * (arch.w / 2 + pillar / 2), cy, pillar, pillar));
+    }
+
+    parts.push({ part: "hellgate", x: cx, y: cy, w: arch.w, h: arch.h, pillar, seed: random.seed() });
+
+    keep({ part: "altar", x: cx, y: cy - altar.behind, w: altar.w, d: altar.d, h: altar.h }, altar.w + 0.4, altar.d + 0.4);
+
+    // (Its braziers lit only at night, as its candles and its portal are: the camp's dead by day)
+    for (let k = 0; k < braziers.count; k++) {
+        const [x, y] = round(PI / 4 + (k / braziers.count) * TAU, braziers.out);
+
+        keep({ part: "brazier", x, y, night: true }, 0.8, 0.8);
+    }
+
+    // (The stakes round the ring, none across the way in from the front)
+    const staked = random.int(...stakes.count);
+
+    for (let k = 0; k < staked; k++) {
+        const angle = PI / 3 + (k / Math.max(1, staked - 1)) * (TAU - (2 * PI) / 3) + random.range(-0.08, 0.08);
+        const [x, y] = round(angle, random.range(...stakes.out));
+
+        keep({ part: "stake", x, y, h: random.range(...stakes.h), lean: random.range(-0.12, 0.12), skull: random.chance(0.8) }, 0.5, 0.5);
+    }
+
+    // (The hovels at the back and the sides, each facing the ring, none in front of it, nor where
+    // the cage and the cart stand)
+    const built = random.int(...hovels.count);
+
+    for (let k = 0; k < built; k++) {
+        const angle = PI - hovels.spread / 2 + ((k + 0.5) / built) * hovels.spread + random.range(-0.1, 0.1);
+        const [x, y] = round(angle, random.range(...hovels.out));
+        const [w, d] = [random.range(...hovels.w), random.range(...hovels.d)];
+
+        parts.push({ part: "hovel", x, y, w, d, h: random.range(...hovels.h), turn: angle + PI, seed: random.seed() });
+        solid.push(box(x, y, Math.max(w, d), Math.max(w, d)));
+    }
+
+    // (The cage at one side, the cart of what they've taken and its barrels at the other, both
+    // forward of the hovels)
+    const side = random.pick([-1, 1]);
+
+    keep({ part: "cage", x: cx + side * 10.5, y: cy + 4.6, turn: random.range(0, TAU), seed: random.seed() }, 1.8, 1.8);
+    keep({ part: "cart", x: cx - side * 10.2, y: cy + 4.2, turn: random.range(-0.4, 0.4) }, 3.2, 2.2);
+    keep({ part: "stores", x: cx - side * 10.6, y: cy + 7.2, seed: random.seed() }, 2.2, 2.2);
+    keep({ part: "bones", x: cx + side * random.range(5.6, 7), y: cy + random.range(6.4, 7.6), turn: random.range(0, TAU), big: false }, 1.6, 1.6);
+
+    // (Gone into through the arch from the front; the ground levelled under the ring, and trodden
+    // bare round it)
+    return {
+        parts,
+        solid,
+        heart: [cx, cy + 2.4],
+        pad: { at: [cx, cy], radius: pad.radius, raise: 0, ease: pad.ease },
+        court: { at: [cx, cy], radius: court, ground: "road" },
+        entry: { x: cx, y: cy + pillar / 2, width: arch.w, height: arch.h, inside: "dungeon" },
+    };
 }
 
 const LAYOUTS = {
@@ -266,6 +385,10 @@ const LAYOUTS = {
     // temple's columns either side, its fallen stone about (an ancient temple), or the earth the
     // ants have dug out heaped either side (an ants' nest)
     dungeon(random, width, depth, seed, form, facing, theme) {
+        if (theme === "hell") {
+            return hellCamp(random, width, depth);
+        }
+
         const laid = LAYOUTS.cave(random, width, depth, seed, form);
         const [cx, front] = [width / 2, laid.entry.y];
         const parts = [...laid.parts];
@@ -752,8 +875,9 @@ function tombAt(random, x, y, along, turnOf, kind) {
 }
 
 // How far each kind of part reaches each way from its middle (metres, across and deep: so it's a
-// piece of its own, stood on the ground where it is), for those laid out at a point
-const REACH = Object.freeze({ pit: [8.8, 8.8], stores: [2.2, 2.2], cart: [3, 3], stone: [1.6, 1.6], altar: [2.4, 1.4], plinth: [3.2, 3.2], figure: [1.2, 1.2], brazier: [0.6, 0.6], backwall: [6.8, 1.2], torch: [0.4, 0.4], column: [1, 1], bones: [2, 2], brokenTower: [7.2, 7.2], gatepost: [0.8, 0.8], gate: [2.6, 2.6], grave: [3.2, 3.2], tomb: [3, 3], mausoleum: [5.2, 5.6], obelisk: [1.4, 1.4] });
+// piece of its own, stood on the ground where it is), for those laid out at a point (a hell's
+// portal its pillars and its step before it; a hovel or a cage as far as it reaches turned any way)
+const REACH = Object.freeze({ pit: [8.8, 8.8], stores: [2.2, 2.2], cart: [3, 3], stone: [1.6, 1.6], altar: [2.4, 1.4], plinth: [3.2, 3.2], figure: [1.2, 1.2], brazier: [0.6, 0.6], backwall: [6.8, 1.2], torch: [0.4, 0.4], column: [1, 1], bones: [2, 2], brokenTower: [7.2, 7.2], gatepost: [0.8, 0.8], gate: [2.6, 2.6], grave: [3.2, 3.2], tomb: [3, 3], mausoleum: [5.2, 5.6], obelisk: [1.4, 1.4], hellgate: [4.2, 1.8], hovel: [6, 6], cage: [2.4, 2.4] });
 
 /**
  * A part's middle and size, laid out ([x, y, w, d] metres, from its site's north-west corner):

@@ -27,6 +27,10 @@ const ROUND = 22;
 const MARKET = 60;
 const SMITHY = 80;
 
+// The braziers heard crackling while they're lit: the shrines', and those lit only at night, a
+// hell's camp's (world/lights.js LIGHTS)
+const BRAZIERS = new Set(["brazier", "brazier-night"]);
+
 export class Surroundings {
     /**
      * @param {object} overworld - The world outside (core/overworld.js): its lands,
@@ -58,7 +62,7 @@ export class Surroundings {
             market: nearest(places.markets, x, z)?.far ?? Infinity,
             smithy: nearest(places.smithies, x, z, SMITHY),
             fire: nearest(lights.filter(({ kind }) => kind === "fire"), x, z)?.far ?? Infinity,
-            brazier: lit ? (nearest(lights.filter(({ kind }) => kind === "brazier"), x, z)?.far ?? Infinity) : Infinity,
+            brazier: lit ? (nearest(lights.filter(({ kind }) => BRAZIERS.has(kind)), x, z)?.far ?? Infinity) : Infinity,
         };
     }
 

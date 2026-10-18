@@ -119,6 +119,18 @@ export const DREADTHORN_LAIRS = Object.freeze({ count: [1, 2], biomes: ["volcani
  */
 export const WEREWOLF_DENS = Object.freeze({ count: [1, 2], biomes: ["darkwood", "woods"], rather: ["elfwood", "tundra", "heath", "mountain"], hills: 0.2, steep: 0.2, clear: 7, sites: 7, camps: 4, apart: 30, tries: 12000, strict: 0.6 });
 
+/**
+ * The hells' ways in (core/dungeons/themes.js `hell`, never one of the wild's dungeons), each a
+ * cult's camp round its portal: `count` of them, two or three a world, out in the wild (no
+ * people's lands), on the land the cults keep to (`biomes`: the cultists' own, worldplan/races.js
+ * FACTIONS; failing that, any wild land), as far from every people's start as the wild goes (at
+ * least `far` metres from each: failing that, a little nearer, `nearer` of it at a time), `clear`
+ * cells from the settlements, `sites` from the other sites (the dungeons' ways in among them),
+ * `camps` from the camps and `apart` from each other and from the great lairs and dens; `tries`
+ * darts at most each time, the first `strict` share of them only on the cults' land.
+ */
+export const HELLS = Object.freeze({ count: [2, 3], biomes: ["marsh", "jungle", "darkwood", "volcanic"], far: 3200, nearer: 0.85, clear: 10, sites: 8, camps: 5, apart: 60, tries: 12000, strict: 0.6 });
+
 // The kinds of place a beast keeps (a great lair, a den), each far from the others
 const BEAST_LAIRS = Object.freeze([...LAIR_KINDS, "werewolf's den"]);
 
@@ -690,6 +702,10 @@ export function settleLand(land, seed) {
     // out before moves for them)
     sites.push(...beastLairs(land, places, sites, camps, createRandom(seed * 59 + 31), used, { kind: "werewolf's den", numbers: WEREWOLF_DENS, id: "werewolf-s-den" }));
 
+    // (And the hells' ways in after them, the same way, from numbers of their own: nothing laid
+    // out before moves for them)
+    sites.push(...hells(land, places, sites, camps, createRandom(seed * 61 + 37)));
+
     // (And each people's master shops, last, from numbers of their own: nothing moves for them)
     masterShops(places, createRandom(seed * 47 + 23));
 
@@ -1033,6 +1049,47 @@ function beastLairs(land, places, sites, camps, random, used, { kind = "dreadtho
         const tongue = RACES[random.int(0, RACES.length - 1)];
 
         found.push({ id: `${id}-${sites.length + found.length + 1}`, kind, race: null, name: nameIn(tongue, random, used), cell, at: centre(...cell), seed: random.seed() });
+    }
+
+    return found;
+}
+
+// The hells' ways in (HELLS): darts thrown at the land, each kept where it's dry wild land, on the
+// cults' land (or, failing that, any), as far from every people's start as it's wanted, clear of
+// the settlements, the sites and the camps, and far from each other and the great lairs; failing enough so far out, a little nearer each time. Each a dungeon's site of the
+// hell's theme, named as hells are, none the same as another's
+function hells(land, places, sites, camps, random) {
+    const { biome, water, territory } = land;
+    const { count, biomes, far, nearer, clear, sites: fromSites, camps: fromCamps, apart: away, tries, strict } = HELLS;
+    const starts = places.filter(({ start }) => start).map(({ at }) => at);
+    const lairs = sites.filter((site) => BEAST_LAIRS.includes(site.kind));
+    const wanted = random.int(count[0], count[1]);
+    const found = [];
+
+    for (let reach = far, round = 0; round < 8 && found.length < wanted; reach *= nearer, round++) {
+        for (let k = 0; k < tries && found.length < wanted; k++) {
+            const cell = [random.int(5, CELLS - 6), random.int(5, CELLS - 6)];
+            const at = cellIndex(...cell);
+            const spot = centre(...cell);
+
+            if (water[at] || biome[at] === BIOME.beach || territory[at] || (k < tries * strict && !biomes.includes(BIOMES[biome[at]].id)) || !dry(land, ...cell, 1)) {
+                continue;
+            }
+
+            if (starts.some(([x, y]) => hypot(x - spot[0], y - spot[1]) < reach) || !clearOf(places, cell, clear)) {
+                continue;
+            }
+
+            if ([...sites, ...found].some((site) => apart(site.cell, cell) < fromSites) || camps.some((camp) => apart(camp.cell, cell) < fromCamps) || [...lairs, ...found].some((one) => apart(one.cell, cell) < away)) {
+                continue;
+            }
+
+            const seed = random.seed();
+            const names = found.map(({ name }) => name);
+            const name = [0, 1, 2, 3, 4, 5, 6, 7].map((n) => dungeonName(THEMES.hell, seed + n * 7919)).find((one) => !names.includes(one)) ?? dungeonName(THEMES.hell, seed);
+
+            found.push({ id: `hell-${found.length + 1}`, kind: "dungeon", theme: "hell", race: null, name, cell, at: spot, seed });
+        }
     }
 
     return found;

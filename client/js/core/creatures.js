@@ -197,6 +197,8 @@ export const CREATURES = Object.freeze({
     // (The lord of a hell, on its throne at the bottom of the pit: core/dungeons/themes.js hell. A
     // great horned brute for now, red as a coal, its fists burning and hellfire in its hands,
     // until a bought model of its own is read: beasts/looks.js)
+    // (A cult's high priest, keeping its rite by a hell's portal at night: host.js #lairs, RITES)
+    cultLeader: { name: "High priest of the cult", hp: 80, hands: true, weapon: "cultLeader", speed: 1.2, chase: 2.3, temper: "aggressive", roam: 3, leash: 24, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.15, perilous: true, darkSight: true },
     demonLord: { name: "Demon lord", hp: 120, hands: true, weapon: "demonLord", speed: 1.1, chase: 2.4, temper: "aggressive", roam: 4, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.3, perilous: true, darkSight: true, steady: true },
 });
 
@@ -229,6 +231,21 @@ export const LAIRS = Object.freeze({
     "werewolf's den": { master: ["moonfang", 9], guards: [["werewolf", 1, 8], ["werewolf", 1, 8], ["direWolf", 3, 8]], near: 100, back: 40 * 60 * 1000, relic: true },
     "ruined castle": { master: ["wightLord", 9], guards: [["skeleton", 3, 7], ["ghost", 2, 7], ["wraith", 1, 8]], near: 90, back: 30 * 60 * 1000, within: true, relic: true },
 });
+
+/**
+ * The rites kept at the hells' ways in (a dungeon's site of the hell's theme: core/dungeons
+ * themes.js `hell`, its cult's camp round its portal), by the theme: held as a lair is (LAIRS: its
+ * `master`, the cult's high priest, and its `guards`, the cult's faithful; how `near` a player
+ * comes for them to be there), but only after dark (`night`), the cult gone at daybreak. Slain to
+ * the last of them, the portal they keep lets anyone through till daybreak (host.js `enter`), and
+ * they're back at it the next night.
+ */
+export const RITES = Object.freeze({
+    hell: { master: ["cultLeader", 10], guards: [["cultist", 4, 10], ["cultist", 2, 9]], near: 110, night: true },
+});
+
+/** Who holds a perilous site (LAIRS', by its kind), or keeps a rite at it (RITES', by its theme: a hell's way in); or null. */
+export const lairOf = (site) => LAIRS[site.kind] ?? (site.theme ? RITES[site.theme] : null) ?? null;
 
 /** How much more often the night's creatures are met after dark (weights, by their `night`). */
 export const NIGHT_WEIGHT = Object.freeze({ only: 3, more: 2 });

@@ -273,9 +273,9 @@ export const CATALOG = Object.freeze({
     trollDeath: { group: "Monsters", label: "Troll dying", about: "A bison's bellow, or a man's death grunt, slowed.", plays: "A troll (an ogre a little higher, a frost troll lower) dying." },
 
     // Voices (the people-shaped among the wild's)
-    humanAttack: { group: "Voices", label: "A man attacking", about: "A man's effort grunt.", plays: "A bandit or a cultist (a man: a woman's voice isn't recorded yet) striking, loudest as its blow lands: now and then." },
-    humanHurt: { group: "Voices", label: "A man hurt", about: "A man's pain grunt.", plays: "A bandit or a cultist (a man: a woman's voice isn't recorded yet) struck, no oftener than every 0.7 seconds." },
-    humanDeath: { group: "Voices", label: "A man dying", about: "A man's dying groan.", plays: "A bandit or a cultist (a man: a woman's voice isn't recorded yet) dying." },
+    humanAttack: { group: "Voices", label: "A man attacking", about: "A man's effort grunt.", plays: "A bandit, a cultist or a cult's high priest (a man: a woman's voice isn't recorded yet) striking, loudest as its blow lands: now and then." },
+    humanHurt: { group: "Voices", label: "A man hurt", about: "A man's pain grunt.", plays: "A bandit, a cultist or a cult's high priest (a man: a woman's voice isn't recorded yet) struck, no oftener than every 0.7 seconds." },
+    humanDeath: { group: "Voices", label: "A man dying", about: "A man's dying groan.", plays: "A bandit, a cultist or a cult's high priest (a man: a woman's voice isn't recorded yet) dying." },
     humanRoughAttack: { group: "Voices", label: "A rough man attacking", about: "A deeper, rougher man's fight grunt.", plays: "The bandit chief (a man) striking, loudest as its blow lands: now and then." },
     humanRoughHurt: { group: "Voices", label: "A rough man hurt", about: "A rough man's pain grunt.", plays: "The bandit chief (a man) struck, no oftener than every 0.7 seconds." },
     humanRoughDeath: { group: "Voices", label: "A rough man dying", about: "A rough man's growl and agony.", plays: "The bandit chief (a man) dying." },
@@ -307,7 +307,7 @@ export const CATALOG = Object.freeze({
     lakeLapping: { group: "The world", label: "A lake", about: "Gentle waves lapping at a lake's edge: TRP's. A 28-second loop.", plays: "Within 45 metres of a lake." },
     creakTree: { group: "The world", label: "A tree creaking", about: "A tree creaking deep in the wind: felix.blume's, in Patagonia.", plays: "In the woods, from a tree near, every 25 to 70 seconds." },
     campfireLoop: { group: "The world", label: "A camp fire", about: "A small camp fire crackling: kyles's. A 31-second loop.", plays: "Within 16 metres of a camp fire." },
-    brazierLoop: { group: "The world", label: "A brazier", about: "A close fire's roar: Nox_Sound's camp fire. An 11-second loop.", plays: "Within 10 metres of a lit brazier (at a guard post, at night); in a smithy, its forge; in a castle's undercroft." },
+    brazierLoop: { group: "The world", label: "A brazier", about: "A close fire's roar: Nox_Sound's camp fire. An 11-second loop.", plays: "Within 10 metres of a lit brazier (at a guard post, or round a hell's way in, the cult's camp, at night); in a smithy, its forge; in a castle's undercroft." },
     rainLoop: { group: "The world", label: "Rain", about: "Light rain in the country: jmbphilmes's. A 34-second loop.", plays: "Not yet: there's no weather. In the studio." },
     thunder: { group: "The world", label: "Thunder", about: "Distant thunder rolling: richwise's and Fission9's.", plays: "Not yet: there's no weather. In the studio." },
 
@@ -379,7 +379,7 @@ export const CATALOG = Object.freeze({
     // Cues (scripts/sounds/items.js: the Versilian Community Sample Library's, in the music's D Dorian)
     slain: { group: "Cues", label: "Slain", about: "Two hand chimes struck together, low on D.", plays: "A foe the player or a follower felled, or one the player fought in the last 30 seconds, hitting the ground." },
     fallen: { group: "Cues", label: "Fallen", about: "Three hand chimes falling to D, sombre.", plays: "The player falling, or a follower." },
-    wake: { group: "Cues", label: "Waking", about: "Two hand chimes rising a fifth.", plays: "Waking again after falling; a spell learnt from a tome; a place cleared; a barracks put down, its town taken or not; asked to trade, summoned, or asked to a party by another player; another player joining the party." },
+    wake: { group: "Cues", label: "Waking", about: "Two hand chimes rising a fifth.", plays: "Waking again after falling; a spell learnt from a tome; a place cleared; a hell's level's master slain; a hell's cult's rite broken, near its camp; a barracks put down, its town taken or not; asked to trade, summoned, or asked to a party by another player; another player joining the party." },
     levelUp: { group: "Cues", label: "Rising a rank", about: "A quick run up the folk harp, a hand chime on its top note.", plays: "A new rank in a skill, among the player's people or in the guilds; a school of magic come to its next tier; a spell grown stronger." },
     questDone: { group: "Cues", label: "A quest done", about: "A folk harp's run from D, then two hand chimes ringing.", plays: "A request handed in and done." },
     newsHeard: { group: "Cues", label: "News", about: "A small Nepalese hand bell.", plays: "News of the war where the player is: a fortification razed or fallen, an envoy arrived or struck down, a convoy fallen on, a supply wagon taken, a seat's ruler making their last stand; a camp's palisade breached, the camp held or carried, or an army or reserve routed, near the player (or their people's); and, from a Knight up, their people's army's supplies not getting through." },

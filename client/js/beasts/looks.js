@@ -632,6 +632,8 @@ export const LOOKS = Object.freeze({
         attacks: ["slash", "thrust", "chop"], rests: ["rattle", "look"], specials: ["curse"],
     },
     frostTroll: { body: "humanoid", scale: [1.5, 1.6] },
+    // (A cult's high priest: robed as its faithful are, a head taller, its staff in hand)
+    cultLeader: { body: "humanoid", scale: [1.08, 1.12] },
     // (A hell's lord: a great horned brute, until a bought model of its own is read)
     demonLord: { body: "humanoid", scale: [1.6, 1.65] },
 });
@@ -725,15 +727,16 @@ const BRUTES = {
 /**
  * One of the people-shaped creatures (a HUMANOIDS id), from a seed: { shape, look, equipment,
  * walk } (as presets.js's), not yet armed (the game adds its weapon's). Bandits are human
- * cutthroats, dressed as rogues, and cultists wear mages' robes; the others are their kind's.
+ * cutthroats, dressed as rogues, and cultists wear mages' robes, their high priest too; the others
+ * are their kind's.
  */
 export function humanoidLook(id, seed = 1) {
     // (Bandits: cutthroats, dressed as rogues, their chief in a warrior's harness; cultists in
-    // mages' robes, hatless)
-    if (id === "bandit" || id === "banditChief" || id === "cultist") {
+    // mages' robes, hatless, their high priest holding the staff it raises over its rite)
+    if (id === "bandit" || id === "banditChief" || id === "cultist" || id === "cultLeader") {
         const sex = seed % 4 === 0 ? "f" : "m";
-        const folk = folkLook({ role: "adventurer", look: { bandit: "rogue", banditChief: "warrior", cultist: "mage" }[id], sex, seed });
-        const carried = new Set(["sword", "staff", "wand", "wizardHat"]);
+        const folk = folkLook({ role: "adventurer", look: { bandit: "rogue", banditChief: "warrior", cultist: "mage", cultLeader: "mage" }[id], sex, seed });
+        const carried = new Set(["sword", ...(id === "cultLeader" ? [] : ["staff"]), "wand", "wizardHat"]);
 
         return { shape: folk.shape, look: folk.look, equipment: folk.equipment.filter((each) => !carried.has(each)), walk: "natural" };
     }

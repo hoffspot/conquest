@@ -17,7 +17,7 @@ import { castleLayout, inCourt, solidAt } from "./setpieces/castles.js";
 import { GOD_IDS } from "./lore/gods.js";
 import { CITADEL, citadelLevel, citadelParts, citadelWays, clearingOf, inMoat, insideCitadel, insideWard, layoutCitadel, moatReach, outlineOf } from "./setpieces/citadel.js";
 import { footprint } from "./setpieces/town.js";
-import { extentOf, layoutNeutral, NEUTRAL } from "./setpieces/neutral.js";
+import { extentOf, layoutNeutral, NEUTRAL, neutralSize } from "./setpieces/neutral.js";
 import { WORKS_SIZE } from "./setpieces/works.js";
 import { GROUND, LANDMARKS, PEOPLE_PLACES, PLOT, pieceCatalog, TOWER_SIZE, towerKey } from "./setpieces/pieces.js";
 import { CELLS, CHUNK, CHUNKS, WORLD_SIZE } from "./worldplan/plan.js";
@@ -74,13 +74,28 @@ const LYING = Object.freeze({ shift: 64, step: 16, lattice: 8, round: 24, across
 const TAU = Math.PI * 2;
 const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
 
+// The squares whose middles are within `radius` metres of a point ({ x, y }, metres): [[i, j]]
+function discOf({ x, y }, radius) {
+    const squares = [];
+
+    for (let j = Math.floor(y - radius); j <= Math.ceil(y + radius); j++) {
+        for (let i = Math.floor(x - radius); i <= Math.ceil(x + radius); i++) {
+            if (hypot(i + 0.5 - x, j + 0.5 - y) <= radius) {
+                squares.push([i, j]);
+            }
+        }
+    }
+
+    return squares;
+}
+
 /** The size (plots across and deep) of what's built at a site, or null if nothing is. */
 export function siteSize(site) {
     if (site.kind === "watchtower" && site.race) {
         return site.race === "human" ? HUMAN_WATCHTOWER : WATCHTOWER;
     }
 
-    return ownPlace(site) ?? NEUTRAL[site.kind] ?? null;
+    return ownPlace(site) ?? neutralSize(site) ?? null;
 }
 
 // A people's own place's size (a castle, a special place), if the site is one
@@ -150,7 +165,7 @@ export function restingOf(plan, site) {
     const known = RESTING.get(plan);
 
     if (!known.has(site.id)) {
-        const [w, h] = NEUTRAL[site.kind];
+        const [w, h] = neutralSize(site);
         const reach = hypot(w, h) * (PLOT / 2);
         const depth = h * PLOT;
         const land = (x, y) => heightAt(plan, Math.min(WORLD_SIZE - 1, Math.max(0, x)), Math.min(WORLD_SIZE - 1, Math.max(0, y)));
@@ -168,8 +183,8 @@ export function restingOf(plan, site) {
         }
 
         // (A hillside: the spot whose slope across it is nearest the one wanted, within what's
-        // wanted of its rise, facing down it)
-        const hill = HILLSIDE[site.kind];
+        // wanted of its rise, facing down it; never a hell's way in, a cult's camp in the open)
+        const hill = site.theme === "hell" ? null : HILLSIDE[site.kind];
         let rest = null;
 
         if (hill) {
@@ -224,7 +239,7 @@ export function restingOf(plan, site) {
                 }
             }
 
-            rest = { at: best.at, facing: null, form: site.kind === "cave" || site.kind === "dungeon" ? "pit" : hill ? "hillside" : null, slope: 0 };
+            rest = { at: best.at, facing: null, form: site.kind === "cave" || (site.kind === "dungeon" && site.theme !== "hell") ? "pit" : hill ? "hillside" : null, slope: 0 };
         }
 
         known.set(site.id, rest);
@@ -418,7 +433,8 @@ export class Sites {
 
     /**
      * What ground a square in a castle's courtyard has (a GROUND kind: open ground, trodden,
-     * setpieces/castles.js), or null for one not in a courtyard.
+     * setpieces/castles.js), or round a hell's camp's ring (trodden bare: setpieces/neutral.js
+     * HELL_CAMP), or null for one not in either.
      */
     courtAt(x, y) {
         return this.courts.get(y * WORLD_SIZE + x) ?? null;
@@ -578,8 +594,10 @@ export class Sites {
             const way = new Set(entrance?.clear.map(([i, j]) => j * size + i));
             const all = laid ? laid.solid.flatMap(([x0, y0, x1, y1]) => inside(footprint({ ...turn((x0 + x1) / 2, (y0 + y1) / 2), w: (x1 - x0) / PLOT, h: (y1 - y0) / PLOT, facing }))) : inside(corners);
             const squares = (castle ? all.filter(([i, j]) => solidAt(castle, lot(i + 0.5, j + 0.5))) : all).filter(([i, j]) => !way.has(j * size + i));
-            // (The way into its keep, too: cleared into its walls, flagged as its courtyard)
-            const courts = castle ? all.filter(([i, j]) => way.has(j * size + i) || (!solidAt(castle, lot(i + 0.5, j + 0.5)) && inCourt(castle, lot(i + 0.5, j + 0.5)))) : [];
+            // (The way into its keep, too: cleared into its walls, flagged as its courtyard; or a
+            // layout's own ground round its middle, a hell's camp's trodden bare round its ring)
+            const bare = laid?.court && turn(...laid.court.at);
+            const courts = castle ? all.filter(([i, j]) => way.has(j * size + i) || (!solidAt(castle, lot(i + 0.5, j + 0.5)) && inCourt(castle, lot(i + 0.5, j + 0.5)))) : bare ? discOf(bare, laid.court.radius) : [];
             const heart = laid ? turn(...laid.heart) : { x, y };
             // (A people's works: where its wagons are loaded, where its guards stand and the round
             // they walk, in the world: setpieces/works.js)
@@ -619,7 +637,7 @@ export class Sites {
                 pieces: this.#pieces(site, x, y, facing, [w, h], laid, cut),
                 squares: new Set(squares.map(([i, j]) => j * size + i)),
                 courts: new Set(courts.map(([i, j]) => j * size + i)),
-                court: castle ? GROUND[castle.ground] : null,
+                court: castle ? GROUND[castle.ground] : bare ? GROUND[laid.court.ground] : null,
                 entrance,
                 radius,
                 heart: [heart.x, heart.y],

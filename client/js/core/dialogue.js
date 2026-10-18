@@ -94,6 +94,7 @@ export const TREES = Object.freeze({
                     { say: "An ale, if you please. (2 gold)", next: "ale", do: [{ buy: "ale", price: 2 }] },
                     { say: "Heard any news?", next: "news" },
                     { if: { rumour: true }, say: "What's the word on the war?", next: "war" },
+                    { if: { hell: true }, say: "Anything strange out in the wilds?", next: "cult" },
                     { if: { notFlag: "askedPlace" }, say: "Tell me about this place.", next: "place", do: [{ remember: "askedPlace" }] },
                     { if: { upstairs: true }, say: "I'm after a bed for the night.", next: "room", do: [{ learn: "sentByBarkeep" }] },
                     FAREWELL,
@@ -105,6 +106,11 @@ export const TREES = Object.freeze({
                     { say: "What else is being said?", next: "war" },
                     { say: "Thanks for that.", next: "more" },
                 ],
+            },
+            // (The nearest hell's cult, as it's heard here: core/cultword.js)
+            cult: {
+                say: ["Strange? {hellRumour}", "{hellRumour} I don't ask, and I'd not go looking.", "Keep your voice down. {hellRumour}"],
+                choices: [{ say: "I'll keep that in mind.", next: "more" }],
             },
             ale: {
                 say: [
@@ -243,6 +249,7 @@ export const TREES = Object.freeze({
                     { say: "Buy you a drink? (2 gold)", next: "drink", do: [{ buy: "ale", price: 2, for: "them" }, { remember: "boughtDrink" }] },
                     { say: "What's the news?", next: "news" },
                     { if: { rumour: true }, say: "What's the word on the war?", next: "war" },
+                    { if: { hell: true }, say: "Seen anything odd out there?", next: "cult" },
                     { say: "Seen the orc about?", next: "orc", do: [{ learn: "orc" }] },
                     FAREWELL,
                 ],
@@ -253,6 +260,11 @@ export const TREES = Object.freeze({
                     { say: "What else is being said?", next: "war" },
                     { say: "Thanks for that.", next: "more" },
                 ],
+            },
+            // (The nearest hell's cult, as it's heard here, by one who's had a few: core/cultword.js)
+            cult: {
+                say: ["Odd? I'll tell you odd. {hellRumour}", "{hellRumour} ...Not that anyone listens to me.", "Shh. {hellRumour} Don't tell them I told you."],
+                choices: [{ say: "I'll keep that in mind.", next: "more" }],
             },
             drink: { say: ["Now there's a friend! Your health!", "Bless you. Bless your boots, even."], choices: "more" },
             news: {
@@ -790,8 +802,14 @@ export const TREES = Object.freeze({
                     { say: "How do the ranks work?", next: "ranks" },
                     { say: "Are there other branches?", next: "branches" },
                     { say: "What's that archway by the hearth?", next: "portal" },
+                    { if: { hell: true }, say: "Anything odd being reported out in the wilds?", next: "cult" },
                     FAREWELL,
                 ],
+            },
+            // (The nearest hell's cult, as the guild's heard of it: core/cultword.js)
+            cult: {
+                say: ["Odd? Well. {hellRumour} There's no notice up for it. Nobody's come back to claim one.", "Between us? {hellRumour} The guild's not posting it. Not yet.", "{hellRumour} If you go, go at Gold rank or better. And not alone!"],
+                choices: [{ say: "I'll keep that in mind.", next: "more" }],
             },
             register: {
                 say: "Wonderful! Name: {player}. Rank: Copper. Everyone starts at Copper, don't pout! Here's your card. Don't lose it; the replacement fee is terrible, and I have to fill in the form.",
@@ -916,8 +934,17 @@ export const TREES = Object.freeze({
                 ],
                 choices: [
                     { if: { rumour: true }, say: "What's the news?", next: "news" },
+                    { if: { hell: true }, say: "Anything strange about these parts?", next: "cult" },
                     { say: "What's this place like?", next: "place" },
                     { say: "Don't let me keep you.", next: null },
+                ],
+            },
+            // (The nearest hell's cult, as it's heard here: core/cultword.js)
+            cult: {
+                say: ["Strange? {hellRumour}", "{hellRumour} That's what they say, anyway.", "Don't say it was me told you. {hellRumour}"],
+                choices: [
+                    { say: "What's this place like?", next: "place" },
+                    { say: "Thank you. Good day.", next: null },
                 ],
             },
             news: {
@@ -949,6 +976,7 @@ export const TREES = Object.freeze({
                 choices: [
                     { say: "Any advice?", next: "advice" },
                     { if: { rumour: true }, say: "Heard anything on the road?", next: "war" },
+                    { if: { hell: true }, say: "Anything out there worth the walk?", next: "cult" },
                     { if: { hire: true, purse: true }, say: "Would you ride with me? ({hirePrice} gold)", next: "hired", do: [{ hire: true }] },
                     { if: { hire: true, purse: false }, say: "Would you ride with me? ({hirePrice} gold)", next: "short" },
                     { say: "Good hunting.", next: null },
@@ -966,6 +994,14 @@ export const TREES = Object.freeze({
                 say: ["On the road, you hear things. {rumour1}", "Came past it myself: {rumour2}", "{rumour3} Good for business, war.", "{rumourRuler} I'd not want to cross them."],
                 choices: [
                     { say: "What else?", next: "war" },
+                    { say: "Any advice?", next: "advice" },
+                    { say: "Good hunting.", next: null },
+                ],
+            },
+            // (The nearest hell's cult, as one who's been out there's heard of it: core/cultword.js)
+            cult: {
+                say: ["Worth the walk? {hellRumour} Not worth it, if you ask me.", "{hellRumour} Two Iron-rank lads went to look. We're still waiting on them.", "Something's out there. {hellRumour}"],
+                choices: [
                     { say: "Any advice?", next: "advice" },
                     { say: "Good hunting.", next: null },
                 ],

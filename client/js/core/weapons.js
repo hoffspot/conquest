@@ -528,6 +528,14 @@ export const NATURAL = Object.freeze({
         ],
     },
     frostTroll: { label: "Frozen club", attacks: [melee({ id: "smash", damage: [6, 12], hitAt: 640, duration: 1100, interval: 1700, stagger: 450, reaction: "crush", animation: "hammer", afflict: { kind: "slow", chance: 0.4, look: "frost" } })] },
+    // (A cult's high priest's: its staff swung, and hellfire called down out of the dark)
+    cultLeader: {
+        label: "Staff and hellfire",
+        attacks: [
+            melee({ id: "strike", damage: [6, 11], hitAt: 330, duration: 700, interval: 1100, reaction: "strike", animation: "staff" }),
+            ranged({ id: "hellfire", reach: 9, damage: [6, 10], hitAt: 600, duration: 1100, interval: 2600, stagger: 200, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.6 } }),
+        ],
+    },
     // (A demon lord's: its burning fists, and hellfire hurled from its hand)
     demonLord: {
         label: "Burning fists and hellfire",

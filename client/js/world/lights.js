@@ -30,15 +30,22 @@ export { FIRE_LIGHT, FIRE_LIGHTS, fireLit };
  * Each kind of light: the fire it is (fire.js FIRES) and whether its flame's drawn (not a
  * lantern's, behind its glass; not a spell's, drawn by the spell), its colour (sRGB: firelight's,
  * about 2,000 to 2,200 K: a little whiter than a candle's 1,850, so faces aren't all orange), how strong its light is on what's round it (candela, a point light's) and how far
- * it reaches (metres), and how wide its glow is (metres).
+ * it reaches (metres), and how wide its glow is (metres). A hell's way in, out in the wilds, lit
+ * only at night (art/kits/neutral.js): each of its candles' flames drawn (`candle-night`, lighting
+ * nothing itself), the tallest of each cluster's lighting what's round them for them all
+ * (`candles-night`); its braziers; and its portal, red as its veil (`hellgate`).
  */
 export const LIGHTS = Object.freeze({
     candle: { fire: "candle", flame: true, colour: 0xff9a40, strength: 0.8, reach: 4, glow: 0.15 },
+    "candle-night": { fire: "candle-night", flame: true, colour: 0xff9a40, strength: 0, reach: 0, glow: 0.2 },
+    "candles-night": { fire: "candle-night", flame: true, colour: 0xff9a40, strength: 1.6, reach: 5, glow: 0.35 },
     lantern: { fire: "lantern", flame: false, colour: 0xff9a40, strength: 3, reach: 9, glow: 0.9 },
     torch: { fire: "torch", flame: true, colour: 0xff9030, strength: 4.5, reach: 11, glow: 0.7 },
     brazier: { fire: "brazier", flame: true, colour: 0xff8e2c, strength: 6, reach: 12, glow: 1.1 },
+    "brazier-night": { fire: "brazier-night", flame: true, colour: 0xff8e2c, strength: 6, reach: 12, glow: 1.1 },
     fire: { fire: "fire", flame: true, colour: 0xff8c28, strength: 8, reach: 14, glow: 1.8 },
     spell: { fire: "spell", flame: false, colour: 0xff7a2a, strength: 10, reach: 12, glow: 0 },
+    hellgate: { fire: "hellgate", flame: false, colour: 0xff3c16, strength: 13, reach: 14, glow: 2.4 },
 });
 
 /**
