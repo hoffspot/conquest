@@ -2393,8 +2393,8 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   own (`MOTES_OF`): pollen over the meadows, fields and heath, dust over the dry lands, the woods
   and the mountains, fireflies over the marsh and in the jungle, pale wisps in the elves' woods
   and the darkwood, embers rising over the volcano's ash, snow falling on the snowfields. One
-  draw of a few hundred soft glowing dots (300 on medium, 600 on high, none on low), each where a
-  hash of its own puts it in a box 28 metres across round the player, drifting on its land's
+  draw of a hundred or more soft glowing dots (150 on medium, 300 on high, none on low), each
+  where a hash of its own puts it in a box 28 metres across round the player, drifting on its land's
   breeze and wandering about it, wrapping round the box as the player goes and fading towards
   its edges; fireflies and embers flicker. Crossing into another land, one kind fades out and the
   next in; none indoors, but where a place's look has its own (an ants' nest's spores, glowing
