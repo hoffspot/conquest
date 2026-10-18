@@ -229,10 +229,10 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     await openViewer(page, "/model-viewer.html?model=beast-centipede&clip=Run");
 
     // (In the game now, as are the ant, the spiders, the scorpion, the cockroach, the wasp, the
-    // black widow, the Ant Monster and the greater demon (a hell's lord): every bought model is but
-    // the fiend, a hell's six flayed and its six gorgers, the ones listed as to come; read, its clips
-    // listed, the one asked for by its address played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Fiend", "Flayling", "Cinder Husk", "Pyre Acolyte", "Ossuary Priest", "Dirge Warden", "Flayed Hierarch", "Slag Gorger", "Forge Brute", "Chained Glutton", "Bloat Gorger", "Pit Ravager", "Gorger Warlord"]);
+    // black widow, the Ant Monster, the greater demon (a hell's lord) and the fiend (its packs):
+    // every bought model is but a hell's six flayed and its six gorgers, the ones listed as to come;
+    // read, its clips listed, the one asked for by its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Flayling", "Cinder Husk", "Pyre Acolyte", "Ossuary Priest", "Dirge Warden", "Flayed Hierarch", "Slag Gorger", "Forge Brute", "Chained Glutton", "Bloat Gorger", "Pit Ravager", "Gorger Warlord"]);
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Giant cockroach", "Dungeon wasp", "Dungeon scorpion", "Black widow", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
@@ -681,6 +681,33 @@ test("a hell's lord as the game draws it: a people-shaped brute till the Greater
 
     // (Drawn 3.2 metres tall, as long as MODELS has it)
     expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(3.19, 1);
+});
+
+test("a hell's fiend as the game draws it: a horned stand-in till its model's read, then the fiend, its claws raked four ways, its spring, its rest, in one of its three skins", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?creature=fiend");
+    await expect(page.locator("#picker optgroup[label='The hells'] option")).toHaveText(["Fiend"]);
+
+    // (Its stand-in a character, as the wild's people-shaped ones are, till its model's read; then
+    // the model)
+    await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.current())).toMatchObject({ humanoid: false, attacks: ["claw", "rake", "slash", "smash"], specials: ["pounce"], rests: ["look"] });
+    expect(await page.evaluate(() => window.lab.watch().moves)).toEqual(expect.arrayContaining(["claw", "rake", "slash", "smash", "pounce", "look"]));
+
+    // (Drawn 2.4 metres tall, as MODELS has it)
+    expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(2.41, 1);
+    await expect(page.locator("#details")).toContainText("one of 3 its kind wears");
+
+    // (Another one, another skin: each of the three, by its seed)
+    const skins = new Set([await page.evaluate(() => window.lab.current().skin)]);
+
+    for (let i = 0; i < 12 && skins.size < 3; i++) {
+        await page.getByRole("button", { name: "Another one" }).click();
+        await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+        skins.add(await page.evaluate(() => window.lab.current().skin));
+    }
+
+    expect([...skins].sort()).toEqual(["", "ash", "pale"]);
 });
 
 test("one of the people, by role, people, woman or man and weapon: every motion of theirs by name (their weapon's, their work, their rests, emotes, spells, blows and falls), one played and stepped", async ({ page }) => {

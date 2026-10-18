@@ -170,6 +170,28 @@ describe("a hell as it's made (dungeons/build.js, place.js, themes.js hell)", ()
         assert.deepEqual(CREATURES.demonLord.tiers, [10, 10]);
     });
 
+    it("has fiends hunting every level in packs of their own, the more of them the deeper down; met nowhere else", () => {
+        // (How many fiends a pack drawn on each level brings, as many as it's likely to: its share of
+        // the level's packs, times how many of them it has)
+        const likely = HELL.realms.map(({ packs }) => {
+            const total = packs.reduce((sum, { weight }) => sum + weight, 0);
+            const fiends = packs.find(({ creatures }) => creatures.includes("fiend"));
+
+            return (fiends.weight / total) * ((fiends.size[0] + fiends.size[1]) / 2);
+        });
+
+        assert.ok(likely.every((each, k) => each > 0 && (k === 0 || each > likely[k - 1])), likely.join(", "));
+
+        // (Met on the levels made, as the rest of their levels' packs are)
+        const met = made.flatMap(({ levels }) => levels.flatMap(({ packs }) => packs.flatMap(({ foes }) => foes))).filter(({ creature }) => creature === "fiend");
+
+        assert.ok(met.length > 0);
+
+        // (A creature of the hells', met in no land of the wilds)
+        assert.deepEqual(CREATURES.fiend.biomes, []);
+        assert.deepEqual(CREATURES.fiend.tiers, [9, 10]);
+    });
+
     it("has its portal out on its bottom level beyond the throne: further in than its lord, every level still walked through whole", () => {
         for (const dungeon of made) {
             dungeon.levels.forEach((level, k) => {
