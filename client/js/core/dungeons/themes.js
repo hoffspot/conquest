@@ -303,11 +303,14 @@ export const THEMES = {
                     mouth: [{ id: "breach", props: [{ char: "*", count: [1, 2], at: "wall" }, { char: "k", count: [2, 2], at: "wall", mirror: true }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [2, 3], at: "wall" }], torches: [1, 1] }],
                     cavern: [
                         { id: "rite", weight: 2, props: [{ char: "a", count: [1, 1], at: "centre", size: [2, 1] }, { char: "k", count: [2, 4], at: "open" }, { char: "j", count: [1, 3], at: "open" }, { char: "i", count: [0, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] },
-                        { id: "pillars", weight: 2, props: [{ char: "*", count: [3, 6], at: "open" }, { char: "j", count: [1, 2], at: "open" }, { char: "y", count: [0, 1], at: "open" }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 1] },
-                        { id: "bonepit", weight: 1, props: [{ char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "m", count: [1, 2], at: "wall" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 0] },
+                        { id: "pillars", weight: 2, props: [{ char: "~", count: [0, 1], at: "wall", size: [3, 2] }, { char: "*", count: [3, 6], at: "open" }, { char: "j", count: [1, 2], at: "open" }, { char: "y", count: [0, 1], at: "open" }, { char: "d", count: [2, 4], at: "wall" }], torches: [0, 1] },
+                        { id: "bonepit", weight: 1, props: [{ char: "~", count: [0, 1], at: "wall", size: [2, 2] }, { char: "j", count: [3, 6], at: "open" }, { char: "i", count: [1, 3], at: "open" }, { char: "m", count: [1, 2], at: "wall" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 0] },
                     ],
-                    grotto: [{ id: "smoke", props: [{ char: "*", count: [1, 3], at: "open" }, { char: "m", count: [0, 2], at: "wall" }, { char: "j", count: [0, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] }],
-                    nook: [{ id: "nook", props: [{ char: "m", count: [0, 2], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0] }],
+                    grotto: [{ id: "smoke", props: [{ char: "~", count: [1, 1], at: "wall", size: [2, 2] }, { char: "*", count: [1, 3], at: "open" }, { char: "m", count: [0, 2], at: "wall" }, { char: "j", count: [0, 2], at: "open" }, { char: "d", count: [1, 3], at: "wall" }], torches: [0, 1] }],
+                    // (The room furthest in, its master's, by the portal down: the cult's altar, the
+                    // rift torn open over it, world/interiors3d.js breachRift)
+                    goal: [{ id: "rift", props: [{ char: "a", count: [1, 1], at: "centre", size: [2, 1] }, { char: "k", count: [2, 3], at: "open" }, { char: "j", count: [1, 3], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0] }],
+                    nook: [{ id: "nook", props: [{ char: "~", count: [0, 1], at: "wall", size: [2, 2] }, { char: "m", count: [0, 2], at: "wall" }, { char: "j", count: [1, 2], at: "open" }, { char: "i", count: [0, 1], at: "open" }, { char: "d", count: [1, 2], at: "wall" }], torches: [0, 0] }],
                 },
             },
             {

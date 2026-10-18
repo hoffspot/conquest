@@ -91,7 +91,11 @@ describe("a hell as it's made (dungeons/build.js, place.js, themes.js hell)", ()
 
                 for (const room of level.rooms) {
                     if (room.look) {
-                        assert.ok(realm.rooms[room.kind].some(({ id }) => id === room.look), `${realm.id}: ${room.look}`);
+                        // (The room furthest in, by the portal down, dressed as its realm's own if
+                        // it has one: the Breach's altar)
+                        const looks = room.role === "stairs" && realm.rooms.goal ? realm.rooms.goal : realm.rooms[room.kind];
+
+                        assert.ok(looks.some(({ id }) => id === room.look), `${realm.id}: ${room.look}`);
                     }
                 }
             });
@@ -213,7 +217,7 @@ describe("a hell as it's made (dungeons/build.js, place.js, themes.js hell)", ()
     });
 });
 
-describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, VEILS)", () => {
+describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, breachRift, VEILS)", () => {
     it("has a portal of fire where other dungeons have stairs: an arch on each way up or down (and out), its veil in a hell's colours, lighting the room red; the guild's portals as they were", () => {
         const floors = dungeonRooms({ seed: 11, theme: "hell", tier: 9 });
         // (How many points one portal's veil has: those drawn alike are drawn as one)
@@ -226,8 +230,9 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, VEI
 
             const built = buildInterior(map);
             const veils = [];
+            const rifts = [];
 
-            built.object.traverse((node) => node.isMesh && node.material.userData?.veil === "hell" && veils.push(node));
+            built.object.traverse((node) => node.isMesh && node.material.userData?.veil === "hell" && (node.material.name.startsWith("rift-veil") ? rifts : veils).push(node));
 
             // (One for the way up, below the first level; one for the way down, or on the bottom
             // level the way out: each lighting the room)
@@ -239,6 +244,36 @@ describe("a hell's levels as they're drawn (world/interiors3d.js riftPortal, VEI
             assert.equal(points, portals * each, `${floor.look}: ${points / each} veils`);
             assert.equal(built.lights.filter(({ kind }) => kind === "portal-hell").length, portals);
             assert.equal(map.look, HELL.realms[k].look);
+
+            // (The Breach's rift over its altar, a hell's swirl in it, two faces back to back, lit
+            // by its own light; on no other level)
+            assert.equal(rifts.length, k === 0 ? 1 : 0, floor.look);
+            assert.equal(built.lights.filter(({ kind }) => kind === "rift").length, k === 0 ? 1 : 0);
+
+            // (The Breach's pools of lava, every one in one mesh and their banks in another, each
+            // pool its light; and its rock and floor glowing by them, embers in its cracks; on no
+            // other level, yet)
+            const named = (name) => {
+                const found = [];
+
+                built.object.traverse((node) => node.isMesh && node.name === name && found.push(node));
+
+                return found;
+            };
+            const pools = map.pieces.filter(({ kind }) => kind === "lava").length;
+
+            assert.equal(pools > 0, k === 0, `${floor.look}: ${pools} pools`);
+            assert.equal(named("lava").length, k === 0 ? 1 : 0);
+            assert.equal(named("lava-bank").length, k === 0 ? 1 : 0);
+            assert.equal(built.lights.filter(({ kind }) => kind === "lava").length, pools);
+
+            if (k === 0) {
+                const rock = named("rock");
+
+                assert.ok(rock.length > 0 && rock.every((mesh) => mesh.geometry.attributes.ember && mesh.geometry.attributes.glow), "embers and glow in the rock");
+                assert.ok(named("floor").every((mesh) => mesh.geometry.attributes.glow && !mesh.geometry.attributes.ember), "the floor glowing by the pools");
+                assert.ok(rock.some((mesh) => mesh.geometry.attributes.glow.array.some((byte) => byte > 0)));
+            }
 
             // (Its veil's colours a hell's in the shader it's drawn with)
             const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.basic.vertexShader, fragmentShader: THREE.ShaderLib.basic.fragmentShader };
