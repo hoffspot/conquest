@@ -12,8 +12,8 @@ import { buildWorld } from "../client/js/core/overworld.js";
 import { createRandom } from "../client/js/core/random.js";
 import { holderOf, PLACE_BANDS, placesOf } from "../client/js/core/places.js";
 import { GUILD_REACH, GUILD_SIZES, MOST_REQUESTS, offerContract, progressOf, REQUESTS } from "../client/js/core/standing.js";
-import { rumourOfRuler, rumoursAt, tell } from "../client/js/core/war/news.js";
-import { TURN_MS, War } from "../client/js/core/war/war.js";
+import { CRY, newsCount, newsSince, rumourOfRuler, rumoursAt, tell } from "../client/js/core/war/news.js";
+import { KEEP_LOG, TURN_MS, War } from "../client/js/core/war/war.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -51,6 +51,59 @@ describe("news and rumours, and the guild's board (news.js, standing.js, host.js
         assert.ok(!heard.some((words) => words.includes(far.name)), "(what's far off isn't heard)");
         assert.equal(rumoursAt(war, here.at, { count: 1 }).length, 1);
         assert.deepEqual(rumoursAt(new War(plan), here.at), []);
+    });
+
+    it("cries the war's news since a listener last listened, oldest first: what's heard there, each once, their cursor moving on past it; only the latest to one who never has; saying when the war's gone on past them", () => {
+        const war = new War(plan);
+        const here = war.towns[0];
+        const apart = (town) => Math.hypot(town.at[0] - here.at[0], town.at[1] - here.at[1]);
+        const far = [...war.towns].sort((a, b) => apart(b) - apart(a))[0];
+        const say = (event) => war.log.push({ turn: war.turn, ...event });
+        const taken = (town, to) => ({ type: "taken", town: town.id, to });
+        const peoples = ["human", "elf", "orc", "darkElf", "cat", "lizard"];
+
+        war.log.length = 0;
+        war.turn = 10;
+        say(taken(here, "orc"));
+        say(taken(far, "orc"));
+        say({ type: "counsel", realm: "human", march: here.id });
+        war.turn = 11;
+        say({ type: "declared", by: "orc", on: "elf" });
+        say(taken(here, "elf"));
+
+        // (All of it heard there, oldest first; but what's far off and what's never talked of)
+        const all = newsSince(war, here.at, { turn: 9, seen: 0 });
+
+        assert.deepEqual(all.told.map(({ words }) => words), [tell(war.log[0], war), tell(war.log[3], war), tell(war.log[4], war)]);
+        assert.deepEqual(all.told.map(({ after }) => after), [{ turn: 10, seen: 1 }, { turn: 11, seen: 1 }, { turn: 11, seen: 2 }], "each with where they'll have heard to");
+        assert.equal(all.rolled, false);
+
+        // (Heard so far: only what's come since; heard it all, none)
+        assert.deepEqual(newsSince(war, here.at, { turn: 11, seen: 1 }).told.map(({ words }) => words), [tell(war.log[4], war)]);
+        assert.deepEqual(newsSince(war, here.at, { turn: 11, seen: 2 }).told, []);
+
+        // (The same said again: once, the later)
+        war.turn = 12;
+        say(taken(here, "orc"));
+        assert.deepEqual(newsSince(war, here.at, { turn: 9, seen: 0 }).told.map(({ after }) => after), [{ turn: 11, seen: 1 }, { turn: 11, seen: 2 }, { turn: 12, seen: 1 }]);
+
+        // (Never having listened: only the latest; the war gone on past where they last did)
+        for (let k = 0; k < CRY.first + 4; k++) {
+            say({ type: "declared", by: peoples[k % 6], on: peoples[(k + 1 + Math.floor(k / 6)) % 6] });
+        }
+
+        assert.equal(newsSince(war, here.at, null).told.length, CRY.first);
+        assert.equal(newsSince(war, here.at, null).told.at(-1).words, tell(war.log.at(-1), war));
+        assert.equal(newsSince(war, here.at, { turn: 5, seen: 3 }).rolled, false, "(nothing let go of yet)");
+
+        while (war.log.length < KEEP_LOG) {
+            say({ type: "counsel", realm: "human", march: here.id });
+        }
+
+        assert.equal(newsSince(war, here.at, { turn: 5, seen: 3 }).rolled, true);
+        assert.equal(newsSince(war, here.at, { turn: 10, seen: 1 }).rolled, false);
+        assert.ok(CRY.page >= 2 && CRY.page < CRY.first);
+        assert.deepEqual([0, 1, 3, 20].map(newsCount), ["no pieces of news", "a piece of news", "three pieces of news", "a great deal of news"]);
     });
 
     it("says what's said of a ruler, if anything's marked", () => {

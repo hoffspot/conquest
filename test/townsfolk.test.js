@@ -12,7 +12,7 @@ import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { loadRecast } from "../client/js/core/navigation/recast.js";
 import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
 import { ROLES } from "../client/js/core/roles.js";
-import { CALLINGS, countOut, errandsOf, LINGER, TOWNSFOLK, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "../client/js/core/townsfolk.js";
+import { CALLINGS, countOut, CRIERS, crierOf, errandsOf, LINGER, TOWNSFOLK, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "../client/js/core/townsfolk.js";
 import { folkLook, TOWNSFOLK_PARTS } from "../client/js/characters/folk.js";
 import { LOOKS } from "../client/js/characters/peoples.js";
 import { EQUIPMENT } from "../client/js/characters/equipment.js";
@@ -123,7 +123,8 @@ describe("the townsfolk (townsfolk.js, host.js)", () => {
 
         assert.deepEqual(out.map(({ place, change }) => [place, change]), [[host.world.start.id, "out"]]);
         assert.equal(folk.length, countOut(host.world.start.kind, false));
-        assert.deepEqual(out[0].ids, folk.map(({ id }) => id));
+        // (And its crier with them: crierOf)
+        assert.deepEqual(out[0].ids, [...folk.map(({ id }) => id), `crier:${host.world.start.id}`]);
 
         for (const one of folk) {
             const kept = host.folk.get(one.id);
@@ -164,6 +165,41 @@ describe("the townsfolk (townsfolk.js, host.js)", () => {
         assert.deepEqual(home.map(({ change }) => change), ["home"]);
         assert.equal(townsfolkOut(host).length, 0);
         assert.ok(folk.every(({ id }) => !host.folk.has(id)));
+        assert.ok(!host.battle.actor(`crier:${host.world.start.id}`) && home[0].ids.includes(`crier:${host.world.start.id}`), "the crier home with them");
+    });
+
+    it("puts a crier in the square of every village and bigger, between its market's middle and its well, out by night as by day; a herald in a castle's heart; none in a hamlet or a farmstead", () => {
+        const errands = Object.fromEntries(Object.keys(LINGER).map((kind, k) => [kind, [{ square: [k, 0], facing: 0 }, { square: [k, 1], facing: 0 }]]));
+        const crierAt = (kind, options = {}) => crierOf({ place: `a-${kind}`, kind, people: "elf", name: "Aldmere", errands, seed: 7, ...options });
+        const crier = crierAt("town");
+
+        assert.deepEqual(crierAt("town"), crier, "the same every time");
+        assert.notDeepEqual(crierAt("town", { seed: 8 }), crier);
+        assert.ok(crier.name.length > 2);
+        assert.deepEqual([crier.id, crier.role, crier.look, crier.title, crier.people, crier.townName, crier.place], ["crier:a-town", "crier", "crier", "Town crier", "elf", "Aldmere", "a-town"]);
+        // (By the market's middle, not on it, where a new hero first stands)
+        assert.deepEqual(crier.routine.stops.map(({ group, square }) => [group, square]), [["market", errands.market[1].square], ["well", errands.well[0].square]]);
+        assert.ok(crier.routine.stops.every(({ wait }) => wait[1] > wait[0] && wait[0] >= 8000), "lingering long at each");
+        assert.deepEqual(crier.square, errands.market[1].square);
+
+        // (Wherever there's a square: a village's crier, a castle's herald, between its heart and its keep)
+        assert.equal(crierAt("village").title, "Village crier");
+        assert.deepEqual(crierAt("castle", { errands: { heart: errands.heart, keep: errands.keep, court: errands.court } }).routine.stops.map(({ group }) => group), ["heart", "keep"]);
+        assert.equal(crierAt("castle", { errands: { heart: errands.heart } }).title, "Herald");
+        assert.deepEqual(Object.keys(CRIERS).sort(), ["capital", "castle", "city", "town", "village"]);
+        assert.ok(["hamlet", "farmstead"].every((kind) => crierAt(kind) === null));
+        assert.equal(crierAt("town", { errands: {} }), null, "nowhere to stand");
+
+        // (In his people's livery and its chain of office, his own plumed hat (none over a cat's
+        // ears), his handbell in his right hand; ringing it heard there; his own talk)
+        const look = folkLook(crier);
+
+        assert.ok(["livery.elf", "chain", "crierHat", "handbell"].every((id) => look.equipment.includes(id)), look.equipment.join());
+        assert.ok(!folkLook({ ...crier, people: "cat" }).equipment.includes("crierHat"));
+        assert.equal(EQUIPMENT.handbell.socket, "rightHand");
+        assert.equal(EQUIPMENT.crierHat.slot, "head");
+        assert.ok(ROLES.crier.rests.length >= 5 && ROLES.crier.rests[0].sound === "newsHeard");
+        assert.equal(treeFor({ id: crier.id, role: "crier" }), TREES.crier);
     });
 
     it("never has them stand in one another, nor in the player, gathered where they're going: by one another; and passing in a narrow way, no longer than a squeeze", () => {
@@ -243,12 +279,15 @@ describe("the townsfolk (townsfolk.js, host.js)", () => {
         assert.ok(castle, JSON.stringify(out.map(({ place }) => place)));
         assert.ok(castle.ids.length >= 3);
 
+        // (Its herald among them: crierOf)
         for (const id of castle.ids) {
             const one = host.folk.get(id);
 
-            assert.ok(["servant", "groom", "scribe"].includes(one.look), one.look);
+            assert.ok(["servant", "groom", "scribe"].includes(one.look) || id === `crier:${citadel.site.id}`, one.look);
             assert.ok(one.routine.stops.every(({ group }) => ["court", "keep", "heart"].includes(group)));
         }
+
+        assert.equal(host.folk.get(`crier:${citadel.site.id}`)?.title, "Herald");
     });
 
     it("goes on past a castle that couldn't be set down, with no one out there", () => {

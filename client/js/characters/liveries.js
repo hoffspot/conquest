@@ -133,6 +133,9 @@ const LIVERY = Object.freeze({
     steward: { m: ["livery.", "chain", "trousers.", "boots", "belt."], f: ["livery.", "robe.", "chain", "boots"] },
     reeve: { m: ["livery.", "chain", "trousers.", "boots", "belt."], f: ["livery.", "robe.", "chain", "boots"] },
     clerk: { m: ["livery.", "trousers.", "boots", "belt."], f: ["livery.", "robe.", "boots"] },
+    // (A crier in his people's colours, as a town's officer, with its chain of office and his own
+    // plumed hat, his handbell in his hand)
+    crier: { m: ["livery.", "chain", "trousers.", "boots", "belt.", "crierHat", "handbell"], f: ["livery.", "chain", "robe.", "boots", "crierHat", "handbell"] },
     councillor: { m: ["livery.", "robe.", "chain", "boots"], f: ["livery.", "robe.", "chain", "boots"] },
     envoy: { m: ["livery.", "robe.", "chain", "cloak.", "boots"], f: ["livery.", "robe.", "chain", "cloak.", "boots"] },
 });

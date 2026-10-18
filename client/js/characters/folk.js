@@ -97,6 +97,12 @@ const PARTS = {
         m: { wear: [["shirt", "blueTunic"], ["trousers", "breeches"], ["boots"], ["belt"]], hair: ["short", "swept", "buzz"], beard: ["none", "stubble", "none"], build: { weight: [0.3, 0.5], muscle: [0.3, 0.45], belly: [0, 0.2] } },
         f: { wear: [["chemise"], ["bodice"], ["kirtle", "skirt"], ["boots"]], hair: ["bob", "ponytail", "topknot"], build: { weight: [0.35, 0.55], muscle: [0.35, 0.45], bust: [0.35, 0.7] } },
     },
+    // A place's crier (core/townsfolk.js crierOf): well fed and loud, in its people's livery
+    // (liveries.js), his handbell in his hand
+    crier: {
+        m: { wear: [["shirt"], ["trousers"], ["boots"], ["belt"], ["handbell"]], hair: ["short", "swept", "bald"], beard: ["full", "short", "goatee"], build: { weight: [0.5, 0.85], muscle: [0.4, 0.6], belly: [0.3, 0.8] } },
+        f: { wear: [["chemise"], ["kirtle"], ["boots"], ["handbell"]], hair: ["topknot", "bob", "long"], build: { weight: [0.45, 0.75], muscle: [0.38, 0.5], bust: [0.45, 0.85] } },
+    },
     // A keep's: the ruler crowned, in velvet and a gown, or in mail with a sword; their steward;
     // the councillors in robes; the sentries in mail with sword and shield
     ruler: {
@@ -194,7 +200,7 @@ const BRIGHT = Object.freeze({ irises: ["#3fa6e8", "#56c48a", "#9a6ae0", "#e0a03
 const GREY = ["grey", "white"];
 
 // What won't go on over a cat's ears (a crown sits between them; a helm opens round them: items.js)
-const OVER_EARS = new Set(["wizardHat", "strawHat", "coif", "hood", "darkHood", "circletElf", "circletDark", "featherBand"]);
+const OVER_EARS = new Set(["wizardHat", "strawHat", "crierHat", "coif", "hood", "darkHood", "circletElf", "circletDark", "featherBand"]);
 
 // Those dressed in their people's everyday dress, if not human (dress.js): the townsfolk, and the
 // folk of the taverns and churches about their own business

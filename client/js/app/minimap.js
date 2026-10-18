@@ -106,6 +106,36 @@ export const LOOK = Object.freeze({ reach: 0.3, spread: 1.1, fade: 0.35 });
 // in from the edge (pixels) one further than shown is marked
 const ELITE_MARK = Object.freeze({ size: 6.5, inset: 8 });
 
+// A place's crier marked (core/townsfolk.js crierOf): his bell's size (pixels from its middle to
+// its top), marked at the edge as an elite is when he's further than shown
+const CRIER_MARK = Object.freeze({ size: 6 });
+
+// A handbell of brass, edged dark, its handle up and its clapper below (a crier's mark), `size`
+// pixels from its middle to its top
+function bell(context, x, y, size) {
+    context.beginPath();
+    context.moveTo(x - size * 0.32, y - size * 0.35);
+    context.quadraticCurveTo(x - size * 0.38, y + size * 0.3, x - size * 0.78, y + size * 0.55);
+    context.lineTo(x + size * 0.78, y + size * 0.55);
+    context.quadraticCurveTo(x + size * 0.38, y + size * 0.3, x + size * 0.32, y - size * 0.35);
+    context.quadraticCurveTo(x, y - size * 0.62, x - size * 0.32, y - size * 0.35);
+    context.closePath();
+    context.fillStyle = "#e8b64c";
+    context.fill();
+    context.strokeStyle = "rgba(40, 22, 2, 0.95)";
+    context.lineWidth = 1.3;
+    context.stroke();
+    context.beginPath();
+    context.moveTo(x, y - size * 0.5);
+    context.lineTo(x, y - size);
+    context.lineWidth = 2.4;
+    context.stroke();
+    context.beginPath();
+    context.arc(x, y + size * 0.72, size * 0.17, 0, 2 * Math.PI);
+    context.fillStyle = "rgba(40, 22, 2, 0.95)";
+    context.fill();
+}
+
 // A star of gold, five-pointed, edged dark (an elite's mark), `size` pixels from its middle to a point
 function star(context, x, y, size) {
     context.beginPath();
@@ -444,7 +474,7 @@ export class Minimap {
      * gone into and the places worth finding ([{ kind, x, z, rim (who holds a place, its colour) }]),
      * and `elites`, the wild's elites near enough to be marked ([{ x, z, targeted }]: ELITE_MARK).
      */
-    draw({ player, others = [], destination = null, look = null, icons = [], elites = [] }, now = performance.now()) {
+    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [] }, now = performance.now()) {
         const { canvas, context, map } = this;
 
         this.drawn = now;
@@ -566,17 +596,31 @@ export class Minimap {
 
         // The wild's elites near enough (core/creatures.js ELITES `marker`): each a star of gold,
         // further than shown, at the edge the way it is (those drawn kept for tests: `elites`,
-        // and whether at the edge)
+        // and whether at the edge); and the criers out, each a bell, as they are (`criers`)
         this.elites = [];
+        this.criers = [];
 
         const [cx, cy] = player ? at(player.x, player.z) : [width / 2, height / 2];
-
-        for (const elite of elites) {
-            const [ex, ey] = at(elite.x, elite.z);
+        // (Where a mark goes: where it is, or further than shown, at the edge on the way to it;
+        // and the share of the way to it that is: under 1 at the edge)
+        const marked = (one) => {
+            const [ex, ey] = at(one.x, one.z);
             const [dx, dy] = [ex - cx, ey - cy];
             const fits = (d, middle, size) => (d > 0 ? (size - ELITE_MARK.inset - middle) / d : d < 0 ? (ELITE_MARK.inset - middle) / d : Infinity);
             const k = Math.min(1, fits(dx, cx, width), fits(dy, cy, height));
-            const [x, y] = [cx + dx * k, cy + dy * k];
+
+            return [cx + dx * k, cy + dy * k, k];
+        };
+
+        for (const crier of criers) {
+            const [x, y, k] = marked(crier);
+
+            bell(context, x, y, CRIER_MARK.size * (k < 1 ? 0.85 : 1));
+            this.criers.push({ x, y, edge: k < 1 });
+        }
+
+        for (const elite of elites) {
+            const [x, y, k] = marked(elite);
 
             if (elite.targeted) {
                 context.beginPath();

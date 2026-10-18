@@ -205,8 +205,8 @@ export const TAKEN = 0.25;
 /** Bumped whenever what a snapshot holds changes (a war kept by version 1, before the works, carries on: restore). */
 export const WAR_VERSION = 9;
 
-// How many things that happened are kept (the log)
-const KEEP_LOG = 300;
+/** How many things that happened are kept (the log): once it's this long, the oldest go as more happen. */
+export const KEEP_LOG = 300;
 
 // The kinds of place fought over
 const FOUGHT_OVER = Object.keys(HOLDINGS);
