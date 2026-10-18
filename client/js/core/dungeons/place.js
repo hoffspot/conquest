@@ -26,6 +26,9 @@ export const ARRIVE_CLEAR = 5;
 /** Floor lights from props: their plan character and the kind of light. */
 export const FIRES = Object.freeze({ x: "campfire", y: "brazier", k: "candles" });
 
+// (The remains of someone who died there, as the plan has them: searched in a theme whose fallen can be)
+const FALLEN_CHAR = "i".charCodeAt(0);
+
 /** How far apart (rings of squares) those in a pack stand, and how far from a room's ways in at least. */
 export const SPREAD = Object.freeze({ apart: 2, doors: 3 });
 
@@ -386,7 +389,9 @@ export function fillLevel(dug, rooms, links, plan) {
 
     // --- Small chests, here and there: likeliest in dead ends, then off the way through ---
 
-    const wanted = random.int(2, index === plan.levels - 1 ? 3 : 4);
+    // (As many again for a theme that has more of them: its `chests`, the ants' nests' twice)
+    const more = theme.chests ?? 1;
+    const wanted = random.int(2 * more, (index === plan.levels - 1 ? 3 : 4) * more);
     const hasChest = new Set();
 
     for (let k = 0; k < rooms.length && chests.filter(({ kind }) => kind === "small").length < wanted; k++) {
@@ -436,6 +441,16 @@ export function fillLevel(dug, rooms, links, plan) {
         const torches = random.int(...(look.torches ?? [0, 1])) + (one.id === entryRoom || one.id === goal ? 1 : 0);
 
         lights.push(...torchesIn(level, one, torches, random));
+    }
+
+    // (A theme whose fallen can be searched (its `fallen`: the ants' nests'): each one's remains
+    // (`i`) searched once, for what's left on them: host.js #openDungeonChest, play.js FALLEN)
+    if (theme.fallen) {
+        for (let k = 0; k < level.chars.length; k++) {
+            if (level.chars[k] === FALLEN_CHAR) {
+                chests.push({ id: `${index}-fallen-${k}`, at: [k % level.width, Math.floor(k / level.width)], kind: "remains", room: grid.room[k] });
+            }
+        }
     }
 
     // (And the light from what burns on the floor: camp fires, braziers, candles)

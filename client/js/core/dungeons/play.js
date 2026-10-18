@@ -31,6 +31,14 @@ export const CHAMPIONS = Object.freeze({ boss: { hp: 4, power: 1.3 }, mini: { hp
 export const COFFER = Object.freeze({ gold: [6, 18], gear: 0.4, potion: 0.3 });
 
 /**
+ * What's left on one of the fallen (the remains of an adventurer who died there, in a theme whose
+ * fallen can be searched: themes.js `fallen`), searched once (a share for each player near them):
+ * a few coins (`gold`, more each tier), a piece of their gear now and then (`gear`), a healing
+ * draught (`potion`) or a cure for poison (`antidote`: what didn't save them) sometimes.
+ */
+export const FALLEN = Object.freeze({ gold: [3, 10], gear: 0.2, potion: 0.2, antidote: 0.15 });
+
+/**
  * What's in the boss's hoard (a share for each player in the dungeon when it's opened, at their
  * own power: hoardTier): gold (`gold`, more each tier), gear (`gear` pieces, made `up` tiers
  * better than a cache's at the tier), healing draughts (`potions`).
@@ -61,6 +69,25 @@ export function rollCoffer(tier, random, { people = "human" } = {}) {
     }
 
     return { gold: goldAt(COFFER.gold, tier, random), items };
+}
+
+/** A share of what's left on one of the fallen (FALLEN) at a level's tier: { gold, items }. */
+export function rollFallen(tier, random, { people = "human" } = {}) {
+    const items = [];
+
+    if (random.chance(FALLEN.gear)) {
+        items.push(gearPiece(tier, random, people));
+    }
+
+    if (random.chance(FALLEN.potion)) {
+        items.push({ id: "potion", quality: "common" });
+    }
+
+    if (random.chance(FALLEN.antidote)) {
+        items.push({ id: "antidote", quality: "common" });
+    }
+
+    return { gold: goldAt(FALLEN.gold, tier, random), items };
 }
 
 /** A share of the boss's hoard (HOARD) at a tier (hoardTier's): { gold, items }. */

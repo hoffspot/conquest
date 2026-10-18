@@ -9038,7 +9038,7 @@ test("a dungeon whose creatures are drawn from models: theirs fetched, not read,
     expect(near).toEqual({ fetching: true, hurried: 0, read: false, made: false });
 });
 
-test("an ants' nest: its creatures' models got ready at its door, the card naming them; gone in, its ants drawn from their model, lent the Ant Monster's fall", async ({ page }) => {
+test("an ants' nest: its creatures' models got ready at its door, the card naming them; gone in, its ants drawn from their model, lent the Ant Monster's fall; its fallen lying about it, one searched", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
@@ -9113,11 +9113,40 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
             await new Promise((resolve) => setTimeout(resolve, 0));
         }
 
-        return { building: game.world.interiors.of(player.map)?.key, running: game.running, ants: ants().length, drawn: ants().every((avatar) => avatar.model), lent: modelOf("ant").animations.map(({ name }) => name).filter((name) => ["Death", "Hit React"].includes(name)).sort(), key };
+        // (Its fallen lying about the level, each searched once: gone to beside one, it's drawn
+        // there, a coin over it; searched, what was left on it put at the player's feet, and said)
+        const fallen = [...game.host.ground.values()].filter(({ remains, map }) => remains && map === player.map);
+        const one = fallen[0];
+
+        Object.assign(player, { x: one.square[0] + 0.5, y: one.square[1] + 1.5, path: [], order: null, progress: null });
+
+        for (let k = 0; k < 10; k++) {
+            player.hp = player.maxHp;
+            game.advance(0.05);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        const lying = Boolean(game.drops.drawn.get(one.id));
+
+        game.host.command(game.me, { type: "pickUp", ground: one.id });
+
+        for (let k = 0; k < 10; k++) {
+            player.hp = player.maxHp;
+            game.advance(0.05);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        const share = [...game.host.ground.values()].find((dropped) => dropped.from === "remains" && dropped.for === game.me);
+        const searched = { lying, gone: !game.host.ground.has(one.id), gold: share?.bundle.gold ?? 0, drawn: Boolean(share && game.drops.drawn.get(share.id)), said: game.messages.some(({ text }) => text.startsWith("You search the remains")) };
+
+        return { building: game.world.interiors.of(player.map)?.key, running: game.running, ants: ants().length, drawn: ants().every((avatar) => avatar.model), lent: modelOf("ant").animations.map(({ name }) => name).filter((name) => ["Death", "Hit React"].includes(name)).sort(), key, fallen: fallen.length, searched };
     }, nest.key);
 
     expect(inside).toMatchObject({ building: nest.key, running: true, drawn: true, lent: ["Death", "Hit React"] });
     expect(inside.ants).toBeGreaterThan(0);
+    expect(inside.fallen).toBeGreaterThan(2);
+    expect(inside.searched).toMatchObject({ lying: true, gone: true, drawn: true, said: true });
+    expect(inside.searched.gold).toBeGreaterThan(0);
 });
 
 test("on the world map a pin's dropped where it's held: a column of light where it stands and a line the way there, taken away held again; tapped twice, the player runs there, or is told there's no way", async ({ page }) => {

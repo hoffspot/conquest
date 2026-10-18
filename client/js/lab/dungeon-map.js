@@ -424,7 +424,7 @@ function count() {
             boss ? `the boss: ${boss.title} (${boss.foes[0].creature}, tier ${boss.foes[0].tier}) and ${boss.foes.length - 1} more` : `stairs down to level ${level.index + 2}`,
             minis.length ? `mini-bosses: ${minis.map(({ title, foes: [mini] }) => `${title} (tier ${mini.tier})`).join(", ")}` : "no mini-boss on this level",
             `${level.packs.filter(({ role }) => role === "pack").length} packs, ${foes.length} foes in all: ${[...kinds].map(([creature, n]) => `${n} ${creature}`).join(", ")}`,
-            `${level.chests.filter(({ kind }) => kind === "small").length} small chests${level.chests.some(({ kind }) => kind === "hoard") ? " and the boss's hoard" : ""}`,
+            `${level.chests.filter(({ kind }) => kind === "small").length} small chests${level.chests.some(({ kind }) => kind === "hoard") ? " and the boss's hoard" : ""}${level.chests.some(({ kind }) => kind === "remains") ? `; ${level.chests.filter(({ kind }) => kind === "remains").length} of the fallen to search` : ""}`,
             `${level.lights.filter(({ kind }) => kind === "torch").length} torches, ${level.lights.filter(({ kind }) => kind !== "torch").length} fires`,
         ].map((text) => Object.assign(document.createElement("li"), { textContent: text })),
     );

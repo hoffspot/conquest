@@ -35,8 +35,16 @@ export const RING = Object.freeze({ radius: 0.27, above: 0.012, glow: [0.6, 0.95
 /** The colour each rarity glows (progress.js QUALITIES: the pack's own, styles.css .rarity-*). */
 export const RARITY_GLOW = Object.freeze({ common: 0xe9e1d0, fine: 0x6aa6ff, masterwork: 0xe8c35a, rare: 0xb07cff, veryRare: 0xff6aa8, legendary: 0xf08a3a });
 
-/** What's shown of something dropped (not a chest): its gold, if any, and each thing in it, as { id (its icon), grade }. */
+/**
+ * What's shown of something dropped (not a chest): its gold, if any, and each thing in it, as { id
+ * (its icon), grade }; one of the fallen not yet searched (a dungeon's: host.js `remains`), a coin
+ * over the remains, as gold left there is.
+ */
 export function shownOf(dropped) {
+    if (dropped.remains) {
+        return [{ id: "gold", grade: "common" }];
+    }
+
     if (dropped.item) {
         return [{ id: dropped.item.id, grade: gradeOf(dropped.item) }];
     }
@@ -250,7 +258,8 @@ export class Drops {
 
     #draw(dropped, x, z) {
         const object = new THREE.Group();
-        const chest = dropped.chest || dropped.from === "chest";
+        // (One of the fallen to search is no chest: its remains are drawn where they lie)
+        const chest = (dropped.chest && !dropped.remains) || dropped.from === "chest";
         const seed = [...dropped.id].reduce((sum, character) => sum + character.charCodeAt(0), 0);
         const sprite = (id) => new THREE.Sprite(new THREE.SpriteMaterial({ map: this.picture(id), transparent: true, depthWrite: false }));
         const things = [];

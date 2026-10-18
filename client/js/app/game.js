@@ -6373,6 +6373,10 @@ export class Game {
             }
 
             this.sound?.play("coins");
+        } else if (event.type === "spoils" && event.creature === "remains") {
+            // (One of a dungeon's fallen searched: what's left on them, a share for each player near)
+            this.hud.message("You search the remains of one who fell here: what was left on them is at your feet. Tap it to take it.", 3);
+            this.sound?.play("pickup");
         } else if (event.type === "spoils" && event.creature === "chest") {
             // (The dead's, an old relic of theirs in it, named; an adventurer's cache: its lock
             // turned, and its lid up)
