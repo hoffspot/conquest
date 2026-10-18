@@ -201,11 +201,16 @@ export const HAZARDS = Object.freeze({
  * hurting the thrower's enemies in it (its thrower's attack's `damage` at its heart, half that at
  * its edge, times a creature's blows from afar: its tier; a player's Goblin Bomb's, the item's:
  * progress.js ITEMS) and throwing them (`toss`, times TOSS.far). A goblin bomber's, and the
- * Goblin King's bigger one (creatures.js `bomb`).
+ * Goblin King's bigger one (creatures.js `bomb`); and what a hell's creatures leave where they fall
+ * dead (creatures.js `burst`), swelling a moment before it bursts, drawn as it is, not as a bomb
+ * (`look`): a cinder husk's embers, and a bloat gorger's bile, poisoning whoever it catches (its
+ * blast's `element`, fire's but for it, and what it leaves on them, `afflict`).
  */
 export const BOMBS = Object.freeze({
     goblinBomb: { radius: 2.5, toss: 1, fuse: 1500, speed: 9, soonest: 500 },
     bigBomb: { radius: 3.5, toss: 1.4, fuse: 1800, speed: 8, soonest: 600 },
+    cinders: { radius: 2.2, toss: 0.6, fuse: 1200, speed: 9, soonest: 0, look: "embers" },
+    bile: { radius: 2.4, toss: 0.4, fuse: 1000, speed: 9, soonest: 0, look: "bile", element: "earth", afflict: { kind: "poison", chance: 0.8 } },
 });
 
 /**
@@ -672,7 +677,7 @@ export class Battle {
      * points in turn (a guard's one point: its post, facing out the way it's added facing). One
      * carrying a shield has `shield` (#hit: { chance, share, spells }).
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null }) {
         const kindOf = KINDS[kind];
         const type = { ...kindOf, hp: hp ?? kindOf.hp, speed: speed ?? kindOf.speed, chase: chase ?? speed ?? kindOf.chase };
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
@@ -707,6 +712,9 @@ export class Battle {
             // for none)
             power: { melee: 1, ranged: 1, heal: 1, stun: 1, ...power },
             armor,
+            // (How little some kinds of harm hurt it: a player's charms, set by the host; a
+            // creature's own, creatures.js `wards`. `charmed`)
+            ...(wards ? { wards: { ...wards } } : {}),
             empowered: null,
             // The shield it carries, if any: how often it catches a blow or a shot from in front
             // on it (`chance`), how much of it the shield takes (`share`), and whether it turns
@@ -4451,12 +4459,15 @@ export class Battle {
 
         this.#emit("blast", { kind, map, x, y, radius, by: side.id, spell, bomb, throws });
 
+        // (A bomb's own element and what it leaves on whoever it catches, BOMBS; fire's otherwise)
+        const { element = "fire", afflict = null } = BOMBS[kind] ?? {};
+
         caught.forEach((actor, k) => {
             const share = 1 - 0.5 * Math.min(1, near[k] / radius);
             const hurt = Math.max(1, Math.round(rollDamage({ damage }, this.random) * power * share));
 
             if (!actor.dead) {
-                this.#hit(by, actor, { id: kind, kind: "blast", reaction: "crush", stagger: 300, element: "fire" }, null, { damage: hurt, spell, ground: true });
+                this.#hit(by, actor, { id: kind, kind: "blast", reaction: "crush", stagger: 300, element, ...(afflict ? { afflict } : {}) }, null, { damage: hurt, spell, ground: true });
             }
         });
 
@@ -4745,6 +4756,14 @@ export class Battle {
             this.#bashed(attacker, target, Math.round(boosted.stun * (attacker.power?.stun ?? 1)));
         }
 
+        // A blow that feeds whoever dealt it (`drain`: a share of the harm it did, healing them)
+        if (attack.drain && attacker && attacker !== target && !attacker.dead && attacker.hp < attacker.maxHp) {
+            const before = attacker.hp;
+
+            attacker.hp = Math.min(attacker.maxHp, attacker.hp + Math.max(1, Math.round(damage * attack.drain)));
+            this.#emit("healed", { id: attacker.id, by: attacker.id, spell: null, attack: attack.id, amount: attacker.hp - before, hp: attacker.hp, maxHp: attacker.maxHp, cured: [], from: target.id });
+        }
+
         if (attacker) {
             this.#provoke(attacker, target);
         }
@@ -4885,6 +4904,11 @@ export class Battle {
         }
 
         this.#emit("death", { id: actor.id, by: killer?.id ?? null, respawnAt: actor.respawnAt });
+
+        // (One that bursts as it dies: what it leaves where it fell, BOMBS, as strong as its blows)
+        if (actor.wild?.burst) {
+            this.#throwBomb(actor, [actor.x, actor.y], actor.wild.burst.kind, actor.wild.burst.damage, actor.power?.melee ?? 1);
+        }
     }
 
     #respawn(actor) {

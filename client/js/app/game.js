@@ -36,7 +36,7 @@ import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
 import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
-import { aloftShare, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
+import { aloftShare, BOMBS, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { townOf } from "../core/insides.js";
@@ -626,6 +626,9 @@ const FLIGHT = Object.freeze({ arrow: { arc: 0.25 }, venom: { arc: 0.55 }, lava:
  * (`sound` m/s); the camera shaken within `shaken` metres of it, harder the nearer.
  */
 const BLAST_HEARD = Object.freeze({ far: 60, clear: 10, highs: 8000, late: 15, sound: 343, shaken: 25 });
+// What a creature leaves where it falls (battle.js BOMBS `look`) is heard doing: gathering, then
+// bursting (a cinder husk's embers as fire does, a bloat gorger's bile as foul water)
+const BURSTS = Object.freeze({ embers: { gathering: "castFireLow", burst: "impactFireMid" }, bile: { gathering: "castWaterLow", burst: "impactWaterHigh" } });
 
 // What bursts where each of the creatures' own lands (besides the burst in its look)
 const SPLASHES = Object.freeze({ venom: ["venomSplash"], lava: ["lavaSplash", "embers", "smoke"], web: ["webSplat"], roots: ["earth"], curse: ["shadows", "wither"], drain: ["shadows", "wither"], flame: ["flames", "smoke"] });
@@ -4133,21 +4136,23 @@ export class Game {
 
     // A bomb lobbed (battle.js BOMBS): drawn flying from the hand of whoever threw it (or where
     // they stood) to where it lands, fizzing there, a ring warning how far it'll reach; its wick
-    // heard sputtering till it bursts (#blast)
+    // heard sputtering till it bursts (#blast). What a creature leaves where it falls (BOMBS
+    // `look`: a cinder husk's embers, a bloat gorger's bile): swelling there, heard gathering
     #bomb(event) {
         if (event.map !== this.mapId) {
             return;
         }
 
         const [ox, oz] = this.originOf(event.map);
-        const thrower = this.avatars.get(event.id);
-        const from = () => (thrower ? thrower.hand("Right") : this.spellFx.onGround(ox + event.from[0], oz + event.from[1], 1.2));
+        const look = BOMBS[event.kind]?.look ?? null;
+        const thrower = look ? null : this.avatars.get(event.id);
+        const from = () => (thrower ? thrower.hand("Right") : this.spellFx.onGround(ox + event.from[0], oz + event.from[1], look ? 0.2 : 1.2));
         const to = new THREE.Vector3(ox + event.x, 0, oz + event.y);
         const travel = Math.max(0.1, (event.lands - this.battle.time) / 1000);
         const fuse = (event.bursts - event.lands) / 1000;
 
-        this.spellFx.lob(event.bomb, from, to, { travel, fuse, radius: event.radius, big: event.kind === "bigBomb" });
-        this.fuses.set(event.bomb, this.sound?.play("fuse", { at: to, delay: travel, far: 20 }) ?? null);
+        this.spellFx.lob(event.bomb, from, to, { travel, fuse, radius: event.radius, big: event.kind === "bigBomb", look });
+        this.fuses.set(event.bomb, this.sound?.play(BURSTS[look]?.gathering ?? "fuse", { at: to, delay: travel, far: 20 }) ?? null);
     }
 
     // A blast (battle.js #blast: a bomb bursting, the Explosion spell): the bomb gone and its wick
@@ -4172,10 +4177,11 @@ export class Game {
         const at = new THREE.Vector3(ox + event.x, 0, oz + event.y);
         const me = this.avatars.get(this.me)?.object.position;
         const off = me ? Math.hypot(me.x - at.x, me.z - at.z) : Infinity;
-        const grand = event.kind !== "goblinBomb";
+        const look = BOMBS[event.kind]?.look ?? null;
+        const grand = event.kind !== "goblinBomb" && !look;
 
-        this.spellFx.blast(at, { radius: event.radius, grand, shake: Math.max(0, 1 - off / BLAST_HEARD.shaken) ** 2 });
-        this.sound?.play(grand ? "explosionLarge" : "explosionSmall", { at, far: BLAST_HEARD.far, muffle: off > BLAST_HEARD.clear ? BLAST_HEARD.highs * (BLAST_HEARD.clear / off) ** 1.3 : null, delay: off > BLAST_HEARD.late ? off / BLAST_HEARD.sound : 0 });
+        this.spellFx.blast(at, { radius: event.radius, grand, shake: Math.max(0, 1 - off / BLAST_HEARD.shaken) ** 2, look });
+        this.sound?.play(BURSTS[look]?.burst ?? (grand ? "explosionLarge" : "explosionSmall"), { at, far: BLAST_HEARD.far, muffle: off > BLAST_HEARD.clear ? BLAST_HEARD.highs * (BLAST_HEARD.clear / off) ** 1.3 : null, delay: off > BLAST_HEARD.late ? off / BLAST_HEARD.sound : 0 });
 
         for (const { id, to, flight, up, until } of event.throws) {
             const avatar = this.avatars.get(id);

@@ -141,6 +141,18 @@ const ABOUT = {
     wightLord: ["Wight lord", "Ruined castles: for the mightiest"],
     frostTroll: ["Frost troll", "The snows: for the mightiest", "hammer"],
     demonLord: ["Demon lord", "A hell's throne, at the bottom of its pit"],
+    flayling: ["Flayling", "A hell's Breach, in swarms: raw claws that leave you bleeding"],
+    cinderHusk: ["Cinder husk", "A hell's Breach: fire hardly hurts it, and it bursts in embers as it falls"],
+    pyreAcolyte: ["Pyre acolyte", "A hell's Breach: keeping off, hurling fire that burns on the ground"],
+    ossuaryPriest: ["Ossuary priest", "A hell's Halls of Bone: raising skeletons, cursing with grave-rot"],
+    dirgeWarden: ["Dirge warden", "A hell's Halls of Bone: armoured, its halberd sweeping you off your feet, its dirge chilling"],
+    flayedHierarch: ["Flayed hierarch", "A hell's Halls of Bone, one alone: its curse heals it with the life it takes"],
+    slagGorger: ["Slag gorger", "A hell's River of Fire: spewing molten slag that burns on the ground; fire hardly hurts it"],
+    forgeBrute: ["Forge brute", "A hell's River of Fire: its club knocks you off your feet, burning"],
+    chainedGlutton: ["Chained glutton", "A hell's River of Fire, one alone: its bite feeds it"],
+    bloatGorger: ["Bloat gorger", "A hell's Pit: spewing bile, and bursting in it as it falls"],
+    pitRavager: ["Pit ravager", "A hell's Pit, in packs: quick, its club and teeth leaving you bleeding"],
+    gorgerWarlord: ["Gorger warlord", "A hell's Pit, one alone: roaring its bloat gorgers to it"],
 };
 
 // --- The scene ---
@@ -1248,6 +1260,7 @@ const groups = [
     ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "knucker", "hodmedod", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "hart", "kelpie", "caveSpider", "shadowStalker", "olm", "centipede", "basilisk", "draugr", "mare", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "spittingCobra", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "ahuizotl", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock", "chimera"]],
     ["The restless dead", ["ghost", "wraith"]],
     ["The ants' nests", ["ant", "greatCentipede", "dungeonSpider", "eliteDungeonSpider", "giantCockroach", "dungeonWasp", "dungeonScorpion", "blackWidow", "antMonster"]],
+    ["The hells", ["flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord"]],
     ["For the mightiest", ["dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "cultLeader", "demonLord"]],
 ];
 
