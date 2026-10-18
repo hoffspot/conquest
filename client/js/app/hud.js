@@ -456,6 +456,76 @@ export class Hud {
      * How many lines said in the player's party they haven't seen (partypanel.js unreadLabel), as
      * a badge on the Party button: none, no badge.
      */
+    /**
+     * How much of the war's news the player hasn't heard from a crier yet, on the compass (the
+     * minimap folded into it: a badge, as the party's unread messages are; none at nothing).
+     */
+    newsUnread(count) {
+        const compass = document.getElementById("compass");
+        const badge = compass?.querySelector("#newsunread");
+        const label = unreadLabel(count);
+
+        if (!badge || badge.textContent === label) {
+            return;
+        }
+
+        badge.textContent = label;
+        badge.hidden = !label;
+        compass.setAttribute("aria-label", label ? `Compass: open the map. ${count} piece${count === 1 ? "" : "s"} of news to hear from a crier` : "Compass: open the map");
+    }
+
+    /**
+     * Words said over someone's head (`id`'s: a crier calling out), in a bubble, for `seconds`, in
+     * place of any they were saying; none ("") takes them away. Placed each frame (placeSaid), as
+     * their plate is.
+     */
+    say(id, text, seconds = 3) {
+        this.said ??= new Map();
+
+        const bubble = this.said.get(id) ?? { element: element("div", "floater said") };
+
+        if (!text) {
+            bubble.element.remove();
+            this.said.delete(id);
+
+            return;
+        }
+
+        bubble.element.dataset.id = id;
+        bubble.element.textContent = text;
+        bubble.element.hidden = true;
+        bubble.until = performance.now() + seconds * 1000;
+        this.floaters.append(bubble.element);
+        this.said.set(id, bubble);
+    }
+
+    /**
+     * Where someone's words go (`point`: client pixels over their head; null, not on screen), how far
+     * off they are (`depth`, metres: the nearer over the further, over everyone's plates); gone once
+     * their time's up.
+     */
+    placeSaid(id, point, { depth = 0, now = performance.now() } = {}) {
+        const bubble = this.said?.get(id);
+
+        if (!bubble) {
+            return;
+        }
+
+        if (now >= bubble.until) {
+            bubble.element.remove();
+            this.said.delete(id);
+
+            return;
+        }
+
+        bubble.element.hidden = !point;
+
+        if (point) {
+            bubble.element.style.transform = `translate3d(${point.x.toFixed(1)}px, ${point.y.toFixed(1)}px, 0) translate(-50%, -100%)`;
+            bubble.element.style.zIndex = String(Math.max(1, 20000 - Math.round(depth)));
+        }
+    }
+
     partyUnread(count) {
         const badge = this.partyButton?.querySelector("#partyunread");
         const label = unreadLabel(count);
@@ -985,6 +1055,7 @@ export class Hud {
     clear() {
         this.floaters.replaceChildren();
         this.tracked.clear();
+        this.said?.clear();
         this.targeted = null;
         this.message("");
         this.choice?.withdraw();

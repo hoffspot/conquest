@@ -4801,7 +4801,7 @@ test("the townsfolk go about their business in the start town: dressed for their
     await expect(talk.locator(".talk-line")).not.toBeEmpty();
 });
 
-test("a crier stands in the start town's square in his people's livery, his handbell in his hand, marked with a bell on the minimap; talked to, he cries the war's news since the player last listened, three at a time, and remembers where they'd heard to", async ({ page }) => {
+test("a crier stands in the start town's square in his people's livery, his handbell in his hand, marked with a bell on the minimap; his bell heard from afar while there's news to hear, and how much on the compass; come near, he calls out the latest; talked to, he cries the war's news since the player last listened, three at a time, and remembers where they'd heard to", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=2");
 
@@ -4871,6 +4871,54 @@ test("a crier stands in the start town's square in his people's livery, his hand
     const talk = page.locator(".talk");
 
     expect(told).toBeGreaterThanOrEqual(9);
+
+    // Further off, with news yet to hear: his bell rung from where he is, now and then, and the
+    // news on the compass (the minimap folded)
+    const rung = await page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const one = game.battle.actor(id);
+        const player = game.battle.actor("player");
+        const heard = [];
+        const play = game.sound.play.bind(game.sound);
+
+        document.body.dataset.minimap = "off";
+        Object.assign(player, { square: [one.square[0] + 60, one.square[1]], x: one.square[0] + 60.5, y: one.square[1] + 0.5, to: null, path: [], order: null });
+        game.sound.play = (name, options = {}) => (heard.push({ name, at: options.at ? Math.hypot(options.at.x - game.avatars.get(id).object.position.x, options.at.z - game.avatars.get(id).object.position.z) : null }), play(name, options));
+
+        for (let k = 0; k < 20; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        game.sound.play = play;
+
+        return { bells: heard.filter(({ name }) => name === "newsHeard"), badge: document.getElementById("newsunread").hidden ? null : document.getElementById("newsunread").textContent };
+    }, crier.id);
+
+    expect(rung.bells).toHaveLength(1);
+    expect(rung.bells[0].at).toBeLessThan(0.01);
+    expect(rung.badge).toBe("5");
+
+    // Come near, out of a fight and a talk: he calls out "Oyez!" and the latest news yet to hear
+    const called = await page.evaluate((id) => {
+        const { game } = window.pellagos;
+        const one = game.battle.actor(id);
+        const player = game.battle.actor("player");
+
+        // (His last call to them long ago: he called out as they stood by him at the start)
+        game.crierCalls?.delete(id);
+        game.hud.say(id, "");
+        Object.assign(player, { square: [one.square[0] + 3, one.square[1]], x: one.square[0] + 3.5, y: one.square[1] + 0.5, to: null, path: [], order: null });
+
+        for (let k = 0; k < 12; k++) {
+            game.advance(0.1);
+        }
+
+        return { words: document.querySelector(`.said[data-id="${id}"]`)?.textContent ?? null, latest: game.host.war.log.at(-1) };
+    }, crier.id);
+
+    expect(called.words).toMatch(/^Oyez! Oyez! Oyez!\n/);
+    expect(called.words).toContain("declared war on");
+    await expect(page.locator(".said")).toBeVisible();
     expect((await talkTo(crier.id)).choices).toContain("Let's hear it.");
     await expect(talk.locator(".talk-line")).toContainText("five pieces of news");
     await talk.getByRole("button", { name: "Let's hear it." }).click();
@@ -4893,6 +4941,13 @@ test("a crier stands in the start town's square in his people's livery, his hand
     await talk.getByRole("button", { name: "Is that all?" }).click();
     await talk.getByRole("button", { name: "Thank you." }).click();
     await expect(talk).toBeHidden();
+
+    // All heard: none on the compass
+    await expect.poll(() => page.evaluate(() => {
+        window.pellagos.game.advance(0.6, { render: false });
+
+        return document.getElementById("newsunread").hidden;
+    })).toBe(true);
 
     // Talked to again: nothing new since
     expect(await page.evaluate(() => {
@@ -7839,7 +7894,7 @@ test("a guard tower of the player's people near them: drawn over its squares wit
     expect(after).toMatchObject({ banner: false, plate: false, open: true });
 });
 
-test("the building screen at the ruler's: a Knight asks where to build; the council's plans on the map, numbered, named and costed; one counselled, and the ruler says it's next; told when their army's supplies don't get through", async ({ page }) => {
+test("the building screen at the ruler's: a Knight asks where to build; the council's plans on the map, numbered, named and costed; one counselled, and the ruler says it's next; their army's supplies not getting through cried by a crier, not told in a box", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
@@ -7929,13 +7984,20 @@ test("the building screen at the ruler's: a Knight asks where to build; the coun
     expect(heeded.build.key).toBe(plan.key);
     expect(heeded.line).toBe(`${plan.name}. So be it: it's the next we build, as soon as the stores allow.`);
 
-    // Their army's supplies not getting through: a Knight's told (docs/WAR.md *Supply*); another
+    // Their army's supplies not getting through (docs/WAR.md *Supply*): far off, so not told in a
+    // box (as it was, to a Knight), but cried by a crier, as their own people's news; another
     // people's army's, not
-    const told = await page.evaluate(() => {
+    const told = await page.evaluate(async () => {
         const { game } = window.pellagos;
+        const { newsSince, tell } = await import("./js/core/war/news.js");
         const war = game.host.war;
         const said = [];
         const message = game.hud.message.bind(game.hud);
+        const since = { turn: war.turn, seen: war.log.filter(({ turn }) => turn === war.turn).length };
+        const happen = (event) => {
+            war.events.push(event);
+            war.log.push(event);
+        };
 
         game.hud.message = (text, ...rest) => {
             said.push(text);
@@ -7943,15 +8005,17 @@ test("the building screen at the ruler's: a Knight asks where to build; the coun
             return message(text, ...rest);
         };
 
-        war.events.push({ type: "unsupplied", turn: war.turn, realm: "orc", army: "force-901", missed: 1, deserted: 0, why: "lost", by: null });
-        war.events.push({ type: "unsupplied", turn: war.turn, realm: "human", army: "force-902", missed: 2, deserted: 4, why: "lost", by: "orc" });
+        happen({ type: "unsupplied", turn: war.turn, realm: "orc", army: "force-901", missed: 1, deserted: 0, why: "lost", by: null });
+        happen({ type: "unsupplied", turn: war.turn, realm: "human", army: "force-902", missed: 2, deserted: 4, why: "lost", by: null });
         game.advance(0.1);
         game.hud.message = message;
 
-        return said.filter((text) => /supplies/.test(text));
+        return { boxed: said.filter((text) => /supplies/.test(text)), cried: newsSince(war, game.world.start.at, since, { realm: "human" }).told.map(({ words }) => words), ours: tell(war.log.at(-1), war) };
     });
 
-    expect(told).toEqual(["Our army's supplies are cut off again: 4 have deserted."]);
+    expect(told.boxed).toEqual([]);
+    expect(told.cried).toEqual([told.ours]);
+    expect(told.ours).toContain("Human");
 });
 
 test("the war table in the keep: a Retainer's told it isn't theirs to read; a Knight taps it, walks up to it, and its map shows the war as their council sees it, their army at their camp and the enemy's army its scout sees, not the one beyond, drawn again as the war goes on; what's tapped told of", async ({ page }) => {
