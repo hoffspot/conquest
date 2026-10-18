@@ -223,3 +223,31 @@ in this repository, but in the private one the game's builds fetch it from
 game.
 
 Don't copy it out of this game or use it in anything else.
+
+## greater-demon.bin
+
+**Gloomy Demon** (`sk_gloomy_demon_export_ue.blend`, and its rig and showcase clip in
+`Gloomy_Demon_Rig.blend`), bought on **Fab** by this repository's owner under **Fab's Standard
+License**: the Greater Demon.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought `.blend` put through `utilities/blenderpipeline`
+(`private/greater-demon.json`, which stays out of the repository with the bought files), its
+`browser` build. That's its eleven meshes joined into one (83,498 triangles, with two lower
+details packed in, 33,399 and 12,523), its materials baked onto one 1,024-pixel KTX2 atlas, its 52
+face shapes left out (`morphs`), the inside of its mouth given to its jaw (`reweight`: it was
+weighted to a bone only its control rig moved), and its own showcase clip (8.8 seconds, as
+Showcase), with a roar cut from it and its jaw opened (`clips.invent`: Roar).
+
+Its other clips aren't the seller's: they're
+[Mesh2Motion](https://github.com/Mesh2Motion/mesh2motion-app)'s human clips, CC0 (free for any
+use), played on its skeleton by the pipeline (`retarget`): Idle, Walk, Run, Claw, Punch, Pound,
+Hit and Death, its wings beating to them (`clips.invent`).
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`). The model viewer shows it (*Coming to the wilds*) until it's in the
+game.
+
+Don't copy it out of this game or use it in anything else.

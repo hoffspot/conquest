@@ -155,8 +155,10 @@ export async function makeReport(config, { blender, optimized, glb, variants = [
         const action = blender.actions?.find((one) => one.name === clip.name);
 
         const invented = optimized.invented?.find((one) => one.name === clip.name);
+        const retargeted = optimized.retargeted?.find((one) => one.clips.some((made) => made.name === clip.name));
+        const from = retargeted ? `${retargeted.from}: ${retargeted.clips.find((made) => made.name === clip.name).from}` : (action?.from ?? null);
 
-        return { ...clip, loops: done.loops, inPlace: done.inPlace, rootMotion: done.rootMotion, from: action?.from ?? null, ...(invented ? { madeFrom: invented.from } : {}) };
+        return { ...clip, loops: done.loops, inPlace: done.inPlace, rootMotion: done.rootMotion, from, ...(invented ? { madeFrom: invented.from } : {}) };
     });
 
     const warnings = [...(blender.warnings ?? [])];
@@ -201,6 +203,9 @@ export async function makeReport(config, { blender, optimized, glb, variants = [
             ktx2: optimized.ktx2 ?? [],
             ...(blender.madeMaterials?.length ? { materialsFromTextures: blender.madeMaterials } : {}),
             ...(blender.joined?.length ? { joined: blender.joined } : {}),
+            ...(optimized.reweighted ? { verticesReweighted: optimized.reweighted } : {}),
+            ...(optimized.morphsLeftOut ? { morphTargetsLeftOut: optimized.morphsLeftOut } : {}),
+            ...(optimized.retargeted?.length ? { retargeted: optimized.retargeted.map(({ from, bones, hips, scale }) => ({ from, bones, hips, scale })) } : {}),
         },
         budgets,
         validation: { beforeCompression: optimized.validation, final: optimized.finalValidation },

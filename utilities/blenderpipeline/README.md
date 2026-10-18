@@ -94,7 +94,9 @@ Build one asset, or several: `node build.js my-asset.json [more.json...]`. Optio
    direction along the surface instead; the report says how many (`exported.tangentsMended`).
 2. Turns it (`turn`) to face +z, sizes it in metres (`size`), stands it on its origin
    (`origin: "feet"`). All are baked into the data, skinned meshes included, not put on a node
-   over it.
+   over it. Before it's sized, it leaves out the morph targets not asked for (`morphs`), and gives
+   the vertices of bones nothing moves to bones that move (`reweight`). Then it plays clips from other skeletons' files on its bones (`retarget`,
+   `lib/retarget.js`; *Clips from another skeleton*, below).
 3. Makes up the clips it's asked for (`clips.invent`, `lib/invent.js`) from those there are: a
    stretch of one, with bones turned or moved over it, eased from key to key, or with their motion
    taken from another clip. A bite is an idle with the neck thrown forward and the jaw snapped
@@ -159,6 +161,9 @@ error, so a misspelt one isn't silently ignored.
 | `profiles` | `{}` | `{ "full": { ... }, "phone": { ... } }`: ways to build it, each a set of these settings merged over the rest, into `<out>/<profile>/` (*Profiles*, below) |
 | `actions` | `[]` | `[{ "from": "other.blend", "action": "Walk", "name": "Crawling" }]`: actions to bring in (`action` left out: all of that file's); or `{ "from": "Wolf@walk.fbx", "name": "Walk" }`: an FBX's clip that moves its skeleton. `"bonesOnly": true` brings its bones' keys alone, not the keys of the object it was on (where an importer put the skeleton it came with, at that skeleton's scale) |
 | `muteConstraints` | `false` | The exported armature's bone constraints muted: a game skeleton made to copy a control rig (Auto-Rig Pro's export skeleton, Rigify's) otherwise holds still whatever its clips say |
+| `morphs` | `true` | Morph targets (shape keys) kept: `true`, all; or a list of their names (`[]`: none). A face's 52 ARKit shapes that nothing in the game moves came to 10 MB on the Greater Demon's head. The clips' channels weighing them keep only those kept (`exported.morphTargetsLeftOut`) |
+| `reweight` | `{}` | `{ "neutral_bone": "jaw" }`: the vertices one bone moves given to another to move. For a bone nothing moves in the game (one only a control rig moved): its vertices are left behind as the rest goes on, stretched into a spike. The report says how many (`exported.verticesReweighted`) |
+| `retarget` | `[]` | `[{ "from": "human-animations.glb", "clips": { "Walk_Large": "Walk" } }]`: clips from other skeletons' files, played on this one's bones of the same names (*Clips from another skeleton*, below) |
 | `clips.include` / `clips.exclude` | all / none | Which actions are exported (names; `*` and `?` wildcards) |
 | `clips.rename` | `{}` | `{ "Blender name": "clip name" }` |
 | `clips.inPlace` | `[]` | Clips to play in place (names, or `true` for all) |
@@ -409,7 +414,8 @@ and sized, so turns are the creature's own and moves are in metres:
 ```
 
 - **`from`**, **`start`** and **`seconds`**: the stretch of a clip it's made from (by default
-  all of it). **`hold`**: seconds in, from which that clip is held still (a death: the flinch
+  all of it). One named as the clip it's made from takes that clip's place (a retargeted idle
+  given a wing's breath); any other name a clip has already is a mistake. **`hold`**: seconds in, from which that clip is held still (a death: the flinch
   held while the body falls).
 - **A turn** (`bones`, `turn`, `keys`: `[seconds, degrees]`): each bone turned so many degrees,
   eased from key to key, about the creature's axes as the bone lies where the stretch starts.
@@ -428,6 +434,44 @@ and sized, so turns are the creature's own and moves are in metres:
 
 The report says which clip each was made from (`madeFrom`). Check them by eye in the viewer, and
 with the browser tests (each moves, stays inside its bounds).
+
+## Clips from another skeleton
+
+A bought model may come with no clips worth playing, or not the ones a game wants, while a library
+of clips made for a skeleton with the same bones' names (Unreal's mannequin's, say, as
+[Mesh2Motion](https://github.com/Mesh2Motion/mesh2motion-app)'s CC0 human clips are) has them all. `retarget` plays them
+on its bones (`lib/retarget.js`):
+
+```json
+"retarget": [
+    { "from": "mesh2motion/human-base-animations.glb", "clips": { "Idle_A": "Idle", "Walk": "Walk", "Punch_Cross": "Punch" } },
+    { "from": "mesh2motion/human-addon-animations.glb", "clips": ["Death_A", "Angry"] }
+]
+```
+
+- **`from`**: a .glb or .gltf with a skeleton (a skin's joints) and the clips. It faces +z with
+  +y up, as the pipeline has every asset (a retargeted clip is played after `turn`).
+- **`clips`**: `{ "its clip": "the name here" }`, or a list of its clips' names, kept.
+- **`bones`**: `{ "bone here": "its bone" }` where the names differ, or `null` to leave a bone
+  out. Every other bone is paired by name.
+- **`unaligned`**: bones (`*` and `?` wildcards) that take only the turns, from where they rest
+  (below).
+- **`fps`**: keyframes a second (30).
+
+Each paired bone turns in the world as its pair turns from where that one rests, once it's laid
+the way its pair lies at rest. An A-pose's arm, down at an angle, is first raised out to the side
+as a T-pose's is, then turned as that arm turns. Its own twist about that way stays its own, and
+so does how its mesh lies on it. A bone left `unaligned` isn't laid first: legs bent at rest stay
+bent, and bend as far again as the other's do (feet may then leave the ground). The hips (the
+topmost bone paired) are carried as the other's are, every distance scaled by how high each stands
+at the hips over its lowest bone. So its feet meet the ground where the other's do; for a crawler
+whose hips are its lowest bone, the scale is by how far its bones reach from them instead. Bones
+the other hasn't got (wings, a tail, a jaw) stay as they rest on their parents, for `clips.invent`
+to move. Only the skeleton's own bones move it: a clip that carries the armature object as well
+is read without it.
+
+Each clip's `from` in the report is the file and its clip (`"human-base-animations.glb: Walk"`);
+`exported.retargeted` says how many bones were paired, the hips and the scale.
 
 ## For a bought asset
 

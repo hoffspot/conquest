@@ -23,6 +23,17 @@ describe("an asset's config", () => {
         assert.equal(config.compress, "meshopt");
     });
 
+    it("reads the clips to take from other skeletons' files, their paths from where it is", () => {
+        const config = resolveConfig({ source: "a.blend", reweight: { neutral: "jaw" }, retarget: [{ from: "clips/human.glb", clips: ["Walk"] }, { from: "kaiju.gltf", clips: { Roar: "Howl" }, bones: { tail_01: "tail", wing: null }, unaligned: ["thigh_*"], fps: 24 }] }, file);
+
+        assert.deepEqual(config.reweight, { neutral: "jaw" });
+        assert.deepEqual(config.retarget, [
+            { from: path.join(HERE, "examples", "clips", "human.glb"), clips: { Walk: "Walk" }, bones: {}, unaligned: [], fps: 30 },
+            { from: path.join(HERE, "examples", "kaiju.gltf"), clips: { Roar: "Howl" }, bones: { tail_01: "tail", wing: null }, unaligned: ["thigh_*"], fps: 24 },
+        ]);
+        assert.deepEqual(resolveConfig({ source: "a.blend" }, file).retarget, []);
+    });
+
     it("keeps what's set, filling in the rest of a group of settings", () => {
         const config = resolveConfig({ source: "a.blend", textures: { atlasSize: 2048 }, clips: { rename: { Walk: "Crawling" } } }, file);
 
@@ -71,6 +82,23 @@ describe("an asset's config", () => {
         refuses({ source: "a.blend", muteConstraints: "yes" }, /muteConstraints is true or false/);
         refuses({ source: "a.blend", actions: [{ from: "b.blend", bonesOnly: 1 }] }, /actions\[0\].bonesOnly is true or false/);
         refuses({ source: "a.blend", restPose: 0 }, /restPose is the name of a clip/);
+        refuses({ source: "a.blend", morphs: false }, /morphs is true \(all kept\) or a list of the names of those kept/);
+        refuses({ source: "a.blend", morphs: ["jawOpen", 1] }, /morphs is true/);
+        refuses({ source: "a.blend", reweight: ["neutral"] }, /reweight is \{ "bone": "the bone to have its vertices" \}/);
+        refuses({ source: "a.blend", reweight: { neutral: "" } }, /reweight is/);
+
+        // (Clips from other skeletons' files: lib/retarget.js)
+        const retarget = (spec) => ({ source: "a.blend", retarget: [{ from: "human.glb", clips: ["Walk"], ...spec }] });
+
+        refuses({ source: "a.blend", retarget: { from: "human.glb" } }, /retarget is a list/);
+        refuses(retarget({ from: "human.fbx" }), /retarget\[0\].from \(the .glb or .gltf the clips are in\) is needed/);
+        refuses(retarget({ clips: [] }), /retarget\[0\].clips is \{ "its clip": "the name here" \} or a list/);
+        refuses(retarget({ clips: {} }), /retarget\[0\].clips names at least one clip/);
+        refuses(retarget({ clips: { Walk: "Stride", Jog: "Stride" } }), /gives two clips one name/);
+        refuses(retarget({ bones: { arm: 1 } }), /retarget\[0\].bones is \{ "bone here": "its bone" \(or null: left out\) \}/);
+        refuses(retarget({ unaligned: "thigh_*" }), /retarget\[0\].unaligned is a list of bones' names/);
+        refuses(retarget({ fps: 0 }), /retarget\[0\].fps is a number of keyframes a second/);
+        refuses(retarget({ speed: 2 }), /unknown setting retarget\[0\].speed/);
 
         // (Clips made up from others: lib/invent.js)
         const invent = (...layers) => ({ source: "a.blend", clips: { invent: [{ name: "Bite", from: "Idle", layers }] } });

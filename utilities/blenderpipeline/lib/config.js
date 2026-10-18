@@ -29,6 +29,16 @@ export const DEFAULTS = Object.freeze({
     // The exported armature's bone constraints muted: a game skeleton made to copy a control rig
     // (Auto-Rig Pro's, Rigify's) holds still otherwise, whatever its clips say
     muteConstraints: false,
+    // Morph targets (shape keys) kept: true, all of them; or a list of their names ([]: none)
+    morphs: true,
+    // Vertices a bone moves given to another to move: { "bone": "bone" } (a bone that only a
+    // control rig moved, left behind in the game as the rest goes on)
+    reweight: {},
+    // Clips from other skeletons' files, played on this one's bones of the same names
+    // (lib/retarget.js): [{ from (a .glb or .gltf), clips: { "its clip": "name here" } or [names],
+    // bones?: { "bone here": "its bone" or null }, unaligned?: [bones laid as they rest, * and ?
+    // wildcards], fps? (keyframes a second: 30) }]
+    retarget: [],
     // Objects joined into one mesh each before they're exported: { "new name": ["object", "Fur*"] }
     // (one draw call for each material in it; a group kept apart can be shown or hidden alone)
     join: {},
@@ -274,6 +284,13 @@ export function resolveConfig(raw, file) {
         fail("muteConstraints is true or false");
     }
 
+    if (config.morphs !== true && !(Array.isArray(config.morphs) && config.morphs.every((name) => typeof name === "string" && name))) {
+        fail("morphs is true (all kept) or a list of the names of those kept");
+    }
+
+    config.reweight = resolveNames(raw.reweight ?? {}, "reweight", 'is { "bone": "the bone to have its vertices" }', fail);
+    config.retarget = resolveRetarget(raw.retarget ?? [], where, fail);
+
     if (typeof config.stripNamespaces !== "boolean") {
         fail("stripNamespaces is true or false");
     }
@@ -389,6 +406,66 @@ export function resolveConfig(raw, file) {
     }
 
     return config;
+}
+
+// A map of names to names ({ "bone": "bone" }); `nulls`: or to null (left out)
+function resolveNames(names, prefix, shape, fail, { nulls = false } = {}) {
+    if (names === null || typeof names !== "object" || Array.isArray(names)) {
+        fail(`${prefix} ${shape}`);
+    }
+
+    for (const [name, to] of Object.entries(names)) {
+        if (!name || !((typeof to === "string" && to) || (nulls && to === null))) {
+            fail(`${prefix} ${shape}`);
+        }
+    }
+
+    return structuredClone(names);
+}
+
+function resolveRetarget(retarget, where, fail) {
+    if (!Array.isArray(retarget)) {
+        fail("retarget is a list: [{ from, clips }]");
+    }
+
+    return retarget.map((spec, i) => {
+        const prefix = `retarget[${i}]`;
+
+        unknownKeys(spec, { from: 0, clips: 0, bones: 0, unaligned: 0, fps: 0 }, `${prefix}.`, fail);
+
+        if (typeof spec.from !== "string" || ![".glb", ".gltf"].includes(path.extname(spec.from).toLowerCase())) {
+            fail(`${prefix}.from (the .glb or .gltf the clips are in) is needed`);
+        }
+
+        const list = Array.isArray(spec.clips) && spec.clips.length && spec.clips.every((name) => typeof name === "string" && name);
+        const clips = list ? Object.fromEntries(spec.clips.map((name) => [name, name])) : resolveNames(spec.clips ?? null, `${prefix}.clips`, 'is { "its clip": "the name here" } or a list of its clips', fail);
+
+        if (!Object.keys(clips).length) {
+            fail(`${prefix}.clips names at least one clip`);
+        }
+
+        if (new Set(Object.values(clips)).size < Object.keys(clips).length) {
+            fail(`${prefix}.clips gives two clips one name`);
+        }
+
+        const unaligned = spec.unaligned ?? [];
+
+        if (!Array.isArray(unaligned) || !unaligned.every((name) => typeof name === "string" && name)) {
+            fail(`${prefix}.unaligned is a list of bones' names (* and ? wildcards)`);
+        }
+
+        if (spec.fps !== undefined && !(typeof spec.fps === "number" && spec.fps > 0)) {
+            fail(`${prefix}.fps is a number of keyframes a second, more than 0`);
+        }
+
+        return {
+            from: path.resolve(where, spec.from),
+            clips,
+            bones: resolveNames(spec.bones ?? {}, `${prefix}.bones`, 'is { "bone here": "its bone" (or null: left out) }', fail, { nulls: true }),
+            unaligned,
+            fps: spec.fps ?? 30,
+        };
+    });
 }
 
 function resolveJoin(join, fail) {

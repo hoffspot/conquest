@@ -5,12 +5,14 @@
 // taken out; it's validated, lower-detail copies are made, and it's compressed.
 
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { Logger, PropertyType } from "@gltf-transform/core";
 import { clearNodeParent, cloneDocument, dedup, join, meshopt, prune, quantize, reorder, resample, simplify, simplifyPrimitive, unpartition, weld, weldPrimitive } from "@gltf-transform/functions";
 import { bounds, channelsByNode, duration, loops, playInPlace, rootMotion, sampleChannel, visitVertices } from "./animation.js";
 import { createIO, MeshoptEncoder, MeshoptSimplifier } from "./gltf.js";
 import { inventClip } from "./invent.js";
 import { encodeTextures } from "./ktx2.js";
+import { retargetClips } from "./retarget.js";
 import { moveDocument, scaleDocument } from "./transform.js";
 import { validate } from "./validate.js";
 
@@ -167,6 +169,168 @@ export function restFromClip(document, name) {
         }
 
         moved += kept.length > 0 ? 1 : 0;
+    }
+
+    return moved;
+}
+
+/**
+ * Only the morph targets (shape keys) of these names kept, on every mesh: a face's 52 ARKit
+ * shapes, say, that nothing in the game moves (10 MB on a demon's head). The clips' channels that
+ * weigh them keep only theirs, and a mesh left with none loses its channels. Returns how many
+ * targets were left out (one for each mesh, however many primitives it has).
+ */
+export function keepMorphs(document, names) {
+    const root = document.getRoot();
+    let dropped = 0;
+
+    for (const mesh of root.listMeshes()) {
+        const count = Math.max(0, ...mesh.listPrimitives().map((primitive) => primitive.listTargets().length));
+        const targetNames = mesh.getExtras()?.targetNames ?? [];
+        const kept = [...Array(count).keys()].filter((i) => names.includes(targetNames[i]));
+
+        if (kept.length === count) {
+            continue;
+        }
+
+        for (const primitive of mesh.listPrimitives()) {
+            for (const [i, target] of primitive.listTargets().entries()) {
+                if (!kept.includes(i)) {
+                    primitive.removeTarget(target);
+                }
+            }
+        }
+
+        const only = (weights) => kept.map((i) => weights[i] ?? 0);
+        const extras = { ...mesh.getExtras() };
+
+        delete extras.targetNames;
+        mesh.setWeights(only(mesh.getWeights()));
+        mesh.setExtras(kept.length ? { ...extras, targetNames: kept.map((i) => targetNames[i]) } : extras);
+
+        for (const node of root.listNodes().filter((one) => one.getMesh() === mesh && one.getWeights().length)) {
+            node.setWeights(only(node.getWeights()));
+        }
+
+        for (const animation of root.listAnimations()) {
+            for (const channel of animation.listChannels().filter((one) => one.getTargetPath() === "weights" && one.getTargetNode()?.getMesh() === mesh)) {
+                if (!kept.length) {
+                    animation.removeChannel(channel);
+                    continue;
+                }
+
+                // (A keyframe's weights, or a cubic spline's three sets of them, one after another)
+                const output = channel.getSampler().getOutput();
+                const all = output.getArray();
+                const sets = all.length / count;
+
+                output.setArray(Float32Array.from({ length: sets * kept.length }, (_, k) => all[Math.floor(k / kept.length) * count + kept[k % kept.length]]));
+            }
+        }
+
+        dropped += count - kept.length;
+    }
+
+    return dropped;
+}
+
+/**
+ * The clips clips.invent asks for, made in turn (one may be made from one made before it). One
+ * made from a clip of its own name takes that one's place: an idle from another skeleton's file
+ * (retarget), say, given a wing's breath. Returns [{ name, from }].
+ */
+export function inventClips(document, list) {
+    for (const spec of list) {
+        const there = document
+            .getRoot()
+            .listAnimations()
+            .find((animation) => animation.getName() === spec.name);
+
+        if (there && spec.from !== spec.name) {
+            throw new Error(`clips.invent ${spec.name}: there's a clip ${spec.name} already`);
+        }
+
+        inventClip(document, spec);
+        there?.dispose();
+    }
+
+    return list.map(({ name, from }) => ({ name, from }));
+}
+
+/**
+ * Vertices one bone moves given to another to move: { "bone": "the bone to have them" }. For a
+ * bone nothing moves in the game (one a control rig moved, its constraints muted): a mouth's inside
+ * left behind as the head goes on, stretched out into a spike. A vertex already moved by the other
+ * bone in part is moved by it as far as the two together moved it. Returns how many were given.
+ */
+export function moveWeights(document, moves) {
+    const bones = new Set(document.getRoot().listSkins().flatMap((skin) => skin.listJoints().map((joint) => joint.getName())));
+
+    for (const [from, to] of Object.entries(moves)) {
+        for (const name of [from, to]) {
+            if (!bones.has(name)) {
+                throw new Error(`reweight: there's no bone ${name}`);
+            }
+        }
+    }
+
+    let moved = 0;
+
+    for (const node of document.getRoot().listNodes()) {
+        const skin = node.getSkin();
+
+        if (!skin || !node.getMesh()) {
+            continue;
+        }
+
+        const names = skin.listJoints().map((joint) => joint.getName());
+
+        for (const primitive of node.getMesh().listPrimitives()) {
+            for (let set = 0; primitive.getAttribute(`JOINTS_${set}`); set++) {
+                const joints = primitive.getAttribute(`JOINTS_${set}`);
+                const weights = primitive.getAttribute(`WEIGHTS_${set}`);
+                const j = [];
+                const w = [];
+
+                for (let i = 0; i < joints.getCount(); i++) {
+                    joints.getElement(i, j);
+                    weights.getElement(i, w);
+
+                    let changed = false;
+
+                    for (let k = 0; k < j.length; k++) {
+                        const to = w[k] > 0 && moves[names[j[k]]];
+
+                        if (!to) {
+                            continue;
+                        }
+
+                        if (!names.includes(to)) {
+                            throw new Error(`reweight: ${to} isn't in ${node.getName()}'s skeleton`);
+                        }
+
+                        const index = names.indexOf(to);
+                        const already = j.findIndex((joint, other) => other !== k && joint === index && w[other] > 0);
+
+                        if (already >= 0) {
+                            w[already] += w[k];
+                            w[k] = 0;
+                            j[k] = 0;
+                        } else {
+                            j[k] = index;
+                        }
+
+                        changed = true;
+                    }
+
+                    if (changed) {
+                        joints.setElement(i, j);
+                        weights.setElement(i, w);
+                        moved++;
+                    }
+                }
+            }
+        }
     }
 
     return moved;
@@ -334,12 +498,36 @@ export async function optimize(config, { raw, glb, lodFile }) {
 
     result.tangentsMended = mendTangents(document);
 
+    if (Object.keys(config.reweight).length) {
+        result.reweighted = moveWeights(document, config.reweight);
+    }
+
+    if (config.morphs !== true) {
+        result.morphsLeftOut = keepMorphs(document, config.morphs);
+    }
+
     if (config.restPose) {
         result.restPose = restFromClip(document, config.restPose);
     }
 
     if (config.turn) {
         moveDocument(document, { turn: (config.turn * Math.PI) / 180 });
+    }
+
+    // Clips from other skeletons' files, played on its bones (facing +z now, as theirs do)
+    result.retargeted = [];
+
+    for (const [i, spec] of config.retarget.entries()) {
+        const source = await io.read(spec.from);
+        const unaligned = (name) => spec.unaligned.some((pattern) => wildcard(pattern, name));
+
+        try {
+            const made = retargetClips(document, source, { clips: spec.clips, bones: spec.bones, unaligned, fps: spec.fps });
+
+            result.retargeted.push({ from: path.basename(spec.from), bones: made.bones.length, hips: made.hips, scale: round(made.scale), clips: made.clips });
+        } catch (error) {
+            throw new Error(`retarget[${i}] (${path.basename(spec.from)}): ${error.message}`);
+        }
     }
 
     const rest = bounds(document);
@@ -367,15 +555,7 @@ export async function optimize(config, { raw, glb, lodFile }) {
     }
 
     // Clips made up from those there are, sized and turned as the rest are now
-    for (const spec of config.clips.invent) {
-        if (root.listAnimations().some((animation) => animation.getName() === spec.name)) {
-            throw new Error(`clips.invent ${spec.name}: there's a clip ${spec.name} already`);
-        }
-
-        inventClip(document, spec);
-    }
-
-    result.invented = config.clips.invent.map(({ name, from }) => ({ name, from }));
+    result.invented = inventClips(document, config.clips.invent);
 
     // Each clip's travel, measured, or taken out to play in place
     const { inPlace, rootBone } = config.clips;
