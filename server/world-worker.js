@@ -35,6 +35,7 @@
 import { performance } from "node:perf_hooks";
 import { parentPort, workerData } from "node:worker_threads";
 import { salvageKept } from "../client/js/app/character-file.js";
+import { copyOf, freshOf } from "../client/js/core/guid.js";
 import { characterFrom, Hosting } from "../client/js/core/netplay.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { elapsedOf } from "../client/js/core/daytime.js";
@@ -174,12 +175,14 @@ async function characterFor(one, { character, hero = "new" }) {
 
     one.slot = free;
 
-    // (Their first, if the world lets them bring one: as it is; else new, as the character maker made it)
+    // (Their first, if the world lets them bring one: as it is, a copy, the world's own from now on,
+    // with an id of its own and the one it was copied from as its origin; else new, as the
+    // character maker made it, with an id of its own: core/guid.js)
     if (!slots.length && !playing.length && stored.meta.firstHero === "bring") {
-        return forward(brought, one.player);
+        return forward({ ...brought, hero: copyOf(brought.hero) }, one.player);
     }
 
-    return { ...brought, talks: { memory: {}, knowledge: [] }, explored: {}, progress: {}, standing: {}, followers: [] };
+    return { ...brought, hero: freshOf(brought.hero), talks: { memory: {}, knowledge: [] }, explored: {}, progress: {}, standing: {}, followers: [] };
 }
 
 // What a player's game said: its hello answered once their hero's found; the rest to the world

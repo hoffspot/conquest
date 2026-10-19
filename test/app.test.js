@@ -12,6 +12,7 @@ import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, flic
 import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
+import { isGuid } from "../client/js/core/guid.js";
 import { clearSave, forgetCharacter, isHero, loadCharacters, loadExplored, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, SAVE_VERSION, saveExplored, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave } from "../client/js/app/save.js";
 import { ago, KEPT_FROM, keepMessage, MESSAGES_KEPT } from "../client/js/app/journal.js";
 import { encode } from "../client/js/core/wire.js";
@@ -68,7 +69,10 @@ describe("saving (save.js)", () => {
 
         assert.equal(save.version, SAVE_VERSION);
         assert.deepEqual([save.id, save.seed, save.created], [made.id, 99, made.created], "started when it was made (what's kept of it is marked so)");
-        assert.deepEqual(save.hero, hero);
+        assert.ok(isGuid(made.hero.guid), "their own id, the same wherever they go");
+        assert.deepEqual(save.hero, { ...hero, guid: made.hero.guid });
+        writeSave(save);
+        assert.equal(loadSave(WEAPONS).hero.guid, made.hero.guid, "and kept");
 
         clearSave();
         assert.equal(loadSave(WEAPONS), null);
@@ -171,7 +175,9 @@ describe("saving (save.js)", () => {
 
         const save = loadSave(WEAPONS);
 
-        assert.deepEqual([save.version, save.hero, save.seed, save.created], [SAVE_VERSION, hero, 7, old.created]);
+        assert.deepEqual([save.version, save.hero, save.seed, save.created], [SAVE_VERSION, { ...hero, guid: save.hero.guid }, 7, old.created]);
+        assert.ok(isGuid(save.hero.guid), "given an id of its own, as one kept before characters had ids");
+        assert.equal(loadSave(WEAPONS).hero.guid, save.hero.guid, "and kept with it");
         assert.equal(loadProgress(save).gold, 55);
         assert.deepEqual(loadTalks(save), { memory: { barkeep: { talks: 3, flags: [] } }, knowledge: ["orc"] });
         assert.equal(loadWorld(save).turn, 12);

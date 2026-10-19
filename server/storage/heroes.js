@@ -13,6 +13,7 @@
 import { readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { SAVE_VERSION } from "../../client/js/app/save.js";
+import { isGuid, withGuid } from "../../client/js/core/guid.js";
 import { exists, readJSON, writeJSON } from "./files.js";
 import { forward, SERVER_VERSION } from "./versions.js";
 
@@ -79,19 +80,37 @@ export class KeptHeroes {
         return heroes;
     }
 
-    /** A player's hero in `slot` (the character, as kept), or null if there's none. */
+    /**
+     * A player's hero in `slot` (the character, as kept), or null if there's none. One kept before
+     * characters had ids of their own (client/js/core/guid.js) is given one, and kept with it.
+     */
     async get(player, slot) {
-        return (await exists(this.#fileOf(player, slot))) ? (await this.#read(player, slot)).character : null;
+        if (!(await exists(this.#fileOf(player, slot)))) {
+            return null;
+        }
+
+        const { character, savedAt } = await this.#read(player, slot);
+
+        if (!isGuid(character.hero?.guid)) {
+            await this.keep(player, character, { slot, when: savedAt ? new Date(savedAt) : new Date() });
+
+            return (await this.#read(player, slot)).character;
+        }
+
+        return character;
     }
 
     /**
-     * A player's hero kept: in `slot` (replacing whoever was there), or the first free one. Returns
-     * { ok: true, slot }, or { ok: false, reason: "full" } if they have MOST_HEROES already.
+     * A player's hero kept: in `slot` (replacing whoever was there), or the first free one; with its
+     * own id (client/js/core/guid.js), given one if it hasn't. Returns { ok: true, slot }, or {
+     * ok: false, reason: "full" } if they have MOST_HEROES already.
      */
-    async keep(player, character, { slot = null, when = new Date() } = {}) {
-        if (!isObject(character) || !isObject(character.hero)) {
+    async keep(player, given, { slot = null, when = new Date() } = {}) {
+        if (!isObject(given) || !isObject(given.hero)) {
             throw new Error("Not a character: it has no hero.");
         }
+
+        const character = { ...given, hero: withGuid(given.hero) };
 
         const taken = await this.slotsOf(player);
         const into = slot ?? Array.from({ length: MOST_HEROES }, (_, k) => k + 1).find((each) => !taken.includes(each)) ?? null;

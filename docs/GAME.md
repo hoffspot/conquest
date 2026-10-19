@@ -4567,8 +4567,9 @@ it.
      each character as save.js `exportCharacter` gives them, their world's war with them): to keep
      somewhere safe, or to carry to another browser or device. **Import from a file** brings in
      what's in one, each as a new character kept here, in their own world as it was. Not one that's
-     kept here already (the same hero, started at the same moment in the same world: delete them
-     first to bring the copy back), nor with six kept. A character kept by an older version of the
+     kept here already (the same character: by their own id, below; or, kept before characters had
+     ids, the same hero started at the same moment in the same world: delete them first to bring
+     the copy back), nor with six kept. A character kept by an older version of the
      game is brought forward a step at a time (save.js `SAVE_STEPS`, never taken away), then
      whatever this version hasn't got is left out or put right, and the game says what: things,
      spells, skills and followers' callings it no longer has (a renamed spell kept by its new
@@ -4577,6 +4578,12 @@ it.
      version (it starts again in the same land). A file from a newer version of the game is
      refused, saying so. A hero taken home from a world on a server comes in the same way, in
      that world's land (docs/SERVER.md, "Heroes as files").
+   - **Each character's own id** (core/guid.js): kept on their hero (`hero.guid`, a random version
+     4 GUID, made without `crypto.randomUUID`, which a game opened from the Wi-Fi hasn't got),
+     from when they're first kept; one kept before ids is given one the first time it's looked
+     at. It goes with them in their files, to worlds on servers and into others' games, so two of
+     the same name are never taken for each other. A copy a world keeps as its own has an id of
+     its own, and the one it was copied from as its `origin` (docs/SERVER.md, "Heroes as files").
    - **New character**, with six kept already (save.js `MOST_CHARACTERS`), first asks which of
      them is to make way, then to be sure ("...permanently deleted, ... once your new character is
      made"). They're deleted only once the new character's made: backed out of making one, they're

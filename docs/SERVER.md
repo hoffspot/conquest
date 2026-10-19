@@ -80,6 +80,13 @@ game's Saved characters exports and brings in (`.pellagos-character`):
 - The world's owner **exports a player's heroes** from the Players tab (**Export heroes**): every
   hero of theirs kept there, in one file, to give them or keep.
 
+**Each hero's own id** (client/js/core/guid.js): every hero a world keeps has one (`hero.guid`),
+given when it's first kept, or the first time one kept before ids is given back. A hero brought
+in from a player's game (their first, where the rules allow it; or the hero of a world brought to
+the server, below) is a copy, the world's own from then on: an id of its own, and the one it was
+copied from as its `origin`. A new hero made with the look of one a player has is new: an id of
+its own and no origin. A visitor's hero, in a world whose players bring theirs, keeps its own id.
+
 A hero kept by an older version of the game, or brought in from an older file, comes in as this
 version plays them: whatever it no longer has (things, spells, skills, callings, a people or a
 weapon) is left out or put right, and the world's journal says what. Brought in from a file, the

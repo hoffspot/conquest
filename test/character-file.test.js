@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import { CHARACTER_EXTENSION, CHARACTER_FORMAT, characterFile, CharacterFileError, readCharacterFile } from "../client/js/app/character-file.js";
 import { defaultHero } from "../client/js/app/heroes.js";
 import { exportCharacter, forgetCharacter, keepCharacter, loadCharacters, loadFollowers, loadProgress, loadTalks, loadWorld, MOST_CHARACTERS, SAVE_STEPS, SAVE_VERSION, saveFollowers, saveProgress, saveTalks, saveWorld, SOLO_KIND, writeSave } from "../client/js/app/save.js";
+import { isGuid } from "../client/js/core/guid.js";
 import { Progress } from "../client/js/core/progress.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -75,6 +76,36 @@ describe("a character file", () => {
         forgetCharacter(bram.id);
         character("Cara", { seed: 99 });
         assert.deepEqual(keepCharacter(read[1].exported), { error: "full" });
+    });
+
+    it("carries each character's own id, and knows them by it: theirs kept already, though renamed since; one without an id given one", () => {
+        const ada = character("Ada", { seed: 7 });
+        const [read] = readCharacterFile(characterFile([ada]).text);
+
+        assert.ok(isGuid(ada.hero.guid));
+        assert.equal(read.exported.save.hero.guid, ada.hero.guid, "in the file");
+
+        // (Renamed since, they're still the one kept)
+        const renamed = structuredClone(read.exported);
+
+        renamed.save.hero.name = "Ada the Bold";
+        renamed.save.created = "2026-01-01T00:00:00.000Z";
+        assert.deepEqual(keepCharacter(renamed), { error: "here" });
+
+        // (Forgotten here, they're kept again, still themselves; one from before ids, a new id)
+        forgetCharacter(ada.id);
+        assert.equal(keepCharacter(read.exported).save.hero.guid, ada.hero.guid);
+
+        const old = structuredClone(read.exported);
+
+        delete old.save.hero.guid;
+        old.save.hero.name = "Older Ada";
+        old.save.created = "2025-01-01T00:00:00.000Z";
+
+        const { save } = keepCharacter(old);
+
+        assert.ok(isGuid(save.hero.guid) && save.hero.guid !== ada.hero.guid);
+        assert.equal(loadCharacters(WEAPONS).find(({ id }) => id === save.id).hero.guid, save.hero.guid);
     });
 
     it("brings a character kept by an older version of the game forward, and leaves out what this version hasn't got, saying so", () => {
