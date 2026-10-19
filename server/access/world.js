@@ -4,7 +4,7 @@
 //   { accessVersion, writtenBy,
 //     keys:    [{ id, hash, sealed, label, role, made, expires, uses, used, revoked, replacedBy, open? }]
 //     codes:   [{ id, hash, key, made, expires, uses, used, revoked }]
-//     players: { <player id>: { ticket, role, via, made, seen, address, banned } }
+//     players: { <player id>: { ticket, role, via, made, seen, address, banned, identity, playerName } }
 //     bans:    [{ address, until, player }] }
 //
 // A world has up to MOST_KEYS keys that work, each labelled ("Tuesday group"), with a role
@@ -19,7 +19,15 @@
 // one, the same label and role, as a password's changed), everyone who came with it needs a key
 // that works to come back; their ticket still says who they are, so their heroes are theirs.
 //
-// A ban follows the player's ticket for good, and the address they last came from for a day.
+// A player who shows their own identity (client/js/core/player.js: its id, a UUID the same on every
+// server, proved by a signature: api.js) is known by it from then on: coming back with it, or on
+// another device with their code, they're the same player, ticket or none. One who comes with a
+// ticket from before is linked to their identity then; one who comes with a ticket and another
+// identity (their code lost, a new ticket given them) is known by the new one from then on. The
+// name they go by is kept with it (`playerName`), for the world's owner to know them by.
+//
+// A ban follows the player's ticket and identity for good, and the address they last came from
+// for a day.
 //
 // An open world (its owner's said anyone may come in) has a door: a key of its own (`open`), that
 // whoever comes without a key comes in by, so that their ticket brings them back as any key's
@@ -28,6 +36,7 @@
 import path from "node:path";
 import { exists, readJSON, writeJSON } from "../storage/files.js";
 import { forward, SERVER_VERSION } from "../storage/versions.js";
+import { isPlayerId } from "../../client/js/core/player.js";
 import { labelOf } from "./secrets.js";
 import { hashOf, isToken, longKeyOf, newLongKey, newShortCode, newToken, randomCrockford, sameHash, shortCodeOf } from "./tokens.js";
 
@@ -427,6 +436,43 @@ export class WorldAccess {
         return found ? { id: found[0], ...found[1] } : null;
     }
 
+    /** The player known by their own identity (client/js/core/player.js: its id): { id, ...record }, or null. */
+    playerByIdentity(identity) {
+        if (!isPlayerId(identity)) {
+            return null;
+        }
+
+        const found = Object.entries(this.data.players).find(([, player]) => player.identity === identity);
+
+        return found ? { id: found[0], ...found[1] } : null;
+    }
+
+    /**
+     * A player known by their own identity from now on ({ id, name }: client/js/core/player.js), and
+     * by the name they go by: no other player of the world known by it. Returns whether they're a
+     * player of it.
+     */
+    async knownAs(id, { id: identity, name }) {
+        const player = this.data.players[id];
+
+        if (!player || !isPlayerId(identity)) {
+            return false;
+        }
+
+        for (const other of Object.values(this.data.players)) {
+            if (other !== player && other.identity === identity) {
+                delete other.identity;
+            }
+        }
+
+        if (player.identity !== identity || player.playerName !== name) {
+            Object.assign(player, { identity, playerName: name });
+            await this.#write();
+        }
+
+        return true;
+    }
+
     /** A player by their id: { id, ...record }, or null. */
     player(id) {
         const player = Object.hasOwn(this.data.players, id) ? this.data.players[id] : null;
@@ -523,6 +569,6 @@ export class WorldAccess {
 
     /** The players, as the owner's shown them (nothing that proves them). */
     players() {
-        return Object.entries(this.data.players).map(([id, { role, via, made, seen, banned = null }]) => ({ id, role, via, made, seen, banned: Boolean(banned) }));
+        return Object.entries(this.data.players).map(([id, { role, via, made, seen, banned = null, identity = null, playerName = null }]) => ({ id, role, via, made, seen, banned: Boolean(banned), identity, playerName }));
     }
 }

@@ -1,9 +1,10 @@
-// Bundles noble-ed25519's verifier, with noble-hashes' SHA-512 (which it needs) and SHA-256 (a server
-// id's fingerprint), into client/vendor/noble-ed25519-<version>/, minified: the game checks a world
-// server's identity with it before it sends a key there (core/identity.js; generated/
-// world_server_plan.md §7.6). WebCrypto would do on https pages, but a game opened from a server on
-// the Wi-Fi is a plain-http page, which has none, so the game always uses this. Run this after
-// changing the "@noble/ed25519" or "@noble/hashes" versions in package.json:
+// Bundles noble-ed25519 (verifying, signing and making keys), with noble-hashes' SHA-512 (which it
+// needs) and SHA-256 (a server id's fingerprint, a player's id), into
+// client/vendor/noble-ed25519-<version>/, minified: the game checks a world server's identity with
+// it before it sends a key there (core/identity.js; generated/world_server_plan.md §7.6), and makes
+// and proves the player's own (core/player.js). WebCrypto would do on https pages, but a game
+// opened from a server on the Wi-Fi is a plain-http page, which has none, so the game always uses
+// this. Run this after changing the "@noble/ed25519" or "@noble/hashes" versions in package.json:
 //
 //     npm install && npm run vendor:ed25519
 //
@@ -21,7 +22,8 @@ const ed25519 = await versionOf("@noble/ed25519");
 const hashes = await versionOf("@noble/hashes");
 const target = path.join(root, `client/vendor/noble-ed25519-${ed25519}`);
 
-// (Only what the game uses: verifying, and the two hashes)
+// (Only what the game uses: verifying, signing, making a secret key and its public half, and the
+// two hashes)
 const entry = `
 import * as ed from "@noble/ed25519";
 import { sha256, sha512 } from "@noble/hashes/sha2.js";
@@ -29,6 +31,9 @@ import { sha256, sha512 } from "@noble/hashes/sha2.js";
 ed.hashes.sha512 = sha512;
 
 export const verify = (signature, message, publicKey) => ed.verify(signature, message, publicKey);
+export const sign = (message, secretKey) => ed.sign(message, secretKey);
+export const getPublicKey = (secretKey) => ed.getPublicKey(secretKey);
+export const randomSecretKey = () => ed.utils.randomSecretKey();
 export { sha256 };
 `;
 

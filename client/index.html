@@ -81,6 +81,7 @@
                     <span class="track" aria-hidden="true"></span>
                     <span>Debug mode</span>
                 </label>
+                <button type="button" class="about-button" id="youbutton">You: your player name and code</button>
                 <button type="button" class="about-button" id="aboutbutton">About</button>
             </div>
         </section>
@@ -417,6 +418,7 @@
                         <li>Once you've been in, your game keeps a <strong>ticket</strong> for the world, on that device: the world says <strong>You hold a key to it</strong> (or <strong>You own it</strong>). Tap it to go back in, no link needed.</li>
                         <li>On another phone or browser, ask the owner for the link again; or, on the old one, choose <strong>My servers and tickets</strong>, copy the code, and paste it into My servers and tickets on the new one: <strong>Take it in</strong>.</li>
                         <li>That code opens your worlds: keep it to yourself.</li>
+                        <li><strong>You</strong>, on the title, is you as a player: the name you go by and your own player id, the same on every server. Its <strong>Show my code</strong> carries you to another device: there, in You, <strong>Use my code from another device</strong>, and every world that knows you knows you there too, ticket or none. Anyone with your code can play as you: keep it to yourself.</li>
                     </ul>
                 </section>
                 <section id="guide-who">
@@ -521,6 +523,30 @@
                 <button type="button" class="button" id="charactersimport" hidden>Import from a file</button>
                 <input type="file" id="charactersfile" accept=".pellagos-character,application/json" hidden>
                 <button type="button" class="button" id="charactersback">Back</button>
+            </div>
+        </dialog>
+
+        <!-- You, the player (app/you.js): the name you go by, your own id, the same on every server,
+             and your code to carry you to another device -->
+        <dialog id="you" class="together you" aria-labelledby="youtitle">
+            <h2 id="youtitle">You</h2>
+            <p class="note">Worlds on servers know you by this, on every server, whichever character you play. It's kept on this device.</p>
+            <label class="field" for="youname">The name you go by</label>
+            <input type="text" id="youname" class="text" maxlength="24" autocomplete="off" spellcheck="false">
+            <p class="note small">Your player id: <span class="you-id" id="youid"></span></p>
+            <div class="you-code" id="youcode" hidden>
+                <p class="note warning">Your code is you: anyone who has it can play as you. Keep it to yourself, and somewhere safe.</p>
+                <p class="you-code-text" id="youcodetext"></p>
+                <img class="you-qr" id="youqr" alt="Your code, to scan on another device">
+            </div>
+            <p class="note warning" id="youstatus" role="status"></p>
+            <div class="menu">
+                <button type="button" class="button primary" id="yousave">Keep this name</button>
+                <button type="button" class="button" id="youshow">Show my code</button>
+                <button type="button" class="button" id="youcopy" hidden>Copy my code</button>
+                <button type="button" class="button" id="youfile" hidden>Save my code as a file</button>
+                <button type="button" class="button" id="youuse">Use my code from another device</button>
+                <button type="button" class="button" id="youback">Back</button>
             </div>
         </dialog>
 

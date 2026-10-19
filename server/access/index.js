@@ -115,11 +115,16 @@ export class Access {
             }
         }
 
+        // (Known by their own identity from now on, if they showed one: world.js knownAs)
+        if (principal.identity) {
+            await access.knownAs(id, principal.identity);
+        }
+
         const session = this.sessions.start({ world: principal.world, player: id, role, via });
 
         this.policy.on("entered", { world: principal.world, player: id, role, via, label: principal.key?.label ?? access.key(via)?.label ?? via, address, new: Boolean(ticket) });
 
-        return { session, ticket, player: id, role };
+        return { session, ticket, player: id, role, identity: principal.identity?.id ?? null };
     }
 
     /** A session for the server's admin, or a creator (`principal`), to use /api/v1 with. Returns it. */

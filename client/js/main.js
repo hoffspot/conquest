@@ -1922,7 +1922,7 @@ async function brokerFor() {
         let via = known?.via ?? record;
 
         if (!card) {
-            const client = new ServerClient(record, { servers: state.servers });
+            const client = new ServerClient(record, { servers: state.servers, player: state.you?.proving });
 
             card = await client.status().catch(() => null);
             via = client.via ?? record;
@@ -2243,9 +2243,13 @@ function leftWorld(why) {
 
 // The game's side of world servers (app/servers.js), loaded the first time it's wanted
 async function serversOf() {
-    const servers = await import("./app/servers.js");
+    const [servers, you] = await Promise.all([import("./app/servers.js"), import("./app/you.js")]);
 
     state.servers ??= new servers.KnownServers();
+    // (The player's own identity, shown coming into a server's worlds: made the first time,
+    // going by the name of the character played last till they change it)
+    state.you ??= you;
+    you.loadPlayer({ name: state.save?.hero?.name ?? null });
 
     return servers;
 }
@@ -2296,7 +2300,7 @@ async function testServer(record) {
     status.textContent = `Testing ${record.name ?? record.key} from here…`;
 
     try {
-        const { results, reported, home } = await new ServerClient(state.servers.get(record.key) ?? record, { servers: state.servers }).test();
+        const { results, reported, home } = await new ServerClient(state.servers.get(record.key) ?? record, { servers: state.servers, player: state.you?.proving }).test();
 
         if (!results.length) {
             status.textContent = "This server doesn't answer the internet yet: its owner opens it to the internet on its management page.";
@@ -2328,7 +2332,7 @@ async function refreshWorlds() {
     await Promise.all(
         state.servers.list().map(async (record) => {
             try {
-                const client = new ServerClient(record, { servers: state.servers });
+                const client = new ServerClient(record, { servers: state.servers, player: state.you?.proving });
 
                 serverCards.set(record.key, { card: await client.status(), via: client.via });
             } catch (error) {
@@ -2707,7 +2711,7 @@ async function askMake(record) {
             $("#worldaskstatus").textContent = "Making it…";
 
             try {
-                const client = new ServerClient(state.servers.get(record.key), { servers: state.servers });
+                const client = new ServerClient(state.servers.get(record.key), { servers: state.servers, player: state.you?.proving });
                 const made = await client.makeWorld(maker.value.trim(), { name: name.value.trim(), race: people.value, characters: characters.value });
 
                 state.servers.remember(state.servers.get(record.key), { maker: maker.value.trim() });
@@ -2834,7 +2838,7 @@ async function askBringAs(record, save, world) {
             let brought;
 
             try {
-                brought = await new ServerClient(state.servers.get(record.key), { servers: state.servers }).bringWorld(maker.value.trim(), { character, name: name.value.trim(), firstHero: first.value });
+                brought = await new ServerClient(state.servers.get(record.key), { servers: state.servers, player: state.you?.proving }).bringWorld(maker.value.trim(), { character, name: name.value.trim(), firstHero: first.value });
             } catch (error) {
                 $("#worldaskstatus").textContent = bringRefusal(error, { server, hero, world: world.name, refusals: SERVER_REFUSALS });
 
@@ -2938,7 +2942,7 @@ function joinServerWorld(record, id, world = null) {
 
 async function enterServerWorld(record, world, { key = null, code = null, ticket = null, expect = null } = {}) {
     const { ServerClient } = await serversOf();
-    const client = new ServerClient(record, { servers: state.servers, expect });
+    const client = new ServerClient(record, { servers: state.servers, player: state.you?.proving, expect });
 
     $("#worldsstatus").textContent = "Asking the server…";
 
@@ -3495,6 +3499,79 @@ for (const id of ["about", "worldsguide"]) {
 }
 
 // About the game: what it is and how it's played, from the top, with which version this is
+// --- You, the player (app/you.js) ---
+
+// The You panel: the name they go by, their id, and their code (shown when asked)
+async function openYou() {
+    await serversOf();
+
+    const { id, name } = state.you.loadPlayer();
+
+    $("#youname").value = name;
+    $("#youid").textContent = id;
+    $("#youcode").hidden = true;
+    $("#youcopy").hidden = true;
+    $("#youfile").hidden = true;
+    $("#youshow").hidden = false;
+    $("#youstatus").textContent = "";
+
+    if (!$("#you").open) {
+        $("#you").showModal();
+    }
+}
+
+$("#youbutton").addEventListener("click", () => openYou());
+$("#youback").addEventListener("click", () => $("#you").close());
+$("#yousave").addEventListener("click", () => {
+    $("#youstatus").textContent = state.you.namePlayer($("#youname").value) ? "Kept: worlds on servers will know you by it the next time you go in." : "A name is 2 to 24 letters, digits and spaces.";
+});
+$("#youshow").addEventListener("click", async () => {
+    const code = state.you.playerCode();
+
+    $("#youcodetext").textContent = code;
+    $("#youqr").src = await qrOf(code);
+    $("#youcode").hidden = false;
+    $("#youcopy").hidden = false;
+    $("#youfile").hidden = false;
+    $("#youshow").hidden = true;
+});
+$("#youcopy").addEventListener("click", () => {
+    navigator.clipboard?.writeText(state.you.playerCode()).then(
+        () => ($("#youstatus").textContent = "Copied: paste it on your other device, in You, then Use my code from another device."),
+        () => ($("#youstatus").textContent = "It couldn't be copied: write it down, or save it as a file."),
+    );
+});
+$("#youfile").addEventListener("click", () => {
+    const { name, id } = state.you.loadPlayer();
+
+    download(`Pellagos-player-${name.replace(/[^\p{L}\p{N}-]+/gu, "-")}.txt`, `Your Pellagos player code (${name}, player id ${id}). Anyone who has it can play as you: keep it to yourself.\n\n${state.you.playerCode()}\n`);
+});
+$("#youuse").addEventListener("click", () => {
+    const code = Object.assign(document.createElement("textarea"), { id: "worldaskplayercode", spellcheck: false, placeholder: "ABCDEF-GHJKMN-…" });
+    const name = textField("worldaskplayername", { maxLength: 24, value: state.you.loadPlayer().name, autocapitalize: "words" });
+
+    askWorld({
+        title: "Use my code from another device",
+        note: "Be the player you are there, here too: the same player id, and the same player in every world you've been in. This device's own identity is replaced, so if it's played in worlds on servers as itself, show its code first and keep it.",
+        fields: [worldField("Your code", code), worldField("The name you go by (as you do there)", name)],
+        go: "Use this code",
+        onGo: async () => {
+            const used = state.you.usePlayerCode(code.value, { name: name.value });
+
+            if (used.error) {
+                $("#worldaskstatus").textContent = "That isn't a player code, or a character's mistyped: check it against the other device's.";
+
+                return false;
+            }
+
+            await openYou();
+            $("#youstatus").textContent = `You're ${used.player.name} here now too.`;
+
+            return true;
+        },
+    });
+});
+
 $("#aboutbutton").addEventListener("click", () => {
     const built = builtAt();
 
