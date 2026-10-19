@@ -63,7 +63,8 @@
                 <div class="menu">
                     <button type="button" id="continuebutton" class="button primary" hidden>Continue</button>
                     <button type="button" id="newbutton" class="button">New character</button>
-                    <button type="button" id="savedbutton" class="button">Saved characters</button>
+                    <button type="button" id="savedbutton" class="button">Characters on this device</button>
+                    <button type="button" id="localworldsbutton" class="button">Worlds on this device</button>
                     <button type="button" id="joinbutton" class="button">Join a world</button>
                     <button type="button" id="worldsbutton" class="button">Worlds on servers</button>
                 </div>
@@ -511,7 +512,7 @@
              new one, or to bring to someone's world; and all of them exported, or characters brought
              in from a file (app/character-file.js) -->
         <dialog id="characters" class="together characters" aria-labelledby="characterstitle">
-            <h2 id="characterstitle">Saved characters</h2>
+            <h2 id="characterstitle">Characters on this device</h2>
             <p class="note" id="charactersnote"></p>
             <ul class="character-list" id="characterlist"></ul>
             <div class="menu">
@@ -520,6 +521,18 @@
                 <button type="button" class="button" id="charactersimport" hidden>Import from a file</button>
                 <input type="file" id="charactersfile" accept=".pellagos-character,application/json" hidden>
                 <button type="button" class="button" id="charactersback">Back</button>
+            </div>
+        </dialog>
+
+        <!-- The worlds kept on this device, apart from the characters: each with its own land and war,
+             played in by choosing who goes in; or where a character in none goes -->
+        <dialog id="localworlds" class="together characters" aria-labelledby="localworldstitle">
+            <h2 id="localworldstitle">Worlds on this device</h2>
+            <p class="note" id="localworldsnote"></p>
+            <ul class="character-list" id="localworldlist"></ul>
+            <div class="menu">
+                <button type="button" class="button" id="localworldsnew">A new world</button>
+                <button type="button" class="button" id="localworldsback">Back</button>
             </div>
         </dialog>
 
@@ -623,7 +636,8 @@
                     <ul>
                         <li><strong>New character</strong> takes three steps: your <strong>look</strong> (your people, body, face, colours and hair; <strong>Random</strong> makes someone new), a <strong>weapon</strong> (sword, staff, wand, grimoire, war hammer, bow, spiked gauntlets or spiked boots), and a <strong>name</strong>. Then <strong>Begin</strong>.</li>
                         <li><strong>Continue</strong> carries on as the character you played last, just where you left them.</li>
-                        <li><strong>Saved characters</strong> keeps up to six, each in a world of their own.</li>
+                        <li><strong>Characters on this device</strong> keeps up to six. A new character starts in a world of their own.</li>
+                        <li><strong>Worlds on this device</strong> keeps up to eight, apart from the characters: each its own land and war. Choose one, then who goes in: what they carry and have grown into goes with them, and each world remembers its own of them (what its folk know of them, where they stand, their requests and followers, where they were).</li>
                         <li><strong>Join a world</strong> and <strong>Worlds on servers</strong> are for playing with others (Playing together, below).</li>
                     </ul>
                 </section>
@@ -706,7 +720,7 @@
                     <h3>Saving</h3>
                     <ul>
                         <li>The game saves as you play, in this browser: where you are, what you carry and know, and your world as it is.</li>
-                        <li>To keep a character safe, or take them to another device, <strong>Export</strong> them from Saved characters, and <strong>Import from a file</strong> there.</li>
+                        <li>To keep a character safe, or take them to another device, <strong>Export</strong> them from Characters on this device (the world they're in comes with them), and <strong>Import from a file</strong> there.</li>
                         <li>Add the game to your home screen (the browser's Share or Install menu) to play it as an app.</li>
                     </ul>
                 </section>

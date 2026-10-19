@@ -13,7 +13,7 @@ import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
 import { isGuid } from "../client/js/core/guid.js";
-import { clearSave, forgetCharacter, isHero, loadCharacters, loadExplored, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, SAVE_VERSION, saveExplored, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, writeSave } from "../client/js/app/save.js";
+import { clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, loadCharacters, loadExplored, loadLocalWorld, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, SAVE_VERSION, saveExplored, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, writeSave } from "../client/js/app/save.js";
 import { ago, KEPT_FROM, keepMessage, MESSAGES_KEPT } from "../client/js/app/journal.js";
 import { encode } from "../client/js/core/wire.js";
 import { Standing } from "../client/js/core/standing.js";
@@ -134,7 +134,7 @@ describe("saving (save.js)", () => {
         assert.equal(loadSave(WEAPONS).hero.name, "Gale");
     });
 
-    it("forgets a character for good, everything kept of them and their world with it; carries on with the latest played of those left", () => {
+    it("forgets a character for good, everything kept of them and their place in each world with it, the worlds staying; carries on with the latest played of those left", () => {
         const items = useStorage();
         const [ash, briar] = [
             { hero: { ...defaultHero(), name: "Ash" }, seed: 10, created: "2026-10-01T10:00:00.000Z", played: "2026-10-05T10:00:00.000Z" },
@@ -150,9 +150,13 @@ describe("saving (save.js)", () => {
         assert.ok([...items.keys()].some((key) => key.startsWith(`pellagos.${briar.id}.`)));
 
         assert.equal(forgetCharacter(briar.id), true);
-        assert.deepEqual([...items.keys()].filter((key) => key.startsWith(`pellagos.${briar.id}.`)), [], "nothing of them left");
         assert.equal(loadSave(WEAPONS).hero.name, "Ash");
-        assert.deepEqual([loadProgress(briar), loadWorld(briar), loadPlace(briar), loadVitals(briar)], [{}, null, null, null]);
+        assert.deepEqual([loadProgress(briar), loadPlace(briar), loadVitals(briar)], [{}, null, null]);
+
+        // (Their world stays, its war with it, with nobody in it: what's kept under their id is its)
+        assert.deepEqual([...items.keys()].filter((key) => key.startsWith(`pellagos.${briar.id}.`)).sort(), [`pellagos.${briar.id}.about`, `pellagos.${briar.id}.world`], "nothing of them left");
+        assert.deepEqual(loadLocalWorld(briar.id).places, {});
+        assert.equal(loadWorld(briar).turn, 3);
 
         // (One that isn't kept: nothing to forget)
         assert.equal(forgetCharacter(briar.id), false);
@@ -182,7 +186,7 @@ describe("saving (save.js)", () => {
         assert.deepEqual(loadTalks(save), { memory: { barkeep: { talks: 3, flags: [] } }, knowledge: ["orc"] });
         assert.equal(loadWorld(save).turn, 12);
         assert.equal(loadPlace(save), null);
-        assert.deepEqual([...items.keys()].filter((key) => /^pellagos\.[a-z]+$/.test(key)).sort(), ["pellagos.characters"], "the old keys let go");
+        assert.deepEqual([...items.keys()].filter((key) => /^pellagos\.[a-z]+$/.test(key)).sort(), ["pellagos.characters", "pellagos.worlds"], "the old keys let go (their world one of the worlds now)");
 
         // The old keys back again (as a page's script might put them): the same character, moved already
         saveProgress(save, new Progress({ gold: 80 }));
@@ -192,6 +196,164 @@ describe("saving (save.js)", () => {
         assert.deepEqual(loadCharacters(WEAPONS).map(({ id }) => id), [save.id]);
         assert.equal(loadProgress(loadSave(WEAPONS)).gold, 80, "what it's grown into since kept");
         assert.equal(items.has("pellagos.progress"), false);
+    });
+
+    it("keeps worlds apart from characters: one kept before given a world of their own, named for them, what was kept of them there as it was; another made, and gone into, what they carry going with them and what each world keeps of them staying in it", () => {
+        const items = useStorage();
+        const hero = { ...defaultHero(), name: "Wren" };
+        const id = "abcd1234";
+        const created = "2026-10-01T10:00:00.000Z";
+        const old = { created, seed: 7 };
+
+        // Kept before worlds were apart: their save, and what's kept of them and their world
+        items.set("pellagos.characters", JSON.stringify({ ids: [id], last: id }));
+        items.set(`pellagos.${id}.save`, JSON.stringify({ version: SAVE_VERSION, id, hero, seed: 7, created, played: created }));
+        saveTalks({ id, ...old }, { memory: { barkeep: { talks: 3, flags: [] } }, knowledge: new Set(["orc"]) });
+        saveProgress({ id, ...old }, new Progress({ gold: 55 }));
+        saveWorld({ id, ...old }, { version: 1, seed: 7, turn: 12 });
+
+        const [wren] = loadCharacters(WEAPONS);
+        const [own] = loadWorlds();
+
+        assert.deepEqual([own.id, own.name, own.seed, own.created], [id, "Wren's world", 7, created], "their own, under their id, made from their seed when they were");
+        assert.equal(wren.world, id);
+
+        const home = stayOf(wren);
+
+        assert.deepEqual([home.place, home.war], [{ id, created, seed: 7 }, { id, created, seed: 7 }], "what was kept of them, where it was");
+        assert.deepEqual(loadTalks(home.place).knowledge, ["orc"]);
+        assert.equal(loadWorld(home.war).turn, 12);
+        assert.equal(loadProgress(wren).gold, 55);
+
+        // Another world made, and gone into: theirs from now; what they carry goes with them, and
+        // what its folk know of them is its own
+        const { world: vale } = makeWorld({ name: "  Thornvale ", seed: 21 });
+
+        assert.deepEqual([vale.name, vale.seed, vale.places], ["Thornvale", 21, {}]);
+        assert.notEqual(vale.id, id);
+
+        const there = enterWorld(wren, vale.id);
+
+        assert.equal(wren.world, vale.id);
+        assert.equal(loadSave(WEAPONS).world, vale.id, "and kept so");
+        assert.equal(there.world.seed, 21);
+        assert.equal(there.place.seed, 21);
+        assert.ok(![id, vale.id].includes(there.place.id), "a place of their own in it");
+        assert.deepEqual(loadTalks(there.place), { memory: {}, knowledge: [] }, "nobody there knows them");
+        assert.equal(loadWorld(there.war), null, "its war not begun");
+        saveTalks(there.place, { memory: {}, knowledge: new Set(["troll"]) });
+        saveWorld(there.war, { version: 1, seed: 21, turn: 2 });
+        saveProgress(wren, new Progress({ gold: 80 }));
+
+        // Back in their own: as they left it, with what they carry now
+        const back = enterWorld(wren, id);
+
+        assert.deepEqual(back.place, home.place);
+        assert.deepEqual(loadTalks(back.place).knowledge, ["orc"]);
+        assert.equal(loadWorld(back.war).turn, 12);
+        assert.equal(loadProgress(wren).gold, 80);
+        assert.deepEqual(loadTalks(enterWorld(wren, vale.id).place).knowledge, ["troll"], "and Thornvale's as they left it");
+        assert.deepEqual(loadWorlds().map(({ name }) => name).sort(), ["Thornvale", "Wren's world"]);
+
+        // (Renamed; and not into a world that isn't kept)
+        assert.equal(renameWorld(vale.id, "Thornwood"), true);
+        assert.equal(loadLocalWorld(vale.id).name, "Thornwood");
+        assert.equal(renameWorld(vale.id, "  "), false);
+        assert.equal(enterWorld(wren, "zzzz9999"), null);
+        assert.equal(wren.world, vale.id);
+    });
+
+    it("forgets a world for good: its war, and what it kept of each character who's been in it; the characters stay, in no world till they go into another", () => {
+        const items = useStorage();
+        const ash = { hero: { ...defaultHero(), name: "Ash" }, seed: 10, created: "2026-10-01T10:00:00.000Z" };
+        const briar = { hero: { ...defaultHero(), name: "Briar" }, seed: 11, created: "2026-10-02T10:00:00.000Z" };
+
+        writeSave(ash);
+        writeSave(briar);
+
+        const { world } = makeWorld({ name: "Fernhollow" });
+        const stays = [ash, briar].map((save) => enterWorld(save, world.id));
+
+        saveWorld(stays[0].war, { version: 1, seed: world.seed, turn: 5 });
+        stays.forEach(({ place }) => saveTalks(place, { memory: {}, knowledge: new Set(["orc"]) }));
+        saveProgress(ash, new Progress({ gold: 30 }));
+
+        assert.equal(forgetWorld(world.id), true);
+        assert.equal(loadLocalWorld(world.id), null);
+        assert.deepEqual(loadWorlds().map(({ name }) => name).sort(), ["Ash's world", "Briar's world"]);
+        assert.deepEqual([...items.keys()].filter((key) => [world.id, ...stays.map(({ place }) => place.id)].some((each) => key.startsWith(`pellagos.${each}.`))), [], "nothing of it left");
+        assert.deepEqual(loadCharacters(WEAPONS).map(({ hero: { name }, world: at }) => [name, at]).sort(), [["Ash", null], ["Briar", null]]);
+        assert.equal(stayOf(loadSave(WEAPONS)), null);
+        assert.equal(loadProgress(ash).gold, 30, "with all they carry");
+        assert.equal(forgetWorld(world.id), false);
+
+        // Up to MOST_WORLDS: another not till one's forgotten; nor one without a name
+        for (let i = loadWorlds().length; i < MOST_WORLDS; i++) {
+            assert.ok(makeWorld({ name: `World ${i}` }).world);
+        }
+
+        assert.equal(MOST_WORLDS, 8);
+        assert.deepEqual(makeWorld({ name: "One more" }), { error: "full" });
+        assert.equal(forgetWorld(loadWorlds()[0].id), true);
+        assert.deepEqual(makeWorld({ name: " " }), { error: "name" });
+        assert.ok(makeWorld({ name: "One more" }).world);
+    });
+
+    it("exports a character with the world they're in, or another they've been in, as if it were theirs alone; brought in on another device, it's a world of its own there, named as it was", () => {
+        useStorage();
+
+        const wren = { hero: { ...defaultHero(), name: "Wren" }, seed: 7, created: "2026-10-01T10:00:00.000Z" };
+
+        writeSave(wren);
+        loadCharacters(WEAPONS);
+
+        const { world: vale } = makeWorld({ name: "Thornvale", seed: 21 });
+        const there = enterWorld(wren, vale.id);
+
+        saveTalks(there.place, { memory: {}, knowledge: new Set(["troll"]) });
+        saveWorld(there.war, { version: 1, seed: 21, turn: 2 });
+        saveProgress(wren, new Progress({ gold: 80 }));
+
+        const exported = exportCharacter(wren);
+
+        assert.deepEqual([exported.save.seed, exported.save.created, "world" in exported.save], [21, wren.created, false], "the world's seed, as a character's export always had");
+        assert.deepEqual([exported.world.name, exported.world.war.turn], ["Thornvale", 2]);
+
+        const read = importCharacter(exported);
+
+        assert.deepEqual(read.talks.knowledge, ["troll"]);
+        assert.equal(read.progress.gold, 80);
+        assert.equal(read.war.turn, 2);
+
+        // (Or with their own, as they left it)
+        const own = exportCharacter(wren, { world: wren.id });
+
+        assert.deepEqual([own.save.seed, own.world, own.talks], [7, null, null]);
+
+        // On another device: kept, with a world of its own, named as it was, them in it
+        useStorage();
+
+        const { save } = keepCharacter(exported);
+        const [world] = loadWorlds();
+
+        assert.deepEqual([world.name, world.seed, save.world], ["Thornvale", 21, world.id]);
+
+        const stay = stayOf(save);
+
+        assert.deepEqual(loadTalks(stay.place).knowledge, ["troll"]);
+        assert.equal(loadWorld(stay.war).turn, 2);
+        assert.equal(loadProgress(save).gold, 80);
+        assert.deepEqual(keepCharacter(exported), { error: "here" });
+
+        // (Not with MOST_WORLDS kept already)
+        useStorage();
+
+        for (let i = 0; i < MOST_WORLDS; i++) {
+            makeWorld({ name: `World ${i}` });
+        }
+
+        assert.deepEqual(keepCharacter(exported), { error: "worlds" });
+        assert.deepEqual(loadCharacters(WEAPONS), []);
     });
 
     it("keeps how a saved character was when it last stopped (host.js vitalsOf), to carry on so; not for another", () => {

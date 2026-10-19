@@ -293,10 +293,10 @@ function progressOf(progress, left) {
 /**
  * A hero a world server keeps (server/storage/heroes.js: as core/host.js leave hands one back,
  * with where and how they were) as a character's export, as the game exports one of its own: in
- * the world's land (`seed`), with its war as it was last saved (`war`) if there's one to give,
- * `created` when it was kept.
+ * the world's land (`seed`), with its war as it was last saved (`war`) if there's one to give, and
+ * its name (`name`), `created` when it was kept.
  */
-export function exportOfKept(character, { seed, created = new Date().toISOString(), war = null }) {
+export function exportOfKept(character, { seed, created = new Date().toISOString(), war = null, name = null }) {
     const of = { created, seed };
     const kind = (value, wrap = null) => (value === undefined || value === null ? null : wrap ? { ...of, [wrap]: value } : isObject(value) ? { ...of, ...value } : null);
 
@@ -316,7 +316,7 @@ export function exportOfKept(character, { seed, created = new Date().toISOString
         vitals: kind(character.vitals, "vitals"),
         messages: null,
         told: null,
-        world: war ? { ...of, war } : null,
+        world: war ? { ...of, war, ...(name ? { name } : {}) } : null,
     };
 }
 

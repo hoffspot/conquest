@@ -13,6 +13,18 @@
 // be several (SAVE_VERSION 1), the one character had the keys to itself ("pellagos.save"...): it's
 // moved under an id of its own the first time it's looked for (migrate).
 //
+// Worlds are kept apart from characters (docs/GAME.md, "Characters and worlds on this device"): a
+// character can go into any of them, and each keeps its own war. What goes with a character
+// wherever they go (CARRIED: who they are, what they've grown into and carry, their wheels, what
+// they've been told) is kept under their id; what a world keeps of each character who's been in it
+// (PLACED: what its folk remember of them and what they've learnt there, what they've found of it,
+// where they stand with its peoples and the requests they carry, their followers there, where they
+// were and how), under the id of their place in it; and the world itself ("pellagos.<id>.about":
+// its name and seed, and its places) and its war, under the world's. "pellagos.worlds" says which
+// worlds there are. Kept before worlds were apart, each character had a world of their own: it's
+// made one, under the character's own id, the first time they're looked for (settle), so that
+// what was kept of them all stays where it is.
+//
 // Storage can be missing or refuse to work (private browsing, blocked site data), so every read
 // and write is guarded: without it the game still plays, it just doesn't remember.
 
@@ -22,19 +34,30 @@ import { MESSAGES_KEPT } from "./journal.js";
 import { decode, encode } from "../core/wire.js";
 
 const ROSTER_KEY = "pellagos.characters";
+const WORLDS_KEY = "pellagos.worlds";
 const SETTINGS_KEY = "pellagos.settings";
 
-// What's kept of each character, each under its own key
+// What's kept of each character, each under its own key (and what an export of them carries)
 const KINDS = Object.freeze(["save", "talks", "explored", "progress", "standing", "followers", "wheels", "pin", "place", "vitals", "world", "messages", "told"]);
 
-// A character's id: eight letters and digits
+// Of them, what goes with a character wherever they go, and what each world keeps of them
+const CARRIED = Object.freeze(["save", "progress", "wheels", "messages", "told"]);
+const PLACED = Object.freeze(["talks", "explored", "standing", "followers", "pin", "place", "vitals"]);
+
+// A character's id, a world's and a place's: eight letters and digits, none the same as another's
 const ID = /^[a-z0-9]{8}$/;
+
+// The format of what's kept of a world ("pellagos.<id>.about")
+const WORLD_VERSION = 1;
 
 const keyOf = (save, kind) => `pellagos.${save.id}.${kind}`;
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
 /** How many characters are kept at most: making another means replacing one of them. */
 export const MOST_CHARACTERS = 6;
+
+/** How many worlds are kept at most: making another means deleting one of them. */
+export const MOST_WORLDS = 8;
 
 /**
  * The save format's version: a save from another version is set aside, not misread. 2 since each
@@ -153,29 +176,91 @@ export function isHero(hero, weapons) {
 }
 
 // The characters kept ({ ids, last }: last, the one played last), the one kept before there
-// could be several moved in first
+// could be several moved in first, and each without a world given one of their own
 function roster() {
     migrate();
 
+    const listed = charactersListed();
+
+    settle(listed.ids);
+
+    return listed;
+}
+
+// The characters kept, as "pellagos.characters" says: { ids, last }
+function charactersListed() {
     const kept = read(ROSTER_KEY);
     const ids = Array.isArray(kept?.ids) ? [...new Set(kept.ids.filter((id) => typeof id === "string" && ID.test(id)))].slice(0, MOST_CHARACTERS) : [];
 
     return { ids, last: ids.includes(kept?.last) ? kept.last : null };
 }
 
-// A new character's id: none of those kept
-function newId(ids, random = Math.random) {
+// The worlds kept, as "pellagos.worlds" says: their ids
+function worldsListed() {
+    const kept = read(WORLDS_KEY);
+
+    return Array.isArray(kept?.ids) ? [...new Set(kept.ids.filter((id) => typeof id === "string" && ID.test(id)))].slice(0, MOST_WORLDS) : [];
+}
+
+// A world as kept ({ version, id, name, seed, created, played, places: { [a character's id]: {
+// id, created } } }: each character's place in it, its own id and when they first came), or null
+function worldRecord(id) {
+    const world = typeof id === "string" && ID.test(id) ? read(`pellagos.${id}.about`) : null;
+
+    return world?.version === WORLD_VERSION && world.id === id && typeof world.name === "string" && Number.isInteger(world.seed) && typeof world.created === "string" && isObject(world.places) ? world : null;
+}
+
+// Every id in use: the characters', the worlds' and their places'
+function idsInUse() {
+    const worlds = worldsListed();
+
+    return new Set([...charactersListed().ids, ...worlds, ...worlds.flatMap((id) => Object.values(worldRecord(id)?.places ?? {}).map((place) => place?.id))]);
+}
+
+// A new id: none of those in use (those given, or every one)
+function newId(ids = idsInUse(), random = Math.random) {
+    const used = new Set(ids);
     let id;
 
     do {
         id = Array.from({ length: 8 }, () => "abcdefghijklmnopqrstuvwxyz0123456789"[Math.floor(random() * 36)]).join("");
-    } while (ids.includes(id));
+    } while (used.has(id));
 
     return id;
 }
 
-// A character as kept ({ version, id, hero, seed, created, played }), or null (none, or one
-// that's no good). One kept before characters had ids of their own (core/guid.js) is given one,
+// Each character kept without a world (kept before worlds were apart from characters, or new) given
+// one of their own, named for them: under their own id, made from their seed when they were, and
+// their place in it under their id too, so what's kept of them is theirs there as it was. With
+// MOST_WORLDS kept already, they wait (and are asked where to go when they're played).
+function settle(ids) {
+    for (const id of ids) {
+        const save = read(`pellagos.${id}.save`);
+
+        if (save?.version !== SAVE_VERSION || save.id !== id || save.world !== undefined || !Number.isInteger(save.seed) || typeof save.created !== "string") {
+            continue;
+        }
+
+        const worlds = worldsListed();
+
+        if (!worldRecord(id)) {
+            if (worlds.length >= MOST_WORLDS) {
+                continue;
+            }
+
+            const name = typeof save.hero?.name === "string" && save.hero.name.trim() ? `${save.hero.name.trim()}'s world` : "A world";
+
+            if (!write(`pellagos.${id}.about`, { version: WORLD_VERSION, id, name, seed: save.seed, created: save.created, played: save.played ?? save.created, places: { [id]: { id, created: save.created } } }) || !write(WORLDS_KEY, { ids: [...worlds, id] })) {
+                continue;
+            }
+        }
+
+        write(`pellagos.${id}.save`, { ...save, world: id });
+    }
+}
+
+// A character as kept ({ version, id, hero, seed, created, played, world }: world, the id of the
+// world they're in, null for none), or null (none, or one that's no good). One kept before characters had ids of their own (core/guid.js) is given one,
 // and kept with it
 function characterOf(id, weapons) {
     const save = read(`pellagos.${id}.save`);
@@ -192,7 +277,7 @@ function characterOf(id, weapons) {
     return save;
 }
 
-/** The characters kept that can be played ({ version, id, hero, seed, created, played }), the one played last first. */
+/** The characters kept that can be played ({ version, id, hero, seed, created, played, world }), the one played last first. */
 export function loadCharacters(weapons) {
     const { ids } = roster();
 
@@ -203,7 +288,7 @@ export function loadCharacters(weapons) {
 }
 
 /**
- * The character played last (Continue as...: { version, id, hero, seed, created, played }); or,
+ * The character played last (Continue as...: { version, id, hero, seed, created, played, world }); or,
  * if that one's gone, the latest played of those left; or null for none (or none any good).
  */
 export function loadSave(weapons) {
@@ -213,11 +298,13 @@ export function loadSave(weapons) {
 }
 
 /**
- * Keep a character ({ hero, seed, created }, and `played`, when they last were), as the one played
- * last. A new one (no `id` yet) is given its id and kept with the others, unless MOST_CHARACTERS
- * are kept already (one of them must go first: forgetCharacter); and its hero, its own id, the
- * same wherever they go, if it hasn't one (core/guid.js). Returns false if it isn't kept (that,
- * or the browser wouldn't store it).
+ * Keep a character ({ hero, seed, created }, and `played`, when they last were; and `world`, the
+ * id of the world they're in, or null for none), as the one played last. A new one (no `id` yet)
+ * is given its id and kept with the others, unless MOST_CHARACTERS are kept already (one of them
+ * must go first: forgetCharacter); and its hero, its own id, the same wherever they go, if it
+ * hasn't one (core/guid.js). A new one not given a world is given one of their own, made from
+ * their seed, the next time the characters are looked at (settle). Returns false if it isn't kept
+ * (that, or the browser wouldn't store it).
  */
 export function writeSave(save) {
     const { ids } = roster();
@@ -227,13 +314,13 @@ export function writeSave(save) {
             return false;
         }
 
-        save.id = newId(ids);
+        save.id = newId();
     }
 
     save.created ??= new Date().toISOString();
     save.hero = isGuid(save.hero?.guid) ? save.hero : withGuid(save.hero);
 
-    const kept = write(keyOf(save, "save"), { version: SAVE_VERSION, id: save.id, hero: save.hero, seed: save.seed, created: save.created, played: save.played ?? save.created });
+    const kept = write(keyOf(save, "save"), { version: SAVE_VERSION, id: save.id, hero: save.hero, seed: save.seed, created: save.created, played: save.played ?? save.created, ...(save.world !== undefined ? { world: save.world } : {}) });
 
     return kept && write(ROSTER_KEY, { ids: ids.includes(save.id) ? ids : [...ids, save.id], last: save.id });
 }
@@ -250,8 +337,9 @@ export function playedSave(save) {
 }
 
 /**
- * Forget a character for good (by id): everything kept of them, their world with it. The one
- * played last becomes the latest played of those left.
+ * Forget a character for good (by id): everything kept of them, and what every world kept of them
+ * (their places in it). The worlds stay. The one played last becomes the latest played of those
+ * left.
  */
 export function forgetCharacter(id) {
     const { ids, last } = roster();
@@ -260,8 +348,26 @@ export function forgetCharacter(id) {
         return false;
     }
 
-    for (const kind of KINDS) {
+    for (const kind of CARRIED) {
         remove(`pellagos.${id}.${kind}`);
+    }
+
+    for (const each of worldsListed()) {
+        const world = worldRecord(each);
+        const place = world?.places[id];
+
+        if (place) {
+            forgetPlace(place);
+            delete world.places[id];
+            write(`pellagos.${each}.about`, world);
+        }
+    }
+
+    // (Kept before worlds were apart, and never given one: what was kept of them in theirs)
+    if (!worldRecord(id)) {
+        for (const kind of [...PLACED, "world"]) {
+            remove(`pellagos.${id}.${kind}`);
+        }
     }
 
     const left = ids.filter((each) => each !== id);
@@ -297,7 +403,7 @@ function migrate() {
             return;
         }
 
-        const save = { id: newId(ids), seed: old.seed, created: old.created };
+        const save = { id: newId(), seed: old.seed, created: old.created };
 
         for (const kind of KINDS.filter((each) => each !== "save" && each !== "vitals")) {
             try {
@@ -322,6 +428,160 @@ function migrate() {
     for (const kind of KINDS) {
         remove(`pellagos.${kind}`);
     }
+}
+
+// What a world kept of a character (their place in it: { id, created }) forgotten
+function forgetPlace(place) {
+    if (typeof place?.id === "string" && ID.test(place.id)) {
+        for (const kind of PLACED) {
+            remove(`pellagos.${place.id}.${kind}`);
+        }
+    }
+}
+
+/**
+ * The worlds kept on this device ({ version, id, name, seed, created, played, places }: places, by
+ * character id, theirs in it), the one played in last first. Each character without one yet is
+ * given one of their own first (settle).
+ */
+export function loadWorlds() {
+    roster();
+
+    return worldsListed()
+        .map((id) => worldRecord(id))
+        .filter(Boolean)
+        .sort((a, b) => String(b.played ?? b.created).localeCompare(String(a.played ?? a.created)));
+}
+
+/** A world kept on this device, by its id ({ version, id, name, seed, created, played, places }), or null. */
+export function loadLocalWorld(id) {
+    roster();
+
+    return worldRecord(id);
+}
+
+/**
+ * Make a world on this device ({ name, seed }: seed, a new one if none's given), with nobody in it
+ * yet: { world } (as loadWorlds gives one); or { error: "full" } with MOST_WORLDS kept already
+ * (one must go first: forgetWorld), "name" without a name, or "storage" if the browser wouldn't
+ * keep it.
+ */
+export function makeWorld({ name, seed = newSeed() } = {}) {
+    roster();
+
+    const ids = worldsListed();
+    const named = typeof name === "string" ? name.trim().slice(0, 60) : "";
+
+    if (!named) {
+        return { error: "name" };
+    }
+
+    if (ids.length >= MOST_WORLDS) {
+        return { error: "full" };
+    }
+
+    const now = new Date().toISOString();
+    const world = { version: WORLD_VERSION, id: newId(), name: named, seed: Number.isInteger(seed) && seed >= 1 ? seed : newSeed(), created: now, played: now, places: {} };
+
+    if (!write(`pellagos.${world.id}.about`, world) || !write(WORLDS_KEY, { ids: [...ids, world.id] })) {
+        remove(`pellagos.${world.id}.about`);
+
+        return { error: "storage" };
+    }
+
+    return { world };
+}
+
+/** Give a world kept on this device another name. Returns false if it isn't kept (or has no name). */
+export function renameWorld(id, name) {
+    const world = loadLocalWorld(id);
+    const named = typeof name === "string" ? name.trim().slice(0, 60) : "";
+
+    return Boolean(world && named) && write(`pellagos.${id}.about`, { ...world, name: named });
+}
+
+/**
+ * Forget a world for good (by id): its war, and what it kept of every character who's been in it
+ * (their places). The characters stay, with all they carry and have grown into; those who were in
+ * it are in no world till they go into another.
+ */
+export function forgetWorld(id) {
+    const world = loadLocalWorld(id);
+
+    if (!world) {
+        return false;
+    }
+
+    for (const place of Object.values(world.places)) {
+        forgetPlace(place);
+    }
+
+    remove(`pellagos.${id}.world`);
+    remove(`pellagos.${id}.about`);
+    write(WORLDS_KEY, { ids: worldsListed().filter((each) => each !== id) });
+
+    for (const each of charactersListed().ids) {
+        const save = read(`pellagos.${each}.save`);
+
+        if (save?.world === id) {
+            write(`pellagos.${each}.save`, { ...save, world: null });
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Where a character's kept in the world they're in (`save.world`): { world, place, war }: the world
+ * (as loadWorlds gives one), and what's kept of them in it and of its war, each as the kinds'
+ * functions take it ({ id, created, seed }: loadTalks(place), loadWorld(war)); or null if they're
+ * in no world kept here. A character that isn't kept (?play) is their own place and war, kept
+ * nowhere.
+ */
+export function stayOf(save) {
+    if (!save?.id) {
+        return save ? { world: null, place: save, war: save } : null;
+    }
+
+    roster();
+
+    // (Where they are as kept, if they're kept: the save given may be from before they went elsewhere)
+    const kept = read(keyOf(save, "save"));
+
+    return stayIn(save, worldRecord(kept?.id === save.id ? kept.world : save.world));
+}
+
+// Where a character's kept in a world (as stayOf gives it), or null if they've never been in it
+function stayIn(save, world) {
+    const place = world?.places[save.id];
+
+    return place ? { world, place: { id: place.id, created: place.created, seed: world.seed }, war: { id: world.id, created: world.created, seed: world.seed } } : null;
+}
+
+/**
+ * A kept character into a world kept here (by id): their place in it made the first time they go
+ * in, and it the world they're in from now. Returns where they're kept in it, as stayOf; or null if
+ * either isn't kept.
+ */
+export function enterWorld(save, id) {
+    const world = loadLocalWorld(id);
+    const kept = save?.id ? read(keyOf(save, "save")) : null;
+
+    if (!world || kept?.id !== save.id) {
+        return null;
+    }
+
+    const now = new Date().toISOString();
+
+    world.places[save.id] ??= { id: newId(), created: now };
+    world.played = now;
+    save.world = id;
+
+    if (!write(`pellagos.${id}.about`, world) || !write(keyOf(save, "save"), { ...kept, world: id })) {
+        return null;
+    }
+
+    return stayOf(save);
 }
 
 /**
@@ -604,28 +864,41 @@ export function forwardExport(exported) {
 }
 
 /**
- * Everything kept of a character and their world, as one piece of plain data, for taking their
- * world to a world server (generated/world_server_plan.md §5: "bring my world to the server"):
- * { kind, version, saveVersion, save, talks, explored, progress, ..., world (its war) }, each as
- * it's kept here (null where nothing is), or null for a character that isn't kept.
+ * Everything kept of a character and a world they've been in (`world`, its id: the one they're in,
+ * unless another's given), as one piece of plain data, for taking them to another device or their
+ * world to a world server (generated/world_server_plan.md §5: "bring my world to the server"): {
+ * kind, version, saveVersion, save, talks, explored, progress, ..., world (its war, and its name)
+ * }, each as it's kept here (null where nothing is), as if the world were theirs alone: everything
+ * marked with when they were started and the world's seed (save.seed), as a character's export
+ * always was. Null for a character that isn't kept. One in no world is exported with none, and
+ * their own seed.
  */
-export function exportCharacter(save) {
+export function exportCharacter(save, { world: id } = {}) {
     if (!save?.id || !own(save, "save")) {
         return null;
     }
 
-    const kept = Object.fromEntries(KINDS.filter((kind) => kind !== "world").map((kind) => [kind, read(keyOf(save, kind))]));
+    const stay = id === undefined ? stayOf(save) : stayIn(save, loadLocalWorld(id));
+    const seed = stay?.world.seed ?? save.seed;
+    const marked = (value) => (value ? { ...value, created: save.created, seed } : null);
+    const character = { ...read(keyOf(save, "save")) };
+
+    delete character.world;
+    const kept = Object.fromEntries(
+        KINDS.filter((kind) => kind !== "world" && kind !== "save").map((kind) => [kind, PLACED.includes(kind) ? (stay ? marked(own(stay.place, kind)) : null) : marked(own(save, kind))]),
+    );
     let world = null;
 
     try {
-        const text = globalThis.localStorage?.getItem(keyOf(save, "world"));
+        const text = stay ? globalThis.localStorage?.getItem(keyOf(stay.war, "world")) : null;
+        const war = text ? decode(text) : null;
 
-        world = text ? decode(text) : null;
+        world = war && war.created === stay.war.created && war.seed === stay.war.seed ? { created: save.created, seed, war: war.war, name: stay.world.name } : null;
     } catch {
         world = null;
     }
 
-    return { kind: SOLO_KIND, version: SOLO_VERSION, saveVersion: SAVE_VERSION, ...kept, world };
+    return { kind: SOLO_KIND, version: SOLO_VERSION, saveVersion: SAVE_VERSION, save: { ...character, seed }, ...kept, world };
 }
 
 /**
@@ -682,11 +955,12 @@ export function importCharacter(given) {
 /**
  * A character from an export (exportCharacter's, brought forward and salvaged:
  * app/character-file.js) kept on this device as a new character, under an id of its own, with
- * their world and all that's kept of them: { save } (as loadCharacters gives one); or { error:
- * "full" } with MOST_CHARACTERS kept already (one must go first: forgetCharacter), "here" if the
- * same character's kept already (their own id, core/guid.js; or, kept before characters had ids,
- * the same hero started at the same moment in the same world), or "storage" if the browser
- * wouldn't keep them. One without an id of its own is given one.
+ * all that's kept of them, and the world they came with as a new world here (its name, or theirs
+ * if it has none), them in it: { save } (as loadCharacters gives one); or { error: "full" } with
+ * MOST_CHARACTERS kept already (one must go first: forgetCharacter), "worlds" with MOST_WORLDS
+ * (forgetWorld), "here" if the same character's kept already (their own id, core/guid.js; or,
+ * kept before characters had ids, the same hero started at the same moment in the same world), or
+ * "storage" if the browser wouldn't keep them. One without an id of its own is given one.
  */
 export function keepCharacter(exported) {
     const { ids, last } = roster();
@@ -704,7 +978,16 @@ export function keepCharacter(exported) {
         return { error: "full" };
     }
 
-    const save = { version: SAVE_VERSION, id: newId(ids), hero: withGuid(from.hero), seed: from.seed, created: from.created, played: from.played ?? from.created };
+    const worlds = worldsListed();
+
+    if (worlds.length >= MOST_WORLDS) {
+        return { error: "worlds" };
+    }
+
+    // (Their world, and their place in it, under their own id: as a character's own world is)
+    const id = newId();
+    const save = { version: SAVE_VERSION, id, hero: withGuid(from.hero), seed: from.seed, created: from.created, played: from.played ?? from.created, world: id };
+    const named = typeof exported.world?.name === "string" && exported.world.name.trim() ? exported.world.name.trim().slice(0, 60) : `${save.hero.name}'s world`;
     let kept = true;
 
     for (const kind of KINDS.filter((each) => each !== "save" && each !== "world" && isObject(exported[each]))) {
@@ -719,14 +1002,16 @@ export function keepCharacter(exported) {
         }
     }
 
+    kept &&= write(keyOf(save, "about"), { version: WORLD_VERSION, id, name: named, seed: save.seed, created: save.created, played: save.played, places: { [id]: { id, created: save.created } } }) && write(WORLDS_KEY, { ids: [...worlds, id] });
     kept &&= write(keyOf(save, "save"), save) && write(ROSTER_KEY, { ids: [...ids, save.id], last });
 
     if (!kept) {
-        for (const kind of KINDS) {
+        for (const kind of [...KINDS, "about"]) {
             remove(keyOf(save, kind));
         }
 
         write(ROSTER_KEY, { ids, last });
+        write(WORLDS_KEY, { ids: worlds });
 
         return { error: "storage" };
     }
@@ -734,7 +1019,7 @@ export function keepCharacter(exported) {
     return { save };
 }
 
-/** Forget every character kept (and the one kept before there could be several). */
+/** Forget every character and world kept (and the one character kept before there could be several). */
 export function clearSave() {
     const { ids } = roster();
 
@@ -742,7 +1027,12 @@ export function clearSave() {
         forgetCharacter(id);
     }
 
+    for (const id of worldsListed()) {
+        forgetWorld(id);
+    }
+
     remove(ROSTER_KEY);
+    remove(WORLDS_KEY);
 }
 
 /** The settings (defaults for anything not set). */

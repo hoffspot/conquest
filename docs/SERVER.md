@@ -92,11 +92,12 @@ offline"), it's saved and set aside, and nobody may come in, its owners neither,
 journal when it went and came back. What it does with its players' characters is changed then.
 
 **Heroes as files.** The heroes a world keeps can leave it as character files, the same files the
-game's Saved characters exports and brings in (`.pellagos-character`):
+game's Characters on this device exports and brings in (`.pellagos-character`):
 
 - A player **takes one home** from a world whose characters are its own, when they choose who
-  goes in (**Take one home**), asked first: it's kept in their game, in the world's land and with
-  its war as it was last saved, to play by themselves or to bring into another world, and the
+  goes in (**Take one home**), asked first: it's kept in their game, with a copy of the world (its
+  land, its war as it was last saved, and its name) as one of the worlds on their device, to play
+  by themselves or to bring into another world, and the
   world forgets it for good. Not a copy (a world that takes copies, a world's hero brought to the
   server, or one switched to its own since: a copy never leaves), and not while they're in the
   world on any device. Should their device not keep it (no room, or storage refused), the file's
@@ -201,30 +202,32 @@ internet panel):
 
 ## Bringing your own world
 
-Each character a player plays alone has a world of their own: the land they started in (its seed
-and home people), and the war going on in it. **Bring my world**, on the server's card in the
-game's **Worlds on servers**, makes one of those a world of the server's. The game says how, as it
-goes:
+Each world a player plays in alone is kept on their device (docs/GAME.md, "Characters and worlds
+on this device"): its land (its seed), and the war going on in it. **Bring my world**, on the
+server's card in the game's **Worlds on servers**, makes one of those a world of the server's. The
+game says how, as it goes:
 
-1. **Which world.** The characters saved in that browser are listed, each as their world. One on
-   another device or in another browser is exported there (Saved characters, Export) and imported
-   here first (Saved characters, Import from a file).
+1. **Which world, as whom.** Each world on that device is listed with each of their characters
+   who's been in it ("Thornvale, as Ada"): the one chosen goes with it. One on another device or
+   in another browser is exported there while they're in it (Characters on this device, Export)
+   and imported here first (Characters on this device, Import from a file): their world comes
+   with them.
 2. **A key that makes worlds here:** the admin key (on the server's Wi-Fi alone), or a creator key
    its owner made for them (Settings, Creator keys).
-3. **Its name** (the character's world, to start with), and whether others make new characters
+3. **Its name** (the world's, to start with), and whether others make new characters
    there (made here) or may copy one of theirs in (copied in).
 
-The server makes a world with the same seed and home people, its war carried on as it stood, and
+The server makes a world with the same seed (its home people the character's), its war carried on as it stood, and
 the rest made from the seed, as the game makes it each time it's loaded. Its heroes are kept by
 the world, and a copy of the character is the first of them (it never leaves the world), put right as this version of the game plays
 them, as a character file is (what changed is said to the player, and in the world's journal).
 Whoever brought it is its first player, its owner, by the owner's key: their game keeps that key
 and their ticket, says what came of it, and goes straight in to their character. The character on
-their device is left as they were: from then on there are two of them.
+their device is left as they were, and so is the world: from then on there are two of each.
 
 It's refused, and nothing's made, for a key that makes no worlds; a game of another version than
-the server's (the game says what to do: export the character, open the game from the server
-itself, import them there, and bring their world from there); a character kept by a newer game
+the server's (the game says what to do: export the character while they're in it, open the game
+from the server itself, import them there, and bring the world that comes with them from there); a character kept by a newer game
 than the server plays (it updates itself overnight, or **Update** does now); or more than 16 MB
 sent. (`POST /api/v1/worlds/bring`, the game's `ServerClient.bringWorld`: server/manage.js
 `bringSolo`, server/reopen.js `importSolo`.)

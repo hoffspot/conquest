@@ -1325,7 +1325,7 @@ async function worldPlayers(world) {
                                       { class: "actions" },
                                       player.here ? button("Send out", () => act(player, "kick", {}, `${nameOf(player)} was sent out.`)) : null,
                                       // (Their heroes kept here as a character file, to give them, or keep: app/character-file.js)
-                                      world.heroes === "kept" && player.heroes.length ? button("Export heroes", () => doing(() => download(`/worlds/${world.id}/players/${player.id}/heroes`), { status, done: "Their heroes are in the file: any copy of the game brings them in (Saved characters › Import from a file)." })) : null,
+                                      world.heroes === "kept" && player.heroes.length ? button("Export heroes", () => doing(() => download(`/worlds/${world.id}/players/${player.id}/heroes`), { status, done: "Their heroes are in the file: any copy of the game brings them in (Characters on this device › Import from a file)." })) : null,
                                       player.banned
                                           ? button("Lift the ban", () => act(player, "unban", {}, "Their ban's lifted."))
                                           : button(

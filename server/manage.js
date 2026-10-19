@@ -459,7 +459,7 @@ export class Management {
             const character = await stored.heroes.get(player, each);
 
             if (character) {
-                characters.push(exportOfKept(character, { seed: stored.meta.seed, created: savedAt ?? new Date().toISOString(), war }));
+                characters.push(exportOfKept(character, { seed: stored.meta.seed, created: savedAt ?? new Date().toISOString(), war, name: stored.meta.name }));
             }
         }
 
