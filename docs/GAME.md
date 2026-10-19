@@ -4707,8 +4707,12 @@ it.
    frame; with the 30 metres, none over 1.5 ms, the player walked just the same). Nor does the
    minimap ring where an order held input gives reaches, a little way on ahead of them, as if
    they were going there. So no held key crosses the wire, only the way it adds up to, and the
-   host still decides where they get to. Shift held along with a way runs, as
-   a Shift-click does, and so does the stick pushed past seven tenths of its reach. The stick
+   host still decides where they get to. Held keys run, as in most games, and Shift held along
+   with a way walks (a click walks and a Shift-click runs, as before); the stick runs pushed past
+   seven tenths of its reach. Out of breath (the battle's `exhausted`), held input walks on the
+   way it's held till a quarter of their stamina is back (steering.js `RUN_AGAIN`), and only then
+   runs again: asked to run again at once, it would sprint a moment on the little got back since,
+   run out again and stutter between the two, "Out of breath" said each time. The stick
    keeps to its corner rather than springing up under the thumb, and only its own circle takes
    touches, so the rest of the view taps and drags as before; or, with **Stick under your thumb**
    (Game options, under Thumb stick, off to start with), its zone is the bottom left of the
@@ -5371,6 +5375,11 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   and turned off, keeping the foe in view by the least turn, following or not. An attacker's
   likeness toned as the screen is (view.js `toneOf`: black black, mid-grey half way, the
   brightest white, more exposure brighter, a red still red).
+- `test/steering.test.js`: steering by held input (app/steering.js): held keys running to start
+  with, walking with Shift held, and stopping let go; out of breath, walking on the way they're
+  held (or the stick's pushed) till a quarter of their stamina is back, the order given again
+  walking all the while, then running at once, and not stuttering back to a walk as it goes down
+  again; still walking let go and held again before it's back.
 - `test/sky.test.js`: the sky's dome round the camera, drawn behind everything, its horizon the
   haze's colour; birds for every land, a dozen triangles or so each; flocks of the land's birds
   now and then, never too many, at their heights, gone once far off; a wyvern over the lands they
@@ -5505,7 +5514,7 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   and given back, the page loaded again), a fight to the death, walking by
   tapping, running by double-clicking and double-tapping with the stamina bar showing and going,
   swiping up from the player to go straight ahead (running),
-  steering by W, A, S, D (two of them diagonally, Shift running, letting go stopping) and by the
+  steering by W, A, S, D (running, two of them diagonally, Shift held walking, letting go stopping) and by the
   thumb stick (there from the start, walking pushed partway, running at its rim, stopping let go,
   and gone turned off in Game options, the keys still steering without it; asked to
   float, springing up under the thumb where it lands, walking the way it's pushed from there, and
