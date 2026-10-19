@@ -1,8 +1,8 @@
 // The broker (generated/world_server_plan.md §8.3, §12.3, §15 S7), over real sockets: a player's
 // own world announced and listed, watched as it comes and goes; a joiner connected to it, the two
 // passing signals (and no more than they may); relaying when they can't connect directly, or
-// refused when the server doesn't relay; a host whose link drops keeping its world till it expires,
-// and taking it back; and what it refuses (a bad announcement, too many from one address, another
+// refused when the server doesn't relay; a host keeping its world while its link is open, and once
+// it drops till it expires, and taking it back; and what it refuses (a bad announcement, too many from one address, another
 // site's page, the broker turned off).
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
@@ -281,7 +281,7 @@ describe("the broker", () => {
         [host, second].forEach((link) => link.close());
     });
 
-    it("keeps a world whose host's link drops till it expires: those relayed told it's away, and back when a new link keeps it; a host that leaves takes it down", async () => {
+    it("keeps a world while its host's link is open, kept or not, and once it drops till it expires: those relayed told it's away, and back when a new link keeps it; a host that leaves takes it down", async () => {
         const server = await serve({ expire: 600 });
         const [host, id, token] = await announce(server);
         const joiner = await open(server);
@@ -314,12 +314,24 @@ describe("the broker", () => {
         back.send(`to ${peer}\nstill here`);
         assert.equal(await joiner.next("data\n"), "data\nstill here");
 
-        // (Not kept again: gone when it expires, the watchers and those in it told)
+        // (Not kept again, its link open: kept on all the same, a page in the background keeping it
+        // seldom, its link answering the broker's pings)
+        await wait(1500);
+        assert.equal(watcher.count("- "), 0);
+        assert.equal(server.broker.listings.get(id)?.host !== null, true);
+
+        // (Its link dropped and not made again: gone when it expires, the watchers and those in it
+        // told)
+        back.close(4000);
+        assert.equal(await joiner.next("away", 1), "away");
         await watcher.next("- ", 0);
         assert.equal(watcher.heard("- "), `- ${id}`);
         assert.equal(await joiner.next("closed"), "closed");
-        back.send(`keep ${id} ${token}`);
-        assert.equal(await back.next("error "), "error gone");
+
+        const again = await open(server);
+
+        again.send(`keep ${id} ${token}`);
+        assert.equal(await again.next("error "), "error gone");
 
         // (A host that leaves: down at once)
         const [leaving, leavingId] = await announce(server);
@@ -327,7 +339,7 @@ describe("the broker", () => {
         await watcher.next("+ ", 0);
         leaving.close(1000);
         assert.equal(await watcher.next("- ", 1), `- ${leavingId}`);
-        [back, late, watcher].forEach((link) => link.close());
+        [again, late, watcher].forEach((link) => link.close());
     });
 
     it("refuses a bad announcement, more than 3 from one address, a joiner for a world that isn't there, and anything it doesn't know", async () => {

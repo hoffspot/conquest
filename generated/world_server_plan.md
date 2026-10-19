@@ -685,7 +685,9 @@ server: "List my world on: ☑ Studio Mac ☐ Sam's server".
 
 - **Announcing.** Their game connects to each chosen server's `/broker` and announces: name, home
   people, players in now and the most allowed, `NET_VERSION`, and visibility (listed, or code
-  only). It keeps the announcement alive every 15 s, and it disappears after 45 s of silence.
+  only). It keeps the announcement alive every 15 s. It lasts while the host's link to the broker
+  is open (the broker's own pings say so, however seldom a page in the background keeps it), and
+  disappears 45 s after that link closes, unless the host comes back on a new one.
 - **Joining.** A joiner picks it from the server's list. The broker passes the WebRTC offer,
   answer and ICE candidates between them, and the two browsers open a data channel.
   - **The channel.** Today's netplay messages, unchanged, over a reliable, ordered data channel.

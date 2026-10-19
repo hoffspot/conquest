@@ -567,6 +567,15 @@ export class BrokerHost extends BrokerSocket {
             case "here":
                 this.onHere([...words, ...[...this.peers.entries()].filter(([, place]) => place.channel?.open).map(([name]) => name)]);
                 break;
+            case "error":
+                // (Its listing gone though its link's open, the broker's word on a keep: an older
+                // server's, which didn't keep one whose page was slowed in the background. Said so,
+                // not its code shown on as if anyone could still join with it)
+                if (peer === "gone" && this.id && !this.reconnecting) {
+                    this.#drop();
+                }
+
+                break;
             default:
                 break;
         }
