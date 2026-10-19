@@ -189,7 +189,7 @@
                 <div class="bar"><div class="fill"></div><span class="value"></span></div>
                 <div class="bar stamina" hidden><div class="fill"></div><span class="value"></span></div>
             </div>
-            <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, tap an enemy to fight it, or someone to talk to them.<span class="stick-only"> Or steer with the stick in the bottom left: push it over to run.</span><span class="keys-only"> W, A, S, D steer, with Shift to run.</span> Hold on yourself or an enemy for spells, or on the minimap for the world map. Your pack and journal are top right<span class="keys-only"> (I and J)</span>.</p>
+            <p class="hint" id="hint">Tap the ground to walk, double&#8209;tap to run, tap an enemy to fight it, or someone to talk to them.<span class="stick-only"> Or steer with the stick in the bottom left: push it over to run.</span><span class="keys-only"> W, A, S, D run that way; hold Shift to walk.</span> Hold on yourself or an enemy for spells, or on the minimap for the world map. Your pack and journal are top right<span class="keys-only"> (I and J)</span>.</p>
             <div class="stickzone" id="stickzone" aria-hidden="true">
                 <div class="stick" id="stick">
                     <div class="stick-knob" id="stickknob"></div>
@@ -755,7 +755,7 @@
                     <p class="about-keys-note">With a keyboard and mouse, click where you'd tap. And:</p>
                     <table class="about-keys">
                         <tbody>
-                            <tr><th scope="row">W A S D</th><td>Steer (Shift to run)</td></tr>
+                            <tr><th scope="row">W A S D</th><td>Steer, running (hold Shift to walk)</td></tr>
                             <tr><th scope="row">1 to 4</th><td>Quick actions, in a fight (1 to 6 with six across, in Game options, Controls)</td></tr>
                             <tr><th scope="row">M</th><td>World map</td></tr>
                             <tr><th scope="row">I</th><td>Pack</td></tr>
@@ -811,7 +811,7 @@
                 </div>
                 <div class="options">
                     <button type="button" class="option-link group" id="graphicsbutton" data-to="graphics">
-                        <span class="text">Graphics<small>Visual quality, Adaptive, full screen, screen shake</small></span>
+                        <span class="text">Graphics<small>Visual quality, Adaptive, full screen, screen shake<span class="keys-only">, pointer</span></small></span>
                         <span class="chevron" aria-hidden="true">›</span>
                     </button>
                     <button type="button" class="option-link group" id="soundbutton" data-to="sound">
@@ -867,6 +867,16 @@
                         <input type="checkbox" id="shakeswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>
+                    <label class="switch option keys-only">
+                        <span class="text">Sword pointer<small>The mouse pointer a little sword, showing what a click will do: shake the mouse to find it. Off, your system's own</small></span>
+                        <input type="checkbox" id="pointerswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option keys-only pointer-option">
+                        <span class="text">Large pointer<small>The sword half as big again</small></span>
+                        <input type="checkbox" id="largepointerswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
                 </div>
                 <div class="menu">
                     <button type="button" class="button" id="graphicsback" data-back>Back</button>
@@ -912,7 +922,7 @@
                 </div>
                 <div class="options">
                     <label class="switch option">
-                        <span class="text">Thumb stick<small>A stick in the bottom left corner to walk with (on to start with); off, you walk by tapping alone.<span class="keys-only"> W, A, S, D (Shift to run) steer either way.</span></small></span>
+                        <span class="text">Thumb stick<small>A stick in the bottom left corner to walk with (on to start with); off, you walk by tapping alone.<span class="keys-only"> W, A, S, D (running; Shift held, walking) steer either way.</span></small></span>
                         <input type="checkbox" id="stickswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>
