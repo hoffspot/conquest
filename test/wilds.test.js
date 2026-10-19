@@ -257,19 +257,28 @@ describe("the land's things drawn (world/art/kits/wilds.js)", () => {
         }
     });
 
-    it("draws a chunk's features as one mesh, each as tall as it stands", () => {
-        const chunk = chunks.find(({ features }) => features.length > 3);
-        const { mesh, boxes } = featureMesh(chunk.features, (x, y) => overworld.biomeAt(x, y), [chunk.x0, chunk.y0]);
+    it("draws a chunk's features as one mesh, its bushes as the hedges are (kits/bushes.js), each as tall as it stands", () => {
+        const chunk = chunks.find(({ features }) => features.length > 3 && features.some(({ kind }) => kind === "bush"));
+        const { mesh, bushes, boxes } = featureMesh(chunk.features, (x, y) => overworld.biomeAt(x, y), [chunk.x0, chunk.y0]);
 
         assert.equal(mesh.material.name, "atlas");
         assert.ok(mesh.castShadow);
         assert.equal(boxes.length, chunk.features.length);
+        assert.deepEqual(
+            bushes.children.map(({ name }) => name),
+            ["bushes", "bush sprigs"],
+        );
 
         for (const [k, { top }] of boxes.entries()) {
             const feature = chunk.features[k];
 
             assert.ok(top > 0.1 && top < 8, `${feature.kind}: ${top}`);
         }
+
+        // (None, where there's no bush)
+        const bare = chunks.find(({ features }) => features.length && !features.some(({ kind }) => kind === "bush"));
+
+        assert.equal(featureMesh(bare.features, (x, y) => overworld.biomeAt(x, y), [bare.x0, bare.y0]).bushes, null);
     });
 
     it("grows undergrowth only on open grass, the same every time, thinner where asked and in settlements", () => {
