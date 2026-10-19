@@ -772,23 +772,25 @@ async function keepSix(page) {
     }, KEPT);
 }
 
-test("up to six characters kept: Saved characters lists them, the one played last first; played, one's the one Continue as carries on with; deleted, asked first, it's gone for good", async ({ page }) => {
+test("up to six characters kept: Characters on this device lists them, the one played last first, each in a world of their own; played, one's the one Continue as carries on with; deleted, asked first, it's gone for good, their world staying", async ({ page }) => {
     test.setTimeout(180000);
     await keepSix(page);
     await title(page);
     await expect(page.locator("#continuebutton")).toHaveText("Continue as Fen");
-    await expect(page.locator("#savedbutton")).toHaveText("Saved characters (6)");
+    await expect(page.locator("#savedbutton")).toHaveText("Characters on this device (6)");
+    await expect(page.locator("#savenote")).toHaveText("Human · Staff · in Fen's world");
 
-    // Listed, the one played last first: each with their people, what they wield as they are now, their gold
+    // Listed, the one played last first: each with their people, what they wield as they are now,
+    // their gold, and the world they're in (kept before worlds were apart: one of their own each)
     await page.locator("#savedbutton").click();
 
     const dialog = page.locator("#characters");
     const cards = dialog.locator(".character");
 
     await expect(dialog).toBeVisible();
-    await expect(dialog.locator("h2")).toHaveText("Saved characters");
+    await expect(dialog.locator("h2")).toHaveText("Characters on this device");
     await expect(cards.locator(".name")).toHaveText(["Fen", "Ember", "Dun", "Cole", "Briar", "Ash"]);
-    await expect(cards.filter({ hasText: "Cole" }).locator(".about")).toHaveText("Human · War hammer · 75 gold");
+    await expect(cards.filter({ hasText: "Cole" }).locator(".about")).toHaveText("Human · War hammer · 75 gold · in Cole's world");
     await expect(cards.filter({ hasText: "Cole" }).locator(".when")).toContainText("Last played");
 
     // Cole played: their world, and the one Continue as carries on with since
@@ -807,18 +809,20 @@ test("up to six characters kept: Saved characters lists them, the one played las
     await dialog.getByRole("button", { name: "Delete Ash" }).click();
     await expect(forget).toBeVisible();
     await expect(forget.locator("h2")).toHaveText("Delete Ash?");
-    await expect(forget.locator("#forgetnote")).toHaveText("Ash will be permanently deleted, with their world, what they carry and what they've learnt. This can't be undone.");
+    await expect(forget.locator("#forgetnote")).toHaveText("Ash will be permanently deleted, with what they carry and what they've learnt. The worlds they've been in stay, in Worlds on this device. This can't be undone.");
     await forget.getByRole("button", { name: "Keep Ash" }).click();
     await expect(forget).toBeHidden();
     await expect(cards).toHaveCount(6);
 
-    // Deleted: gone, and everything kept of them
+    // Deleted: gone, and everything kept of them; their world stays, with nobody in it
     await dialog.getByRole("button", { name: "Delete Ash" }).click();
     await forget.getByRole("button", { name: "Delete Ash" }).click();
     await expect(cards.locator(".name")).toHaveText(["Cole", "Fen", "Ember", "Dun", "Briar"]);
-    expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("pellagos.chara000.")))).toEqual([]);
+    expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("pellagos.chara000.")))).toEqual(["pellagos.chara000.about"]);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.chara000.about")).places)).toEqual({});
     await dialog.getByRole("button", { name: "Back" }).click();
-    await expect(page.locator("#savedbutton")).toHaveText("Saved characters (5)");
+    await expect(page.locator("#savedbutton")).toHaveText("Characters on this device (5)");
+    await expect(page.locator("#localworldsbutton")).toHaveText("Worlds on this device (6)");
     await expect(page.locator("#continuebutton")).toHaveText("Continue as Cole");
 });
 
@@ -838,7 +842,7 @@ test("with six characters kept, New character asks which is to make way, and to 
         await expect(dialog.locator(".forget")).toHaveCount(0);
         await dialog.locator(".character").filter({ hasText: name }).click();
         await expect(forget.locator("h2")).toHaveText(`Replace ${name}?`);
-        await expect(forget.locator("#forgetnote")).toHaveText(`${name} will be permanently deleted, with their world, what they carry and what they've learnt, once your new character is made. This can't be undone.`);
+        await expect(forget.locator("#forgetnote")).toHaveText(`${name} will be permanently deleted, with what they carry and what they've learnt, once your new character is made. The worlds they've been in stay, in Worlds on this device. This can't be undone.`);
         await forget.getByRole("button", { name: `Replace ${name}` }).click();
         await expect(page.locator("#create")).toBeVisible();
         await page.waitForFunction(() => window.pellagos.creator?.avatar);
@@ -859,8 +863,94 @@ test("with six characters kept, New character asks which is to make way, and to 
     await page.getByRole("button", { name: "Begin" }).click();
     await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
     expect(await names()).toEqual(["Ash", "Cole", "Dun", "Ember", "Fen", "Gale"]);
-    expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("pellagos.chara001.")))).toEqual([]);
+    expect(await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("pellagos.chara001.")))).toEqual(["pellagos.chara001.about"]);
     expect((await keptOf(page, "save")).hero.name).toBe("Gale");
+    expect((await keptOf(page, "about")).name).toBe("Gale's world");
+});
+
+test("worlds on this device, apart from the characters: one made, and a character taken into it, new to its folk with what they carry; back in their own as they left it; deleted, asked first, the characters staying; one in no world asked where they go", async ({ page }) => {
+    // (Played twice: more than the usual time)
+    test.setTimeout(240000);
+    await keepSix(page);
+    await title(page);
+    await expect(page.locator("#localworldsbutton")).toHaveText("Worlds on this device (6)");
+    await page.locator("#localworldsbutton").click();
+
+    const worlds = page.locator("#localworlds");
+    const rows = worlds.locator(".character");
+    const ask = page.locator("#worldask");
+    const who = page.locator("#characters");
+    const played = async (seed) => {
+        await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+        expect(await page.evaluate(() => window.pellagos.game.world.seed)).toBe(seed);
+        await page.locator("#menubutton").click();
+        await page.getByRole("button", { name: "Back to the title" }).click();
+    };
+
+    // Each kept before worlds were apart: a world of their own, named for them
+    await expect(worlds.locator("h2")).toHaveText("Worlds on this device");
+    await expect(rows.locator(".name")).toHaveText(["Fen's world", "Ember's world", "Dun's world", "Cole's world", "Briar's world", "Ash's world"]);
+    await expect(rows.filter({ hasText: "Cole's world" }).locator(".about")).toHaveText("Its war not begun · Cole has been here");
+
+    // A new world: its name, and a seed of their own
+    await worlds.getByRole("button", { name: "A new world" }).click();
+    await expect(ask.locator("#worldasktitle")).toHaveText("A new world");
+    await ask.getByRole("button", { name: "Make it" }).click();
+    await expect(ask.locator("#worldaskstatus")).toHaveText("Give the world a name.");
+    await ask.locator("#worldaskname").fill("Thornvale");
+    await ask.locator("#worldaskseed").fill("not a seed");
+    await ask.getByRole("button", { name: "Make it" }).click();
+    await expect(ask.locator("#worldaskstatus")).toContainText("A seed is a whole number");
+    await ask.locator("#worldaskseed").fill("9001");
+    await ask.getByRole("button", { name: "Make it" }).click();
+    await expect(ask).toBeHidden();
+    await expect(rows.locator(".name").first()).toHaveText("Thornvale");
+    await expect(rows.first().locator(".about")).toHaveText("Its war not begun · nobody's been here yet");
+
+    // Cole into it: new to its folk, with what they carry
+    await rows.first().click();
+    await expect(who.locator("h2")).toHaveText("Who goes into Thornvale?");
+    await expect(who.locator(".character").filter({ hasText: "Cole" }).locator(".about")).toHaveText("Human · War hammer · 75 gold · new here");
+    await who.locator(".character").filter({ hasText: "Cole" }).click();
+    await played(9001);
+    await expect(page.locator("#continuebutton")).toHaveText("Continue as Cole");
+    await expect(page.locator("#savenote")).toHaveText("Human · War hammer · 75 gold · in Thornvale");
+
+    const vale = await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.chara002.save")).world);
+    const place = await page.evaluate((id) => JSON.parse(localStorage.getItem(`pellagos.${id}.about`)).places.chara002.id, vale);
+
+    expect(place).not.toBe("chara002");
+    expect(await page.evaluate((id) => JSON.parse(localStorage.getItem(`pellagos.${id}.place`))?.seed, place)).toBe(9001);
+
+    // Back into their own: been there before
+    await page.locator("#localworldsbutton").click();
+    await rows.filter({ hasText: "Cole's world" }).click();
+    await expect(who.locator(".character").filter({ hasText: "Cole" }).locator(".about")).toHaveText("Human · War hammer · 75 gold · been here before");
+    await who.locator(".character").filter({ hasText: "Cole" }).click();
+    await played(KEPT[2].seed);
+    await expect(page.locator("#savenote")).toHaveText("Human · War hammer · 75 gold · in Cole's world");
+
+    // Thornvale deleted, asked first: everything of it gone, Cole kept
+    const forget = page.locator("#forget");
+
+    await page.locator("#localworldsbutton").click();
+    await expect(rows.filter({ hasText: "Thornvale" }).locator(".about")).toContainText("Cole has been here");
+    await worlds.getByRole("button", { name: "Delete Thornvale" }).click();
+    await expect(forget.locator("#forgetnote")).toHaveText("Thornvale will be permanently deleted: its war, and what its folk remember of everyone who's been there. Your characters stay, with all they carry and have grown into. This can't be undone.");
+    await forget.getByRole("button", { name: "Delete Thornvale" }).click();
+    await expect(rows.locator(".name")).toHaveText(["Cole's world", "Fen's world", "Ember's world", "Dun's world", "Briar's world", "Ash's world"]);
+    expect(await page.evaluate((ids) => Object.keys(localStorage).filter((key) => ids.some((id) => key.startsWith(`pellagos.${id}.`))), [vale, place])).toEqual([]);
+
+    // Ash's world deleted: Ash in none, asked where they go when they're played
+    await worlds.getByRole("button", { name: "Delete Ash's world" }).click();
+    await forget.getByRole("button", { name: "Delete Ash's world" }).click();
+    await worlds.getByRole("button", { name: "Back" }).click();
+    await page.locator("#savedbutton").click();
+    await expect(who.locator(".character").filter({ hasText: "Ash" }).locator(".about")).toHaveText("Human · Staff · in no world yet");
+    await who.locator(".character").filter({ hasText: "Ash" }).click();
+    await expect(worlds.locator("h2")).toHaveText("Where does Ash go?");
+    await expect(rows.filter({ hasText: "Briar's world" }).locator(".about")).toContainText("new to Ash");
+    await expect(worlds.locator(".side")).toHaveCount(0);
 });
 
 // A character kept by an older version of the game (save version 1: no id of its own), with a
@@ -902,8 +992,8 @@ test("a saved character exported as a file and brought in again (not while they'
     await page.locator("#forget").getByRole("button", { name: "Delete Cole" }).click();
     await expect(cards).toHaveCount(5);
     await bringIn(file);
-    await expect(imported.locator("#importednote")).toHaveText("One character is now among your saved characters.");
-    await expect(imported.locator(".about")).toHaveText("Human · War hammer · 75 gold");
+    await expect(imported.locator("#importednote")).toHaveText("One character is now among the characters on this device.");
+    await expect(imported.locator(".about")).toHaveText("Human · War hammer · 75 gold · in Cole's world");
     await imported.getByRole("button", { name: "OK" }).click();
     await expect(cards).toHaveCount(6);
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.characters")).ids.map((id) => JSON.parse(localStorage.getItem(`pellagos.${id}.save`))).find((save) => save.hero.name === "Cole").seed)).toBe(KEPT[2].seed);
@@ -923,7 +1013,7 @@ test("a saved character exported as a file and brought in again (not while they'
     await page.locator("#forget").getByRole("button", { name: "Delete Ash" }).click();
     await bringIn({ name: "Old Bram.pellagos-character", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(OLD_CHARACTER)) });
     await expect(imported.locator(".name")).toHaveText("Old Bram");
-    await expect(imported.locator(".about")).toHaveText("Human · Sword · 99 gold");
+    await expect(imported.locator(".about")).toHaveText("Human · Sword · 99 gold · in Old Bram's world");
     await expect(imported.locator("#importedlist li li")).toHaveText([
         "Changed to suit this version of the game:",
         "Their people (dwarf), whom the game no longer has: they're human now.",

@@ -4547,37 +4547,68 @@ it.
    a release that changes a file changes its address. It keeps a copy only once its bytes match
    the hash, and lets go of what no release in use lists: the newest's, and that of each page
    still open on an older one (generated/asset_streaming_plan.md, section 5).
-2. **The title.** **Continue as** the character played last; make a **New character**; choose
-   another of those kept (**Saved characters**, up to six); join a world someone else has opened
-   (its code: docs/WAR.md M11); and the debug mode switch.
+2. **The title.** **Continue as** the character played last, in the world they're in; make a
+   **New character**; choose another of those kept (**Characters on this device**, up to six), or
+   a world (**Worlds on this device**, up to eight) and who goes in; join a world someone else has
+   opened (its code: docs/WAR.md M11) or one on a server (**Worlds on servers**); and the debug
+   mode switch.
    - **About**, at the bottom, opens what the game is and how it's played, in a dialog that
      scrolls (index.html `#about`): the game, starting, getting about, fighting, magic, gear and
      gold, towns and folk, the world and its war, your party, playing together, saving, the keys,
      the options and the credits. A row of contents along its top takes you to each part (on a
      phone, one row swiped sideways), and it ends with which version of the game this is
      (app/version.js). It opens at the top each time.
-   - **Saved characters** lists those kept, the one played last first, each with their people,
-     what they wield (as they have it now), their gold and when they last played. Tapped, one's
-     played, and is the one Continue carries on with from then. Each has a **Delete** button,
-     which asks first: "Ash will be permanently deleted, with their world, what they carry and
-     what they've learnt. This can't be undone." Kept, nothing changes; deleted, everything kept
-     of them goes (save.js `forgetCharacter`). The list shows even with none kept, to bring one in.
+   - **Characters and worlds on this device** are kept apart (save.js), where each character once
+     had one world, the one they started in. A character can go into any world kept here, and each
+     world keeps its own war. What goes with a character wherever they go: their look, what
+     they've grown into (skills, spells and their schools), what they carry (gear, pack and gold),
+     their action wheels, the last messages they were told and what they've been told once. What
+     each world keeps of each character who's been in it (their **place** in it): what its folk
+     remember of them and what they've learnt there, what they've found of it, where they stand
+     with its peoples and the requests they carry, their followers there, and where they were and
+     how. Each is kept under keys of its own: a character's under their id, their place in a world
+     under the place's, and a world (`pellagos.<id>.about`: its name, seed and places) and its war
+     under the world's; `pellagos.worlds` lists the worlds. A character kept before worlds were
+     apart is given a world of their own, named for them ("Ash's world"), the first time they're
+     looked at: under their own id, with their place in it under their id too, so everything
+     kept of them stays where it was (save.js `settle`). A new character starts in a world of
+     their own the same way, unless they're made for one; with eight worlds kept (save.js
+     `MOST_WORLDS`), they're asked which they go into.
+   - **Characters on this device** lists those kept, the one played last first, each with their
+     people, what they wield (as they have it now), their gold, the world they're in, and when
+     they last played. Tapped, one's played in the world they're in (in none, they're asked which,
+     or to make one), and is the one Continue carries on with from then. Each has a **Delete**
+     button, which asks first: "Ash will be permanently deleted, with what they carry and what
+     they've learnt. The worlds they've been in stay, in Worlds on this device. This can't be
+     undone." Kept, nothing changes; deleted, everything kept of them goes, their places in every
+     world with it (save.js `forgetCharacter`). The list shows even with none kept, to bring one
+     in.
+   - **Worlds on this device** lists the worlds kept, the one played in last first, each with its
+     war's turn, who's been in it, and when it was last played. Tapped, one asks **Who goes into
+     Thornvale?**: each character kept, said to be "here now", "been here before" or "new here",
+     and **A new character**, made for it. Someone who's been before carries on where they left
+     off; anyone else comes new to its folk, with all they carry. Each world has **Rename**, and
+     **Delete**, which asks first ("its war, and what its folk remember of everyone who's been
+     there. Your characters stay"). **A new world** asks its name and, if wanted, its seed: the
+     same seed makes the same land again, with a war of its own.
    - **Export** beside each saves that character as a file (`<name>.pellagos-character`), and
      **Export all** every one in a file of the day's (app/character-file.js: `pellagos.character.1`,
-     each character as save.js `exportCharacter` gives them, their world's war with them): to keep
-     somewhere safe, or to carry to another browser or device. **Import from a file** brings in
-     what's in one, each as a new character kept here, in their own world as it was. Not one that's
-     kept here already (the same character: by their own id, below; or, kept before characters had
-     ids, the same hero started at the same moment in the same world: delete them first to bring
-     the copy back), nor with six kept. A character kept by an older version of the
+     each character as save.js `exportCharacter` gives them, with the world they're in: their place
+     in it, its war and its name, all as if it were theirs alone, as a character's export always
+     was): to keep somewhere safe, or to carry to another browser or device. **Import from a file**
+     brings in what's in one, each as a new character kept here, with the world they came with as
+     a new world here, named as it was. Not one that's kept here already (the same character: by
+     their own id, below; or, kept before characters had ids, the same hero started at the same
+     moment in the same world: delete them first to bring the copy back), nor with six characters
+     or eight worlds kept. A character kept by an older version of the
      game is brought forward a step at a time (save.js `SAVE_STEPS`, never taken away), then
      whatever this version hasn't got is left out or put right, and the game says what: things,
      spells, skills and followers' callings it no longer has (a renamed spell kept by its new
      name), a people or a starting weapon (human, a sword), parts of their look (as a new hero's),
      a world that can't be read (a new one, with what they carry), or a war kept by a newer
      version (it starts again in the same land). A file from a newer version of the game is
-     refused, saying so. A hero taken home from a world on a server comes in the same way, in
-     that world's land (docs/SERVER.md, "Heroes as files").
+     refused, saying so. A hero taken home from a world on a server comes in the same way, with a
+     copy of that world as it was, by its name (docs/SERVER.md, "Heroes as files").
    - **Each character's own id** (core/guid.js): kept on their hero (`hero.guid`, a random version
      4 GUID, made without `crypto.randomUUID`, which a game opened from the Wi-Fi hasn't got),
      from when they're first kept; one kept before ids is given one the first time it's looked
@@ -4786,14 +4817,23 @@ still drawn; a piece of a settlement that fails to build is left out, the rest b
 
 Up to six characters are kept in the browser's local storage (save.js), each under an id of its
 own (eight letters and digits): `pellagos.<id>.save` is `{ version, id, hero, seed, created,
-played }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair }, weapon }`;
-and beside it, under `pellagos.<id>.` too, what they've grown into and carry (`progress`), what's
-been said (`talks`), what they've found of the world (`explored`), where they stand (`standing`),
-their followers, action wheels, map pin, where they were (`place`) and how (`vitals`), the last
-messages they were told (`messages`: `[{ text, at, times }]`, the ten newest), what they've been
-told once and needn't be again (`told`: `["spoils"]`, the first loot a fight left them: docs/WILDS.md
-*What they leave*), and their world's war (`world`). `pellagos.characters` is `{ ids, last }`: those kept, and the one played
-last. Settings (the minimap and sound switches, the three volumes, the camera's, debug mode and its
+played, world }`, where `hero` is `{ name, shape: { macro, details }, look: { skin, eyes, hair },
+weapon }` and `world` the id of the world they're in (null for none); and beside it, under
+`pellagos.<id>.` too, what goes with them wherever they go: what they've grown into and carry
+(`progress`), their action wheels, the last messages they were told (`messages`: `[{ text, at,
+times }]`, the ten newest), and what they've been told once and needn't be again (`told`:
+`["spoils"]`, the first loot a fight left them: docs/WILDS.md *What they leave*).
+`pellagos.characters` is `{ ids, last }`: those kept, and the one played last.
+
+Up to eight worlds are kept beside them (above, "Characters and worlds on this device"),
+each under an id of its own: `pellagos.<id>.about` is `{ version, id, name, seed, created, played,
+places }`, `places` saying, by character id, each one's place in it (`{ id, created }`); its war
+is `pellagos.<id>.world`. What it keeps of each character is under their place's id: what's been
+said (`talks`), what they've found of the world (`explored`), where they stand (`standing`), their
+followers, map pin, where they were (`place`) and how (`vitals`). Everything's marked with when
+whatever it's of was started and the world's seed, and is read only for that. `pellagos.worlds` is
+`{ ids }`. A character kept before worlds were apart has their world made for them under their
+own id, and their place in it too, so all that was kept stays where it was. Settings (the minimap and sound switches, the three volumes, the camera's, debug mode and its
 controls) are in `pellagos.settings`, the same whoever's played.
 
 Kept before there could be several (`SAVE_VERSION` 1), the one character had the keys to itself

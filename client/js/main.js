@@ -26,7 +26,7 @@ import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
 import { telemetry } from "./app/telemetry.js";
 import { builtAt, codeVersion } from "./app/version.js";
-import { exportCharacter, forgetCharacter, keepCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, MOST_CHARACTERS, newSeed, playedSave, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, writeSave } from "./app/save.js";
+import { enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, writeSave } from "./app/save.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
 import { released } from "./world/release.js";
@@ -63,7 +63,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, joinAs: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, onServer: null, worldsAfter: null, worldAsk: null };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, onServer: null, worldsAfter: null, worldAsk: null };
 
 window.pellagos = {
     get game() {
@@ -240,6 +240,7 @@ function title() {
 
     fullScreen.stop();
     const kept = loadCharacters(WEAPONS);
+    const worlds = loadWorlds();
     const continueButton = $("#continuebutton");
     const note = $("#savenote");
 
@@ -248,13 +249,16 @@ function title() {
     $("#titlenote").hidden = true;
     continueButton.hidden = !save;
     note.hidden = !save;
-    // (Shown with none kept too: to bring one in from a file)
+    // (Shown with none kept too: to bring one in from a file, or make a world)
     $("#savedbutton").hidden = false;
-    $("#savedbutton").textContent = kept.length > 1 ? `Saved characters (${kept.length})` : kept.length ? "Saved character" : "Saved characters";
+    $("#savedbutton").textContent = kept.length ? `Characters on this device (${kept.length})` : "Characters on this device";
+    $("#localworldsbutton").textContent = worlds.length ? `Worlds on this device (${worlds.length})` : "Worlds on this device";
 
     if (save) {
+        const { about, where } = describe(save);
+
         continueButton.textContent = `Continue as ${save.hero.name}`;
-        note.textContent = describe(save).about;
+        note.textContent = `${about} · ${where}`;
         continueButton.focus();
     } else {
         $("#newbutton").focus();
@@ -310,7 +314,7 @@ async function frontDoor() {
 }
 
 // A kept character as the title's cards show them: their name, people, what they wield (as they
-// have now), their gold, and when they last played
+// have now), their gold, which world on this device they're in, and when they last played
 function describe(save) {
     const progress = loadProgress(save);
     const held = progress.gear?.mainHand?.id;
@@ -318,11 +322,23 @@ function describe(save) {
     const people = peopleOf(save.hero);
     const gold = Number.isFinite(progress.gold) ? ` · ${progress.gold} gold` : "";
 
+    const world = stayOf(save)?.world;
+
     return {
         name: save.hero.name,
         about: `${people[0].toUpperCase()}${people.slice(1)} · ${weapon}${gold}`,
+        where: world ? `in ${world.name}` : "in no world yet",
         when: `Last played ${new Date(save.played ?? save.created).toLocaleDateString()}`,
     };
+}
+
+// A kept character as they go into another's world: who they are and what they carry, and what's
+// kept of them in the world they're in on this device (what its folk taught them, where they stand
+// and the requests they carry, who follows them)
+function characterOf(save) {
+    const place = stayOf(save)?.place;
+
+    return { hero: save.hero, talks: loadTalks(place), progress: loadProgress(save), standing: loadStanding(place), followers: loadFollowers(place) };
 }
 
 // A hero's people, as said ("human", "dark elf")
@@ -342,12 +358,14 @@ $("#newbutton").addEventListener("click", () => {
 });
 
 $("#savedbutton").addEventListener("click", () => openCharacters("play"));
+$("#localworldsbutton").addEventListener("click", () => openLocalWorlds("list"));
 
 // --- The characters kept ---
 
-// Who's to be played (`mode` "play": or exported or forgotten, each by its own button; all of them
-// exported, or more brought in from a file), replaced by a new character ("replace"), or brought
-// to someone's world ("join")
+// Who's to be played (`mode` "play": in the world they're in; or exported or forgotten, each by
+// its own button; all of them exported, or more brought in from a file), played in a world on
+// this device ("enter": state.into), replaced by a new character ("replace"), or brought to
+// someone's world ("join")
 function openCharacters(mode) {
     const dialog = $("#characters");
     const kept = loadCharacters(WEAPONS);
@@ -359,20 +377,30 @@ function openCharacters(mode) {
         return;
     }
 
+    const into = mode === "enter" ? state.into : null;
+    const notes = {
+        replace: `${MOST_CHARACTERS} characters are kept, the most there can be. Choose one to be replaced by your new character.`,
+        join: "Choose who comes with you.",
+        worlds: "Choose who comes with you.",
+        enter: "Those who've been here carry on where they left off. Anyone else comes new to its folk, with all they carry and have grown into.",
+        play: kept.length ? `Choose who to play: they carry on in the world they're in (to take one into another, choose it in Worlds on this device). Up to ${MOST_CHARACTERS} are kept.` : "No characters are kept here yet. Make a new one, or bring one in from a file the game exported.",
+    };
+
     dialog.dataset.mode = mode;
-    $("#characterstitle").textContent = mode === "replace" ? "Make way for a new character" : mode === "join" || mode === "worlds" ? "Who comes" : "Saved characters";
-    $("#charactersnote").textContent = mode === "replace" ? `${MOST_CHARACTERS} characters are kept, the most there can be. Choose one to be replaced by your new character.` : mode === "join" || mode === "worlds" ? "Choose who comes with you." : kept.length ? `Choose who to play. Up to ${MOST_CHARACTERS} are kept.` : "No characters are kept here yet. Make a new one, or bring one in from a file the game exported.";
-    $("#charactersnew").hidden = mode !== "join" || kept.length >= MOST_CHARACTERS;
+    $("#characterstitle").textContent = mode === "replace" ? "Make way for a new character" : mode === "join" || mode === "worlds" ? "Who comes" : into ? `Who goes into ${into.name}?` : "Characters on this device";
+    $("#charactersnote").textContent = notes[mode];
+    $("#charactersnew").hidden = !(mode === "join" || mode === "enter") || kept.length >= MOST_CHARACTERS;
     $("#charactersexport").hidden = mode !== "play" || kept.length < 2;
     $("#charactersimport").hidden = mode !== "play";
     $("#characterlist").replaceChildren(
         ...kept.map((save) => {
-            const { name, about, when } = describe(save);
+            const { name, about, where, when } = describe(save);
+            const here = into && save.world === into.id ? "here now" : into?.places[save.id] ? "been here before" : into ? "new here" : null;
             const row = document.createElement("li");
             const pick = Object.assign(document.createElement("button"), { type: "button", className: "character" });
 
             pick.dataset.id = save.id;
-            pick.append(Object.assign(document.createElement("span"), { className: "name", textContent: mode === "replace" ? `Replace ${name}` : name }), Object.assign(document.createElement("span"), { className: "about", textContent: about }), Object.assign(document.createElement("span"), { className: "when", textContent: when }));
+            pick.append(Object.assign(document.createElement("span"), { className: "name", textContent: mode === "replace" ? `Replace ${name}` : name }), Object.assign(document.createElement("span"), { className: "about", textContent: `${about} · ${here ?? where}` }), Object.assign(document.createElement("span"), { className: "when", textContent: when }));
             pick.addEventListener("click", () => chosen(mode, save));
             row.append(pick);
 
@@ -425,7 +453,11 @@ function chosen(mode, save) {
         return;
     }
 
-    play(save);
+    if (mode === "enter") {
+        $("#localworlds").close();
+    }
+
+    play(save, mode === "enter" ? { world: state.into?.id } : {});
 }
 
 // Asked before a character's forgotten for good ("delete": at once; "replace": once the new
@@ -437,7 +469,7 @@ function askForget(save, why) {
     dialog.dataset.id = save.id;
     dialog.dataset.why = why;
     $("#forgettitle").textContent = why === "replace" ? `Replace ${name}?` : `Delete ${name}?`;
-    $("#forgetnote").textContent = `${name} will be permanently deleted, with their world, what they carry and what they've learnt${why === "replace" ? ", once your new character is made" : ""}. This can't be undone.`;
+    $("#forgetnote").textContent = `${name} will be permanently deleted, with what they carry and what they've learnt${why === "replace" ? ", once your new character is made" : ""}. The worlds they've been in stay, in Worlds on this device. This can't be undone.`;
     $("#forgetgo").textContent = why === "replace" ? `Replace ${name}` : `Delete ${name}`;
     $("#forgetback").textContent = `Keep ${name}`;
     dialog.showModal();
@@ -457,6 +489,14 @@ $("#forgetgo").addEventListener("click", () => {
         return;
     }
 
+    if (why === "world") {
+        forgetWorld(id);
+        title();
+        openLocalWorlds("list");
+
+        return;
+    }
+
     forgetCharacter(id);
 
     if (state.joinAs?.id === id) {
@@ -468,6 +508,170 @@ $("#forgetgo").addEventListener("click", () => {
 });
 
 $("#forgetback").addEventListener("click", () => $("#forget").close());
+
+// --- The worlds kept on this device ---
+
+// Names, as said ("Ash, Briar and Cole")
+const listOf = (names) => (names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : (names[0] ?? ""));
+
+// The worlds on this device (`mode` "list": one played in by choosing who goes in, renamed or
+// deleted by its own buttons, or a new one made), or where a character in none goes ("go": `save`)
+function openLocalWorlds(mode, save = null) {
+    const dialog = $("#localworlds");
+    const worlds = loadWorlds();
+    const kept = loadCharacters(WEAPONS);
+    const names = new Map(kept.map((one) => [one.id, one.hero.name]));
+    const who = save?.hero.name;
+
+    state.goAs = mode === "go" ? save : null;
+    dialog.dataset.mode = mode;
+    $("#localworldstitle").textContent = mode === "go" ? `Where does ${who} go?` : "Worlds on this device";
+    $("#localworldsnote").textContent =
+        mode === "go"
+            ? `${who} isn't in any world on this device. Choose one to go into, or make a new one: anywhere they haven't been, they come new to its folk, with all they carry and have grown into.`
+            : worlds.length
+              ? `Each has its own land and its own war, and remembers everyone who's been in it. Choose one, then who goes in. Up to ${MOST_WORLDS} are kept.`
+              : "No worlds are kept here yet. Make one, or make a new character: they start in a world of their own.";
+    $("#localworldsnew").hidden = worlds.length >= MOST_WORLDS;
+    $("#localworldlist").replaceChildren(
+        ...worlds.map((world) => {
+            const been = Object.keys(world.places)
+                .map((id) => names.get(id))
+                .filter(Boolean);
+            const war = loadWorld(world);
+            const whose = mode === "go" ? (world.places[save.id] ? `${who} has been here` : `new to ${who}`) : been.length ? `${listOf(been)} ${been.length === 1 ? "has" : "have"} been here` : "nobody's been here yet";
+            const row = document.createElement("li");
+            const pick = Object.assign(document.createElement("button"), { type: "button", className: "character" });
+
+            pick.dataset.id = world.id;
+            pick.append(
+                Object.assign(document.createElement("span"), { className: "name", textContent: world.name }),
+                Object.assign(document.createElement("span"), { className: "about", textContent: `${war ? `The war at turn ${war.turn ?? 0}` : "Its war not begun"} · ${whose}` }),
+                Object.assign(document.createElement("span"), { className: "when", textContent: `Last played ${new Date(world.played ?? world.created).toLocaleDateString()}` }),
+            );
+            pick.addEventListener("click", () => {
+                if (mode === "go") {
+                    dialog.close();
+                    play(save, { world: world.id });
+
+                    return;
+                }
+
+                state.into = world;
+
+                if (!kept.length) {
+                    dialog.close();
+                    create({ into: world.id });
+
+                    return;
+                }
+
+                openCharacters("enter");
+            });
+            row.append(pick);
+
+            if (mode === "list") {
+                const side = Object.assign(document.createElement("div"), { className: "side" });
+                const rename = Object.assign(document.createElement("button"), { type: "button", className: "export", textContent: "Rename", title: `Give ${world.name} another name` });
+                const forget = Object.assign(document.createElement("button"), { type: "button", className: "forget", textContent: "Delete", title: `Delete ${world.name}` });
+
+                rename.setAttribute("aria-label", `Rename ${world.name}`);
+                rename.addEventListener("click", () => askLocalWorld({ world }));
+                forget.setAttribute("aria-label", `Delete ${world.name}`);
+                forget.addEventListener("click", () => askForgetWorld(world));
+                side.append(rename, forget);
+                row.append(side);
+            }
+
+            return row;
+        }),
+    );
+
+    if (!dialog.open) {
+        dialog.showModal();
+    }
+
+    $("#localworldlist button")?.focus();
+}
+
+$("#localworldsnew").addEventListener("click", () => {
+    const save = $("#localworlds").dataset.mode === "go" ? state.goAs : null;
+
+    askLocalWorld({ made: save ? (world) => ($("#localworlds").close(), play(save, { world: world.id })) : null });
+});
+$("#localworldsback").addEventListener("click", () => $("#localworlds").close());
+
+// A world on this device made (its name, and its seed: a new one, or one given to make a land
+// again), then shown with the others or gone into (`made`); or one renamed (`world`)
+function askLocalWorld({ world = null, made = null } = {}) {
+    const name = textField("worldaskname", { maxLength: 60, value: world?.name ?? "", placeholder: "Thornvale", autocapitalize: "words" });
+    const seed = textField("worldaskseed", { inputMode: "numeric", maxLength: 10, placeholder: "Empty for a new land" });
+
+    askWorld({
+        title: world ? `Rename ${world.name}` : "A new world",
+        note: world ? "" : "A world of its own on this device: its own land, made from its seed, and its own war. Any of your characters can go into it, and it remembers each who does.",
+        fields: world ? [worldField("World's name", name)] : [worldField("World's name", name), worldField("Seed", seed), helpBlock("Its seed", ["The same seed makes the same land: give one to make a land you've played before again, with a war of its own. Leave it empty for a new one."])],
+        go: world ? "Rename" : "Make it",
+        onGo: async () => {
+            if (!name.value.trim()) {
+                $("#worldaskstatus").textContent = "Give the world a name.";
+
+                return false;
+            }
+
+            if (world) {
+                renameWorld(world.id, name.value);
+                title();
+                openLocalWorlds("list");
+
+                return true;
+            }
+
+            const given = seed.value.trim();
+
+            if (given && !(/^\d+$/.test(given) && Number(given) >= 1 && Number(given) <= 2147483646)) {
+                $("#worldaskstatus").textContent = "A seed is a whole number from 1 to 2147483646 (or nothing, for a new land).";
+
+                return false;
+            }
+
+            const { world: kept, error } = makeWorld({ name: name.value, ...(given ? { seed: Number(given) } : {}) });
+
+            if (!kept) {
+                $("#worldaskstatus").textContent = error === "full" ? `${MOST_WORLDS} worlds are kept, the most there can be: delete one first.` : "This browser won't keep another world.";
+
+                return false;
+            }
+
+            title();
+
+            if (made) {
+                $("#worldask").close();
+                made(kept);
+
+                return true;
+            }
+
+            openLocalWorlds("list");
+
+            return true;
+        },
+    });
+}
+
+// Asked before a world on this device is forgotten for good
+function askForgetWorld(world) {
+    const dialog = $("#forget");
+
+    dialog.dataset.id = world.id;
+    dialog.dataset.why = "world";
+    $("#forgettitle").textContent = `Delete ${world.name}?`;
+    $("#forgetnote").textContent = `${world.name} will be permanently deleted: its war, and what its folk remember of everyone who's been there. Your characters stay, with all they carry and have grown into. This can't be undone.`;
+    $("#forgetgo").textContent = `Delete ${world.name}`;
+    $("#forgetback").textContent = `Keep ${world.name}`;
+    dialog.showModal();
+    $("#forgetback").focus();
+}
 
 // Characters saved as a file (app/character-file.js: loaded once it's wanted, as it brings the
 // game's rules with it), as the browser downloads one
@@ -516,12 +720,19 @@ async function keepFromFile(text) {
         return 0;
     }
 
-    const why = { here: "they're kept here already.", full: `${MOST_CHARACTERS} characters are kept, the most there can be: delete one to make room, then bring the file in again.`, storage: "this browser wouldn't keep them." };
+    const why = {
+        here: "they're kept here already.",
+        full: `${MOST_CHARACTERS} characters are kept, the most there can be: delete one to make room, then bring the file in again.`,
+        worlds: `${MOST_WORLDS} worlds are kept, the most there can be, and they come with theirs: delete one in Worlds on this device to make room, then bring the file in again.`,
+        storage: "this browser wouldn't keep them.",
+    };
     const said = read.map((one) => {
         const kept = one.error ? { error: null } : keepCharacter(one.exported);
 
         if (kept.save) {
-            return { name: one.name, about: describe(kept.save).about, says: one.left.length ? ["Changed to suit this version of the game:", ...one.left] : [], brought: true };
+            const { about, where } = describe(kept.save);
+
+            return { name: one.name, about: `${about} · ${where}`, says: one.left.length ? ["Changed to suit this version of the game:", ...one.left] : [], brought: true };
         }
 
         return { name: one.name, says: [one.error ? `Not brought in. ${one.error}` : `Not brought in: ${why[kept.error]}`] };
@@ -529,7 +740,7 @@ async function keepFromFile(text) {
     const brought = said.filter((one) => one.brought).length;
 
     title();
-    showImported(brought ? `${brought === 1 ? "One character is" : `${brought} characters are`} now among your saved characters${said.length > brought ? `; ${said.length - brought} couldn't be` : ""}.` : "No one was brought in.", said);
+    showImported(brought ? `${brought === 1 ? "One character is" : `${brought} characters are`} now among the characters on this device${said.length > brought ? `; ${said.length - brought} couldn't be` : ""}.` : "No one was brought in.", said);
 
     return brought;
 }
@@ -581,7 +792,17 @@ $("#importedok").addEventListener("click", () => {
 });
 $("#charactersback").addEventListener("click", () => $("#characters").close());
 $("#charactersnew").addEventListener("click", () => {
+    const into = $("#characters").dataset.mode === "enter" ? state.into : null;
+
     $("#characters").close();
+
+    if (into) {
+        $("#localworlds").close();
+        create({ into: into.id });
+
+        return;
+    }
+
     $("#join").close();
     state.joinAfter = $("#joincode").value.toUpperCase().replace(/[^A-Z]/g, "");
     create();
@@ -614,8 +835,10 @@ $("#debugswitch").addEventListener("change", (event) => applySetting("debug", ev
 // --- Making a character ---
 
 // (`replacing`: the id of the kept character the new one takes the place of, forgotten once
-// they're made: backed out of, they're kept)
-async function create({ replacing = null } = {}) {
+// they're made: backed out of, they're kept. `into`: the id of the world on this device they're
+// made for, played in once they're made; else they start in a new world of their own, named for
+// them, or, with as many kept as there can be, they're asked which)
+async function create({ replacing = null, into = null } = {}) {
     const { Creator } = state.modules;
     const { view, kit } = state.session;
 
@@ -640,7 +863,7 @@ async function create({ replacing = null } = {}) {
         return;
     }
 
-    const save = { hero, seed: newSeed(), created: new Date().toISOString() };
+    const save = { hero, seed: newSeed(), created: new Date().toISOString(), ...(into ? { world: null } : {}) };
 
     if (replacing) {
         forgetCharacter(replacing);
@@ -648,6 +871,7 @@ async function create({ replacing = null } = {}) {
 
     if (!writeSave(save)) {
         console.warn("This browser won't keep the character: it will be forgotten when the page closes.");
+        delete save.id;
     }
 
     state.joinAs = save;
@@ -683,7 +907,7 @@ async function create({ replacing = null } = {}) {
         return;
     }
 
-    play(save);
+    play(save, into ? { world: into } : {});
 }
 
 // --- Playing ---
@@ -735,7 +959,17 @@ function failed(error) {
     $("#loadlist").replaceChildren(button("Back to the title", true, () => title()), button("Load afresh", false, () => location.reload()));
 }
 
-async function play(save) {
+// A character played (`world`: in that world on this device, going into it; else the one they're
+// in): in no world, they're asked which first
+async function play(save, { world = null } = {}) {
+    const stay = world && save.id ? enterWorld(save, world) : stayOf(save);
+
+    if (!stay) {
+        openLocalWorlds("go", save);
+
+        return;
+    }
+
     state.building = true;
     fullScreen.play();
 
@@ -743,7 +977,7 @@ async function play(save) {
     playedSave(save);
 
     try {
-        await playing(save);
+        await playing(save, stay);
     } catch (error) {
         failed(error);
     } finally {
@@ -751,7 +985,9 @@ async function play(save) {
     }
 }
 
-async function playing(save) {
+// (`stay`: where they're kept in the world they're in, save.js stayOf: what they carry is kept
+// with them, what its folk remember of them and the rest with their place in it, its war with it)
+async function playing(save, { world, place, war }) {
     const { createGame } = state.modules;
     const { view, kit, sound } = state.session;
 
@@ -770,39 +1006,40 @@ async function playing(save) {
         sound,
         hud: state.hud,
         hero: save.hero,
-        seed: save.seed,
-        talks: loadTalks(save),
-        onTalk: (talks) => saveTalks(save, talks),
-        explored: loadExplored(save),
-        onExplore: (explored) => saveExplored(save, explored),
+        seed: world?.seed ?? save.seed,
+        talks: loadTalks(place),
+        onTalk: (talks) => saveTalks(place, talks),
+        explored: loadExplored(place),
+        onExplore: (explored) => saveExplored(place, explored),
         progress: loadProgress(save),
         onProgress: (progress) => saveProgress(save, progress),
-        standing: loadStanding(save),
-        onStanding: (standing) => saveStanding(save, standing),
-        followers: loadFollowers(save),
-        onFollowers: (followers) => saveFollowers(save, followers),
+        standing: loadStanding(place),
+        onStanding: (standing) => saveStanding(place, standing),
+        followers: loadFollowers(place),
+        onFollowers: (followers) => saveFollowers(place, followers),
         wheels: loadWheels(save),
         onWheels: (wheels) => saveWheels(save, wheels),
-        war: loadWorld(save),
+        war: loadWorld(war),
         // (Kept each of the war's turns, a minute of play: and where the player is with it)
-        onWar: (war) => {
-            saveWorld(save, war.snapshot());
+        onWar: (now) => {
+            saveWorld(war, now.snapshot());
             keepPlace();
         },
         onWorldMap: openWorldMap,
-        pin: loadPin(save),
-        onPin: (pin) => savePin(save, pin),
-        place: loadPlace(save),
-        vitals: loadVitals(save),
+        pin: loadPin(place),
+        onPin: (pin) => savePin(place, pin),
+        place: loadPlace(place),
+        vitals: loadVitals(place),
         messages: loadMessages(save),
         onMessages: (messages) => saveMessages(save, messages),
         told: loadTold(save),
         onTold: (told) => saveTold(save, told),
     });
 
+    state.stay = { world, place, war };
     state.keepPlace = () => {
-        savePlace(save, game.place());
-        saveVitals(save, game.vitals());
+        savePlace(place, game.place());
+        saveVitals(place, game.vitals());
     };
 
     state.worldMap?.dispose();
@@ -1656,7 +1893,7 @@ async function listingOf(game) {
     const { MOST_PLAYERS, NET_VERSION } = await import("./core/netplay.js");
     const hero = state.save?.hero ?? game.host?.players?.get?.("player")?.hero ?? {};
 
-    return { name: `${hero.name ?? "A player"}'s world`, people: hero.race ?? "human", most: MOST_PLAYERS, net: NET_VERSION, listed: false };
+    return { name: state.stay?.world?.name ?? `${hero.name ?? "A player"}'s world`, people: hero.race ?? "human", most: MOST_PLAYERS, net: NET_VERSION, listed: false };
 }
 
 // The world server whose broker a world's opened through (plan §8.3): the one the game came from,
@@ -1809,7 +2046,7 @@ async function join(event) {
         joined = await joinWorld({
             ...(broker ? { broker } : {}),
             code,
-            character: { hero: save.hero, talks: loadTalks(save), progress: loadProgress(save), standing: loadStanding(save), followers: loadFollowers(save) },
+            character: characterOf(save),
             onClosed: () => leftWorld("The world's host has closed it to others."),
             onLink: (link) => {
                 holdForLink(link);
@@ -1919,6 +2156,9 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     const { createJoinedGame } = state.modules;
     const { view, kit, sound } = state.session;
     const keep = (write) => (kept || !save ? () => {} : write);
+    // (What they learn there, where they stand and who follows them, kept with their place in the
+    // world they're in on this device, which they brought with them: characterOf)
+    const at = save ? stayOf(save)?.place : null;
 
     $("#join").close();
     state.game?.dispose();
@@ -1937,10 +2177,10 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
         hero: save?.hero,
         welcome,
         joining,
-        onTalk: keep((talks) => saveTalks(save, talks)),
+        onTalk: keep((talks) => saveTalks(at, talks)),
         onProgress: keep((progress) => saveProgress(save, progress)),
-        onStanding: keep((standing) => saveStanding(save, standing)),
-        onFollowers: keep((followers) => saveFollowers(save, followers)),
+        onStanding: keep((standing) => saveStanding(at, standing)),
+        onFollowers: keep((followers) => saveFollowers(at, followers)),
         wheels: save ? loadWheels(save) : null,
         onWheels: save ? (wheels) => saveWheels(save, wheels) : () => {},
         onWorldMap: openWorldMap,
@@ -2508,46 +2748,48 @@ function helpBlock(heading, lines = [], { items = [], ordered = false } = {}) {
 // world of the server's, with them in it, kept by the world, and whoever brings it its owner
 function askBring(record) {
     const server = record.name ?? record.key;
+    // (Each world on this device with each of the characters who's been in it, to go with it)
     const kept = loadCharacters(WEAPONS);
+    const pairs = loadWorlds().flatMap((world) => kept.filter((save) => world.places[save.id]).map((save) => ({ world, save })));
     const how = helpBlock("How it works", [], {
         ordered: true,
         items: [
-            "Choose the character whose world you'll bring.",
+            "Choose the world on this device you'll bring, and which of your characters who's been in it goes with it.",
             `Give a key that makes worlds on ${server}: its admin key, or a creator key its owner made for you.`,
             "Name the world, and say whether others may bring a hero of their own in.",
             "Go in: you're its owner, playing that character. Invite others from the world's menu: World, then Invite others.",
         ],
     });
-    const only = helpBlock("Only characters on this device", ["The characters saved in this browser are listed here. To bring one from another device or browser, export them there (Saved characters, then Export), and import the file here first (Saved characters, then Import from a file)."]);
+    const only = helpBlock("Only worlds and characters on this device", ["The worlds and characters saved in this browser are listed here. To bring one from another device or browser, export the character there while they're in it (Characters on this device, then Export), and import the file here first (Characters on this device, then Import from a file): their world comes with them."]);
 
     askWorld({
         title: "Bring my world to the server",
-        note: `Each character you play alone has a world of their own: the land they started in, and the war going on in it. Bring one to ${server}, and it becomes a world there: the same land, its war carried on from where it stands, and your character in it, ready for others to join.`,
-        fields: kept.length ? [how, only] : [only],
-        choices: kept.length
-            ? kept.map((save) => {
+        note: `Each world on this device has its own land, and the war going on in it. Bring one to ${server}, and it becomes a world there: the same land, its war carried on from where it stands, and one of your characters in it, ready for others to join.`,
+        fields: pairs.length ? [how, only] : [only],
+        choices: pairs.length
+            ? pairs.map(({ world, save }) => {
                   const { name, about, when } = describe(save);
-                  const war = loadWorld(save);
+                  const war = loadWorld(world);
 
-                  return worldCard({ name: `${name}'s world`, about: `${about}${war ? ` · the war at turn ${war.turn ?? 0}` : ""}`, when, onClick: () => askBringAs(record, save) });
+                  return worldCard({ name: `${world.name}, as ${name}`, about: `${about}${war ? ` · the war at turn ${war.turn ?? 0}` : ""}`, when, onClick: () => askBringAs(record, save, world) });
               })
             : null,
         go: null,
     });
 
-    if (!kept.length) {
-        $("#worldaskstatus").textContent = "There are no characters saved on this device yet: play one alone first, or import one from a file.";
+    if (!pairs.length) {
+        $("#worldaskstatus").textContent = "There are no worlds played in on this device yet: play a character in one first, or import one from a file.";
     }
 }
 
-// The rest of it, for the character chosen (`save`): the key that makes worlds, its name, and its
-// first heroes; then brought, and said what came of it, before going in
-async function askBringAs(record, save) {
+// The rest of it, for the world chosen and who goes with it (`world`, `save`): the key that makes
+// worlds, its name, and its first heroes; then brought, and said what came of it, before going in
+async function askBringAs(record, save, world) {
     const { ServerClient, SERVER_REFUSALS } = await serversOf();
     const server = record.name ?? record.key;
     const hero = save.hero.name;
     const maker = textField("worldaskmaker", { type: "password", value: record.maker ?? "", placeholder: "Its admin key, or a creator key" });
-    const name = textField("worldaskname", { maxLength: 60, value: `${hero}'s world`, autocapitalize: "words" });
+    const name = textField("worldaskname", { maxLength: 60, value: world.name, autocapitalize: "words" });
     const first = selectField("worldaskfirst", [
         ["new", "Others make new characters here, the world's own"],
         ["bring", "Others may copy one of theirs in, once each, the copy staying here"],
@@ -2557,16 +2799,16 @@ async function askBringAs(record, save) {
     ]);
     const comes = helpBlock("What comes with it", [], {
         items: [
-            `The land ${hero} started in, and the war, as it stands now.`,
-            `A copy of ${hero}, with all they carry, know and have found, kept by the world as your first character there, ${server}'s own.`,
+            `The land of ${world.name}, and its war, as it stands now.`,
+            `A copy of ${hero}, with all they carry, know and have found there, kept by the world as your first character there, ${server}'s own.`,
             "Where everyone is and what they're doing is made afresh from the land, as it is each time you load your game.",
-            `${hero} stays on this device as they are: what they do on ${server} stays in its world, and what they do alone here stays here.`,
+            `${hero} and ${world.name} stay on this device as they are: what happens on ${server} stays in its world, and what happens here stays here.`,
         ],
     });
 
     askWorld({
-        title: `Bring ${hero}'s world to ${server}`,
-        note: `A new world on ${server}, made from ${hero}'s: you'll be its owner, and only those you give a key come in.`,
+        title: `Bring ${world.name} to ${server}`,
+        note: `A new world on ${server}, made from ${world.name}: you'll be its owner, and only those you give a key come in.`,
         fields: [comes, worldField("Key that makes worlds", maker), keyHelp, worldField("World's name", name), worldField("Other players' characters", first)],
         go: "Bring it to the server",
         onGo: async () => {
@@ -2582,7 +2824,7 @@ async function askBringAs(record, save) {
                 return false;
             }
 
-            const character = exportCharacter(save);
+            const character = exportCharacter(save, { world: world.id });
 
             if (!character) {
                 $("#worldaskstatus").textContent = `${hero} couldn't be read from this device.`;
@@ -2590,14 +2832,14 @@ async function askBringAs(record, save) {
                 return false;
             }
 
-            $("#worldaskstatus").textContent = `Bringing ${hero}'s world to ${server}… Making its land can take a minute.`;
+            $("#worldaskstatus").textContent = `Bringing ${world.name} to ${server}… Making its land can take a minute.`;
 
             let brought;
 
             try {
                 brought = await new ServerClient(state.servers.get(record.key), { servers: state.servers }).bringWorld(maker.value.trim(), { character, name: name.value.trim(), firstHero: first.value });
             } catch (error) {
-                $("#worldaskstatus").textContent = bringRefusal(error, { server, hero, refusals: SERVER_REFUSALS });
+                $("#worldaskstatus").textContent = bringRefusal(error, { server, hero, world: world.name, refusals: SERVER_REFUSALS });
 
                 return false;
             }
@@ -2606,7 +2848,7 @@ async function askBringAs(record, save) {
             showWorlds();
             askWorld({
                 title: `${brought.name} is on ${server}`,
-                note: `${brought.hero}'s world is a world of ${server}'s now${brought.turn === null ? ", its war begun afresh" : `, its war at turn ${brought.turn}`}. You're its owner, and ${brought.hero} is kept there for you.`,
+                note: `${world.name} has come to ${server} as a world of its own${brought.turn === null ? ", its war begun afresh" : `, its war at turn ${brought.turn}`}. You're its owner, and ${brought.hero} is kept there for you.`,
                 fields: [
                     ...(brought.left?.length ? [helpBlock(`What changed for ${brought.hero}`, [`This version of the game plays them a little differently: ${brought.left.join(" ")}`])] : []),
                     helpBlock("Next", [], {
@@ -2632,7 +2874,7 @@ async function askBringAs(record, save) {
 }
 
 // Why a world couldn't be brought to a server, and what to do about it
-function bringRefusal(error, { server, hero, refusals }) {
+function bringRefusal(error, { server, hero, world, refusals }) {
     switch (error.error) {
         case "key":
         case "role":
@@ -2640,13 +2882,13 @@ function bringRefusal(error, { server, hero, refusals }) {
         case "home":
             return `${server}'s admin key only works on its own Wi-Fi. From elsewhere, ask its owner for a creator key.`;
         case "version":
-            return `${error.message} To bring ${hero}'s world anyway: export ${hero} here (Saved characters, then Export), open the game from the server itself, import the file there (Saved characters, then Import from a file), and bring their world from there.`;
+            return `${error.message} To bring ${world} anyway: export ${hero} here while they're in it (Characters on this device, then Export), open the game from the server itself, import the file there (Characters on this device, then Import from a file), and bring the world that comes with them from there.`;
         case "newer":
             return `${hero} was saved by a newer version of the game than ${server} plays. It updates itself overnight; or its owner can update it now (management page: Settings, then Updates).`;
         case "too-big":
-            return `${hero}'s world is too big to send to ${server}.`;
+            return `${world} is too big to send to ${server}.`;
         default:
-            return error.message ?? refusals[error.error] ?? `${hero}'s world couldn't be brought to ${server}.`;
+            return error.message ?? refusals[error.error] ?? `${world} couldn't be brought to ${server}.`;
     }
 }
 
@@ -2875,9 +3117,16 @@ function askTakeHome(client, entered, hero) {
         return;
     }
 
+    // (They come with a copy of the world as it is, a world of this device's)
+    if (loadWorlds().length >= MOST_WORLDS) {
+        $("#worldaskstatus").textContent = `${MOST_WORLDS} worlds are kept on this device, the most there can be, and ${hero.name} comes with a copy of ${name}: delete one first to make room (Worlds on this device).`;
+
+        return;
+    }
+
     askWorld({
         title: `Take ${hero.name} home?`,
-        note: `${hero.name} will leave ${name} for good and be kept on this device instead. This can't be undone.`,
+        note: `${hero.name} will leave ${name} for good and be kept on this device instead. A copy of ${name} as it is now comes with them, as one of the worlds on this device. This can't be undone.`,
         go: `Take ${hero.name} home`,
         onGo: async () => {
             let file;
@@ -2894,7 +3143,7 @@ function askTakeHome(client, entered, hero) {
 
             if (!(await keepFromFile(file.text))) {
                 download(file.name, file.text);
-                $("#importednote").textContent = `${hero.name} left ${name}, but this device wouldn't keep them: they're saved as a file (${file.name}) instead. Bring it in from Saved characters.`;
+                $("#importednote").textContent = `${hero.name} left ${name}, but this device wouldn't keep them: they're saved as a file (${file.name}) instead. Bring it in from Characters on this device.`;
             }
 
             return true;
@@ -2953,7 +3202,7 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
     const { SERVER_REFUSALS } = await serversOf();
     const { NET_REFUSALS, NET_KICKS, versionWords } = await import("./app/together.js");
     const kept = entered.card?.heroes === "kept";
-    const character = given ?? (save ? { hero: save.hero, talks: loadTalks(save), progress: loadProgress(save), standing: loadStanding(save), followers: loadFollowers(save) } : {});
+    const character = given ?? (save ? characterOf(save) : {});
 
     if (!$("#worlds").open) {
         $("#worlds").showModal();

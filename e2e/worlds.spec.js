@@ -287,12 +287,12 @@ test("a world that takes copies: a character on this device copied in once, told
     await expect(ask.locator("#worldasktitle")).toHaveText("Take which character home?");
     await ask.getByRole("button", { name: /^Ada/ }).click();
     await expect(ask.locator("#worldasktitle")).toHaveText("Take Ada home?");
-    await expect(ask.locator("#worldasknote")).toHaveText("Ada will leave Ownby for good and be kept on this device instead. This can't be undone.");
+    await expect(ask.locator("#worldasknote")).toHaveText("Ada will leave Ownby for good and be kept on this device instead. A copy of Ownby as it is now comes with them, as one of the worlds on this device. This can't be undone.");
     await ask.getByRole("button", { name: "Take Ada home" }).click();
 
     const imported = page.locator("#imported");
 
-    await expect(imported.locator("#importednote")).toHaveText("One character is now among your saved characters.");
+    await expect(imported.locator("#importednote")).toHaveText("One character is now among the characters on this device.");
     await imported.getByRole("button", { name: "OK" }).click();
 
     const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.characters")).ids.map((id) => JSON.parse(localStorage.getItem(`pellagos.${id}.save`))).map(({ hero, seed }) => [hero.name, seed, hero.guid]));
@@ -302,7 +302,7 @@ test("a world that takes copies: a character on this device copied in once, told
     expect(await server.worlds.get(own.world).heroes.list(ownPlayer)).toEqual([]);
 });
 
-test("a character's own world brought to a server (Bring my world): told how, and what comes with it; refused a key that makes no worlds; then a world of the server's, in their land, its owner going in as that character", async ({ page }) => {
+test("a world on this device brought to a server (Bring my world) with a character who's been in it: told how, and what comes with it; refused a key that makes no worlds; then a world of the server's, in its land, its owner going in as that character", async ({ page }) => {
     await ready(page, save("Wren", "human", "sword"));
 
     const before = server.worlds.size;
@@ -320,18 +320,18 @@ test("a character's own world brought to a server (Bring my world): told how, an
     await expect(row).toContainText("Version", { timeout: 30000 });
     await row.getByRole("button", { name: "Bring my world" }).click();
 
-    // The characters on this device, each their own world's, and how it works
+    // The worlds on this device, each with who's been in it, and how it works
     const ask = page.locator("#worldask");
 
     await expect(ask.locator("#worldasktitle")).toHaveText("Bring my world to the server");
-    await expect(ask.locator("#worldasknote")).toContainText("Each character you play alone has a world of their own");
+    await expect(ask.locator("#worldasknote")).toContainText("Each world on this device has its own land");
     await expect(ask.locator(".world-help").first().locator("li")).toHaveCount(4);
-    await expect(ask.locator(".world-help").nth(1)).toContainText("To bring one from another device or browser, export them there");
-    await ask.getByRole("button", { name: /^Wren's world/ }).click();
+    await expect(ask.locator(".world-help").nth(1)).toContainText("To bring one from another device or browser, export the character there while they're in it");
+    await ask.getByRole("button", { name: /^Wren's world, as Wren/ }).click();
 
     // What comes with it, and the key that makes worlds: one that doesn't, refused, saying which will
     await expect(ask.locator("#worldasktitle")).toHaveText(/^Bring Wren's world to /);
-    await expect(ask.locator(".world-help").first()).toContainText("A copy of Wren, with all they carry, know and have found, kept by the world as your first character there");
+    await expect(ask.locator(".world-help").first()).toContainText("A copy of Wren, with all they carry, know and have found there, kept by the world as your first character there");
     await expect(ask.locator("#worldaskname")).toHaveValue("Wren's world");
     await ask.locator("#worldaskmaker").fill("NOT-A-KEY");
     await ask.getByRole("button", { name: "Bring it to the server" }).click();

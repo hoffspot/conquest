@@ -92,9 +92,12 @@ they're served, and what the owner sets up for it.
 **Loading.** The first screen lists everything the game downloads (about 3 MB: the 3D engine,
 the game's code, the body characters are made from, its skin details, and the props),
 with a bar for each and one for the whole. Then the title screen offers to **Continue as** the
-character you played last, make a **New character**, or choose another of your **Saved
-characters**: up to six are kept. With six, a new one takes the place of one you choose, after
-asking you to be sure, as they're deleted for good; and any can be deleted from the list.
+character you played last, make a **New character**, or choose another of the **Characters on
+this device**: up to six are kept. With six, a new one takes the place of one you choose, after
+asking you to be sure, as they're deleted for good; and any can be deleted from the list. The
+**Worlds on this device** are kept apart from them, up to eight: choose one, then who goes in.
+What a character carries and has grown into goes with them into any world; each world keeps its
+own war, and what it knows of each of them.
 **About**, at the bottom of the title, is an overview of the game and how it's played, to scroll
 through: getting about, fighting, magic, gear, towns, the war, your party, playing together,
 saving, the keys and the options.
@@ -132,8 +135,9 @@ saving, the keys and the options.
    leg in turn.
 3. **Name.** Type one, or ask for a suggestion, and **Begin**.
 
-Your characters are saved in the browser, each with their own world: where they were and how,
-hurt, poisoned or blessed, a spell still on them, all carried on the next time as it was.
+Your characters are saved in the browser, a new one starting in a world of their own, and so are
+your worlds: in each, where they were and how, hurt, poisoned or blessed, a spell still on them,
+all carried on the next time as it was.
 
 **In the town.** You wake in the market square. **Tap or click the ground** to walk there, or
 **an enemy** to go and fight them: a red ring round it marks it as your target, and its name
@@ -713,9 +717,10 @@ client/                 The game (static files served to the browser)
                         another, fallen, risen
     together.js         Playing together: a world opened to others, or another's joined, through
                         the relay (a WebSocket)
-    save.js             The saved characters (up to six), what they've grown into and carry,
-                        what's been said and found, where they were and how; and settings
-                        (local storage)
+    save.js             The saved characters (up to six), what they've grown into and carry;
+                        the worlds (up to eight), apart from them, each with its war and what
+                        it keeps of each character: what's been said and found, where they
+                        were and how; and settings (local storage)
     device.js           Touch screens, landscape, installing and the service worker
     fullscreen.js       Full screen while playing (Game options), and pausing when it's left
   js/core/              The rules. No DOM or Three.js, so they also run in Node
