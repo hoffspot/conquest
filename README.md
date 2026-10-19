@@ -152,7 +152,9 @@ ways (a sword slashes, cuts backhand, chops overhead, thrusts and cuts upwards),
 way twice in a row, and fireballs, bolts and spells each have five looks too. **Swipe up from yourself**
 (a quick flick upwards, starting on your character) to turn the way the camera looks and go
 straight ahead that way, as far as you can until something's in the way: sprinting while you
-have stamina, then walking.
+have stamina, then walking. On a keyboard, **W, A, S, D** (or the arrow keys) steer you the way
+the camera looks, running; hold **Shift** to walk. Out of breath, you walk on the way you're
+steering until a quarter of your stamina is back, then run again.
 
 **Weapons are put away** out of a fight, each in its place on the body:
 - the sword in a scabbard at the left hip;
@@ -455,6 +457,7 @@ up. They're all remembered.
 | --- | --- | --- |
 | Walk | Tap the ground | Click the ground |
 | Run | Double-tap the ground | Double-click (or Shift-click) the ground |
+| Find the pointer | (No pointer on a touch screen) | Shake the mouse: the sword pointer's blade glows and it grows for a moment (Game options, Graphics: Sword pointer, Large pointer) |
 | Fight | Tap an enemy to set on them where you stand (striking once they're in reach); double-tap to run at them; hold on them and flick up (Attack) to walk up to them | Click an enemy (double-click to run at them; hold and flick up to walk up to them) |
 | Stop | Tap whoever you're going after, or yourself | Click them, or yourself |
 | Fight from the icons down the right | Tap an attacker's icon to set on them where you stand (the glowing one: stop going after them); double-tap to run at them; hold to walk up to them | Click (double-click to run at them; hold to walk up to them) |
