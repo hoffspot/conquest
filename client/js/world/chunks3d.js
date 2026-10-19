@@ -34,6 +34,7 @@ import { archMaking } from "./art/kits/arches.js";
 import { aqueductMaking } from "./art/kits/aqueducts.js";
 import { bridgeGrowth, stoneBridgeMaking } from "./art/kits/bridges.js";
 import { ARCHES, legsOf } from "../core/arches.js";
+import { bushMesh } from "./art/kits/bushes.js";
 import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
 import { fordParts, fordsMesh } from "./art/kits/fords.js";
 import { stepsMesh, stonesOf } from "./art/kits/steps.js";
@@ -898,9 +899,14 @@ export class Chunks {
         if (features.length) {
             yield* featureLooks(features, landAt);
 
-            const wild = featureMesh(features, landAt, [chunk.x0, chunk.y0], this.groundAt);
+            const wild = featureMesh(features, landAt, [chunk.x0, chunk.y0], this.groundAt, { sprigs: this.undergrowth });
 
             object.add(wild.mesh);
+
+            if (wild.bushes) {
+                object.add(wild.bushes);
+            }
+
             standing(wild.boxes);
         }
 
@@ -1059,9 +1065,11 @@ function primer() {
     group.add(smokeMesh([[0, 0, 0, 2]]));
     group.add(clothMesh([{ at: [0, 0, 0], width: 1, drop: 1, kind: "hang", look: "human" }]));
 
-    // (And a tuft of grass, for the undergrowth's; and a stretch of hedge)
+    // (And a tuft of grass, for the undergrowth's; a stretch of hedge; and a bush, its pictures
+    // its own, its programs the hedge's)
     group.add(undergrowthMesh([{ kind: "tuft", land: "meadow", look: 0, x: 0, y: 0, turn: 0, size: 1, tint: [1, 1, 1] }], [0, 0]));
     group.add(hedgeMesh([{ axis: 0, at: 0.5, from: 0, to: 2, ends: [true, true], seed: 1 }], [0, 0], () => 0).object);
+    group.add(bushMesh([{ at: [0, 0, 0], across: 1.4, height: 1.1, turn: 0, seed: 1, leaves: [0.05, 0.14, 0.02], bloom: null, blooms: 0 }], [0, 0]).object);
 
     // (A window's light on the ground: windowpools.js's, drawn by night only, so made here)
     group.add(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), poolMaterial()));

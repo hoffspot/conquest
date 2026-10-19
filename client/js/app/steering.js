@@ -4,6 +4,10 @@
 // given again as that way turns and stopped when the input's let go. So held input asks nothing new
 // of the core: no held keys cross the wire, only the way they add up to.
 //
+// Held keys run, as in most games, and Shift held along with them walks (the stick runs pushed
+// most of the way over). Out of breath, held input walks on the way it's held till enough of it is
+// back, then runs again (RUN_AGAIN).
+//
 // Which way is forward is read off the camera, not the world, so turning the camera turns what
 // forward means while a key is still down. A stick's angle goes through whole, which is why a stick
 // suits this better than four buttons: the order takes any angle, so diagonals cost nothing.
@@ -32,6 +36,12 @@ const REACH = 56;
 const DEADZONE = 10;
 const RUN_AT = 0.7;
 
+// Out of breath (the battle has a runner with no stamina left walk: battle.js #move, "exhausted"),
+// held input walks on till this share of their stamina is back, and only then runs again. Asked to
+// run again at once, they'd sprint a moment on the little got back since, run out again and
+// stutter between the two, "Out of breath" said each time
+export const RUN_AGAIN = 0.25;
+
 // Which way each key means, against the camera: [forward, right]
 const KEYS = new Map([
     ["KeyW", [1, 0]],
@@ -47,6 +57,7 @@ const KEYS = new Map([
 export class Steering {
     #keys = new Set();
     #shift = false;
+    #winded = false;
     #stick = null;
     #sent = null;
     #frame = 0;
@@ -62,6 +73,7 @@ export class Steering {
      *   (radians, as core/battle.js means "facing"), or null while there's nobody to steer.
      * @param {(facing: number, run: boolean) => void} how.go - Send them straight ahead that way.
      * @param {() => void} how.stop - Stop them.
+     * @param {() => number} [how.breath] - How much of their stamina they have (0 to 1).
      */
     constructor(how) {
         this.#how = how;
@@ -88,6 +100,18 @@ export class Steering {
         return this.#keys.size > 0 || this.#stick !== null;
     }
 
+    /**
+     * They've run out of breath (the battle's "exhausted"): held input walks on the way it's held
+     * till enough of it's back (RUN_AGAIN), then runs again.
+     */
+    outOfBreath() {
+        this.#winded = true;
+
+        if (this.steering) {
+            this.#work();
+        }
+    }
+
     /** Let go of everything and stop, as a menu opening or the page losing its keys does. */
     release() {
         const was = this.steering;
@@ -109,6 +133,7 @@ export class Steering {
     dispose() {
         this.#keys.clear();
         this.#shift = false;
+        this.#winded = false;
         this.#letGoOfStick();
 
         for (const [target, type, listener] of this.#listeners) {
@@ -138,8 +163,7 @@ export class Steering {
             return;
         }
 
-        // Shift is how a click already asks to run, so it does the same here: held alongside a way,
-        // it turns walking into running without being a way of its own
+        // Held keys run; Shift held alongside a way walks instead, without being a way of its own
         if (event.key === "Shift") {
             this.#shift = down;
         } else if (KEYS.has(event.code)) {
@@ -255,8 +279,8 @@ export class Steering {
                 right += side;
             }
 
-            // Shift held is running, as it is for a click (game.js: tap)
-            run = this.#shift;
+            // Running, unless Shift's held
+            run = !this.#shift;
         } else {
             return null;
         }
@@ -271,7 +295,12 @@ export class Steering {
         const x = forward * sin - right * cos;
         const z = forward * cos + right * sin;
 
-        return { facing: Math.atan2(x, z), run };
+        // (Out of breath, walking on till enough's back)
+        if (this.#winded && (this.#how.breath?.() ?? 1) >= RUN_AGAIN) {
+            this.#winded = false;
+        }
+
+        return { facing: Math.atan2(x, z), run: run && !this.#winded };
     }
 
     // Keep up with what's held: the order's given again as the way turns, and while anything's held

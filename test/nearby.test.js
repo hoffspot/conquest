@@ -280,6 +280,28 @@ describe("world servers finding each other on the Wi-Fi (nearby.js)", () => {
         assert.equal(network.adverts.size, 0);
     });
 
+    it("renamed by its owner, is advertised again under its new name, and the others list it so; left empty, under the computer's own again", async () => {
+        const network = new FakeNetwork();
+        const studio = await serve(network, { host: "studio-mac.local", name: "Studio Mac", ip: "10.0.0.2" });
+        const sams = await serve(network, { host: "sams-mac.local", name: "Sam's Mac", ip: "10.0.0.3" });
+
+        await until(() => studio.nearby.list().length && sams.nearby.list().length, "each to find the other");
+        await sams.manage.changeSettings({ name: "Pellagos Home Server" });
+        await until(() => studio.nearby.list()[0]?.name === "Pellagos Home Server", "listed under its new name");
+        assert.equal(sams.nearby.state().as, "Pellagos Home Server");
+        assert.match(sams.manage.overview().bonjour.words, /Shown to others on the Wi-Fi as “Pellagos Home Server”/);
+        assert.deepEqual(
+            studio.nearby.list().map((one) => one.name),
+            ["Pellagos Home Server"],
+            "(its old name gone)",
+        );
+
+        await sams.manage.changeSettings({ name: "" });
+        await until(() => studio.nearby.list()[0]?.name === "Sam's Mac", "listed under the computer's own again");
+        await sams.close();
+        await studio.close();
+    });
+
     it("follows its bonjour setting as it runs; and, refused, says why, serves players all the same, and tries again", async () => {
         const network = new FakeNetwork();
         const studio = await serve(network, { host: "studio-mac.local", name: "Studio Mac", ip: "10.0.0.2" });

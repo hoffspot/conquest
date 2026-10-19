@@ -13,7 +13,7 @@ import { material } from "../engine/materials.js";
 import { Solid } from "../engine/solid.js";
 import { churchBody } from "./church.js";
 import { buildHouse, planHouse, STYLES as HOUSE_STYLES } from "./house.js";
-import { emblemSignTexture, hangingSignTexture, loadSignFont, nameBoardTexture, signMaterial, TAVERN_NAME } from "./signs.js";
+import { emblemSignTexture, hangingSignTexture, loadSignFont, nameBoardTexture, paintBothFaces, signMaterial, TAVERN_NAME } from "./signs.js";
 import { dressShop, SHOP_NAMES, SHOPFRONTS } from "./shopfront.js";
 import { fireLight, lanternLight, torch } from "./torches.js";
 
@@ -90,11 +90,8 @@ function hangingSign(solid, face, u, top, texture, name, { width = 0.8, height =
     }
 
     const [bottom, upper] = [top - m(0.06) - m(height), top - m(0.06)];
-    const corners = [along(near, bottom), along(far, bottom), along(far, upper), along(near, upper)];
 
-    // (Painted on both faces, each the right way round)
-    solid.face(corners, picture, [[0, 0], [1, 0], [1, 1], [0, 1]]);
-    solid.face([...corners].reverse(), picture, [[0, 1], [1, 1], [1, 0], [0, 0]]);
+    paintBothFaces(solid, [along(near, bottom), along(far, bottom), along(far, upper), along(near, upper)], picture);
 }
 
 // A name board on a wall's face: `u0` to `u1` along it, `v0` to `v1` up it, in a timber frame
