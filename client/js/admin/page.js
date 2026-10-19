@@ -697,6 +697,8 @@ async function renderOverview() {
     const { overview } = state.server;
     const mac = onMac();
 
+    showWho(overview);
+
     // (From the Wi-Fi, the server's own computer's name for itself is no use)
     const addresses = overview.addresses.filter((address) => mac || !/\/\/(localhost|127\.0\.0\.1)[:/]/.test(address));
 
@@ -742,7 +744,7 @@ async function renderOverview() {
         panel(
             "About",
             facts([
-                ["Server", overview.name],
+                ["Server", h("span", {}, overview.name, h("span", { class: "muted small" }, overview.name === overview.ownName ? " · the computer's own name: Settings gives it another" : ` · its own name (Settings), the computer's ${overview.ownName}`))],
                 ["Version", overview.version],
                 ["Its id", h("code", {}, overview.id)],
                 ["Up for", duration(overview.uptime)],
@@ -1061,7 +1063,7 @@ function worldSettings(world) {
         }
 
         for (const [key, setting] of Object.entries(schema)) {
-            const value = setting.kind === "boolean" ? form.elements[key].checked : Number(form.elements[key].value);
+            const value = setting.kind === "text" ? form.elements[key].value.replace(/\s+/g, " ").trim() : setting.kind === "boolean" ? form.elements[key].checked : Number(form.elements[key].value);
 
             if (value !== world.settings[key]) {
                 settings[key] = value;
@@ -1524,11 +1526,16 @@ async function renderSettings() {
 
     const { settings, schema, overview } = state.server;
     const status = h("p", { class: "warning", role: "status" });
+
+    showWho(overview);
+
     const form = h(
         "form",
         {},
         Object.entries(schema).map(([key, setting]) =>
-            setting.kind === "boolean"
+            setting.kind === "text"
+                ? field(setting.about, h("input", { type: "text", name: key, maxlength: String(setting.most), placeholder: key === "name" ? overview.ownName : "", value: settings[key] }))
+                : setting.kind === "boolean"
                 ? check(key, setting.about, settings[key])
                 : field(
                       `${setting.about} (${setting.min} to ${setting.max})`,
@@ -1547,7 +1554,7 @@ async function renderSettings() {
         const changes = {};
 
         for (const [key, setting] of Object.entries(schema)) {
-            const value = setting.kind === "boolean" ? form.elements[key].checked : Number(form.elements[key].value);
+            const value = setting.kind === "text" ? form.elements[key].value.replace(/\s+/g, " ").trim() : setting.kind === "boolean" ? form.elements[key].checked : Number(form.elements[key].value);
 
             if (value !== settings[key]) {
                 changes[key] = value;
@@ -2032,11 +2039,16 @@ async function open() {
 
     $("#signin").hidden = true;
     $("#tabs").hidden = false;
-    $("#who").textContent = `${overview.name} · version ${overview.version} · ${overview.mac ? "on this computer" : "from the Wi-Fi"}`;
+    showWho(overview);
     say("");
     setUpNewWorld();
     await show(state.tab);
     refresh();
+}
+
+// Who's being managed, at the top: the server's name (as it is now), its version, and from where
+function showWho(overview) {
+    $("#who").textContent = `${overview.name} · version ${overview.version} · ${overview.mac ? "on this computer" : "from the Wi-Fi"}`;
 }
 
 function start() {

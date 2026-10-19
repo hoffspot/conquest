@@ -2,6 +2,7 @@
     "admin.spec.js › from the Wi-Fi, the page at /admin asks for the admin key first": 0.8,
     "admin.spec.js › its Archive: the whole server archived, the archive opened, its worlds brought in as new ones with keys of their own (restoring's for a server with none)": 1.1,
     "admin.spec.js › its Updates: a newer version found, with its notes, and how this copy of the repository is updated": 0.8,
+    "admin.spec.js › its name, given in Settings, is the server's at once: the page's own, its Overview's, and the game's opened from it; left empty, the computer's own again": 7.2,
     "admin.spec.js › the management page on the server's computer: a world made, started, set aside, backed up and restored, a player's ticket reissued, exported, deleted with its name typed, and brought in again": 7.4,
     "broker.spec.js › a host no direct link gets through to is joined relayed by the server; and hidden from its list once the server doesn't relay": 95.3,
     "broker.spec.js › a player's own world through the server's broker: listed on it, joined from the Worlds screen point to point; its listing gone when it's closed": 103.8,

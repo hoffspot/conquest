@@ -1061,7 +1061,7 @@ export class Management {
 
     // ---- The server
 
-    /** The server's overview (§10 Overview): who it is, where it's reached, how long it's been up, the machine and how many worlds it may run. */
+    /** The server's overview (§10 Overview): who it is (its name, and the computer's own), where it's reached, how long it's been up, the machine and how many worlds it may run. */
     overview() {
         const { server } = this;
         const states = [...server.registry.entries.values()].map((entry) => entry.thread?.state).filter(Boolean);
@@ -1075,6 +1075,7 @@ export class Management {
         return {
             id: server.identity.id,
             name: server.name,
+            ownName: server.ownName,
             version: SERVER_VERSION,
             started: new Date(this.started).toISOString(),
             uptime: Date.now() - this.started,
@@ -1413,7 +1414,11 @@ export class Management {
         return this.server.settings.all();
     }
 
-    /** The server's settings changed: each checked first. Some wait for a restart (the ports). */
+    /**
+     * The server's settings changed: each checked first. Some wait for a restart (the ports). Its
+     * name's at once: its status says it (so the game's lists and invites, as each asks again),
+     * and Bonjour's advert's made again under it (nearby.js refresh, after SETTLE).
+     */
     async changeSettings(changes, { by = null } = {}) {
         const changed = await this.server.settings.change(changes);
 
@@ -1423,6 +1428,7 @@ export class Management {
 
         this.server.registry.refill();
         this.server.nearby.follow(this.server.settings.get("bonjour"));
+        this.server.nearby.refresh();
         if (Object.hasOwn(changes, "tunnelPort")) {
             await this.server.closeTunnel();
         }
@@ -1438,7 +1444,9 @@ export class Management {
             this.server.broker?.refresh();
         }
 
-        await this.journal(`The server's settings were changed${by ? ` by ${by}` : ""}: ${Object.entries(changes).map(([key, value]) => `${key} ${value}`).join(", ")}.`);
+        const words = ([key, value]) => (key !== "name" ? `${key} ${value}` : value ? `name “${value}”` : `name the computer's own (“${this.server.ownName}”)`);
+
+        await this.journal(`The server's settings were changed${by ? ` by ${by}` : ""}: ${Object.entries(changes).map(words).join(", ")}.`);
 
         return { settings: this.settings(), restart: ["port", "adminPort"].some((key) => Object.hasOwn(changes, key)) };
     }
