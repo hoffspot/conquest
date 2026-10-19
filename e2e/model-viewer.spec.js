@@ -229,10 +229,10 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     await openViewer(page, "/model-viewer.html?model=beast-centipede&clip=Run");
 
     // (In the game now, as are the ant, the spiders, the scorpion, the cockroach, the wasp, the
-    // black widow, the Ant Monster, the greater demon (a hell's lord) and the fiend (its packs):
-    // every bought model is but a hell's six flayed and its six gorgers, the ones listed as to come;
-    // read, its clips listed, the one asked for by its address played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Flayling", "Cinder Husk", "Pyre Acolyte", "Ossuary Priest", "Dirge Warden", "Flayed Hierarch", "Slag Gorger", "Forge Brute", "Chained Glutton", "Bloat Gorger", "Pit Ravager", "Gorger Warlord"]);
+    // black widow, the Ant Monster, the greater demon (a hell's lord), the fiend (its packs), and its
+    // six flayed and six gorgers: every bought model is, none listed as to come; read, its clips
+    // listed, the one asked for by its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual([]);
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Giant cockroach", "Dungeon wasp", "Dungeon scorpion", "Black widow", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
@@ -686,7 +686,7 @@ test("a hell's lord as the game draws it: a people-shaped brute till the Greater
 test("a hell's fiend as the game draws it: a horned stand-in till its model's read, then the fiend, its claws raked four ways, its spring, its rest, in one of its three skins", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?creature=fiend");
-    await expect(page.locator("#picker optgroup[label='The hells'] option")).toHaveText(["Fiend"]);
+    await expect(page.locator("#picker optgroup[label='The hells'] option")).toHaveText(["Fiend", "Flayling", "Cinder husk", "Pyre acolyte", "Ossuary priest", "Dirge warden", "Flayed hierarch", "Slag gorger", "Forge brute", "Chained glutton", "Bloat gorger", "Pit ravager", "Gorger warlord"]);
 
     // (Its stand-in a character, as the wild's people-shaped ones are, till its model's read; then
     // the model)
@@ -930,4 +930,51 @@ test("and a hell's six gorgers: each from one of Monster2's builds, its five cli
         expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles });
         await expect(page.locator("#details")).toContainText("Monster2, bought on Fab: used with the permission its Standard License gives");
     }
+});
+
+// Each of a hell's own kinds (creatures.js) as the game draws it: a stand-in till its model's read,
+// then its model, as tall as MODELS has it, its ways of attacking, its own special one and its
+// rest ([kind, its attacks, a special of its own, its rest, how tall it's drawn])
+async function drawnAsTheGame(page, kinds) {
+    for (const [kind, attacks, special, rest, height] of kinds) {
+        await openViewer(page, `/model-viewer.html?creature=${kind}`);
+        await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+
+        const current = await page.evaluate(() => window.lab.current());
+
+        expect(current, kind).toMatchObject({ humanoid: false, attacks, rests: [rest] });
+
+        if (special) {
+            expect(current.specials, kind).toContain(special);
+            expect(await page.evaluate(() => window.lab.watch().moves), kind).toContain(special);
+        }
+
+        expect(await page.evaluate(() => window.lab.avatar().character.height), kind).toBeCloseTo(height, 1);
+    }
+}
+
+test("a hell's flayed as the game draws them: each its model, as tall as it's drawn, its claws or its staff, its lunge or what its free hand casts, curses, wails or drains, its other idle as it rests", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await drawnAsTheGame(page, [
+        ["flayling", ["rake"], "lunge", "look", 1.85],
+        ["cinderHusk", ["grasp", "lunge"], null, "look", 2],
+        ["pyreAcolyte", ["sweep"], "cast", "look", 1.96],
+        ["ossuaryPriest", ["sweep"], "curse", "look", 2.37],
+        ["dirgeWarden", ["sweep"], "wail", "look", 2.61],
+        ["flayedHierarch", ["sweep"], "drain", "look", 2.73],
+    ]);
+});
+
+test("a hell's gorgers as the game draws them: each its model, as tall as it's drawn, its club or its claws, its maw's bite or spew, its roar as it rests", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await drawnAsTheGame(page, [
+        ["slagGorger", ["claw"], "spew", "roar", 2.06],
+        ["forgeBrute", ["smash"], "bite", "roar", 2.24],
+        ["chainedGlutton", ["smash"], "bite", "roar", 2.47],
+        ["bloatGorger", ["claw"], "spew", "roar", 2.15],
+        ["pitRavager", ["rend"], "bite", "roar", 2.06],
+        ["gorgerWarlord", ["smash"], "bite", "roar", 3.38],
+    ]);
 });

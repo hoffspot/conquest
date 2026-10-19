@@ -301,6 +301,10 @@ export const THEMES = {
                     { id: "wraiths", creatures: ["wraith"], size: [1, 2], weight: 1 },
                     { id: "bats", creatures: ["bats"], size: [3, 5], weight: 1 },
                     { id: "fiends", creatures: ["fiend"], size: [1, 2], weight: 1 },
+                    // (Its flayed: creatures.js)
+                    { id: "flaylings", creatures: ["flayling"], size: [3, 5], weight: 3 },
+                    { id: "husks", creatures: ["cinderHusk"], size: [2, 3], weight: 2 },
+                    { id: "acolytes", creatures: ["pyreAcolyte"], size: [1, 2], weight: 2 },
                 ],
                 minis: [
                     { id: "fireCaller", creature: "cultist", title: "Fire-caller", weight: 2 },
@@ -337,6 +341,10 @@ export const THEMES = {
                     { id: "shades", creatures: ["ghost"], size: [2, 3], weight: 2 },
                     { id: "stalkers", creatures: ["shadowStalker"], size: [1, 2], weight: 1 },
                     { id: "fiends", creatures: ["fiend"], size: [1, 2], weight: 2 },
+                    // (Its flayed: creatures.js)
+                    { id: "priests", creatures: ["ossuaryPriest"], size: [1, 1], weight: 2 },
+                    { id: "wardens", creatures: ["dirgeWarden"], size: [1, 2], weight: 2 },
+                    { id: "hierarch", creatures: ["flayedHierarch"], size: [1, 1], weight: 1 },
                 ],
                 minis: [
                     { id: "boneChampion", creature: "skeleton", title: "Bone champion", weight: 2 },
@@ -376,6 +384,10 @@ export const THEMES = {
                     { id: "chimera", creatures: ["chimera"], size: [1, 1], weight: 1 },
                     { id: "wyverns", creatures: ["wyvern"], size: [1, 2], weight: 1 },
                     { id: "fiends", creatures: ["fiend"], size: [1, 3], weight: 2 },
+                    // (Its gorgers: creatures.js)
+                    { id: "slagGorgers", creatures: ["slagGorger"], size: [2, 3], weight: 2 },
+                    { id: "forgeBrutes", creatures: ["forgeBrute"], size: [1, 2], weight: 2 },
+                    { id: "glutton", creatures: ["chainedGlutton"], size: [1, 1], weight: 1 },
                 ],
                 minis: [
                     { id: "moltenLord", creature: "magmaSlime", title: "Molten lord", weight: 1 },
@@ -415,6 +427,10 @@ export const THEMES = {
                     { id: "hounds", creatures: ["blackShuck"], size: [2, 3], weight: 1 },
                     { id: "embers", creatures: ["magmaSlime", "salamander"], size: [2, 3], weight: 1 },
                     { id: "fiends", creatures: ["fiend"], size: [2, 3], weight: 3 },
+                    // (Its gorgers: creatures.js)
+                    { id: "bloatGorgers", creatures: ["bloatGorger"], size: [2, 3], weight: 2 },
+                    { id: "ravagers", creatures: ["pitRavager"], size: [2, 3], weight: 2 },
+                    { id: "warlord", creatures: ["gorgerWarlord"], size: [1, 1], weight: 1 },
                 ],
                 minis: [
                     { id: "pitPriest", creature: "cultist", title: "Pit priest", weight: 1 },

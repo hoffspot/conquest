@@ -6371,6 +6371,7 @@ export class Host {
             chase: spec.chase,
             power: { melee: power, ranged: power },
             armor: spec.armor ?? 0,
+            wards: spec.wards ?? null,
             // (One holding a place gone into, `wary`: a moment's pause on first seeing someone come
             // in, battle.js WARY_MS; a dungeon's boss or mini-boss, its rank and its id in its theme,
             // `champion` and `regalia`: how it's drawn, beasts/champions.js; an elite, `elite`, seeing
@@ -7949,6 +7950,7 @@ export class Host {
             chase: spec.chase,
             power: { melee: power, ranged: power },
             armor: spec.armor ?? 0,
+            wards: spec.wards ?? null,
             wild: { creature, tier, temper: "aggressive", guard: 0, roam: 0, leash: 0, pack: id, leader: null, menace: false, unique: false, ...traitsOf(creature), companion: risen ? "risen" : "called" },
         });
         this.#event("roused", { ids: [id], creature });
