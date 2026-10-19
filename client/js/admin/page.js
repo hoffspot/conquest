@@ -1282,7 +1282,8 @@ async function worldPlayers(world) {
         }
     };
 
-    const nameOf = (player) => player.name ?? (player.heroes.length ? player.heroes.map((hero) => hero.name).join(", ") : `A player (${player.id})`);
+    // (By the name they go by, if they've shown their own identity; else the hero they're playing, or have)
+    const nameOf = (player) => player.playerName ?? player.name ?? (player.heroes.length ? player.heroes.map((hero) => hero.name).join(", ") : `A player (${player.id})`);
 
     return h(
         "div",
@@ -1303,7 +1304,7 @@ async function worldPlayers(world) {
                               h(
                                   "tr",
                                   { dataset: { player: player.id } },
-                                  h("td", {}, h("strong", {}, nameOf(player)), player.here ? h("span", { class: "good small" }, player.away ? " · in, away" : " · in now") : null, world.heroes === "kept" && player.heroes.length ? h("div", { class: "muted small" }, `Heroes: ${player.heroes.map((hero) => hero.name).join(", ")}`) : null),
+                                  h("td", {}, h("strong", {}, nameOf(player)), player.here ? h("span", { class: "good small" }, player.away ? " · in, away" : " · in now") : null, world.heroes === "kept" && player.heroes.length ? h("div", { class: "muted small" }, `Heroes: ${player.heroes.map((hero) => hero.name).join(", ")}`) : null, player.identity ? h("div", { class: "muted small player-id", title: "Their own player id, the same on every server" }, `Player id ${player.identity}`) : null),
                                   h(
                                       "td",
                                       {},

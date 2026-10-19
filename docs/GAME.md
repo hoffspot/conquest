@@ -4630,6 +4630,16 @@ it.
      kept.
    - **Joining** brings the character played last; **Change who comes** chooses another kept, or
      a new one (with fewer than six).
+   - **You** (app/you.js; docs/SERVER.md, "Players and their codes"), under the title's buttons:
+     the player's own identity, the same on every server, made the first time it's wanted (going
+     by the name of the character played last). **The name you go by**, kept when it's changed;
+     **your player id** (a UUID worked out from the identity's key); **Show my code** (it, its code
+     to scan, **Copy my code**, **Save my code as a file**, with a warning that whoever has it can
+     play as them); and **Use my code from another device**, which asks first, as this device's
+     own identity is replaced, and asks the name they go by (as they do there: a code is the key
+     alone). Kept in `pellagos.player` (`{ version, secret, name, created }`).
+     Loaded only once it's wanted, with the signing it brings (vendored noble-ed25519), so the
+     title doesn't wait for it.
 3. **Making a character** (app/creator.js): the character stands on a plinth, lit from the front
    and edged in blue light from behind, while the panel beside it (below it on an upright phone)
    changes them. The camera frames what each tab changes: the whole body, the face close up, the

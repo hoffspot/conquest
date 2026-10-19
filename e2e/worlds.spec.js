@@ -454,3 +454,75 @@ test("the server's own address shows its worlds on the title: one open to anyone
     expect(access.players().map(({ via }) => via)).toEqual([access.door().id]);
     expect(await page.evaluate((world) => Boolean(JSON.parse(localStorage.getItem("pellagos.servers")).servers[0].worlds[world].ticket), made.world)).toBe(true);
 });
+
+test("You: the player's own name and id, the same on every server; their code carries them to a new device, where the world knows them as the same player, ticket or none", async ({ browser }) => {
+    const first = await browser.newContext();
+    const second = await browser.newContext();
+    const page = await first.newPage();
+    const other = await second.newPage();
+
+    await ready(page, save("Wren", "human", "sword"));
+    await ready(other, save("Bram", "human", "bow"));
+
+    const made = await server.createWorld({ name: "Kinsmoor", seed: 44, race: "human", heroes: "brought", settings: { open: true } });
+    const access = server.access.world(made.world);
+
+    // You: going by the name of the character played last, till it's changed; their id; their code
+    await page.goto(`${base}/`);
+    await page.locator("#youbutton").click();
+
+    const you = page.locator("#you");
+
+    await expect(you.locator("#youname")).toHaveValue("Wren");
+    await expect(you.locator("#youid")).toHaveText(/^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    await you.locator("#youname").fill("Wren the Bold");
+    await you.getByRole("button", { name: "Keep this name" }).click();
+    await expect(you.locator("#youstatus")).toContainText("Kept");
+    await you.getByRole("button", { name: "Show my code" }).click();
+    await expect(you.locator("#youcodetext")).toHaveText(/^([0-9A-Z]{6}-){8}[0-9A-Z]{6}$/);
+    await expect(you.locator("#youqr")).toHaveAttribute("src", /^data:image\//);
+
+    const id = await you.locator("#youid").textContent();
+    const code = await you.locator("#youcodetext").textContent();
+
+    await you.getByRole("button", { name: "Back" }).click();
+
+    // In the open world: known by it, by the name they go by
+    const door = (on) => on.locator(`#titleserver li[data-world="${made.world}"]`);
+
+    await door(page).getByRole("button").click();
+    await expect(page.locator("#worldasktitle")).toHaveText("Who visits Kinsmoor?", { timeout: 60000 });
+
+    const known = access.playerByIdentity(id);
+
+    expect([known?.playerName, access.players().length]).toEqual(["Wren the Bold", 1]);
+
+    // A new device, with no ticket: their code used there, asked first
+    await other.goto(`${base}/`);
+    await other.locator("#youbutton").click();
+    await expect(other.locator("#youname")).toHaveValue("Bram");
+    expect(await other.locator("#youid").textContent()).not.toBe(id);
+    await other.getByRole("button", { name: "Use my code from another device" }).click();
+
+    const ask = other.locator("#worldask");
+
+    await ask.locator("#worldaskplayercode").fill("not a code");
+    await ask.getByRole("button", { name: "Use this code" }).click();
+    await expect(ask.locator("#worldaskstatus")).toContainText("isn't a player code");
+    await expect(ask.locator("#worldaskplayername")).toHaveValue("Bram");
+    await ask.locator("#worldaskplayercode").fill(code.toLowerCase());
+    await ask.locator("#worldaskplayername").fill("Wren the Bold");
+    await ask.getByRole("button", { name: "Use this code" }).click();
+    await expect(other.locator("#youid")).toHaveText(id);
+    await expect(other.locator("#youstatus")).toHaveText("You're Wren the Bold here now too.");
+    await other.locator("#you").getByRole("button", { name: "Back" }).click();
+
+    // Into the same world from there: the same player, no ticket needed
+    await door(other).getByRole("button").click();
+    await expect(other.locator("#worldasktitle")).toHaveText("Who visits Kinsmoor?", { timeout: 60000 });
+    expect(access.players().map((player) => player.id)).toEqual([known.id]);
+    expect(access.playerByIdentity(id).playerName).toBe("Wren the Bold");
+
+    await first.close();
+    await second.close();
+});

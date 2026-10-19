@@ -64,7 +64,33 @@ A world has at most 10 keys that work at once. A key can be revoked, and everyon
 it is sent out. Instead of a long key, a **short code** (8 letters and digits, for saying aloud or
 typing on a phone) works once. Whoever comes in is given a **ticket**, kept by their game, so they come back
 without the key. A lost ticket is given again from the world's Players tab; the old one stops
-working. A player can be banned (by their ticket, and their address for 24 hours) and let back.
+working. A player can be banned (by their ticket and their identity, and their address for 24
+hours) and let back.
+
+**Players and their codes** (client/js/core/player.js, client/js/app/you.js). Each player has an
+identity of their own, the same on every server, kept on their device: a secret key the game makes
+for them (Ed25519), and their **player id**, worked out from its public half: a UUID (version 8:
+the first 16 bytes of the key's SHA-256), lowercase, the same every time, for a database to keep as
+its own `uuid` type and index. They go by a name they choose (2 to 24 letters, digits and spaces).
+Coming into a world (`POST /enter`, a short code redeemed), the game shows `player`: their public
+key, their name, the moment, and a signature over the server's own id, the moment and the name
+(`pellagos.player.1`). The server takes it only if the signature holds, for its own id, within 10
+minutes of its clock, and never shown before (each is remembered while it's fresh); else they come
+in by their key and ticket alone, as before identities. Taken, the world's player is known by it
+from then on (`access.json`: `identity`, `playerName`):
+
+- **Coming back with it** (on another device, with their code), they're the same player, with
+  their heroes, ticket or none, as long as a key they came by works (as a ticket alone is).
+- **A ticket from before identities** is linked to theirs the first time they show both.
+- **A ticket and another identity** (they lost their code, and the owner gave them a new ticket):
+  known by the new one from then on.
+- **In another world** they're a player of that world's, known by the same identity.
+- The Players tab names them by the name they go by, and shows their player id.
+
+Their **code** is their secret key written out (nine groups of six letters and digits, the last
+two catching a mistyped one), to carry them to another device: the game's **You** panel shows it,
+copies it, saves it as a file, or shows it as a code to scan, and takes one from another device.
+Anyone with it can play as them, so it's theirs alone to keep.
 
 **What a world does with its players' characters** (`storage/worlds.js` `CHARACTER_RULES`: its
 `characters`, kept as the heroes mode and first-hero rule each stands for, `RULE_MODES`). The game

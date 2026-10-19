@@ -340,8 +340,12 @@ export class KnownServers {
  * pinned (a fresh invite link is the only way a pin's moved). `fetch`, `timing` are for the tests.
  */
 export class ServerClient {
-    constructor(record, { servers = null, expect = null, fetch = globalThis.fetch?.bind(globalThis), timing = LINK_TIMING, secure = globalThis.location?.protocol === "https:" } = {}) {
-        Object.assign(this, { record, servers, expect, fetch, timing, secure });
+    /**
+     * `player`, if given: the player's own identity's proof for a server, by its id (server id =>
+     * core/player.js proofOf's), shown each time it comes into one of its worlds.
+     */
+    constructor(record, { servers = null, expect = null, fetch = globalThis.fetch?.bind(globalThis), timing = LINK_TIMING, secure = globalThis.location?.protocol === "https:", player = null } = {}) {
+        Object.assign(this, { record, servers, expect, fetch, timing, secure, player });
 
         /** The id it's proved this time (null until it has). */
         this.proven = null;
@@ -614,7 +618,7 @@ export class ServerClient {
     async enter({ world, key = this.record.worlds?.[world]?.key ?? null, ticket = this.record.worlds?.[world]?.ticket ?? null }) {
         await this.prove();
 
-        return this.#entered(world, await this.#call("POST", "/enter", { body: { world, ...(key ? { key } : {}), ...(ticket ? { ticket } : {}), net: NET_VERSION } }), key, ticket);
+        return this.#entered(world, await this.#call("POST", "/enter", { body: { world, ...(key ? { key } : {}), ...(ticket ? { ticket } : {}), ...this.#shown(), net: NET_VERSION } }), key, ticket);
     }
 
     /**
@@ -627,10 +631,15 @@ export class ServerClient {
     }
 
     /** A short code traded for its world and key, then into it, as enter(). Proves the server first. */
+    // The player's own identity's proof, for the server it's proved (made fresh each time: a server takes each once)
+    #shown() {
+        return this.player && this.proven ? { player: this.player(this.proven) } : {};
+    }
+
     async redeem(code) {
         await this.prove();
 
-        const answer = await this.#call("POST", "/codes/redeem", { body: { code: String(code).toUpperCase().replace(/[^0-9A-Z]/g, ""), net: NET_VERSION } });
+        const answer = await this.#call("POST", "/codes/redeem", { body: { code: String(code).toUpperCase().replace(/[^0-9A-Z]/g, ""), ...this.#shown(), net: NET_VERSION } });
 
         return this.#entered(answer.world, answer, answer.key);
     }

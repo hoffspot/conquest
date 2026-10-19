@@ -5968,7 +5968,8 @@ dialog.worlds {
 
 dialog.worlds input.text,
 dialog.worlds select,
-dialog.worlds textarea {
+dialog.worlds textarea,
+dialog.you input.text {
     width: 100%;
     box-sizing: border-box;
     font: inherit;
@@ -6193,6 +6194,28 @@ dialog.characters {
 .character-list .export:hover {
     background: rgba(255, 244, 220, 0.12);
     border-color: rgba(220, 180, 106, 0.5);
+}
+
+/* You (app/you.js): your own id and your code, in characters that read plainly, and its QR code */
+dialog.you .you-id,
+dialog.you .you-code-text {
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    overflow-wrap: anywhere;
+}
+
+dialog.you .you-code-text {
+    color: var(--gold-bright);
+    font-size: 15px;
+    letter-spacing: 0.04em;
+    margin: 8px 0;
+}
+
+dialog.you .you-qr {
+    display: block;
+    width: min(220px, 70%);
+    margin: 8px auto;
+    image-rendering: pixelated;
+    background: #fff;
 }
 
 /* Who was brought in from a file, and what of them was changed or left out */

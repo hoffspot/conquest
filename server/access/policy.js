@@ -52,11 +52,14 @@ export class KeyPolicy {
     }
 
     /**
-     * Who is asking (`request`: { world, key, ticket, session, address, from }): from a session if
-     * they have one that's going, else from the key and ticket they showed. Returns { principal,
-     * proofs } (proofs: what they showed that proved something).
+     * Who is asking (`request`: { world, key, ticket, session, address, from, identity }): from a
+     * session if they have one that's going, else from the key, ticket and identity they showed
+     * (`identity`: { id, name }, their own, proved already: api.js; known in the world, it says
+     * who they are as a ticket does, and before one). Returns { principal, proofs } (proofs: what
+     * they showed that proved something). A player principal coming into a world carries the
+     * identity they showed, to be known by it (index.js enter).
      */
-    identify({ world = null, key = null, ticket = null, session = null, address = null, from = "internet" } = {}) {
+    identify({ world = null, key = null, ticket = null, session = null, address = null, from = "internet", identity = null } = {}) {
         const where = { address, from };
 
         if (session) {
@@ -85,7 +88,7 @@ export class KeyPolicy {
 
         // (The admin key proves nothing from the internet: there it's never taken, plan §7.3)
         if (key && secrets.isAdmin(key)) {
-            return from === "internet" ? { principal: { kind: "refused", why: "home", ...where }, proofs: [] } : this.#admin(world, ticket, where);
+            return from === "internet" ? { principal: { kind: "refused", why: "home", ...where }, proofs: [] } : this.#admin(world, ticket, where, identity);
         }
 
         const creator = key ? secrets.creatorOf(key) : null;
@@ -106,8 +109,12 @@ export class KeyPolicy {
 
         const now = new Date(this.access.clock());
         const shown = key ? access.keyOf(key) : null;
-        const player = ticket ? access.playerByTicket(ticket) : null;
-        const proofs = [...(shown ? ["key"] : []), ...(player ? ["ticket"] : [])];
+        // (Known by their identity, they're that player whatever ticket they've brought)
+        const known = identity ? access.playerByIdentity(identity.id) : null;
+        const byTicket = ticket ? access.playerByTicket(ticket) : null;
+        const player = known ?? byTicket;
+        const proofs = [...(shown ? ["key"] : []), ...(byTicket ? ["ticket"] : []), ...(known ? ["identity"] : [])];
+        const as = identity ? { identity } : {};
 
         if (player?.role === "banned" || access.addressBanned(address, now)) {
             return { principal: { kind: "refused", why: "banned", ...where }, proofs };
@@ -122,14 +129,14 @@ export class KeyPolicy {
         }
 
         if (opens) {
-            return { principal: { kind: "player", world, player, key: shown, role: player ? higherRole(player.role, shown.role) : shown.role, via: shown.id, ...where }, proofs };
+            return { principal: { kind: "player", world, player, key: shown, role: player ? higherRole(player.role, shown.role) : shown.role, via: shown.id, ...as, ...where }, proofs };
         }
 
         // A ticket alone: while the key they last came by still works (or they're the admin's)
         const via = player && (player.via === VIA_ADMIN ? true : access.key(player.via));
 
         if (player && (via === true || (via && WorldAccess.works(via, now)))) {
-            return { principal: { kind: "player", world, player, key: null, role: player.role, via: player.via, ...where }, proofs };
+            return { principal: { kind: "player", world, player, key: null, role: player.role, via: player.via, ...as, ...where }, proofs };
         }
 
         // An open world: anyone without a key that works comes in by its door (a key of its own,
@@ -144,14 +151,14 @@ export class KeyPolicy {
                 return { principal: { kind: "refused", why: "busy", ...where }, proofs };
             }
 
-            return { principal: { kind: "player", world, player, key: door, role: door.role, via: door.id, ...where }, proofs: [...proofs, "open"] };
+            return { principal: { kind: "player", world, player, key: door, role: door.role, via: door.id, ...as, ...where }, proofs: [...proofs, "open"] };
         }
 
         return { principal: { kind: "refused", why: "key", ...where }, proofs };
     }
 
     // The admin's key: the server's, and in a world they come into, its owner
-    #admin(world, ticket, where) {
+    #admin(world, ticket, where, identity = null) {
         if (!world) {
             return { principal: { kind: "admin", ...where }, proofs: ["key"] };
         }
@@ -162,9 +169,10 @@ export class KeyPolicy {
             return { principal: { kind: "refused", why: "no-world", ...where }, proofs: ["key"] };
         }
 
-        const player = ticket ? access.playerByTicket(ticket) : null;
+        const known = identity ? access.playerByIdentity(identity.id) : null;
+        const byTicket = ticket ? access.playerByTicket(ticket) : null;
 
-        return { principal: { kind: "player", world, player, key: null, role: "owner", via: VIA_ADMIN, admin: true, ...where }, proofs: ["key", ...(player ? ["ticket"] : [])] };
+        return { principal: { kind: "player", world, player: known ?? byTicket, key: null, role: "owner", via: VIA_ADMIN, admin: true, ...(identity ? { identity } : {}), ...where }, proofs: ["key", ...(byTicket ? ["ticket"] : []), ...(known ? ["identity"] : [])] };
     }
 
     /**

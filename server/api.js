@@ -9,9 +9,11 @@
 //   POST   /reachability {results}          what a game found reaching it from elsewhere ("Test this
 //                                           server"): kept for the management page (manage.js report)
 //   GET    /health                          "ok", or "slow" if any world's steps are
-//   POST   /enter {world, key?, ticket?}    into a world: { session, ticket?, role, world, card (as
-//                                           /status lists it), player, heroes, life, position }; an
-//                                           open world's with no key at all (by its door: access/world.js)
+//   POST   /enter {world, key?, ticket?,    into a world: { session, ticket?, role, world, card (as
+//          player?}                         /status lists it), player, identity, heroes, life,
+//                                           position }; an open world's with no key at all (by its
+//                                           door: access/world.js); `player`, their own identity's
+//                                           proof (client/js/core/player.js), known by it from then on
 //   POST   /codes/redeem {code}             a short code traded for { world, key }, then as /enter
 //   GET    /worlds                          listed worlds, and the caller's own (a session or the admin key)
 //   POST   /worlds {name, seed?, race...}   a world made (a creator key or the admin key): { world, ownerKey, playerKey }
@@ -75,6 +77,7 @@
 
 import { randomInt } from "node:crypto";
 import { NET_VERSION } from "../client/js/core/netplay.js";
+import { playerOfProof, PROOF_MINUTES } from "../client/js/core/player.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
 import { plainAddress } from "./access/addresses.js";
 import { Rate } from "./access/limits.js";
@@ -110,7 +113,8 @@ const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 4
 
 const refuse = (why, extra = {}) => new Refusal(STATUS[why] ?? 403, why, REFUSED[why] ?? extra.message ?? "That can't be done.", extra);
 
-// Who's asking, from the request's headers (and a key in its body, if there's one)
+// Who's asking, from the request's headers (and a key in its body, if there's one; and their own
+// identity's proof, if they've shown it: client/js/core/player.js proofOf)
 function credentials(request, body = {}) {
     const [scheme, value] = String(request.headers.authorization ?? "").split(" ");
 
@@ -118,6 +122,7 @@ function credentials(request, body = {}) {
         session: scheme === "Bearer" ? value : null,
         key: scheme === "Key" ? value : typeof body.key === "string" ? body.key : null,
         ticket: typeof body.ticket === "string" ? body.ticket : null,
+        proof: body.player !== null && typeof body.player === "object" && !Array.isArray(body.player) ? body.player : null,
     };
 }
 
@@ -132,6 +137,30 @@ export function apiHandler(server, { mac = false } = {}) {
     const { policy } = access;
     const status = new Rate(STATUS_PER_MINUTE);
     const reports = new Rate(REPORTS_PER_MINUTE);
+
+    // A player's own identity, from the proof they showed coming into a world ({ id, name }:
+    // client/js/core/player.js playerOfProof), if it proves it: signed for this server, fresh, and
+    // never shown before (each signature's remembered while it's fresh, so it's good once); else
+    // null, and they come in by their key and ticket alone, as before identities
+    const shownProofs = new Map();
+    const identityOf = (proof) => {
+        const now = access.clock();
+        const who = proof ? playerOfProof(proof, { server: server.identity.id, now }) : null;
+
+        for (const [signature, until] of shownProofs) {
+            if (until < now) {
+                shownProofs.delete(signature);
+            }
+        }
+
+        if (!who || shownProofs.has(proof.signature)) {
+            return null;
+        }
+
+        shownProofs.set(proof.signature, now + 2 * PROOF_MINUTES * 60000);
+
+        return { id: who.id, name: who.name };
+    };
 
     // Who's asking (a principal: access/policy.js), from what they showed, or the admin on the computer itself
     const principalOf = (request, { world = null, body = {} } = {}) => {
@@ -300,14 +329,14 @@ export function apiHandler(server, { mac = false } = {}) {
                 throw refuse("no-world");
             }
 
-            const { key, ticket, session } = credentials(request, body);
+            const { key, ticket, session, proof } = credentials(request, body);
 
             // (Into an open world without a key: by its door, made the first time)
             if (!key && !session && server.metaOf(world).settings.open) {
                 await access.openDoor(world, { by: "the world's being open" });
             }
 
-            const { principal } = policy.identify({ world, key, ticket, session, address: request.address, from: request.from });
+            const { principal } = policy.identify({ world, key, ticket, session, address: request.address, from: request.from, identity: identityOf(proof) });
 
             return enter(principal, world, body);
         }],
@@ -318,7 +347,7 @@ export function apiHandler(server, { mac = false } = {}) {
                 throw redeemed.reason === "wait" ? refuse("wait", { wait: Math.ceil(redeemed.wait / 1000) }) : refuse("code", { message: "That code doesn't open anything here (or no longer does)." });
             }
 
-            const { principal } = policy.identify({ world: redeemed.world, key: redeemed.key, ticket: typeof body.ticket === "string" ? body.ticket : null, address: request.address, from: request.from });
+            const { principal } = policy.identify({ world: redeemed.world, key: redeemed.key, ticket: typeof body.ticket === "string" ? body.ticket : null, address: request.address, from: request.from, identity: identityOf(credentials(request, body).proof) });
 
             return { key: redeemed.key, ...(await enter(principal, redeemed.world, body)) };
         }],

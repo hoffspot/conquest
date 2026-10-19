@@ -14,6 +14,7 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { isGuid } from "../client/js/core/guid.js";
 import { NET_VERSION } from "../client/js/core/netplay.js";
+import { newPlayerSecret, playerIdOf, proofOf, publicKeyOf } from "../client/js/core/player.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { verifyIdentity } from "../server/access/identity.js";
 import { newToken } from "../server/access/tokens.js";
@@ -344,6 +345,59 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         game.close();
         await until(() => server.registry.lifeOf(made.world).life === "stored", "set aside");
         assert.deepEqual((await visitors.get(player, guid)).talks.knowledge, ["the ford"], "and theirs untouched");
+    });
+
+    it("knows a player by their own identity in every world: proved each time, each proof good once and for this server alone; a ticket from before linked to it; their name kept; banned, by it too", async () => {
+        const made = (await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Kinsmoor", race: "human", seed: 3 } })).json;
+        const other = (await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Farrow", race: "human", seed: 4 } })).json;
+        const secret = newPlayerSecret();
+        const id = playerIdOf(publicKeyOf(secret));
+        const shown = (name = "Wren") => proofOf(secret, { server: server.identity.id, name });
+        const enter = (world, body) => server.call("POST", "/enter", { body: { world, net: NET_VERSION, ...body } });
+
+        // A ticket from before identities: linked to theirs the first time they show it with it
+        const before = await enter(made.world, { key: made.playerKey });
+
+        assert.equal(before.json.identity, null);
+
+        const linked = await enter(made.world, { key: made.playerKey, ticket: before.json.ticket, player: shown() });
+
+        assert.deepEqual([linked.json.player, linked.json.identity, linked.json.ticket], [before.json.player, id, null]);
+
+        // Their identity alone (their code on another device): the same player, no ticket, their new name kept
+        const again = await enter(made.world, { key: made.playerKey, player: shown("Wren the Bold") });
+
+        assert.deepEqual([again.json.player, again.json.ticket], [before.json.player, null]);
+
+        const owner = await enter(made.world, { key: made.ownerKey });
+        const players = (await server.call("GET", `/worlds/${made.world}/players`, { auth: `Bearer ${owner.json.session}` })).json.players;
+        const listed = players.find((one) => one.id === before.json.player);
+
+        assert.deepEqual([listed.identity, listed.playerName], [id, "Wren the Bold"]);
+
+        // In another world: a player of that world's, known by the same identity
+        const there = await enter(other.world, { key: other.playerKey, player: shown() });
+
+        assert.notEqual(there.json.player, before.json.player);
+        assert.equal(there.json.identity, id);
+
+        // A proof shown twice isn't taken the second time (in by the key alone, someone new); nor
+        // one made for another server
+        const proof = shown();
+
+        assert.equal((await enter(made.world, { key: made.playerKey, player: proof })).json.player, before.json.player);
+
+        const replayed = await enter(made.world, { key: made.playerKey, player: proof });
+
+        assert.equal(replayed.json.identity, null);
+        assert.notEqual(replayed.json.player, before.json.player);
+        assert.equal((await enter(made.world, { key: made.playerKey, player: proofOf(secret, { server: "ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ-ZZZZZ", name: "Wren" }) })).json.identity, null);
+
+        // Banned: by their identity too, from anywhere, with no ticket
+        assert.equal((await server.call("POST", `/worlds/${made.world}/players/${before.json.player}/ban`, { auth: `Bearer ${owner.json.session}` })).status, 200);
+        assert.equal(server.access.policy.identify({ world: made.world, key: made.playerKey, identity: { id, name: "Wren" }, address: "203.0.113.9", from: "internet" }).principal.why, "banned");
+        assert.equal(server.access.policy.identify({ world: made.world, key: made.playerKey, identity: { id: playerIdOf(publicKeyOf(newPlayerSecret())), name: "Bram" }, address: "203.0.113.9", from: "internet" }).principal.kind, "player", "another identity isn't");
+        assert.equal((await server.call("POST", `/worlds/${made.world}/players/${before.json.player}/unban`, { auth: `Bearer ${owner.json.session}` })).status, 200);
     });
 
     it("takes a world offline for upkeep: everyone sent out, nobody let in, its owners neither, its character rule changed only then (or set aside); and back online", async () => {
