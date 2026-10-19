@@ -59,7 +59,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/pacing.js", 1893],
             ["js/app/pack.js", 61771],
             ["js/app/partypanel.js", 20779],
-            ["js/app/peer.js", 32464],
+            ["js/app/peer.js", 32918],
             ["js/app/predict.js", 9692],
             ["js/app/quickbar.js", 15284],
             ["js/app/readying.js", 4809],
