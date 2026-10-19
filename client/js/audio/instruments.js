@@ -1,10 +1,12 @@
 // The music's instruments: recordings of real ones, from the Versilian Community Sample Library
-// (CC0) by Versilian Studios, and a classical guitar from FreePats (CC0).
+// (CC0) by Versilian Studios and their VS Chamber Orchestra: Community Edition (CC0), and a
+// classical guitar from FreePats (CC0).
 // scripts/build-music.js makes them into short MP3s (client/music), listed in samples.js: an
 // alto recorder, an ocarina (a small, round clay flute), a folk harp, a strumstick (a small
 // plucked folk instrument, standing in for a lute in the town's music), a harpsichord, a
-// Renaissance chamber organ, hand chimes, a frame drum and a tambourine; and, for the tavern's
-// lute, the guitar, its nylon strings the nearest to a lute's gut.
+// Renaissance chamber organ, hand chimes, a frame drum and a tambourine; for the tavern's lute,
+// the guitar, its nylon strings the nearest to a lute's gut; and for a fight, French horns, a
+// section of cellos, timpani, a bass drum and a rope-tensioned field drum.
 //
 // Each pitched instrument was recorded at a few notes, a few semitones apart: a note plays the
 // nearest, a little faster or slower. Blown instruments (and the organ) sound for as long as a
@@ -29,6 +31,12 @@ export const INSTRUMENTS = Object.freeze({
     drum: { name: "Frame drum", kinds: ["low", "high"], mix: 0.42, pan: 0 },
     tambourine: { name: "Tambourine", kinds: ["hit"], mix: 0.18, pan: 0.25 },
     guitar: { name: "Classical guitar (a lute)", ring: 0.35, mix: 0.45, pan: -0.1 },
+    // (A fight's: battle.js)
+    horn: { name: "French horns", held: true, release: 0.35, mix: 0.42, pan: -0.2 },
+    cello: { name: "Cellos (spiccato)", ring: 0.25, mix: 0.36, pan: 0.2 },
+    timpani: { name: "Timpani", ring: 1, mix: 0.42, pan: 0 },
+    bassdrum: { name: "Bass drum", kinds: ["hit"], mix: 0.42, pan: 0 },
+    snare: { name: "Field drum (rope-tensioned)", kinds: ["hit"], mix: 0.22, pan: 0.1 },
 });
 
 /** The notes an instrument was recorded at (MIDI), low to high. */

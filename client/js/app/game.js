@@ -145,6 +145,7 @@ import { PHASE, telemetry } from "./telemetry.js";
 import { Throng } from "./throng.js";
 import { Pacing } from "./pacing.js";
 import { PREDICT, Prediction } from "./predict.js";
+import { FIGHT_LINGERS, inFight } from "./fight.js";
 import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
 import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
@@ -2250,6 +2251,7 @@ export class Game {
         this.sound?.setAmbient(false);
         this.sound?.setAmbience({});
         this.sound?.setPlace("town");
+        this.sound?.setBattle(false);
         this.sound?.setHearth(null);
         this.hud.clear();
         this.hud.onMessage = () => {};
@@ -3028,6 +3030,14 @@ export class Game {
         this.sound?.setListener(me.object.position.x, me.object.position.z);
         this.#hearAround(dt);
         this.sound?.update(dt);
+
+        // (In a fight, or lately: a fight's music; FIGHT_LINGERS after its last moment, what's
+        // heard here again: fight.js)
+        if (inFight(battle.actor(this.me), battle.actors, (a, b) => battle.hostile(a, b), battle.time - (this.lastAttack.get(this.me) ?? -Infinity))) {
+            this.foughtAt = battle.time;
+        }
+
+        this.sound?.setBattle(battle.time - (this.foughtAt ?? -Infinity) < FIGHT_LINGERS);
 
         // (The criers near calling out, as often as what's heard is worked out)
         this.crying = (this.crying ?? 0) - dt;

@@ -593,7 +593,7 @@ npm run build:manifest  # after changing what the game downloads: lists it for t
 npm run vendor:three    # after changing the three version in package.json: copies it to client/vendor
 npm run build:characters -- --mpfb2=../mpfb2  # rebuilds client/characters from MakeHuman's MPFB2
 npm run build:vitruvian -- --from=../charmorph-vitruvian  # then the game's body, from CharMorph's Vitruvian
-npm run build:music     # remakes client/music, the music's instrument recordings, from the VCSL
+npm run build:music     # remakes client/music, the music's instrument recordings, from the VCSL and VSCO 2 CE
 npm run build:sounds    # remakes client/sounds, the recorded sounds, from their CC0 recordings (scripts/sounds)
 npm run build:textures  # remakes client/textures/dungeons, the dungeons' photographs, from CC0 scans
 npm run build:props     # remakes client/models/dungeons, the dungeons' furniture and dressing, from CC0 and CC BY models
@@ -654,7 +654,8 @@ client/                 The game (static files served to the browser)
                         are its own now), kept for serving glTF
   fonts/                UnifrakturMaguntia, the blackletter of the tavern's signs (SIL OFL)
   music/                The music's instruments: short recordings of real ones, as MP3s (made by
-                        npm run build:music from the Versilian Community Sample Library, CC0)
+                        npm run build:music from the Versilian Community Sample Library and
+                        VS Chamber Orchestra: Community Edition, CC0)
   sounds/               Recorded sounds, as MP3s: footsteps on each footing, the weapons', armour's
                         and bodies', the spells', the creatures', the ambience's beds and calls,
                         the player's things in hand, the interface and the cues
@@ -1026,7 +1027,9 @@ what it doesn't cover.
   Rubashkin (<https://github.com/JonRubashkin/Castle-Builder>).
 - Music's instruments: recordings from the Versilian Community Sample Library by Versilian
   Studios (<https://github.com/sgossner/VCSL>), CC0, trimmed and made into MP3s by
-  `scripts/build-music.js` (with its SFZ files from <https://github.com/smpldsnds/sgossner-vcsl>).
+  `scripts/build-music.js` (with its SFZ files from <https://github.com/smpldsnds/sgossner-vcsl>);
+  a fight's French horns and cellos from their VS Chamber Orchestra: Community Edition
+  (<https://github.com/sgossner/VSCO-2-CE>), CC0.
   The tavern's lute is FreePats' Spanish classical guitar
   (<https://github.com/freepats/spanish-classical-guitar>), CC0.
 - Footsteps: recordings by Nox_Sound on Freesound (<https://freesound.org/people/Nox_Sound/>),

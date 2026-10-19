@@ -4290,22 +4290,49 @@ The drums play a jig's beat (the frame drum low on each beat and high on its las
 tambourine on the off-beats), and each beat's first quaver is leant on. It's about as loud as the
 town's score.
 
+**A fight's music** (`battle.js`) is martial and driving, but played by the town's band with what
+an army brings, from the VCSL and from Versilian Studios' VS Chamber Orchestra: Community Edition
+(VSCO 2 CE, CC0), all of it played softly, so none of it's harsh:
+
+| Instrument | Plays | Recording |
+| --- | --- | --- |
+| French horns | the theme, the calls, chords under the second tune | VSCO 2 CE's F horn, sustained, medium |
+| Cellos | a galloping figure under everything, in quick quavers | VSCO 2 CE's cello section, spiccato |
+| Timpani | each chord's root on the beat, a flourish every eighth bar | VCSL's Timpani 2, tuned to each note |
+| Bass drum, field drum | the march (the bass drum on the strong beats, the field drum softly on the others, its quavers leading into each eight bars) | VCSL's Bass Drum 1; its rope-tensioned snare drum, struck softly on its head, the snares on |
+| The town's band | the theme up high (recorder and ocarina), the second tune (recorder), harp, strumstick, organ, chimes, frame drum, tambourine | as the town's |
+
+D minor (D Aeolian, its A chords major so they lead home), 4/4 at 132 beats a minute, 46 bars,
+about a minute and a half: the cellos galloping alone (2 bars), the horns' theme over them (8:
+the tonic struck twice and a leap to the fifth, answered, climbing to F and back to A), the theme
+two octaves up on recorder and ocarina over the horns (8), a second tune towards F major on the
+recorder (8), the drums alone under the horns' calls (8), everyone (8), and the turn (4), ending
+on A, to lead back into the cellos' D minor: its notes run right up to the loop, so there's no
+gap there.
+
 **Where it's heard** (`setPlace`, told by the game whenever the player's map changes): each score
 has its own track (its instruments' channels, into its own level and low-pass filter). Going into
 the tavern, the town's music fades out over 1.5 seconds as the tavern's fades in, from its start;
 coming back out, the town's comes back where it left off. Upstairs, the tavern's music is heard
 through the floor: at 40% of its level (about 8 dB down) and muffled (low-passed at 650 Hz),
-changing over 0.8 s on the stairs.
+changing over 0.8 s on the stairs. In a fight (`setBattle`, told by the game every frame:
+`app/fight.js`), its music fades in over 1.2 seconds over whatever's heard, from its start (the
+cellos), wherever the player is but a hell's realms, as loud and clear indoors as out. The player's
+in one while anything alive and hostile to them is after them or striking them, or they're
+striking at something hostile (or swung at what they're set on in the last 2.5 seconds); it's
+done 2.5 seconds after the last moment of that, and what was heard fades back over 1.5 seconds,
+where it left off: about four seconds after the fight's over, it's back.
 
 `npm run build:music` (`scripts/build-music.js`) makes the recordings: for each instrument, it
-reads the library's SFZ file (which recording is which note), picks recordings every 4 semitones
+reads the library's SFZ file (which recording is which note; VSCO 2 CE has none, its files named
+for their notes, an octave under the usual names), picks recordings every 4 semitones
 or so across the notes the music plays, and downloads them (kept in `.cache`; the guitar's are
 FLAC, decoded with `@wasm-audio-decoders/flac`). Each is mixed to
 mono, started where its note starts (never a "release" recording, the sound after a note
 ends, which some instruments also have), fine-tuned (by the SFZ's tuning),
 resampled to 32 kHz, cut to as long as the score needs (0.6 to 2.6 seconds), faded out, made
 about as loud as the others (by its loudest 50 ms in its first 0.6 seconds) and saved as an
-80 kb/s MP3 named for what's in it: 56 recordings, about 1.1 megabytes in all, listed in
+80 kb/s MP3 named for what's in it: 76 recordings, about 1.4 megabytes in all, listed in
 `samples.js`. (MP3 adds about 35 ms of silence at the start of each, the same for every one, so
 the music is in time with itself.)
 

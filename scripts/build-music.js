@@ -1,14 +1,17 @@
 // Makes the music's instrument samples (client/music, listed in client/js/audio/samples.js) from
 // recordings of real instruments, all CC0 (public domain): the Versilian Community Sample
-// Library (VCSL) by Versilian Studios, https://github.com/sgossner/VCSL, and, for the tavern's
-// lute, FreePats' Spanish classical guitar, https://github.com/freepats/spanish-classical-guitar
+// Library (VCSL) by Versilian Studios, https://github.com/sgossner/VCSL; for a fight's horns and
+// cellos, their VS Chamber Orchestra: Community Edition (VSCO 2 CE),
+// https://github.com/sgossner/VSCO-2-CE; and, for the tavern's lute, FreePats' Spanish classical
+// guitar, https://github.com/freepats/spanish-classical-guitar
 //
 //   npm run build:music
 //
-// For each instrument the music plays (score.js, and the tavern's, tavern.js), it reads the
-// library's SFZ file (which says which recording is which note), picks a recording every few
-// semitones across the notes the music uses (instruments.js plays the nearest, a little faster or
-// slower), and downloads it (kept in .cache). Each is made mono, tuned (by the SFZ's fine
+// For each instrument the music plays (every score: scores.js), it reads the library's SFZ file
+// (which says which recording is which note; VSCO 2 CE has none, its files named for their notes
+// instead), picks a recording every few semitones across the notes the music uses
+// (instruments.js plays the nearest, a little faster or slower), and downloads it (kept in
+// .cache). Each is made mono, tuned (by the SFZ's fine
 // tuning), resampled to 32 kHz, cut to as long as the music needs, faded out, made about as loud
 // as the others, and saved as an MP3 named for what's in it (so browsers and the service worker
 // can keep them for good).
@@ -18,14 +21,15 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { Mp3Encoder } from "@breezystack/lamejs";
 import { FLACDecoder } from "@wasm-audio-decoders/flac";
-import { SCORE } from "../client/js/audio/score.js";
-import { TAVERN } from "../client/js/audio/tavern.js";
+import { SCORES } from "../client/js/audio/scores.js";
 
 // The recordings, and the SFZ files (VCSL's made for it, kept with a copy of it; FreePats' with
 // its recordings), and where they're kept once downloaded
 const LIBRARY = "https://raw.githubusercontent.com/sgossner/VCSL/master/";
 const SFZ_LIBRARY = "https://raw.githubusercontent.com/smpldsnds/sgossner-vcsl/main/";
 const CACHE = new URL("../.cache/vcsl/", import.meta.url);
+const VSCO = "https://raw.githubusercontent.com/sgossner/VSCO-2-CE/master/";
+const VSCO_CACHE = new URL("../.cache/vsco/", import.meta.url);
 const FREEPATS = "https://raw.githubusercontent.com/freepats/spanish-classical-guitar/main/";
 const FREEPATS_CACHE = new URL("../.cache/freepats/", import.meta.url);
 const OUT = new URL("../client/music/", import.meta.url);
@@ -54,6 +58,7 @@ const ONSET = 0.03;
  * (seconds: long enough for the music's longest note and its release), and which recordings to
  * use where the library has more than one for a note (`pick`: a pattern in the file's name, such
  * as a velocity layer). Unpitched ones (drums) name a recording for each kind of hit instead.
+ * VSCO 2 CE's (`vsco`: a folder) name the notes they were recorded at, and their file for each.
  */
 const SOURCES = {
     recorder: { sfz: "Aerophones/Edge-blown Aerophones/Baroque Alto Recorder - Sustain", seconds: 2.4 },
@@ -66,10 +71,25 @@ const SOURCES = {
     drum: { sfz: "Membranophones/Struck Membranophones/Frame Drum", seconds: 0.8, kinds: { low: /HDrumL_Hit_v3_rr1/, high: /HDrumS_Hit_v2_rr1/ } },
     tambourine: { sfz: "Idiophones/Struck Idiophones/Tambourine 1", seconds: 0.6, kinds: { hit: /Tamb1_Hit_v1_rr1/ } },
     guitar: { sfz: "SpanishClassicalGuitar-20190618", freepats: true, seconds: 1.8 },
+    // (A fight's: battle.js. The horns held and soft, the cellos' quick bowed notes, the timpani
+    // tuned to each note, a bass drum and a rope-tensioned field drum's head, its snares on,
+    // struck softly)
+    horn: { vsco: "Brass/F Horn/sus", notes: ["C1", "D#1", "G1", "A#1", "D2", "F2", "A2", "C3"], file: (note) => `MOHorn_sus_${note}_v2_1.wav`, seconds: 2.4 },
+    cello: { vsco: "Strings/Cello Section/spic", notes: ["C1", "E1", "G1", "B1", "D2", "F2", "A2", "C3", "E3"], file: (note) => `spic_${note}_v2_RR1.wav`, seconds: 0.7 },
+    timpani: { sfz: "Membranophones/Struck Membranophones/Timpani 2 - Scale", seconds: 1.6, pick: /_v3_rr1_/ },
+    bassdrum: { sfz: "Membranophones/Struck Membranophones/Bass Drum 1", seconds: 1.2, kinds: { hit: /BDrumNew_hit_v3_rr1/ } },
+    snare: { sfz: "Membranophones/Struck Membranophones/Snare Drum, Rope Tension", seconds: 0.5, kinds: { hit: /RopeSnare_low_sn_Main_vl2_rr1/ } },
 };
 
+/** A VSCO 2 CE file's note as MIDI: its names are an octave under the usual ("C3" is middle C, 60). */
+export function vscoKey(note) {
+    const [, letter, sharp, octave] = /^([A-G])(#?)(-?\d)$/.exec(note);
+
+    return 12 * (Number(octave) + 2) + { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[letter] + (sharp ? 1 : 0);
+}
+
 // Every note the music plays
-const NOTES = [...SCORE.notes, ...TAVERN.notes];
+const NOTES = Object.values(SCORES).flatMap(({ notes }) => notes);
 
 // A file from the library, downloaded once
 export async function fetchFromLibrary(path, library = LIBRARY, cache = CACHE) {
@@ -318,10 +338,11 @@ async function main() {
     await mkdir(OUT, { recursive: true });
 
     for (const [name, source] of Object.entries(SOURCES)) {
-        const folder = source.sfz.slice(0, source.sfz.lastIndexOf("/") + 1);
-        const [library, sfzLibrary, cache] = source.freepats ? [FREEPATS, FREEPATS, FREEPATS_CACHE] : [LIBRARY, SFZ_LIBRARY, CACHE];
-        const sfz = (await fetchFromLibrary(`${source.sfz}.sfz`, sfzLibrary, cache)).toString("utf8");
-        const regions = regionsOf(sfz).filter(({ sample, trigger }) => trigger !== "release" && (!source.pick || source.pick.test(sample)));
+        const folder = source.vsco ? `${source.vsco}/` : source.sfz.slice(0, source.sfz.lastIndexOf("/") + 1);
+        const [library, sfzLibrary, cache] = source.vsco ? [VSCO, null, VSCO_CACHE] : source.freepats ? [FREEPATS, FREEPATS, FREEPATS_CACHE] : [LIBRARY, SFZ_LIBRARY, CACHE];
+        const regions = source.vsco
+            ? source.notes.map((note) => ({ sample: source.file(note), key: vscoKey(note), offset: 0, tune: 0, trigger: "attack" }))
+            : regionsOf((await fetchFromLibrary(`${source.sfz}.sfz`, sfzLibrary, cache)).toString("utf8")).filter(({ sample, trigger }) => trigger !== "release" && (!source.pick || source.pick.test(sample)));
         let chosen;
 
         if (source.kinds) {
@@ -367,8 +388,9 @@ async function main() {
     await writeFile(LIST, `// Made by scripts/build-music.js (npm run build:music): don't edit it by hand.
 //
 // The music's samples, in client/music: recordings of real instruments from the Versilian
-// Community Sample Library by Versilian Studios (CC0), https://github.com/sgossner/VCSL, and
-// FreePats' Spanish classical guitar (CC0), https://github.com/freepats/spanish-classical-guitar.
+// Community Sample Library by Versilian Studios (CC0), https://github.com/sgossner/VCSL, their VS
+// Chamber Orchestra: Community Edition (CC0), https://github.com/sgossner/VSCO-2-CE, and FreePats'
+// Spanish classical guitar (CC0), https://github.com/freepats/spanish-classical-guitar.
 // Each pitched instrument has recordings at a few notes (\`key\`, MIDI); drums one for each kind
 // of hit.
 
