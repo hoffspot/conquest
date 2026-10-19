@@ -25,6 +25,7 @@ import { exportOfKept, fileOf } from "../client/js/app/character-file.js";
 import { addressOf, inviteLink } from "../client/js/app/invites.js";
 import { dayOf, elapsedOf, HOUR, timeOfDay } from "../client/js/core/daytime.js";
 import { decode } from "../client/js/core/wire.js";
+import { isGuid } from "../client/js/core/guid.js";
 import { SNAPSHOT_STEPS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
 import { RACE } from "../client/js/core/worldplan/plan.js";
 import { isRole } from "./access/world.js";
@@ -37,7 +38,7 @@ import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, SERVER_JOURNAL, st
 import { LAYOUT_VERSION } from "./storage/folder.js";
 import { schemaReason } from "./storage/settings.js";
 import { NewerDataError, SERVER_VERSION } from "./storage/versions.js";
-import { BACKUP_NAME, CHARACTER_RULES, FIRST_HEROES, HERO_MODES, HEROES, isOffline, JOURNAL, NOW, RULE_MODES, ruleOf, STATE, StoredWorld, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
+import { BACKUP_NAME, CHARACTER_RULES, FIRST_HEROES, HERO_MODES, HEROES, isOffline, JOURNAL, NOW, RULE_MODES, ruleOf, STATE, StoredWorld, VISITORS, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
 
 /** The server's own journal (in its data folder): what's done to the server, not to one world. */
 export { SERVER_JOURNAL };
@@ -69,6 +70,7 @@ export const ACTIVITY_LINES = 300;
 export const SLOW_STEP = 50;
 
 const gzipped = promisify(gzip);
+const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
 /** A refusal of something asked of the management API: its HTTP status, a code, and what to say. */
 export class Refused extends Error {
@@ -650,7 +652,7 @@ export class Management {
 
             await writeGzip(path.join(stored.folder, STATE, NOW), text);
         } else {
-            for (const part of [STATE, HEROES]) {
+            for (const part of [STATE, HEROES, VISITORS]) {
                 await rm(path.join(stored.folder, part), { recursive: true, force: true });
 
                 if (await exists(path.join(from.folder, part))) {
@@ -682,7 +684,8 @@ export class Management {
 
     /**
      * A world as one file (EXPORT_FORMAT, gzipped JSON): what it is (world.json), its latest
-     * snapshot (as storage/worlds.js keeps it, encoded), and the heroes it keeps; from a backup
+     * snapshot (as storage/worlds.js keeps it, encoded), the heroes it keeps, and what it remembers
+     * of its visitors (by player, and their characters' ids: storage/visitors.js); from a backup
      * (`backup`: an id backups() gave) if one's named, else as it is now. Nothing of who may come in.
      * Returns { name (a file name for it), body (bytes) }.
      */
@@ -694,6 +697,7 @@ export class Management {
         const snapshotFile = from.save ?? path.join(folder, STATE, NOW);
         const snapshot = (await exists(snapshotFile)) ? await readGzip(snapshotFile) : null;
         const heroes = {};
+        const visitors = {};
 
         for (const player of await readdir(path.join(folder, HEROES)).catch(() => [])) {
             for (const file of await readdir(path.join(folder, HEROES, player)).catch(() => [])) {
@@ -702,7 +706,14 @@ export class Management {
             }
         }
 
-        const body = await gzipped(Buffer.from(JSON.stringify({ format: EXPORT_FORMAT, exportedBy: SERVER_VERSION, exported: new Date().toISOString(), world: { ...meta, id }, snapshot, heroes })));
+        for (const player of await readdir(path.join(folder, VISITORS)).catch(() => [])) {
+            for (const file of await readdir(path.join(folder, VISITORS, player)).catch(() => [])) {
+                visitors[player] ??= {};
+                visitors[player][file] = JSON.parse(await readFile(path.join(folder, VISITORS, player, file), "utf8"));
+            }
+        }
+
+        const body = await gzipped(Buffer.from(JSON.stringify({ format: EXPORT_FORMAT, exportedBy: SERVER_VERSION, exported: new Date().toISOString(), world: { ...meta, id }, snapshot, heroes, visitors })));
         const safe = String(meta.name ?? id).replace(/[^A-Za-z0-9 _-]+/g, "").trim().replace(/\s+/g, "-") || id;
 
         return { name: `${safe}-${backup ?? stampOf(new Date())}.pellagos.json.gz`, body };
@@ -769,6 +780,17 @@ export class Management {
                         await ensureFolder(path.join(stored.folder, HEROES, player));
                         await writeFile(path.join(stored.folder, HEROES, player, file), JSON.stringify(kept), { mode: FILE_MODE });
                         heroes++;
+                    }
+                }
+            }
+
+            // (And what it remembers of its visitors, for the players they came with, each by their
+            // character's id)
+            for (const [player, remembered] of Object.entries(isObject(bundle.visitors) ? bundle.visitors : {})) {
+                for (const [file, kept] of Object.entries(isObject(remembered) ? remembered : {})) {
+                    if (/^[A-Za-z0-9_-]{1,64}$/.test(player) && file.endsWith(".json") && isGuid(file.slice(0, -5)) && isObject(kept)) {
+                        await ensureFolder(path.join(stored.folder, VISITORS, player));
+                        await writeFile(path.join(stored.folder, VISITORS, player, file), JSON.stringify(kept), { mode: FILE_MODE });
                     }
                 }
             }

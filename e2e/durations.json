@@ -186,7 +186,8 @@
     "secure.spec.js › on the server's computer, the management page says what the router forwards and how the internet sees the home; or why it won't, and how to forward the port by hand": 3,
     "secure.spec.js › on the server's computer, the management page sets it up to get free certificates (a DuckDNS name), shows how that goes, never the token, and stops it": 2.5,
     "sound-studio.spec.js › describes every sound, and plays each, its recordings and its made variants (if it has any), once started": 4.6,
-    "together.spec.js › a world opened to others: an elf joins it by its code, is brought in by the elves' town, walks in the host's world, and leaves; closed, whoever's in it is told": 212.1,
+    "together.spec.js › a visitor to a world on the host's device is remembered there by their own id: gone, what the world knows of them is kept with it, and back, they're where they left": 86.5,
+    "together.spec.js › a world opened to others: an elf joins it by its code, is brought in by the elves' town, walks in the host's world, and leaves; closed, whoever's in it is told": 138.5,
     "together.spec.js › two players make a party: one asks from the party menu, the other says no, then yes; each has the other's icon at the top of their party, the leader crowned, allied in both worlds; they talk in its chat, unread lines on the Party button; one leaves, and the party's no more": 126.1,
     "together.spec.js › two players side by side trade face to face: one asks, the other says yes, each offers, both agree, and it changes hands in both worlds": 95.5,
     "together.spec.js › two players walk about a while: the joined copy's checked against the host's every fifth of a second and never drifts; the guest's hero drawn going at once; what's sent measured": 94.8,
@@ -196,10 +197,10 @@
     "war.spec.js › plays the war on: forces march and camp, the news tells of it, and the players' might brings on the next age": 3.2,
     "world-map.spec.js › lays out another world from another seed, and zooms in and out": 5.3,
     "world-map.spec.js › lays out the world for a seed and draws it, with where a player of each people starts": 3,
-    "worlds.spec.js › a newcomer with no character follows a world's invite link: makes a character, told it's for that world, and goes straight in": 30.9,
+    "worlds.spec.js › a newcomer with no character follows a world's invite link: makes a character, told it's for that world, and goes straight in": 30,
     "worlds.spec.js › a server that proves to be another than the one pinned is sent no key": 5.2,
-    "worlds.spec.js › a world made on a server and shared by an invite link: both play in it, leave, and it waits; the second comes back to the same hero": 85.4,
+    "worlds.spec.js › a world made on a server and shared by an invite link: both play in it, leave, and it waits; the second comes back to the same hero": 86.2,
     "worlds.spec.js › a world on this device brought to a server (Bring my world) with a character who's been in it: told how, and what comes with it; refused a key that makes no worlds; then a world of the server's, in its land, its owner going in as that character": 28,
-    "worlds.spec.js › a world that takes copies: a character on this device copied in once, told first what a copy is, and one from a file, told what was changed; each the world's own, never taken home; a world whose characters are its own: one made there taken home, out of it for good": 59.1,
-    "worlds.spec.js › the server's own address shows its worlds on the title: one open to anyone joined with a tap, no key or link, choosing which of theirs visits it": 24.5
+    "worlds.spec.js › a world that takes copies: a character on this device copied in once, told first what a copy is, and one from a file, told what was changed; each the world's own, never taken home; a world whose characters are its own: one made there taken home, out of it for good": 58.8,
+    "worlds.spec.js › the server's own address shows its worlds on the title: one open to anyone joined with a tap, no key or link, choosing which of theirs visits it": 23.8
 }

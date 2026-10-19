@@ -38,10 +38,13 @@
 //
 // What's said, as text (core/wire.js), whichever way it goes (app/relay.js carries it):
 //
-//   joiner -> host   { kind: "hello", version, character, hero }   (character: as Host.join takes
-//                                                    it; hero, on the world server: which of
-//                                                    the player's kept heroes, a slot, "new",
-//                                                    or "copy": the character copied in)
+//   joiner -> host   { kind: "hello", version, character, hero }   (character: who they are
+//                                                    and what they carry, { hero, progress },
+//                                                    as Host.join takes them: the world they
+//                                                    come into keeps the rest of them; hero, on
+//                                                    the world server: which of the player's
+//                                                    kept heroes, a slot, "new", or "copy":
+//                                                    the character copied in)
 //                    { kind: "ready" }                         (its copy of the world made: playing)
 //                    { kind: "away", hidden }                  (its page hidden, or shown again)
 //                    { kind: "command", seq, command }
@@ -70,7 +73,7 @@ import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 143;
+export const NET_VERSION = 144;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;

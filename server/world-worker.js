@@ -77,7 +77,7 @@ const { host } = opened;
 const saving = [];
 
 // (Anyone the save had in the world, who never left it, as the server stopped: out of it, and
-// their heroes kept where they were)
+// their heroes kept where they were; or, visitors, what the world knows of them remembered)
 for (const id of [...host.players.keys()]) {
     const place = host.placeOf(id);
     const vitals = host.vitalsOf(id);
@@ -86,6 +86,8 @@ for (const id of [...host.players.keys()]) {
 
     if (kept && player && character) {
         saving.push(stored.heroes.keep(player, { ...character, place, vitals }, { slot: Number(slot) }));
+    } else if (!kept && character) {
+        saving.push(stored.visitors.keep(id, { ...character, place, vitals }));
     }
 }
 
@@ -130,6 +132,10 @@ hosting.onLeave = (id, peer, character) => {
 
     if (kept && player && character) {
         keeping = keeping.then(() => stored.heroes.keep(player, character, { slot: Number(slot) })).catch((error) => stored.journal(`Couldn't keep ${character.hero?.name}: ${error.message}`).catch(() => {}));
+    } else if (!kept && character) {
+        // (A visitor gone: what the world knows of them remembered, for their player, by their
+        // character's id, for the next time they come; what they carry went with them)
+        keeping = keeping.then(() => stored.visitors.keep(id, character)).catch((error) => stored.journal(`Couldn't remember ${character.hero?.name}: ${error.message}`).catch(() => {}));
     }
 };
 
@@ -149,15 +155,23 @@ async function forward(character, player) {
     }
 }
 
+// What the world takes of a character brought to it: who they are and what they carry (their
+// look, their own id, what they've grown into, their gear and gold); what another world knew of
+// them stays there, and this one's is its own (docs/SERVER.md, "Visitors")
+const carried = (brought) => ({ hero: brought.hero, talks: { memory: {}, knowledge: [] }, explored: {}, progress: brought.progress, standing: {}, followers: [] });
+
 // The character a player comes in with (as Hosting.characterOf hands it over), from what their
 // hello asked for, by the world's character rule (storage/worlds.js CHARACTER_RULES): visiting,
-// theirs as they bring it; else one of their heroes kept here (by its slot), a new one ("new":
+// theirs as they bring it, with what the world remembers of them from before (by their own id:
+// client/js/core/guid.js); else one of their heroes kept here (by its slot), a new one ("new":
 // made with their look), or, where the world takes copies, a copy of theirs ("copy": once for each
-// character in the whole world, by its own id: client/js/core/guid.js). Null if it can't be, or {
-// refused } saying why ("copied": that character's been copied in already)
+// character in the whole world, by its own id). Null if it can't be, or { refused } saying why
+// ("copied": that character's been copied in already)
 async function characterFor(one, { character, hero = "new" }) {
     if (!kept) {
-        return characterFrom(character);
+        const brought = characterFrom(character);
+
+        return brought && { ...carried(brought), ...((await stored.visitors.get(one.player, brought.hero.guid).catch(() => null)) ?? {}) };
     }
 
     const slots = await stored.heroes.slotsOf(one.player);
@@ -195,7 +209,7 @@ async function characterFor(one, { character, hero = "new" }) {
         one.slot = free;
         one.origin = origin;
 
-        return forward({ ...brought, hero: copyOf(brought.hero) }, one.player);
+        return forward({ ...carried(brought), hero: copyOf(brought.hero) }, one.player);
     }
 
     one.slot = free;

@@ -26,7 +26,7 @@ import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
 import { telemetry } from "./app/telemetry.js";
 import { builtAt, codeVersion } from "./app/version.js";
-import { enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, writeSave } from "./app/save.js";
+import { enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
 import { released } from "./world/release.js";
@@ -332,14 +332,10 @@ function describe(save) {
     };
 }
 
-// A kept character as they go into another's world: who they are and what they carry, and what's
-// kept of them in the world they're in on this device (what its folk taught them, where they stand
-// and the requests they carry, who follows them)
-function characterOf(save) {
-    const place = stayOf(save)?.place;
-
-    return { hero: save.hero, talks: loadTalks(place), progress: loadProgress(save), standing: loadStanding(place), followers: loadFollowers(place) };
-}
+// A kept character as they go into another's world: who they are and what they carry. The world
+// they go into keeps the rest of them, its own (what its folk know of them, where they stand, who
+// follows them there: docs/SERVER.md, "Visitors"), as the worlds on this device keep theirs
+const characterOf = (save) => ({ hero: save.hero, progress: loadProgress(save) });
 
 // A hero's people, as said ("human", "dark elf")
 const peopleOf = (hero) => (hero.race && hero.race !== "human" ? hero.race.replace(/([A-Z])/g, " $1").toLowerCase() : "human");
@@ -538,8 +534,10 @@ function openLocalWorlds(mode, save = null) {
             const been = Object.keys(world.places)
                 .map((id) => names.get(id))
                 .filter(Boolean);
+            const visitors = Object.values(world.places).filter((place) => typeof place?.visitor === "string").length;
+            const guests = visitors ? `${visitors} visitor${visitors === 1 ? "" : "s"}` : "";
             const war = loadWorld(world);
-            const whose = mode === "go" ? (world.places[save.id] ? `${who} has been here` : `new to ${who}`) : been.length ? `${listOf(been)} ${been.length === 1 ? "has" : "have"} been here` : "nobody's been here yet";
+            const whose = mode === "go" ? (world.places[save.id] ? `${who} has been here` : `new to ${who}`) : been.length || visitors ? `${listOf([...been, ...(guests ? [guests] : [])])} ${been.length + visitors === 1 ? "has" : "have"} been here` : "nobody's been here yet";
             const row = document.createElement("li");
             const pick = Object.assign(document.createElement("button"), { type: "button", className: "character" });
 
@@ -1846,6 +1844,9 @@ async function invite() {
     try {
         const world = await openWorld(game, {
             ...(broker ? { broker: { address: broker.address, listing: await listingOf(game) } } : {}),
+            // (Those who come in: who they are and what they carry theirs, what this world remembers
+            // of them its own, kept with it by their own id: save.js visitorOf, keepVisitor)
+            ...(state.stay?.world ? { visitors: { arrive: (brought) => visitorOf(state.stay.world.id, brought), leave: (character) => keepVisitor(state.stay.world.id, character) } } : {}),
             // (Someone come or gone: shown; and the world goes on, for them, even with the menu open;
             // nothing downloaded while the world's sent them)
             onChange: () => {
@@ -2156,9 +2157,6 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     const { createJoinedGame } = state.modules;
     const { view, kit, sound } = state.session;
     const keep = (write) => (kept || !save ? () => {} : write);
-    // (What they learn there, where they stand and who follows them, kept with their place in the
-    // world they're in on this device, which they brought with them: characterOf)
-    const at = save ? stayOf(save)?.place : null;
 
     $("#join").close();
     state.game?.dispose();
@@ -2177,10 +2175,9 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
         hero: save?.hero,
         welcome,
         joining,
-        onTalk: keep((talks) => saveTalks(at, talks)),
+        // (What they carry and grow into theirs, kept on this device as it changes, the one that's
+        // brought next time: what the world knows of them is its own, kept there)
         onProgress: keep((progress) => saveProgress(save, progress)),
-        onStanding: keep((standing) => saveStanding(at, standing)),
-        onFollowers: keep((followers) => saveFollowers(at, followers)),
         wheels: save ? loadWheels(save) : null,
         onWheels: save ? (wheels) => saveWheels(save, wheels) : () => {},
         onWorldMap: openWorldMap,

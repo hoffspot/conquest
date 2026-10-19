@@ -59,6 +59,9 @@ export const MOST_CHARACTERS = 6;
 /** How many worlds are kept at most: making another means deleting one of them. */
 export const MOST_WORLDS = 8;
 
+/** How many visitors a world on this device remembers at most: past that, the one gone longest's forgotten. */
+export const MOST_VISITORS = 12;
+
 /**
  * The save format's version: a save from another version is set aside, not misread. 2 since each
  * character's kept under an id of its own (1: one character, its keys to itself; moved on).
@@ -582,6 +585,79 @@ export function enterWorld(save, id) {
     }
 
     return stayOf(save);
+}
+
+// A visitor's place in a world kept here (one of another player's characters, come in while it's
+// open to others), by their own id (core/guid.js): { id, created } (as a character's place),
+// `visitor` their name and `seen` when they last came or went. Made the first time they come, the
+// one gone longest forgotten past MOST_VISITORS. As stayOf's place ({ id, created, seed }), or
+// null if the world isn't kept or they've no id.
+function visitorPlace(id, hero) {
+    const world = loadLocalWorld(id);
+    const guid = hero?.guid;
+
+    if (!world || !isGuid(guid)) {
+        return null;
+    }
+
+    const now = new Date().toISOString();
+
+    if (!world.places[guid]) {
+        const visitors = Object.entries(world.places)
+            .filter(([, place]) => typeof place?.visitor === "string")
+            .sort(([, a], [, b]) => String(a.seen).localeCompare(String(b.seen)));
+
+        for (const [key, place] of visitors.slice(0, Math.max(0, visitors.length + 1 - MOST_VISITORS))) {
+            forgetPlace(place);
+            delete world.places[key];
+        }
+
+        world.places[guid] = { id: newId(), created: now };
+    }
+
+    const place = (world.places[guid] = { ...world.places[guid], visitor: typeof hero.name === "string" ? hero.name : "", seen: now });
+
+    return write(`pellagos.${id}.about`, world) ? { id: place.id, created: place.created, seed: world.seed } : null;
+}
+
+/**
+ * A visitor to a world kept here (one of another player's characters, as core/netplay.js
+ * characterFrom brings them, come in while it's open to others: by their own id, core/guid.js) as
+ * the world takes them in: who they are and what they carry, theirs; what the world remembers of
+ * them from before (what its folk know of them and what they learnt there, what they found of it,
+ * where they stand and the requests they carry, their followers, where they were and how), its
+ * own. Remembered nowhere, the first time, with no id, or the world not kept here.
+ */
+export function visitorOf(id, brought) {
+    const place = visitorPlace(id, brought.hero);
+
+    return { hero: brought.hero, progress: brought.progress, talks: loadTalks(place), explored: loadExplored(place), standing: loadStanding(place), followers: loadFollowers(place), place: loadPlace(place), vitals: loadVitals(place) };
+}
+
+/**
+ * A visitor gone from a world kept here (their character as core/host.js leave hands it back, with
+ * where and how they were): what the world knows of them remembered, by their own id, for the next
+ * time they come. What they carry went with them. Returns whether it's kept.
+ */
+export function keepVisitor(id, character) {
+    const place = visitorPlace(id, character?.hero);
+
+    if (!place) {
+        return false;
+    }
+
+    const marked = { created: place.created, seed: place.seed };
+    const { talks, explored, standing, followers, place: where, vitals } = character;
+    const kept = [
+        write(keyOf(place, "talks"), { ...marked, memory: isObject(talks?.memory) ? talks.memory : {}, knowledge: Array.isArray(talks?.knowledge) ? talks.knowledge : [] }),
+        write(keyOf(place, "explored"), { ...marked, ...(isObject(explored) ? explored : {}) }),
+        write(keyOf(place, "standing"), { ...marked, ...(isObject(standing) ? standing : {}) }),
+        write(keyOf(place, "followers"), { ...marked, followers: Array.isArray(followers) ? followers : [] }),
+        savePlace(place, where),
+        saveVitals(place, vitals),
+    ];
+
+    return kept.slice(0, 4).every(Boolean);
 }
 
 /**

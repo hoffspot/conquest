@@ -74,7 +74,7 @@ says which on each world's card and tells players plainly before they choose who
 | --- | --- | --- | --- |
 | **Made here** (`own`) | One of theirs made there (up to 6 a player), or a new one, made there with the look of who they came as | By the world: its own | **Take one home**, asked first: it leaves the world for good (the server forgets it) and is kept on their device |
 | **Copied in** (`copies`) | One of their copies there ("Ada · Fernhollow's copy"), a character on their device copied in (asked first), one from a character file (asked first), or a new one | By the world. A copy is the world's own: what it does there never goes back to the character on their device | Never: a copy stays in the world it was copied into |
-| **Visiting** (`visiting`) | One of the characters on their device, or a new one made first | On their device: the world keeps nothing of them | They leave with the player |
+| **Visiting** (`visiting`) | One of the characters on their device, or a new one made first | Who they are and what they carry: on their device, the one kept as they play, brought each time. What the world knows of them: by the world (Visitors, below) | They leave with the player |
 
 - **Copied once.** A character is copied into a world once: by its own id (below), by anyone, on
   any device. Asked again, the world says so ("That character's been copied into this world
@@ -84,6 +84,23 @@ says which on each world's card and tells players plainly before they choose who
   copies already in it stay copies.
 - **Made** with a rule (the game's Make a world, the management page's New world: `characters`),
   or without one, as kept by the world, made there.
+- **What a world takes of a character brought to it** (visiting, or copied in): who they are and
+  what they carry (their look, their own id, what they've grown into, their gear and gold). What
+  another world knew of them (what its folk know of them, where they stand and the requests they
+  carry, their followers, where they were) stays in that world: each world has its own.
+
+**Visitors** (`storage/visitors.js`). A world whose players bring their own remembers what it knows
+of each who's visited it, for the player who brought them and by their character's own id: what
+its folk remember of them and what they learnt there, what they found of it, where they stand
+with its peoples and the requests they carry, their followers there, and where they were and how
+when they left (`visitors/<player>/<character id>.json`). The next time that player brings that
+character, they come back to all of it, with what they carry as their device has it now; another
+player bringing a character with the same id gets none of it (others see a character's id as they
+play beside them). What they carry is never kept by the world: their game keeps it as it changes,
+and it goes with them when they leave. A world's backups, its export and the server's archive
+carry what it remembers of its visitors. A world a player opens to others from their own device
+does the same for its visitors, kept on that device with the world (docs/GAME.md, "Characters and
+worlds on this device"), up to twelve, the one gone longest forgotten.
 
 **Offline for upkeep.** Its owner (on the management page, or the world's own endpoints) or the
 server's admin **takes a world offline**: everyone in it is sent out ("The world's owner took it

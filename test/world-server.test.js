@@ -20,6 +20,7 @@ import { newToken } from "../server/access/tokens.js";
 import { guard, hostsOf, originsOf, Refusal } from "../server/guards.js";
 import { PLAY_PROTOCOL } from "../server/play.js";
 import { Socket } from "../server/relay.js";
+import { REMEMBERED } from "../server/storage/visitors.js";
 import { WorldServer } from "../server/world-server.js";
 
 // Short codes hashed cheaply in the tests (the server's own cost takes 128 MiB and a good part of a second)
@@ -291,6 +292,58 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
         assert.equal(decode(home.json.text).characters[0].save.hero.guid, made1.hero.guid, "the same character, their own id with them");
         assert.equal(await server.worlds.get(own.world).heroes.get(entered.json.player, 1), null, "gone from the world for good");
         assert.match(await readFile(path.join(server.worlds.get(own.world).folder, "journal.log"), "utf8"), /Ada \([^)]+\) taken home, out of the world for good\./);
+    });
+
+    it("remembers a visitor to a world whose players bring their own, for their player, by their character's own id: what the world knows of them, never what they carry, which comes from their device each time; another player bringing the same id gets none of it", async () => {
+        const made = (await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Wayfare", race: "human", seed: 3, characters: "visiting" } })).json;
+        const guid = "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d";
+        const ada = (gold) => ({ hero: { ...HERO, guid }, progress: { gold }, talks: { memory: {}, knowledge: ["what their own world taught them"] }, standing: { points: 40 } });
+        const first = await server.call("POST", "/enter", { body: { world: made.world, key: made.playerKey, net: NET_VERSION } });
+        const player = first.json.player;
+        const theirs = (game) => game.message("welcome").snapshot.players.find((one) => one.id === player);
+        const visitors = server.worlds.get(made.world).visitors;
+
+        // The first time: what they carry theirs; what their own world knew of them not this one's
+        let game = await play(server, made.world, first.json.session, { character: ada(50) });
+
+        assert.equal(theirs(game).progress.gold, 50);
+        assert.deepEqual(theirs(game).talks.knowledge, []);
+        assert.equal(theirs(game).standing.points ?? 0, 0);
+        game.close();
+        await until(() => server.registry.lifeOf(made.world).life === "stored", "set aside");
+
+        // Gone: what the world knows of them remembered, for them, by their id; not what they carry
+        const remembered = await visitors.get(player, guid);
+
+        assert.ok(remembered.place && Number.isFinite(remembered.place.x), "where they stood");
+        assert.ok(Object.keys(remembered).every((kind) => REMEMBERED.includes(kind)), Object.keys(remembered).join(", "));
+        assert.equal("progress" in remembered, false);
+        assert.deepEqual((await visitors.list(player)).map(({ guid: id, name }) => [id, name]), [[guid, "Ada"]]);
+
+        // (What its folk learnt of them meanwhile, as it would be had they talked)
+        await visitors.keep(player, { hero: { ...HERO, guid }, ...remembered, talks: { memory: { barkeep: { talks: 2, flags: [] } }, knowledge: ["the ford"] } });
+
+        // Back: what the world remembers of them, where they left; what they carry as their device has it now
+        const again = await server.call("POST", "/enter", { body: { world: made.world, key: made.playerKey, ticket: first.json.ticket } });
+
+        game = await play(server, made.world, again.json.session, { character: ada(80) });
+
+        const actor = game.message("welcome").snapshot.battle.actors.find((one) => one.id === player);
+
+        assert.equal(theirs(game).progress.gold, 80, "what they carry, from their device");
+        assert.deepEqual(theirs(game).talks.knowledge, ["the ford"]);
+        assert.deepEqual([actor.x, actor.y], [remembered.place.x, remembered.place.y]);
+        game.close();
+        await until(() => server.registry.lifeOf(made.world).life === "stored", "set aside");
+
+        // Another player bringing a character with the same id: none of it
+        const other = await server.call("POST", "/enter", { body: { world: made.world, key: made.playerKey, net: NET_VERSION } });
+
+        game = await play(server, made.world, other.json.session, { character: ada(5) });
+        assert.deepEqual(game.message("welcome").snapshot.players.find((one) => one.id === other.json.player).talks.knowledge, []);
+        game.close();
+        await until(() => server.registry.lifeOf(made.world).life === "stored", "set aside");
+        assert.deepEqual((await visitors.get(player, guid)).talks.knowledge, ["the ford"], "and theirs untouched");
     });
 
     it("takes a world offline for upkeep: everyone sent out, nobody let in, its owners neither, its character rule changed only then (or set aside); and back online", async () => {
