@@ -1980,17 +1980,9 @@ function guild(map) {
     ceiling(solid, map);
 
     // The guild's banners, blue with a gold shield, either side of the counter and by the door
-    const banner = (x, z, face) => {
-        const across = face === "z" ? [m(0.45), 0.2] : [0.2, m(0.45)];
-
-        solid.box(x - across[0], m(1.1), z - across[1], x + across[0], m(2.8), z + across[1], material("guild-blue", WALL));
-        solid.box(x - across[0] * 0.5, m(1.7), z - across[1] * 0.5 - (face === "z" ? 0.1 : 0), x + across[0] * 0.5, m(2.3), z + across[1] * 0.5 + (face === "z" ? 0.1 : 0), material("guild-gold", WALL));
-        solid.box(x - across[0] - 0.2, m(2.8), z - across[1] - 0.2, x + across[0] + 0.2, m(2.9), z + across[1] + 0.2, material("brass", WALL));
-    };
-
-    banner(m(9.5), 0.3, "z");
-    banner(m(13), 0.3, "z");
-    banner(0.3, m(11), "x");
+    wallBanner(solid, m(9.5), 0.3, "z", "guild-blue", "guild-gold");
+    wallBanner(solid, m(13), 0.3, "z", "guild-blue", "guild-gold");
+    wallBanner(solid, 0.3, m(11), "x", "guild-blue", "guild-gold");
 
     // Shelves along the north wall behind the counter: ledgers, scrolls in their pigeonholes, a
     // strongbox
@@ -2281,13 +2273,28 @@ function noticeBoard(solid, board, count = 12) {
     }
 }
 
-// A banner hanging on a wall: `face` "z" (on the north wall, at z) or "x" (on a side wall)
-function wallBanner(solid, x, z, face, cloth, trim, { low = 1.1, high = 2.8 } = {}) {
+// The boxes of a banner hanging on a wall, [x0, y0, z0, x1, y1, z1] each: its cloth, the shield on
+// it and the brass rod it hangs from. `face` "z" (on the north wall, at z) or "x" (on a side wall).
+// The shield stands proud of the cloth on both sides: in the same plane as the cloth's, the two
+// would fight to be drawn and flicker as the camera moves
+export function bannerBoxes(x, z, face, { low = 1.1, high = 2.8 } = {}) {
     const across = face === "z" ? [m(0.45), 0.2] : [0.2, m(0.45)];
+    const shield = face === "z" ? [across[0] * 0.5, across[1] + 0.05] : [across[0] + 0.05, across[1] * 0.5];
 
-    solid.box(x - across[0], m(low), z - across[1], x + across[0], m(high), z + across[1], material(cloth, WALL));
-    solid.box(x - across[0] * 0.5, m(low + (high - low) * 0.35), z - across[1] * 0.5 - (face === "z" ? 0.1 : 0), x + across[0] * 0.5, m(low + (high - low) * 0.7), z + across[1] * 0.5 + (face === "z" ? 0.1 : 0), material(trim, WALL));
-    solid.box(x - across[0] - 0.2, m(high), z - across[1] - 0.2, x + across[0] + 0.2, m(high + 0.1), z + across[1] + 0.2, material("brass", WALL));
+    return {
+        cloth: [x - across[0], m(low), z - across[1], x + across[0], m(high), z + across[1]],
+        shield: [x - shield[0], m(low + (high - low) * 0.35), z - shield[1], x + shield[0], m(low + (high - low) * 0.7), z + shield[1]],
+        rod: [x - across[0] - 0.2, m(high), z - across[1] - 0.2, x + across[0] + 0.2, m(high + 0.1), z + across[1] + 0.2],
+    };
+}
+
+// A banner hanging on a wall (bannerBoxes), its cloth and shield in the colours asked
+function wallBanner(solid, x, z, face, cloth, trim, heights) {
+    const boxes = bannerBoxes(x, z, face, heights);
+
+    solid.box(...boxes.cloth, material(cloth, WALL));
+    solid.box(...boxes.shield, material(trim, WALL));
+    solid.box(...boxes.rod, material("brass", WALL));
 }
 
 // A town hall's chamber: plaster and timber, the rolls on their shelves and the reeve's desk

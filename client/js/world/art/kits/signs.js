@@ -617,6 +617,16 @@ function paintFingerboard(name, km, left) {
     return textureOf(canvas);
 }
 
+/**
+ * A sign's board painted on both faces (a Solid's faces): `corners` its bottom left, bottom right,
+ * top right and top left as seen from in front. Each face shows the picture the right way round to
+ * someone in front of it, the back's left and right swapped (or it would read as in a mirror).
+ */
+export function paintBothFaces(solid, corners, picture) {
+    solid.face(corners, picture, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+    solid.face([...corners].reverse(), picture, [[1, 1], [0, 1], [0, 0], [1, 0]]);
+}
+
 /** A material showing a sign's picture (lit like the rest of the town). */
 export function signMaterial(texture, name) {
     const result = new THREE.MeshLambertMaterial({ map: texture });

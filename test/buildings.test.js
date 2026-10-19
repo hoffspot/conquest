@@ -1028,6 +1028,49 @@ describe("the atlas (engine/atlas.js)", () => {
     });
 });
 
+// Each triangle of every sign hanging or standing in an object (its material named "sign ..."):
+// which way it faces, and its picture as someone in front of it sees it, `right` how far the way
+// the picture runs left to right (u) goes their right, `up` how far its bottom to top (v) goes up
+// (1 each, the right way round; -1 each mirrored or upside down)
+function signFaces(object) {
+    const faces = [];
+    const vector = (array, k) => new THREE.Vector3().fromArray(array, k * 3);
+
+    object.traverse((node) => {
+        if (!node.isMesh) {
+            return;
+        }
+
+        const { position, uv } = node.geometry.attributes;
+        const index = node.geometry.index?.array ?? [...Array(position.count).keys()];
+        const groups = node.geometry.groups.length ? node.geometry.groups : [{ start: 0, count: index.length, materialIndex: 0 }];
+
+        for (const { start, count, materialIndex } of groups) {
+            const { name } = Array.isArray(node.material) ? node.material[materialIndex] : node.material;
+
+            if (!name.startsWith("sign ")) {
+                continue;
+            }
+
+            for (let t = start; t < start + count; t += 3) {
+                const [a, b, c] = [index[t], index[t + 1], index[t + 2]];
+                const [e1, e2] = [vector(position.array, b).sub(vector(position.array, a)), vector(position.array, c).sub(vector(position.array, a))];
+                const [du1, dv1, du2, dv2] = [uv.getX(b) - uv.getX(a), uv.getY(b) - uv.getY(a), uv.getX(c) - uv.getX(a), uv.getY(c) - uv.getY(a)];
+                const det = du1 * dv2 - du2 * dv1;
+                // (Which way the picture's u and v run across the face, in the world)
+                const along = e1.clone().multiplyScalar(dv2).sub(e2.clone().multiplyScalar(dv1)).divideScalar(det).normalize();
+                const rising = e2.clone().multiplyScalar(du1).sub(e1.clone().multiplyScalar(du2)).divideScalar(det).normalize();
+                const facing = e1.clone().cross(e2).normalize();
+                const right = new THREE.Vector3(0, 1, 0).cross(facing).normalize();
+
+                faces.push({ name, facing, right: along.dot(right), up: rising.y });
+            }
+        }
+    });
+
+    return faces;
+}
+
 describe("each people's buildings (peoples/)", () => {
     it("builds every piece of each people's, within a budget of triangles: houses, landmarks, their own places, walls, gates, towers, and their well and stalls", async () => {
         const { PEOPLE_KITS } = await import("../client/js/world/art/peoples/index.js");
@@ -1055,6 +1098,37 @@ describe("each people's buildings (peoples/)", () => {
                 assert.ok(finite(object), `${people} ${piece.kind} ${piece.type ?? piece.name ?? ""}: every corner and normal a number`);
             }
         }
+    });
+
+    it("paints each sign the right way round on both its faces, never as in a mirror: the humans' landmarks, each people's, and the shops' standing signs", async () => {
+        const { PEOPLE_KITS } = await import("../client/js/world/art/peoples/index.js");
+        const { SHOP_NAMES } = await import("../client/js/world/art/kits/shopfront.js");
+        const names = ["tavern", "church", "blacksmith", "guild", "hall", "keep", ...SHOP_NAMES];
+        const kits = { human: { landmark }, ...PEOPLE_KITS };
+        let [signs, twoFaced] = [0, 0];
+
+        for (const [people, kit] of Object.entries(kits)) {
+            for (const name of names) {
+                const piece = { kind: "landmark", name, w: name === "guild" ? 4 : 3, h: name === "church" ? 4 : 3, people, x: 5, y: 7, seed: 3 };
+                const faces = signFaces(await kit.landmark(piece));
+
+                signs += faces.length;
+
+                for (const face of faces) {
+                    assert.ok(face.right > 0.99 && face.up > 0.99, `${people} ${name}: ${face.name} reads ${face.right < 0 ? "backwards" : "upside down"}`);
+                }
+
+                // (Those hanging or standing free painted on both faces, as much of each facing
+                // one way as the other; those on a wall on its face only)
+                for (const sign of new Set(faces.map((face) => face.name))) {
+                    const facing = faces.filter((face) => face.name === sign).reduce((sum, face) => sum.add(face.facing), new THREE.Vector3());
+
+                    twoFaced += facing.length() < 1e-6 ? 1 : 0;
+                }
+            }
+        }
+
+        assert.ok(signs > 100 && twoFaced > 30, `${signs} triangles of signs, ${twoFaced} signs painted on both faces`);
     });
 
     it("builds each people's landmarks whole on a lot of any size a town gives them, small keeps stepping up fewer times", async () => {
