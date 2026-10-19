@@ -170,9 +170,22 @@ use anything); then they can't be thrown again for 4 seconds. Players and their 
 thrown as anyone is; never the heavy or the unsolid (bats and the other flocks and swarms,
 bears, trolls, ogres, wyverns, wisps, treants, crocodiles, rock tuskers, wild bulls, Cape
 buffalo, Nandi bears, great boas, knuckers, kelpies, chimeras, draugar, drakes, ghosts, wraiths,
-mares, frost trolls: creatures.js
+mares, frost trolls, and a hell's fiends, cinder husks, dirge wardens, flayed hierarchs, forge
+brutes, chained gluttons and gorger warlords: creatures.js
 `steady`), the perilous places' own, an elite, a dungeon's boss (or a hell's level's master), a
 fortification, a palisade or a wagon. The thrown body's a ragdoll (docs/CHARACTERS.md *Thrown*); a creature's tumbles whole.
+
+Some of a hell's own kinds (docs/DUNGEONS.md *Its own kinds*) leave a blast of their own where they
+fall dead (creatures.js `burst`): a cinder husk its embers, a bloat gorger its bile, lying there a
+moment (1.2 and 1 second), a ring on the ground as wide as it'll reach, swelling, heard gathering,
+then bursting as a bomb does on whoever of its foes is within 2.2 or 2.4 metres (never its own
+kind), throwing them less far; the embers as fire, the bile as earth, poisoning whoever it
+catches as often as not (battle.js `BOMBS` `cinders`, `bile`: their `look`, `element` and
+`afflict`). So whoever kills one up close should step away. Others of them keep some kinds of harm
+off themselves as a player's charms do (creatures.js `wards`: a cinder husk and a slag gorger half
+of fire's, a dirge warden half of water's, a flayed hierarch some of magic's; battle.js `charmed`,
+half at most); and a flayed hierarch's curse and a chained glutton's bite draw back into them a
+share of the harm they do, healing them (weapons.js `drain`: told as "healed", as Vampirism's is).
 
 The goblins' elite (*Elites*, below) is the **Goblin King**, not an "Elite Goblin raider":
 bigger than any of them (as tall as a man), broad, crowned and caped in red edged with gold,

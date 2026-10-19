@@ -16,6 +16,41 @@ import { THEMES } from "../core/dungeons/themes.js";
 import { landAt } from "../core/worldplan/plan.js";
 import { Breath } from "./breath.js";
 
+// One of a hell's flayed (MODELS): its catalog entry, how long and tall it's made, how much bigger
+// it's drawn (`scale`), its ways of attacking and its special ones; the rest as all of them have it
+const flayed = (asset, made, scale, attacks, specials) => Object.freeze({
+    asset,
+    length: +(made.long * scale).toFixed(3),
+    made: Object.freeze(made),
+    clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit", dead: "Death" }),
+    attacks: Object.freeze(attacks),
+    specials: Object.freeze(specials),
+    rests: Object.freeze({ look: "Idle 2" }),
+    fire: Object.freeze({}),
+    joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "hand_l", left: "hand_l" }),
+    mouth: null,
+    pace: +(1.36 * scale).toFixed(2),
+    runPace: +(3.43 * scale).toFixed(2),
+    flinch: 0.6,
+});
+
+// One of a hell's gorgers (MODELS), as `flayed`: no run, its maw biting, spewing and roaring
+const gorger = (asset, made, scale, attacks) => Object.freeze({
+    asset,
+    length: +(made.long * scale).toFixed(3),
+    made: Object.freeze(made),
+    clips: Object.freeze({ idle: "Idle", walk: "Walk", react: "Gethit", dead: "Death" }),
+    attacks: Object.freeze(attacks),
+    specials: Object.freeze({ bite: "Bite", spew: "Spew", call: "Roar" }),
+    rests: Object.freeze({ roar: "Roar" }),
+    fire: Object.freeze({}),
+    joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "spine_03", mouth: "jaw_up", left: "hand_l" }),
+    mouth: null,
+    pace: +(1.53 * scale).toFixed(2),
+    runPace: null,
+    flinch: 0.6,
+});
+
 /**
  * The creatures drawn from a model, by their LOOKS id (which stands in for one until it's read):
  * the catalog's entry (`asset`: two kinds may be drawn from one), and the skins one of them may
@@ -326,6 +361,28 @@ export const MODELS = Object.freeze({
         runPace: 5.65,
         flinch: 0.6,
     }),
+    // (A hell's flayed (creatures.js), each one of Monster1's six builds, drawn from a man's height
+    // to a head taller, made 2.1 metres tall (2.4 crowned); its own clips: its claws or its staff
+    // swept, its lunge (a thrust cut from its second attack, "lunge" as weapons.js names it), and,
+    // one with a staff, its free hand thrown up and out as it casts, curses, wails, drains or calls;
+    // its other idle as it rests; walking at 1.36 m/s as it's made, running at 3.43)
+    flayling: flayed("beast-flayling", { long: 0.39, tall: 2.08 }, 0.89, { rake: "Attack" }, { lunge: "Lunge" }),
+    cinderHusk: flayed("beast-cinder-husk", { long: 0.39, tall: 2.08 }, 0.96, { grasp: "Attack", lunge: "Lunge" }, {}),
+    pyreAcolyte: flayed("beast-pyre-acolyte", { long: 0.52, tall: 2.08 }, 0.94, { sweep: "Attack" }, { lunge: "Lunge", cast: "Cast" }),
+    ossuaryPriest: flayed("beast-ossuary-priest", { long: 0.52, tall: 2.37 }, 1, { sweep: "Attack" }, { lunge: "Lunge", curse: "Cast", call: "Cast" }),
+    dirgeWarden: flayed("beast-dirge-warden", { long: 0.5, tall: 2.37 }, 1.1, { sweep: "Attack" }, { lunge: "Lunge", wail: "Cast" }),
+    flayedHierarch: flayed("beast-flayed-hierarch", { long: 0.67, tall: 2.37 }, 1.15, { sweep: "Attack" }, { lunge: "Lunge", drain: "Cast" }),
+    // (A hell's gorgers (creatures.js), each from one of Monster2's four builds: made 1.9 metres
+    // tall (2.5 under the warlord's banners), drawn a tenth to a third again as tall; its own
+    // clips: its club swung or its claws, and its maw's bite, its spew and its roar (made from its
+    // idle; the roar its call), roaring as it rests; walking at 1.53 m/s as it's made, with no run
+    // of its own (its walk played faster). It has no head: its maw's in its belly)
+    slagGorger: gorger("beast-slag-gorger", { long: 0.7, tall: 1.87 }, 1.1, { claw: "Attack" }),
+    forgeBrute: gorger("beast-forge-brute", { long: 1.03, tall: 1.87 }, 1.2, { smash: "Attack" }),
+    chainedGlutton: gorger("beast-chained-glutton", { long: 1.18, tall: 1.9 }, 1.3, { smash: "Attack" }),
+    bloatGorger: gorger("beast-bloat-gorger", { long: 0.7, tall: 1.87 }, 1.15, { claw: "Attack" }),
+    pitRavager: gorger("beast-pit-ravager", { long: 1.03, tall: 1.87 }, 1.1, { rend: "Attack" }),
+    gorgerWarlord: gorger("beast-gorger-warlord", { long: 1.18, tall: 2.5 }, 1.35, { smash: "Attack" }),
 });
 
 // The models read and those asked for, by kind (each in its skins); and each model file's read,

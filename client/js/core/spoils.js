@@ -238,6 +238,21 @@ export const SPOILS = Object.freeze({
     frostTroll: { items: [{ id: "frostHeart", chance: 0.45 }, { id: "frostHide", chance: 0.5 }] },
     fiend: { gold: [10, 30], items: [{ id: "fireGland", chance: 0.3 }, { id: "soulShard", chance: 0.2 }, { id: "obsidian", chance: 0.25 }] },
     demonLord: { gold: [60, 140], items: [{ id: "obsidian", chance: 0.8, count: [2, 3] }, { id: "soulShard", chance: 0.6 }, { id: "fireGland", chance: 0.5 }] },
+    // (A hell's flayed: the Breach's with what the cult gave them and what burnt them, the Halls of
+    // Bone's with their bones and their crowns' gold)
+    flayling: { gold: [2, 8], items: [{ id: "boneDust", chance: 0.3 }, { id: "cultSigil", chance: 0.15 }] },
+    cinderHusk: { gold: [3, 10], items: [{ id: "emberGland", chance: 0.35 }, { id: "obsidian", chance: 0.2 }] },
+    pyreAcolyte: { gold: [6, 16], items: [{ id: "cultSigil", chance: 0.4 }, { id: "fireGland", chance: 0.25 }, { id: "potion", chance: 0.15 }] },
+    ossuaryPriest: { gold: [8, 20], items: [{ id: "oldSkull", chance: 0.4 }, { id: "boneDust", chance: 0.5 }, { id: "soulShard", chance: 0.2 }] },
+    dirgeWarden: { gold: [10, 26], items: [{ id: "graveIron", chance: 0.4 }, { id: "rustedMail", chance: 0.3 }] },
+    flayedHierarch: { gold: [20, 50], items: [{ id: "crownShard", chance: 0.5 }, { id: "soulShard", chance: 0.4 }, { id: "oldSkull", chance: 0.3 }] },
+    // (A hell's gorgers: what they've swallowed, and what the fire's made of it)
+    slagGorger: { gold: [4, 12], items: [{ id: "magmaCore", chance: 0.3 }, { id: "obsidian", chance: 0.35 }] },
+    forgeBrute: { gold: [8, 20], items: [{ id: "obsidian", chance: 0.4 }, { id: "fireGland", chance: 0.25 }, { id: "graveIron", chance: 0.2 }] },
+    chainedGlutton: { gold: [15, 40], items: [{ id: "boneDust", chance: 0.5 }, { id: "oldSkull", chance: 0.35 }, { id: "soulShard", chance: 0.3 }] },
+    bloatGorger: { gold: [4, 12], items: [{ id: "boneDust", chance: 0.4 }, { id: "rustedMail", chance: 0.2 }] },
+    pitRavager: { gold: [6, 16], items: [{ id: "boneDust", chance: 0.35 }, { id: "rustedMail", chance: 0.3 }, { id: "oldSkull", chance: 0.2 }] },
+    gorgerWarlord: { gold: [30, 70], items: [{ id: "crownShard", chance: 0.4 }, { id: "soulShard", chance: 0.5 }, { id: "obsidian", chance: 0.5, count: [1, 2] }] },
 });
 
 /**

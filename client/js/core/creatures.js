@@ -73,7 +73,10 @@ const PACK_EVERY = 2;
  * more of a kind to it now and then while it fights (`call`: { kind, count: [least, most], `most`
  * of them about it at once, every `every` ms, the first `first` ms after it sets on someone:
  * battle.js #calls, brought by the host, host.js #flock), and as a dungeon's boss its `boss`
- * `call`'s (the ants' nest's Ant Monster).
+ * `call`'s (the ants' nest's Ant Monster); bursting as it dies (`burst`: a bomb of that `kind` left
+ * where it falls, battle.js BOMBS, its `damage` at the blast's heart: a hell's Cinder Husk). How
+ * little some kinds of harm hurt it (`wards`: { fire, water, air, earth, magic }, a share kept
+ * off each, as a player's charms keep it: battle.js `charmed`, half at most).
  */
 export const CREATURES = Object.freeze({
     // Near home, everywhere
@@ -194,6 +197,34 @@ export const CREATURES = Object.freeze({
     wraith: { name: "Wraith", hp: 46, weapon: "wraith", speed: 1.2, chase: 2.6, temper: "aggressive", roam: 6, leash: 18, pack: [1, 1], tiers: [5, 10], biomes: [], blood: "none", armor: 0.2, night: "only", darkSight: true , steady: true },
     wightLord: { name: "Wight lord", hp: 70, hands: true, weapon: "wightLord", speed: 1.1, chase: 2.2, temper: "aggressive", roam: 4, leash: 26, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "none", armor: 0.25, perilous: true, darkSight: true , steady: true },
     frostTroll: { name: "Frost troll", hp: 75, hands: true, weapon: "frostTroll", speed: 1, chase: 2.2, temper: "aggressive", roam: 10, leash: 22, pack: [1, 1], tiers: [9, 10], biomes: ["snow"], blood: "red", armor: 0.2, perilous: true , steady: true },
+    // (A hell's flayed, its sacrifices and its priests, skinned and given back their lives below:
+    // only there, in its first two levels (core/dungeons/themes.js hell), each drawn from a model of
+    // its own. In the Breach, flaylings in swarms, quick, their claws leaving wounds that bleed;
+    // cinder husks, burnt out and slow, shrugging off fire, bursting in embers as they fall
+    // (`burst`); pyre acolytes keeping off, hurling fire that burns on the ground. In the Halls of
+    // Bone, ossuary priests raising its skeletons (`call`) and cursing with grave-rot; dirge wardens,
+    // armoured, their halberds sweeping whoever's near off their feet, their dirge chilling; and,
+    // fewest, a flayed hierarch, its curse drawing back into it the life it takes, weapons.js `drain`)
+    flayling: { name: "Flayling", hp: 32, weapon: "flayling", speed: 1.3, chase: 3.9, temper: "aggressive", roam: 8, leash: 22, pack: [3, 5], tiers: [9, 10], biomes: [], blood: "red", darkSight: true },
+    cinderHusk: { name: "Cinder husk", hp: 58, weapon: "cinderHusk", speed: 0.8, chase: 2.1, temper: "aggressive", roam: 6, leash: 20, pack: [2, 3], tiers: [9, 10], biomes: [], blood: "none", armor: 0.1, darkSight: true, steady: true, wards: { fire: 0.5 }, burst: { kind: "cinders", damage: [8, 14] } },
+    pyreAcolyte: { name: "Pyre acolyte", hp: 40, weapon: "pyreAcolyte", speed: 1.0, chase: 2.6, temper: "aggressive", roam: 6, leash: 22, pack: [1, 2], tiers: [9, 10], biomes: [], blood: "red", darkSight: true, keep: 5, wards: { fire: 0.3 } },
+    ossuaryPriest: { name: "Ossuary priest", hp: 52, weapon: "ossuaryPriest", speed: 0.9, chase: 2.4, temper: "aggressive", roam: 5, leash: 22, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "red", armor: 0.1, darkSight: true, keep: 4, call: { kind: "skeleton", count: [1, 2], most: 4, every: 14000, first: 2500 } },
+    dirgeWarden: { name: "Dirge warden", hp: 92, weapon: "dirgeWarden", speed: 0.9, chase: 2.3, temper: "aggressive", roam: 4, leash: 20, pack: [1, 2], tiers: [9, 10], biomes: [], blood: "red", armor: 0.35, darkSight: true, steady: true, wards: { water: 0.5 } },
+    flayedHierarch: { name: "Flayed hierarch", hp: 115, weapon: "flayedHierarch", speed: 0.95, chase: 2.4, temper: "aggressive", roam: 5, leash: 24, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "red", armor: 0.25, darkSight: true, steady: true, wards: { magic: 0.3 } },
+    // (A hell's gorgers, headless brutes with a maw in the belly: only there, in its last two
+    // levels, each drawn from a model of its own. In the River of Fire, slag gorgers spewing molten
+    // slag that burns on the ground, shrugging off fire; forge brutes, their clubs knocking whoever
+    // they catch off their feet, burning; and, fewest, chained gluttons, whose bite feeds them
+    // (weapons.js `drain`). In the Pit, bloat gorgers spewing bile, bursting in it as they fall
+    // (`burst`); pit ravagers, quick, their clubs and teeth leaving wounds that bleed; and, fewest,
+    // a gorger warlord under skulls and banners, roaring its bloat gorgers to it (`call`))
+    slagGorger: { name: "Slag gorger", hp: 70, weapon: "slagGorger", speed: 0.9, chase: 2.4, temper: "aggressive", roam: 6, leash: 22, pack: [2, 3], tiers: [9, 10], biomes: [], blood: "red", armor: 0.1, darkSight: true, wards: { fire: 0.5 } },
+    forgeBrute: { name: "Forge brute", hp: 95, weapon: "forgeBrute", speed: 0.95, chase: 2.3, temper: "aggressive", roam: 5, leash: 22, pack: [1, 2], tiers: [9, 10], biomes: [], blood: "red", armor: 0.25, darkSight: true, steady: true, wards: { fire: 0.3 } },
+    chainedGlutton: { name: "Chained glutton", hp: 125, weapon: "chainedGlutton", speed: 1, chase: 2.2, temper: "aggressive", roam: 4, leash: 22, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "red", armor: 0.3, darkSight: true, steady: true },
+    bloatGorger: { name: "Bloat gorger", hp: 75, weapon: "bloatGorger", speed: 0.9, chase: 2.1, temper: "aggressive", roam: 6, leash: 22, pack: [2, 3], tiers: [9, 10], biomes: [], blood: "slime", darkSight: true, burst: { kind: "bile", damage: [8, 14] } },
+    pitRavager: { name: "Pit ravager", hp: 85, weapon: "pitRavager", speed: 1.1, chase: 3, temper: "aggressive", roam: 8, leash: 24, pack: [2, 3], tiers: [9, 10], biomes: [], blood: "red", armor: 0.15, darkSight: true },
+    gorgerWarlord: { name: "Gorger warlord", hp: 160, weapon: "gorgerWarlord", speed: 1.05, chase: 2.3, temper: "aggressive", roam: 4, leash: 26, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "red", armor: 0.35, darkSight: true, steady: true, call: { kind: "bloatGorger", count: [1, 2], most: 3, every: 16000, first: 3000 } },
+
     // (The lord of a hell, on its throne at the bottom of the pit: core/dungeons/themes.js hell. A
     // great horned brute for now, red as a coal, its fists burning and hellfire in its hands,
     // until a bought model of its own is read: beasts/looks.js)
@@ -385,13 +416,13 @@ export function notable(wild, { master = false } = {}) {
 
 /**
  * How a creature fights besides its weapon (battle.js, its actor's `wild`): `steady`, `keep`,
- * `bomb`, `hover` and, one that has them, `call` and `lurk` (CREATURES); as a dungeon's boss
- * (`boss`), its bomb and its call as its `boss` has them.
+ * `bomb`, `hover` and, one that has them, `call`, `lurk` and `burst` (CREATURES); as a dungeon's
+ * boss (`boss`), its bomb and its call as its `boss` has them.
  */
 export function traitsOf(creature, { boss = false } = {}) {
-    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null, lurk = null } = CREATURES[creature] ?? {};
+    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null, lurk = null, burst = null } = CREATURES[creature] ?? {};
 
-    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}), ...(lurk ? { lurk: { ...lurk } } : {}) };
+    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}), ...(lurk ? { lurk: { ...lurk } } : {}), ...(burst ? { burst: { ...burst, damage: [...burst.damage] } } : {}) };
 }
 
 /** The round an elite walks ([[x, y], ...] metres): ELITES.stops evenly about where it was put out (`at`), ELITES.loop metres off. */

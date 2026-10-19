@@ -31,6 +31,8 @@
 //    `kind`, `ms`, `radius` in metres), hurting whoever stands in it
 //  - bomb (a goblin bomber's): instead of a projectile, a bomb lobbed where the target stands,
 //    bursting there a moment later (battle.js BOMBS: which), its damage at the blast's heart
+//  - drain (some): a share of the harm a hit does drawn back into whoever dealt it, healing it
+//    (battle.js #hit: a hell's Flayed Hierarch's curse)
 //
 // Pure data and arithmetic, no DOM: the battle (battle.js) and the interface both use it.
 
@@ -548,6 +550,86 @@ export const NATURAL = Object.freeze({
         ],
     },
     // (A demon lord's: its burning fists, and hellfire hurled from its hand)
+    // (A hell's flayed: creatures.js)
+    flayling: {
+        label: "Raw claws",
+        attacks: [eitherOf(
+            melee({ id: "rake", damage: [3, 6], hitAt: 400, duration: 850, interval: 1150, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.35 } }),
+            melee({ id: "lunge", reach: 2, damage: [5, 9], hitAt: 700, duration: 1200, interval: 2400, stagger: 300, reaction: "pierce", animation: "lunge", afflict: { kind: "bleed", chance: 0.6 } }))],
+    },
+    cinderHusk: {
+        label: "Smouldering grasp",
+        attacks: [melee({ id: "grasp", damage: [5, 9], hitAt: 550, duration: 1050, interval: 1600, stagger: 250, reaction: "fire", animation: "melee", afflict: { kind: "burn", chance: 0.5 } })],
+    },
+    pyreAcolyte: {
+        label: "Staff and pyre",
+        attacks: [
+            melee({ id: "sweep", damage: [3, 6], hitAt: 700, duration: 1300, interval: 1600, reaction: "crush", animation: "melee" }),
+            ranged({ id: "pyre", reach: 8, damage: [4, 8], hitAt: 800, duration: 1600, interval: 2600, reaction: "fire", animation: "cast", projectile: { kind: "fireball", speed: 9 }, afflict: { kind: "burn", chance: 0.5 }, pool: { kind: "lava", ms: 3000, radius: 0.8 } }),
+        ],
+    },
+    ossuaryPriest: {
+        label: "Staff and grave-rot",
+        attacks: [
+            melee({ id: "sweep", damage: [4, 7], hitAt: 700, duration: 1300, interval: 1700, reaction: "crush", animation: "melee", afflict: { kind: "disease", chance: 0.25 } }),
+            ranged({ id: "rot", reach: 7, damage: [3, 6], hitAt: 800, duration: 1600, interval: 2800, reaction: "arcane", animation: "curse", projectile: { kind: "curse", speed: 7 }, afflict: { kind: "disease", chance: 0.6 } }),
+        ],
+    },
+    dirgeWarden: {
+        label: "Halberd and dirge",
+        attacks: [
+            eitherOf(
+                melee({ id: "sweep", reach: 2, damage: [8, 13], hitAt: 900, duration: 1700, interval: 2300, stagger: 400, knockdown: 900, reaction: "cleave", animation: "melee" }),
+                melee({ id: "thrust", reach: 2, damage: [7, 11], hitAt: 700, duration: 1200, interval: 1900, reaction: "pierce", animation: "lunge", afflict: { kind: "bleed", chance: 0.3 } })),
+            ranged({ id: "dirge", reach: 6, damage: [2, 4], hitAt: 900, duration: 1600, interval: 5000, reaction: "arcane", animation: "wail", projectile: { kind: "wail", speed: 7 }, afflict: { kind: "slow", chance: 1, look: "frost" } }),
+        ],
+    },
+    flayedHierarch: {
+        label: "Gilded staff and flaying curse",
+        attacks: [
+            melee({ id: "sweep", damage: [8, 13], hitAt: 800, duration: 1500, interval: 2000, stagger: 300, reaction: "crush", animation: "melee", afflict: { kind: "bleed", chance: 0.35 } }),
+            ranged({ id: "flay", reach: 7, damage: [5, 9], hitAt: 850, duration: 1600, interval: 3200, reaction: "arcane", animation: "drain", projectile: { kind: "drain", speed: 8 }, afflict: { kind: "wither", chance: 0.6 }, drain: 0.6 }),
+        ],
+    },
+    // (A hell's gorgers: creatures.js. Their maws bite ("bite"), spew ("spew") and roar)
+    slagGorger: {
+        label: "Maw and slag",
+        attacks: [
+            melee({ id: "bite", damage: [6, 10], hitAt: 550, duration: 1300, interval: 1600, reaction: "pierce", animation: "bite", afflict: { kind: "burn", chance: 0.35 } }),
+            ranged({ id: "slag", reach: 6, damage: [4, 8], hitAt: 750, duration: 1800, interval: 3200, reaction: "fire", animation: "spew", projectile: { kind: "lava", speed: 7 }, afflict: { kind: "burn", chance: 0.7 }, pool: { kind: "lava", ms: 4000, radius: 1 } }),
+        ],
+    },
+    forgeBrute: {
+        label: "Club and maw",
+        attacks: [eitherOf(
+            melee({ id: "smash", reach: 1.6, damage: [9, 15], hitAt: 1100, duration: 2500, interval: 2600, stagger: 450, knockdown: 1200, reaction: "crush", animation: "melee", afflict: { kind: "burn", chance: 0.4 } }),
+            melee({ id: "bite", damage: [6, 10], hitAt: 550, duration: 1300, interval: 1600, reaction: "pierce", animation: "bite" }))],
+    },
+    chainedGlutton: {
+        label: "Spiked club and devouring maw",
+        attacks: [eitherOf(
+            melee({ id: "smash", reach: 1.6, damage: [10, 16], hitAt: 1100, duration: 2500, interval: 2600, stagger: 450, reaction: "crush", animation: "melee", afflict: { kind: "bleed", chance: 0.4 } }),
+            melee({ id: "devour", damage: [8, 13], hitAt: 550, duration: 1300, interval: 1900, stagger: 300, reaction: "pierce", animation: "bite", afflict: { kind: "bleed", chance: 0.5 }, drain: 0.5 }))],
+    },
+    bloatGorger: {
+        label: "Maw and bile",
+        attacks: [
+            melee({ id: "bite", damage: [5, 9], hitAt: 550, duration: 1300, interval: 1700, reaction: "pierce", animation: "bite", afflict: { kind: "disease", chance: 0.35 } }),
+            ranged({ id: "bile", reach: 6, damage: [3, 6], hitAt: 750, duration: 1800, interval: 3000, reaction: "arcane", animation: "spew", projectile: { kind: "venom", speed: 7 }, afflict: { kind: "poison", chance: 0.8 }, pool: { kind: "venom", ms: 4000, radius: 1 } }),
+        ],
+    },
+    pitRavager: {
+        label: "Club and teeth",
+        attacks: [eitherOf(
+            melee({ id: "rend", reach: 1.6, damage: [8, 13], hitAt: 1100, duration: 2500, interval: 2500, stagger: 300, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.5 } }),
+            melee({ id: "bite", damage: [6, 10], hitAt: 550, duration: 1300, interval: 1400, reaction: "pierce", animation: "bite", afflict: { kind: "bleed", chance: 0.4 } }))],
+    },
+    gorgerWarlord: {
+        label: "Spiked club and maw",
+        attacks: [eitherOf(
+            melee({ id: "smash", reach: 1.8, damage: [12, 19], hitAt: 1100, duration: 2500, interval: 2600, stagger: 500, knockdown: 1400, reaction: "crush", animation: "melee" }),
+            melee({ id: "bite", damage: [9, 14], hitAt: 550, duration: 1300, interval: 1700, reaction: "pierce", animation: "bite", afflict: { kind: "bleed", chance: 0.4 } }))],
+    },
     demonLord: {
         label: "Burning fists and hellfire",
         attacks: [
