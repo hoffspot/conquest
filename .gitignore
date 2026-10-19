@@ -28,6 +28,18 @@ client/models/beasts/greater-demon.bin
 client/models/beasts/fiend.bin
 client/models/beasts/fiend.pale.bin
 client/models/beasts/fiend.ash.bin
+client/models/beasts/flayling.bin
+client/models/beasts/cinder-husk.bin
+client/models/beasts/pyre-acolyte.bin
+client/models/beasts/ossuary-priest.bin
+client/models/beasts/dirge-warden.bin
+client/models/beasts/flayed-hierarch.bin
+client/models/beasts/slag-gorger.bin
+client/models/beasts/forge-brute.bin
+client/models/beasts/chained-glutton.bin
+client/models/beasts/bloat-gorger.bin
+client/models/beasts/pit-ravager.bin
+client/models/beasts/gorger-warlord.bin
 # (A licensed model's earlier builds, kept ignored where a copy's left behind)
 client/models/beasts/werewolf.bin
 client/models/beasts/werewolf.dusk.bin
