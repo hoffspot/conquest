@@ -6,11 +6,11 @@ import { describe, it } from "node:test";
 import { ambienceOf, CALLS, doorOf, HELL, INDOORS, TOLLS, tolled } from "../client/js/audio/ambience.js";
 import { CATALOG, GROUPS, LOOPS, MUSIC } from "../client/js/audio/catalog.js";
 import { filter, pluck } from "../client/js/audio/dsp.js";
-import { sampleFiles } from "../client/js/audio/instruments.js";
+import { instrumentsOf, sampleFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { useSound, wearSound } from "../client/js/audio/handling.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
-import { ARMOUR, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { ARMOUR, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { BEDS, LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { CREATURES } from "../client/js/core/creatures.js";
@@ -293,6 +293,9 @@ const noting = (fetched) => (url) => {
     return fromDisk(url);
 };
 
+// The music's recordings of the scores `names` (sound.js FIRST's: those downloaded at the start)
+const musicFiles = (names = FIRST) => sampleFiles([...new Set(names.flatMap((name) => instrumentsOf(SCORES[name])))]);
+
 // The sounds, made once (without a worker, as in Node), and the music's recordings, downloaded
 // once, handed to each Sound tested
 const made = new Sound({ fetch: fromDisk });
@@ -330,7 +333,7 @@ describe("every sound described, for the sound studio (catalog.js, sound-studio.
 
         assert.ok(GROUPS.every((group) => Object.values(CATALOG).some((entry) => entry.group === group)), "no group empty");
         assert.deepEqual(Object.keys(LOOPS), ["wind", ...Object.keys(BEDS)], "the beds made in code");
-        assert.deepEqual(Object.keys(MUSIC).sort(), [...Object.keys(PLACES), "battle"].sort(), "the music in every place, and a fight's");
+        assert.deepEqual(Object.keys(MUSIC).sort(), [...Object.keys(PLACES), "battle", ...Object.values(LANDS).filter((name) => !PLACES[name])].sort(), "the music in every place, a fight's, and each people's");
         assert.ok(Object.values(MUSIC).every(described));
     });
 
@@ -365,7 +368,7 @@ describe("every sound described, for the sound studio (catalog.js, sound-studio.
 });
 
 describe("playing sounds (sound.js)", () => {
-    it("makes every sound (here without a worker), downloads the music's recordings and the recorded sounds, and plays nothing before it's unlocked", async () => {
+    it("makes every sound (here without a worker), downloads the town's, the tavern's and a fight's music's recordings and the recorded sounds, and plays nothing before it's unlocked", async () => {
         await making;
         await made.downloading;
 
@@ -374,13 +377,13 @@ describe("playing sounds (sound.js)", () => {
         }
 
         assert.ok(made.samples.has("wind"));
-        assert.deepEqual([...made.recordings.keys()].sort(), [...sampleFiles(), ...recordedFiles()].map(([id]) => id).sort());
+        assert.deepEqual([...made.recordings.keys()].sort(), [...musicFiles(), ...recordedFiles()].map(([id]) => id).sort(), "not the other scores' till they're wanted");
         assert.equal(made.play("slash"), null, "no sound until the browser allows it");
 
         // Unlocked, the browser decodes them all (but those downloaded once they're wanted: the spells')
         const { sound } = await started();
 
-        assert.equal(sound.instruments.size, sampleFiles().length);
+        assert.equal(sound.instruments.size, musicFiles().length);
 
         for (const [name, files] of Object.entries(RECORDED)) {
             assert.equal(sound.recorded.get(name)?.length, ON_DEMAND.includes(name) ? undefined : files.length, name);
@@ -774,7 +777,7 @@ describe("playing sounds (sound.js)", () => {
         await offline.prepare();
         await offline.downloading;
         assert.equal(offline.recordings.size, 0);
-        assert.equal(offline.unplayable, sampleFiles().length);
+        assert.equal(offline.lost.size, musicFiles().length);
     });
 
     it("starts the music without a recording it couldn't get, rather than never", async () => {
@@ -783,7 +786,7 @@ describe("playing sounds (sound.js)", () => {
 
         // (As if that one had failed to download)
         sound.instruments.delete(missing);
-        sound.unplayable = 1;
+        sound.lost.add(missing);
         sound.scheduleMusic();
         assert.notEqual(sound.music.start, null);
         sound.close();
@@ -1035,6 +1038,74 @@ describe("playing sounds (sound.js)", () => {
         sound.close();
     });
 
+    it("plays each people's music out in their lands: its recordings downloaded the first time it's wanted, the town's playing on till they're in, then faded over; through their buildings' walls; the town's again where it left off in the humans'; nothing changing in the wild", async () => {
+        const fetched = [];
+        const { sound } = await started({ fetch: noting(fetched) });
+        const context = sound.context;
+        const { town, elves } = sound.tracks;
+        const theirs = musicFiles(["elves"]).filter(([id]) => !musicFiles().some(([first]) => first === id));
+        const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+        // (Half a minute into the town's music)
+        for (let t = 0; t <= 30; t += 0.2) {
+            context.currentTime = 10 + t;
+            sound.scheduleMusic();
+        }
+
+        const index = town.index;
+
+        assert.equal(fetched.length, 0, "no other score's recordings till it's wanted");
+        assert.ok(theirs.length > 0);
+
+        // Into the elves' lands: their recordings downloaded, the town's playing on meanwhile, at
+        // the level it's heard here
+        sound.setLand("elf");
+        assert.equal(sound.music, town);
+        assert.equal(sound.waiting, LAND_FADE);
+        await sound.scoresWanted.get("elves");
+        assert.deepEqual(fetched.sort(), theirs.map(([, url]) => String(url)).sort());
+        assert.equal(sound.music, town, "nor while they're decoded");
+
+        // In: faded over, from its start
+        await tick();
+        context.currentTime += 0.2;
+        sound.scheduleMusic();
+        assert.equal(sound.music, elves);
+        assert.equal(sound.waiting, null);
+        assert.deepEqual([elves.output.gain.value, town.output.gain.value], [1, 0]);
+        assert.ok(Math.abs(elves.start - (context.currentTime + 0.3)) < 1e-9);
+
+        // Through a smithy's walls, theirs; out in the wild between lands, nothing changes
+        sound.setPlace("smithy");
+        assert.deepEqual([sound.music, elves.output.gain.value, elves.filter.frequency.value], [elves, PLACES.smithy.level, PLACES.smithy.muffle]);
+        sound.setPlace("town");
+        sound.setLand(null);
+        assert.equal(sound.music, elves);
+
+        // Back in the humans' lands: the town's where it left off, straight away (its recordings
+        // in from the start)
+        sound.setLand("human");
+        assert.deepEqual([sound.music, town.index, town.output.gain.value, elves.output.gain.value], [town, index, 1, 0]);
+
+        // A minute and more on, the elves' own recordings let go of (not the town's), their MP3s
+        // kept; wanted again, they're decoded again, not downloaded
+        let now = sound.now();
+
+        sound.now = () => now;
+        now += 61_000;
+        context.currentTime += 20;
+        sound.scheduleMusic();
+        assert.ok(theirs.every(([id]) => !sound.instruments.has(id) && sound.musicMp3s.has(id)));
+        assert.ok(musicFiles().every(([id]) => sound.instruments.has(id)));
+        fetched.length = 0;
+        sound.setLand("elf");
+        await tick();
+        context.currentTime += 0.2;
+        sound.scheduleMusic();
+        assert.deepEqual([sound.music, fetched.length], [elves, 0]);
+        sound.close();
+    });
+
     it("starts the music where the player is, if they're in the tavern when the sound starts", async () => {
         await making;
 
@@ -1221,7 +1292,7 @@ describe("keeping the sound going (sound.js)", () => {
         assert.notEqual(sound.context, first);
         assert.equal(first.state, "closed");
         assert.equal(sound.playing, true);
-        assert.equal(sound.instruments.size, sampleFiles().length);
+        assert.equal(sound.instruments.size, musicFiles().length);
         assert.ok(sound.buffers.has("slash"));
 
         const notes = musicOf(sound, played.slice(before));
@@ -1817,14 +1888,14 @@ describe("the recorded sounds kept decoded to a budget (sound.js DECODED_BUDGET)
         const was = bytes(sound.decoded);
 
         assert.ok(mp3s > 0 && sound.recordings.size === 0, "kept once they're decoded");
-        assert.equal(sound.memory(), bytes(sound.buffers) + bytes(sound.instruments) + was + mp3s);
+        assert.equal(sound.memory(), bytes(sound.buffers) + bytes(sound.instruments) + bytes(sound.musicMp3s) + was + mp3s);
 
         // (Let go of, what's decoded is less, and the MP3s are all still counted)
         sound.budget = 0;
         await sound.want("castFireLow");
         await tick();
         assert.ok(bytes(sound.decoded) < was / 4 && bytes(sound.mp3s) > mp3s);
-        assert.equal(sound.memory(), bytes(sound.buffers) + bytes(sound.instruments) + bytes(sound.decoded) + bytes(sound.mp3s));
+        assert.equal(sound.memory(), bytes(sound.buffers) + bytes(sound.instruments) + bytes(sound.musicMp3s) + bytes(sound.decoded) + bytes(sound.mp3s));
         sound.close();
     });
 });

@@ -398,19 +398,27 @@ export const LOOPS = Object.freeze({
     heartbeat: { group: "Indoors", label: "The heart beating", about: "Made in code, four beats of a heart, a beat every 1.2 seconds, heard as if through flesh: a deep lub and a softer, higher dub, thuds falling in pitch with a soft, wet thump of low noise, each beat a little different.", plays: "All through a hell's Halls of Bone, faintly, louder nearer the heart they beat to (in their last room)." },
 });
 
-/** The music, by where it's heard (each of sound.js's PLACES), and a fight's (`battle`). */
+/**
+ * The music, by where it's heard (each of sound.js's PLACES), a fight's (`battle`), and each
+ * people's in their own lands (sound.js LANDS: the humans' the town's).
+ */
 export const MUSIC = Object.freeze({
     battle: { label: "A fight", about: "Martial and driving, about a minute and a half in D minor, 4/4 at 132: cellos galloping alone, then French horns' theme over them, the theme up high on recorder and ocarina, a second tune towards F major, the drums alone under the horns' calls, and everyone; on the town's band with horns, cellos, timpani, a bass drum and a rope-tensioned field drum, all played softly.", plays: "While the player's in a fight, wherever they are but a hell's realms: something hostile after them or striking them, or them striking at it. It fades in over a second, from its start (the cellos); about four seconds after the fight's last moment, what was heard fades back where it left off." },
-    town: { label: "The town's score", about: "A Bard's Tale-style score in D Dorian, on recordings of real old instruments (recorder, ocarina, folk harp, strumstick, harpsichord, organ, chimes, frame drum).", plays: "Out in the world and the towns." },
+    town: { label: "The town's score", about: "A Bard's Tale-style score in D Dorian, on recordings of real old instruments (recorder, ocarina, folk harp, strumstick, harpsichord, organ, chimes, frame drum).", plays: "Out in the humans' lands and their towns, and as the game starts; in the wild between peoples' lands, whichever was heard last goes on." },
+    elves: { label: "The elves' lands", about: "Woodsy and calm, two minutes in F Lydian, 6/8: a flute's tune over a folk harp rippling, a recorder answering it, a section of violins holding the chords softly, hand chimes now and then; no drums.", plays: "Out in the elves' lands (as first claimed, whoever holds them now) and their towns, faded over as the player crosses into them; through the walls of their buildings, as the town's is in the humans'." },
+    darkElves: { label: "The dark elves' lands", about: "Shadowy and unsettling, two minutes in E Phrygian, 4/4 at 60: a pipe organ's low drone that never moves, tubular bells tolling far off, a flute low and breathy, a section of cellos, a bowed vibraphone's glassy held notes and a harp's slow broken chords.", plays: "Out in the dark elves' lands and their towns, faded over as the player crosses into them; through the walls of their buildings." },
+    catFolk: { label: "The cat folk's lands", about: "Warm and sunlit, two minutes on G major's five notes, 4/4 at 104: a kalimba rippling over its own low tines, an ocarina and a balafon trading tunes, bongos, a conga and a small shaker.", plays: "Out on the cat folk's savannah and in their towns, faded over as the player crosses into them; through the walls of their buildings." },
+    lizardFolk: { label: "The lizard folk's lands", about: "Humid and hypnotic, two minutes in A Dorian, 4/4 at 88: a marimba's figure going round and round over a pipe organ's drone on A, a slit drum and a shaker, a flute's long notes floating over it and the cellos taking up its tune low down.", plays: "Out in the lizard folk's jungles and marshes and their towns, faded over as the player crosses into them; through the walls of their buildings." },
+    orcs: { label: "The orcs' lands", about: "Forward and assertive, a minute and a half in G minor, 4/4 at 100: war drums stamping (a bass drum, tenor drums, the timpani), cellos driving in quick short notes, the tune on French horns with tenor trombones an octave under them, held soft; in the middle the brass calling and the drums answering.", plays: "Out in the orcs' lands and their towns, faded over as the player crosses into them; through the walls of their buildings." },
     taproom: { label: "The tavern's jig", about: "A lively jig led by a lute (a classical guitar's nylon strings), with recorder and drum.", plays: "In a tavern's taproom." },
     upstairs: { label: "Upstairs in the tavern", about: "The tavern's jig, quieter and muffled, heard through the floor.", plays: "Upstairs in a tavern." },
-    smithy: { label: "In a smithy", about: "The town's music as if through the smithy's walls, under the forge's roar.", plays: "In a smithy." },
-    temple: { label: "In a temple", about: "The town's music hushed, far off through thick walls.", plays: "In a temple." },
+    smithy: { label: "In a smithy", about: "The land's music (the town's in the humans') as if through the smithy's walls, under the forge's roar.", plays: "In a smithy." },
+    temple: { label: "In a temple", about: "The land's music hushed, far off through thick walls.", plays: "In a temple." },
     guild: { label: "In an adventurers' guild", about: "The tavern's jig, a little quieter: the guild's as lively.", plays: "In an adventurers' guild." },
-    hall: { label: "In a town hall", about: "The town's music through the hall's windows.", plays: "In a town hall." },
-    shop: { label: "In a shop", about: "The town's music through the shop's windows, a little nearer than a hall's.", plays: "In a swordsmith's, an armorer's, an occult scriptorium, an alchemist's, and the masters' shops." },
-    keep: { label: "In a keep", about: "The town's music far off through stone.", plays: "In a keep, a castle's or a citadel's." },
-    undercroft: { label: "In an undercroft", about: "The town's music further off yet, under the keep's great hall.", plays: "In a castle keep's undercroft, with its smith, quartermaster and arcanist." },
+    hall: { label: "In a town hall", about: "The land's music through the hall's windows.", plays: "In a town hall." },
+    shop: { label: "In a shop", about: "The land's music through the shop's windows, a little nearer than a hall's.", plays: "In a swordsmith's, an armorer's, an occult scriptorium, an alchemist's, and the masters' shops." },
+    keep: { label: "In a keep", about: "The land's music far off through stone.", plays: "In a keep, a castle's or a citadel's." },
+    undercroft: { label: "In an undercroft", about: "The land's music further off yet, under the keep's great hall.", plays: "In a castle keep's undercroft, with its smith, quartermaster and arcanist." },
     cave: { label: "In a cave", about: "The world outside barely heard.", plays: "In a cave." },
     lair: { label: "In a great lair", about: "The world outside barely heard, deeper in.", plays: "In the drake's lair or a Dreadthorn's." },
     nest: { label: "In an ants' nest", about: "The world outside barely heard, as deep in the earth as a lair.", plays: "In an ants' nest." },

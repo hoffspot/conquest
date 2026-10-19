@@ -4310,10 +4310,33 @@ recorder (8), the drums alone under the horns' calls (8), everyone (8), and the 
 on A, to lead back into the cellos' D minor: its notes run right up to the loop, so there's no
 gap there.
 
+**Each people's music** (`elves.js`, `dark-elves.js`, `cat-folk.js`, `lizard-folk.js`,
+`orcs.js`, written out with `writing.js`) is heard in their own lands; the humans' is the town's.
+Each is in the town's old-world, modal idiom, and played softly on recordings from the VCSL and VSCO
+2 CE:
+
+| People | Mood | Mode, metre | Played on |
+| --- | --- | --- | --- |
+| Elves | woodsy and calm, no drums | F Lydian, 6/8 at 56, 2 min | a flute's tune over a folk harp rippling, a recorder answering, a section of violins holding the chords, hand chimes now and then |
+| Dark elves | shadowy and unsettling | E Phrygian (the F over the drone's E unsettles), 4/4 at 60, 2 min | a pipe organ's low drone on E that never moves, tubular bells tolling far off, a flute low and breathy, cellos, a bowed vibraphone's glassy held notes, a harp's slow broken chords |
+| Cat folk | warm and sunlit | G major, their tunes on its five notes, 4/4 at 104, 2 min | a kalimba rippling over its own low tines, an ocarina and a balafon (soft mallets) trading tunes, bongos, a conga, a small shaker |
+| Lizard folk | humid and hypnotic | A Dorian, 4/4 at 88, 2 min | a marimba's figure going round and round, the same each bar but for its chord, over a pipe organ's drone on A; a slit drum and a shaker; a flute's long notes over it, the cellos taking up its tune |
+| Orcs | forward and assertive | G minor, 4/4 at 100, 1½ min | war drums stamping (a bass drum, tenor drums, the timpani), cellos driving in quick short notes, the tune on French horns with tenor trombones an octave under them, the brass calling and the drums answering in the middle |
+
+Every score loops without a seam: each starts at once, plays right up to its end, and never goes
+a bar without a new note (`test/music.test.js`).
+
 **Where it's heard** (`setPlace`, told by the game whenever the player's map changes): each score
-has its own track (its instruments' channels, into its own level and low-pass filter). Going into
-the tavern, the town's music fades out over 1.5 seconds as the tavern's fades in, from its start;
-coming back out, the town's comes back where it left off. Upstairs, the tavern's music is heard
+has its own track (its instruments' channels, into its own level and low-pass filter). Out of
+doors and through the walls of a building (`setLand`, from the game's `#hearAround`), the music
+is the land's: the score of the people whose lands they are (their territory as first claimed,
+whoever holds it now: `overworld.homeAt`; `sound.js` `LANDS`), the town's in the humans'. Once
+the player's been in another people's lands for two seconds (`LAND_HEARD`, so walking along a
+border doesn't turn it back and forth; straight away as the game starts), their music fades over
+in four (`LAND_FADE`), where it left off; in the wild between lands, and indoors, it stays as it
+was. Going into
+the tavern, the land's music fades out over 1.5 seconds as the tavern's fades in, from its start;
+coming back out, the land's comes back where it left off. Upstairs, the tavern's music is heard
 through the floor: at 40% of its level (about 8 dB down) and muffled (low-passed at 650 Hz),
 changing over 0.8 s on the stairs. In a fight (`setBattle`, told by the game every frame:
 `app/fight.js`), its music fades in over 1.2 seconds over whatever's heard, from its start (the
@@ -4330,10 +4353,12 @@ or so across the notes the music plays, and downloads them (kept in `.cache`; th
 FLAC, decoded with `@wasm-audio-decoders/flac`). Each is mixed to
 mono, started where its note starts (never a "release" recording, the sound after a note
 ends, which some instruments also have), fine-tuned (by the SFZ's tuning),
-resampled to 32 kHz, cut to as long as the score needs (0.6 to 2.6 seconds), faded out, made
-about as loud as the others (by its loudest 50 ms in its first 0.6 seconds) and saved as an
-80 kb/s MP3 named for what's in it: 76 recordings, about 1.4 megabytes in all, listed in
-`samples.js`. (MP3 adds about 35 ms of silence at the start of each, the same for every one, so
+resampled to 32 kHz, cut to as long as the score needs (0.5 to 3.8 seconds, the held
+instruments' long enough for the slow scores' longest notes, and each under 40 KB), faded out,
+made about as loud as the others (by its loudest 50 ms in its first 0.6 seconds) and saved as an
+80 kb/s MP3 named for what's in it: 139 recordings, about 3 megabytes in all (1.5 for the
+town's, the tavern's and a fight's), listed in `samples.js`. The softest takes are used (and one
+of the pipe organ's, its low F sharp, all but silent, left out). (MP3 adds about 35 ms of silence at the start of each, the same for every one, so
 the music is in time with itself.)
 
 It's in D Dorian (D minor with a raised sixth, the old dances' mode), in 3/4 at 96 beats a
@@ -4358,10 +4383,14 @@ a hall's reverb, and carries straight on round from the end to the beginning, so
 without a seam. It plays on every screen.
 
 `worker.js` makes the sounds in a worker, the most needed first, so the page never waits
-(without module workers they're made on the page, a few at a time). Meanwhile the music's
-recordings are downloaded, six at a time, in the background (not on the loading screen: the
-game doesn't wait for them), kept by the service worker, and decoded once sound starts; the
-music begins when they all are. Offline without them, it just doesn't play. Browsers let a
+(without module workers they're made on the page, a few at a time). Meanwhile the recordings of
+the town's, the tavern's and a fight's music (`FIRST`) are downloaded, six at a time, in the
+background (not on the loading screen: the game doesn't wait for them), kept by the service
+worker, and decoded once sound starts; the music begins when the score it starts with has all of
+its. Each other score's own recordings are downloaded the first time it's wanted, three at a
+time (300 to 850 KB each, the dark elves' and the lizard folk's held notes the most); till
+they're in, what's heard plays on (as loud and as muffled as the new one would be there), then
+fades over. Offline without them, it just doesn't play (or plays on without them). Browsers let a
 page make sound only after a tap, click or key, so it starts on the first one (the start or end
 of a touch, a click or a key: Safari on iPhones counts only the end of a touch, and wants
 something played in it, so a moment of silence is). On an iPhone or iPad, Safari mutes a page's
@@ -4383,8 +4412,10 @@ kept (and counted in what the sounds hold), so one let go of is decoded again fr
 time it's wanted, never downloaded again; meanwhile it plays as it did before it was first in:
 its made sound, what stands in for it, or nothing. What's sounding at once can come to more
 than the budget (a busy place's beds are 20 to 30 MB, the sounds downloaded at the start 22):
-the rest are let go of once they're done. The music's recordings (about 20 MB decoded) are kept
-as they are, and the sound studio keeps everything decoded. Travelling through sixteen places in
+the rest are let go of once they're done. The music's recordings for the town's, the tavern's
+and a fight's (about 20 MB decoded) are kept as they are; another score's own are let go of once
+it's not been heard for a minute (`MUSIC_KEPT`), their MP3s kept, decoded again (never
+downloaded again) if it's wanted again; and the sound studio keeps everything decoded. Travelling through sixteen places in
 Chromium (the town by day and by night, the taproom, a smithy, the wilds' lands by day and by
 night, a cave, a crypt, the lair, a temple, a ruin), with their creatures' voices and a few
 spells, what was decoded climbed past 150 MB, and was still climbing; kept to the budget, it

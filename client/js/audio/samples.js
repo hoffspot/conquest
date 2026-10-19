@@ -25,6 +25,7 @@ export const SAMPLES = Object.freeze({
         { key: 84, file: "ocarina-84.6f896455.mp3" },
     ],
     harp: [
+        { key: 42, file: "harp-42.a072a396.mp3" },
         { key: 46, file: "harp-46.ff3ae0be.mp3" },
         { key: 50, file: "harp-50.80491620.mp3" },
         { key: 54, file: "harp-54.24333488.mp3" },
@@ -67,6 +68,7 @@ export const SAMPLES = Object.freeze({
         { key: 81, file: "chimes-81.17be1d8e.mp3" },
         { key: 86, file: "chimes-86.6d64ae66.mp3" },
         { key: 90, file: "chimes-90.e2dc9438.mp3" },
+        { key: 94, file: "chimes-94.8b1789d2.mp3" },
     ],
     drum: [
         { kind: "low", file: "drum-low.bf5d510d.mp3" },
@@ -114,5 +116,96 @@ export const SAMPLES = Object.freeze({
     ],
     snare: [
         { kind: "hit", file: "snare-hit.c302f539.mp3" },
+    ],
+    flute: [
+        { key: 64, file: "flute-64.386bf9ec.mp3" },
+        { key: 69, file: "flute-69.b0c32b65.mp3" },
+        { key: 72, file: "flute-72.eb186396.mp3" },
+        { key: 76, file: "flute-76.8781fdd3.mp3" },
+        { key: 81, file: "flute-81.02e9e5be.mp3" },
+    ],
+    violins: [
+        { key: 66, file: "violins-66.6a6d752c.mp3" },
+        { key: 69, file: "violins-69.4dd48d13.mp3" },
+        { key: 72, file: "violins-72.2b4255d5.mp3" },
+        { key: 76, file: "violins-76.09653c7f.mp3" },
+        { key: 79, file: "violins-79.12f3ddb3.mp3" },
+    ],
+    celli: [
+        { key: 43, file: "celli-43.fd3995cd.mp3" },
+        { key: 47, file: "celli-47.d5220efa.mp3" },
+        { key: 50, file: "celli-50.3716e7a8.mp3" },
+        { key: 53, file: "celli-53.8964c694.mp3" },
+        { key: 57, file: "celli-57.efb12b7e.mp3" },
+        { key: 60, file: "celli-60.efb3d32e.mp3" },
+        { key: 64, file: "celli-64.758b8421.mp3" },
+        { key: 67, file: "celli-67.03d5351c.mp3" },
+    ],
+    trombone: [
+        { key: 39, file: "trombone-39.91e80f39.mp3" },
+        { key: 41, file: "trombone-41.be9df764.mp3" },
+        { key: 46, file: "trombone-46.7104dad8.mp3" },
+        { key: 50, file: "trombone-50.ce6ce7ec.mp3" },
+    ],
+    pipeorgan: [
+        { key: 39, file: "pipeorgan-39.10a8eb0b.mp3" },
+        { key: 45, file: "pipeorgan-45.cee37970.mp3" },
+        { key: 48, file: "pipeorgan-48.0ed372b0.mp3" },
+        { key: 51, file: "pipeorgan-51.c06f4cf6.mp3" },
+    ],
+    bells: [
+        { key: 66, file: "bells-66.050390e8.mp3" },
+        { key: 70, file: "bells-70.8a3b6938.mp3" },
+    ],
+    vibes: [
+        { key: 74, file: "vibes-74.1e4f5cd8.mp3" },
+        { key: 81, file: "vibes-81.172b449a.mp3" },
+    ],
+    kalimba: [
+        { key: 44, file: "kalimba-44.63b4ed73.mp3" },
+        { key: 49, file: "kalimba-49.f1e75e9f.mp3" },
+        { key: 53, file: "kalimba-53.a3ab617e.mp3" },
+        { key: 58, file: "kalimba-58.e44cceb0.mp3" },
+        { key: 63, file: "kalimba-63.912c13cc.mp3" },
+        { key: 67, file: "kalimba-67.d0093eab.mp3" },
+        { key: 70, file: "kalimba-70.d161e0aa.mp3" },
+        { key: 75, file: "kalimba-75.4d7f9e12.mp3" },
+        { key: 79, file: "kalimba-79.f0cf9f01.mp3" },
+    ],
+    balafon: [
+        { key: 65, file: "balafon-65.b0e8b8de.mp3" },
+        { key: 72, file: "balafon-72.cf8b991a.mp3" },
+        { key: 77, file: "balafon-77.c6b57e87.mp3" },
+        { key: 84, file: "balafon-84.23bdaf49.mp3" },
+    ],
+    marimba: [
+        { key: 41, file: "marimba-41.bc219909.mp3" },
+        { key: 48, file: "marimba-48.c524e156.mp3" },
+        { key: 55, file: "marimba-55.b8bca57b.mp3" },
+        { key: 59, file: "marimba-59.fa6f7458.mp3" },
+        { key: 65, file: "marimba-65.8b306229.mp3" },
+        { key: 72, file: "marimba-72.7ad56581.mp3" },
+        { key: 79, file: "marimba-79.f19f9177.mp3" },
+    ],
+    bongos: [
+        { kind: "high", file: "bongos-high.2a22ae66.mp3" },
+        { kind: "muted", file: "bongos-muted.9df2bfbd.mp3" },
+        { kind: "low", file: "bongos-low.dfb7977c.mp3" },
+    ],
+    conga: [
+        { kind: "low", file: "conga-low.da03e82f.mp3" },
+        { kind: "open", file: "conga-open.4a141a96.mp3" },
+    ],
+    shaker: [
+        { kind: "down", file: "shaker-down.ebf977e8.mp3" },
+        { kind: "up", file: "shaker-up.65be59d6.mp3" },
+    ],
+    slitdrum: [
+        { kind: "low", file: "slitdrum-low.626d5abb.mp3" },
+        { kind: "high", file: "slitdrum-high.170e00c0.mp3" },
+    ],
+    toms: [
+        { kind: "low", file: "toms-low.a55cc624.mp3" },
+        { kind: "high", file: "toms-high.682afc2c.mp3" },
     ],
 });

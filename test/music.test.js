@@ -1,15 +1,22 @@
-// The music: its scores (client/js/audio/score.js, the tavern's and a fight's) and the
-// recordings of real instruments they're played on (instruments.js, samples.js, made by
+// The music: its scores (client/js/audio/score.js, the tavern's, a fight's and each people's) and
+// the recordings of real instruments they're played on (instruments.js, samples.js, made by
 // scripts/build-music.js)
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { describe, it } from "node:test";
-import { baseFor, INSTRUMENTS, keysOf, sampleFiles } from "../client/js/audio/instruments.js";
+import { baseFor, INSTRUMENTS, instrumentsOf, keysOf, sampleFiles } from "../client/js/audio/instruments.js";
 import { SAMPLES } from "../client/js/audio/samples.js";
 import { BATTLE, BATTLE_BEATS_PER_BAR, BATTLE_TEMPO } from "../client/js/audio/battle.js";
+import { CAT_FOLK } from "../client/js/audio/cat-folk.js";
+import { DARK_ELVES } from "../client/js/audio/dark-elves.js";
+import { ELVES } from "../client/js/audio/elves.js";
+import { LIZARD_FOLK } from "../client/js/audio/lizard-folk.js";
+import { ORCS } from "../client/js/audio/orcs.js";
 import { BEATS_PER_BAR, midi, SCORE, TEMPO } from "../client/js/audio/score.js";
 import { SCORES } from "../client/js/audio/scores.js";
+import { FIRST, LANDS } from "../client/js/audio/sound.js";
 import { TAVERN, TAVERN_BEATS_PER_BAR, TAVERN_TEMPO } from "../client/js/audio/tavern.js";
+import { harmony } from "../client/js/audio/writing.js";
 import { decodeWav, regionsOf, vscoKey } from "../scripts/build-music.js";
 
 const BAR = (BEATS_PER_BAR * 60) / TEMPO;
@@ -39,9 +46,10 @@ describe("the score (score.js)", () => {
             if (instrument.kinds) {
                 assert.ok(instrument.kinds.includes(note.pitch));
             } else {
-                // Two semitones from a recording at most, but for the ocarina's lowest notes
-                // (the library's lowest is A4: F4 plays it four semitones down)
-                const most = note.instrument === "ocarina" ? 4 : 2;
+                // Two semitones from a recording at most, but as far as an instrument's `reach`
+                // where it says (the ocarina's lowest: the library's lowest is A4, and F4 plays it
+                // four semitones down)
+                const most = instrument.reach ?? 2;
 
                 assert.ok(Math.abs(baseFor(note.instrument, note.pitch) - note.pitch) <= most, `${note.instrument} ${note.pitch}`);
             }
@@ -231,6 +239,108 @@ describe("a fight's music (battle.js)", () => {
     });
 });
 
+describe("each people's music in their own lands (elves.js, dark-elves.js, cat-folk.js, lizard-folk.js, orcs.js)", () => {
+    // Each one's score, its people, its tempo and bar (beats), the pitch classes it keeps to, and
+    // what plays it
+    const PEOPLES = {
+        elves: { score: ELVES, people: "elf", tempo: 168, beatsPerBar: 6, keeps: [5, 7, 9, 11, 0, 2, 4] },
+        darkElves: { score: DARK_ELVES, people: "darkElf", tempo: 60, beatsPerBar: 4, keeps: [4, 5, 7, 9, 11, 0, 2] },
+        catFolk: { score: CAT_FOLK, people: "cat", tempo: 208, beatsPerBar: 8, keeps: [7, 9, 11, 0, 2, 4, 6] },
+        lizardFolk: { score: LIZARD_FOLK, people: "lizard", tempo: 176, beatsPerBar: 8, keeps: [9, 11, 0, 2, 4, 6, 7] },
+        orcs: { score: ORCS, people: "orc", tempo: 100, beatsPerBar: 4, keeps: [7, 9, 10, 0, 2, 3, 5, 6] },
+    };
+    const barOf = ({ tempo, beatsPerBar }) => (beatsPerBar * 60) / tempo;
+    const inBar = (score, n) => score.notes.filter(({ time }) => time >= n * barOf(score) - 0.02 && time < (n + 1) * barOf(score) - 0.02);
+    const bars = (score) => Array.from({ length: Math.round(score.length / barOf(score)) }, (_, n) => inBar(score, n));
+
+    it("is each people's own, heard in their lands (the humans' the town's): a minute and a half to two minutes and a bit, its sections one after another", () => {
+        assert.deepEqual(LANDS, { human: "town", elf: "elves", darkElf: "darkElves", cat: "catFolk", lizard: "lizardFolk", orc: "orcs" });
+
+        for (const [name, { score, people, tempo, beatsPerBar }] of Object.entries(PEOPLES)) {
+            assert.equal(SCORES[name], score, name);
+            assert.equal(LANDS[people], name);
+            assert.deepEqual([score.tempo, score.beatsPerBar], [tempo, beatsPerBar], name);
+            assert.ok(score.length > 90 && score.length < 140, `${name}: ${score.length} s`);
+            assert.ok(Math.abs(score.sections.reduce((all, section) => all + section.bars, 0) * barOf(score) - score.length) < 1e-9, name);
+            assert.ok(score.sections.every((section, k) => k === 0 || section.bar === score.sections[k - 1].bar + score.sections[k - 1].bars), name);
+        }
+    });
+
+    it("writes every note in time, on an instrument, near a recording of it, in order; nothing loud", () => {
+        for (const [name, { score }] of Object.entries(PEOPLES)) {
+            assert.ok(score.notes.length > 200, name);
+
+            for (const [k, note] of score.notes.entries()) {
+                const instrument = INSTRUMENTS[note.instrument];
+
+                assert.ok(instrument, `${name}: ${note.instrument}`);
+                assert.ok(note.time >= 0 && note.time < score.length, `${name}: ${note.instrument} at ${note.time}`);
+                assert.ok(k === 0 || note.time >= score.notes[k - 1].time, `${name}: in time order`);
+                assert.ok(note.duration > 0 && note.velocity > 0 && note.velocity <= 0.9, `${name}: ${note.instrument} at ${note.velocity}`);
+
+                if (instrument.kinds) {
+                    assert.ok(instrument.kinds.includes(note.pitch), `${name}: ${note.instrument} ${note.pitch}`);
+                } else {
+                    assert.ok(Math.abs(baseFor(note.instrument, note.pitch) - note.pitch) <= (instrument.reach ?? 2), `${name}: ${note.instrument} ${note.pitch}`);
+                }
+            }
+        }
+    });
+
+    it("keeps to its mode: the elves' F Lydian, the dark elves' E Phrygian, the cat folk's G major (their tunes on its five notes), the lizard folk's A Dorian, the orcs' G minor", () => {
+        for (const [name, { score, keeps }] of Object.entries(PEOPLES)) {
+            const strays = score.notes.filter(({ instrument, pitch }) => !INSTRUMENTS[instrument].kinds && !keeps.includes(pitch % 12));
+
+            assert.deepEqual(strays, [], name);
+        }
+
+        const tunes = CAT_FOLK.notes.filter(({ instrument }) => ["ocarina", "balafon"].includes(instrument));
+
+        assert.ok(tunes.every(({ pitch }) => [7, 9, 11, 2, 4].includes(pitch % 12)), "the cat folk's tunes: G A B D E");
+        assert.deepEqual(harmony([[midi("E5"), 1], [null, 1], [midi("B4"), 2]], [7, 9, 11, 2, 4]), [[midi("B4"), 1], [null, 1], [midi("G4"), 2]], "two of the five below");
+    });
+
+    it("sounds like its people: the elves' flute, harp and violins with no drums; the dark elves' organ droning on E all through; the cat folk's kalimba and hand drums; the lizard folk's marimba going round over a drone on A; the orcs' brass and war drums", () => {
+        const plays = (score) => new Set(score.notes.map(({ instrument }) => instrument));
+
+        assert.ok(["flute", "harp", "violins"].every((instrument) => plays(ELVES).has(instrument)));
+        assert.ok([...plays(ELVES)].every((instrument) => !INSTRUMENTS[instrument].kinds), "no drums");
+
+        // (The drone in every bar, never moving, under bells and the flute)
+        assert.ok(bars(DARK_ELVES).every((notes) => notes.some(({ instrument, pitch }) => instrument === "pipeorgan" && pitch === midi("E2"))));
+        assert.ok(["bells", "flute", "celli", "vibes"].every((instrument) => plays(DARK_ELVES).has(instrument)));
+
+        // (The kalimba every bar but the drums', the hand drums every bar)
+        assert.ok(bars(CAT_FOLK).every((notes) => notes.some(({ instrument }) => instrument === "conga") && notes.some(({ instrument }) => instrument === "bongos")));
+        assert.ok(bars(CAT_FOLK).filter((notes) => notes.filter(({ instrument }) => instrument === "kalimba").length >= 8).length >= bars(CAT_FOLK).length - 4);
+
+        // (The marimba's figure the same eight quavers each bar, over the drone on A)
+        assert.ok(bars(LIZARD_FOLK).every((notes) => notes.filter(({ instrument }) => instrument === "marimba").length >= 8 && notes.some(({ instrument, pitch }) => instrument === "pipeorgan" && pitch === midi("A2"))));
+
+        // (The war drums stamping every bar but the brass's calls, each answered by the drums the
+        // bar after; the brass in every section)
+        const calls = ORCS.sections.find(({ name }) => name === "the calls");
+
+        assert.ok(bars(ORCS).every((notes, n) => notes.some(({ instrument }) => instrument === "bassdrum") || (n >= calls.bar && n < calls.bar + calls.bars && (n - calls.bar) % 2 === 0)));
+        assert.ok(ORCS.sections.every((section) => ORCS.notes.some(({ instrument, time }) => ["horn", "trombone"].includes(instrument) && time >= section.start && time < section.start + section.bars * barOf(ORCS))));
+        assert.ok(plays(ORCS).has("toms") && plays(ORCS).has("cello"));
+    });
+});
+
+describe("every score loops without a seam (scores.js)", () => {
+    it("starts at once, plays up to its end, and never goes a bar without a new note", () => {
+        for (const [name, score] of Object.entries(SCORES)) {
+            const bar = (score.beatsPerBar * 60) / score.tempo;
+            const times = score.notes.map(({ time }) => time);
+            const longest = Math.max(...times.slice(1).map((time, k) => time - times[k]));
+
+            assert.ok(times[0] < 0.05, `${name} starts at ${times[0]}`);
+            assert.ok(score.length - times.at(-1) <= bar / 2 + 0.05, `${name}'s last note ${score.length - times.at(-1)} s before its end`);
+            assert.ok(longest < bar + 0.05, `${name}: ${longest.toFixed(2)} s without a note`);
+        }
+    });
+});
+
 describe("the instruments (instruments.js, samples.js)", () => {
     it("has recordings of every instrument the music plays, and of every kind of drum hit", () => {
         const played = new Set(Object.values(SCORES).flatMap(({ notes }) => notes).map(({ instrument }) => instrument));
@@ -274,8 +384,23 @@ describe("the instruments (instruments.js, samples.js)", () => {
             bytes += data.length;
         }
 
-        // (About 1.2 MB for the town's and the tavern's, and 300 KB more for a fight's)
-        assert.ok(bytes < 1_600_000, `${bytes} bytes in all`);
+        // (Downloaded at the start, only the town's, the tavern's and a fight's: about 1.2 MB for
+        // the town's and the tavern's, and 300 KB more for a fight's; each other score's own the
+        // first time it's wanted, under 900 KB, the dark elves' and the lizard folk's held notes
+        // the most; about 3 MB in all)
+        const sizeOf = (instruments) => sampleFiles(instruments).reduce((all, [, url]) => all + statSync(url).size, 0);
+        const first = new Set(FIRST.flatMap((name) => instrumentsOf(SCORES[name])));
+
+        assert.deepEqual(FIRST, ["town", "tavern", "battle"]);
+        assert.ok(sizeOf([...first]) < 1_600_000, `${sizeOf([...first])} bytes at the start`);
+
+        for (const [name, score] of Object.entries(SCORES)) {
+            const own = instrumentsOf(score).filter((instrument) => !first.has(instrument));
+
+            assert.ok(sizeOf(own) < 900_000, `${name}'s own: ${sizeOf(own)} bytes`);
+        }
+
+        assert.ok(bytes < 3_300_000, `${bytes} bytes in all`);
     });
 });
 

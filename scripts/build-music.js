@@ -79,6 +79,24 @@ const SOURCES = {
     timpani: { sfz: "Membranophones/Struck Membranophones/Timpani 2 - Scale", seconds: 1.6, pick: /_v3_rr1_/ },
     bassdrum: { sfz: "Membranophones/Struck Membranophones/Bass Drum 1", seconds: 1.2, kinds: { hit: /BDrumNew_hit_v3_rr1/ } },
     snare: { sfz: "Membranophones/Struck Membranophones/Snare Drum, Rope Tension", seconds: 0.5, kinds: { hit: /RopeSnare_low_sn_Main_vl2_rr1/ } },
+    // (The peoples': elves.js, dark-elves.js, cat-folk.js, lizard-folk.js, orcs.js. Held ones
+    // long enough for the slow music's longest notes; the soft takes of each, nothing harsh)
+    flute: { vsco: "Woodwinds/Flute/susNV", notes: ["C3", "E3", "A3", "C4", "E4", "A4", "C5", "E5", "A5", "C6"], file: (note) => `LDFlute_susNV_${note}_v1_1.wav`, seconds: 3.8 },
+    violins: { vsco: "Strings/Violin Section/susVib", notes: ["G2", "A2", "B2", "D3", "F#3", "A3", "C4", "E4", "G4", "B4", "D5"], file: (note) => `VlnEns_susVib_${note}_v1.wav`, seconds: 2.8 },
+    celli: { vsco: "Strings/Cello Section/susvib", notes: ["C1", "E1", "G1", "B1", "D2", "F2", "A2", "C3", "E3", "G3", "B3", "D4", "F4"], file: (note) => `susvib_${note}_v1_1.wav`, seconds: 3.8 },
+    trombone: { vsco: "Brass/Tenor Trombone/sus", notes: ["A#0", "C#1", "D#1", "F1", "A#1", "D2", "F2", "C3", "C#3", "D#3", "F3"], file: (note) => `tenortbn_sus_${note}_v1_1.wav`, seconds: 2.8 },
+    // (Its low F sharp's recording all but silent, so left out)
+    pipeorgan: { sfz: "Aerophones/Edge-blown Aerophones/Pipe Organ - Quiet", seconds: 3.8, pick: /^(?!.*_F#1_)/ },
+    bells: { sfz: "Idiophones/Struck Idiophones/Tubular Bells 1", seconds: 3.8, pick: /_pp?_rr/ },
+    vibes: { sfz: "Idiophones/Struck Idiophones/Vibraphone - Bowed", seconds: 3.6 },
+    kalimba: { sfz: "Idiophones/Plucked Idiophones/Kalimba, Tanzania", seconds: 2 },
+    balafon: { sfz: "Idiophones/Struck Idiophones/Balafon - Soft Mallet", seconds: 1.8, pick: /_vl2_/ },
+    marimba: { sfz: "Idiophones/Struck Idiophones/Marimba", seconds: 2.2, pick: /_med_/ },
+    bongos: { sfz: "Membranophones/Struck Membranophones/Bongos", seconds: 0.6, kinds: { high: /BongoH_Hit1_v2_rr1/, muted: /BongoH_HitMuted1_v2_rr1/, low: /BongoL_Hit1_v2_rr1/ } },
+    conga: { sfz: "Membranophones/Struck Membranophones/Conga", seconds: 0.8, kinds: { low: /Tumba_HitN_v2_rr1/, open: /Conga_HitN_v2_rr1/ } },
+    shaker: { sfz: "Idiophones/Struck Idiophones/Shaker, Small", seconds: 0.5, kinds: { down: /Mid_ShakerDouble_Down_rr1/, up: /Mid_ShakerDouble_Up_rr1/ } },
+    slitdrum: { sfz: "Idiophones/Struck Idiophones/Slit Drum", seconds: 1, kinds: { low: /LogDrumLo_MedM_v2_rr1/, high: /LogDrumHi_MedM_v2_rr1/ } },
+    toms: { sfz: "Membranophones/Struck Membranophones/Legacy Toms", seconds: 0.8, kinds: { low: /tenor_mf_rr1/, high: /tenorH_mf_rr1/ } },
 };
 
 /** A VSCO 2 CE file's note as MIDI: its names are an octave under the usual ("C3" is middle C, 60). */

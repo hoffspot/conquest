@@ -272,6 +272,10 @@ const LIGHT_REACH = 30;
 // What's heard round the player (audio/ambience.js) worked out again this often (seconds)
 const HEARD_EVERY = 0.5;
 
+// Out of doors, the player's this long (seconds) in a people's lands before their music's heard
+// there (audio/sound.js setLand), so walking along a border doesn't turn it back and forth
+const LAND_HEARD = 2;
+
 // Wooden stairs' creaks (a recording of three or four treads) played this much quicker, to fit a
 // climb (STAIRS)
 const CREAKS = 1.4;
@@ -2251,6 +2255,7 @@ export class Game {
         this.sound?.setAmbient(false);
         this.sound?.setAmbience({});
         this.sound?.setPlace("town");
+        this.sound?.setLand("human");
         this.sound?.setBattle(false);
         this.sound?.setHearth(null);
         this.hud.clear();
@@ -6083,6 +6088,19 @@ export class Game {
         } else if (overworld?.biomeAt) {
             this.surroundings ??= new Surroundings(overworld);
             facts = { ...facts, ...this.surroundings.at(me.x, me.z, { height: me.y, lights: this.nearLights ?? [], lit: torchesLit(elapsedOf(this.host.war)) }) };
+
+            // (Whose lands these are, as first claimed, for their music: straight away as the
+            // game starts, then once they've been in them LAND_HEARD; in the wild between, it
+            // stays as it was)
+            const people = overworld.homeAt?.(me.x, me.z) ?? null;
+            const first = this.landNear === undefined;
+
+            this.landFor = people === this.landNear ? (this.landFor ?? 0) + HEARD_EVERY : 0;
+            this.landNear = people;
+
+            if (people && (first || this.landFor >= LAND_HEARD)) {
+                this.sound.setLand(people);
+            }
         }
 
         this.sound.setAmbience(ambienceOf(facts));
