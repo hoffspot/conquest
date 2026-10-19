@@ -215,6 +215,86 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     await guestContext.close();
 });
 
+test("a visitor to a world on the host's device is remembered there by their own id: gone, what the world knows of them is kept with it, and back, they're where they left", async ({ ownBrowser: browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    // (The host plays a character kept on their device, in a world of their own there)
+    await host.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), { ...ELF, seed: 2, hero: { ...ELF.hero, name: "Wren", race: "human" } });
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), ELF);
+    await host.goto("/");
+    await host.locator("#continuebutton").click();
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+
+    // Syl comes in, and walks a little way
+    await guest.goto(`/?join=${code}`);
+    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(guest);
+
+    const guestId = () => host.evaluate(() => [...window.pellagos.game.host.players.keys()].find((id) => id !== "player"));
+
+    await expect.poll(guestId, { timeout: 30000 }).toBeTruthy();
+
+    const onward = await guest.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const to = [me.square[0], me.square[1] + 3];
+
+        game.remote.command({ type: "move", to });
+
+        return to;
+    });
+
+    await expect.poll(async () => host.evaluate((id) => window.pellagos.game.battle.actor(id).square, await guestId()), { timeout: 60000 }).toEqual(onward);
+
+    // Gone: what the host's world knows of them kept with it, by their own id
+    await guest.locator("#menubutton").click();
+    await guest.locator("#quitbutton").click();
+    await expect(host.locator("#banner")).toContainText("Syl has left the world.", { timeout: 30000 });
+
+    const guid = await guest.evaluate(() => JSON.parse(localStorage.getItem(`pellagos.${JSON.parse(localStorage.getItem("pellagos.characters")).last}.save`)).hero.guid);
+    const remembered = await host.evaluate((guid) => {
+        const id = JSON.parse(localStorage.getItem("pellagos.characters")).last;
+        const world = JSON.parse(localStorage.getItem(`pellagos.${JSON.parse(localStorage.getItem(`pellagos.${id}.save`)).world}.about`));
+        const place = world.places[guid];
+
+        return place && { visitor: place.visitor, place: JSON.parse(localStorage.getItem(`pellagos.${place.id}.place`))?.place ?? null, progress: localStorage.getItem(`pellagos.${place.id}.progress`) };
+    }, guid);
+
+    expect(remembered).toMatchObject({ visitor: "Syl", progress: null });
+    expect(remembered.place).toBeTruthy();
+
+    // Back: where they left
+    await guest.locator("#joinbutton").click();
+    await guest.locator("#join").locator("#joincode").fill(code);
+    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(guest);
+    await expect.poll(async () => host.evaluate((id) => id && window.pellagos.game.battle.actor(id)?.square, await guestId()), { timeout: 60000 }).toEqual(onward);
+
+    await hostContext.close();
+    await guestContext.close();
+});
+
 // A human who joins by the host's own town, carrying two wolf pelts
 const BRYN = {
     version: 1,

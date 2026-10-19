@@ -27,7 +27,7 @@ import { decode } from "../../client/js/core/wire.js";
 import { VERSIONS } from "../update/installed.js";
 import { BACKUPS, ensureFolder, exists, FILE_MODE, SERVER_JOURNAL, stampOf } from "./files.js";
 import { forward, SERVER_VERSION } from "./versions.js";
-import { FORMAT_STEPS, FORMAT_VERSION, HEROES, STATE, StoredWorld, WORLD_FILE, WORLDS } from "./worlds.js";
+import { FORMAT_STEPS, FORMAT_VERSION, HEROES, STATE, StoredWorld, VISITORS, WORLD_FILE, WORLDS } from "./worlds.js";
 
 /** An archive's format (and the versions of it a server reads: this one, and any before it). */
 export const ARCHIVE_FORMAT = "pellagos.archive.1";
@@ -244,7 +244,8 @@ export function worldsIn(archive) {
 
 /**
  * One world in an archive as manage.js importWorld takes a world's file (its EXPORT_FORMAT, as
- * `format`): what it is, its newest save that reads, and the heroes it keeps. Null if it isn't in
+ * `format`): what it is, its newest save that reads, the heroes it keeps, and what it remembers of
+ * its visitors. Null if it isn't in
  * it, or its world.json doesn't read.
  */
 export function worldBundle(archive, id, format) {
@@ -270,9 +271,26 @@ export function worldBundle(archive, id, format) {
         }
     }
 
+    // (And what it remembers of its visitors, by player, each by their character's id)
+    const visitors = {};
+    const remembered = `${WORLDS}/${id}/${VISITORS}/`;
+
+    for (const [file, entry] of archive.files) {
+        const [player, name, more] = file.startsWith(remembered) ? file.slice(remembered.length).split("/") : [];
+
+        if (player && name && !more) {
+            try {
+                visitors[player] ??= {};
+                visitors[player][name] = JSON.parse(bytesOf(entry).toString("utf8"));
+            } catch {
+                // (One that doesn't read isn't brought)
+            }
+        }
+    }
+
     const { writtenBy, ...world } = meta;
 
-    return { format, exportedBy: writtenBy ?? archive.archivedBy, exported: archive.archived, world, snapshot: newestSave(archive, id)?.text ?? null, heroes };
+    return { format, exportedBy: writtenBy ?? archive.archivedBy, exported: archive.archived, world, snapshot: newestSave(archive, id)?.text ?? null, heroes, visitors };
 }
 
 /**

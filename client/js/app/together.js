@@ -7,7 +7,7 @@
 //   const world = await openWorld(game, { broker });          // { code, hosting, close() }
 //   const joined = await joinWorld({ code, character, broker }); // { joining, close() }
 
-import { Hosting, Joining } from "../core/netplay.js";
+import { characterFrom, Hosting, Joining } from "../core/netplay.js";
 import { BROKER_ERRORS, BrokerHost, BrokerJoin, reachability } from "./peer.js";
 
 export { NET_KICKS, NET_REFUSALS, versionWords } from "../core/netplay.js";
@@ -484,8 +484,12 @@ const peerOptions = ({ RTC, timing }) => ({ ...(RTC !== undefined ? { RTC } : {}
  * most, net, listed }, and for the tests RTC, timing }) if it's given, else the relay at `address`. Hears onChange() when
  * someone comes or goes; onLink("lost") when its link's dropped and it's coming back on another,
  * onLink(null) once it has (everyone sent the world again); and onDrop() if the link's lost for good.
+ * `visitors` ({ arrive, leave }), if it's given: each who comes in taken as arrive(brought) gives
+ * them (who they are and what they carry, as netplay.js characterFrom brings them, with what the
+ * world remembers of them: save.js visitorOf), and leave(character) told as each goes, with where
+ * and how they were (to remember them: save.js keepVisitor).
  */
-export async function openWorld(game, { address = null, broker = null, onChange = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING } = {}) {
+export async function openWorld(game, { address = null, broker = null, onChange = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING, visitors = null } = {}) {
     let link;
     let code;
 
@@ -512,7 +516,21 @@ export async function openWorld(game, { address = null, broker = null, onChange 
     const hosting = new Hosting(game.host, { send: (peer, text) => link.to(peer, text) });
 
     hosting.onJoin = () => onChange();
-    hosting.onLeave = () => onChange();
+    hosting.onLeave = (id, peer, character) => {
+        if (character) {
+            visitors?.leave(character);
+        }
+
+        onChange();
+    };
+
+    if (visitors) {
+        hosting.characterOf = (peer, character) => {
+            const brought = characterFrom(character);
+
+            return brought && visitors.arrive(brought);
+        };
+    }
     // (One sent out, told why: their place at the relay closed after it)
     hosting.onKick = (peer) => link.kick(peer);
     hosting.onChat = (line) => game.chatHeard(line);

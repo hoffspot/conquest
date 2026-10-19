@@ -13,7 +13,7 @@ import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
 import { isGuid } from "../client/js/core/guid.js";
-import { clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, loadCharacters, loadExplored, loadLocalWorld, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, SAVE_VERSION, saveExplored, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, writeSave } from "../client/js/app/save.js";
+import { clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLocalWorld, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, SAVE_VERSION, saveExplored, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
 import { ago, KEPT_FROM, keepMessage, MESSAGES_KEPT } from "../client/js/app/journal.js";
 import { encode } from "../client/js/core/wire.js";
 import { Standing } from "../client/js/core/standing.js";
@@ -354,6 +354,58 @@ describe("saving (save.js)", () => {
 
         assert.deepEqual(keepCharacter(exported), { error: "worlds" });
         assert.deepEqual(loadCharacters(WEAPONS), []);
+    });
+
+    it("remembers visitors to a world on this device by their own id: what it knows of them kept as they go, given back the next time with what they carry their own; up to twelve, the one gone longest forgotten; forgotten with the world", () => {
+        const items = useStorage();
+        const { world } = makeWorld({ name: "Thornvale", seed: 21 });
+        const wren = { ...defaultHero(), name: "Wren", guid: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d" };
+
+        // The first time: nothing known of them, what they carry theirs
+        const first = visitorOf(world.id, { hero: wren, progress: { gold: 50 } });
+
+        assert.deepEqual([first.progress.gold, first.talks, first.standing, first.followers, first.place], [50, { memory: {}, knowledge: [] }, {}, [], null]);
+
+        // Gone: what the world knows of them kept, by their id (what they carry isn't)
+        assert.equal(keepVisitor(world.id, { hero: wren, progress: { gold: 99 }, talks: { memory: { barkeep: { talks: 2, flags: [] } }, knowledge: ["the ford"] }, explored: { entered: ["home:tavern"], visited: "" }, standing: { points: 40, requests: [] }, followers: [{ name: "Pip", calling: "warrior" }], place: { x: 10, y: 12, facing: 1 }, vitals: { hp: 5 } }), true);
+
+        const place = loadLocalWorld(world.id).places[wren.guid];
+
+        assert.equal(place.visitor, "Wren");
+        assert.equal([...items.keys()].some((key) => key === `pellagos.${place.id}.progress`), false);
+
+        // Back: as the world left them, what they carry as they bring it
+        const again = visitorOf(world.id, { hero: wren, progress: { gold: 80 } });
+
+        assert.equal(again.progress.gold, 80);
+        assert.deepEqual(again.talks.knowledge, ["the ford"]);
+        assert.equal(again.standing.points, 40);
+        assert.deepEqual(again.followers.map(({ name }) => name), ["Pip"]);
+        assert.deepEqual(again.place, { x: 10, y: 12, facing: 1 });
+        assert.deepEqual(again.vitals, { hp: 5 });
+        assert.deepEqual(loadLocalWorld(world.id).places[wren.guid].id, place.id, "the same place");
+
+        // (Without an id, or in a world not kept here: remembered nowhere)
+        assert.deepEqual(visitorOf(world.id, { hero: { ...wren, guid: undefined }, progress: {} }).talks, { memory: {}, knowledge: [] });
+        assert.equal(keepVisitor("zzzz9999", { hero: wren }), false);
+
+        // Up to MOST_VISITORS: the one gone longest forgotten for a new one
+        const guid = (n) => `9a1b2c3d-4e5f-4a6b-8c7d-${String(n).padStart(12, "0")}`;
+
+        for (let n = 1; n < MOST_VISITORS + 1; n++) {
+            keepVisitor(world.id, { hero: { ...wren, name: `Guest ${n}`, guid: guid(n) }, talks: { memory: {}, knowledge: [] } });
+        }
+
+        const kept = Object.values(loadLocalWorld(world.id).places).filter((one) => typeof one.visitor === "string");
+
+        assert.equal(MOST_VISITORS, 12);
+        assert.equal(kept.length, MOST_VISITORS);
+        assert.equal(loadLocalWorld(world.id).places[wren.guid], undefined, "Wren, gone longest, forgotten");
+        assert.deepEqual([...items.keys()].filter((key) => key.startsWith(`pellagos.${place.id}.`)), [], "and all of it");
+
+        // Forgotten with the world
+        assert.equal(forgetWorld(world.id), true);
+        assert.deepEqual([...items.keys()].filter((key) => kept.some((one) => key.startsWith(`pellagos.${one.id}.`))), []);
     });
 
     it("keeps how a saved character was when it last stopped (host.js vitalsOf), to carry on so; not for another", () => {

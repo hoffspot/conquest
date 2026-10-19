@@ -437,9 +437,16 @@ describe("a world's management (server/manage.js)", () => {
         }
     });
 
-    it("brings a world in from its file: a world of its own with its save, its time and its kept heroes, and new keys; refusing what isn't one, a newer one, one too big, and anyone who can't make worlds", async () => {
+    it("brings a world in from its file: a world of its own with its save, its time, its kept heroes and what it remembers of its visitors, and new keys; refusing what isn't one, a newer one, one too big, and anyone who can't make worlds", async () => {
+        // (What it remembers of a visitor, for their player, by their character's id: storage/visitors.js)
+        const guid = "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d";
+
+        await server.worlds.get(world.world).visitors.keep("visitor-1", { hero: { name: "Wren", guid }, talks: { memory: {}, knowledge: ["the ford"] } });
+
         const exported = (await raw(server.adminPort, { route: `/api/v1/worlds/${world.world}/export`, headers: { Cookie: admin.cookie, [ADMIN_HEADER]: ADMIN_VALUE } })).body;
         const bundle = JSON.parse(gunzipSync(exported).toString("utf8"));
+
+        assert.deepEqual(Object.keys(bundle.visitors["visitor-1"]), [`${guid}.json`]);
         const page = { Cookie: admin.cookie, [ADMIN_HEADER]: ADMIN_VALUE };
         const brought = await upload(server.adminPort, "/worlds/import", exported, page);
 
@@ -455,6 +462,7 @@ describe("a world's management (server/manage.js)", () => {
         assert.equal(server.metaOf(brought.json.world).worldTime, decode(bundle.snapshot).battle.time, "its time, from its save");
         assert.ok((await admin.call("GET", `/worlds/${brought.json.world}/backups`)).json.backups.some((backup) => backup.id === "now"), "its save kept");
         assert.ok((await readdir(path.join(server.root, "worlds", brought.json.world))).includes("journal.log"));
+        assert.deepEqual((await server.worlds.get(brought.json.world).visitors.get("visitor-1", guid)).talks.knowledge, ["the ford"]);
 
         // (Its players come in by its own new keys: the old world's don't open it)
         assert.equal((await wifi(server, "POST", "/enter", { body: { world: brought.json.world, key: world.playerKey } })).json.error, "key");

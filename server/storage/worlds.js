@@ -10,6 +10,8 @@
 //                                writes it, gzipped)
 //     state/auto-1..5.json.gz    the five before it, newest first
 //     heroes/<player-id>/<n>.json   the heroes it keeps (heroes.js)
+//     visitors/<character-id>.json  what it remembers of each who's visited it, a world whose
+//                                players bring their own (visitors.js)
 //     journal.log                what's happened to it, a line each
 //
 // Every save first moves the snapshots kept down the ring (the oldest gone), then writes the new
@@ -24,6 +26,7 @@ import { decode, encode } from "../../client/js/core/wire.js";
 import { RACE } from "../../client/js/core/worldplan/plan.js";
 import { BACKUPS, ensureFolder, exists, FILE_MODE, readGzip, readJSON, stampOf, writeGzip, writeJSON } from "./files.js";
 import { KeptHeroes } from "./heroes.js";
+import { Visitors } from "./visitors.js";
 import { schemaReason } from "./settings.js";
 import { forward, SERVER_VERSION } from "./versions.js";
 
@@ -42,6 +45,7 @@ export const WORLD_FILE = "world.json";
 export const STATE = "state";
 export const NOW = "now.json.gz";
 export const HEROES = "heroes";
+export const VISITORS = "visitors";
 export const JOURNAL = "journal.log";
 
 /** The autosave `n` (1, the newest, to AUTOSAVES)'s file. */
@@ -140,6 +144,9 @@ export class StoredWorld {
 
         /** The heroes it keeps for its players. */
         this.heroes = new KeptHeroes(path.join(folder, HEROES));
+
+        /** What it remembers of those who've visited it, a world whose players bring their own. */
+        this.visitors = new Visitors(path.join(folder, VISITORS));
     }
 
     get id() {

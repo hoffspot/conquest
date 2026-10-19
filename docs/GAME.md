@@ -4574,6 +4574,15 @@ it.
      kept of them stays where it was (save.js `settle`). A new character starts in a world of
      their own the same way, unless they're made for one; with eight worlds kept (save.js
      `MOST_WORLDS`), they're asked which they go into.
+   - **Going into someone else's world** (one opened to others, or a world on a server whose
+     players bring their own), a character takes only who they are and what they carry: what
+     they've grown into and carry is kept on this device as it changes there, and is what they
+     bring next time. What that world knows of them is its own, kept by it, by their own id:
+     theirs again the next time they come (docs/SERVER.md, "Visitors"). A world on this device
+     opened to others does the same for those who visit it: each visitor's place in it under
+     their own id (`places[<their id>]`, with their name and when they were last seen), up to
+     twelve (save.js `MOST_VISITORS`, the one gone longest forgotten), the list saying how many
+     have visited ("Ada and 2 visitors have been here"; save.js `visitorOf`, `keepVisitor`).
    - **Characters on this device** lists those kept, the one played last first, each with their
      people, what they wield (as they have it now), their gold, the world they're in, and when
      they last played. Tapped, one's played in the world they're in (in none, they're asked which,
@@ -4850,7 +4859,7 @@ besides, should it stop some other way. Inside a building, it's the step outside
 it's where they'll get up. The next time, they carry on there (game.js `place`; the land's built
 round it as it loads), facing as they were, or on the nearest square that can be stood on within
 eight; if none can, where the world puts them. They still get up at home if they fall. A world
-joined to someone else's keeps nothing of this: it's theirs.
+joined to someone else's keeps nothing of this here: that world remembers it, by their own id.
 
 **How they were** is kept with where they were, at the same moments, in `<id>.vitals` (host.js
 `vitalsOf`, save.js `saveVitals`): their hit points and stamina; what lingers on them after blows
@@ -4865,7 +4874,7 @@ rest with what was left of it. Anything the game no longer knows is let go, and 
 longer than it can (a boon its own time, an ability its wait); a boon's what the game says it
 is, not what was kept (an afterglow's roll no more than the most a roll can be, nor less than the
 least). Fallen when kept, they get up whole, at home. A Scroll of Safety being read
-isn't kept: read again. A world joined to someone else's keeps nothing of this either.
+isn't kept: read again. A world joined to someone else's keeps nothing of this here either: that world remembers it.
 
 A save of another version, or one naming a weapon the game doesn't know, is ignored rather than
 misread; if the browser won't store anything (private browsing), the game still plays, it just
