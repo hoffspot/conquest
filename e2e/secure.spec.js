@@ -106,8 +106,8 @@ test("from the internet, over TLS alone: a page asked for plainly sent on to htt
 
     expect(link).toContain("secure=1");
     await page.goto(link);
-    await expect(page.locator("#worldask #worldasktitle")).toHaveText("Who goes into Farhold", { timeout: 60000 });
-    await page.locator("#worldask").getByRole("button", { name: /A new hero/ }).click();
+    await expect(page.locator("#worldask #worldasktitle")).toHaveText("Who goes into Farhold?", { timeout: 60000 });
+    await page.locator("#worldask").getByRole("button", { name: /^A new character/ }).click();
     await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 180000, polling: 250 });
 
     const [place] = server.play.places.values();
