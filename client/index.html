@@ -811,7 +811,7 @@
                 </div>
                 <div class="options">
                     <button type="button" class="option-link group" id="graphicsbutton" data-to="graphics">
-                        <span class="text">Graphics<small>Visual quality, Adaptive, full screen, screen shake</small></span>
+                        <span class="text">Graphics<small>Visual quality, Adaptive, full screen, screen shake<span class="keys-only">, pointer</span></small></span>
                         <span class="chevron" aria-hidden="true">›</span>
                     </button>
                     <button type="button" class="option-link group" id="soundbutton" data-to="sound">
@@ -865,6 +865,16 @@
                     <label class="switch option">
                         <span class="text">Screen shake<small>The greatest spells shake the view</small></span>
                         <input type="checkbox" id="shakeswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option keys-only">
+                        <span class="text">Sword pointer<small>The mouse pointer a little sword, showing what a click will do: shake the mouse to find it. Off, your system's own</small></span>
+                        <input type="checkbox" id="pointerswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                    <label class="switch option keys-only pointer-option">
+                        <span class="text">Large pointer<small>The sword half as big again</small></span>
+                        <input type="checkbox" id="largepointerswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>
                 </div>
