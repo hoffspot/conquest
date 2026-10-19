@@ -24,6 +24,7 @@ import { Fetcher } from "./app/fetcher.js";
 import { FullScreen } from "./app/fullscreen.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
+import { Pointer } from "./app/pointer.js";
 import { telemetry } from "./app/telemetry.js";
 import { builtAt, codeVersion } from "./app/version.js";
 import { enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
@@ -37,6 +38,13 @@ const $ = (selector) => document.querySelector(selector);
 
 const settings = loadSettings();
 const debug = new Debug($("#debug"), { settings, onChange: applySetting });
+
+// The mouse pointer, a sword over the whole page (Game options: app/pointer.js), told by the game
+// what's under it
+const pointer = new Pointer();
+
+showPointer();
+pointer.start();
 
 // Full screen while playing (Game options: app/fullscreen.js); left any other way, the game pauses
 const fullScreen = new FullScreen({
@@ -811,6 +819,8 @@ $("#minimapswitch").checked = settings.minimap;
 $("#stickswitch").checked = settings.stick;
 $("#floatswitch").checked = settings.stickFloats;
 $("#zoomswitch").checked = settings.zoom;
+$("#pointerswitch").checked = settings.swordPointer;
+$("#largepointerswitch").checked = settings.largePointer;
 $("#resistswitch").checked = settings.resistSummons;
 $("#refuseswitch").checked = settings.refuseInvites;
 $("#snagswitch").checked = settings.autoSnag;
@@ -1052,6 +1062,7 @@ async function playing(save, { world, place, war }) {
     showStick(settings.stick);
     floatStick(settings.stickFloats);
     showZoom(settings.zoom);
+    game.cursor = pointer;
     game.resistSummons = settings.resistSummons;
     game.refuseInvites = settings.refuseInvites;
     game.autoSnag = settings.autoSnag;
@@ -1835,6 +1846,18 @@ async function invite() {
     showInvite();
 
     if (state.together) {
+        // (The server it's open through asked its name again: its owner may have renamed it since)
+        const via = state.together.via;
+
+        if (via) {
+            nameNow(via).then((name) => {
+                if (state.together?.via === via && name !== via.name) {
+                    via.name = name;
+                    showInvite();
+                }
+            });
+        }
+
         return;
     }
 
@@ -1899,8 +1922,9 @@ async function listingOf(game) {
 
 // The world server whose broker a world's opened through (plan §8.3): the one the game came from,
 // if it is one; else the first known server whose card says it brokers; else none (the old relay,
-// at the page's own server, which ?relay= asks for too). { name, address (its broker's), at (the
-// server's address), own (the page's own) }
+// at the page's own server, which ?relay= asks for too). { name (as it's called now), address
+// (its broker's), at (the server's address), own (the page's own), key (else, the server's, as
+// it's remembered) }
 async function brokerFor() {
     if (new URLSearchParams(location.search).has("relay")) {
         return null;
@@ -1908,7 +1932,7 @@ async function brokerFor() {
 
     const { addressOf, baseOf, ServerClient } = await serversOf();
     const { brokerOf } = await import("./app/peer.js");
-    const own = await pageServer();
+    const own = await pageServer({ fresh: true });
 
     if (own?.server?.broker) {
         const at = addressOf(location.origin);
@@ -1929,16 +1953,39 @@ async function brokerFor() {
         }
 
         if (card?.server?.broker) {
-            return { name: card.server.name ?? record.name ?? record.key, address: brokerOf(via), at: baseOf(via), own: false };
+            return { name: card.server.name ?? record.name ?? record.key, address: brokerOf(via), at: baseOf(via), own: false, key: record.key };
         }
     }
 
     return null;
 }
 
+// The name of the server a world's opened through (brokerFor's), as it is now: its owner may have
+// renamed it (the management page's Settings). As it was, if it can't be asked
+async function nameNow(via) {
+    if (via.own) {
+        return (await pageServer({ fresh: true }))?.server?.name ?? via.name;
+    }
+
+    const record = state.servers?.list().find((one) => one.key === via.key);
+
+    if (!record) {
+        return via.name;
+    }
+
+    const { ServerClient } = await serversOf();
+    const card = await new ServerClient(record, { servers: state.servers, player: state.you?.proving }).status().catch(() => null);
+
+    return card?.server?.name ?? via.name;
+}
+
 // The card of the world server this page came from (null if it's no world server: GitHub Pages,
-// or `npm start`), asked once
-function pageServer() {
+// or `npm start`), asked once; or again (`fresh`), where what it says now matters (its name)
+function pageServer({ fresh = false } = {}) {
+    if (fresh) {
+        state.pageServer = null;
+    }
+
     state.pageServer ??= fetch(new URL("api/v1/status", new URL("/", location.href)))
         .then((response) => (response.ok ? response.json() : null))
         .then((card) => (card?.server?.id ? card : null))
@@ -2196,6 +2243,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     showStick(settings.stick);
     floatStick(settings.stickFloats);
     showZoom(settings.zoom);
+    game.cursor = pointer;
     game.resistSummons = settings.resistSummons;
     game.refuseInvites = settings.refuseInvites;
     game.autoSnag = settings.autoSnag;
@@ -3638,6 +3686,8 @@ for (const [button, on] of [["#minimapfold", false], ["#compass", true]]) {
 $("#stickswitch").addEventListener("change", (event) => applySetting("stick", event.target.checked));
 $("#floatswitch").addEventListener("change", (event) => applySetting("stickFloats", event.target.checked));
 $("#zoomswitch").addEventListener("change", (event) => applySetting("zoom", event.target.checked));
+$("#pointerswitch").addEventListener("change", (event) => applySetting("swordPointer", event.target.checked));
+$("#largepointerswitch").addEventListener("change", (event) => applySetting("largePointer", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 $("#refuseswitch").addEventListener("change", (event) => applySetting("refuseInvites", event.target.checked));
 $("#snagswitch").addEventListener("change", (event) => applySetting("autoSnag", event.target.checked));
@@ -3820,6 +3870,8 @@ function applySetting(key, value) {
         floatStick(value);
     } else if (key === "zoom") {
         showZoom(value);
+    } else if (key === "swordPointer" || key === "largePointer") {
+        showPointer();
     } else if (key === "quickSix") {
         state.game?.showQuick(quickShown());
         state.quickSetup?.showCount(quickShown());
@@ -3855,6 +3907,14 @@ function applyCamera() {
 function showMinimap(on) {
     document.body.dataset.minimap = on ? "on" : "off";
     state.game?.showMinimap(on);
+}
+
+// The sword pointer, or the system's own; large or not (and its size said of only with it on)
+function showPointer() {
+    pointer.on = settings.swordPointer;
+    pointer.large = settings.largePointer;
+    pointer.show();
+    document.body.dataset.swordPointer = settings.swordPointer ? "on" : "off";
 }
 
 // The thumb stick: hidden with it, anything the thumb was holding is let go of, so the player

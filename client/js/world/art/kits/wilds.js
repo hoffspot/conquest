@@ -31,6 +31,7 @@ import { LAYERS, atlasMaterial, wildsMaterial } from "../engine/atlas.js";
 import { MATERIALS } from "../engine/painters.js";
 import { releaseGeometry } from "../../release.js";
 import { facingSun } from "../../sun.js";
+import { bushMesh } from "./bushes.js";
 import { TREE_WIND } from "./trees.js";
 import { plantsOf } from "./yards.js";
 
@@ -831,52 +832,6 @@ function ruin(mesher, random) {
 
 // --- Living things, and the dead ---
 
-/**
- * A bush, about a metre across (placed at its size): a few lumpy rounds of leaves, darker below,
- * lighter on top; berries or flowers on some (`look`: its colours, and what's on it).
- */
-function bush(mesher, random, { leaves, bloom = null, blooms = 0 }) {
-    const count = random.int(2, 4);
-    const surface = [];
-
-    for (let k = 0; k < count; k++) {
-        const angle = random.range(0, TAU);
-        const out = k === 0 ? 0 : random.range(0.15, 0.3);
-        const r = k === 0 ? random.range(0.38, 0.46) : random.range(0.22, 0.34);
-        const centre = [Math.cos(angle) * out, r * 0.8, Math.sin(angle) * out];
-        const seed = random.int(1, 1e6);
-
-        for (const face of ballOf(k === 0 ? 1 : 0)) {
-            const points = face.map((p) => {
-                const push = 1 + 0.35 * (noise3(p[0] * 2.2 + k, p[1] * 2.2, p[2] * 2.2, seed) - 0.5);
-
-                return [centre[0] + p[0] * r * push, Math.max(0, centre[1] + p[1] * r * push * 0.85), centre[2] + p[2] * r * push];
-            });
-            const colours = points.map((p) => {
-                const shade = 0.55 + 0.6 * Math.min(1, p[1] / (r * 1.6));
-                const tone = noise3(p[0] * 9, p[1] * 9, p[2] * 9, seed + 1);
-
-                return leaves.map((v, i) => v * shade * (0.85 + tone * 0.3) * (i === 1 ? 1 + tone * 0.1 : 1));
-            });
-
-            mesher.tri(points[0], points[1], points[2], { colours });
-
-            if (points[0][1] > r * 0.6) {
-                surface.push(points[0]);
-            }
-        }
-    }
-
-    for (let k = 0; bloom && k < Math.min(blooms, 12) && surface.length; k++) {
-        const p = random.pick(surface);
-        const size = random.range(0.025, 0.04);
-
-        for (const face of ballOf(-1)) {
-            mesher.tri(...face.map(([x, y, z]) => [p[0] + x * size, p[1] + y * size, p[2] + z * size]), { colours: bloom.map((v) => v * random.range(0.85, 1.1)) });
-        }
-    }
-}
-
 /** A termite mound, about a metre tall (placed at its height): a lumpy spire of red earth, a smaller one or two leaning on it. */
 function mound(mesher, random) {
     const earth = linear(random.pick([0xa0633f, 0x8c5a3a, 0xb07448]));
@@ -1046,10 +1001,10 @@ function stem(mesher, foot, top, green, width = 0.012) {
     mesher.tri([foot[0] - side[0] * w, foot[1], foot[2] - side[2] * w], [foot[0] + side[0] * w, foot[1], foot[2] + side[2] * w], top, { normals: [UP, UP, UP], colours: [green.map((v) => v * 0.7), green.map((v) => v * 0.7), green], sways: [0, 0, 1] });
 }
 
-// A little ball (a bud, a berry, a clock gone to seed): an octahedron
+// A little ball (a bud, a berry, a clock gone to seed): an octahedron, lit round
 function bud(mesher, at, radius, colour, sway = 1, squash = 1) {
     for (const face of ballOf(-1)) {
-        mesher.tri(...face.map(([x, y, z]) => [at[0] + x * radius, at[1] + y * radius * squash, at[2] + z * radius]), { colours: colour, sways: sway });
+        mesher.tri(...face.map(([x, y, z]) => [at[0] + x * radius, at[1] + y * radius * squash, at[2] + z * radius]), { normals: face.map((n) => unit(n)), colours: colour, sways: sway });
     }
 }
 
@@ -2593,7 +2548,7 @@ function* makeLooks(wanted) {
  * the craggier ones), so the chunks make theirs ahead, within each frame's budget.
  */
 export function* featureLooks(features, landAt) {
-    yield* makeLooks(features.map((feature) => featureLook(feature, landAt)));
+    yield* makeLooks(features.filter(({ kind }) => kind !== "bush").map((feature) => featureLook(feature, landAt)));
 }
 
 /** Make the looks some undergrowth wants (undergrowthOf's) that aren't made yet, one a step (as featureLooks). */
@@ -2624,8 +2579,6 @@ function draw(mesher, random, kind, land) {
             return stump(mesher, random);
         case "snag":
             return snag(mesher, random);
-        case "bush":
-            return bush(mesher, random, bushLook(random, land));
         case "cairn":
             return cairn(mesher, random, look.stone);
         case "menhir":
@@ -2788,16 +2741,20 @@ function tintOf(h) {
 
 /**
  * A chunk's features (core/wilds.js's) drawn: { mesh (at the chunk's corner, drawn with the atlas,
- * casting shadows), boxes ({ min: [x, z], max: [x, z], top }: each one's, in the world, for how
- * tall things stand on each square) }. `landAt(x, y)` is each point's land.
+ * casting shadows), bushes (their bushes, drawn as the hedges are: kits/bushes.js; or null), boxes
+ * ({ min: [x, z], max: [x, z], top }: each one's, in the world, for how tall things stand on each
+ * square) }. `landAt(x, y)` is each point's land; `sprigs` as many of the bushes' sprigs as the
+ * quality draws (0 to 1).
  */
-export function featureMesh(features, landAt, [x0, y0], groundAt = () => 0) {
+export function featureMesh(features, landAt, [x0, y0], groundAt = () => 0, { sprigs = 1 } = {}) {
     const mesher = new Mesher(Math.max(64, features.length * 400));
     const boxes = [];
+    const bushes = [];
 
     for (const feature of features) {
-        const part = lookOf(...featureLook(feature, landAt));
-        const { scale, turn } = fit(feature, part);
+        const bush = feature.kind === "bush";
+        const part = bush ? null : lookOf(...featureLook(feature, landAt));
+        const { scale, turn } = bush ? { scale: [feature.size * 2, 1, feature.size * 2], turn: feature.turn } : fit(feature, part);
         const tint = tintOf(hashOf(Math.floor(feature.x * 10), Math.floor(feature.y * 10), 17));
         const reach = Math.max(scale[0], scale[2]) * 0.7;
         // (Set down on the lowest of the ground under it, a little into it, so on a slope none of
@@ -2806,8 +2763,24 @@ export function featureMesh(features, landAt, [x0, y0], groundAt = () => 0) {
         const sunk = feature.kind === "boulder" || feature.kind === "stone" ? SUNK * feature.height : 0;
         const base = Math.min(...[[0, 0], [-reach, 0], [reach, 0], [0, -reach], [0, reach]].map(([dx, dy]) => groundAt(feature.x + dx * 0.7, feature.y + dy * 0.7))) - 0.05 - sunk;
 
+        if (bush) {
+            const [, land, index] = featureLook(feature, landAt);
+            const random = randomOf(hashOf(index + 1, 4021, [...land].reduce((sum, c) => sum * 31 + c.charCodeAt(0), 11)) * 4294967296);
+
+            bushes.push({ at: [feature.x - x0, base, feature.y - y0], across: feature.size * 2, height: feature.height, turn, seed: Math.floor(hashOf(Math.floor(feature.x * 10), Math.floor(feature.y * 10), 29) * 1e6), ...bushLook(random, land) });
+            boxes.push({ min: [feature.x - reach, feature.y - reach], max: [feature.x + reach, feature.y + reach], top: base + feature.height });
+            continue;
+        }
+
         place(mesher, part, { at: [feature.x - x0, base, feature.y - y0], turn, scale, tint, shift: [feature.variant * 7.3, feature.variant * 3.1] });
         boxes.push({ min: [feature.x - reach, feature.y - reach], max: [feature.x + reach, feature.y + reach], top: base + part.top * scale[1] });
+    }
+
+    // (The bushes' bodies and sprigs their own; their berries or flowers here, little round balls)
+    const drawn = bushMesh(bushes, [x0, y0], { sprigs });
+
+    for (const { at, radius, colour } of drawn.berries) {
+        ball(mesher, at, radius, colour);
     }
 
     const mesh = new THREE.Mesh(mesher.geometry(), atlasMaterial());
@@ -2819,7 +2792,7 @@ export function featureMesh(features, landAt, [x0, y0], groundAt = () => 0) {
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
 
-    return { mesh, boxes };
+    return { mesh, bushes: drawn.object, boxes };
 }
 
 // Which look a feature has: [kind, land, index]
@@ -3188,8 +3161,8 @@ export function undergrowthMesh(items, origin) {
 // The peoples' homelands' own features (core/wilds.js HOMELANDS)
 const HOME_FEATURES = ["termites", "kopje", "skullpole", "stakes", "wrack", "mangrove", "stela", "moonstone", "leaflamp", "webstump", "cocoon", "crystals"];
 
-/** Every kind drawn here (the features' and the undergrowth's), for tests and the lab. */
-export const KINDS = Object.freeze([...new Set(["boulder", "stone", "outcrop", "log", "stump", "snag", "bush", "cairn", "menhir", "mound", "haystack", "scarecrow", "logpile", "ruin", "ribs", ...HOME_FEATURES, ...Object.values(UNDERGROWTH).flatMap(({ kinds }) => Object.keys(kinds)), ...Object.values(HOME_UNDERGROWTH).flatMap((kinds) => Object.keys(kinds)), ...GARDEN_KINDS])]);
+/** Every kind drawn here (the features' and the undergrowth's; not the bushes, kits/bushes.js's), for tests and the lab. */
+export const KINDS = Object.freeze([...new Set(["boulder", "stone", "outcrop", "log", "stump", "snag", "cairn", "menhir", "mound", "haystack", "scarecrow", "logpile", "ruin", "ribs", ...HOME_FEATURES, ...Object.values(UNDERGROWTH).flatMap(({ kinds }) => Object.keys(kinds)), ...Object.values(HOME_UNDERGROWTH).flatMap((kinds) => Object.keys(kinds)), ...GARDEN_KINDS])]);
 
 /** One look of a kind for a land, as a geometry on its own (for tests and the lab). */
 export function lookGeometry(kind, land = "meadow", index = 0) {

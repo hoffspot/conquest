@@ -35,9 +35,10 @@ On the server's computer: <http://localhost:8481>. From another device on the Wi
 address with `/admin`, for example `http://my-mac.local:8480/admin`, and the admin key. It's never
 answered from the internet. Its tabs:
 
-- **Overview.** Its name, its id (players' games check it's the same server each time), its
-  addresses on the Wi-Fi with QR codes, how long it's been up, how many worlds it runs at once,
-  the admin key, and the internet (below).
+- **Overview.** Its name (the computer's own, unless it's been given one in Settings), its id
+  (players' games check it's the same server each time), its addresses on the Wi-Fi with QR
+  codes, how long it's been up, how many worlds it runs at once, the admin key, and the internet
+  (below).
 - **Worlds.** Each world, how it is ("Running: 3 players, day 4, 14:00", "Set aside: saved",
   "Offline"), and what can be done with it: start it, set it aside (everyone in it is sent out and
   it's saved), **take it offline** and **bring it online** (below), save it now, its settings,
@@ -45,7 +46,13 @@ answered from the internet. Its tabs:
 - **New world.** Its name, seed and home people, what it does with its players' characters
   (below), its rules, and **Or bring a world in** (below).
 - **Settings.** The server's settings, **Updates** (below), and creator keys: whoever holds one
-  makes worlds of their own here, and owns them.
+  makes worlds of their own here, and owns them. First among the settings is **the server's
+  name** as players see it: "Pellagos Home Server", say, rather than "Tom's Mac mini". Left
+  empty, it's the computer's own. Changed, it's the name at once wherever it's shown: the game's
+  lists of servers and its **Invite others** ("Your world's open to others through Pellagos
+  Home Server"), the title's "Worlds on Pellagos Home Server", Bonjour on the Wi-Fi (other
+  servers list it under its new name within a few seconds), this page, and the name of the
+  server's archives. A game already open picks it up the next time it asks the server.
 - **Activity** (what's happened, the server's and each world's) and **Health** (each world's
   steps and memory, and the server's).
 

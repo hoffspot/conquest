@@ -187,6 +187,33 @@ test("loads everything, listing what it downloads, then shows the title", async 
     expect(loaded.groups).toEqual([true, true, true, true, true, true]);
 });
 
+test("the title's wordmark fits its card, every letter painted: on a computer, with a scrollbar's room taken from the card, and on a phone", async ({ page }) => {
+    // Its letters' first and last, against its own box, which its gradient's painted in (its
+    // letters as far from either side, the space after its last letter not counted)
+    const fits = () =>
+        page.evaluate(() => {
+            const name = document.querySelector("#titlename");
+            const range = document.createRange();
+
+            range.selectNodeContents(name);
+
+            const [text, box] = [range.getBoundingClientRect(), name.getBoundingClientRect()];
+            const after = parseFloat(getComputedStyle(name).letterSpacing);
+
+            return { inside: text.left >= box.left - 0.5 && text.right <= box.right + 0.5, centred: Math.abs(text.left - box.left - (box.right - text.right + after)) < 4 };
+        });
+
+    await title(page);
+    expect(await fits()).toEqual({ inside: true, centred: true });
+
+    // (A scrollbar's room taken from the card, as Chrome takes it when its menu's long)
+    await page.addStyleTag({ content: "#title .card { padding-right: 47px !important; }" });
+    expect(await fits()).toEqual({ inside: true, centred: true });
+
+    await page.setViewportSize({ width: 320, height: 640 });
+    expect(await fits()).toEqual({ inside: true, centred: true });
+});
+
 test("debug mode shows how the game runs, and is remembered", async ({ page }) => {
     await title(page);
     await expect(page.locator("#debug")).toBeHidden();
@@ -1470,7 +1497,7 @@ const told = (page) => page.evaluate(() => {
     return { order: player.order, facing: player.facing, look: Math.atan2(-e[8], -e[10]) };
 });
 
-test("W, A, S, D steer the player the way the camera looks, two of them diagonally, Shift runs, and letting go stops", async ({ page }) => {
+test("W, A, S, D steer the player the way the camera looks, running, two of them diagonally, Shift held walking, and letting go stops", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const way = await clearestWayAhead(page);
@@ -1479,14 +1506,14 @@ test("W, A, S, D steer the player the way the camera looks, two of them diagonal
     // (Facing off to the side to begin with, so turning to go shows)
     expect(Math.abs(Math.sin(start.facing - way))).toBeGreaterThan(0.9);
 
-    // W: straight ahead the way the camera looks, walking
+    // W: straight ahead the way the camera looks, running
     await page.keyboard.down("KeyW");
 
-    const walking = await told(page);
+    const going = await told(page);
 
-    expect(walking.order?.type).toBe("move");
-    expect(walking.order.run).toBe(false);
-    expect(Math.cos(walking.facing - walking.look)).toBeGreaterThan(0.99);
+    expect(going.order?.type).toBe("move");
+    expect(going.order.run).toBe(true);
+    expect(Math.cos(going.facing - going.look)).toBeGreaterThan(0.99);
 
     // Held, they go that way and not off to the side
     const moved = await page.evaluate(() => {
@@ -1500,10 +1527,10 @@ test("W, A, S, D steer the player the way the camera looks, two of them diagonal
         return { running: game.battle.actor("player").running, x: avatar.object.position.x, z: avatar.object.position.z };
     });
 
-    expect(moved.running).toBe(false);
+    expect(moved.running).toBe(true);
 
-    const along = (moved.x - start.x) * Math.sin(walking.facing) + (moved.z - start.z) * Math.cos(walking.facing);
-    const across = Math.abs((moved.x - start.x) * Math.cos(walking.facing) - (moved.z - start.z) * Math.sin(walking.facing));
+    const along = (moved.x - start.x) * Math.sin(going.facing) + (moved.z - start.z) * Math.cos(going.facing);
+    const across = Math.abs((moved.x - start.x) * Math.cos(going.facing) - (moved.z - start.z) * Math.sin(going.facing));
 
     expect(along).toBeGreaterThan(1);
     expect(across).toBeLessThan(1);
@@ -1526,10 +1553,10 @@ test("W, A, S, D steer the player the way the camera looks, two of them diagonal
     expect(Math.abs(off)).toBeGreaterThan(38);
     expect(Math.abs(off)).toBeLessThan(52);
 
-    // Shift, with a way still held, turns the walk into a run
+    // Shift, with a way still held, turns the run into a walk
     await page.keyboard.up("KeyD");
     await page.keyboard.down("Shift");
-    expect((await told(page)).order.run).toBe(true);
+    expect((await told(page)).order.run).toBe(false);
 
     // Everything let go: they're told to stop
     await page.keyboard.up("KeyW");
@@ -1691,6 +1718,86 @@ test("the thumb stick, there from the start, walks the player the way it's pushe
     expect((await told(page)).order?.type).toBe("move");
     await page.keyboard.up("KeyW");
     expect((await told(page)).order).toBe(null);
+});
+
+test("the mouse pointer a sword over the page, over the view showing what a click would do (an enemy, someone to talk to, the ground), lit and bigger shaken, large or the system's own as Game options say", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const cursor = (selector = "#view") => page.evaluate((selector) => getComputedStyle(document.querySelector(selector)).cursor, selector);
+    const set = (id, on) =>
+        page.evaluate(
+            ([id, on]) => {
+                const switched = document.querySelector(id);
+
+                switched.checked = on;
+                switched.dispatchEvent(new Event("change"));
+            },
+            [id, on],
+        );
+
+    // The sword, over the view and over the page's buttons alike (theirs a hand otherwise)
+    expect(await cursor()).toContain("images/pointer/sword-32.png");
+    expect(await cursor("#packbutton")).toContain("images/pointer/sword-32.png");
+
+    // An enemy a few steps before the player, held still, and beside them someone neutral, as the
+    // folk are (someone to talk to): over the enemy the blade's lit red, over the other a speech
+    // bubble, over the ground the sword again
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor("player");
+        const squares = game.world.maps.town.squares;
+        const free = (dx, dy) => [0, 1, -1, 2, -2].map((ex) => [me.square[0] + dx + ex, me.square[1] + dy]).find(([x, y]) => !squares.blocked(x, y));
+
+        game.battle.add({ id: "foe", kind: "orc", weapon: "cleaver", team: "orcs", square: free(3, -6), hp: 5000 }).stunnedUntil = 1e9;
+        game.battle.add({ id: "friend", kind: "orc", weapon: "cleaver", team: "orcs", neutral: true, square: free(-3, -6), hp: 5000 }).stunnedUntil = 1e9;
+        game.enlisting.push("foe", "friend");
+        game.stop();
+    });
+    expect(await playUntil(page, () => window.pellagos.game.avatars.has("foe") && window.pellagos.game.avatars.has("friend"))).toBe(true);
+
+    const spots = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const at = (id) => session.view.toScreen(game.avatars.get(id).point(0.5));
+        const ground = session.view.toScreen(game.avatars.get("player").object.position.clone().add({ x: 0, y: 0, z: -2.5 }));
+
+        game.advance(0.1);
+        game.start();
+
+        return { foe: at("foe"), friend: at("friend"), ground };
+    });
+
+    await page.mouse.move(spots.foe.x, spots.foe.y);
+    await expect.poll(cursor).toContain("images/pointer/attack-32.png");
+    expect(await cursor("#packbutton"), "the rest of the page the sword still").toContain("images/pointer/sword-32.png");
+    await page.mouse.move(spots.friend.x, spots.friend.y);
+    await expect.poll(cursor).toContain("images/pointer/talk-32.png");
+    await page.mouse.move(spots.ground.x, spots.ground.y);
+    await expect.poll(cursor).toContain("images/pointer/sword-32.png");
+
+    // Shaken, back and forth quickly: lit, half again as big, over the view and the page; a
+    // moment after, back as it was. (The game held still meanwhile, so the page is quick to take
+    // the moves: drawn in software here, a frame takes a good part of a shake)
+    await page.evaluate(() => window.pellagos.game.stop());
+
+    for (let k = 0; k < 8; k++) {
+        await page.mouse.move(spots.ground.x + (k % 2 ? 140 : -140), spots.ground.y, { steps: 3 });
+    }
+
+    await page.evaluate(() => window.pellagos.game.start());
+    expect(await cursor()).toContain("images/pointer/shaken-48.png");
+    expect(await cursor("#packbutton")).toContain("images/pointer/shaken-48.png");
+    await expect.poll(cursor, { timeout: 4000 }).not.toContain("shaken");
+
+    // Large, and turned off: the system's own pointer
+    await set("#largepointerswitch", true);
+    expect(await cursor()).toContain("-44.png");
+    await set("#largepointerswitch", false);
+    await set("#pointerswitch", false);
+    expect(await cursor()).toBe("auto");
+    expect(await cursor("#packbutton")).toBe("pointer");
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector("#largepointerswitch").closest("label")).display)).toBe("none");
+    await set("#pointerswitch", true);
+    expect(await cursor()).toContain("images/pointer/sword-32.png");
 });
 
 test("with following turned on (Game options), the camera follows from the first step, swinging round behind the player", async ({ page }) => {
@@ -2274,16 +2381,11 @@ test("those attacking the player have an icon each down the right side, a likene
     });
     expect(await playUntil(page, () => window.pellagos.game.avatars.has("slime"))).toBe(true);
 
-    // Each with their likeness, once it's drawn: the orc first (they came to it in that order)
-    await page.waitForFunction(
-        () => {
-            window.pellagos.game.advance(0.02);
-
-            return document.querySelectorAll("#attackers .attacker.painted").length === 2;
-        },
-        null,
-        { timeout: 20000 },
-    );
+    // Each with their likeness, once it's drawn: the orc first (they came to it in that order).
+    // (Played on as the game would be: a likeness that comes out blank is drawn again half a
+    // second of the game's time later, which a fiftieth of a second a look took more than its
+    // twenty seconds to reach where frames are slow)
+    expect(await playUntil(page, () => document.querySelectorAll("#attackers .attacker.painted").length === 2)).toBe(true);
 
     const icons = await page.evaluate(() => {
         const column = document.querySelector("#attackers");
@@ -9578,14 +9680,21 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
         const at = game.avatars.get(game.me).object.position;
         const fungus = meshes.find(({ name }) => name === "fungus");
 
-        // (A trickle let start now, and a frame or two of its grains; what's played meanwhile)
+        // (A trickle let start now, and a frame or two of its grains; what's played meanwhile. Where
+        // it starts is picked at random near the player, under enough roof, a few tries a frame:
+        // so it's let try afresh each frame till one has)
         const before = game.effects.dust.live.length;
         const asked = [];
         const play = game.sound.play.bind(game.sound);
 
         game.sound.play = (name, options = {}) => (asked.push({ name, at: options.at ? { x: options.at.x, z: options.at.z } : null, far: options.far }), play(name, options));
-        game.trickles.wait = 0;
-        await step(3);
+
+        for (let k = 0; k < 40 && !game.trickles.running; k++) {
+            game.trickles.wait = 0;
+            await step(1);
+        }
+
+        await step(2);
         game.sound.play = play;
 
         const fell = asked.find(({ name }) => name === "soilTrickle");
@@ -10273,7 +10382,7 @@ test("Game options: its groups at the top, each a page of its own, short enough 
     await expect(options.locator("input")).toHaveCount(0);
 
     const groups = {
-        graphics: ["#qualityslider", "#adaptiveswitch", "#fullscreenswitch", "#shakeswitch"],
+        graphics: ["#qualityslider", "#adaptiveswitch", "#fullscreenswitch", "#shakeswitch", "#pointerswitch", "#largepointerswitch"],
         sound: ["#soundswitch", "#effectsvolume", "#environmentvolume", "#musicvolume"],
         controls: ["#stickswitch", "#floatswitch", "#zoomswitch", "#minimapswitch", "#wheelsbutton", "#quickbutton"],
         camera: ["#followswitch", "#battlecamswitch", "#dragslider", "#invertswitch"],

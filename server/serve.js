@@ -47,6 +47,7 @@ import { ignoreBrokenPipes, RESTART, WORLD_OPTIONS } from "./launch.js";
 import { bonjour, folders } from "./platform/index.js";
 import { archiveFolder, ArchiveError, readArchive, stageRestore, worldIds } from "./storage/archive.js";
 import { FILE_MODE } from "./storage/files.js";
+import { SETTINGS_FILE } from "./storage/folder.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 import { WorldServer } from "./world-server.js";
 
@@ -58,7 +59,11 @@ const root = path.resolve(values.data ?? folders().data);
 
 // (An archive of the data folder made, or one staged to be restored, and done: --archive, --restore)
 if (values.archive) {
-    const { name, body, worlds } = await archiveFolder(root, { name: os.hostname().replace(/\.local$/, "") });
+    // (Named for the server: its `name` setting, else the computer)
+    const named = await readFile(path.join(root, SETTINGS_FILE), "utf8")
+        .then((text) => JSON.parse(text).name)
+        .catch(() => null);
+    const { name, body, worlds } = await archiveFolder(root, { name: (typeof named === "string" && named) || os.hostname().replace(/\.local$/, "") });
     const into = path.resolve(values.archive);
     const file = (await stat(into).catch(() => null))?.isDirectory() ? path.join(into, name) : into;
 

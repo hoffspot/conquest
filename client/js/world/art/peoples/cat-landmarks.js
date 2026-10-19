@@ -10,7 +10,7 @@
 import { GODS } from "../../../core/lore/gods.js";
 import { material } from "../engine/materials.js";
 import { add3, inset, Solid, times } from "../engine/solid.js";
-import { emblemSignTexture, loadSignFont, nameBoardTexture, signMaterial } from "../kits/signs.js";
+import { emblemSignTexture, loadSignFont, nameBoardTexture, paintBothFaces, signMaterial } from "../kits/signs.js";
 import { awning, ears, finial, hearth, jar, jars, MUDS, PAINTS, studded, toron, townHouse } from "./cat.js";
 import { band, CELL, circle, ENTRY, lamp, m, pinnacle, pole, post, randomFor, steps, wallPoint, weathering } from "./kit.js";
 import { fireLight } from "../kits/torches.js";
@@ -241,12 +241,8 @@ export async function tavern(piece) {
 
     const texture = emblemSignTexture({ name: own.name, emblem: own.emblem ?? "tankard", count: own.count ?? 1, tint: random.int(0, 5) });
     const [s0, s1] = [add3(signAt, times(reach, 0.25)), add3(signAt, times(reach, 0.95))];
-    const sign = [add3(s0, [0, -m(1.15), 0]), add3(s1, [0, -m(1.15), 0]), add3(s1, [0, -m(0.08), 0]), add3(s0, [0, -m(0.08), 0])];
 
-    const picture = signMaterial(texture, `sign ${own.name}`);
-
-    solid.face(sign, picture, [[0, 0], [1, 0], [1, 1], [0, 1]]);
-    solid.face([...sign].reverse(), picture, [[0, 1], [1, 1], [1, 0], [0, 0]]);
+    paintBothFaces(solid, [add3(s0, [0, -m(1.15), 0]), add3(s1, [0, -m(1.15), 0]), add3(s1, [0, -m(0.08), 0]), add3(s0, [0, -m(0.08), 0])], signMaterial(texture, `sign ${own.name}`));
 
     // Benches of mud either side of the door, a lamp over each
     for (const side of [-1, 1]) {

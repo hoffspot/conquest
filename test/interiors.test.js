@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { Doors } from "../client/js/app/doors.js";
 import { Battle, FLEE, sitting, STEP_MS } from "../client/js/core/battle.js";
 import { COME_IN, comeIn, FACING, linkAt, MAP_ORIGINS, offStairs, readPlan, routeBetween, tavernFloors, tavernFolk } from "../client/js/core/interiors.js";
-import { cutFor, cutsAway, doorways } from "../client/js/world/interiors3d.js";
+import { bannerBoxes, cutFor, cutsAway, doorways } from "../client/js/world/interiors3d.js";
 import { BECKON, REST_EVERY, ROLES } from "../client/js/core/roles.js";
 import { generateWorld, nearestFree } from "../client/js/core/world.js";
 import { reachable } from "./helpers.js";
@@ -897,6 +897,22 @@ describe("seeing the player indoors (interiors3d.js)", () => {
         const found = doorways(upstairs).map(({ along, x0, y0, length }) => `${along} ${x0},${y0} ${length}`).sort();
 
         assert.deepEqual(found, ["x 10,5 2", "x 10,9 2", "x 15,5 2", "x 15,9 2"]);
+    });
+});
+
+describe("the banners on the walls (interiors3d.js bannerBoxes)", () => {
+    it("has a banner's shield stand proud of its cloth on both sides, never in the same plane, so the two never fight to be drawn; within the cloth across it and up it", () => {
+        for (const [face, out, along] of [["z", 2, 0], ["x", 0, 2]]) {
+            for (const heights of [undefined, { low: 0.9, high: 3 }]) {
+                const { cloth, shield, rod } = bannerBoxes(5, 0.3, face, heights);
+                const label = `${face} ${JSON.stringify(heights)}`;
+
+                assert.ok(shield[out] < cloth[out] && shield[out + 3] > cloth[out + 3], `out from the wall: ${label}`);
+                assert.ok(shield[along] > cloth[along] && shield[along + 3] < cloth[along + 3], `across: ${label}`);
+                assert.ok(shield[1] > cloth[1] && shield[4] < cloth[4], `up: ${label}`);
+                assert.equal(rod[1], cloth[4], `the rod at the top: ${label}`);
+            }
+        }
     });
 });
 
