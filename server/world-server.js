@@ -83,7 +83,8 @@ export class WorldServer {
      * ended); `options.bonjour` the machine's Bonjour (platform/ bonjour(): server/world.js gives
      * it; without one it's never shown to others nor finds them). The rest are for the tests:
      * `cost` (short codes' hashing), `clock`, `awake` (keeping the machine awake), `interfaces`,
-     * `hostname` and `name` (the machine's: its name is the computer's own, else its host name's),
+     * `hostname` and `name` (the machine's: its own name is the computer's, else its host name's;
+     * the `name` setting, its owner's, goes before either),
      * `home` (which addresses are home: access/addresses.js isHome; the tests make loopback the
      * internet with it), `acme` (the certificate authority, and how it and DNS hosts are reached:
      * certify.js), `tokens` (where tokens are kept: platform/ tokenStore), `router` and `funnel`
@@ -114,8 +115,8 @@ export class WorldServer {
         /** Whether an address is at home (the guards ask it). */
         this.isHome = home;
 
-        /** Its name, as others see it (its status, Bonjour, the management page): the computer's own, once it's listening, unless given. */
-        this.name = name ?? hostname.replace(/\.local$/, "");
+        /** The computer's own name (once it's listening; its host name's till then), unless given. */
+        this.ownName = name ?? hostname.replace(/\.local$/, "");
         this.named = Boolean(name);
         this.settings = folder.settings;
         this.store = folder.worlds;
@@ -198,6 +199,15 @@ export class WorldServer {
 
         /** Its updates (update/updater.js): new versions looked for once a day, once it's started; installed when its owner asks, or by itself overnight. */
         this.updater = new Updater(this, update);
+    }
+
+    /**
+     * Its name, as others see it (its status, so the game's lists and invites; Bonjour; the
+     * management page; its archives): its owner's, the `name` setting, as it is now; else the
+     * computer's own.
+     */
+    get name() {
+        return this.settings.get("name") || this.ownName;
     }
 
     /** What it advertises on the Wi-Fi (nearby.js): { id, name, version, net, port, worlds (how many it lists) }. */
@@ -369,7 +379,7 @@ export class WorldServer {
         this.followFunnel();
 
         if (!this.named) {
-            this.name = (await computerName().catch(() => null)) ?? this.name;
+            this.ownName = (await computerName().catch(() => null)) ?? this.ownName;
         }
 
         this.nearby.follow(this.settings.get("bonjour"));

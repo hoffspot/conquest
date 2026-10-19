@@ -1846,6 +1846,18 @@ async function invite() {
     showInvite();
 
     if (state.together) {
+        // (The server it's open through asked its name again: its owner may have renamed it since)
+        const via = state.together.via;
+
+        if (via) {
+            nameNow(via).then((name) => {
+                if (state.together?.via === via && name !== via.name) {
+                    via.name = name;
+                    showInvite();
+                }
+            });
+        }
+
         return;
     }
 
@@ -1910,8 +1922,9 @@ async function listingOf(game) {
 
 // The world server whose broker a world's opened through (plan §8.3): the one the game came from,
 // if it is one; else the first known server whose card says it brokers; else none (the old relay,
-// at the page's own server, which ?relay= asks for too). { name, address (its broker's), at (the
-// server's address), own (the page's own) }
+// at the page's own server, which ?relay= asks for too). { name (as it's called now), address
+// (its broker's), at (the server's address), own (the page's own), key (else, the server's, as
+// it's remembered) }
 async function brokerFor() {
     if (new URLSearchParams(location.search).has("relay")) {
         return null;
@@ -1919,7 +1932,7 @@ async function brokerFor() {
 
     const { addressOf, baseOf, ServerClient } = await serversOf();
     const { brokerOf } = await import("./app/peer.js");
-    const own = await pageServer();
+    const own = await pageServer({ fresh: true });
 
     if (own?.server?.broker) {
         const at = addressOf(location.origin);
@@ -1940,16 +1953,39 @@ async function brokerFor() {
         }
 
         if (card?.server?.broker) {
-            return { name: card.server.name ?? record.name ?? record.key, address: brokerOf(via), at: baseOf(via), own: false };
+            return { name: card.server.name ?? record.name ?? record.key, address: brokerOf(via), at: baseOf(via), own: false, key: record.key };
         }
     }
 
     return null;
 }
 
+// The name of the server a world's opened through (brokerFor's), as it is now: its owner may have
+// renamed it (the management page's Settings). As it was, if it can't be asked
+async function nameNow(via) {
+    if (via.own) {
+        return (await pageServer({ fresh: true }))?.server?.name ?? via.name;
+    }
+
+    const record = state.servers?.list().find((one) => one.key === via.key);
+
+    if (!record) {
+        return via.name;
+    }
+
+    const { ServerClient } = await serversOf();
+    const card = await new ServerClient(record, { servers: state.servers, player: state.you?.proving }).status().catch(() => null);
+
+    return card?.server?.name ?? via.name;
+}
+
 // The card of the world server this page came from (null if it's no world server: GitHub Pages,
-// or `npm start`), asked once
-function pageServer() {
+// or `npm start`), asked once; or again (`fresh`), where what it says now matters (its name)
+function pageServer({ fresh = false } = {}) {
+    if (fresh) {
+        state.pageServer = null;
+    }
+
     state.pageServer ??= fetch(new URL("api/v1/status", new URL("/", location.href)))
         .then((response) => (response.ok ? response.json() : null))
         .then((card) => (card?.server?.id ? card : null))
