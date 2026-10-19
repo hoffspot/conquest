@@ -2354,16 +2354,11 @@ test("those attacking the player have an icon each down the right side, a likene
     });
     expect(await playUntil(page, () => window.pellagos.game.avatars.has("slime"))).toBe(true);
 
-    // Each with their likeness, once it's drawn: the orc first (they came to it in that order)
-    await page.waitForFunction(
-        () => {
-            window.pellagos.game.advance(0.02);
-
-            return document.querySelectorAll("#attackers .attacker.painted").length === 2;
-        },
-        null,
-        { timeout: 20000 },
-    );
+    // Each with their likeness, once it's drawn: the orc first (they came to it in that order).
+    // (Played on as the game would be: a likeness that comes out blank is drawn again half a
+    // second of the game's time later, which a fiftieth of a second a look took more than its
+    // twenty seconds to reach where frames are slow)
+    expect(await playUntil(page, () => document.querySelectorAll("#attackers .attacker.painted").length === 2)).toBe(true);
 
     const icons = await page.evaluate(() => {
         const column = document.querySelector("#attackers");
