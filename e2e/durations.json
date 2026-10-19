@@ -65,7 +65,7 @@
     "pellagos.spec.js › Game options set the camera: following off at first, it keeps the way it's turned as the player walks; the battle cam on at first; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered": 115.8,
     "pellagos.spec.js › Game options set the camera: following off, it keeps the way it's turned as the player walks; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered": 109.4,
     "pellagos.spec.js › Game options: its groups at the top, each a page of its own, short enough not to scroll; back from each by the arrow in its heading, the Back at its foot, or Escape, to the group it came from": 48.1,
-    "pellagos.spec.js › W, A, S, D steer the player the way the camera looks, two of them diagonally, Shift runs, and letting go stops": 14.3,
+    "pellagos.spec.js › W, A, S, D steer the player the way the camera looks, running, two of them diagonally, Shift held walking, and letting go stops": 14.3,
     "pellagos.spec.js › Worlds on servers' Worlds Guide: every way into a world, with examples, its contents and its own pointers taking you to each part; on a phone, nothing wider than the screen; closed, back to the worlds": 13.3,
     "pellagos.spec.js › a Dreadthorn badly hurt takes to the air: drawn hanging up there, out of reach of the player's blade, the player told; down again after": 73.2,
     "pellagos.spec.js › a Dreadthorn drawn with its stand-in is drawn again from its model once that's read, out of view": 71.1,

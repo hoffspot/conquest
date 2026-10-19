@@ -9064,6 +9064,8 @@ export class Game {
                     if (event.id === this.me) {
                         hud.message("Out of breath", 1.5);
                         this.sound?.play("breath");
+                        // (Held keys walk on till enough of it's back: steering.js RUN_AGAIN)
+                        this.steering?.outOfBreath();
                     }
 
                     break;
@@ -10454,6 +10456,11 @@ export class Game {
                     this.#command({ type: "ahead", facing, run, reach: HELD_REACH });
                 },
                 stop: () => this.#command({ type: "stop" }),
+                breath: () => {
+                    const player = this.battle.actor(this.me);
+
+                    return player?.maxStamina ? player.stamina / player.maxStamina : 1;
+                },
             });
         }
 
