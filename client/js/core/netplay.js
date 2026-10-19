@@ -40,7 +40,8 @@
 //
 //   joiner -> host   { kind: "hello", version, character, hero }   (character: as Host.join takes
 //                                                    it; hero, on the world server: which of
-//                                                    the player's kept heroes, a slot, or "new")
+//                                                    the player's kept heroes, a slot, "new",
+//                                                    or "copy": the character copied in)
 //                    { kind: "ready" }                         (its copy of the world made: playing)
 //                    { kind: "away", hidden }                  (its page hidden, or shown again)
 //                    { kind: "command", seq, command }
@@ -69,7 +70,7 @@ import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 142;
+export const NET_VERSION = 143;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -107,6 +108,7 @@ export const NET_REFUSALS = Object.freeze({
     version: "That world's being played in another version of the game.",
     full: "That world's full.",
     character: "Your character couldn't be brought into that world.",
+    copied: "That character's been copied into this world already: play their copy there, or bring another.",
     here: "You're in that world already, on another device.",
 });
 
@@ -484,10 +486,11 @@ export class Hosting {
             return;
         }
 
+        // (Or refused saying why, if it can say: a world server's, a character copied in already)
         const brought = this.characterOf(peer, character);
 
-        if (!brought) {
-            refuse("character");
+        if (!brought || brought.refused) {
+            refuse(NET_REFUSALS[brought?.refused] ? brought.refused : "character");
 
             return;
         }

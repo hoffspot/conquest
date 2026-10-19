@@ -70,7 +70,7 @@ test("the management page on the server's computer: a world made, started, set a
     await page.locator('[data-tab="new"]').click();
     await page.locator('#new [name="name"]').fill("Ashby");
     await page.locator('#new [name="seed"]').fill("5");
-    await page.locator('#new [name="heroes"]').selectOption("kept");
+    await page.locator('#new [name="characters"]').selectOption("own");
     await page.locator('#new button[type="submit"]').click();
 
     const shown = page.locator("#shown");
@@ -159,14 +159,24 @@ test("the management page on the server's computer: a world made, started, set a
     expect((await enter({ world, ticket: first.json.ticket })).json.error).toBe("key");
     expect((await enter({ world, ticket })).json.player).toBe(first.json.player);
 
-    // Its heroes mode switched, while it's set aside
+    // What it does with its players' characters switched, while it's set aside
     await dialog.locator('[data-world-tab="settings"]').click();
-    await dialog.locator('select[name="heroes"]').selectOption("brought");
+    await dialog.locator('select[name="characters"]').selectOption("visiting");
     await dialog.getByRole("button", { name: "Save" }).click();
     await expect(dialog.locator("#worldstatus")).toHaveText("Saved.");
     expect(server.metaOf(world).heroes).toBe("brought");
     await page.locator("#worldclose").click();
-    await expect(card).toContainText("Brought in by their players");
+    await expect(card).toContainText("Visiting: players bring their own, kept on their devices");
+
+    // Taken offline, asked first: nobody let in, its owner neither; then back online
+    await card.getByRole("button", { name: "Take offline" }).click();
+    await page.getByRole("button", { name: "Take it offline" }).click();
+    await expect(card.locator(".life")).toHaveText("Offline");
+    await expect(card).toContainText("Nobody: it's offline");
+    expect((await enter({ world, key: ownerKey })).json.error).toBe("offline");
+    await card.getByRole("button", { name: "Bring online" }).click();
+    await expect(card.getByRole("button", { name: "Take offline" })).toBeVisible();
+    expect((await enter({ world, key: ownerKey })).status).toBe(200);
 
     // What's happened to it, as Activity has it
     await page.locator('[data-tab="activity"]').click();
@@ -213,7 +223,7 @@ test("the management page on the server's computer: a world made, started, set a
     const brought = page.locator("#worlds .card", { hasText: "Ashby" });
 
     await expect(brought).toBeVisible();
-    await expect(brought).toContainText("Brought in by their players");
+    await expect(brought).toContainText("Visiting: players bring their own, kept on their devices");
     expect(await brought.getAttribute("data-world")).not.toBe(world);
     expect(server.metaOf(await brought.getAttribute("data-world")).seed).toBe(5);
 

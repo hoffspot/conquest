@@ -472,7 +472,10 @@ up. They're all remembered.
   **Worlds on servers** adds a server by its address, an invite link or its QR code (or from those
   found nearby on the Wi-Fi), then comes into a world with its key or short code, or makes one,
   or brings one of their own characters' worlds there (**Bring my world**: its land and its war,
-  with that character in it, and them its owner). A world's **invite link** (its owner's World
+  with a copy of that character in it, and them its owner). Each world says what it does with its
+  players' characters: **visiting** (they bring their own, kept on their device as they play),
+  **copies** (each copied in once, the copy the world's own), or **made here** (one taken home
+  leaves it for good); and its owner can take it **offline** for upkeep. A world's **invite link** (its owner's World
   panel, or the management page's **Invite players**) opens the game from the server and takes
   anyone in, a character made first if they have none; a world **open to anyone** needs no link,
   and the server's own address shows its worlds on the title. Worlds on servers' **Worlds Guide**

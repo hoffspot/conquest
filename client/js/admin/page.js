@@ -811,8 +811,22 @@ async function renderWorlds() {
     $("#worlds").replaceChildren(h("div", { class: "grid" }, worlds.map(worldCard)));
 }
 
+// What a world does with its players' characters (server/storage/worlds.js CHARACTER_RULES), in words
+const RULE_WORDS = Object.freeze({
+    own: "Made here: the world's own (one taken home leaves it)",
+    copies: "Copied in once each: the copy stays here",
+    visiting: "Visiting: players bring their own, kept on their devices",
+});
+
+// The same, as its owner chooses it
+const RULE_CHOICES = Object.freeze([
+    ["own", "Made here: characters belong to the world (one taken home leaves it)"],
+    ["copies", "Copied in: each character copied in once, the copy staying here"],
+    ["visiting", "Visiting: players bring their own, kept on their device as they play"],
+]);
+
 function heroesWords(world) {
-    return world.heroes === "kept" ? `Kept by the world${world.firstHero === "bring" ? " (a first hero may be brought in)" : ""}` : "Brought in by their players";
+    return RULE_WORDS[world.characters] ?? RULE_WORDS.own;
 }
 
 function worldCard(world) {
@@ -821,14 +835,14 @@ function worldCard(world) {
     return h(
         "article",
         { class: "card", dataset: { world: world.id } },
-        h("header", {}, h("h3", {}, world.name), h("span", { class: "life", dataset: { life: world.life } }, LIFE_WORDS[world.life] ?? world.life)),
+        h("header", {}, h("h3", {}, world.name), h("span", { class: "life", dataset: { life: world.offline && !going ? "offline" : world.life } }, world.offline && !going ? "Offline" : (LIFE_WORDS[world.life] ?? world.life))),
         world.description ? h("p", { class: "small" }, world.description) : null,
         h("p", { class: "muted small words" }, world.words),
         world.players.length ? h("p", { class: "small" }, "In now: ", world.players.map((one) => `${one.name ?? one.player}${one.away ? " (away)" : ""}`).join(", ")) : null,
         facts([
             ["Home people", world.people],
-            ["Heroes", heroesWords(world)],
-            ["Who can join", world.settings.open ? "Anyone who opens the server" : "Those with its invite link or a key"],
+            ["Characters", heroesWords(world)],
+            ["Who can join", world.offline ? "Nobody: it's offline" : world.settings.open ? "Anyone who opens the server: no key needed" : "Those with its invite link or a key"],
             ["Listed", world.settings.listed || world.settings.open ? "Yes: anyone can see it" : "No: those with a key alone"],
             ["Most players", String(world.settings.mostPlayers)],
             ["Seed", String(world.seed)],
@@ -842,7 +856,8 @@ function worldCard(world) {
             { class: "actions" },
             button("Play", () => play(world), "primary"),
             button("Invite players", () => invitePlayers(world), "primary"),
-            going ? button("Set aside", () => lifeOf(world, "aside")) : button("Start", () => lifeOf(world, "start")),
+            world.offline ? null : going ? button("Set aside", () => lifeOf(world, "aside")) : button("Start", () => lifeOf(world, "start")),
+            world.offline ? button("Bring online", () => lifeOf(world, "online"), "primary") : button("Take offline", () => takeOffline(world)),
             going ? button("Save now", () => lifeOf(world, "save")) : null,
             button("Keys", () => openWorld(world.id, "keys")),
             button("Players", () => openWorld(world.id, "players")),
@@ -904,11 +919,21 @@ async function play(world) {
     });
 }
 
+// A world taken offline for upkeep, asked first: everyone in it sent out, nobody let in, its
+// owners neither, till it's brought back online (server/manage.js takeOffline)
+async function takeOffline(world) {
+    if (await confirmIt({ title: `Take ${world.name} offline`, note: `Everyone in it is sent out, and it's saved and set aside. Nobody may come in, its owners neither, till it's brought back online. While it's offline, what it does with its players' characters can be changed (its Settings).`, go: "Take it offline" })) {
+        await lifeOf(world, "offline");
+    }
+}
+
 async function lifeOf(world, what) {
     const WORDS = {
         start: [`Opening ${world.name}…`, `${world.name} is open.`],
         aside: [`Saving ${world.name}, then setting it aside…`, `${world.name} is set aside: saved, and using nothing.`],
         save: [`Saving ${world.name}…`, `${world.name} is saved.`],
+        offline: [`Taking ${world.name} offline…`, `${world.name} is offline: nobody may come in till it's brought back online. What it does with its players' characters can be changed in its Settings now.`],
+        online: [`Bringing ${world.name} back online…`, `${world.name} is back online: its players can come in again.`],
     };
     const [saying, said] = WORDS[what];
 
@@ -997,11 +1022,10 @@ function worldSettings(world) {
         h(
             "fieldset",
             {},
-            h("legend", {}, "Heroes"),
-            going ? h("p", { class: "muted small" }, "Whose heroes it keeps changes only while it's set aside: set it aside first.") : null,
-            field("Whose heroes", select("heroes", [["kept", "Kept by the world: each player's heroes stay here"], ["brought", "Brought in: players come as the characters they have"]], world.heroes, going)),
-            field("First heroes (in a world that keeps them)", select("firstHero", [["new", "Made new here"], ["bring", "May be brought in, once"]], world.firstHero, going)),
-            h("p", { class: "muted small" }, "Heroes a world's kept stay on the server if it's switched to brought-in heroes, and are there again if it's switched back."),
+            h("legend", {}, "Characters"),
+            going ? h("p", { class: "muted small" }, "What it does with its players' characters changes only while nobody's in it: take it offline first (on its card), or set it aside.") : null,
+            field("What it does with its players' characters", select("characters", RULE_CHOICES, world.characters, going)),
+            h("p", { class: "muted small" }, "Characters a world keeps stay on the server if it's switched to visiting, and are there again if it's switched back. Copies already in a world stay copies."),
         ),
         h(
             "fieldset",
@@ -1032,10 +1056,8 @@ function worldSettings(world) {
             changes.description = description;
         }
 
-        for (const key of ["heroes", "firstHero"]) {
-            if (!form.elements[key].disabled && form.elements[key].value !== world[key]) {
-                changes[key] = form.elements[key].value;
-            }
+        if (!form.elements.characters.disabled && form.elements.characters.value !== world.characters) {
+            changes.characters = form.elements.characters.value;
         }
 
         for (const [key, setting] of Object.entries(schema)) {
@@ -1432,8 +1454,7 @@ function setUpNewWorld() {
                     name: field("name").value.trim(),
                     description: field("description").value,
                     race: field("race").value,
-                    heroes: field("heroes").value,
-                    firstHero: field("firstHero").value,
+                    characters: field("characters").value,
                     ...(seed ? { seed: Number(seed) } : {}),
                     settings: {
                         mostPlayers: Number(field("mostPlayers").value),

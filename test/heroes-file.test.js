@@ -1,9 +1,10 @@
-// A world's kept heroes as character files (server/manage.js heroesFile; client/js/app/character-
-// file.js; docs/SERVER.md, "Heroes as files"): one of a player's taken home by them, on their
-// session, in the world's land and with its war, what this version of the game hasn't got left
-// out and said as the game brings it in; refused to anyone else, and where the world doesn't keep
-// heroes; every one of a player's exported by the world's owner from the management page; and a
-// kept hero brought into the world as this version plays them, its journal told what changed.
+// A world's kept heroes as character files (server/manage.js heroesFile, takeHome; client/js/app/
+// character-file.js; docs/SERVER.md, "Heroes as files"): one of a player's taken home by them, on
+// their session, out of the world for good, in the world's land and with its war, what this version
+// of the game hasn't got left out and said as the game brings it in; refused to anyone else, and
+// where the world doesn't keep heroes; every one of a player's exported by the world's owner from
+// the management page; and a kept hero brought into the world as this version plays them, its
+// journal told what changed.
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import http from "node:http";
@@ -12,6 +13,7 @@ import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { CHARACTER_EXTENSION, CHARACTER_FORMAT, exportOfKept, keptOfExport, readCharacterFile, salvageKept } from "../client/js/app/character-file.js";
 import { defaultHero } from "../client/js/app/heroes.js";
+import { isGuid } from "../client/js/core/guid.js";
 import { NET_VERSION } from "../client/js/core/netplay.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { ADMIN_HEADER, ADMIN_VALUE } from "../server/admin.js";
@@ -119,25 +121,37 @@ describe("a world's kept heroes as character files", () => {
         await server.worlds.get(world.world).heroes.keep(ada.player, keptHero("Élodie", 5));
     });
 
-    it("takes one of a player's heroes home, by them alone: in the world's land, what this version hasn't got left out and said", async () => {
-        const { status, json } = await raw(server.port, { route: `/worlds/${world.world}/heroes/1`, headers: { Authorization: `Bearer ${ada.session}` } });
+    it("takes one of a player's heroes home, by them alone and out of the world for good: in the world's land, what this version hasn't got left out and said", async () => {
+        const kept = server.worlds.get(world.world).heroes;
+        const { slot } = await kept.keep(ada.player, keptHero("Wynn", 60));
+        const home = (who, at = slot) => raw(server.port, { method: "POST", route: `/worlds/${world.world}/heroes/${at}/home`, ...(who ? { headers: { Authorization: `Bearer ${who.session}` } } : {}) });
+
+        // (Not another player's, nor without a session, nor a slot with nobody in it)
+        assert.equal((await home(bram)).json.error, "no-hero");
+        assert.equal((await home(null)).status, 401);
+        assert.equal((await home(ada, 5)).status, 404);
+        assert.ok(await kept.get(ada.player, slot), "still there");
+
+        const { status, json } = await home(ada);
         const [read, ...others] = readCharacterFile(json.text);
 
         assert.equal(status, 200);
-        assert.equal(json.name, `Ada${CHARACTER_EXTENSION}`);
+        assert.equal(json.name, `Wynn${CHARACTER_EXTENSION}`);
         assert.equal(decode(json.text).format, CHARACTER_FORMAT);
         assert.deepEqual(others, []);
-        assert.equal(read.name, "Ada");
+        assert.equal(read.name, "Wynn");
         assert.equal(read.exported.save.seed, 21, "in the world's land");
         assert.equal(read.exported.progress.gold, 60);
         assert.deepEqual(read.exported.talks.knowledge, ["the ford"]);
         assert.deepEqual(read.exported.place.place, { x: 10, y: 12, facing: 1 });
         assert.deepEqual(read.left, ["1 thing the game no longer has: old blade."]);
 
-        // (Not another player's, nor without a session, nor a slot with nobody in it)
-        assert.equal((await raw(server.port, { route: `/worlds/${world.world}/heroes/1`, headers: { Authorization: `Bearer ${bram.session}` } })).json.error, "no-hero");
-        assert.equal((await raw(server.port, { route: `/worlds/${world.world}/heroes/1` })).status, 401);
-        assert.equal((await raw(server.port, { route: `/worlds/${world.world}/heroes/5`, headers: { Authorization: `Bearer ${ada.session}` } })).status, 404);
+        // (Out of the world for good: forgotten there, its journal told, and not taken twice)
+        const journal = path.join(server.worlds.get(world.world).folder, "journal.log");
+
+        assert.equal(await kept.get(ada.player, slot), null);
+        assert.match(await readFile(journal, "utf8"), /Wynn \(.+\) taken home, out of the world for good\./);
+        assert.equal((await home(ada)).status, 404);
     });
 
     it("exports every one of a player's heroes for the world's owner, as a file; not where the world doesn't keep heroes", async () => {
@@ -186,7 +200,8 @@ describe("a kept hero and a character's export, each as the other", () => {
 
         assert.equal(exported.save.seed, 9);
         assert.equal(exported.world.war.turn, 4);
-        assert.deepEqual(back.hero, kept.hero);
+        assert.ok(isGuid(back.hero.guid), "given an id of its own");
+        assert.deepEqual(back.hero, { ...kept.hero, guid: back.hero.guid });
         assert.equal(back.progress.gold, 30);
         assert.deepEqual(back.talks, kept.talks);
         assert.deepEqual(back.place, kept.place);

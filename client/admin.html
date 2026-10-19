@@ -61,17 +61,12 @@
                     <label class="check"><input name="listed" type="checkbox"> Listed: shown to anyone who asks the server what worlds it has</label>
                 </fieldset>
                 <fieldset>
-                    <legend>Heroes</legend>
-                    <label class="field">Whose heroes
-                        <select name="heroes">
-                            <option value="kept">Kept by the world: each player's heroes stay here</option>
-                            <option value="brought">Brought in: players come as the characters they have</option>
-                        </select>
-                    </label>
-                    <label class="field">First heroes (in a world that keeps them)
-                        <select name="firstHero">
-                            <option value="new">Made new here</option>
-                            <option value="bring">May be brought in, once</option>
+                    <legend>Characters</legend>
+                    <label class="field">What it does with its players' characters
+                        <select name="characters">
+                            <option value="own">Made here: characters belong to the world (one taken home leaves it)</option>
+                            <option value="copies">Copied in: each character copied in once, the copy staying here</option>
+                            <option value="visiting">Visiting: players bring their own, kept on their device as they play</option>
                         </select>
                     </label>
                 </fieldset>

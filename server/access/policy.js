@@ -33,6 +33,7 @@ export const REFUSED = Object.freeze({
     key: "That key doesn't open this world.",
     banned: "You've been banned from this world.",
     locked: "This world is locked: nobody may come in for now.",
+    offline: "This world's offline for upkeep: nobody may come in till it's brought back online.",
     home: "That can only be done from home: the Mac itself or its Wi-Fi.",
     role: "You may not do that in this world.",
     busy: "Too many newcomers have come into this world lately: try again in an hour or so.",
@@ -207,8 +208,9 @@ export class KeyPolicy {
 
         const { role } = principal;
 
+        // (Offline for upkeep, nobody: its owners neither, whose management needs no entering)
         if (action === "world.enter") {
-            return target.meta?.state === "locked" && role !== "owner" ? no("locked") : { yes: true, role, why: null };
+            return target.meta?.state === "offline" ? no("offline") : target.meta?.state === "locked" && role !== "owner" ? no("locked") : { yes: true, role, why: null };
         }
 
         if (action === "key.issue") {

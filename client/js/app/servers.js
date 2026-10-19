@@ -70,6 +70,7 @@ export const SERVER_REFUSALS = Object.freeze({
     key: "That key doesn't open this world (or no longer does).",
     banned: "You've been banned from this world.",
     locked: "That world's locked: only its owner can come in just now.",
+    offline: "That world's offline for upkeep: try again later.",
     home: "That key only works at home, on the server's own Wi-Fi.",
     role: "Only the world's owner can do that.",
     full: "That world's full.",
@@ -617,11 +618,12 @@ export class ServerClient {
     }
 
     /**
-     * A hero of the player's kept in a world (by its slot), as a character file to take home
-     * (app/character-file.js): { name, text, count }. Throws ServerRefusal.
+     * A hero of the player's kept in a world whose characters are its own (by its slot) taken home:
+     * as a character file (app/character-file.js: { name, text, count }), and forgotten in the
+     * world for good. Throws ServerRefusal.
      */
-    async heroFile({ world, session, slot }) {
-        return this.#call("GET", `/worlds/${world}/heroes/${slot}`, { session });
+    async takeHome({ world, session, slot }) {
+        return this.#call("POST", `/worlds/${world}/heroes/${slot}/home`, { session });
     }
 
     /** A short code traded for its world and key, then into it, as enter(). Proves the server first. */
@@ -644,10 +646,10 @@ export class ServerClient {
      * A world made, with a creator or admin key (`maker`): { world, name, ownerKey, playerKey }. The
      * owner's key kept for it, so the one who made it comes in as its owner.
      */
-    async makeWorld(maker, { name, race, heroes = "kept", firstHero = "new", seed } = {}) {
+    async makeWorld(maker, { name, race, characters = "own", seed } = {}) {
         await this.prove();
 
-        const made = await this.#call("POST", "/worlds", { key: maker, body: { name, race, heroes, firstHero, ...(Number.isSafeInteger(seed) ? { seed } : {}) } });
+        const made = await this.#call("POST", "/worlds", { key: maker, body: { name, race, characters, ...(Number.isSafeInteger(seed) ? { seed } : {}) } });
 
         this.servers?.keepWorld(this.record.key, made.world, { name: made.name, key: made.ownerKey, playerKey: made.playerKey, role: "owner" });
 

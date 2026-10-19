@@ -12,6 +12,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { after, before, describe, it } from "node:test";
+import { isGuid } from "../client/js/core/guid.js";
 import { NET_VERSION } from "../client/js/core/netplay.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { verifyIdentity } from "../server/access/identity.js";
@@ -121,7 +122,7 @@ async function connect(server) {
 }
 
 // Into a world by its session, hello'd with a hero (a slot, or "new"), and ready: the game, once welcomed
-async function play(server, world, session, { hero = "new" } = {}) {
+async function play(server, world, session, { hero = "new", character = { hero: HERO } } = {}) {
     const game = await connect(server);
 
     game.send(`enter ${world} ${session}`);
@@ -131,7 +132,7 @@ async function play(server, world, session, { hero = "new" } = {}) {
         return game;
     }
 
-    game.say({ kind: "hello", version: NET_VERSION, character: { hero: HERO }, hero });
+    game.say({ kind: "hello", version: NET_VERSION, character, hero });
     await until(() => game.message("welcome") || game.message("refused"), "welcome");
     game.say({ kind: "ready" });
 
@@ -201,7 +202,7 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
 
         assert.equal(again.json.player, entered.json.player);
         assert.equal(again.json.ticket, null);
-        assert.deepEqual(again.json.heroes, [{ slot: 1, name: "Ada", race: "human" }]);
+        assert.deepEqual(again.json.heroes, [{ slot: 1, name: "Ada", race: "human", origin: null }], "made here, no copy");
 
         game = await play(server, world.world, again.json.session, { hero: 1 });
 
@@ -229,6 +230,119 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
 
         assert.match(journal, /The key "Players' key" was revoked/);
         assert.ok(!journal.includes(world.playerKey) && !journal.includes(world.playerKey.replace(/-/g, "")), "no key in the journal");
+    });
+
+    it("copies a character into a world that takes copies once, by anyone, as the world's own; never takes a copy home; takes one made in a world of its own home, out of it for good, only while they're not in it", async () => {
+        const made = (await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Copperby", race: "human", seed: 3, characters: "copies" } })).json;
+        const ada = { hero: { ...HERO, guid: "3f2b1c9e-7a4d-4e0f-9b21-5c6d7e8f9a0b" } };
+        const first = await server.call("POST", "/enter", { body: { world: made.world, key: made.playerKey, net: NET_VERSION } });
+
+        assert.deepEqual([first.json.card.characters, first.json.card.heroes, first.json.card.firstHero], ["copies", "kept", "bring"]);
+
+        // Copied in: the world's own, an id of its own, theirs its origin
+        let game = await play(server, made.world, first.json.session, { hero: "copy", character: ada });
+
+        assert.ok(game.message("welcome"), JSON.stringify(game.message("refused")));
+        game.close();
+        await until(() => server.registry.lifeOf(made.world).life === "stored", "set aside");
+
+        const copy = await server.worlds.get(made.world).heroes.get(first.json.player, 1);
+
+        assert.equal(copy.hero.origin, ada.hero.guid);
+        assert.ok(isGuid(copy.hero.guid) && copy.hero.guid !== ada.hero.guid);
+
+        // Once: not again, by them, nor by anyone else (another device, another player)
+        const second = await server.call("POST", "/enter", { body: { world: made.world, key: made.playerKey, net: NET_VERSION } });
+
+        assert.notEqual(second.json.player, first.json.player);
+        game = await play(server, made.world, second.json.session, { hero: "copy", character: ada });
+        assert.equal(game.message("refused")?.reason, "copied");
+        game.close();
+
+        // Never taken home: a copy stays in the world it was copied into
+        const again = await server.call("POST", "/enter", { body: { world: made.world, key: made.playerKey, ticket: first.json.ticket, net: NET_VERSION } });
+
+        assert.deepEqual(again.json.heroes.map(({ slot, origin }) => [slot, origin]), [[1, ada.hero.guid]]);
+        assert.equal((await server.call("POST", `/worlds/${made.world}/heroes/1/home`, { auth: `Bearer ${again.json.session}` })).json.error, "copy-stays");
+
+        // A world of its own: one made there taken home, out of it for good; not while they're in it
+        const own = (await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Ownby", race: "human", seed: 3, characters: "own" } })).json;
+        const entered = await server.call("POST", "/enter", { body: { world: own.world, key: own.playerKey, net: NET_VERSION } });
+
+        assert.equal(entered.json.card.characters, "own");
+        game = await play(server, own.world, entered.json.session, { hero: "copy", character: ada });
+        assert.equal(game.message("refused")?.reason, "character", "no copies in a world of its own");
+        game.close();
+        game = await play(server, own.world, entered.json.session, { character: ada });
+        assert.ok(game.message("welcome"));
+        await until(() => server.registry.lifeOf(own.world).state?.players.some((one) => one.player === entered.json.player), "in");
+        assert.equal((await server.call("POST", `/worlds/${own.world}/heroes/1/home`, { auth: `Bearer ${entered.json.session}` })).json.error, "playing", "not while they're in it");
+        game.close();
+        await until(() => server.registry.lifeOf(own.world).life === "stored", "set aside");
+
+        const made1 = await server.worlds.get(own.world).heroes.get(entered.json.player, 1);
+
+        assert.equal(made1.hero.origin, undefined, "made new here, no copy");
+
+        const home = await server.call("POST", `/worlds/${own.world}/heroes/1/home`, { auth: `Bearer ${entered.json.session}` });
+
+        assert.equal(home.status, 200, JSON.stringify(home.json));
+        assert.equal(home.json.count, 1);
+        assert.equal(decode(home.json.text).characters[0].save.hero.guid, made1.hero.guid, "the same character, their own id with them");
+        assert.equal(await server.worlds.get(own.world).heroes.get(entered.json.player, 1), null, "gone from the world for good");
+        assert.match(await readFile(path.join(server.worlds.get(own.world).folder, "journal.log"), "utf8"), /Ada \([^)]+\) taken home, out of the world for good\./);
+    });
+
+    it("takes a world offline for upkeep: everyone sent out, nobody let in, its owners neither, its character rule changed only then (or set aside); and back online", async () => {
+        const made = (await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Offton", race: "human", seed: 3 } })).json;
+        const admin = { auth: `Key ${server.adminKey}` };
+        const entered = await server.call("POST", "/enter", { body: { world: made.world, key: made.playerKey, net: NET_VERSION } });
+        const game = await play(server, made.world, entered.json.session);
+
+        assert.ok(game.message("welcome"));
+        await until(() => server.registry.lifeOf(made.world).state?.running, "running");
+
+        // (Not while anyone's in it)
+        const running = await server.call("PATCH", `/worlds/${made.world}`, { ...admin, body: { characters: "visiting" } });
+
+        assert.equal(running.status, 409);
+        assert.match(running.json.message, /Take the world offline first/);
+
+        const offline = await server.call("POST", `/worlds/${made.world}/offline`, admin);
+
+        assert.equal(offline.status, 200, JSON.stringify(offline.json));
+        assert.equal(offline.json.offline, true);
+        await until(() => game.line("closed"), "sent out");
+        assert.equal(game.line("closed"), "closed offline");
+
+        for (const key of [made.playerKey, made.ownerKey]) {
+            const refused = await server.call("POST", "/enter", { body: { world: made.world, key, net: NET_VERSION } });
+
+            assert.equal(refused.json.error, "offline");
+        }
+
+        assert.equal((await server.call("GET", `/worlds/${made.world}`, admin)).json.words, "Offline: nobody may come in till it's brought back online.");
+
+        const listed = await server.call("PATCH", `/worlds/${made.world}`, { ...admin, body: { settings: { listed: true } } });
+
+        assert.equal(listed.json.characters, "own");
+        assert.equal((await server.call("GET", "/status")).json.worlds.find(({ id }) => id === made.world).offline, true, "said so to anyone who asks");
+
+        // Offline: its character rule changed; a rule there isn't, refused
+        assert.equal((await server.call("PATCH", `/worlds/${made.world}`, { ...admin, body: { characters: "sometimes" } })).status, 400);
+
+        const changed = await server.call("PATCH", `/worlds/${made.world}`, { ...admin, body: { characters: "visiting" } });
+
+        assert.deepEqual([changed.json.characters, changed.json.heroes, changed.json.firstHero], ["visiting", "brought", "new"]);
+
+        // Back online: let in again
+        assert.equal((await server.call("POST", `/worlds/${made.world}/online`, admin)).json.offline, false);
+
+        const back = await server.call("POST", "/enter", { body: { world: made.world, key: made.playerKey, net: NET_VERSION } });
+
+        assert.equal(back.status, 200);
+        assert.equal(back.json.card.characters, "visiting");
+        assert.match(await readFile(path.join(server.worlds.get(made.world).folder, "journal.log"), "utf8"), /Taken offline by [^:]+: nobody may come in till it's brought back online\.[\s\S]*its characters: visiting[\s\S]*Brought back online/);
     });
 
     it("trades a short code once for the world and its key", async () => {

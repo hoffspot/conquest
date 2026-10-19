@@ -38,11 +38,12 @@ answered from the internet. Its tabs:
 - **Overview.** Its name, its id (players' games check it's the same server each time), its
   addresses on the Wi-Fi with QR codes, how long it's been up, how many worlds it runs at once,
   the admin key, and the internet (below).
-- **Worlds.** Each world, how it is ("Running: 3 players, day 4, 14:00", "Set aside: saved"), and
-  what can be done with it: start it, set it aside (everyone in it is sent out and it's saved),
-  save it now, its settings, keys, players and backups, export it, delete it (its name typed).
-- **New world.** Its name, seed and home people, whether heroes are kept by the world or brought
-  in by their players, its rules, and **Or bring a world in** (below).
+- **Worlds.** Each world, how it is ("Running: 3 players, day 4, 14:00", "Set aside: saved",
+  "Offline"), and what can be done with it: start it, set it aside (everyone in it is sent out and
+  it's saved), **take it offline** and **bring it online** (below), save it now, its settings,
+  keys, players and backups, export it, delete it (its name typed).
+- **New world.** Its name, seed and home people, what it does with its players' characters
+  (below), its rules, and **Or bring a world in** (below).
 - **Settings.** The server's settings, **Updates** (below), and creator keys: whoever holds one
   makes worlds of their own here, and owns them.
 - **Activity** (what's happened, the server's and each world's) and **Health** (each world's
@@ -65,20 +66,46 @@ typing on a phone) works once. Whoever comes in is given a **ticket**, kept by t
 without the key. A lost ticket is given again from the world's Players tab; the old one stops
 working. A player can be banned (by their ticket, and their address for 24 hours) and let back.
 
-A world either **keeps** its players' heroes (up to 6 a player, made there, or one brought in the
-first time if its rules allow it), or players **bring** the heroes they have in their game. It can
-be switched while the world's set aside.
+**What a world does with its players' characters** (`storage/worlds.js` `CHARACTER_RULES`: its
+`characters`, kept as the heroes mode and first-hero rule each stands for, `RULE_MODES`). The game
+says which on each world's card and tells players plainly before they choose who goes in:
+
+| Rule | Who goes in | Kept | Leaving |
+| --- | --- | --- | --- |
+| **Made here** (`own`) | One of theirs made there (up to 6 a player), or a new one, made there with the look of who they came as | By the world: its own | **Take one home**, asked first: it leaves the world for good (the server forgets it) and is kept on their device |
+| **Copied in** (`copies`) | One of their copies there ("Ada · Fernhollow's copy"), a character on their device copied in (asked first), one from a character file (asked first), or a new one | By the world. A copy is the world's own: what it does there never goes back to the character on their device | Never: a copy stays in the world it was copied into |
+| **Visiting** (`visiting`) | One of the characters on their device, or a new one made first | On their device: the world keeps nothing of them | They leave with the player |
+
+- **Copied once.** A character is copied into a world once: by its own id (below), by anyone, on
+  any device. Asked again, the world says so ("That character's been copied into this world
+  already"), and the game shows them as copied in already.
+- **Changed only while nobody's in it**: offline (below) or set aside. Characters a world keeps
+  stay on the server if it's switched to visiting, and are there again if it's switched back;
+  copies already in it stay copies.
+- **Made** with a rule (the game's Make a world, the management page's New world: `characters`),
+  or without one, as kept by the world, made there.
+
+**Offline for upkeep.** Its owner (on the management page, or the world's own endpoints) or the
+server's admin **takes a world offline**: everyone in it is sent out ("The world's owner took it
+offline"), it's saved and set aside, and nobody may come in, its owners neither, till it's
+**brought back online**. Its card says so to anyone who lists it ("Offline for upkeep"), and its
+journal when it went and came back. What it does with its players' characters is changed then.
 
 **Heroes as files.** The heroes a world keeps can leave it as character files, the same files the
 game's Saved characters exports and brings in (`.pellagos-character`):
 
-- A player **takes one home** when they choose who goes in (**Take one home**): a copy of that hero
-  is kept in their game, in the world's land and with its war as it was last saved, to play by
-  themselves or to bring into another world. The hero stays in the world as they are.
-- Where a first hero may be brought in, a player can **bring one from a file** (**Bring one from a
+- A player **takes one home** from a world whose characters are its own, when they choose who
+  goes in (**Take one home**), asked first: it's kept in their game, in the world's land and with
+  its war as it was last saved, to play by themselves or to bring into another world, and the
+  world forgets it for good. Not a copy (a world that takes copies, a world's hero brought to the
+  server, or one switched to its own since: a copy never leaves), and not while they're in the
+  world on any device. Should their device not keep it (no room, or storage refused), the file's
+  saved instead, so it's never lost.
+- Where characters are copied in, a player can **copy one from a file** (**Copy one from a
   file**), as well as one their game keeps.
 - The world's owner **exports a player's heroes** from the Players tab (**Export heroes**): every
-  hero of theirs kept there, in one file, to give them or keep.
+  hero of theirs kept there, in one file, to give them or keep. It's a copy, for safekeeping: the
+  heroes stay in the world.
 
 **Each hero's own id** (client/js/core/guid.js): every hero a world keeps has one (`hero.guid`),
 given when it's first kept, or the first time one kept before ids is given back. A hero brought
@@ -152,7 +179,8 @@ like anyone else, to come back by. No more than 20 newcomers an hour come in by 
 address, and bans hold as ever. Turned off, nobody new comes in without the link, and those
 already in can still come back; to keep them out too, revoke the open door under its **Keys**.
 Its owner turns it on or off from its Settings on the management page, or from the game's World
-panel.
+panel, whenever they like. The game's lists say which each world is: "Open to anyone: tap to
+join", "Needs a key: ask its owner for an invite link", or "Offline for upkeep".
 
 ## Reaching it from the internet
 
@@ -183,12 +211,12 @@ goes:
    here first (Saved characters, Import from a file).
 2. **A key that makes worlds here:** the admin key (on the server's Wi-Fi alone), or a creator key
    its owner made for them (Settings, Creator keys).
-3. **Its name** (the character's world, to start with), and whether others may bring a hero of
-   their own in, or make one new here (its **first heroes**).
+3. **Its name** (the character's world, to start with), and whether others make new characters
+   there (made here) or may copy one of theirs in (copied in).
 
 The server makes a world with the same seed and home people, its war carried on as it stood, and
 the rest made from the seed, as the game makes it each time it's loaded. Its heroes are kept by
-the world, and the character is the first of them, put right as this version of the game plays
+the world, and a copy of the character is the first of them (it never leaves the world), put right as this version of the game plays
 them, as a character file is (what changed is said to the player, and in the world's journal).
 Whoever brought it is its first player, its owner, by the owner's key: their game keeps that key
 and their ticket, says what came of it, and goes straight in to their character. The character on

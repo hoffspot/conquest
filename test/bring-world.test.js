@@ -149,7 +149,7 @@ describe("a player's own world brought to a world server", () => {
         assert.equal(owner.role, "owner");
         assert.equal(owner.player, json.player);
         assert.equal(owner.ticket, null, "known already: no new ticket");
-        assert.deepEqual(owner.heroes, [{ slot: 1, name: "Ada", race: "elf" }]);
+        assert.deepEqual(owner.heroes, [{ slot: 1, name: "Ada", race: "elf", origin: ADA }], "a copy of theirs");
         assert.deepEqual((await enter({ ticket: json.ticket })).heroes.map(({ name }) => name), ["Ada"], "by their ticket alone, too");
 
         const guest = await enter({ key: json.playerKey });

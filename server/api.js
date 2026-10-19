@@ -30,12 +30,18 @@
 // A world's owner's (or the admin's) management of it (manage.js), the management page's:
 //
 //   GET    /worlds/:id                      all its owner's shown of it, and how it is in words
-//   PATCH  /worlds/:id {name?, description?, heroes?, firstHero?, settings?}   changed (its heroes mode only while it's set aside)
+//   PATCH  /worlds/:id {name?, description?, characters?, settings?}   changed (its characters only while nobody's in it:
+//                                           offline, or set aside; or its heroes mode and first-hero rule, as they're kept)
 //   DELETE /worlds/:id {confirm}            deleted, its name typed (its backups kept)
 //   POST   /worlds/:id/start, /aside, /save                          its life
+//   POST   /worlds/:id/offline, /online     taken offline for upkeep (everyone sent out, "offline",
+//                                           nobody let in, its character rule changeable), back online
 //   POST   /worlds/:id/keys/:key/show       a key that works, shown again: { key }
 //   DELETE /worlds/:id/codes/:code          a short code revoked
 //   GET    /worlds/:id/players              its players; POST …/players/:p/kick, /ban, /unban, /role {role}, /ticket
+//   GET    /worlds/:id/players/:p/heroes    a player's heroes kept there, as a character file (the owner's export)
+//   POST   /worlds/:id/heroes/:slot/home    one of the caller's own heroes taken home (a world whose characters
+//                                           are its own): as a character file, and forgotten there for good
 //   GET    /worlds/:id/backups              its backups; POST makes one; POST …/backups/:b/restore; GET …/backups/:b/download
 //   GET    /worlds/:id/export               the world as one file (manage.js EXPORT_FORMAT)
 //   POST   /worlds/:id/afresh               one that can't be carried on started afresh from its seed, its war and heroes kept
@@ -79,7 +85,7 @@ import { ARCHIVE_LIMIT, BRING_LIMIT, IMPORT_LIMIT, Refused } from "./manage.js";
 import { PLAY_PATH, PLAY_PROTOCOL } from "./play.js";
 import { SETTINGS } from "./storage/settings.js";
 import { SERVER_VERSION } from "./storage/versions.js";
-import { WORLD_SETTINGS } from "./storage/worlds.js";
+import { isOffline, ruleOf, WORLD_SETTINGS } from "./storage/worlds.js";
 
 /** Where on the server the API is. */
 export const API_PATH = "/api/v1";
@@ -100,7 +106,7 @@ export class Download {
 }
 
 // What each refusal is, as HTTP says it
-const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 403, home: 403, role: 403, full: 409, version: 409, code: 401, wait: 429, busy: 429 });
+const STATUS = Object.freeze({ "no-world": 404, key: 401, banned: 403, locked: 403, offline: 409, home: 403, role: 403, full: 409, version: 409, code: 401, wait: 429, busy: 429 });
 
 const refuse = (why, extra = {}) => new Refusal(STATUS[why] ?? 403, why, REFUSED[why] ?? extra.message ?? "That can't be done.", extra);
 
@@ -141,7 +147,10 @@ export function apiHandler(server, { mac = false } = {}) {
     // Who did it, as the journals say it
     const byOf = (principal) => (principal.kind === "admin" ? (principal.from === "mac" ? "the admin, on the server's computer" : "the admin") : principal.admin ? "the admin" : (principal.player?.id ?? "an owner"));
 
-    // A world's card, as a listing shows it: its name, home people, heroes, players in it now and their heroes' names
+    // A world's card, as a listing shows it: its name, home people, what it does with its players'
+    // characters (`characters`: storage/worlds.js CHARACTER_RULES; and, as the game once read them,
+    // its heroes mode and first-hero rule), players in it now, whether it's open to anyone or needs
+    // a key, and whether it's offline
     const cardOf = (id) => {
         const meta = server.metaOf(id);
         const { life, state } = registry.lifeOf(id);
@@ -153,10 +162,12 @@ export function apiHandler(server, { mac = false } = {}) {
             race: meta.race,
             heroes: meta.heroes,
             firstHero: meta.firstHero,
+            characters: ruleOf(meta),
             most: meta.settings.mostPlayers,
             players: state?.players.filter((one) => one.id).length ?? 0,
             life,
             open: meta.settings.open === true,
+            offline: isOffline(meta),
         };
     };
 
@@ -182,7 +193,8 @@ export function apiHandler(server, { mac = false } = {}) {
         }
 
         const entered = await access.enter(principal);
-        const heroes = meta.heroes === "kept" ? (await server.worlds.get(world).heroes.list(entered.player)).map(({ slot, name, race }) => ({ slot, name, race })) : [];
+        // (Theirs kept there: each, whether it's a copy, and of which of theirs, by its own id)
+        const heroes = meta.heroes === "kept" ? (await server.worlds.get(world).heroes.list(entered.player)).map(({ slot, name, race, origin }) => ({ slot, name, race, origin })) : [];
         const { life, position } = registry.lifeOf(world);
 
         return { ...entered, world, card: cardOf(world), heroes, life, position, play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL } };
@@ -450,6 +462,11 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return doing(() => (what === "start" ? manage.start(world) : what === "aside" ? manage.setAside(world, `set aside by ${byOf(principal)}`) : manage.save(world)));
         }],
+        ["POST", new RegExp(`^/worlds/${WORLD}/(offline|online)$`), async (request, body, [, world, what]) => {
+            const principal = managing(request, world, "world.manage");
+
+            return doing(() => (what === "offline" ? manage.takeOffline(world, { by: byOf(principal) }) : manage.bringOnline(world, { by: byOf(principal) })));
+        }],
         ["POST", new RegExp(`^/worlds/${WORLD}/afresh$`), async (request, body, [, world]) => {
             const principal = managing(request, world, "world.manage");
 
@@ -476,9 +493,9 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return { players: await doing(() => manage.players(world)) };
         }],
-        // (A player's heroes kept in a world, as a character file: one of theirs taken home, by them;
-        // all of a player's, exported by the world's owner)
-        ["GET", new RegExp(`^/worlds/${WORLD}/heroes/([1-9])$`), async (request, body, [, world, slot]) => {
+        // (A player's heroes kept in a world, as a character file: one of theirs taken home, by them,
+        // out of the world for good; all of a player's, exported by the world's owner)
+        ["POST", new RegExp(`^/worlds/${WORLD}/heroes/([1-9])/home$`), async (request, body, [, world, slot]) => {
             if (!server.metaOf(world)) {
                 throw refuse("no-world");
             }
@@ -489,7 +506,9 @@ export function apiHandler(server, { mac = false } = {}) {
                 throw refuse(principal.why ?? "key");
             }
 
-            return doing(() => manage.heroesFile(world, principal.player.id, { slot: Number(slot) }));
+            const inWorld = registry.lifeOf(world).state?.players.some((one) => one.player === principal.player.id) ?? false;
+
+            return doing(() => manage.takeHome(world, principal.player.id, Number(slot), { inWorld }));
         }],
         ["GET", new RegExp(`^/worlds/${WORLD}/players/${PLAYER}/heroes$`), async (request, body, [, world, player]) => {
             managing(request, world, "world.manage");
