@@ -638,6 +638,22 @@ export const LOOKS = Object.freeze({
     demonLord: { body: "humanoid", scale: [1.6, 1.65] },
     // (A hell's fiend: lean, horned and a head and more taller than a man, until its own model's read)
     fiend: { body: "humanoid", scale: [1.28, 1.33] },
+    // (A hell's flayed, gaunt and skinned, a man's height to a head and more taller, until their
+    // own models are read: creatures.js)
+    flayling: { body: "humanoid", scale: [0.98, 1.02] },
+    cinderHusk: { body: "humanoid", scale: [1.07, 1.1] },
+    pyreAcolyte: { body: "humanoid", scale: [1.04, 1.07] },
+    ossuaryPriest: { body: "humanoid", scale: [1.11, 1.14] },
+    dirgeWarden: { body: "humanoid", scale: [1.23, 1.26] },
+    flayedHierarch: { body: "humanoid", scale: [1.28, 1.31] },
+    // (A hell's gorgers, hulking brutes a head and more taller than a man, until their own models
+    // are read: creatures.js)
+    slagGorger: { body: "humanoid", scale: [1.12, 1.16] },
+    forgeBrute: { body: "humanoid", scale: [1.22, 1.26] },
+    chainedGlutton: { body: "humanoid", scale: [1.32, 1.36] },
+    bloatGorger: { body: "humanoid", scale: [1.17, 1.21] },
+    pitRavager: { body: "humanoid", scale: [1.12, 1.16] },
+    gorgerWarlord: { body: "humanoid", scale: [1.37, 1.41] },
 });
 
 // A value between two, from the random numbers
@@ -645,6 +661,30 @@ const between = (random, [least, most]) => random.range(least, most);
 
 // The people-shaped creatures' bodies (the character engine's sliders: macro.js, details.js),
 // skins, eyes, hair and what they wear, each a little different from its seed
+// (A hell's flayed, as BRUTES: gaunt, long in the arm, skinned (`tones`, the veins standing out),
+// bald, their eyes burning (`irises`), in what they wear (`wear`))
+const flayed = (tones, irises, wear) => ({
+    macro: { gender: 1, muscle: [0.55, 0.7], weight: [0, 0.1], height: [0.95, 1], african: 0.3, asian: 0.3, caucasian: 0.4 },
+    details: { browRidge: [0.6, 0.9], jawWidth: [0.3, 0.5], headSquare: [0, 0.2], eyeSize: [-0.3, 0], cheekbones: [0.8, 1], armLength: [0.9, 1], handSize: [0.8, 1], footSize: [0.6, 0.8], neck: [0.6, 0.8], shoulders: [0.4, 0.6], belly: [0, 0] },
+    skin: { tones, warts: [0.2, 0.4], veins: [0.9, 1], blush: [0, 0.05], brows: [0, 0.1], warpaint: "#140606" },
+    irises,
+    hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
+    wear,
+    walk: "orc",
+});
+
+// (A hell's gorgers, as BRUTES: hulking, pot-bellied, bald, small-eyed (they've no heads of their
+// own: their maws are in their bellies), in their skins (`tones`), in what they wear (`wear`))
+const gorger = (tones, wear) => ({
+    macro: { gender: 1, muscle: [0.8, 0.95], weight: [0.85, 1], height: [0.9, 1], african: 0.3, asian: 0.3, caucasian: 0.4 },
+    details: { belly: [0.9, 1], underbite: [0.6, 0.9], jawWidth: [0.9, 1], headSize: [-0.6, -0.4], eyeSize: [-0.7, -0.5], neck: [0.9, 1], shoulders: [0.8, 1], armLength: [0.7, 0.9], handSize: [0.8, 1] },
+    skin: { tones, warts: [0.4, 0.7], veins: [0.5, 0.8], blush: [0, 0.1], brows: [0, 0.1], warpaint: "#140606" },
+    irises: ["#2a0a06", "#3a1008"],
+    hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
+    wear,
+    walk: "orc",
+});
+
 const BRUTES = {
     goblin: {
         macro: { gender: 1, muscle: [0.35, 0.5], weight: [0.15, 0.3], height: [0, 0.08], african: 0.3, asian: 0.3, caucasian: 0.4 },
@@ -736,6 +776,25 @@ const BRUTES = {
         wear: [["loincloth"], ["orcHelm"]],
         walk: "orc",
     },
+    // (A hell's flayed, standing in for their own models: gaunt, long in the arm, skinned, the
+    // veins standing out, their eyes burning; flaylings raw red in rags, cinder husks ash grey,
+    // pyre acolytes the red of blood with a belt, ossuary priests ash grey and crowned, dirge
+    // wardens a drowned blue, crowned, bracers on, and hierarchs raw red, crowned, caped)
+    flayling: flayed(["#9a3a2c", "#8a3226", "#a8442f"], ["#ffb020", "#ff6a1a"], [["loincloth"]]),
+    cinderHusk: flayed(["#4a4744", "#3c3936", "#55514d"], ["#ffb020", "#ff6a1a"], [["loincloth"]]),
+    pyreAcolyte: flayed(["#6a1a14", "#5a1610", "#7a2018"], ["#ffb020", "#ff6a1a"], [["loincloth"], ["belt"]]),
+    ossuaryPriest: flayed(["#56524d", "#4a4642", "#625d57"], ["#9aff5a", "#6adf3a"], [["loincloth"], ["belt"], ["crown"]]),
+    dirgeWarden: flayed(["#3e6e84", "#356276", "#467a92"], ["#9ad8ff", "#6ac0ff"], [["loincloth"], ["belt"], ["bracers"], ["crown"]]),
+    flayedHierarch: flayed(["#9a3a2c", "#8a3226", "#a8442f"], ["#ff3040", "#ff1a2a"], [["loincloth"], ["belt"], ["bracers"], ["crown"], ["kingsCape"]]),
+    // (A hell's gorgers, standing in for their own models: hulking, pot-bellied brutes, their skins
+    // burnt, blood-red, ochre, rotten green, pale or sallow, in loincloths, the bigger belted and
+    // bracered, the warlord in a horned helm)
+    slagGorger: gorger(["#7a3a1e", "#6a3018", "#874224"], [["loincloth"]]),
+    forgeBrute: gorger(["#7a2216", "#6a1c12", "#86281a"], [["loincloth"], ["belt"]]),
+    chainedGlutton: gorger(["#8a6a2c", "#7a5c24", "#967434"], [["loincloth"], ["belt"], ["bracers"]]),
+    bloatGorger: gorger(["#5a6a2c", "#4e5c24", "#667634"], [["loincloth"]]),
+    pitRavager: gorger(["#a08070", "#927262", "#ac8c7a"], [["loincloth"], ["belt"]]),
+    gorgerWarlord: gorger(["#a08070", "#927262", "#ac8c7a"], [["loincloth"], ["belt"], ["bracers"], ["orcHelm"]]),
 };
 
 /**

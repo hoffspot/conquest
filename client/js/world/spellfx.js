@@ -708,6 +708,14 @@ TEXTURES.spectrum = () =>
 
 // --- The effect itself ---
 
+// What a hell's creatures leave where they fall dead (battle.js BOMBS `look`), as SpellFx.lob
+// draws them: its body's colour and glow, the light in it, the sparks or drops rising off it and
+// how fast they rise (`rise`, a negative gravity)
+const BURST_LOOKS = Object.freeze({
+    embers: { body: 0x2a1408, glow: 0xff5a10, light: 0xff7a20, sparks: [0xffc040, 0xff5a10], rise: -1.5 },
+    bile: { body: 0x2a3a10, glow: 0x6adf20, light: 0x9aff40, sparks: [0xc8ff60, 0x5aa020], rise: -0.6 },
+});
+
 export class SpellFx {
     /**
      * @param {import("./effects.js").Effects} effects - The game's particles.
@@ -1888,7 +1896,13 @@ export class SpellFx {
      * burning. A scorch where it was, and cracks; the camera shaken (`shake`: how near it is,
      * 0 to 1) and, for the spell, the screen washed with its light.
      */
-    blast(at, { radius = 2.5, grand = false, shake = 1 } = {}) {
+    blast(at, { radius = 2.5, grand = false, shake = 1, look = null } = {}) {
+        if (look === "bile") {
+            this.#bileBurst(at, radius, shake);
+
+            return;
+        }
+
         const ground = this.onGround(at.x, at.z);
         const heart = this.onGround(at.x, at.z, 0.9);
         const size = grand ? 1.6 : 1;
@@ -1970,6 +1984,23 @@ export class SpellFx {
         }
     }
 
+    // A bloat gorger's bile bursting (battle.js BOMBS bile): a sickly flash, foul drops thrown up
+    // and out falling back, a green wash spreading over the ground as far as it reaches, and the
+    // camera shaken (`shake`) as a small bomb's is
+    #bileBurst(at, radius, shake) {
+        const ground = this.onGround(at.x, at.z);
+        const heart = this.onGround(at.x, at.z, 0.7);
+
+        this.glow(heart.clone(), { colour: 0x8aff40, strength: 10, reach: 7, life: 0.5 });
+        this.spray(p([0xc8ff60, 0x6ac020, 0x2a5a10], { count: 40, size: [0.06, 0.16], speed: [3, 8], life: [0.5, 1], gravity: 9.8, spread: 1.6, drag: 1.2 }), heart);
+        this.spray(p([0x9ad850, 0x4a8a20], { count: 14, size: [0.5, 0.9], speed: [1, 2.5], life: [0.6, 1.1], gravity: -0.3, spread: 2.2, grow: 1.6, glow: false, opacity: 0.45 }), heart);
+        this.ring(ground, { colour: 0x9aff50, from: 0.3, to: 1.8 * radius, life: 0.4, opacity: 0.7 });
+
+        if (shake > 0) {
+            this.shake(0.12 * shake);
+        }
+    }
+
     // A bomb: an iron-dark pot, its wick, and the spark at its end (lit, the bigger the King's)
     #bombBody(big) {
         const bomb = new THREE.Group();
@@ -1989,14 +2020,34 @@ export class SpellFx {
         return bomb;
     }
 
+    // What a hell's creature leaves where it falls dead (battle.js BOMBS `look`), in place of a
+    // bomb: a cinder husk's embers, a clot of coals glowing; a bloat gorger's bile, a sac of it
+    // swelling; its spark the heat in it, or its foulness
+    #burstBody(look) {
+        const { body, glow, light } = BURST_LOOKS[look];
+        const embers = new THREE.Group();
+        const coal = new THREE.Mesh(this.geometries.ball, new THREE.MeshStandardMaterial({ color: body, emissive: glow, emissiveIntensity: 1.6, roughness: 0.9 }));
+        const spark = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.#texture("glow"), color: light, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+        const size = 0.16;
+
+        coal.scale.set(size, size * 0.6, size);
+        spark.position.y = size * 0.5;
+        spark.scale.setScalar(0.5);
+        embers.add(coal, spark);
+        embers.userData = { size, spark };
+
+        return embers;
+    }
+
     /**
      * A bomb lobbed (battle.js BOMBS; `key`: its id), from where it's let go (`from`: a
      * function) to a point on the ground (`to`), `travel` seconds through the air, tumbling, its
      * wick sputtering; there it fizzes, a ring on the ground round it warning how far it'll reach
      * (`radius`), pulsing quicker as its wick burns down (`fuse` seconds), till it bursts (burst).
-     * `big`: the Goblin King's.
+     * `big`: the Goblin King's; `look`: what a hell's creature leaves where it falls (BURST_LOOKS),
+     * swelling there, sparks or foul drops rising off it.
      */
-    lob(key, from, to, { travel = 0.6, fuse = 1.5, radius = 2.5, big = false } = {}) {
+    lob(key, from, to, { travel = 0.6, fuse = 1.5, radius = 2.5, big = false, look = null } = {}) {
         const start = from()?.clone();
 
         if (!start) {
@@ -2005,7 +2056,7 @@ export class SpellFx {
 
         this.burst(key);
 
-        const bomb = this.#bombBody(big);
+        const bomb = look ? this.#burstBody(look) : this.#bombBody(big);
         const { size, spark } = bomb.userData;
         const end = this.onGround(to.x, to.z, size);
         const high = 0.8 + 0.15 * start.distanceTo(end);
@@ -2036,11 +2087,14 @@ export class SpellFx {
                 entry.ring = this.#warning(end, radius, fuse);
             }
 
-            // (The wick sputtering)
-            spark.scale.setScalar((0.12 + Math.random() * 0.1) * (big ? 1.3 : 1));
+            // (The wick sputtering; embers' heat swelling, sparks drifting up off them)
+            spark.scale.setScalar(look ? 0.4 + 0.5 * Math.min(1, Math.max(0, age - travel) / fuse) + Math.random() * 0.12 : (0.12 + Math.random() * 0.1) * (big ? 1.3 : 1));
             next -= dt;
 
-            if (next <= 0) {
+            if (next <= 0 && look) {
+                next = 0.05;
+                this.spray(p(BURST_LOOKS[look].sparks, { count: 3, size: [0.025, 0.06], speed: [0.4, 1.4], life: [0.4, 0.9], gravity: BURST_LOOKS[look].rise, spread: 0.9 }), spark.getWorldPosition(new THREE.Vector3()));
+            } else if (next <= 0) {
                 next = 0.035;
                 this.spray(p([0xfff4c0, 0xff8a1a], { count: 2, size: [0.02, 0.045], speed: [1, 2.5], life: [0.15, 0.3], gravity: 6, spread: 1.5 }), spark.getWorldPosition(new THREE.Vector3()));
             }

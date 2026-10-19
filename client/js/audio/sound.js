@@ -325,6 +325,23 @@ export const CREATURE_VOICES = Object.freeze({
     cultist: { family: "human", rate: 1.05 },
     cultLeader: { family: "human", rate: 0.9 },
     banditChief: { family: "humanRough" },
+    // (A hell's flayed: flaylings shrieking as goblins do, lower; cinder husks rasping, ossuary
+    // priests moaning and hierarchs groaning as wights do, higher and lower; pyre acolytes as men;
+    // dirge wardens as trolls, higher)
+    flayling: { family: "goblin", rate: 0.76, fall: "deathThudMid" },
+    cinderHusk: { family: "wight", rate: 1.22, fall: "deathThudMid" },
+    pyreAcolyte: { family: "human", rate: 0.94, fall: "deathThudMid" },
+    ossuaryPriest: { family: "wight", rate: 1.05, fall: "deathThudMid" },
+    dirgeWarden: { family: "troll", rate: 1.2, fall: "deathThudBig" },
+    flayedHierarch: { family: "wight", rate: 0.8, fall: "deathThudBig" },
+    // (A hell's gorgers, bellowing as trolls do from their maws: lower the bigger, a pit ravager
+    // higher)
+    slagGorger: { family: "troll", rate: 0.9, fall: "deathThudBig" },
+    forgeBrute: { family: "troll", rate: 0.85, fall: "deathThudBig" },
+    chainedGlutton: { family: "troll", rate: 0.78, fall: "deathThudBig" },
+    bloatGorger: { family: "troll", rate: 0.92, fall: "deathThudBig" },
+    pitRavager: { family: "troll", rate: 1.1, fall: "deathThudBig" },
+    gorgerWarlord: { family: "troll", rate: 0.74, fall: "deathThudBig" },
 });
 
 // What a creature's voice is heard doing, and how loud (as synth.js's `volume`): calling (heard
