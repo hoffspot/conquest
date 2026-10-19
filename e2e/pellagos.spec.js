@@ -187,6 +187,33 @@ test("loads everything, listing what it downloads, then shows the title", async 
     expect(loaded.groups).toEqual([true, true, true, true, true, true]);
 });
 
+test("the title's wordmark fits its card, every letter painted: on a computer, with a scrollbar's room taken from the card, and on a phone", async ({ page }) => {
+    // Its letters' first and last, against its own box, which its gradient's painted in (its
+    // letters as far from either side, the space after its last letter not counted)
+    const fits = () =>
+        page.evaluate(() => {
+            const name = document.querySelector("#titlename");
+            const range = document.createRange();
+
+            range.selectNodeContents(name);
+
+            const [text, box] = [range.getBoundingClientRect(), name.getBoundingClientRect()];
+            const after = parseFloat(getComputedStyle(name).letterSpacing);
+
+            return { inside: text.left >= box.left - 0.5 && text.right <= box.right + 0.5, centred: Math.abs(text.left - box.left - (box.right - text.right + after)) < 4 };
+        });
+
+    await title(page);
+    expect(await fits()).toEqual({ inside: true, centred: true });
+
+    // (A scrollbar's room taken from the card, as Chrome takes it when its menu's long)
+    await page.addStyleTag({ content: "#title .card { padding-right: 47px !important; }" });
+    expect(await fits()).toEqual({ inside: true, centred: true });
+
+    await page.setViewportSize({ width: 320, height: 640 });
+    expect(await fits()).toEqual({ inside: true, centred: true });
+});
+
 test("debug mode shows how the game runs, and is remembered", async ({ page }) => {
     await title(page);
     await expect(page.locator("#debug")).toBeHidden();
