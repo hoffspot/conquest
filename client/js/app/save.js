@@ -91,6 +91,10 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     // (And whether it springs up under the thumb wherever it lands in the bottom left, rather than
     // waiting in its corner)
     stickFloats: false,
+    // The mouse pointer a sword, showing what a click would do, lit when shaken (app/pointer.js);
+    // and larger. With a mouse only: a touch screen has none
+    swordPointer: true,
+    largePointer: false,
     // The zoom buttons in the bottom right corner: off, since pinching and the wheel zoom anyway
     zoom: false,
     // Six quick actions across the bottom in a fight, not four with their names (app/quickbar.js):

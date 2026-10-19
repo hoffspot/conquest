@@ -109,6 +109,24 @@ textarea {
     outline: none;
 }
 
+/* The sword pointer (app/pointer.js), with a mouse: everywhere on the page, over the view showing
+   what a click there would do (--pointer-view), and shaken lit; where you type, the text cursor.
+   Over everything else's own (a button's hand, a drag's grab), so it's the one pointer to look for */
+@media (hover: hover) and (pointer: fine) {
+    :root[data-pointer],
+    :root[data-pointer] * {
+        cursor: var(--pointer) !important;
+    }
+
+    :root[data-pointer] #view {
+        cursor: var(--pointer-view, var(--pointer)) !important;
+    }
+
+    :root[data-pointer] :is(textarea, [contenteditable="true"], input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"], [type="color"], [type="file"])) {
+        cursor: text !important;
+    }
+}
+
 /* Every screen is a layer over the view */
 .screen {
     position: fixed;
@@ -1078,6 +1096,11 @@ input[type="range"] {
 body[data-stick="off"] #hud .stickzone,
 body[data-stick="off"] .stick-only,
 body[data-stick="off"] .stick-option {
+    display: none;
+}
+
+/* The sword pointer turned off in Game options: nothing said of its size */
+body[data-sword-pointer="off"] .pointer-option {
     display: none;
 }
 

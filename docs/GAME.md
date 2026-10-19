@@ -4726,7 +4726,26 @@ it.
    shown or not, nothing is said of the stick in the opening hint while it's off, and a pause
    lets go of whatever was held. Nothing else takes the stick's touches from it (what lies over
    its corner, the hint and the floating words, takes no touches), and its circle doesn't blur
-   what's behind it, which a phone's GPU did afresh every frame. The heads-up display
+   what's behind it, which a phone's GPU did afresh every frame. *The mouse pointer*
+   (app/pointer.js): with a mouse (a fine pointer that hovers: a touch screen has none), it's a
+   little sword over the whole page, so it's easy to find on a big screen of grass: a steel
+   blade, a gilt guard, outlined dark (drawn by scripts/build-pointers.js into
+   `client/images/pointer/`, at 1x and 2x for a sharp screen). Over the view it shows what a
+   click there would do (game.js `#aimAt`, tap()'s choice in its order without doing any of it,
+   looked at again every tenth of a second while the mouse is over it, as what's under a still
+   mouse moves too): its blade lit red over an enemy, a speech bubble over someone to talk to (or
+   a player to trade with), an arch over a door, the stairs or the guild's portal, and a hand
+   over something on the ground to pick up or search, or the war table; the plain sword over
+   the ground. Its badge sits in the sword's free corner, so where it points, its tip, never
+   moves. Shaken (four or more turns back within 0.7 s, each after 30 pixels one way, 500 pixels
+   in all: a sweep however fast, a circle or a wiggle isn't one), its blade glows gold and it
+   grows half again, staying lit 1.5 s after the shaking stops, as the operating systems' shake
+   to find does (macOS, KDE's shake cursor, Windows' Find My Mouse). It's the system's pointer,
+   set by CSS (styles.css: `--pointer`, and `--pointer-view` over the view), never drawn by the
+   game, so it never trails the mouse; over a button it's the sword too (the button lights as
+   before), and where you type, the text cursor. **Sword pointer** in Game options (Graphics, on)
+   turns it off for the system's own; **Large pointer** (off) makes it half as big again, 44
+   pixels, as the game accessibility guidelines ask: a choice of size, not one size for all. The heads-up display
    (app/hud.js) shows the player's name and health in the bottom right corner (and, once
    they've registered with the adventurers' guilds, their rank there by their name: a chip of
    its metal, Copper to Mithril, docs/WAR.md M8; the thumb stick,
@@ -4791,7 +4810,8 @@ it.
    "Move the buttons for the game options menu to the top from the bottom. Organize the menu
    into submenus so the scrolling isn't as long"):
    - **Graphics:** the Visual quality slider (Low, Medium, High) and the Adaptive switch
-     (Keeping up, above), full screen while playing (below), and screen shake.
+     (Keeping up, above), full screen while playing (below), screen shake, and with a mouse the
+     sword pointer and under it, while it's on, the large pointer (*The mouse pointer*, above).
    - **Sound:** a switch that turns all the sound on or off, and a slider (0 to 100%) for each
      bus: sound effects, environment and music (a sound plays as the first two are moved, to
      hear how loud).
@@ -5359,6 +5379,12 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
 - `test/pacing.test.js`: how often the world's drawn: every other frame of a 120 Hz screen at 60,
   evenly; a 144 Hz one at 72 and a 90 Hz one at 90; 30 when asked; every frame with no rate, or when
   drawing takes longer than the rate allows; following the screen changing its rate.
+- `test/pointer.test.js`: the mouse pointer (app/pointer.js): lit by a quick shake back and
+  forth any way, staying lit a while after and then going out, and not by a sweep however fast,
+  a circle, a wiggle or a slow back and forth; its pictures, every look at every size, 1x and 2x,
+  each the size it's said to be and none over 128 pixels, shaken half again as big; its CSS
+  value pointing with the sword's tip, both scales where the browser takes them, the system's
+  pointer last; and its CSS everywhere but where one types, over the view as the game says.
 - `test/camera.test.js`: the camera following from the player's first step, catching up and
   turning behind them (walked away from, it doesn't turn; walked towards, it turns all the way
   round), easing round (three-quarters of a half turn in 0.5 to 1.2 s, never a jump), steady
@@ -5518,7 +5544,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   thumb stick (there from the start, walking pushed partway, running at its rim, stopping let go,
   and gone turned off in Game options, the keys still steering without it; asked to
   float, springing up under the thumb where it lands, walking the way it's pushed from there, and
-  back to its corner let go),
+  back to its corner let go), the mouse pointer a sword over the page and its buttons, over the
+  view its blade lit red over an enemy, a speech bubble over someone neutral (as the folk are),
+  the sword over the ground, shaken lit and bigger and a moment later not, large, and turned off
+  the system's own,
   a bow fight leaving arrows in bleeding wounds, blood on the ground and a pool under the fallen,
   healed and come back to life without them,
   the music's recordings downloaded and playing after a tap (and carrying on when the browser

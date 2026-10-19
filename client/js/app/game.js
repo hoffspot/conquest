@@ -237,6 +237,10 @@ const DOUBLE_TAP_SLOP = { view: 60, map: 16 };
 // How far from an enemy (screen pixels, at its chest) a tap picks it
 const PICK_RADIUS = 46;
 
+// How often what's under the mouse is looked at again for the pointer to show (ms): what's under a
+// still mouse moves too (#aim)
+const AIM_MS = 100;
+
 // Holding this long (ms) on the player or an enemy opens the action wheel; a finger this far
 // (pixels) from where it opened is in one of its slices
 const HOLD_MS = 400;
@@ -1016,6 +1020,12 @@ export class Game {
         this.autoSnag = false;
         this.snagOnly = null;
         this.snagTried = new Set();
+
+        // The mouse pointer (app/pointer.js), told what a click on the view would do where the
+        // mouse is (#aim); where the mouse is over the view (null: off it), and when it was looked at
+        this.cursor = null;
+        this.hovering = null;
+        this.aimedAt = -Infinity;
 
         /**
          * Party chat (core/netplay.js CHAT): what's been said in the player's party, and its comings
@@ -2219,6 +2229,7 @@ export class Game {
         }
 
         this.listeners = [];
+        this.#unaim();
 
         for (const pointer of this.pointers.values()) {
             clearTimeout(pointer.hold);
@@ -2587,6 +2598,8 @@ export class Game {
         } catch (error) {
             this.#fault(error);
         }
+
+        this.#aim(now);
 
         if (this.remote || this.hosting || this.together) {
             this.#together(steps ? (this.steppedAt = now) : now);
@@ -10340,6 +10353,11 @@ export class Game {
         this.#on(canvas, "pointermove", (event) => {
             const pointer = this.pointers.get(event.pointerId);
 
+            // (A mouse over the view: what's under it, for the pointer to show: #aim)
+            if (event.pointerType === "mouse") {
+                this.hovering = { x: event.clientX, y: event.clientY };
+            }
+
             if (!pointer) {
                 return;
             }
@@ -10433,6 +10451,7 @@ export class Game {
 
         this.#on(canvas, "pointerup", up);
         this.#on(canvas, "pointercancel", up);
+        this.#on(canvas, "pointerleave", () => this.#unaim());
 
         // Anything the player does keeps them from resting
         for (const type of ["pointerdown", "keydown", "wheel"]) {
@@ -10609,6 +10628,50 @@ export class Game {
                 this.hud.message("Only out in the world you've opened, not joined", 2.5);
             }
         });
+    }
+
+    // What the mouse pointer shows over the view, looked at again every AIM_MS while the mouse is
+    // over it: what a click there would do (#aimAt)
+    #aim(now) {
+        if (!this.cursor || !this.hovering || now - this.aimedAt < AIM_MS) {
+            return;
+        }
+
+        this.aimedAt = now;
+        this.cursor.aim(this.#aimAt(this.hovering.x, this.hovering.y));
+    }
+
+    // The mouse gone off the view, or the game no longer listening: the plain sword
+    #unaim() {
+        this.hovering = null;
+        this.cursor?.aim(null);
+    }
+
+    /**
+     * What a click at a point on the view would do, for the pointer to show (app/pointer.js AIMS):
+     * "attack" an enemy, "talk" to someone (or trade with another player), "hand" for something
+     * on the ground to pick up or search (or the war table, to open its map), "enter" for a door,
+     * the stairs or the guild's portal; null for the ground (or the player). As tap() chooses, in
+     * its order, without doing any of it.
+     */
+    #aimAt(clientX, clientY) {
+        const me = this.battle.actor(this.me);
+        const found = this.#whoIsAt(clientX, clientY, { player: true, folk: true })?.actor ?? null;
+        const who = found === me ? null : found;
+
+        if (who) {
+            return me && !this.battle.hostile(who, me) ? "talk" : "attack";
+        }
+
+        if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point))) {
+            return "hand";
+        }
+
+        if (this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) || this.#portalAt(clientX, clientY)) {
+            return "enter";
+        }
+
+        return this.#warTableAt(clientX, clientY) ? "hand" : null;
     }
 
     // The portal of the guild's hall the player's in (core/portals.js), if that's what was tapped:
