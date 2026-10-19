@@ -1693,6 +1693,86 @@ test("the thumb stick, there from the start, walks the player the way it's pushe
     expect((await told(page)).order).toBe(null);
 });
 
+test("the mouse pointer a sword over the page, over the view showing what a click would do (an enemy, someone to talk to, the ground), lit and bigger shaken, large or the system's own as Game options say", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const cursor = (selector = "#view") => page.evaluate((selector) => getComputedStyle(document.querySelector(selector)).cursor, selector);
+    const set = (id, on) =>
+        page.evaluate(
+            ([id, on]) => {
+                const switched = document.querySelector(id);
+
+                switched.checked = on;
+                switched.dispatchEvent(new Event("change"));
+            },
+            [id, on],
+        );
+
+    // The sword, over the view and over the page's buttons alike (theirs a hand otherwise)
+    expect(await cursor()).toContain("images/pointer/sword-32.png");
+    expect(await cursor("#packbutton")).toContain("images/pointer/sword-32.png");
+
+    // An enemy a few steps before the player, held still, and beside them someone neutral, as the
+    // folk are (someone to talk to): over the enemy the blade's lit red, over the other a speech
+    // bubble, over the ground the sword again
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor("player");
+        const squares = game.world.maps.town.squares;
+        const free = (dx, dy) => [0, 1, -1, 2, -2].map((ex) => [me.square[0] + dx + ex, me.square[1] + dy]).find(([x, y]) => !squares.blocked(x, y));
+
+        game.battle.add({ id: "foe", kind: "orc", weapon: "cleaver", team: "orcs", square: free(3, -6), hp: 5000 }).stunnedUntil = 1e9;
+        game.battle.add({ id: "friend", kind: "orc", weapon: "cleaver", team: "orcs", neutral: true, square: free(-3, -6), hp: 5000 }).stunnedUntil = 1e9;
+        game.enlisting.push("foe", "friend");
+        game.stop();
+    });
+    expect(await playUntil(page, () => window.pellagos.game.avatars.has("foe") && window.pellagos.game.avatars.has("friend"))).toBe(true);
+
+    const spots = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const at = (id) => session.view.toScreen(game.avatars.get(id).point(0.5));
+        const ground = session.view.toScreen(game.avatars.get("player").object.position.clone().add({ x: 0, y: 0, z: -2.5 }));
+
+        game.advance(0.1);
+        game.start();
+
+        return { foe: at("foe"), friend: at("friend"), ground };
+    });
+
+    await page.mouse.move(spots.foe.x, spots.foe.y);
+    await expect.poll(cursor).toContain("images/pointer/attack-32.png");
+    expect(await cursor("#packbutton"), "the rest of the page the sword still").toContain("images/pointer/sword-32.png");
+    await page.mouse.move(spots.friend.x, spots.friend.y);
+    await expect.poll(cursor).toContain("images/pointer/talk-32.png");
+    await page.mouse.move(spots.ground.x, spots.ground.y);
+    await expect.poll(cursor).toContain("images/pointer/sword-32.png");
+
+    // Shaken, back and forth quickly: lit, half again as big, over the view and the page; a
+    // moment after, back as it was. (The game held still meanwhile, so the page is quick to take
+    // the moves: drawn in software here, a frame takes a good part of a shake)
+    await page.evaluate(() => window.pellagos.game.stop());
+
+    for (let k = 0; k < 8; k++) {
+        await page.mouse.move(spots.ground.x + (k % 2 ? 140 : -140), spots.ground.y, { steps: 3 });
+    }
+
+    await page.evaluate(() => window.pellagos.game.start());
+    expect(await cursor()).toContain("images/pointer/shaken-48.png");
+    expect(await cursor("#packbutton")).toContain("images/pointer/shaken-48.png");
+    await expect.poll(cursor, { timeout: 4000 }).not.toContain("shaken");
+
+    // Large, and turned off: the system's own pointer
+    await set("#largepointerswitch", true);
+    expect(await cursor()).toContain("-44.png");
+    await set("#largepointerswitch", false);
+    await set("#pointerswitch", false);
+    expect(await cursor()).toBe("auto");
+    expect(await cursor("#packbutton")).toBe("pointer");
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector("#largepointerswitch").closest("label")).display)).toBe("none");
+    await set("#pointerswitch", true);
+    expect(await cursor()).toContain("images/pointer/sword-32.png");
+});
+
 test("with following turned on (Game options), the camera follows from the first step, swinging round behind the player", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
@@ -2274,16 +2354,11 @@ test("those attacking the player have an icon each down the right side, a likene
     });
     expect(await playUntil(page, () => window.pellagos.game.avatars.has("slime"))).toBe(true);
 
-    // Each with their likeness, once it's drawn: the orc first (they came to it in that order)
-    await page.waitForFunction(
-        () => {
-            window.pellagos.game.advance(0.02);
-
-            return document.querySelectorAll("#attackers .attacker.painted").length === 2;
-        },
-        null,
-        { timeout: 20000 },
-    );
+    // Each with their likeness, once it's drawn: the orc first (they came to it in that order).
+    // (Played on as the game would be: a likeness that comes out blank is drawn again half a
+    // second of the game's time later, which a fiftieth of a second a look took more than its
+    // twenty seconds to reach where frames are slow)
+    expect(await playUntil(page, () => document.querySelectorAll("#attackers .attacker.painted").length === 2)).toBe(true);
 
     const icons = await page.evaluate(() => {
         const column = document.querySelector("#attackers");
@@ -10280,7 +10355,7 @@ test("Game options: its groups at the top, each a page of its own, short enough 
     await expect(options.locator("input")).toHaveCount(0);
 
     const groups = {
-        graphics: ["#qualityslider", "#adaptiveswitch", "#fullscreenswitch", "#shakeswitch"],
+        graphics: ["#qualityslider", "#adaptiveswitch", "#fullscreenswitch", "#shakeswitch", "#pointerswitch", "#largepointerswitch"],
         sound: ["#soundswitch", "#effectsvolume", "#environmentvolume", "#musicvolume"],
         controls: ["#stickswitch", "#floatswitch", "#zoomswitch", "#minimapswitch", "#wheelsbutton", "#quickbutton"],
         camera: ["#followswitch", "#battlecamswitch", "#dragslider", "#invertswitch"],
