@@ -37,7 +37,7 @@ import { ensureFolder, exists, FILE_MODE, readGzip, readJSON, SERVER_JOURNAL, st
 import { LAYOUT_VERSION } from "./storage/folder.js";
 import { schemaReason } from "./storage/settings.js";
 import { NewerDataError, SERVER_VERSION } from "./storage/versions.js";
-import { BACKUP_NAME, FIRST_HEROES, HERO_MODES, HEROES, JOURNAL, NOW, STATE, StoredWorld, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
+import { BACKUP_NAME, CHARACTER_RULES, FIRST_HEROES, HERO_MODES, HEROES, isOffline, JOURNAL, NOW, RULE_MODES, ruleOf, STATE, StoredWorld, WORLD_FILE, WORLD_SETTINGS } from "./storage/worlds.js";
 
 /** The server's own journal (in its data folder): what's done to the server, not to one world. */
 export { SERVER_JOURNAL };
@@ -106,6 +106,9 @@ export function clockOf(elapsed = 0) {
 // "3 players", "1 player", "nobody"
 const count = (n, one, many = `${one}s`) => (n ? `${n} ${n === 1 ? one : many}` : `no ${many}`);
 
+/** Each character rule (storage/worlds.js CHARACTER_RULES), as the journals say it. */
+export const RULE_WORDS = Object.freeze({ visiting: "visiting, each player's own synced as they play", copies: "a copy of each character, once, the world's own", own: "made in the world, its own" });
+
 export class Management {
     /** @param {object} server - The world server (world-server.js WorldServer). */
     constructor(server) {
@@ -148,6 +151,10 @@ export class Management {
         const { day, hour } = clockOf(state?.elapsed ?? meta.elapsed ?? 0);
         const players = state?.players.filter((one) => one.id).length ?? 0;
 
+        if (isOffline(meta) && !["running", "empty", "stopping", "loading"].includes(life)) {
+            return "Offline: nobody may come in till it's brought back online.";
+        }
+
         switch (life) {
             case "waiting":
                 return `Waiting its turn to open (${position === 1 ? "next" : `number ${position}`}): as many worlds are running as the server's set to run.`;
@@ -182,6 +189,8 @@ export class Management {
             creator: meta.creator,
             heroes: meta.heroes,
             firstHero: meta.firstHero,
+            characters: ruleOf(meta),
+            offline: isOffline(meta),
             settings: meta.settings,
             played: state?.played ?? meta.played ?? 0,
             elapsed,
@@ -203,13 +212,22 @@ export class Management {
     }
 
     /**
-     * A world's name, description, heroes mode, first-hero rule or settings changed (`changes`:
-     * those to change). Each's checked first: refused, with the reasons, and nothing changed if any
-     * can't be. Its heroes mode and first-hero rule change only while it's set aside (nobody's in
-     * it, and its thread isn't holding the old). A running world's thread is told the rest at once.
+     * A world's name, description, character rule (`characters`: storage/worlds.js CHARACTER_RULES,
+     * kept as the heroes mode and first-hero rule it stands for; or those, as they are), or
+     * settings changed (`changes`: those to change). Each's checked first: refused, with the
+     * reasons, and nothing changed if any can't be. Its character rule changes only while nobody's
+     * in it (offline, or set aside: its thread isn't holding the old). A running world's thread is
+     * told the rest at once.
      */
-    async change(id, changes, { by = null } = {}) {
+    async change(id, given, { by = null } = {}) {
         const stored = this.#world(id);
+        const { characters, ...rest } = given;
+
+        if (characters !== undefined && !CHARACTER_RULES.includes(characters)) {
+            throw new Refused(400, "bad-request", `A world's characters are ${CHARACTER_RULES.join(", ")}, not ${JSON.stringify(characters)}.`);
+        }
+
+        const changes = characters === undefined ? rest : { ...rest, ...RULE_MODES[characters] };
         const { name, description, heroes, firstHero, settings } = changes;
         const reasons = [
             name === undefined || (typeof name === "string" && name.trim() && name.trim().length <= 60) ? null : "A world needs a name, of 60 characters at most.",
@@ -229,7 +247,7 @@ export class Management {
         const modes = (heroes !== undefined && heroes !== stored.meta.heroes) || (firstHero !== undefined && firstHero !== stored.meta.firstHero);
 
         if (modes && this.#going(id)) {
-            throw new Refused(409, "running", "Set the world aside first: whose heroes it keeps changes only while nobody's in it.");
+            throw new Refused(409, "running", "Take the world offline first (or set it aside): what it does with its players' characters changes only while nobody's in it.");
         }
 
         const meta = {
@@ -248,7 +266,7 @@ export class Management {
             await this.server.access.openDoor(id, { by });
         }
 
-        const what = [name !== undefined && `named "${meta.name}"`, description !== undefined && "described anew", heroes !== undefined && `its heroes ${heroes === "kept" ? "kept by the world" : "brought in by their players"}`, firstHero !== undefined && `first heroes ${firstHero === "bring" ? "may be brought in" : "made new"}`, settings && `its settings (${Object.entries(settings).map(([key, value]) => `${key} ${value}`).join(", ")})`].filter(Boolean);
+        const what = [name !== undefined && `named "${meta.name}"`, description !== undefined && "described anew", modes && `its characters: ${RULE_WORDS[ruleOf(stored.meta)]}`, settings && `its settings (${Object.entries(settings).map(([key, value]) => `${key} ${value}`).join(", ")})`].filter(Boolean);
 
         await stored.journal(`Changed${by ? ` by ${by}` : ""}: ${what.join("; ")}.`);
 
@@ -309,6 +327,42 @@ export class Management {
         if (!ok) {
             throw new Refused(500, "unsaved", "It was set aside, but its last save didn't reach the disk: its journal says why.");
         }
+
+        return this.details(id);
+    }
+
+    /**
+     * A world taken offline (storage/worlds.js isOffline), for its upkeep: everyone in it sent out
+     * ("offline"), saved and set aside, and nobody let in (its owners neither) till it's brought
+     * back online. Its character rule can be changed then. Returns its details.
+     */
+    async takeOffline(id, { by = null } = {}) {
+        const stored = this.#world(id);
+
+        await stored.writeMeta({ state: "offline" });
+        this.server.closePlaces((place) => place.world === id, "offline");
+
+        if (this.#going(id)) {
+            const { ok } = await this.server.registry.setAside(id, "taken offline");
+
+            if (!ok) {
+                throw new Refused(500, "unsaved", "It was taken offline, but its last save didn't reach the disk: its journal says why.");
+            }
+        }
+
+        // (Again once it's set aside: its last save wrote world.json as its thread had it)
+        await this.#world(id).writeMeta({ state: "offline" });
+        await stored.journal(`Taken offline${by ? ` by ${by}` : ""}: nobody may come in till it's brought back online.`);
+
+        return this.details(id);
+    }
+
+    /** A world brought back online: players let in again. Returns its details. */
+    async bringOnline(id, { by = null } = {}) {
+        const stored = this.#world(id);
+
+        await stored.writeMeta({ state: null });
+        await stored.journal(`Brought back online${by ? ` by ${by}` : ""}.`);
 
         return this.details(id);
     }
@@ -414,6 +468,41 @@ export class Management {
         }
 
         return fileOf(characters);
+    }
+
+    /**
+     * A player's hero taken home from a world whose characters are its own (storage/worlds.js
+     * CHARACTER_RULES `own`): as a character file (heroesFile's), and out of the world for good,
+     * forgotten there. Refused in a world that takes copies, and for any hero that's a copy (its
+     * `origin`: a world brought to the server, or one whose rule's been changed since): a copy
+     * never leaves the world it was copied into; in a world whose players visit with their own;
+     * or while the player's in the world (on any device). Returns { name, text, count }.
+     */
+    async takeHome(id, player, slot, { inWorld = false } = {}) {
+        const stored = this.#world(id);
+        const rule = ruleOf(stored.meta);
+
+        if (rule !== "own") {
+            throw new Refused(409, rule === "copies" ? "copy-stays" : "not-kept", rule === "copies" ? "A copy stays in the world it was copied into: it can't be taken home." : "That world doesn't keep its characters: its players' are on their own devices.");
+        }
+
+        if (inWorld) {
+            throw new Refused(409, "playing", "Leave the world first: a character's taken home only while you're not in it.");
+        }
+
+        const hero = (await stored.heroes.get(player, slot))?.hero;
+
+        if (hero?.origin) {
+            throw new Refused(409, "copy-stays", "A copy stays in the world it was copied into: it can't be taken home.");
+        }
+
+        const file = await this.heroesFile(id, player, { slot });
+        const name = hero?.name ?? "A hero";
+
+        await stored.heroes.forget(player, slot);
+        await stored.journal(`${name} (${player}) taken home, out of the world for good.`);
+
+        return file;
     }
 
     #player(id, player) {

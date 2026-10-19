@@ -18,6 +18,7 @@
 // keeps its own (keptOfExport). A kept hero is salvaged as it's brought into the world too
 // (salvageKept).
 
+import { withGuid } from "../core/guid.js";
 import { STARTING_WEAPONS } from "../core/weapons.js";
 import { HIRES } from "../core/host.js";
 import { ITEMS, TREES } from "../core/progress.js";
@@ -322,7 +323,8 @@ export function exportOfKept(character, { seed, created = new Date().toISOString
 /**
  * A character's export (brought forward and salvaged: readCharacterFile's) as a world server keeps
  * a hero, read as the game reads what it keeps: { hero, talks, explored, progress, standing,
- * followers, place, vitals }. Throws ExportError for one that doesn't read.
+ * followers, place, vitals }; their hero with their own id (core/guid.js: given one, from a file
+ * kept before characters had ids). Throws ExportError for one that doesn't read.
  */
 export function keptOfExport(exported) {
     const read = importCharacter(exported);
@@ -333,7 +335,7 @@ export function keptOfExport(exported) {
 
     const { hero, talks, explored, progress, standing, followers, place, vitals } = read;
 
-    return { hero, talks, explored, progress, standing, followers, ...(place ? { place } : {}), ...(vitals ? { vitals } : {}) };
+    return { hero: withGuid(hero), talks, explored, progress, standing, followers, ...(place ? { place } : {}), ...(vitals ? { vitals } : {}) };
 }
 
 /**

@@ -47,6 +47,7 @@ import { Router } from "./router.js";
 import { createStaticHandler } from "./static.js";
 import { CertificateStore } from "./storage/certificates.js";
 import { DataFolder } from "./storage/folder.js";
+import { CHARACTER_RULES, RULE_MODES } from "./storage/worlds.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 
 const CLIENT_DIRECTORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../client");
@@ -290,8 +291,15 @@ export class WorldServer {
      * A world made (as the server's admin or a creator asks: `creator` names them, for its
      * journal), with an owner's key and a player's key. Returns { world, ownerKey, playerKey }.
      */
-    async createWorld({ name, description = "", seed, race, heroes = "kept", firstHero = "new", settings = {} }, { creator = null } = {}) {
-        return this.adopt(await this.store.create({ name, description, seed, race, creator, heroes, firstHero, settings }), { creator });
+    async createWorld({ name, description = "", seed, race, heroes = "kept", firstHero = "new", characters = null, settings = {} }, { creator = null } = {}) {
+        if (characters !== null && !CHARACTER_RULES.includes(characters)) {
+            throw new Error(`A world's characters are ${CHARACTER_RULES.join(", ")}, not ${JSON.stringify(characters)}.`);
+        }
+
+        // (Its character rule, if it's given one, as the heroes mode and first-hero rule it stands for)
+        const modes = characters ? RULE_MODES[characters] : { heroes, firstHero };
+
+        return this.adopt(await this.store.create({ name, description, seed, race, creator, ...modes, settings }), { creator });
     }
 
     /**

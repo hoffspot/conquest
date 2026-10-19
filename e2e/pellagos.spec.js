@@ -277,7 +277,7 @@ test("Worlds on servers' Worlds Guide: every way into a world, with examples, it
     await expect(guide).toBeVisible();
     await expect(page.locator("#worlds")).toBeVisible();
     await expect(page.locator("#worldsguidetitle")).toHaveText("Worlds Guide");
-    await expect(page.locator("#worldsguidebody h3")).toHaveText(["Which way in?", "Two kinds of world", "A friend's world, by its code", "Players' worlds on a server", "Invite links", "A server's address", "Servers nearby", "Open worlds", "Short codes", "Keys", "Coming back, and other devices", "Who you come as", "A world of your own on a server", "When it won't join"]);
+    await expect(page.locator("#worldsguidebody h3")).toHaveText(["Which way in?", "Two kinds of world", "Your characters in a world on a server", "A friend's world, by its code", "Players' worlds on a server", "Invite links", "A server's address", "Servers nearby", "Open worlds", "Short codes", "Keys", "Coming back, and other devices", "Who you come as", "A world of your own on a server", "When it won't join"]);
     expect(await body.evaluate((element) => element.scrollTop)).toBe(0);
 
     // What you've been given, and what to do with it; and examples of each kind of code and link

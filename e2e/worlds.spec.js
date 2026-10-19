@@ -105,13 +105,14 @@ test("a world made on a server and shared by an invite link: both play in it, le
 
     await ask.locator("#worldaskmaker").fill(server.adminKey);
     await ask.locator("#worldaskname").fill("Thornwick");
-    await ask.locator("#worldaskheroes").selectOption("kept");
+    await ask.locator("#worldaskcharacters").selectOption("own");
     await ask.getByRole("button", { name: "Make it" }).click();
 
-    // (A world that keeps its heroes, and the owner's first time in: a new hero, looking as Brand does)
-    await expect(ask.locator("#worldasktitle")).toHaveText("Who goes into Thornwick", { timeout: 60000 });
+    // (A world whose characters are its own, and the owner's first time in: a new one, looking as Brand does)
+    await expect(ask.locator("#worldasktitle")).toHaveText("Who goes into Thornwick?", { timeout: 60000 });
     await expect(ask).toBeVisible();
-    await ask.getByRole("button", { name: /A new hero/ }).click();
+    await expect(ask.locator("#worldasknote")).toHaveText("Characters in Thornwick are Thornwick's own, made there. This is your first time in.");
+    await ask.getByRole("button", { name: /A new character/ }).click();
     await playing(owner);
 
     const world = [...server.worlds.keys()][0];
@@ -143,10 +144,10 @@ test("a world made on a server and shared by an invite link: both play in it, le
 
     // The guest follows the link: straight to choosing a hero (the key's never in their address bar)
     await guest.goto(link);
-    await expect(guest.locator("#worldask #worldasktitle")).toHaveText("Who goes into Thornwick", { timeout: 60000 });
+    await expect(guest.locator("#worldask #worldasktitle")).toHaveText("Who goes into Thornwick?", { timeout: 60000 });
     await expect(guest.locator("#worldask")).toBeVisible();
     expect(guest.url()).not.toContain("key=");
-    await guest.locator("#worldask").getByRole("button", { name: /A new hero/ }).click();
+    await guest.locator("#worldask").getByRole("button", { name: /A new character/ }).click();
     await playing(guest);
 
     const guestId = await guest.evaluate(() => window.pellagos.game.me);
@@ -177,7 +178,7 @@ test("a world made on a server and shared by an invite link: both play in it, le
 
     const choose = guest.locator("#worldask");
 
-    await expect(choose.locator("#worldasktitle")).toHaveText("Who goes into Thornwick", { timeout: 60000 });
+    await expect(choose.locator("#worldasktitle")).toHaveText("Who goes into Thornwick?", { timeout: 60000 });
     await expect(choose).toBeVisible();
     await choose.getByRole("button", { name: /^Syl/ }).click();
     await playing(guest);
@@ -187,11 +188,12 @@ test("a world made on a server and shared by an invite link: both play in it, le
     await guestContext.close();
 });
 
-test("a first hero brought into a world from a character file, told first what was changed to suit this version of the game; and taken home again, a copy among the saved characters, in the world's land", async ({ page }) => {
-    await ready(page, null);
+test("a world that takes copies: a character on this device copied in once, told first what a copy is, and one from a file, told what was changed; each the world's own, never taken home; a world whose characters are its own: one made there taken home, out of it for good", async ({ page }) => {
+    await ready(page, save("Ada", "human", "sword"));
 
-    // (A world that keeps its heroes and lets a first one be brought in, its key held by the game)
-    const made = await server.createWorld({ name: "Fernhollow", seed: 31, race: "human", heroes: "kept", firstHero: "bring" });
+    // (A world that takes copies and one whose characters are its own, their keys held by the game)
+    const copies = await server.createWorld({ name: "Fernhollow", seed: 31, race: "human", characters: "copies" });
+    const own = await server.createWorld({ name: "Ownby", seed: 33, race: "human", characters: "own" });
     const key = `127.0.0.1:${server.port}`;
     const created = "2025-05-05T05:05:05.000Z";
     const file = {
@@ -208,50 +210,96 @@ test("a first hero brought into a world from a character file, told first what w
     };
 
     await page.addInitScript(
-        ({ key, port, id, world, playerKey }) => localStorage.setItem("pellagos.servers", JSON.stringify({ version: 1, servers: [{ key, host: "127.0.0.1", port, secure: false, id, name: null, seen: null, worlds: { [world]: { name: "Fernhollow", key: playerKey } } }] })),
-        { key, port: server.port, id: server.identity.id, world: made.world, playerKey: made.playerKey },
+        ({ key, port, id, worlds }) => localStorage.setItem("pellagos.servers", JSON.stringify({ version: 1, servers: [{ key, host: "127.0.0.1", port, secure: false, id, name: null, seen: null, worlds }] })),
+        { key, port: server.port, id: server.identity.id, worlds: { [copies.world]: { name: "Fernhollow", key: copies.playerKey }, [own.world]: { name: "Ownby", key: own.playerKey } } },
     );
     await page.goto(`${base}/`);
 
     const ask = page.locator("#worldask");
-    const into = async () => {
+    const into = async (world, name) => {
         await page.locator("#worldsbutton").click();
-        await page.locator(`#worlds li[data-world="${made.world}"]`).getByRole("button").click();
-        await expect(ask.locator("#worldasktitle")).toHaveText("Who goes into Fernhollow", { timeout: 60000 });
+        await page.locator(`#worlds li[data-world="${world}"]`).getByRole("button").click();
+        await expect(ask.locator("#worldasktitle")).toHaveText(`Who goes into ${name}?`, { timeout: 60000 });
     };
+    const quit = async () => {
+        await page.locator("#menubutton").click();
+        await page.locator("#quitbutton").click();
+        await expect(page.locator("#title")).toBeVisible();
+    };
+    // (Ada's own id, once the game's moved her under an id of her own and given her one)
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("pellagos.characters")), { timeout: 60000 }).not.toBeNull();
 
-    // Their first time in: brought in from the file, told first what couldn't come
-    await into();
+    const ada = await page.evaluate(() => JSON.parse(localStorage.getItem(`pellagos.${JSON.parse(localStorage.getItem("pellagos.characters")).ids[0]}.save`)).hero.guid);
 
-    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), ask.getByRole("button", { name: /^Bring one from a file/ }).click()]);
+    // One from a file copied in, told first what a copy is and what couldn't come
+    await into(copies.world, "Fernhollow");
+    await expect(ask.locator("#worldasknote")).toContainText("Fernhollow keeps a copy of each character brought in, once each.");
+
+    const [chooser] = await Promise.all([page.waitForEvent("filechooser"), ask.getByRole("button", { name: /^Copy one from a file/ }).click()]);
 
     await chooser.setFiles({ name: "Old Bram.pellagos-character", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(file)) });
-    await expect(ask.locator("#worldasktitle")).toHaveText("Bring Old Bram in?");
-    await expect(ask.locator("#worldasknote")).toHaveText("Changed to suit this version of the game: 1 thing the game no longer has: old blade.");
-    await ask.getByRole("button", { name: "Bring Old Bram in" }).click();
+    await expect(ask.locator("#worldasktitle")).toHaveText("Copy Old Bram into Fernhollow?");
+    await expect(ask.locator("#worldasknote")).toHaveText("A copy of Old Bram comes into Fernhollow and stays there, Fernhollow's own: it can't be taken out again. Changed to suit this version of the game: 1 thing the game no longer has: old blade.");
+    await ask.getByRole("button", { name: "Copy Old Bram in" }).click();
     await playing(page);
     expect(await page.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Old Bram");
 
     const [player] = (await page.evaluate(() => window.pellagos.game.me)).split(".");
 
-    await page.locator("#menubutton").click();
-    await page.locator("#quitbutton").click();
-    await expect(page.locator("#title")).toBeVisible();
-    await expect.poll(async () => (await server.worlds.get(made.world).heroes.list(player)).map(({ name }) => name), { timeout: 60000 }).toEqual(["Old Bram"]);
+    await quit();
+    await expect.poll(async () => (await server.worlds.get(copies.world).heroes.list(player)).map(({ name }) => name), { timeout: 60000 }).toEqual(["Old Bram"]);
 
-    // Taken home: a copy among the saved characters, in Fernhollow's land, with what they carry
-    await into();
+    // Ada, on this device, copied in: asked first, told what a copy is
+    await into(copies.world, "Fernhollow");
+    await expect(ask.getByRole("button", { name: /^Old Bram · Fernhollow's copy/ })).toBeVisible();
+    await expect(ask.getByRole("button", { name: /^Take one home/ })).toHaveCount(0);
+    await ask.getByRole("button", { name: /^Copy Ada in/ }).click();
+    await expect(ask.locator("#worldasktitle")).toHaveText("Copy Ada into Fernhollow?");
+    await expect(ask.locator("#worldasknote")).toContainText(`Ada on this device carries on as they are: nothing the copy does in Fernhollow comes back to them, and the copy can't be taken out again.`);
+    await ask.getByRole("button", { name: "Copy Ada in" }).click();
+    await playing(page);
+    expect(await page.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Ada");
+    await quit();
+    await expect.poll(async () => (await server.worlds.get(copies.world).heroes.list(player)).map(({ name, origin }) => [name, origin === ada]), { timeout: 60000 }).toEqual([["Old Bram", false], ["Ada", true]]);
+
+    // Copied once: said so, not offered again
+    await into(copies.world, "Fernhollow");
+    await expect(ask.getByRole("button", { name: /^Ada · Fernhollow's copy/ })).toBeVisible();
+    await expect(ask.getByRole("button", { name: /^Ada: copied in already/ })).toBeDisabled();
+    await page.keyboard.press("Escape");
+    await expect(ask).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#worlds")).toBeHidden();
+
+    // A world whose characters are its own: a new one, made there, looking as Ada does
+    await into(own.world, "Ownby");
+    await ask.getByRole("button", { name: /^A new character/ }).click();
+    await playing(page);
+
+    const [ownPlayer] = (await page.evaluate(() => window.pellagos.game.me)).split(".");
+
+    await quit();
+    await expect.poll(async () => (await server.worlds.get(own.world).heroes.list(ownPlayer)).map(({ name }) => name), { timeout: 60000 }).toEqual(["Ada"]);
+
+    // Taken home: asked first, out of Ownby for good, a character of their own on this device
+    await into(own.world, "Ownby");
     await ask.getByRole("button", { name: /^Take one home/ }).click();
-    await expect(ask.locator("#worldasktitle")).toHaveText("Take which hero home?");
-    await ask.getByRole("button", { name: /^Old Bram/ }).click();
+    await expect(ask.locator("#worldasktitle")).toHaveText("Take which character home?");
+    await ask.getByRole("button", { name: /^Ada/ }).click();
+    await expect(ask.locator("#worldasktitle")).toHaveText("Take Ada home?");
+    await expect(ask.locator("#worldasknote")).toHaveText("Ada will leave Ownby for good and be kept on this device instead. This can't be undone.");
+    await ask.getByRole("button", { name: "Take Ada home" }).click();
 
     const imported = page.locator("#imported");
 
     await expect(imported.locator("#importednote")).toHaveText("One character is now among your saved characters.");
-    await expect(imported.locator(".about")).toHaveText("Human · Sword · 41 gold");
     await imported.getByRole("button", { name: "OK" }).click();
-    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.characters")).ids.map((id) => JSON.parse(localStorage.getItem(`pellagos.${id}.save`))).map(({ hero, seed }) => [hero.name, seed]))).toEqual([["Old Bram", 31]]);
-    expect((await server.worlds.get(made.world).heroes.list(player)).map(({ name }) => name)).toEqual(["Old Bram"]);
+
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.characters")).ids.map((id) => JSON.parse(localStorage.getItem(`pellagos.${id}.save`))).map(({ hero, seed }) => [hero.name, seed, hero.guid]));
+
+    expect(kept.map(([name, seed]) => [name, seed]).sort()).toEqual([["Ada", 33], ["Ada", 777]]);
+    expect(new Set(kept.map(([, , guid]) => guid)).size).toBe(2);
+    expect(await server.worlds.get(own.world).heroes.list(ownPlayer)).toEqual([]);
 });
 
 test("a character's own world brought to a server (Bring my world): told how, and what comes with it; refused a key that makes no worlds; then a world of the server's, in their land, its owner going in as that character", async ({ page }) => {
@@ -283,7 +331,7 @@ test("a character's own world brought to a server (Bring my world): told how, an
 
     // What comes with it, and the key that makes worlds: one that doesn't, refused, saying which will
     await expect(ask.locator("#worldasktitle")).toHaveText(/^Bring Wren's world to /);
-    await expect(ask.locator(".world-help").first()).toContainText("Wren, with all they carry, know and have found, kept by the world as your first hero there.");
+    await expect(ask.locator(".world-help").first()).toContainText("A copy of Wren, with all they carry, know and have found, kept by the world as your first character there");
     await expect(ask.locator("#worldaskname")).toHaveValue("Wren's world");
     await ask.locator("#worldaskmaker").fill("NOT-A-KEY");
     await ask.getByRole("button", { name: "Bring it to the server" }).click();
@@ -302,7 +350,10 @@ test("a character's own world brought to a server (Bring my world): told how, an
 
     expect(server.metaOf(world)).toMatchObject({ seed: 777, race: "human", heroes: "kept" });
     await ask.getByRole("button", { name: "Go in" }).click();
-    await expect(ask.locator("#worldasktitle")).toHaveText("Who goes into Wren's Vale", { timeout: 60000 });
+    await expect(ask.locator("#worldasktitle")).toHaveText("Who goes into Wren's Vale?", { timeout: 60000 });
+    // (A copy of theirs, the world's own: their Wren stays on this device as they are)
+    await expect(ask.getByRole("button", { name: /^Wren · Wren's Vale's copy/ })).toBeVisible();
+    await expect(ask.getByRole("button", { name: /^Take one home/ })).toHaveCount(0);
     await ask.getByRole("button", { name: /^Wren/ }).click();
     await playing(page);
     expect(await page.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Wren");
@@ -370,7 +421,7 @@ test("a newcomer with no character follows a world's invite link: makes a charac
     expect(server.access.world(made.world).players().map(({ role }) => role)).toEqual(["player"]);
 });
 
-test("the server's own address shows its worlds on the title: one open to anyone joined with a tap, no key or link", async ({ page }) => {
+test("the server's own address shows its worlds on the title: one open to anyone joined with a tap, no key or link, choosing which of theirs visits it", async ({ page }) => {
     await ready(page, save("Ivo", "human", "sword"));
 
     const made = await server.createWorld({ name: "Openfield", seed: 43, race: "human", heroes: "brought", settings: { open: true } });
@@ -384,7 +435,16 @@ test("the server's own address shows its worlds on the title: one open to anyone
     await expect(door.locator("#titleservername")).toHaveText(/^Worlds on /);
     await expect(row).toContainText("Openfield");
     await expect(row).toContainText("Open to anyone: tap to join");
+    await expect(row).toContainText("Visit as your own");
     await row.getByRole("button").click();
+
+    // (Which of theirs visits: the characters on this device, or a new one; told how visiting goes)
+    const ask = page.locator("#worldask");
+
+    await expect(ask.locator("#worldasktitle")).toHaveText("Who visits Openfield?", { timeout: 60000 });
+    await expect(ask.locator("#worldasknote")).toHaveText("You visit Openfield as one of the characters on this device. What they gain there stays with them, kept as you play; when you leave, they leave Openfield with you.");
+    await expect(ask.getByRole("button", { name: /^A new character/ })).toBeVisible();
+    await ask.getByRole("button", { name: /^Ivo/ }).click();
 
     // (In as Ivo, by the world's open door: their ticket kept, to come back by)
     await playing(page);

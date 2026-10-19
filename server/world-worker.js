@@ -35,7 +35,7 @@
 import { performance } from "node:perf_hooks";
 import { parentPort, workerData } from "node:worker_threads";
 import { salvageKept } from "../client/js/app/character-file.js";
-import { copyOf, freshOf } from "../client/js/core/guid.js";
+import { copyOf, freshOf, isGuid } from "../client/js/core/guid.js";
 import { characterFrom, Hosting } from "../client/js/core/netplay.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { elapsedOf } from "../client/js/core/daytime.js";
@@ -150,7 +150,11 @@ async function forward(character, player) {
 }
 
 // The character a player comes in with (as Hosting.characterOf hands it over), from what their
-// hello asked for: in a kept world, one of their heroes (by its slot) or a new one; else theirs
+// hello asked for, by the world's character rule (storage/worlds.js CHARACTER_RULES): visiting,
+// theirs as they bring it; else one of their heroes kept here (by its slot), a new one ("new":
+// made with their look), or, where the world takes copies, a copy of theirs ("copy": once for each
+// character in the whole world, by its own id: client/js/core/guid.js). Null if it can't be, or {
+// refused } saying why ("copied": that character's been copied in already)
 async function characterFor(one, { character, hero = "new" }) {
     if (!kept) {
         return characterFrom(character);
@@ -173,15 +177,30 @@ async function characterFor(one, { character, hero = "new" }) {
         return null;
     }
 
-    one.slot = free;
+    // (A copy of theirs, where the world takes them: as it is, the world's own from now on, with an
+    // id of its own and the one it was copied from as its origin; never one copied in already, by
+    // anyone, nor one being copied in now)
+    if (hero === "copy") {
+        const origin = brought.hero.guid;
+        const copying = [...peers.values()].some((other) => other !== one && other.origin === origin);
 
-    // (Their first, if the world lets them bring one: as it is, a copy, the world's own from now on,
-    // with an id of its own and the one it was copied from as its origin; else new, as the
-    // character maker made it, with an id of its own: core/guid.js)
-    if (!slots.length && !playing.length && stored.meta.firstHero === "bring") {
+        if (stored.meta.firstHero !== "bring" || !isGuid(origin)) {
+            return null;
+        }
+
+        if (copying || (await stored.heroes.origins()).has(origin)) {
+            return { refused: "copied" };
+        }
+
+        one.slot = free;
+        one.origin = origin;
+
         return forward({ ...brought, hero: copyOf(brought.hero) }, one.player);
     }
 
+    one.slot = free;
+
+    // (Else new, as the character maker made it, with an id of its own)
     return { ...brought, hero: freshOf(brought.hero), talks: { memory: {}, knowledge: [] }, explored: {}, progress: {}, standing: {}, followers: [] };
 }
 

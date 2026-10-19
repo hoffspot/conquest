@@ -70,6 +70,30 @@ export const HERO_MODES = Object.freeze(["kept", "brought"]);
 /** In a world that keeps them, a player's first hero there: made new, or one of theirs brought in. */
 export const FIRST_HEROES = Object.freeze(["new", "bring"]);
 
+/**
+ * What a world does with its players' characters (docs/SERVER.md *Characters and worlds*), as its
+ * players are told it, each as the heroes mode and the first-hero rule it's kept as (RULE_MODES):
+ * - `visiting`: they bring a character of their own each time, the one on their device the
+ *   master, synced as they play, and gone from the world when they leave;
+ * - `copies`: each character of theirs copied in once, the copy the world's own from then on,
+ *   never to leave it (nothing done in it goes back to the one on their device);
+ * - `own`: characters made in the world, its own; one taken home is moved out of it for good.
+ */
+export const CHARACTER_RULES = Object.freeze(["visiting", "copies", "own"]);
+
+/** Each character rule (CHARACTER_RULES) as the heroes mode and first-hero rule a world's kept with. */
+export const RULE_MODES = Object.freeze({ visiting: Object.freeze({ heroes: "brought", firstHero: "new" }), copies: Object.freeze({ heroes: "kept", firstHero: "bring" }), own: Object.freeze({ heroes: "kept", firstHero: "new" }) });
+
+/** A world's character rule (CHARACTER_RULES), from its heroes mode and first-hero rule. */
+export const ruleOf = ({ heroes, firstHero }) => (heroes === "brought" ? "visiting" : firstHero === "bring" ? "copies" : "own");
+
+/**
+ * Whether a world's offline (its `state`): taken out of play by its owner or the admin for upkeep
+ * (manage.js takeOffline), nobody let in till it's brought back. Its character rule's changed
+ * only while nobody's in it: offline, or set aside.
+ */
+export const isOffline = (meta) => meta?.state === "offline";
+
 /** A world's rules, as its owner sets them (generated/world_server_plan.md §4, §10), as settings.js has a schema. */
 export const WORLD_SETTINGS = Object.freeze({
     mostPlayers: { kind: "integer", min: 1, max: 8, default: 8, about: "The most players in it at once" },

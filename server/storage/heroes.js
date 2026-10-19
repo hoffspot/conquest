@@ -67,17 +67,49 @@ export class KeptHeroes {
             .sort((a, b) => a - b);
     }
 
-    /** A player's heroes, as they're listed for them to choose from: [{ slot, name, race, savedAt }]. */
+    /**
+     * A player's heroes, as they're listed for them to choose from: [{ slot, name, race, savedAt,
+     * origin (the id of the character it's a copy of: client/js/core/guid.js; or null, one made
+     * here) }].
+     */
     async list(player) {
         const heroes = [];
 
         for (const slot of await this.slotsOf(player)) {
             const { character, savedAt } = await this.#read(player, slot);
 
-            heroes.push({ slot, name: character.hero?.name ?? "", race: character.hero?.race ?? "human", savedAt });
+            heroes.push({ slot, name: character.hero?.name ?? "", race: character.hero?.race ?? "human", savedAt, origin: isGuid(character.hero?.origin) ? character.hero.origin : null });
         }
 
         return heroes;
+    }
+
+    /**
+     * The characters copied into the world (a world that takes copies: server/storage/worlds.js
+     * CHARACTER_RULES), by whoever: the ids of those its kept heroes are copies of.
+     */
+    async origins() {
+        const found = new Set();
+
+        if (!(await exists(this.folder))) {
+            return found;
+        }
+
+        for (const player of await readdir(this.folder)) {
+            if (!PLAYER.test(player)) {
+                continue;
+            }
+
+            for (const slot of await this.slotsOf(player)) {
+                const origin = (await this.#read(player, slot)).character.hero?.origin;
+
+                if (isGuid(origin)) {
+                    found.add(origin);
+                }
+            }
+        }
+
+        return found;
     }
 
     /**

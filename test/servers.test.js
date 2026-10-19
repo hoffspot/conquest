@@ -163,7 +163,7 @@ describe("a world on a world server, from the game (app/servers.js ServerClient,
         assert.equal(card.server.id, server.identity.id);
         assert.equal(servers.get(address.key).id, null, "nothing's pinned until it's proved");
 
-        const made = await client.makeWorld(adminKey, { name: "Thornwick", race: "human", heroes: "kept", seed: 3 });
+        const made = await client.makeWorld(adminKey, { name: "Thornwick", race: "human", characters: "own", seed: 3 });
 
         assert.equal(servers.get(address.key).id, server.identity.id, "pinned when it proved itself");
         assert.equal(servers.get(address.key).worlds[made.world].key, made.ownerKey);
@@ -245,7 +245,7 @@ describe("a world on a world server, from the game (app/servers.js ServerClient,
         const { server, address, adminKey } = await serve();
         const servers = new KnownServers(memory());
         const client = new ServerClient(servers.remember(address), { servers, timing: QUICK });
-        const made = await client.makeWorld(adminKey, { name: "Fenwick", race: "human", heroes: "brought", seed: 3 });
+        const made = await client.makeWorld(adminKey, { name: "Fenwick", race: "human", characters: "visiting", seed: 3 });
         const entered = await client.enter({ world: made.world });
 
         // (Sent out: told why)

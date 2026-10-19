@@ -249,6 +249,12 @@ main {
     color: var(--gold);
 }
 
+/* Taken offline for upkeep: nobody may come in */
+.card .life[data-life="offline"] {
+    color: var(--bad);
+    border-color: currentColor;
+}
+
 dl.facts {
     display: grid;
     grid-template-columns: fit-content(50%) minmax(0, 1fr);

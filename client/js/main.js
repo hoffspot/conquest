@@ -294,7 +294,8 @@ async function frontDoor() {
                 worldCard({
                     name: world?.name ?? held?.name ?? id,
                     about: world ? `${world.description ? `${world.description} · ` : ""}${world.players} of ${world.most} playing` : "Yours to come back to",
-                    when: held?.role === "owner" ? "You own it: carry on" : held?.key || held?.ticket ? "Carry on" : world?.open ? "Open to anyone: tap to join" : "Needs an invite link or key",
+                    badge: world ? RULE_BADGES[ruleOfCard(world)] : "",
+                    when: world?.offline ? "Offline for upkeep" : held?.role === "owner" ? "You own it: carry on" : held?.key || held?.ticket ? "Carry on" : world?.open ? "Open to anyone: tap to join" : "Needs an invite link or key",
                     onClick: async () => {
                         await openWorlds();
                         joinServerWorld(state.servers.get(record.key) ?? record, id, world);
@@ -473,6 +474,12 @@ $("#forgetback").addEventListener("click", () => $("#forget").close());
 async function exportCharacters(saves) {
     const { characterFile } = await import("./app/character-file.js");
     const { name, text } = characterFile(saves);
+
+    download(name, text);
+}
+
+// A file (its name and text) as the browser downloads one
+function download(name, text) {
     const link = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([text], { type: "application/json" })), download: name });
 
     document.body.append(link);
@@ -496,7 +503,7 @@ async function importCharacters(file) {
 }
 
 // The characters in a character file's text (one brought in, or a hero taken home from a world
-// on a server) kept here, as importCharacters says
+// on a server) kept here, as importCharacters says. Returns how many were kept
 async function keepFromFile(text) {
     const { readCharacterFile } = await import("./app/character-file.js");
     let read;
@@ -506,7 +513,7 @@ async function keepFromFile(text) {
     } catch (error) {
         showImported(error.message, []);
 
-        return;
+        return 0;
     }
 
     const why = { here: "they're kept here already.", full: `${MOST_CHARACTERS} characters are kept, the most there can be: delete one to make room, then bring the file in again.`, storage: "this browser wouldn't keep them." };
@@ -523,6 +530,8 @@ async function keepFromFile(text) {
 
     title();
     showImported(brought ? `${brought === 1 ? "One character is" : `${brought} characters are`} now among your saved characters${said.length > brought ? `; ${said.length - brought} couldn't be` : ""}.` : "No one was brought in.", said);
+
+    return brought;
 }
 
 function showImported(note, said) {
@@ -2173,7 +2182,7 @@ async function showWorlds() {
             const held = record.worlds?.[id];
             const row = document.createElement("li");
             const players = world ? ` · ${world.players} of ${world.most} in` : "";
-            const badge = world ? (world.heroes === "kept" ? "Heroes stay here" : "Bring your hero") : "";
+            const badge = world ? RULE_BADGES[ruleOfCard(world)] : "";
 
             row.dataset.world = id;
             row.append(
@@ -2181,7 +2190,7 @@ async function showWorlds() {
                     name: world?.name ?? held?.name ?? id,
                     badge,
                     about: `${world?.life === "running" ? "Going now" : world ? "Waiting for someone to come in" : "Unlisted"}${players}`,
-                    when: held?.role === "owner" ? "You own it" : held?.ticket || held?.key ? "You hold a key to it" : world?.open ? "Open to anyone: tap to join" : "Ask its owner for an invite link",
+                    when: world?.offline ? "Offline for upkeep" : held?.role === "owner" ? "You own it" : held?.ticket || held?.key ? "You hold a key to it" : world?.open ? "Open to anyone: tap to join" : "Needs a key: ask its owner for an invite link",
                     className: matched ? "" : "unmatched",
                     disabled: !matched,
                     onClick: () => (walled ? location.assign(handOff(id)) : joinServerWorld(record, id, world)),
@@ -2443,20 +2452,13 @@ async function askMake(record) {
     const maker = textField("worldaskmaker", { type: "password", value: record.maker ?? "", placeholder: "The key the server printed, or a creator key" });
     const name = textField("worldaskname", { maxLength: 40, placeholder: "Thornwick", autocapitalize: "words" });
     const people = selectField("worldaskpeople", RACES.map((race) => [race.id, race.name]));
-    const heroes = selectField("worldaskheroes", [
-        ["kept", "Heroes stay here (the world keeps them)"],
-        ["brought", "Bring your hero (from your device)"],
-    ]);
-    const first = selectField("worldaskfirst", [
-        ["new", "First heroes are made new here"],
-        ["bring", "A first hero may be brought in"],
-    ]);
+    const characters = selectField("worldaskcharacters", RULE_CHOICES);
 
     people.value = state.joinAs?.hero.race ?? "human";
     askWorld({
         title: "Make a world",
         note: `A new world on ${record.name ?? record.key}, set in a town of the people you choose. Only those you give a key come in.`,
-        fields: [worldField("Maker's key", maker), worldField("Name", name), worldField("Whose town it starts in", people), worldField("Heroes", heroes), worldField("First heroes", first)],
+        fields: [worldField("Maker's key", maker), worldField("Name", name), worldField("Whose town it starts in", people), worldField("Characters", characters)],
         go: "Make it",
         onGo: async () => {
             if (!name.value.trim()) {
@@ -2469,7 +2471,7 @@ async function askMake(record) {
 
             try {
                 const client = new ServerClient(state.servers.get(record.key), { servers: state.servers });
-                const made = await client.makeWorld(maker.value.trim(), { name: name.value.trim(), race: people.value, heroes: heroes.value, firstHero: first.value });
+                const made = await client.makeWorld(maker.value.trim(), { name: name.value.trim(), race: people.value, characters: characters.value });
 
                 state.servers.remember(state.servers.get(record.key), { maker: maker.value.trim() });
                 $("#worldask").close();
@@ -2547,8 +2549,8 @@ async function askBringAs(record, save) {
     const maker = textField("worldaskmaker", { type: "password", value: record.maker ?? "", placeholder: "Its admin key, or a creator key" });
     const name = textField("worldaskname", { maxLength: 60, value: `${hero}'s world`, autocapitalize: "words" });
     const first = selectField("worldaskfirst", [
-        ["new", "Others make a new hero here"],
-        ["bring", "Others may bring a hero of their own"],
+        ["new", "Others make new characters here, the world's own"],
+        ["bring", "Others may copy one of theirs in, once each, the copy staying here"],
     ]);
     const keyHelp = helpBlock("The key that makes worlds", [
         `${server}'s admin key works at home, on its own Wi-Fi: it's on its management page's Overview (and printed when the server first started). From anywhere else, ask the server's owner for a creator key (management page: Settings, then Creator keys).`,
@@ -2556,7 +2558,7 @@ async function askBringAs(record, save) {
     const comes = helpBlock("What comes with it", [], {
         items: [
             `The land ${hero} started in, and the war, as it stands now.`,
-            `${hero}, with all they carry, know and have found, kept by the world as your first hero there.`,
+            `A copy of ${hero}, with all they carry, know and have found, kept by the world as your first character there, ${server}'s own.`,
             "Where everyone is and what they're doing is made afresh from the land, as it is each time you load your game.",
             `${hero} stays on this device as they are: what they do on ${server} stays in its world, and what they do alone here stays here.`,
         ],
@@ -2565,7 +2567,7 @@ async function askBringAs(record, save) {
     askWorld({
         title: `Bring ${hero}'s world to ${server}`,
         note: `A new world on ${server}, made from ${hero}'s: you'll be its owner, and only those you give a key come in.`,
-        fields: [comes, worldField("Key that makes worlds", maker), keyHelp, worldField("World's name", name), worldField("Other players' heroes", first)],
+        fields: [comes, worldField("Key that makes worlds", maker), keyHelp, worldField("World's name", name), worldField("Other players' characters", first)],
         go: "Bring it to the server",
         onGo: async () => {
             if (!maker.value.trim()) {
@@ -2717,107 +2719,191 @@ async function enterServerWorld(record, world, { key = null, code = null, ticket
     chooseHero(client, entered);
 }
 
-// Who goes into the world: in one that keeps heroes, one of theirs there or a new one (looking as
-// who comes looks; or, on a first visit where the world allows it, who comes, brought in); in
-// one that doesn't, who comes
+// What a world does with its players' characters (server/storage/worlds.js CHARACTER_RULES), as
+// its card says it (or, from a server before it said, as its heroes mode and first-hero rule)
+const ruleOfCard = (card) => card?.characters ?? (card?.heroes !== "kept" ? "visiting" : card?.firstHero === "bring" ? "copies" : "own");
+
+/** Each character rule in a few words, as the worlds' lists badge them. */
+const RULE_BADGES = Object.freeze({ visiting: "Visit as your own", copies: "Copies stay here", own: "Made here" });
+
+// Each character rule, as a world's maker chooses it
+const RULE_CHOICES = Object.freeze([
+    ["own", "Made here: characters belong to the world (one taken home leaves it)"],
+    ["copies", "Copied in: each character copied in once, the copy staying here"],
+    ["visiting", "Visiting: players bring their own, kept on their device as they play"],
+]);
+
+// A world's copy of one of their characters, by name: "Ada · Ashvale's copy"
+const copyName = (hero, world) => (hero.origin ? `${hero.name} · ${world}'s copy` : hero.name);
+
+// Who goes into the world, by what it does with its players' characters (ruleOfCard), each told
+// plainly first:
+// - visiting: one of the characters on this device (or a new one, made first), the one here the
+//   master: what they gain is kept as they play, and they leave the world when the player does;
+// - copies: one of their copies there ("Ada · Ashvale's copy"), or one of theirs copied in (once
+//   each, asked first: the copy the world's own, nothing done there coming back), one from a file,
+//   or a new one;
+// - own: one of theirs there, or a new one; or one taken home (asked first: it leaves the world
+//   for good, kept on this device)
 function chooseHero(client, entered) {
     const save = state.joinAs;
     const { card, heroes } = entered;
     const name = card?.name ?? entered.world;
+    const rule = ruleOfCard(card);
+    const kept = loadCharacters(WEAPONS);
 
-    if (card?.heroes !== "kept") {
-        if (!save) {
-            state.worldsAfter = { client, entered };
-            $("#worlds").close();
-            create();
+    // (A new one: made with the look of who they'd come as; with nobody kept here, made first)
+    const fresh = (about) =>
+        worldCard({
+            name: "A new character",
+            about: save ? about : "Made in the character maker first",
+            onClick: () => {
+                $("#worldask").close();
+
+                if (!save) {
+                    state.worldsAfter = { client, entered, hero: rule === "visiting" ? undefined : "new" };
+                    $("#worlds").close();
+                    create();
+
+                    return;
+                }
+
+                playServerWorld(client, entered, { save, hero: "new" });
+            },
+        });
+    const makeFirst = (after) => {
+        state.worldsAfter = { client, entered, ...after };
+        $("#worlds").close();
+        create();
+    };
+
+    if (rule === "visiting") {
+        if (!kept.length) {
+            makeFirst({});
 
             return;
         }
 
-        playServerWorld(client, entered, { save });
+        const choices = kept.map((one) => worldCard({ name: one.hero.name, about: `${peopleOf(one.hero)} · on this device`, onClick: () => ($("#worldask").close(), (state.joinAs = one), playServerWorld(client, entered, { save: one })) }));
+
+        choices.push(worldCard({ name: "A new character", about: "Made in the character maker first, kept on this device", onClick: () => ($("#worldask").close(), makeFirst({})) }));
+        askWorld({ title: `Who visits ${name}?`, note: `You visit ${name} as one of the characters on this device. What they gain there stays with them, kept as you play; when you leave, they leave ${name} with you.`, choices, go: null });
 
         return;
     }
 
-    const bring = !heroes.length && card.firstHero === "bring";
-
-    // (Their first time, with no character yet and nothing else to choose: straight to making
-    // one, then straight in as them)
-    if (!save && !heroes.length && !bring) {
-        state.worldsAfter = { client, entered, hero: "new" };
-        $("#worlds").close();
-        create();
+    // (Their first time, with no character yet and nothing else to choose: straight to making one,
+    // then straight in as them)
+    if (!save && !heroes.length && !(rule === "copies" && kept.length)) {
+        makeFirst({ hero: "new" });
 
         return;
     }
 
-    const choices = heroes.map((hero) => worldCard({ name: hero.name, about: `${peopleOf(hero)} · kept by ${name}`, onClick: () => ($("#worldask").close(), playServerWorld(client, entered, { save, hero: hero.slot })) }));
+    const choices = heroes.map((hero) => worldCard({ name: copyName(hero, name), about: `${peopleOf(hero)} · ${hero.origin ? `a copy, ${name}'s own` : `kept by ${name}`}`, onClick: () => ($("#worldask").close(), playServerWorld(client, entered, { save, hero: hero.slot })) }));
+    const room = heroes.length < 6;
 
-    // (Or one of theirs taken home: a copy of them, among the characters kept on this device)
-    if (heroes.length) {
+    if (rule === "copies") {
+        const copied = new Set(heroes.map(({ origin }) => origin).filter(Boolean));
+
+        // (Each of theirs on this device, copied in once; one copied already said so)
+        for (const one of kept) {
+            const done = copied.has(one.hero.guid);
+
+            choices.push(
+                worldCard({
+                    name: done ? `${one.hero.name}: copied in already` : `Copy ${one.hero.name} in`,
+                    about: done ? `Play their copy above` : `${peopleOf(one.hero)} · a copy comes in and stays in ${name}`,
+                    disabled: done || !room,
+                    onClick: () =>
+                        askWorld({
+                            title: `Copy ${one.hero.name} into ${name}?`,
+                            note: `A copy of ${one.hero.name} comes into ${name} as they are now, and stays there, ${name}'s own: in the list as "${one.hero.name} · ${name}'s copy". ${one.hero.name} on this device carries on as they are: nothing the copy does in ${name} comes back to them, and the copy can't be taken out again. A character's copied into ${name} once.`,
+                            go: `Copy ${one.hero.name} in`,
+                            onGo: async () => (playServerWorld(client, entered, { save: one, hero: "copy" }), true),
+                        }),
+                }),
+            );
+        }
+
+        if (room) {
+            choices.push(worldCard({ name: "Copy one from a file", about: `A character the game exported: a copy comes in and stays in ${name}`, onClick: () => bringFromFile(client, entered) }));
+            choices.push(fresh(`Made new here, ${name}'s own, looking as ${save?.hero.name} does`));
+        }
+
+        askWorld({ title: `Who goes into ${name}?`, note: `${name} keeps a copy of each character brought in, once each. A copy is ${name}'s own: what it does there never comes back to the character on your device, and it stays in ${name}.`, choices, go: null });
+
+        return;
+    }
+
+    // (Their own there: one taken home leaves the world for good, kept on this device; never a copy,
+    // as a world's hero brought to the server is: a copy never leaves)
+    const homeable = heroes.filter(({ origin }) => !origin);
+
+    if (homeable.length) {
         choices.push(
             worldCard({
                 name: "Take one home",
-                about: `A copy of one of your heroes kept by ${name}, among your saved characters on this device`,
+                about: `Moved out of ${name} for good, to the characters on this device`,
                 onClick: () =>
                     askWorld({
-                        title: "Take which hero home?",
-                        note: `They stay in ${name} as they are: a copy of them is kept on this device, in ${name}'s land, to play by yourself, or to bring into another world.`,
-                        choices: heroes.map((hero) => worldCard({ name: hero.name, about: `${peopleOf(hero)} · kept by ${name}`, onClick: () => takeHome(client, entered, hero) })),
+                        title: "Take which character home?",
+                        note: `They leave ${name} for good and become one of the characters kept on this device, in ${name}'s land, to play by yourself or bring into another world.`,
+                        choices: homeable.map((hero) => worldCard({ name: hero.name, about: `${peopleOf(hero)} · kept by ${name}`, onClick: () => askTakeHome(client, entered, hero) })),
                         go: null,
                     }),
             }),
         );
     }
 
-    // (Or their first brought in from a file the game exported, where the world lets them bring one)
-    if (bring) {
-        choices.push(worldCard({ name: "Bring one from a file", about: `A character the game exported: they come in as they are, and stay in ${name}`, onClick: () => bringFromFile(client, entered) }));
+    if (room) {
+        choices.push(fresh(`Made new here, ${name}'s own, looking as ${save?.hero.name} does`));
     }
 
-    if (heroes.length < 6) {
-        choices.push(
-            worldCard({
-                name: save ? (bring ? `Bring ${save.hero.name}` : "A new hero") : "A new hero",
-                about: save ? (bring ? `${save.hero.name} comes in as they are, and stays in ${name}` : `Starting afresh, looking as ${save.hero.name} does`) : "Made in the character maker first",
-                onClick: () => {
-                    $("#worldask").close();
-
-                    if (!save) {
-                        state.worldsAfter = { client, entered, hero: "new" };
-                        $("#worlds").close();
-                        create();
-
-                        return;
-                    }
-
-                    playServerWorld(client, entered, { save, hero: "new" });
-                },
-            }),
-        );
-    }
-
-    askWorld({ title: `Who goes into ${name}`, note: heroes.length ? `${name} keeps its heroes: choose one of yours there, or start a new one.` : `${name} keeps its heroes. This is your first time in.`, choices, go: null });
+    askWorld({ title: `Who goes into ${name}?`, note: heroes.length ? `Characters in ${name} are ${name}'s own, made there: choose one of yours, or start a new one.` : `Characters in ${name} are ${name}'s own, made there. This is your first time in.`, choices, go: null });
 }
 
-// A hero of theirs kept in a world taken home: a copy of them kept on this device (app/character-file.js)
-async function takeHome(client, entered, hero) {
-    let file;
+// Asked first, a character of theirs taken home from a world whose characters are its own: moved
+// out of it for good (the server forgets them) and kept on this device; with no room here, said
+// so first; and if this device won't keep them after all, the file's saved, so they're never lost
+function askTakeHome(client, entered, hero) {
+    const name = entered.card?.name ?? entered.world;
 
-    try {
-        file = await client.heroFile({ world: entered.world, session: entered.session, slot: hero.slot });
-    } catch (error) {
-        $("#worldaskstatus").textContent = error.message;
+    if (loadCharacters(WEAPONS).length >= MOST_CHARACTERS) {
+        $("#worldaskstatus").textContent = `${MOST_CHARACTERS} characters are kept on this device, the most there can be: delete one first to make room.`;
 
         return;
     }
 
-    $("#worldask").close();
-    keepFromFile(file.text);
+    askWorld({
+        title: `Take ${hero.name} home?`,
+        note: `${hero.name} will leave ${name} for good and be kept on this device instead. This can't be undone.`,
+        go: `Take ${hero.name} home`,
+        onGo: async () => {
+            let file;
+
+            try {
+                file = await client.takeHome({ world: entered.world, session: entered.session, slot: hero.slot });
+            } catch (error) {
+                $("#worldaskstatus").textContent = error.message;
+
+                return false;
+            }
+
+            $("#worldask").close();
+
+            if (!(await keepFromFile(file.text))) {
+                download(file.name, file.text);
+                $("#importednote").textContent = `${hero.name} left ${name}, but this device wouldn't keep them: they're saved as a file (${file.name}) instead. Bring it in from Saved characters.`;
+            }
+
+            return true;
+        },
+    });
 }
 
-// Their first hero brought into a world that keeps its heroes from a character file (one of
-// those in it, if there are several), told first what was changed to suit this version of the game
+// A character copied into a world that takes copies from a character file (one of those in it, if
+// there are several), told first what a copy is, and what was changed to suit this version of the game
 function bringFromFile(client, entered) {
     const input = Object.assign(document.createElement("input"), { type: "file", accept: ".pellagos-character,application/json" });
 
@@ -2838,10 +2924,14 @@ function bringFromFile(client, entered) {
             return;
         }
 
+        const world = entered.card?.name ?? entered.world;
         const bring = ({ name, exported, left }) =>
-            left.length
-                ? askWorld({ title: `Bring ${name} in?`, note: `Changed to suit this version of the game: ${left.join(" ")}`, go: `Bring ${name} in`, onGo: async () => (playServerWorld(client, entered, { character: keptOfExport(exported), hero: "new" }), true) })
-                : ($("#worldask").close(), playServerWorld(client, entered, { character: keptOfExport(exported), hero: "new" }));
+            askWorld({
+                title: `Copy ${name} into ${world}?`,
+                note: `A copy of ${name} comes into ${world} and stays there, ${world}'s own: it can't be taken out again.${left.length ? ` Changed to suit this version of the game: ${left.join(" ")}` : ""}`,
+                go: `Copy ${name} in`,
+                onGo: async () => (playServerWorld(client, entered, { character: keptOfExport(exported), hero: "copy" }), true),
+            });
 
         if (!read.length) {
             $("#worldaskstatus").textContent = "There's no one in that file who can be brought in.";
