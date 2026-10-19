@@ -133,12 +133,25 @@ textarea {
     overflow: auto;
 }
 
+/* (The cards the wordmark's in: its size taken from theirs, below) */
+.card.title,
+.card.loader {
+    container-type: inline-size;
+}
+
 .wordmark {
     margin: 0;
     font-family: var(--font-display);
     font-weight: 600;
     font-size: clamp(40px, 9vw, 64px);
+    /* (Never wider than its card, whatever the font and however much of the card a scrollbar
+       takes: PELLAGOS is about six and a half times its height across, so at most a seventh of
+       the card's width, 64 pixels at most. Painted by its letters cutting through its gradient,
+       a letter past its edge wasn't painted at all: Chrome showed half an S) */
+    font-size: clamp(28px, 14.5cqi, 64px);
     letter-spacing: 0.12em;
+    /* (The space after its last letter matched before its first, so it's in the middle) */
+    padding-left: 0.12em;
     text-align: center;
     text-transform: uppercase;
     background: linear-gradient(180deg, #fff1c8 0%, var(--gold) 55%, var(--gold-deep) 100%);
