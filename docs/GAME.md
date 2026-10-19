@@ -2306,9 +2306,12 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   - trees long fallen and gone silver (their trunks bending and tapering, broken branches, the
     root plate torn up with earth still in it), old stumps (sawn or broken, roots flaring,
     shelf fungus), dead trees still standing, piles of logs;
-  - bushes (with red, black or white berries, pink or white flowers, the heath's yellow gorse),
-    termite mounds on the savannah, haystacks and scarecrows in the fields, stretches of ruined
-    wall, and in the badlands now and then the ribs, spine and horned skull of some great beast;
+  - bushes (with red, black or white berries, pink or white flowers, the heath's yellow gorse):
+    each a lumpy mound of small leaves in its land's green, lit as one soft mass, darker at its
+    foot, sprigs of leaves standing out of it so its outline is leaves, drawn as the hedges are
+    (`world/art/kits/bushes.js`); termite mounds on the savannah, haystacks and scarecrows in
+    the fields, stretches of ruined wall, and in the badlands now and then the ribs, spine and
+    horned skull of some great beast;
   - in each people's homeland, their own besides the land's (`HOMELANDS`): the cat folk's red
     termite spires and granite kopjes, the orcs' horned skulls on poles hung with red rags,
     clusters of sharpened stakes and the wrack of old fights (a broken cart wheel, a shield,
