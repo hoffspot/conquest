@@ -6,7 +6,7 @@
 // players out, bans them, gives them new tickets, backs it up, restores it, exports it and deletes
 // it (its name typed); and the server's settings, creator keys, journal and health.
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -548,5 +548,37 @@ describe("the server's settings, creator keys, journal and health (server/manage
         assert.notEqual(renewed.json.key, old);
         assert.equal((await wifi(server, "POST", "/server/session", { auth: `Key ${old}`, headers: { [ADMIN_HEADER]: ADMIN_VALUE } })).status, 401);
         assert.equal((await wifi(server, "POST", "/server/session", { auth: `Key ${renewed.json.key}`, headers: { [ADMIN_HEADER]: ADMIN_VALUE } })).status, 200);
+    });
+
+    it("goes by the name its owner gives it, wherever players see it, at once (its status, on the Wi-Fi, the management page, its archives); kept; refused unless it's one line of 40 characters at most; left empty, the computer's own again", async () => {
+        const own = server.ownName;
+
+        assert.equal(server.name, own, "the computer's own, till it's given one");
+        assert.equal((await admin.call("GET", "/server")).json.settings.name, "");
+
+        for (const name of ["x".repeat(41), "É".repeat(35), " Pellagos", "Pellagos\nHome", 7]) {
+            assert.equal((await admin.call("PATCH", "/server", { settings: { name } })).status, 400, JSON.stringify(name));
+        }
+
+        assert.equal((await admin.call("PATCH", "/server", { settings: { name: "Pellagos Home Server" } })).status, 200);
+        assert.equal(server.name, "Pellagos Home Server");
+        assert.equal((await wifi(server, "GET", "/status")).json.server.name, "Pellagos Home Server", "the game's lists and invites");
+        assert.equal(server.bonjourCard().name, "Pellagos Home Server", "on the Wi-Fi");
+
+        const { overview } = (await admin.call("GET", "/server")).json;
+
+        assert.equal(overview.name, "Pellagos Home Server");
+        assert.equal(overview.ownName, own, "the computer's own, for the page to say");
+        assert.match((await server.manage.archive()).name, /^Pellagos-Home-Server-.*\.pellagos-archive$/);
+        assert.equal(JSON.parse(await readFile(path.join(server.root, "server.json"), "utf8")).name, "Pellagos Home Server", "kept with its settings");
+
+        // (Left empty: the computer's own again)
+        assert.equal((await admin.call("PATCH", "/server", { settings: { name: "" } })).status, 200);
+        assert.equal((await wifi(server, "GET", "/status")).json.server.name, own);
+
+        const activity = (await admin.call("GET", "/server/journal")).json.activity.map((entry) => entry.text).join("\n");
+
+        assert.ok(activity.includes("settings were changed by the admin, on the server's computer: name “Pellagos Home Server”"));
+        assert.ok(activity.includes(`settings were changed by the admin, on the server's computer: name the computer's own (“${own}”)`));
     });
 });

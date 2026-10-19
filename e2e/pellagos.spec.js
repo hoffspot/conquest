@@ -9605,14 +9605,21 @@ test("an ants' nest: its creatures' models got ready at its door, the card namin
         const at = game.avatars.get(game.me).object.position;
         const fungus = meshes.find(({ name }) => name === "fungus");
 
-        // (A trickle let start now, and a frame or two of its grains; what's played meanwhile)
+        // (A trickle let start now, and a frame or two of its grains; what's played meanwhile. Where
+        // it starts is picked at random near the player, under enough roof, a few tries a frame:
+        // so it's let try afresh each frame till one has)
         const before = game.effects.dust.live.length;
         const asked = [];
         const play = game.sound.play.bind(game.sound);
 
         game.sound.play = (name, options = {}) => (asked.push({ name, at: options.at ? { x: options.at.x, z: options.at.z } : null, far: options.far }), play(name, options));
-        game.trickles.wait = 0;
-        await step(3);
+
+        for (let k = 0; k < 40 && !game.trickles.running; k++) {
+            game.trickles.wait = 0;
+            await step(1);
+        }
+
+        await step(2);
         game.sound.play = play;
 
         const fell = asked.find(({ name }) => name === "soilTrickle");

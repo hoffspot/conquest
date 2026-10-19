@@ -17,10 +17,11 @@ export const CONFIG_VERSION = 1;
 export const SETTINGS_STEPS = Object.freeze({});
 
 /**
- * Every setting: its kind ("boolean", "integer", "number"), its range, its default, and what it's
- * for (as the management page says it).
+ * Every setting: its kind ("text", "boolean", "integer", "number"), its range (a text's most
+ * characters), its default, and what it's for (as the management page says it).
  */
 export const SETTINGS = Object.freeze({
+    name: { kind: "text", most: 40, default: "", about: "The server's name, as players see it: in the game's lists and its invites, and on the Wi-Fi. Left empty, it's the computer's own" },
     port: { kind: "integer", min: 1, max: 65535, default: 8480, about: "The port players reach the server on (and the management page, from the Wi-Fi, at /admin)" },
     adminPort: { kind: "integer", min: 1, max: 65535, default: 8481, about: "The port the management page answers on, on this computer alone, needing no key" },
     worldsAtOnce: { kind: "integer", min: 1, max: 64, default: 2, about: "How many worlds may be running or loading at once" },
@@ -57,6 +58,8 @@ export function schemaReason(schema, key, value) {
     }
 
     switch (setting.kind) {
+        case "text":
+            return textReason(key, value, setting.most);
         case "boolean":
             return typeof value === "boolean" ? null : `${key} must be true or false, not ${JSON.stringify(value)}.`;
         case "integer":
@@ -64,6 +67,27 @@ export function schemaReason(schema, key, value) {
         default:
             return Number.isFinite(value) && value >= setting.min && value <= setting.max ? null : `${key} must be a number from ${setting.min} to ${setting.max}, not ${JSON.stringify(value)}.`;
     }
+}
+
+/** The most bytes a text setting may take as UTF-8: a Bonjour name's, which the server's name is advertised as. */
+export const TEXT_BYTES = 63;
+
+// Why `value` can't be text setting `key` of `most` characters at most, or null if it can: one line,
+// with no spaces at either end (empty, it's left to its default's meaning)
+function textReason(key, value, most) {
+    if (typeof value !== "string") {
+        return `${key} must be text, not ${JSON.stringify(value)}.`;
+    }
+
+    if ([...value].length > most || new TextEncoder().encode(value).length > TEXT_BYTES) {
+        return `${key} must be ${most} characters at most (fewer with accents or symbols).`;
+    }
+
+    if (/\p{Cc}/u.test(value) || value !== value.trim()) {
+        return `${key} must be one line, with no spaces at either end.`;
+    }
+
+    return null;
 }
 
 /** Refused: a settings file holding a value its setting can't have (`reason`). */

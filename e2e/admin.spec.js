@@ -262,6 +262,42 @@ test("its Updates: a newer version found, with its notes, and how this copy of t
     await expect(updates.getByRole("button", { name: /Update to/ })).toHaveCount(0);
 });
 
+test("its name, given in Settings, is the server's at once: the page's own, its Overview's, and the game's opened from it; left empty, the computer's own again", async ({ page }) => {
+    await page.goto(`http://localhost:${server.adminPort}/`);
+    await page.locator('[data-tab="settings"]').click();
+
+    const settings = page.locator("#settings .panel").filter({ has: page.locator('input[name="name"]') });
+    const name = settings.locator('input[name="name"]');
+
+    await expect(name).toHaveValue("");
+    await expect(name).toHaveAttribute("placeholder", server.ownName);
+    await name.fill("  Pellagos   Home Server ");
+    await settings.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("#who")).toContainText("Pellagos Home Server · version");
+    await expect(name).toHaveValue("Pellagos Home Server");
+    expect(server.name).toBe("Pellagos Home Server");
+
+    await page.locator('[data-tab="overview"]').click();
+    await expect(page.locator("#overview")).toContainText(`Pellagos Home Server · its own name (Settings), the computer's ${server.ownName}`);
+
+    // (The game opened from it: its worlds on the title, under its name)
+    const game = await page.context().newPage();
+
+    await game.goto(`http://127.0.0.1:${server.port}/`);
+    await expect(game.locator("#titleservername")).toHaveText("Worlds on Pellagos Home Server", { timeout: 60000 });
+    await game.close();
+
+    // (Left empty: the computer's own again; the page opened afresh, so its Settings are drawn
+    // once, not drawn again under what's typed)
+    await page.goto(`http://localhost:${server.adminPort}/`);
+    await page.locator('[data-tab="settings"]').click();
+    await expect(name).toHaveValue("Pellagos Home Server");
+    await name.fill("");
+    await settings.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("#who")).toContainText(`${server.ownName} · version`);
+    expect(server.name).toBe(server.ownName);
+});
+
 test("its Archive: the whole server archived, the archive opened, its worlds brought in as new ones with keys of their own (restoring's for a server with none)", async ({ page }) => {
     test.setTimeout(120000);
 

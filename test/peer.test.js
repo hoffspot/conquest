@@ -209,6 +209,20 @@ describe("a player's own world through the broker", () => {
         await until(() => host.heard.length, "the joiner heard");
         assert.deepEqual(host.heard, [[joined.peer, "still here"]]);
     });
+
+    it("says its world's no longer open to others when the broker's let its listing go though its link's open (an older server's way), its code not shown on", async () => {
+        const server = await serve();
+        const host = await hosting(server, { timing: { ...QUICK, keep: 300, ping: 100 } });
+        let dropped = 0;
+
+        host.host.onDrop = () => dropped++;
+
+        // (Let go as an older server let one go, 45 s after its last keep, a page in the background
+        // keeping it once a minute: its next keep's answered "error gone")
+        server.broker.listings.delete(host.code);
+        await until(() => dropped === 1, "told its listing's gone");
+        assert.equal(host.host.closing, true);
+    });
 });
 
 describe("playing a player's own world through the broker (together.js)", () => {
