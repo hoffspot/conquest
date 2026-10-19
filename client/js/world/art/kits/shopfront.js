@@ -12,7 +12,7 @@
 import { createRandom } from "../../../core/random.js";
 import { SHOP_LANDMARKS } from "../../../core/setpieces/pieces.js";
 import { material } from "../engine/materials.js";
-import { emblemSignTexture, signMaterial } from "./signs.js";
+import { emblemSignTexture, paintBothFaces, signMaterial } from "./signs.js";
 
 const M = 5;
 const m = (metres) => metres * M;
@@ -295,8 +295,5 @@ export function standingSign(solid, name, x, z) {
     solid.beam([x, top + m(0.1), z], [x, top + m(0.1), far + m(0.1)], m(0.05), m(0.06), iron);
     solid.beam([x, top - m(0.35), z], [x, top + m(0.08), z + m(0.24)], m(0.03), m(0.03), iron);
 
-    const corners = [[x, top - m(0.9), near], [x, top - m(0.9), far], [x, top, far], [x, top, near]];
-
-    solid.face(corners, picture, [[0, 0], [1, 0], [1, 1], [0, 1]]);
-    solid.face([...corners].reverse(), picture, [[0, 1], [1, 1], [1, 0], [0, 0]]);
+    paintBothFaces(solid, [[x, top - m(0.9), near], [x, top - m(0.9), far], [x, top, far], [x, top, near]], picture);
 }
