@@ -8,7 +8,8 @@ import { createRandom } from "../core/random.js";
 
 /**
  * A score to write at `tempo` beats a minute, `beatsPerBar` to a bar, its players' unevenness
- * from `seed` (each note up to `nudge` seconds early or late, in all):
+ * from `seed` (each note up to `nudge` seconds early or late, in all), every note `level` times
+ * as loud as it's written (at most full):
  *
  *  - play(instrument, bar, beat, pitch, beats, velocity, { exact }): a note at a bar and beat of
  *    the section being written (a drum's kind of hit for its pitch);
@@ -20,7 +21,7 @@ import { createRandom } from "../core/random.js";
  *    start (s) }], notes: [{ time (s), instrument, pitch, duration (s), velocity }] in time
  *    order }, as score.js compose.
  */
-export function writing({ tempo, beatsPerBar, seed, nudge = 0.016 }) {
+export function writing({ tempo, beatsPerBar, seed, nudge = 0.016, level = 1 }) {
     const beat = 60 / tempo;
     const bar = beatsPerBar * beat;
     const random = createRandom(seed);
@@ -36,7 +37,7 @@ export function writing({ tempo, beatsPerBar, seed, nudge = 0.016 }) {
             instrument,
             pitch,
             duration: beats * beat,
-            velocity: Math.min(1, velocity * (exact ? 1 : 0.93 + random.next() * 0.14)),
+            velocity: Math.min(1, level * velocity * (exact ? 1 : 0.93 + random.next() * 0.14)),
         });
     };
 

@@ -4311,7 +4311,8 @@ on A, to lead back into the cellos' D minor: its notes run right up to the loop,
 gap there.
 
 **Each people's music** (`elves.js`, `dark-elves.js`, `cat-folk.js`, `lizard-folk.js`,
-`orcs.js`, written out with `writing.js`) is heard in their own lands; the humans' is the town's.
+`orcs.js`, written out with `writing.js`) is heard in their own lands, and through their
+buildings' walls (where a place has no music of its own); the humans' is the town's.
 Each is in the town's old-world, modal idiom, and played softly on recordings from the VCSL and VSCO
 2 CE:
 
@@ -4322,6 +4323,24 @@ Each is in the town's old-world, modal idiom, and played softly on recordings fr
 | Cat folk | warm and sunlit | G major, their tunes on its five notes, 4/4 at 104, 2 min | a kalimba rippling over its own low tines, an ocarina and a balafon (soft mallets) trading tunes, bongos, a conga, a small shaker |
 | Lizard folk | humid and hypnotic | A Dorian, 4/4 at 88, 2 min | a marimba's figure going round and round, the same each bar but for its chord, over a pipe organ's drone on A; a slit drum and a shaker; a flute's long notes over it, the cellos taking up its tune |
 | Orcs | forward and assertive | G minor, 4/4 at 100, 1½ min | war drums stamping (a bass drum, tenor drums, the timpani), cellos driving in quick short notes, the tune on French horns with tenor trombones an octave under them, the brass calling and the drums answering in the middle |
+
+**Each kind of dungeon's music** (`caves.js`, `crypts.js`, `nest.js`, `lair.js`, `ruins.js`,
+`hell.js`) is heard down in it, in place of the land's, a little under it (80%):
+
+| Where | Mood | Mode, metre | Played on |
+| --- | --- | --- | --- |
+| Caves, bandits' hideouts | dark, echoing, alone | A minor, 4/4 at 56, 2¼ min | cellos holding a low chord, a bowed vibraphone's cold notes, a kalimba and a marimba dropping notes like water from the roof (placed at random, seeded), a slit drum far off |
+| Crypts, the ancient tombs | a requiem | D minor, 3/4 at 60, 1½ min | a slow chorale (a pipe organ's deep bass under the chamber organ's chords, a breath between them), tubular bells tolling, a flute's low lament |
+| An ants' nest | skittering, tense | E Phrygian, 4/4 at 116, 1½ min | cellos plucked, creeping by half steps; a marimba ticking high up; a shaker and a slit drum; a vibraphone holding two notes a half step apart |
+| The great lairs | vast, ominous | C minor, 4/4 at 66, 2 min | a bass drum beating slow and double like a great heart, a gong, French horns and trombones on a slow theme, the cellos taking it up, the timpani |
+| Ruined keeps, broken towers | glory long gone | D minor, 3/4 at 72, 1¾ min | the town's ballad, its verse in D minor (its B naturals flattened), on the recorder and then the folk harp alone, the strings holding the chords |
+| A hell's realms | forlorn, creepy, without hope | A minor, 4/4 at 50, 2½ min | no beat: an organ's soft chords over a bass that only ever falls by half steps, the cellos with it, two bells a tritone apart, a vibraphone's cold notes, a flute's sighs |
+
+A hell's is played as much lower in each realm as its drone is (`hell.js` `shifts`, `sound.js`
+PLACES `shift`): the Breach's as written, the Halls of Bone's a tone under it, the River of
+Fire's two, the Pit's a fifth, always in tune with the drone. There's no fight's music in a
+hell. Each score is written at its own overall level (`writing.js` `level`), so the quiet ones
+come out about as loud as the rest.
 
 Every score loops without a seam: each starts at once, plays right up to its end, and never goes
 a bar without a new note (`test/music.test.js`).
@@ -4356,8 +4375,10 @@ ends, which some instruments also have), fine-tuned (by the SFZ's tuning),
 resampled to 32 kHz, cut to as long as the score needs (0.5 to 3.8 seconds, the held
 instruments' long enough for the slow scores' longest notes, and each under 40 KB), faded out,
 made about as loud as the others (by its loudest 50 ms in its first 0.6 seconds) and saved as an
-80 kb/s MP3 named for what's in it: 139 recordings, about 3 megabytes in all (1.5 for the
-town's, the tavern's and a fight's), listed in `samples.js`. The softest takes are used (and one
+80 kb/s MP3 named for what's in it: 152 recordings, about 3.4 megabytes in all, listed in
+`samples.js`. Each score downloads only the recordings its own notes play (`instruments.js`
+`scoreFiles`, as low as it's played anywhere): about 1.5 MB for the town's, the tavern's and a
+fight's, then 130 to 680 KB for each other score's own. The softest takes are used (and one
 of the pipe organ's, its low F sharp, all but silent, left out). (MP3 adds about 35 ms of silence at the start of each, the same for every one, so
 the music is in time with itself.)
 
@@ -4388,7 +4409,7 @@ the town's, the tavern's and a fight's music (`FIRST`) are downloaded, six at a 
 background (not on the loading screen: the game doesn't wait for them), kept by the service
 worker, and decoded once sound starts; the music begins when the score it starts with has all of
 its. Each other score's own recordings are downloaded the first time it's wanted, three at a
-time (300 to 850 KB each, the dark elves' and the lizard folk's held notes the most); till
+time (130 to 680 KB each, a hell's and the lizard folk's the most); till
 they're in, what's heard plays on (as loud and as muffled as the new one would be there), then
 fades over. Offline without them, it just doesn't play (or plays on without them). Browsers let a
 page make sound only after a tap, click or key, so it starts on the first one (the start or end

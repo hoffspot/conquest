@@ -39,7 +39,7 @@ export const tune = (text) => text.split(/\s+/).filter((token) => token && token
 });
 
 /** Chords: the pitch classes of the root, third and fifth. */
-export const CHORDS = Object.freeze({ Dm: [2, 5, 9], C: [0, 4, 7], G: [7, 11, 2], A: [9, 1, 4], Am: [9, 0, 4], F: [5, 9, 0], Bb: [10, 2, 5], D: [2, 6, 9], Em: [4, 7, 11], Bm: [11, 2, 6], Gm: [7, 10, 2], Eb: [3, 7, 10], Cm: [0, 3, 7] });
+export const CHORDS = Object.freeze({ Dm: [2, 5, 9], C: [0, 4, 7], G: [7, 11, 2], A: [9, 1, 4], Am: [9, 0, 4], F: [5, 9, 0], Bb: [10, 2, 5], D: [2, 6, 9], Em: [4, 7, 11], Bm: [11, 2, 6], Gm: [7, 10, 2], Eb: [3, 7, 10], Cm: [0, 3, 7], Ab: [8, 0, 3], E: [4, 8, 11], B: [11, 3, 6] });
 
 /** A bar's chords, written as their names. */
 export const chords = (text) => text.split(/\s+/).filter(Boolean);
@@ -55,12 +55,13 @@ export function voicing(name, low) {
 
 // --- The tunes ---
 
-const VERSE = tune(`
+/** The verse's tune, and its chords (the ruins' lament plays it in D minor: ruins.js). */
+export const VERSE = tune(`
     D5:1 A4:1 A4:0.5 B4:0.5 | C5:1 G4:1 G4:0.5 A4:0.5 | F4:0.5 G4:0.5 A4:1 D5:1 | C5:1.5 B4:0.5 A4:1 |
     D5:1 A4:1 A4:0.5 B4:0.5 | C5:1 E5:1 D5:0.5 C5:0.5 | B4:1 D5:1 B4:0.5 G4:0.5 | A4:2 r:1 |
     F4:1 A4:1 C5:1 | E5:1.5 D5:0.5 C5:1 | D5:1 F5:1 E5:0.5 D5:0.5 | C5:1 A4:2 |
     A4:1 C5:1 F5:1 | E5:1 D5:1 B4:1 | C#5:1.5 B4:0.5 A4:1 | D5:2 r:1`);
-const VERSE_CHORDS = chords("Dm C Dm Am Dm C G A F C Dm Am F G A Dm");
+export const VERSE_CHORDS = chords("Dm C Dm Am Dm C G A F C Dm Am F G A Dm");
 
 const CHORUS = tune(`
     C5:1 F5:2 | E5:1 G5:1 E5:1 | D5:2 G5:1 | F5:1.5 E5:0.5 D5:1 |

@@ -9,7 +9,7 @@
 // section of cellos, timpani, a bass drum and a rope-tensioned field drum; and for the peoples'
 // own music, a flute, violins and cellos bowed and held, tenor trombones, a pipe organ's quiet
 // stops, tubular bells, a bowed vibraphone, a kalimba, a balafon, a marimba, bongos, a conga, a
-// shaker, a slit drum and tenor drums.
+// shaker, a slit drum and tenor drums; and for the dungeons', cellos plucked and a gong.
 //
 // Each pitched instrument was recorded at a few notes, a few semitones apart: a note plays the
 // nearest, a little faster or slower. Blown and bowed instruments (and the organs) sound for as
@@ -58,6 +58,9 @@ export const INSTRUMENTS = Object.freeze({
     shaker: { name: "Shaker", kinds: ["down", "up"], mix: 0.34, pan: 0.35 },
     slitdrum: { name: "Slit drum", kinds: ["low", "high"], mix: 0.42, pan: 0.15 },
     toms: { name: "Tenor drums", kinds: ["low", "high"], mix: 0.38, pan: -0.1 },
+    // (The dungeons': caves.js, crypts.js, nest.js, lair.js, ruins.js, hell.js)
+    pizzicato: { name: "Cellos (plucked)", ring: 0.4, mix: 0.4, pan: 0.2 },
+    gong: { name: "Gong", kinds: ["hit"], mix: 0.3, pan: 0 },
 });
 
 /** The notes an instrument was recorded at (MIDI), low to high. */
@@ -74,6 +77,18 @@ export function baseFor(name, pitch) {
 
 /** The instruments a score plays (scores.js), by name. */
 export const instrumentsOf = (score) => [...new Set(score.notes.map(({ instrument }) => instrument))];
+
+/**
+ * The recordings a score plays (as low as it's played anywhere: its `shifts`), only those:
+ * [id, where it is], as sampleFiles.
+ */
+export function scoreFiles(score) {
+    const ids = new Set(
+        (score.shifts ?? [0]).flatMap((shift) => score.notes.map(({ instrument, pitch }) => `${instrument} ${baseFor(instrument, INSTRUMENTS[instrument].kinds ? pitch : pitch + shift)}`)),
+    );
+
+    return sampleFiles(instrumentsOf(score)).filter(([id]) => ids.has(id));
+}
 
 /** Every recording (or those of the instruments `names`): [id ("instrument key", as `#note` asks for it), where it is]. */
 export function sampleFiles(names = Object.keys(SAMPLES)) {

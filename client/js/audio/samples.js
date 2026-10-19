@@ -90,6 +90,7 @@ export const SAMPLES = Object.freeze({
         { key: 84, file: "guitar-84.fc2d92a3.mp3" },
     ],
     horn: [
+        { key: 43, file: "horn-43.5d35e241.mp3" },
         { key: 46, file: "horn-46.66b0a876.mp3" },
         { key: 50, file: "horn-50.1d1494dc.mp3" },
         { key: 53, file: "horn-53.7f0b96ee.mp3" },
@@ -118,6 +119,7 @@ export const SAMPLES = Object.freeze({
         { kind: "hit", file: "snare-hit.c302f539.mp3" },
     ],
     flute: [
+        { key: 60, file: "flute-60.4a66ddcd.mp3" },
         { key: 64, file: "flute-64.386bf9ec.mp3" },
         { key: 69, file: "flute-69.b0c32b65.mp3" },
         { key: 72, file: "flute-72.eb186396.mp3" },
@@ -132,6 +134,7 @@ export const SAMPLES = Object.freeze({
         { key: 79, file: "violins-79.12f3ddb3.mp3" },
     ],
     celli: [
+        { key: 40, file: "celli-40.7b0fa5d0.mp3" },
         { key: 43, file: "celli-43.fd3995cd.mp3" },
         { key: 47, file: "celli-47.d5220efa.mp3" },
         { key: 50, file: "celli-50.3716e7a8.mp3" },
@@ -154,12 +157,16 @@ export const SAMPLES = Object.freeze({
         { key: 51, file: "pipeorgan-51.c06f4cf6.mp3" },
     ],
     bells: [
-        { key: 66, file: "bells-66.050390e8.mp3" },
-        { key: 70, file: "bells-70.8a3b6938.mp3" },
+        { key: 64, file: "bells-64.7fbc8fc5.mp3" },
+        { key: 68, file: "bells-68.5d8076f2.mp3" },
+        { key: 72, file: "bells-72.505a260e.mp3" },
+        { key: 76, file: "bells-76.0eee64a4.mp3" },
     ],
     vibes: [
+        { key: 67, file: "vibes-67.8e72f76d.mp3" },
         { key: 74, file: "vibes-74.1e4f5cd8.mp3" },
         { key: 81, file: "vibes-81.172b449a.mp3" },
+        { key: 88, file: "vibes-88.63088efa.mp3" },
     ],
     kalimba: [
         { key: 44, file: "kalimba-44.63b4ed73.mp3" },
@@ -171,6 +178,7 @@ export const SAMPLES = Object.freeze({
         { key: 70, file: "kalimba-70.d161e0aa.mp3" },
         { key: 75, file: "kalimba-75.4d7f9e12.mp3" },
         { key: 79, file: "kalimba-79.f0cf9f01.mp3" },
+        { key: 83, file: "kalimba-83.90ee3ab5.mp3" },
     ],
     balafon: [
         { key: 65, file: "balafon-65.b0e8b8de.mp3" },
@@ -186,6 +194,7 @@ export const SAMPLES = Object.freeze({
         { key: 65, file: "marimba-65.8b306229.mp3" },
         { key: 72, file: "marimba-72.7ad56581.mp3" },
         { key: 79, file: "marimba-79.f19f9177.mp3" },
+        { key: 83, file: "marimba-83.4e571f46.mp3" },
     ],
     bongos: [
         { kind: "high", file: "bongos-high.2a22ae66.mp3" },
@@ -207,5 +216,13 @@ export const SAMPLES = Object.freeze({
     toms: [
         { kind: "low", file: "toms-low.a55cc624.mp3" },
         { kind: "high", file: "toms-high.682afc2c.mp3" },
+    ],
+    pizzicato: [
+        { key: 40, file: "pizzicato-40.de4bcc91.mp3" },
+        { key: 43, file: "pizzicato-43.7bd1d5c6.mp3" },
+        { key: 47, file: "pizzicato-47.be8156bf.mp3" },
+    ],
+    gong: [
+        { kind: "hit", file: "gong-hit.3dff88c9.mp3" },
     ],
 });
