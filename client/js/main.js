@@ -24,6 +24,7 @@ import { Fetcher } from "./app/fetcher.js";
 import { FullScreen } from "./app/fullscreen.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
+import { Pointer } from "./app/pointer.js";
 import { telemetry } from "./app/telemetry.js";
 import { builtAt, codeVersion } from "./app/version.js";
 import { enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
@@ -37,6 +38,13 @@ const $ = (selector) => document.querySelector(selector);
 
 const settings = loadSettings();
 const debug = new Debug($("#debug"), { settings, onChange: applySetting });
+
+// The mouse pointer, a sword over the whole page (Game options: app/pointer.js), told by the game
+// what's under it
+const pointer = new Pointer();
+
+showPointer();
+pointer.start();
 
 // Full screen while playing (Game options: app/fullscreen.js); left any other way, the game pauses
 const fullScreen = new FullScreen({
@@ -811,6 +819,8 @@ $("#minimapswitch").checked = settings.minimap;
 $("#stickswitch").checked = settings.stick;
 $("#floatswitch").checked = settings.stickFloats;
 $("#zoomswitch").checked = settings.zoom;
+$("#pointerswitch").checked = settings.swordPointer;
+$("#largepointerswitch").checked = settings.largePointer;
 $("#resistswitch").checked = settings.resistSummons;
 $("#refuseswitch").checked = settings.refuseInvites;
 $("#snagswitch").checked = settings.autoSnag;
@@ -1052,6 +1062,7 @@ async function playing(save, { world, place, war }) {
     showStick(settings.stick);
     floatStick(settings.stickFloats);
     showZoom(settings.zoom);
+    game.cursor = pointer;
     game.resistSummons = settings.resistSummons;
     game.refuseInvites = settings.refuseInvites;
     game.autoSnag = settings.autoSnag;
@@ -2232,6 +2243,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     showStick(settings.stick);
     floatStick(settings.stickFloats);
     showZoom(settings.zoom);
+    game.cursor = pointer;
     game.resistSummons = settings.resistSummons;
     game.refuseInvites = settings.refuseInvites;
     game.autoSnag = settings.autoSnag;
@@ -3674,6 +3686,8 @@ for (const [button, on] of [["#minimapfold", false], ["#compass", true]]) {
 $("#stickswitch").addEventListener("change", (event) => applySetting("stick", event.target.checked));
 $("#floatswitch").addEventListener("change", (event) => applySetting("stickFloats", event.target.checked));
 $("#zoomswitch").addEventListener("change", (event) => applySetting("zoom", event.target.checked));
+$("#pointerswitch").addEventListener("change", (event) => applySetting("swordPointer", event.target.checked));
+$("#largepointerswitch").addEventListener("change", (event) => applySetting("largePointer", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 $("#refuseswitch").addEventListener("change", (event) => applySetting("refuseInvites", event.target.checked));
 $("#snagswitch").addEventListener("change", (event) => applySetting("autoSnag", event.target.checked));
@@ -3856,6 +3870,8 @@ function applySetting(key, value) {
         floatStick(value);
     } else if (key === "zoom") {
         showZoom(value);
+    } else if (key === "swordPointer" || key === "largePointer") {
+        showPointer();
     } else if (key === "quickSix") {
         state.game?.showQuick(quickShown());
         state.quickSetup?.showCount(quickShown());
@@ -3891,6 +3907,14 @@ function applyCamera() {
 function showMinimap(on) {
     document.body.dataset.minimap = on ? "on" : "off";
     state.game?.showMinimap(on);
+}
+
+// The sword pointer, or the system's own; large or not (and its size said of only with it on)
+function showPointer() {
+    pointer.on = settings.swordPointer;
+    pointer.large = settings.largePointer;
+    pointer.show();
+    document.body.dataset.swordPointer = settings.swordPointer ? "on" : "off";
 }
 
 // The thumb stick: hidden with it, anything the thumb was holding is let go of, so the player
