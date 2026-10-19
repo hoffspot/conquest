@@ -270,7 +270,6 @@ ash, are their colour textures alone (`fiend.pale.bin`, `fiend.ash.bin`).
 
 It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
 in this repository, but in the private one the game's builds fetch it from
-(`docs/LICENSED_MODELS.md`). The model viewer shows it (*Coming to the wilds*) until it's in the
-game.
+(`docs/LICENSED_MODELS.md`). In the game it's the hells' fiends (`beasts/model.js` `fiend`).
 
 Don't copy it out of this game or use it in anything else.

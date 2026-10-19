@@ -305,6 +305,27 @@ export const MODELS = Object.freeze({
         runPace: 5.7,
         flinch: 0.5,
     }),
+    // (A fiend of the hells' (dungeons/themes.js `hell`): Monster4, made 2.1 metres tall, drawn
+    // 2.4, its wings spread 3.7 metres; its own clips: its claws raked four ways, one at random
+    // each time, its spring (the special "pounce", as weapons.js names it) a leap with its wings
+    // spread; its other idle as it rests; walking at 1.1 m/s, its run a sprint played slower at its
+    // chase; in one of its three skins (its own red, pale, ash) by its seed)
+    fiend: Object.freeze({
+        asset: "beast-fiend",
+        skins: Object.freeze(["", "pale", "ash"]),
+        length: 1.26,
+        made: Object.freeze({ long: 1.11, tall: 2.12 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit", dead: "Death" }),
+        attacks: Object.freeze({ claw: "Attack", rake: "Attack 3", slash: "Attack 5", smash: "Attack 2" }),
+        specials: Object.freeze({ pounce: "Attack 4" }),
+        rests: Object.freeze({ look: "Idle 2" }),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "head", left: "hand_l" }),
+        mouth: null,
+        pace: 1.1,
+        runPace: 5.65,
+        flinch: 0.6,
+    }),
 });
 
 // The models read and those asked for, by kind (each in its skins); and each model file's read,
