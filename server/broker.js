@@ -10,7 +10,8 @@
 //                                                  -> "announced ID TOKEN" (ID: the world's code,
 //                                                     CODE_LENGTH letters; or "error busy",
 //                                                     "error too-many", "error bad")
-//                    "keep ID TOKEN[\n{players, visibility}]"  every 15 s, or it's gone after 45 s; from a new
+//                    "keep ID TOKEN[\n{players, visibility}]"  every 15 s: it's kept while its host's link is
+//                                                  open, and for 45 s once it's closed; from a new
 //                                                  link, it's the host's again -> "announced ID
 //                                                  TOKEN", "here pN pN..." (or "error gone")
 //                    "withdraw ID"                 taken down: those joined through it told "closed"
@@ -52,10 +53,10 @@ export const BROKER_PROTOCOL = "pellagos.broker.1";
 /**
  * Its limits: the longest message (bytes: a world's snapshot, relayed to one who's joined, is the
  * biggest; anything else may be `small`), how much may wait to go to one slow to take it, listings
- * per address and in all, how long one lasts without a keep, how many signals a connection attempt
- * may pass, how many may join one world at once, how long a new link has to say what it's for, and
- * how often each's asked whether it's still there (let go if it doesn't answer for `timeout`); all
- * ms but the sizes and counts.
+ * per address and in all, how long one lasts once its host's link has closed, how many signals a
+ * connection attempt may pass, how many may join one world at once, how long a new link has to say
+ * what it's for, and how often each's asked whether it's still there (let go if it doesn't answer
+ * for `timeout`); all ms but the sizes and counts.
  */
 export const BROKER_LIMITS = Object.freeze({
     message: 4 * 1024 * 1024,
@@ -233,11 +234,19 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
         policy.on("withdrawn", { listing: listing.id });
     };
 
-    // Kept: it lasts limits.expire from now
+    // Kept: it lasts while its host's link is open, and limits.expire after it's closed
     const keep = (listing) => {
-        clearTimeout(listing.expiry);
         listing.keptAt = clock();
-        listing.expiry = setTimeout(() => withdraw(listing), limits.expire);
+        lasting(listing);
+    };
+
+    // Withdrawn limits.expire from now, unless its host's link is open then: a page in the
+    // background, its timers slowed to one a minute, or a computer dozing, keeps it less often than
+    // it means to, but its link still answers the broker's pings (one that doesn't, for
+    // limits.timeout, is closed), and its code's still good
+    const lasting = (listing) => {
+        clearTimeout(listing.expiry);
+        listing.expiry = setTimeout(() => (listing.host ? lasting(listing) : withdraw(listing)), limits.expire);
         listing.expiry.unref?.();
     };
 
@@ -524,6 +533,9 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
             if (socket.left) {
                 withdraw(listing);
             } else {
+                // (Its host given limits.expire from now to come back on a new link)
+                lasting(listing);
+
                 for (const attempt of listing.joiners.values()) {
                     attempt.socket.send("away");
                 }
