@@ -1470,7 +1470,7 @@ const told = (page) => page.evaluate(() => {
     return { order: player.order, facing: player.facing, look: Math.atan2(-e[8], -e[10]) };
 });
 
-test("W, A, S, D steer the player the way the camera looks, two of them diagonally, Shift runs, and letting go stops", async ({ page }) => {
+test("W, A, S, D steer the player the way the camera looks, running, two of them diagonally, Shift held walking, and letting go stops", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const way = await clearestWayAhead(page);
@@ -1479,14 +1479,14 @@ test("W, A, S, D steer the player the way the camera looks, two of them diagonal
     // (Facing off to the side to begin with, so turning to go shows)
     expect(Math.abs(Math.sin(start.facing - way))).toBeGreaterThan(0.9);
 
-    // W: straight ahead the way the camera looks, walking
+    // W: straight ahead the way the camera looks, running
     await page.keyboard.down("KeyW");
 
-    const walking = await told(page);
+    const going = await told(page);
 
-    expect(walking.order?.type).toBe("move");
-    expect(walking.order.run).toBe(false);
-    expect(Math.cos(walking.facing - walking.look)).toBeGreaterThan(0.99);
+    expect(going.order?.type).toBe("move");
+    expect(going.order.run).toBe(true);
+    expect(Math.cos(going.facing - going.look)).toBeGreaterThan(0.99);
 
     // Held, they go that way and not off to the side
     const moved = await page.evaluate(() => {
@@ -1500,10 +1500,10 @@ test("W, A, S, D steer the player the way the camera looks, two of them diagonal
         return { running: game.battle.actor("player").running, x: avatar.object.position.x, z: avatar.object.position.z };
     });
 
-    expect(moved.running).toBe(false);
+    expect(moved.running).toBe(true);
 
-    const along = (moved.x - start.x) * Math.sin(walking.facing) + (moved.z - start.z) * Math.cos(walking.facing);
-    const across = Math.abs((moved.x - start.x) * Math.cos(walking.facing) - (moved.z - start.z) * Math.sin(walking.facing));
+    const along = (moved.x - start.x) * Math.sin(going.facing) + (moved.z - start.z) * Math.cos(going.facing);
+    const across = Math.abs((moved.x - start.x) * Math.cos(going.facing) - (moved.z - start.z) * Math.sin(going.facing));
 
     expect(along).toBeGreaterThan(1);
     expect(across).toBeLessThan(1);
@@ -1526,10 +1526,10 @@ test("W, A, S, D steer the player the way the camera looks, two of them diagonal
     expect(Math.abs(off)).toBeGreaterThan(38);
     expect(Math.abs(off)).toBeLessThan(52);
 
-    // Shift, with a way still held, turns the walk into a run
+    // Shift, with a way still held, turns the run into a walk
     await page.keyboard.up("KeyD");
     await page.keyboard.down("Shift");
-    expect((await told(page)).order.run).toBe(true);
+    expect((await told(page)).order.run).toBe(false);
 
     // Everything let go: they're told to stop
     await page.keyboard.up("KeyW");
