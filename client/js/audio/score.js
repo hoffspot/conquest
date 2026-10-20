@@ -39,7 +39,7 @@ export const tune = (text) => text.split(/\s+/).filter((token) => token && token
 });
 
 /** Chords: the pitch classes of the root, third and fifth. */
-export const CHORDS = Object.freeze({ Dm: [2, 5, 9], C: [0, 4, 7], G: [7, 11, 2], A: [9, 1, 4], Am: [9, 0, 4], F: [5, 9, 0], Bb: [10, 2, 5], D: [2, 6, 9], Em: [4, 7, 11], Bm: [11, 2, 6], Gm: [7, 10, 2] });
+export const CHORDS = Object.freeze({ Dm: [2, 5, 9], C: [0, 4, 7], G: [7, 11, 2], A: [9, 1, 4], Am: [9, 0, 4], F: [5, 9, 0], Bb: [10, 2, 5], D: [2, 6, 9], Em: [4, 7, 11], Bm: [11, 2, 6], Gm: [7, 10, 2], Eb: [3, 7, 10], Cm: [0, 3, 7] });
 
 /** A bar's chords, written as their names. */
 export const chords = (text) => text.split(/\s+/).filter(Boolean);

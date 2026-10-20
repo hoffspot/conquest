@@ -82,4 +82,11 @@ test("describes every sound, and plays each, its recordings and its made variant
     })).toEqual({ loop: true, rate: pit, seconds: 8 });
     await page.locator('.card[data-name="hellDrone"] button.primary').click();
     expect(await page.evaluate(() => window.soundStudio.sound.beds.get("hellDrone").gain)).toBe(0);
+
+    // A people's music (the elves'), its recordings downloaded once it's wanted, faded over to
+    // once they're in, and played
+    await page.locator('.card[data-name="music:elves"] button.primary').click();
+    await expect.poll(() => page.evaluate(() => window.soundStudio.sound.music?.name), { timeout: 30000 }).toBe("elves");
+    await expect.poll(() => page.evaluate(() => window.soundStudio.sound.music.index), { timeout: 15000 }).toBeGreaterThan(0);
+    expect(await page.evaluate(() => ["flute 72", "violins 69"].every((id) => window.soundStudio.sound.instruments.has(id)))).toBe(true);
 });

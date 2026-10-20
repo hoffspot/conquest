@@ -12,7 +12,7 @@
 import { INDOORS } from "../audio/ambience.js";
 import { CATALOG, GROUPS, LOOPS, MUSIC } from "../audio/catalog.js";
 import { ON_DEMAND, RECORDED, SOURCES } from "../audio/recorded.js";
-import { GAITS, PLACES, Sound } from "../audio/sound.js";
+import { GAITS, LANDS, PLACES, Sound } from "../audio/sound.js";
 import { BEDS, SOUNDS } from "../audio/synth.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -218,20 +218,35 @@ function windCard() {
     return card({ name: "wind", label, about, plays, made: 1, controls: [row("Hear", [toggle]), Object.assign(document.createElement("p"), { className: "source", textContent: "Made in code: client/js/audio/synth.js (wind)." })] });
 }
 
-// The music: each place's, and a fight's, played until stopped (none where none's heard: a hell's
-// realms)
-function musicCard(place) {
-    const { label, about, plays } = MUSIC[place];
-    const fight = place === "battle";
+// Where each score's written, and what it's played on
+const VCSL = "the Versilian Community Sample Library";
+const VSCO = "VS Chamber Orchestra: Community Edition";
+const WRITTEN = {
+    town: [`${VCSL} and FreePats`, "score.js and tavern.js"],
+    battle: [`${VCSL} and ${VSCO}`, "battle.js"],
+    elves: [`${VCSL} and ${VSCO}`, "elves.js"],
+    darkElves: [`${VCSL} and ${VSCO}`, "dark-elves.js"],
+    catFolk: [VCSL, "cat-folk.js"],
+    lizardFolk: [`${VCSL} and ${VSCO}`, "lizard-folk.js"],
+    orcs: [`${VCSL} and ${VSCO}`, "orcs.js"],
+};
 
-    if (!fight && !PLACES[place].level) {
-        return card({ name: `music:${place}`, label, about, plays, controls: [Object.assign(document.createElement("p"), { className: "source", textContent: "No music here." })] });
+// The music: each place's (in the humans' lands), a fight's, and each people's in their lands,
+// played until stopped (none where none's heard: a hell's realms)
+function musicCard(name) {
+    const { label, about, plays } = MUSIC[name];
+    const fight = name === "battle";
+    const people = Object.keys(LANDS).find((each) => LANDS[each] === name && !PLACES[name]);
+
+    if (PLACES[name] && !PLACES[name].level) {
+        return card({ name: `music:${name}`, label, about, plays, controls: [Object.assign(document.createElement("p"), { className: "source", textContent: "No music here." })] });
     }
     const start = button("▶ Play", () => {
         sound.setBattle(fight);
 
         if (!fight) {
-            sound.setPlace(place);
+            sound.setPlace(PLACES[name] ? name : "town");
+            sound.setLand(people ?? "human");
         }
 
         if (Number($("#music").value) === 0) {
@@ -244,9 +259,10 @@ function musicCard(place) {
         $("#music").value = 0;
         sound.setVolume("music", 0);
     });
-    const source = Object.assign(document.createElement("p"), { className: "source", textContent: fight ? "Recordings of real instruments: the Versilian Community Sample Library and VS Chamber Orchestra: Community Edition (CC0). Score: client/js/audio/battle.js." : "Recordings of real instruments: the Versilian Community Sample Library and FreePats (CC0). Score: client/js/audio/score.js and tavern.js." });
+    const [library, file] = WRITTEN[fight || people ? name : "town"];
+    const source = Object.assign(document.createElement("p"), { className: "source", textContent: `Recordings of real instruments: ${library} (CC0). Score: client/js/audio/${file}.` });
 
-    return card({ name: `music:${place}`, label, about, plays, controls: [row("Hear", [start, stop]), source] });
+    return card({ name: `music:${name}`, label, about, plays, controls: [row("Hear", [start, stop]), source] });
 }
 
 function section(id, title, cards) {

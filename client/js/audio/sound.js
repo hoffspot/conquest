@@ -15,21 +15,27 @@
 //    and a made bird sings; and leaves rustle in nearby trees. And in a hell, beds made in code
 //    (synth.js BEDS: its drone, the Halls of Bone's heartbeat), each made in a worker once it's
 //    wanted and looped as the wind is; any bed played lower and slower where a place says.
-//  - Music: the town's score (score.js), or, in the tavern, its jig (tavern.js), played on
-//    recordings of real instruments (instruments.js) as it goes, note by note, a little ahead of
-//    time, so it loops without a seam; with a hall's reverb. Going into the tavern, the town's
-//    music fades into the tavern's, which starts from its beginning; coming out, the town's
-//    comes back where it left off. Upstairs, the tavern's music is quieter and muffled, heard
-//    through the floor. In a fight (setBattle), a fight's music (battle.js) fades in over
-//    whatever's heard, from its start, wherever the player is but a hell's realms, as loud
-//    and clear indoors as out; once it's done, what was heard there fades back, where it left
-//    off.
+//  - Music: the land's score (setLand: the people's whose lands they are, LANDS: the town's,
+//    score.js, in the humans' and to start with; elves.js and the others' in theirs, faded over
+//    as the player crosses into them, nothing changing in the wild between), or, in the tavern,
+//    its jig (tavern.js), played on recordings of real instruments (instruments.js) as it goes,
+//    note by note, a little ahead of time, so it loops without a seam; with a hall's reverb.
+//    Going into the tavern, the land's music fades into the tavern's, which starts from its
+//    beginning; coming out, the land's comes back where it left off. Upstairs, the tavern's music
+//    is quieter and muffled, heard through the floor. In a fight (setBattle), a fight's music
+//    (battle.js) fades in over whatever's heard, from its start, wherever the player is but a
+//    hell's realms, as loud and clear indoors as out; once it's done, what was heard there fades
+//    back, where it left off.
 //
 // synth.js's sounds are made in a worker (worker.js), so nothing waits for them; the music's
-// recordings (client/music, about a megabyte) and the recorded sounds (client/sounds) are
-// downloaded meanwhile, but for the spells' and the creatures', each downloaded only once it's
-// wanted (want: the spells the player can cast, as they come to know them; a creature's as it's
-// drawn; anyone else's the first time it's heard, what's made playing in its place till then).
+// recordings (client/music) and the recorded sounds (client/sounds) are downloaded meanwhile, but
+// for the spells' and the creatures', each downloaded only once it's wanted (want: the spells the
+// player can cast, as they come to know them; a creature's as it's drawn; anyone else's the first
+// time it's heard, what's made playing in its place till then). Of the music's, only the town's,
+// the tavern's and a fight's (FIRST: about a megabyte and a half) are downloaded at the start;
+// each other score's (about a megabyte and a half in all) the first time it's wanted, what's
+// heard playing on till they're in, then fading over; and once a score's not been heard for
+// MUSIC_KEPT, the recordings only it plays are let go of, their MP3s kept to decode again.
 // Decoded, a recording's big (the browser's own 32-bit samples, 25 to 30 times its MP3: a bed's 5
 // to 7 MB), so no more than DECODED_BUDGET of the recorded sounds is kept decoded: past it, those
 // played least lately are let go of (never one sounding), their MP3s kept, each decoded again the
@@ -46,55 +52,62 @@
 // where it was.
 
 import { SURFACES } from "./footing.js";
-import { baseFor, INSTRUMENTS, sampleFiles } from "./instruments.js";
+import { baseFor, INSTRUMENTS, instrumentsOf, sampleFiles } from "./instruments.js";
 import { SPELLS } from "../core/spells.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL } from "./recorded.js";
 import { SCORES } from "./scores.js";
 import { BEDS, LEVEL, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
 
-/** The music: the town's, the tavern's and a fight's (scores.js). */
+/** The music: the town's, the tavern's, a fight's and each people's (scores.js). */
 export { SCORES };
 
 /**
- * Where the player can be (the game's maps), and the music heard there: which score, how loud
- * (a share of the music bus), and how muffled (heard through a floor: a low-pass filter's
- * frequency, Hz, or null); and whether a fight's music is heard there (`fights`, unless false).
+ * Each people's music, heard out in their own lands (their territory as it was first claimed:
+ * overworld.homeAt) and through the walls of their buildings: the humans' the town's.
+ */
+export const LANDS = Object.freeze({ human: "town", elf: "elves", darkElf: "darkElves", cat: "catFolk", lizard: "lizardFolk", orc: "orcs" });
+
+/**
+ * Where the player can be (the game's maps), and the music heard there: which score (`land`:
+ * the land's, LANDS), how loud (a share of the music bus), and how muffled (heard through a
+ * floor: a low-pass filter's frequency, Hz, or null); and whether a fight's music is heard there
+ * (`fights`, unless false).
  */
 export const PLACES = Object.freeze({
-    town: { score: "town", level: 1, muffle: null },
+    town: { score: "land", level: 1, muffle: null },
     taproom: { score: "tavern", level: 1, muffle: null },
     upstairs: { score: "tavern", level: 0.4, muffle: 650 },
-    // (In a smithy, the town's music as if through its walls, under the forge's roar)
-    smithy: { score: "town", level: 0.45, muffle: 900 },
-    // (In a temple, the town's music hushed, far off through thick walls)
-    temple: { score: "town", level: 0.2, muffle: 450 },
+    // (In a smithy, the land's music as if through its walls, under the forge's roar)
+    smithy: { score: "land", level: 0.45, muffle: 900 },
+    // (In a temple, the land's music hushed, far off through thick walls)
+    temple: { score: "land", level: 0.2, muffle: 450 },
     // (In an adventurers' guild, the tavern's jig: it's as lively)
     guild: { score: "tavern", level: 0.7, muffle: null },
-    // (In a town hall, the town's music through its windows; in a keep, far off through stone)
-    hall: { score: "town", level: 0.35, muffle: 800 },
-    // (In a shop, the specialists' and the masters', the town's music through its windows, a
+    // (In a town hall, the land's music through its windows; in a keep, far off through stone)
+    hall: { score: "land", level: 0.35, muffle: 800 },
+    // (In a shop, the specialists' and the masters', the land's music through its windows, a
     // little nearer than a hall's)
-    shop: { score: "town", level: 0.4, muffle: 850 },
-    keep: { score: "town", level: 0.25, muffle: 500 },
+    shop: { score: "land", level: 0.4, muffle: 850 },
+    keep: { score: "land", level: 0.25, muffle: 500 },
     // (In a castle keep's undercroft, under its great hall, further off yet)
-    undercroft: { score: "town", level: 0.15, muffle: 350 },
+    undercroft: { score: "land", level: 0.15, muffle: 350 },
     // (In a cave, or the dragon's lair, the world outside barely heard; in a broken watchtower,
     // through its stones)
-    cave: { score: "town", level: 0.12, muffle: 300 },
-    lair: { score: "town", level: 0.1, muffle: 250 },
+    cave: { score: "land", level: 0.12, muffle: 300 },
+    lair: { score: "land", level: 0.1, muffle: 250 },
     // (In an ants' nest, as deep in the earth as a lair)
-    nest: { score: "town", level: 0.1, muffle: 250 },
+    nest: { score: "land", level: 0.1, muffle: 250 },
     // (In a crypt, the world above barely heard through the hall's floor)
-    crypt: { score: "town", level: 0.1, muffle: 280 },
+    crypt: { score: "land", level: 0.1, muffle: 280 },
     // (In a ruined keep, open to the sky, the world outside through its broken walls)
-    ruin: { score: "town", level: 0.5, muffle: 1200 },
-    tower: { score: "town", level: 0.5, muffle: 1100 },
+    ruin: { score: "land", level: 0.5, muffle: 1200 },
+    tower: { score: "land", level: 0.5, muffle: 1100 },
     // (In a hell's realms, none of the world's music: another world's, its drone in its place
     // (ambience.js INDOORS))
-    hellBreach: { score: "town", level: 0, muffle: 250, fights: false },
-    hellBone: { score: "town", level: 0, muffle: 250, fights: false },
-    hellFire: { score: "town", level: 0, muffle: 250, fights: false },
-    hellPit: { score: "town", level: 0, muffle: 250, fights: false },
+    hellBreach: { score: "land", level: 0, muffle: 250, fights: false },
+    hellBone: { score: "land", level: 0, muffle: 250, fights: false },
+    hellFire: { score: "land", level: 0, muffle: 250, fights: false },
+    hellPit: { score: "land", level: 0, muffle: 250, fights: false },
 });
 
 /** What's heard in a fight, wherever it is (but where a place says `fights: false`: a hell's realms). */
@@ -125,8 +138,12 @@ const VOICES = 24;
 // started again; if it's stuck again that soon after, it's made anew
 const STALL = 1.5;
 
-// The music's recordings: how many there are, and how many are downloaded at once
-const RECORDINGS = sampleFiles().length;
+// The scores whose recordings are downloaded at the start: the town's (where the game starts,
+// and the humans' lands'), the tavern's and a fight's (heard any moment); the rest's the first
+// time each is wanted. Those only a score plays are let go of once it's not been heard this long
+// (seconds), its MP3s kept to decode again
+export const FIRST = Object.freeze(["town", "tavern", "battle"]);
+const MUSIC_KEPT = 60;
 
 /**
  * The sounds recorded rather than made (recorded.js: client/sounds), each variant's id ("name
@@ -202,9 +219,11 @@ const THROUGH_FLOOR = 0.8;
 const CLEAR = 20000;
 
 // A fight's music fades in over this long (seconds), and what was heard back over this long once
-// it's done (the game says it's done a while after the fight is: game.js FIGHT_LINGERS)
+// it's done (the game says it's done a while after the fight is: game.js FIGHT_LINGERS); and
+// crossing into a people's lands, their music fades over this long
 export const BATTLE_IN = 1.2;
 export const BATTLE_OUT = 1.5;
+export const LAND_FADE = 4;
 
 // The scores played from their start each time they're heard (the rest carry on where they left off)
 const FROM_THE_START = new Set(["tavern", "battle"]);
@@ -703,8 +722,20 @@ export class Sound {
         /** Sounds' samples as they're made (name → [variant]), and the music's recordings as they're downloaded ("instrument key" → MP3). */
         this.samples = new Map();
         this.recordings = new Map();
-        this.unplayable = 0;
         this.fetch = fetch;
+
+        /**
+         * The music's recordings asked for ("instrument key"), those that couldn't be had
+         * (offline, say: the music plays without them), and their MP3s, kept once they're decoded
+         * (to decode again once they're let go of: MUSIC_KEPT); each score's recordings being
+         * downloaded since it was first wanted (name → promise); and when each score was last
+         * heard (name → ms: now()).
+         */
+        this.asked = new Set();
+        this.lost = new Set();
+        this.musicMp3s = new Map();
+        this.scoresWanted = new Map();
+        this.scoreHeard = new Map();
 
         /** The browser's copies: sounds' (name → [variant]) and instruments' ("instrument key"). */
         this.buffers = new Map();
@@ -775,13 +806,17 @@ export class Sound {
         this.ready = null;
 
         /**
-         * Where the player is (a PLACES key), whether they're in a fight, the music heard (`musicHeard`:
-         * PLACES' or FIGHTING), and each score's playing: { score, start, index, loop, channels,
-         * output, filter }.
+         * Where the player is (a PLACES key), the land's score (LANDS), whether they're in a
+         * fight, the music heard (`musicHeard`: PLACES', its score the land's, or FIGHTING), how
+         * long the fade to what's wanted is to be once its recordings are in (`waiting`, seconds,
+         * or null), and each score's playing: { name, score, start, index, loop, channels, output,
+         * filter }.
          */
         this.place = "town";
+        this.land = "town";
         this.battle = false;
-        this.musicHeard = PLACES.town;
+        this.musicHeard = { ...PLACES.town, score: "town" };
+        this.waiting = null;
         this.tracks = {};
         this.timer = null;
     }
@@ -796,7 +831,10 @@ export class Sound {
      * Resolves when the sounds are made (`downloading` when the recordings are downloaded).
      */
     prepare() {
-        this.downloading ??= this.#download();
+        const first = this.#musicFiles(FIRST);
+
+        this.downloading ??= this.#download([...first, ...recordedFiles()]);
+        this.#wantScore(this.#wanted().score);
         this.ready ??= new Promise((resolve) => {
             let worker = null;
             const here = async () => {
@@ -1113,6 +1151,23 @@ export class Sound {
     }
 
     /**
+     * Say whose lands the player's in (a people's id: overworld.homeAt), for the music heard out
+     * in them and through their buildings' walls: their own (LANDS), faded over (LAND_FADE) as
+     * they cross into them, where it left off. In the wild between (null), and once they're
+     * indoors, it stays as it was.
+     */
+    setLand(people) {
+        const score = LANDS[people];
+
+        if (!score || score === this.land) {
+            return;
+        }
+
+        this.land = score;
+        this.#follow(LAND_FADE);
+    }
+
+    /**
      * Say whether the player's in a fight (the game says it's done a while after the last blow):
      * a fight's music fades in over whatever's heard, from its start (BATTLE_IN), and once
      * it's done, what's heard where they are fades back where it left off (BATTLE_OUT).
@@ -1127,21 +1182,51 @@ export class Sound {
     }
 
     // The music to be heard now: a fight's, in one (where a fight's music is heard), else where
-    // the player is
+    // the player is (the land's, where it's heard)
     #wanted() {
         const here = PLACES[this.place];
 
-        return this.battle && here.fights !== false ? FIGHTING : here;
+        if (this.battle && here.fights !== false) {
+            return FIGHTING;
+        }
+
+        return here.score === "land" ? { ...here, score: this.land } : here;
     }
 
     // Fade to the music to be heard now from what was: from one score to another over `seconds`
     // (the new one from its start, or where it left off), or the same one to its level and how
-    // muffled it is there (THROUGH_FLOOR)
+    // muffled it is there (THROUGH_FLOOR). A score whose recordings aren't in yet is asked for,
+    // what's heard playing on till they are (`waiting`: scheduleMusic fades over then)
     #follow(seconds) {
         const was = this.musicHeard;
         const now = this.#wanted();
 
+        this.#wantScore(now.score);
+
+        if (this.context && now.score !== was.score && this.tracks[was.score]?.start !== null && !this.#ready(now.score)) {
+            const track = this.tracks[was.score];
+            const time = this.context.currentTime;
+
+            // (Meanwhile what's heard is as loud and as muffled as the new one will be here)
+            for (const [param, to] of [[track.output.gain, now.level], [track.filter?.frequency, now.muffle ?? CLEAR]]) {
+                if (param) {
+                    param.cancelScheduledValues(time);
+                    param.setValueAtTime(param.value, time);
+                    param.linearRampToValueAtTime(to, time + THROUGH_FLOOR);
+                }
+            }
+
+            this.waiting = seconds;
+
+            return;
+        }
+
+        this.waiting = null;
         this.musicHeard = now;
+
+        if (now.score !== was.score) {
+            this.scoreHeard.set(was.score, this.now());
+        }
 
         // (Not started yet: the music starts where the player is)
         if (!this.context) {
@@ -1619,7 +1704,7 @@ export class Sound {
         const seen = new Set();
         let bytes = 0;
 
-        for (const kept of [this.samples, this.recordings, this.mp3s, this.buffers, this.instruments, this.decoded]) {
+        for (const kept of [this.samples, this.recordings, this.mp3s, this.musicMp3s, this.buffers, this.instruments, this.decoded]) {
             for (const value of kept.values()) {
                 for (const each of [value].flat()) {
                     if (each && !seen.has(each)) {
@@ -1682,7 +1767,9 @@ export class Sound {
                 } catch {
                     // (Offline, say: the music just doesn't play, or plays without it; a recorded
                     // sound's made one plays instead)
-                    this.unplayable += RECORDED[id.split(" ")[0]] ? 0 : 1;
+                    if (!RECORDED[id.split(" ")[0]]) {
+                        this.lost.add(id);
+                    }
                 }
             }
         };
@@ -1728,7 +1815,82 @@ export class Sound {
                 },
             );
         } else {
-            this.context.decodeAudioData(recording).then((buffer) => this.instruments.set(id, buffer), () => this.unplayable++);
+            // (Its MP3 kept, to decode again once it's let go of: #restMusic)
+            this.musicMp3s.set(id, recording);
+            this.decoding.add(id);
+            this.context.decodeAudioData(recording.slice(0)).then(
+                (buffer) => {
+                    this.decoding.delete(id);
+                    this.instruments.set(id, buffer);
+                },
+                () => {
+                    this.decoding.delete(id);
+                    this.lost.add(id);
+                },
+            );
+        }
+    }
+
+    // The music's recordings for the scores `names` not asked for yet (nor had already), asked
+    // for now
+    #musicFiles(names) {
+        const had = (id) => this.asked.has(id) || this.recordings.has(id) || this.instruments.has(id) || this.musicMp3s.has(id);
+        const files = sampleFiles([...new Set(names.flatMap((name) => instrumentsOf(SCORES[name])))]).filter(([id]) => !had(id));
+
+        for (const [id] of files) {
+            this.asked.add(id);
+        }
+
+        return files;
+    }
+
+    // A score wanted: its recordings downloaded, if they aren't yet (a few at a time, not to hold
+    // up the rest), and any let go of decoded again from their MP3s
+    #wantScore(name) {
+        const files = this.#musicFiles([name]);
+
+        if (files.length && this.fetch && !this.scoresWanted.has(name)) {
+            this.scoresWanted.set(name, this.#download(files, WANTED_DOWNLOADS));
+        }
+
+        if (this.context && this.context.state !== "closed") {
+            for (const [id] of sampleFiles(instrumentsOf(SCORES[name]))) {
+                const mp3 = this.musicMp3s.get(id);
+
+                if (mp3 && !this.instruments.has(id) && !this.decoding.has(id)) {
+                    this.recordings.set(id, mp3);
+                    this.#decode(id, mp3);
+                }
+            }
+        }
+    }
+
+    // Whether a score can start: each recording it plays in (decoded), or known it can't be had,
+    // and one of them in at least
+    #ready(name) {
+        const ids = sampleFiles(instrumentsOf(SCORES[name])).map(([id]) => id);
+
+        return ids.some((id) => this.instruments.has(id)) && ids.every((id) => this.instruments.has(id) || this.lost.has(id));
+    }
+
+    // Let go of the decoded recordings no score heard lately plays (not one of FIRST's, nor
+    // what's heard or wanted, nor one heard in the last MUSIC_KEPT), their MP3s kept
+    #restMusic() {
+        const now = this.now();
+        const kept = new Set([...FIRST, this.musicHeard.score, this.#wanted().score]);
+
+        for (const [name, heard] of this.scoreHeard) {
+            if (now - heard < MUSIC_KEPT * 1000) {
+                kept.add(name);
+            }
+        }
+
+        const playing = new Set(sampleFiles([...new Set([...kept].flatMap((name) => instrumentsOf(SCORES[name])))]).map(([id]) => id));
+
+        for (const id of this.instruments.keys()) {
+            if (!playing.has(id) && this.musicMp3s.has(id)) {
+                this.instruments.delete(id);
+            }
         }
     }
 
@@ -2090,7 +2252,7 @@ export class Sound {
             }
 
             // (Where each score has got to is kept when the browser's sound is made anew)
-            this.tracks[name] = { start: null, index: 0, loop: 0, ...this.tracks[name], score, channels, output, filter };
+            this.tracks[name] = { start: null, index: 0, loop: 0, ...this.tracks[name], name, score, channels, output, filter };
         }
 
         this.musicHeard = here;
@@ -2102,12 +2264,24 @@ export class Sound {
      * seconds, round again from its start at its end (every SCHEDULE_MS, once started).
      */
     scheduleMusic() {
+        // (What's wanted, its recordings in now, faded over to; and now and then, those no score
+        // heard lately plays let go of)
+        if (this.waiting !== null && this.context && this.#ready(this.#wanted().score)) {
+            this.#follow(this.waiting);
+        }
+
+        if (this.context && this.context.currentTime - (this.lettingGo ?? -Infinity) > MUSIC_KEPT / 4) {
+            this.lettingGo = this.context.currentTime;
+            this.#restMusic();
+        }
+
         const music = this.music;
         const context = this.context;
         const score = music?.score;
 
-        // (Starting once every recording is ready, or known not to be, so none is missing from the start)
-        if (!this.playing || (music.start === null && (!this.instruments.size || this.instruments.size + this.unplayable < RECORDINGS))) {
+        // (Starting once every recording its score plays is ready, or known not to be, so none
+        // is missing from the start)
+        if (!this.playing || (music.start === null && !this.#ready(music.name))) {
             return;
         }
 
