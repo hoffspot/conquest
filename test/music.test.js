@@ -4,17 +4,23 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { describe, it } from "node:test";
-import { baseFor, INSTRUMENTS, instrumentsOf, keysOf, sampleFiles } from "../client/js/audio/instruments.js";
+import { baseFor, INSTRUMENTS, keysOf, sampleFiles, scoreFiles } from "../client/js/audio/instruments.js";
 import { SAMPLES } from "../client/js/audio/samples.js";
 import { BATTLE, BATTLE_BEATS_PER_BAR, BATTLE_TEMPO } from "../client/js/audio/battle.js";
 import { CAT_FOLK } from "../client/js/audio/cat-folk.js";
+import { CAVES } from "../client/js/audio/caves.js";
+import { CRYPTS } from "../client/js/audio/crypts.js";
 import { DARK_ELVES } from "../client/js/audio/dark-elves.js";
 import { ELVES } from "../client/js/audio/elves.js";
+import { HELL } from "../client/js/audio/hell.js";
+import { LAIR } from "../client/js/audio/lair.js";
 import { LIZARD_FOLK } from "../client/js/audio/lizard-folk.js";
+import { NEST } from "../client/js/audio/nest.js";
 import { ORCS } from "../client/js/audio/orcs.js";
+import { RUINS } from "../client/js/audio/ruins.js";
 import { BEATS_PER_BAR, midi, SCORE, TEMPO } from "../client/js/audio/score.js";
 import { SCORES } from "../client/js/audio/scores.js";
-import { FIRST, LANDS } from "../client/js/audio/sound.js";
+import { FIRST, LANDS, PLACES } from "../client/js/audio/sound.js";
 import { TAVERN, TAVERN_BEATS_PER_BAR, TAVERN_TEMPO } from "../client/js/audio/tavern.js";
 import { harmony } from "../client/js/audio/writing.js";
 import { decodeWav, regionsOf, vscoKey } from "../scripts/build-music.js";
@@ -327,6 +333,63 @@ describe("each people's music in their own lands (elves.js, dark-elves.js, cat-f
     });
 });
 
+describe("each kind of dungeon's music (caves.js, crypts.js, nest.js, lair.js, ruins.js, hell.js)", () => {
+    // Each one's score, where it's heard, and the pitch classes it keeps to
+    const DUNGEONS = {
+        caves: { score: CAVES, places: ["cave"], keeps: [9, 11, 0, 2, 4, 5, 7] },
+        crypts: { score: CRYPTS, places: ["crypt"], keeps: [2, 4, 5, 7, 9, 10, 0, 1] },
+        nest: { score: NEST, places: ["nest"], keeps: [4, 5, 7, 9, 11, 0, 2, 3, 6, 8, 10, 1] },
+        lair: { score: LAIR, places: ["lair"], keeps: [0, 2, 3, 5, 7, 8, 10, 11] },
+        ruins: { score: RUINS, places: ["ruin", "tower"], keeps: [2, 4, 5, 7, 9, 10, 0, 1] },
+        hell: { score: HELL, places: ["hellBreach", "hellBone", "hellFire", "hellPit"], keeps: [9, 11, 0, 2, 4, 5, 7, 8, 6, 3, 1] },
+    };
+
+    it("is each its own, heard where it is (not the land's), every note in time, near a recording (as low as it's played), and soft", () => {
+        for (const [name, { score, places }] of Object.entries(DUNGEONS)) {
+            assert.equal(SCORES[name], score, name);
+            assert.ok(places.every((place) => PLACES[place].score === name), name);
+            assert.ok(score.length > 60 && score.length < 170, `${name}: ${score.length} s`);
+
+            for (const shift of score.shifts ?? [0]) {
+                for (const note of score.notes) {
+                    const instrument = INSTRUMENTS[note.instrument];
+                    const pitch = instrument.kinds ? note.pitch : note.pitch + shift;
+
+                    assert.ok(note.time >= 0 && note.time < score.length && note.velocity > 0 && note.velocity <= 0.9, `${name}: ${note.instrument} at ${note.time}`);
+                    assert.ok(instrument.kinds ? instrument.kinds.includes(pitch) : Math.abs(baseFor(note.instrument, pitch) - pitch) <= (instrument.reach ?? 2), `${name} (${shift}): ${note.instrument} ${pitch}`);
+                }
+            }
+        }
+    });
+
+    it("keeps to its mode: a cave's A minor, a crypt's D minor, the nest's creeping half steps, the lair's C minor, a ruin's D minor (the town's verse, flattened), a hell's A minor and its half steps falling", () => {
+        for (const [name, { score, keeps }] of Object.entries(DUNGEONS)) {
+            const strays = score.notes.filter(({ instrument, pitch }) => !INSTRUMENTS[instrument].kinds && !keeps.includes(pitch % 12));
+
+            assert.deepEqual(strays, [], name);
+        }
+
+        // (A ruin's tune the town's verse, its B naturals flattened)
+        const tune = RUINS.notes.filter(({ instrument }) => instrument === "recorder").map(({ pitch }) => pitch);
+
+        assert.ok(tune.length > 40 && tune.every((pitch) => pitch % 12 !== 11));
+    });
+
+    it("sounds like its place: a cave dripping, the crypt's bells and organ, the nest's plucked cellos creeping, the lair's great heart, a hell's bass only ever falling, played lower in each realm down", () => {
+        const plays = (score) => new Set(score.notes.map(({ instrument }) => instrument));
+
+        assert.ok(["kalimba", "marimba", "celli"].every((instrument) => plays(CAVES).has(instrument)));
+        assert.ok(["bells", "pipeorgan", "organ", "flute"].every((instrument) => plays(CRYPTS).has(instrument)));
+        assert.ok(plays(NEST).has("pizzicato") && plays(NEST).has("slitdrum"));
+        assert.ok(LAIR.notes.filter(({ instrument }) => instrument === "bassdrum").length >= 2 * (LAIR.length / ((4 * 60) / LAIR.tempo)) - 1);
+
+        const falling = HELL.notes.filter(({ instrument }) => instrument === "celli").map(({ pitch }) => pitch);
+
+        assert.ok(falling.every((pitch, k) => k === 0 || pitch <= falling[k - 1] || pitch === midi("A3")), "the cellos' bass never rises but to begin again");
+        assert.deepEqual(HELL.shifts, [0, -2, -4, -7]);
+    });
+});
+
 describe("every score loops without a seam (scores.js)", () => {
     it("starts at once, plays up to its end, and never goes a bar without a new note", () => {
         for (const [name, score] of Object.entries(SCORES)) {
@@ -384,23 +447,25 @@ describe("the instruments (instruments.js, samples.js)", () => {
             bytes += data.length;
         }
 
-        // (Downloaded at the start, only the town's, the tavern's and a fight's: about 1.2 MB for
-        // the town's and the tavern's, and 300 KB more for a fight's; each other score's own the
-        // first time it's wanted, under 900 KB, the dark elves' and the lizard folk's held notes
-        // the most; about 3 MB in all)
-        const sizeOf = (instruments) => sampleFiles(instruments).reduce((all, [, url]) => all + statSync(url).size, 0);
-        const first = new Set(FIRST.flatMap((name) => instrumentsOf(SCORES[name])));
+        // (Downloaded at the start, only the recordings the town's, the tavern's and a fight's
+        // play: about 1.2 MB for the town's and the tavern's, and 300 KB more for a fight's; each
+        // other score's own the first time it's wanted, under 800 KB, a hell's and the lizard
+        // folk's the most; about 3.4 MB in all)
+        const sizeOf = (files) => files.reduce((all, [, url]) => all + statSync(url).size, 0);
+        const first = new Map(FIRST.flatMap((name) => scoreFiles(SCORES[name])));
 
         assert.deepEqual(FIRST, ["town", "tavern", "battle"]);
         assert.ok(sizeOf([...first]) < 1_600_000, `${sizeOf([...first])} bytes at the start`);
 
         for (const [name, score] of Object.entries(SCORES)) {
-            const own = instrumentsOf(score).filter((instrument) => !first.has(instrument));
+            const own = scoreFiles(score).filter(([id]) => !first.has(id));
 
-            assert.ok(sizeOf(own) < 900_000, `${name}'s own: ${sizeOf(own)} bytes`);
+            assert.ok(sizeOf(own) < 800_000, `${name}'s own: ${sizeOf(own)} bytes`);
         }
 
-        assert.ok(bytes < 3_300_000, `${bytes} bytes in all`);
+        // (Every recording some score plays)
+        assert.deepEqual(new Set(Object.values(SCORES).flatMap((score) => scoreFiles(score).map(([id]) => id))), new Set(files.map(([id]) => id)));
+        assert.ok(bytes < 3_700_000, `${bytes} bytes in all`);
     });
 });
 

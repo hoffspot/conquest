@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 import { ambienceOf, CALLS, doorOf, HELL, INDOORS, TOLLS, tolled } from "../client/js/audio/ambience.js";
 import { CATALOG, GROUPS, LOOPS, MUSIC } from "../client/js/audio/catalog.js";
 import { filter, pluck } from "../client/js/audio/dsp.js";
-import { instrumentsOf, sampleFiles } from "../client/js/audio/instruments.js";
+import { sampleFiles, scoreFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { useSound, wearSound } from "../client/js/audio/handling.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
@@ -294,7 +294,7 @@ const noting = (fetched) => (url) => {
 };
 
 // The music's recordings of the scores `names` (sound.js FIRST's: those downloaded at the start)
-const musicFiles = (names = FIRST) => sampleFiles([...new Set(names.flatMap((name) => instrumentsOf(SCORES[name])))]);
+const musicFiles = (names = FIRST) => [...new Map(names.flatMap((name) => scoreFiles(SCORES[name]))).entries()];
 
 // The sounds, made once (without a worker, as in Node), and the music's recordings, downloaded
 // once, handed to each Sound tested
@@ -1106,6 +1106,48 @@ describe("playing sounds (sound.js)", () => {
         sound.close();
     });
 
+    it("plays each kind of dungeon its own music, from its start; a hell's lower in each realm down, as its drone is, never a fight's there", async () => {
+        const { sound, played } = await started();
+        const context = sound.context;
+        const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+        const into = async (place) => {
+            sound.setPlace(place);
+            await sound.scoresWanted.get(PLACES[place].score);
+            await tick();
+            context.currentTime += 0.2;
+            sound.scheduleMusic();
+        };
+
+        for (const [place, score] of [["cave", "caves"], ["crypt", "crypts"], ["nest", "nest"], ["lair", "lair"], ["ruin", "ruins"], ["tower", "ruins"]]) {
+            await into(place);
+            assert.equal(sound.music, sound.tracks[score], place);
+            assert.equal(sound.tracks[score].output.gain.value, PLACES[place].level);
+        }
+
+        // In a hell's realms, its music, each realm lower: the notes at the Pit's a fifth under
+        // the Breach's
+        await into("hellBreach");
+        assert.equal(sound.music, sound.tracks.hell);
+
+        const rates = async (place) => {
+            sound.setPlace(place);
+            played.length = 0;
+            context.currentTime += 5;
+            sound.scheduleMusic();
+
+            return played.filter(({ source }) => Object.values(sound.tracks.hell.channels).includes(source.outputs[0]?.outputs[0])).map(({ source }) => source);
+        };
+
+        assert.deepEqual([sound.music.shift, (await rates("hellBone")).length > 0, sound.music.shift], [0, true, -2]);
+        await rates("hellPit");
+        assert.equal(sound.music.shift, -7);
+
+        // (And no fight's music there)
+        sound.setBattle(true);
+        assert.equal(sound.music, sound.tracks.hell);
+        sound.close();
+    });
+
     it("starts the music where the player is, if they're in the tavern when the sound starts", async () => {
         await making;
 
@@ -1446,14 +1488,14 @@ describe("the ambience (ambience.js)", () => {
         }
     });
 
-    it("hears a hell's realms each its own way: its drone lower the deeper the realm, the Halls' heart, lava hissing, the dead far off, the Hellforge's hammer; none of the world's music", () => {
+    it("hears a hell's realms each its own way: its drone lower the deeper the realm, the Halls' heart, lava hissing, the dead far off, the Hellforge's hammer; a hell's own music, as much lower as its drone, and never a fight's", () => {
         const realms = THEMES.hell.realms.map(({ sound }) => sound);
         const hear = (place, facts = {}) => ambienceOf({ place, time: DAY.day, ...facts });
 
         assert.deepEqual(realms, ["hellBreach", "hellBone", "hellFire", "hellPit"]);
 
         for (const place of realms) {
-            assert.equal(PLACES[place].level, 0, `${place}: no music`);
+            assert.deepEqual([PLACES[place].score, PLACES[place].fights], ["hell", false], `${place}'s music`);
             assert.ok(hear(place).beds.hellDrone > 0, `${place}'s drone`);
             assert.equal(doorOf(place), null, "through a portal");
         }
@@ -1464,6 +1506,8 @@ describe("the ambience (ambience.js)", () => {
         assert.ok(drones.every((rate, k) => k === 0 || rate < drones[k - 1]), drones.join());
         assert.equal(drones[0], 1);
         assert.ok(Math.abs(drones[3] - 2 ** (-7 / 12)) < 1e-3);
+        assert.ok(realms.every((place, k) => Math.abs(2 ** (PLACES[place].shift / 12) - drones[k]) < 1e-3), "the music in tune with the drone");
+        assert.deepEqual(SCORES.hell.shifts, realms.map((place) => PLACES[place].shift));
 
         for (const place of realms) {
             const { beds, rates } = hear(place);

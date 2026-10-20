@@ -1031,8 +1031,9 @@ what it doesn't cover.
 - Music's instruments: recordings from the Versilian Community Sample Library by Versilian
   Studios (<https://github.com/sgossner/VCSL>), CC0, trimmed and made into MP3s by
   `scripts/build-music.js` (with its SFZ files from <https://github.com/smpldsnds/sgossner-vcsl>);
-  the French horns, the cellos, the violins, the tenor trombones and the flute from their VS
-  Chamber Orchestra: Community Edition (<https://github.com/sgossner/VSCO-2-CE>), CC0.
+  the French horns, the cellos (bowed and plucked), the violins, the tenor trombones and the
+  flute from their VS Chamber Orchestra: Community Edition
+  (<https://github.com/sgossner/VSCO-2-CE>), CC0.
   The tavern's lute is FreePats' Spanish classical guitar
   (<https://github.com/freepats/spanish-classical-guitar>), CC0.
 - Footsteps: recordings by Nox_Sound on Freesound (<https://freesound.org/people/Nox_Sound/>),

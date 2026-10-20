@@ -52,7 +52,7 @@
 // where it was.
 
 import { SURFACES } from "./footing.js";
-import { baseFor, INSTRUMENTS, instrumentsOf, sampleFiles } from "./instruments.js";
+import { baseFor, INSTRUMENTS, sampleFiles, scoreFiles } from "./instruments.js";
 import { SPELLS } from "../core/spells.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL } from "./recorded.js";
 import { SCORES } from "./scores.js";
@@ -69,9 +69,10 @@ export const LANDS = Object.freeze({ human: "town", elf: "elves", darkElf: "dark
 
 /**
  * Where the player can be (the game's maps), and the music heard there: which score (`land`:
- * the land's, LANDS), how loud (a share of the music bus), and how muffled (heard through a
- * floor: a low-pass filter's frequency, Hz, or null); and whether a fight's music is heard there
- * (`fights`, unless false).
+ * the land's, LANDS), how loud (a share of the music bus), how muffled (heard through a floor: a
+ * low-pass filter's frequency, Hz, or null), and how much lower it's played (`shift`, semitones:
+ * one of its score's `shifts`); and whether a fight's music is heard there (`fights`, unless
+ * false).
  */
 export const PLACES = Object.freeze({
     town: { score: "land", level: 1, muffle: null },
@@ -91,23 +92,21 @@ export const PLACES = Object.freeze({
     keep: { score: "land", level: 0.25, muffle: 500 },
     // (In a castle keep's undercroft, under its great hall, further off yet)
     undercroft: { score: "land", level: 0.15, muffle: 350 },
-    // (In a cave, or the dragon's lair, the world outside barely heard; in a broken watchtower,
-    // through its stones)
-    cave: { score: "land", level: 0.12, muffle: 300 },
-    lair: { score: "land", level: 0.1, muffle: 250 },
-    // (In an ants' nest, as deep in the earth as a lair)
-    nest: { score: "land", level: 0.1, muffle: 250 },
-    // (In a crypt, the world above barely heard through the hall's floor)
-    crypt: { score: "land", level: 0.1, muffle: 280 },
-    // (In a ruined keep, open to the sky, the world outside through its broken walls)
-    ruin: { score: "land", level: 0.5, muffle: 1200 },
-    tower: { score: "land", level: 0.5, muffle: 1100 },
-    // (In a hell's realms, none of the world's music: another world's, its drone in its place
-    // (ambience.js INDOORS))
-    hellBreach: { score: "land", level: 0, muffle: 250, fights: false },
-    hellBone: { score: "land", level: 0, muffle: 250, fights: false },
-    hellFire: { score: "land", level: 0, muffle: 250, fights: false },
-    hellPit: { score: "land", level: 0, muffle: 250, fights: false },
+    // (Down in a dungeon, its own: a cave's (bandits' hideouts too), a great lair's, an ants'
+    // nest's, a crypt's (the ancient tombs too), a ruin's (a broken watchtower's too), a little
+    // under the land's, the dungeon's own sounds round it)
+    cave: { score: "caves", level: 0.8, muffle: null },
+    lair: { score: "lair", level: 0.8, muffle: null },
+    nest: { score: "nest", level: 0.8, muffle: null },
+    crypt: { score: "crypts", level: 0.8, muffle: null },
+    ruin: { score: "ruins", level: 0.8, muffle: null },
+    tower: { score: "ruins", level: 0.8, muffle: null },
+    // (In a hell's realms, a hell's, over its drone (ambience.js INDOORS), played as much lower
+    // as the drone is in each (`shift`, semitones: hell.js), and never a fight's)
+    hellBreach: { score: "hell", level: 0.8, muffle: null, fights: false, shift: 0 },
+    hellBone: { score: "hell", level: 0.8, muffle: null, fights: false, shift: -2 },
+    hellFire: { score: "hell", level: 0.8, muffle: null, fights: false, shift: -4 },
+    hellPit: { score: "hell", level: 0.8, muffle: null, fights: false, shift: -7 },
 });
 
 /** What's heard in a fight, wherever it is (but where a place says `fights: false`: a hell's realms). */
@@ -1243,6 +1242,9 @@ export class Sound {
         };
         const track = this.tracks[now.score];
 
+        // (As much lower as it's played here, from its next note)
+        track.shift = now.shift ?? 0;
+
         if (was.score !== now.score) {
             ramp(this.tracks[was.score].output.gain, 0, seconds);
 
@@ -1835,7 +1837,7 @@ export class Sound {
     // for now
     #musicFiles(names) {
         const had = (id) => this.asked.has(id) || this.recordings.has(id) || this.instruments.has(id) || this.musicMp3s.has(id);
-        const files = sampleFiles([...new Set(names.flatMap((name) => instrumentsOf(SCORES[name])))]).filter(([id]) => !had(id));
+        const files = [...new Map(names.flatMap((name) => scoreFiles(SCORES[name]))).entries()].filter(([id]) => !had(id));
 
         for (const [id] of files) {
             this.asked.add(id);
@@ -1854,7 +1856,7 @@ export class Sound {
         }
 
         if (this.context && this.context.state !== "closed") {
-            for (const [id] of sampleFiles(instrumentsOf(SCORES[name]))) {
+            for (const [id] of scoreFiles(SCORES[name])) {
                 const mp3 = this.musicMp3s.get(id);
 
                 if (mp3 && !this.instruments.has(id) && !this.decoding.has(id)) {
@@ -1868,7 +1870,7 @@ export class Sound {
     // Whether a score can start: each recording it plays in (decoded), or known it can't be had,
     // and one of them in at least
     #ready(name) {
-        const ids = sampleFiles(instrumentsOf(SCORES[name])).map(([id]) => id);
+        const ids = scoreFiles(SCORES[name]).map(([id]) => id);
 
         return ids.some((id) => this.instruments.has(id)) && ids.every((id) => this.instruments.has(id) || this.lost.has(id));
     }
@@ -1885,7 +1887,7 @@ export class Sound {
             }
         }
 
-        const playing = new Set(sampleFiles([...new Set([...kept].flatMap((name) => instrumentsOf(SCORES[name])))]).map(([id]) => id));
+        const playing = new Set([...kept].flatMap((name) => scoreFiles(SCORES[name]).map(([id]) => id)));
 
         for (const id of this.instruments.keys()) {
             if (!playing.has(id) && this.musicMp3s.has(id)) {
@@ -2257,6 +2259,7 @@ export class Sound {
 
         this.musicHeard = here;
         this.music = this.tracks[here.score];
+        this.music.shift = here.shift ?? 0;
     }
 
     /**
@@ -2318,7 +2321,8 @@ export class Sound {
 
     #note(note, at, track) {
         const instrument = INSTRUMENTS[note.instrument];
-        const key = baseFor(note.instrument, note.pitch);
+        const pitch = instrument.kinds ? note.pitch : note.pitch + (track.shift ?? 0);
+        const key = baseFor(note.instrument, pitch);
         const buffer = this.instruments.get(`${note.instrument} ${key}`);
 
         if (!buffer) {
@@ -2331,7 +2335,7 @@ export class Sound {
         const end = at + note.duration;
 
         source.buffer = buffer;
-        source.playbackRate.value = instrument.kinds ? 1 : 2 ** ((note.pitch - key) / 12);
+        source.playbackRate.value = instrument.kinds ? 1 : 2 ** ((pitch - key) / 12);
         level.gain.setValueAtTime(note.velocity, at);
         source.start(at);
 

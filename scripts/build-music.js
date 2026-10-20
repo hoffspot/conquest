@@ -97,6 +97,10 @@ const SOURCES = {
     shaker: { sfz: "Idiophones/Struck Idiophones/Shaker, Small", seconds: 0.5, kinds: { down: /Mid_ShakerDouble_Down_rr1/, up: /Mid_ShakerDouble_Up_rr1/ } },
     slitdrum: { sfz: "Idiophones/Struck Idiophones/Slit Drum", seconds: 1, kinds: { low: /LogDrumLo_MedM_v2_rr1/, high: /LogDrumHi_MedM_v2_rr1/ } },
     toms: { sfz: "Membranophones/Struck Membranophones/Legacy Toms", seconds: 0.8, kinds: { low: /tenor_mf_rr1/, high: /tenorH_mf_rr1/ } },
+    // (The dungeons': caves.js, crypts.js, nest.js, lair.js, ruins.js, hell.js. The gong struck
+    // softly, ringing on)
+    pizzicato: { vsco: "Strings/Cello Section/pizzT", notes: ["C1", "E1", "G1", "B1", "D2", "F2", "A2", "C3", "E3", "G3", "B3", "D4", "F4"], file: (note) => `pizzT_${note}_v1_RR1.wav`, seconds: 0.9 },
+    gong: { sfz: "Idiophones/Struck Idiophones/Gong 1", seconds: 3.8, kinds: { hit: /gong_p\.wav/ } },
 };
 
 /** A VSCO 2 CE file's note as MIDI: its names are an octave under the usual ("C3" is middle C, 60). */
@@ -106,8 +110,8 @@ export function vscoKey(note) {
     return 12 * (Number(octave) + 2) + { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[letter] + (sharp ? 1 : 0);
 }
 
-// Every note the music plays
-const NOTES = Object.values(SCORES).flatMap(({ notes }) => notes);
+// Every note the music plays (a score played lower in places, a hell's, as low as it's played)
+const NOTES = Object.values(SCORES).flatMap(({ notes, shifts = [0] }) => shifts.flatMap((shift) => notes.map((note) => ({ ...note, pitch: typeof note.pitch === "number" ? note.pitch + shift : note.pitch }))));
 
 // A file from the library, downloaded once
 export async function fetchFromLibrary(path, library = LIBRARY, cache = CACHE) {

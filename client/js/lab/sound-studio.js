@@ -229,18 +229,20 @@ const WRITTEN = {
     catFolk: [VCSL, "cat-folk.js"],
     lizardFolk: [`${VCSL} and ${VSCO}`, "lizard-folk.js"],
     orcs: [`${VCSL} and ${VSCO}`, "orcs.js"],
+    caves: [`${VCSL} and ${VSCO}`, "caves.js"],
+    crypts: [`${VCSL} and ${VSCO}`, "crypts.js"],
+    nest: [`${VCSL} and ${VSCO}`, "nest.js"],
+    lair: [`${VCSL} and ${VSCO}`, "lair.js"],
+    ruins: [`${VCSL} and ${VSCO}`, "ruins.js"],
+    hell: [`${VCSL} and ${VSCO}`, "hell.js"],
 };
 
-// The music: each place's (in the humans' lands), a fight's, and each people's in their lands,
-// played until stopped (none where none's heard: a hell's realms)
+// The music: each place's (the land's in the humans' lands, or its own), a fight's, and each
+// people's in their lands, played until stopped
 function musicCard(name) {
     const { label, about, plays } = MUSIC[name];
     const fight = name === "battle";
     const people = Object.keys(LANDS).find((each) => LANDS[each] === name && !PLACES[name]);
-
-    if (PLACES[name] && !PLACES[name].level) {
-        return card({ name: `music:${name}`, label, about, plays, controls: [Object.assign(document.createElement("p"), { className: "source", textContent: "No music here." })] });
-    }
     const start = button("▶ Play", () => {
         sound.setBattle(fight);
 
@@ -259,7 +261,8 @@ function musicCard(name) {
         $("#music").value = 0;
         sound.setVolume("music", 0);
     });
-    const [library, file] = WRITTEN[fight || people ? name : "town"];
+    const score = fight || people ? name : PLACES[name].score === "land" ? "town" : PLACES[name].score;
+    const [library, file] = WRITTEN[score === "tavern" ? "town" : score];
     const source = Object.assign(document.createElement("p"), { className: "source", textContent: `Recordings of real instruments: ${library} (CC0). Score: client/js/audio/${file}.` });
 
     return card({ name: `music:${name}`, label, about, plays, controls: [row("Hear", [start, stop]), source] });
