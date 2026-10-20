@@ -398,8 +398,9 @@ export const LOOPS = Object.freeze({
     heartbeat: { group: "Indoors", label: "The heart beating", about: "Made in code, four beats of a heart, a beat every 1.2 seconds, heard as if through flesh: a deep lub and a softer, higher dub, thuds falling in pitch with a soft, wet thump of low noise, each beat a little different.", plays: "All through a hell's Halls of Bone, faintly, louder nearer the heart they beat to (in their last room)." },
 });
 
-/** The music, by where it's heard (each of sound.js's PLACES). */
+/** The music, by where it's heard (each of sound.js's PLACES), and a fight's (`battle`). */
 export const MUSIC = Object.freeze({
+    battle: { label: "A fight", about: "Martial and driving, about a minute and a half in D minor, 4/4 at 132: cellos galloping alone, then French horns' theme over them, the theme up high on recorder and ocarina, a second tune towards F major, the drums alone under the horns' calls, and everyone; on the town's band with horns, cellos, timpani, a bass drum and a rope-tensioned field drum, all played softly.", plays: "While the player's in a fight, wherever they are but a hell's realms: something hostile after them or striking them, or them striking at it. It fades in over a second, from its start (the cellos); about four seconds after the fight's last moment, what was heard fades back where it left off." },
     town: { label: "The town's score", about: "A Bard's Tale-style score in D Dorian, on recordings of real old instruments (recorder, ocarina, folk harp, strumstick, harpsichord, organ, chimes, frame drum).", plays: "Out in the world and the towns." },
     taproom: { label: "The tavern's jig", about: "A lively jig led by a lute (a classical guitar's nylon strings), with recorder and drum.", plays: "In a tavern's taproom." },
     upstairs: { label: "Upstairs in the tavern", about: "The tavern's jig, quieter and muffled, heard through the floor.", plays: "Upstairs in a tavern." },

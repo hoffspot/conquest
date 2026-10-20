@@ -1,8 +1,9 @@
 // Made by scripts/build-music.js (npm run build:music): don't edit it by hand.
 //
 // The music's samples, in client/music: recordings of real instruments from the Versilian
-// Community Sample Library by Versilian Studios (CC0), https://github.com/sgossner/VCSL, and
-// FreePats' Spanish classical guitar (CC0), https://github.com/freepats/spanish-classical-guitar.
+// Community Sample Library by Versilian Studios (CC0), https://github.com/sgossner/VCSL, their VS
+// Chamber Orchestra: Community Edition (CC0), https://github.com/sgossner/VSCO-2-CE, and FreePats'
+// Spanish classical guitar (CC0), https://github.com/freepats/spanish-classical-guitar.
 // Each pitched instrument has recordings at a few notes (`key`, MIDI); drums one for each kind
 // of hit.
 
@@ -14,12 +15,14 @@ export const SAMPLES = Object.freeze({
         { key: 74, file: "recorder-74.7fc59049.mp3" },
         { key: 78, file: "recorder-78.0d4f30a1.mp3" },
         { key: 82, file: "recorder-82.d5609a25.mp3" },
+        { key: 86, file: "recorder-86.7a81829e.mp3" },
     ],
     ocarina: [
         { key: 69, file: "ocarina-69.ab15da38.mp3" },
         { key: 73, file: "ocarina-73.e7cc0cc4.mp3" },
         { key: 78, file: "ocarina-78.bf8d3a30.mp3" },
         { key: 82, file: "ocarina-82.696acfa3.mp3" },
+        { key: 84, file: "ocarina-84.6f896455.mp3" },
     ],
     harp: [
         { key: 46, file: "harp-46.ff3ae0be.mp3" },
@@ -60,7 +63,7 @@ export const SAMPLES = Object.freeze({
         { key: 70, file: "organ-70.94917a72.mp3" },
     ],
     chimes: [
-        { key: 78, file: "chimes-78.b4e12e31.mp3" },
+        { key: 76, file: "chimes-76.a0a4a265.mp3" },
         { key: 81, file: "chimes-81.17be1d8e.mp3" },
         { key: 86, file: "chimes-86.6d64ae66.mp3" },
         { key: 90, file: "chimes-90.e2dc9438.mp3" },
@@ -83,5 +86,33 @@ export const SAMPLES = Object.freeze({
         { key: 75, file: "guitar-75.7b380077.mp3" },
         { key: 80, file: "guitar-80.745e0905.mp3" },
         { key: 84, file: "guitar-84.fc2d92a3.mp3" },
+    ],
+    horn: [
+        { key: 46, file: "horn-46.66b0a876.mp3" },
+        { key: 50, file: "horn-50.1d1494dc.mp3" },
+        { key: 53, file: "horn-53.7f0b96ee.mp3" },
+        { key: 57, file: "horn-57.7c781362.mp3" },
+        { key: 60, file: "horn-60.9694a6ac.mp3" },
+    ],
+    cello: [
+        { key: 40, file: "cello-40.a2ea90fd.mp3" },
+        { key: 43, file: "cello-43.3eb9e27e.mp3" },
+        { key: 47, file: "cello-47.84df8090.mp3" },
+        { key: 50, file: "cello-50.5c7e8fc5.mp3" },
+        { key: 53, file: "cello-53.888ad0ad.mp3" },
+        { key: 57, file: "cello-57.1bb07a54.mp3" },
+        { key: 60, file: "cello-60.c53df5d8.mp3" },
+    ],
+    timpani: [
+        { key: 39, file: "timpani-39.3994af20.mp3" },
+        { key: 44, file: "timpani-44.68357474.mp3" },
+        { key: 48, file: "timpani-48.ce11275d.mp3" },
+        { key: 50, file: "timpani-50.0aeb6ca4.mp3" },
+    ],
+    bassdrum: [
+        { kind: "hit", file: "bassdrum-hit.0106d440.mp3" },
+    ],
+    snare: [
+        { kind: "hit", file: "snare-hit.c302f539.mp3" },
     ],
 });

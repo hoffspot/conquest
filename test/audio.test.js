@@ -330,7 +330,7 @@ describe("every sound described, for the sound studio (catalog.js, sound-studio.
 
         assert.ok(GROUPS.every((group) => Object.values(CATALOG).some((entry) => entry.group === group)), "no group empty");
         assert.deepEqual(Object.keys(LOOPS), ["wind", ...Object.keys(BEDS)], "the beds made in code");
-        assert.deepEqual(Object.keys(MUSIC).sort(), Object.keys(PLACES).sort(), "the music in every place");
+        assert.deepEqual(Object.keys(MUSIC).sort(), [...Object.keys(PLACES), "battle"].sort(), "the music in every place, and a fight's");
         assert.ok(Object.values(MUSIC).every(described));
     });
 
@@ -976,6 +976,62 @@ describe("playing sounds (sound.js)", () => {
         const next = on(town)[0];
 
         assert.ok(next && Math.abs(next.when - (context.currentTime + 0.3)) < 0.05, "its next note in a moment");
+        sound.close();
+    });
+
+    it("fades a fight's music in over whatever's heard, from its start; once it's done, back to what was heard, where it left off; none in a hell's realms", async () => {
+        const { sound, played } = await started();
+        const context = sound.context;
+        const { town, tavern, battle } = sound.tracks;
+        const on = (track) => played.filter(({ source }) => Object.values(track.channels).includes(source.outputs[0]?.outputs[0]));
+
+        // (Half a minute into the town's music)
+        for (let t = 0; t <= 30; t += 0.2) {
+            context.currentTime = 10 + t;
+            sound.scheduleMusic();
+        }
+
+        const index = town.index;
+
+        assert.equal(battle.output.gain.value, 0, "silent out of a fight");
+
+        // A fight: its music in, from its start (the cellos galloping), the town's out
+        sound.setBattle(true);
+        assert.equal(sound.music, battle);
+        assert.deepEqual([battle.output.gain.value, town.output.gain.value, battle.filter.frequency.value], [1, 0, 20000]);
+        played.length = 0;
+        sound.scheduleMusic();
+        assert.ok(Math.abs(battle.start - (context.currentTime + 0.3)) < 1e-9);
+        assert.ok(on(battle).length > 0 && on(battle).every(({ source }) => source.outputs[0].outputs[0] === battle.channels.cello));
+        assert.equal(on(town).length, 0);
+
+        // (Said again, nothing changes)
+        sound.setBattle(true);
+        assert.equal(sound.music, battle);
+
+        // Indoors in a fight, it's as loud and clear as out
+        sound.setPlace("smithy");
+        assert.deepEqual([sound.music, battle.output.gain.value, battle.filter.frequency.value], [battle, 1, 20000]);
+
+        // Done: what's heard where they are now fades back, where it left off (the town's,
+        // through the smithy's walls)
+        sound.setBattle(false);
+        assert.equal(sound.music, town);
+        assert.deepEqual([town.output.gain.value, town.filter.frequency.value, battle.output.gain.value], [PLACES.smithy.level, PLACES.smithy.muffle, 0]);
+        assert.equal(town.index, index);
+
+        // Back in a fight, from its start again; in the tavern, the tavern's after it
+        sound.setBattle(true);
+        assert.deepEqual([battle.start, battle.index], [null, 0]);
+        sound.setPlace("taproom");
+        sound.setBattle(false);
+        assert.equal(sound.music, tavern);
+
+        // In a hell's realms, none: the drone alone
+        sound.setPlace("hellBreach");
+        sound.setBattle(true);
+        assert.notEqual(sound.music, battle);
+        assert.equal(battle.output.gain.value, 0);
         sound.close();
     });
 

@@ -20,7 +20,10 @@
 //    time, so it loops without a seam; with a hall's reverb. Going into the tavern, the town's
 //    music fades into the tavern's, which starts from its beginning; coming out, the town's
 //    comes back where it left off. Upstairs, the tavern's music is quieter and muffled, heard
-//    through the floor.
+//    through the floor. In a fight (setBattle), a fight's music (battle.js) fades in over
+//    whatever's heard, from its start, wherever the player is but a hell's realms, as loud
+//    and clear indoors as out; once it's done, what was heard there fades back, where it left
+//    off.
 //
 // synth.js's sounds are made in a worker (worker.js), so nothing waits for them; the music's
 // recordings (client/music, about a megabyte) and the recorded sounds (client/sounds) are
@@ -46,17 +49,16 @@ import { SURFACES } from "./footing.js";
 import { baseFor, INSTRUMENTS, sampleFiles } from "./instruments.js";
 import { SPELLS } from "../core/spells.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL } from "./recorded.js";
-import { SCORE } from "./score.js";
+import { SCORES } from "./scores.js";
 import { BEDS, LEVEL, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "./synth.js";
-import { TAVERN } from "./tavern.js";
 
-/** The music: the town's, and the tavern's. */
-export const SCORES = Object.freeze({ town: SCORE, tavern: TAVERN });
+/** The music: the town's, the tavern's and a fight's (scores.js). */
+export { SCORES };
 
 /**
  * Where the player can be (the game's maps), and the music heard there: which score, how loud
  * (a share of the music bus), and how muffled (heard through a floor: a low-pass filter's
- * frequency, Hz, or null).
+ * frequency, Hz, or null); and whether a fight's music is heard there (`fights`, unless false).
  */
 export const PLACES = Object.freeze({
     town: { score: "town", level: 1, muffle: null },
@@ -89,11 +91,14 @@ export const PLACES = Object.freeze({
     tower: { score: "town", level: 0.5, muffle: 1100 },
     // (In a hell's realms, none of the world's music: another world's, its drone in its place
     // (ambience.js INDOORS))
-    hellBreach: { score: "town", level: 0, muffle: 250 },
-    hellBone: { score: "town", level: 0, muffle: 250 },
-    hellFire: { score: "town", level: 0, muffle: 250 },
-    hellPit: { score: "town", level: 0, muffle: 250 },
+    hellBreach: { score: "town", level: 0, muffle: 250, fights: false },
+    hellBone: { score: "town", level: 0, muffle: 250, fights: false },
+    hellFire: { score: "town", level: 0, muffle: 250, fights: false },
+    hellPit: { score: "town", level: 0, muffle: 250, fights: false },
 });
+
+/** What's heard in a fight, wherever it is (but where a place says `fights: false`: a hell's realms). */
+export const FIGHTING = Object.freeze({ score: "battle", level: 1, muffle: null });
 
 /** The buses, and how loud each is to start with (0 to 1, as the sliders show them). */
 export const BUSES = Object.freeze(["effects", "environment", "music"]);
@@ -195,6 +200,14 @@ const REVERB_TIME = 2.6;
 const CROSSFADE = 1.5;
 const THROUGH_FLOOR = 0.8;
 const CLEAR = 20000;
+
+// A fight's music fades in over this long (seconds), and what was heard back over this long once
+// it's done (the game says it's done a while after the fight is: game.js FIGHT_LINGERS)
+export const BATTLE_IN = 1.2;
+export const BATTLE_OUT = 1.5;
+
+// The scores played from their start each time they're heard (the rest carry on where they left off)
+const FROM_THE_START = new Set(["tavern", "battle"]);
 
 // The swing for each attack animation (actions.js), and the sound of each projectile's launch
 const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", kick: "swingKick", cleaver: "swingCleaver", wand: "swingWand", throw: "bombThrow" };
@@ -761,8 +774,14 @@ export class Sound {
         this.music = null;
         this.ready = null;
 
-        /** Where the player is (a PLACES key), and each score's playing: { score, start, index, loop, channels, output, filter }. */
+        /**
+         * Where the player is (a PLACES key), whether they're in a fight, the music heard (`musicHeard`:
+         * PLACES' or FIGHTING), and each score's playing: { score, start, index, loop, channels,
+         * output, filter }.
+         */
         this.place = "town";
+        this.battle = false;
+        this.musicHeard = PLACES.town;
         this.tracks = {};
         this.timer = null;
     }
@@ -1085,14 +1104,44 @@ export class Sound {
      * quieter and muffled.
      */
     setPlace(place) {
-        const was = PLACES[this.place];
-        const now = PLACES[place];
-
-        if (!now || place === this.place) {
+        if (!PLACES[place] || place === this.place) {
             return;
         }
 
         this.place = place;
+        this.#follow(CROSSFADE);
+    }
+
+    /**
+     * Say whether the player's in a fight (the game says it's done a while after the last blow):
+     * a fight's music fades in over whatever's heard, from its start (BATTLE_IN), and once
+     * it's done, what's heard where they are fades back where it left off (BATTLE_OUT).
+     */
+    setBattle(on) {
+        if (Boolean(on) === this.battle) {
+            return;
+        }
+
+        this.battle = Boolean(on);
+        this.#follow(on ? BATTLE_IN : BATTLE_OUT);
+    }
+
+    // The music to be heard now: a fight's, in one (where a fight's music is heard), else where
+    // the player is
+    #wanted() {
+        const here = PLACES[this.place];
+
+        return this.battle && here.fights !== false ? FIGHTING : here;
+    }
+
+    // Fade to the music to be heard now from what was: from one score to another over `seconds`
+    // (the new one from its start, or where it left off), or the same one to its level and how
+    // muffled it is there (THROUGH_FLOOR)
+    #follow(seconds) {
+        const was = this.musicHeard;
+        const now = this.#wanted();
+
+        this.musicHeard = now;
 
         // (Not started yet: the music starts where the player is)
         if (!this.context) {
@@ -1102,17 +1151,17 @@ export class Sound {
         }
 
         const time = this.context.currentTime;
-        const ramp = (param, to, seconds) => {
+        const ramp = (param, to, over) => {
             param.cancelScheduledValues(time);
             param.setValueAtTime(param.value, time);
-            param.linearRampToValueAtTime(to, time + seconds);
+            param.linearRampToValueAtTime(to, time + over);
         };
         const track = this.tracks[now.score];
 
         if (was.score !== now.score) {
-            ramp(this.tracks[was.score].output.gain, 0, CROSSFADE);
+            ramp(this.tracks[was.score].output.gain, 0, seconds);
 
-            if (now.score !== "town" || track.start === null) {
+            if (FROM_THE_START.has(now.score) || track.start === null) {
                 // From the start (once every recording is ready)
                 Object.assign(track, { start: null, index: 0, loop: 0 });
             } else {
@@ -1125,7 +1174,7 @@ export class Sound {
             this.music = track;
         }
 
-        ramp(track.output.gain, now.level, was.score !== now.score ? CROSSFADE : THROUGH_FLOOR);
+        ramp(track.output.gain, now.level, was.score !== now.score ? seconds : THROUGH_FLOOR);
 
         if (track.filter) {
             ramp(track.filter.frequency, now.muffle ?? CLEAR, THROUGH_FLOOR);
@@ -2000,7 +2049,7 @@ export class Sound {
         const context = this.context;
         const reverb = context.createConvolver();
         const send = context.createGain();
-        const here = PLACES[this.place];
+        const here = this.#wanted();
 
         reverb.buffer = hall(context, REVERB_TIME);
         send.gain.value = REVERB_SEND;
@@ -2044,6 +2093,7 @@ export class Sound {
             this.tracks[name] = { start: null, index: 0, loop: 0, ...this.tracks[name], score, channels, output, filter };
         }
 
+        this.musicHeard = here;
         this.music = this.tracks[here.score];
     }
 

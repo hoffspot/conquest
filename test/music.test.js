@@ -1,13 +1,16 @@
-// The music: its score (client/js/audio/score.js) and the recordings of real instruments it's
-// played on (instruments.js, samples.js, made by scripts/build-music.js)
+// The music: its scores (client/js/audio/score.js, the tavern's and a fight's) and the
+// recordings of real instruments they're played on (instruments.js, samples.js, made by
+// scripts/build-music.js)
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { describe, it } from "node:test";
 import { baseFor, INSTRUMENTS, keysOf, sampleFiles } from "../client/js/audio/instruments.js";
 import { SAMPLES } from "../client/js/audio/samples.js";
+import { BATTLE, BATTLE_BEATS_PER_BAR, BATTLE_TEMPO } from "../client/js/audio/battle.js";
 import { BEATS_PER_BAR, midi, SCORE, TEMPO } from "../client/js/audio/score.js";
+import { SCORES } from "../client/js/audio/scores.js";
 import { TAVERN, TAVERN_BEATS_PER_BAR, TAVERN_TEMPO } from "../client/js/audio/tavern.js";
-import { decodeWav, regionsOf } from "../scripts/build-music.js";
+import { decodeWav, regionsOf, vscoKey } from "../scripts/build-music.js";
 
 const BAR = (BEATS_PER_BAR * 60) / TEMPO;
 const MUSIC = new URL("../client/music/", import.meta.url);
@@ -147,9 +150,90 @@ describe("the tavern's music (tavern.js)", () => {
     });
 });
 
+describe("a fight's music (battle.js)", () => {
+    const bar = (BATTLE_BEATS_PER_BAR * 60) / BATTLE_TEMPO;
+    const inSection = (section) => BATTLE.notes.filter(({ time }) => time >= section.start && time < section.start + section.bars * bar);
+    const pitched = BATTLE.notes.filter(({ instrument }) => !INSTRUMENTS[instrument].kinds);
+
+    it("is martial, in 4/4 at 132, about a minute and a half: the cellos, the horns' theme, the theme high, a second tune, the drums, everyone, the turn", () => {
+        assert.equal(BATTLE_TEMPO, 132);
+        assert.equal(BATTLE_BEATS_PER_BAR, 4);
+        assert.deepEqual(BATTLE.sections.map(({ name }) => name), ["cellos", "theme", "theme high", "second tune", "drums", "everyone", "turn"]);
+        assert.equal(BATTLE.sections.reduce((bars, section) => bars + section.bars, 0) * bar, BATTLE.length);
+        assert.ok(BATTLE.length > 80 && BATTLE.length < 100, `${BATTLE.length} s`);
+        assert.ok(BATTLE.sections.every((section, k) => k === 0 || section.bar === BATTLE.sections[k - 1].bar + BATTLE.sections[k - 1].bars));
+        assert.ok(SCORES.battle === BATTLE && SCORES.town === SCORE && SCORES.tavern === TAVERN);
+    });
+
+    it("writes every note in time, on an instrument, near a recording of it, in order", () => {
+        assert.ok(BATTLE.notes.length > 1200);
+
+        for (const [k, note] of BATTLE.notes.entries()) {
+            const instrument = INSTRUMENTS[note.instrument];
+
+            assert.ok(instrument, note.instrument);
+            assert.ok(note.time >= 0 && note.time < BATTLE.length, `${note.instrument} at ${note.time}`);
+            assert.ok(k === 0 || note.time >= BATTLE.notes[k - 1].time, "in time order");
+            assert.ok(note.duration > 0 && note.velocity > 0 && note.velocity <= 1);
+
+            if (instrument.kinds) {
+                assert.ok(instrument.kinds.includes(note.pitch));
+            } else {
+                assert.ok(Math.abs(baseFor(note.instrument, note.pitch) - note.pitch) <= 2, `${note.instrument} ${note.pitch}`);
+            }
+        }
+    });
+
+    it("opens on the cellos galloping alone, no drums; then drives on: the cellos galloping, the timpani, the march and the horns in every section after", () => {
+        const [opening, ...rest] = BATTLE.sections;
+        // (Not the theme's first notes, a few milliseconds early as players are)
+        const opens = inSection(opening).filter(({ time }) => time < opening.start + opening.bars * bar - 0.05);
+
+        assert.deepEqual([...new Set(opens.map(({ instrument }) => instrument))], ["cello"]);
+        assert.equal(opens.length, opening.bars * 8, "a bar's eight quavers, every bar");
+
+        for (const section of rest) {
+            const played = new Set(inSection(section).map(({ instrument }) => instrument));
+
+            assert.ok(["cello", "timpani", "snare", "bassdrum", "horn"].every((instrument) => played.has(instrument)), section.name);
+
+            // (The cellos in quavers: a bar's eight, every bar; a hundredth of a second either
+            // side of the bars' edges, as the times are added up)
+            const cellos = BATTLE.notes.filter(({ instrument, time }) => instrument === "cello" && time >= section.start - 0.01 && time < section.start + section.bars * bar - 0.01);
+
+            assert.equal(cellos.length, section.bars * 8, section.name);
+        }
+    });
+
+    it("is played softly, never harsh: no drum hit loud, the horns held in their middle register", () => {
+        const loudest = (instrument) => Math.max(...BATTLE.notes.filter((note) => note.instrument === instrument).map(({ velocity }) => velocity));
+
+        assert.ok(loudest("snare") < 0.6 && loudest("bassdrum") < 0.8, `${loudest("snare")}, ${loudest("bassdrum")}`);
+        assert.ok(loudest("horn") <= 0.9);
+
+        const horns = pitched.filter(({ instrument }) => instrument === "horn").map(({ pitch }) => pitch);
+
+        assert.ok(Math.min(...horns) >= midi("A2") && Math.max(...horns) <= midi("D4"), `${Math.min(...horns)} to ${Math.max(...horns)}`);
+    });
+
+    it("keeps to D minor, its A chords major (a C sharp leading home)", () => {
+        const allowed = new Set([2, 4, 5, 7, 9, 10, 0, 1]);
+
+        assert.ok(pitched.every(({ pitch }) => allowed.has(pitch % 12)), [...new Set(pitched.map(({ pitch }) => pitch % 12))].join());
+    });
+
+    it("ends on A, leading back into D at the start: it loops without a seam", () => {
+        const lowest = (notes) => notes.filter(({ instrument }) => !INSTRUMENTS[instrument].kinds).reduce((low, note) => (note.pitch < low.pitch ? note : low));
+
+        assert.equal(lowest(BATTLE.notes.filter(({ time }) => time >= BATTLE.length - bar - 0.01)).pitch % 12, 9);
+        assert.equal(lowest(BATTLE.notes.filter(({ time }) => time < bar - 0.01)).pitch % 12, 2);
+        assert.ok(BATTLE.length - BATTLE.notes.at(-1).time + BATTLE.notes[0].time < 0.5);
+    });
+});
+
 describe("the instruments (instruments.js, samples.js)", () => {
     it("has recordings of every instrument the music plays, and of every kind of drum hit", () => {
-        const played = new Set([...SCORE.notes, ...TAVERN.notes].map(({ instrument }) => instrument));
+        const played = new Set(Object.values(SCORES).flatMap(({ notes }) => notes).map(({ instrument }) => instrument));
 
         assert.deepEqual([...played].sort(), Object.keys(INSTRUMENTS).sort());
         assert.deepEqual(Object.keys(SAMPLES).sort(), Object.keys(INSTRUMENTS).sort());
@@ -164,7 +248,7 @@ describe("the instruments (instruments.js, samples.js)", () => {
     });
 
     it("plays each note from the nearest recording (a drum's kind of hit, as it is)", () => {
-        assert.deepEqual(keysOf("recorder"), [65, 70, 74, 78, 82]);
+        assert.deepEqual(keysOf("recorder"), [65, 70, 74, 78, 82, 86]);
         assert.equal(baseFor("recorder", 66), 65);
         assert.equal(baseFor("recorder", 69), 70);
         assert.equal(baseFor("recorder", 81), 82);
@@ -190,11 +274,19 @@ describe("the instruments (instruments.js, samples.js)", () => {
             bytes += data.length;
         }
 
-        assert.ok(bytes < 1_200_000, `${bytes} bytes in all`);
+        // (About 1.2 MB for the town's and the tavern's, and 300 KB more for a fight's)
+        assert.ok(bytes < 1_600_000, `${bytes} bytes in all`);
     });
 });
 
 describe("making the recordings (scripts/build-music.js)", () => {
+    it("reads VSCO 2 CE's notes from its files' names, an octave under the usual names (its C3 is middle C)", () => {
+        assert.equal(vscoKey("C3"), 60);
+        assert.equal(vscoKey("D2"), 50);
+        assert.equal(vscoKey("A#1"), 46);
+        assert.equal(vscoKey("A0"), 33);
+    });
+
     it("reads the library's SFZ files: each recording, its note, where it starts, its tuning, and whether it's a note's release", () => {
         const regions = regionsOf(`// Made by a tool
 <group>

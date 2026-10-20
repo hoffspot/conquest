@@ -218,15 +218,21 @@ function windCard() {
     return card({ name: "wind", label, about, plays, made: 1, controls: [row("Hear", [toggle]), Object.assign(document.createElement("p"), { className: "source", textContent: "Made in code: client/js/audio/synth.js (wind)." })] });
 }
 
-// The music: each place's, played until stopped (none where none's heard: a hell's realms)
+// The music: each place's, and a fight's, played until stopped (none where none's heard: a hell's
+// realms)
 function musicCard(place) {
     const { label, about, plays } = MUSIC[place];
+    const fight = place === "battle";
 
-    if (!PLACES[place].level) {
+    if (!fight && !PLACES[place].level) {
         return card({ name: `music:${place}`, label, about, plays, controls: [Object.assign(document.createElement("p"), { className: "source", textContent: "No music here." })] });
     }
     const start = button("▶ Play", () => {
-        sound.setPlace(place);
+        sound.setBattle(fight);
+
+        if (!fight) {
+            sound.setPlace(place);
+        }
 
         if (Number($("#music").value) === 0) {
             $("#music").value = MUSIC_VOLUME;
@@ -238,7 +244,7 @@ function musicCard(place) {
         $("#music").value = 0;
         sound.setVolume("music", 0);
     });
-    const source = Object.assign(document.createElement("p"), { className: "source", textContent: "Recordings of real instruments: the Versilian Community Sample Library and FreePats (CC0). Score: client/js/audio/score.js and tavern.js." });
+    const source = Object.assign(document.createElement("p"), { className: "source", textContent: fight ? "Recordings of real instruments: the Versilian Community Sample Library and VS Chamber Orchestra: Community Edition (CC0). Score: client/js/audio/battle.js." : "Recordings of real instruments: the Versilian Community Sample Library and FreePats (CC0). Score: client/js/audio/score.js and tavern.js." });
 
     return card({ name: `music:${place}`, label, about, plays, controls: [row("Hear", [start, stop]), source] });
 }
