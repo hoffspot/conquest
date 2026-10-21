@@ -5,12 +5,13 @@ import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 import { ambienceOf, CALLS, doorOf, HELL, INDOORS, TOLLS, tolled } from "../client/js/audio/ambience.js";
 import { CATALOG, GROUPS, LOOPS, MUSIC } from "../client/js/audio/catalog.js";
+import { FIGHT_LINGERS } from "../client/js/app/fight.js";
 import { filter, pluck } from "../client/js/audio/dsp.js";
 import { sampleFiles, scoreFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { useSound, wearSound } from "../client/js/audio/handling.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
-import { ARMOUR, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { ARMOUR, BATTLE_OUT, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { BEDS, LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { CREATURES } from "../client/js/core/creatures.js";
@@ -173,7 +174,7 @@ describe("making sounds (synth.js)", () => {
 // A stand-in for the browser's Web Audio: records what's played, how loud, where and on which bus
 function fakeAudio() {
     const played = [];
-    const param = (value) => ({ value, curves: [], cancelScheduledValues() {}, setValueAtTime(v) { this.value = v; }, linearRampToValueAtTime(v) { this.value = v; }, setValueCurveAtTime(curve, at, duration) { this.curves.push({ curve, at, duration }); } });
+    const param = (value) => ({ value, curves: [], cancelScheduledValues() {}, setValueAtTime(v) { this.value = v; }, linearRampToValueAtTime(v, at) { this.value = v; this.until = at; }, setValueCurveAtTime(curve, at, duration) { this.curves.push({ curve, at, duration }); } });
 
     // A node remembers what it's connected to, so a sound can be followed to its bus
     const node = (extra = {}) => {
@@ -953,10 +954,19 @@ describe("playing sounds (sound.js)", () => {
         assert.ok(Math.abs(tavern.start - (context.currentTime + 0.3)) < 1e-9);
         assert.ok(on(tavern).length > 0 && on(town).length === 0);
 
+        // (The town's played on till it's faded out, and no further)
+        const fading = town.fading;
+
+        assert.equal(town.output.gain.until, fading);
+
         for (let t = 0; t <= 4; t += 0.2) {
             context.currentTime += 0.2;
             sound.scheduleMusic();
         }
+
+        assert.ok(on(town).every(({ when }) => when <= fading));
+
+        const left = town.index;
 
         assert.ok(on(tavern).some(({ source }) => source.outputs[0].outputs[0] === tavern.channels.guitar));
 
@@ -971,7 +981,8 @@ describe("playing sounds (sound.js)", () => {
         // Out: the town's again, where it left off, straight away
         sound.setPlace("town");
         assert.equal(sound.music, town);
-        assert.equal(town.index, index);
+        assert.ok(left >= index);
+        assert.equal(town.index, left);
         assert.equal(tavern.output.gain.value, 0);
         played.length = 0;
         sound.scheduleMusic();
@@ -982,7 +993,7 @@ describe("playing sounds (sound.js)", () => {
         sound.close();
     });
 
-    it("fades a fight's music in over whatever's heard, from its start; once it's done, back to what was heard, where it left off; none in a hell's realms", async () => {
+    it("fades a fight's music in over whatever's heard, from its start; once it's done, out slowly and back to what was heard, where it left off, about eight seconds after; none in a hell's realms", async () => {
         const { sound, played } = await started();
         const context = sound.context;
         const { town, tavern, battle } = sound.tracks;
@@ -1017,15 +1028,46 @@ describe("playing sounds (sound.js)", () => {
         assert.deepEqual([sound.music, battle.output.gain.value, battle.filter.frequency.value], [battle, 1, 20000]);
 
         // Done: what's heard where they are now fades back, where it left off (the town's,
-        // through the smithy's walls)
+        // through the smithy's walls), as the fight's fades out, playing on till it's silent:
+        // back about eight seconds after the fight's last moment
+        const done = context.currentTime;
+
         sound.setBattle(false);
         assert.equal(sound.music, town);
         assert.deepEqual([town.output.gain.value, town.filter.frequency.value, battle.output.gain.value], [PLACES.smithy.level, PLACES.smithy.muffle, 0]);
+        assert.deepEqual([town.output.gain.until, battle.output.gain.until], [done + BATTLE_OUT, done + BATTLE_OUT]);
+        assert.equal(FIGHT_LINGERS / 1000 + BATTLE_OUT, 8);
         assert.equal(town.index, index);
+        played.length = 0;
 
-        // Back in a fight, from its start again; in the tavern, the tavern's after it
+        for (let t = 0; t <= 8; t += 0.2) {
+            context.currentTime = done + t;
+            sound.scheduleMusic();
+        }
+
+        assert.ok(on(battle).some(({ when }) => when > done + 4), "played on as it fades");
+        assert.ok(on(battle).every(({ when }) => when <= done + BATTLE_OUT), "and no further");
+
+        // Back in a fight, from its start again
         sound.setBattle(true);
         assert.deepEqual([battle.start, battle.index], [null, 0]);
+
+        for (let t = 0; t <= 10; t += 0.2) {
+            context.currentTime += 0.2;
+            sound.scheduleMusic();
+        }
+
+        // Done, and another fight while it's fading out: it comes back from where it's got to
+        sound.setBattle(false);
+        context.currentTime += 2;
+        sound.scheduleMusic();
+
+        const { start, index: got } = battle;
+
+        sound.setBattle(true);
+        assert.deepEqual([sound.music, battle.start, battle.index, battle.output.gain.value], [battle, start, got, 1]);
+
+        // In the tavern, the tavern's after it
         sound.setPlace("taproom");
         sound.setBattle(false);
         assert.equal(sound.music, tavern);
