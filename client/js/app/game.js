@@ -699,6 +699,11 @@ const NEWS_NEAR = 300;
 // no oftener than this (seconds), and a little louder than as he rests
 const BELL = Object.freeze({ reach: 160, every: 180, volume: 1.6 });
 
+// An invasion's horns (audio/synth.js): heard as far off as this (metres); the raiders' blown again
+// so long after it's first blown as they come (seconds), and the town's answering so long after
+// that first; and the lord's thanks shown so long (seconds) for a good share of them felled
+const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, thanks: 14 });
+
 // How many of the places the player's heard tell of and found since the journal keeps (the last)
 const HEARD_FOUND = 5;
 
@@ -3083,6 +3088,11 @@ export class Game {
         // (In a fight, or lately: a fight's music; FIGHT_LINGERS after its last moment, what's
         // heard here again: fight.js)
         if (inFight(battle.actor(this.me), battle.actors, (a, b) => battle.hostile(a, b), battle.time - (this.lastAttack.get(this.me) ?? -Infinity))) {
+            this.foughtAt = battle.time;
+        }
+
+        // (An invasion on round the player, till its raiders break: a fight's music, in it or not)
+        if (this.#invadedHere()) {
             this.foughtAt = battle.time;
         }
 
@@ -5648,12 +5658,15 @@ export class Game {
         return { lines: [ALARM, criesOf(invasion.band, invasion.way)[1]], news: false };
     }
 
-    // An invasion (core/invasions.js; host.js #invade). Coming: its soldiers drawn, and, at the
-    // town the player's in or near, the player told the way the raiders come (in their first, that
-    // the raiders leave them be till they strike one), the town's crier crying it out
-    // (#invasionCry). Beaten off, or the town's soldiers fallen: told, and the crier's thanks. And
-    // the player thanked for the raiders they felled: the gold, the merit and the standing, and,
-    // for a good share of them, the lord's purse and a piece from the armoury
+    // An invasion (core/invasions.js; host.js #invade). Coming: its soldiers drawn, the raiders'
+    // war horn blown where they come out and the town's answering from its line (#invasionHorn),
+    // and, at the town the player's in or near, the player told the way the raiders come (in their
+    // first, that the raiders leave them be till they strike one), the town's crier crying it out
+    // (#invasionCry). Beaten off: the raiders' horn as they run, the player told, and the crier's
+    // thanks; the town's soldiers fallen, the raiders' horn, and told. And the player thanked for
+    // the raiders they felled: the gold, the merit and the standing, and, for a good share of them,
+    // the lord's thanks, in a panel of its own, the town's horn blown for it: their own purse and a
+    // piece from the armoury
     #invasion(event) {
         const band = BANDS[event.band];
         const invasion = this.host.invasions.find(({ id }) => id === event.id);
@@ -5663,6 +5676,12 @@ export class Game {
         switch (event.change) {
             case "coming":
                 this.enlisting.push(...event.ids);
+                this.#invasionHorn("warHorn", event.at);
+                this.#invasionHorn("warHorn", event.at, HORNS.again);
+
+                if (invasion) {
+                    this.#invasionHorn("townHorn", this.#invasionLine(invasion, -INVASION.inside), HORNS.answer);
+                }
 
                 if (near) {
                     const spared = event.spared.includes(this.me) ? " They'll leave you be, unless you strike one." : "";
@@ -5673,6 +5692,10 @@ export class Game {
 
                 break;
             case "repelled":
+                if (invasion) {
+                    this.#invasionHorn("retreatHorn", this.#invasionLine(invasion, INVASION.meet));
+                }
+
                 if (near) {
                     this.hud.message(`The ${band.many} are beaten back from ${event.name}!`, 4);
                     this.#invasionCry(event.place, thanksOf(event.band));
@@ -5680,6 +5703,10 @@ export class Game {
 
                 break;
             case "fell":
+                if (invasion) {
+                    this.#invasionHorn("warHorn", this.#invasionLine(invasion, INVASION.meet));
+                }
+
                 if (near) {
                     this.hud.message(`${event.name}'s soldiers have fallen. The ${band.many} go back the way they came.`, 4);
                 }
@@ -5691,18 +5718,53 @@ export class Game {
                 }
 
                 const got = [`${event.gold} gold`, ...(event.merit ? [`${event.merit} merit with the guilds`] : []), ...(event.thanks ? [`${event.thanks} standing`] : [])];
-                const lord = event.big ? ` Its lord sends their own purse, and ${itemLabel(event.piece).toLowerCase()} from the armoury.` : "";
+                const felled = `${event.felled} ${event.felled === 1 ? "raider" : band.many}`;
 
-                this.hud.message(`${event.name} thanks you for the ${event.felled} ${event.felled === 1 ? "raider" : band.many} you felled: ${got.join(", ")}.${lord}`, 7);
                 this.hud.setGold(this.progress.gold);
                 this.onProgress(this.progress);
                 this.onStanding(this.standing);
                 this.sound?.play("coins");
+
+                if (!event.big) {
+                    this.hud.message(`${event.name} thanks you for the ${felled} you felled: ${got.join(", ")}.`, 7);
+                    break;
+                }
+
+                // (A good share of them: the lord's own thanks, the town's horn blown for it)
+                const piece = itemLabel(event.piece).toLowerCase();
+
+                this.hud.choose(`The lord of ${event.name} thanks you, who felled ${felled} of the ${event.of} who came: their own purse, ${/^[aeiou]/.test(piece) ? "an" : "a"} ${piece} from the armoury, and ${got.join(", ")}.`, [{ label: "With thanks", value: true }], () => {}, { cancel: null, seconds: HORNS.thanks });
+                this.sound?.play("townHorn", { delay: 0.4 });
                 break;
             }
             default:
                 break;
         }
+    }
+
+    // An invasion's horn (audio/synth.js) blown at a point of the open world's (the battle's
+    // metres), `delay` seconds from now, heard as far off as HORNS.far
+    #invasionHorn(name, [x, y], delay = 0) {
+        const [ox, oz] = this.originOf("town");
+
+        this.sound?.play(name, { at: new THREE.Vector3(ox + x, 0, oz + y), delay, far: HORNS.far });
+    }
+
+    // Where on an invasion's road its lines are, so far out past the town's edge (`out` metres;
+    // inside it, less): the town's forming (-INVASION.inside), where they meet (INVASION.meet)
+    #invasionLine({ middle, from, edge }, out) {
+        const [dx, dy] = [from[0] - middle[0], from[1] - middle[1]];
+        const length = Math.hypot(dx, dy) || 1;
+
+        return [middle[0] + (dx / length) * (edge + out), middle[1] + (dy / length) * (edge + out)];
+    }
+
+    // Whether an invasion's on round the player, its raiders yet to break (as near as they're
+    // told of it: #invasion)
+    #invadedHere() {
+        const me = this.battle.actor(this.me);
+
+        return Boolean(me?.map === "town") && this.host.invasions.some(({ broke, middle, edge }) => broke === null && Math.hypot(me.x - middle[0], me.y - middle[1]) <= edge + INVASION.out + INVASION.away);
     }
 
     // A town's crier crying out (an invasion's), if he's out and the player's within his bell's

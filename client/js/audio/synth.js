@@ -18,6 +18,7 @@
 //    wheel opening, and a slice that can't be used.
 //  - Around the town (the environment): a bird's chirp, leaves rustling, the wind (a loop); and
 //    in the tavern, the hearth's fire crackling.
+//  - War: great horns blown, an invasion's raiders' (low and long) and a town's (a bright call).
 //
 // Each sound belongs to a bus, which has its own volume: "effects" (the default) or
 // "environment" (the music is music.js's). Built from dsp.js; no Web Audio (sound.js plays
@@ -254,6 +255,43 @@ const GLASS = [
     [2.76, 0.25],
     [5.4, 0.08],
 ];
+
+// A horn's buzz: a stack of harmonics, as a brass instrument's (a phone's speaker, which plays
+// little under 200 Hz, gives a low note's weight in them: the ear hears the missing low note)
+const BRASS = [
+    [1, 1],
+    [2, 0.8],
+    [3, 0.6],
+    [4, 0.45],
+    [5, 0.32],
+    [6, 0.22],
+    [7, 0.15],
+    [8, 0.1],
+    [9, 0.06],
+];
+
+// Blasts on a great horn, one after another, `gap` seconds apart: [[frequency, seconds, fall (how
+// far down it falls as it dies away: 0 not at all)]...]. Each a horn's buzz, the lips bending up
+// into the note, wavering a little, its brassy top opening as it swells and closing as it dies,
+// breath hissing through it
+function horn(random, blasts, { gap = 0.18 } = {}) {
+    let out = new Float32Array(1);
+    let at = 0;
+
+    for (const [frequency, length, fall = 0] of blasts) {
+        const [attack, release] = [0.16, Math.min(0.5, length / 3)];
+        const level = (t) => (t < attack ? (t / attack) ** 1.5 : Math.min(1, Math.max(0, (length - t) / release)));
+        const dying = (t) => Math.max(0, (t - (length - release * 1.6)) / (release * 1.6)) ** 2;
+        const pitch = (t) => frequency * (1 - 0.06 * Math.exp(-t / 0.07)) * (1 + 0.006 * Math.sin(TAU * 4.5 * t)) * (1 - fall * dying(t));
+        const buzz = filter(tone(length, pitch, { harmonics: BRASS }), "lowpass", (t) => frequency * (2.5 + 6 * level(t)), 0.9);
+        const breath = filter(noise(random, length), "bandpass", frequency * 12, 0.8);
+
+        out = add(out, shape(add(buzz, breath, 0.05), level), 1, at);
+        at += length + gap;
+    }
+
+    return out;
+}
 
 // Notes one after another (a cue): [[frequency, start (s)]...], each ringing for `decay` seconds
 function notes(list, { decay = 0.35, harmonics = [[1, 1], [2, 0.25], [3, 0.08]], length = 1 } = {}) {
@@ -608,6 +646,14 @@ export const SOUNDS = {
             return add(out(0), out(0.05), 0.7, 0.45);
         },
     },
+
+    // War: an invasion's raiders' war horn, a long, low blast (the G under the bass clef: blown
+    // twice as they come, app/game.js HORNS), and as they break and run, a short one and a long one
+    // falling away; a town's horn, answering them as its soldiers march out, a bright call up a
+    // fourth and a fifth (and for one its lord thanks)
+    warHorn: { variants: 2, volume: 0.7, make: (random) => horn(random, [[98, 1.85, 0.03]]) },
+    retreatHorn: { variants: 1, volume: 0.6, make: (random) => horn(random, [[110, 0.45], [98, 1.35, 0.3]], { gap: 0.1 }) },
+    townHorn: { variants: 1, volume: 0.6, make: (random) => horn(random, [[196, 0.3], [262, 0.3], [392, 1.15, 0.02]], { gap: 0.07 }) },
 
     // Around the town (the environment's bus): birds, and leaves rustling in a tree
     bird: {

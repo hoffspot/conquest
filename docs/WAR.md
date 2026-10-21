@@ -2367,9 +2367,21 @@ near it is told ("Bandits on the north road! Marleyworth calls every able hand t
 their first, "They'll leave you be, unless you strike one."), and its crier, if he's out and they're
 within his bell's reach (160 m), rings it and cries the alarm, not his usual openings (`ALARM`: "To
 arms! To arms!"), the road they come by and his call to every able hand to defend the town
-(`criesOf`: "Bandits on the north road! Every able hand, defend the town!"); while it's on he calls
-out to the adventurers each time he calls ("Adventurers! Able hands! To the north road, and drive
-them off!"); beaten off, he thanks every brave soul who stood for it (`thanksOf`).
+(`criesOf`, in the band's own words, its `cry`: "Bandits on the north road! Every able hand, defend
+the town!", "Northmen on the north road, axes high!", "Corsairs up from the shore, on the north
+road!"); while it's on he calls out to the adventurers each time he calls ("Adventurers! Able
+hands! To the north road, and drive them off!"); beaten off, he cries the band beaten in its own
+words (its `beaten`: "The cult's fires are put out!") and thanks every brave soul who stood for it
+(`thanksOf`).
+
+**Horns and music** (app/game.js `#invasionHorn`, `HORNS`; audio/synth.js `horn`): as the raiders
+come out onto the town's road, their war horn's blown there twice, 2.2 seconds apart (a long, low
+blast), and the town's answers from where its line forms (a bright call up a fourth and a fifth),
+each heard up to 450 metres off. Beaten off, the raiders' horn sounds the retreat where the lines
+met (a short blast and a long one falling away); the town's soldiers all fallen, it's blown there
+once. While it's on round a player (as near as they're told of it), till the raiders break, a
+fight's music plays for them (`#invadedHere`), whether anyone's after them or not. The sound studio
+plays the horns, under *War*.
 
 **Thanks** (`#thank`, `rewardOf`, `REWARD`), to every player who felled raiders (they, their
 followers or their creatures), once the raiders break: a bounty of 3 gold for each, the guilds'
@@ -2377,9 +2389,12 @@ merit (2, one more for every 4 felled, at most 8, if they've signed up at a guil
 thanks (3, one more for every 3, at most 12: standing with their own people where the town's
 theirs, else a favour of its people's to theirs). One who felled 15% of the raiders (`big`), the
 town held, has its lord's own purse besides (150 gold), 4 more merit and 8 more standing, and a
-rare piece from its armoury (like their own weapon, or a ring or an amulet). What's on the
-raiders they fell is theirs as it is on any foe (core/progress.js `LOOT.raider`: no people's
-uniform).
+rare piece from its armoury (like their own weapon, or a ring or an amulet). Each is told what
+they've had in a message; one who's had the lord's own reward, in a panel of its own ("The lord of
+Marleyworth thanks you, who felled 4 bandits of the 25 who came: their own purse, a rare sword from
+the armoury, and 162 gold, 7 merit with the guilds, 12 standing.", 14 seconds, or till they say
+**With thanks**), the town's horn blown for it. What's on the raiders they fell is theirs as it is
+on any foe (core/progress.js `LOOT.raider`: no people's uniform).
 
 **Called up** (debug): the debug overlay's **Invasion** brings one to the town the player's in now
 (the host's `invade` command), as one due would come.

@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures.js";
 import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 import { Explored } from "../client/js/core/explored.js";
-import { SIZE } from "../client/js/core/invasions.js";
+import { REWARD, SIZE } from "../client/js/core/invasions.js";
 import { branchesFound, fareOf } from "../client/js/core/portals.js";
 import { guilds, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
 
@@ -12737,4 +12737,104 @@ test("an invasion's raiders felled by the player: thanked for them by the town a
     expect(felled).toBe(2);
     expect(await playUntil(page, () => /thanks you for the 2 bandits you felled/.test(document.querySelector("#banner").textContent))).toBe(true);
     expect(await playUntil(page, () => window.pellagos.game.host.invasions.length === 0, { seconds: 120 })).toBe(true);
+});
+
+test("an invasion: the raiders' war horn blown twice where they come out, the town's answering from its line, and the call told; a fight's music round the player though none's after them; a share of them felled by the player, the town's lord thanks them in a panel of its own, the town's horn blown for it, as the raiders break to their horn sounding the retreat", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=2");
+
+    // (The lone orc out of the way; every horn blown heard, how long after, and whether from
+    // somewhere; as small an invasion as comes, so few are felled for the lord's thanks)
+    await page.evaluate((least) => {
+        const { game } = window.pellagos;
+        const play = game.sound.play.bind(game.sound);
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        window.horns = [];
+        game.sound.play = (name, options = {}) => {
+            if (name.endsWith("Horn")) {
+                window.horns.push([name, options.delay ?? 0, Boolean(options.at)]);
+            }
+
+            return play(name, options);
+        };
+        game.advance(0.1, { render: false });
+        game.host.command(game.me, { type: "budget", invasion: least });
+        game.invade();
+    }, SIZE.least);
+
+    expect(await playUntil(page, () => window.horns.length > 0)).toBe(true);
+
+    const coming = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const [invasion] = game.host.invasions;
+
+        return { band: invasion.band, size: invasion.size, spared: invasion.spared.includes(game.me), horns: window.horns, music: session.sound.battle, told: document.querySelector("#banner").textContent };
+    });
+
+    expect(coming).toMatchObject({ band: "bandits", spared: true, music: true });
+    expect(coming.size).toBeLessThan(SIZE.least);
+    expect(coming.horns).toEqual([
+        ["warHorn", 0, true],
+        ["warHorn", 2.2, true],
+        ["townHorn", 4.6, true],
+    ]);
+    expect(coming.told).toMatch(/^Bandits on the [a-z-]+ road! .+ calls every able hand to its defence\. They'll leave you be, unless you strike one\./);
+
+    // The player sets on a share of them, each brought to them, and fells them
+    const felled = await page.evaluate(async (share) => {
+        const { game } = window.pellagos;
+        const [invasion] = game.host.invasions;
+        const me = game.battle.actor(game.me);
+        const ids = invasion.invaders.slice(0, Math.ceil(invasion.size * share));
+
+        for (const id of ids) {
+            const raider = game.battle.actor(id);
+
+            raider.hp = 1;
+            game.host.command(game.me, { type: "engage", target: id });
+
+            for (let k = 0; k < 300 && !raider.dead; k++) {
+                game.host.battle.place(id, "town", [me.square[0] + 1, me.square[1]]);
+                game.advance(1 / 30, { render: false, wait: true });
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        return { ids: ids.length, felled: ids.filter((id) => game.battle.actor(id)?.dead).length };
+    }, REWARD.big);
+
+    expect(felled.felled).toBe(felled.ids);
+
+    // The rest of their line falls but three: they break and run, their horn sounding the retreat
+    // where the lines met, and the lord's thanks
+    const gold = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [invasion] = game.host.invasions;
+
+        window.horns.length = 0;
+
+        for (const id of invasion.invaders.filter((each) => !game.battle.actor(each).dead).slice(3)) {
+            Object.assign(game.battle.actor(id), { hp: 0, dead: true, respawnAt: Infinity });
+        }
+
+        return game.progress.gold;
+    });
+    const thanks = page.getByRole("dialog", { name: /^The lord of .+ thanks you/ });
+
+    expect(await playUntil(page, () => Boolean(document.querySelector(".choice")))).toBe(true);
+    await expect(thanks).toBeVisible();
+    await expect(thanks).toContainText(`who felled ${felled.ids} bandits of the ${coming.size} who came: their own purse,`);
+    await expect(thanks).toContainText("from the armoury");
+    expect(await page.evaluate(() => window.horns)).toEqual([
+        ["retreatHorn", 0, true],
+        ["townHorn", 0.4, false],
+    ]);
+    expect(await page.evaluate(() => window.pellagos.game.progress.gold)).toBeGreaterThan(gold + REWARD.purse);
+    await expect(page.locator("#banner")).toContainText("The bandits are beaten back from");
+
+    await thanks.getByRole("button", { name: "With thanks" }).click();
+    await expect(thanks).toBeHidden();
 });
