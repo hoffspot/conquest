@@ -6,7 +6,8 @@
 // by older versions that must still load.
 //
 // The world: seed 3, its host's player and an elf who joined, out in the elves' town; a field
-// battle under way near the host; a minute of it played.
+// battle under way near the host, and an invasion coming to the host's town; a minute of it
+// played.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -32,6 +33,7 @@ const ada = host.battle.actor(HOST_PLAYER);
 
 host.command(HOST_PLAYER, { type: "move", to: [ada.square[0] + 8, ada.square[1] + 3] });
 host.command(HOST_PLAYER, { type: "fieldBattle", size: 4, facing: 0 });
+host.command(HOST_PLAYER, { type: "invade" });
 
 for (let step = 0; step < 1200; step++) {
     host.advance(STEP_MS);

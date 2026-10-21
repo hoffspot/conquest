@@ -68,6 +68,7 @@ import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, 
 import { describeLeader } from "../core/war/peoples.js";
 import { CRY, newsCount, newsSince, peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { bubbleSeconds, CALLING, callOf } from "../core/crying.js";
+import { BANDS, criesOf, INVASION, thanksOf } from "../core/invasions.js";
 import { createRandom } from "../core/random.js";
 import { cultNear, cultWays, cultWord } from "../core/cultword.js";
 import { circleOf, rumouredBy, rumoursNear, rumourWord, RUMOURS } from "../core/rumours.js";
@@ -701,7 +702,7 @@ const BELL = Object.freeze({ reach: 160, every: 180, volume: 1.6 });
 const HEARD_FOUND = 5;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -5582,7 +5583,8 @@ export class Game {
             this.cryRandom ??= createRandom(Math.floor(Math.random() * 2 ** 31));
 
             const state = this.crierCalls.get(nearest.one.id) ?? {};
-            const call = callOf({ now: now * 1000, state, headline: unheard.at(-1)?.words ?? null, night: torchesLit(elapsedOf(war)), random: this.cryRandom });
+            const invasion = this.host.invasions.find(({ place, broke }) => broke === null && `crier:${place}` === nearest.one.id);
+            const call = invasion ? this.#invasionCall(invasion, state, now * 1000) : callOf({ now: now * 1000, state, headline: unheard.at(-1)?.words ?? null, night: torchesLit(elapsedOf(war)), random: this.cryRandom });
 
             this.crierCalls.set(nearest.one.id, state);
 
@@ -5599,6 +5601,97 @@ export class Game {
         // (Further off, with news for them: his bell, from where he is)
         if (unheard.length && avatar && now >= (this.bellNext ?? 0)) {
             this.bellNext = now + BELL.every;
+            this.sound?.play(ROLES.crier.rests[0].sound, { at: avatar.object.position, volume: BELL.volume, far: BELL.reach });
+        }
+    }
+
+    // A crier's call while an invasion's on at his town, its raiders not beaten off yet: his plea
+    // to every able hand (core/invasions.js criesOf), each time he calls; or null, too soon after
+    // his last
+    #invasionCall(invasion, state, now) {
+        if (now < (state.next ?? -Infinity)) {
+            return null;
+        }
+
+        state.next = now + CALLING.every[0];
+
+        return { lines: [CALLING.oyez, criesOf(invasion.band, invasion.way)[1]], news: false };
+    }
+
+    // An invasion (core/invasions.js; host.js #invade). Coming: its soldiers drawn, and, at the
+    // town the player's in or near, the player told the way the raiders come (in their first, that
+    // the raiders leave them be till they strike one), the town's crier crying it out
+    // (#invasionCry). Beaten off, or the town's soldiers fallen: told, and the crier's thanks. And
+    // the player thanked for the raiders they felled: the gold, the merit and the standing, and,
+    // for a good share of them, the lord's purse and a piece from the armoury
+    #invasion(event) {
+        const band = BANDS[event.band];
+        const invasion = this.host.invasions.find(({ id }) => id === event.id);
+        const me = this.battle.actor(this.me);
+        const near = this.progress.invasion.place === event.place || Boolean(invasion && me?.map === "town" && Math.hypot(me.x - invasion.middle[0], me.y - invasion.middle[1]) <= invasion.edge + INVASION.out + INVASION.away);
+
+        switch (event.change) {
+            case "coming":
+                this.enlisting.push(...event.ids);
+
+                if (near) {
+                    const spared = event.spared.includes(this.me) ? " They'll leave you be, unless you strike one." : "";
+
+                    this.hud.message(`${band.label} on the ${event.way} road! ${event.name} calls every able hand to its defence.${spared}`, 6);
+                    this.#invasionCry(event.place, criesOf(event.band, event.way)[0]);
+                }
+
+                break;
+            case "repelled":
+                if (near) {
+                    this.hud.message(`The ${band.many} are beaten back from ${event.name}!`, 4);
+                    this.#invasionCry(event.place, thanksOf(event.band));
+                }
+
+                break;
+            case "fell":
+                if (near) {
+                    this.hud.message(`${event.name}'s soldiers have fallen. The ${band.many} go back the way they came.`, 4);
+                }
+
+                break;
+            case "thanks": {
+                if (event.player !== this.me) {
+                    break;
+                }
+
+                const got = [`${event.gold} gold`, ...(event.merit ? [`${event.merit} merit with the guilds`] : []), ...(event.thanks ? [`${event.thanks} standing`] : [])];
+                const lord = event.big ? ` Its lord sends their own purse, and ${itemLabel(event.piece).toLowerCase()} from the armoury.` : "";
+
+                this.hud.message(`${event.name} thanks you for the ${event.felled} ${event.felled === 1 ? "raider" : band.many} you felled: ${got.join(", ")}.${lord}`, 7);
+                this.hud.setGold(this.progress.gold);
+                this.onProgress(this.progress);
+                this.onStanding(this.standing);
+                this.sound?.play("coins");
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    // A town's crier crying out (an invasion's), if he's out and the player's within his bell's
+    // reach (BELL): his words over his head, his bell rung, and his own cries put off a while
+    #invasionCry(place, words) {
+        const crier = this.battle.actor(`crier:${place}`);
+        const me = this.battle.actor(this.me);
+        const avatar = crier ? this.avatars.get(crier.id) : null;
+
+        if (!crier || !me || crier.map !== me.map || Math.hypot(crier.x - me.x, crier.y - me.y) > BELL.reach) {
+            return;
+        }
+
+        this.hud.say(crier.id, `${CALLING.oyez}\n${words}`, 1 + bubbleSeconds(words));
+        this.crierCalls ??= new Map();
+        this.crierCalls.set(crier.id, { ...this.crierCalls.get(crier.id), next: this.clock * 1000 + CALLING.every[0] });
+
+        if (avatar) {
+            this.#rest({ id: crier.id, role: "crier", rest: 0 }, avatar);
             this.sound?.play(ROLES.crier.rests[0].sound, { at: avatar.object.position, volume: BELL.volume, far: BELL.reach });
         }
     }
@@ -9345,6 +9438,9 @@ export class Game {
                 this.enlisting.push(...event.ids);
                 this.hud.message(`Two armies of ${event.size} take the field`, 3);
                 break;
+            case "invasion":
+                this.#invasion(event);
+                break;
             case "townsfolk":
                 // (A place's townsfolk out about their business, drawn nearest first; or home again)
                 if (event.change === "out") {
@@ -9572,8 +9668,10 @@ export class Game {
 
                 break;
             case "turn":
-                // (The war kept as it goes; the journal's time left with it)
+                // (The war kept as it goes; the journal's time left with it; and the player's time
+                // in towns, for the invasions to come: core/invasions.js clockOf)
                 this.onWar(this.host.war);
+                this.onProgress(this.progress);
 
                 if (this.journal?.open) {
                     this.#showJournal();
@@ -10606,9 +10704,10 @@ export class Game {
             }
         }
 
-        // Someone to talk to (one of the folk, a soldier who isn't an enemy): go up to them; another
+        // Someone to talk to (one of the folk, a soldier who isn't an enemy, nor one of an
+        // invasion's raiders, leaving the player be till they strike one): go up to them; another
         // player (not an enemy): trade with them
-        if (who && me && !this.battle.hostile(who, me)) {
+        if (who && me && !this.battle.hostile(who, me) && !this.host.invader(who.id)) {
             this.lastTap = { time, x: clientX, y: clientY, from: "view" };
 
             if (who.kind === "player") {
@@ -10658,6 +10757,19 @@ export class Game {
         });
     }
 
+    /**
+     * An invasion at the town the player's in, now (core/host.js #invadeNow: the debug overlay's
+     * Invasion), as one due would come; told why not, if not (not in a town or city, one on
+     * already, or not the world's own player).
+     */
+    invade() {
+        this.#command({ type: "invade" }, (result) => {
+            if (!result.ok) {
+                this.hud.message("Only in a town or city of the world you've opened, with no invasion on", 2.5);
+            }
+        });
+    }
+
     // What the mouse pointer shows over the view, looked at again every AIM_MS while the mouse is
     // over it: what a click there would do (#aimAt)
     #aim(now) {
@@ -10688,7 +10800,7 @@ export class Game {
         const who = found === me ? null : found;
 
         if (who) {
-            return me && !this.battle.hostile(who, me) ? "talk" : "attack";
+            return me && !this.battle.hostile(who, me) && !this.host.invader(who.id) ? "talk" : "attack";
         }
 
         if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point))) {

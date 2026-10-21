@@ -20,7 +20,7 @@
 // colours and metal. Pure data, no DOM.
 
 import { SHIELD_ARMS } from "../core/gear.js";
-import { WEAPONS } from "../core/weapons.js";
+import { weaponOf } from "../core/weapons.js";
 
 /**
  * Each people's colours: their cloth (`main`), its trim, a darker shade (`dark`: trousers, a
@@ -120,7 +120,7 @@ export function soldierKit(people, weapon, { captain = false } = {}) {
     const under = p === "orc" ? ["loincloth"] : [`livery.${p}`];
     const pieces = ["helm", "hauberk", "vambraces", ...(weapon === "gauntlets" ? [] : ["warGloves"]), "girdle", "legguards", "warBoots", ...(captain ? ["cloak"] : []), ...(SHIELDED.has(weapon) ? ["shield"] : [])];
 
-    return [...under, ...pieces.flatMap((piece) => uniformLook(piece, p)), ...(WEAPONS[weapon]?.equipment ?? []), ...(weapon === "bow" ? ["quiver"] : [])];
+    return [...under, ...pieces.flatMap((piece) => uniformLook(piece, p)), ...(weaponOf(weapon)?.equipment ?? []), ...(weapon === "bow" ? ["quiver"] : [])];
 }
 
 /**

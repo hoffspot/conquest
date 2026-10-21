@@ -17,7 +17,7 @@ import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const GUEST = Object.freeze({ hero: { name: "Bryn", shape: {}, look: {}, weapon: "bow", boots: false, race: "human" }, progress: { gold: 50 } });
 const MINUTE = 60000;
-const SERVED = Object.freeze({ rest: "everyone", debug: "owner" });
+const SERVED = Object.freeze({ rest: "everyone", debug: "owner", invasions: true });
 
 // How long the world's been going (ms) when it's a time of day (ms from midnight) on day `day`
 const at = (time, day = 1) => day * DAY.length + time - DAY.start;
@@ -92,11 +92,12 @@ describe("a world with no host player (core/host.js RULES)", () => {
     it("keeps its rules with it, each copy and each restored one playing by them; anything unknown as RULES has it", () => {
         const { host } = served();
 
-        assert.deepEqual(RULES, { rest: "host", debug: "host" }, "(a world a browser hosts, to begin with)");
+        assert.deepEqual(RULES, { rest: "host", debug: "host", invasions: true }, "(a world a browser hosts, to begin with)");
         assert.deepEqual(host.rules, SERVED);
         assert.deepEqual(host.snapshot().rules, SERVED);
         assert.deepEqual(Host.restore(buildWorld({ seed: 2 }), host.snapshot()).rules, SERVED);
-        assert.deepEqual(new Host(buildWorld({ seed: 2 }), { populate: false, rules: { rest: "nobody", debug: 1 } }).rules, RULES);
+        assert.deepEqual(new Host(buildWorld({ seed: 2 }), { populate: false, rules: { rest: "nobody", debug: 1, invasions: "sometimes" } }).rules, RULES);
+        assert.deepEqual(new Host(buildWorld({ seed: 2 }), { populate: false, rules: { rest: "host", debug: "host" } }).rules, RULES, "(one kept before invasions: they come)");
         assert.equal(host.players.get("p1").role, "owner");
         assert.equal(host.players.get("p2").role, "player");
     });

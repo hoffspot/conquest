@@ -675,9 +675,10 @@ export class Battle {
      * it's added. The folk have a `role` (roles.js ROLES: how they rest), and a `side` (the people
      * whose town they're in, whose enemies they run from: #afraid). A patrol goes round its
      * points in turn (a guard's one point: its post, facing out the way it's added facing). One
-     * carrying a shield has `shield` (#hit: { chance, share, spells }).
+     * carrying a shield has `shield` (#hit: { chance, share, spells }). One that's `lone` picks its
+     * own fights: its own don't take up its grudges (#provoke: an invasion's raiders).
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, lone = false }) {
         const kindOf = KINDS[kind];
         const type = { ...kindOf, hp: hp ?? kindOf.hp, speed: speed ?? kindOf.speed, chase: chase ?? speed ?? kindOf.chase };
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
@@ -844,6 +845,7 @@ export class Battle {
             // own with, weakest first: SPELLS ids)
             casts: casts ? [...casts] : null,
             heals: heals ? [...heals] : null,
+            ...(lone ? { lone: true } : {}),
         };
 
         this.actors.push(actor);
@@ -4806,7 +4808,7 @@ export class Battle {
 
     // Someone set on (struck, or a spell cast at them): they fight back (`turn`: a creature or a
     // guard turns on whoever did it), calm towards them no longer (Pacify), and hold it against
-    // them a while, as do those of their own who saw
+    // them a while, as do those of their own who saw (not one that's `lone`'s: it's its own)
     #provoke(attacker, target, { turn = true } = {}) {
         // (Struck while it waited, holding a place: it fights back at once)
         target.waryUntil = 0;
@@ -4854,7 +4856,7 @@ export class Battle {
                 // (A creature: only its own pack)
                 const own = other.team === target.team && (!target.wild || other.wild?.pack === target.wild.pack);
 
-                if (other === target || (own && !other.neutral && !other.dead && other.map === target.map && (this.canSee(other, target) || this.canSee(other, attacker)))) {
+                if (other === target || (own && !target.lone && !other.neutral && !other.dead && other.map === target.map && (this.canSee(other, target) || this.canSee(other, attacker)))) {
                     other.foes[attacker.id] = until;
                 }
             }

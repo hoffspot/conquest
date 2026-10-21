@@ -19,9 +19,9 @@ import { characterFrom } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { NewerDataError } from "./storage/versions.js";
 
-/** The rules of a world the server runs (core/host.js RULES): time passes when everyone rests; debug commands are its owners', if its settings allow them. */
+/** The rules of a world the server runs (core/host.js RULES): time passes when everyone rests; debug commands are its owners', if its settings allow them; invasions come to its towns. */
 export function rulesFor(meta) {
-    return { rest: "everyone", debug: meta.settings?.debugCommands ? "owner" : "none" };
+    return { rest: "everyone", debug: meta.settings?.debugCommands ? "owner" : "none", invasions: true };
 }
 
 /** Refused: a kept world that can't be carried on (`reason`), for its owner to choose a fresh start from its seed. */
