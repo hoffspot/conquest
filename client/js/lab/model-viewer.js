@@ -1,7 +1,8 @@
 // The model viewer (model-viewer.html; it was the creature lab, creature-lab.html, which sends
 // on here): every creature of the wilds (beasts/looks.js), each dungeon's bosses and
 // mini-bosses, the game's people (an adventurer, a soldier, each of the folk's roles: of any
-// people, a woman or a man), and its things (what's carried and worn, built in code:
+// people, a woman or a man; and the bands that invade the towns, their raiders and chiefs), and
+// its things (what's carried and worn, built in code:
 // characters/items.js; the catalog's props, the treasure chest opening), and the creatures whose
 // models are in the catalog but who aren't in the game yet, in any of their skins,
 // one at a time, doing what each does in the game (standing, walking,
@@ -18,7 +19,8 @@
 // ?creature=wolf&action=walk&seed=3 opens on one (a dungeon's boss or mini-boss:
 // ?creature=caves:boss:trollKing, its theme, its rank and its id there: beasts/champions.js; and
 // ?clip=Roar one of its model's clips); ?person=smith&people=lizard&sex=m opens on one of the
-// people (?person=adventurer or soldier, &weapon=bow); ?item=sword or ?prop=dungeon-prop-barrel
+// people (?person=adventurer or soldier, &weapon=bow; ?person=raider-northmen, one of a band of
+// invaders, or chief-northmen, its chief: core/invasions.js BANDS); ?item=sword or ?prop=dungeon-prop-barrel
 // on a thing; ?model=beast-werewolf on a creature not in the game yet (&skin=dusk in one of its
 // skins); window.lab lets a script do the same and step time on
 // exactly (for renders: .shots, and e2e/model-viewer.spec.js). The ox is shown in its wagon's
@@ -44,6 +46,7 @@ import { motions } from "../characters/motioncheck.js";
 import { ARMS, soldierLook } from "../characters/soldiers.js";
 import { CREATURES } from "../core/creatures.js";
 import { THEMES } from "../core/dungeons/themes.js";
+import { BANDS, raiderName } from "../core/invasions.js";
 import { ACT_TIMES, ROLES } from "../core/roles.js";
 import { allAtOnce } from "../core/steps.js";
 import { STARTING_WEAPONS, WEAPONS, weaponOf } from "../core/weapons.js";
@@ -261,7 +264,7 @@ function resize() {
 const person = {
     people: HERO_PEOPLES.some(({ id }) => id === params.get("people")) ? params.get("people") : "human",
     sex: params.get("sex") === "m" ? "m" : "f",
-    weapon: params.get("weapon") in WEAPONS ? params.get("weapon") : "sword",
+    weapon: weaponOf(params.get("weapon")) ? params.get("weapon") : "sword",
     // (And what the ox's wagon is laden with: wood, stone, metal or none, in its people's timber)
     load: ["wood", "stone", "metal", "none"].includes(params.get("load")) ? params.get("load") : "wood",
 };
@@ -282,10 +285,36 @@ const MOTIONS = new Map(motions().map((motion) => [motion.id, motion]));
 /** Whether an id in the picker is one of the people's ("person:" and a role, "adventurer" or "soldier"). */
 const isPerson = (id) => String(id).startsWith("person:");
 
+// The invaders shown as people: one of a band's raiders ("raider-" and the band) or its chief
+// ("chief-"), as { band, chief }; null, anyone else
+function bandOf(role) {
+    const [, rank, band] = /^(raider|chief)-(\w+)$/.exec(role) ?? [];
+
+    return band in BANDS ? { band, chief: rank === "chief" } : null;
+}
+
 // The weapons one of the people may be shown with: an adventurer any a player may start with
-// (and an orc's cleaver), a soldier their people's (soldiers.js ARMS); none, one of the folk
+// (and an orc's cleaver), a soldier their people's (soldiers.js ARMS), a raider any of their
+// band's, its chief their own; none, one of the folk
 function weaponsOf(role, people) {
+    const invader = bandOf(role);
+
+    if (invader) {
+        const { arms, chief } = BANDS[invader.band];
+
+        return invader.chief ? [chief] : [...new Set(Object.values(arms).flat())];
+    }
+
     return role === "adventurer" ? [...STARTING_WEAPONS, "cleaver"] : role === "soldier" ? [...new Set(ARMS[people] ?? ["sword"])] : [];
+}
+
+// What one of a band is called, fighting with `weapon` (its chief: their chief's name), as
+// "Northern berserker"
+function invaderName({ band, chief }, weapon) {
+    const { adjective, arms, names } = BANDS[band];
+    const role = Object.keys(arms).find((each) => arms[each].includes(weapon)) ?? "front";
+
+    return `${adjective} ${chief ? names.chief : raiderName(band, role, weapon)}`;
 }
 
 /**
@@ -300,6 +329,13 @@ function personLook(role, seed) {
 
     if (role === "soldier") {
         return { role: "sentry", weapon, ...soldierLook({ people, weapon, sex, seed }) };
+    }
+
+    // (An invader: their band in place of a people)
+    const invader = bandOf(role);
+
+    if (invader) {
+        return { role: "sentry", weapon, ...soldierLook({ people: invader.band, weapon, sex, seed, captain: invader.chief }) };
     }
 
     if (role === "adventurer") {
@@ -321,7 +357,7 @@ function personLook(role, seed) {
 function dressPerson(role, seed) {
     const look = personLook(role, seed);
     const character = allAtOnce(Character.building(kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: 1, merge: true }));
-    const avatar = new Avatar(character, { walk: look.walk, guard: look.weapon ? WEAPONS[look.weapon].attacks[0].animation : null });
+    const avatar = new Avatar(character, { walk: look.walk, guard: look.weapon ? weaponOf(look.weapon).attacks[0].animation : null });
 
     character.sheathe(true);
     avatar.rest = (variant = null) => {
@@ -596,7 +632,8 @@ function showCreature(id, which) {
 function showPerson(id, which) {
     const role = id.slice("person:".length);
     const { avatar, look } = dressPerson(role, which);
-    const people = HERO_PEOPLES.find(({ id: each }) => each === person.people).label;
+    const invader = bandOf(role);
+    const people = invader ? BANDS[invader.band].label : HERO_PEOPLES.find(({ id: each }) => each === person.people).label;
 
     current = {
         id,
@@ -605,8 +642,8 @@ function showPerson(id, which) {
         weapon: look.weapon,
         person: { role, rests: look.role, weapon: look.weapon, people: person.people, sex: person.sex },
         thing: null,
-        name: role === "adventurer" ? "Adventurer" : role === "soldier" ? "Soldier" : ROLES[role].title,
-        about: [people, person.sex === "f" ? "woman" : "man", look.weapon ? WEAPONS[look.weapon].label.toLowerCase() : null, role === "adventurer" ? "as the players and their followers" : null].filter(Boolean).join(" · "),
+        name: invader ? invaderName(invader, look.weapon) : role === "adventurer" ? "Adventurer" : role === "soldier" ? "Soldier" : ROLES[role].title,
+        about: [people, person.sex === "f" ? "woman" : "man", look.weapon ? weaponOf(look.weapon).label.toLowerCase() : null, role === "adventurer" ? "as the players and their followers" : null, invader ? "invading a town" : null].filter(Boolean).join(" · "),
     };
 }
 
@@ -761,7 +798,7 @@ function act(what, which = null, variant = null, { again: repeated = false } = {
         // (On guard as they are, with what they carry: a spell's cast or a flinch is played on
         // guard with their people's first weapon)
         if (!["attack", "draw"].includes(motion.group) && !motion.sheathed) {
-            avatar.actions.setWeapon(weapon ? WEAPONS[weapon].attacks[0].animation : null);
+            avatar.actions.setWeapon(weapon ? weaponOf(weapon).attacks[0].animation : null);
             avatar.actions.setGuard(Boolean(weapon));
             avatar.character.sheathe(!weapon);
         }
@@ -773,7 +810,7 @@ function act(what, which = null, variant = null, { again: repeated = false } = {
         // swipe; a model's clips play over that. Hovering, its fire breathed down)
         const own = weaponOf(CREATURES[kind]?.weapon)?.attacks ?? [];
         const named = what === "hover" ? "breath" : which;
-        const attack = weapon ? WEAPONS[weapon].attacks[0] : (own.find(({ animation }) => animation === named) ?? own.find(({ animation }) => animation === "melee") ?? { animation: "bite", hitAt: 450, duration: 900 });
+        const attack = weapon ? weaponOf(weapon).attacks[0] : (own.find(({ animation }) => animation === named) ?? own.find(({ animation }) => animation === "melee") ?? { animation: "bite", hitAt: 450, duration: 900 });
 
         every = Math.max(2, attack.duration / 1000 + 0.6);
 
@@ -1092,7 +1129,7 @@ function movesOf() {
         ];
     }
 
-    const animation = weapon ? WEAPONS[weapon].attacks[0].animation : null;
+    const animation = weapon ? weaponOf(weapon).attacks[0].animation : null;
 
     return [
         ...(ATTACKS[animation]?.variants ?? []).map(({ name }, variant) => ({ group: "Attacks", label: name, what: "attack", which: null, variant })),
@@ -1301,6 +1338,19 @@ if (COMING.length) {
     picker.append(group);
 }
 
+// (The bands that invade the towns: each one's raiders, any of them, and its chief)
+{
+    const group = document.createElement("optgroup");
+
+    group.label = "Invaders";
+
+    for (const [band, { label, names }] of Object.entries(BANDS)) {
+        group.append(new Option(label, `person:raider-${band}`), new Option(`${label}: ${names.chief}`, `person:chief-${band}`));
+    }
+
+    picker.append(group);
+}
+
 // (Each dungeon theme's bosses and mini-bosses, as they're drawn there)
 for (const [theme, { name, bosses, minis }] of Object.entries(THEMES)) {
     const group = document.createElement("optgroup");
@@ -1360,6 +1410,8 @@ function showWho() {
     }
     who.sex.hidden = wagon;
     who.load.hidden = !wagon;
+    // (An invader's band is their people)
+    who.people.hidden = Boolean(shown && bandOf(shown.role));
 
     if (wagon) {
         who.people.value = person.people;
@@ -1377,7 +1429,7 @@ function showWho() {
 
     who.people.value = shown.people;
     who.sex.value = shown.sex;
-    who.weapon.replaceChildren(...arms.map((weapon) => new Option(WEAPONS[weapon].label, weapon)));
+    who.weapon.replaceChildren(...arms.map((weapon) => new Option(weaponOf(weapon).label, weapon)));
     who.weapon.value = shown.weapon ?? "";
     who.weapon.hidden = arms.length === 0;
 }
@@ -1604,7 +1656,7 @@ const asked = params.has("person") ? `person:${params.get("person")}` : params.h
 const known = (id) =>
     id in LOOKS ||
     championOf(id ?? "") ||
-    (isPerson(id) && (FOLK_ROLES.includes(id.slice(7)) || ["adventurer", "soldier"].includes(id.slice(7)))) ||
+    (isPerson(id) && (FOLK_ROLES.includes(id.slice(7)) || ["adventurer", "soldier"].includes(id.slice(7)) || bandOf(id.slice(7)))) ||
     (id?.startsWith("item:") && ITEMS.some(([item]) => `item:${item}` === id)) ||
     (id?.startsWith("prop:") && PROPS.includes(id.slice(5))) ||
     (id?.startsWith("model:") && BEAST_MODELS.includes(id.slice(6)));

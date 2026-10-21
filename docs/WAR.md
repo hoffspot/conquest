@@ -2269,7 +2269,8 @@ A big band of raiders comes down one of a town's roads to attack it, and a big f
 own people marches out to meet them at its edge (`core/invasions.js`, the host's `#invasions`).
 The first comes to a character five minutes after they land in a town, whichever town that is; the
 rest come now and then while they're in towns, each as big as the devices in it can draw and keep
-moving. Bandits for now; the raider bands of other kinds and the war horn and music are to come.
+moving. A character's first is bandits'; every one after, any of five bands. The war horn and music
+are to come.
 
 **When** (`INVASION`, Progress `invasion`: `clockOf`):
 - **Time in towns**, counted for each character every second (`tick`) while they're in a town,
@@ -2302,14 +2303,13 @@ breaking a minute and a half to three minutes in, the town keeping a quarter to 
 soldiers; the host's steps took 4 to 6.5 ms on the mean.
 
 **The two sides** (`#invade`, `sidesOf`):
-- **The raiders**, two fifths of them (`BANDS.bandits`): rough men dressed as adventurers are
-  (characters/soldiers.js `raiderLook`), in no people's livery. Cutthroats with cleavers and swords
-  behind round shields (half of them), brutes with war hammers and battle axes (a fifth) and
-  archers (the rest), no casters or healers; their chiefs in the shield line, one to every 25,
-  cloaked, with a sword, two and a half times as hard to bring down; the rest less hardy than a
-  soldier (85%). They come out 70 m beyond the town's edge on a road out of it (any way, with none),
-  in a line of battle facing it (core/formation.js), and march on it a little faster than the
-  town's soldiers (1.3 m/s), to meet them 14 m beyond the edge.
+- **The raiders**, two fifths of them, of a band (`BANDS`, below; `bandFor`): bandits in any
+  character's first, else any of the five at random, the corsairs only to a town by the sea
+  (within 12 of the world plan's cells of it, about 400 m: `COAST`). In no people's livery, each
+  band dressed as its own (characters/soldiers.js `raiderLook`); their chiefs in the shield line,
+  one to every 25 to 40 of them, with a weapon of their own, harder to bring down. They come out
+  70 m beyond the town's edge on a road out of it (any way, with none), in a line of battle facing
+  it (core/formation.js), and march on it, to meet the town's soldiers 14 m beyond the edge.
 - **The town's people**, the rest (58%): soldiers of whoever holds the town, in their own people's
   line (`DOCTRINES`, `ROLE_ARMS`), forming 6 m inside its edge and marching out to meet them; and
   two squads of bomb throwers (`bombers`: a fortieth of them each, at least two), out on their
@@ -2325,14 +2325,42 @@ soldiers; the host's steps took 4 to 6.5 ms on the mean.
 - **None of the war's**: the soldiers of either side and those the raiders bring down (the town's
   guards among them) are no losses to the war; a raider struck is no grudge between peoples.
 
-**How it goes** (`#invasionsOn`): the two lines meet and grind; once only a quarter of the raiders
-are left standing (`rout`), the town's held: they break and run back the way they came (2.6 m/s),
-going once they're 90 m beyond its edge, and the town's soldiers hold the field. With the town's
-soldiers all fallen first, it isn't: the raiders go back the way they came. Once none of them is
-left standing there, those left stand 20 seconds, then go as soon as they're not fighting
-(`linger`); and ten minutes after it came, everyone left in it goes (`lasts`). Played headless in
-seven worlds (the start towns of every people), the town held every time, the raiders breaking about
-a minute in, the town's soldiers a third to two thirds of them left, all of it over in two minutes.
+**The bands** (`BANDS`; their looks characters/soldiers.js `RAIDERS`; a raider's toughness a share of
+a soldier's 40 hit points, its chiefs' many times it):
+
+| Band | Its line | Up close | From afar | Its chiefs | Breaks at |
+| --- | --- | --- | --- | --- | --- |
+| **Bandits** (anyone's first) | Half shield line, a fifth two-handers, the rest archers; 1.3 m/s | Cutthroats (cleavers, swords, round shields), brutes (war hammers, battle axes); 85% | Archers | Chiefs: a sword, 2.5 times | A quarter left |
+| **Northmen** | Three tenths shield line, two fifths berserkers ranging 18 m after an enemy (12, a line's), three tenths behind; 1.5 m/s | Raiders (swords, cleavers), berserkers (battle axes, greatswords, war hammers); as hardy as a soldier | Archers, and axe-throwers: a hand axe thrown end over end from 9 m (core/weapons.js `throwingAxes`) | Chieftains: a greatsword, 3 times | A fifth |
+| **The Ashen Cult** | Its zealots nearly half, a tenth healers, three tenths fire-callers; stands 10 m short of where the lines meet and lets the town come (`stand`, `advance`); 1.1 m/s | Zealots (staves, war hammers); 70% | Fire-callers (grimoires, wands), casting the fire's spells; ash-priests healing | High priests: a staff, and hellfire hurled from 9 m that may set alight (`ashenPriest`), 3 times | A quarter |
+| **Sellswords** | Near half a deep shield line (kite and tower shields), a fifth two-handers, three tenths archers, a surgeon or two; 1.1 m/s | Swordsmen, two-handers (greatswords, war hammers); 90%, their armour taking a tenth off every blow | Archers | Captains: a greatsword, 2.5 times | 15%: the last to break |
+| **Corsairs** (by the sea only) | Two fifths cutthroats, a tenth brutes, half archers; 1.6 m/s, the fastest | Cutthroats (cleavers, swords), brutes (battle axes); 80% | Archers | Captains: a sword, 2.5 times | Two fifths: the first |
+
+Their looks, no two alike (one piece for each slot picked by each raider's seed): bandits as
+adventurers are (rogues, warriors, rangers), their chiefs cloaked and helmed; northmen in hide vests
+over bare arms, fur mantles, hide trousers, iron bands, nasal or horned helms and bone necklaces,
+three in four in war paint (woad, soot or ochre), their chieftains in black fur and horns; the cult
+in dark red and crimson robes and hoods, every face smeared with ash, their high priests in a
+blood-red cape;
+sellswords in mail or gambesons, breastplates, vambraces, gauntlets, greaves and helms of every
+people's make, no two alike, their captains cloaked; corsairs in linen shirts, wide trousers, bright
+sashes and tall boots, a coif or bare-headed, their captains in a plumed hat and a cloak. A thrown
+axe is drawn in flight, turning end over end (world/effects.js), and heard as a bomb lobbed is.
+The model viewer shows any of each band, with any of its weapons, and its chief (WILDS.md, *The
+model viewer*: `?person=raider-northmen&weapon=throwingAxes`, `?person=chief-cult`).
+
+**How it goes** (`#invasionsOn`): the two lines meet and grind; once only so many of the raiders are
+left standing (their band's `rout`: a quarter of bandits), or none of those who fight up close
+(`close`: their front and heavy lines, and their chiefs; archers, casters and healers can't hold the
+field alone, and would otherwise shoot down the town's line from beyond its reach), the town's held,
+however few of its own are left: they break and run back the way they came (2.6 m/s), going once
+they're 90 m beyond its edge, and the town's soldiers hold the field. With the town's soldiers all
+fallen first, it isn't: the raiders go back the way they came. Once none of them is left standing
+there, those left stand 20 seconds, then go as soon as they're not fighting (`linger`); and ten
+minutes after it came, everyone left in it goes (`lasts`). Played headless against every band in the
+start towns of the six peoples, at 60, 120 and 360 (core/invasions.js SIZE), the town held all 90
+times, the raiders breaking from 40 seconds to three minutes in; the cult cost the town most (at 360
+the cat folk's town kept 23 of its 209), the corsairs and the bandits least.
 
 **The crier** (app/game.js `#invasion`, `#invasionCry`): as it comes, every player in the town or
 near it is told ("Bandits on the north road! Marleyworth calls every able hand to its defence."; in
@@ -2361,7 +2389,8 @@ uniform).
 with what they carry (`Progress.invasion`), and a world's rules say whether invasions come at all
 (`RULES.invasions`). What two games share changed (`NET_VERSION` 145). How big an invasion each
 player's device can draw is in the host's snapshot too (each player's `budget`; `SNAPSHOT_VERSION`
-31, none told in a world kept before), and told by their game (`NET_VERSION` 146).
+31, none told in a world kept before), and told by their game (`NET_VERSION` 146). The bands
+changed what two games share again (`NET_VERSION` 147).
 
 ### Playing together (M11)
 

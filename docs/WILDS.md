@@ -1157,8 +1157,8 @@ each of the three it's built as (`seed % 3`), at its kind's size, each drawn at 
 creatures and the people move, at <https://hoffspot.github.io/conquest/model-viewer.html>. It was
 the creature lab; `creature-lab.html` sends on to it, with what it was asked for. Choose a
 creature of the wild, a dungeon's boss or mini-boss (DUNGEONS.md), one of the people (an
-adventurer, a soldier, or one of the folk in their role: CHARACTERS.md, *The motion check*), or
-one of the things, and it's drawn as the game draws it. The things are a works' wagon and its ox
+adventurer, a soldier, or one of the folk in their role: CHARACTERS.md, *The motion check*; or
+one of a band invading a town, or its chief: WAR.md, *Invasions*), or one of the things, and it's drawn as the game draws it. The things are a works' wagon and its ox
 (WAR.md, *Convoys on the roads*: of a people's timber, laden with wood, stone or metal, or
 empty); what's carried and worn that's a model of its own, built in code (characters/items.js:
 the weapons, shields, helms and hats, quivers and packs, the tusks and tails); and the catalog's
@@ -1186,9 +1186,10 @@ The panel and playback:
   goes through the last ten seconds as they were drawn (`Rewind`: each bone where it was), and on
   again to just where it was.
 - **Show:** its skeleton (three.js's `SkeletonHelper`) and its wireframe, each on and off.
-- **Person** (one of the people): of which people, a woman or a man, and, an adventurer or a
-  soldier, with which weapon (an adventurer any a player may start with, or an orc's cleaver; a
-  soldier their people's). **Wagon** (the ox's): its people's timber, and its load.
+- **Person** (one of the people): of which people, a woman or a man, and, an adventurer, a
+  soldier or an invader, with which weapon (an adventurer any a player may start with, or an
+  orc's cleaver; a soldier their people's; an invader any of their band's, its chief their own,
+  their band their people). **Wagon** (the ox's): its people's timber, and its load.
 - **The game's moves,** each by name: a beast's attacks, its special ones and its ways of resting;
   a people-shaped one's weapon's attacks and its ways of resting (characters/actions.js); one of
   the people's every motion, as the motion check plays it (characters/motioncheck.js `motions`):

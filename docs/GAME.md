@@ -5060,8 +5060,9 @@ battle's victors. It's for seeing how many this device draws and plays smoothly,
 ground: in the world, and only in a world the player opened (not one they've joined), or in a world
 server's world by its owners, if its rules allow them the debug commands.
 
-**Invasion** brings an invasion to the town or city the player's in, now, as one due would come (the
-host's `invade` command: docs/WAR.md *Invasions*), on the same terms.
+**Invasion** brings an invasion to the town or city the player's in, now, of the band chosen (any
+of the five, the corsairs too away from the sea) or as one due would come (the host's `invade`
+command: docs/WAR.md *Invasions*), on the same terms.
 
 ## The debug log
 
