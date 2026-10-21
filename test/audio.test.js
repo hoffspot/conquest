@@ -315,6 +315,11 @@ async function started(options) {
     sound.downloading = made.downloading;
     sound.unlock();
 
+    // (Its music played only as each test plays it, the test setting the clock: its own timer
+    // stopped, which on a slow machine could otherwise schedule it between the clock's steps,
+    // while the test waits on a download)
+    clearInterval(sound.timer);
+
     // (The browser decodes the recordings a moment later)
     await new Promise((resolve) => setTimeout(resolve, 0));
 
