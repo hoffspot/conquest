@@ -1696,6 +1696,13 @@ drawn for less before everything is. After 6 seconds near 60 again, 2 are drawn 
 a time; 2 drawn in full again that made it too slow go back to their crowds, and aren't tried again
 for 20 seconds, then 40, 80..., so it doesn't see-saw.
 
+**How big an invasion** (`app/budget.js`, with Adaptive on or off). While there's no invasion on,
+the game measures how long its frames take to update and draw (after 5 seconds of play, the middle
+of the last 10 seconds'), works out how many soldiers it has room for at 30 frames a second
+(core/invasions.js `sizeFor`: at most 360 on a computer, 160 on a phone, 120 on a smaller one,
+never fewer than 60) and tells the host whenever that changes by a tenth (its `budget` command):
+an invasion's as big as the smallest told by the players in its town (docs/WAR.md *Invasions*).
+
 **Clear of buildings.** In the town, a building can stand between the camera and the player,
 from whichever side it looks. The view marches out along its line from where it looks over the
 height of what's built on each square (`buildings`: houses, landmarks, walls, towers,

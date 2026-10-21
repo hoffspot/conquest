@@ -26,7 +26,8 @@
  *  - `kinds`: the kinds of settlement invaded (setpieces/town.js SETTLEMENT_KINDS); `within`: how
  *    far beyond its edge someone's still in it;
  *  - `tick`: how often each player's time in a town is counted;
- *  - `size`: how many of both sides together, `defenders` the share of them the town's;
+ *  - `size`: how many of both sides together, with no device told (SIZE: as many as the
+ *    players' devices in it can draw), `defenders` the share of them the town's;
  *    `bombers`: its bomb throwers, in `squads` of a share of its force each (`share`), at least
  *    `least`;
  *  - `out`: how far beyond the edge the raiders come out into the world, along the road;
@@ -59,6 +60,36 @@ export const INVASION = Object.freeze({
     linger: 20000,
     lasts: 600000,
 });
+
+/**
+ * How big an invasion a device can draw and keep moving, both sides together (`sizeFor`): no more
+ * than its kind of device's (`most`: a computer's, a phone's or a smaller phone's, as the game
+ * tells them apart, world/view.js detectQuality), nor fewer than `least`; and as many as each
+ * frame has room for, below `frame` ms (30 frames a second, a sixth to spare), each of them
+ * costing it so much of a frame (`each`: ms) over what it's drawing already. Measured: a step of
+ * a battle of 400 takes 7.5 ms on a computer (docs/WAR.md *Lines of battle*), a phone's about five
+ * times as slow; and crowds of 200 add about 4 ms to a frame's update (docs/GAME.md *Crowds*).
+ */
+export const SIZE = Object.freeze({
+    most: Object.freeze({ low: 120, medium: 160, high: 360 }),
+    each: Object.freeze({ low: 0.1, medium: 0.09, high: 0.04 }),
+    least: 60,
+    frame: (1000 / 30) * (5 / 6),
+});
+
+/**
+ * How big an invasion a device of a kind (`device`: "low", "medium" or "high") can draw, its
+ * frames taking `work` ms now (to update and draw, before it comes): SIZE.
+ */
+export function sizeFor(work, device = "high") {
+    const most = SIZE.most[device] ?? SIZE.most.low;
+    const fits = Math.floor((SIZE.frame - (Number.isFinite(work) ? work : SIZE.frame)) / (SIZE.each[device] ?? SIZE.each.low));
+
+    return Math.max(SIZE.least, Math.min(most, fits));
+}
+
+/** Whether a size someone's game tells the host is one it could be (SIZE). */
+export const isSize = (size) => Number.isInteger(size) && size >= SIZE.least && size <= Math.max(...Object.values(SIZE.most));
 
 /**
  * The bands that invade, each: its name (`label`), what one of it is called (`adjective`: "Bandit
