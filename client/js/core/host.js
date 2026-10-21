@@ -4392,7 +4392,7 @@ export class Host {
                 this.#give(player, structuredClone(piece));
             }
 
-            this.#event("invasion", { change: "thanks", id: invasion.id, player: id, name: invasion.name, people: invasion.people, felled, of: invasion.size, gold: reward.gold, merit, thanks: invasion.people === player.realm ? reward.thanks : 0, big: reward.big, piece });
+            this.#event("invasion", { change: "thanks", id: invasion.id, player: id, name: invasion.name, band: invasion.band, people: invasion.people, felled, of: invasion.size, gold: reward.gold, merit, thanks: invasion.people === player.realm ? reward.thanks : 0, big: reward.big, piece });
         }
     }
 

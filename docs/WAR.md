@@ -2390,7 +2390,8 @@ with what they carry (`Progress.invasion`), and a world's rules say whether inva
 (`RULES.invasions`). What two games share changed (`NET_VERSION` 145). How big an invasion each
 player's device can draw is in the host's snapshot too (each player's `budget`; `SNAPSHOT_VERSION`
 31, none told in a world kept before), and told by their game (`NET_VERSION` 146). The bands
-changed what two games share again (`NET_VERSION` 147).
+changed what two games share again (`NET_VERSION` 147), and so did the band named in the thanks
+(148).
 
 ### Playing together (M11)
 
