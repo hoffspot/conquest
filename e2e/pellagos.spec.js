@@ -5090,7 +5090,8 @@ test("a crier stands in the start town's square in his people's livery, his hand
     expect(rung.bells[0].at).toBeLessThan(0.01);
     expect(rung.badge).toBe("5");
 
-    // Come near, out of a fight and a talk: he calls out "Oyez!" and the latest news yet to hear
+    // Come near, out of a fight and a talk: he calls out one of his openings ("Oyez!" and the
+    // others, in turn) and the latest news yet to hear
     const called = await page.evaluate((id) => {
         const { game } = window.pellagos;
         const one = game.battle.actor(id);
@@ -5108,7 +5109,7 @@ test("a crier stands in the start town's square in his people's livery, his hand
         return { words: document.querySelector(`.said[data-id="${id}"]`)?.textContent ?? null, latest: game.host.war.log.at(-1) };
     }, crier.id);
 
-    expect(called.words).toMatch(/^Oyez! Oyez! Oyez!\n/);
+    expect(await page.evaluate(async () => (await import("/js/core/crying.js")).OPENINGS)).toContain(called.words.split("\n")[0]);
     expect(called.words).toContain("declared war on");
     await expect(page.locator(".said")).toBeVisible();
     expect((await talkTo(crier.id)).choices).toContain("Let's hear it.");

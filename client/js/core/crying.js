@@ -1,17 +1,38 @@
 // A place's crier calling out (docs/GAME.md *The crier*): as a player comes near him, out of a
-// fight and out of a talk, he cries "Oyez! Oyez! Oyez!" and then the latest of the war's news they
-// haven't heard yet, or, with none, one of the town's own cries (something lost or found, a
-// bylaw, the market; by night, the hour and the watch). He never cries the same news to them again
-// within a while, nor calls again sooner than his last call's wait (CALLING); the town's cries go
-// round each once before any's said again. Pure data, no DOM: the game keeps what each crier's
-// called to its player (app/game.js #cryOut), and shows his words over his head (app/hud.js say).
+// fight and out of a talk, he cries out for their ear ("Oyez! Oyez! Oyez!", "Hear ye! Hear ye!"
+// and the rest of OPENINGS) and then the latest of the war's news they haven't heard yet, or, with
+// none, one of the town's own cries (something lost or found, a bylaw, the market; by night, the
+// hour and the watch). He never cries the same news to them again within a while, nor calls again
+// sooner than his last call's wait (CALLING); his openings and the town's cries each go round once
+// before any's said again, never the same twice running. Pure data, no DOM: the game keeps what
+// each crier's called to its player (app/game.js #cryOut), and shows his words over his head
+// (app/hud.js say).
 
 /**
  * How a crier calls out: how near the player comes (metres) before he calls; how long he waits
- * between his calls to them (ms: from and to); how long before he'll cry the same news to them
- * again (ms); and the call before his words.
+ * between his calls to them (ms: from and to); and how long before he'll cry the same news to them
+ * again (ms).
  */
-export const CALLING = Object.freeze({ near: 25, every: Object.freeze([45000, 60000]), again: 180000, oyez: "Oyez! Oyez! Oyez!" });
+export const CALLING = Object.freeze({ near: 25, every: Object.freeze([45000, 60000]), again: 180000 });
+
+/** How he opens a call, before his words: each in turn. */
+export const OPENINGS = Object.freeze([
+    "Oyez! Oyez! Oyez!",
+    "Hear ye! Hear ye!",
+    "Attend! Attend!",
+    "Attend yourselves!",
+    "Make way! Make way!",
+    "Good people!",
+    "Heed the word!",
+    "Silence for the scroll!",
+    "Gather 'round!",
+    "Come all!",
+    "Hark! Hark!",
+    "Hearken, all!",
+    "Give ear, good folk!",
+    "Be it known to all!",
+    "Draw near and listen!",
+]);
 
 /** The town's own cries, by day and by night, between the news. */
 export const CRIES = Object.freeze({
@@ -38,11 +59,13 @@ export const bubbleSeconds = (text) => Math.min(6, Math.max(2.5, 1.2 + text.leng
 /**
  * What a crier calls to a player now (`now`, ms), or null, too soon after his last call to them.
  * `state` is what he's called to them so far, kept by the game and changed here: { next (when he
- * may call again), said ({ words: when he last cried them }), day, night (the town's cries still
- * to go round, by their places in CRIES) }. His "Oyez!", then the latest news they haven't heard
- * (`headline`) unless he's cried it them within CALLING.again, else one of the town's own cries
- * (by day, or by `night`), taken in turn from a shuffle of them (`random`: core/random.js).
- * { lines: [the oyez, his words], news (whether it's the war's news) }.
+ * may call again), said ({ words: when he last cried them }), openings, day, night (his openings
+ * and the town's cries still to go round, by their places in OPENINGS and CRIES), last (the
+ * place of the last of each taken) }. One of his openings, then the latest news they haven't
+ * heard (`headline`) unless he's cried it them within CALLING.again, else one of the town's own
+ * cries (by day, or by `night`); his openings and the cries each taken in turn from a shuffle of
+ * them (`random`: core/random.js). { lines: [his opening, his words], news (whether it's the war's
+ * news) }.
  */
 export function callOf({ now, state, headline = null, night = false, random }) {
     if (now < (state.next ?? -Infinity)) {
@@ -54,18 +77,35 @@ export function callOf({ now, state, headline = null, night = false, random }) {
     state.said ??= {};
     state.next = now + from + random.next() * (to - from);
 
+    const opening = inTurn(state, "openings", OPENINGS, random);
+
     if (headline && !(now - (state.said[headline] ?? -Infinity) < CALLING.again)) {
         state.said[headline] = now;
 
-        return { lines: [CALLING.oyez, headline], news: true };
+        return { lines: [opening, headline], news: true };
     }
 
     const when = night ? "night" : "day";
-    const cries = CRIES[when];
 
-    if (!state[when]?.length) {
-        state[when] = random.shuffle([...cries.keys()]);
+    return { lines: [opening, inTurn(state, when, CRIES[when], random)], news: false };
+}
+
+// The next of `list` to say, taken from a shuffle of it (its places, kept in state[key]): each
+// once before any's said again, and never the same twice running, from one shuffle to the next
+function inTurn(state, key, list, random) {
+    state.last ??= {};
+
+    if (!state[key]?.length) {
+        const order = random.shuffle([...list.keys()]);
+
+        if (order.length > 1 && order.at(-1) === state.last[key]) {
+            [order[0], order[order.length - 1]] = [order.at(-1), order[0]];
+        }
+
+        state[key] = order;
     }
 
-    return { lines: [CALLING.oyez, cries[state[when].pop()]], news: false };
+    state.last[key] = state[key].pop();
+
+    return list[state.last[key]];
 }

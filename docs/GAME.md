@@ -694,8 +694,12 @@ world's seed, as they are.
   further than it shows (app/minimap.js `criers`, as the wild's elites are).
 - **Calling out** (core/crying.js `callOf`, app/game.js `#cryOut`): as the player comes within
   25 m of him (`CALLING.near`), out of a talk and a fight, he calls out over his head in a bubble
-  (app/hud.js `say`), ringing his bell as he does: "Oyez! Oyez! Oyez!", then the latest of the
-  war's news they've yet to hear from a crier. He never cries the same news to them again within
+  (app/hud.js `say`), ringing his bell as he does. He opens with one of his calls for their ear
+  (`OPENINGS`: "Oyez! Oyez! Oyez!", "Hear ye! Hear ye!", "Attend! Attend!", "Attend yourselves!",
+  "Make way! Make way!", "Good people!", "Heed the word!", "Silence for the scroll!", "Gather
+  'round!", "Come all!", "Hark! Hark!", "Hearken, all!", "Give ear, good folk!", "Be it known to
+  all!", "Draw near and listen!"), each in turn: every one once before any again, never the same
+  twice running. Then the latest of the war's news they've yet to hear from a crier. He never cries the same news to them again within
   three minutes (`CALLING.again`), nor calls more often than every 45 to 60 seconds; with no news
   to cry, one of the town's own cries (`CRIES`: something lost or found, a bylaw, the market; by
   night, the hour and the watch), each once before any again. A bubble's shown as long as its

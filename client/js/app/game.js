@@ -5549,11 +5549,11 @@ export class Game {
     }
 
     // The criers out near the player (docs/GAME.md *The crier*): each one within CALLING.near
-    // calling out to them now and then (core/crying.js callOf: "Oyez!", and the latest news they've
-    // yet to hear, else one of the town's own cries), over his head (hud.say), ringing his bell as
-    // he does; not while they're talking or fighting. The news they've yet to hear from the
-    // nearest, on the compass; and while there's some, his bell rung now and then from where he
-    // is, to bring them to him (BELL). Every HEARD_EVERY seconds
+    // calling out to them now and then (core/crying.js callOf: "Oyez!" or another of his openings,
+    // and the latest news they've yet to hear, else one of the town's own cries), over his head
+    // (hud.say), ringing his bell as he does; not while they're talking or fighting. The news
+    // they've yet to hear from the nearest, on the compass; and while there's some, his bell rung
+    // now and then from where he is, to bring them to him (BELL). Every HEARD_EVERY seconds
     #cryOut() {
         const player = this.battle.actor(this.me);
         const war = this.host.war;
@@ -5587,9 +5587,9 @@ export class Game {
             this.crierCalls.set(nearest.one.id, state);
 
             if (call) {
-                const [oyez, words] = call.lines;
+                const [opening, words] = call.lines;
 
-                this.hud.say(nearest.one.id, `${oyez}\n${words}`, 1 + bubbleSeconds(words));
+                this.hud.say(nearest.one.id, `${opening}\n${words}`, 1 + bubbleSeconds(words));
                 this.#rest({ id: nearest.one.id, role: "crier", rest: 0 }, avatar);
             }
 
