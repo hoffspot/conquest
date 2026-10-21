@@ -592,6 +592,69 @@ test("and the Kaiju: its nine clips (its run cut to the ten seconds that loop), 
     await expect(page.locator("#details")).toContainText("HuyKhoi2407's Kaiju, bought on Fab: used with the permission its Standard License gives");
 });
 
+test("and the Kaiju's atomic breath: its glow charged from its tail, then a beam from its jaws down onto the ground in front of it, its glow at its brightest; none of it in its other clips", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-kaiju&clip=Energy%20Breath&shot");
+    await page.waitForFunction(() => window.lab.watch().clip === "Energy Breath", null, { timeout: 60000 });
+
+    // (A moment of a clip, `seconds` into it: what its breath is doing, and how much of what's
+    // drawn is the beam's blue-white)
+    const at = (clip, seconds) =>
+        page.evaluate(
+            ([name, time]) => {
+                window.lab.clip(name);
+                window.lab.pause();
+
+                for (let k = 0; k < Math.round(time * 30); k++) {
+                    window.lab.step(1);
+                }
+
+                window.lab.draw();
+
+                const view = document.querySelector("#view");
+                const flat = Object.assign(document.createElement("canvas"), { width: view.width, height: view.height });
+                const drawn = flat.getContext("2d");
+
+                drawn.drawImage(view, 0, 0);
+
+                const pixels = drawn.getImageData(0, 0, flat.width, flat.height).data;
+                let blue = 0;
+
+                for (let k = 0; k < pixels.length; k += 4) {
+                    blue += pixels[k + 2] > 220 && pixels[k + 2] >= pixels[k] ? 1 : 0;
+                }
+
+                return { ...window.lab.breath(), blue: blue / (pixels.length / 4) };
+            },
+            [clip, seconds],
+        );
+
+    const before = await at("Energy Breath", 0.1);
+
+    expect(before).toMatchObject({ firing: false, glow: 0, aim: 0 });
+    expect(before.blue).toBeLessThan(0.002);
+
+    // (Drawing breath: its glow lit from its tail on, its head coming round to aim)
+    const charging = await at("Energy Breath", 0.9);
+
+    expect(charging.firing).toBe(false);
+    expect(charging.glow).toBeGreaterThan(0);
+
+    // (Firing: on the ground 10 to 20 metres in front of its mouth, where what it fights would be)
+    const firing = await at("Energy Breath", 2.5);
+
+    expect(firing).toMatchObject({ firing: true, aim: 1 });
+    expect(firing.glow).toBeGreaterThan(3);
+    expect(firing.hit).toBeGreaterThan(10);
+    expect(firing.hit).toBeLessThan(20);
+    expect(firing.blue).toBeGreaterThan(0.01);
+
+    const roaring = await at("Roar", 2.5);
+
+    expect(roaring).toMatchObject({ firing: false, glow: 0, aim: 0 });
+    expect(roaring.blue).toBeLessThan(0.002);
+});
+
 test("and the Greater Demon: its own showcase and the roar cut from it, the human clips played on its skeleton, its one mesh, and whose it is", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?model=beast-greater-demon&clip=Pound");

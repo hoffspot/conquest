@@ -5,8 +5,9 @@
 /**
  * How much there is to draw of something as it's shown (`object`): { meshes, triangles,
  * vertices, materials, textures ([{ width, height, compressed }], each once, the largest first),
- * bones }. What's hidden (a model's other levels of detail) or drawn unseen (only into the
- * shadows) is left out; its bones are counted all the same.
+ * bones }. What's hidden (a model's other levels of detail), drawn unseen (only into the
+ * shadows) or not part of it (what a beast breathes: beasts/beam.js) is left out; its bones are
+ * counted all the same.
  */
 export function detailsOf(object) {
     const materials = new Set();
@@ -29,7 +30,8 @@ export function detailsOf(object) {
     object.traverseVisible((node) => {
         const drawn = [node.material].flat().filter((material) => material && material.visible !== false && material.colorWrite !== false);
 
-        if (!node.isMesh || !node.geometry || drawn.length === 0) {
+        // (Not what it breathes or throws: beasts/beam.js's)
+        if (!node.isMesh || !node.geometry || drawn.length === 0 || node.userData.effect) {
             return;
         }
 
