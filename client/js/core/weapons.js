@@ -214,6 +214,16 @@ export const NATURAL = Object.freeze({
             ranged({ id: "bomb", reach: 10, damage: [5, 10], hitAt: 650, duration: 1200, interval: 3800, stagger: 300, reaction: "crush", animation: "throw", bomb: "goblinBomb" }),
         ],
     },
+    // (A town's bomb throwers, among those who march out against an invasion: core/invasions.js
+    // BOMBER. A sword up close, its shield hand free to lob goblin bombs at whoever's further off)
+    bombardier: {
+        label: "Sword and bombs",
+        equipment: ["sword"],
+        attacks: [
+            melee({ id: "slash", damage: [4, 8], hitAt: 380, duration: 760, interval: 1100, reaction: "slash", animation: "sword" }),
+            ranged({ id: "bomb", reach: 11, damage: [6, 12], hitAt: 650, duration: 1200, interval: 4000, stagger: 300, reaction: "crush", animation: "throw", bomb: "goblinBomb" }),
+        ],
+    },
     boggart: { label: "Claws", attacks: [melee({ id: "claw", damage: [3, 6], hitAt: 170, duration: 420, interval: 900, stagger: 80, reaction: "slash", animation: "punch", afflict: { kind: "disease", chance: 0.15 } })] },
     badger: { label: "Teeth and claws", attacks: [melee({ id: "bite", damage: [3, 5], hitAt: 350, duration: 750, interval: 1150, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.2 } })] },
     wildBull: { label: "Horns", attacks: [melee({ id: "gore", damage: [5, 9], hitAt: 500, duration: 1000, interval: 1600, stagger: 400, reaction: "pierce", animation: "melee", afflict: { kind: "bleed", chance: 0.2 } })] },

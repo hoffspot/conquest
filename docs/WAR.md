@@ -2263,6 +2263,89 @@ as its breaches). The storms under way are in the host's. What two games share c
 mesh, sight, blows and cover); and again (`NET_VERSION` 97): those hacking at it keeping at it,
 covered, the stakes' 300 hit points, and an army met keeping its mix as it's fewer.
 
+### Invasions
+
+A big band of raiders comes down one of a town's roads to attack it, and a big force of the town's
+own people marches out to meet them at its edge (`core/invasions.js`, the host's `#invasions`).
+The first comes to a character five minutes after they land in a town, whichever town that is; the
+rest come now and then while they're in towns. Bandits for now; the raider bands of other kinds,
+the size to fit each device and the war horn and music are to come.
+
+**When** (`INVASION`, Progress `invasion`: `clockOf`):
+- **Time in towns**, counted for each character every second (`tick`) while they're in a town,
+  city or capital (`kinds`: out in the world within its edge or 12 m beyond it, or in one of its
+  buildings), not while they're away, being sent out or resting. It goes with the character,
+  saved with what they carry, to every world they play in: how many invasions they've been in
+  (`seen`), their time in towns since the last (`clock`), when the next is due (`due`), and the town
+  they're in now and how long they've been there (`place`, `here`).
+- **The first** five minutes into it (`first`), 30 seconds at least in the town it comes to
+  (`settleFirst`); **every one after** half an hour to an hour of it later (`every`, at random),
+  never in their first three minutes in a town (`settle`). Villages, hamlets and farmsteads are
+  never invaded, nor a town whose people are the character's enemies (they'd fight them beside the
+  raiders).
+- **One at a time** in a world. The players in the town it comes to are all in it: for each of them
+  it's counted (`seen`) and their next due from then.
+
+**The two sides** (`#invade`, `sidesOf`), 120 in all for now (`size`):
+- **The raiders**, two fifths of them (`BANDS.bandits`): rough men dressed as adventurers are
+  (characters/soldiers.js `raiderLook`), in no people's livery. Cutthroats with cleavers and swords
+  behind round shields (half of them), brutes with war hammers and battle axes (a fifth) and
+  archers (the rest), no casters or healers; their chiefs in the shield line, one to every 25,
+  cloaked, with a sword, two and a half times as hard to bring down; the rest less hardy than a
+  soldier (85%). They come out 70 m beyond the town's edge on a road out of it (any way, with none),
+  in a line of battle facing it (core/formation.js), and march on it a little faster than the
+  town's soldiers (1.3 m/s), to meet them 14 m beyond the edge.
+- **The town's people**, the rest (58%): soldiers of whoever holds the town, in their own people's
+  line (`DOCTRINES`, `ROLE_ARMS`), forming 6 m inside its edge and marching out to meet them; and
+  two squads of bomb throwers (`bombers`: a fortieth of them each, at least two), out on their
+  line's flanks, a sword up close and goblin bombs lobbed from 11 m (core/weapons.js `bombardier`)
+  that toss the raiders they burst by off their feet.
+- **Who fights whom** (the host's `#against`): the raiders are everyone's enemies and everyone
+  theirs; a raider's fellows don't take up its grudges (battle.js `lone`), each picks its own fights.
+  In a character's **first** invasion the raiders leave them be, and their followers and creatures
+  (`spared`), till they strike one: that one's theirs to fight for the rest of it (`struck`), its
+  fellows still not. In **every one after** the raiders fight them from the start. Clicking or
+  tapping a raider sets the player on it, never talks to it (app/game.js `tap`; the pointer shows
+  the sword's attack).
+- **None of the war's**: the soldiers of either side and those the raiders bring down (the town's
+  guards among them) are no losses to the war; a raider struck is no grudge between peoples.
+
+**How it goes** (`#invasionsOn`): the two lines meet and grind; once only a quarter of the raiders
+are left standing (`rout`), the town's held: they break and run back the way they came (2.6 m/s),
+going once they're 90 m beyond its edge, and the town's soldiers hold the field. With the town's
+soldiers all fallen first, it isn't: the raiders go back the way they came. Once none of them is
+left standing there, those left stand 20 seconds, then go as soon as they're not fighting
+(`linger`); and ten minutes after it came, everyone left in it goes (`lasts`). Played headless in
+seven worlds (the start towns of every people), the town held every time, the raiders breaking about
+a minute in, the town's soldiers a third to two thirds of them left, all of it over in two minutes.
+
+**The crier** (app/game.js `#invasion`, `#invasionCry`): as it comes, every player in the town or
+near it is told ("Bandits on the north road! Marleyworth calls every able hand to its defence."; in
+their first, "They'll leave you be, unless you strike one."), and its crier, if he's out and they're
+within his bell's reach (160 m), rings it and cries the alarm, not his usual openings (`ALARM`: "To
+arms! To arms!"), the road they come by and his call to every able hand to defend the town
+(`criesOf`: "Bandits on the north road! Every able hand, defend the town!"); while it's on he calls
+out to the adventurers each time he calls ("Adventurers! Able hands! To the north road, and drive
+them off!"); beaten off, he thanks every brave soul who stood for it (`thanksOf`).
+
+**Thanks** (`#thank`, `rewardOf`, `REWARD`), to every player who felled raiders (they, their
+followers or their creatures), once the raiders break: a bounty of 3 gold for each, the guilds'
+merit (2, one more for every 4 felled, at most 8, if they've signed up at a guild) and the town's
+thanks (3, one more for every 3, at most 12: standing with their own people where the town's
+theirs, else a favour of its people's to theirs). One who felled 15% of the raiders (`big`), the
+town held, has its lord's own purse besides (150 gold), 4 more merit and 8 more standing, and a
+rare piece from its armoury (like their own weapon, or a ring or an amulet). What's on the
+raiders they fell is theirs as it is on any foe (core/progress.js `LOOT.raider`: no people's
+uniform).
+
+**Called up** (debug): the debug overlay's **Invasion** brings one to the town the player's in now
+(the host's `invade` command), as one due would come.
+
+**Kept.** The invasions on and how many there've been are in the host's snapshot (`invasions`,
+`invaded`; `SNAPSHOT_VERSION` 30, none in a world kept before), each character's time in towns
+with what they carry (`Progress.invasion`), and a world's rules say whether invasions come at all
+(`RULES.invasions`). What two games share changed (`NET_VERSION` 145).
+
 ### Playing together (M11)
 
 **Opening a world.** In the menu, **Invite others** opens the world to others. It gets a room at

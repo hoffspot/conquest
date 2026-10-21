@@ -22,6 +22,7 @@
 import { CURES } from "./afflictions.js";
 import { BREWS, CHARM_ROLLS, CHARMS, charmStats, SCROLLS, STARTING_SCROLLS } from "./goods.js";
 import { blockMost, disguiseOf, GEAR, GEAR_SLOTS, gearName, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
+import { clockOf } from "./invasions.js";
 import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, GUILD_TOMES, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
 import { WEAPONS } from "./weapons.js";
@@ -294,6 +295,8 @@ export const SELL_SHARE = 0.4;
 export const LOOT = Object.freeze({
     orc: { gold: [5, 15], items: [{ id: "potion", chance: 0.3 }, { uniform: true, chance: 0.12 }, { id: "sword", quality: "fine", chance: 0.06 }] },
     soldier: { gold: [2, 8], items: [{ id: "potion", chance: 0.15 }, { uniform: true, chance: 0.15 }, { id: "bow", quality: "fine", chance: 0.03 }] },
+    // (One of an invasion's raiders: no people's uniform, what they've taken on the roads: core/invasions.js BANDS)
+    raider: { gold: [2, 7], items: [{ id: "potion", chance: 0.12 }, { id: "sword", quality: "fine", chance: 0.02 }, { id: "bow", quality: "fine", chance: 0.02 }] },
     // (The chest a place's occupiers guarded, opened once they're put to the sword: core/places.js)
     chest: { gold: [25, 60], items: [{ id: "potion", chance: 0.9 }, { uniform: true, chance: 0.9 }, { uniform: true, chance: 0.5 }, { id: "sword", quality: "fine", chance: 0.2 }, { id: "bow", quality: "fine", chance: 0.15 }] },
     // (The dragon's hoard in its lair, opened once it's slain: core/host.js #lairs)
@@ -626,10 +629,10 @@ function gearOf(kept, hero) {
 /** A player's skills, gold, pack and gear. */
 export class Progress {
     /**
-     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { slot: piece } }.
+     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { slot: piece }, invasion }.
      * @param {object} [hero] - Their hero (for the weapon they started with, and their spiked boots).
      */
-    constructor({ skills = {}, schools = null, spells = [], spellXp = {}, gold = 20, pack = [], gear = null } = {}, { weapon = "sword", boots = false } = {}) {
+    constructor({ skills = {}, schools = null, spells = [], spellXp = {}, gold = 20, pack = [], gear = null, invasion = null } = {}, { weapon = "sword", boots = false } = {}) {
         this.skills = Object.fromEntries(Object.keys(TREES).map((tree) => [tree, Math.max(0, Number(skills[tree]) || 0)]));
 
         /**
@@ -661,6 +664,13 @@ export class Progress {
         for (const piece of off) {
             this.stow(piece);
         }
+
+        /**
+         * Their time in towns, for the invasions that come to them (core/invasions.js clockOf:
+         * how many they've been in, the time since the last, when the next comes, and the town
+         * they're in now and how long they've been there).
+         */
+        this.invasion = clockOf(invasion);
     }
 
     /** A school of magic's tier (1 to its last: 5 for Healing, 7 for the elements). */
@@ -1207,7 +1217,7 @@ export class Progress {
 
     /** What's kept. */
     toJSON() {
-        return { skills: { ...this.skills }, schools: { ...this.schools }, spells: [...this.spells], spellXp: { ...this.spellXp }, gold: this.gold, pack: this.pack.map((stack) => (stack ? { ...stack } : null)), gear: structuredClone(this.gear) };
+        return { skills: { ...this.skills }, schools: { ...this.schools }, spells: [...this.spells], spellXp: { ...this.spellXp }, gold: this.gold, pack: this.pack.map((stack) => (stack ? { ...stack } : null)), gear: structuredClone(this.gear), invasion: { ...this.invasion } };
     }
 }
 
