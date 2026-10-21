@@ -330,3 +330,26 @@ from (`docs/LICENSED_MODELS.md`). The model viewer shows them (*Coming to the wi
 they're in the game.
 
 Don't copy them out of this game or use them in anything else.
+
+## kaiju.bin
+
+**Kaiju**, by **HuyKhoi2407** (its Blender files, rigged and animated, `Kaiju_Animation-baked.blend`
+with its textures), bought on **Fab** by this repository's owner under **Fab's Standard License**:
+the Kaiju.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought `.blend` put through `utilities/blenderpipeline`
+(`private/kaiju.json`, which stays out of the repository with the bought files), its `browser`
+build. That's made 36 m long (13 m tall), its mesh simplified to 60,770 triangles with two lower
+details packed in, its seven 4K UDIM materials baked onto one 2,048-pixel KTX2 atlas (colour,
+normals, roughness and metal, and its green glow), and its nine clips (Idle, Roar, Hit React,
+Energy Breath, Walk, Walk Left, Walk Right, Run, Faint), at 30 keyframes a second, its Run cut to
+its first ten seconds: the stretch that loops, and that its tail's dynamics are baked over.
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`). The model viewer shows it (*Coming to the wilds*) until it's in the
+game.
+
+Don't copy it out of this game or use it in anything else.

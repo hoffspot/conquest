@@ -230,9 +230,9 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
 
     // (In the game now, as are the ant, the spiders, the scorpion, the cockroach, the wasp, the
     // black widow, the Ant Monster, the greater demon (a hell's lord), the fiend (its packs), and its
-    // six flayed and six gorgers: every bought model is, none listed as to come; read, its clips
-    // listed, the one asked for by its address played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual([]);
+    // six flayed and six gorgers: every bought model is but the kaiju, listed as to come; read, its
+    // clips listed, the one asked for by its address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Kaiju"]);
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Giant cockroach", "Dungeon wasp", "Dungeon scorpion", "Black widow", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
     expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
@@ -577,6 +577,19 @@ test("and the Black Widow: its 28 clips that play in place and the flinch made u
     await expect(page.locator("#name")).toHaveText("The Black Widow");
     expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 10468, bones: 56 });
     await expect(page.locator("#details")).toContainText("Medhue's Black Widow, bought on Fab: used with the permission its Standard License gives");
+});
+
+test("and the Kaiju: its nine clips (its run cut to the ten seconds that loop), its full detail only, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-kaiju&clip=Roar");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual(["Energy Breath", "Faint", "Hit React", "Idle", "Roar", "Walk", "Walk Left", "Walk Right", "Run"]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Roar", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Kaiju");
+    await expect(page.locator("#clips").getByRole("button", { name: /^Run · 10\.00 s/ })).toBeVisible();
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, triangles: 60770, bones: 99 });
+    await expect(page.locator("#details")).toContainText("HuyKhoi2407's Kaiju, bought on Fab: used with the permission its Standard License gives");
 });
 
 test("and the Greater Demon: its own showcase and the roar cut from it, the human clips played on its skeleton, its one mesh, and whose it is", async ({ page }) => {

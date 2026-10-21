@@ -20,4 +20,4 @@ It doesn't cover:
   Flayling, the Cinder Husk, the Pyre Acolyte, the Ossuary Priest, the Dirge Warden and the Flayed
   Hierarch), Fab's Monster1's six builds; and its six gorgers (the Slag Gorger, the Forge Brute,
   the Chained Glutton, the Bloat Gorger, the Pit Ravager and the Gorger Warlord), Fab's Monster2's
-  four builds (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
+  four builds; and the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
