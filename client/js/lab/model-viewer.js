@@ -33,6 +33,7 @@ import { clone as cloneScene } from "three/addons/utils/SkeletonUtils.js";
 import { ASSETS } from "../app/assets.js";
 import { HERO_PEOPLES } from "../app/heroes.js";
 import { filesOf } from "../app/catalog.js";
+import { BEAMS, EnergyBreath } from "../beasts/beam.js";
 import { dressCreature, restsOf } from "../beasts/beast.js";
 import { LOOKS } from "../beasts/looks.js";
 import { hasModel, MODELS, modelOf, wantModel } from "../beasts/model.js";
@@ -429,8 +430,9 @@ const propsRead = new Map();
 // A thing (`object`) shown as a creature is, on the ground in the middle, its clips (if it has
 // any: the chest's opening) played alone as a model's are (`hold`, by name). A creature's model
 // made hovering over its origin (`hover`: the Dungeon Wasp, whose deaths fall to it) keeps its
-// origin for the ground; one made below it is raised to stand on it
-function thingAvatar(object, clips = [], { hover = false } = {}) {
+// origin for the ground; one made below it is raised to stand on it. One that breathes a beam
+// (`beam`: beasts/beam.js BEAMS's) breathes it in its clip, as the clip's played
+function thingAvatar(object, clips = [], { hover = false, beam = null } = {}) {
     const box = new THREE.Box3().setFromObject(object);
     const size = box.isEmpty() ? new THREE.Vector3(1, 1, 1) : box.getSize(new THREE.Vector3());
     const middle = box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
@@ -451,6 +453,12 @@ function thingAvatar(object, clips = [], { hover = false } = {}) {
         action.setEffectiveWeight(0);
     }
 
+    const breath = beam ? new EnergyBreath(object, beam) : null;
+
+    if (breath) {
+        object.add(breath.object);
+    }
+
     const still = () => {};
 
     return {
@@ -458,7 +466,15 @@ function thingAvatar(object, clips = [], { hover = false } = {}) {
         scale: 1,
         size,
         // (Its height: how high it reaches over the ground, a hovering one's gap below it too)
-        character: { height: Math.max(0.05, box.isEmpty() ? size.y : box.max.y - floor), dispose: () => mixer.stopAllAction(), sheathe: still },
+        character: {
+            height: Math.max(0.05, box.isEmpty() ? size.y : box.max.y - floor),
+            dispose: () => {
+                mixer.stopAllAction();
+                breath?.dispose();
+            },
+            sheathe: still,
+        },
+        breath,
         actions: { revive: still, setGuard: still, react: still, die: still, knockdown: still, startAttack: still },
         place(x, z, facing) {
             holder.position.set(x, 0, z);
@@ -476,6 +492,7 @@ function thingAvatar(object, clips = [], { hover = false } = {}) {
                       }
 
                       mixer.update(0);
+                      breath?.at(clip, time);
                   },
               }
             : null,
@@ -671,7 +688,7 @@ function showThing(id) {
     object.traverse((node) => {
         node.visible = !node.userData.lod;
     });
-    current = { ...thing, avatar: thingAvatar(object, read?.animations ?? [], { hover: kind === "model" }), thing: { asset: name, read: Boolean(read), skins: Object.keys(skinsOf(name)) }, name: label, about: read ? made : "On its way…" };
+    current = { ...thing, avatar: thingAvatar(object, read?.animations ?? [], { hover: kind === "model", beam: read ? BEAMS[name] : null }), thing: { asset: name, read: Boolean(read), skins: Object.keys(skinsOf(name)) }, name: label, about: read ? made : "On its way…" };
 
     if (!read) {
         loadGltf(Object.values(filesOf(ASSETS, name, document.baseURI))[0])
@@ -1719,6 +1736,8 @@ window.lab = {
     },
     watch: () => ({ ...watch, past: rewind.past, kept: rewind.kept.length, bones: bones?.bones.length ?? 0, moves: movesOf().map(({ label }) => label), clips: Object.keys(current.avatar.plan?.lengths ?? {}) }),
     details: () => detailsOf(current.avatar.object),
+    // (A beam it breathes, what it's doing: beasts/beam.js)
+    breath: () => current.avatar.breath?.state ?? null,
     // (How it's laid out and seen: how much of the view the bars and panel cover; where the middle
     // of what's shown is on the screen; and the camera, how far back, its fog, its view's shape)
     layout: () => ({ covered: { ...covered }, compact: document.body.classList.contains("compact"), side: document.body.classList.contains("side") }),
@@ -1729,12 +1748,12 @@ window.lab = {
     },
     camera: () => ({ distance: camera.position.distanceTo(controls.target), fogFar: scene.fog.far, aspect: camera.aspect, view: camera.view && camera.view.enabled ? { ...camera.view } : null }),
     view: ({ turn = 0, lift = 0, zoom = 1, at = null } = {}) => {
-        // (Looking at a height, metres: its head, say)
+        // (Looking at a height, metres: its head, say; or at a point, [x, y, z])
         if (at !== null) {
-            const shift = at - controls.target.y;
+            const shift = Array.isArray(at) ? new THREE.Vector3(...at).sub(controls.target) : new THREE.Vector3(0, at - controls.target.y, 0);
 
-            controls.target.y += shift;
-            camera.position.y += shift;
+            controls.target.add(shift);
+            camera.position.add(shift);
         }
 
         const offset = camera.position.clone().sub(controls.target);

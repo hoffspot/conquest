@@ -1067,6 +1067,37 @@ back along the ground while planted.
   `test/model.test.js`: every clip and bone each names in its model, those the ant borrows (and the
   bones they're played on) in the Ant Monster's; the ant's poses before and after it's lent them.
 
+**The Kaiju** (`beast-kaiju`: HuyKhoi2407's Kaiju, bought on Fab, 36 m long and 13 m tall) isn't in
+the game yet: the model viewer shows it (*Coming to the wilds*), every clip as it was made. Its
+Energy Breath is an atomic breath (`beasts/beam.js`, `BEAMS`), as a kaiju's should be:
+
+- **Charging** (0.3 s in to 1.3): the glow on its spines and body (its emissive map) lit from its
+  tail's tip to its head, a bright crest running along it, turning from green to blue-white and
+  brighter as it goes. Its material's a copy of the model's, its shader given how far along it
+  each point is, from its tail's tip to its head as it was bound.
+- **Aimed** at the ground in front of it, where what it fights would be: first 13 m in front of its
+  mouth, raked on to 18 by the time it stops. Its neck and head are turned (each bone a share) so
+  the way out of its jaws, halfway between them, meets it, from where the clip has them (whose own
+  line hits 6 to 12 m out and wanders as its head bobs). Turned in as its jaws open, let go of as
+  they shut, 35° at most.
+- **Firing** (1.3 s to 4.6, its jaws wide open): a beam from between its lips to where it lands,
+  shot out in a seventh of a second: a white-hot core in blue fire, thickening from 1.2 m to 2.2
+  (its radius) and churning, pulses running out along it, light coiling round it and sparks
+  running out along it; a flare at its mouth; and where it lands, a blinding flare 20 m across,
+  billows of blue-white fire bursting up and out, sparks thrown up every way and on the way it was
+  going, the ground lit 18 m round with rings of light running out over it and a track glowing
+  where it's raked, and blue mist rolling off and lingering after it stops. Its glow is at its
+  brightest, flickering with the beam, and its face is lit by it.
+- **Timed by the clip's time,** nothing kept from one moment to the next: each spark and puff is
+  where its age puts it, thrown up from where it landed when it was. So it's the same played,
+  paused or stepped back and forth through, and costs little a frame (a few of its shaders' values
+  set, its head turned, the ground looked along for where it lands), nothing at all in its other
+  clips. Drawn as light added to what's behind it, by its own shaders (a draw call each part),
+  never culled; no lights are added (that would have every material's shader compiled again).
+- `e2e/model-viewer.spec.js`: nothing of it before it charges or in its other clips; charging,
+  its glow lit; firing, aimed, its glow at its brightest, landing 10 to 20 m in front of its mouth,
+  and the beam's blue-white drawn.
+
 ### A place's creatures, ready before they're met (beasts/model.js, app/readying.js)
 
 Creatures drawn from models of 3 to 5 MB each live mostly in places with a way in: a dungeon,
@@ -1197,7 +1228,8 @@ The panel and playback:
   the spells, the blows and dodges, and the falls.
 - **Clips in its model:** drawn from a model (the Dreadthorn), every clip in its file by name and
   length, played alone as it was made (`modelBody`'s `hold`), and slid through. One built in code
-  has none: its moves are worked out as it plays.
+  has none: its moves are worked out as it plays. The Kaiju breathes its beam in its Energy Breath
+  (*The Kaiju*, above); `window.lab.breath()` says what it's doing.
 - **Details** (`detailsOf`): how it's made (a model's file and its size, or the game's code); its
   source (a prop's maker and licence, as the catalog has them); how tall and long it is (a
   thing, how wide, deep and tall); the triangles, vertices, meshes and materials drawn of it as
