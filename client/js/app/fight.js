@@ -1,8 +1,8 @@
 // Whether the player's in a fight, for its music (audio/battle.js, sound.js setBattle): something
 // hostile to them after them or striking them, or them striking at something hostile to them.
 // Done a while after the last moment of it (FIGHT_LINGERS), so a lull between blows doesn't end
-// it; and then what was heard fades back over BATTLE_OUT, about four seconds after the fight's
-// last moment in all.
+// it; and then the fight's music fades out and what was heard back over BATTLE_OUT, back about
+// eight seconds after the fight's last moment in all.
 
 /** How long after the last moment of a fight it's still one (ms). */
 export const FIGHT_LINGERS = 2500;
