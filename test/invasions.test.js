@@ -350,6 +350,7 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         assert.equal(player.standing.points, points + reward.thanks, "the town's people's thanks: the player's own");
         assert.equal(player.standing.guild.merit, merit + reward.merit);
         assert.equal(thanks.piece.quality, REWARD.quality);
+        assert.equal(thanks.band, invasion.band, "the band they were of (the game names them by it)");
         assert.ok(player.progress.pack.some((stack) => stack?.id === thanks.piece.id && stack.quality === REWARD.quality), "the lord's piece in their pack");
     });
 

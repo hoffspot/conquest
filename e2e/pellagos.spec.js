@@ -1,6 +1,7 @@
 import { expect, test } from "./fixtures.js";
 import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 import { Explored } from "../client/js/core/explored.js";
+import { SIZE } from "../client/js/core/invasions.js";
 import { branchesFound, fareOf } from "../client/js/core/portals.js";
 import { guilds, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
 
@@ -12686,4 +12687,54 @@ test("the wild's people-shaped creatures past the bodies' budget are drawn in th
     };
 
     expect(await playUntil(page, inFull, { seconds: 60 })).toBe(true);
+});
+
+test("an invasion's raiders felled by the player: thanked for them by the town as it holds, by the name of their band, and played on", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=2");
+
+    // (The lone orc out of the way; as small an invasion as comes)
+    await page.evaluate((least) => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.advance(0.1, { render: false });
+        game.host.command(game.me, { type: "budget", invasion: least });
+        game.invade();
+    }, SIZE.least);
+    expect(await playUntil(page, () => window.pellagos.game.host.invasions.length > 0)).toBe(true);
+
+    // The player sets on two of them, each brought to them, and fells them; the rest of their
+    // line falls but three, and they break
+    const felled = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const [invasion] = game.host.invasions;
+        const me = game.battle.actor(game.me);
+        const ids = invasion.invaders.slice(0, 2);
+
+        for (const id of ids) {
+            const raider = game.battle.actor(id);
+
+            raider.hp = 1;
+            game.host.command(game.me, { type: "engage", target: id });
+
+            for (let k = 0; k < 300 && !raider.dead; k++) {
+                game.host.battle.place(id, "town", [me.square[0] + 1, me.square[1]]);
+                game.advance(1 / 30, { render: false, wait: true });
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        for (const id of invasion.invaders.filter((each) => !game.battle.actor(each).dead).slice(3)) {
+            Object.assign(game.battle.actor(id), { hp: 0, dead: true, respawnAt: Infinity });
+        }
+
+        return ids.filter((id) => game.battle.actor(id)?.dead).length;
+    });
+
+    expect(felled).toBe(2);
+    expect(await playUntil(page, () => /thanks you for the 2 bandits you felled/.test(document.querySelector("#banner").textContent))).toBe(true);
+    expect(await playUntil(page, () => window.pellagos.game.host.invasions.length === 0, { seconds: 120 })).toBe(true);
 });
