@@ -9,8 +9,8 @@ spider, Fab's Spider V6a; the dungeon scorpion, Fab's Scorpion V5d; the giant co
 Cockroach from Fab; the dungeon wasp, Fab's Vespa Titanus Giant Wasp; the black widow, Medhue's
 Black Widow from Fab; the hells' Lord of the Pit, the greater demon, Fab's Gloomy Demon; the
 hells' fiends, Fab's Monster4, with its two other skins; and, to come to the hells, its six
-flayed, Fab's Monster1's six builds, and its six gorgers, Fab's Monster2's four builds
-(`client/models/beasts/LICENSE.md`). This page is how such
+flayed, Fab's Monster1's six builds, and its six gorgers, Fab's Monster2's four builds; and, to
+come, the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,

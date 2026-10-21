@@ -40,6 +40,7 @@ client/models/beasts/chained-glutton.bin
 client/models/beasts/bloat-gorger.bin
 client/models/beasts/pit-ravager.bin
 client/models/beasts/gorger-warlord.bin
+client/models/beasts/kaiju.bin
 # (A licensed model's earlier builds, kept ignored where a copy's left behind)
 client/models/beasts/werewolf.bin
 client/models/beasts/werewolf.dusk.bin

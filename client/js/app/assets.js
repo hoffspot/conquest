@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "7667020fcc",
+    release: "7ddd0f99f5",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2202,6 +2202,18 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/gorger-warlord.bin",
                     "hash": "b7d4a362fb",
                     "bytes": 2854240
+                }
+            ]
+        },
+        "beast-kaiju": {
+            "tier": "demand",
+            "label": "The Kaiju (HuyKhoi2407's Kaiju, bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/kaiju.bin",
+                    "hash": "d1ca11cfe4",
+                    "bytes": 3859268
                 }
             ]
         },
