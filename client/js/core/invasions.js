@@ -175,6 +175,9 @@ export function rewardOf({ felled, of, held = true }) {
     };
 }
 
+/** How the crier opens his calls while an invasion's on (core/crying.js OPENINGS, his others). */
+export const ALARM = "To arms! To arms!";
+
 /**
  * The crier's cries as an invasion comes (each at most 90 characters, as every cry: core/
  * crying.js), the way it's coming from (`way`: "north", "south-east"...): the raiders and their
@@ -183,7 +186,7 @@ export function rewardOf({ felled, of, held = true }) {
 export function criesOf(band, way) {
     const { label } = BANDS[band];
 
-    return [`${label} on the ${way} road! To arms, every able hand: defend the town!`, `Adventurers! Able hands! To the ${way} road, and drive them off!`];
+    return [`${label} on the ${way} road! Every able hand, defend the town!`, `Adventurers! Able hands! To the ${way} road, and drive them off!`];
 }
 
 /** The crier's thanks once they're beaten off (at most 90 characters). */

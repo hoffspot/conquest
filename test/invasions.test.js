@@ -8,6 +8,7 @@ import { before, describe, it } from "node:test";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
+let ALARM;
 let BANDS;
 let BOMBER;
 let INVASION;
@@ -20,6 +21,7 @@ let raiderArms;
 let rewardOf;
 let sidesOf;
 let thanksOf;
+let OPENINGS;
 let BOMBS;
 let FOE_MS;
 let KINDS;
@@ -38,7 +40,8 @@ let encode;
 let world;
 
 before(async () => {
-    ({ BANDS, BOMBER, INVASION, REWARD, clockOf, criesOf, dueAfter, isDue, raiderArms, rewardOf, sidesOf, thanksOf } = await import("../client/js/core/invasions.js"));
+    ({ ALARM, BANDS, BOMBER, INVASION, REWARD, clockOf, criesOf, dueAfter, isDue, raiderArms, rewardOf, sidesOf, thanksOf } = await import("../client/js/core/invasions.js"));
+    ({ OPENINGS } = await import("../client/js/core/crying.js"));
     ({ BOMBS, FOE_MS, KINDS, STEP_MS } = await import("../client/js/core/battle.js"));
     ({ Host, HOST_PLAYER, SNAPSHOT_STEPS } = await import("../client/js/core/host.js"));
     ({ createRandom } = await import("../client/js/core/random.js"));
@@ -165,6 +168,7 @@ describe("invasions (core/invasions.js)", () => {
         }
 
         assert.match(criesOf("bandits", "north")[0], /^Bandits on the north road!.*able hand/);
+        assert.ok(ALARM.length <= 90 && !OPENINGS.includes(ALARM), "his alarm, not one of his usual openings");
         assert.match(criesOf("bandits", "north")[1], /Adventurers/);
     });
 

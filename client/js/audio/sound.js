@@ -24,8 +24,8 @@
 //    beginning; coming out, the land's comes back where it left off. Upstairs, the tavern's music
 //    is quieter and muffled, heard through the floor. In a fight (setBattle), a fight's music
 //    (battle.js) fades in over whatever's heard, from its start, wherever the player is but a
-//    hell's realms, as loud and clear indoors as out; once it's done, what was heard there fades
-//    back, where it left off.
+//    hell's realms, as loud and clear indoors as out; once it's done, it fades out slowly and
+//    what was heard there back, where it left off. A score fading out plays on till it's silent.
 //
 // synth.js's sounds are made in a worker (worker.js), so nothing waits for them; the music's
 // recordings (client/music) and the recorded sounds (client/sounds) are downloaded meanwhile, but
@@ -217,11 +217,12 @@ const CROSSFADE = 1.5;
 const THROUGH_FLOOR = 0.8;
 const CLEAR = 20000;
 
-// A fight's music fades in over this long (seconds), and what was heard back over this long once
-// it's done (the game says it's done a while after the fight is: game.js FIGHT_LINGERS); and
-// crossing into a people's lands, their music fades over this long
+// A fight's music fades in over this long (seconds); once it's done (the game says it's done a
+// while after the fight is: fight.js FIGHT_LINGERS), it fades out and what was heard back over
+// this long, back about eight seconds after the fight's last moment in all; and crossing into a
+// people's lands, their music fades over this long
 export const BATTLE_IN = 1.2;
-export const BATTLE_OUT = 1.5;
+export const BATTLE_OUT = 5.5;
 export const LAND_FADE = 4;
 
 // The scores played from their start each time they're heard (the rest carry on where they left off)
@@ -809,7 +810,7 @@ export class Sound {
          * fight, the music heard (`musicHeard`: PLACES', its score the land's, or FIGHTING), how
          * long the fade to what's wanted is to be once its recordings are in (`waiting`, seconds,
          * or null), and each score's playing: { name, score, start, index, loop, channels, output,
-         * filter }.
+         * filter, fading (when it's faded out, played on till then; or null) }.
          */
         this.place = "town";
         this.land = "town";
@@ -1246,9 +1247,15 @@ export class Sound {
         track.shift = now.shift ?? 0;
 
         if (was.score !== now.score) {
-            ramp(this.tracks[was.score].output.gain, 0, seconds);
+            const old = this.tracks[was.score];
 
-            if (FROM_THE_START.has(now.score) || track.start === null) {
+            // (Played on till it's faded out)
+            ramp(old.output.gain, 0, seconds);
+            old.fading = time + seconds;
+
+            if (track.fading > time && track.start !== null) {
+                // Still fading out, so heard: on from where it's got to
+            } else if (FROM_THE_START.has(now.score) || track.start === null) {
                 // From the start (once every recording is ready)
                 Object.assign(track, { start: null, index: 0, loop: 0 });
             } else {
@@ -1258,6 +1265,7 @@ export class Sound {
                 track.start = time + 0.3 - track.loop * track.score.length - next.time;
             }
 
+            track.fading = null;
             this.music = track;
         }
 
@@ -2254,7 +2262,7 @@ export class Sound {
             }
 
             // (Where each score has got to is kept when the browser's sound is made anew)
-            this.tracks[name] = { start: null, index: 0, loop: 0, ...this.tracks[name], name, score, channels, output, filter };
+            this.tracks[name] = { start: null, index: 0, loop: 0, ...this.tracks[name], name, score, channels, output, filter, fading: null };
         }
 
         this.musicHeard = here;
@@ -2264,7 +2272,8 @@ export class Sound {
 
     /**
      * Play the notes of the score heard where the player is that start in the next LOOKAHEAD
-     * seconds, round again from its start at its end (every SCHEDULE_MS, once started).
+     * seconds, round again from its start at its end (every SCHEDULE_MS, once started); and of
+     * any score fading out, till it's silent.
      */
     scheduleMusic() {
         // (What's wanted, its recordings in now, faded over to; and now and then, those no score
@@ -2279,42 +2288,57 @@ export class Sound {
         }
 
         const music = this.music;
-        const context = this.context;
-        const score = music?.score;
 
-        // (Starting once every recording its score plays is ready, or known not to be, so none
-        // is missing from the start)
-        if (!this.playing || (music.start === null && !this.#ready(music.name))) {
+        if (!this.playing) {
             return;
         }
 
-        const now = context.currentTime;
-        const notes = score.notes;
+        const now = this.context.currentTime;
+
+        // (Those fading out played on till they're silent)
+        for (const track of Object.values(this.tracks)) {
+            if (track !== music && track.fading > now && track.start !== null) {
+                this.#play(track, now, Math.min(now + LOOKAHEAD, track.fading));
+            }
+        }
+
+        // (Starting once every recording its score plays is ready, or known not to be, so none
+        // is missing from the start)
+        if (music.start === null && !this.#ready(music.name)) {
+            return;
+        }
 
         music.start ??= now + 0.3;
+        this.#play(music, now, now + LOOKAHEAD);
+    }
+
+    // Play a track's notes that start from now till `until`
+    #play(track, now, until) {
+        const score = track.score;
+        const notes = score.notes;
 
         for (;;) {
-            const note = notes[music.index];
-            const at = music.start + music.loop * score.length + note.time;
+            const note = notes[track.index];
+            const at = track.start + track.loop * score.length + note.time;
 
-            if (at > now + LOOKAHEAD) {
+            if (at > until) {
                 break;
             }
 
             // (Notes that were due while the page was busy are let go, not played late)
             if (at >= now - 0.05 && this.volumes.music > 0) {
                 try {
-                    this.#note(note, at, music);
+                    this.#note(note, at, track);
                 } catch {
                     // (One note going wrong mustn't stop the rest)
                 }
             }
 
-            music.index++;
+            track.index++;
 
-            if (music.index >= notes.length) {
-                music.index = 0;
-                music.loop++;
+            if (track.index >= notes.length) {
+                track.index = 0;
+                track.loop++;
             }
         }
     }

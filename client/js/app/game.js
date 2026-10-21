@@ -68,7 +68,7 @@ import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, 
 import { describeLeader } from "../core/war/peoples.js";
 import { CRY, newsCount, newsSince, peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { bubbleSeconds, CALLING, callOf } from "../core/crying.js";
-import { BANDS, criesOf, INVASION, thanksOf } from "../core/invasions.js";
+import { ALARM, BANDS, criesOf, INVASION, thanksOf } from "../core/invasions.js";
 import { createRandom } from "../core/random.js";
 import { cultNear, cultWays, cultWord } from "../core/cultword.js";
 import { circleOf, rumouredBy, rumoursNear, rumourWord, RUMOURS } from "../core/rumours.js";
@@ -5550,11 +5550,11 @@ export class Game {
     }
 
     // The criers out near the player (docs/GAME.md *The crier*): each one within CALLING.near
-    // calling out to them now and then (core/crying.js callOf: "Oyez!", and the latest news they've
-    // yet to hear, else one of the town's own cries), over his head (hud.say), ringing his bell as
-    // he does; not while they're talking or fighting. The news they've yet to hear from the
-    // nearest, on the compass; and while there's some, his bell rung now and then from where he
-    // is, to bring them to him (BELL). Every HEARD_EVERY seconds
+    // calling out to them now and then (core/crying.js callOf: "Oyez!" or another of his openings,
+    // and the latest news they've yet to hear, else one of the town's own cries), over his head
+    // (hud.say), ringing his bell as he does; not while they're talking or fighting. The news
+    // they've yet to hear from the nearest, on the compass; and while there's some, his bell rung
+    // now and then from where he is, to bring them to him (BELL). Every HEARD_EVERY seconds
     #cryOut() {
         const player = this.battle.actor(this.me);
         const war = this.host.war;
@@ -5589,9 +5589,9 @@ export class Game {
             this.crierCalls.set(nearest.one.id, state);
 
             if (call) {
-                const [oyez, words] = call.lines;
+                const [opening, words] = call.lines;
 
-                this.hud.say(nearest.one.id, `${oyez}\n${words}`, 1 + bubbleSeconds(words));
+                this.hud.say(nearest.one.id, `${opening}\n${words}`, 1 + bubbleSeconds(words));
                 this.#rest({ id: nearest.one.id, role: "crier", rest: 0 }, avatar);
             }
 
@@ -5605,9 +5605,9 @@ export class Game {
         }
     }
 
-    // A crier's call while an invasion's on at his town, its raiders not beaten off yet: his plea
-    // to every able hand (core/invasions.js criesOf), each time he calls; or null, too soon after
-    // his last
+    // A crier's call while an invasion's on at his town, its raiders not beaten off yet: his alarm
+    // and his plea to every able hand (core/invasions.js ALARM, criesOf), each time he calls; or
+    // null, too soon after his last
     #invasionCall(invasion, state, now) {
         if (now < (state.next ?? -Infinity)) {
             return null;
@@ -5615,7 +5615,7 @@ export class Game {
 
         state.next = now + CALLING.every[0];
 
-        return { lines: [CALLING.oyez, criesOf(invasion.band, invasion.way)[1]], news: false };
+        return { lines: [ALARM, criesOf(invasion.band, invasion.way)[1]], news: false };
     }
 
     // An invasion (core/invasions.js; host.js #invade). Coming: its soldiers drawn, and, at the
@@ -5686,7 +5686,7 @@ export class Game {
             return;
         }
 
-        this.hud.say(crier.id, `${CALLING.oyez}\n${words}`, 1 + bubbleSeconds(words));
+        this.hud.say(crier.id, `${ALARM}\n${words}`, 1 + bubbleSeconds(words));
         this.crierCalls ??= new Map();
         this.crierCalls.set(crier.id, { ...this.crierCalls.get(crier.id), next: this.clock * 1000 + CALLING.every[0] });
 

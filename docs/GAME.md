@@ -694,8 +694,12 @@ world's seed, as they are.
   further than it shows (app/minimap.js `criers`, as the wild's elites are).
 - **Calling out** (core/crying.js `callOf`, app/game.js `#cryOut`): as the player comes within
   25 m of him (`CALLING.near`), out of a talk and a fight, he calls out over his head in a bubble
-  (app/hud.js `say`), ringing his bell as he does: "Oyez! Oyez! Oyez!", then the latest of the
-  war's news they've yet to hear from a crier. He never cries the same news to them again within
+  (app/hud.js `say`), ringing his bell as he does. He opens with one of his calls for their ear
+  (`OPENINGS`: "Oyez! Oyez! Oyez!", "Hear ye! Hear ye!", "Attend! Attend!", "Attend yourselves!",
+  "Make way! Make way!", "Good people!", "Heed the word!", "Silence for the scroll!", "Gather
+  'round!", "Come all!", "Hark! Hark!", "Hearken, all!", "Give ear, good folk!", "Be it known to
+  all!", "Draw near and listen!"), each in turn: every one once before any again, never the same
+  twice running. Then the latest of the war's news they've yet to hear from a crier. He never cries the same news to them again within
   three minutes (`CALLING.again`), nor calls more often than every 45 to 60 seconds; with no news
   to cry, one of the town's own cries (`CRIES`: something lost or found, a bylaw, the market; by
   night, the hour and the watch), each once before any again. A bubble's shown as long as its
@@ -4365,8 +4369,11 @@ changing over 0.8 s on the stairs. In a fight (`setBattle`, told by the game eve
 cellos), wherever the player is but a hell's realms, as loud and clear indoors as out. The player's
 in one while anything alive and hostile to them is after them or striking them, or they're
 striking at something hostile (or swung at what they're set on in the last 2.5 seconds); it's
-done 2.5 seconds after the last moment of that, and what was heard fades back over 1.5 seconds,
-where it left off: about four seconds after the fight's over, it's back.
+done 2.5 seconds after the last moment of that, and then the fight's music fades out over 5.5
+seconds as what was heard fades back, where it left off: about eight seconds after the fight's
+over, it's back. If another fight starts while it's fading out, the fight's music comes back from
+where it's got to rather than from its start. Whenever one score fades into another, the one
+fading out plays on till it's silent.
 
 `npm run build:music` (`scripts/build-music.js`) makes the recordings: for each instrument, it
 reads the library's SFZ file (which recording is which note; VSCO 2 CE has none, its files named

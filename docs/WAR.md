@@ -2320,13 +2320,13 @@ seven worlds (the start towns of every people), the town held every time, the ra
 a minute in, the town's soldiers a third to two thirds of them left, all of it over in two minutes.
 
 **The crier** (app/game.js `#invasion`, `#invasionCry`): as it comes, every player in the town or
-near it is told ("Bandits on the north road! Marleyworth calls every able hand to its defence.";
-in their first, "They'll leave you be, unless you strike one."), and its crier, if he's out and
-they're within his bell's reach (160 m), rings it and cries the road they come by and calls every
-able hand to defend the town (`criesOf`: "Bandits on the north road! To arms, every able hand:
-defend the town!"); while it's on he calls out to the adventurers each time he calls ("Adventurers!
-Able hands! To the north road, and drive them off!"); beaten off, he thanks every brave soul who
-stood for it (`thanksOf`).
+near it is told ("Bandits on the north road! Marleyworth calls every able hand to its defence."; in
+their first, "They'll leave you be, unless you strike one."), and its crier, if he's out and they're
+within his bell's reach (160 m), rings it and cries the alarm, not his usual openings (`ALARM`: "To
+arms! To arms!"), the road they come by and his call to every able hand to defend the town
+(`criesOf`: "Bandits on the north road! Every able hand, defend the town!"); while it's on he calls
+out to the adventurers each time he calls ("Adventurers! Able hands! To the north road, and drive
+them off!"); beaten off, he thanks every brave soul who stood for it (`thanksOf`).
 
 **Thanks** (`#thank`, `rewardOf`, `REWARD`), to every player who felled raiders (they, their
 followers or their creatures), once the raiders break: a bounty of 3 gold for each, the guilds'
