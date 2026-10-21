@@ -107,8 +107,10 @@ export const isSize = (size) => Number.isInteger(size) && size >= SIZE.least && 
  * role goes after an enemy (`leash`, metres: core/formation.js ROLES' where not given); whether its
  * line closes with the enemy it sees (`advance`), or stands `stand` metres short of where the
  * lines meet and lets them come; the share of it left standing when it breaks and runs (`rout`);
- * whether it comes only to a town by the sea (`coastal`); and what's found on its fallen
- * (core/progress.js LOOT). How each is dressed is characters/soldiers.js raiderLook's.
+ * whether it comes only to a town by the sea (`coastal`); what the crier cries of it coming
+ * (`cry`: its road `{way}`) and once it's beaten (`beaten`: criesOf, thanksOf); and what's found
+ * on its fallen (core/progress.js LOOT). How each is dressed is characters/soldiers.js
+ * raiderLook's.
  *
  * - **Bandits**: cutthroats with swords and cleavers behind round shields, brutes with hammers and
  *   axes, archers, and their chiefs; no casters or healers. Rough men, less hardy than a
@@ -141,6 +143,8 @@ export const BANDS = Object.freeze({
         hp: 0.85,
         march: 1.3,
         rout: 0.25,
+        cry: "Bandits on the {way} road!",
+        beaten: "The bandits are beaten!",
         loot: "raider",
     }),
     northmen: Object.freeze({
@@ -157,6 +161,8 @@ export const BANDS = Object.freeze({
         march: 1.5,
         leash: Object.freeze({ heavy: 18 }),
         rout: 0.2,
+        cry: "Northmen on the {way} road, axes high!",
+        beaten: "The northmen are put to flight!",
         loot: "raider",
     }),
     cult: Object.freeze({
@@ -174,6 +180,8 @@ export const BANDS = Object.freeze({
         advance: false,
         stand: 10,
         rout: 0.25,
+        cry: "The Ashen Cult on the {way} road, with fire!",
+        beaten: "The cult's fires are put out!",
         loot: "raider",
     }),
     sellswords: Object.freeze({
@@ -190,6 +198,8 @@ export const BANDS = Object.freeze({
         armor: 0.1,
         march: 1.1,
         rout: 0.15,
+        cry: "A sellsword company on the {way} road!",
+        beaten: "The sellswords' company breaks!",
         loot: "raider",
     }),
     corsairs: Object.freeze({
@@ -206,6 +216,8 @@ export const BANDS = Object.freeze({
         march: 1.6,
         rout: 0.4,
         coastal: true,
+        cry: "Corsairs up from the shore, on the {way} road!",
+        beaten: "The corsairs flee for their ships!",
         loot: "raider",
     }),
 });
@@ -321,10 +333,8 @@ export const ALARM = "To arms! To arms!";
  * road, then his plea to every able hand, the adventurers first, to defend the town.
  */
 export function criesOf(band, way) {
-    const { label } = BANDS[band];
-
-    return [`${label} on the ${way} road! Every able hand, defend the town!`, `Adventurers! Able hands! To the ${way} road, and drive them off!`];
+    return [`${BANDS[band].cry.replace("{way}", way)} Every able hand, defend the town!`, `Adventurers! Able hands! To the ${way} road, and drive them off!`];
 }
 
-/** The crier's thanks once they're beaten off (at most 90 characters). */
-export const thanksOf = (band) => `The ${BANDS[band].many} are beaten! The town thanks every brave soul who stood for it!`;
+/** The crier's thanks once they're beaten off (at most 90 characters): the band's own `beaten`, and the town's thanks. */
+export const thanksOf = (band) => `${BANDS[band].beaten} The town thanks every brave soul who stood for it!`;

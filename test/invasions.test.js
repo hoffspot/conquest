@@ -166,7 +166,7 @@ describe("invasions (core/invasions.js)", () => {
         assert.ok(rewardOf({ felled: 500, of: 50 }).merit <= REWARD.merit[2] + REWARD.bigMerit, "merit kept in bounds");
     });
 
-    it("cries the raiders' road and calls every able hand to defend the town, in no more than 90 characters", () => {
+    it("cries the raiders' road and calls every able hand to defend the town, each band its own way, in no more than 90 characters", () => {
         for (const band of Object.keys(BANDS)) {
             for (const way of ["north", "south", "east", "west", "north-east", "north-west", "south-east", "south-west"]) {
                 for (const cry of criesOf(band, way)) {
@@ -181,6 +181,14 @@ describe("invasions (core/invasions.js)", () => {
         assert.match(criesOf("bandits", "north")[0], /^Bandits on the north road!.*able hand/);
         assert.ok(ALARM.length <= 90 && !OPENINGS.includes(ALARM), "his alarm, not one of his usual openings");
         assert.match(criesOf("bandits", "north")[1], /Adventurers/);
+
+        // (Each band cried and thanked for in words of its own)
+        const bands = Object.keys(BANDS);
+
+        assert.equal(new Set(bands.map((band) => criesOf(band, "north")[0])).size, bands.length);
+        assert.equal(new Set(bands.map((band) => thanksOf(band))).size, bands.length);
+        assert.match(criesOf("corsairs", "west")[0], /^Corsairs up from the shore, on the west road!/);
+        assert.match(thanksOf("cult"), /^The cult's fires are put out!/);
     });
 
     it("arms and dresses the bandits as cutthroats, brutes and archers, their chiefs cloaked, in no people's livery", () => {

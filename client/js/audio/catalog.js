@@ -30,6 +30,7 @@ export const GROUPS = Object.freeze([
     "The world",
     "Birds",
     "Town and farm",
+    "War",
     "Indoors",
     "Coins and trade",
     "In hand",
@@ -329,6 +330,11 @@ export const CATALOG = Object.freeze({
     sheepBleat: { group: "Town and farm", label: "Sheep", about: "A sheep bleating out of doors: Yuval's.", plays: "By day on farmland and meadow, every 20 to 60 seconds; seldom in a town." },
     churchBell: { group: "Town and farm", label: "A church bell", about: "A church bell struck, ringing on: Nox_Sound's.", plays: "In a town at the hours of prayer (6, 9, 12, 15 and 18 o'clock), three strokes, from the church somewhere off." },
 
+    // War (app/game.js #invasion): an invasion's horns
+    warHorn: { group: "War", label: "A war horn", about: "A great horn, made in code: a long, low blast on the G under the bass clef, the lips bending up into it, dying away a little flat.", plays: "An invasion's raiders coming: blown twice, 2.2 seconds apart, where they come out onto the town's road, heard up to 450 metres off; and once where the lines met, once the town's soldiers have all fallen." },
+    retreatHorn: { group: "War", label: "Sounding the retreat", about: "The same horn, made in code: a short blast, then a long one falling away as it dies.", plays: "An invasion's raiders breaking and running, the town held: blown where the lines met, heard up to 450 metres off." },
+    townHorn: { group: "War", label: "A town's horn", about: "A brighter horn, made in code: a call up a fourth and a fifth (G, C and the G above), the last held.", plays: "A town's soldiers marching out to meet an invasion, 2.4 seconds after the raiders' second blast: blown where their line forms, heard up to 450 metres off; and as a town's lord thanks the player for felling a good share of an invasion's raiders." },
+
     // Indoors (ambience.js INDOORS)
     tavernLoop: { group: "Indoors", label: "A tavern", about: "A lively pub's crowd: ondondvo's, in Czechia. A 29-second loop.", plays: "In a tavern's taproom; quieter upstairs and in an adventurers' guild." },
     hearthLoop: { group: "Indoors", label: "A hearth", about: "A fire crackling gently: florianreichelt's. A 26-second loop.", plays: "In a tavern's taproom, louder nearer the hearth." },
@@ -403,7 +409,7 @@ export const LOOPS = Object.freeze({
  * people's in their own lands (sound.js LANDS: the humans' the town's).
  */
 export const MUSIC = Object.freeze({
-    battle: { label: "A fight", about: "Martial and driving, about a minute and a half in D minor, 4/4 at 132: cellos galloping alone, then French horns' theme over them, the theme up high on recorder and ocarina, a second tune towards F major, the drums alone under the horns' calls, and everyone; on the town's band with horns, cellos, timpani, a bass drum and a rope-tensioned field drum, all played softly.", plays: "While the player's in a fight, wherever they are but a hell's realms: something hostile after them or striking them, or them striking at it. It fades in over a second, from its start (the cellos). Two and a half seconds after the fight's last moment, it fades out slowly, playing on, as what was heard fades back where it left off: back about eight seconds after the fight's last moment; another fight while it's fading, and it comes back from where it's got to." },
+    battle: { label: "A fight", about: "Martial and driving, about a minute and a half in D minor, 4/4 at 132: cellos galloping alone, then French horns' theme over them, the theme up high on recorder and ocarina, a second tune towards F major, the drums alone under the horns' calls, and everyone; on the town's band with horns, cellos, timpani, a bass drum and a rope-tensioned field drum, all played softly.", plays: "While the player's in a fight, wherever they are but a hell's realms: something hostile after them or striking them, or them striking at it; or an invasion on round them, till its raiders break. It fades in over a second, from its start (the cellos). Two and a half seconds after the fight's last moment, it fades out slowly, playing on, as what was heard fades back where it left off: back about eight seconds after the fight's last moment; another fight while it's fading, and it comes back from where it's got to." },
     town: { label: "The town's score", about: "A Bard's Tale-style score in D Dorian, on recordings of real old instruments (recorder, ocarina, folk harp, strumstick, harpsichord, organ, chimes, frame drum).", plays: "Out in the humans' lands and their towns, and as the game starts; in the wild between peoples' lands, whichever was heard last goes on." },
     elves: { label: "The elves' lands", about: "Woodsy and calm, two minutes in F Lydian, 6/8: a flute's tune over a folk harp rippling, a recorder answering it, a section of violins holding the chords softly, hand chimes now and then; no drums.", plays: "Out in the elves' lands (as first claimed, whoever holds them now) and their towns, faded over as the player crosses into them; through the walls of their buildings, as the town's is in the humans'." },
     darkElves: { label: "The dark elves' lands", about: "Shadowy and unsettling, two minutes in E Phrygian, 4/4 at 60: a pipe organ's low drone that never moves, tubular bells tolling far off, a flute low and breathy, a section of cellos, a bowed vibraphone's glassy held notes and a harp's slow broken chords.", plays: "Out in the dark elves' lands and their towns, faded over as the player crosses into them; through the walls of their buildings." },
