@@ -4369,8 +4369,11 @@ changing over 0.8 s on the stairs. In a fight (`setBattle`, told by the game eve
 cellos), wherever the player is but a hell's realms, as loud and clear indoors as out. The player's
 in one while anything alive and hostile to them is after them or striking them, or they're
 striking at something hostile (or swung at what they're set on in the last 2.5 seconds); it's
-done 2.5 seconds after the last moment of that, and what was heard fades back over 1.5 seconds,
-where it left off: about four seconds after the fight's over, it's back.
+done 2.5 seconds after the last moment of that, and then the fight's music fades out over 5.5
+seconds as what was heard fades back, where it left off: about eight seconds after the fight's
+over, it's back. If another fight starts while it's fading out, the fight's music comes back from
+where it's got to rather than from its start. Whenever one score fades into another, the one
+fading out plays on till it's silent.
 
 `npm run build:music` (`scripts/build-music.js`) makes the recordings: for each instrument, it
 reads the library's SFZ file (which recording is which note; VSCO 2 CE has none, its files named
