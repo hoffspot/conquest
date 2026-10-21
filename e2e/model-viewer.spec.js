@@ -757,6 +757,16 @@ test("one of the people, by role, people, woman or man and weapon: every motion 
     await expect(moves.getByRole("button", { name: "drawing it", exact: true })).toBeVisible();
     expect(await page.evaluate(() => window.lab.current().person)).toMatchObject({ role: "adventurer", people: "orc", sex: "f", weapon: "bow" });
 
+    // One of a band of invaders, by what they fight with; their band their people
+    await page.locator("#picker").selectOption("person:raider-northmen");
+    await page.locator("#weapon").selectOption("throwingAxes");
+    await expect(page.locator("#name")).toHaveText("Northern axe-thrower");
+    await expect(page.locator("#about")).toContainText("Northmen · woman · throwing axes");
+    await expect(page.locator("#people")).toBeHidden();
+    await page.locator("#picker").selectOption("person:chief-cult");
+    await expect(page.locator("#name")).toHaveText("Ashen high priest");
+    await expect(page.locator("#weapon")).toHaveValue("ashenPriest");
+
     // (Its details: a character, its licence the game's)
     await expect(page.locator("#details")).toContainText("a character");
 });

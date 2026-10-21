@@ -224,6 +224,25 @@ export const NATURAL = Object.freeze({
             ranged({ id: "bomb", reach: 11, damage: [6, 12], hitAt: 650, duration: 1200, interval: 4000, stagger: 300, reaction: "crush", animation: "throw", bomb: "goblinBomb" }),
         ],
     },
+    // (An invasion's northmen's axe-throwers: core/invasions.js BANDS. A hand axe up close, and
+    // one thrown, end over end, at whoever's further off; and the Ashen Cult's high priests, as
+    // the cult's leader in its ruins: a staff, and hellfire hurled)
+    throwingAxes: {
+        label: "Throwing axes",
+        equipment: ["cleaver"],
+        attacks: [
+            melee({ id: "hack", damage: [3, 8], hitAt: 520, duration: 900, interval: 1400, stagger: 200, reaction: "hack", animation: "cleaver" }),
+            ranged({ id: "axe", reach: 9, damage: [5, 10], hitAt: 600, duration: 1000, interval: 1800, stagger: 250, reaction: "hack", animation: "throw", projectile: { kind: "axe", speed: 15 } }),
+        ],
+    },
+    ashenPriest: {
+        label: "Staff and hellfire",
+        equipment: ["staff"],
+        attacks: [
+            melee({ id: "strike", damage: [6, 11], hitAt: 330, duration: 700, interval: 1100, reaction: "strike", animation: "staff" }),
+            ranged({ id: "hellfire", reach: 9, damage: [6, 10], hitAt: 600, duration: 1100, interval: 2600, stagger: 200, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.6 } }),
+        ],
+    },
     boggart: { label: "Claws", attacks: [melee({ id: "claw", damage: [3, 6], hitAt: 170, duration: 420, interval: 900, stagger: 80, reaction: "slash", animation: "punch", afflict: { kind: "disease", chance: 0.15 } })] },
     badger: { label: "Teeth and claws", attacks: [melee({ id: "bite", damage: [3, 5], hitAt: 350, duration: 750, interval: 1150, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.2 } })] },
     wildBull: { label: "Horns", attacks: [melee({ id: "gore", damage: [5, 9], hitAt: 500, duration: 1000, interval: 1600, stagger: 400, reaction: "pierce", animation: "melee", afflict: { kind: "bleed", chance: 0.2 } })] },

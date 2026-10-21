@@ -11,7 +11,9 @@
 //
 // The town's people have the better of it: more of them, a whole line of battle (core/
 // formation.js), and two squads of bomb throwers whose goblin bombs toss the raiders off their
-// feet. Once only a share of the raiders are left standing they break and run (`rout`). Whoever
+// feet. Once only a share of the raiders are left standing, or none of those who fight up close
+// (their archers, casters and healers can't hold the field alone), they break and run (`rout`,
+// `close`). Whoever
 // felled raiders has a bounty for each, the guilds' merit and the town's thanks; and one who
 // brought down a good share of them (`big`), its lord's own purse and a rare piece from its
 // armoury besides.
@@ -33,8 +35,10 @@
  *  - `out`: how far beyond the edge the raiders come out into the world, along the road;
  *    `inside`: how far inside it the town's soldiers form their line; `meet`: where the two lines
  *    meet, beyond it; `march`: how fast the town's line marches (m/s; the raiders', their band's);
- *  - `rout`: the share of the raiders left standing when they break and run; `run`: how fast
- *    they run, back the way they came, `away` metres beyond where they came out;
+ *  - `rout`: the share of the raiders left standing when they break and run, as they do once
+ *    none of those in the roles that fight up close (`close`: core/formation.js ROLES) or their
+ *    chiefs are; `run`: how fast they run, back the way they came, `away` metres beyond where
+ *    they came out;
  *  - `linger`: how long those left stand once it's over before they go, as soon as they're not
  *    fighting; `lasts`: when it's gone on this long, everyone left in it goes (ms of the battle's
  *    time).
@@ -55,6 +59,7 @@ export const INVASION = Object.freeze({
     meet: 14,
     march: 1.1,
     rout: 0.25,
+    close: Object.freeze(["front", "heavy"]),
     run: 2.6,
     away: 40,
     linger: 20000,
@@ -94,16 +99,33 @@ export const isSize = (size) => Number.isInteger(size) && size >= SIZE.least && 
 /**
  * The bands that invade, each: its name (`label`), what one of it is called (`adjective`: "Bandit
  * cutthroat") and many of it (`many`); its mix of roles in a line (core/formation.js MIX's) and
- * what each role fights with (the first of several the most; WEAPONS keys); each role's name, and
- * its chiefs' (one leading every `chiefs` of it, the first among them; each `chiefHp` times as hard
- * to bring down); how hard the rest are to bring down (`hp`: of a soldier's); how fast its line
- * marches (`march`, m/s); what's found on its fallen (core/progress.js LOOT); and how each is
- * dressed by what they fight with (characters/folk.js adventurers' callings: soldiers.js
- * soldierLook).
+ * what each role fights with (the first of several the most; WEAPONS keys, or weapons.js NATURAL's
+ * own); each role's name (or a weapon's, where it has one of its own), and its chiefs' (one leading
+ * every `chiefs` of it, the first among them, with `chief` in hand; each `chiefHp` times as hard
+ * to bring down); how hard the rest are to bring down (`hp`: of a soldier's) and the share of each
+ * blow their armour takes off (`armor`); how fast its line marches (`march`, m/s); how far each
+ * role goes after an enemy (`leash`, metres: core/formation.js ROLES' where not given); whether its
+ * line closes with the enemy it sees (`advance`), or stands `stand` metres short of where the
+ * lines meet and lets them come; the share of it left standing when it breaks and runs (`rout`);
+ * whether it comes only to a town by the sea (`coastal`); and what's found on its fallen
+ * (core/progress.js LOOT). How each is dressed is characters/soldiers.js raiderLook's.
  *
- * Bandits: cutthroats with swords and cleavers behind round shields, brutes with hammers and axes,
- * archers, and their chiefs; no casters or healers. Rough men, less hardy than a soldier, eager
- * to close.
+ * - **Bandits**: cutthroats with swords and cleavers behind round shields, brutes with hammers and
+ *   axes, archers, and their chiefs; no casters or healers. Rough men, less hardy than a
+ *   soldier, eager to close. Every character's first invasion is theirs.
+ * - **Northmen**: raiders out of the north in furs and war paint, the shock of their berserkers
+ *   (battle axes, greatswords, hammers: two in five of them, going far after whoever they see),
+ *   axe-throwers and archers behind a thin shield line, their chieftains with greatswords. Quick
+ *   to come on, and the last to break but the sellswords.
+ * - **The Ashen Cult**: robed fanatics of the fire, faces smeared with ash. Their fire-callers
+ *   (three in ten of them, with grimoires and wands, casting fire) and ash-priests healing them
+ *   stand off short of the town's line and burn it as it comes, their zealots (staves and
+ *   hammers) going out to meet it; their high priests hurl hellfire. Frail up close.
+ * - **Sellswords**: a company of hired soldiers in mismatched plate, a deep shield line, greatswords
+ *   and archers, a surgeon or two, their captains with greatswords: their armour taking off a tenth
+ *   of each blow, and they hold the longest before they break.
+ * - **Corsairs**: sea raiders, by the sea only: cutthroats with cleavers and swords, half of them
+ *   archers, fast to come on and quick to break.
  */
 export const BANDS = Object.freeze({
     bandits: Object.freeze({
@@ -114,13 +136,97 @@ export const BANDS = Object.freeze({
         arms: Object.freeze({ front: Object.freeze(["cleaver", "sword"]), heavy: Object.freeze(["hammer", "axe"]), archer: Object.freeze(["bow"]) }),
         names: Object.freeze({ front: "cutthroat", heavy: "brute", archer: "archer", chief: "chief" }),
         chiefs: 25,
+        chief: "sword",
         chiefHp: 2.5,
         hp: 0.85,
         march: 1.3,
+        rout: 0.25,
         loot: "raider",
-        looks: Object.freeze({ sword: "rogue", cleaver: "rogue", hammer: "warrior", axe: "warrior", bow: "ranger", chief: "warrior" }),
+    }),
+    northmen: Object.freeze({
+        label: "Northmen",
+        adjective: "Northern",
+        many: "northmen",
+        mix: Object.freeze({ front: 0.3, heavy: 0.4, archer: 0.3, caster: 0, healer: 0 }),
+        arms: Object.freeze({ front: Object.freeze(["sword", "cleaver"]), heavy: Object.freeze(["axe", "greatsword", "hammer"]), archer: Object.freeze(["throwingAxes", "bow"]) }),
+        names: Object.freeze({ front: "raider", heavy: "berserker", archer: "archer", throwingAxes: "axe-thrower", chief: "chieftain" }),
+        chiefs: 30,
+        chief: "greatsword",
+        chiefHp: 3,
+        hp: 1,
+        march: 1.5,
+        leash: Object.freeze({ heavy: 18 }),
+        rout: 0.2,
+        loot: "raider",
+    }),
+    cult: Object.freeze({
+        label: "The Ashen Cult",
+        adjective: "Ashen",
+        many: "cultists",
+        mix: Object.freeze({ front: 0.45, heavy: 0.15, archer: 0, caster: 0.3, healer: 0.1 }),
+        arms: Object.freeze({ front: Object.freeze(["staff"]), heavy: Object.freeze(["hammer"]), caster: Object.freeze(["grimoire", "wand"]), healer: Object.freeze(["staff"]) }),
+        names: Object.freeze({ front: "zealot", heavy: "zealot", caster: "fire-caller", healer: "ash-priest", chief: "high priest" }),
+        chiefs: 40,
+        chief: "ashenPriest",
+        chiefHp: 3,
+        hp: 0.7,
+        march: 1.1,
+        advance: false,
+        stand: 10,
+        rout: 0.25,
+        loot: "raider",
+    }),
+    sellswords: Object.freeze({
+        label: "Sellswords",
+        adjective: "Sellsword",
+        many: "sellswords",
+        mix: Object.freeze({ front: 0.45, heavy: 0.2, archer: 0.3, caster: 0, healer: 0.05 }),
+        arms: Object.freeze({ front: Object.freeze(["sword"]), heavy: Object.freeze(["greatsword", "greatsword", "hammer"]), archer: Object.freeze(["bow"]), healer: Object.freeze(["staff"]) }),
+        names: Object.freeze({ front: "swordsman", heavy: "two-hander", archer: "archer", healer: "surgeon", chief: "captain" }),
+        chiefs: 30,
+        chief: "greatsword",
+        chiefHp: 2.5,
+        hp: 0.9,
+        armor: 0.1,
+        march: 1.1,
+        rout: 0.15,
+        loot: "raider",
+    }),
+    corsairs: Object.freeze({
+        label: "Corsairs",
+        adjective: "Corsair",
+        many: "corsairs",
+        mix: Object.freeze({ front: 0.4, heavy: 0.1, archer: 0.5, caster: 0, healer: 0 }),
+        arms: Object.freeze({ front: Object.freeze(["cleaver", "sword"]), heavy: Object.freeze(["axe"]), archer: Object.freeze(["bow"]) }),
+        names: Object.freeze({ front: "cutthroat", heavy: "brute", archer: "archer", chief: "captain" }),
+        chiefs: 25,
+        chief: "sword",
+        chiefHp: 2.5,
+        hp: 0.8,
+        march: 1.6,
+        rout: 0.4,
+        coastal: true,
+        loot: "raider",
     }),
 });
+
+/** How near the sea a town is to be for a band that comes only by the sea (`coastal`): cells of the world plan's (CELL metres). */
+export const COAST = 12;
+
+/** The name of one of a band who fights with `weapon` in a role (BANDS `names`: the weapon's own, else the role's). */
+export const raiderName = (band, role, weapon) => BANDS[band].names[weapon] ?? BANDS[band].names[role] ?? BANDS[band].names.front;
+
+/**
+ * Which band invades a town (BANDS): bandits in anyone's first (`first`); else any of them, as
+ * `random` has it, one that comes only by the sea only to a town by it (`coastal`).
+ */
+export function bandFor({ first, coastal, random }) {
+    if (first) {
+        return "bandits";
+    }
+
+    return random.pick(Object.keys(BANDS).filter((band) => coastal || !BANDS[band].coastal));
+}
 
 /** The town's bomb throwers' weapon (core/weapons.js NATURAL): a sword up close, goblin bombs further off. */
 export const BOMBER = "bombardier";

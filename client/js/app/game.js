@@ -628,7 +628,7 @@ function ailmentOf(kind, look = null) {
 
 // How the wild's creatures' spit and the like fly (app/game.js #fly): lobbed in an arc (`arc`:
 // how high, m), or along the ground (roots burrowing: `ground`)
-const FLIGHT = Object.freeze({ arrow: { arc: 0.25 }, venom: { arc: 0.55 }, lava: { arc: 0.75 }, web: { arc: 0.4 }, roots: { ground: true }, flame: { arc: 0 } });
+const FLIGHT = Object.freeze({ arrow: { arc: 0.25 }, axe: { arc: 0.45 }, venom: { arc: 0.55 }, lava: { arc: 0.75 }, web: { arc: 0.4 }, roots: { ground: true }, flame: { arc: 0 } });
 
 /**
  * A blast heard and felt (#blast): heard as far as `far` metres (further than a blow); from
@@ -10789,11 +10789,11 @@ export class Game {
 
     /**
      * An invasion at the town the player's in, now (core/host.js #invadeNow: the debug overlay's
-     * Invasion), as one due would come; told why not, if not (not in a town or city, one on
-     * already, or not the world's own player).
+     * Invasion), of a band (core/invasions.js BANDS), or as one due would come (`band` null); told
+     * why not, if not (not in a town or city, one on already, or not the world's own player).
      */
-    invade() {
-        this.#command({ type: "invade" }, (result) => {
+    invade(band = null) {
+        this.#command({ type: "invade", band }, (result) => {
             if (!result.ok) {
                 this.hud.message("Only in a town or city of the world you've opened, with no invasion on", 2.5);
             }

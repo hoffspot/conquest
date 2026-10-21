@@ -10,6 +10,10 @@ const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", 
 
 let ALARM;
 let BANDS;
+let bandFor;
+let raiderName;
+let NATURAL;
+let ROLES;
 let BUDGET;
 let InvasionBudget;
 let SIZE;
@@ -45,7 +49,8 @@ let encode;
 let world;
 
 before(async () => {
-    ({ ALARM, BANDS, BOMBER, INVASION, REWARD, SIZE, clockOf, criesOf, dueAfter, isDue, isSize, raiderArms, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
+    ({ ALARM, BANDS, BOMBER, INVASION, REWARD, SIZE, bandFor, clockOf, criesOf, dueAfter, isDue, isSize, raiderArms, raiderName, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
+    ({ ROLES } = await import("../client/js/core/formation.js"));
     ({ BUDGET, InvasionBudget } = await import("../client/js/app/budget.js"));
     ({ OPENINGS } = await import("../client/js/core/crying.js"));
     ({ BOMBS, FOE_MS, KINDS, STEP_MS } = await import("../client/js/core/battle.js"));
@@ -53,7 +58,7 @@ before(async () => {
     ({ createRandom } = await import("../client/js/core/random.js"));
     ({ compass } = await import("../client/js/core/ways.js"));
     ({ soldierLook } = await import("../client/js/characters/soldiers.js"));
-    ({ WEAPONS, weaponOf } = await import("../client/js/core/weapons.js"));
+    ({ NATURAL, WEAPONS, weaponOf } = await import("../client/js/core/weapons.js"));
     ({ buildWorld } = await import("../client/js/core/overworld.js"));
     ({ decode, encode } = await import("../client/js/core/wire.js"));
     world = buildWorld({ seed: 2 });
@@ -296,7 +301,12 @@ describe("an invasion in the world (core/host.js #invade)", () => {
 
         play(game, INVASION.lasts, () => {
             if (broke === null && invasion.broke !== null) {
-                broke = { raiders: standing(host, invasion.invaders).length, defenders: standing(host, invasion.defenders).length, broken: host.battle.formations[invasion.formations.invaders].broken };
+                broke = {
+                    raiders: standing(host, invasion.invaders).length,
+                    close: standing(host, invasion.invaders).filter((id) => INVASION.close.includes(host.soldiers.get(id).role) || host.soldiers.get(id).chief).length,
+                    defenders: standing(host, invasion.defenders).length,
+                    broken: host.battle.formations[invasion.formations.invaders].broken,
+                };
             }
 
             return !host.invasions.length;
@@ -307,7 +317,7 @@ describe("an invasion in the world (core/host.js #invade)", () => {
             ["coming", "repelled", "over"],
         );
         assert.ok(invasion.held, "the town held");
-        assert.ok(broke.raiders <= Math.ceil(invasion.size * INVASION.rout) && broke.defenders > broke.raiders && broke.broken, "they broke at a quarter, and ran");
+        assert.ok((broke.raiders <= Math.ceil(invasion.size * INVASION.rout) || broke.close === 0) && broke.defenders > broke.raiders && broke.broken, "they broke at a quarter, or with none left to fight up close, and ran");
         assert.ok(ids.every((id) => !host.battle.actor(id) && !host.soldiers.has(id)), "all of them let go of");
         assert.ok(!Object.keys(host.battle.formations).some((id) => id.startsWith(invasion.id)), "and their lines");
         assert.deepEqual(garrisons(), before, "no town's garrison lost to the war for it");
@@ -487,5 +497,154 @@ describe("an invasion as big as the devices in it can draw (core/invasions.js si
         assert.equal(sized([null]), INVASION.size);
         assert.ok(Math.abs(sized([300]) - 300) <= 4, "a computer's (those that find no ground to stand on aside)");
         assert.ok(Math.abs(sized([300, 140, null]) - 140) <= 2, "the phone's, the smaller");
+    });
+});
+
+describe("the bands that invade (core/invasions.js BANDS, characters/soldiers.js raiderLook)", () => {
+    it("arms each band for each role it fields, names each, and has each break at a share of its own; only the corsairs keep to the sea", () => {
+        assert.deepEqual(Object.keys(BANDS).sort(), ["bandits", "corsairs", "cult", "northmen", "sellswords"]);
+
+        for (const [id, band] of Object.entries(BANDS)) {
+            const roles = Object.keys(band.mix).filter((role) => band.mix[role] > 0);
+
+            assert.ok(Math.abs(Object.values(band.mix).reduce((sum, share) => sum + share, 0) - 1) < 1e-9, `${id}: a whole line`);
+            assert.ok(weaponOf(band.chief), `${id}: its chiefs' weapon`);
+
+            for (const role of roles) {
+                for (let k = 0; k < 3; k++) {
+                    const weapon = raiderArms(id, role, k);
+
+                    assert.ok(weaponOf(weapon), `${id} ${role}: ${weapon}`);
+                    assert.ok(raiderName(id, role, weapon), `${id} ${role}: a name`);
+                }
+            }
+
+            assert.ok(band.rout > 0 && band.rout < 0.5, `${id}: breaks`);
+            assert.equal(Boolean(band.coastal), id === "corsairs", `${id}: by the sea or not`);
+            assert.ok(Object.entries(band.leash ?? {}).every(([role, leash]) => ROLES[role] && leash > 0), `${id}: its leashes`);
+        }
+
+        assert.equal(raiderName("northmen", "archer", "throwingAxes"), "axe-thrower");
+        assert.equal(raiderName("northmen", "archer", "bow"), "archer");
+        assert.equal(raiderName("cult", "caster", "grimoire"), "fire-caller");
+        assert.ok(NATURAL.throwingAxes.attacks.some(({ projectile }) => projectile?.kind === "axe"), "thrown axes");
+        assert.ok(NATURAL.ashenPriest.attacks.some(({ projectile }) => projectile?.kind === "fireball"), "hellfire");
+        assert.ok(BANDS.sellswords.rout < BANDS.bandits.rout && BANDS.corsairs.rout > BANDS.bandits.rout, "the sellswords hold longest, the corsairs least");
+        assert.equal(BANDS.cult.advance, false, "the cult stands off and lets the town come");
+    });
+
+    it("sends bandits in anyone's first, then any band at random, the corsairs only to a town by the sea", () => {
+        const random = createRandom(11);
+        const inland = new Set();
+        const coastal = new Set();
+
+        for (let k = 0; k < 200; k++) {
+            assert.equal(bandFor({ first: true, coastal: k % 2 === 0, random }), "bandits");
+            inland.add(bandFor({ first: false, coastal: false, random }));
+            coastal.add(bandFor({ first: false, coastal: true, random }));
+        }
+
+        assert.deepEqual([...inland].sort(), ["bandits", "cult", "northmen", "sellswords"]);
+        assert.deepEqual([...coastal].sort(), Object.keys(BANDS).sort());
+    });
+
+    it("dresses each band as its own, in no people's livery: furs and war paint, robes and ash, mismatched plate, sashes and boots", () => {
+        const looks = (band, weapon, captain = false) => Array.from({ length: 12 }, (_, seed) => soldierLook({ people: band, weapon, sex: seed % 3 ? "m" : "f", seed: seed + 1, captain }));
+        const emblems = (look) => look.equipment.filter((id) => /^(surcoat|livery|shield|cloak)\./.test(id));
+        const wearing = (all, ids) => all.some((look) => look.equipment.some((id) => ids.includes(id)));
+
+        for (const band of Object.keys(BANDS)) {
+            for (const look of looks(band, raiderArms(band, "front"))) {
+                assert.deepEqual(emblems(look), [], band);
+            }
+        }
+
+        const northmen = looks("northmen", "axe");
+        const cult = looks("cult", "grimoire");
+        const sellswords = looks("sellswords", "sword");
+        const corsairs = looks("corsairs", "cleaver");
+
+        assert.ok(wearing(northmen, ["furMantleGrey", "furMantleBrown", "furMantleBlack"]) && northmen.every((look) => look.equipment.includes("battleAxe")));
+        assert.ok(northmen.some((look) => look.look.skin.warpaint) && northmen.some((look) => !look.look.skin.warpaint), "most in war paint");
+        assert.ok(cult.every((look) => look.look.skin.warpaint && look.equipment.some((id) => id.startsWith("robe."))), "robed, faces smeared with ash");
+        assert.ok(sellswords.every((look) => look.equipment.some((id) => id === "kiteShield" || id === "towerShield")));
+        assert.ok(new Set(sellswords.flatMap((look) => look.equipment.filter((id) => id.startsWith("mail") || id.startsWith("gambeson")))).size > 2, "no two alike");
+        assert.ok(corsairs.every((look) => look.equipment.some((id) => /Sash/.test(id))));
+        assert.ok(looks("corsairs", "sword", true).every((look) => look.equipment.includes("crierHat")), "their captains plumed");
+        assert.ok(looks("northmen", "greatsword", true).every((look) => look.equipment.includes("orcHelm") && look.equipment.includes("furMantleBlack")), "their chieftains horned");
+        assert.ok(looks("northmen", "throwingAxes").every((look) => look.equipment.includes("cleaver")), "a hand axe in hand");
+        assert.ok(looks("cult", "ashenPriest", true).every((look) => look.equipment.includes("staff") && look.equipment.includes("kingsCape")), "their high priests");
+    });
+
+    it("brings each band in as it fights: the cult's fire-callers casting and its line standing off, berserkers ranging further, the sellswords' armour", () => {
+        const called = (band) => {
+            const game = inTown({ invasion: { seen: 1 } });
+
+            assert.deepEqual(game.host.command(HOST_PLAYER, { type: "invade", band }), { ok: true });
+
+            return { ...game, invasion: game.host.invasions[0] };
+        };
+
+        const cult = called("cult");
+        const casters = cult.invasion.invaders.map((id) => cult.host.battle.actor(id)).filter((one) => cult.host.soldiers.get(one.id).role === "caster");
+
+        assert.equal(cult.invasion.band, "cult");
+        assert.ok(casters.length && casters.every((one) => one.casts?.length && one.name === "Ashen fire-caller"));
+        assert.equal(cult.host.battle.formations[cult.invasion.formations.invaders].advance, false);
+
+        const northmen = called("northmen");
+        const berserkers = northmen.invasion.invaders.map((id) => northmen.host.battle.actor(id)).filter((one) => northmen.host.soldiers.get(one.id).role === "heavy");
+
+        assert.ok(berserkers.length && berserkers.every((one) => one.leash === BANDS.northmen.leash.heavy && one.name === "Northern berserker"));
+        assert.ok(northmen.invasion.invaders.some((id) => northmen.host.battle.actor(id).name === "Northern chieftain"));
+
+        const sellswords = called("sellswords");
+
+        assert.ok(sellswords.invasion.invaders.every((id) => sellswords.host.battle.actor(id).armor === BANDS.sellswords.armor));
+        assert.equal(sellswords.host.command(HOST_PLAYER, { type: "invade", band: "pirates" }).ok, false, "only a band there is (and one at a time)");
+    });
+
+    it("counts the town held once a band breaks, however few of the town's are left standing", () => {
+        const game = inTown({ invasion: { seen: 1 } });
+        const { host } = game;
+
+        host.command(HOST_PLAYER, { type: "invade", band: "corsairs" });
+
+        const [invasion] = host.invasions;
+        const fell = (ids) => ids.forEach((id) => Object.assign(host.battle.actor(id), { hp: 0, dead: true, respawnAt: Infinity }));
+
+        // (Down to the share they break at, and the town's fewer than them by then)
+        fell(invasion.invaders.slice(Math.ceil(invasion.size * BANDS.corsairs.rout)));
+        fell(invasion.defenders.slice(3));
+        play(game, 2000);
+
+        assert.ok(invasion.broke !== null && invasion.held);
+        assert.deepEqual(game.events.map(({ change }) => change), ["coming", "repelled"]);
+    });
+
+    it("breaks once none of a band's who fight up close are left, however many of its archers and healers are", () => {
+        const game = inTown({ invasion: { seen: 1 } });
+        const { host } = game;
+
+        host.command(HOST_PLAYER, { type: "invade", band: "sellswords" });
+
+        const [invasion] = host.invasions;
+        const close = (id) => INVASION.close.includes(host.soldiers.get(id).role) || host.soldiers.get(id).chief;
+        const fell = (ids) => ids.forEach((id) => Object.assign(host.battle.actor(id), { hp: 0, dead: true, respawnAt: Infinity }));
+        const [line, back] = [invasion.invaders.filter(close), invasion.invaders.filter((id) => !close(id))];
+
+        assert.ok(back.length > Math.ceil(invasion.size * BANDS.sellswords.rout), "more of its archers and healers than it breaks at");
+
+        // (All but one of its line: it stands)
+        fell(line.slice(1));
+        play(game, 2000);
+        assert.equal(invasion.broke, null);
+
+        // (And that one)
+        fell(line);
+        play(game, 2000);
+        assert.ok(invasion.broke !== null && invasion.held);
+        assert.equal(host.battle.formations[invasion.formations.invaders].broken, true);
+        assert.deepEqual(game.events.map(({ change }) => change), ["coming", "repelled"]);
     });
 });

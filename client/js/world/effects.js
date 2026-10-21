@@ -612,6 +612,18 @@ function arrowModel() {
     return group;
 }
 
+// A hand axe thrown (an invasion's northmen's axe-throwers: core/weapons.js throwingAxes): a
+// short haft and an iron head, turning end over end about the middle as it flies (`spin`)
+function axeModel() {
+    const group = new THREE.Group();
+    const haft = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.016, 0.42, 6), new THREE.MeshLambertMaterial({ color: 0x6b4e30 }));
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.1, 0.13).translate(0, 0.15, 0.055), new THREE.MeshLambertMaterial({ color: 0x6e7276 }));
+
+    group.add(haft, head);
+
+    return group;
+}
+
 // The balls' spheres (by radius) and materials (the white core's, and a halo's by colour),
 // shared by every ball, so that a shot makes nothing that would have to be freed when it lands
 const BALLS = { spheres: new Map(), core: null, halos: new Map() };
@@ -702,6 +714,7 @@ export class Effects {
         this.camera = null;
 
         this.arrow = arrowModel();
+        this.axe = axeModel();
 
         // The bloodied end of an arrow that's gone in, just outside the wound
         this.bloodied = new THREE.Mesh(new THREE.CylinderGeometry(0.0062, 0.0062, 0.1, 5).rotateX(Math.PI / 2).translate(0, 0, 0.25), new THREE.MeshStandardMaterial({ color: 0x4a0604, roughness: 0.25 }));
@@ -946,7 +959,7 @@ export class Effects {
     }
 
     /**
-     * A projectile the battle launched: `kind` "arrow", "bolt" or "fireball", from a point; a
+     * A projectile the battle launched: `kind` "arrow", "axe", "bolt" or "fireball", from a point; a
      * bolt or fireball in one of its LOOKS.
      */
     launch(id, kind, from, look = 0) {
@@ -955,6 +968,8 @@ export class Effects {
 
         if (kind === "arrow") {
             object = this.arrow.clone();
+        } else if (kind === "axe") {
+            object = new THREE.Group().add(this.axe.clone());
         } else {
             object = glowBall(style.core, style.size);
 
@@ -973,7 +988,7 @@ export class Effects {
     lookOf(id) {
         const flight = this.flying.get(id);
 
-        return flight && flight.kind !== "arrow" ? flight.look : null;
+        return flight && flight.kind !== "arrow" && flight.kind !== "axe" ? flight.look : null;
     }
 
     /** What kind of projectile one in flight is ("arrow", "venom"...), or null (gone). */
@@ -1008,11 +1023,16 @@ export class Effects {
         last.copy(object.position);
         path.copy(position);
 
-        if (kind === "arrow") {
+        if (kind === "arrow" || kind === "axe") {
             object.position.copy(position);
 
             if (position.distanceToSquared(last) > 1e-8) {
                 object.lookAt(position.clone().add(position.clone().sub(last)));
+            }
+
+            // (An axe end over end, about its side, three turns a second)
+            if (kind === "axe") {
+                object.children[0].rotation.x = (performance.now() / 1000) * Math.PI * 6;
             }
 
             return;
