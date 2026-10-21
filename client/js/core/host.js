@@ -30,7 +30,7 @@ import { dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
-import { BANDS, BOMBER, dueAfter, INVASION, isDue, raiderArms, REWARD, rewardOf, sidesOf } from "./invasions.js";
+import { BANDS, BOMBER, dueAfter, INVASION, isDue, isSize, raiderArms, REWARD, rewardOf, sidesOf } from "./invasions.js";
 import { waysOut } from "./settlements.js";
 import { compass } from "./ways.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
@@ -562,7 +562,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 30;
+export const SNAPSHOT_VERSION = 31;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -596,6 +596,8 @@ export const SNAPSHOT_STEPS = Object.freeze({
     // 30: the invasions (Host #invasions: none yet), and each player's time in towns for them
     // (core/invasions.js clockOf: begun now)
     29: (snapshot) => ({ ...snapshot, version: 30, invaded: 0, invasions: [] }),
+    // 31: how big an invasion each player's device can draw (Host `budget`: none told yet)
+    30: (snapshot) => ({ ...snapshot, version: 31, players: snapshot.players.map((player) => ({ budget: null, ...player })) }),
 });
 
 /**
@@ -1174,6 +1176,9 @@ export class Host {
             // Resting, waiting on everyone else to rest too ({ where, until }: RULES rest
             // "everyone"), or not
             resting: null,
+            // How big an invasion their device can draw, as their game's told (core/invasions.js
+            // sizeFor: the "budget" command), or null till it has
+            budget: null,
         };
         const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
         const at = taken.size ? nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), square, { taken }) : square;
@@ -1625,6 +1630,16 @@ export class Host {
                 return this.debugs(playerId) ? this.#fieldBattle(player, actor, command.size, command.facing ?? actor.facing) : refuse("command");
             case "invade":
                 return this.debugs(playerId) ? this.#invadeNow(player) : refuse("command");
+            case "budget":
+                // (How big an invasion their device can draw, as their game's measured it: core/
+                // invasions.js sizeFor)
+                if (!isSize(command.invasion)) {
+                    return refuse("command");
+                }
+
+                player.budget = command.invasion;
+
+                return OK;
             default:
                 return refuse("command");
         }
@@ -2161,7 +2176,7 @@ export class Host {
             invaded: this.invaded,
             invasions: structuredClone(this.invasions),
             fallen: structuredClone(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), ...this.characterOf(player), followers: undefined })),
+            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), budget: player.budget ?? null, ...this.characterOf(player), followers: undefined })),
             done: structuredClone(this.done),
         };
     }
@@ -2348,11 +2363,11 @@ export class Host {
             }
         }
 
-        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, discarded, safety, role, lastCommand, away, out, resting } of snapshot.players) {
+        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, discarded, safety, role, lastCommand, away, out, resting, budget } of snapshot.players) {
             const kept = new Progress(progress, hero);
 
             // (Outfitted as they were: their actor's carried on as it was, charms and all)
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting) });
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null });
         }
 
         host.random.state = snapshot.random ?? host.random.state;
@@ -4093,9 +4108,13 @@ export class Host {
     // in their shield line, one to every BANDS `chiefs` of them, harder to bring down; and two
     // squads of the town's bomb throwers (BOMBER) out on its line's flanks. The players in the
     // town are in it: those for whom it's their first, left be by the raiders till they strike
-    // one (`spared`); and each one's next due in their time in towns from now (dueAfter)
-    #invade(town, { band = "bandits", size = INVASION.size } = {}) {
+    // one (`spared`); and each one's next due in their time in towns from now (dueAfter). As big
+    // as the smallest their devices can draw (each one's `budget`: core/invasions.js sizeFor), or
+    // INVASION.size with none told
+    #invade(town, { band = "bandits" } = {}) {
         const id = `invasion-${this.invaded++}`;
+        const told = [...this.players.values()].filter(({ progress }) => progress.invasion.place === town.id).map(({ budget }) => budget).filter(isSize);
+        const size = told.length ? Math.min(...told) : INVASION.size;
         const random = createRandom([...`${id}:${town.id}`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0);
         const ways = waysOut(this.world.plan, this.#placeOf(town.id));
         const angle = ways.length ? random.pick(ways) : random.next() * 2 * Math.PI;
@@ -9157,11 +9176,12 @@ export class Host {
     }
 
     // A player's command, whatever it is: they're not away (back, if they were marked so); and
-    // one that gets them up (STIRS) ends their rest
+    // one that gets them up (STIRS) ends their rest. (Not what their device can draw, told by their
+    // game as it goes: no sign they're there)
     #active(id, command) {
         const player = this.players.get(id);
 
-        if (!player) {
+        if (!player || command?.type === "budget") {
             return;
         }
 

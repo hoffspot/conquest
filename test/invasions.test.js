@@ -10,6 +10,11 @@ const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", 
 
 let ALARM;
 let BANDS;
+let BUDGET;
+let InvasionBudget;
+let SIZE;
+let isSize;
+let sizeFor;
 let BOMBER;
 let INVASION;
 let REWARD;
@@ -40,7 +45,8 @@ let encode;
 let world;
 
 before(async () => {
-    ({ ALARM, BANDS, BOMBER, INVASION, REWARD, clockOf, criesOf, dueAfter, isDue, raiderArms, rewardOf, sidesOf, thanksOf } = await import("../client/js/core/invasions.js"));
+    ({ ALARM, BANDS, BOMBER, INVASION, REWARD, SIZE, clockOf, criesOf, dueAfter, isDue, isSize, raiderArms, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
+    ({ BUDGET, InvasionBudget } = await import("../client/js/app/budget.js"));
     ({ OPENINGS } = await import("../client/js/core/crying.js"));
     ({ BOMBS, FOE_MS, KINDS, STEP_MS } = await import("../client/js/core/battle.js"));
     ({ Host, HOST_PLAYER, SNAPSHOT_STEPS } = await import("../client/js/core/host.js"));
@@ -374,5 +380,112 @@ describe("an invasion in the world (core/host.js #invade)", () => {
 
         assert.equal(older.version, 30);
         assert.deepEqual([older.invaded, older.invasions], [0, []]);
+    });
+});
+
+describe("an invasion as big as the devices in it can draw (core/invasions.js sizeFor, app/budget.js)", () => {
+    it("gives a computer three hundred and more, a phone a hundred and more, and fewer as its frames have less room, never fewer than sixty", () => {
+        assert.equal(sizeFor(8, "high"), SIZE.most.high, "a computer with room to spare");
+        assert.ok(sizeFor(8, "high") >= 300 && sizeFor(8, "high") <= 400);
+        assert.ok(sizeFor(14, "medium") >= 100 && sizeFor(14, "medium") <= 160, `${sizeFor(14, "medium")}: a phone`);
+        assert.ok(sizeFor(16, "low") >= 100 && sizeFor(16, "low") <= SIZE.most.low, `${sizeFor(16, "low")}: a smaller phone`);
+        assert.ok(sizeFor(20, "high") < sizeFor(10, "high") || sizeFor(10, "high") === SIZE.most.high, "fewer with less room");
+        assert.ok(sizeFor(22, "medium") < sizeFor(12, "medium"));
+        assert.equal(sizeFor(40, "high"), SIZE.least, "one that can't keep up already: the least");
+        assert.equal(sizeFor(NaN, "high"), SIZE.least);
+        assert.equal(sizeFor(10, "something"), sizeFor(10, "low"), "a kind it doesn't know: a smaller phone's");
+
+        // (Each as it has room for: what it's drawing, and so many more, inside a frame at 30 a second)
+        for (const device of ["low", "medium", "high"]) {
+            const size = sizeFor(12, device);
+
+            assert.ok(size === SIZE.most[device] || 12 + size * SIZE.each[device] <= 1000 / 30, device);
+        }
+
+        assert.ok(isSize(SIZE.least) && isSize(SIZE.most.high) && !isSize(SIZE.least - 1) && !isSize(SIZE.most.high + 1) && !isSize(120.5) && !isSize("120"));
+    });
+
+    it("measures the frames a while before it tells the host, then tells it again only as that changes by a tenth", () => {
+        const budget = new InvasionBudget();
+        const play = (from, ms, work, device = "high") => {
+            const told = [];
+
+            for (let now = from; now < from + ms; now += 1000 / 60) {
+                const size = budget.observe(now, 1000 / 60, work, device);
+
+                if (size !== null) {
+                    told.push(size);
+                }
+            }
+
+            return told;
+        };
+
+        assert.deepEqual(play(0, BUDGET.warmup + BUDGET.window * 0.8, 10), [], "not yet");
+        assert.deepEqual(play(BUDGET.warmup + BUDGET.window * 0.8, 2000, 10), [SIZE.most.high]);
+        assert.deepEqual(play(20000, 20000, 10.5), [], "hardly changed");
+        assert.deepEqual(play(40000, 20000, 24), [sizeFor(24, "high")], "less room");
+        assert.equal(budget.told, sizeFor(24, "high"));
+
+        // (Stopped a while, and while there's an invasion on: judged afresh)
+        assert.equal(budget.observe(80000, 5000, 10, "high"), null);
+        budget.hold();
+        assert.deepEqual(play(90000, BUDGET.warmup + BUDGET.window * 0.8, 10), []);
+    });
+
+    it("keeps how big an invasion each player's device can draw, told it by their game, which is no sign they're there", () => {
+        const { host, player } = inTown();
+
+        assert.equal(player.budget, null);
+
+        player.away = true;
+        host.battle.time += 1000;
+
+        const before = player.lastCommand;
+
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "budget", invasion: 200 }), { ok: true });
+        assert.equal(player.budget, 200);
+        assert.equal(player.lastCommand, before, "no sign they're there");
+        assert.equal(player.away, true);
+
+        for (const invasion of [SIZE.least - 1, SIZE.most.high + 1, 150.5, "150", null]) {
+            assert.equal(host.command(HOST_PLAYER, { type: "budget", invasion }).ok, false, `${invasion}`);
+        }
+
+        assert.equal(player.budget, 200);
+        assert.equal(Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot()))).players.get(HOST_PLAYER).budget, 200);
+
+        const older = SNAPSHOT_STEPS[30]({ version: 30, players: [{ id: "p1" }] });
+
+        assert.equal(older.version, 31);
+        assert.equal(older.players[0].budget, null);
+    });
+
+    it("comes as big as the smallest told by the players in its town, or as big as it was with none told", () => {
+        const sized = (budgets) => {
+            const host = new Host(world, { populate: false });
+
+            budgets.forEach((budget, k) => {
+                const id = k ? `p${k}` : HOST_PLAYER;
+
+                host.join({ id, hero: { ...HERO, name: `Ada ${k}` }, progress: { invasion: { clock: INVASION.first } } });
+
+                if (budget !== null) {
+                    host.command(id, { type: "budget", invasion: budget });
+                }
+            });
+
+            for (let k = 0; k < 40 && !host.invasions.length; k++) {
+                host.advance(1000);
+            }
+
+            const [invasion] = host.invasions;
+
+            return invasion.invaders.length + invasion.defenders.length;
+        };
+
+        assert.equal(sized([null]), INVASION.size);
+        assert.ok(Math.abs(sized([300]) - 300) <= 4, "a computer's (those that find no ground to stand on aside)");
+        assert.ok(Math.abs(sized([300, 140, null]) - 140) <= 2, "the phone's, the smaller");
     });
 });

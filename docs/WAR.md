@@ -2268,8 +2268,8 @@ covered, the stakes' 300 hit points, and an army met keeping its mix as it's few
 A big band of raiders comes down one of a town's roads to attack it, and a big force of the town's
 own people marches out to meet them at its edge (`core/invasions.js`, the host's `#invasions`).
 The first comes to a character five minutes after they land in a town, whichever town that is; the
-rest come now and then while they're in towns. Bandits for now; the raider bands of other kinds,
-the size to fit each device and the war horn and music are to come.
+rest come now and then while they're in towns, each as big as the devices in it can draw and keep
+moving. Bandits for now; the raider bands of other kinds and the war horn and music are to come.
 
 **When** (`INVASION`, Progress `invasion`: `clockOf`):
 - **Time in towns**, counted for each character every second (`tick`) while they're in a town,
@@ -2286,7 +2286,22 @@ the size to fit each device and the war horn and music are to come.
 - **One at a time** in a world. The players in the town it comes to are all in it: for each of them
   it's counted (`seen`) and their next due from then.
 
-**The two sides** (`#invade`, `sidesOf`), 120 in all for now (`size`):
+**How big** (`SIZE`, `sizeFor`; app/budget.js): as big as the smallest that the devices of the
+players in its town can draw at 30 frames a second or more, or 120 with none of them told (`size`).
+Each player's game measures its frames while there's no invasion on: after 5 seconds of play, the
+middling frame's work (updating and drawing it) over the last 10 seconds. It tells the host how
+many that leaves room for whenever that changes by a tenth (the host's `budget` command, kept with
+the player; no sign the player's there, for being marked away). That's as many as fit in a frame of
+28 ms (30 a second, a sixth to spare) over what it's doing already: a computer 0.04 ms a soldier,
+at most 360; a phone 0.09 ms, at most 160; a smaller phone (world/view.js `detectQuality`) 0.1 ms,
+at most 120; never fewer than 60. A computer with room to spare has 360 (151 raiders, 209 of the
+town's); a phone whose frames take 14 ms has about 150, a smaller one at 16 ms about 115. (A step of
+a battle of 400 takes 7.5 ms on a computer and a phone's about five times as slow; crowds of 200
+add about 4 ms to a frame's update.) In seven worlds at 360, the town held every time, the raiders
+breaking a minute and a half to three minutes in, the town keeping a quarter to a half of its
+soldiers; the host's steps took 4 to 6.5 ms on the mean.
+
+**The two sides** (`#invade`, `sidesOf`):
 - **The raiders**, two fifths of them (`BANDS.bandits`): rough men dressed as adventurers are
   (characters/soldiers.js `raiderLook`), in no people's livery. Cutthroats with cleavers and swords
   behind round shields (half of them), brutes with war hammers and battle axes (a fifth) and
@@ -2344,7 +2359,9 @@ uniform).
 **Kept.** The invasions on and how many there've been are in the host's snapshot (`invasions`,
 `invaded`; `SNAPSHOT_VERSION` 30, none in a world kept before), each character's time in towns
 with what they carry (`Progress.invasion`), and a world's rules say whether invasions come at all
-(`RULES.invasions`). What two games share changed (`NET_VERSION` 145).
+(`RULES.invasions`). What two games share changed (`NET_VERSION` 145). How big an invasion each
+player's device can draw is in the host's snapshot too (each player's `budget`; `SNAPSHOT_VERSION`
+31, none told in a world kept before), and told by their game (`NET_VERSION` 146).
 
 ### Playing together (M11)
 

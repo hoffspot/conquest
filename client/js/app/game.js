@@ -104,7 +104,7 @@ import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { missileTravel, SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
-import { QUALITY, ROOM_VIEW } from "../world/view.js";
+import { detectQuality, QUALITY, ROOM_VIEW } from "../world/view.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { TallGrass } from "../world/grass.js";
@@ -143,6 +143,7 @@ import { PartyPanel } from "./partypanel.js";
 import { PackPanel } from "./pack.js";
 import { Governor } from "./governor.js";
 import { PHASE, telemetry } from "./telemetry.js";
+import { InvasionBudget } from "./budget.js";
 import { Throng } from "./throng.js";
 import { Pacing } from "./pacing.js";
 import { PREDICT, Prediction } from "./predict.js";
@@ -939,6 +940,12 @@ export class Game {
          * (#thronging); and those that are: id -> { avatar, standIn, hidden, unecho }.
          */
         this.throng = new Throng();
+
+        /**
+         * How big an invasion this device can draw, measured from its frames while there's none
+         * on and told to the host as it changes (app/budget.js; core/host.js `budget`).
+         */
+        this.invasionBudget = new InvasionBudget();
 
         /**
          * How it's going, for the debug log (app/telemetry.js): where the player is, what's drawn
@@ -2654,6 +2661,7 @@ export class Game {
         smooth("update", updated - frameStart);
         smooth("render", rendered - updated);
         this.stats.steps = steps;
+        this.#budget(now, elapsed * 1000, rendered - frameStart);
 
         if (steps) {
             this.#begin?.();
@@ -2674,6 +2682,28 @@ export class Game {
         // written down now and then, for a crash to be found by: just after the frame, not in it)
         telemetry.end(elapsed * 1000, this.telemetryState);
         telemetry.aliveSoon(this.telemetryState);
+    }
+
+    // How big an invasion this device can draw (app/budget.js), from a frame's work (ms: updated
+    // and drawn), told the host whenever it's changed enough: not while one's on (its frames
+    // aren't what's measured), and not as the player's own doing (#command: nothing they were
+    // about, a journey or the way to a portal, given up for it)
+    #budget(now, interval, work) {
+        if (this.host.invasions.length) {
+            this.invasionBudget.hold();
+
+            return;
+        }
+
+        this.device ??= detectQuality();
+
+        const size = this.invasionBudget.observe(now, interval, work, this.device);
+
+        if (size !== null) {
+            const command = { type: "budget", invasion: size };
+
+            this.remote ? this.remote.command(command) : this.host.command(this.me, command);
+        }
     }
 
     // Any projectile drawn in flight that the battle no longer has, landed (taken away)
