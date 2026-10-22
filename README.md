@@ -1058,7 +1058,8 @@ what it doesn't cover.
   (Yellowstone's sound library, some by Dan Bergum and Jennifer Jerrett, and its Sound Gallery:
   wolves, grizzlies, bison, a pig frog), the U.S. Fish and Wildlife Service's
   bear growls (via AntumDeluge on OpenGameArt), OpenGameArt's packs by qubodup, AntumDeluge,
-  artisticdude and rubberduck, and on Freesound by 2create, ale-batec, aphexx_, betchkal,
+  artisticdude and rubberduck (and, for the Kaiju's, by Darsycho, pauliuw, Joth, bretbernhoft,
+  faxcorp, jwiese and rubberduck), and on Freesound by 2create, ale-batec, aphexx_, betchkal,
   Breviceps, coelhoigor, csaszi, D.jones, elynch0901, felix.blume, florianreichelt, Garuda1982,
   geoneo0, GJ55GB, Halgrimm, hnhnh, JesterWhoo, jmdh, Kinoton, Kodack, Lashim, leonelmail,
   MrFossy, myfreesoundaccount1998, nicotep, Nox_Sound, ozymandias37, qubodup, rubberduck9999,

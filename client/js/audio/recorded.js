@@ -1022,6 +1022,41 @@ export const RECORDED = Object.freeze({
         { file: "human-rough-death-2.04198a68.mp3", from: ["freesound-347337"], peak: 0.155 },
         { file: "human-rough-death-3.1f9007a3.mp3", from: ["freesound-347337"], peak: 0.127 },
     ],
+    kaijuCall: [
+        { file: "kaiju-call-1.a4c3465f.mp3", from: ["oga-monster-snarls","oga-demon-call-one-voice","oga-troll-roars","oga-monster-snarl-attack"], peak: 0.255 },
+        { file: "kaiju-call-2.4da1345b.mp3", from: ["oga-monster-snarls","oga-demon-call-one-voice","oga-troll-roars","oga-monster-snarl-attack"], peak: 0.13 },
+    ],
+    kaijuAttack: [
+        { file: "kaiju-attack-1.c942b324.mp3", from: ["oga-troll-roars","oga-monster-snarls"], peak: 0.23 },
+        { file: "kaiju-attack-2.5c3071f2.mp3", from: ["oga-troll-roars","oga-monster-snarls"], peak: 0.295 },
+        { file: "kaiju-attack-3.ee0e588b.mp3", from: ["oga-troll-roars","oga-monster-snarls"], peak: 0.215 },
+    ],
+    kaijuHurt: [
+        { file: "kaiju-hurt-1.d399f3cb.mp3", from: ["oga-troll-roars","oga-monster-snarls"], peak: 0.07 },
+        { file: "kaiju-hurt-2.ef0e3028.mp3", from: ["oga-troll-roars","oga-monster-snarls"], peak: 0.1 },
+        { file: "kaiju-hurt-3.f0459e6d.mp3", from: ["oga-troll-roars","oga-monster-snarls"], peak: 0.155 },
+    ],
+    kaijuDeath: [
+        { file: "kaiju-death-1.6968d4d8.mp3", from: ["oga-monster-snarls","oga-demon-call-one-voice","oga-troll-roars"], peak: 0.34 },
+        { file: "kaiju-death-2.0d69b90d.mp3", from: ["oga-monster-snarls","oga-demon-call-one-voice","oga-troll-roars"], peak: 0.205 },
+    ],
+    kaijuGrowl: [
+        { file: "kaiju-growl-1.5f11a656.mp3", from: ["oga-demon-growl","oga-monster-snarls"], peak: 0.21 },
+        { file: "kaiju-growl-2.e872d460.mp3", from: ["oga-demon-growl","oga-monster-snarls"], peak: 0.205 },
+    ],
+    kaijuCharge: [
+        { file: "kaiju-charge-1.333f816d.mp3", from: ["oga-monster-snarls","oga-overloading"], peak: 1.485 },
+        { file: "kaiju-charge-2.65f89bbf.mp3", from: ["oga-monster-snarls","oga-overloading"], peak: 1.365 },
+    ],
+    kaijuBreath: [
+        { file: "kaiju-breath-1.4aac591c.mp3", from: ["oga-chunky-explosion","oga-demon-growl","oga-rumbling20","oga-scifi-rocket-01","oga-deathboom","oga-monster-snarls"], peak: 3.32 },
+        { file: "kaiju-breath-2.a16a2d99.mp3", from: ["oga-scifi-explosion-02","oga-chunky-explosion","oga-demon-growl","oga-rumbling20","oga-scifi-rocket-01","oga-scifi-explosion-01","oga-deathboom","oga-monster-snarls"], peak: 3.34 },
+    ],
+    kaijuStep: [
+        { file: "kaiju-step-1.e8440ae8.mp3", from: ["oga-scifi-explosion-01","oga-creature-stomp-01"], peak: 0.135 },
+        { file: "kaiju-step-2.04971f02.mp3", from: ["oga-scifi-explosion-01","oga-creature-stomp-01","oga-deathboom"], peak: 0.06 },
+        { file: "kaiju-step-3.9ce0ba9e.mp3", from: ["oga-scifi-explosion-02","oga-creature-stomp-01"], peak: 0.055 },
+    ],
     wingbeat: [
         { file: "wingbeat-1.692dafce.mp3", from: ["freesound-670509"], peak: 0.654 },
         { file: "wingbeat-2.311c150e.mp3", from: ["freesound-670509"], peak: 0.695 },
@@ -1489,7 +1524,7 @@ export const RECORDED = Object.freeze({
 });
 
 /** The recorded sounds downloaded only once they're wanted (sound.js want), not at the start. */
-export const ON_DEMAND = Object.freeze(["castFireLow", "castFireMid", "castFireHigh", "impactFireLow", "impactFireMid", "impactFireHigh", "fireball", "fire", "castEarthLow", "castEarthMid", "castEarthHigh", "impactEarthLow", "impactEarthMid", "impactEarthHigh", "stoneShot", "castAirLow", "castAirMid", "castAirHigh", "impactAirLow", "impactAirMid", "impactAirHigh", "shockbolt", "castWaterLow", "castWaterMid", "castWaterHigh", "impactWaterLow", "impactWaterMid", "impactWaterHigh", "waterbolt", "castHealingLow", "castHealingMid", "castHealingHigh", "impactHealingLow", "impactHealingMid", "impactHealingHigh", "bolt", "arcane", "buff", "ward", "cure", "hex", "fear", "teleportOut", "teleportIn", "summon", "polymorph", "lightSpell", "fizzle", "spellCircle", "wolfCall", "wolfAttack", "wolfHurt", "wolfDeath", "bearCall", "bearAttack", "bearHurt", "bearDeath", "boarCall", "boarAttack", "boarHurt", "boarDeath", "bigCatCall", "bigCatAttack", "bigCatHurt", "bigCatDeath", "ratCall", "ratAttack", "ratHurt", "ratDeath", "snakeCall", "snakeAttack", "snakeHurt", "snakeDeath", "crocCall", "crocAttack", "crocHurt", "crocDeath", "frogCall", "frogAttack", "frogHurt", "frogDeath", "slimeCall", "slimeAttack", "slimeHurt", "slimeDeath", "slimeSizzle", "batsCall", "batsAttack", "batsHurt", "batsDeath", "spiderCall", "spiderAttack", "spiderHurt", "spiderDeath", "skeletonCall", "skeletonAttack", "skeletonHurt", "skeletonDeath", "ghostCall", "ghostAttack", "ghostHurt", "ghostDeath", "wightCall", "wightAttack", "wightHurt", "wightDeath", "treantCall", "treantAttack", "treantHurt", "treantDeath", "dragonCall", "dragonAttack", "dragonHurt", "dragonDeath", "dragonBreath", "goblinCall", "goblinAttack", "goblinHurt", "goblinDeath", "trollCall", "trollAttack", "trollHurt", "trollDeath", "humanAttack", "humanHurt", "humanDeath", "humanRoughAttack", "humanRoughHurt", "humanRoughDeath", "wingbeat", "smallWings", "deathThudSmall", "deathThudMid", "deathThudBig", "breath", "windOpen", "windHigh", "windForest", "birdDay", "birdDawn", "gull", "crow", "nightLoop", "owl", "frogsLoop", "streamLoop", "riverLoop", "surfLoop", "lakeLapping", "waterfallLoop", "leaves", "creakTree", "hearthLoop", "crackle", "brazierLoop", "campfireLoop", "rainLoop", "thunder", "townLoop", "marketLoop", "dogBark", "rooster", "cowMoo", "sheepBleat", "horseWhinny", "chickens", "churchBell", "distantHammer", "tavernLoop", "templeLoop", "caveDrips", "cryptLoop", "lairLoop", "clink", "pour", "anvil", "hiss", "bellows", "grind", "rustle", "door", "doorHeavy", "gate", "trapdoor", "stairs", "coinPickup", "pickup", "drop", "discard", "equipCloth", "equipLeather", "equipMail", "equipPlate", "potionCork", "potionDrink", "scroll", "bookOpen", "pageTurn", "mapUnfold", "packOpen", "packClose", "chestOpen", "chestClose", "lockpick", "quill", "tradeDone", "eat"]);
+export const ON_DEMAND = Object.freeze(["castFireLow", "castFireMid", "castFireHigh", "impactFireLow", "impactFireMid", "impactFireHigh", "fireball", "fire", "castEarthLow", "castEarthMid", "castEarthHigh", "impactEarthLow", "impactEarthMid", "impactEarthHigh", "stoneShot", "castAirLow", "castAirMid", "castAirHigh", "impactAirLow", "impactAirMid", "impactAirHigh", "shockbolt", "castWaterLow", "castWaterMid", "castWaterHigh", "impactWaterLow", "impactWaterMid", "impactWaterHigh", "waterbolt", "castHealingLow", "castHealingMid", "castHealingHigh", "impactHealingLow", "impactHealingMid", "impactHealingHigh", "bolt", "arcane", "buff", "ward", "cure", "hex", "fear", "teleportOut", "teleportIn", "summon", "polymorph", "lightSpell", "fizzle", "spellCircle", "wolfCall", "wolfAttack", "wolfHurt", "wolfDeath", "bearCall", "bearAttack", "bearHurt", "bearDeath", "boarCall", "boarAttack", "boarHurt", "boarDeath", "bigCatCall", "bigCatAttack", "bigCatHurt", "bigCatDeath", "ratCall", "ratAttack", "ratHurt", "ratDeath", "snakeCall", "snakeAttack", "snakeHurt", "snakeDeath", "crocCall", "crocAttack", "crocHurt", "crocDeath", "frogCall", "frogAttack", "frogHurt", "frogDeath", "slimeCall", "slimeAttack", "slimeHurt", "slimeDeath", "slimeSizzle", "batsCall", "batsAttack", "batsHurt", "batsDeath", "spiderCall", "spiderAttack", "spiderHurt", "spiderDeath", "skeletonCall", "skeletonAttack", "skeletonHurt", "skeletonDeath", "ghostCall", "ghostAttack", "ghostHurt", "ghostDeath", "wightCall", "wightAttack", "wightHurt", "wightDeath", "treantCall", "treantAttack", "treantHurt", "treantDeath", "dragonCall", "dragonAttack", "dragonHurt", "dragonDeath", "dragonBreath", "goblinCall", "goblinAttack", "goblinHurt", "goblinDeath", "trollCall", "trollAttack", "trollHurt", "trollDeath", "humanAttack", "humanHurt", "humanDeath", "humanRoughAttack", "humanRoughHurt", "humanRoughDeath", "kaijuCall", "kaijuAttack", "kaijuHurt", "kaijuDeath", "kaijuGrowl", "kaijuCharge", "kaijuBreath", "kaijuStep", "wingbeat", "smallWings", "deathThudSmall", "deathThudMid", "deathThudBig", "breath", "windOpen", "windHigh", "windForest", "birdDay", "birdDawn", "gull", "crow", "nightLoop", "owl", "frogsLoop", "streamLoop", "riverLoop", "surfLoop", "lakeLapping", "waterfallLoop", "leaves", "creakTree", "hearthLoop", "crackle", "brazierLoop", "campfireLoop", "rainLoop", "thunder", "townLoop", "marketLoop", "dogBark", "rooster", "cowMoo", "sheepBleat", "horseWhinny", "chickens", "churchBell", "distantHammer", "tavernLoop", "templeLoop", "caveDrips", "cryptLoop", "lairLoop", "clink", "pour", "anvil", "hiss", "bellows", "grind", "rustle", "door", "doorHeavy", "gate", "trapdoor", "stairs", "coinPickup", "pickup", "drop", "discard", "equipCloth", "equipLeather", "equipMail", "equipPlate", "potionCork", "potionDrink", "scroll", "bookOpen", "pageTurn", "mapUnfold", "packOpen", "packClose", "chestOpen", "chestClose", "lockpick", "quill", "tradeDone", "eat"]);
 
 /** The recordings they're made from: what each is, who recorded it, where it is, its licence. */
 export const SOURCES = Object.freeze({
@@ -1738,10 +1773,22 @@ export const SOURCES = Object.freeze({
     "oga-bottle-glass-uncork-01": { title: "Jan Schupke ('Vehicle'), 'Fantasy Accessory SFX Library'", by: "Vehicle (Jan Schupke)", page: "https://opengameart.org/content/fantasy-accessory-sfx-library", licence: "CC0" },
     "oga-bottle-glass-uncork-03": { title: "Jan Schupke ('Vehicle'), 'Fantasy Accessory SFX Library'", by: "Vehicle (Jan Schupke)", page: "https://opengameart.org/content/fantasy-accessory-sfx-library", licence: "CC0" },
     "oga-bottle-glass-uncork-05": { title: "Jan Schupke ('Vehicle'), 'Fantasy Accessory SFX Library'", by: "Vehicle (Jan Schupke)", page: "https://opengameart.org/content/fantasy-accessory-sfx-library", licence: "CC0" },
+    "oga-chunky-explosion": { title: "Chunky Explosion", by: "Joth", page: "https://opengameart.org/content/chunky-explosion", licence: "CC0" },
+    "oga-creature-stomp-01": { title: "80 CC0 creture SFX #2 (stomp_01)", by: "rubberduck", page: "https://opengameart.org/content/80-cc0-creture-sfx-2", licence: "CC0" },
+    "oga-deathboom": { title: "Electricity Game Sound Pack (deathboom)", by: "faxcorp", page: "https://opengameart.org/content/electricity-game-sound-pack", licence: "CC0" },
+    "oga-demon-call-one-voice": { title: "Monster or beast sounds (Demon Call One Voice)", by: "pauliuw", page: "https://opengameart.org/content/monster-or-beast-sounds", licence: "CC0" },
+    "oga-demon-growl": { title: "Monster or beast sounds (Demon Growl)", by: "pauliuw", page: "https://opengameart.org/content/monster-or-beast-sounds", licence: "CC0" },
+    "oga-monster-snarl-attack": { title: "Monster snarls (monster-snarl-attack)", by: "Darsycho", page: "https://opengameart.org/content/monster-snarls", licence: "CC0" },
+    "oga-monster-snarls": { title: "Monster snarls (monster-snarls)", by: "Darsycho", page: "https://opengameart.org/content/monster-snarls", licence: "CC0" },
+    "oga-overloading": { title: "Overloading Sound", by: "jwiese", page: "https://opengameart.org/content/overloading-sound", licence: "CC0" },
     "oga-qubodup-ghostmoan01": { title: "Ghost Monster Voice Moaning & Growling (GhostMoan01)", by: "qubodup", page: "https://opengameart.org/content/ghost-monster-voice-moaning-growling", licence: "CC0" },
     "oga-qubodup-ghostmoan02": { title: "Ghost Monster Voice Moaning & Growling (GhostMoan02)", by: "qubodup", page: "https://opengameart.org/content/ghost-monster-voice-moaning-growling", licence: "CC0" },
     "oga-qubodup-ghostmoan04": { title: "Ghost Monster Voice Moaning & Growling (GhostMoan04)", by: "qubodup", page: "https://opengameart.org/content/ghost-monster-voice-moaning-growling", licence: "CC0" },
     "oga-qubodup-ghostmoan05": { title: "Ghost Monster Voice Moaning & Growling (GhostMoan05)", by: "qubodup", page: "https://opengameart.org/content/ghost-monster-voice-moaning-growling", licence: "CC0" },
+    "oga-rumbling20": { title: "Rumbling Sound Effects (rumbling20)", by: "bretbernhoft", page: "https://opengameart.org/content/rumbling-sound-effects", licence: "CC0" },
+    "oga-scifi-explosion-01": { title: "50 CC0 Sci-Fi SFX (explosion_01)", by: "rubberduck", page: "https://opengameart.org/content/50-cc0-sci-fi-sfx", licence: "CC0" },
+    "oga-scifi-explosion-02": { title: "50 CC0 Sci-Fi SFX (explosion_02)", by: "rubberduck", page: "https://opengameart.org/content/50-cc0-sci-fi-sfx", licence: "CC0" },
+    "oga-scifi-rocket-01": { title: "50 CC0 Sci-Fi SFX (rocket_01)", by: "rubberduck", page: "https://opengameart.org/content/50-cc0-sci-fi-sfx", licence: "CC0" },
     "oga-sfx100v2-air-02": { title: "rubberduck, '100 CC0 SFX #2'", by: "rubberduck", page: "https://opengameart.org/content/100-cc0-sfx-2", licence: "CC0" },
     "oga-sfx100v2-air-03": { title: "rubberduck, '100 CC0 SFX #2'", by: "rubberduck", page: "https://opengameart.org/content/100-cc0-sfx-2", licence: "CC0" },
     "oga-spell-fire-03": { title: "rubberduck, '80 CC0 RPG SFX'", by: "rubberduck", page: "https://opengameart.org/content/80-cc0-rpg-sfx", licence: "CC0" },
@@ -1753,6 +1800,7 @@ export const SOURCES = Object.freeze({
     "oga-splash-07": { title: "rubberduck, '40 CC0 water / splash / slime SFX'", by: "rubberduck", page: "https://opengameart.org/content/40-cc0-water-splash-slime-sfx", licence: "CC0" },
     "oga-splash-11": { title: "rubberduck, '40 CC0 water / splash / slime SFX'", by: "rubberduck", page: "https://opengameart.org/content/40-cc0-water-splash-slime-sfx", licence: "CC0" },
     "oga-splash-13": { title: "rubberduck, '40 CC0 water / splash / slime SFX'", by: "rubberduck", page: "https://opengameart.org/content/40-cc0-water-splash-slime-sfx", licence: "CC0" },
+    "oga-troll-roars": { title: "Big scary troll sounds (troll-roars)", by: "Darsycho", page: "https://opengameart.org/content/big-scary-troll-sounds", licence: "CC0" },
     "oga-undead-1": { title: "Undead Moans (undead-1)", by: "AntumDeluge", page: "https://opengameart.org/content/undead-moans", licence: "CC0" },
     "oga-undead-3": { title: "Undead Moans (undead-3)", by: "AntumDeluge", page: "https://opengameart.org/content/undead-moans", licence: "CC0" },
     "oga-undead-4": { title: "Undead Moans (undead-4)", by: "AntumDeluge", page: "https://opengameart.org/content/undead-moans", licence: "CC0" },
