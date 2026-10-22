@@ -330,6 +330,9 @@ export const CREATURE_VOICES = Object.freeze({
     wyvern: { family: "dragon", rate: 1.15, fall: "deathThudBig", wings: "wingbeat" },
     dragon: { family: "dragon", fall: "deathThudBig", wings: "wingbeat", fire: "dragonBreath" },
     dreadthorn: { family: "dragon", rate: 0.8, fall: "deathThudBig", wings: "wingbeat", fire: "dragonBreath" },
+    // (The Behemoth of the Rift: a drake's voice as low as it goes; its atomic breath made in code,
+    // synth.js atomicBreath, played as it draws breath: app/game.js)
+    kaiju: { family: "dragon", rate: 0.72, fall: "deathThudBig" },
     wildBull: { family: "dragon", rate: 1.2, fall: "deathThudBig" },
     capeBuffalo: { family: "dragon", rate: 1.1, fall: "deathThudBig" },
     kelpie: { family: "dragon", rate: 1.24, fall: "deathThudBig" },

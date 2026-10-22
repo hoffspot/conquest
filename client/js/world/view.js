@@ -113,13 +113,14 @@ export function framed(pitch, distance, upright, back = 1) {
 // Fighting something much taller than the player (a wyvern, a dragon), or far from them (an
 // archer, a caster), out of doors, the camera draws back to keep both in the picture: by `per` of
 // its distance for each metre the foe stands over `over` metres, or by `far` for each metre it's
-// further than `from` metres off; `most` times as far at most, eased at `ease` a second (the
-// camera study, recommendation 5)
-export const BIG_FOE = Object.freeze({ over: 2.5, per: 0.15, from: 4, far: 0.07, most: 1.5, ease: 1.5 });
+// further than `from` metres off; `most` times as far at most (and `colossal` times, the
+// Behemoth of the Rift's 13 metres: game.js #colossalFoe), eased at `ease` a second (the camera
+// study, recommendation 5)
+export const BIG_FOE = Object.freeze({ over: 2.5, per: 0.15, from: 4, far: 0.07, most: 1.5, colossal: 2.4, ease: 1.5 });
 
-/** How much further back the camera draws for a foe `tall` metres tall, `apart` metres off (BIG_FOE). */
-export function backFor(tall, apart = 0) {
-    return Math.min(BIG_FOE.most, Math.max(1, 1 + (tall - BIG_FOE.over) * BIG_FOE.per, 1 + (apart - BIG_FOE.from) * BIG_FOE.far));
+/** How much further back the camera draws for a foe `tall` metres tall, `apart` metres off (BIG_FOE), `most` times at most. */
+export function backFor(tall, apart = 0, most = BIG_FOE.most) {
+    return Math.min(most, Math.max(1, 1 + (tall - BIG_FOE.over) * BIG_FOE.per, 1 + (apart - BIG_FOE.from) * BIG_FOE.far));
 }
 
 // The layer the player's drawn on for the pack's paperdoll, and what's behind them there
@@ -1076,12 +1077,13 @@ export class View {
     /**
      * Whoever the player's fighting, kept in view through anything in the way too: their chest
      * (or null), and how tall they are (metres: the hole's as big); and out of doors drawn back
-     * from for a big one, or one far from the player (`apart` metres: BIG_FOE).
+     * from for a big one, or one far from the player (`apart` metres: BIG_FOE), `most` times as
+     * far at most.
      */
-    setFoe(point, tall = 1.8, apart = 0) {
+    setFoe(point, tall = 1.8, apart = 0, most = BIG_FOE.most) {
         this.foe = point ? (this.foe ?? new THREE.Vector3()).copy(point) : null;
         this.foeTall = tall;
-        this.drawBack = point ? backFor(tall, apart) : 1;
+        this.drawBack = point ? backFor(tall, apart, most) : 1;
     }
 
     /** How many drawing buffer pixels a metre is, a metre from the camera (for sizing particles). */

@@ -19,6 +19,7 @@
 //  - Around the town (the environment): a bird's chirp, leaves rustling, the wind (a loop); and
 //    in the tavern, the hearth's fire crackling.
 //  - War: great horns blown, an invasion's raiders' (low and long) and a town's (a bright call).
+//  - The Behemoth of the Rift's atomic breath: a whine charging, then a roaring beam.
 //
 // Each sound belongs to a bus, which has its own volume: "effects" (the default) or
 // "environment" (the music is music.js's). Built from dsp.js; no Web Audio (sound.js plays
@@ -291,6 +292,27 @@ function horn(random, blasts, { gap = 0.18 } = {}) {
     }
 
     return out;
+}
+
+// A kaiju's atomic breath (the Behemoth of the Rift's: beasts/beam.js), timed to its clip: a
+// whine rising as its glow charges (CHARGE seconds), crackling the more as it comes; then the
+// beam, a roar of fire with a deep rumble under it and a sizzle over it, pulsing, for FIRE seconds;
+// dying away after
+const CHARGE = 1.3;
+const FIRE = 3.3;
+
+function atomicBreath(random) {
+    const length = CHARGE + FIRE + 0.9;
+    const charging = (t) => Math.min(1, t / CHARGE) ** 2 * (t < CHARGE + 0.15 ? 1 : Math.max(0, 1 - (t - CHARGE - 0.15) / 0.4));
+    const firing = (t) => (t < CHARGE ? 0 : t < CHARGE + 0.12 ? (t - CHARGE) / 0.12 : t < CHARGE + FIRE ? 1 : Math.max(0, 1 - (t - CHARGE - FIRE) / 0.9) ** 1.6);
+    const pulse = (t) => 0.82 + 0.18 * Math.sin(TAU * 7 * t) * Math.sin(TAU * 2.3 * t + 1);
+    const whine = shape(tone(length, (t) => 70 + 420 * Math.min(1, t / CHARGE) ** 1.7, { harmonics: [[1, 1], [2, 0.5], [3, 0.3], [5, 0.15]] }), (t) => 0.5 * charging(t));
+    const crackle = shape(filter(noise(random, length), "highpass", 3200, 0.8), (t) => charging(t) * (random.next() < 0.004 + 0.03 * Math.min(1, t / CHARGE) ? 1 : 0.06));
+    const roar = shape(filter(noise(random, length), "lowpass", (t) => 500 + 900 * firing(t) * pulse(t), 0.9), (t) => firing(t) * pulse(t));
+    const rumble = shape(tone(length, (t) => 42 + 6 * Math.sin(TAU * 1.5 * t), { harmonics: [[1, 1], [2, 0.6], [3, 0.25]] }), (t) => 0.8 * firing(t));
+    const sizzle = shape(filter(noise(random, length), "bandpass", 6200, 1.2), (t) => 0.35 * firing(t) * pulse(t));
+
+    return add(add(add(add(whine, crackle, 0.6), roar, 1), rumble, 0.9), sizzle, 1);
 }
 
 // Notes one after another (a cue): [[frequency, start (s)]...], each ringing for `decay` seconds
@@ -646,6 +668,9 @@ export const SOUNDS = {
             return add(out(0), out(0.05), 0.7, 0.45);
         },
     },
+
+    // The Behemoth of the Rift's atomic breath, charged and fired (atomicBreath)
+    atomicBreath: { variants: 1, volume: 0.85, make: atomicBreath },
 
     // War: an invasion's raiders' war horn, a long, low blast (the G under the bass clef: blown
     // twice as they come, app/game.js HORNS), and as they break and run, a short one and a long one

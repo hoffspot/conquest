@@ -147,6 +147,9 @@ export const PARTS = Object.freeze({
     waspWing: { label: "Wasp's wing", worth: 4, icon: "wing", tint: "#b0a8d0" },
     widowGland: { label: "Black widow's venom gland", worth: 18, icon: "gland", tint: "#c81818" },
     frostHide: { label: "Frost troll hide", worth: 70, icon: "hide", tint: "#b8c8d8" },
+    riftScale: { label: "Behemoth's scale", worth: 160, icon: "scale", tint: "#1c241c" },
+    riftSpine: { label: "Glowing dorsal spine", worth: 320, icon: "shard", tint: "#40ff90" },
+    riftHeart: { label: "Heart of the Behemoth", worth: 1200, icon: "heart", tint: "#3ad0ff" },
 });
 
 /**
@@ -237,6 +240,8 @@ export const SPOILS = Object.freeze({
     wightLord: { gold: [20, 60], items: [{ id: "crownShard", chance: 0.5 }, { id: "graveIron", chance: 0.5 }] },
     frostTroll: { items: [{ id: "frostHeart", chance: 0.45 }, { id: "frostHide", chance: 0.5 }] },
     fiend: { gold: [10, 30], items: [{ id: "fireGland", chance: 0.3 }, { id: "soulShard", chance: 0.2 }, { id: "obsidian", chance: 0.25 }] },
+    // (The Behemoth of the Rift: scales off its hide, a spine that still glows, and its heart)
+    kaiju: { items: [{ id: "riftScale", chance: 1, count: [4, 7] }, { id: "riftSpine", chance: 0.8, count: [1, 2] }, { id: "riftHeart", chance: 0.6 }] },
     demonLord: { gold: [60, 140], items: [{ id: "obsidian", chance: 0.8, count: [2, 3] }, { id: "soulShard", chance: 0.6 }, { id: "fireGland", chance: 0.5 }] },
     // (A hell's flayed: the Breach's with what the cult gave them and what burnt them, the Halls of
     // Bone's with their bones and their crowns' gold)

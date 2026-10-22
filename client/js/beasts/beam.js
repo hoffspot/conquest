@@ -573,9 +573,10 @@ export class EnergyBreath {
 
         this.unglow = charged(model, this.glow);
 
-        // (How far ahead of where it stands its mouth is, as it stands)
+        // (How far ahead of where it stands its mouth is, as it stands, in its own measure: as big
+        // as it's drawn when it's aimed, #target, however it's scaled as it's made)
         model.updateWorldMatrix(true, true);
-        this.ahead = this.#mouth().mouth.sub(model.getWorldPosition(new THREE.Vector3())).dot(this.#forward());
+        this.ahead = this.#mouth().mouth.sub(model.getWorldPosition(new THREE.Vector3())).dot(this.#forward()) / model.getWorldScale(new THREE.Vector3()).x;
 
         this.state = { firing: false, glow: 0, aim: 0, hit: null, length: 0 };
     }
@@ -602,7 +603,7 @@ export class EnergyBreath {
 
     // Where it means to hit the ground, so far ahead of its mouth (metres)
     #target(reach) {
-        const at = this.model.getWorldPosition(new THREE.Vector3()).addScaledVector(this.#forward(), this.ahead + reach);
+        const at = this.model.getWorldPosition(new THREE.Vector3()).addScaledVector(this.#forward(), this.ahead * this.model.getWorldScale(new THREE.Vector3()).x + reach);
 
         at.y = this.groundAt(at.x, at.z);
 

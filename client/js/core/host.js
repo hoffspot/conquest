@@ -35,7 +35,7 @@ import { waysOut } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
 import { compass } from "./ways.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, lairOf, memberOf, menaces, outByDay, packOf, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
+import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, lairOf, memberOf, menaces, outByDay, packOf, RIFT, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
 import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from "./insides.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -388,7 +388,7 @@ export const PLAYER_ROLES = Object.freeze(["owner", "trusted", "player"]);
 
 // What a player does that gets them up from resting (waiting on the rest to rest too: RULES rest
 // "everyone"): going somewhere, fighting, casting, trading
-const STIRS = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "trade", "travel", "table", "fieldBattle", "invade"]);
+const STIRS = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "trade", "travel", "table", "fieldBattle", "invade", "rift"]);
 
 /**
  * How long a camp's slept by, as the player chooses (host.js `#camp`'s `until`): so many of the
@@ -1631,6 +1631,9 @@ export class Host {
                 return this.debugs(playerId) ? this.#fieldBattle(player, actor, command.size, command.facing ?? actor.facing) : refuse("command");
             case "invade":
                 return this.debugs(playerId) ? this.#invadeNow(player, command.band ?? null) : refuse("command");
+            case "rift":
+                // (The Behemoth of the Rift before them, coming at them: the debug overlay's)
+                return this.debugs(playerId) ? this.#riftBefore(actor) : refuse("command");
             case "budget":
                 // (How big an invasion their device can draw, as their game's measured it: core/
                 // invasions.js sizeFor)
@@ -3413,8 +3416,14 @@ export class Host {
     // peoples stand in the war; anyone of no people's (the orc) against everyone, the peoples'
     // soldiers too; anyone, without a war. The wild's creatures (creatures.js) are every player's
     // enemies, and the soldiers' and followers' when they're a menace or fighting; no one else's
-    // (the orc's)
+    // (the orc's). What's come through the rift (RIFT) is everyone's, and everyone its
     #against(a, b) {
+        // (The Behemoth of the Rift and its kind: against everything that lives, the wild's
+        // creatures and an invasion's raiders too)
+        if (a.team === RIFT || b.team === RIFT) {
+            return a.team !== b.team;
+        }
+
         const [sa, sb] = [this.soldiers.get(a.id), this.soldiers.get(b.id)];
 
         // (A field battle's other army, everyone's enemy; and everyone theirs: #fieldBattle)
@@ -6411,7 +6420,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -6844,6 +6853,56 @@ export class Host {
             // further, `sight`, and drawn as a champion "elite")
             wild: { creature, tier: at, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: elite ? ELITES.loop + ELITES.leash : spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town", ...traitsOf(creature, { boss: champion === "boss" }), ...(walks ? { round: walks.stops, stop: walks.at } : {}), ...(champion ? { champion, regalia } : {}), ...(lead ? { elite: true, sight: ELITES.sight, champion: "elite", regalia: null } : {}) },
         });
+    }
+
+    // The Behemoth of the Rift come into the world (CREATURES kaiju), standing on the square nearest
+    // `at` ([x, y] metres) clear of anyone, on `map`, facing `facing` (radians from south, towards
+    // east): one of the wild's (its spoils when it falls) but kept in it till it does (`rift`), on
+    // the rift's side alone (RIFT), everyone's enemy, fighting its own way (battle.js #colossus),
+    // its hit points × `health`. Its id
+    #riftBeast(at, { map = "town", facing = 0, health = 1 } = {}) {
+        const spec = CREATURES.kaiju;
+        const id = `kaiju-${this.battle.time}`;
+        const power = tierPower(TIERS);
+        const taken = new Set(this.battle.actors.filter((each) => each.map === map && !each.dead).map(({ square: [x, y] }) => squareKey(x, y)));
+        const square = nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), [Math.floor(at[0]), Math.floor(at[1])], { taken, within: 12 });
+
+        this.wild.set(id, { creature: "kaiju", tier: TIERS, pack: id, camp: null, lair: null, master: false, rift: true });
+        this.battle.add({
+            id,
+            kind: "beast",
+            name: spec.name,
+            weapon: spec.weapon,
+            team: RIFT,
+            square,
+            map,
+            ai: "colossus",
+            facing,
+            armed: true,
+            hp: Math.round(spec.hp * health),
+            speed: spec.speed,
+            chase: spec.chase,
+            power: { melee: power, ranged: power },
+            armor: spec.armor,
+            wild: { creature: "kaiju", tier: TIERS, temper: spec.temper, guard: 0, roam: 0, leash: spec.leash, pack: id, leader: null, menace: true, unique: true, darkSight: true, ...traitsOf("kaiju") },
+        });
+        this.#event("roused", { ids: [id], creature: "kaiju" });
+
+        return id;
+    }
+
+    // The Behemoth of the Rift called up before a player (the debug overlay's): 70 metres off the
+    // way they face, turned to them
+    #riftBefore(actor) {
+        if (actor.map !== "town" || [...this.wild].some(([id, one]) => one.rift && !this.battle.actor(id)?.dead)) {
+            return refuse("command");
+        }
+
+        const at = [actor.x + sin(actor.facing) * 70, actor.y + cos(actor.facing) * 70];
+
+        this.#riftBeast(at, { facing: atan2(actor.x - at[0], actor.y - at[1]) });
+
+        return OK;
     }
 
     // A creature let go (wandered off, far from every player)

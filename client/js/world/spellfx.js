@@ -1655,6 +1655,47 @@ export class SpellFx {
         this.onShake(amount);
     }
 
+    /**
+     * Ground shaken by something colossal (`at`, on the ground; the camera shaken by `shake`): its
+     * jaws slammed down (`kind` "slam": earth and stones thrown up, a ring of dust rolling out over
+     * `radius` metres), its roar (`roar`: a pale shockwave racing out over it, the dust lifted
+     * all round), or its tread (`tread`: a little dust where its feet come down).
+     */
+    quake(at, { radius = 5, kind = "slam", shake = 0 } = {}) {
+        const ground = this.onGround(at.x, at.z);
+        const dust = (count, reach, speed, size) => {
+            for (let k = 0; k < count; k++) {
+                const angle = (k / count) * Math.PI * 2 + Math.random() * 0.4;
+                const out = new THREE.Vector3(Math.cos(angle), 0.06, Math.sin(angle));
+
+                this.spray(p([0x8a7c66, 0x5e5444], { count: 2, size: [size, size * 1.8], speed: [speed * 0.6, speed], life: [1.2, 2], gravity: -0.15, spread: 0.5, glow: false, opacity: 0.45, grow: 3, drag: 2.5 }), this.onGround(at.x + out.x * reach, at.z + out.z * reach, 0.4), out.multiplyScalar(speed));
+            }
+        };
+
+        if (shake > 0) {
+            this.shake(shake);
+        }
+
+        if (kind === "tread") {
+            dust(6, radius * 0.4, 2, 0.6);
+
+            return;
+        }
+
+        if (kind === "roar") {
+            this.ring(ground, { colour: 0xd8e8ff, from: 1, to: radius, life: 0.7, opacity: 0.5 });
+            this.after(0.12, () => this.ring(ground, { colour: 0xa8b8c8, from: 1, to: radius * 1.2, life: 0.9, opacity: 0.35 }));
+            dust(18, radius * 0.5, 6, 0.9);
+
+            return;
+        }
+
+        this.ring(ground, { colour: 0xc8b89a, from: 0.5, to: radius * 1.6, life: 0.55, opacity: 0.7 });
+        this.shards(this.onGround(at.x, at.z, 0.2), { count: 14, colour: 0x4a3a2a, size: 0.14, speed: 6, up: 6, life: 1.8 });
+        this.spray(p([0x6a5a46, 0x3a2e22], { count: 40, size: [0.05, 0.14], speed: [3, 8], life: [0.7, 1.3], gravity: 9.8, spread: 1.8, glow: false, opacity: 0.9, late: true, drag: 0.5 }), this.onGround(at.x, at.z, 0.3));
+        dust(16, radius * 0.4, 4, 1);
+    }
+
     /** Wash the screen with a colour a moment. */
     screen(colour, strength = 0.3, seconds = 0.6) {
         this.onScreen(colour, strength, seconds);

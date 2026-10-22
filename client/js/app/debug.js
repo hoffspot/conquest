@@ -368,6 +368,7 @@ export class Debug {
         const muster = element("button", { type: "button", onclick: () => this.game?.fieldBattle(Number(armies.value)) }, "Muster");
         const bands = element("select", {}, element("option", { value: "" }, "As it would come"), ...Object.entries(BANDS).map(([id, { label }]) => element("option", { value: id }, label)));
         const invade = element("button", { type: "button", onclick: () => this.game?.invade(bands.value || null) }, "Invade");
+        const rift = element("button", { type: "button", onclick: () => this.game?.rift() }, "Call up");
 
         quality.value = settings.quality;
         scale.value = settings.renderScale;
@@ -383,6 +384,7 @@ export class Debug {
             element("label", { class: "check" }, navigation, "Navigation mesh"),
             element("label", { class: "field" }, "Field battle", armies, muster),
             element("label", { class: "field" }, "Invasion", bands, invade),
+            element("label", { class: "field" }, "Behemoth of the Rift", rift),
         );
     }
 }

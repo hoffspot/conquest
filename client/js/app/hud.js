@@ -252,6 +252,45 @@ export class Hud {
         this.plate.addEventListener("contextmenu", (event) => event.preventDefault());
     }
 
+    /**
+     * The bar for the great foe near the player (`foe`: { name, hp, maxHp }; the Behemoth of the
+     * Rift, app/game.js #bossBar): its name over its health, across the top under the buttons;
+     * null, none. (Changing the page only when what it shows changes)
+     */
+    boss(foe) {
+        if (!foe) {
+            if (this.bossBar) {
+                this.bossBar.hidden = true;
+            }
+
+            this.bossShown = null;
+
+            return;
+        }
+
+        if (!this.bossBar) {
+            this.bossBar = element("div", "bossbar");
+            this.bossBar.id = "bossbar";
+            this.bossBar.setAttribute("role", "status");
+            this.bossBar.append(element("div", "name"), Object.assign(element("div", "bar"), { innerHTML: '<div class="fill"></div>' }));
+            this.root.append(this.bossBar);
+        }
+
+        const shown = `${foe.name}:${foe.hp}:${foe.maxHp}`;
+
+        if (shown === this.bossShown) {
+            return;
+        }
+
+        const share = foe.maxHp ? Math.max(0, foe.hp / foe.maxHp) : 0;
+
+        this.bossShown = shown;
+        this.bossBar.querySelector(".name").textContent = foe.name;
+        this.bossBar.querySelector(".fill").style.transform = `scaleX(${share.toFixed(3)})`;
+        this.bossBar.setAttribute("aria-label", `${foe.name}: ${Math.round(share * 100)}% of its strength left`);
+        this.bossBar.hidden = false;
+    }
+
     /** Show all that's on the player on their card (`all`), or one row of it, the rest an ellipsis. */
     showAll(all = true) {
         this.plate.classList.toggle("all", all);

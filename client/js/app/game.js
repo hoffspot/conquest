@@ -104,7 +104,7 @@ import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { missileTravel, SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
-import { detectQuality, QUALITY, ROOM_VIEW } from "../world/view.js";
+import { BIG_FOE, detectQuality, QUALITY, ROOM_VIEW } from "../world/view.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { TallGrass } from "../world/grass.js";
@@ -634,12 +634,32 @@ const FLIGHT = Object.freeze({ arrow: { arc: 0.25 }, axe: { arc: 0.45 }, venom: 
  * A blast heard and felt (#blast): heard as far as `far` metres (further than a blow); from
  * further than `clear`, the air taking the highs out of it (a low-pass at `highs` Hz there,
  * lower the further); from further than `late`, heard as long after as sound takes to come
- * (`sound` m/s); the camera shaken within `shaken` metres of it, harder the nearer.
+ * (`sound` m/s); the camera shaken within `shaken` metres of it, harder the nearer (and within
+ * `quaked` metres of the colossal's: COLOSSAL_BLASTS).
  */
-const BLAST_HEARD = Object.freeze({ far: 60, clear: 10, highs: 8000, late: 15, sound: 343, shaken: 25 });
+const BLAST_HEARD = Object.freeze({ far: 60, clear: 10, highs: 8000, late: 15, sound: 343, shaken: 25, quaked: 60 });
+
+// How far off (metres) the Behemoth of the Rift's atomic breath is heard, and within how far of it
+// its bar's across the top of the screen (#bossBar)
+const ATOMIC_HEARD = 120;
+const BOSS_NEAR = 150;
+
+// Within how far of the player (metres) the colossal's framed by the camera (#colossalFoe)
+const COLOSSAL_FRAMED = 90;
 // What a creature leaves where it falls (battle.js BOMBS `look`) is heard doing: gathering, then
 // bursting (a cinder husk's embers as fire does, a bloat gorger's bile as foul water)
 const BURSTS = Object.freeze({ embers: { gathering: "castFireLow", burst: "impactFireMid" }, bile: { gathering: "castWaterLow", burst: "impactWaterHigh" } });
+
+// The colossal's blasts (battle.js #colossal, #rake, #stride: the Behemoth of the Rift's), each as
+// the ground shakes under it (spellfx.js quake) and how hard the camera's shaken within
+// BLAST_HEARD.quaked of it, and what's heard: its jaws slamming down, its roar, its tread; its
+// breath's drawn by its beam (beasts/beam.js), whoever it lands on thrown as by any blast
+const COLOSSAL_BLASTS = Object.freeze({
+    colossalSlam: { quake: "slam", shake: 0.8, sound: "deathThudBig" },
+    colossalRoar: { quake: "roar", shake: 0.6, sound: null },
+    colossalTread: { quake: "tread", shake: 0.35, sound: null },
+    atomicBreath: { quake: null, shake: 0.3, sound: null },
+});
 
 // What bursts where each of the creatures' own lands (besides the burst in its look)
 const SPLASHES = Object.freeze({ venom: ["venomSplash"], lava: ["lavaSplash", "embers", "smoke"], web: ["webSplat"], roots: ["earth"], curse: ["shadows", "wither"], drain: ["shadows", "wither"], flame: ["flames", "smoke"] });
@@ -2928,6 +2948,7 @@ export class Game {
         this.stockades?.update(dt);
         this.contacts?.begin();
         this.#marshal(dt);
+        this.#bossBar(dt);
         this.#allying();
         this.#rationing(dt);
         this.#thronging(dt);
@@ -3784,8 +3805,9 @@ export class Game {
     // The creatures drawn from a model (beasts/model.js): each kind's asked for once the player's
     // near one of its lairs, or where one may be met at that hour (a werewolf: #modelsHere), before
     // it's met (looked at every MODELLING seconds); and one drawn with its stand-in, its model read
-    // since, drawn again from the model once it's out of view and not attacking, falling or coming
-    // down out of the sky (let go of, and put back on the list to be drawn)
+    // since, drawn again from the model once it's out of view (the colossal, at once) and not
+    // attacking, falling or coming down out of the sky (let go of, and put back on the list to be
+    // drawn)
     #modelling(dt) {
         const me = this.avatars.get(this.me)?.object.position;
 
@@ -3794,6 +3816,11 @@ export class Game {
 
             for (const kind of new Set([...modelsNear([me.x, me.z], this.#modelLairs()), ...this.#modelsHere()])) {
                 wantModel(kind);
+            }
+
+            // (The colossal about, wherever it is: read now, it's met at once)
+            for (const kind of this.#modelsAbout()) {
+                wantModel(kind, "now");
             }
 
             // (The places near: their creatures' models fetched, not read; and those of the place
@@ -3813,7 +3840,11 @@ export class Game {
         }
 
         for (const [id, avatar] of this.avatars) {
-            if (avatar instanceof BeastAvatar && !avatar.model && MODELS[avatar.id] && modelOf(avatar.id) && !avatar.seen && !avatar.doing.attack && !avatar.doing.dead && !avatar.arriving && !this.battle.actor(id)?.aloft) {
+            // (The colossal, too big to be out of view for long: drawn again from its model as
+            // soon as it's read, seen or not)
+            const colossal = Boolean(this.battle.actor(id)?.wild?.colossus);
+
+            if (avatar instanceof BeastAvatar && !avatar.model && MODELS[avatar.id] && modelOf(avatar.id) && (!avatar.seen || colossal) && !avatar.doing.attack && !avatar.doing.dead && !avatar.arriving && !this.battle.actor(id)?.aloft) {
                 this.#undress(id);
                 this.enlisting.push(id);
             } else if (!(avatar instanceof BeastAvatar) && this.#modelSince(id, avatar)) {
@@ -3864,6 +3895,12 @@ export class Game {
 
     // The kinds drawn from a model that may be met where the player is, out in the world, at this
     // hour (beasts/model.js modelsMet: its land, how far it is from their home, by night or day)
+    // The kinds drawn from a model of the colossal (the Behemoth of the Rift: battle.js #colossus)
+    // alive anywhere in the battle: each's model wanted as soon as it's come, as big as it is
+    #modelsAbout() {
+        return [...new Set(this.battle.actors.filter((actor) => actor.wild?.colossus && !actor.dead && MODELS[actor.wild.creature]).map((actor) => actor.wild.creature))];
+    }
+
     #modelsHere() {
         const actor = this.battle.actor(this.me);
 
@@ -3886,7 +3923,7 @@ export class Game {
 
         const me = this.avatars.get(this.me)?.object.position;
 
-        forgetModels(performance.now(), MODEL_LINGER, me ? [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere()] : [], this.#modelsInside());
+        forgetModels(performance.now(), MODEL_LINGER, me ? [...modelsNear([me.x, me.z], this.#modelLairs(), KEEP_MODELS), ...this.#modelsHere(), ...this.#modelsAbout()] : [], this.#modelsInside());
     }
 
     // Those about drawn in full or in their kind's crowd for now (THRONGING, app/throng.js): past
@@ -4248,9 +4285,23 @@ export class Game {
         const off = me ? Math.hypot(me.x - at.x, me.z - at.z) : Infinity;
         const look = BOMBS[event.kind]?.look ?? null;
         const grand = event.kind !== "goblinBomb" && !look;
+        const colossal = COLOSSAL_BLASTS[event.kind];
+        const shaken = Math.max(0, 1 - off / (colossal ? BLAST_HEARD.quaked : BLAST_HEARD.shaken)) ** 2;
 
-        this.spellFx.blast(at, { radius: event.radius, grand, shake: Math.max(0, 1 - off / BLAST_HEARD.shaken) ** 2, look });
-        this.sound?.play(BURSTS[look]?.burst ?? (grand ? "explosionLarge" : "explosionSmall"), { at, far: BLAST_HEARD.far, muffle: off > BLAST_HEARD.clear ? BLAST_HEARD.highs * (BLAST_HEARD.clear / off) ** 1.3 : null, delay: off > BLAST_HEARD.late ? off / BLAST_HEARD.sound : 0 });
+        if (colossal) {
+            if (colossal.quake) {
+                this.spellFx.quake(at, { radius: event.radius, kind: colossal.quake, shake: colossal.shake * shaken });
+            } else if (shaken > 0) {
+                this.spellFx.shake(colossal.shake * shaken);
+            }
+
+            if (colossal.sound) {
+                this.sound?.play(colossal.sound, { at, far: BLAST_HEARD.far, delay: off > BLAST_HEARD.late ? off / BLAST_HEARD.sound : 0 });
+            }
+        } else {
+            this.spellFx.blast(at, { radius: event.radius, grand, shake: shaken, look });
+            this.sound?.play(BURSTS[look]?.burst ?? (grand ? "explosionLarge" : "explosionSmall"), { at, far: BLAST_HEARD.far, muffle: off > BLAST_HEARD.clear ? BLAST_HEARD.highs * (BLAST_HEARD.clear / off) ** 1.3 : null, delay: off > BLAST_HEARD.late ? off / BLAST_HEARD.sound : 0 });
+        }
 
         for (const { id, to, flight, up, until } of event.throws) {
             const avatar = this.avatars.get(id);
@@ -4365,7 +4416,7 @@ export class Game {
         }
 
         const position = player.object.position;
-        const fighting = this.#kept();
+        const fighting = this.#colossalFoe() ?? this.#kept();
         const foe = this.#battleFoe(fighting, player);
         const chest = player.point(0.55);
 
@@ -4403,7 +4454,7 @@ export class Game {
             blocked: foeChest ? (way) => this.view.hiddenFrom(way, [chest, foeChest]) : undefined,
         });
 
-        this.view.setFoe(foeChest, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0);
+        this.view.setFoe(foeChest, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0, foe?.wild?.colossus ? BIG_FOE.colossal : undefined);
         this.#threats();
         this.#attackers();
         this.#clearOfFight(fighting);
@@ -6686,8 +6737,8 @@ export class Game {
         }
     }
 
-    // Of those to be drawn, the one to take the next step of: the nearest the player (on their map
-    // before any on another), begun if it isn't yet, and none of those put by this frame (waiting
+    // Of those to be drawn, the one to take the next step of: the colossal first, then the nearest
+    // the player (on their map before any on another), begun if it isn't yet, and none of those put by this frame (waiting
     // on their skins, painted elsewhere). The townsfolk after everyone else, and none of them while
     // a building's being got ready (`busy`), as Wenches and Ale's folk: only there to be seen about,
     // they keep no one waiting, the soldiers and creatures nor a building's folk behind them in the
@@ -6729,12 +6780,15 @@ export class Game {
 
         this.enlisting = this.enlisting.filter((id) => !this.aside.has(id));
 
+        // (The colossal before anyone: it's seen from far off, and comes for everyone)
+        const colossal = (actor) => Boolean(actor.wild?.colossus);
+
         for (const actor of [...[...this.enlistees.values()].map(({ actor }) => actor), ...this.enlisting.map((id) => this.battle.actor(id))]) {
             if (put.has(actor.id) || (busy && later(actor))) {
                 continue;
             }
 
-            if (!nearest || (later(nearest) && !later(actor)) || (later(nearest) === later(actor) && far(actor) < far(nearest))) {
+            if (!nearest || (colossal(actor) && !colossal(nearest)) || (colossal(actor) === colossal(nearest) && ((later(nearest) && !later(actor)) || (later(nearest) === later(actor) && far(actor) < far(nearest))))) {
                 nearest = actor;
             }
         }
@@ -9063,6 +9117,12 @@ export class Game {
                     this.lastAttack.set(event.id, battle.time);
                     this.sound?.attack(event.animation, avatar.object.position, event.hitAt / 1000);
 
+                    // (The Behemoth of the Rift drawing breath: its atomic breath heard, charged and
+                    // fired, as its clip has it: synth.js atomicBreath)
+                    if (event.attack === "atomicBreath") {
+                        this.sound?.play("atomicBreath", { at: avatar.object.position, far: ATOMIC_HEARD });
+                    }
+
                     // (One of the wild's creatures snarling, hissing or grunting with it, loudest as
                     // it lands: a beast's every blow, a people-shaped one's now and then: CALLS)
                     const creature = this.#voiced(actor, avatar);
@@ -10860,6 +10920,41 @@ export class Game {
                 this.hud.message("Only in a town or city of the world you've opened, with no invasion on", 2.5);
             }
         });
+    }
+
+    /** The Behemoth of the Rift called up before the player (the debug overlay's): host.js "rift". */
+    rift() {
+        this.#command({ type: "rift" }, (result) => {
+            if (!result.ok) {
+                this.hud.message("Only out in the world of the world you've opened, with no Behemoth about", 2.5);
+            }
+        });
+    }
+
+    // The colossal near the player (the Behemoth of the Rift: #bossBar's, within COLOSSAL_FRAMED
+    // metres of them), framed by the camera whoever they're fighting, drawn back from as far as
+    // it's tall (view.js BIG_FOE `colossal`); or null
+    #colossalFoe() {
+        const me = this.battle.actor(this.me);
+        const boss = this.bossId === null || this.bossId === undefined ? null : this.battle.actor(this.bossId);
+
+        return me && boss && !boss.dead && boss.map === me.map && Math.hypot(boss.x - me.x, boss.y - me.y) <= COLOSSAL_FRAMED ? boss : null;
+    }
+
+    // The bar across the top for the great foe nearest the player (hud.js boss): the Behemoth of
+    // the Rift (battle.js #colossus) alive within BOSS_NEAR metres of them; looked for a couple of
+    // times a second (MARSHAL.every), its health kept up with every frame
+    #bossBar(dt) {
+        const me = this.battle.actor(this.me);
+
+        if ((this.bossClock = (this.bossClock ?? 0) - dt) <= 0) {
+            this.bossClock = MARSHAL.every;
+            this.bossId = me ? (this.battle.actors.find((actor) => actor.ai === "colossus" && !actor.dead && actor.map === me.map && Math.hypot(actor.x - me.x, actor.y - me.y) <= BOSS_NEAR)?.id ?? null) : null;
+        }
+
+        const boss = this.bossId === null || this.bossId === undefined ? null : this.battle.actor(this.bossId);
+
+        this.hud.boss(boss && !boss.dead ? { name: boss.name, hp: boss.hp, maxHp: boss.maxHp } : null);
     }
 
     // What the mouse pointer shows over the view, looked at again every AIM_MS while the mouse is
