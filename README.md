@@ -655,6 +655,8 @@ client/                 The game (static files served to the browser)
                         build:textures from ambientCG's and Poly Haven's CC0 scans)
   models/kaykit/        KayKit Medieval Hexagon models (CC0), no longer used by the game (its props
                         are its own now), kept for serving glTF
+  models/kenney/        The town's siege engines, a catapult and a ballista, and their wrecks
+                        (Kenney's Castle Kit, CC0)
   fonts/                UnifrakturMaguntia, the blackletter of the tavern's signs (SIL OFL)
   music/                The music's instruments: short recordings of real ones, as MP3s (made by
                         npm run build:music from the Versilian Community Sample Library and
@@ -1005,6 +1007,8 @@ what it doesn't cover.
   - museums' scans, CC0, through Zenodo's mirror: the Virtual Museums of Małopolska's celestial
     globe, pharmaceutical mortar (Wawel Royal Castle) and apothecary albarello (the Museum of
     Pharmacy, Kraków).
+- The town's siege engines, a catapult and a ballista, and their wrecks are from Kenney's Castle
+  Kit (<https://kenney.nl/assets/castle-kit>), CC0 (`client/models/kenney/License.txt`).
 - The treasure chest (its model and its opening) is from the JMI 3D Toolkit by vidarr101
   (<https://github.com/JustMoreInnovation/foundry-vtt-modules>), MIT license
   (`client/models/jmi/LICENSE`).

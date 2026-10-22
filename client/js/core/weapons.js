@@ -236,6 +236,20 @@ export const NATURAL = Object.freeze({
     shadowfireSlinger: bomber("Sword and shadowfire orbs", "shadowfireOrb"),
     naphthaThrower: bomber("Sword and sun jars", "sunJar"),
     bladderThrower: bomber("Sword and swamp-gas bladders", "gasBladder"),
+    // (A town's siege engines, rolled out against the Behemoth of the Rift: core/invasions.js
+    // ENGINES. A catapult hurling a pot of burning pitch far over the line, bursting in fire where
+    // it lands (battle.js BOMBS firePot); a ballista loosing a bolt as long as a man, hard. Nothing
+    // up close: their crews fight for them there)
+    catapult: {
+        label: "Catapult",
+        equipment: [],
+        attacks: [ranged({ id: "firePot", reach: 30, damage: [48, 72], hitAt: 1400, duration: 2600, interval: 9000, stagger: 400, reaction: "fire", animation: "launch", bomb: "firePot" })],
+    },
+    ballista: {
+        label: "Ballista",
+        equipment: [],
+        attacks: [ranged({ id: "bolt", reach: 28, damage: [36, 54], hitAt: 700, duration: 1400, interval: 6500, stagger: 500, reaction: "pierce", animation: "loose", projectile: { kind: "ballistaBolt", speed: 34 } })],
+    },
     // (An invasion's northmen's axe-throwers: core/invasions.js BANDS. A hand axe up close, and
     // one thrown, end over end, at whoever's further off; and the Ashen Cult's high priests, as
     // the cult's leader in its ruins: a staff, and hellfire hurled)

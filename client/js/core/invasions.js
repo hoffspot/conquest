@@ -231,11 +231,13 @@ export const BANDS = Object.freeze({
  *  - **Where it comes**: out `out` metres beyond the town's edge on the road, walking on its own
  *    way (battle.js #colossus) to `stops` metres beyond its edge, where the town's line meets it;
  *  - **The town's side**: as big as the devices there can draw (SIZE) but the room the Behemoth
- *    takes itself (`costs`: as many soldiers' worth), all of it the town's, its bomb throwers
- *    `bombers` of it (in two squads on its flanks, at least `least` each); each of them going
- *    after it as far as `leash` metres from their place in the line, so all of them do;
- *  - **How strong**: its hit points `hp` for each of the town's soldiers who meets it, and
- *    `grows` more for each for every one of them (the more of them, the better they fight it:
+ *    takes itself (`costs`: as many soldiers' worth), all of it the town's: its siege engines
+ *    rolled out behind the line (ENGINES), the rest its soldiers, their bomb throwers `bombers` of
+ *    them (in two squads on its flanks, at least `least` each); each of them going after it as far
+ *    as `leash` metres from their place in the line, so all of them do;
+ *  - **How strong**: its hit points `hp` for each of the town's soldiers who meets it (a siege
+ *    engine as many as it's worth: ENGINES `worth`), and `grows` more for each for every one of
+ *    them (the more of them, the better they fight it:
  *    their arrows can't miss so big a beast): a close fight the town wins about two times in
  *    three, at any size (docs/WAR.md *The Behemoth of the Rift*);
  *  - **How it ends**: the Behemoth slain, the town held; the town's soldiers fallen but `last` of
@@ -265,6 +267,27 @@ export const BEHEMOTH = Object.freeze({
     beaten: "The Behemoth of the Rift is slain!",
 });
 
+/**
+ * A town's siege engines, rolled out against the Behemoth of the Rift (BEHEMOTH): a catapult and a
+ * ballista for every `per` of the town's side (at least one of each), behind its line. Each a
+ * soldier of its own (`kinds`: its `weapon`, weapons.js NATURAL catapult and ballista, and what
+ * it's called, `name`): as strong as `hp`, its timbers turning `armor` of every blow, rolled no
+ * faster than `speed` m/s; taking as much room as `costs` soldiers on the devices that draw it, and
+ * as many soldiers' worth against the Behemoth as `worth` (its hit points grow as much:
+ * behemothSides); and `crew` of the town's soldiers keeping by it (as a follower keeps by its
+ * leader: battle.js #follow), fighting for it up close.
+ */
+export const ENGINES = Object.freeze({
+    per: 50,
+    costs: 2,
+    worth: 9,
+    crew: 2,
+    kinds: Object.freeze({
+        catapult: Object.freeze({ weapon: "catapult", name: "catapult", hp: 160, armor: 0.35, speed: 0.9 }),
+        ballista: Object.freeze({ weapon: "ballista", name: "ballista", hp: 140, armor: 0.3, speed: 1 }),
+    }),
+});
+
 /** What an invasion's band says of itself (BANDS'; the Behemoth's, BEHEMOTH): its label, many, cry and beaten. */
 export const bandOf = (band) => (band === BEHEMOTH.id ? BEHEMOTH : BANDS[band]);
 
@@ -275,16 +298,22 @@ export const bandOf = (band) => (band === BEHEMOTH.id ? BEHEMOTH : BANDS[band]);
 export const isBehemoth = ({ dark, first, roll }) => dark && !first && roll < BEHEMOTH.share;
 
 /**
- * How the town meets the Behemoth with `size` in all it can draw: { defenders (all of them the
- * town's, its bomb throwers among them), bombers (in each of its squads: `squads` of them), hp
- * (the Behemoth's hit points: BEHEMOTH.hp for each of its soldiers, and `grows` more for each for
- * every one of them) }.
+ * How the town meets the Behemoth with `size` in all it can draw: { defenders (its soldiers,
+ * its bomb throwers and its engines' crews among them), bombers (in each of its squads: `squads`
+ * of them), engines (how many of each kind: ENGINES, each taking as much room as `costs` of its
+ * soldiers), hp (the Behemoth's hit points: BEHEMOTH.hp for each of its soldiers, an engine as
+ * many as it's `worth`, and `grows` more for each for every one of them) }.
  */
 export function behemothSides(size = INVASION.size) {
-    const defenders = Math.max(SIZE.least - BEHEMOTH.costs, size - BEHEMOTH.costs);
+    const side = Math.max(SIZE.least - BEHEMOTH.costs, size - BEHEMOTH.costs);
+    const each = Math.max(1, Math.round(side / ENGINES.per));
+    const engines = Object.fromEntries(Object.keys(ENGINES.kinds).map((kind) => [kind, each]));
+    const rolled = each * Object.keys(ENGINES.kinds).length;
+    const defenders = side - rolled * ENGINES.costs;
+    const strength = defenders + rolled * ENGINES.worth;
     const { squads } = INVASION.bombers;
 
-    return { defenders, bombers: Math.max(BEHEMOTH.least, Math.round(defenders * BEHEMOTH.bombers)), squads, hp: Math.round(defenders * (BEHEMOTH.hp + BEHEMOTH.grows * defenders)) };
+    return { defenders, bombers: Math.max(BEHEMOTH.least, Math.round(defenders * BEHEMOTH.bombers)), squads, engines, hp: Math.round(strength * (BEHEMOTH.hp + BEHEMOTH.grows * strength)) };
 }
 
 /** How near the sea a town is to be for a band that comes only by the sea (`coastal`): cells of the world plan's (CELL metres). */

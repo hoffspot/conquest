@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures.js";
 import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 import { Explored } from "../client/js/core/explored.js";
-import { BEHEMOTH, BOMBERS, REWARD, SIZE } from "../client/js/core/invasions.js";
+import { behemothSides, BOMBERS, ENGINES, REWARD, SIZE } from "../client/js/core/invasions.js";
 import { branchesFound, fareOf } from "../client/js/core/portals.js";
 import { NATURAL } from "../client/js/core/weapons.js";
 import { guilds, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
@@ -13071,7 +13071,10 @@ test("the Behemoth of the Rift against the town: its roar heard twice where it c
         return { band: invasion.band, defenders: invasion.defenders.length, invaders: invasion.invaders.length, roars: window.voices.filter(([creature, what]) => creature === "kaiju" && what === "call"), told: document.querySelector("#banner").textContent };
     });
 
-    expect(coming).toMatchObject({ band: "behemoth", defenders: SIZE.least - BEHEMOTH.costs, invaders: 1 });
+    // (Its soldiers, and its siege engines rolled out behind them)
+    const sides = behemothSides(SIZE.least);
+
+    expect(coming).toMatchObject({ band: "behemoth", defenders: sides.defenders + Object.values(sides.engines).reduce((all, each) => all + each, 0), invaders: 1 });
     expect(coming.roars).toHaveLength(2);
     expect(coming.roars.every(([, , , at, far]) => at && far > 300)).toBe(true);
     expect(coming.told).toMatch(/^The Behemoth of the Rift comes on the [a-z-]+ road! .+ calls every able hand to its defence\./);
@@ -13114,6 +13117,152 @@ test("the Behemoth of the Rift against the town: its roar heard twice where it c
     expect(dealt).toBeGreaterThanOrEqual(30);
     expect(await playUntil(page, () => /thanks you for the wounds you dealt the Behemoth, \d+% of its strength: \d+ gold/.test(document.querySelector("#banner").textContent))).toBe(true);
     await expect(page.locator("#bossbar")).toBeHidden();
+});
+
+test("a town's siege engines drawn from their models: rolled on their wheels; the catapult's arm flung up and over, its pot of burning pitch flying from its bucket, bursting where it lands; the ballista's bolt loosed, gone from it till another's laid in; set alight and burnt through, each lies wrecked", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=5");
+
+    // (Out in an open field, the lone orc out of the way: a catapult and a ballista as the town
+    // rolls them out against the Behemoth (ENGINES), side by side, on their rounds 8 m ahead and
+    // back, the player out of it, behind them)
+    await page.evaluate(async (kinds) => {
+        const { game } = window.pellagos;
+        const { squaresOf } = await import("./js/core/grid.js");
+        const squares = squaresOf(game.host.world.maps.town);
+        const me = game.battle.actor(game.me);
+        const open = ([cx, cy]) => [...Array(21).keys()].every((j) => [...Array(21).keys()].every((i) => !squares.blocked(cx - 30 + i * 3, cy - 30 + j * 3)));
+        let spot = null;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (let far = 120; far <= 400 && !spot; far += 20) {
+            for (let k = 0; k < 16 && !spot; k++) {
+                const at = [Math.floor(me.x + Math.sin((k / 16) * Math.PI * 2) * far), Math.floor(me.y + Math.cos((k / 16) * Math.PI * 2) * far)];
+
+                spot = open(at) ? at : null;
+            }
+        }
+
+        const [x, y] = spot;
+
+        game.host.battle.place(game.me, "town", [x - 8, y + 6]);
+        Object.assign(me, { neutral: true, hp: 1e6, maxHp: 1e6, facing: Math.atan2(11, -6) });
+
+        for (const [k, [kind, { weapon, name, hp, armor, speed }]] of Object.entries(kinds).entries()) {
+            const square = [x + k * 6, y];
+
+            game.host.battle.add({ id: kind, kind: "soldier", name, weapon, team: "human", square, ai: "patrol", patrol: [square, [square[0], square[1] - 8]], armed: true, hp, armor, speed, engine: kind });
+            game.enlisting.push(kind);
+        }
+    }, ENGINES.kinds);
+
+    // (Each drawn from its model, and its wreck read; its wheels, and the catapult's arm and the
+    // ballista's bolt, found on it)
+    expect(await playUntil(page, () => ["catapult", "ballista"].every((id) => window.pellagos.game.avatars.get(id)?.body && window.pellagos.game.avatars.get(id).wreck), { seconds: 60, realTime: true })).toBe(true);
+
+    // (Shown once the camera's on them, as anyone drawn is: a second of it drawn)
+    const made = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const [catapult, ballista] = ["catapult", "ballista"].map((id) => game.avatars.get(id));
+
+        for (let k = 0; k < 30; k++) {
+            game.advance(1 / 30, { render: k % 5 === 0, wait: true });
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        return { wheels: [catapult.wheels.length, ballista.wheels.length], arm: Boolean(catapult.arm), bolt: Boolean(ballista.bolt), shown: [catapult, ballista].every(({ object, body, wreck }) => object.visible && body.visible && !wreck.visible) };
+    });
+
+    expect(made).toEqual({ wheels: [4, 2], arm: true, bolt: true, shown: true });
+
+    // (Rolled on their rounds: each wheel turned as far as it's gone, about its axle)
+    expect(await playUntil(page, () => ["catapult", "ballista"].every((id) => window.pellagos.game.avatars.get(id).rolled > 3), { seconds: 20 })).toBe(true);
+
+    const rolled = await page.evaluate(() =>
+        ["catapult", "ballista"].map((id) => {
+            const avatar = window.pellagos.game.avatars.get(id);
+
+            return avatar.wheels.every((wheel) => Math.abs(wheel.rotation.z + avatar.rolled / (avatar.look.wheel * avatar.look.size)) < 1e-6) && avatar.wheels[0].rotation.z < -3 / (avatar.look.wheel * avatar.look.size);
+        }),
+    );
+
+    expect(rolled).toEqual([true, true]);
+
+    // (An orc within both their reach, held where it stands; watched frame by frame as they let
+    // fly at it)
+    const watched = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const [catapult, ballista] = ["catapult", "ballista"].map((id) => game.battle.actor(id));
+        const drawn = { catapult: game.avatars.get("catapult"), ballista: game.avatars.get("ballista") };
+        const target = game.host.battle.add({ id: "target", kind: "orc", weapon: "cleaver", team: "orcs", square: [Math.floor((catapult.x + ballista.x) / 2), Math.floor(catapult.y - 24)], hp: 1e6 });
+        const seen = { flung: 0, pot: null, burst: false, bolt: null, emptied: false, laidIn: false };
+
+        target.stunnedUntil = 1e12;
+        game.enlisting.push("target");
+
+        for (let k = 0; k < 30 * 16 && !(seen.burst && seen.laidIn); k++) {
+            game.advance(1 / 30, { render: k % 10 === 0, wait: true });
+
+            if (k % 10 === 0) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+
+            // (The catapult's arm, as far as it's flung; its pot, how far from its bucket where
+            // it's first drawn; and its burst)
+            seen.flung = Math.min(seen.flung, drawn.catapult.arm.rotation.z);
+
+            const pots = [...game.spellFx.bombs.values()];
+
+            if (pots.length && !seen.pot) {
+                seen.pot = { off: pots[0].object.position.distanceTo(drawn.catapult.hand()) };
+            }
+
+            seen.burst ||= Boolean(seen.pot) && !pots.length;
+
+            // (The ballista's bolt, flying as a ballista's bolt; its own gone from it as it does, laid in after)
+            const shot = game.battle.projectiles.find(({ from }) => from === "ballista");
+
+            if (shot && !seen.bolt) {
+                seen.bolt = game.effects.kindOf(shot.id);
+                seen.emptied = !drawn.ballista.bolt.visible;
+            }
+
+            seen.laidIn ||= Boolean(seen.bolt) && drawn.ballista.bolt.visible;
+        }
+
+        return { ...seen, hurt: target.hp < target.maxHp };
+    });
+
+    expect(watched.flung).toBeLessThan(-1.5);
+    expect(watched.pot).not.toBeNull();
+    expect(watched.pot.off).toBeLessThan(1.5);
+    expect(watched.burst).toBe(true);
+    expect(watched.bolt).toBe("ballistaBolt");
+    expect(watched.emptied).toBe(true);
+    expect(watched.laidIn).toBe(true);
+    expect(watched.hurt).toBe(true);
+
+    // (Set alight, and burnt through: wrecked where they stand, the wreck in place of each)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        for (const id of ["catapult", "ballista"]) {
+            game.battle.actor(id).hp = 1;
+            game.host.battle.afflict(id, "burn", { damage: 10 });
+        }
+    });
+    expect(await playUntil(page, () => ["catapult", "ballista"].every((id) => window.pellagos.game.battle.actor(id).dead), { seconds: 10 })).toBe(true);
+    await playUntil(page, () => false, { seconds: 1 });
+
+    const wrecked = await page.evaluate(() => ["catapult", "ballista"].map((id) => {
+        const { object, body, wreck } = window.pellagos.game.avatars.get(id);
+
+        return object.visible && !body.visible && wreck.visible;
+    }));
+
+    expect(wrecked).toEqual([true, true]);
 });
 
 test("an invasion's raiders felled by the player: thanked for them by the town as it holds, by the name of their band, and played on", async ({ page }) => {

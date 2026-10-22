@@ -13,6 +13,7 @@ let ALARM;
 let BANDS;
 let BEHEMOTH;
 let BEHEMOTH_REWARD;
+let ENGINES;
 let behemothReward;
 let behemothSides;
 let isBehemoth;
@@ -59,7 +60,7 @@ let encode;
 let world;
 
 before(async () => {
-    ({ ALARM, BANDS, BEHEMOTH, BEHEMOTH_REWARD, BOMBERS, INVASION, REWARD, SIZE, bandFor, behemothReward, behemothSides, bombersOf, clockOf, criesOf, dueAfter, isBehemoth, isDue, isSize, raiderArms, raiderName, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
+    ({ ALARM, BANDS, BEHEMOTH, BEHEMOTH_REWARD, BOMBERS, ENGINES, INVASION, REWARD, SIZE, bandFor, behemothReward, behemothSides, bombersOf, clockOf, criesOf, dueAfter, isBehemoth, isDue, isSize, raiderArms, raiderName, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
     ({ RIFT } = await import("../client/js/core/creatures.js"));
     ({ DAY } = await import("../client/js/core/daytime.js"));
     ({ ROLES } = await import("../client/js/core/formation.js"));
@@ -709,11 +710,17 @@ describe("the Behemoth of the Rift's invasion (core/invasions.js BEHEMOTH, core/
         assert.ok(Math.abs(BEHEMOTH.share - 1 / 3) < 1e-9);
 
         for (const size of [SIZE.least, INVASION.size, SIZE.most.high]) {
-            const { defenders, bombers, squads, hp } = behemothSides(size);
+            const { defenders, bombers, squads, engines, hp } = behemothSides(size);
+            const rolled = Object.values(engines).reduce((sum, count) => sum + count, 0);
+            const strength = defenders + rolled * ENGINES.worth;
 
-            assert.equal(defenders, size - BEHEMOTH.costs, `${size}: all of it the town's but the room the Behemoth takes`);
+            // (Its siege engines among it, a catapult and a ballista for every so many of it, at
+            // least one of each, each taking the room of so many soldiers)
+            assert.deepEqual(Object.keys(engines), ["catapult", "ballista"]);
+            assert.ok(Object.values(engines).every((count) => count === Math.max(1, Math.round((size - BEHEMOTH.costs) / ENGINES.per))), `${size}: ${JSON.stringify(engines)}`);
+            assert.equal(defenders + rolled * ENGINES.costs, size - BEHEMOTH.costs, `${size}: all of it the town's but the room the Behemoth takes`);
             assert.ok(bombers >= BEHEMOTH.least && bombers * squads < defenders / 4);
-            assert.equal(hp, Math.round(defenders * (BEHEMOTH.hp + BEHEMOTH.grows * defenders)), "its hit points so many for each who meets it, more for each the more of them");
+            assert.equal(hp, Math.round(strength * (BEHEMOTH.hp + BEHEMOTH.grows * strength)), "its hit points so many for each who meets it (an engine as many as it's worth), more for each the more of them");
         }
     });
 
@@ -778,10 +785,27 @@ describe("the Behemoth of the Rift's invasion (core/invasions.js BEHEMOTH, core/
         const bearing = Math.atan2(beast.y - invasion.middle[1], beast.x - invasion.middle[0]);
 
         assert.ok(Math.abs(Math.atan2(Math.sin(bearing - way), Math.cos(bearing - way))) < 0.1, `from the tower's way (${bearing.toFixed(2)}, ${way.toFixed(2)})`);
-        assert.equal(defenders.length, sides.defenders, "the town's whole strength");
-        assert.equal(invasion.mustered, sides.defenders);
+        // (Its soldiers, and its siege engines, each with its crew keeping by it)
+        const engines = defenders.filter((one) => one.engine);
+        const soldiers = defenders.filter((one) => !one.engine);
+        const crews = soldiers.filter((one) => host.soldiers.get(one.id).role === "crew");
+
+        assert.equal(soldiers.length, sides.defenders, "the town's whole strength");
+        assert.deepEqual(Object.fromEntries(Object.keys(sides.engines).map((kind) => [kind, engines.filter((one) => one.engine === kind).length])), sides.engines, "its siege engines");
+        assert.equal(invasion.mustered, sides.defenders + engines.length);
         assert.equal(defenders.filter((one) => one.weapon === bombersOf(invasion.people).weapon).length, sides.bombers * sides.squads, "its bomb throwers");
-        assert.ok(defenders.every((one) => one.team === "human" && one.leash === BEHEMOTH.leash), "each after it as far as it goes");
+        assert.ok(defenders.every((one) => one.team === "human"));
+        assert.ok(defenders.filter((one) => !crews.includes(one)).every((one) => one.leash === BEHEMOTH.leash), "each after it as far as it goes");
+        assert.equal(crews.length, engines.length * ENGINES.crew, "each engine's crew");
+        assert.ok(crews.every((one) => one.ai === "follow" && one.leader === host.soldiers.get(one.id).engine && !one.formation), "following their engine");
+
+        // (By it as it's rolled up behind the line: most of them at its side, any held up round
+        // something in the way catching up)
+        play(game, 6000);
+
+        const apart = crews.map((one) => Math.hypot(one.x - host.battle.actor(one.leader).x, one.y - host.battle.actor(one.leader).y));
+
+        assert.ok(apart.filter((metres) => metres < 4).length >= crews.length * 0.75 && apart.every((metres) => metres < 16), `keeping by their engine: ${apart.map((metres) => metres.toFixed(1))}`);
         assert.ok(host.battle.hostile(beast, me) && defenders.every((one) => host.battle.hostile(beast, one)), "everyone's enemy");
         assert.deepEqual(invasion.spared, [], "no one's first");
         assert.deepEqual(beast.wild.keepOut, { middle: invasion.middle, within: invasion.edge }, "never into the town after anyone");

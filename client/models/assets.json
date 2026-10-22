@@ -1521,6 +1521,42 @@
                 }
             ]
         },
+        "siege-catapult": {
+            "tier": "demand",
+            "label": "A town's catapult, rolled out against the Behemoth (Kenney's Castle Kit, CC0)",
+            "files": [
+                {
+                    "path": "models/kenney/siege-catapult.glb"
+                }
+            ]
+        },
+        "siege-catapult-wrecked": {
+            "tier": "demand",
+            "label": "A catapult wrecked (Kenney's Castle Kit, CC0)",
+            "files": [
+                {
+                    "path": "models/kenney/siege-catapult-demolished.glb"
+                }
+            ]
+        },
+        "siege-ballista": {
+            "tier": "demand",
+            "label": "A town's ballista, rolled out against the Behemoth (Kenney's Castle Kit, CC0)",
+            "files": [
+                {
+                    "path": "models/kenney/siege-ballista.glb"
+                }
+            ]
+        },
+        "siege-ballista-wrecked": {
+            "tier": "demand",
+            "label": "A ballista wrecked (Kenney's Castle Kit, CC0)",
+            "files": [
+                {
+                    "path": "models/kenney/siege-ballista-demolished.glb"
+                }
+            ]
+        },
         "basis-transcoder": {
             "tier": "demand",
             "label": "The Basis Universal transcoder, which models' KTX2 textures are read with (Binomial, Apache 2.0)",
