@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "7ddd0f99f5",
+    release: "decf407f9a",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -1837,6 +1837,50 @@ export const ASSETS = Object.freeze({
                     "path": "models/jmi/chest.glb",
                     "hash": "7bdf812b68",
                     "bytes": 178404
+                }
+            ]
+        },
+        "siege-catapult": {
+            "tier": "demand",
+            "label": "A town's catapult, rolled out against the Behemoth (Kenney's Castle Kit, CC0)",
+            "files": [
+                {
+                    "path": "models/kenney/siege-catapult.glb",
+                    "hash": "cc2bc65ade",
+                    "bytes": 93716
+                }
+            ]
+        },
+        "siege-catapult-wrecked": {
+            "tier": "demand",
+            "label": "A catapult wrecked (Kenney's Castle Kit, CC0)",
+            "files": [
+                {
+                    "path": "models/kenney/siege-catapult-demolished.glb",
+                    "hash": "3da1c1b282",
+                    "bytes": 78836
+                }
+            ]
+        },
+        "siege-ballista": {
+            "tier": "demand",
+            "label": "A town's ballista, rolled out against the Behemoth (Kenney's Castle Kit, CC0)",
+            "files": [
+                {
+                    "path": "models/kenney/siege-ballista.glb",
+                    "hash": "d3b3c9d481",
+                    "bytes": 72164
+                }
+            ]
+        },
+        "siege-ballista-wrecked": {
+            "tier": "demand",
+            "label": "A ballista wrecked (Kenney's Castle Kit, CC0)",
+            "files": [
+                {
+                    "path": "models/kenney/siege-ballista-demolished.glb",
+                    "hash": "d7a4ff61b0",
+                    "bytes": 62160
                 }
             ]
         },

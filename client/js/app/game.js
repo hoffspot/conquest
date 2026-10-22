@@ -97,6 +97,7 @@ import { fadeNear } from "../world/nearfade.js";
 import { Banners } from "../world/banners3d.js";
 import { Camps } from "../world/camps3d.js";
 import { FortAvatar, Forts } from "../world/forts3d.js";
+import { EngineAvatar } from "../world/siege3d.js";
 import { Stockades } from "../world/stockades3d.js";
 import { ContactShadows } from "../world/contacts.js";
 import { Flyers } from "../world/flyers3d.js";
@@ -630,7 +631,7 @@ function ailmentOf(kind, look = null) {
 
 // How the wild's creatures' spit and the like fly (app/game.js #fly): lobbed in an arc (`arc`:
 // how high, m), or along the ground (roots burrowing: `ground`)
-const FLIGHT = Object.freeze({ arrow: { arc: 0.25 }, axe: { arc: 0.45 }, venom: { arc: 0.55 }, lava: { arc: 0.75 }, web: { arc: 0.4 }, roots: { ground: true }, flame: { arc: 0 }, riftFire: { arc: 0 } });
+const FLIGHT = Object.freeze({ arrow: { arc: 0.25 }, ballistaBolt: { arc: 0.4 }, axe: { arc: 0.45 }, venom: { arc: 0.55 }, lava: { arc: 0.75 }, web: { arc: 0.4 }, roots: { ground: true }, flame: { arc: 0 }, riftFire: { arc: 0 } });
 
 // Fire breathed, a roaring stream from the jaws as it flies (effects.breathe): a drake's, and the
 // rift's green fire, a rift stalker's (effects BURSTS)
@@ -661,8 +662,11 @@ const SMALL_BOMBS = new Set(Object.values(BOMBERS).flatMap(({ weapon }) => weapo
 // What a creature leaves where it falls (battle.js BOMBS `look`) is heard doing: gathering, then
 // bursting (a cinder husk's embers as fire does, a bloat gorger's bile as foul water); and a
 // people's bomb that has no wick to fizz (by its kind), lying where it landed: a starfire seed pod
-// shimmering, a shadowfire orb's flame, a swamp-gas bladder hissing, bursting as foul water does
+// shimmering, a shadowfire orb's flame, a swamp-gas bladder hissing, bursting as foul water does;
+// and a catapult's pot of burning pitch, heard flying (`flying`, from where it's flung), nothing
+// heard lying there (it bursts as it lands), bursting as a great blast
 const BURSTS = Object.freeze({
+    firePot: { flying: "fireball", gathering: null, burst: "explosionLarge" },
     embers: { gathering: "castFireLow", burst: "impactFireMid" },
     bile: { gathering: "castWaterLow", burst: "impactWaterHigh" },
     starfirePod: { gathering: "castHealingLow" },
@@ -1807,6 +1811,11 @@ export class Game {
 
         if (actor.kind === "folk") {
             return yield* this.#addingFolk(this.host.folk.get(actor.id));
+        }
+
+        // A town's siege engine (core/invasions.js ENGINES): its own model (world/siege3d.js)
+        if (actor.engine) {
+            return this.#register(actor.id, new EngineAvatar(actor.engine), { wounds: false });
         }
 
         // A soldier: as their people's are dressed, carrying what they fight with
@@ -3016,10 +3025,22 @@ export class Game {
                 [x, z] = this.predict.at(actor, x, z, this.clock * 1000);
             }
 
-            // (A fortification, or a camp's stakes: only where it stands, on the ground there)
-            if (actor.kind === "fort" || actor.kind === "stakes") {
+            // (A fortification, or a camp's stakes: only where it stands, on the ground there; and a
+            // siege engine, rolled there)
+            if (actor.kind === "fort" || actor.kind === "stakes" || actor.engine) {
                 avatar.update(dt, ox + x, oz + z, actor.facing);
                 avatar.object.position.y = this.#groundOn(actor.map, ox + x, oz + z);
+
+                // (A siege engine shown as anyone drawn is, once its shaders are ready and its
+                // pictures sent: #register, #sending)
+                if (actor.engine) {
+                    avatar.object.visible = !avatar.compiling && avatar.sent !== false;
+
+                    if (avatar.sent === false) {
+                        this.unsent.push(avatar);
+                    }
+                }
+
                 continue;
             }
 
@@ -3577,7 +3598,7 @@ export class Game {
         }
 
         const near = (actor) => actor.map === me.map && Math.abs(actor.x - me.x) <= DRAW_REACH && Math.abs(actor.y - me.y) <= DRAW_REACH;
-        const soldiers = this.battle.actors.filter((actor) => actor.kind === "soldier" && !actor.dead && near(actor) && this.host.soldiers.has(actor.id));
+        const soldiers = this.battle.actors.filter((actor) => actor.kind === "soldier" && !actor.engine && !actor.dead && near(actor) && this.host.soldiers.has(actor.id));
         const ids = new Set(soldiers.map(({ id }) => id));
         // (How many of them can be drawn in full: in a battle the quality's own, else as many as
         // the bodies' budget has room for beside everyone else drawn in full, or to be)
@@ -4291,8 +4312,15 @@ export class Game {
         const travel = Math.max(0.1, (event.lands - this.battle.time) / 1000);
         const fuse = (event.bursts - event.lands) / 1000;
 
+        const heard = BURSTS[look ?? event.kind] ?? {};
+        const gathering = "gathering" in heard ? heard.gathering : "fuse";
+
         this.spellFx.lob(event.bomb, from, to, { travel, fuse, radius: event.radius, big: event.kind === "bigBomb", kind: event.kind, look });
-        this.fuses.set(event.bomb, this.sound?.play(BURSTS[look ?? event.kind]?.gathering ?? "fuse", { at: to, delay: travel, far: 20 }) ?? null);
+        this.fuses.set(event.bomb, gathering ? (this.sound?.play(gathering, { at: to, delay: travel, far: 20 }) ?? null) : null);
+
+        if (heard.flying) {
+            this.sound?.play(heard.flying, { at: from() });
+        }
     }
 
     // A blast (battle.js #blast: a bomb bursting, the Explosion spell): the bomb gone and its wick
@@ -6786,12 +6814,13 @@ export class Game {
         }
     }
 
-    // Of those to be drawn, the one to take the next step of: the colossal first, then the nearest
-    // the player (on their map before any on another), begun if it isn't yet, and none of those put by this frame (waiting
-    // on their skins, painted elsewhere). The townsfolk after everyone else, and none of them while
-    // a building's being got ready (`busy`), as Wenches and Ale's folk: only there to be seen about,
-    // they keep no one waiting, the soldiers and creatures nor a building's folk behind them in the
-    // skins worker. { actor, steps }, or null if there's none
+    // Of those to be drawn, the one to take the next step of: the colossal (and siege engines)
+    // first, then the nearest the player (on their map before any on another), begun if it isn't
+    // yet, and none of those put by this frame (waiting on their skins, painted elsewhere). The
+    // townsfolk after everyone else, and none of them while a building's being got ready (`busy`),
+    // as Wenches and Ale's folk: only there to be seen about, they keep no one waiting, the
+    // soldiers and creatures nor a building's folk behind them in the skins worker. { actor,
+    // steps }, or null if there's none
     #nextEnlistee(put, busy = false) {
         const me = this.battle.actor(this.me);
         const far = (actor) => (me && actor.map === me.map ? Math.hypot(actor.x - me.x, actor.y - me.y) : Infinity);
@@ -6829,8 +6858,9 @@ export class Game {
 
         this.enlisting = this.enlisting.filter((id) => !this.aside.has(id));
 
-        // (The colossal before anyone: it's seen from far off, and comes for everyone)
-        const colossal = (actor) => Boolean(actor.wild?.colossus);
+        // (The colossal before anyone: it's seen from far off, and comes for everyone; and a town's
+        // siege engines with it, quick to make, each its model at once)
+        const colossal = (actor) => Boolean(actor.wild?.colossus || actor.engine);
 
         for (const actor of [...[...this.enlistees.values()].map(({ actor }) => actor), ...this.enlisting.map((id) => this.battle.actor(id))]) {
             if (put.has(actor.id) || (busy && later(actor))) {

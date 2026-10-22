@@ -205,7 +205,9 @@ export const HAZARDS = Object.freeze({
  * NATURAL bombardier and its kin: the humans' black-powder grenado, thrown furthest; the elves'
  * starfire seed pod, bursting widest; the dark elves' shadowfire orb in spider silk, withering
  * whoever it catches; the cat folk's clay sun jar of desert naphtha, setting them alight; the
- * lizard folk's swamp-gas bladder, poisoning them; the orcs', goblin bombs); and what a hell's
+ * lizard folk's swamp-gas bladder, poisoning them; the orcs', goblin bombs); a town's catapult's
+ * pot of burning pitch, flung far, bursting the moment it lands and setting what it catches
+ * alight (weapons.js NATURAL catapult); and what a hell's
  * creatures leave where they fall dead (creatures.js `burst`), swelling a moment before it bursts,
  * drawn as it is, not as a bomb (`look`): a cinder husk's embers, and a bloat gorger's bile,
  * poisoning whoever it catches (its blast's `element`, fire's but for it, and what it leaves on
@@ -221,6 +223,7 @@ export const BOMBS = Object.freeze({
     gasBladder: { radius: 2.8, toss: 0.4, fuse: 1300, speed: 8, soonest: 500, element: "earth", afflict: { kind: "poison", chance: 0.7 } },
     cinders: { radius: 2.2, toss: 0.6, fuse: 1200, speed: 9, soonest: 0, look: "embers" },
     bile: { radius: 2.4, toss: 0.4, fuse: 1000, speed: 9, soonest: 0, look: "bile", element: "earth", afflict: { kind: "poison", chance: 0.8 } },
+    firePot: { radius: 3.5, toss: 1.1, fuse: 100, speed: 16, soonest: 900, afflict: { kind: "burn", chance: 0.8 } },
 });
 
 /**
@@ -703,7 +706,7 @@ export class Battle {
      * carrying a shield has `shield` (#hit: { chance, share, spells }). One that's `lone` picks its
      * own fights: its own don't take up its grudges (#provoke: an invasion's raiders).
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, lone = false }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, lone = false, engine = null }) {
         const kindOf = KINDS[kind];
         const type = { ...kindOf, hp: hp ?? kindOf.hp, speed: speed ?? kindOf.speed, chase: chase ?? speed ?? kindOf.chase };
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
@@ -831,6 +834,10 @@ export class Battle {
             // The squares it stands over, if more than its own (a fortification): [x0, y0, x1, y1],
             // what's after it aimed at the nearest of them (#aimAt)
             footprint: footprint ? [...footprint] : null,
+            // A siege engine's kind, if it's one (a town's catapult or ballista, its soldier: core/
+            // invasions.js ENGINES): never staggered, knocked down or thrown, and only fire takes to
+            // its timbers (#hit, #throwable, afflict)
+            engine,
             // The spells that last on it (Resist Fire, Reflect, Invisibility...): { kind (the
             // spell), until, by, level }
             buffs: [],
@@ -1489,8 +1496,9 @@ export class Battle {
         const actor = this.actor(id);
         const affliction = AFFLICTIONS[kind];
 
-        // (Nothing holds the colossal back or frightens it: only what hurts takes hold)
-        if (!actor || actor.dead || !affliction || (actor.wild?.colossus && (affliction.flee || affliction.speed))) {
+        // (Nothing holds the colossal back or frightens it: only what hurts takes hold; and nothing
+        // but fire takes to a siege engine's timbers)
+        if (!actor || actor.dead || !affliction || (actor.wild?.colossus && (affliction.flee || affliction.speed)) || (actor.engine && kind !== "burn")) {
             return false;
         }
 
@@ -1882,10 +1890,10 @@ export class Battle {
         }
 
         // (After the colossal, its body in sight as far as it reaches: however far off where it
-        // stands)
-        const colossal = actor.target === null ? null : this.actor(actor.target);
+        // stands. A siege engine the same, whoever it's after: its crew watch for them)
+        const sought = actor.target === null ? null : this.actor(actor.target);
 
-        if (colossal?.wild?.colossus && !colossal.dead && this.hostile(colossal, actor) && this.canSee(actor, colossal, Math.max(SIGHT, longestReach(actor.arms)))) {
+        if (sought && (sought.wild?.colossus || actor.engine) && !sought.dead && this.hostile(sought, actor) && this.canSee(actor, sought, Math.max(SIGHT, longestReach(actor.arms)))) {
             return true;
         }
 
@@ -2931,6 +2939,14 @@ export class Battle {
     #follow(actor) {
         const leader = this.actor(actor.leader);
 
+        // (A siege engine's crew, their engine wrecked: on as the soldiers they are, from where
+        // they stand, going after an enemy as far as it would have)
+        if (leader?.engine && leader.dead) {
+            Object.assign(actor, { ai: "patrol", leader: null, leash: leader.leash, patrol: [actor.square], patrolIndex: 0 });
+
+            return;
+        }
+
         if (!leader || leader.dead || leader.map !== actor.map) {
             actor.target = null;
 
@@ -3293,7 +3309,8 @@ export class Battle {
     // The nearest enemy it can see that passes `test` (none further than it can see: SIGHT, or
     // further for one of the wild's that sees further, its `sight`: an elite, creatures.js ELITES)
     #nearestSeen(actor, test = () => true) {
-        const sight = actor.wild?.sight ?? SIGHT;
+        // (A siege engine as far as it reaches: its crew watch for it)
+        const sight = actor.wild?.sight ?? (actor.engine ? Math.max(SIGHT, longestReach(actor.arms)) : SIGHT);
 
         return this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy, sight) && test(enemy), sight);
     }
@@ -4852,9 +4869,9 @@ export class Battle {
 
     // Can someone be thrown by a blast (TOSS)? Not too heavy or not solid (`steady`), one of the
     // perilous places' own, an elite or a dungeon's boss (or a hell's level's own), what stands over
-    // more than its square, a wagon; nor one thrown lately
+    // more than its square, a wagon or a siege engine; nor one thrown lately
     #throwable(actor) {
-        return !actor.footprint && actor.kind !== "fort" && actor.kind !== "stakes" && actor.kind !== "wagon" && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && actor.wild?.champion !== "boss" && actor.wild?.champion !== "floor" && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
+        return !actor.footprint && actor.kind !== "fort" && actor.kind !== "stakes" && actor.kind !== "wagon" && !actor.engine && !actor.wild?.steady && !actor.wild?.unique && !actor.wild?.elite && actor.wild?.champion !== "boss" && actor.wild?.champion !== "floor" && this.time >= (actor.thrownAt ?? -Infinity) + TOSS.spared;
     }
 
     // Thrown by a blast at `at` (TOSS), `out` of the way from its heart to its edge (0 to 1): away
@@ -5075,7 +5092,10 @@ export class Battle {
             this.#emit("blocked", { id: target.id, by: attacker.id, attack: attack.id, share: blocked, damage, of: whole, projectile, spell });
 
             if (!damage) {
-                target.staggeredUntil = Math.max(target.staggeredUntil, this.time + Math.round(attack.stagger / 2));
+                if (!target.engine) {
+                    target.staggeredUntil = Math.max(target.staggeredUntil, this.time + Math.round(attack.stagger / 2));
+                }
+
                 this.#provoke(attacker, target);
 
                 return 0;
@@ -5083,7 +5103,12 @@ export class Battle {
         }
 
         target.hp = Math.max(0, target.hp - damage);
-        target.staggeredUntil = Math.max(target.staggeredUntil, this.time + (blocked ? Math.round(attack.stagger / 2) : attack.stagger));
+
+        // (A siege engine isn't staggered: what's struck is its timbers)
+        if (!target.engine) {
+            target.staggeredUntil = Math.max(target.staggeredUntil, this.time + (blocked ? Math.round(attack.stagger / 2) : attack.stagger));
+        }
+
         this.#emit("hit", {
             id: target.id,
             by: attacker?.id ?? null,
@@ -5101,7 +5126,7 @@ export class Battle {
 
         // A blow that knocks its target off its feet: it can't move, fight or cast till it's up
         // (warded against its school, less long)
-        if (attack.knockdown && !blocked && target.hp > 0 && !target.wild?.colossus) {
+        if (attack.knockdown && !blocked && target.hp > 0 && !target.wild?.colossus && !target.engine) {
             const down = Math.round(attack.knockdown * (warded ? WARD : 1));
 
             target.stunnedUntil = Math.max(target.stunnedUntil, this.time + down);

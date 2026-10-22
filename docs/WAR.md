@@ -2422,20 +2422,58 @@ otherwise still does).
   are no one it fights.
 - **The town's whole strength** marches out to meet it: as big as the devices there can draw
   (`SIZE`, above), all of it the town's but the room the Behemoth takes itself (`costs`: 20
-  soldiers' worth), so 40 at 60 and 340 at 360; its bomb throwers 6% of them, in two squads on
-  the line's flanks, three at least in each (`bombers`, `least`). Each goes after it as far as
-  90 m from their place in the line (`leash`), so all of them do. It's no one's first: it fights
-  every player from the start, and they it.
+  soldiers' worth), so 40 at 60 and 340 at 360. Its siege engines are rolled out behind the line
+  (below), the rest of it soldiers; its bomb throwers 6% of them, in two squads on the line's
+  flanks, three at least in each (`bombers`, `least`). Each goes after it as far as 90 m from
+  their place in the line (`leash`), so all of them do. It's no one's first: it fights every
+  player from the start, and they it.
+- **Its siege engines** (`ENGINES`; host.js `#townLine`, `ENGINE_LINE`): a catapult and a ballista
+  for every 50 of the town's side, one of each at least (`per`), so 2 at 60, 4 at 120 and 14 at
+  360. Each takes two soldiers' room on the devices that draw it (`costs`). They stand abreast
+  9 m apart, 6 m behind the line's hindmost rank, and are rolled along with it (no faster than
+  0.9 and 1 m/s). Each is a soldier of its own in the battle (battle.js `engine`), with no blow
+  up close:
+  - **the catapult** (weapons.js NATURAL `catapult`) flings a pot of burning pitch as far as 30 m
+    every 9 seconds, which bursts the moment it lands (battle.js BOMBS `firePot`), 3.5 m about,
+    for 48 to 72, setting four in five of those it catches alight;
+  - **the ballista** (`ballista`) looses a bolt as far as 28 m every 6.5 seconds, for 36 to 54.
+
+  Their crews watch for them, so an engine is in the fight as far off as it reaches while it can
+  see whoever it's after (`#inFight`, `#nearestSeen`). Being timbers on wheels, an engine is never
+  staggered, knocked down or thrown by a blast, and nothing but fire takes to it (`afflict`): no
+  poison, no bleeding. They're strong (160 and 140 hit points), their timbers turning 35% and 30%
+  of every blow.
+
+  Two of the town's soldiers keep by each as its crew (`crew`), out of the line's formation:
+  they follow it as a follower keeps by its leader (battle.js `#follow`), and fight whoever comes
+  at it or near it. Once it's wrecked, they fight on as the soldiers they are, going after an
+  enemy as far as it would have.
+
+  **Drawn** (world/siege3d.js `EngineAvatar`) from Kenney's Castle Kit (`client/models/kenney`,
+  CC0, read only when they're wanted), made 2.6 and 2.8 times as big. Each wheel turns as far as
+  the engine's rolled, and it swings round slowly (a half turn in 3 and 2.2 seconds), though
+  always round in time to face whoever it lets fly at. As it lets fly, the catapult's arm is flung up and over and its pot leaves from the bucket, glowing and
+  trailing fire (world/spellfx.js BOMB_LOOKS `firePot`); the arm is wound down again over 2.2
+  seconds. The ballista's bolt, three times an arrow, is gone from it as it flies and is laid in
+  again 1.6 seconds later. Either one jolts back as it shoots. Broken, its wreck lies in its place.
+
+  **Heard** (audio/sound.js SWINGS, LAUNCHES; game.js BURSTS): the catapult's arm slams into its
+  crossbar as it lets fly, and its pot roars through the air like a fireball, bursting in a great
+  blast; the ballista's string thrums like a longbow's, and its bolt whooshes like a heavy stone.
 - **How strong** (`behemothSides`): its hit points 130 for each of the town's soldiers who meet
-  it, and a quarter more for each for every one of them (`hp`, `grows`): 5,600 against the 40 of
-  an invasion of 60, 15,500 against 100, 73,100 against 340. The more of them, the better they
-  fight it: their arrows can't miss so big a beast, and it can't be at all of them at once. Played
-  headless with the army alone (the player standing aside) in the start towns of 18 worlds, 43
-  fights at 60, 120, 240 and 360 (12, 18, 9 and 4), the town held 28 times, about two in three at
-  each size, and kept 36 to 44% of its soldiers on the mean when it did; from the first blow, the
-  fight lasted a minute and a half at 60, three minutes at 360. Its archers, casters and bomb
-  throwers do much of it: whoever's after it is in the fight while they see any of its body as
-  far as they reach (WILDS.md).
+  it, nine soldiers' worth for each of its siege engines (`ENGINES.worth`), and a quarter more for
+  each for every one of them (`hp`, `grows`): 7,749 against the 36 soldiers and 2 engines of an
+  invasion of 60, 20,736 against 92 and 4 at 120, 104,901 against 312 and 14 at 360. The more of
+  them, the better they fight it: their arrows can't miss so big a beast, and it can't be at all
+  of them at once. Before the engines, played headless with the army alone (the player standing
+  aside) in the start towns of 18 worlds, 43 fights at 60, 120, 240 and 360 (12, 18, 9 and 4), the
+  town held 28 times, about two in three at each size. With them, played the same way in the start
+  towns of 36 worlds, 49 fights at 60, 120 and 240 (36, 9 and 4), it held 30 times (20, 7 and 3),
+  where without them it held 25 times in the same 49 (16, 6 and 3). With them it kept 37 to 41% of
+  its soldiers on the mean when it held. From the first blow, the fight lasted two and three
+  quarter minutes at 60 and three and a half at 240, on the median. Its archers, casters, bomb
+  throwers and engines do much of it: whoever's after it is in the fight while they see any of its
+  body as far as they reach (WILDS.md).
 - **How it ends** (`#invasionsOn`): slain, the town held ("The Behemoth of the Rift is slain
   before Marleyworth!", and the crier's "The Behemoth of the Rift is slain! The town thanks every
   brave soul who stood for it!"); with all but 5% of the town's soldiers fallen (`last`), it goes
@@ -2454,7 +2492,10 @@ otherwise still does).
 - `test/invasions.test.js`: by night only, one time in three, never in anyone's first; the
   town's whole strength against it, everyone's enemy, on to the town's edge; slain, the town
   held, those who wounded it thanked by their share; going back once all but a few of the town's
-  are down. `test/kaiju.test.js`: never after anyone in the town.
+  are down. `test/kaiju.test.js`: never after anyone in the town. `test/siege.test.js`: the
+  engines' weapons, the catapult's pot bursting as it lands and setting alight, the ballista's
+  bolt, what doesn't take to them, and their crews. `e2e/pellagos.spec.js`: the engines drawn
+  from their models, rolled, letting fly and wrecked.
 
 **Called up** (debug): the debug overlay's **Invasion** brings one to the town the player's in now
 (the host's `invade` command), as one due would come; its band's list has the Behemoth of the Rift
@@ -2467,8 +2508,8 @@ with what they carry (`Progress.invasion`), and a world's rules say whether inva
 player's device can draw is in the host's snapshot too (each player's `budget`; `SNAPSHOT_VERSION`
 31, none told in a world kept before), and told by their game (`NET_VERSION` 146). The bands
 changed what two games share again (`NET_VERSION` 147), and so did the band named in the thanks
-(148), the Behemoth of the Rift (149), each people's own bombs (150), and the rift's own creatures
-in the Tower of Sar Mordal (151).
+(148), the Behemoth of the Rift (149), each people's own bombs (150), the rift's own creatures
+in the Tower of Sar Mordal (151), and the town's siege engines (152).
 
 ### Playing together (M11)
 

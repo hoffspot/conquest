@@ -599,6 +599,11 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
   - an orc's goblin bomb, as above.
   The others with wicks fizz as a goblin bomb does (`fuse`); all but the bladder burst as a bomb
   does (`explosionSmall`).
+  A town's catapult's pot of burning pitch (`firePot`; WAR.md *The Behemoth of the Rift*) is a clay
+  jar 2.6 times as big, aglow and aflame as it flies from the catapult's bucket, its fire streaming
+  off it, heard roaring through the air like a fireball. It bursts the moment it lands, in a great
+  blast of fire with 1.4 times a bomb's sparks and smoke (`more`; heard as `explosionLarge`), its
+  pitch left burning on the ground round it for 2.5 to 3.5 seconds.
   About 130 glowing particles and 70 of dust a bomb, 300 and 150 the spell (of 3,000 each).
 - **What lasts** shows on whoever it's on: motes of its colour now and then; Levitate lifts them
   0.35 metres off the ground, bobbing; Invisibility leaves a shimmer of them.

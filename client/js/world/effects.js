@@ -94,6 +94,11 @@ const SPLAT_FADES = 8;
 const POOL_SPREADS = 5;
 const POOL_DRAINS = 2;
 
+// What flies point first along its way (or, an axe, end over end): an arrow, a ballista's bolt (an
+// arrow BOLT_SIZE times as big) and a thrown axe
+const SHAFTS = new Set(["arrow", "ballistaBolt", "axe"]);
+const BOLT_SIZE = 3.2;
+
 /** Flat ground (where there's no terrain: the ground's height at a point, metres). */
 export const FLAT = () => 0;
 
@@ -964,14 +969,15 @@ export class Effects {
 
     /**
      * A projectile the battle launched: `kind` "arrow", "axe", "bolt" or "fireball", from a point; a
-     * bolt or fireball in one of its LOOKS.
+     * bolt or fireball in one of its LOOKS; a ballista's bolt an arrow BOLT_SIZE times as big.
      */
     launch(id, kind, from, look = 0) {
         const style = LOOKS[kind]?.[look] ?? LOOKS[kind]?.[0] ?? null;
         let object;
 
-        if (kind === "arrow") {
+        if (kind === "arrow" || kind === "ballistaBolt") {
             object = this.arrow.clone();
+            object.scale.multiplyScalar(kind === "ballistaBolt" ? BOLT_SIZE : 1);
         } else if (kind === "axe") {
             object = new THREE.Group().add(this.axe.clone());
         } else {
@@ -992,7 +998,7 @@ export class Effects {
     lookOf(id) {
         const flight = this.flying.get(id);
 
-        return flight && flight.kind !== "arrow" && flight.kind !== "axe" ? flight.look : null;
+        return flight && !SHAFTS.has(flight.kind) ? flight.look : null;
     }
 
     /** What kind of projectile one in flight is ("arrow", "venom"...), or null (gone). */
@@ -1028,7 +1034,7 @@ export class Effects {
         last.copy(object.position);
         path.copy(position);
 
-        if (kind === "arrow" || kind === "axe") {
+        if (SHAFTS.has(kind)) {
             object.position.copy(position);
 
             if (position.distanceToSquared(last) > 1e-8) {

@@ -720,7 +720,8 @@ const BURST_LOOKS = Object.freeze({
 // kin), as SpellFx.lob draws it and blast bursts it: its body (`shape`: a goblin bomb's iron-dark
 // pot; a grenado's black iron ball, a brass collar round its wick; a starfire seed pod, its
 // seams aglow; a shadowfire orb, wound round in spider silk; a clay sun jar, its rag stuffed in its
-// neck; a swamp-gas bladder, tied off), its colour, what glows in it (`glow`), how rough and
+// neck; a swamp-gas bladder, tied off; a catapult's pot of burning pitch, a jar many times as big:
+// `scale`), its colour, what glows in it (`glow`), how rough and
 // metallic, whether it's lit by a wick (`wick`) or glows (`shine`: how brightly; sparks drifting
 // off it: `drift`, rising `rise`), its spark's colour (`spark`); and its burst (`burst`, else a goblin bomb's): its flash
 // and heat's colours, its sparks', whether it's fire (a fireball and the ground scorched) and its
@@ -748,6 +749,13 @@ export const BOMB_LOOKS = Object.freeze({
     gasBladder: {
         shape: "bladder", colour: 0x5a6430, glow: 0x3a5a08, shine: 0.25, rough: 0.3, metal: 0, drift: [0xc8ff70, 0x7aa030], rise: -0.3, spark: 0xb8ff70,
         burst: { gas: true },
+    },
+    // (A town's catapult's pot of burning pitch: a clay pot as big as a man's chest, aflame as it's
+    // flung, its fire streaming off it, bursting the moment it lands in a great blast of fire,
+    // pitch left burning where it's spattered)
+    firePot: {
+        shape: "jar", scale: 2.6, colour: 0x5a3220, glow: 0xff5a10, shine: 0.7, rough: 0.9, metal: 0, drift: [0xffd070, 0xff4a00], rise: -2.2, spark: 0xffa040,
+        burst: { flash: 0xfff0c8, heat: 0xff7a1a, sparks: [0xffe090, 0xff8a1a, 0xc02800], fire: true, smoke: [0x1a140e, 0x4a3a28], flames: true, more: 1.4 },
     },
 });
 
@@ -2161,7 +2169,7 @@ export class SpellFx {
             return mesh;
         };
         const spark = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.#texture("glow"), color: style.spark, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-        const size = (big ? 0.17 : 0.12) * ({ pod: 0.8, orb: 0.9, jar: 1, bladder: 1.1 }[style.shape] ?? 1);
+        const size = (big ? 0.17 : 0.12) * ({ pod: 0.8, orb: 0.9, jar: 1, bladder: 1.1 }[style.shape] ?? 1) * (style.scale ?? 1);
         let top = size * 0.85;
 
         if (style.shape === "jar") {

@@ -228,9 +228,10 @@ export const LAND_FADE = 4;
 // The scores played from their start each time they're heard (the rest carry on where they left off)
 const FROM_THE_START = new Set(["tavern", "battle"]);
 
-// The swing for each attack animation (actions.js), and the sound of each projectile's launch
-const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", kick: "swingKick", cleaver: "swingCleaver", wand: "swingWand", throw: "bombThrow" };
-const LAUNCHES = { arrow: "arrow", bolt: "bolt", fireball: "fireball", venom: "bolt", wisp: "bolt", roots: "bolt", web: "bolt", curse: "bolt", wail: "bolt", drain: "bolt", lava: "fireball", flame: "dragonBreath", riftFire: "dragonBreath" };
+// The swing for each attack animation (actions.js; a catapult's arm slamming into its crossbar as it
+// lets fly, a ballista's string), and the sound of each projectile's launch
+const SWINGS = { sword: "swingSword", staff: "swingStaff", hammer: "swingHammer", punch: "swingPunch", kick: "swingKick", cleaver: "swingCleaver", wand: "swingWand", throw: "bombThrow", launch: "trapdoor", loose: "arrow" };
+const LAUNCHES = { arrow: "arrow", bolt: "bolt", fireball: "fireball", venom: "bolt", wisp: "bolt", roots: "bolt", web: "bolt", curse: "bolt", wail: "bolt", drain: "bolt", lava: "fireball", flame: "dragonBreath", riftFire: "dragonBreath", ballistaBolt: "stoneShot" };
 
 // The footsteps on each footing (audio/footing.js SURFACES: "grass" → "stepGrass"...)
 const STEPS = Object.fromEntries(SURFACES.map((surface) => [surface, `step${surface[0].toUpperCase()}${surface.slice(1)}`]));

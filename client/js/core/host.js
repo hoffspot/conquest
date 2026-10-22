@@ -30,7 +30,7 @@ import { dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
-import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
+import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, ENGINES, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
 import { waysOut, wayToward } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
 import { compass } from "./ways.js";
@@ -270,6 +270,13 @@ export const NPC_SHIELDS = Object.freeze({
 
 // A soldier's shield, if what they fight with leaves a hand for one (NPC_SHIELDS)
 const shieldOf = (weapon, rank) => (SHIELD_ARMS.includes(weapon) ? NPC_SHIELDS[rank] : null);
+
+/**
+ * Where a town's siege engines stand in its line (core/invasions.js ENGINES: #townLine): `behind`
+ * metres behind its hindmost rank, `apart` metres from each other, abreast; each one's crew either
+ * side of it, `crew` metres to the side and, past the first two, as far behind.
+ */
+export const ENGINE_LINE = Object.freeze({ behind: 6, apart: 9, crew: Object.freeze([1.8, 1.6]) });
 
 /** How near (metres) a people's soldiers must be to see a player bring down their enemy, and owe them for it (M7). */
 export const FAVOUR_SIGHT = 25;
@@ -4301,8 +4308,10 @@ export class Host {
     // behind the line's ends, a squad either side (`bombers` in each of `squads`). On the squares
     // `free` has free; each going after an enemy as far as its role does (ROLES' leash), or as far
     // as `leash` (metres: against the Behemoth, all of them). Their ids
-    #townLine(id, formation, people, { defenders, bombers, squads }, { anchor, facing, to, free, leash = null }) {
-        const roles = [...rolesOf(defenders - bombers * squads, DOCTRINES[people] ?? DOCTRINES.human), ...new Array(bombers * squads).fill("archer")];
+    #townLine(id, formation, people, { defenders, bombers, squads, engines = {} }, { anchor, facing, to, free, leash = null }) {
+        const rolled = Object.entries(engines).flatMap(([kind, count]) => new Array(count).fill(kind));
+        const crews = rolled.length * ENGINES.crew;
+        const roles = [...rolesOf(defenders - bombers * squads - crews, DOCTRINES[people] ?? DOCTRINES.human), ...new Array(bombers * squads).fill("archer")];
         const places = linePlaces(roles);
         const firstBomber = roles.length - bombers * squads;
         const wing = Math.max(0, ...places.slice(0, firstBomber).map(([right]) => Math.abs(right))) + FORMATION.apart * 2;
@@ -4333,6 +4342,46 @@ export class Host {
 
             this.#enlist(one, { people, ...(bomber ? { weapon: bombersOf(people).weapon } : soldierOf(people, role, each)), name: bomber ? bombersOf(people).name : "soldier", record: { invasion: id, side: "defender", role }, square, patrol: [square], facing, leash: leash ?? ROLES[role].leash, armed: true, formation: { id: formation, slot: places[k], role } });
             ids.push(one);
+        });
+
+        // Its siege engines, if it rolls any out (ENGINES: against the Behemoth), abreast behind
+        // the line in its formation, each with its crew either side of it, keeping by it
+        const behind = Math.max(0, ...places.map(([, back]) => back)) + ENGINE_LINE.behind;
+
+        rolled.forEach((kind, k) => {
+            const { weapon, name, hp, armor, speed } = ENGINES.kinds[kind];
+            const slot = [(k - (rolled.length - 1) / 2) * ENGINE_LINE.apart, behind];
+            const engine = `${id}/engine-${k}`;
+            const at = (place) => {
+                try {
+                    return free(placeAt({ anchor, facing }, place));
+                } catch {
+                    return null;
+                }
+            };
+            const square = at(slot);
+
+            if (!square) {
+                return;
+            }
+
+            this.#enlist(engine, { people, weapon, name, record: { invasion: id, side: "defender", role: "engine" }, square, patrol: [square], facing, leash: leash ?? ROLES.archer.leash, armed: true, formation: { id: formation, slot, role: "archer" }, hp, armor, speed, engine: kind });
+            ids.push(engine);
+
+            for (let c = 0; c < ENGINES.crew; c++) {
+                const side = c % 2 ? 1 : -1;
+                const place = [slot[0] + side * ENGINE_LINE.crew[0], slot[1] + ENGINE_LINE.crew[1] * Math.floor(c / 2)];
+                const spot = at(place);
+
+                if (spot) {
+                    const one = `${id}/crew-${k}-${c}`;
+
+                    // (Following it as a follower does its leader, battle.js #follow: by it as it's
+                    // rolled, and after whoever comes at it)
+                    this.#enlist(one, { people, ...soldierOf(people, "front", c), name: "siege crew", record: { invasion: id, side: "defender", role: "crew", engine }, square: spot, patrol: [spot], facing, ai: "follow", leader: engine, armed: true });
+                    ids.push(one);
+                }
+            }
         });
 
         return ids;
