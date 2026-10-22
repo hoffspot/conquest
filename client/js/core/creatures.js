@@ -278,6 +278,12 @@ export const CREATURES = Object.freeze({
     // drawn from a bought model of its own (beasts/model.js). On no side but its own (RIFT), it's
     // everyone's enemy; too vast to be thrown, it fights its own way (`colossus`: battle.js
     // #colossus) and is met only where one's come against a town by night)
+    // (The rift's own small kind, come through it into the Tower of Sar Mordal and kept round it:
+    // the Behemoth's kind, a man's height, quick and hungry, the kind that killed Sinclair's wife
+    // (riftlings); and one bigger, leading them, breathing the rift's green fire (a rift stalker):
+    // only ever met there, LAIRS "rift tower". Drawn from the Kaiju's model, small: beasts/model.js)
+    riftling: { name: "Riftling", hp: 46, weapon: "riftling", speed: 1.5, chase: 3.6, temper: "aggressive", roam: 6, leash: 28, pack: [1, 1], tiers: [7, 9], biomes: [], blood: "ichor", armor: 0.1, darkSight: true },
+    riftStalker: { name: "Rift stalker", hp: 150, weapon: "riftStalker", speed: 1.3, chase: 3, temper: "aggressive", roam: 4, leash: 30, pack: [1, 1], tiers: [9, 9], biomes: [], blood: "ichor", armor: 0.25, perilous: true, darkSight: true, steady: true },
     kaiju: { name: "Behemoth of the Rift", hp: 2400, weapon: "kaiju", speed: 1.5, chase: 2.2, temper: "aggressive", roam: 0, leash: 400, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "ichor", armor: 0.3, perilous: true, darkSight: true, steady: true, colossus: COLOSSUS },
 });
 
@@ -309,6 +315,9 @@ export const LAIRS = Object.freeze({
     "dreadthorn's lair": { master: ["dreadthorn", 10], guards: [["wyvern", 3, 9]], near: 130, back: 60 * 60 * 1000, hoard: "greatHoard", relic: true },
     "werewolf's den": { master: ["moonfang", 9], guards: [["werewolf", 1, 8], ["werewolf", 1, 8], ["direWolf", 3, 8]], near: 100, back: 40 * 60 * 1000, relic: true },
     "ruined castle": { master: ["wightLord", 9], guards: [["skeleton", 3, 7], ["ghost", 2, 7], ["wraith", 1, 8]], near: 90, back: 30 * 60 * 1000, within: true, relic: true },
+    // (The Tower of Sar Mordal: its rift's own, the rift stalker in Sinclair's study at the top of
+    // it, by his hoard, a riftling with it and two in the hall below; the rest round the rift outside)
+    "rift tower": { master: ["riftStalker", 9], guards: [["riftling", 4, 8], ["riftling", 2, 9]], near: 100, back: 40 * 60 * 1000, within: true, hoard: "greatHoard", relic: true },
 });
 
 /**

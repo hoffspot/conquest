@@ -143,6 +143,8 @@ const ABOUT = {
     dragon: ["Drake", "The drake's lair: for the mightiest"],
     dreadthorn: ["Dreadthorn", "A Dreadthorn's lair: the mightiest of all"],
     kaiju: ["Behemoth of the Rift", "Out of the rift by the Tower of Sar Mordal, against a town by night: everyone's enemy"],
+    riftling: ["Riftling", "In and round the Tower of Sar Mordal, come through its rift"],
+    riftStalker: ["Rift stalker", "At the top of the Tower of Sar Mordal, in Sinclair's study, the riftlings' master"],
     moonfang: ["Moonfang", "A werewolves' den: for the mightiest"],
     ghost: ["Restless ghost", "The ruins and ruined castles, with their dead"],
     wraith: ["Wraith", "The ruins and ruined castles, with their dead"],
@@ -1393,6 +1395,7 @@ const groups = [
     ["Each people's own", ["blackShuck", "boggart", "badger", "wildBull", "rookFlock", "knucker", "hodmedod", "wisp", "treant", "mandrake", "cwnAnnwn", "pixies", "hart", "kelpie", "caveSpider", "shadowStalker", "olm", "centipede", "basilisk", "draugr", "mare", "hyena", "scorpion", "jackal", "capeBuffalo", "nandiBear", "locustSwarm", "spittingCobra", "bogFrog", "crocodile", "giantLeech", "jaguar", "boa", "bloodflies", "ahuizotl", "magmaSlime", "rockTusker", "gilaMonster", "salamander", "deathWorm", "vultureFlock", "chimera"]],
     ["The restless dead", ["ghost", "wraith"]],
     ["The ants' nests", ["ant", "greatCentipede", "dungeonSpider", "eliteDungeonSpider", "giantCockroach", "dungeonWasp", "dungeonScorpion", "blackWidow", "antMonster"]],
+    ["The Tower of Sar Mordal", ["riftling", "riftStalker"]],
     ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord"]],
     ["For the mightiest", ["kaiju", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "cultLeader", "demonLord"]],
 ];

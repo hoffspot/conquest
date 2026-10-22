@@ -5,7 +5,7 @@
 // crown for a keep, and a crested helm for a barracks. And the places worth finding out in the
 // world (core/places.js; the terrain plan's M7.5): a castle, a manor, an abbey, a windmill, a
 // watchtower, a people's hall, a holy spring, a great rock, a totem, ruins, a ruined castle, a
-// cave, the dragon's lair, a shrine, standing stones, a graveyard and a camp, each rimmed in the
+// cave, the dragon's lair, the Tower of Sar Mordal (a broken tower, the rift's green tear by it), a shrine, standing stones, a graveyard and a camp, each rimmed in the
 // colour of who holds it (PLACE_RIMS); a dungeon's way in (an arch over steps going down, grey
 // while it's cleared); an adventurers' cache once it's been seen (a chest); and each people's
 // works, a lumber mill (a log and an axe), a mine (a pick over its ore) and a quarry (a squared
@@ -260,6 +260,17 @@ const LOOKS = {
             ["M-6.5,9 v-12 l2,-2.5 l1.8,2.5 l2.2,-4 l2,3 l2,-1.5 l2.5,2.5 v12 z", "#7d8a78", "#1e2420", 1],
             ["M-1.5,3 v-3 a1.5,1.5 0 0 1 3,0 v3 z", "#141814", null, 0],
             ["M3,-1 l-1.4,3 l1.2,1.6", null, "#1e2420", 0.8],
+        ],
+    },
+    riftTower: {
+        rim: "#40ff90",
+        parts: [
+            // The Tower of Sar Mordal: a tall tower broken off jagged at the top, its window dark,
+            // and the rift's green tear in the air beside it
+            ["M-8,9 v-14 l1.6,-2 l1.4,1.6 l1.8,-3.6 l1.4,2.4 l1.4,-1 v16.6 z", "#6a7268", "#141a14", 1],
+            ["M-5.6,1 v-2.6 a1.2,1.2 0 0 1 2.4,0 v2.6 z", "#0c100c", null, 0],
+            ["M6,-9 C3.4,-4 8.4,-1 5.4,3 C3.8,5.4 6.6,7 6,9 C8.8,6.4 7.2,4 8.6,1.4 C10.2,-1.8 6,-4.4 6,-9 z", "#40ff90", "#0a3a1e", 0.8],
+            ["M6.4,-5 C5.4,-2 7.6,0 6.2,3", null, "#e0ffe8", 0.9],
         ],
     },
     cave: {

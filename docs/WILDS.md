@@ -1188,6 +1188,46 @@ again, its spines glowing green (`beasts/looks.js`).
   after anyone in a town it's come against; everyone's enemy, nothing that stuns, frightens or
   slows it taking hold.
 
+### The Tower of Sar Mordal (creatures.js `riftling`, `riftStalker`, LAIRS `rift tower`)
+
+The wizard Sinclair's tower, abandoned. Monsters from another world came through a rift he'd
+opened and killed his wife; he followed them back through it and was never seen again. The rift's
+still open beside his tower, and what comes through it keeps the place: the Behemoth of the Rift
+among them, now and then, by night (WAR.md *The Behemoth of the Rift*).
+
+- **One a world** (worldplan/settle.js `RIFT_TOWER`; WORLD.md *Sites*), out in the wild on bare,
+  lonely land, far from every people's start. On the maps, a broken tower with the rift's green
+  tear beside it (app/mapicons.js `riftTower`); the criers tell of it (core/rumours.js).
+- **Outside** (setpieces/neutral.js `"rift tower"`, `RIFT_TOWER_LAID`): a tall tower, its top fallen
+  in (15 to 19 m still standing, art/kits/neutral.js `brokenTower`), gone into by the dark doorway
+  at its foot; to its east the rift, a ragged tear in the air 4 to 4.6 m tall, swirling green day
+  and night (`riftTear`, veil.js `VEILS.rift`), lighting the land round it green after dark
+  (lights.js `riftTear`); the bones of what came too near it about it.
+- **Inside** (core/insides.js `RIFT_HALL`, `RIFT_STUDY`; world/interiors3d.js `riftHall`,
+  `riftStudy`), two floors 12 m across. Below, his hall gone to ruin: his shelves of books, his long
+  table with books left open on it, heaps of what's fallen, old bones and someone who died there,
+  and the rift's green light seeping up through a crack across the floor. Above, his study, open
+  to the sky: his shelves, his table, his lectern with his journal open on it, and his hoard.
+- **Kept** (`LAIRS`, `within`: host.js `#lairs`) once a player's within 100 m, back 40 minutes
+  after it's slain. The rift stalker is in the study by the hoard (its chest locked while it
+  lives, an old relic in it), with a riftling; two riftlings hold the hall; the rest prowl round
+  the rift.
+- **The riftlings** are the Behemoth's kind, a man's height: 46 hp, quick (3.6 m/s after someone),
+  their jaws 6 to 11, laying a wound open 3 times in 10 (weapons.js `riftling`); they see in the
+  dark, and their scales turn a tenth of every blow.
+- **The rift stalker** leads them, half as big again: 150 hp, its scales turning a quarter of every
+  blow, never staggered; its jaws 10 to 17, and the rift's green fire breathed from up to 7 m off
+  every 6 s, 12 to 20, setting them alight 6 times in 10 (`riftFire`): a roaring green stream from
+  its jaws (app/game.js `BREATHED`, effects.js `riftBreath`), heard as a drake's fire.
+- **Drawn** from the Kaiju's own model, small (beasts/model.js `MODELS`, `rift`): a riftling 4.2 m
+  long, a stalker 7, running as the Behemoth never does; their bite the start of its Roar, the
+  stalker's breath its Energy Breath with no beam (`beam: false`), roaring as they rest. Till it's
+  read, the Behemoth's stand-in, small and greener (beasts/looks.js).
+- **Heard** in the Kaiju's own voice, higher (sound.js `CREATURE_VOICES`: a riftling's at 1.24, a
+  stalker's at 1.12).
+- **Their spoils**: riftlings' scales, and a rift-fire gland; a stalker's now and then a glowing
+  dorsal spine as the Behemoth's (spoils.js).
+
 ### A place's creatures, ready before they're met (beasts/model.js, app/readying.js)
 
 Creatures drawn from models of 3 to 5 MB each live mostly in places with a way in: a dungeon,

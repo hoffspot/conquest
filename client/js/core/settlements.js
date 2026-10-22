@@ -29,6 +29,18 @@ export function waysOut(plan, place) {
     });
 }
 
+/**
+ * Of the ways out of a place (waysOut's angles), the one leaving it nearest towards a point ([x, y]
+ * metres: the Tower of Sar Mordal, the Behemoth of the Rift's way in, host.js #invade), or null if
+ * there are none.
+ */
+export function wayToward(plan, place, [x, y]) {
+    const bearing = atan2(y - place.at[1], x - place.at[0]);
+    const off = (angle) => Math.abs(atan2(sin(angle - bearing), cos(angle - bearing)));
+
+    return waysOut(plan, place).reduce((best, angle) => (best === null || off(angle) < off(best) ? angle : best), null);
+}
+
 /** How many metres a side a place's layout is (its town and the fields round it). */
 export function sizeOf(place) {
     const spec = SETTLEMENT_KINDS[place.kind];

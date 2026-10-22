@@ -623,6 +623,32 @@ export const LOOKS = Object.freeze({
         attacks: ["bite", "stamp"], rests: ["sniff", "stretch"], specials: ["breath"],
         feet: "colossal",
     },
+    // (The rift's own small kind, in the Tower of Sar Mordal: the Behemoth's body made a man's
+    // height (about 4 metres nose to tail), its scales mottled greener, its eyes and spines the
+    // rift's green; a rift stalker its body half as big again. Each its own model once that's read,
+    // the Kaiju's, small: beasts/model.js)
+    riftling: {
+        body: "quadruped",
+        scale: [0.33, 0.36],
+        length: 4.4, height: 2.4, girth: 0.66, width: 0.52, chest: 1.16, haunch: 1.12, neck: 1.7, neckUp: 0.62,
+        head: [0.42, 0.31, 0.6], snout: { length: 0.84, radius: 0.2, taper: 0.58, flat: 1.1 }, teeth: 14, brows: true, slit: true, eyeSize: 0.62, crouch: 1.5,
+        ears: "none", horns: 0, horned: false, frill: 7, legs: 0.34, claws: 1.5, talons: true,
+        tail: { length: 6, radius: 0.36, lift: -0.15, curl: 0.06, spade: 0 }, plates: 22, flat: true, roughness: 0.8, bellyBands: true,
+        spines: true,
+        colours: { fur: 0x22301e, saddle: 0x111a10, mask: 0x1c2618, belly: 0x44503a, dark: 0x0a0e08, claws: 0xa8a890, ivory: 0xd0d0b8, eyes: 0x7aff9a, glow: 0x50ff90 },
+        attacks: ["bite", "swipe", "stamp"], rests: ["sniff", "stretch"],
+    },
+    riftStalker: {
+        body: "quadruped",
+        scale: [0.56, 0.6],
+        length: 4.4, height: 2.4, girth: 0.7, width: 0.56, chest: 1.2, haunch: 1.14, neck: 1.6, neckUp: 0.6,
+        head: [0.4, 0.3, 0.56], snout: { length: 0.8, radius: 0.2, taper: 0.6, flat: 1.1 }, teeth: 14, brows: true, slit: true, eyeSize: 0.5, crouch: 1.4,
+        ears: "none", horns: 0, horned: false, frill: 9, legs: 0.36, claws: 1.4, talons: true,
+        tail: { length: 6, radius: 0.4, lift: -0.2, curl: 0.04, spade: 0 }, plates: 26, flat: true, roughness: 0.8, bellyBands: true,
+        spines: true,
+        colours: { fur: 0x1a2618, saddle: 0x0c140c, mask: 0x162014, belly: 0x36402e, dark: 0x070a06, claws: 0x9a9a88, ivory: 0xc8c8b4, eyes: 0x8affb0, glow: 0x5aff9a },
+        attacks: ["bite", "stamp"], rests: ["sniff", "stretch"], specials: ["breath"],
+    },
     // (The restless dead of the ruins: a ghost, the pale shade of one who lived there long ago; a
     // wraith, a black-robed horror with nothing under its cowl but two cold lights)
     ghost: {

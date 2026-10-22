@@ -16,6 +16,7 @@ let BEHEMOTH_REWARD;
 let behemothReward;
 let behemothSides;
 let isBehemoth;
+let wayToward;
 let RIFT;
 let DAY;
 let bandFor;
@@ -66,6 +67,7 @@ before(async () => {
     ({ OPENINGS } = await import("../client/js/core/crying.js"));
     ({ BOMBS, FOE_MS, KINDS, STEP_MS } = await import("../client/js/core/battle.js"));
     ({ Host, HOST_PLAYER, SNAPSHOT_STEPS } = await import("../client/js/core/host.js"));
+    ({ wayToward } = await import("../client/js/core/settlements.js"));
     ({ createRandom } = await import("../client/js/core/random.js"));
     ({ compass } = await import("../client/js/core/ways.js"));
     ({ soldierLook } = await import("../client/js/characters/soldiers.js"));
@@ -751,7 +753,7 @@ describe("the Behemoth of the Rift's invasion (core/invasions.js BEHEMOTH, core/
         assert.ok(rolled.every((k) => due(night, k, { clock: INVASION.first }) === "bandits"), "never in their first");
     });
 
-    it("brings the town's whole strength out against it, as many as the devices there can draw, everyone's enemy, coming on to the town's edge", () => {
+    it("brings the town's whole strength out against it, as many as the devices there can draw, everyone's enemy, coming on to the town's edge from the Tower of Sar Mordal's way", () => {
         const game = inTown({ invasion: { seen: 1 } });
         const { host, me } = game;
 
@@ -769,6 +771,13 @@ describe("the Behemoth of the Rift's invasion (core/invasions.js BEHEMOTH, core/
         assert.ok(beast.team === RIFT && beast.ai === "colossus" && beast.wild.creature === BEHEMOTH.creature);
         assert.equal(beast.maxHp, sides.hp);
         assert.ok(Math.abs(out - (invasion.edge + BEHEMOTH.out)) < 4, "out of the rift down the road");
+
+        // (Down the way out of the town towards the Tower of Sar Mordal, its rift by it)
+        const { plan } = host.world;
+        const way = wayToward(plan, plan.places.find(({ id }) => id === invasion.place), plan.sites.find(({ kind }) => kind === "rift tower").at);
+        const bearing = Math.atan2(beast.y - invasion.middle[1], beast.x - invasion.middle[0]);
+
+        assert.ok(Math.abs(Math.atan2(Math.sin(bearing - way), Math.cos(bearing - way))) < 0.1, `from the tower's way (${bearing.toFixed(2)}, ${way.toFixed(2)})`);
         assert.equal(defenders.length, sides.defenders, "the town's whole strength");
         assert.equal(invasion.mustered, sides.defenders);
         assert.equal(defenders.filter((one) => one.weapon === bombersOf(invasion.people).weapon).length, sides.bombers * sides.squads, "its bomb throwers");

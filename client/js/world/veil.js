@@ -23,12 +23,17 @@ export const VEIL = Object.freeze({ loop: 120, time: { value: 0 } });
  * middle and its brightest streaks (`deep`, `middle`, `high`), its eye (`eye`) and the light
  * churning at its rim (`rim`); and, standing in the open, the dark it is by day, unlit (`still`).
  * A guild's the deep blues of its portals; a hell's (core/dungeons themes.js `portals`) the reds
- * and golds of a fire seen through smoke, and by day a smoke that doesn't stir.
+ * and golds of a fire seen through smoke, and by day a smoke that doesn't stir; the rift's by the
+ * Tower of Sar Mordal (art/kits/neutral.js riftTear) the Behemoth's green, swirling day and night.
  */
 export const VEILS = Object.freeze({
     guild: { deep: [0.02, 0.05, 0.2], middle: [0.07, 0.3, 0.85], high: [0.45, 0.88, 1], eye: [0.85, 0.97, 1], rim: [0.35, 0.75, 1], still: [0.03, 0.04, 0.07] },
     hell: { deep: [0.1, 0.0, 0.0], middle: [0.72, 0.1, 0.02], high: [1, 0.6, 0.16], eye: [1, 0.88, 0.55], rim: [1, 0.32, 0.06], still: [0.06, 0.032, 0.03] },
+    rift: { deep: [0.0, 0.07, 0.03], middle: [0.06, 0.62, 0.24], high: [0.55, 1, 0.72], eye: [0.88, 1, 0.92], rim: [0.3, 1, 0.55], still: [0.02, 0.05, 0.03] },
 });
+
+// The veils standing in the open that swirl by day as well as by night (openVeil): the rift's
+const ALWAYS = new Set(["rift"]);
 
 const vec3Of = (colour) => `vec3(${colour.map((c) => c.toFixed(3)).join(", ")})`;
 
@@ -171,8 +176,9 @@ const open = new Map();
 
 /**
  * The veil of a portal standing in the open (a hell's way in, out in the wilds: art/kits/neutral.js
- * hellgate), in `kind`'s colours (VEILS): drawn both sides, its light its own whatever's round it,
- * casting no shadow; swirling only at night (veilShader's `night`), by day a still, dark opening.
+ * hellgate; the rift by the Tower of Sar Mordal, riftTear), in `kind`'s colours (VEILS): drawn both
+ * sides, its light its own whatever's round it, casting no shadow; swirling only at night
+ * (veilShader's `night`), by day a still, dark opening; the rift's swirling all day too (ALWAYS).
  * Its texture coordinates are the guild's veil's: art pixels from the middle of its opening's
  * foot, the opening a semicircle 0.8 m round on legs 1.75 m long.
  */
@@ -182,7 +188,7 @@ export function openVeil(kind = "hell") {
 
         result.name = `veil-${kind}-open`;
         result.userData.shadow = false;
-        result.onBeforeCompile = (shader) => veilShader(shader, kind, { night: true });
+        result.onBeforeCompile = (shader) => veilShader(shader, kind, { night: !ALWAYS.has(kind) });
         result.customProgramCacheKey = () => `veil-${kind}-open`;
         open.set(kind, result);
     }

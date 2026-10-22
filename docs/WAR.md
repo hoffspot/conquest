@@ -2415,7 +2415,8 @@ By night (the torches lit: core/light.js `torchesLit`), one invasion in three of
 one of the great beasts out of the rift by the Tower of Sar Mordal, in place of a band; never a
 character's first (`isBehemoth`, rolled apart from the band, so whichever band would come
 otherwise still does).
-- **It comes** out 150 m beyond the town's edge on one of its roads (`out`), its roar heard there
+- **It comes** out 150 m beyond the town's edge on the road out of the town that leaves it nearest
+  towards the Tower of Sar Mordal, where its rift is (`out`; settlements.js `wayToward`), its roar heard there
   twice from afar in place of the raiders' horn, walking on its own way to 10 m beyond the edge
   (`stops`). It never goes into the town after anyone (battle.js `keepOut`): those within its edge
   are no one it fights.
@@ -2466,7 +2467,8 @@ with what they carry (`Progress.invasion`), and a world's rules say whether inva
 player's device can draw is in the host's snapshot too (each player's `budget`; `SNAPSHOT_VERSION`
 31, none told in a world kept before), and told by their game (`NET_VERSION` 146). The bands
 changed what two games share again (`NET_VERSION` 147), and so did the band named in the thanks
-(148), the Behemoth of the Rift (149), and each people's own bombs (150).
+(148), the Behemoth of the Rift (149), each people's own bombs (150), and the rift's own creatures
+in the Tower of Sar Mordal (151).
 
 ### Playing together (M11)
 

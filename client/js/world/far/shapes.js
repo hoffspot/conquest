@@ -475,7 +475,7 @@ export function settlementShapes(shapes, { pieces, people, origin, heightOf, big
 
 // The sites no people keeps that are seen from afar (the rest too low to be: a cave's in its
 // hillside, or down in the ground)
-const NEUTRAL_KINDS = new Set(["ruins", "ruined castle", ...LAIR_KINDS, "werewolf's den", "watchtower"]);
+const NEUTRAL_KINDS = new Set(["ruins", "ruined castle", ...LAIR_KINDS, "werewolf's den", "rift tower", "watchtower"]);
 
 /**
  * A people's works (core/setpieces/works.js lays it out, as near to), as seen from afar: a

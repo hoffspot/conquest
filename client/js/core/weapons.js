@@ -603,6 +603,20 @@ export const NATURAL = Object.freeze({
             { id: "atomicBreath", kind: "colossal", reach: 0, damage: [18, 28], hitAt: 1300, duration: 6000, interval: 6000, lasts: 3300, stagger: 500, reaction: "fire", animation: "breath", afflict: { kind: "burn", chance: 0.5 } },
         ],
     },
+    // (The rift's own, the Behemoth's kind made small, in the Tower of Sar Mordal: a riftling's
+    // jaws, laying a wound open; a rift stalker's, and the rift's green fire breathed on whoever
+    // stands before it, a roaring stream as a drake's: app/game.js BREATHED)
+    riftling: {
+        label: "Jaws",
+        attacks: [melee({ id: "bite", damage: [6, 11], hitAt: 450, duration: 900, interval: 1300, stagger: 200, reaction: "pierce", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } })],
+    },
+    riftStalker: {
+        label: "Jaws and the rift's fire",
+        attacks: [
+            melee({ id: "bite", damage: [10, 17], hitAt: 500, duration: 1000, interval: 1500, stagger: 300, reaction: "pierce", animation: "melee", afflict: { kind: "bleed", chance: 0.4 } }),
+            ranged({ id: "riftFire", reach: 7, damage: [12, 20], hitAt: 1300, duration: 3000, interval: 6000, stagger: 400, reaction: "fire", animation: "breath", projectile: { kind: "riftFire", speed: 14 }, afflict: { kind: "burn", chance: 0.6 } }),
+        ],
+    },
     // (A demon lord's: its burning fists, and hellfire hurled from its hand)
     // (A hell's flayed: creatures.js)
     flayling: {

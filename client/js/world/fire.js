@@ -52,6 +52,7 @@ export const FIRES = Object.freeze({
     forge: { width: 0.7, height: 0.5, tongues: 6, spread: 0.2, rate: 2.6, steady: 1, lean: 1e3, heat: 1.15, embers: 0, smoke: null, night: false, twist: 0.6 },
     spell: { width: 0.6, height: 1, tongues: 6, spread: 0.2, rate: 3, steady: 1.2, lean: 0.6, heat: 1.25, embers: 20, smoke: null, night: false, twist: 3 },
     hellgate: { width: 2.4, height: 3.4, tongues: 0, spread: 0, rate: 1, steady: 0.5, lean: 1e3, heat: 1, embers: 0, smoke: null, night: true, twist: 0 },
+    riftTear: { width: 2, height: 4.4, tongues: 0, spread: 0, rate: 1.4, steady: 0.4, lean: 1e3, heat: 1, embers: 0, smoke: null, night: true, twist: 0 },
 });
 
 /** The breeze fires lean in: the way it blows (east, south: a unit, as the smoke and flags lean) and how hard (metres a second, before its gusts). */

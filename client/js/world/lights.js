@@ -33,7 +33,8 @@ export { FIRE_LIGHT, FIRE_LIGHTS, fireLit };
  * it reaches (metres), and how wide its glow is (metres). A hell's way in, out in the wilds, lit
  * only at night (art/kits/neutral.js): each of its candles' flames drawn (`candle-night`, lighting
  * nothing itself), the tallest of each cluster's lighting what's round them for them all
- * (`candles-night`); its braziers; and its portal, red as its veil (`hellgate`).
+ * (`candles-night`); its braziers; and its portal, red as its veil (`hellgate`). The rift by the
+ * Tower of Sar Mordal, green as its veil (`riftTear`).
  */
 export const LIGHTS = Object.freeze({
     candle: { fire: "candle", flame: true, colour: 0xff9a40, strength: 0.8, reach: 4, glow: 0.15 },
@@ -46,6 +47,7 @@ export const LIGHTS = Object.freeze({
     fire: { fire: "fire", flame: true, colour: 0xff8c28, strength: 8, reach: 14, glow: 1.8 },
     spell: { fire: "spell", flame: false, colour: 0xff7a2a, strength: 10, reach: 12, glow: 0 },
     hellgate: { fire: "hellgate", flame: false, colour: 0xff3c16, strength: 13, reach: 14, glow: 2.4 },
+    riftTear: { fire: "riftTear", flame: false, colour: 0x40ff90, strength: 12, reach: 16, glow: 2.6 },
 });
 
 /**

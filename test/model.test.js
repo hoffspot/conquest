@@ -36,7 +36,7 @@ async function gltfOf(path) {
 }
 
 describe("the creatures drawn from a model (beasts/model.js)", () => {
-    it("are in the catalog, each a lair's master, met in the wilds, in a kind of dungeon or against a town, with a look that stands in for it till it's read, and its skins there too", () => {
+    it("are in the catalog, each a lair's master or guard, met in the wilds, in a kind of dungeon or against a town, with a look that stands in for it till it's read, and its skins there too", () => {
         for (const [id, { asset, skins = [""] }] of Object.entries(MODELS)) {
             assert.ok(hasModel(id), id);
             assert.equal(ASSETS.models[asset].tier, "demand", "downloaded only as it's wanted");
@@ -47,8 +47,11 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
             // theme it's in (modelsInside))
             const inDungeons = Object.values(THEMES).some((theme) => modelsInside({ kind: "dungeon", theme: theme.id }).includes(id));
 
-            // (Or it comes against a town: the Behemoth of the Rift, core/invasions.js BEHEMOTH)
-            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || CREATURES[id].biomes?.length || inDungeons || id === BEHEMOTH.creature, `${id} keeps a lair, is met in the wilds, in a kind of dungeon, or comes against a town`);
+            // (Or it comes against a town: the Behemoth of the Rift, core/invasions.js BEHEMOTH; or
+            // it guards a lair whose master's drawn from its model, wanted with it: a riftling)
+            const guarding = Object.values(LAIRS).some(({ master, guards = [] }) => MODELS[master[0]]?.asset === asset && guards.some(([kind]) => kind === id));
+
+            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || guarding || CREATURES[id].biomes?.length || inDungeons || id === BEHEMOTH.creature, `${id} keeps a lair, guards one, is met in the wilds, in a kind of dungeon, or comes against a town`);
 
             // (Each of its skins but its own one of the catalog's "<asset>-skins")
             const files = (ASSETS.models[`${asset}-skins`]?.files ?? []).map(({ path }) => path);

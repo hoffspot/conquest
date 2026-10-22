@@ -205,6 +205,7 @@ and 40 to 55 farmsteads.
 | A drake's lair | 1 | Volcanic ground, mountains or snow, in the wild |
 | A Dreadthorn's lair | 1 or 2 | Out in the wild, high on volcanic ground or in the mountains (any high wild land if a world has too little), on a hillside, 40 cells (about 1.3 km) from each other and from the drake's (`DREADTHORN_LAIRS`) |
 | A werewolves' den | 1 or 2 | Out in the wild, in the dark woods or the woods (any wild elves' woods, tundra, heath or mountain if a world has too little), on a hillside (where the land rises at least 0.2 m a metre across its cell, so there's one near to cut it into), 30 cells (about 1 km) from each other and from every other great lair (`WEREWOLF_DENS`) |
+| The Tower of Sar Mordal | 1 | Out in the wild, on heath, badlands, tundra or mountain (any wild land if a world has too little), at least 1.8 km from every people's start (a little nearer each time, if nowhere that far will do), 30 cells (about 1 km) from every great lair, den and hell (`RIFT_TOWER`; WILDS.md *The Tower of Sar Mordal*) |
 | An old graveyard | 1 for each people | Outside their start town, 8 to 17 cells out (about 250 to 550 m), in their lands, as near a road as there's room (`graveyards`) |
 | Each people's works | 2 lumber mills, 2 mines and 2 quarries for each people | In their lands, not on their edge (`WORKINGS`), on gentle dry ground: mills in the woods, mines and quarries up in the hills, where there are any; by a road where there's one; two of a kind 24 cells apart (`workings`; docs/WAR.md, *The works*) |
 
@@ -212,7 +213,7 @@ Ruins, castles, people's buildings, works and the great lairs have names. The gr
 out last, once every place has been moved out of the water, from random numbers of their own, so
 nothing else in the world moves for them; then the works, the same way; then the Dreadthorns'
 lairs, the same way again, their ids after every other site's; then the werewolves' dens, after
-those.
+those; then the hells' ways in; and last of all the Tower of Sar Mordal.
 
 **Enemy camps.** There are 72 camps, of eight factions:
 

@@ -74,6 +74,10 @@ const LINES = Object.freeze({
         hooks: ["Every full moon, wolves howl {where}.", "Something's killing sheep {where}."],
         tales: ["There's a wolf there that walks on two legs, they say.", "The tracks there start out a wolf's, and end up a man's."],
     },
+    "rift tower": {
+        hooks: ["There's an old wizard's tower {where}, its top fallen in.", "There's a green light in the sky at night {where}, over the old tower.", "Nobody goes near Sar Mordal, the wizard's tower {where}."],
+        tales: ["A wizard called Sinclair lived there. Tore a hole in the air, they say, and things came through it.", "Things came through his door and killed his wife. He went in after them, and he never came back.", "There's things round it the shape of the Behemoth, only small as a man. And hungry."],
+    },
     shrine: {
         hooks: ["There's an old shrine {where}.", "Pilgrims come through on their way to a shrine {where}.", "There's a shrine to the old gods {where}."],
         tales: ["Pray there, and you'll walk away lighter, they say.", "My gran swore it healed her bad leg."],
@@ -229,6 +233,7 @@ const WARNINGS = Object.freeze({
     "dragon's lair": "The hills out that way are scorched black, and the sheep there get taken whole.",
     "dreadthorn's lair": "Something with wings nests in the crags out that way.",
     "werewolf's den": "Out that way, the wolves howl at the full moon, and their tracks end up a man's.",
+    "rift tower": "There's an old tower out that way with a green light over it at night, and things round it that aren't from here.",
     shrine: "There's an old altar out that way. Harmless, they say, but folk speak low there.",
     "standing stones": "There's old stones stood in a ring out that way, that hum on still nights.",
     watchtower: "There's an old tower out that way, and outlaws watching from it.",
