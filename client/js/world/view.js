@@ -114,9 +114,9 @@ export function framed(pitch, distance, upright, back = 1) {
 // archer, a caster), out of doors, the camera draws back to keep both in the picture: by `per` of
 // its distance for each metre the foe stands over `over` metres, or by `far` for each metre it's
 // further than `from` metres off; `most` times as far at most (and `colossal` times, the
-// Behemoth of the Rift's 13 metres: game.js #colossalFoe), eased at `ease` a second (the camera
-// study, recommendation 5)
-export const BIG_FOE = Object.freeze({ over: 2.5, per: 0.15, from: 4, far: 0.07, most: 1.5, colossal: 2.4, ease: 1.5 });
+// Behemoth of the Rift's 13 metres: game.js #colossalFoe, looking `lower` degrees less steeply
+// down too, to see up to its head), eased at `ease` a second (the camera study, recommendation 5)
+export const BIG_FOE = Object.freeze({ over: 2.5, per: 0.15, from: 4, far: 0.07, most: 1.5, colossal: 2.4, lower: 16, ease: 1.5 });
 
 /** How much further back the camera draws for a foe `tall` metres tall, `apart` metres off (BIG_FOE), `most` times at most. */
 export function backFor(tall, apart = 0, most = BIG_FOE.most) {
@@ -510,6 +510,11 @@ export class View {
         this.upright = 0;
         this.drawBack = 1;
         this.back = 1;
+
+        // How much less steeply it looks down for the colossal (degrees: BIG_FOE `lower`: asked,
+        // and eased to)
+        this.lowerBy = 0;
+        this.lowered = 0;
 
         /**
          * Which way the camera looks from, in radians: 0 from the south, looking north, growing
@@ -937,6 +942,7 @@ export class View {
         this.pitch = pitch;
         this.upright += ((this.camera.aspect < 1 ? 1 : 0) - this.upright) * (1 - Math.exp(-PORTRAIT.ease * dt));
         this.back += (this.drawBack - this.back) * (1 - Math.exp(-BIG_FOE.ease * dt));
+        this.lowered += (this.lowerBy - this.lowered) * (1 - Math.exp(-BIG_FOE.ease * dt));
         this.#clear(dt);
         this.#place();
     }
@@ -944,7 +950,7 @@ export class View {
     // The pitch and distance the camera's placed by: those asked for, held upright looked down more
     // steeply from further back, out of doors (framed, PORTRAIT)
     #framed() {
-        return framed(this.pitch, this.distance, this.room ? 0 : this.upright, this.room ? 1 : this.back);
+        return framed(this.room ? this.pitch : this.pitch - this.lowered, this.distance, this.room ? 0 : this.upright, this.room ? 1 : this.back);
     }
 
     /**
@@ -1084,6 +1090,7 @@ export class View {
         this.foe = point ? (this.foe ?? new THREE.Vector3()).copy(point) : null;
         this.foeTall = tall;
         this.drawBack = point ? backFor(tall, apart, most) : 1;
+        this.lowerBy = point && most > BIG_FOE.most ? BIG_FOE.lower : 0;
     }
 
     /** How many drawing buffer pixels a metre is, a metre from the camera (for sizing particles). */

@@ -158,6 +158,88 @@ test("draws the Dreadthorn from its model once it's read, in place of its stand-
     expect([...new Set(fetched.filter((url) => url.includes("/models/beasts/")).map((url) => url.replace(/^.*\/models\//, "").replace(/=[0-9a-f]{10}$/, "=")))]).toEqual(["beasts/dreadthorn.bin?h="]);
 });
 
+test("draws the Behemoth of the Rift from the Kaiju's model: 36 metres long, its atomic breath raked over the ground ahead as the battle has it land, each move as much of its clip as it lasts, falling in its Faint", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await page.goto("/");
+    await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
+
+    const drawn = await page.evaluate(async () => {
+        const THREE = await import("three");
+        const { BeastAvatar } = await import("./js/beasts/beast.js");
+        const { wantModel } = await import("./js/beasts/model.js");
+        const { NATURAL } = await import("./js/core/weapons.js");
+
+        await wantModel("kaiju");
+
+        const beast = new BeastAvatar("kaiju", { seed: 3 });
+        const scene = new THREE.Scene();
+        const move = (id) => NATURAL.kaiju.attacks.find((attack) => attack.id === id);
+
+        scene.add(beast.object, new THREE.HemisphereLight(0xffffff, 0x404040, 2));
+        beast.lowerDetail({});
+        beast.update(1 / 30, 0, 0, 0);
+        beast.object.updateWorldMatrix(true, true);
+
+        const size = new THREE.Box3().setFromObject(beast.plan.levels[0][0], true);
+
+        // (Breathing: charged, then fired, 2.5 seconds into its breath)
+        const { hitAt, duration } = move("atomicBreath");
+
+        beast.actions.startAttack("breath", { hitAt: hitAt / 1000, duration: duration / 1000 });
+
+        for (let i = 0; i < 75; i++) {
+            beast.update(1 / 30, 0, 0, 0);
+        }
+
+        const breath = { ...beast.plan.beam.state };
+        const { renderer } = window.pellagos.session.view;
+        const camera = new THREE.PerspectiveCamera(50, 1, 0.5, 300);
+
+        camera.position.set(40, 20, 30);
+        camera.lookAt(0, 5, 15);
+        renderer.render(scene, camera);
+
+        const error = renderer.getContext().getError();
+
+        // (Its breath over: none of it drawn)
+        for (let i = 0; i < 120; i++) {
+            beast.update(1 / 30, 0, 0, 0);
+        }
+
+        const after = { ...beast.plan.beam.state };
+
+        // (Fallen dead: its Faint, held where it lies)
+        beast.actions.die();
+
+        for (let i = 0; i < 300; i++) {
+            beast.update(1 / 30, 0, 0, 0);
+        }
+
+        beast.object.updateWorldMatrix(true, true);
+
+        const head = beast.plan.joints.head.getWorldPosition(new THREE.Vector3());
+
+        beast.dispose();
+
+        return { model: beast.model, long: size.max.z - size.min.z, tall: size.max.y - size.min.y, breath, after, error, head: head.y };
+    });
+
+    expect(drawn.model).toBe(true);
+    // (As long and as tall as it's made)
+    expect(drawn.long).toBeGreaterThan(24);
+    expect(drawn.long).toBeLessThan(40);
+    expect(drawn.tall).toBeGreaterThan(8);
+    // (Fired, aimed where the battle has it land: 13 to 18 metres before its mouth, raked on)
+    expect(drawn.breath).toMatchObject({ firing: true, aim: 1 });
+    expect(drawn.breath.glow).toBeGreaterThan(3);
+    expect(drawn.breath.hit).toBeGreaterThan(10);
+    expect(drawn.breath.hit).toBeLessThan(20);
+    expect(drawn.after).toMatchObject({ firing: false, glow: 0 });
+    expect(drawn.error).toBe(0);
+    // (Lying where it fell, its head on the ground)
+    expect(drawn.head).toBeLessThan(3);
+});
+
 test("draws the werewolf from its model once it's read, each in a skin of its own: its body and fur a level of detail at a time, all of it flushed red when it's struck", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     const fetched = [];

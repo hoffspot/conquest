@@ -642,6 +642,11 @@ const BLAST_HEARD = Object.freeze({ far: 60, clear: 10, highs: 8000, late: 15, s
 // How far off (metres) the Behemoth of the Rift's atomic breath is heard, and within how far of it
 // its bar's across the top of the screen (#bossBar)
 const ATOMIC_HEARD = 120;
+
+// How long into its beam (seconds) the Behemoth's atomic breath's beam is heard again over the end
+// of the first (synth.js atomicBeam: 1.9 seconds, faded out over its last 0.35), so the two go on
+// as one over the three and a third seconds it fires
+const ATOMIC_AGAIN = 1.55;
 const BOSS_NEAR = 150;
 
 // Within how far of the player (metres) the colossal's framed by the camera (#colossalFoe)
@@ -9118,9 +9123,14 @@ export class Game {
                     this.sound?.attack(event.animation, avatar.object.position, event.hitAt / 1000);
 
                     // (The Behemoth of the Rift drawing breath: its atomic breath heard, charged and
-                    // fired, as its clip has it: synth.js atomicBreath)
+                    // fired, as its clip has it: synth.js atomicCharge, then atomicBeam twice, the
+                    // second over the end of the first, as long as it fires)
                     if (event.attack === "atomicBreath") {
-                        this.sound?.play("atomicBreath", { at: avatar.object.position, far: ATOMIC_HEARD });
+                        const at = avatar.object.position.clone();
+
+                        this.sound?.play("atomicCharge", { at, far: ATOMIC_HEARD });
+                        this.sound?.play("atomicBeam", { at, far: ATOMIC_HEARD, delay: event.hitAt / 1000, variant: 0 });
+                        this.sound?.play("atomicBeam", { at, far: ATOMIC_HEARD, delay: event.hitAt / 1000 + ATOMIC_AGAIN, variant: 1 });
                     }
 
                     // (One of the wild's creatures snarling, hissing or grunting with it, loudest as

@@ -241,7 +241,7 @@ export const SPOILS = Object.freeze({
     frostTroll: { items: [{ id: "frostHeart", chance: 0.45 }, { id: "frostHide", chance: 0.5 }] },
     fiend: { gold: [10, 30], items: [{ id: "fireGland", chance: 0.3 }, { id: "soulShard", chance: 0.2 }, { id: "obsidian", chance: 0.25 }] },
     // (The Behemoth of the Rift: scales off its hide, a spine that still glows, and its heart)
-    kaiju: { items: [{ id: "riftScale", chance: 1, count: [4, 7] }, { id: "riftSpine", chance: 0.8, count: [1, 2] }, { id: "riftHeart", chance: 0.6 }] },
+    kaiju: { items: [{ id: "riftScale", chance: 0.95, count: [4, 7] }, { id: "riftSpine", chance: 0.8, count: [1, 2] }, { id: "riftHeart", chance: 0.6 }] },
     demonLord: { gold: [60, 140], items: [{ id: "obsidian", chance: 0.8, count: [2, 3] }, { id: "soulShard", chance: 0.6 }, { id: "fireGland", chance: 0.5 }] },
     // (A hell's flayed: the Breach's with what the cult gave them and what burnt them, the Halls of
     // Bone's with their bones and their crowns' gold)

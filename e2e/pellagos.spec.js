@@ -12689,6 +12689,67 @@ test("the wild's people-shaped creatures past the bodies' budget are drawn in th
     expect(await playUntil(page, inFull, { seconds: 60 })).toBe(true);
 });
 
+test("the Behemoth of the Rift called up out in the open: drawn from its model at once, its bar across the top; its atomic breath raked over the player, thrown limp", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=5");
+
+    // (Out in an open field, the lone orc out of the way: the debug overlay's call-up, 70 m off
+    // the way they face)
+    const called = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { squaresOf } = await import("./js/core/grid.js");
+        const squares = squaresOf(game.host.world.maps.town);
+        const me = game.battle.actor(game.me);
+        const open = ([cx, cy]) => [...Array(21).keys()].every((j) => [...Array(21).keys()].every((i) => !squares.blocked(cx - 30 + i * 3, cy - 30 + j * 3)));
+        let spot = null;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (let far = 120; far <= 400 && !spot; far += 20) {
+            for (let k = 0; k < 16 && !spot; k++) {
+                const at = [Math.floor(me.x + Math.sin((k / 16) * Math.PI * 2) * far), Math.floor(me.y + Math.cos((k / 16) * Math.PI * 2) * far)];
+
+                spot = open(at) ? at : null;
+            }
+        }
+
+        game.host.battle.place(game.me, "town", spot);
+        me.facing = 0;
+        me.hp = me.maxHp = 5000;
+
+        return game.host.command(game.me, { type: "rift" }).ok && game.battle.actors.some((actor) => actor.ai === "colossus");
+    });
+
+    expect(called).toBe(true);
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.avatars.get(window.pellagos.game.battle.actors.find((actor) => actor.ai === "colossus").id)?.model), { seconds: 120, realTime: true })).toBe(true);
+    await expect(page.locator("#bossbar .name")).toHaveText("Behemoth of the Rift");
+
+    // (Before it, where its breath lands, alone: it breathes on them as it would on three)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const kaiju = game.battle.actors.find((actor) => actor.ai === "colossus");
+
+        game.host.battle.place(kaiju.id, "town", [Math.floor(me.x), Math.floor(me.y - 31)]);
+        Object.assign(kaiju, { facing: 0, moveAt: {}, readyAt: 0, rethinkAt: 0 });
+        kaiju.wild.colossus.breath.crowd = 1;
+    });
+    expect(await playUntil(page, () => window.pellagos.game.avatars.get(window.pellagos.game.me).thrown, { seconds: 20 })).toBe(true);
+
+    const breathed = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const kaiju = game.battle.actors.find((actor) => actor.ai === "colossus");
+
+        return { attack: kaiju.attack?.attack.id ?? null, beam: game.avatars.get(kaiju.id).plan.beam.state, hp: game.battle.actor(game.me).hp };
+    });
+
+    expect(breathed.attack).toBe("atomicBreath");
+    expect(breathed.beam.firing).toBe(true);
+    expect(breathed.hp).toBeLessThan(5000);
+});
+
 test("an invasion's raiders felled by the player: thanked for them by the town as it holds, by the name of their band, and played on", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=2");

@@ -294,25 +294,33 @@ function horn(random, blasts, { gap = 0.18 } = {}) {
     return out;
 }
 
-// A kaiju's atomic breath (the Behemoth of the Rift's: beasts/beam.js), timed to its clip: a
-// whine rising as its glow charges (CHARGE seconds), crackling the more as it comes; then the
-// beam, a roar of fire with a deep rumble under it and a sizzle over it, pulsing, for FIRE seconds;
-// dying away after
+// A kaiju's atomic breath (the Behemoth of the Rift's: beasts/beam.js), as long as its clip has
+// it, in two (no made sound's two seconds long): its charging, a whine rising over CHARGE seconds
+// as its glow charges, crackling the more as it comes, swelling into the beam; and the beam, a
+// roar of fire with a deep rumble under it and a sizzle over it, pulsing, BEAM seconds, faded in
+// and out so one played over the end of another goes on as one (app/game.js plays it twice,
+// over the three and a third seconds it fires)
 const CHARGE = 1.3;
-const FIRE = 3.3;
+const BEAM = 1.9;
 
-function atomicBreath(random) {
-    const length = CHARGE + FIRE + 0.9;
-    const charging = (t) => Math.min(1, t / CHARGE) ** 2 * (t < CHARGE + 0.15 ? 1 : Math.max(0, 1 - (t - CHARGE - 0.15) / 0.4));
-    const firing = (t) => (t < CHARGE ? 0 : t < CHARGE + 0.12 ? (t - CHARGE) / 0.12 : t < CHARGE + FIRE ? 1 : Math.max(0, 1 - (t - CHARGE - FIRE) / 0.9) ** 1.6);
-    const pulse = (t) => 0.82 + 0.18 * Math.sin(TAU * 7 * t) * Math.sin(TAU * 2.3 * t + 1);
+function atomicCharge(random) {
+    const length = CHARGE + 0.1;
+    const charging = (t) => Math.min(1, t / CHARGE) ** 2 * Math.max(0, Math.min(1, (length - t) / 0.08));
     const whine = shape(tone(length, (t) => 70 + 420 * Math.min(1, t / CHARGE) ** 1.7, { harmonics: [[1, 1], [2, 0.5], [3, 0.3], [5, 0.15]] }), (t) => 0.5 * charging(t));
     const crackle = shape(filter(noise(random, length), "highpass", 3200, 0.8), (t) => charging(t) * (random.next() < 0.004 + 0.03 * Math.min(1, t / CHARGE) ? 1 : 0.06));
-    const roar = shape(filter(noise(random, length), "lowpass", (t) => 500 + 900 * firing(t) * pulse(t), 0.9), (t) => firing(t) * pulse(t));
-    const rumble = shape(tone(length, (t) => 42 + 6 * Math.sin(TAU * 1.5 * t), { harmonics: [[1, 1], [2, 0.6], [3, 0.25]] }), (t) => 0.8 * firing(t));
-    const sizzle = shape(filter(noise(random, length), "bandpass", 6200, 1.2), (t) => 0.35 * firing(t) * pulse(t));
+    const swell = shape(filter(noise(random, length), "lowpass", 900, 0.8), (t) => 0.6 * Math.max(0, (t - CHARGE + 0.25) / 0.35) ** 2 * Math.max(0, Math.min(1, (length - t) / 0.08)));
 
-    return add(add(add(add(whine, crackle, 0.6), roar, 1), rumble, 0.9), sizzle, 1);
+    return add(add(whine, crackle, 0.6), swell, 1);
+}
+
+function atomicBeam(random) {
+    const level = (t) => Math.min(1, t / 0.08) * Math.min(1, (BEAM - t) / 0.35);
+    const pulse = (t) => 0.82 + 0.18 * Math.sin(TAU * 7 * t) * Math.sin(TAU * 2.3 * t + 1);
+    const roar = shape(filter(noise(random, BEAM), "lowpass", (t) => 500 + 900 * pulse(t), 0.9), (t) => level(t) * pulse(t));
+    const rumble = shape(tone(BEAM, (t) => 42 + 6 * Math.sin(TAU * 1.5 * t), { harmonics: [[1, 1], [2, 0.6], [3, 0.25]] }), (t) => 0.8 * level(t));
+    const sizzle = shape(filter(noise(random, BEAM), "bandpass", 6200, 1.2), (t) => 0.35 * level(t) * pulse(t));
+
+    return add(add(roar, rumble, 0.9), sizzle, 1);
 }
 
 // Notes one after another (a cue): [[frequency, start (s)]...], each ringing for `decay` seconds
@@ -669,8 +677,10 @@ export const SOUNDS = {
         },
     },
 
-    // The Behemoth of the Rift's atomic breath, charged and fired (atomicBreath)
-    atomicBreath: { variants: 1, volume: 0.85, make: atomicBreath },
+    // The Behemoth of the Rift's atomic breath, charged (atomicCharge) and fired (atomicBeam:
+    // two of them, one over the end of the other)
+    atomicCharge: { variants: 1, volume: 0.8, make: atomicCharge },
+    atomicBeam: { variants: 2, volume: 0.85, make: atomicBeam },
 
     // War: an invasion's raiders' war horn, a long, low blast (the G under the bass clef: blown
     // twice as they come, app/game.js HORNS), and as they break and run, a short one and a long one

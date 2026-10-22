@@ -342,6 +342,69 @@ describe("one drawn in a crowd (crowd.js CrowdAvatar)", () => {
         assert.ok(!crowd.members.has(one));
     });
 
+    it("thrown by a blast, is flung whole along its arc, over about its middle as its fall plays, lying where it lands till it's up; dead, it lies there", () => {
+        const ground = () => 0;
+        const one = new CrowdAvatar(crowdOf(), "human:m:sword");
+
+        one.place(0, 0, 0);
+
+        const lands = one.actions.toss({ to: [0, 6], flight: 1, up: 2, ground, seconds: 2.6 });
+        const heights = [];
+
+        assert.equal(lands, 1);
+        assert.ok(one.thrown && one.airborne);
+
+        // (The battle has it where it lands at once; it's drawn along its arc)
+        for (let t = 0; t < 0.95; t += 0.05) {
+            one.update(0.05, 0, 6, 0);
+            heights.push(one.object.position.y);
+            assert.equal(moveOf(one.frameIn(table)), "die", "its fall playing");
+        }
+
+        assert.ok(Math.max(...heights) > 1.9 && Math.max(...heights) <= 2 + 1e-9, "as high as its arc");
+        assert.ok(one.object.position.z > 5.5 && one.object.position.z <= 6 + 1e-9, "nearly there");
+
+        // (Turned over about its middle on the way, the right way up as it lands)
+        const half = new CrowdAvatar(crowdOf(), "human:m:sword");
+
+        half.place(0, 0, 0);
+        half.actions.toss({ to: [0, 6], flight: 1, up: 2, ground, seconds: 2.6 });
+        half.update(0.5, 0, 6, 0);
+
+        const middle = new THREE.Vector3(0, 0.9, 0).applyMatrix4(half.placed());
+
+        assert.ok(Math.abs(middle.y - (half.object.position.y + 0.9)) < 1e-6 && Math.abs(middle.z - half.object.position.z) < 1e-6, "over about its middle");
+
+        for (let t = 0; t < 1.2; t += 0.05) {
+            one.update(0.05, 0, 6, 0);
+        }
+
+        assert.ok(!one.airborne && one.thrown, "lying there");
+        assert.equal(one.object.position.y, 0);
+        assert.equal(moveOf(one.frameIn(table)), "die");
+
+        // (Up again when it's let up, where its actor is)
+        for (let t = 0; t < 0.5; t += 0.05) {
+            one.update(0.05, 0, 6, 0);
+        }
+
+        assert.ok(!one.thrown);
+        assert.notEqual(moveOf(one.frameIn(table)), "die");
+
+        // (Dead, it lies there)
+        const dead = new CrowdAvatar(crowdOf(), "human:m:sword");
+
+        dead.place(0, 0, 0);
+        dead.actions.toss({ to: [3, 0], flight: 0.8, up: 1.5, ground, seconds: null });
+
+        for (let t = 0; t < 5; t += 0.05) {
+            dead.update(0.05, 3, 0, 0);
+        }
+
+        assert.ok(dead.thrown && !dead.airborne);
+        assert.equal(moveOf(dead.frameIn(table)), "die");
+    });
+
     it("walks, or runs, its stride as far through as it's gone", () => {
         const one = new CrowdAvatar(crowdOf(), "human:m:sword");
 

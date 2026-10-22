@@ -1067,9 +1067,10 @@ back along the ground while planted.
   `test/model.test.js`: every clip and bone each names in its model, those the ant borrows (and the
   bones they're played on) in the Ant Monster's; the ant's poses before and after it's lent them.
 
-**The Kaiju** (`beast-kaiju`: HuyKhoi2407's Kaiju, bought on Fab, 36 m long and 13 m tall) isn't in
-the game yet: the model viewer shows it (*Coming to the wilds*), every clip as it was made. Its
-Energy Breath is an atomic breath (`beasts/beam.js`, `BEAMS`), as a kaiju's should be:
+**The Kaiju** (`beast-kaiju`: HuyKhoi2407's Kaiju, bought on Fab, 36 m long and 13 m tall) is the
+Behemoth of the Rift in the game (*The Behemoth of the Rift*, below); the model viewer shows it
+among the mightiest, and every clip as it was made (`?model=beast-kaiju`). Its Energy Breath is an
+atomic breath (`beasts/beam.js`, `BEAMS`), as a kaiju's should be:
 
 - **Charging** (0.3 s in to 1.3): the glow on its spines and body (its emissive map) lit from its
   tail's tip to its head, a bright crest running along it, turning from green to blue-white and
@@ -1097,6 +1098,61 @@ Energy Breath is an atomic breath (`beasts/beam.js`, `BEAMS`), as a kaiju's shou
 - `e2e/model-viewer.spec.js`: nothing of it before it charges or in its other clips; charging,
   its glow lit; firing, aimed, its glow at its brightest, landing 10 to 20 m in front of its mouth,
   and the beam's blue-white drawn.
+
+### The Behemoth of the Rift (creatures.js `kaiju`, `COLOSSUS`; battle.js `#colossus`)
+
+One of the great beasts of the other world, come through the rift outside the Tower of Sar Mordal.
+Drawn from the Kaiju's model (`beasts/model.js` MODELS `kaiju`), 36 m long and 13 m tall, as
+it's made; its stand-in till that's read is the Dreadthorn's body, wingless and twice as big
+again, its spines glowing green (`beasts/looks.js`).
+
+- **On no side but its own** (`RIFT`, host.js `#against`): everyone's enemy, the players', the
+  soldiers', an invasion's raiders' and the wild's creatures', and everyone its.
+- **Too vast to be moved**: never thrown, stunned, staggered, knocked down, frightened, slowed,
+  calmed or made to falter by a spell; what burns, poisons or bleeds it takes hold.
+- **Its body as wide as it's drawn.** Where it stands is under its hips, where its model's made
+  standing (its hind feet 2.5 m before that, its fore feet 12). Its body's middle is 7 m before
+  that, and the squares 6 m round it are its `footprint`, moved with it each step: whoever's after
+  it closes to the nearest of them (as on a fortification's walls), not its middle.
+- **Its own walk** (`#stride`, in place of a character's): turning no faster than 0.6 radians a
+  second, toward the next corner of its way or to whom it's after, stepping on as it turns (more
+  slowly the further it has to turn), through whoever's in its way. Walking, it treads on whoever's
+  under it every 0.7 s: within 6.5 m of its body's middle, hurt and thrown aside (`tread`).
+- **Whom it fights** (`#colossalTarget`, looked at again every second): of the enemies it sees
+  within 90 m, the one with the most of their fellows within 6 m of them, those where its breath
+  would land counting more.
+- **Where it goes**: to stand as far before them as its breath lands, the way it's coming from;
+  through them and beyond, if they're nearer than that, to turn on them from there.
+- **Its moves** (`#colossalMove`; weapons.js `kaiju`; each no sooner than its `every` after the
+  last), the first it's ready to make that would catch anyone:
+  - **Its atomic breath** (every 12 s at most), when three or more stand where it would land. Its
+    Energy Breath plays: its glow charges for 1.3 s, then the beam's raked over the ground from 13
+    to 18 m before its mouth (its mouth 15.9 m before where it stands), over 3.3 s, the way it
+    faces then. A blast every quarter of a second where it lands (`#rake`), 4 m round: whoever it
+    catches hurt once a breath, burning half the time, and thrown back, away from it, up to 7.8 m.
+    It's drawn by its beam (`beasts/beam.js`), aimed where the battle has it land.
+  - **Its jaws slammed down** (every 5 s), on whoever's 16 m before where it stands, 5 m round:
+    the start of its Roar, its head reared and brought down.
+  - **Its roar** (every 24 s), once eight or more are within 15 m of its body's middle: all of them
+    thrown off their feet, its Roar played through its bellow.
+  Each plays as much of its clip as the move lasts (MODELS `spans`), at the clip's own pace. Struck
+  it flinches in the start of its Hit React; it falls in its Faint, held where it lies.
+- **Heard**: its voice a drake's as low as it goes (sound.js `CREATURE_VOICES`); its atomic breath
+  made in code, a whine charging (synth.js `atomicCharge`) and a roaring beam (`atomicBeam`, twice,
+  the second over the end of the first, as long as it fires: no made sound is two seconds long),
+  heard 120 m off; its jaws landing as a great beast falls.
+- **Seen**: its jaws slammed down and its roar shake the ground (spellfx.js `quake`: earth thrown up
+  and dust rolling out, a shockwave for its roar, a little dust under its tread), and the camera
+  within 60 m. Within 150 m of the player its name and strength are across the top of the screen
+  (hud.js `boss`), and within 90 m the camera frames it, drawn back as far as it's tall and looking
+  up at it (view.js `BIG_FOE` `colossal`). Its model's read the moment it comes, and it's drawn
+  before anyone else, from its model at once.
+- **Its spoils**: scales off its hide, a dorsal spine that still glows, and its heart (spoils.js).
+- **Called up** before the player, 70 m off the way they face, by the debug overlay's *Behemoth of
+  the Rift* (host.js `"rift"`).
+- `test/kaiju.test.js`: its breath raked over those where it lands, each hurt once and thrown away
+  from it; its jaws, its roar, its tread; its walk, turning slowly, its body's squares with it;
+  everyone's enemy, nothing that stuns, frightens or slows it taking hold.
 
 ### A place's creatures, ready before they're met (beasts/model.js, app/readying.js)
 
