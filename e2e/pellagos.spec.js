@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures.js";
 import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 import { Explored } from "../client/js/core/explored.js";
-import { behemothSides, BOMBERS, ENGINES, REWARD, SIZE } from "../client/js/core/invasions.js";
+import { behemothSides, BOMBERS, ENGINES, INVASION, REWARD, SIZE } from "../client/js/core/invasions.js";
 import { branchesFound, fareOf } from "../client/js/core/portals.js";
 import { NATURAL } from "../client/js/core/weapons.js";
 import { guilds, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
@@ -13310,12 +13310,14 @@ test("an invasion's raiders felled by the player: thanked for them by the town a
     expect(await playUntil(page, () => window.pellagos.game.host.invasions.length > 0)).toBe(true);
 
     // The player sets on two of them, each brought to them, and fells them; the rest of their
-    // line falls but three, and they break
-    const felled = await page.evaluate(async () => {
+    // line falls, to the last man (its reinforcing done with: as if it had gone on that long)
+    const felled = await page.evaluate(async (reinforcing) => {
         const { game } = window.pellagos;
         const [invasion] = game.host.invasions;
         const me = game.battle.actor(game.me);
         const ids = invasion.invaders.slice(0, 2);
+
+        invasion.fightAt = game.battle.time - reinforcing;
 
         for (const id of ids) {
             const raider = game.battle.actor(id);
@@ -13331,19 +13333,19 @@ test("an invasion's raiders felled by the player: thanked for them by the town a
             await new Promise((resolve) => setTimeout(resolve, 0));
         }
 
-        for (const id of invasion.invaders.filter((each) => !game.battle.actor(each).dead).slice(3)) {
+        for (const id of invasion.invaders.filter((each) => !game.battle.actor(each).dead)) {
             Object.assign(game.battle.actor(id), { hp: 0, dead: true, respawnAt: Infinity });
         }
 
         return ids.filter((id) => game.battle.actor(id)?.dead).length;
-    });
+    }, INVASION.reinforce.lasts);
 
     expect(felled).toBe(2);
     expect(await playUntil(page, () => /thanks you for the 2 bandits you felled/.test(document.querySelector("#banner").textContent))).toBe(true);
     expect(await playUntil(page, () => window.pellagos.game.host.invasions.length === 0, { seconds: 120 })).toBe(true);
 });
 
-test("an invasion: the raiders' war horn blown twice where they come out, the town's answering from its line, and the call told; a fight's music round the player though none's after them; a share of them felled by the player, the town's lord thanks them in a panel of its own, the town's horn blown for it, as the raiders break to their horn sounding the retreat", async ({ page }) => {
+test("an invasion: the raiders' war horn blown twice where they come out, the town's answering from its line, and the call told; a fight's music round the player though none's after them; a share of them felled by the player, the town's lord thanks them in a panel of its own, the town's horn blown for it, as the bandits are cut down to the last, no one left to sound the retreat", async ({ page }) => {
     test.setTimeout(240000);
     await playing(page, "/?play&seed=2");
 
@@ -13384,14 +13386,17 @@ test("an invasion: the raiders' war horn blown twice where they come out, the to
         ["warHorn", 2.2, true],
         ["townHorn", 4.6, true],
     ]);
-    expect(coming.told).toMatch(/^Bandits on the [a-z-]+ road! .+ calls every able hand to its defence\. They'll leave you be, unless you strike one\./);
+    expect(coming.told).toMatch(/^Bandits on the [a-z-]+ road! .+ calls every able hand to its defence\. This time they'll leave you be, unless you strike one\. Next time, they won't\./);
 
-    // The player sets on a share of them, each brought to them, and fells them
-    const felled = await page.evaluate(async (share) => {
+    // The player sets on a share of them, each brought to them, and fells them (its reinforcing
+    // done with: as if it had gone on that long)
+    const felled = await page.evaluate(async ([share, reinforcing]) => {
         const { game } = window.pellagos;
         const [invasion] = game.host.invasions;
         const me = game.battle.actor(game.me);
         const ids = invasion.invaders.slice(0, Math.ceil(invasion.size * share));
+
+        invasion.fightAt = game.battle.time - reinforcing;
 
         for (const id of ids) {
             const raider = game.battle.actor(id);
@@ -13408,19 +13413,19 @@ test("an invasion: the raiders' war horn blown twice where they come out, the to
         }
 
         return { ids: ids.length, felled: ids.filter((id) => game.battle.actor(id)?.dead).length };
-    }, REWARD.big);
+    }, [REWARD.big, INVASION.reinforce.lasts]);
 
     expect(felled.felled).toBe(felled.ids);
 
-    // The rest of their line falls but three: they break and run, their horn sounding the retreat
-    // where the lines met, and the lord's thanks
+    // The rest of their line falls, to the last man: no one left to sound the retreat; and the
+    // lord's thanks
     const gold = await page.evaluate(() => {
         const { game } = window.pellagos;
         const [invasion] = game.host.invasions;
 
         window.horns.length = 0;
 
-        for (const id of invasion.invaders.filter((each) => !game.battle.actor(each).dead).slice(3)) {
+        for (const id of invasion.invaders.filter((each) => !game.battle.actor(each).dead)) {
             Object.assign(game.battle.actor(id), { hp: 0, dead: true, respawnAt: Infinity });
         }
 
@@ -13432,12 +13437,9 @@ test("an invasion: the raiders' war horn blown twice where they come out, the to
     await expect(thanks).toBeVisible();
     await expect(thanks).toContainText(`who felled ${felled.ids} bandits of the ${coming.size} who came: their own purse,`);
     await expect(thanks).toContainText("from the armoury");
-    expect(await page.evaluate(() => window.horns)).toEqual([
-        ["retreatHorn", 0, true],
-        ["townHorn", 0.4, false],
-    ]);
+    expect(await page.evaluate(() => window.horns)).toEqual([["townHorn", 0.4, false]]);
     expect(await page.evaluate(() => window.pellagos.game.progress.gold)).toBeGreaterThan(gold + REWARD.purse);
-    await expect(page.locator("#banner")).toContainText("The bandits are beaten back from");
+    await expect(page.locator("#banner")).toContainText("The bandits are cut down to the last before");
 
     await thanks.getByRole("button", { name: "With thanks" }).click();
     await expect(thanks).toBeHidden();

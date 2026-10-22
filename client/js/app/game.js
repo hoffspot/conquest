@@ -5774,8 +5774,8 @@ export class Game {
     // An invasion (core/invasions.js; host.js #invade). Coming: its soldiers drawn, the raiders'
     // war horn blown where they come out and the town's answering from its line (#invasionHorn),
     // and, at the town the player's in or near, the player told the way the raiders come (in their
-    // first, that the raiders leave them be till they strike one), the town's crier crying it out
-    // (#invasionCry). Beaten off: the raiders' horn as they run, the player told, and the crier's
+    // first, that the raiders leave them be this time till they strike one, and won't next time),
+    // the town's crier crying it out (#invasionCry). Reinforced: those come up drawn. Beaten off: the raiders' horn as they run, the player told, and the crier's
     // thanks; the town's soldiers fallen, the raiders' horn, and told. And the player thanked for
     // the raiders they felled: the gold, the merit and the standing, and, for a good share of them,
     // the lord's thanks, in a panel of its own, the town's horn blown for it: their own purse and a
@@ -5788,6 +5788,11 @@ export class Game {
         const near = this.progress.invasion.place === event.place || Boolean(invasion && me?.map === "town" && Math.hypot(me.x - invasion.middle[0], me.y - invasion.middle[1]) <= invasion.edge + INVASION.out + INVASION.away);
 
         switch (event.change) {
+            case "reinforced":
+                // (More of either side come up to the fight: core/host.js #reinforceInvasion)
+                this.enlisting.push(...event.ids);
+
+                break;
             case "coming":
                 this.enlisting.push(...event.ids);
 
@@ -5810,24 +5815,28 @@ export class Game {
                 }
 
                 if (near) {
-                    const spared = event.spared.includes(this.me) ? " They'll leave you be, unless you strike one." : "";
+                    const spared = event.spared.includes(this.me) ? " This time they'll leave you be, unless you strike one. Next time, they won't." : "";
 
                     this.hud.message(behemoth ? `${band.label} comes on the ${event.way} road! ${event.name} calls every able hand to its defence.` : `${band.label} on the ${event.way} road! ${event.name} calls every able hand to its defence.${spared}`, 6);
                     this.#invasionCry(event.place, criesOf(event.band, event.way)[0]);
                 }
 
                 break;
-            case "repelled":
-                if (invasion) {
+            case "repelled": {
+                // (A band that fights to the last, cut down: no one left to sound the retreat)
+                const last = !behemoth && band.rout === 0;
+
+                if (invasion && !last) {
                     this.#invasionHorn("retreatHorn", this.#invasionLine(invasion, INVASION.meet));
                 }
 
                 if (near) {
-                    this.hud.message(behemoth ? `${band.label} is slain before ${event.name}!` : `The ${band.many} are beaten back from ${event.name}!`, 4);
+                    this.hud.message(behemoth ? `${band.label} is slain before ${event.name}!` : last ? `The ${band.many} are cut down to the last before ${event.name}!` : `The ${band.many} are beaten back from ${event.name}!`, 4);
                     this.#invasionCry(event.place, thanksOf(event.band));
                 }
 
                 break;
+            }
             case "fell":
                 if (invasion) {
                     this.#invasionHorn("warHorn", this.#invasionLine(invasion, INVASION.meet));

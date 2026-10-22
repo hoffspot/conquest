@@ -2333,7 +2333,10 @@ soldiers; the host's steps took 4 to 6.5 ms on the mean.
   theirs; a raider's fellows don't take up its grudges (battle.js `lone`), each picks its own fights.
   In a character's **first** invasion the raiders leave them be, and their followers and creatures
   (`spared`), till they strike one: that one's theirs to fight for the rest of it (`struck`), its
-  fellows still not. In **every one after** the raiders fight them from the start. Clicking or
+  fellows still not. Nor does watching a raider strike the town's soldiers make one of them its
+  enemy (battle.js `#provoke`: a `lone` raider makes no enemy of one it leaves be by striking
+  another of their own), so they can stand among the town's line in the thick of it. In **every
+  one after** the raiders fight them from the start. Clicking or
   tapping a raider sets the player on it, never talks to it (app/game.js `tap`; the pointer shows
   the sword's attack).
 - **None of the war's**: the soldiers of either side and those the raiders bring down (the town's
@@ -2344,7 +2347,7 @@ a soldier's 40 hit points, its chiefs' many times it):
 
 | Band | Its line | Up close | From afar | Its chiefs | Breaks at |
 | --- | --- | --- | --- | --- | --- |
-| **Bandits** (anyone's first) | Half shield line, a fifth two-handers, the rest archers; 1.3 m/s | Cutthroats (cleavers, swords, round shields), brutes (war hammers, battle axes); 85% | Archers | Chiefs: a sword, 2.5 times | A quarter left |
+| **Bandits** (anyone's first) | Half shield line, a fifth two-handers, the rest archers; 1.3 m/s | Cutthroats (cleavers, swords, round shields), brutes (war hammers, battle axes); 85% | Archers | Chiefs: a sword, 2.5 times | Never: to the last |
 | **Northmen** | Three tenths shield line, two fifths berserkers ranging 18 m after an enemy (12, a line's), three tenths behind; 1.5 m/s | Raiders (swords, cleavers), berserkers (battle axes, greatswords, war hammers); as hardy as a soldier | Archers, and axe-throwers: a hand axe thrown end over end from 9 m (core/weapons.js `throwingAxes`) | Chieftains: a greatsword, 3 times | A fifth |
 | **The Ashen Cult** | Its zealots nearly half, a tenth healers, three tenths fire-callers; stands 10 m short of where the lines meet and lets the town come (`stand`, `advance`); 1.1 m/s | Zealots (staves, war hammers); 70% | Fire-callers (grimoires, wands), casting the fire's spells; ash-priests healing | High priests: a staff, and hellfire hurled from 9 m that may set alight (`ashenPriest`), 3 times | A quarter |
 | **Sellswords** | Near half a deep shield line (kite and tower shields), a fifth two-handers, three tenths archers, a surgeon or two; 1.1 m/s | Swordsmen, two-handers (greatswords, war hammers); 90%, their armour taking a tenth off every blow | Archers | Captains: a greatsword, 2.5 times | 15%: the last to break |
@@ -2363,47 +2366,62 @@ axe is drawn in flight, turning end over end (world/effects.js), and heard as a 
 The model viewer shows any of each band, with any of its weapons, and its chief (WILDS.md, *The
 model viewer*: `?person=raider-northmen&weapon=throwingAxes`, `?person=chief-cult`).
 
-**How it goes** (`#invasionsOn`): the two lines meet and grind; once only so many of the raiders are
-left standing (their band's `rout`: a quarter of bandits), or none of those who fight up close
-(`close`: their front and heavy lines, and their chiefs; archers, casters and healers can't hold the
-field alone, and would otherwise shoot down the town's line from beyond its reach), the town's held,
-however few of its own are left: they break and run back the way they came (2.6 m/s), going once
-they're 90 m beyond its edge, and the town's soldiers hold the field. With the town's soldiers all
-fallen first, it isn't: the raiders go back the way they came. Once none of them is left standing
-there, those left stand 20 seconds, then go as soon as they're not fighting (`linger`); and ten
-minutes after it came, everyone left in it goes (`lasts`). Played headless against every band in the
-start towns of the six peoples, at 60, 120 and 360 (core/invasions.js SIZE), the town held all 90
-times, the raiders breaking from 40 seconds to three minutes in; the cult cost the town most (at 360
-the cat folk's town kept 23 of its 209), the corsairs and the bandits least.
+**How it goes** (`#invasionsOn`): the two lines meet and grind. **Reinforced** (`reinforce`,
+`#reinforceInvasion`): from the first blow, for three minutes, every 15 seconds each side's fallen
+are made good. The raiders are brought back up to 70% of the line that came, coming up the road
+from where it came out; the town's to 80% of its own, coming out from where its line formed. Each
+joins its side's line, its ranks opening for them. Neither side breaks meanwhile, so the town keeps
+the edge throughout, and a player has time to come to the fight, see how it stands and choose what
+to do. Then it's fought out with what's left. Once only so many of the raiders are left standing
+(their band's `rout`), or none of those who fight up close (`close`: their front and heavy lines,
+and their chiefs; archers, casters and healers can't hold the field alone, and would otherwise
+shoot down the town's line from beyond its reach), the town's held, however few of its own are
+left: they break and run back the way they came (2.6 m/s), going once they're 90 m beyond its edge,
+and the town's soldiers hold the field. The **bandits** never break (their `rout` none): with
+nowhere to run to, they fight to the last, archers and all, and the town's held once the last of
+them is down ("The bandits are cut down to the last before Marleyworth!"). With the town's
+soldiers all fallen first, it isn't held: the raiders go back the way they came. Once none of them
+is left standing there, those left stand 20 seconds, then go as soon as they're not fighting
+(`linger`); and ten minutes after it came, everyone left in it goes (`lasts`).
+
+Played headless in the start towns of six worlds, a bandits' invasion of 120 (the player standing
+aside) was fought for three and a half minutes from the first blow (200 to 219 seconds), about 30
+of the bandits and 45 to 55 of the town's in it at a time, 141 bandits coming in all; the town held
+every time. Before the reinforcements, played headless against every band in the start towns of the
+six peoples, at 60, 120 and 360 (core/invasions.js SIZE), the town held all 90 times, the raiders
+breaking from 40 seconds to three minutes in; the cult cost the town most (at 360 the cat folk's
+town kept 23 of its 209), the corsairs and the bandits least.
 
 **The crier** (app/game.js `#invasion`, `#invasionCry`): as it comes, every player in the town or
 near it is told ("Bandits on the north road! Marleyworth calls every able hand to its defence."; in
-their first, "They'll leave you be, unless you strike one."), and its crier, if he's out and they're
-within his bell's reach (160 m), rings it and cries the alarm, not his usual openings (`ALARM`: "To
-arms! To arms!"), the road they come by and his call to every able hand to defend the town
-(`criesOf`, in the band's own words, its `cry`: "Bandits on the north road! Every able hand, defend
-the town!", "Northmen on the north road, axes high!", "Corsairs up from the shore, on the north
-road!"); while it's on he calls out to the adventurers each time he calls ("Adventurers! Able
-hands! To the north road, and drive them off!"); beaten off, he cries the band beaten in its own
-words (its `beaten`: "The cult's fires are put out!") and thanks every brave soul who stood for it
-(`thanksOf`).
+their first, "This time they'll leave you be, unless you strike one. Next time, they won't."), and
+its crier, if he's out and they're within his bell's reach (160 m), rings it and cries the alarm,
+not his usual openings (`ALARM`: "To arms! To arms!"), the road they come by and his call to
+every able hand to defend the town (`criesOf`, in the band's own words, its `cry`: "Bandits on the
+north road! Every able hand, defend the town!", "Northmen on the north road, axes high!", "Corsairs
+up from the shore, on the north road!"); while it's on he calls out to the adventurers each time
+he calls ("Adventurers! Able hands! To the north road, and drive them off!"); beaten off, he cries
+the band beaten in its own words (its `beaten`: "The cult's fires are put out!") and thanks every
+brave soul who stood for it (`thanksOf`).
 
 **Horns and music** (app/game.js `#invasionHorn`, `HORNS`; audio/synth.js `horn`): as the raiders
 come out onto the town's road, their war horn's blown there twice, 2.2 seconds apart (a long, low
 blast), and the town's answers from where its line forms (a bright call up a fourth and a fifth),
 each heard up to 450 metres off. Beaten off, the raiders' horn sounds the retreat where the lines
-met (a short blast and a long one falling away); the town's soldiers all fallen, it's blown there
-once. While it's on round a player (as near as they're told of it), till the raiders break, a
-fight's music plays for them (`#invadedHere`), whether anyone's after them or not. The sound studio
-plays the horns, under *War*.
+met (a short blast and a long one falling away; not the bandits', cut down to the last with no one
+left to blow it); the town's soldiers all fallen, it's blown there once. While it's on round a
+player (as near as they're told of it), till the raiders break, a fight's music plays for them
+(`#invadedHere`), whether anyone's after them or not. The sound studio plays the horns, under
+*War*.
 
 **Thanks** (`#thank`, `rewardOf`, `REWARD`), to every player who felled raiders (they, their
 followers or their creatures), once the raiders break: a bounty of 3 gold for each, the guilds'
 merit (2, one more for every 4 felled, at most 8, if they've signed up at a guild) and the town's
 thanks (3, one more for every 3, at most 12: standing with their own people where the town's
-theirs, else a favour of its people's to theirs). One who felled 15% of the raiders (`big`), the
-town held, has its lord's own purse besides (150 gold), 4 more merit and 8 more standing, and a
-rare piece from its armoury (like their own weapon, or a ring or an amulet). Each is told what
+theirs, else a favour of its people's to theirs). One who felled 15% of the raiders (`big`: of all
+who came, their reinforcements too), the town held, has its lord's own purse besides (150 gold),
+4 more merit and 8 more standing, and a rare piece from its armoury (like their own weapon, or a
+ring or an amulet). Each is told what
 they've had in a message; one who's had the lord's own reward, in a panel of its own ("The lord of
 Marleyworth thanks you, who felled 4 bandits of the 25 who came: their own purse, a rare sword from
 the armoury, and 162 gold, 7 merit with the guilds, 12 standing.", 14 seconds, or till they say
@@ -2512,8 +2530,8 @@ player's device can draw is in the host's snapshot too (each player's `budget`; 
 31, none told in a world kept before), and told by their game (`NET_VERSION` 146). The bands
 changed what two games share again (`NET_VERSION` 147), and so did the band named in the thanks
 (148), the Behemoth of the Rift (149), each people's own bombs (150), the rift's own creatures
-in the Tower of Sar Mordal (151), the town's siege engines (152), and the townsfolk sheltering from
-the Behemoth (153).
+in the Tower of Sar Mordal (151), the town's siege engines (152), the townsfolk sheltering from
+the Behemoth (153), and an invasion's reinforcements (154).
 
 ### Playing together (M11)
 

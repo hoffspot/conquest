@@ -2,7 +2,8 @@
 // town, a band of bandits comes down one of its roads, and the town's own people march out to
 // meet them at its edge, the stronger side, two squads of bomb throwers among them. In a
 // character's first the raiders leave them be till they strike one; in those after, they don't.
-// Beaten down to a quarter, the raiders run; whoever felled them is thanked for it. By night, now
+// Both sides reinforced a while from the first blow; then beaten down, the raiders run (the
+// bandits fight to the last); whoever felled them is thanked for it. By night, now
 // and then, the Behemoth of the Rift comes in a band's place, the town's whole strength against it.
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
@@ -315,6 +316,37 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         assert.ok(fellows.length && fellows.every((id) => !host.battle.hostile(host.battle.actor(id), me)), "its fellows leave them be");
     });
 
+    it("leaves a character be in their first though they stand among the town's line in the thick of it, watching the raiders strike its soldiers: none of them their enemy, none at them", () => {
+        const game = inTown({ invasion: { clock: INVASION.first } });
+        const { host, me } = game;
+
+        play(game, INVASION.settleFirst + 2000, () => host.invasions.length > 0);
+
+        const [invasion] = host.invasions;
+        const raiders = () => invasion.invaders.map((id) => host.battle.actor(id)).filter((actor) => actor && !actor.dead);
+        const hits = [];
+        let among = false;
+
+        Object.assign(me, { hp: 1e6, maxHp: 1e6 });
+
+        for (let t = 0; t < 40000; t += STEP_MS) {
+            // (Once the first blow's struck, the player put by whichever of the town's is nearest a raider)
+            if (!among && raiders().some((actor) => actor.attack)) {
+                const nearest = invasion.defenders.map((id) => host.battle.actor(id)).filter((actor) => actor && !actor.dead).sort((a, b) => Math.min(...raiders().map((r) => Math.hypot(r.x - a.x, r.y - a.y))) - Math.min(...raiders().map((r) => Math.hypot(r.x - b.x, r.y - b.y))))[0];
+
+                host.battle.place(HOST_PLAYER, "town", nearest.square);
+                among = true;
+            }
+
+            hits.push(...host.advance(STEP_MS).filter((event) => event.type === "hit" && (event.id === HOST_PLAYER || event.by === HOST_PLAYER)));
+            assert.ok(raiders().every((actor) => actor.target !== HOST_PLAYER && !host.battle.hostile(actor, me)), `at ${t} ms: none of them their enemy`);
+        }
+
+        assert.ok(among, "in the thick of it");
+        assert.deepEqual(hits, [], "no blow struck at them, nor by them");
+        assert.deepEqual(invasion.struck, []);
+    });
+
     it("fights a character from the start in every invasion after their first", () => {
         const game = inTown({ invasion: { seen: 1, clock: INVASION.every[1], due: INVASION.every[0] } });
         const { host, me } = game;
@@ -329,7 +361,7 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         assert.equal(host.players.get(HOST_PLAYER).progress.invasion.seen, 2);
     });
 
-    it("is beaten off by the town's people: the raiders break at a quarter left and run, it's let go of after, and the war's none the worse", () => {
+    it("is fought out by the town's people: both sides reinforced a while from the first blow, the town always the stronger, the bandits fighting to the last; it's let go of after, and the war's none the worse", () => {
         const game = inTown({ invasion: { clock: INVASION.first } });
         const { host } = game;
         const garrisons = () => host.war.towns.map(({ id, garrison }) => [id, garrison]);
@@ -338,29 +370,39 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         play(game, INVASION.settleFirst + 2000, () => host.invasions.length > 0);
 
         const [invasion] = host.invasions;
-        const ids = [...invasion.invaders, ...invasion.defenders];
+        const ids = new Set([...invasion.invaders, ...invasion.defenders]);
+        const sides = [];
         let broke = null;
 
         play(game, INVASION.lasts, () => {
+            [...invasion.invaders, ...invasion.defenders].forEach((id) => ids.add(id));
+
+            // (How each side stands while it's reinforced)
+            if (invasion.fightAt !== null && invasion.broke === null && host.battle.time - invasion.fightAt < INVASION.reinforce.lasts) {
+                sides.push([standing(host, invasion.invaders).length, standing(host, invasion.defenders).length]);
+            }
+
             if (broke === null && invasion.broke !== null) {
-                broke = {
-                    raiders: standing(host, invasion.invaders).length,
-                    close: standing(host, invasion.invaders).filter((id) => INVASION.close.includes(host.soldiers.get(id).role) || host.soldiers.get(id).chief).length,
-                    defenders: standing(host, invasion.defenders).length,
-                    broken: host.battle.formations[invasion.formations.invaders].broken,
-                };
+                broke = { raiders: standing(host, invasion.invaders).length, at: invasion.broke };
             }
 
             return !host.invasions.length;
         });
 
+        const changes = game.events.map(({ change }) => change);
+
+        assert.equal(invasion.band, "bandits");
         assert.deepEqual(
-            game.events.map(({ change }) => change),
+            changes.filter((change) => change !== "reinforced"),
             ["coming", "repelled", "over"],
         );
+        assert.ok(changes.filter((change) => change === "reinforced").length >= INVASION.reinforce.lasts / INVASION.reinforce.every / 2, "reinforced, again and again");
+        assert.ok(invasion.came > invasion.size, `more came up (${invasion.came} of them)`);
         assert.ok(invasion.held, "the town held");
-        assert.ok((broke.raiders <= Math.ceil(invasion.size * INVASION.rout) || broke.close === 0) && broke.defenders > broke.raiders && broke.broken, "they broke at a quarter, or with none left to fight up close, and ran");
-        assert.ok(ids.every((id) => !host.battle.actor(id) && !host.soldiers.has(id)), "all of them let go of");
+        assert.ok(sides.length > 0 && sides.every(([raiders, defenders]) => defenders > raiders), "the town the stronger all the while");
+        assert.ok(broke.at - invasion.fightAt >= INVASION.reinforce.lasts, `none breaking while it's reinforced (${(broke.at - invasion.fightAt) / 1000} s)`);
+        assert.equal(broke.raiders, 0, "the bandits fought to the last");
+        assert.ok([...ids].every((id) => !host.battle.actor(id) && !host.soldiers.has(id)), "all of them let go of");
         assert.ok(!Object.keys(host.battle.formations).some((id) => id.startsWith(invasion.id)), "and their lines");
         assert.deepEqual(garrisons(), before, "no town's garrison lost to the war for it");
     });
@@ -373,20 +415,31 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         play(game, INVASION.settleFirst + 2000, () => host.invasions.length > 0);
 
         const [invasion] = host.invasions;
-        const felled = Math.ceil(invasion.size * REWARD.big);
+        let felled = 0;
+        // (What they had just before they're thanked: the war goes on meanwhile, and its honours)
+        let [gold, points, merit] = [];
 
-        for (const id of invasion.invaders.slice(0, felled)) {
-            strike(game, id, { fell: true });
-        }
+        // (As many as the share of all who came, their reinforcements too, felled as it goes on)
+        play(game, INVASION.lasts, () => {
+            const raider = standing(host, invasion.invaders).find((id) => !host.soldiers.get(id).chief);
 
-        const [gold, points, merit] = [player.progress.gold, player.standing.points, player.standing.guild.merit];
+            if (invasion.broke === null) {
+                [gold, points, merit] = [player.progress.gold, player.standing.points, player.standing.guild.merit];
+            }
 
-        play(game, INVASION.lasts, () => invasion.broke !== null);
+            if (invasion.broke === null && raider && felled < Math.ceil(invasion.came * REWARD.big)) {
+                strike(game, raider, { fell: true });
+                felled += 1;
+            }
 
+            return invasion.broke !== null;
+        });
+
+        // (Those they struck down, and any more they felled fighting on beside the town's)
         const thanks = game.events.find(({ change }) => change === "thanks");
-        const reward = rewardOf({ felled, of: invasion.size });
+        const reward = rewardOf({ felled: thanks?.felled, of: invasion.came });
 
-        assert.ok(thanks && thanks.player === HOST_PLAYER && thanks.felled === felled && thanks.big);
+        assert.ok(thanks && thanks.player === HOST_PLAYER && thanks.felled >= felled && thanks.of === invasion.came && thanks.big);
         assert.equal(thanks.gold, reward.gold);
         assert.equal(player.progress.gold, gold + reward.gold);
         assert.equal(player.standing.points, points + reward.thanks, "the town's people's thanks: the player's own");
@@ -544,7 +597,7 @@ describe("an invasion as big as the devices in it can draw (core/invasions.js si
 });
 
 describe("the bands that invade (core/invasions.js BANDS, characters/soldiers.js raiderLook)", () => {
-    it("arms each band for each role it fields, names each, and has each break at a share of its own; only the corsairs keep to the sea", () => {
+    it("arms each band for each role it fields, names each, and has each break at a share of its own (the bandits fighting to the last); only the corsairs keep to the sea", () => {
         assert.deepEqual(Object.keys(BANDS).sort(), ["bandits", "corsairs", "cult", "northmen", "sellswords"]);
 
         for (const [id, band] of Object.entries(BANDS)) {
@@ -562,7 +615,7 @@ describe("the bands that invade (core/invasions.js BANDS, characters/soldiers.js
                 }
             }
 
-            assert.ok(band.rout > 0 && band.rout < 0.5, `${id}: breaks`);
+            assert.ok(id === "bandits" ? band.rout === 0 : band.rout > 0 && band.rout < 0.5, `${id}: breaks (the bandits, never)`);
             assert.equal(Boolean(band.coastal), id === "corsairs", `${id}: by the sea or not`);
             assert.ok(Object.entries(band.leash ?? {}).every(([role, leash]) => ROLES[role] && leash > 0), `${id}: its leashes`);
         }
@@ -572,7 +625,9 @@ describe("the bands that invade (core/invasions.js BANDS, characters/soldiers.js
         assert.equal(raiderName("cult", "caster", "grimoire"), "fire-caller");
         assert.ok(NATURAL.throwingAxes.attacks.some(({ projectile }) => projectile?.kind === "axe"), "thrown axes");
         assert.ok(NATURAL.ashenPriest.attacks.some(({ projectile }) => projectile?.kind === "fireball"), "hellfire");
-        assert.ok(BANDS.sellswords.rout < BANDS.bandits.rout && BANDS.corsairs.rout > BANDS.bandits.rout, "the sellswords hold longest, the corsairs least");
+        const breaking = Object.values(BANDS).map(({ rout }) => rout).filter((rout) => rout > 0);
+
+        assert.ok(BANDS.sellswords.rout === Math.min(...breaking) && BANDS.corsairs.rout === Math.max(...breaking), "of those that break, the sellswords hold longest, the corsairs least");
         assert.equal(BANDS.cult.advance, false, "the cult stands off and lets the town come");
     });
 
