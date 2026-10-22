@@ -131,6 +131,17 @@ export const WEREWOLF_DENS = Object.freeze({ count: [1, 2], biomes: ["darkwood",
  */
 export const HELLS = Object.freeze({ count: [2, 3], biomes: ["marsh", "jungle", "darkwood", "volcanic"], far: 3200, nearer: 0.85, clear: 10, sites: 8, camps: 5, apart: 60, tries: 12000, strict: 0.6 });
 
+/**
+ * The Tower of Sar Mordal (core/creatures.js LAIRS "rift tower": the wizard Sinclair's, abandoned,
+ * its rift's own creatures keeping it), one a world, so named (`name`): out in the wild (no people's lands) on bare,
+ * lonely land (`biomes`: failing that, any wild land), as far from every people's start as the wild
+ * goes (at least `far` metres from each: failing that, a little nearer, `nearer` of it at a time),
+ * `clear` cells from the settlements, `sites` from the other sites, `camps` from the camps and
+ * `apart` from the great lairs and dens and the hells' ways in; `tries` darts at most each time,
+ * the first `strict` share of them only on the land it'd rather be on.
+ */
+export const RIFT_TOWER = Object.freeze({ name: "The Tower of Sar Mordal", biomes: ["heath", "badlands", "tundra", "mountain"], far: 1800, nearer: 0.85, clear: 9, sites: 8, camps: 5, apart: 30, tries: 12000, strict: 0.6 });
+
 // The kinds of place a beast keeps (a great lair, a den), each far from the others
 const BEAST_LAIRS = Object.freeze([...LAIR_KINDS, "werewolf's den"]);
 
@@ -706,6 +717,10 @@ export function settleLand(land, seed) {
     // out before moves for them)
     sites.push(...hells(land, places, sites, camps, createRandom(seed * 61 + 37)));
 
+    // (And the Tower of Sar Mordal after them, the same way, from numbers of its own: nothing laid
+    // out before moves for it)
+    sites.push(...riftTower(land, places, sites, camps, createRandom(seed * 67 + 41)));
+
     // (And each people's master shops, last, from numbers of their own: nothing moves for them)
     masterShops(places, createRandom(seed * 47 + 23));
 
@@ -1093,6 +1108,41 @@ function hells(land, places, sites, camps, random) {
     }
 
     return found;
+}
+
+// The Tower of Sar Mordal (RIFT_TOWER): as the hells' ways in are found, one, kept where it's dry
+// wild land, on the bare land it'd rather be on (or, failing that, any), far from every people's
+// start, clear of the settlements, the sites and the camps, and far from the great lairs, the dens
+// and the hells. None, if nowhere will do
+function riftTower(land, places, sites, camps, random) {
+    const { biome, water, territory } = land;
+    const { name, biomes, far, nearer, clear, sites: fromSites, camps: fromCamps, apart: away, tries, strict } = RIFT_TOWER;
+    const starts = places.filter(({ start }) => start).map(({ at }) => at);
+    const kept = sites.filter((site) => BEAST_LAIRS.includes(site.kind) || site.theme === "hell");
+
+    for (let reach = far, round = 0; round < 8; reach *= nearer, round++) {
+        for (let k = 0; k < tries; k++) {
+            const cell = [random.int(5, CELLS - 6), random.int(5, CELLS - 6)];
+            const at = cellIndex(...cell);
+            const spot = centre(...cell);
+
+            if (water[at] || biome[at] === BIOME.beach || territory[at] || (k < tries * strict && !biomes.includes(BIOMES[biome[at]].id)) || !dry(land, ...cell, 1)) {
+                continue;
+            }
+
+            if (starts.some(([x, y]) => hypot(x - spot[0], y - spot[1]) < reach) || !clearOf(places, cell, clear)) {
+                continue;
+            }
+
+            if (sites.some((site) => apart(site.cell, cell) < fromSites) || camps.some((camp) => apart(camp.cell, cell) < fromCamps) || kept.some((one) => apart(one.cell, cell) < away)) {
+                continue;
+            }
+
+            return [{ id: "rift-tower-1", kind: "rift tower", race: null, name, cell, at: spot, seed: random.seed() }];
+        }
+    }
+
+    return [];
 }
 
 // The dungeons' ways in (DUNGEON_SITES): darts thrown at the land, each kept where it's dry land,

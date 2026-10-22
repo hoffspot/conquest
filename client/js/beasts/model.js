@@ -35,6 +35,26 @@ const flayed = (asset, made, scale, attacks, specials) => Object.freeze({
     flinch: 0.6,
 });
 
+// One of the rift's own small kind (MODELS): the Kaiju's model drawn `long` metres long, its walk's
+// pace and its run's as much smaller, attacking its `attacks` and `specials` ways; no beam
+const rift = (long, attacks, specials) => Object.freeze({
+    asset: "beast-kaiju",
+    length: long,
+    made: Object.freeze({ long: 36, tall: 13 }),
+    clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit React", dead: "Faint" }),
+    attacks: Object.freeze(attacks),
+    specials: Object.freeze(specials),
+    spans: Object.freeze({ bite: Object.freeze([0, 1.6]), breath: Object.freeze([0, 4.6]) }),
+    rests: Object.freeze({ roar: "Roar" }),
+    fire: Object.freeze({}),
+    joints: Object.freeze({ torso: "Spine002", body: "Hip", head: "Head", mouth: "lipjaw", left: "FFoot_L" }),
+    mouth: null,
+    beam: false,
+    pace: +((3.1 * long) / 36).toFixed(2),
+    runPace: +((16 * long) / 36).toFixed(2),
+    flinch: 1.3,
+});
+
 // One of a hell's gorgers (MODELS), as `flayed`: no run, its maw biting, spewing and roaring
 const gorger = (asset, made, scale, attacks) => Object.freeze({
     asset,
@@ -66,7 +86,8 @@ const gorger = (asset, made, scale, attacks) => Object.freeze({
  * fire (`fire`, by clip: seconds into it) and from where (`mouth`, if it does); its joints for the
  * game's (`joints`: beast.js BONES' names, by the model's bones' names as the glTF loader gives
  * them); and how fast (metres a second, as it's drawn) it goes when its walk plays at its own pace
- * (`pace`), and its run (`runPace`).
+ * (`pace`), and its run (`runPace`). One drawn from a model that breathes a beam (beasts/beam.js
+ * BEAMS, by its catalog entry) breathes it too, unless it's said not to (`beam`: false).
  */
 export const MODELS = Object.freeze({
     // (The Behemoth of the Rift: drawn 36 metres long, as it's made. Its jaws slammed down (the
@@ -90,6 +111,13 @@ export const MODELS = Object.freeze({
         pace: 3.1,
         flinch: 1.3,
     }),
+    // (The rift's own small kind in the Tower of Sar Mordal, drawn from the Kaiju's model: a
+    // riftling 4.2 metres long, a man's height; a rift stalker 7. Running as the Kaiju never does;
+    // a riftling's bite and a stalker's the start of its Roar, its jaws brought down, as the
+    // Behemoth slams them; a stalker's green fire breathed in its Energy Breath, its jaws wide, as a
+    // drake's is (app/game.js BREATHED), not the Behemoth's beam (`beam`: none); roaring as they rest)
+    riftling: rift(4.2, { bite: "Roar" }, {}),
+    riftStalker: rift(7, { bite: "Roar" }, { breath: "Energy Breath" }),
     dreadthorn: Object.freeze({
         asset: "beast-dreadthorn",
         length: 17,
@@ -1092,13 +1120,16 @@ function attackTime(model, style, clip, u, lengths) {
     return from + u * (to - from);
 }
 
+// The beam a kind breathes (beasts/beam.js BEAMS: its catalog entry's), if it breathes one
+const beamOf = (model) => (model.beam === false ? null : (BEAMS[model.asset] ?? null));
+
 /**
  * Where a model's beam (beasts/beam.js BEAMS: its catalog entry's, if it breathes one) is in its
  * clip at this moment of an attack (BeastAvatar's attack: { style, u }): { clip, time } in its
  * breath's clip, or null (none drawn).
  */
 export function beamAt(model, attack, lengths) {
-    const beam = BEAMS[model.asset];
+    const beam = beamOf(model);
     const clip = attack && clipOf(model, attack.style);
 
     if (!beam || clip !== beam.clip) {
@@ -1193,7 +1224,7 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
 
     // (Its beam, if it breathes one (beasts/beam.js BEAMS): its glow made to charge, in copies of
     // its materials that can, those drawn and flushed in their place)
-    const beam = BEAMS[model.asset] ? new EnergyBreath(scene, BEAMS[model.asset], { groundAt }) : null;
+    const beam = beamOf(model) ? new EnergyBreath(scene, beamOf(model), { groundAt }) : null;
 
     if (beam) {
         scene.traverse((node) => {

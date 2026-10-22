@@ -285,7 +285,7 @@ export const FEAR_MEMORY = 60000;
 export const SEE_THROUGH = Object.freeze({ tier: 7, near: 8, perSecond: 0.02 });
 
 // The element of a blow that isn't a spell (for wards: spells.js `ward`), by what it throws
-const THROWN = Object.freeze({ bolt: "magic", wisp: "magic", curse: "magic", fireball: "fire", flame: "fire", lava: "fire", roots: "earth" });
+const THROWN = Object.freeze({ bolt: "magic", wisp: "magic", curse: "magic", fireball: "fire", flame: "fire", riftFire: "fire", lava: "fire", roots: "earth" });
 // How much of a blow or a spell's harm gets through the charms someone carries against its school
 // or element (actor.wards: host.js, core/goods.js CHARMS), every spell's too (`magic`): never less
 // than half of it

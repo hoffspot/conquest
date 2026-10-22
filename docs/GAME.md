@@ -733,8 +733,10 @@ as a wagon!"
 - **Which places** (`rumouredOf`): the places worth finding out in the world: its dungeons (the
   ants' nests, the caves, the outlaws' hideouts, the old tombs; not the hells, whose cults' word is
   their own: docs/DUNGEONS.md *Word of it*); its ruins, ruined castles, caves, the drake's and the
-  Dreadthorns' lairs, the werewolf's den, its shrines and standing stones, its watchtowers out in
-  the wild; and the wild's camps (bandits, wolves, goblins, giant spiders, the restless dead,
+  Dreadthorns' lairs, the werewolf's den, the Tower of Sar Mordal ("There's a green light in the
+  sky at night north of town, over the old tower. Things came through his door and killed his
+  wife. He went in after them, and he never came back."), its shrines and standing stones, its
+  watchtowers out in the wild; and the wild's camps (bandits, wolves, goblins, giant spiders, the restless dead,
   trolls, raiders, cultists). The nearest to the town first, within 2 km of it (`RUMOURS.reach`),
   and only those the player hasn't found and hasn't heard of (`rumoursNear`).
 - **Found** (core/explored.js `sighted`): the one rule for it, the maps' own: the player's been in

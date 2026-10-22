@@ -33,6 +33,7 @@ export const NEUTRAL = Object.freeze({
     "dragon's lair": [10, 9],
     "dreadthorn's lair": [14, 12],
     "werewolf's den": [7, 6],
+    "rift tower": [7, 6],
     watchtower: [3, 3],
     graveyard: [6, 5],
     dungeon: [5, 4],
@@ -830,6 +831,33 @@ const LAYOUTS = {
         return { parts, solid, heart: [cx, Math.max(end + 1.5, (end + y1) / 2)] };
     },
 
+    // The Tower of Sar Mordal (RIFT_TOWER_LAID): the wizard Sinclair's, a tall tower, its top fallen
+    // in, gone into by the dark doorway at its foot on its south side; to its east the rift he
+    // tore in the air, green; the bones of what came too near it about it
+    "rift tower"(random, width, depth) {
+        const { tower, high, rift, bones } = RIFT_TOWER_LAID;
+        const [tx, ty] = [width / 2 + tower.off[0], depth / 2 + tower.off[1]];
+        const [rx, ry] = [width / 2 + rift.off[0], depth / 2 + rift.off[1]];
+        const parts = [
+            { part: "brokenTower", x: tx, y: ty, r: tower.r, h: random.range(...high), seed: random.seed() },
+            { part: "riftTear", x: rx, y: ry, wide: rift.wide, tall: random.range(...rift.tall), lift: rift.lift, seed: random.seed() },
+        ];
+
+        for (let k = random.int(...bones); k > 0; k--) {
+            const a = random.range(0, TAU);
+            const out = random.range(2, 5);
+
+            parts.push({ part: "bones", x: rx + cos(a) * out, y: ry + sin(a) * out, turn: random.range(0, TAU), big: random.chance(0.3) });
+        }
+
+        return {
+            parts,
+            solid: [box(tx, ty, tower.r * 2 + 0.4, tower.r * 2 + 0.4), box(rx, ry, rift.wide, 0.6)],
+            heart: [width / 2, depth - 2],
+            entry: { x: tx, y: ty + tower.r + 0.4, width: 1.1, height: 2.1, inside: "riftTower" },
+        };
+    },
+
     // A watchtower no one keeps: its top fallen in, a heap at its foot
     watchtower(random, width, depth) {
         const [cx, cy] = [width / 2, depth / 2 - 1];
@@ -846,6 +874,14 @@ const LAYOUTS = {
 
 // A rectangle w by d round (x, y): [x0, y0, x1, y1]
 const box = (x, y, w, d) => [x - w / 2, y - d / 2, x + w / 2, y + d / 2];
+
+/**
+ * How the Tower of Sar Mordal's laid out (metres): its tower (`tower`: its radius, and how far its
+ * middle is off the site's, west and north) and how high it still stands (`high`: from and to), the
+ * rift (`rift`: how far off the middle it stands, east and south; how wide it's torn and how tall,
+ * and how high off the ground its foot is), and how many bones lie about it.
+ */
+const RIFT_TOWER_LAID = Object.freeze({ tower: { r: 4.2, off: [-4, -2] }, high: [15, 19], rift: { off: [6.5, 3], wide: 2.2, tall: [4, 4.6], lift: 0.5 }, bones: [2, 4] });
 
 // How tall a headstone was cut (GRAVEYARD.tall): the taller the rarer
 const tallOf = (random) => {
@@ -877,7 +913,7 @@ function tombAt(random, x, y, along, turnOf, kind) {
 // How far each kind of part reaches each way from its middle (metres, across and deep: so it's a
 // piece of its own, stood on the ground where it is), for those laid out at a point (a hell's
 // portal its pillars and its step before it; a hovel or a cage as far as it reaches turned any way)
-const REACH = Object.freeze({ pit: [8.8, 8.8], stores: [2.2, 2.2], cart: [3, 3], stone: [1.6, 1.6], altar: [2.4, 1.4], plinth: [3.2, 3.2], figure: [1.2, 1.2], brazier: [0.6, 0.6], backwall: [6.8, 1.2], torch: [0.4, 0.4], column: [1, 1], bones: [2, 2], brokenTower: [7.2, 7.2], gatepost: [0.8, 0.8], gate: [2.6, 2.6], grave: [3.2, 3.2], tomb: [3, 3], mausoleum: [5.2, 5.6], obelisk: [1.4, 1.4], hellgate: [4.2, 1.8], hovel: [6, 6], cage: [2.4, 2.4] });
+const REACH = Object.freeze({ pit: [8.8, 8.8], stores: [2.2, 2.2], cart: [3, 3], stone: [1.6, 1.6], altar: [2.4, 1.4], plinth: [3.2, 3.2], figure: [1.2, 1.2], brazier: [0.6, 0.6], backwall: [6.8, 1.2], torch: [0.4, 0.4], column: [1, 1], bones: [2, 2], brokenTower: [7.2, 7.2], gatepost: [0.8, 0.8], gate: [2.6, 2.6], grave: [3.2, 3.2], tomb: [3, 3], mausoleum: [5.2, 5.6], obelisk: [1.4, 1.4], hellgate: [4.2, 1.8], hovel: [6, 6], cage: [2.4, 2.4], riftTear: [3, 1.2] });
 
 /**
  * A part's middle and size, laid out ([x, y, w, d] metres, from its site's north-west corner):

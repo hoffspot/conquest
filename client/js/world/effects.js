@@ -73,10 +73,13 @@ const BURSTS = {
     wither: { count: 2, colours: [0xc898ff, 0x4a1a70], size: [0.05, 0.09], speed: [0.2, 0.5], life: [0.8, 1.3], gravity: 0.5, spread: 2, glow: false, opacity: 0.9, late: true, swirl: 3 },
     shadows: { count: 2, colours: [0x2a1438, 0x0c0612], size: [0.24, 0.4], speed: [0.1, 0.3], life: [0.9, 1.4], gravity: 0.2, spread: 1.4, glow: false, opacity: 0.45, grow: 1.4 },
     flames: { count: 3, colours: [0xfff0a0, 0xff3a0a], size: [0.14, 0.3], speed: [0.3, 0.9], life: [0.35, 0.6], gravity: -2.6, spread: 1.4, glow: true, late: true, grow: 0.2 },
+    riftFlames: { count: 3, colours: [0xe0ffe8, 0x10c050], size: [0.14, 0.3], speed: [0.3, 0.9], life: [0.35, 0.6], gravity: -2.6, spread: 1.4, glow: true, late: true, grow: 0.2 },
     frost: { count: 2, colours: [0xffffff, 0x7ac8f0], size: [0.04, 0.07], speed: [0.1, 0.4], life: [0.5, 0.9], gravity: 0.4, spread: 2, glow: false, opacity: 0.95, late: true },
     webbed: { count: 1, colours: [0xffffff, 0xe0e0d4], size: [0.025, 0.045], speed: [0.05, 0.2], life: [0.6, 1], gravity: 0.3, spread: 1, glow: false, opacity: 0.9 },
-    // Fire breathed: a stream of it, and smoke rolling off (effects.breathe)
+    // Fire breathed: a stream of it, and smoke rolling off (effects.breathe); the rift's green fire
+    // breathed (a rift stalker's), its smoke the same
     breath: { count: 5, colours: [0xfff2a8, 0xff2a00], size: [0.1, 0.24], speed: [7, 10], life: [0.3, 0.45], gravity: -1.5, spread: 0.32, glow: true, grow: 2.2, drag: 0.9 },
+    riftBreath: { count: 5, colours: [0xe0ffe8, 0x10c050], size: [0.1, 0.24], speed: [7, 10], life: [0.3, 0.45], gravity: -1.5, spread: 0.32, glow: true, grow: 2.2, drag: 0.9 },
     breathSmoke: { count: 1, colours: [0x3a2e26, 0x1a1410], size: [0.16, 0.28], speed: [4, 6], life: [0.5, 0.8], gravity: -1.2, spread: 0.5, glow: false, opacity: 0.35, grow: 2.4, drag: 1.2 },
 };
 
@@ -143,14 +146,15 @@ export const LOOKS = Object.freeze({
         { name: "twin", core: 0xc8b4ff, size: 0.04, flicker: 0.1, pitch: 1.1, twin: { radius: 0.06, speed: 22 }, trail: { count: 2, colours: [0xeee6ff, 0x8a6cff], size: [0.05, 0.1], speed: [0, 0.2], life: [0.15, 0.3], gravity: 0, spread: 1.5, glow: true }, burst: { colours: [0xe6dcff, 0x7a5cff], size: 1 } },
         { name: "streak", core: 0xd4c8ff, size: 0.05, flicker: 0.05, pitch: 1.25, stretch: 3.2, trail: { count: 1, colours: [0xffffff, 0x9a7cff], size: [0.06, 0.1], speed: [0, 0.1], life: [0.08, 0.16], gravity: 0, spread: 0.5, glow: true }, burst: { colours: [0xffffff, 0x8a6cff], size: 0.9 } },
     ],
-    // (The wild's creatures' own: venom spat, a wisp's light, roots, a web, lava, fire breathed, a
-    // curse, a ghost's wail, a wraith's draining)
+    // (The wild's creatures' own: venom spat, a wisp's light, roots, a web, lava, fire breathed (and
+    // the rift's green fire, a rift stalker's), a curse, a ghost's wail, a wraith's draining)
     venom: [{ name: "venom", core: 0x9ad83a, size: 0.07, flicker: 0.15, pitch: 1.3, trail: { count: 2, colours: [0xd8ff8a, 0x4a8a10], size: [0.06, 0.12], speed: [0, 0.3], life: [0.2, 0.4], gravity: 2.5, spread: 1, glow: false }, burst: { colours: [0xc8f06a, 0x3a7a10], size: 0.9 } }],
     wisp: [{ name: "wisp", core: 0xbfeaff, size: 0.07, flicker: 0.3, pitch: 1.35, trail: { count: 3, colours: [0xffffff, 0x60c0ff], size: [0.06, 0.12], speed: [0, 0.3], life: [0.2, 0.4], gravity: 0, spread: 2, glow: true }, burst: { colours: [0xffffff, 0x60c0ff], size: 1 } }],
     roots: [{ name: "roots", core: 0x6a5030, size: 0.09, flicker: 0.1, pitch: 0.7, trail: { count: 2, colours: [0x8a7a4a, 0x3a4a1a], size: [0.08, 0.16], speed: [0.1, 0.4], life: [0.3, 0.5], gravity: 2, spread: 1.5, glow: false }, burst: { colours: [0x8a7a4a, 0x3a5a1a], size: 1.1 } }],
     web: [{ name: "web", core: 0xeeeee4, size: 0.08, flicker: 0.05, pitch: 1.4, trail: { count: 1, colours: [0xffffff, 0xcfcfc0], size: [0.05, 0.1], speed: [0, 0.1], life: [0.3, 0.5], gravity: 0.5, spread: 0.4, glow: false }, burst: { colours: [0xffffff, 0xd8d8cc], size: 0.9 } }],
     lava: [{ name: "lava", core: 0xff5a10, size: 0.12, flicker: 0.12, pitch: 0.8, smoke: true, trail: { count: 3, colours: [0xffb040, 0x901000], size: [0.12, 0.22], speed: [0.1, 0.5], life: [0.25, 0.45], gravity: 1.5, spread: 1.4, glow: true, grow: 0.4 }, burst: { colours: [0xffa040, 0x901000], size: 1.2 } }],
     flame: [{ name: "flame", core: 0xff6a10, size: 0.22, flicker: 0.2, pitch: 0.7, trail: { count: 6, colours: [0xffd070, 0xd01000], size: [0.25, 0.5], speed: [0.2, 1], life: [0.25, 0.45], gravity: -2.4, spread: 2.4, glow: true, grow: 0.8 }, burst: { colours: [0xffc060, 0xd01800], size: 1.6 } }],
+    riftFire: [{ name: "rift fire", core: 0x40ff80, size: 0.22, flicker: 0.2, pitch: 0.8, trail: { count: 6, colours: [0xd8ffe0, 0x0a8a30], size: [0.25, 0.5], speed: [0.2, 1], life: [0.25, 0.45], gravity: -2.4, spread: 2.4, glow: true, grow: 0.8 }, burst: { colours: [0xc0ffd0, 0x0a9a3a], size: 1.6 } }],
     wail: [{ name: "wail", core: 0xd8f0ff, size: 0.1, flicker: 0.35, pitch: 0.6, jitter: 0.05, trail: { count: 3, colours: [0xffffff, 0x6aa8d8], size: [0.12, 0.24], speed: [0, 0.3], life: [0.3, 0.55], gravity: -0.3, spread: 2.4, glow: true, grow: 0.8, swirl: 5 }, burst: { colours: [0xf0faff, 0x5a90c8], size: 1.2 } }],
     drain: [{ name: "drain", core: 0x3aff9a, size: 0.07, flicker: 0.3, pitch: 0.65, trail: { count: 3, colours: [0xb0ffd8, 0x0a3a24], size: [0.07, 0.15], speed: [0, 0.3], life: [0.25, 0.45], gravity: 0, spread: 1.8, glow: true, swirl: 9 }, burst: { colours: [0xa0ffd0, 0x0a4a2a], size: 1.1 } }],
     curse: [{ name: "curse", core: 0x7a3aaa, size: 0.08, flicker: 0.25, pitch: 0.75, trail: { count: 3, colours: [0xc8a0ff, 0x2a0a3a], size: [0.08, 0.16], speed: [0, 0.3], life: [0.25, 0.45], gravity: 0, spread: 2, glow: true, swirl: 6 }, burst: { colours: [0xd0a8ff, 0x3a0a4a], size: 1.1 } }],
@@ -999,10 +1003,11 @@ export class Effects {
     /**
      * Fire breathed for `seconds`: a roaring stream from one point to another (each a function
      * giving it as it is then: the jaws, as the head moves; whoever it's at), flames spreading
-     * and slowing as they go, smoke rolling off.
+     * and slowing as they go, smoke rolling off; its flames a drake's (`kind`: BURSTS "breath") or
+     * the rift's green ("riftBreath").
      */
-    breathe(from, to, seconds) {
-        this.streams.push({ from, to, left: seconds, age: 0 });
+    breathe(from, to, seconds, kind = "breath") {
+        this.streams.push({ from, to, left: seconds, age: 0, kind });
     }
 
     /**
@@ -1183,7 +1188,7 @@ export class Effects {
             const speed = reach / 0.36;
 
             for (let k = 0; k < 2; k++) {
-                this.glow.emit({ ...BURSTS.breath, count: Math.round(BURSTS.breath.count * strength), speed: [speed * 0.85, speed * 1.15] }, from, way);
+                this.glow.emit({ ...BURSTS[stream.kind], count: Math.round(BURSTS[stream.kind].count * strength), speed: [speed * 0.85, speed * 1.15] }, from, way);
             }
 
             if (Math.random() < dt * 14) {

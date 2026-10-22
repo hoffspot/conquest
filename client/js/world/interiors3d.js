@@ -669,6 +669,9 @@ const FLAMES = Object.freeze({
     rift: { intensity: 4.2, distance: 10, flicker: 0.1, colour: 0xff5020, glow: 0.7 },
     // (The lord of the Pit's throne: his own colour, violet, all but steady)
     lord: { intensity: 2.6, distance: 9, flicker: 0.03, colour: 0x9a48ff, glow: 0.55 },
+    // (The rift's green light in the Tower of Sar Mordal, seeping up through the crack across its
+    // hall's floor, and over its broken top)
+    riftGlow: { intensity: 3.2, distance: 11, flicker: 0.05, colour: 0x40ff90, glow: 0.6 },
 });
 
 /**
@@ -3339,25 +3342,7 @@ function ruin(map) {
     }
 
     // Heaps of what fell, a charred joist across each
-    for (const heap of at("rubble")) {
-        for (const [x, y] of heap.squares) {
-            const [cx, cz] = [m(x + 0.5), m(y + 0.5)];
-
-            solid.cone(cx, cz, 0, m(0.55 + 0.25 * roughOf(x, y)), m(0.75), material("rubble-old"), 7);
-
-            for (let k = 0; k < 4; k++) {
-                const size = m(0.18 + 0.16 * roughOf(x + k, y));
-                const [bx, bz] = [cx + m(roughOf(k, x) - 0.5) * 1.1, cz + m(roughOf(y, k) - 0.5) * 1.1];
-
-                solid.turnedBox(bx, bz, size, size * 0.8, 0, size * 1.3 + m(0.1 * k), roughOf(k, y) * 3, material(stone));
-            }
-        }
-
-        const [x, y] = heap.squares[0];
-        const turn = roughOf(x * 5, y) * Math.PI;
-
-        solid.turnedBox(m(x + 0.5 + Math.cos(turn) * 1.4), m(y + 0.5 + Math.sin(turn) * 1.4), m(2.2), m(0.13), 0, m(0.7), turn, material("timber-char"));
-    }
+    rubbleHeaps(solid, at("rubble"), stone);
 
     // (Old bones, the scanned ones: dungeondressing.js)
     const props = at("bones").flatMap((heap) => bonesAt(heap.x + 0.5, heap.y + 0.5, { rough: roughOf(heap.x, heap.y) }));
@@ -3396,6 +3381,29 @@ function ruin(map) {
     lighting.daylight = [0.45, 1, 0.35];
 
     return { solid, moving: [], flames, lights, hearth: null, open: true, props };
+}
+
+// Heaps of what fell (a plan's rubble), each of `stone` blocks, a charred joist across each
+function rubbleHeaps(solid, heaps, stone) {
+    for (const heap of heaps) {
+        for (const [x, y] of heap.squares) {
+            const [cx, cz] = [m(x + 0.5), m(y + 0.5)];
+
+            solid.cone(cx, cz, 0, m(0.55 + 0.25 * roughOf(x, y)), m(0.75), material("rubble-old"), 7);
+
+            for (let k = 0; k < 4; k++) {
+                const size = m(0.18 + 0.16 * roughOf(x + k, y));
+                const [bx, bz] = [cx + m(roughOf(k, x) - 0.5) * 1.1, cz + m(roughOf(y, k) - 0.5) * 1.1];
+
+                solid.turnedBox(bx, bz, size, size * 0.8, 0, size * 1.3 + m(0.1 * k), roughOf(k, y) * 3, material(stone));
+            }
+        }
+
+        const [x, y] = heap.squares[0];
+        const turn = roughOf(x * 5, y) * Math.PI;
+
+        solid.turnedBox(m(x + 0.5 + Math.cos(turn) * 1.4), m(y + 0.5 + Math.sin(turn) * 1.4), m(2.2), m(0.13), 0, m(0.7), turn, material("timber-char"));
+    }
 }
 
 // A broken watchtower below: flagstones, its walls of old stone, the stairs up along the north
@@ -3548,6 +3556,134 @@ function towerTop(map) {
     lighting.daylight = [0.45, 1, 0.35];
 
     return { solid, moving: [], flames: fires.map(({ fire }) => fire), lights: fires.map(({ light }) => light), hearth: null, open: true };
+}
+
+// What's left on Sinclair's tables in the Tower of Sar Mordal (metres, from a table's middle: along
+// it, across it; the model, how big, how it lies): his books open and shut, his scrolls and quill,
+// a candlestick long gone out, a skull he studied
+const SINCLAIRS_TABLE = Object.freeze([
+    [-0.5, -0.15, "book-open", 0.9, { pitch: -Math.PI / 2 }],
+    [0.45, 0.2, "books", 1, {}],
+    [0.1, 0.3, "scroll", 1, {}],
+    [0.55, -0.25, "quill", 1, {}],
+    [-0.05, -0.3, "candlestick", 0.3, {}],
+    [-0.75, 0.3, "skull", 0.22, {}],
+]);
+
+// The crack across the Tower of Sar Mordal's hall's floor, the rift's light seeping up through it:
+// its points (squares, from the west wall to the east), each a little off a straight line
+const CRACK = Object.freeze({ from: [1.2, 9.6], to: [10.6, 6.4], points: 9, off: 0.45, wide: [0.03, 0.08] });
+
+// Sinclair's books, things and the bones on a floor of his tower: on his tables (SINCLAIRS_TABLE),
+// on his lectern his journal open, and the bones and remains lying about (placements, metres)
+function sinclairsThings(map) {
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+    const placed = [];
+
+    for (const piece of at("table")) {
+        const [cx, cz] = [piece.x + piece.w / 2, piece.y + piece.h / 2];
+        const along = piece.w >= piece.h;
+
+        for (const [u, v, model, size, lying] of SINCLAIRS_TABLE) {
+            const [x, z] = along ? [cx + u * (piece.w / 3), cz + v * (piece.h / 2)] : [cx + v * (piece.w / 2), cz + u * (piece.h / 3)];
+
+            placed.push({ model, x, z, y: 0.78, size, turn: roughOf(x, z) * 0.8 - 0.4 + (along ? 0 : Math.PI / 2), ...lying, shadow: false });
+        }
+    }
+
+    for (const piece of at("side-table")) {
+        placed.push({ model: "book-open", x: piece.x + 0.5, z: piece.y + 0.5, y: SHOP_TOPS.lectern, pitch: -Math.PI / 2 });
+    }
+
+    for (const heap of at("bones")) {
+        placed.push(...bonesAt(heap.x + 0.5, heap.y + 0.5, { rough: roughOf(heap.x, heap.y) }));
+    }
+
+    for (const body of at("remains")) {
+        placed.push(...remainsAt(body.x + 0.5, body.y + 0.5, { rough: roughOf(body.x, body.y) }));
+    }
+
+    return placed;
+}
+
+// The Tower of Sar Mordal below (core/insides.js RIFT_HALL), the wizard Sinclair's hall gone to
+// ruin: its flagstones, its walls of old stone, the stairs up along the north wall, his shelves of
+// books along the walls, his long table, its books left open on it, heaps of what's fallen, old
+// bones and someone who died there; a crack across the floor, the rift's green light seeping up
+// through it, the only light there is but the day through the door
+function riftHall(map) {
+    const solid = new Solid();
+    const [w, h] = [m(map.width), m(map.height)];
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+    const stair = at("stairs")[0];
+    const doors = map.marks.D;
+    const doorMiddle = (doors[0][0] + doors.at(-1)[0] + 1) / 2;
+
+    solid.box(-m(0.3), -0.5, -m(0.3), w + m(0.3), 0, h + m(0.3), material("stone"));
+    walledIn(solid, map, "stone-old", [{ side: "s", from: doorMiddle - 0.8, to: doorMiddle + 0.8, lintel: 2.3 }], []);
+    stairs(solid, m(stair.x), m(stair.x + stair.w), m(stair.y), m(stair.y + stair.h), 0, m(STOREY), m(stair.y + stair.h));
+    ceiling(solid, map, [m(stair.x), m(stair.y), m(stair.x + stair.w), m(stair.y + stair.h)]);
+
+    for (const shelf of at("shelves")) {
+        wallShelves(solid, shelf, map, "books");
+    }
+
+    for (const piece of at("table")) {
+        table(solid, m(piece.x + 0.05), m(piece.y + 0.1), m(piece.x + piece.w - 0.05), m(piece.y + piece.h - 0.1));
+    }
+
+    rubbleHeaps(solid, at("rubble"), "stone-old");
+
+    // (The crack: a jagged run of glowing slivers sunk a little in the floor, its light at its
+    // middle and its glow along it)
+    const { from, to, points, off, wide } = CRACK;
+    const crack = Array.from({ length: points + 1 }, (_, k) => {
+        const t = k / points;
+        const bend = k === 0 || k === points ? 0 : (roughOf(k, 41) - 0.5) * 2 * off;
+
+        return [from[0] + (to[0] - from[0]) * t + bend * 0.4, from[1] + (to[1] - from[1]) * t + bend];
+    });
+
+    crack.slice(1).forEach(([x1, z1], k) => {
+        const [x0, z0] = crack[k];
+        const width = wide[0] + (wide[1] - wide[0]) * roughOf(k, 17);
+
+        solid.turnedBox(m((x0 + x1) / 2), m((z0 + z1) / 2), m(Math.hypot(x1 - x0, z1 - z0) / 2 + 0.04), m(width / 2), -m(0.05), m(0.01), Math.atan2(z1 - z0, x1 - x0), material("glow-green"));
+    });
+
+    const [mx, mz] = crack[Math.floor(points / 2)];
+
+    lit("riftGlow", m(mx), m(0.4), m(mz), { glows: crack.filter((_, k) => k % 2).map(([x, z]) => [m(x), m(0.1), m(z)]) });
+
+    return { solid, moving: [], flames: [], lights: [], hearth: null, props: sinclairsThings(map) };
+}
+
+// Sinclair's study at the top of the Tower of Sar Mordal (core/insides.js RIFT_STUDY): its top
+// fallen in, as a broken watchtower's (towerTop: its boards, the stairs up through them, its
+// broken parapet, rubble, open to the sky), his shelves of books along what's left of its walls,
+// his table, his lectern with his journal open on it; the rift's green light coming up over its
+// broken edge at night
+function riftStudy(map) {
+    const built = towerTop(map);
+    const { solid } = built;
+    const at = (kind) => map.pieces.filter((piece) => piece.kind === kind);
+
+    for (const shelf of at("shelves")) {
+        wallShelves(solid, shelf, map, "books");
+    }
+
+    for (const piece of at("table")) {
+        table(solid, m(piece.x + 0.05), m(piece.y + 0.1), m(piece.x + piece.w - 0.05), m(piece.y + piece.h - 0.1));
+    }
+
+    for (const piece of at("side-table")) {
+        lectern(solid, piece);
+    }
+
+    rubbleHeaps(solid, at("rubble"), "stone-old");
+    lit("riftGlow", m(map.width - 1), m(1.2), m(map.height / 2), { glows: [] });
+
+    return { ...built, props: sinclairsThings(map) };
 }
 
 // --- A dungeon's levels (core/dungeons: docs/DUNGEONS.md) ---
@@ -5749,7 +5885,7 @@ export function shopWares(map, kind) {
 }
 
 // (A dungeon theme added without art of its own drawn as `dungeon` draws any: buildingInterior)
-const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, barracks, undercroft, shop, cave, lair, crypt, ruin, tower, "tower-top": towerTop, "dungeon-caves": dungeon, "dungeon-hideout": dungeon, "dungeon-ancient": dungeon };
+const BUILDERS = { taproom, upstairs, smithy, temple, guild, hall, keep, barracks, undercroft, shop, cave, lair, crypt, ruin, tower, "tower-top": towerTop, "rift-hall": riftHall, "rift-study": riftStudy, "dungeon-caves": dungeon, "dungeon-hideout": dungeon, "dungeon-ancient": dungeon };
 
 // --- Each people's own ---
 

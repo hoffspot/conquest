@@ -628,7 +628,11 @@ function ailmentOf(kind, look = null) {
 
 // How the wild's creatures' spit and the like fly (app/game.js #fly): lobbed in an arc (`arc`:
 // how high, m), or along the ground (roots burrowing: `ground`)
-const FLIGHT = Object.freeze({ arrow: { arc: 0.25 }, axe: { arc: 0.45 }, venom: { arc: 0.55 }, lava: { arc: 0.75 }, web: { arc: 0.4 }, roots: { ground: true }, flame: { arc: 0 } });
+const FLIGHT = Object.freeze({ arrow: { arc: 0.25 }, axe: { arc: 0.45 }, venom: { arc: 0.55 }, lava: { arc: 0.75 }, web: { arc: 0.4 }, roots: { ground: true }, flame: { arc: 0 }, riftFire: { arc: 0 } });
+
+// Fire breathed, a roaring stream from the jaws as it flies (effects.breathe): a drake's, and the
+// rift's green fire, a rift stalker's (effects BURSTS)
+const BREATHED = Object.freeze({ flame: "breath", riftFire: "riftBreath" });
 
 /**
  * A blast heard and felt (#blast): heard as far as `far` metres (further than a blow); from
@@ -676,7 +680,7 @@ const COLOSSAL_BLASTS = Object.freeze({
 });
 
 // What bursts where each of the creatures' own lands (besides the burst in its look)
-const SPLASHES = Object.freeze({ venom: ["venomSplash"], lava: ["lavaSplash", "embers", "smoke"], web: ["webSplat"], roots: ["earth"], curse: ["shadows", "wither"], drain: ["shadows", "wither"], flame: ["flames", "smoke"] });
+const SPLASHES = Object.freeze({ venom: ["venomSplash"], lava: ["lavaSplash", "embers", "smoke"], web: ["webSplat"], roots: ["earth"], curse: ["shadows", "wither"], drain: ["shadows", "wither"], flame: ["flames", "smoke"], riftFire: ["riftFlames", "smoke"] });
 
 // What a creature that doesn't bleed red spills where it's struck (effects.js BURSTS): by its
 // blood (creatures.js), or, with none, by what it is
@@ -9235,8 +9239,8 @@ export class Game {
 
                     // (Fire breathed: a roaring stream from its jaws to whoever it's at, a moment;
                     // a creature drawn from a model breathes its own, beasts/model.js)
-                    if (event.kind === "flame" && target && !avatar.plan?.breath) {
-                        effects.breathe(() => avatar.hand("Right"), () => target.point(0.6), 0.7);
+                    if (BREATHED[event.kind] && target && !avatar.plan?.breath) {
+                        effects.breathe(() => avatar.hand("Right"), () => target.point(0.6), 0.7, BREATHED[event.kind]);
                     }
 
                     break;

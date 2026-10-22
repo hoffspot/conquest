@@ -9306,6 +9306,109 @@ test("a cave held by outlaws is gone into by its mouth: within, the rock all rou
     expect(within.lit).toBeGreaterThan(1);
 });
 
+test("the Tower of Sar Mordal: the rift swirling green beside it, its riftlings round it; in by its door to Sinclair's hall, lit green up through the crack across its floor, two riftlings keeping it; up to his study, open to the sky, his journal on his lectern, the rift stalker by his hoard breathing the rift's green fire", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    const tower = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { world, host } = game;
+        const player = game.battle.actor("player");
+        const site = world.plan.sites.find((one) => one.kind === "rift tower");
+        const settle = async (steps) => {
+            for (let k = 0; k < steps; k++) {
+                game.advance(0.25, { render: false });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+        const until = async (done, steps = 80) => {
+            for (let k = 0; k < steps && !done(); k++) {
+                player.hp = player.maxHp;
+                game.advance(0.1);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+        Object.assign(host.war, { turn: 70, clock: 30000 });
+
+        // (At noon, 70 m from it: the tower and the rift beside it drawn, the rift swirling)
+        Object.assign(player, { x: site.at[0] + 0.5, y: site.at[1] + 70.5, path: [], order: null, progress: null });
+        await settle(10);
+
+        let rift = false;
+
+        session.view.scene.traverse((node) => {
+            rift ||= node.material?.name === "veil-rift-open" && node.visible;
+        });
+
+        // (Its master and a riftling in the study, two riftlings in the hall, the rest round the rift)
+        const building = world.interiors.buildings.get(`site:${site.id}`);
+        const held = host.lairs.get(site.id).ids.map((id) => game.battle.actor(id));
+        const where = held.map(({ wild, map }) => `${wild.creature} ${map === "town" ? "outside" : map.split("/")[1]}`).sort();
+
+        // In by its door, those outside slain
+        for (const one of held.filter(({ map }) => map === "town")) {
+            Object.assign(one, { dead: true, respawnAt: Infinity });
+        }
+
+        for (const one of held.filter(({ map }) => map !== "town")) {
+            Object.assign(one.wild, { temper: "calm", guard: 0 });
+        }
+
+        const [ox, oy] = building.entrance.outside;
+
+        Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
+        game.host.command("player", { type: "enter", link: building.door.id });
+        await until(() => player.map !== "town");
+        await until(() => game.interiors.get(player.map)?.object.visible, 120);
+
+        const room = (id) => game.interiors.get(id);
+        const hall = { map: player.map.split("/")[1], lit: room(player.map).lights.filter(({ kind }) => kind === "riftGlow").length, open: room(player.map).open, things: [...new Set(room(player.map).props.map(({ model }) => model))].filter((model) => ["book-open", "books", "scroll", "skull"].includes(model)).sort() };
+
+        // Up its stairs to his study
+        const [sx, sy] = building.stairs.ends[0].squares[0];
+
+        Object.assign(player, { square: [sx, sy], x: sx + 0.5, y: sy + 0.5, path: [], order: null, progress: null });
+        game.host.command("player", { type: "enter", link: building.stairs.id });
+        await until(() => player.map.endsWith("/study"));
+        await until(() => game.interiors.get(player.map)?.object.visible, 120);
+
+        const lectern = world.maps[player.map].pieces.find(({ kind }) => kind === "side-table");
+        const study = { map: player.map.split("/")[1], open: room(player.map).open, lit: room(player.map).lights.filter(({ kind }) => kind === "riftGlow").length, journal: room(player.map).props.some(({ model, x, z }) => model === "book-open" && x === lectern.x + 0.5 && z === lectern.y + 0.5), chest: Boolean(game.drops.drawn.get(`chest-${site.id}`)) };
+
+        // The rift stalker set on the player, 5 m off: the rift's green fire breathed from its jaws
+        const stalker = held.find(({ wild }) => wild.creature === "riftStalker");
+
+        Object.assign(stalker.wild, { temper: "aggressive", guard: 12 });
+        host.battle.place(stalker.id, player.map, [player.square[0] + 4, player.square[1] + 3]);
+
+        let breathed = null;
+
+        for (let k = 0; k < 400 && !breathed; k++) {
+            player.hp = player.maxHp;
+            game.advance(1 / 30);
+            breathed = game.effects.streams.find(({ kind }) => kind === "riftBreath") ? [...game.effects.flying.values()].map(({ kind }) => kind) : null;
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        return { name: building.name, rift, where, hall, study, breathed };
+    });
+
+    expect(tower).toEqual({
+        name: "The Tower of Sar Mordal",
+        rift: true,
+        where: ["riftStalker study", "riftling hall", "riftling hall", "riftling outside", "riftling outside", "riftling outside", "riftling study"],
+        hall: { map: "hall", lit: 1, open: false, things: ["book-open", "books", "scroll", "skull"] },
+        study: { map: "study", open: true, lit: 1, journal: true, chest: true },
+        breathed: ["riftFire"],
+    });
+});
+
 test("a dungeon's way in out in the wilds is gone into: its first level drawn and lit by its torches, its pictures kept compressed, nothing drawn past its fog, its foes woken, down its stairs to the next, and out again the same way", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");

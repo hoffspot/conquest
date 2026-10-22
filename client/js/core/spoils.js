@@ -150,6 +150,8 @@ export const PARTS = Object.freeze({
     riftScale: { label: "Behemoth's scale", worth: 160, icon: "scale", tint: "#1c241c" },
     riftSpine: { label: "Glowing dorsal spine", worth: 320, icon: "shard", tint: "#40ff90" },
     riftHeart: { label: "Heart of the Behemoth", worth: 1200, icon: "heart", tint: "#3ad0ff" },
+    riftlingScale: { label: "Riftling's scale", worth: 26, icon: "scale", tint: "#24301e" },
+    riftGland: { label: "Rift-fire gland", worth: 75, icon: "gland", tint: "#5aff90" },
 });
 
 /**
@@ -242,6 +244,8 @@ export const SPOILS = Object.freeze({
     fiend: { gold: [10, 30], items: [{ id: "fireGland", chance: 0.3 }, { id: "soulShard", chance: 0.2 }, { id: "obsidian", chance: 0.25 }] },
     // (The Behemoth of the Rift: scales off its hide, a spine that still glows, and its heart)
     kaiju: { items: [{ id: "riftScale", chance: 0.95, count: [4, 7] }, { id: "riftSpine", chance: 0.8, count: [1, 2] }, { id: "riftHeart", chance: 0.6 }] },
+    riftling: { items: [{ id: "riftlingScale", chance: 0.7, count: [1, 2] }, { id: "riftGland", chance: 0.2 }] },
+    riftStalker: { items: [{ id: "riftlingScale", chance: 0.9, count: [2, 4] }, { id: "riftGland", chance: 0.8 }, { id: "riftSpine", chance: 0.25 }] },
     demonLord: { gold: [60, 140], items: [{ id: "obsidian", chance: 0.8, count: [2, 3] }, { id: "soulShard", chance: 0.6 }, { id: "fireGland", chance: 0.5 }] },
     // (A hell's flayed: the Breach's with what the cult gave them and what burnt them, the Halls of
     // Bone's with their bones and their crowns' gold)

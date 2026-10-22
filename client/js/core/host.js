@@ -31,7 +31,7 @@ import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
 import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
-import { waysOut } from "./settlements.js";
+import { waysOut, wayToward } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
 import { compass } from "./ways.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
@@ -4163,7 +4163,10 @@ export class Host {
 
         const behemoth = band === BEHEMOTH.id;
         const ways = waysOut(this.world.plan, place);
-        const angle = ways.length ? random.pick(ways) : random.next() * 2 * Math.PI;
+        const picked = ways.length ? random.pick(ways) : random.next() * 2 * Math.PI;
+        // (The Behemoth out of the rift by the Tower of Sar Mordal: down the way out towards it)
+        const tower = behemoth ? this.world.plan.sites.find(({ kind }) => kind === "rift tower") : null;
+        const angle = (tower && wayToward(this.world.plan, place, tower.at)) ?? picked;
         const out = [cos(angle), sin(angle)];
         const along = (metres) => [town.middle[0] + out[0] * metres, town.middle[1] + out[1] * metres];
         const inward = atan2(-out[0], -out[1]);

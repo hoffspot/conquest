@@ -980,6 +980,56 @@ const BUILD = {
         fireLight(solid, [cx, spring - m(0.3), front + m(0.4)], "hellgate");
     },
 
+    // The rift the wizard Sinclair tore in the air by the Tower of Sar Mordal (setpieces/neutral.js
+    // "rift tower"): a tear in the air standing over the ground, its foot `lift` metres up, as tall
+    // and as wide as it's torn (`tall`, `wide`), its edges ragged and bent a little as torn cloth
+    // is, the swirl of the Behemoth's green in it, day and night (veil.js openVeil "rift"), a ragged
+    // rim glowing round it; its face to the south and the north, and lighting the land round it
+    // green at night (lights.js LIGHTS `riftTear`). Its veil's texture coordinates the guild's veil's
+    // (its eye 1.35 m up a tear 2.2 m tall and 1.05 wide), the tear drawn as much bigger
+    riftTear(solid, piece, random, part) {
+        const [cx, cz] = middleOf(piece);
+        const [tall, wide, eye, points] = [2.2, 1.05, 1.35, 12];
+        const scale = part.tall / tall;
+        const foot = eye - tall / 2;
+        const edge = [];
+
+        // (Up its right side and down its left, ragged, bent a little: the veil's own metres)
+        for (const side of [1, -1]) {
+            for (let k = side > 0 ? 0 : points - 1; side > 0 ? k <= points : k >= 1; k += side > 0 ? 1 : -1) {
+                const t = k / points;
+                const half = (wide / 2) * Math.sin(Math.PI * t) ** 0.7 * (k % 2 ? 1 : random.range(0.55, 0.9)) * (part.wide / (wide * scale));
+                const bend = 0.14 * Math.sin(Math.PI * 2 * t + 0.6);
+
+                edge.push([bend + side * half, foot + t * tall]);
+            }
+        }
+
+        // (Where a point of the veil's is, in the world's pixels: across the tear, up from its foot)
+        const at = ([x, y]) => [cx + m(x * scale), m(part.lift + (y - foot) * scale), cz];
+        const veil = openVeil("rift");
+        const rim = material("glow-green");
+        const middle = [0, eye];
+
+        edge.forEach((point, k) => {
+            const next = edge[(k + 1) % edge.length];
+
+            solid.face([middle, point, next].map(at), veil, [middle, point, next].map(([x, y]) => [m(x), m(y)]), null);
+
+            // (Its rim, out from its edge as far as it's ragged)
+            const [tx, ty] = [next[0] - point[0], next[1] - point[1]];
+            const length = Math.hypot(tx, ty) || 1;
+            const out = random.range(0.05, 0.16);
+            const [ox, oy] = [(ty / length) * out, (-tx / length) * out];
+
+            for (const side of [1, -1]) {
+                solid.facing([point, next, [next[0] + ox, next[1] + oy], [point[0] + ox, point[1] + oy]].map(at).map(([x, y, z]) => [x, y, z + side * m(0.01)]), [0, 0, side], rim, undefined, null);
+            }
+        });
+
+        fireLight(solid, [cx, m(part.lift + (eye - foot) * scale), cz + m(0.6)], "riftTear");
+    },
+
     // A sharpened stake driven into the ground round a hell's camp, leaning a little, a skull
     // spitted on its point mostly, looking out the way the camp's come at
     stake(solid, piece, random, part) {

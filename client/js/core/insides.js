@@ -1035,6 +1035,42 @@ const TOWER_TOP = [
     ".........",
 ];
 
+// The Tower of Sar Mordal's two floors (the wizard Sinclair's, abandoned: core/creatures.js LAIRS
+// "rift tower"), 12 by 12. Below, his hall gone to ruin: the stairs up along the north wall, as a
+// watchtower's; his shelves of books along the walls, the long table, heaps of what's fallen, old
+// bones and someone who died there; the rift's green light seeping up through a crack across the
+// floor; two of the riftlings keeping it. Above, his study, its top fallen in and open to the sky:
+// his shelves, his table, his lectern (his journal on it), the rift stalker by his hoard, a
+// riftling with it, rubble and bones about
+const RIFT_HALL = [
+    "<SSSSS..eeee",
+    "<SSSSS......",
+    "...........e",
+    "e.......m..e",
+    "e..g.......e",
+    "e...TTT.....",
+    "....TTT.....",
+    "..j......g..",
+    "m.......i...",
+    "............",
+    "..........m.",
+    ".....DD.....",
+];
+const RIFT_STUDY = [
+    ".SSSSS>.eeee",
+    ".SSSSS>.....",
+    "...........e",
+    "e..........e",
+    "e...o....l..",
+    "e...........",
+    "....TT......",
+    "....TT...#..",
+    "..g.........",
+    ".h......j...",
+    "..........#.",
+    "m...........",
+];
+
 // A people's watchtower, kept (9 by 9, as a broken one): below, the guardroom, the stairs up along
 // the north wall, the racks of their arms by them, a table and its benches, barrels by the west
 // wall; above, its parapet whole, a brazier burning. Where outlaws holding it stand marked, as a
@@ -1134,6 +1170,14 @@ export function towerRooms(building) {
     return [
         { suffix: "ground", style: "tower", name: building.name, rows: TOWER, ground: GROUND.courtyard, sound: "tower" },
         { suffix: "top", style: "tower-top", name: `The top of ${building.name}`, rows: TOWER_TOP, ground: GROUND.courtyard, sound: "tower" },
+    ];
+}
+
+/** The Tower of Sar Mordal's two floors: Sinclair's hall, and his study at the top. */
+export function riftTowerRooms(building) {
+    return [
+        { suffix: "hall", style: "rift-hall", name: building.name, rows: RIFT_HALL, ground: GROUND.courtyard, sound: "tower" },
+        { suffix: "study", style: "rift-study", name: "Sinclair's study", rows: RIFT_STUDY, ground: GROUND.courtyard, sound: "tower" },
     ];
 }
 
@@ -1251,6 +1295,8 @@ const KINDS = Object.freeze({
     crypt: { first: "crypt", rooms: cryptRooms, folk: () => [] },
     ruin: { first: "hall", rooms: ruinRooms, folk: () => [] },
     tower: { first: "ground", rooms: towerRooms, folk: () => [] },
+    // (The Tower of Sar Mordal: no folk, its rift's own the host's)
+    riftTower: { first: "hall", rooms: riftTowerRooms, folk: () => [] },
     // (A people's watchtower: kept, its sentries in it)
     watchtower: { first: "ground", rooms: watchtowerRooms, folk: (building, [ground, top]) => watchFolkOf(building, ground, top) },
     // (A dungeon: its levels the dungeon builder's, those in it the host's)
@@ -1258,7 +1304,7 @@ const KINDS = Object.freeze({
 });
 
 /** The kinds of the places worth finding that can be gone into (a site's entrance's `inside`). */
-export const SITE_INSIDES = Object.freeze(["cave", "lair", "crypt", "ruin", "tower", "watchtower", "dungeon"]);
+export const SITE_INSIDES = Object.freeze(["cave", "lair", "crypt", "ruin", "tower", "riftTower", "watchtower", "dungeon"]);
 
 // What those holding a building not theirs gather by: a temple's altar, a keep's thrones
 const HELD_BY = Object.freeze({ church: "altar", keep: "throne" });
@@ -1380,7 +1426,7 @@ export function clearOfWaysIn(map, entries, posts, { clear = WAY_IN_CLEAR } = {}
 // --- The buildings ---
 
 // What a building's called that has no name of its own
-const NAMES = Object.freeze({ swordsmith: "the swordsmith's", armorer: "the armorer's", scriptorium: "the Occult Scriptorium", alchemist: "the alchemist's", masterSwordsmith: "the Master Swordsmith's", masterArmorer: "the Master Armorer's", emporium: "the Mystic Emporium", blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", barracks: "the barracks", guardhouse: "the guardhouse", cave: "the cave", lair: "the drake's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", watchtower: "the watchtower", dungeon: "the dungeon" });
+const NAMES = Object.freeze({ swordsmith: "the swordsmith's", armorer: "the armorer's", scriptorium: "the Occult Scriptorium", alchemist: "the alchemist's", masterSwordsmith: "the Master Swordsmith's", masterArmorer: "the Master Armorer's", emporium: "the Mystic Emporium", blacksmith: "the smithy", guild: "the Adventurers' Guild", hall: "the town hall", keep: "the keep", barracks: "the barracks", guardhouse: "the guardhouse", cave: "the cave", lair: "the drake's lair", crypt: "the crypt", ruin: "the ruined keep", tower: "the watchtower", riftTower: "the Tower of Sar Mordal", watchtower: "the watchtower", dungeon: "the dungeon" });
 
 // Where the buildings' floors are drawn in the 3D world: past the world's edge (and Wenches and
 // Ale's), a hundred metres apart, each building's floors in a column
