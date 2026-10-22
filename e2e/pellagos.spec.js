@@ -9409,6 +9409,144 @@ test("the Tower of Sar Mordal: the rift swirling green beside it, its riftlings 
     });
 });
 
+test("Sinclair's journal on his lectern, at the top of the Tower of Sar Mordal: tapped from across his study, walked up to and read, kept in the player's journal; its pages turned on and back, by its buttons and the arrow keys; shut, and read again from the journal's Writings", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    // Up in his study, those keeping the tower slain, across the room from his lectern
+    const set = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { world, host } = game;
+        const player = game.battle.actor("player");
+        const site = world.plan.sites.find((one) => one.kind === "rift tower");
+        const settle = async (steps) => {
+            for (let k = 0; k < steps; k++) {
+                game.advance(0.25, { render: false });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+        const until = async (done, steps = 80) => {
+            for (let k = 0; k < steps && !done(); k++) {
+                game.advance(0.1);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+        const through = async (link, [x, y], done) => {
+            Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, progress: null });
+            game.host.command("player", { type: "enter", link });
+            await until(done);
+            await until(() => game.interiors.get(player.map)?.object.visible, 120);
+        };
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6, x: site.at[0] + 0.5, y: site.at[1] + 70.5, path: [], order: null, progress: null });
+        Object.assign(host.war, { turn: 70, clock: 30000 });
+        await settle(10);
+
+        for (const id of host.lairs.get(site.id).ids) {
+            Object.assign(game.battle.actor(id), { dead: true, respawnAt: Infinity });
+        }
+
+        const building = world.interiors.buildings.get(`site:${site.id}`);
+
+        await through(building.door.id, building.entrance.outside, () => player.map !== "town");
+        await through(building.stairs.id, building.stairs.ends[0].squares[0], () => player.map.endsWith("/study"));
+
+        return { map: player.map, lectern: world.maps[player.map].pieces.find(({ kind }) => kind === "side-table"), before: game.memory.writings ?? [] };
+    });
+
+    expect(set.map).toMatch(/\/study$/);
+    expect(set.lectern).toMatchObject({ x: 4, y: 4, w: 1, h: 1 });
+    expect(set.before).toEqual([]);
+
+    // Tapped from across the room, looking at it: walked up to it, and read
+    const at = await page.evaluate(({ x, y }) => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const [ox, oz] = game.originOf(game.mapId);
+        const message = game.hud.message.bind(game.hud);
+
+        window.said = [];
+        game.hud.message = (text, ...rest) => {
+            window.said.push(text);
+
+            return message(text, ...rest);
+        };
+        Object.assign(player, { square: [x, y + 4], x: x + 0.5, y: y + 4.5, path: [], facing: Math.PI });
+
+        for (let k = 0; k < 8; k++) {
+            game.advance(0.25);
+        }
+
+        Object.assign(game.cameraFollow, { yaw: 0, turning: 0, pitch: 35 });
+        game.cameraFollow.heading = { x: 0, z: 0 };
+        game.advance(0.05);
+        game.start();
+
+        return game.view.toScreen(game.view.camera.position.clone().set(ox + x + 0.5, 1.06, oz + y + 0.5));
+    }, set.lectern);
+
+    await page.mouse.click(at.x, at.y);
+    await page.waitForFunction(() => window.pellagos.game.reader.open, null, { timeout: 60000, polling: 100 });
+
+    const page1 = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return {
+            title: document.querySelector(".reader-title").textContent,
+            heading: document.querySelector(".reader-heading").textContent,
+            at: document.querySelector(".reader-at").textContent,
+            back: document.querySelector(".reader-back").disabled,
+            square: game.battle.actor("player").square,
+            kept: game.memory.writings,
+            said: window.said,
+        };
+    });
+
+    expect(page1).toEqual({
+        title: "The journal of Sinclair of Sar Mordal",
+        heading: "The 3rd of Thawmonth, the Year of the Pale Comet",
+        at: "1 of 10",
+        back: true,
+        square: [set.lectern.x, set.lectern.y + 1],
+        kept: ["sinclair"],
+        said: ["The journal of Sinclair of Sar Mordal: kept in your journal, under Writings."],
+    });
+
+    // On two pages with the arrow key, on another with its button, and back one
+    await page.keyboard.press("ArrowRight");
+    await page.keyboard.press("ArrowRight");
+    await page.locator(".reader-on").click();
+    await page.locator(".reader-back").click();
+
+    expect(await page.evaluate(() => [document.querySelector(".reader-heading").textContent, document.querySelector(".reader-at").textContent])).toEqual(["The 2nd of Seedmonth", "3 of 10"]);
+
+    // To the last page, in another hand, signed, no page on from it
+    for (let k = 0; k < 7; k++) {
+        await page.keyboard.press("ArrowRight");
+    }
+
+    expect(await page.evaluate(() => ({ hand: document.querySelector(".reader-hand")?.textContent, signed: document.querySelector(".reader-signed")?.textContent, at: document.querySelector(".reader-at").textContent, on: document.querySelector(".reader-on").disabled }))).toEqual({
+        hand: "Another hand, in pencil.",
+        signed: "A scout of the Adventurers' Guild",
+        at: "10 of 10",
+        on: true,
+    });
+
+    // Shut, and read again from the journal
+    await page.keyboard.press("Escape");
+    expect(await page.evaluate(() => window.pellagos.game.reader.open)).toBe(false);
+    await page.keyboard.press("j");
+    await expect(page.locator(".journal-writing-title")).toHaveText(["The journal of Sinclair of Sar Mordal"]);
+    await page.locator(".journal-writing .journal-button").click();
+
+    expect(await page.evaluate(() => ({ journal: window.pellagos.game.journal.open, reader: window.pellagos.game.reader.open, at: document.querySelector(".reader-at").textContent }))).toEqual({ journal: false, reader: true, at: "1 of 10" });
+});
+
 test("a dungeon's way in out in the wilds is gone into: its first level drawn and lit by its torches, its pictures kept compressed, nothing drawn past its fog, its foes woken, down its stairs to the next, and out again the same way", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
