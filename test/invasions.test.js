@@ -27,7 +27,8 @@ let InvasionBudget;
 let SIZE;
 let isSize;
 let sizeFor;
-let BOMBER;
+let BOMBERS;
+let bombersOf;
 let INVASION;
 let REWARD;
 let clockOf;
@@ -57,7 +58,7 @@ let encode;
 let world;
 
 before(async () => {
-    ({ ALARM, BANDS, BEHEMOTH, BEHEMOTH_REWARD, BOMBER, INVASION, REWARD, SIZE, bandFor, behemothReward, behemothSides, clockOf, criesOf, dueAfter, isBehemoth, isDue, isSize, raiderArms, raiderName, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
+    ({ ALARM, BANDS, BEHEMOTH, BEHEMOTH_REWARD, BOMBERS, INVASION, REWARD, SIZE, bandFor, behemothReward, behemothSides, bombersOf, clockOf, criesOf, dueAfter, isBehemoth, isDue, isSize, raiderArms, raiderName, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
     ({ RIFT } = await import("../client/js/core/creatures.js"));
     ({ DAY } = await import("../client/js/core/daytime.js"));
     ({ ROLES } = await import("../client/js/core/formation.js"));
@@ -145,7 +146,7 @@ describe("invasions (core/invasions.js)", () => {
         assert.ok(isDue({ ...clock, seen: 1, due: INVASION.every[0], clock: INVASION.every[0], here: INVASION.settle }));
     });
 
-    it("gives the town the bigger side, and two squads of bomb throwers at least two strong", () => {
+    it("gives the town the bigger side, and two squads of bomb throwers at least two strong, each people's with its own bombs", () => {
         for (const size of [40, INVASION.size, 300, 400]) {
             const { invaders, defenders, bombers, squads } = sidesOf(size);
 
@@ -154,11 +155,31 @@ describe("invasions (core/invasions.js)", () => {
             assert.ok(bombers >= 2 && squads === 2, `${size}: bomb throwers`);
         }
 
-        const bombs = weaponOf(BOMBER).attacks;
+        // (Each people's own bombs: as strong as one another, each its own kind, tossing whoever
+        // they burst by; the orcs' goblin bombs, and any other people's)
+        const peoples = ["human", "elf", "darkElf", "cat", "lizard", "orc"];
+        const kinds = new Set();
 
-        assert.ok(bombs.some(({ kind }) => kind === "melee"), "a sword up close");
-        assert.ok(bombs.some(({ kind, bomb }) => kind === "ranged" && BOMBS[bomb] === BOMBS.goblinBomb), "goblin bombs further off");
-        assert.ok(BOMBS.goblinBomb.toss > 0, "that toss whoever they burst by");
+        assert.deepEqual(Object.keys(BOMBERS).sort(), [...peoples].sort());
+
+        for (const people of peoples) {
+            const { weapon, name } = BOMBERS[people];
+            const attacks = weaponOf(weapon).attacks;
+            const bomb = attacks.find(({ kind }) => kind === "ranged");
+
+            assert.ok(attacks.some(({ kind }) => kind === "melee"), `${people}: a sword up close`);
+            assert.ok(BOMBS[bomb.bomb]?.toss > 0 && BOMBS[bomb.bomb].radius >= 2, `${people}: ${bomb.bomb} further off, tossing whoever they burst by`);
+            assert.deepEqual(bomb.damage, weaponOf(BOMBERS.orc.weapon).attacks.find(({ kind }) => kind === "ranged").damage, `${people}: as strong as the rest`);
+            assert.ok(name && !kinds.has(bomb.bomb), `${people}: its own`);
+            kinds.add(bomb.bomb);
+        }
+
+        assert.equal(weaponOf(BOMBERS.orc.weapon).attacks.find(({ kind }) => kind === "ranged").bomb, "goblinBomb");
+        assert.equal(bombersOf("bandits"), BOMBERS.orc);
+        assert.equal(BOMBS.sunJar.afflict.kind, "burn", "the cat folk's naphtha setting them alight");
+        assert.equal(BOMBS.gasBladder.afflict.kind, "poison", "the lizard folk's swamp gas poisoning them");
+        assert.equal(BOMBS.shadowfireOrb.afflict.kind, "wither", "the dark elves' shadowfire withering them");
+        assert.ok(BOMBS.grenado.toss > BOMBS.goblinBomb.toss && BOMBS.starfirePod.radius > BOMBS.goblinBomb.radius, "a grenado throwing them furthest; starfire bursting widest");
     });
 
     it("thanks whoever felled raiders: a bounty for each, merit and standing that grow, and the lord's reward for a share of them", () => {
@@ -221,7 +242,7 @@ describe("invasions (core/invasions.js)", () => {
         assert.ok(archer.equipment.includes("bow") && archer.equipment.includes("quiver") && !archer.equipment.includes("sword"));
         assert.ok(chief.equipment.includes("travelCloak") && chief.equipment.includes("sword"));
         assert.deepEqual([...livery(cutthroat.equipment), ...livery(archer.equipment), ...livery(chief.equipment)], []);
-        assert.ok(soldierLook({ people: "human", weapon: BOMBER, seed: 3 }).equipment.includes("sword"), "the town's bomb throwers carry a sword");
+        assert.ok(Object.entries(BOMBERS).every(([people, { weapon }]) => soldierLook({ people, weapon, seed: 3 }).equipment.includes("sword")), "the town's bomb throwers carry a sword");
     });
 });
 
@@ -250,8 +271,8 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         assert.ok(raiders.length >= 40 && defenders.length > raiders.length, "the town the stronger");
         assert.ok(raiders.every((one) => one.team === "bandits" && one.lone && one.kind === "soldier"));
         assert.ok(defenders.every((one) => one.team === "human"), "the town's own people");
-        assert.equal(defenders.filter((one) => one.weapon === BOMBER).length, 2 * sidesOf(INVASION.size).bombers, "two squads of bomb throwers");
-        assert.ok(defenders.filter((one) => one.weapon === BOMBER).every((one) => one.name === "Human bomb thrower"));
+        assert.equal(defenders.filter((one) => one.weapon === BOMBERS.human.weapon).length, 2 * sidesOf(INVASION.size).bombers, "two squads of bomb throwers");
+        assert.ok(defenders.filter((one) => one.weapon === BOMBERS.human.weapon).every((one) => one.name === "Human grenadier"), "the humans' grenadiers");
 
         const chiefs = raiders.filter((one) => one.name === "Bandit chief");
 
@@ -750,7 +771,7 @@ describe("the Behemoth of the Rift's invasion (core/invasions.js BEHEMOTH, core/
         assert.ok(Math.abs(out - (invasion.edge + BEHEMOTH.out)) < 4, "out of the rift down the road");
         assert.equal(defenders.length, sides.defenders, "the town's whole strength");
         assert.equal(invasion.mustered, sides.defenders);
-        assert.equal(defenders.filter((one) => one.weapon === BOMBER).length, sides.bombers * sides.squads, "its bomb throwers");
+        assert.equal(defenders.filter((one) => one.weapon === bombersOf(invasion.people).weapon).length, sides.bombers * sides.squads, "its bomb throwers");
         assert.ok(defenders.every((one) => one.team === "human" && one.leash === BEHEMOTH.leash), "each after it as far as it goes");
         assert.ok(host.battle.hostile(beast, me) && defenders.every((one) => host.battle.hostile(beast, one)), "everyone's enemy");
         assert.deepEqual(invasion.spared, [], "no one's first");

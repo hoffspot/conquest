@@ -1,5 +1,6 @@
 // Blasts that throw (battle.js BOMBS, TOSS, KEEP), the goblins' bombs and their King
-// (creatures.js), the Explosion spell (spells.js) and the Goblin Bomb (progress.js ITEMS)
+// (creatures.js), each people's bomb throwers' (invasions.js BOMBERS), the Explosion spell
+// (spells.js) and the Goblin Bomb (progress.js ITEMS)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Battle, BOMBS, KEEP, STEP_MS, TOSS } from "../client/js/core/battle.js";
@@ -10,6 +11,7 @@ import { CHAMPIONS } from "../client/js/core/dungeons/play.js";
 import { THEMES } from "../client/js/core/dungeons/themes.js";
 import { SCROLLS } from "../client/js/core/goods.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { BOMBERS } from "../client/js/core/invasions.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { ITEMS, SHOPS } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
@@ -96,6 +98,27 @@ describe("bombs and blasts (battle.js BOMBS, TOSS)", () => {
             assert.deepEqual([one.x, one.y], to);
             assert.ok(flight > TOSS.flight && up > TOSS.up, `${flight} ms, ${up} m up`);
             assert.ok(until >= blast.time + TOSS.down && one.downUntil === until);
+        }
+    });
+
+    it("has each people's bomb throwers lob their own bombs, each bursting its own way: setting alight, poisoning, withering, or none", () => {
+        for (const [people, { weapon }] of Object.entries(BOMBERS)) {
+            const battle = new Battle(field(40), { seed: 5 });
+            const kind = NATURAL[weapon].attacks.find(({ bomb }) => bomb).bomb;
+            const thrower = battle.add({ id: "thrower", kind: "soldier", weapon, team: people, square: [10, 20], ai: "patrol", armed: true, hp: 500 });
+            const orcs = [[17, 20], [17, 21], [18, 20], [18, 21], [17, 19], [18, 19]].map((square, k) => standing(battle, `orc${k}`, square, { team: "raiders" }));
+
+            thrower.patrol = [[10, 20]];
+
+            const events = run(battle, 8000);
+            const blast = events.find((event) => event.type === "blast" && event.kind === kind);
+            const afflicted = new Set(events.filter((event) => event.type === "afflicted").map((event) => event.kind));
+            const { afflict = null, element = "fire" } = BOMBS[kind];
+
+            assert.ok(events.some((event) => event.type === "bomb" && event.kind === kind && event.id === "thrower"), `${people}: its ${kind} lobbed`);
+            assert.ok(blast?.throws.length > 0 && orcs.some((orc) => orc.hp < 500), `${people}: bursting on them, throwing them`);
+            assert.equal(afflicted.has(afflict?.kind), Boolean(afflict), `${people}: ${afflict?.kind ?? "nothing"} left on them`);
+            assert.ok(element === "fire" || (kind === "gasBladder" && element === "earth"), `${people}: ${element}`);
         }
     });
 

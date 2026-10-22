@@ -201,14 +201,24 @@ export const HAZARDS = Object.freeze({
  * hurting the thrower's enemies in it (its thrower's attack's `damage` at its heart, half that at
  * its edge, times a creature's blows from afar: its tier; a player's Goblin Bomb's, the item's:
  * progress.js ITEMS) and throwing them (`toss`, times TOSS.far). A goblin bomber's, and the
- * Goblin King's bigger one (creatures.js `bomb`); and what a hell's creatures leave where they fall
- * dead (creatures.js `burst`), swelling a moment before it bursts, drawn as it is, not as a bomb
- * (`look`): a cinder husk's embers, and a bloat gorger's bile, poisoning whoever it catches (its
- * blast's `element`, fire's but for it, and what it leaves on them, `afflict`).
+ * Goblin King's bigger one (creatures.js `bomb`); each people's own, its bomb throwers' (weapons.js
+ * NATURAL bombardier and its kin: the humans' black-powder grenado, thrown furthest; the elves'
+ * starfire seed pod, bursting widest; the dark elves' shadowfire orb in spider silk, withering
+ * whoever it catches; the cat folk's clay sun jar of desert naphtha, setting them alight; the
+ * lizard folk's swamp-gas bladder, poisoning them; the orcs', goblin bombs); and what a hell's
+ * creatures leave where they fall dead (creatures.js `burst`), swelling a moment before it bursts,
+ * drawn as it is, not as a bomb (`look`): a cinder husk's embers, and a bloat gorger's bile,
+ * poisoning whoever it catches (its blast's `element`, fire's but for it, and what it leaves on
+ * them, `afflict`).
  */
 export const BOMBS = Object.freeze({
     goblinBomb: { radius: 2.5, toss: 1, fuse: 1500, speed: 9, soonest: 500 },
     bigBomb: { radius: 3.5, toss: 1.4, fuse: 1800, speed: 8, soonest: 600 },
+    grenado: { radius: 2.5, toss: 1.3, fuse: 1400, speed: 9, soonest: 500 },
+    starfirePod: { radius: 3, toss: 0.7, fuse: 1200, speed: 9, soonest: 500 },
+    shadowfireOrb: { radius: 2.5, toss: 0.8, fuse: 1500, speed: 9, soonest: 500, afflict: { kind: "wither", chance: 0.5 } },
+    sunJar: { radius: 2.3, toss: 0.7, fuse: 1100, speed: 9, soonest: 500, afflict: { kind: "burn", chance: 0.7 } },
+    gasBladder: { radius: 2.8, toss: 0.4, fuse: 1300, speed: 8, soonest: 500, element: "earth", afflict: { kind: "poison", chance: 0.7 } },
     cinders: { radius: 2.2, toss: 0.6, fuse: 1200, speed: 9, soonest: 0, look: "embers" },
     bile: { radius: 2.4, toss: 0.4, fuse: 1000, speed: 9, soonest: 0, look: "bile", element: "earth", afflict: { kind: "poison", chance: 0.8 } },
 });

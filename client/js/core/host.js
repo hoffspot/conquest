@@ -30,7 +30,7 @@ import { dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
-import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, BOMBER, COAST, dueAfter, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
+import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
 import { waysOut } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
 import { compass } from "./ways.js";
@@ -4140,11 +4140,11 @@ export class Host {
     // INVASION.meet beyond it. Each line's mixed as its people's or its band's are (DOCTRINES,
     // BANDS `mix`), each soldier carrying what they fight with in their role; the raiders' chiefs
     // in their shield line, one to every BANDS `chiefs` of them, harder to bring down; and two
-    // squads of the town's bomb throwers (BOMBER) out on its line's flanks. The players in the
-    // town are in it: those for whom it's their first, left be by the raiders till they strike
-    // one (`spared`); and each one's next due in their time in towns from now (dueAfter). As big
-    // as the smallest their devices can draw (each one's `budget`: core/invasions.js sizeFor), or
-    // INVASION.size with none told
+    // squads of the town's bomb throwers (BOMBERS: its people's) out on its line's flanks. The
+    // players in the town are in it: those for whom it's their first, left be by the raiders till
+    // they strike one (`spared`); and each one's next due in their time in towns from now
+    // (dueAfter). As big as the smallest their devices can draw (each one's `budget`: core/
+    // invasions.js sizeFor), or INVASION.size with none told
     #invade(town, { band = null } = {}) {
         const id = `invasion-${this.invaded++}`;
         const there = [...this.players.values()].filter(({ progress }) => progress.invasion.place === town.id);
@@ -4328,7 +4328,7 @@ export class Host {
             const bomber = k >= firstBomber;
             const one = `${id}/defender-${ids.length}`;
 
-            this.#enlist(one, { people, ...(bomber ? { weapon: BOMBER } : soldierOf(people, role, each)), name: bomber ? "bomb thrower" : "soldier", record: { invasion: id, side: "defender", role }, square, patrol: [square], facing, leash: leash ?? ROLES[role].leash, armed: true, formation: { id: formation, slot: places[k], role } });
+            this.#enlist(one, { people, ...(bomber ? { weapon: bombersOf(people).weapon } : soldierOf(people, role, each)), name: bomber ? bombersOf(people).name : "soldier", record: { invasion: id, side: "defender", role }, square, patrol: [square], facing, leash: leash ?? ROLES[role].leash, armed: true, formation: { id: formation, slot: places[k], role } });
             ids.push(one);
         });
 

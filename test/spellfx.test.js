@@ -8,7 +8,10 @@ const nothing = new Proxy(function () {}, { get: () => nothing, apply: () => not
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, style: {}, getContext: () => nothing }) };
 
 const { SPELLS, SCHOOLS } = await import("../client/js/core/spells.js");
-const { SpellFx, SPELL_LOOKS } = await import("../client/js/world/spellfx.js");
+const { BOMB_LOOKS, SpellFx, SPELL_LOOKS } = await import("../client/js/world/spellfx.js");
+const { BOMBS } = await import("../client/js/core/battle.js");
+const { BOMBERS } = await import("../client/js/core/invasions.js");
+const { NATURAL } = await import("../client/js/core/weapons.js");
 
 // A spell cast and landing, played through: how many particles it threw, how far across it reached
 // (its widest ring, mark or scattering, metres), and how hard it washed the screen and shook it
@@ -55,6 +58,84 @@ function play(spell) {
 
     return { ...seen, particles, left };
 }
+
+// A people's bomb (BOMB_LOOKS) lobbed, lying lit, and bursting, played through: what it was
+// drawn as (its parts' colours), whether it burst in a fireball, scorched the ground or left it
+// burning, how many particles it threw, how hard it shook the camera, and what was left after
+function bombed(kind) {
+    let particles = 0;
+    const effects = { glow: { emit: (settings) => (particles += settings.count) }, dust: { emit: (settings) => (particles += settings.count) } };
+    const fx = new SpellFx(effects, new THREE.Scene());
+    const seen = { fireball: false, scorch: false, blaze: 0, shake: 0 };
+
+    fx.onShake = (amount) => (seen.shake = Math.max(seen.shake, amount));
+
+    for (const method of ["fireball", "decal", "blaze"]) {
+        const own = fx[method].bind(fx);
+
+        fx[method] = (...args) => {
+            if (method === "decal") {
+                seen.scorch ||= args[1]?.texture === "scorch";
+            } else if (method === "blaze") {
+                seen.blaze++;
+            } else {
+                seen.fireball = true;
+            }
+
+            return own(...args);
+        };
+    }
+
+    fx.lob("bomb", () => new THREE.Vector3(0, 1.2, 0), new THREE.Vector3(0, 0, -6), { travel: 0.5, fuse: 1, kind });
+
+    const body = fx.bombs.get("bomb").object;
+    const colours = new Set();
+
+    body.traverse((node) => node.isMesh && colours.add(node.material.color.getHex()));
+
+    for (let time = 0; time < 1.5; time += 1 / 30) {
+        fx.update(1 / 30);
+    }
+
+    fx.burst("bomb");
+    fx.blast(new THREE.Vector3(0, 0, -6), { radius: BOMBS[kind].radius, kind });
+
+    for (let time = 0; time < 12; time += 1 / 30) {
+        fx.update(1 / 30);
+    }
+
+    const left = fx.running.length + fx.group.children.filter((child) => !child.isLight).length;
+
+    fx.clear();
+
+    return { ...seen, colours, parts: body.children.length, particles, left };
+}
+
+describe("how each people's bombs look (spellfx.js BOMB_LOOKS)", () => {
+    it("draws each people's bomb throwers' bombs as their own, lit or glowing, each bursting its own way and leaving nothing behind", () => {
+        const kinds = Object.values(BOMBERS).map(({ weapon }) => NATURAL[weapon].attacks.find(({ bomb }) => bomb).bomb);
+        const played = Object.fromEntries(kinds.map((kind) => [kind, bombed(kind)]));
+
+        for (const kind of kinds) {
+            assert.ok(BOMB_LOOKS[kind], `${kind}'s look`);
+            assert.equal(played[kind].left, 0, `${kind}: nothing left behind`);
+            assert.ok(played[kind].particles > 20, `${kind}: its burst`);
+        }
+
+        // (Each its own body: no two alike in their parts' colours)
+        const bodies = kinds.map((kind) => [...played[kind].colours].sort().join());
+
+        assert.equal(new Set(bodies).size, kinds.length, "each its own");
+        assert.ok(played.shadowfireOrb.parts > played.goblinBomb.parts, "a shadowfire orb wound in silk");
+
+        // (Fire and smoke from black powder and naphtha; none from starfire nor swamp gas)
+        assert.ok(played.grenado.fireball && played.sunJar.fireball && played.goblinBomb.fireball);
+        assert.ok(!played.starfirePod.fireball && !played.starfirePod.scorch, "starfire: light, no fire");
+        assert.ok(!played.gasBladder.fireball && !played.gasBladder.scorch, "swamp gas: no fire");
+        assert.ok(played.sunJar.blaze >= 4 && played.goblinBomb.blaze === 0, "naphtha left burning");
+        assert.ok(played.grenado.shake > played.goblinBomb.shake && played.grenado.particles > played.goblinBomb.particles, "black powder bursting harder");
+    });
+});
 
 describe("how spells look (spellfx.js)", () => {
     it("has a look for every spell", () => {

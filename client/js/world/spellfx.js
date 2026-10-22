@@ -716,6 +716,41 @@ const BURST_LOOKS = Object.freeze({
     bile: { body: 0x2a3a10, glow: 0x6adf20, light: 0x9aff40, sparks: [0xc8ff60, 0x5aa020], rise: -0.6 },
 });
 
+// Each people's bomb (battle.js BOMBS: its bomb throwers', weapons.js NATURAL bombardier and its
+// kin), as SpellFx.lob draws it and blast bursts it: its body (`shape`: a goblin bomb's iron-dark
+// pot; a grenado's black iron ball, a brass collar round its wick; a starfire seed pod, its
+// seams aglow; a shadowfire orb, wound round in spider silk; a clay sun jar, its rag stuffed in its
+// neck; a swamp-gas bladder, tied off), its colour, what glows in it (`glow`), how rough and
+// metallic, whether it's lit by a wick (`wick`) or glows (`shine`: how brightly; sparks drifting
+// off it: `drift`, rising `rise`), its spark's colour (`spark`); and its burst (`burst`, else a goblin bomb's): its flash
+// and heat's colours, its sparks', whether it's fire (a fireball and the ground scorched) and its
+// smoke's (none: `null`); a grenado's black powder bursting harder (`more`), starfire glittering
+// down after it (`stars`), naphtha left burning (`flames`), and a bladder's swamp gas billowing
+// (`gas`: no fire at all)
+export const BOMB_LOOKS = Object.freeze({
+    goblinBomb: { shape: "pot", colour: 0x2b2522, rough: 0.55, metal: 0.2, wick: true, spark: 0xffd070 },
+    grenado: {
+        shape: "grenado", colour: 0x232327, rough: 0.35, metal: 0.75, wick: true, spark: 0xffe6a0,
+        burst: { flash: 0xfff4dc, heat: 0xff7a2a, sparks: [0xfff6d0, 0xffb040, 0xff3a00], fire: true, smoke: [0x16140f, 0x45403a], more: 1.3 },
+    },
+    starfirePod: {
+        shape: "pod", colour: 0x34481c, glow: 0xa8ff60, shine: 0.45, rough: 0.7, metal: 0, drift: [0xf4ffc8, 0xb8ff70], rise: -0.4, spark: 0xeaffc0,
+        burst: { flash: 0xf6fff0, heat: 0xc8ff90, sparks: [0xffffff, 0xf4ffb0, 0x9affd8], fire: false, smoke: null, stars: true },
+    },
+    shadowfireOrb: {
+        shape: "orb", colour: 0x0c0812, glow: 0x6a28e0, shine: 0.2, silk: 0xdcd8e0, rough: 0.3, metal: 0.1, drift: [0xb478ff, 0x4a1aa0], rise: -0.8, spark: 0xb478ff,
+        burst: { flash: 0xd8b0ff, heat: 0x7a30ff, sparks: [0xe8d0ff, 0x9a50ff, 0x3a107a], fire: false, smoke: [0x0e0814, 0x2a1a3a] },
+    },
+    sunJar: {
+        shape: "jar", colour: 0xa85a34, rough: 0.9, metal: 0, wick: true, spark: 0xffb050,
+        burst: { flash: 0xfff0c0, heat: 0xff8a20, sparks: [0xffe080, 0xff8a1a, 0xc03000], fire: true, smoke: [0x201810, 0x50402a], flames: true },
+    },
+    gasBladder: {
+        shape: "bladder", colour: 0x5a6430, glow: 0x3a5a08, shine: 0.25, rough: 0.3, metal: 0, drift: [0xc8ff70, 0x7aa030], rise: -0.3, spark: 0xb8ff70,
+        burst: { gas: true },
+    },
+});
+
 export class SpellFx {
     /**
      * @param {import("./effects.js").Effects} effects - The game's particles.
@@ -763,6 +798,9 @@ export class SpellFx {
             crescent: new THREE.TorusGeometry(0.5, 0.06, 6, 20, Math.PI).rotateX(Math.PI / 2),
             fireball: new THREE.IcosahedronGeometry(1, 3),
             wick: new THREE.CylinderGeometry(1, 1, 1, 6, 1).translate(0, 0.5, 0),
+            // (A strand of silk round a shadowfire orb; a sun jar, its body and its neck)
+            strand: new THREE.TorusGeometry(1, 0.035, 4, 20),
+            jar: new THREE.LatheGeometry([[0, 0], [0.55, 0.02], [0.85, 0.25], [0.95, 0.55], [0.8, 0.85], [0.42, 1.02], [0.4, 1.22], [0.5, 1.28], [0, 1.3]].map(([x, y]) => new THREE.Vector2(x, y)), 12),
             prism: new THREE.OctahedronGeometry(1, 0).scale(0.5, 1.3, 0.5),
         };
 
@@ -1935,27 +1973,47 @@ export class SpellFx {
      * (they read as sparks then); soil and stones thrown up and falling; a skirt of dust rolling
      * out low; dark smoke rising after, and embers drifting; for the spell, the ground left
      * burning. A scorch where it was, and cracks; the camera shaken (`shake`: how near it is,
-     * 0 to 1) and, for the spell, the screen washed with its light.
+     * 0 to 1) and, for the spell, the screen washed with its light. A people's bomb (`kind`:
+     * BOMB_LOOKS) bursts in its own colours: a grenado's black powder harder; a starfire seed
+     * pod's white-gold, no fire, its starfire glittering down after it; a shadowfire orb's violet
+     * and black; a sun jar's naphtha left burning on the ground; a bladder's swamp gas billowing
+     * (gasBurst).
      */
-    blast(at, { radius = 2.5, grand = false, shake = 1, look = null } = {}) {
+    blast(at, { radius = 2.5, grand = false, shake = 1, look = null, kind = null } = {}) {
         if (look === "bile") {
             this.#bileBurst(at, radius, shake);
 
             return;
         }
 
+        const burst = BOMB_LOOKS[kind]?.burst ?? {};
+
+        if (burst.gas) {
+            this.#gasBurst(at, radius, shake);
+
+            return;
+        }
+
         const ground = this.onGround(at.x, at.z);
         const heart = this.onGround(at.x, at.z, 0.9);
-        const size = grand ? 1.6 : 1;
+        const more = burst.more ?? 1;
+        const size = (grand ? 1.6 : 1) * (more > 1 ? 1.15 : 1);
+        const fire = burst.fire !== false;
+        const sparks = burst.sparks ?? [0xfff6d0, 0xffb040, 0xff3a00];
+        const heat = burst.heat ?? 0xff7a2a;
 
-        this.flash(heart, { colour: 0xfff2d0, intensity: grand ? BRIGHTEST : 22, distance: grand ? 16 : 11, life: grand ? 0.18 : 0.12, size: grand ? 6 : 3 });
-        this.glow(heart.clone(), { colour: 0xff7a2a, strength: grand ? 28 : 18, reach: grand ? 14 : 9, life: grand ? 0.8 : 0.5 });
-        this.fireball(this.onGround(at.x, at.z, 0.35 * size), { size: 2 * size, life: grand ? 1.3 : 0.9 });
-        this.spray(p([0xfff4d8, 0xffa040, 0xb81e00], { count: grand ? 50 : 24, size: [0.4, 0.8], speed: [6, 11], life: [0.3, 0.6], gravity: -2, spread: 2.2, grow: 1.2, drag: 6 }), heart);
+        this.flash(heart, { colour: burst.flash ?? 0xfff2d0, intensity: grand ? BRIGHTEST : 22 * more, distance: grand ? 16 : 11, life: grand ? 0.18 : 0.12, size: grand ? 6 : 3 });
+        this.glow(heart.clone(), { colour: heat, strength: grand ? 28 : 18, reach: grand ? 14 : 9, life: grand ? 0.8 : 0.5 });
+
+        if (fire) {
+            this.fireball(this.onGround(at.x, at.z, 0.35 * size), { size: 2 * size, life: grand ? 1.3 : 0.9 });
+        }
+
+        this.spray(p(fire ? [0xfff4d8, 0xffa040, 0xb81e00] : sparks, { count: Math.round((grand ? 50 : 24) * more), size: [0.4, 0.8], speed: [6, 11], life: [0.3, 0.6], gravity: -2, spread: 2.2, grow: 1.2, drag: 6 }), heart);
 
         // (The shockwaves: pale and fast, then deeper; the spell's a third, and a dome of heat)
-        this.ring(ground, { colour: 0xffe6b0, from: 0.3, to: 2.2 * radius, life: 0.28, opacity: 0.9 });
-        this.after(0.05, () => this.ring(ground, { colour: FIRE.deep, from: 0.3, to: 1.6 * radius, life: 0.4, opacity: 0.8 }));
+        this.ring(ground, { colour: burst.flash ?? 0xffe6b0, from: 0.3, to: 2.2 * radius, life: 0.28, opacity: 0.9 });
+        this.after(0.05, () => this.ring(ground, { colour: fire ? FIRE.deep : heat, from: 0.3, to: 1.6 * radius, life: 0.4, opacity: 0.8 }));
 
         if (grand) {
             this.after(0.1, () => this.ring(ground, { colour: 0xffd090, from: 0.5, to: 2.6 * radius, life: 0.5, opacity: 0.5 }));
@@ -1963,20 +2021,22 @@ export class SpellFx {
         }
 
         // (Sparks in jets, up and out)
-        for (let k = 0; k < (grand ? 7 : 5); k++) {
+        for (let k = 0; k < Math.round((grand ? 7 : 5) * more); k++) {
             const angle = Math.random() * Math.PI * 2;
             const jet = new THREE.Vector3(Math.cos(angle), 0.5 + Math.random() * 0.9, Math.sin(angle)).normalize().multiplyScalar(9);
 
-            this.spray(p([0xfff6d0, 0xffb040, 0xff3a00], { count: grand ? 12 : 8, size: [0.04, 0.09], speed: [7, 12], life: [0.35, 0.7], gravity: 9.8, spread: 0.35, drag: 1.5 }), heart, jet);
+            this.spray(p(sparks, { count: grand ? 12 : 8, size: [0.04, 0.09], speed: [7, 12], life: [0.35, 0.7], gravity: 9.8, spread: 0.35, drag: 1.5 }), heart, jet);
         }
 
-        // (Soil and stones thrown up, and earth falling)
-        this.shards(this.onGround(at.x, at.z, 0.2), { count: grand ? 12 : 8, colour: 0x4a3a2a, size: 0.09, speed: 5, up: 5, life: 1.6 });
-        this.spray(p([0x6a5a46, 0x3a2e22], { count: grand ? 40 : 24, size: [0.04, 0.1], speed: [3, 7], life: [0.6, 1.1], gravity: 9.8, spread: 1.8, glow: false, opacity: 0.9, late: true, drag: 0.6 }), this.onGround(at.x, at.z, 0.3));
+        // (Soil and stones thrown up, and earth falling; a skirt of dust rolling out low, round
+        // where it burst: not from starfire, all light)
+        if (!burst.stars) {
+            this.shards(this.onGround(at.x, at.z, 0.2), { count: grand ? 12 : 8, colour: 0x4a3a2a, size: 0.09, speed: 5, up: 5, life: 1.6 });
+            this.spray(p([0x6a5a46, 0x3a2e22], { count: grand ? 40 : 24, size: [0.04, 0.1], speed: [3, 7], life: [0.6, 1.1], gravity: 9.8, spread: 1.8, glow: false, opacity: 0.9, late: true, drag: 0.6 }), this.onGround(at.x, at.z, 0.3));
+        }
 
-        // (A skirt of dust rolling out low, round where it burst)
         this.after(0.03, () => {
-            const around = grand ? 16 : 12;
+            const around = burst.stars ? 0 : grand ? 16 : 12;
 
             for (let k = 0; k < around; k++) {
                 const angle = (k / around) * Math.PI * 2 + Math.random() * 0.3;
@@ -1986,42 +2046,86 @@ export class SpellFx {
             }
         });
 
-        // (Dark smoke billowing up after it, higher the later)
-        for (let k = 0; k < (grand ? 12 : 7); k++) {
+        // (Dark smoke billowing up after it, higher the later: none from starfire)
+        const smoke = burst.smoke === undefined ? [0x2a2420, 0x6a625a] : burst.smoke;
+
+        for (let k = 0; smoke && k < Math.round((grand ? 12 : 7) * more); k++) {
             this.after(0.12 + k * 0.035, () => {
                 const angle = Math.random() * Math.PI * 2;
                 const reach = Math.random() * radius * 0.6;
 
-                this.spray(p([0x2a2420, 0x6a625a], { count: 1, size: [1, 1.8], speed: [0.4, 1.2], life: grand ? [2.6, 3.5] : [1.8, 2.5], gravity: -1.2, spread: 1.4, glow: false, opacity: 0.55, grow: 2.5 }), this.onGround(at.x + Math.cos(angle) * reach, at.z + Math.sin(angle) * reach, 0.5 + k * 0.08));
+                this.spray(p(smoke, { count: 1, size: [1, 1.8], speed: [0.4, 1.2], life: grand ? [2.6, 3.5] : [1.8, 2.5], gravity: -1.2, spread: 1.4, glow: false, opacity: 0.55, grow: 2.5 }), this.onGround(at.x + Math.cos(angle) * reach, at.z + Math.sin(angle) * reach, 0.5 + k * 0.08));
             });
         }
 
-        this.spray(p([0xffd070, 0xff6a10, 0xa01800], { count: grand ? 60 : 20, size: [0.03, 0.07], speed: [2, 5], life: [1, 2], gravity: -1.2, spread: 2, drag: 1.2 }), heart);
+        this.spray(p(fire ? [0xffd070, 0xff6a10, 0xa01800] : sparks, { count: grand ? 60 : 20, size: [0.03, 0.07], speed: [2, 5], life: [1, 2], gravity: -1.2, spread: 2, drag: 1.2 }), heart);
 
-        // (The ground left burning round it: the spell's)
-        if (grand) {
+        // (Starfire: a burst of it every way, then glittering down after it, slowly, all round
+        // where it burst)
+        if (burst.stars) {
+            this.spray(p(sparks, { count: 60, size: [0.06, 0.14], speed: [5, 10], life: [0.4, 0.8], gravity: 1, spread: 2.6, drag: 2.5 }), heart);
+
             for (let k = 0; k < 8; k++) {
-                const angle = (k / 8) * Math.PI * 2 + Math.random() * 0.4;
-                const reach = radius * (0.45 + Math.random() * 0.3);
-
-                this.blaze(new THREE.Vector3(at.x + Math.cos(angle) * reach, 0, at.z + Math.sin(angle) * reach), { width: 0.35, height: 0.6 + Math.random() * 0.4, tongues: 4, life: 1.2 + Math.random() * 0.5, rise: 0.1, fall: 0.5 });
+                this.after(0.1 + k * 0.12, () => this.spray(p(sparks, { count: 16, size: [0.06, 0.13], speed: [0.5, 2], life: [1.4, 2.2], gravity: 0.5, spread: 2.4, drag: 1.4 }), this.onGround(at.x + (Math.random() - 0.5) * radius, at.z + (Math.random() - 0.5) * radius, 1.6 + Math.random())));
             }
         }
 
-        // (Where it was: scorched, glowing as it cools; the spell's cracked)
-        this.decal(at, { texture: "scorch", colour: 0xffffff, radius: grand ? 4.5 : 3, life: grand ? 18 : 12, dark: true, fade: 0.3 });
-        this.decal(at, { texture: "glow", colour: 0xff4a0a, radius: radius * 0.8, life: 1.5, opacity: 0.8, fade: 0.8 });
+        // (The ground left burning round it: the spell's; a sun jar's naphtha, splashed about)
+        if (grand || burst.flames) {
+            const many = grand ? 8 : 6;
+
+            for (let k = 0; k < many; k++) {
+                const angle = (k / many) * Math.PI * 2 + Math.random() * 0.4;
+                const reach = radius * (burst.flames ? 0.2 + Math.random() * 0.6 : 0.45 + Math.random() * 0.3);
+
+                this.blaze(new THREE.Vector3(at.x + Math.cos(angle) * reach, 0, at.z + Math.sin(angle) * reach), { width: 0.35, height: 0.6 + Math.random() * 0.4, tongues: 4, life: burst.flames ? 2.5 + Math.random() : 1.2 + Math.random() * 0.5, rise: 0.1, fall: 0.5 });
+            }
+        }
+
+        // (Where it was: scorched, glowing as it cools (in its own colour); the spell's cracked)
+        if (fire || smoke) {
+            this.decal(at, { texture: "scorch", colour: 0xffffff, radius: grand ? 4.5 : 3, life: grand ? 18 : 12, dark: true, fade: 0.3 });
+        }
+
+        this.decal(at, { texture: "glow", colour: fire ? 0xff4a0a : heat, radius: radius * 0.8, life: 1.5, opacity: 0.8, fade: 0.8 });
 
         if (grand) {
             this.decal(at, { texture: "cracks", colour: 0xff6a20, radius: 3, life: 2.5, vivid: 2, fade: 0.6 });
         }
 
         if (shake > 0) {
-            this.shake((grand ? 0.32 : 0.15) * shake);
+            this.shake((grand ? 0.32 : 0.15) * shake * more);
         }
 
         if (grand && shake > 0) {
             this.screen(0xffb060, 0.12 * shake, 0.35);
+        }
+    }
+
+    // A lizard folk's swamp-gas bladder bursting (BOMB_LOOKS gasBladder): a dull pop, a sickly
+    // flash, and its gas billowing out low over the ground as far as it reaches, lingering, its
+    // ring on the ground, the camera shaken (`shake`) a little
+    #gasBurst(at, radius, shake) {
+        const ground = this.onGround(at.x, at.z);
+        const heart = this.onGround(at.x, at.z, 0.5);
+
+        this.glow(heart.clone(), { colour: 0xa8ff50, strength: 8, reach: 7, life: 0.6 });
+        this.ring(ground, { colour: 0xb8ff70, from: 0.3, to: 1.8 * radius, life: 0.45, opacity: 0.6 });
+        this.spray(p([0xd8ff90, 0x8ac040], { count: 18, size: [0.04, 0.1], speed: [2, 5], life: [0.4, 0.8], gravity: 6, spread: 1.8, drag: 1.5 }), heart);
+
+        for (let k = 0; k < 10; k++) {
+            this.after(k * 0.08, () => {
+                const angle = Math.random() * Math.PI * 2;
+                const reach = Math.random() * radius * 0.7;
+
+                this.spray(p([0x9ac050, 0x5a7a28, 0xc8e070], { count: 2, size: [0.8, 1.4], speed: [0.5, 1.6], life: [2.2, 3.2], gravity: -0.15, spread: 2.4, grow: 2.2, glow: false, opacity: 0.4, drag: 2 }), this.onGround(at.x + Math.cos(angle) * reach, at.z + Math.sin(angle) * reach, 0.4));
+            });
+        }
+
+        this.decal(at, { texture: "glow", colour: 0x6a9a20, radius: radius * 0.9, life: 2.5, opacity: 0.5, fade: 0.6 });
+
+        if (shake > 0) {
+            this.shake(0.08 * shake);
         }
     }
 
@@ -2042,20 +2146,66 @@ export class SpellFx {
         }
     }
 
-    // A bomb: an iron-dark pot, its wick, and the spark at its end (lit, the bigger the King's)
-    #bombBody(big) {
+    // A bomb (BOMB_LOOKS: each people's), lit: its body, as its people make it, its wick (if it has
+    // one) and the spark at its end, or the glow in it (the bigger the Goblin King's)
+    #bombBody(style, big) {
         const bomb = new THREE.Group();
-        const pot = new THREE.Mesh(this.geometries.ball, new THREE.MeshStandardMaterial({ color: 0x2b2522, roughness: 0.55, metalness: 0.2 }));
-        const wick = new THREE.Mesh(this.geometries.wick, new THREE.MeshStandardMaterial({ color: 0x8a6a40, roughness: 0.9 }));
-        const spark = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.#texture("glow"), color: 0xffd070, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-        const size = big ? 0.17 : 0.12;
+        const shell = new THREE.MeshStandardMaterial({ color: style.colour, roughness: style.rough, metalness: style.metal, emissive: style.glow ?? 0x000000, emissiveIntensity: style.shine ?? 0 });
+        const part = (geometry, material, [sx, sy, sz], y = 0) => {
+            const mesh = new THREE.Mesh(this.geometries[geometry], material);
 
-        pot.scale.setScalar(size);
-        wick.scale.set(0.012, 0.09, 0.012);
-        wick.position.y = size * 0.85;
-        spark.position.y = wick.position.y + 0.09;
-        spark.scale.setScalar(0.16);
-        bomb.add(pot, wick, spark);
+            mesh.scale.set(sx, sy, sz);
+            mesh.position.y = y;
+            bomb.add(mesh);
+
+            return mesh;
+        };
+        const spark = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.#texture("glow"), color: style.spark, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+        const size = (big ? 0.17 : 0.12) * ({ pod: 0.8, orb: 0.9, jar: 1, bladder: 1.1 }[style.shape] ?? 1);
+        let top = size * 0.85;
+
+        if (style.shape === "jar") {
+            // (A clay jar, its neck stuffed with an oily rag)
+            part("jar", shell, [size * 0.8, size * 1.4, size * 0.8], -size * 0.7);
+            top = size * 1.15;
+        } else if (style.shape === "pod") {
+            // (A seed pod, long, a stalk at its end)
+            part("ball", shell, [size * 0.62, size * 1.25, size * 0.62]);
+            part("wick", new THREE.MeshStandardMaterial({ color: 0x3a4a1c, roughness: 0.9 }), [0.01, 0.05, 0.01], size * 1.15);
+            top = 0;
+        } else if (style.shape === "bladder") {
+            // (A bladder, swollen, tied off at its neck)
+            part("ball", shell, [size, size * 0.85, size]);
+            part("spike", shell, [size * 0.28, size * 0.45, size * 0.28], size * 0.7);
+            top = size * 0.4;
+        } else {
+            part("ball", shell, [size, size, size]);
+        }
+
+        // (A shadowfire orb's silk, wound round it every way)
+        if (style.silk) {
+            const silk = new THREE.MeshStandardMaterial({ color: style.silk, roughness: 1 });
+
+            for (const [x, y] of [[0, 0], [Math.PI / 2, 0], [Math.PI / 3, Math.PI / 4]]) {
+                part("strand", silk, [size * 1.04, size * 1.04, size * 1.04]).rotation.set(x, y, 0);
+            }
+        }
+
+        // (A grenado's brass collar round its wick)
+        if (style.shape === "grenado") {
+            part("wick", new THREE.MeshStandardMaterial({ color: 0xb08a3a, roughness: 0.4, metalness: 0.8 }), [size * 0.3, size * 0.2, size * 0.3], size * 0.82);
+        }
+
+        if (style.wick) {
+            part("wick", new THREE.MeshStandardMaterial({ color: style.shape === "jar" ? 0xc8b48a : 0x8a6a40, roughness: 0.9 }), [0.012, 0.09, 0.012], top);
+            spark.position.y = top + 0.09;
+            spark.scale.setScalar(0.16);
+        } else {
+            spark.position.y = top;
+            spark.scale.setScalar(size * 3);
+        }
+
+        bomb.add(spark);
         bomb.userData = { size, spark };
 
         return bomb;
@@ -2085,10 +2235,11 @@ export class SpellFx {
      * function) to a point on the ground (`to`), `travel` seconds through the air, tumbling, its
      * wick sputtering; there it fizzes, a ring on the ground round it warning how far it'll reach
      * (`radius`), pulsing quicker as its wick burns down (`fuse` seconds), till it bursts (burst).
-     * `big`: the Goblin King's; `look`: what a hell's creature leaves where it falls (BURST_LOOKS),
-     * swelling there, sparks or foul drops rising off it.
+     * `big`: the Goblin King's; `kind`: whose (BOMB_LOOKS: each people's, glowing or lit by a
+     * wick); `look`: what a hell's creature leaves where it falls (BURST_LOOKS), swelling there,
+     * sparks or foul drops rising off it.
      */
-    lob(key, from, to, { travel = 0.6, fuse = 1.5, radius = 2.5, big = false, look = null } = {}) {
+    lob(key, from, to, { travel = 0.6, fuse = 1.5, radius = 2.5, big = false, kind = "goblinBomb", look = null } = {}) {
         const start = from()?.clone();
 
         if (!start) {
@@ -2097,16 +2248,20 @@ export class SpellFx {
 
         this.burst(key);
 
-        const bomb = look ? this.#burstBody(look) : this.#bombBody(big);
+        const style = BOMB_LOOKS[kind] ?? BOMB_LOOKS.goblinBomb;
+        const bomb = look ? this.#burstBody(look) : this.#bombBody(style, big);
         const { size, spark } = bomb.userData;
         const end = this.onGround(to.x, to.z, size);
         const high = 0.8 + 0.15 * start.distanceTo(end);
         const spin = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(16);
         const entry = { object: bomb, ring: null, alive: true, light: null };
+        // (Its sparks, drifting off what glows (a hell's creature's leavings, a seed pod, an orb, a
+        // bladder): their colours, and how they rise)
+        const drift = look ? { colours: BURST_LOOKS[look].sparks, rise: BURST_LOOKS[look].rise } : style.wick ? null : { colours: style.drift, rise: style.rise };
         let next = 0;
 
         bomb.position.copy(start);
-        entry.light = this.glow(bomb.position, { colour: 0xffb050, strength: 1.5, reach: 3, life: travel + fuse + 1, steady: 0.4, fade: () => 1 });
+        entry.light = this.glow(bomb.position, { colour: look ? 0xffb050 : style.spark, strength: 1.5, reach: 3, life: travel + fuse + 1, steady: 0.4, fade: () => 1 });
         this.bombs.set(key, entry);
         this.#show(bomb, travel + fuse + 1, (t, dt, age = 0) => {
             if (!entry.alive) {
@@ -2128,13 +2283,15 @@ export class SpellFx {
                 entry.ring = this.#warning(end, radius, fuse);
             }
 
-            // (The wick sputtering; embers' heat swelling, sparks drifting up off them)
-            spark.scale.setScalar(look ? 0.4 + 0.5 * Math.min(1, Math.max(0, age - travel) / fuse) + Math.random() * 0.12 : (0.12 + Math.random() * 0.1) * (big ? 1.3 : 1));
+            // (The wick sputtering; what glows swelling, sparks drifting up off it)
+            const swelling = Math.min(1, Math.max(0, age - travel) / fuse);
+
+            spark.scale.setScalar(look ? 0.4 + 0.5 * swelling + Math.random() * 0.12 : drift ? size * (2.5 + 2 * swelling) + Math.random() * 0.04 : (0.12 + Math.random() * 0.1) * (big ? 1.3 : 1));
             next -= dt;
 
-            if (next <= 0 && look) {
+            if (next <= 0 && drift) {
                 next = 0.05;
-                this.spray(p(BURST_LOOKS[look].sparks, { count: 3, size: [0.025, 0.06], speed: [0.4, 1.4], life: [0.4, 0.9], gravity: BURST_LOOKS[look].rise, spread: 0.9 }), spark.getWorldPosition(new THREE.Vector3()));
+                this.spray(p(drift.colours, { count: 3, size: [0.025, 0.06], speed: [0.4, 1.4], life: [0.4, 0.9], gravity: drift.rise, spread: 0.9 }), spark.getWorldPosition(new THREE.Vector3()));
             } else if (next <= 0) {
                 next = 0.035;
                 this.spray(p([0xfff4c0, 0xff8a1a], { count: 2, size: [0.02, 0.045], speed: [1, 2.5], life: [0.15, 0.3], gravity: 6, spread: 1.5 }), spark.getWorldPosition(new THREE.Vector3()));
@@ -2201,7 +2358,7 @@ export class SpellFx {
         const ward = new THREE.Mesh(this.geometries.ball, new THREE.ShaderMaterial({ name: "wardShell", uniforms: { colour: { value: new THREE.Color() }, reveal: { value: 1 }, flare: { value: 0 }, fade: { value: 0 }, time: { value: 0 } }, vertexShader: WARD_VERTEX, fragmentShader: WARD_FRAGMENT, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, toneMapped: false }));
 
         const fireball = new THREE.Mesh(this.geometries.fireball, this.#fireballMaterial());
-        const bomb = this.#bombBody(false);
+        const bomb = this.#bombBody(BOMB_LOOKS.goblinBomb, false);
         // (Shards and spikes as they're drawn: copies, all at once, lit, see-through or glowing)
         const copies = [new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), new THREE.MeshStandardMaterial({ roughness: 0.8, flatShading: true, transparent: true }), this.#additive(0xffffff)].map((material) => this.#copies("spike", material, [new THREE.Object3D()]));
 

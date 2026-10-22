@@ -68,7 +68,7 @@ import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, 
 import { describeLeader } from "../core/war/peoples.js";
 import { CRY, newsCount, newsSince, peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { bubbleSeconds, CALLING, callOf } from "../core/crying.js";
-import { ALARM, bandOf, BEHEMOTH, criesOf, INVASION, thanksOf } from "../core/invasions.js";
+import { ALARM, bandOf, BEHEMOTH, BOMBERS, criesOf, INVASION, thanksOf } from "../core/invasions.js";
 import { createRandom } from "../core/random.js";
 import { cultNear, cultWays, cultWord } from "../core/cultword.js";
 import { circleOf, rumouredBy, rumoursNear, rumourWord, RUMOURS } from "../core/rumours.js";
@@ -648,9 +648,21 @@ const BOSS_NEAR = 150;
 
 // Within how far of the player (metres) the colossal's framed by the camera (#colossalFoe)
 const COLOSSAL_FRAMED = 90;
+// The bombs that burst as a small one does (not the Goblin King's, nor the Explosion spell): each
+// people's bomb throwers' (core/invasions.js BOMBERS), goblin bombs among them
+const SMALL_BOMBS = new Set(Object.values(BOMBERS).flatMap(({ weapon }) => weaponOf(weapon).attacks.flatMap(({ bomb }) => (bomb ? [bomb] : []))));
+
 // What a creature leaves where it falls (battle.js BOMBS `look`) is heard doing: gathering, then
-// bursting (a cinder husk's embers as fire does, a bloat gorger's bile as foul water)
-const BURSTS = Object.freeze({ embers: { gathering: "castFireLow", burst: "impactFireMid" }, bile: { gathering: "castWaterLow", burst: "impactWaterHigh" } });
+// bursting (a cinder husk's embers as fire does, a bloat gorger's bile as foul water); and a
+// people's bomb that has no wick to fizz (by its kind), lying where it landed: a starfire seed pod
+// shimmering, a shadowfire orb's flame, a swamp-gas bladder hissing, bursting as foul water does
+const BURSTS = Object.freeze({
+    embers: { gathering: "castFireLow", burst: "impactFireMid" },
+    bile: { gathering: "castWaterLow", burst: "impactWaterHigh" },
+    starfirePod: { gathering: "castHealingLow" },
+    shadowfireOrb: { gathering: "castFireLow" },
+    gasBladder: { gathering: "castWaterLow", burst: "impactWaterHigh" },
+});
 
 // The colossal's blasts (battle.js #colossal, #rake, #stride: the Behemoth of the Rift's), each as
 // the ground shakes under it (spellfx.js quake) and how hard the camera's shaken within
@@ -4249,8 +4261,9 @@ export class Game {
     }
 
     // A bomb lobbed (battle.js BOMBS): drawn flying from the hand of whoever threw it (or where
-    // they stood) to where it lands, fizzing there, a ring warning how far it'll reach; its wick
-    // heard sputtering till it bursts (#blast). What a creature leaves where it falls (BOMBS
+    // they stood) to where it lands, as its people make it (spellfx.js BOMB_LOOKS), fizzing there,
+    // a ring warning how far it'll reach; its wick heard sputtering till it bursts (#blast), or
+    // what has none, heard as it does (BURSTS). What a creature leaves where it falls (BOMBS
     // `look`: a cinder husk's embers, a bloat gorger's bile): swelling there, heard gathering
     #bomb(event) {
         if (event.map !== this.mapId) {
@@ -4265,8 +4278,8 @@ export class Game {
         const travel = Math.max(0.1, (event.lands - this.battle.time) / 1000);
         const fuse = (event.bursts - event.lands) / 1000;
 
-        this.spellFx.lob(event.bomb, from, to, { travel, fuse, radius: event.radius, big: event.kind === "bigBomb", look });
-        this.fuses.set(event.bomb, this.sound?.play(BURSTS[look]?.gathering ?? "fuse", { at: to, delay: travel, far: 20 }) ?? null);
+        this.spellFx.lob(event.bomb, from, to, { travel, fuse, radius: event.radius, big: event.kind === "bigBomb", kind: event.kind, look });
+        this.fuses.set(event.bomb, this.sound?.play(BURSTS[look ?? event.kind]?.gathering ?? "fuse", { at: to, delay: travel, far: 20 }) ?? null);
     }
 
     // A blast (battle.js #blast: a bomb bursting, the Explosion spell): the bomb gone and its wick
@@ -4292,7 +4305,7 @@ export class Game {
         const me = this.avatars.get(this.me)?.object.position;
         const off = me ? Math.hypot(me.x - at.x, me.z - at.z) : Infinity;
         const look = BOMBS[event.kind]?.look ?? null;
-        const grand = event.kind !== "goblinBomb" && !look;
+        const grand = !SMALL_BOMBS.has(event.kind) && !look;
         const colossal = COLOSSAL_BLASTS[event.kind];
         const shaken = Math.max(0, 1 - off / (colossal ? BLAST_HEARD.quaked : BLAST_HEARD.shaken)) ** 2;
 
@@ -4307,8 +4320,8 @@ export class Game {
                 this.sound?.play(colossal.sound, { at, far: BLAST_HEARD.far, delay: off > BLAST_HEARD.late ? off / BLAST_HEARD.sound : 0 });
             }
         } else {
-            this.spellFx.blast(at, { radius: event.radius, grand, shake: shaken, look });
-            this.sound?.play(BURSTS[look]?.burst ?? (grand ? "explosionLarge" : "explosionSmall"), { at, far: BLAST_HEARD.far, muffle: off > BLAST_HEARD.clear ? BLAST_HEARD.highs * (BLAST_HEARD.clear / off) ** 1.3 : null, delay: off > BLAST_HEARD.late ? off / BLAST_HEARD.sound : 0 });
+            this.spellFx.blast(at, { radius: event.radius, grand, shake: shaken, look, kind: event.kind });
+            this.sound?.play(BURSTS[look ?? event.kind]?.burst ?? (grand ? "explosionLarge" : "explosionSmall"), { at, far: BLAST_HEARD.far, muffle: off > BLAST_HEARD.clear ? BLAST_HEARD.highs * (BLAST_HEARD.clear / off) ** 1.3 : null, delay: off > BLAST_HEARD.late ? off / BLAST_HEARD.sound : 0 });
         }
 
         for (const { id, to, flight, up, until } of event.throws) {
