@@ -340,7 +340,7 @@ export const CATALOG = Object.freeze({
 
     // War (app/game.js #invasion): an invasion's horns
     warHorn: { group: "War", label: "A war horn", about: "A great horn, made in code: a long, low blast on the G under the bass clef, the lips bending up into it, dying away a little flat.", plays: "An invasion's raiders coming: blown twice, 2.2 seconds apart, where they come out onto the town's road, heard up to 450 metres off; and once where the lines met, once the town's soldiers have all fallen." },
-    retreatHorn: { group: "War", label: "Sounding the retreat", about: "The same horn, made in code: a short blast, then a long one falling away as it dies.", plays: "An invasion's raiders breaking and running, the town held: blown where the lines met, heard up to 450 metres off." },
+    retreatHorn: { group: "War", label: "Sounding the retreat", about: "The same horn, made in code: a short blast, then a long one falling away as it dies.", plays: "An invasion's raiders breaking and running, the town held (not the bandits', who fight to the last): blown where the lines met, heard up to 450 metres off." },
     townHorn: { group: "War", label: "A town's horn", about: "A brighter horn, made in code: a call up a fourth and a fifth (G, C and the G above), the last held.", plays: "A town's soldiers marching out to meet an invasion, 2.4 seconds after the raiders' second blast: blown where their line forms, heard up to 450 metres off; and as a town's lord thanks the player for felling a good share of an invasion's raiders." },
 
     // Indoors (ambience.js INDOORS)
