@@ -561,7 +561,8 @@ are kept.
 - **A shop** (`shopRooms`, `SHOP_INSIDES`: a specialist's or a master's) is one room 18 by 12
   metres, floorboarded, its door in the middle of the south wall between two windows, the counter
   across it under its cloth with its keeper behind it, a rug up from the door (all but the
-  alchemist's), and the rest as its trade has it (`interiors3d.js` `shop`, by its `look`). What
+  alchemist's), torches on the side walls and either side of the door (beside it, never over
+  the doorway), and the rest as its trade has it (`interiors3d.js` `shop`, by its `look`). What
   it sells is set out as makers' models and museums' scans (`shopWares`: `scripts/build-props.js`,
   furnished as a dungeon's are, and only on its counter, tables, benches, lecterns, racks and
   stands, never on the floor in anyone's way):
