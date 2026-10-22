@@ -48,7 +48,7 @@ import { brokenOf, SIDES, STOCKADE, walkwayOf } from "./war/stockade.js";
 import { ARMY, CAMP as ARMY_CAMP } from "./war/armies.js";
 import { ADJECTIVES } from "./war/peoples.js";
 import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } from "./war/war.js";
-import { countOut, crierOf, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
+import { countOut, crierOf, doorsOf, errandsOf, SHELTER, shelterOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, longestReach, WEAPONS } from "./weapons.js";
 import { dropTiles, navigatorOf } from "./navigation.js";
 import { FORTS, footprintOf } from "./war/forts.js";
@@ -1990,6 +1990,7 @@ export class Host {
         }
 
         this.#invasions(ms);
+        this.#sheltering();
         this.#warOn(ms);
 
         // (The players' camps' fires burnt out)
@@ -3611,6 +3612,87 @@ export class Host {
 
         this.townsfolk.delete(id);
         this.#event("townsfolk", { place: id, ids, change: "home" });
+    }
+
+    // The townsfolk of a town the Behemoth of the Rift comes on (core/townsfolk.js SHELTER): while
+    // it stands, each running for the nearest door on their place's rounds, and in there (off the
+    // streets, kept: `indoors`), or in wherever they are once they've been long on the way; their
+    // crier staying out, crying it. Once it's slain or gone, out of their doors again, one after
+    // another, about their business; and those not in yet, back to it from where they are
+    #sheltering() {
+        const now = this.battle.time;
+
+        for (const [place, ids] of this.townsfolk) {
+            const folk = ids.map((id) => this.folk.get(id)).filter((one) => one?.role === "townsfolk");
+            const threat = this.invasions.some(({ band, place: at, beast }) => band === BEHEMOTH.id && at === place && this.battle.actor(beast) && !this.battle.actor(beast).dead);
+
+            if (threat) {
+                const doors = doorsOf(folk);
+
+                for (const one of folk) {
+                    const actor = one.indoors ? null : this.battle.actor(one.id);
+
+                    if (!actor) {
+                        continue;
+                    }
+
+                    if (!one.shelter) {
+                        const routine = shelterOf([actor.x, actor.y], doors);
+
+                        if (routine && this.battle.reroute(one.id, routine)) {
+                            one.shelter = { since: now };
+                        }
+                    } else if (actor.arrived || now - one.shelter.since >= SHELTER.within) {
+                        this.#goIn(place, one, actor);
+                    }
+                }
+
+                continue;
+            }
+
+            let after = 0;
+
+            for (const one of folk) {
+                if (one.shelter) {
+                    delete one.shelter;
+                    this.battle.reroute(one.id, one.routine);
+                } else if (one.indoors) {
+                    one.indoors.out ??= now + SHELTER.apart * after++;
+
+                    if (now >= one.indoors.out) {
+                        this.#comeOut(place, one);
+                    }
+                }
+            }
+        }
+    }
+
+    // One of the townsfolk in at their door (#sheltering): off the streets, where they went in kept
+    #goIn(place, one, actor) {
+        one.indoors = { square: [...actor.square], facing: actor.facing };
+        delete one.shelter;
+        this.battle.remove(one.id);
+        this.#event("townsfolk", { place, ids: [one.id], change: "indoors", at: [actor.x, actor.y] });
+    }
+
+    // One of the townsfolk out of the door they went in by (#sheltering), facing away from it, about
+    // their business again
+    #comeOut(place, one) {
+        const { square, facing } = one.indoors;
+        let spot = square;
+
+        try {
+            spot = this.#spots()([square[0] + 0.5, square[1] + 0.5]);
+        } catch {
+            // (No room by it: at it)
+        }
+
+        delete one.indoors;
+        Object.assign(one, { square: spot, facing: facing + Math.PI });
+
+        if (this.#addFolk(one, this.#sideOf(place, one.people))) {
+            this.#event("townsfolk", { place, ids: [one.id], change: "out", at: [spot[0] + 0.5, spot[1] + 0.5] });
+        }
     }
 
     // Each town the war's fought over, near a player: its soldiers out (again, if it's changed

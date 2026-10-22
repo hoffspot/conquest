@@ -13041,7 +13041,7 @@ test("the Behemoth of the Rift called up out in the open: drawn from its model a
     expect(breathed.hp).toBeLessThan(5000);
 });
 
-test("the Behemoth of the Rift against the town: its roar heard twice where it comes out, the call told, the town's whole strength out to meet it, its bar across the top as it nears; wounded by the player and slain, the town thanks them for their share of it", async ({ page }) => {
+test("the Behemoth of the Rift against the town: its roar heard twice where it comes out, the call told, the town's whole strength out to meet it, the townsfolk running indoors, their doors heard, the crier staying out; its bar across the top as it nears; wounded by the player and slain, the town thanks them for their share of it, and the townsfolk come out again", async ({ page }) => {
     test.setTimeout(240000);
     await playing(page, "/?play&seed=2");
 
@@ -13049,14 +13049,23 @@ test("the Behemoth of the Rift against the town: its roar heard twice where it c
     await page.evaluate((least) => {
         const { game } = window.pellagos;
         const voice = game.sound.voice.bind(game.sound);
+        const play = game.sound.play.bind(game.sound);
 
         game.stop();
         Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
         window.voices = [];
+        window.doors = [];
         game.sound.voice = (creature, what, at, options = {}) => {
             window.voices.push([creature, what, options.delay ?? 0, Boolean(at), options.far ?? null]);
 
             return voice(creature, what, at, options);
+        };
+        game.sound.play = (name, options = {}) => {
+            if (name === "door") {
+                window.doors.push(Boolean(options.at));
+            }
+
+            return play(name, options);
         };
         game.advance(0.1, { render: false });
         game.host.command(game.me, { type: "budget", invasion: least });
@@ -13078,6 +13087,21 @@ test("the Behemoth of the Rift against the town: its roar heard twice where it c
     expect(coming.roars).toHaveLength(2);
     expect(coming.roars.every(([, , , at, far]) => at && far > 300)).toBe(true);
     expect(coming.told).toMatch(/^The Behemoth of the Rift comes on the [a-z-]+ road! .+ calls every able hand to its defence\./);
+
+    // (The townsfolk running indoors, a door heard as each goes in, off the streets; the crier
+    // staying out, crying it)
+    expect(await playUntil(page, () => [...window.pellagos.game.host.folk.values()].filter(({ role }) => role === "townsfolk").every(({ indoors }) => indoors), { seconds: 45 })).toBe(true);
+
+    const sheltered = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const folk = [...game.host.folk.values()].filter(({ role }) => role === "townsfolk").map(({ id }) => id);
+        const crier = [...game.host.folk.values()].find(({ role }) => role === "crier");
+
+        return { folk: folk.length, drawn: folk.filter((id) => game.avatars.has(id)).length, doors: window.doors.filter(Boolean).length, crier: Boolean(crier && game.battle.actor(crier.id)) };
+    });
+
+    expect(sheltered.folk).toBeGreaterThan(0);
+    expect(sheltered).toMatchObject({ drawn: 0, doors: sheltered.folk, crier: true });
 
     // (Brought nearer: its bar across the top)
     await page.evaluate(() => {
@@ -13117,6 +13141,10 @@ test("the Behemoth of the Rift against the town: its roar heard twice where it c
     expect(dealt).toBeGreaterThanOrEqual(30);
     expect(await playUntil(page, () => /thanks you for the wounds you dealt the Behemoth, \d+% of its strength: \d+ gold/.test(document.querySelector("#banner").textContent))).toBe(true);
     await expect(page.locator("#bossbar")).toBeHidden();
+
+    // (The townsfolk out of their doors again, the doors heard, about their business)
+    expect(await playUntil(page, () => [...window.pellagos.game.host.folk.values()].filter(({ role }) => role === "townsfolk").every(({ id, indoors }) => !indoors && window.pellagos.game.battle.actor(id)?.routine.pace === undefined), { seconds: 30 })).toBe(true);
+    expect(await page.evaluate(() => window.doors.filter(Boolean).length)).toBe(sheltered.folk * 2);
 });
 
 test("a town's siege engines drawn from their models: rolled on their wheels; the catapult's arm flung up and over, its pot of burning pitch flying from its bucket, bursting where it lands; the ballista's bolt loosed, gone from it till another's laid in; set alight and burnt through, each lies wrecked", async ({ page }) => {
