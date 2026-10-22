@@ -665,6 +665,19 @@ No one fights them; they run from danger (*The battle*, *The folk in danger*), t
 whoever holds their town among it. The host keeps them in its snapshot (`townsfolk`: each place's,
 their looks and errands with them; `SNAPSHOT_VERSION` 5).
 
+**Sheltering from the Behemoth** (`SHELTER`, host.js `#sheltering`; WAR.md *The Behemoth of the
+Rift*). While the Behemoth of the Rift comes on their town and still stands, the townsfolk run
+(3.2 m/s, `battle.reroute` and a routine's `pace`) for the nearest door on any of their place's
+townsfolk's rounds (`doorsOf`, `shelterOf`: a house's, a tradesman's, the church's, the tavern's,
+the guild's, the hall's, a castle's keep's; not a stall, the well, the market or a way out) and go
+in there, the door heard as they do. One standing at a door already goes straight in. One still
+on the way after 40 seconds goes in wherever they are. Indoors, they're off the streets but kept
+(`indoors`: where they went in, and in the snapshot). Their crier stays out, crying it. Once it's
+slain, or gone back the way it came, they come out of the doors they went in by, one every
+1.5 seconds, facing away from them, the door heard again, and go about their business; any still
+on their way in turn back to it from where they are. In the start towns of four worlds, all of
+them were in within eight seconds of its coming.
+
 **Drawn.** A step at a time, as the soldiers and the wild's creatures are (app/game.js
 `#nextEnlistee`), but after them, the nearest the player first, and none while a building's being
 got ready: only there to be seen about, they keep neither the town's guards waiting to be drawn

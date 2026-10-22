@@ -12,7 +12,8 @@ import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { loadRecast } from "../client/js/core/navigation/recast.js";
 import { buildWorld, CHUNK } from "../client/js/core/overworld.js";
 import { ROLES } from "../client/js/core/roles.js";
-import { CALLINGS, countOut, CRIERS, crierOf, errandsOf, LINGER, TOWNSFOLK, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "../client/js/core/townsfolk.js";
+import { CALLINGS, countOut, CRIERS, crierOf, doorsOf, errandsOf, LINGER, SHELTER, shelterOf, TOWNSFOLK, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "../client/js/core/townsfolk.js";
+import { BEHEMOTH } from "../client/js/core/invasions.js";
 import { folkLook, TOWNSFOLK_PARTS } from "../client/js/characters/folk.js";
 import { LOOKS } from "../client/js/characters/peoples.js";
 import { EQUIPMENT } from "../client/js/characters/equipment.js";
@@ -263,6 +264,94 @@ describe("the townsfolk (townsfolk.js, host.js)", () => {
         run(host, 3000);
         run(copy, 3000);
         assert.deepEqual(townsfolkOut(copy).map(({ id, x, y }) => [id, x, y]), townsfolkOut(host).map(({ id, x, y }) => [id, x, y]), "and go on as they would have");
+    });
+
+    it("finds the doors on their rounds to take shelter at, each once, and the nearest of them to run to", () => {
+        const folk = [
+            { routine: { stops: [{ square: [4, 4], facing: 0, group: "home" }, { square: [9, 9], facing: 1, group: "well" }, { square: [20, 4], facing: 2, group: "church" }] } },
+            { routine: { stops: [{ square: [4, 4], facing: 0, group: "home" }, { square: [12, 30], facing: 3, group: "trade" }, { square: [30, 30], facing: 0, group: "market" }] } },
+        ];
+        const doors = doorsOf(folk);
+
+        assert.deepEqual(doors, [{ square: [4, 4], facing: 0 }, { square: [20, 4], facing: 2 }, { square: [12, 30], facing: 3 }], "not a well nor the market");
+
+        const routine = shelterOf([18.5, 8.5], doors);
+
+        assert.deepEqual(routine.stops.map(({ square, facing, group }) => [square, facing, group]), [[[20, 4], 2, "shelter"]], "the nearest");
+        assert.equal(routine.pace, SHELTER.pace);
+        assert.equal(shelterOf([1, 1], []), null, "nowhere to go");
+    });
+
+    it("sends them running indoors as the Behemoth of the Rift comes, each in at the nearest door on their rounds, their crier staying out to cry it; once it's slain, out of the doors they went in by, one after another, about their business again", () => {
+        const host = hosted();
+
+        // (Out a while, about their errands)
+        run(host, 20000);
+
+        const crier = `crier:${host.world.start.id}`;
+        const folk = townsfolkOut(host).map(({ id }) => id);
+        const doors = doorsOf(folk.map((id) => host.folk.get(id)));
+        const atDoor = ([x, y]) => doors.some(({ square }) => Math.hypot(square[0] + 0.5 - x, square[1] + 0.5 - y) <= 1.6);
+
+        assert.ok(folk.length >= 2 && doors.length >= 2, `${folk.length} out, ${doors.length} doors`);
+
+        // It comes: each of them running for the nearest door (in at once, any standing at one)
+        const at = new Map(folk.map((id) => [id, [host.battle.actor(id).x, host.battle.actor(id).y]]));
+
+        assert.ok(host.command(HOST_PLAYER, { type: "invade", band: BEHEMOTH.id }).ok);
+        run(host, STEP_MS * 2);
+
+        const running = folk.filter((id) => host.battle.actor(id));
+
+        assert.ok(running.length > 0, "some of them running");
+        assert.ok(folk.filter((id) => !running.includes(id)).every((id) => host.folk.get(id).indoors && atDoor(at.get(id))), "any in at once, at a door already");
+
+        for (const id of running) {
+            const actor = host.battle.actor(id);
+
+            assert.deepEqual(actor.routine, shelterOf(at.get(id), doors), `${id}: for the nearest door`);
+            assert.equal(actor.walkPace, SHELTER.pace, `${id}: running`);
+        }
+
+        // In, every one of them, at their doors; the crier out, about his business, crying it
+        const went = folk.filter((id) => !running.includes(id)).map((id) => ({ ids: [id], at: at.get(id) }));
+
+        for (let t = 0; t < SHELTER.within + 5000 && folk.some((id) => host.battle.actor(id)); t += 1000) {
+            went.push(...run(host, 1000).filter(({ type, change }) => type === "townsfolk" && change === "indoors"));
+        }
+
+        assert.ok(folk.every((id) => !host.battle.actor(id) && host.folk.get(id).indoors), "all of them indoors");
+        assert.deepEqual(went.flatMap(({ ids }) => ids).sort(), [...folk].sort());
+        assert.ok(went.filter(({ at: where }) => atDoor(where)).length >= folk.length - 1, `at their doors: ${went.map(({ at: where }) => where.map(Math.round))}`);
+        assert.ok(host.battle.actor(crier), "the crier out");
+        assert.equal(host.battle.actor(crier).routine, host.folk.get(crier).routine, "about his business");
+
+        // Kept so in a snapshot
+        const copy = Host.restore(host.world, host.snapshot());
+
+        assert.ok(folk.every((id) => !copy.battle.actor(id) && copy.folk.get(id).indoors));
+
+        // Slain: out of their doors again, one after another, each about their business
+        Object.assign(host.battle.actor(host.invasions[0].beast), { hp: 0, dead: true, respawnAt: Infinity });
+
+        const out = [];
+
+        for (let t = 0; t < folk.length * SHELTER.apart + 3000; t += 500) {
+            out.push(...run(host, 500).filter(({ type, change }) => type === "townsfolk" && change === "out"));
+        }
+
+        assert.deepEqual(out.flatMap(({ ids }) => ids).sort(), [...folk].sort());
+        assert.ok(out.every((each, k) => k === 0 || each.time - out[k - 1].time >= SHELTER.apart - STEP_MS), "one after another");
+
+        for (const event of out) {
+            const [id] = event.ids;
+            const actor = host.battle.actor(id);
+            const [x, y] = went.find(({ ids }) => ids.includes(id)).at;
+
+            assert.ok(actor && !host.folk.get(id).indoors && !host.folk.get(id).shelter, `${id}: out`);
+            assert.equal(actor.routine, host.folk.get(id).routine, `${id}: about their business`);
+            assert.ok(Math.hypot(event.at[0] - x, event.at[1] - y) < 3, `${id}: out by the door they went in by`);
+        }
     });
 
     it("brings a castle's folk out in its wards: its servants, grooms and scribes", () => {

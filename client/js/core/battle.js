@@ -1158,6 +1158,23 @@ export class Battle {
     }
 
     /**
+     * One of the folk sent about other business (`routine`, as add's: the townsfolk running for a
+     * door, and back about their own after: core/host.js #sheltering), from where they stand, its
+     * first stop next. Whether they're there to send.
+     */
+    reroute(id, routine) {
+        const actor = this.actor(id);
+
+        if (!actor?.routine || !routine) {
+            return false;
+        }
+
+        Object.assign(actor, { routine, stop: 0, arrived: false, path: [], pathGoal: null, stopSince: this.time, waitUntil: 0, restingUntil: 0 });
+
+        return true;
+    }
+
+    /**
      * Take a character out (one of the folk, gone with their building when the player's far
      * away): no one's after them, talking to them or shooting at them any more. Whether they were
      * there.
@@ -2031,9 +2048,10 @@ export class Battle {
     /**
      * The folk going about their business (actor.routine): seated ({ seated: true, act, every:
      * [ms, ms] }), doing its act (a toast) every so often; or going from stop to stop ({ stops:
-     * [{ square, facing, act, group }], wait: [ms, ms], order: "cycle" or "alternate" }), each in
-     * turn or (alternating) one of another group at random, waiting at each, facing its way, and
-     * doing its act there (an "act" event: { id, act }).
+     * [{ square, facing, act, group }], wait: [ms, ms], order: "cycle" or "alternate", pace }),
+     * each in turn or (alternating) one of another group at random, waiting at each, facing its
+     * way, and doing its act there (an "act" event: { id, act }); at their own speed, or `pace`
+     * (m/s: running for a door, core/townsfolk.js SHELTER).
      */
     #routine(actor) {
         const routine = actor.routine;
@@ -2044,7 +2062,7 @@ export class Battle {
             return;
         }
 
-        actor.walkPace = actor.speed;
+        actor.walkPace = routine.pace ?? actor.speed;
 
         // (One that sits, up and away from its seat: back to it, as near as there's a way (its seat
         // in a booth, or at a table), and sitting down in it the way it sat)

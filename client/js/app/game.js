@@ -9682,7 +9682,17 @@ export class Game {
                 this.#invasion(event);
                 break;
             case "townsfolk":
-                // (A place's townsfolk out about their business, drawn nearest first; or home again)
+                // (One of a place's townsfolk in at a door from the Behemoth of the Rift, or out of it
+                // again after (core/host.js #sheltering): the door heard there)
+                if (event.at && this.mapId === "town") {
+                    const [ox, oz] = this.originOf("town");
+                    const [x, z] = [ox + event.at[0], oz + event.at[1]];
+
+                    this.sound?.play("door", { at: new THREE.Vector3(x, this.#groundOn("town", x, z), z) });
+                }
+
+                // (A place's townsfolk out about their business, drawn nearest first; or home again,
+                // or indoors)
                 if (event.change === "out") {
                     this.enlisting.push(...event.ids);
                 } else {
