@@ -42,6 +42,17 @@ export const MELEE_REACH = 1;
 const melee = (settings) => ({ kind: "melee", reach: MELEE_REACH, stagger: 150, ...settings });
 const ranged = (settings) => ({ kind: "ranged", stagger: 150, ...settings });
 
+// A bomb thrower's (NATURAL bombardier and its kin): a sword up close, and `bomb`s (battle.js
+// BOMBS) lobbed at whoever's further off, its shield hand free for them
+const bomber = (label, bomb) => ({
+    label,
+    equipment: ["sword"],
+    attacks: [
+        melee({ id: "slash", damage: [4, 8], hitAt: 380, duration: 760, interval: 1100, reaction: "slash", animation: "sword" }),
+        ranged({ id: "bomb", reach: 11, damage: [6, 12], hitAt: 650, duration: 1200, interval: 4000, stagger: 300, reaction: "crush", animation: "throw", bomb }),
+    ],
+});
+
 /**
  * Every weapon: its name, its school (melee, ranged or magic), what it's made of (EQUIPMENT ids,
  * characters/equipment.js), a line about it, and its attacks. The starting weapons a player
@@ -215,15 +226,16 @@ export const NATURAL = Object.freeze({
         ],
     },
     // (A town's bomb throwers, among those who march out against an invasion: core/invasions.js
-    // BOMBER. A sword up close, its shield hand free to lob goblin bombs at whoever's further off)
-    bombardier: {
-        label: "Sword and bombs",
-        equipment: ["sword"],
-        attacks: [
-            melee({ id: "slash", damage: [4, 8], hitAt: 380, duration: 760, interval: 1100, reaction: "slash", animation: "sword" }),
-            ranged({ id: "bomb", reach: 11, damage: [6, 12], hitAt: 650, duration: 1200, interval: 4000, stagger: 300, reaction: "crush", animation: "throw", bomb: "goblinBomb" }),
-        ],
-    },
+    // BOMBERS, each people's. A sword up close, its shield hand free to lob its people's bombs at
+    // whoever's further off: battle.js BOMBS. The orcs' goblin bombs; the humans' black-powder
+    // grenadoes; the elves' starfire seed pods; the dark elves' shadowfire orbs in spider silk; the
+    // cat folk's clay sun jars of desert naphtha; the lizard folk's swamp-gas bladders)
+    bombardier: bomber("Sword and goblin bombs", "goblinBomb"),
+    grenadier: bomber("Sword and grenadoes", "grenado"),
+    starfireSower: bomber("Sword and starfire seed pods", "starfirePod"),
+    shadowfireSlinger: bomber("Sword and shadowfire orbs", "shadowfireOrb"),
+    naphthaThrower: bomber("Sword and sun jars", "sunJar"),
+    bladderThrower: bomber("Sword and swamp-gas bladders", "gasBladder"),
     // (An invasion's northmen's axe-throwers: core/invasions.js BANDS. A hand axe up close, and
     // one thrown, end over end, at whoever's further off; and the Ashen Cult's high priests, as
     // the cult's leader in its ruins: a staff, and hellfire hurled)

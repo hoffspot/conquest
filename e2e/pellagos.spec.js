@@ -1,8 +1,9 @@
 import { expect, test } from "./fixtures.js";
 import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 import { Explored } from "../client/js/core/explored.js";
-import { BEHEMOTH, REWARD, SIZE } from "../client/js/core/invasions.js";
+import { BEHEMOTH, BOMBERS, REWARD, SIZE } from "../client/js/core/invasions.js";
 import { branchesFound, fareOf } from "../client/js/core/portals.js";
+import { NATURAL } from "../client/js/core/weapons.js";
 import { guilds, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
 
 // Pellagos in a real browser. The page exposes itself as window.pellagos ({ game, session,
@@ -7259,6 +7260,53 @@ test("the Explosion spell bursts on an orc and throws it limp through the air, t
     expect(await playUntil(page, () => window.pellagos.game.avatars.get("wolf").thrown, { seconds: 4 })).toBe(true);
     expect(await page.evaluate(() => window.pellagos.game.spellFx.bombs.size)).toBe(0);
     expect(await playUntil(page, () => !window.pellagos.game.avatars.get("wolf").thrown, { seconds: 6 })).toBe(true);
+});
+
+test("each people's bomb throwers' bombs drawn as their own as they're lobbed: a grenado, a starfire seed pod, a shadowfire orb in silk, a sun jar and a swamp-gas bladder, each lying lit or glowing where it lands, then bursting", async ({ page }) => {
+    test.setTimeout(150000);
+    await playing(page, "/?play&seed=1");
+
+    // (An orc a way off, standing still, thrown at in turn: each people's bomb lobbed by the
+    // player as their bomb throwers lob it)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.battle.add({ id: "target", kind: "orc", weapon: "cleaver", team: "orcs", square: [me.square[0] + 1, me.square[1] - 6], hp: 1e6 }).stunnedUntil = 1e12;
+        game.enlisting.push("target");
+    });
+    expect(await playUntil(page, () => window.pellagos.game.avatars.has("target"))).toBe(true);
+
+    const drawn = {};
+
+    for (const [people, { weapon }] of Object.entries(BOMBERS)) {
+        const kind = NATURAL[weapon].attacks.find(({ bomb }) => bomb).bomb;
+
+        expect(await page.evaluate((kind) => {
+            const { game } = window.pellagos;
+
+            Object.assign(game.battle.actor("target"), { hp: 1e6, stunnedUntil: 1e12, thrownAt: -Infinity });
+
+            return game.host.battle.lob(game.me, "target", { kind, damage: [1, 1], reach: 12 });
+        }, kind)).toEqual({ ok: true });
+        expect(await playUntil(page, () => [...window.pellagos.game.spellFx.bombs.values()].some(({ ring }) => ring), { seconds: 3 })).toBe(true);
+
+        drawn[people] = await page.evaluate(() => {
+            const [{ object }] = window.pellagos.game.spellFx.bombs.values();
+            const colours = [];
+
+            object.traverse((node) => node.isMesh && colours.push(node.material.color.getHexString()));
+
+            return colours.sort().join();
+        });
+        expect(await playUntil(page, () => window.pellagos.game.spellFx.bombs.size === 0, { seconds: 4 })).toBe(true);
+        expect(await playUntil(page, () => !window.pellagos.game.avatars.get("target").thrown, { seconds: 6 })).toBe(true);
+    }
+
+    // (Each its own)
+    expect(new Set(Object.values(drawn)).size).toBe(Object.keys(BOMBERS).length);
 });
 
 test("a Scroll of Safety read from the pack: a circle of runes grows under the player for three seconds, then they're in their home town's market square, the circle shrinking away there; struck down first, it's lost", async ({ page }) => {

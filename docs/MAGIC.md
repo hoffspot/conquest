@@ -582,6 +582,23 @@ tumbling stones, spikes of earth and ice bursting up, a whirlwind's funnel, dome
   A goblin bomb in flight is an iron-dark pot tumbling through the air, its wick sputtering
   sparks (`lob`); landed, it sits fizzing in a ring of light on the ground as wide as its blast
   will be, pulsing quicker and quicker as its wick burns down, till it bursts (`burst`).
+- **Bombs**: each people's bomb throwers' are their own (spellfx.js `BOMB_LOOKS`; WAR.md
+  *Invasions*), drawn and heard so:
+  - a human grenado: a black iron ball, a brass collar round its wick; it bursts harder (more
+    sparks and smoke, the camera shaken more);
+  - an elven starfire seed pod: long, green, its seams aglow, sparks drifting up off it as it lies
+    shimmering (`castHealingLow`); it bursts white-gold, no fireball nor smoke, starfire
+    glittering down slowly after it;
+  - a dark elven shadowfire orb: black, glowing violet, wound round in white spider silk, violet
+    sparks off it as it burns (`castFireLow`); it bursts violet and black, its smoke dark violet;
+  - a cat folk's sun jar: a clay jar, a rag stuffed in its neck for a wick; it bursts in fire, its
+    naphtha left burning on the ground round it for 2.5 to 3.5 seconds;
+  - a lizard folk's swamp-gas bladder: swollen, tied off, its gas hissing as it lies
+    (`castWaterLow`); it pops with a dull flash (`impactWaterHigh`), its gas billowing out low
+    over the ground and lingering (`#gasBurst`), no fire, the camera shaken little;
+  - an orc's goblin bomb, as above.
+  The others with wicks fizz as a goblin bomb does (`fuse`); all but the bladder burst as a bomb
+  does (`explosionSmall`).
   About 130 glowing particles and 70 of dust a bomb, 300 and 150 the spell (of 3,000 each).
 - **What lasts** shows on whoever it's on: motes of its colour now and then; Levitate lifts them
   0.35 metres off the ground, bobbing; Invisibility leaves a shimmer of them.

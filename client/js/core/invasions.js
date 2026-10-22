@@ -10,10 +10,10 @@
 // its fellows not; in every one after, the raiders fight them as they'd fight anyone.
 //
 // The town's people have the better of it: more of them, a whole line of battle (core/
-// formation.js), and two squads of bomb throwers whose goblin bombs toss the raiders off their
-// feet. Once only a share of the raiders are left standing, or none of those who fight up close
-// (their archers, casters and healers can't hold the field alone), they break and run (`rout`,
-// `close`). Whoever
+// formation.js), and two squads of bomb throwers whose bombs (each people's own: BOMBERS) toss
+// the raiders off their feet. Once only a share of the raiders are left standing, or none of
+// those who fight up close (their archers, casters and healers can't hold the field alone), they
+// break and run (`rout`, `close`). Whoever
 // felled raiders has a bounty for each, the guilds' merit and the town's thanks; and one who
 // brought down a good share of them (`big`), its lord's own purse and a rare piece from its
 // armoury besides.
@@ -305,8 +305,26 @@ export function bandFor({ first, coastal, random }) {
     return random.pick(Object.keys(BANDS).filter((band) => coastal || !BANDS[band].coastal));
 }
 
-/** The town's bomb throwers' weapon (core/weapons.js NATURAL): a sword up close, goblin bombs further off. */
-export const BOMBER = "bombardier";
+/**
+ * Each people's town's bomb throwers (core/weapons.js NATURAL bombardier and its kin): a sword up
+ * close and their people's own bombs further off (battle.js BOMBS), what they throw (`weapon`)
+ * and what they're called (`name`): the humans' grenadiers with black-powder grenadoes, the
+ * elves' starfire sowers with seed pods of starfire, the dark elves' shadowfire slingers with orbs
+ * of it wrapped in spider silk, the cat folk's naphtha throwers with clay sun jars of desert
+ * naphtha, the lizard folk's bladder throwers with bladders of swamp gas, and the orcs' bomb
+ * throwers with goblin bombs.
+ */
+export const BOMBERS = Object.freeze({
+    human: Object.freeze({ weapon: "grenadier", name: "grenadier" }),
+    elf: Object.freeze({ weapon: "starfireSower", name: "starfire sower" }),
+    darkElf: Object.freeze({ weapon: "shadowfireSlinger", name: "shadowfire slinger" }),
+    cat: Object.freeze({ weapon: "naphthaThrower", name: "naphtha thrower" }),
+    lizard: Object.freeze({ weapon: "bladderThrower", name: "bladder thrower" }),
+    orc: Object.freeze({ weapon: "bombardier", name: "bomb thrower" }),
+});
+
+/** A people's town's bomb throwers (BOMBERS): any other people's, goblin bombs. */
+export const bombersOf = (people) => BOMBERS[people] ?? BOMBERS.orc;
 
 /**
  * A character's time in towns, as kept (Progress `invasion`), made safe: { seen (how many

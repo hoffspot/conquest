@@ -2313,8 +2313,19 @@ soldiers; the host's steps took 4 to 6.5 ms on the mean.
 - **The town's people**, the rest (58%): soldiers of whoever holds the town, in their own people's
   line (`DOCTRINES`, `ROLE_ARMS`), forming 6 m inside its edge and marching out to meet them; and
   two squads of bomb throwers (`bombers`: a fortieth of them each, at least two), out on their
-  line's flanks, a sword up close and goblin bombs lobbed from 11 m (core/weapons.js `bombardier`)
-  that toss the raiders they burst by off their feet.
+  line's flanks, a sword up close and their people's own bombs lobbed from 11 m that toss the
+  raiders they burst by off their feet (`BOMBERS`; core/weapons.js `bombardier` and its kin;
+  battle.js `BOMBS`; drawn and heard: MAGIC.md *Bombs*). Each people's as strong as the rest
+  (6–12 at its heart, half at its edge), each its own:
+
+  | People | Its bomb throwers | Their bombs | Bursting |
+  | --- | --- | --- | --- |
+  | Humans | Grenadiers | Black-powder grenadoes: black iron, a brass collar round the wick | Hardest: throwing them furthest (1.3 times a goblin bomb), its fuse a little shorter |
+  | Elves | Starfire sowers | Seed pods of starfire, glowing at their seams | Widest (3 m), no fire nor smoke: white-gold, starfire glittering down after it |
+  | Dark elves | Shadowfire slingers | Orbs of shadowfire wound round in spider silk | Violet and black, withering half of those it catches |
+  | Cat folk | Naphtha throwers | Clay sun jars of desert naphtha, a rag in the neck | Narrower (2.3 m), its naphtha splashed about burning, setting 70% of them alight |
+  | Lizard folk | Bladder throwers | Bladders of swamp gas, tied off | A cloud of it billowing low (2.8 m, as earth), poisoning 70%, throwing them least |
+  | Orcs (and any other) | Bomb throwers | Goblin bombs | As a goblin bomber's |
 - **Where they stand**: neither line on a square with no way from it to where the lines meet (a
   yard shut in among buildings: the host's `#spots`, `to`), so none of them is left there for the
   whole of it.
@@ -2455,7 +2466,7 @@ with what they carry (`Progress.invasion`), and a world's rules say whether inva
 player's device can draw is in the host's snapshot too (each player's `budget`; `SNAPSHOT_VERSION`
 31, none told in a world kept before), and told by their game (`NET_VERSION` 146). The bands
 changed what two games share again (`NET_VERSION` 147), and so did the band named in the thanks
-(148), and the Behemoth of the Rift (149).
+(148), the Behemoth of the Rift (149), and each people's own bombs (150).
 
 ### Playing together (M11)
 
