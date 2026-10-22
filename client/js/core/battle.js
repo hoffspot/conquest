@@ -704,7 +704,8 @@ export class Battle {
      * whose town they're in, whose enemies they run from: #afraid). A patrol goes round its
      * points in turn (a guard's one point: its post, facing out the way it's added facing). One
      * carrying a shield has `shield` (#hit: { chance, share, spells }). One that's `lone` picks its
-     * own fights: its own don't take up its grudges (#provoke: an invasion's raiders).
+     * own fights: its own don't take up its grudges, nor do those it leaves be take up grudges
+     * against it for others of their own it strikes (#provoke: an invasion's raiders).
      */
     add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, lone = false, engine = null }) {
         const kindOf = KINDS[kind];
@@ -5269,12 +5270,16 @@ export class Battle {
 
         if (attacker.team !== target.team) {
             const until = this.time + FOE_MS;
+            // (One that picks its own fights, `lone` (an invasion's raider), makes no enemy of one
+            // it leaves be by striking another of their own: a player in their first invasion, and
+            // theirs, watching it strike the town's soldiers)
+            const spares = (other) => attacker.lone && this.relations && !this.relations(attacker, other);
 
             for (const other of this.actors) {
                 // (A creature: only its own pack)
                 const own = other.team === target.team && (!target.wild || other.wild?.pack === target.wild.pack);
 
-                if (other === target || (own && !target.lone && !other.neutral && !other.dead && other.map === target.map && (this.canSee(other, target) || this.canSee(other, attacker)))) {
+                if (other === target || (own && !target.lone && !other.neutral && !other.dead && other.map === target.map && !spares(other) && (this.canSee(other, target) || this.canSee(other, attacker)))) {
                     other.foes[attacker.id] = until;
                 }
             }

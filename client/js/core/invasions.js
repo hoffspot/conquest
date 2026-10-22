@@ -11,12 +11,13 @@
 //
 // The town's people have the better of it: more of them, a whole line of battle (core/
 // formation.js), and two squads of bomb throwers whose bombs (each people's own: BOMBERS) toss
-// the raiders off their feet. Once only a share of the raiders are left standing, or none of
-// those who fight up close (their archers, casters and healers can't hold the field alone), they
-// break and run (`rout`, `close`). Whoever
-// felled raiders has a bounty for each, the guilds' merit and the town's thanks; and one who
-// brought down a good share of them (`big`), its lord's own purse and a rare piece from its
-// armoury besides.
+// the raiders off their feet. For a few minutes from the first blow, more of each side keep
+// coming up as its own fall (`reinforce`), the town always the stronger, so a player has time to
+// come to it. Then, once only a share of the raiders are left standing, or none of those who
+// fight up close (their archers, casters and healers can't hold the field alone), they break and
+// run (`rout`, `close`); the bandits fight to the last. Whoever felled raiders has a bounty for
+// each, the guilds' merit and the town's thanks; and one who brought down a good share of them
+// (`big`), its lord's own purse and a rare piece from its armoury besides.
 //
 // Pure data and arithmetic: the host (core/host.js #invasions) brings them to life.
 
@@ -37,8 +38,15 @@
  *    meet, beyond it; `march`: how fast the town's line marches (m/s; the raiders', their band's);
  *  - `rout`: the share of the raiders left standing when they break and run, as they do once
  *    none of those in the roles that fight up close (`close`: core/formation.js ROLES) or their
- *    chiefs are; `run`: how fast they run, back the way they came, `away` metres beyond where
+ *    chiefs are (a band's own, BANDS'; none for a band that fights to the last, down to its
+ *    last archer); `run`: how fast they run, back the way they came, `away` metres beyond where
  *    they came out;
+ *  - `reinforce`: from the first blow, for `lasts` ms, every `every` ms, each side's fallen made
+ *    good from behind it (core/host.js #reinforceInvasion): the raiders' back up to `raiders` of the line
+ *    that came, coming up the road from where it came out, the town's to `town` of its own, out
+ *    of the town; neither side breaking meanwhile. So the town keeps the edge, and the fight goes
+ *    on long enough for a player to come to it, see how it stands and choose what to do; then
+ *    it's fought out with what's left;
  *  - `linger`: how long those left stand once it's over before they go, as soon as they're not
  *    fighting; `lasts`: when it's gone on this long, everyone left in it goes (ms of the battle's
  *    time).
@@ -62,6 +70,7 @@ export const INVASION = Object.freeze({
     close: Object.freeze(["front", "heavy"]),
     run: 2.6,
     away: 40,
+    reinforce: Object.freeze({ lasts: 180000, every: 15000, raiders: 0.7, town: 0.8 }),
     linger: 20000,
     lasts: 600000,
 });
@@ -106,7 +115,8 @@ export const isSize = (size) => Number.isInteger(size) && size >= SIZE.least && 
  * blow their armour takes off (`armor`); how fast its line marches (`march`, m/s); how far each
  * role goes after an enemy (`leash`, metres: core/formation.js ROLES' where not given); whether its
  * line closes with the enemy it sees (`advance`), or stands `stand` metres short of where the
- * lines meet and lets them come; the share of it left standing when it breaks and runs (`rout`);
+ * lines meet and lets them come; the share of it left standing when it breaks and runs (`rout`:
+ * none, fighting to the last);
  * whether it comes only to a town by the sea (`coastal`); what the crier cries of it coming
  * (`cry`: its road `{way}`) and once it's beaten (`beaten`: criesOf, thanksOf); and what's found
  * on its fallen (core/progress.js LOOT). How each is dressed is characters/soldiers.js
@@ -114,7 +124,8 @@ export const isSize = (size) => Number.isInteger(size) && size >= SIZE.least && 
  *
  * - **Bandits**: cutthroats with swords and cleavers behind round shields, brutes with hammers and
  *   axes, archers, and their chiefs; no casters or healers. Rough men, less hardy than a
- *   soldier, eager to close. Every character's first invasion is theirs.
+ *   soldier, eager to close, and with nowhere to run to, fighting to the last. Every
+ *   character's first invasion is theirs.
  * - **Northmen**: raiders out of the north in furs and war paint, the shock of their berserkers
  *   (battle axes, greatswords, hammers: two in five of them, going far after whoever they see),
  *   axe-throwers and archers behind a thin shield line, their chieftains with greatswords. Quick
@@ -142,7 +153,7 @@ export const BANDS = Object.freeze({
         chiefHp: 2.5,
         hp: 0.85,
         march: 1.3,
-        rout: 0.25,
+        rout: 0,
         cry: "Bandits on the {way} road!",
         beaten: "The bandits are beaten!",
         loot: "raider",
