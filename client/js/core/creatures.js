@@ -68,22 +68,24 @@ const PACK_EVERY = 2;
  *    `footprint`), what's after it closing to the nearest of them;
  *  - `sight`: how far it sees whoever it'd fight; `turn`: how fast it turns (radians a second);
  *  - `tread`: whoever's under it as it walks, every `every` ms: within `reach` of its body's
- *    middle, hurt (`damage`) and thrown aside (`toss`);
+ *    middle, hurt (`damage`) and thrown aside (`toss`); standing, its feet shifted every `still`
+ *    ms, whoever's within `round` of its body's middle (under it, or hard against it);
  *  - its moves, each its weapon's attack of that id (weapons.js NATURAL kaiju), made no sooner
  *    than `every` ms after it last made it: `slam`, its jaws slammed down `ahead` metres before
- *    where it stands, `radius` round, whenever anyone's there; `roar`, everyone within `radius`
- *    thrown off their feet, once `crowd` of them are; `breath`, raked over the ground from
- *    `reach[0]` to `reach[1]` metres before its mouth (`mouth` metres before where it stands: as
- *    beasts/beam.js aims it), a blast `radius` round where it lands every `tick` ms, whoever it
- *    catches hurt once and thrown, whenever enough of them (`crowd`) stand where it would land.
+ *    where it stands (or `near`, whichever catches more), `radius` round, whenever anyone's there;
+ *    `roar`, everyone within `radius` thrown off their feet, once `crowd` of them are; `breath`,
+ *    raked over the ground from `reach[0]` to `reach[1]` metres before its mouth (`mouth` metres
+ *    before where it stands: as beasts/beam.js aims it), a blast `radius` round where it lands
+ *    every `tick` ms, whoever it catches hurt once and thrown, whenever enough of them (`crowd`)
+ *    stand where it would land (or all of them about, with fewer left).
  */
 export const COLOSSUS = Object.freeze({
     body: Object.freeze({ ahead: 7, half: 6 }),
     sight: 90,
     turn: 0.6,
-    tread: Object.freeze({ every: 700, reach: 6.5, damage: Object.freeze([8, 14]), toss: 1.2 }),
-    slam: Object.freeze({ ahead: 16, radius: 5, toss: 1.6, every: 5000 }),
-    roar: Object.freeze({ radius: 15, toss: 2, crowd: 8, every: 24000 }),
+    tread: Object.freeze({ every: 700, still: 1800, reach: 6.5, round: 7.5, damage: Object.freeze([5, 9]), toss: 1.2 }),
+    slam: Object.freeze({ ahead: 16, near: 10, radius: 5, toss: 1.6, every: 5000 }),
+    roar: Object.freeze({ radius: 15, toss: 2, crowd: 5, every: 18000 }),
     breath: Object.freeze({ mouth: 15.9, reach: Object.freeze([13, 18]), radius: 4, tick: 250, toss: 2.6, crowd: 3, every: 12000 }),
 });
 

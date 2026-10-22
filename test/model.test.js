@@ -13,6 +13,7 @@ const { THEMES } = await import("../client/js/core/dungeons/themes.js");
 const { landAt, planWorld, startFor } = await import("../client/js/core/worldplan/plan.js");
 const { ASSETS } = await import("../client/js/app/assets.js");
 const { CREATURES, LAIRS, tierAt } = await import("../client/js/core/creatures.js");
+const { BEHEMOTH } = await import("../client/js/core/invasions.js");
 const { LOOKS } = await import("../client/js/beasts/looks.js");
 const { isScrambled, unscramble } = await import("../client/js/app/scramble.js");
 const { LEFT_OUT, licensedModelsHere } = await import("../scripts/licensed-models.js");
@@ -35,7 +36,7 @@ async function gltfOf(path) {
 }
 
 describe("the creatures drawn from a model (beasts/model.js)", () => {
-    it("are in the catalog, each a lair's master, met in the wilds or in a kind of dungeon, with a look that stands in for it till it's read, and its skins there too", () => {
+    it("are in the catalog, each a lair's master, met in the wilds, in a kind of dungeon or against a town, with a look that stands in for it till it's read, and its skins there too", () => {
         for (const [id, { asset, skins = [""] }] of Object.entries(MODELS)) {
             assert.ok(hasModel(id), id);
             assert.equal(ASSETS.models[asset].tier, "demand", "downloaded only as it's wanted");
@@ -46,7 +47,8 @@ describe("the creatures drawn from a model (beasts/model.js)", () => {
             // theme it's in (modelsInside))
             const inDungeons = Object.values(THEMES).some((theme) => modelsInside({ kind: "dungeon", theme: theme.id }).includes(id));
 
-            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || CREATURES[id].biomes?.length || inDungeons, `${id} keeps a lair, is met in the wilds, or in a kind of dungeon`);
+            // (Or it comes against a town: the Behemoth of the Rift, core/invasions.js BEHEMOTH)
+            assert.ok(Object.values(LAIRS).some(({ master }) => master[0] === id) || CREATURES[id].biomes?.length || inDungeons || id === BEHEMOTH.creature, `${id} keeps a lair, is met in the wilds, in a kind of dungeon, or comes against a town`);
 
             // (Each of its skins but its own one of the catalog's "<asset>-skins")
             const files = (ASSETS.models[`${asset}-skins`]?.files ?? []).map(({ path }) => path);

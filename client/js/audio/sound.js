@@ -1657,10 +1657,10 @@ export class Sound {
      * seen someone to go after, or it's about its business), attacking ("attack", loudest `hitAt`
      * seconds from now, as its blow lands), hurt ("hurt") or dying ("death"), `delay` seconds
      * from now, as its family sounds at its own pitch; with what's heard with it (a magma slime's
-     * sizzle, the bats' fluttering: under all but its hurt). Returns its source, or null if it has
-     * no such voice.
+     * sizzle, the bats' fluttering: under all but its hurt); heard as far off as a call or a blow
+     * is, or `far` metres. Returns its source, or null if it has no such voice.
      */
-    voice(creature, what, at, { hitAt = null, delay = 0 } = {}) {
+    voice(creature, what, at, { hitAt = null, delay = 0, far = null } = {}) {
         const voice = CREATURE_VOICES[creature];
         const name = voice ? uttered(voice.family, what) : null;
 
@@ -1672,7 +1672,7 @@ export class Sound {
             this.play(voice.with, { at, delay });
         }
 
-        return this.play(name, { at, rate: voice.rate ?? 1, delay, peakAt: hitAt, far: what === "call" ? CALL_FAR : FAR });
+        return this.play(name, { at, rate: voice.rate ?? 1, delay, peakAt: hitAt, far: far ?? (what === "call" ? CALL_FAR : FAR) });
     }
 
     /**

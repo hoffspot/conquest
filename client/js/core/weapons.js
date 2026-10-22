@@ -586,9 +586,9 @@ export const NATURAL = Object.freeze({
     kaiju: {
         label: "Atomic breath, jaws and roar",
         attacks: [
-            { id: "slam", kind: "colossal", reach: 0, damage: [18, 30], hitAt: 1100, duration: 1600, interval: 1600, stagger: 400, reaction: "crush", animation: "slam" },
-            { id: "roar", kind: "colossal", reach: 0, damage: [4, 8], hitAt: 3600, duration: 7600, interval: 7600, stagger: 400, reaction: "crush", animation: "roar" },
-            { id: "atomicBreath", kind: "colossal", reach: 0, damage: [22, 34], hitAt: 1300, duration: 6000, interval: 6000, lasts: 3300, stagger: 500, reaction: "fire", animation: "breath", afflict: { kind: "burn", chance: 0.5 } },
+            { id: "slam", kind: "colossal", reach: 0, damage: [26, 38], hitAt: 1100, duration: 1600, interval: 1600, stagger: 400, reaction: "crush", animation: "slam" },
+            { id: "roar", kind: "colossal", reach: 0, damage: [4, 7], hitAt: 3600, duration: 7600, interval: 7600, stagger: 400, reaction: "crush", animation: "roar" },
+            { id: "atomicBreath", kind: "colossal", reach: 0, damage: [18, 28], hitAt: 1300, duration: 6000, interval: 6000, lasts: 3300, stagger: 500, reaction: "fire", animation: "breath", afflict: { kind: "burn", chance: 0.5 } },
         ],
     },
     // (A demon lord's: its burning fists, and hellfire hurled from its hand)

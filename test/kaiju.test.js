@@ -79,7 +79,7 @@ describe("the Behemoth of the Rift (battle.js #colossus)", () => {
         assert.equal(kaiju.hp, kaiju.maxHp, "none of it on itself");
     });
 
-    it("slams its jaws down on those just before it, roars once enough are round it, and treads on whoever's under it as it goes", () => {
+    it("slams its jaws down on those just before it, roars once enough are round it, and treads on whoever's under it", () => {
         const battle = new Battle(field(120), { seed: 7 });
 
         behemoth(battle, [40, 30], { facing: 0 });
@@ -102,21 +102,29 @@ describe("the Behemoth of the Rift (battle.js #colossus)", () => {
 
         assert.ok(roared, "roared");
         assert.ok(events.some((event) => event.type === "blast" && event.kind === "colossalRoar" && event.throws.length >= 4), "and threw them off their feet");
+
+        // (Under it by its hind feet, standing, out of its jaws' way: its feet shifted on them)
+        const under = new Battle(field(120), { seed: 3 });
+
+        behemoth(under, [60, 60], { facing: 0 });
+        soldiers(under, "u", [63, 61], 1);
+
+        assert.ok(run(under, 6000).some((event) => event.type === "hit" && event.id === "u0" && event.attack === "colossalTread"), "trod on the one under it");
     });
 
-    it("walks to where its breath would land on them, turning no faster than it turns, its body's squares kept with it, treading on whoever's in its way", () => {
+    it("walks on them till they're under its jaws, turning no faster than it turns, its body's squares kept with it; whoever's in its way, trodden on or slammed till they're down", () => {
         const battle = new Battle(field(160), { seed: 11 });
         const kaiju = behemoth(battle, [80, 20], { facing: Math.PI / 2 });
         const band = soldiers(battle, "s", [78, 95], 8, { spread: 1.5 });
 
-        // (One in its way: under it as it goes)
-        soldiers(battle, "w", [80, 40], 1);
+        // (One in its way, as a town's soldier is)
+        soldiers(battle, "w", [80, 40], 1, { hp: 40 });
 
         let most = 0;
         let was = kaiju.facing;
         const events = [];
 
-        for (let t = 0; t < 30000; t += STEP_MS) {
+        for (let t = 0; t < 45000; t += STEP_MS) {
             events.push(...battle.advance(STEP_MS));
             most = Math.max(most, Math.abs(Math.atan2(Math.sin(kaiju.facing - was), Math.cos(kaiju.facing - was))));
             was = kaiju.facing;
@@ -128,8 +136,35 @@ describe("the Behemoth of the Rift (battle.js #colossus)", () => {
         const middle = [kaiju.x + Math.sin(kaiju.facing) * COLOSSUS.body.ahead, kaiju.y + Math.cos(kaiju.facing) * COLOSSUS.body.ahead];
 
         assert.ok(x0 <= middle[0] && middle[0] <= x1 + 1 && y0 <= middle[1] && middle[1] <= y1 + 1 && x1 - x0 >= COLOSSUS.body.half * 2 - 1, "its body's squares where its body is");
-        assert.ok(events.some((event) => event.type === "hit" && event.id === "w0" && event.attack === "colossalTread"), "trod on the one in its way");
+        assert.ok(events.some((event) => event.type === "hit" && event.id === "w0" && event.by === "kaiju") && battle.actor("w0").dead, "the one in its way, down");
         assert.ok(events.some((event) => event.type === "hit" && band.some(({ id }) => id === event.id) && event.by === "kaiju"), "and came on the band");
+        assert.ok(Math.hypot(kaiju.x - 80, kaiju.y - 95) <= COLOSSUS.slam.ahead + COLOSSUS.slam.radius, "under its jaws");
+    });
+
+    it("never goes after anyone in a town it's come against (its `keepOut`), but on to its goal; going back, after no one", () => {
+        const battle = new Battle(field(160), { seed: 17 });
+        const kaiju = behemoth(battle, [80, 40], { facing: 0 });
+        const town = { middle: [80, 130], within: 40 };
+
+        // (One in the town, in plain sight; none outside it)
+        soldiers(battle, "t", [80, 100], 1);
+        Object.assign(kaiju.wild, { goal: [80, 80], keepOut: town });
+
+        const events = run(battle, 40000);
+
+        assert.equal(kaiju.target, null);
+        assert.ok(!events.some((event) => event.type === "attack" && event.id === "kaiju"), "no move made at them");
+        assert.ok(Math.hypot(kaiju.x - 80, kaiju.y - 80) < 6, "come on to its goal");
+
+        // (One outside it: set on; going back, not)
+        soldiers(battle, "o", [70, 82], 1);
+        run(battle, 2000);
+        assert.equal(kaiju.target, "o0");
+
+        Object.assign(kaiju.wild, { goal: [80, 10], leaving: true });
+        run(battle, 2000);
+        assert.equal(kaiju.target, null, "going back");
+        assert.ok(kaiju.path.length > 0, "on its way");
     });
 
     it("is everyone's enemy and everyone its, the wild's creatures too; nothing stuns, frightens, slows or throws it", () => {

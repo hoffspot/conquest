@@ -1624,13 +1624,17 @@ export class Battle {
     /**
      * Can `a` see `b`: on the same map, within SIGHT squares (out in the world at night, only as
      * far as the light where `b` is lets them: light.js sightAt, `this.light`; as far as ever for
-     * a creature that sees in the dark, creatures.js `darkSight`), with nothing that
-     * blocks sight between their middles (the map's opaque squares: houses and trees, not barrels
-     * or a well, outdoors; walls, not tables, indoors)? (`range`: as far as they look, if further
-     * than SIGHT: a spell's caster, as far as it reaches)
+     * a creature that sees in the dark, creatures.js `darkSight`, or of the colossal, towering and
+     * aglow), with nothing that blocks sight between their middles (the map's opaque squares:
+     * houses and trees, not barrels or a well, outdoors; walls, not tables, indoors)? (`range`: as
+     * far as they look, if further than SIGHT: a spell's caster, as far as it reaches. To the
+     * colossal: to the nearest of the squares its body stands over, #aimAt)
      */
     canSee(a, b, range = SIGHT) {
-        return a.map === b.map && this.#sees(a.map, a.square, b.square, a.map === this.lightMap && !a.wild?.darkSight ? range * sightAt(this.light, b.square) : range);
+        const colossal = Boolean(b.wild?.colossus && b.footprint);
+        const to = colossal ? this.#aimAt(b, a.square) : b.square;
+
+        return a.map === b.map && this.#sees(a.map, a.square, to, a.map === this.lightMap && !a.wild?.darkSight && !colossal ? range * sightAt(this.light, to) : range);
     }
 
     // Can someone on a map at one square see another square: within `range` (SIGHT), nothing opaque
@@ -1864,6 +1868,14 @@ export class Battle {
      */
     #inFight(actor) {
         if (actor.attack || actor.order?.type === "engage") {
+            return true;
+        }
+
+        // (After the colossal, its body in sight as far as it reaches: however far off where it
+        // stands)
+        const colossal = actor.target === null ? null : this.actor(actor.target);
+
+        if (colossal?.wild?.colossus && !colossal.dead && this.hostile(colossal, actor) && this.canSee(actor, colossal, Math.max(SIGHT, longestReach(actor.arms)))) {
             return true;
         }
 
@@ -2622,16 +2634,24 @@ export class Battle {
     // The colossal's own way of fighting. Whom it'd fight looked for again now and then
     // (#colossalTarget); then, ready, the first of its moves that would catch anyone (#colossalMove);
     // else going to stand where its breath would land on them, turning as it goes (#stride), or
-    // standing there turned to them
+    // standing there turned to them. With no one to fight, going where it's sent, if anywhere
+    // (its wild's `goal`: an invasion's, host.js); leaving (`leaving`: going back the way it
+    // came, beaten off), going there and fighting no one
     #colossus(actor) {
-        const target = this.#colossalTarget(actor);
+        const { goal = null, leaving = false } = actor.wild;
+        const target = leaving ? null : this.#colossalTarget(actor);
 
         if (!target) {
             actor.target = null;
-            actor.path = [];
-            actor.pathGoal = null;
             actor.facingTo = null;
-            actor.walkPace = actor.speed;
+            actor.walkPace = leaving ? actor.chaseSpeed : actor.speed;
+
+            if (!goal || hypot(goal[0] - actor.x, goal[1] - actor.y) <= COLOSSAL_NEAR) {
+                actor.path = [];
+                actor.pathGoal = null;
+            } else {
+                this.#colossalGo(actor, [Math.floor(goal[0]), Math.floor(goal[1])]);
+            }
 
             return;
         }
@@ -2645,32 +2665,32 @@ export class Battle {
             return;
         }
 
-        // Where it'd stand: as far before them as its breath lands, the way it's coming from;
-        // through them and on beyond, if they're nearer than its breath would reach (trampling
-        // whoever's in its way: #tread), to turn on them from there
-        const { breath } = actor.wild.colossus;
+        // Coming on till they're under its jaws, breathing on any it passes where its breath
+        // lands; then standing its ground, turned to them, fighting whoever's about with its
+        // jaws, its roar and its tread (it never backs off)
+        const { slam } = actor.wild.colossus;
         const far = hypot(target.x - actor.x, target.y - actor.y);
-        const lands = breath.mouth + (breath.reach[0] + breath.reach[1]) / 2;
         const [ux, uy] = far > 1e-6 ? [(target.x - actor.x) / far, (target.y - actor.y) / far] : [sin(actor.facing), cos(actor.facing)];
 
         actor.facingTo = atan2(target.x - actor.x, target.y - actor.y);
 
-        if (Math.abs(far - lands) <= COLOSSAL_NEAR) {
+        if (far <= slam.ahead + COLOSSAL_NEAR) {
             actor.path = [];
             actor.pathGoal = null;
 
             return;
         }
 
-        const beyond = far < lands - COLOSSAL_NEAR * 2;
-        const [gx, gy] = beyond ? [target.x + ux * lands * 0.6, target.y + uy * lands * 0.6] : [target.x - ux * lands, target.y - uy * lands];
-        const goal = [Math.floor(gx), Math.floor(gy)];
+        this.#colossalGo(actor, [Math.floor(target.x - ux * slam.ahead), Math.floor(target.y - uy * slam.ahead)]);
+    }
 
+    // The colossal on its way to a square (or the nearest free one to it): its way found again
+    // when it's going somewhere else, at most every REPATH_MS; nowhere to stand there, it stands
+    #colossalGo(actor, goal) {
         if ((!actor.path.length || !same(actor.pathGoal, goal)) && this.time - actor.lastPathAt >= REPATH_MS) {
             try {
                 this.#pathTo(actor, nearestFree(this.#squares(actor.map), goal, { within: 6 }));
             } catch {
-                // (Nowhere to stand there: it turns to them where it is)
                 actor.path = [];
                 actor.pathGoal = null;
             }
@@ -2678,9 +2698,12 @@ export class Battle {
     }
 
     // Whom the colossal would fight, looked for again every COLOSSAL_THINK_MS (else whom it's
-    // after, while they're about): of the enemies it can see as far as its `sight`, the one with
-    // most of their fellows near them (within COLOSSAL_FELLOWS metres), those its breath would land
-    // on where it stands counting more; the nearest of as many. Null if it sees none
+    // after, while they're about): of the enemies it can see as far as its `sight` (none within
+    // `within` of `middle` of its wild's `keepOut`: a town it's come against), standing, those
+    // within reach of its jaws (as far from its body's middle as they'd land on) before any others
+    // (on its way, it walks over them); of them, the one with most of their fellows near them
+    // (within COLOSSAL_FELLOWS metres), those its breath would land on where it stands counting
+    // more; the nearest of as many. Null if it sees none
     #colossalTarget(actor) {
         const { colossus } = actor.wild;
         const was = actor.target === null ? null : this.actor(actor.target);
@@ -2692,15 +2715,23 @@ export class Battle {
 
         actor.rethinkAt = this.time + COLOSSAL_THINK_MS;
 
-        const { breath } = colossus;
+        const { breath, slam, body } = colossus;
         const lands = breath.mouth + (breath.reach[0] + breath.reach[1]) / 2;
+        const [bx, by] = this.#before(actor, body.ahead);
+        const jaws = slam.ahead + slam.radius - body.ahead;
+        const standing = !actor.path.length;
         let best = null;
+        let bestNear = false;
         let bestScore = -Infinity;
+
+        // (Not one in where it's kept out of: a town it's come against, host.js `keepOut`)
+        const { keepOut = null } = actor.wild;
+        const kept = (other) => Boolean(keepOut) && hypot(other.x - keepOut.middle[0], other.y - keepOut.middle[1]) < keepOut.within;
 
         for (const k of this.#within(actor.map, actor.x, actor.y, colossus.sight)) {
             const other = this.actors[k];
 
-            if (other === actor || other.dead || other.map !== actor.map || !this.hostile(actor, other) || !this.canSee(actor, other, colossus.sight)) {
+            if (other === actor || other.dead || other.map !== actor.map || kept(other) || !this.hostile(actor, other) || !this.canSee(actor, other, colossus.sight)) {
                 continue;
             }
 
@@ -2710,10 +2741,12 @@ export class Battle {
 
                 return !fellow.dead && fellow.map === actor.map && this.hostile(actor, fellow) && hypot(fellow.x - other.x, fellow.y - other.y) <= COLOSSAL_FELLOWS;
             }).length;
+            const near = standing && hypot(other.x - bx, other.y - by) <= jaws;
             const score = fellows + (Math.abs(far - lands) <= COLOSSAL_NEAR * 2 ? 3 : 0) - far / colossus.sight;
 
-            if (score > bestScore) {
+            if ((near && !bestNear) || (near === bestNear && score > bestScore)) {
                 best = other;
+                bestNear = near;
                 bestScore = score;
             }
         }
@@ -2735,24 +2768,35 @@ export class Battle {
     }
 
     // The first of the colossal's moves (its weapon's attacks: COLOSSUS) it's ready to make that
-    // would catch anyone: its breath, raked over where enough of them stand (`crowd`); its jaws
-    // slammed down on any just before it; its roar, with enough of them round it. Made, it's
-    // started as a blow is (#attack: told as "attack"), turned the way it faces, standing still:
-    // whether it's made one
+    // would catch anyone: its breath, raked over where enough of them stand (`crowd`, or all of
+    // them about, with fewer left); its jaws slammed down on any just before it (`ahead`, or
+    // `near`: wherever catches more); its roar, with enough of them round it. Made, it's started
+    // as a blow is (#attack: told as "attack"), turned the way it faces, standing still: whether
+    // it's made one
     #colossalMove(actor, target) {
-        const { colossus } = actor.wild;
+        const { breath, slam, roar, body, sight } = actor.wild.colossus;
         const ready = (move) => this.time >= (actor.moveAt?.[move] ?? 0);
-        const [mx, my] = this.#before(actor, colossus.breath.mouth + (colossus.breath.reach[0] + colossus.breath.reach[1]) / 2);
-        const along = (colossus.breath.reach[1] - colossus.breath.reach[0]) / 2 + colossus.breath.radius;
-        const [bx, by] = this.#before(actor, colossus.body.ahead);
-        const [sx, sy] = this.#before(actor, colossus.slam.ahead);
+        const [mx, my] = this.#before(actor, breath.mouth + (breath.reach[0] + breath.reach[1]) / 2);
+        const along = (breath.reach[1] - breath.reach[0]) / 2 + breath.radius;
+        const [bx, by] = this.#before(actor, body.ahead);
+        let about = null;
+        const enough = (caught, crowd) => caught > 0 && (caught >= crowd || caught >= (about ??= this.#caughtBy(actor, actor.x, actor.y, sight).length));
         let move = null;
+        let ahead = null;
 
-        if (ready("breath") && this.#caughtBy(actor, mx, my, along).length >= colossus.breath.crowd) {
+        if (ready("breath") && enough(this.#caughtBy(actor, mx, my, along).length, breath.crowd)) {
             move = "breath";
-        } else if (ready("slam") && this.#caughtBy(actor, sx, sy, colossus.slam.radius).length) {
-            move = "slam";
-        } else if (ready("roar") && this.#caughtBy(actor, bx, by, colossus.roar.radius).length >= colossus.roar.crowd) {
+        } else if (ready("slam")) {
+            const caught = (at) => this.#caughtBy(actor, ...this.#before(actor, at), slam.radius).length;
+            const [far, near] = [caught(slam.ahead), caught(slam.near)];
+
+            if (far || near) {
+                move = "slam";
+                ahead = near > far ? slam.near : slam.ahead;
+            }
+        }
+
+        if (!move && ready("roar") && this.#caughtBy(actor, bx, by, roar.radius).length >= roar.crowd) {
             move = "roar";
         }
 
@@ -2762,21 +2806,21 @@ export class Battle {
 
         const attack = actor.arms.find(({ id }) => id === (move === "breath" ? "atomicBreath" : move));
 
-        actor.moveAt = { ...actor.moveAt, [move]: this.time + colossus[move].every };
+        actor.moveAt = { ...actor.moveAt, [move]: this.time + actor.wild.colossus[move].every };
         actor.path = [];
         actor.pathGoal = null;
-        actor.attack = { attack, target: target.id, start: this.time, struck: false };
+        actor.attack = { attack, target: target.id, start: this.time, struck: false, ...(ahead === null ? {} : { ahead }) };
         actor.readyAt = this.time + attack.interval;
         this.#emit("attack", { id: actor.id, target: target.id, weapon: actor.weapon, attack: attack.id, animation: attack.animation, duration: attack.duration, hitAt: attack.hitAt });
 
         return true;
     }
 
-    // One of the colossal's moves come to its moment (#fight): its jaws slammed down before it, a
-    // blast where they land; its roar, a blast all round it from its body's middle; or its breath
-    // begun, raked over the ground ahead of it from there on (#rake). Whoever any of them catches is
-    // thrown from it (#blast, its heart where it stands)
-    #colossal(actor, attack) {
+    // One of the colossal's moves come to its moment (#fight): its jaws slammed down `ahead` metres
+    // before it, a blast where they land; its roar, a blast all round it from its body's middle; or
+    // its breath begun, raked over the ground ahead of it from there on (#rake). Whoever any of
+    // them catches is thrown from it (#blast, its heart where it stands)
+    #colossal(actor, attack, ahead = actor.wild.colossus.slam.ahead) {
         const { colossus } = actor.wild;
         const power = actor.power?.melee ?? 1;
         const heart = [actor.x, actor.y];
@@ -2790,7 +2834,7 @@ export class Battle {
             return;
         }
 
-        const [x, y] = attack.id === "slam" ? this.#before(actor, colossus.slam.ahead) : this.#before(actor, colossus.body.ahead);
+        const [x, y] = this.#before(actor, attack.id === "slam" ? ahead : colossus.body.ahead);
         const { radius, toss } = colossus[attack.id];
 
         this.#blast(actor, actor, actor.map, x, y, { radius, damage: attack.damage, power, toss, kind: attack.id === "slam" ? "colossalSlam" : "colossalRoar", heart, element: attack.id === "slam" ? null : "air", reaction: attack.reaction, stagger: attack.stagger });
@@ -2831,10 +2875,11 @@ export class Battle {
     }
 
     // The colossal's own walk (in place of #move: it goes through whoever's in its way, trampling
-    // them, #tread): turning no faster than it turns (`turn`) toward the next corner of its way, or
-    // to whom it's after standing (`facingTo`); stepping on as it turns, slower the further it has
-    // to turn, as far as the ground's clear (else finding its way again). The squares its body
-    // stands over kept with it (`footprint`: those after it close to the nearest of them)
+    // them, #tread): along its way as it goes, its body turned no faster than it turns (`turn`)
+    // toward the next corner of it, or to whom it's after standing (`facingTo`), slower the further
+    // it's turned from where it's going, as far as the ground's clear (else finding its way again).
+    // The squares its body stands over kept with it (`footprint`: those after it close to the
+    // nearest of them)
     #stride(actor) {
         const { colossus } = actor.wild;
         const seconds = STEP_MS / 1000;
@@ -2842,31 +2887,14 @@ export class Battle {
         let moved = 0;
 
         if (!actor.attack) {
+            const was = actor.facing;
             const heading = corner ? atan2(corner[0] - actor.x, corner[1] - actor.y) : (actor.facingTo ?? actor.facing);
             const most = colossus.turn * seconds;
-            const turn = wrapAngle(heading - actor.facing);
 
-            actor.facing = wrapAngle(actor.facing + Math.max(-most, Math.min(most, turn)));
-
-            if (corner) {
-                const aligned = cos(wrapAngle(heading - actor.facing));
-                const step = Math.min(hypot(corner[0] - actor.x, corner[1] - actor.y), actor.walkPace * seconds * Math.max(0.25, aligned));
-                const next = [actor.x + sin(actor.facing) * step, actor.y + cos(actor.facing) * step];
-
-                if (this.#clear(actor.map, next, actor, { walking: true })) {
-                    [actor.x, actor.y] = next;
-                    actor.square = [Math.floor(actor.x), Math.floor(actor.y)];
-                    moved = step;
-                    this.#moved(actor);
-                } else {
-                    actor.path = [];
-                    actor.lastPathAt = -Infinity;
-                }
-
-                if (actor.path.length && hypot(corner[0] - actor.x, corner[1] - actor.y) < 1) {
-                    actor.path.shift();
-                }
-            }
+            // (Along its way as anyone walks it (#travel: through whoever's in the way, #bumps),
+            // slower the further it's turned from where it's going; its body turned after it)
+            moved = corner ? this.#travel(actor, actor.walkPace * seconds * Math.max(0.25, cos(wrapAngle(heading - was)))) : 0;
+            actor.facing = wrapAngle(was + Math.max(-most, Math.min(most, wrapAngle(heading - was))));
         }
 
         actor.pace = moved / seconds;
@@ -2877,11 +2905,14 @@ export class Battle {
 
         actor.footprint = [Math.floor(bx - half), Math.floor(by - half), Math.floor(bx + half), Math.floor(by + half)];
 
-        if (moved > 0 && this.time >= (actor.treadAt ?? 0)) {
-            const { every, reach, damage, toss } = colossus.tread;
+        // (Treading on whoever's in its way as it goes; standing, its feet shifted now and then
+        // (`still` ms), on whoever's under it or hard against it)
+        const { every, still, reach, round, damage, toss } = colossus.tread;
+        const under = moved === 0 && !actor.attack && this.#caughtBy(actor, bx, by, round).length > 0;
 
-            actor.treadAt = this.time + every;
-            this.#blast(actor, actor, actor.map, bx, by, { radius: reach, damage, power: actor.power?.melee ?? 1, toss, kind: "colossalTread", heart: [bx, by], element: null, reaction: "crush", stagger: 300 });
+        if ((moved > 0 || under) && this.time >= (actor.treadAt ?? 0)) {
+            actor.treadAt = this.time + (moved > 0 ? every : still);
+            this.#blast(actor, actor, actor.map, bx, by, { radius: moved > 0 ? reach : round, damage, power: actor.power?.melee ?? 1, toss, kind: "colossalTread", heart: [bx, by], element: null, reaction: "crush", stagger: 300 });
         }
     }
 
@@ -3147,11 +3178,18 @@ export class Battle {
     }
 
     // Where `actor` aims at `target` from `from` (squares): its own square; or, standing over more
-    // (a fortification's `footprint`), the one of them nearest
+    // (a fortification's `footprint`), the one of them nearest; or, under it (the colossal's body
+    // over them), the one of them next to theirs
     #aimAt(target, from) {
         const box = target.footprint;
 
-        return box ? [Math.min(box[2], Math.max(box[0], from[0])), Math.min(box[3], Math.max(box[1], from[1]))] : target.square;
+        if (!box) {
+            return target.square;
+        }
+
+        const at = [Math.min(box[2], Math.max(box[0], from[0])), Math.min(box[3], Math.max(box[1], from[1]))];
+
+        return same(at, from) ? [from[0] + (from[0] < box[2] ? 1 : -1), from[1]] : at;
     }
 
     // Where `actor` goes to get at `target` from `from`: its square; or, standing over more, the
@@ -3896,8 +3934,9 @@ export class Battle {
      */
     #travel(actor, budget) {
         const start = budget;
-        // (Backing off from whoever it's after, a goblin bomber's: on till it's there)
-        const target = actor.backing ? null : this.#aim(actor);
+        // (Backing off from whoever it's after, a goblin bomber's: on till it's there; the
+        // colossal's, on till it's there, #colossus saying when to stop)
+        const target = actor.backing || actor.wild?.colossus ? null : this.#aim(actor);
 
         while (budget > 1e-9 && actor.path.length) {
             const [tx, ty] = actor.path[0];
@@ -4021,6 +4060,11 @@ export class Battle {
     // whoever's standing still where it's going, or by it (THRONG): it squeezed in among the folk
     // at a stall, or onto where the player stood, and stood there inside them
     #bumps(actor, [x, y]) {
+        // (The colossal: through anyone, treading on them, #stride)
+        if (actor.wild?.colossus) {
+            return null;
+        }
+
         const squeezing = this.time < actor.squeezeUntil;
         const end = squeezing && !this.#aim(actor) ? actor.path.at(-1) : null;
         let nearest = null;
@@ -4209,7 +4253,7 @@ export class Battle {
             }
 
             if (attack.kind === "colossal") {
-                this.#colossal(actor, attack);
+                this.#colossal(actor, attack, current.ahead);
             } else if (attack.call) {
                 const { kind, count, most } = attack.call;
 

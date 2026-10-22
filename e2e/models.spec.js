@@ -180,7 +180,6 @@ test("draws the Behemoth of the Rift from the Kaiju's model: 36 metres long, its
         beast.update(1 / 30, 0, 0, 0);
         beast.object.updateWorldMatrix(true, true);
 
-        const size = new THREE.Box3().setFromObject(beast.plan.levels[0][0], true);
 
         // (Breathing: charged, then fired, 2.5 seconds into its breath)
         const { hitAt, duration } = move("atomicBreath");
@@ -200,6 +199,8 @@ test("draws the Behemoth of the Rift from the Kaiju's model: 36 metres long, its
         renderer.render(scene, camera);
 
         const error = renderer.getContext().getError();
+        // (Its size as it's drawn, its bones posed)
+        const size = new THREE.Box3().setFromObject(beast.plan.levels[0][0], true);
 
         // (Its breath over: none of it drawn)
         for (let i = 0; i < 120; i++) {

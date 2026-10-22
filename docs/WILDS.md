@@ -1118,22 +1118,33 @@ again, its spines glowing green (`beasts/looks.js`).
   second, toward the next corner of its way or to whom it's after, stepping on as it turns (more
   slowly the further it has to turn), through whoever's in its way. Walking, it treads on whoever's
   under it every 0.7 s: within 6.5 m of its body's middle, hurt and thrown aside (`tread`).
+  Standing, it shifts its feet every 1.8 s on whoever's within 7.5 m of its body's middle (under it,
+  or hard against it: `still`, `round`).
 - **Whom it fights** (`#colossalTarget`, looked at again every second): of the enemies it sees
-  within 90 m, the one with the most of their fellows within 6 m of them, those where its breath
-  would land counting more.
-- **Where it goes**: to stand as far before them as its breath lands, the way it's coming from;
-  through them and beyond, if they're nearer than that, to turn on them from there.
+  within 90 m, standing, those within reach of its jaws first (as far from its body's middle as
+  they land, 14 m); of them, the one with the most of their fellows within 6 m of them, those where
+  its breath would land counting more. On its way it walks over whoever's at its feet.
+- **Where it goes**: on to them till they're under its jaws (16 m before where it stands), then it
+  stands its ground, turned to them, and never backs off. Its breath catches them as they come
+  within its reach on the way.
+- **Seen**, by night as by day, as far off as anyone looks (battle.js `canSee`): towering and aglow,
+  and to the nearest of its body's squares, not where it stands. Whoever's after it is in a fight
+  while they see its body as far as they reach, however far off where it stands is (`#inFight`):
+  their weapons drawn, not put away. One under it strikes the square of it next to theirs
+  (`#aimAt`).
 - **Its moves** (`#colossalMove`; weapons.js `kaiju`; each no sooner than its `every` after the
   last), the first it's ready to make that would catch anyone:
-  - **Its atomic breath** (every 12 s at most), when three or more stand where it would land. Its
-    Energy Breath plays: its glow charges for 1.3 s, then the beam's raked over the ground from 13
-    to 18 m before its mouth (its mouth 15.9 m before where it stands), over 3.3 s, the way it
-    faces then. A blast every quarter of a second where it lands (`#rake`), 4 m round: whoever it
-    catches hurt once a breath, burning half the time, and thrown back, away from it, up to 7.8 m.
-    It's drawn by its beam (`beasts/beam.js`), aimed where the battle has it land.
-  - **Its jaws slammed down** (every 5 s), on whoever's 16 m before where it stands, 5 m round:
-    the start of its Roar, its head reared and brought down.
-  - **Its roar** (every 24 s), once eight or more are within 15 m of its body's middle: all of them
+  - **Its atomic breath** (every 12 s at most), when three or more stand where it would land, or
+    all of them about with fewer left. Its Energy Breath plays: its glow charges for 1.3 s, then
+    the beam's raked over the ground from 13 to 18 m before its mouth (its mouth 15.9 m before
+    where it stands), over 3.3 s, the way it faces then. A blast every quarter of a second where it
+    lands (`#rake`), 4 m round: whoever it catches hurt once a breath (18 to 28), burning half the
+    time, and thrown back, away from it, up to 7.8 m. It's drawn by its beam (`beasts/beam.js`),
+    aimed where the battle has it land.
+  - **Its jaws slammed down** (every 5 s), 16 m before where it stands or 10 m (whichever catches
+    more), 5 m round: 26 to 38, most of a soldier's 40. The start of its Roar, its head reared and
+    brought down.
+  - **Its roar** (every 18 s), once five or more are within 15 m of its body's middle: all of them
     thrown off their feet, its Roar played through its bellow.
   Each plays as much of its clip as the move lasts (MODELS `spans`), at the clip's own pace. Struck
   it flinches in the start of its Hit React; it falls in its Faint, held where it lies.
@@ -1150,9 +1161,13 @@ again, its spines glowing green (`beasts/looks.js`).
 - **Its spoils**: scales off its hide, a dorsal spine that still glows, and its heart (spoils.js).
 - **Called up** before the player, 70 m off the way they face, by the debug overlay's *Behemoth of
   the Rift* (host.js `"rift"`).
+- **Comes against a town** by night, now and then, in place of a band of raiders (WAR.md
+  *Invasions*, *The Behemoth of the Rift*).
 - `test/kaiju.test.js`: its breath raked over those where it lands, each hurt once and thrown away
-  from it; its jaws, its roar, its tread; its walk, turning slowly, its body's squares with it;
-  everyone's enemy, nothing that stuns, frightens or slows it taking hold.
+  from it; its jaws, its roar, its tread, walking and standing; its walk on them till they're under
+  its jaws, turning slowly, its body's squares with it, whoever's in its way brought down; never
+  after anyone in a town it's come against; everyone's enemy, nothing that stuns, frightens or
+  slows it taking hold.
 
 ### A place's creatures, ready before they're met (beasts/model.js, app/readying.js)
 

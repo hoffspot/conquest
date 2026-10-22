@@ -68,7 +68,7 @@ import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, 
 import { describeLeader } from "../core/war/peoples.js";
 import { CRY, newsCount, newsSince, peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { bubbleSeconds, CALLING, callOf } from "../core/crying.js";
-import { ALARM, BANDS, criesOf, INVASION, thanksOf } from "../core/invasions.js";
+import { ALARM, bandOf, BEHEMOTH, criesOf, INVASION, thanksOf } from "../core/invasions.js";
 import { createRandom } from "../core/random.js";
 import { cultNear, cultWays, cultWord } from "../core/cultword.js";
 import { circleOf, rumouredBy, rumoursNear, rumourWord, RUMOURS } from "../core/rumours.js";
@@ -3385,16 +3385,22 @@ export class Game {
     // about, moved only then), whether it casts its shadow (not when it's too small on the screen
     // for one to show: MANY), how many of its triangles are drawn (BeastAvatar.fitDetail), and
     // how often it's posed, as a character as big is (posingEvery); out of view, as seldom as can
-    // be, unless its shadow may be seen
+    // be, unless its shadow may be seen. (Breathing its beam, as if in view, every frame: the beam
+    // reaches far beyond its body, into view when it isn't: the Behemoth of the Rift's)
     #posingBeast(avatar, dt, pixels) {
         const { position } = avatar.object;
         const { height } = avatar.character;
         const near = this.view.heightOnScreen(position, height, pixels, { anywhere: true });
         const seen = this.view.heightOnScreen(position, height, pixels);
+        const beaming = avatar.beaming;
 
-        avatar.seen = seen > 0;
+        avatar.seen = seen > 0 || beaming;
         avatar.castShadows(near >= (avatar.shadowed ? MANY.shadow : MANY.again));
         avatar.fitDetail(seen);
+
+        if (beaming && seen <= 0) {
+            return 1;
+        }
 
         const tall = seen || (avatar.shadowed ? near : 0);
 
@@ -5724,7 +5730,8 @@ export class Game {
     // the lord's thanks, in a panel of its own, the town's horn blown for it: their own purse and a
     // piece from the armoury
     #invasion(event) {
-        const band = BANDS[event.band];
+        const band = bandOf(event.band);
+        const behemoth = event.band === BEHEMOTH.id;
         const invasion = this.host.invasions.find(({ id }) => id === event.id);
         const me = this.battle.actor(this.me);
         const near = this.progress.invasion.place === event.place || Boolean(invasion && me?.map === "town" && Math.hypot(me.x - invasion.middle[0], me.y - invasion.middle[1]) <= invasion.edge + INVASION.out + INVASION.away);
@@ -5732,8 +5739,20 @@ export class Game {
         switch (event.change) {
             case "coming":
                 this.enlisting.push(...event.ids);
-                this.#invasionHorn("warHorn", event.at);
-                this.#invasionHorn("warHorn", event.at, HORNS.again);
+
+                // (The Behemoth's: its roar heard from afar where it comes out of the rift, twice,
+                // in place of the raiders' horn; its voice wanted now, to be heard)
+                if (behemoth) {
+                    const [ox, oz] = this.originOf("town");
+                    const at = new THREE.Vector3(ox + event.at[0], 0, oz + event.at[1]);
+
+                    this.sound?.want(creatureSounds(BEHEMOTH.creature));
+                    this.sound?.voice(BEHEMOTH.creature, "call", at, { far: HORNS.far, delay: HORNS.again / 2 });
+                    this.sound?.voice(BEHEMOTH.creature, "call", at, { far: HORNS.far, delay: HORNS.again * 1.5 });
+                } else {
+                    this.#invasionHorn("warHorn", event.at);
+                    this.#invasionHorn("warHorn", event.at, HORNS.again);
+                }
 
                 if (invasion) {
                     this.#invasionHorn("townHorn", this.#invasionLine(invasion, -INVASION.inside), HORNS.answer);
@@ -5742,7 +5761,7 @@ export class Game {
                 if (near) {
                     const spared = event.spared.includes(this.me) ? " They'll leave you be, unless you strike one." : "";
 
-                    this.hud.message(`${band.label} on the ${event.way} road! ${event.name} calls every able hand to its defence.${spared}`, 6);
+                    this.hud.message(behemoth ? `${band.label} comes on the ${event.way} road! ${event.name} calls every able hand to its defence.` : `${band.label} on the ${event.way} road! ${event.name} calls every able hand to its defence.${spared}`, 6);
                     this.#invasionCry(event.place, criesOf(event.band, event.way)[0]);
                 }
 
@@ -5753,7 +5772,7 @@ export class Game {
                 }
 
                 if (near) {
-                    this.hud.message(`The ${band.many} are beaten back from ${event.name}!`, 4);
+                    this.hud.message(behemoth ? `${band.label} is slain before ${event.name}!` : `The ${band.many} are beaten back from ${event.name}!`, 4);
                     this.#invasionCry(event.place, thanksOf(event.band));
                 }
 
@@ -5764,7 +5783,7 @@ export class Game {
                 }
 
                 if (near) {
-                    this.hud.message(`${event.name}'s soldiers have fallen. The ${band.many} go back the way they came.`, 4);
+                    this.hud.message(behemoth ? `${event.name}'s soldiers have fallen. The Behemoth goes back the way it came.` : `${event.name}'s soldiers have fallen. The ${band.many} go back the way they came.`, 4);
                 }
 
                 break;
@@ -5774,7 +5793,8 @@ export class Game {
                 }
 
                 const got = [`${event.gold} gold`, ...(event.merit ? [`${event.merit} merit with the guilds`] : []), ...(event.thanks ? [`${event.thanks} standing`] : [])];
-                const felled = `${event.felled} ${event.felled === 1 ? "raider" : band.many}`;
+                // (The Behemoth's: for the wounds they dealt it, a share of its strength)
+                const felled = behemoth ? `${Math.max(1, Math.round((event.felled / Math.max(1, event.of)) * 100))}% of its strength` : `${event.felled} ${event.felled === 1 ? "raider" : band.many}`;
 
                 this.hud.setGold(this.progress.gold);
                 this.onProgress(this.progress);
@@ -5782,14 +5802,15 @@ export class Game {
                 this.sound?.play("coins");
 
                 if (!event.big) {
-                    this.hud.message(`${event.name} thanks you for the ${felled} you felled: ${got.join(", ")}.`, 7);
+                    this.hud.message(behemoth ? `${event.name} thanks you for the wounds you dealt the Behemoth, ${felled}: ${got.join(", ")}.` : `${event.name} thanks you for the ${felled} you felled: ${got.join(", ")}.`, 7);
                     break;
                 }
 
                 // (A good share of them: the lord's own thanks, the town's horn blown for it)
                 const piece = itemLabel(event.piece).toLowerCase();
+                const given = `their own purse, ${/^[aeiou]/.test(piece) ? "an" : "a"} ${piece} from the armoury, and ${got.join(", ")}`;
 
-                this.hud.choose(`The lord of ${event.name} thanks you, who felled ${felled} of the ${event.of} who came: their own purse, ${/^[aeiou]/.test(piece) ? "an" : "a"} ${piece} from the armoury, and ${got.join(", ")}.`, [{ label: "With thanks", value: true }], () => {}, { cancel: null, seconds: HORNS.thanks });
+                this.hud.choose(behemoth ? `The lord of ${event.name} thanks you, who dealt the Behemoth of the Rift ${felled}: ${given}.` : `The lord of ${event.name} thanks you, who felled ${felled} of the ${event.of} who came: ${given}.`, [{ label: "With thanks", value: true }], () => {}, { cancel: null, seconds: HORNS.thanks });
                 this.sound?.play("townHorn", { delay: 0.4 });
                 break;
             }

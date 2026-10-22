@@ -16,7 +16,7 @@
 //
 // No Three.js here: the overlay reads what it's given.
 
-import { BANDS } from "../core/invasions.js";
+import { BANDS, BEHEMOTH } from "../core/invasions.js";
 import { formatBytes } from "./loader.js";
 
 // How often the numbers are updated (ms)
@@ -366,7 +366,7 @@ export class Debug {
         const navigation = element("input", { type: "checkbox", onchange: () => change("navigation", navigation.checked) });
         const armies = element("select", {}, ...FIELD_SIZES.map((size) => element("option", { value: size }, `${size} a side`)));
         const muster = element("button", { type: "button", onclick: () => this.game?.fieldBattle(Number(armies.value)) }, "Muster");
-        const bands = element("select", {}, element("option", { value: "" }, "As it would come"), ...Object.entries(BANDS).map(([id, { label }]) => element("option", { value: id }, label)));
+        const bands = element("select", {}, element("option", { value: "" }, "As it would come"), ...Object.entries(BANDS).map(([id, { label }]) => element("option", { value: id }, label)), element("option", { value: BEHEMOTH.id }, BEHEMOTH.label));
         const invade = element("button", { type: "button", onclick: () => this.game?.invade(bands.value || null) }, "Invade");
         const rift = element("button", { type: "button", onclick: () => this.game?.rift() }, "Call up");
 
