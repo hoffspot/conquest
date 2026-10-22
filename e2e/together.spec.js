@@ -1,3 +1,5 @@
+import { STEP_MS } from "../client/js/core/battle.js";
+import { MOTION } from "../client/js/core/motion.js";
 import { expect, test } from "./fixtures.js";
 
 // Playing together (docs/WAR.md M11), in two browsers at once: one player opens their world to
@@ -588,6 +590,9 @@ test("two players walk about a while: the joined copy's checked against the host
     await guest.waitForFunction(() => window.pellagos.game.clock > 0.3, null, { timeout: 60000, polling: 250 });
 
     const sentAtFirst = await host.evaluate(() => ({ at: performance.now(), ...window.pellagos.game.hosting.sent }));
+    const checking = () => guest.evaluate(() => ({ time: window.pellagos.game.battle.time, checks: window.pellagos.game.remote.motionChecks }));
+    const checkedAtFirst = await checking();
+    let checkedLast = checkedAtFirst;
 
     // Both walk about for a while, here and there round where they are: the host's player as the
     // host's game has them; the guest by tapping the ground, as a player would
@@ -615,12 +620,22 @@ test("two players walk about a while: the joined copy's checked against the host
         const net = await guest.evaluate(() => {
             const { remote, predict } = window.pellagos.game;
 
-            return { desyncs: remote.desyncs, resyncs: remote.resyncs - remote.skips, checks: remote.motionChecks, pending: predict.pending, lag: predict.lag };
+            return { desyncs: remote.desyncs, resyncs: remote.resyncs - remote.skips, pending: predict.pending, lag: predict.lag };
         });
 
         expect(net).toMatchObject({ desyncs: 0, resyncs: 0, pending: null });
-        expect(net.checks).toBeGreaterThan(round * 5);
         expect(net.lag).toBeLessThan(600);
+
+        // (Its world gone on, and checked once each MOTION.every steps of it, a fifth of a second:
+        // by its world's time, not the clock's, which two worlds drawn in software leave at a
+        // quarter of it or so, faster or slower with the machine)
+        const checked = await checking();
+        const due = (checked.time - checkedAtFirst.time) / (STEP_MS * MOTION.every);
+
+        expect(checked.time).toBeGreaterThan(checkedLast.time);
+        expect(checked.checks - checkedAtFirst.checks).toBeGreaterThanOrEqual(Math.floor(due) - 1);
+        expect(checked.checks - checkedAtFirst.checks).toBeLessThanOrEqual(Math.ceil(due) + 1);
+        checkedLast = checked;
     }
 
     // What the host sent the guest a second, all told, and of that its motion
