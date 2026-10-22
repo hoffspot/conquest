@@ -25,10 +25,39 @@ const { CHUNK, buildWorld } = await import("../client/js/core/overworld.js");
 const { ROLES } = await import("../client/js/core/roles.js");
 const { PLOT } = await import("../client/js/core/setpieces/pieces.js");
 const { squareOf } = await import("../client/js/core/settlements.js");
-const { buildInterior, buildingInterior } = await import("../client/js/world/interiors3d.js");
+const { buildInterior, buildingInterior, doorways } = await import("../client/js/world/interiors3d.js");
 
 const { reachable } = await import("./helpers.js");
 const same = (a, b) => a[0] === b[0] && a[1] === b[1];
+
+// The lights drawn in a doorway, where a torch or a sconce should hang beside it: inside, within
+// 0.6 m of the wall it's through and no more than 0.3 m past its sides, whether through the outer
+// wall (the plan's "D" squares at its edge) or a wall inside (interiors3d.js doorways). (The
+// daylight beyond one, at a crypt's stair head, isn't in it)
+function inDoorways(map, interior) {
+    const [ox, oz] = map.origin;
+    const openings = doorways(map).map(({ along, x0, y0, length }) => (along === "x" ? { along, from: x0, to: x0 + length, at: y0 + 0.5 } : { along, from: y0, to: y0 + length, at: x0 + 0.5 }));
+
+    for (const [x, y] of map.marks.D ?? []) {
+        for (const [edge, along, from, at] of [[y === 0, "x", x, 0], [y === map.height - 1, "x", x, map.height], [x === 0, "z", y, 0], [x === map.width - 1, "z", y, map.width]]) {
+            if (edge) {
+                openings.push({ along, from, to: from + 1, at });
+            }
+        }
+    }
+
+    return interior.lights
+        .map(({ kind, x, z }) => ({ kind, x: x - ox, z: z - oz }))
+        .filter(({ x, z }) => x >= 0 && z >= 0 && x <= map.width && z <= map.height)
+        .filter(({ x, z }) =>
+            openings.some(({ along, from, to, at }) => {
+                const [length, across] = along === "x" ? [x, z] : [z, x];
+
+                return Math.abs(across - at) < 0.6 && length > from - 0.3 && length < to + 0.3;
+            }),
+        )
+        .map(({ kind, x, z }) => `${kind} at ${x.toFixed(2)}, ${z.toFixed(2)}`);
+}
 
 // A tavern as a settlement has one: its piece, its name and what's upstairs
 const tavern = (upstairs, storeys = 2, seed = 5) => ({ key: `test:${upstairs}:${seed}`, name: "The Test", seed, tavern: { name: "The Test", upstairs, storeys } });
@@ -494,7 +523,7 @@ describe("the buildings (insides.js Interiors)", () => {
         assert.equal(battle.actor("player").map, building.door.ends[1].map);
     });
 
-    it("is drawn by its floors' style, and its doors picked up as they come", () => {
+    it("is drawn by its floors' style, its torches and sconces beside its doorways, never in one; and its doors picked up as they come", () => {
         const building = [...interiors.buildings.values()].find(({ made, entrance }) => made && entrance);
         const scene = new THREE.Group();
         const doors = new Doors(world, scene);
@@ -545,6 +574,7 @@ describe("the buildings (insides.js Interiors)", () => {
                 const interior = buildInterior(world.maps[id]);
 
                 assert.ok(interior.object.children.length > 0, `${kind}: ${id}`);
+                assert.deepEqual(inDoorways(world.maps[id], interior), [], `${kind}: ${id}`);
                 interior.dispose();
             }
         }
@@ -599,7 +629,7 @@ describe("the buildings (insides.js Interiors)", () => {
 });
 
 describe("the places worth finding gone into (insides.js: a cave, the drake's lair, a werewolves' den, the crypt under the ruins, a ruined castle's keep, a broken watchtower, the Tower of Sar Mordal, the humans' abbeys and manors)", () => {
-    it("have their way in among the world's links as they're set down, their floors made when wanted: all in them got to from the way in, their holders' and chest's places marked, a tower's two floors joined by stairs; and are drawn", () => {
+    it("have their way in among the world's links as they're set down, their floors made when wanted: all in them got to from the way in, their holders' and chest's places marked, a tower's two floors joined by stairs; and are drawn, no light in a doorway", () => {
         const world = buildWorld({ seed: 1 });
         const sites = world.maps.town.sites;
 
@@ -637,6 +667,7 @@ describe("the places worth finding gone into (insides.js: a cave, the drake's la
 
                 assert.ok(interior.object.children.length > 0 && interior.lights.length > 0 === (map.style !== "tower-top"), `${kind}: ${map.id}`);
                 assert.equal(interior.open, ["tower-top", "rift-study", "ruin"].includes(map.style), `${map.id} open to the sky`);
+                assert.deepEqual(inDoorways(map, interior), [], map.id);
                 interior.dispose();
             }
         }
@@ -832,7 +863,7 @@ describe("the places worth finding gone into (insides.js: a cave, the drake's la
 });
 
 describe("a people's castle's keep's undercroft (insides.js)", () => {
-    it("is down the stairs from its great hall (a town's keep, a manor's and the elves' tree hall's have none): its forge, its armoury and the arcanist's corner, all got to from the stairs' foot; the castle's smith and apprentice at the forge, its quartermaster and arcanist behind their counters; and is drawn, vaulted and lit", () => {
+    it("is down the stairs from its great hall (a town's keep, a manor's and the elves' tree hall's have none): its forge, its armoury and the arcanist's corner, all got to from the stairs' foot; the castle's smith and apprentice at the forge, its quartermaster and arcanist behind their counters; and is drawn, vaulted and lit, no light in a doorway", () => {
         const world = buildWorld({ seed: 1 });
         const sites = world.maps.town.sites;
         const peoples = [];
@@ -883,6 +914,7 @@ describe("a people's castle's keep's undercroft (insides.js)", () => {
                 const interior = buildInterior(map);
 
                 assert.ok(interior.object.children.length > 0 && interior.lights.length >= (map === under ? 5 : 2), `${site.race}: ${map.id}`);
+                assert.deepEqual(inDoorways(map, interior), [], `${site.race}: ${map.id}`);
                 interior.dispose();
             }
 
