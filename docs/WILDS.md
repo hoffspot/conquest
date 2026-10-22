@@ -1098,12 +1098,13 @@ atomic breath (`beasts/beam.js`, `BEAMS`), as a kaiju's should be:
 - `e2e/model-viewer.spec.js`: nothing of it before it charges or in its other clips; charging,
   its glow lit; firing, aimed, its glow at its brightest, landing 10 to 20 m in front of its mouth,
   and the beam's blue-white drawn.
-- **Its sounds** (`scripts/sounds/creatures.js`, `kaiju…`; heard in the model viewer as its clips
-  play, at the moments measured from them: `beasts/sounds.js` `CLIP_SOUNDS`): all mixed from CC0
+- **Its sounds** (`scripts/sounds/creatures.js`, `kaiju…`; heard in the game as the Behemoth of the
+  Rift's, below, and in the model viewer as its clips play, at the moments measured from them:
+  `beasts/sounds.js` `CLIP_SOUNDS`): all mixed from CC0
   recordings on OpenGameArt to sound like a kaiju. Its roar is a monster's snarls with a demon's
   held call and a troll's roar, slowed a little, its rumble taken off, 4.75 s, a rasp up to 4 kHz
   over a band near 250 Hz; in its Roar a short cry cut from them as its head goes up (its attack's,
-  as its blows will be once it's in the game) and its roar as its jaws open wide. Struck, a short
+  as its every move is in the game) and its roar as its jaws open wide. Struck, a short
   cry, higher; then it roars back. Its death is its roar slowed and dying away, then the crash of a
   great beast falling as it hits the ground, a footfall's thud with it. It growls now and then
   standing (a demon's growl slowed and muffled). Drawing breath, its snarls play backwards,
@@ -1165,10 +1166,11 @@ again, its spines glowing green (`beasts/looks.js`).
     thrown off their feet, its Roar played through its bellow.
   Each plays as much of its clip as the move lasts (MODELS `spans`), at the clip's own pace. Struck
   it flinches in the start of its Hit React; it falls in its Faint, held where it lies.
-- **Heard**: its voice a drake's as low as it goes (sound.js `CREATURE_VOICES`); its atomic breath
-  made in code, a whine charging (synth.js `atomicCharge`) and a roaring beam (`atomicBeam`, twice,
-  the second over the end of the first, as long as it fires: no made sound is two seconds long),
-  heard 120 m off; its jaws landing as a great beast falls.
+- **Heard** in the Kaiju's own sounds (*The Kaiju*, above; sound.js `CREATURE_VOICES` `kaiju`):
+  its roar as it sets on someone (and twice, 450 m off, as it comes against a town), every move
+  loudest as it lands, its cry struck, its death; its breath charging, loudest as it fires, and
+  fired, heard 120 m off (app/game.js); each foot coming down as it walks, heard 80 m off
+  (sound.js `GAITS` `colossal`); and falling, the crash of a great beast.
 - **Seen**: its jaws slammed down and its roar shake the ground (spellfx.js `quake`: earth thrown up
   and dust rolling out, a shockwave for its roar, a little dust under its tread), and the camera
   within 60 m. Within 150 m of the player its name and strength are across the top of the screen

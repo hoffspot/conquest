@@ -1,6 +1,6 @@
-// What a coming model's clips sound like (lab/model-viewer.js plays them as its clips play): one
-// that isn't in the game yet, where a creature's voice is heard as it fights (audio/sound.js), has
-// its clips' sounds here, at moments of them, measured from its model.
+// What a model's clips sound like in the model viewer (lab/model-viewer.js plays them as its clips
+// play), at moments of them, measured from its model: the Kaiju's (in the game, the Behemoth of the
+// Rift's voice is heard as it fights, audio/sound.js, its breath and its footfalls app/game.js's).
 
 // When a footfall's thud starts, after the foot comes down (s): the Kaiju's, its first 35 ms quiet
 const THUD = 0.035;

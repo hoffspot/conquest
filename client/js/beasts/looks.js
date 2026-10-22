@@ -621,6 +621,7 @@ export const LOOKS = Object.freeze({
         spines: true,
         colours: { fur: 0x1c211c, saddle: 0x0e120e, mask: 0x181c18, belly: 0x3a3e34, dark: 0x080a08, claws: 0x9a9a88, ivory: 0xc8c8b4, eyes: 0x60ff9a, glow: 0x40ff90 },
         attacks: ["bite", "stamp"], rests: ["sniff", "stretch"], specials: ["breath"],
+        feet: "colossal",
     },
     // (The restless dead of the ruins: a ghost, the pale shade of one who lived there long ago; a
     // wraith, a black-robed horror with nothing under its cowl but two cold lights)
