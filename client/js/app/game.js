@@ -44,6 +44,7 @@ import { holderOf, LAIR_KINDS, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
 import { atPortal, beforePortal, branchesFrom, branchOf, fareOff, portalOn } from "../core/portals.js";
 import { atWarTable, beforeWarTable, mayRead, warTableOn } from "../core/wartable.js";
+import { atWriting, beforeWriting, keepRead, WRITINGS, writingOn } from "../core/writings.js";
 import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
 import { useSound, wearSound } from "../audio/handling.js";
@@ -137,6 +138,7 @@ import { FatePanel, fateWords } from "./fate.js";
 import { plateScale } from "./hud.js";
 import { itemPicture } from "./icons.js";
 import { JournalPanel, bearing, keepMessage, regardOf } from "./journal.js";
+import { ReaderPanel } from "./reader.js";
 import { Journey } from "./journey.js";
 import { SpellbookPanel } from "./spellbook.js";
 import { PartyPanel } from "./partypanel.js";
@@ -1241,9 +1243,10 @@ export class Game {
         this.talkVariety = new Variety();
 
         // The map whose guild's portal the player's walking up to (tapped: #keepToPortal), or null;
-        // and whose war table (#keepToTable)
+        // whose war table (#keepToTable); and whose lectern, to read what's on it (#keepToLectern)
         this.toPortal = null;
         this.toTable = null;
+        this.toLectern = null;
     }
 
     /** This game's player, as the host has them (core/host.js players). */
@@ -1719,7 +1722,11 @@ export class Game {
         this.journal.onAbandon = (id) => {
             this.#command({ type: "abandon", request: id }, () => this.journal.open && this.#showJournal());
         };
+        this.journal.onRead = (id) => this.read(id);
         this.journal.onClose = () => this.closeJournal();
+        this.reader = new ReaderPanel(this.hud.root);
+        this.reader.onTurn = () => this.sound?.play("pageTurn");
+        this.reader.onClose = () => this.closeReader();
         this.partyPanel = new PartyPanel(this.hud.root);
         this.partyPanel.onOrder = (id, order) => this.#orderUnit(id, order);
         this.partyPanel.onChoose = (id) => this.#chooseAlly(this.allyTarget === id ? null : id);
@@ -2404,6 +2411,7 @@ export class Game {
         this.pack?.dispose();
         this.drops?.dispose();
         this.journal?.panel.remove();
+        this.reader?.panel.remove();
         this.partyPanel?.panel.remove();
         this.spellbook?.panel.remove();
         this.fate?.panel.remove();
@@ -3171,6 +3179,7 @@ export class Game {
         this.#keepShopping();
         this.#keepToPortal();
         this.#keepToTable();
+        this.#keepToLectern();
         this.#restPlayer();
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawDrops();
@@ -7230,6 +7239,7 @@ export class Game {
             this.closePack();
             this.closeSpellbook();
             this.closeParty();
+            this.closeReader();
             this.#showJournal();
             this.sound?.play("bookOpen");
         }
@@ -7243,6 +7253,7 @@ export class Game {
             this.closePack();
             this.closeJournal();
             this.closeParty();
+            this.closeReader();
             this.#showSpellbook();
             this.sound?.play("bookOpen");
         }
@@ -7302,6 +7313,7 @@ export class Game {
             this.closePack();
             this.closeJournal();
             this.closeSpellbook();
+            this.closeReader();
             this.partyPanel.showTab(chat || this.chatUnread > 0 ? "chat" : "party");
             this.#showParty();
             this.sound?.play("bookOpen");
@@ -7810,6 +7822,7 @@ export class Game {
                 }),
             most: this.host.mostFollowers(this.me),
             heard: this.#heardTell(at),
+            writings: (this.memory.writings ?? []).filter((id) => WRITINGS[id]).map((id) => ({ id, title: WRITINGS[id].title, found: WRITINGS[id].found })),
             messages: this.messages,
         });
     }
@@ -7988,6 +8001,7 @@ export class Game {
             this.closeJournal();
             this.closeSpellbook();
             this.closeParty();
+            this.closeReader();
             this.#showPack();
             this.sound?.play("packOpen");
         }
@@ -10823,14 +10837,20 @@ export class Game {
                 // (What was open in the pack to see what it is, put away first)
                 event.preventDefault();
                 event.stopPropagation();
-            } else if (event.key === "Escape" && (this.pack?.open || this.journal?.open || this.spellbook?.open || this.partyPanel?.open || this.fate?.open)) {
+            } else if (event.key === "Escape" && (this.pack?.open || this.journal?.open || this.reader?.open || this.spellbook?.open || this.partyPanel?.open || this.fate?.open)) {
                 event.preventDefault();
                 event.stopPropagation();
                 this.closePack();
                 this.closeJournal();
+                this.closeReader();
                 this.closeSpellbook();
                 this.closeParty();
                 this.fate?.hide();
+            } else if ((event.key === "ArrowRight" || event.key === "ArrowLeft") && this.reader?.open && plain) {
+                // (Reading, the arrow keys turn its pages)
+                event.preventDefault();
+                event.stopPropagation();
+                this.reader.turn(event.key === "ArrowRight" ? 1 : -1);
             } else if ((event.key === "i" || event.key === "I") && plain) {
                 this.togglePack();
             } else if ((event.key === "j" || event.key === "J") && plain) {
@@ -10928,13 +10948,15 @@ export class Game {
         }
 
         const enemy = who;
-        const door = enemy ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
-        const portal = enemy || door ? null : this.#portalAt(clientX, clientY);
-        const table = enemy || door || portal ? null : this.#warTableAt(clientX, clientY);
-        const ground = enemy || door || portal || table ? null : this.view.pickGround(clientX, clientY);
+        // (A lectern before any way out behind it: it stands in the room, in front of its stairs)
+        const lectern = enemy ? null : this.#lecternAt(clientX, clientY);
+        const door = enemy || lectern ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
+        const portal = enemy || door || lectern ? null : this.#portalAt(clientX, clientY);
+        const table = enemy || door || portal || lectern ? null : this.#warTableAt(clientX, clientY);
+        const ground = enemy || door || portal || table || lectern ? null : this.view.pickGround(clientX, clientY);
         const [ox, oz] = this.originOf(this.mapId);
 
-        this.#order({ enemy, door, portal, table, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
+        this.#order({ enemy, door, portal, table, lectern, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
     }
 
     /**
@@ -11021,7 +11043,8 @@ export class Game {
     /**
      * What a click at a point on the view would do, for the pointer to show (app/pointer.js AIMS):
      * "attack" an enemy, "talk" to someone (or trade with another player), "hand" for something
-     * on the ground to pick up or search (or the war table, to open its map), "enter" for a door,
+     * on the ground to pick up or search (or the war table, to open its map; or a lectern, to read
+     * what's on it), "enter" for a door,
      * the stairs or the guild's portal; null for the ground (or the player). As tap() chooses, in
      * its order, without doing any of it.
      */
@@ -11034,7 +11057,7 @@ export class Game {
             return me && !this.battle.hostile(who, me) && !this.host.invader(who.id) ? "talk" : "attack";
         }
 
-        if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point))) {
+        if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point)) || this.#lecternAt(clientX, clientY)) {
             return "hand";
         }
 
@@ -11100,6 +11123,95 @@ export class Game {
         if (atWarTable(table, me.x, me.y)) {
             this.openWarTable();
         }
+    }
+
+    // The lectern on the floor the player's on with something written lying on it (core/
+    // writings.js: Sinclair's journal, in his study), if that's what was tapped: { id, piece }
+    #lecternAt(clientX, clientY) {
+        const writing = writingOn(this.world.maps?.[this.mapId]);
+
+        if (!writing) {
+            return null;
+        }
+
+        const [ox, oz] = this.originOf(this.mapId);
+        const { x, y, w, h } = writing.piece;
+        const box = new THREE.Box3(new THREE.Vector3(ox + x, 0, oz + y), new THREE.Vector3(ox + x + w, 1.3, oz + y + h));
+
+        return this.view.rayAt(clientX, clientY).intersectsBox(box) ? writing : null;
+    }
+
+    // Walking up to a lectern (it was tapped): there and stopped, what's on it opens; told to do
+    // anything else, gone through a door, or stopped short, it's forgotten
+    #keepToLectern() {
+        if (!this.toLectern) {
+            return;
+        }
+
+        const me = this.battle.actor(this.me);
+        const writing = writingOn(this.world.maps?.[this.mapId]);
+
+        if (!me || me.dead || me.map !== this.toLectern || !writing) {
+            this.toLectern = null;
+
+            return;
+        }
+
+        if (me.order || me.path.length) {
+            return;
+        }
+
+        this.toLectern = null;
+
+        if (atWriting(writing.piece, me.x, me.y)) {
+            this.readHere();
+        }
+    }
+
+    /**
+     * Read what's written on the lectern the player stands at (core/writings.js: Sinclair's
+     * journal): it opens at its first page, and it's kept in their journal to read again
+     * (memory.writings: told so the first time). Returns { ok, id }, or { ok: false } if they're
+     * at none.
+     */
+    readHere() {
+        const me = this.battle.actor(this.me);
+        const writing = writingOn(this.world.maps?.[this.mapId]);
+
+        if (!me || me.dead || !writing || me.map !== this.mapId || !atWriting(writing.piece, me.x, me.y)) {
+            return { ok: false };
+        }
+
+        const read = this.memory.writings ?? [];
+
+        if (!read.includes(writing.id)) {
+            this.memory.writings = keepRead(read, writing.id);
+            this.#keepTalks();
+            this.hud.message(`${WRITINGS[writing.id].title}: kept in your journal, under Writings.`, 3);
+        }
+
+        this.read(writing.id);
+
+        return { ok: true, id: writing.id };
+    }
+
+    /** Open a writing the player's read (core/writings.js WRITINGS' id) at its first page, everything else closed. */
+    read(id) {
+        if (!WRITINGS[id] || !(this.memory.writings ?? []).includes(id)) {
+            return;
+        }
+
+        this.closePack();
+        this.closeJournal();
+        this.closeSpellbook();
+        this.closeParty();
+        this.reader.show(id);
+        this.sound?.play("bookOpen");
+    }
+
+    /** Close what's being read. */
+    closeReader() {
+        this.reader?.hide();
     }
 
     /**
@@ -11938,7 +12050,7 @@ export class Game {
     // Send the player to fight an enemy, through a door (or up or down the stairs), or to a point
     // on the ground ([x, z] metres, on their map), running if told to or tapped twice in quick
     // succession (in the same place: the view or the minimap)
-    #order({ enemy, door = null, portal = null, table = null, ground }, { clientX, clientY, run, time, from }) {
+    #order({ enemy, door = null, portal = null, table = null, lectern = null, ground }, { clientX, clientY, run, time, from }) {
         const player = this.battle.actor(this.me);
         const last = this.lastTap;
 
@@ -12016,6 +12128,24 @@ export class Game {
             return;
         }
 
+        // A lectern, what's written on it to be read: up to it, and it opens (#keepToLectern)
+        if (lectern) {
+            const [ox, oz] = this.originOf(player.map);
+            const square = beforeWriting(lectern.piece);
+
+            if (atWriting(lectern.piece, player.x, player.y) && !player.path.length) {
+                this.readHere();
+
+                return;
+            }
+
+            this.#command({ type: "move", to: square, run });
+            this.toLectern = player.map;
+            this.effects.markTarget(ox + square[0] + 0.5, oz + square[1] + 0.5);
+
+            return;
+        }
+
         if (!ground) {
             return;
         }
@@ -12067,13 +12197,14 @@ export class Game {
     // or hosting; joined to another's world, once the host's done it and it's been done here too)
     #command(command, then = null) {
         // (Anything the player does themselves ends running somewhere far: not resisting a
-        // summons, done for them; and walking up to the portal or the war table)
+        // summons, done for them; and walking up to the portal, the war table or a lectern)
         if (!this.journeying && !(command.type === "summoned" && !command.come)) {
             this.journey = null;
         }
 
         this.toPortal = null;
         this.toTable = null;
+        this.toLectern = null;
 
         if (this.remote) {
             return this.remote.command(command, this.#predicting(command, then));

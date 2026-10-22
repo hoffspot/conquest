@@ -1173,11 +1173,11 @@ export function towerRooms(building) {
     ];
 }
 
-/** The Tower of Sar Mordal's two floors: Sinclair's hall, and his study at the top. */
+/** The Tower of Sar Mordal's two floors: Sinclair's hall, and his study at the top, his journal on its lectern (core/writings.js). */
 export function riftTowerRooms(building) {
     return [
         { suffix: "hall", style: "rift-hall", name: building.name, rows: RIFT_HALL, ground: GROUND.courtyard, sound: "tower" },
-        { suffix: "study", style: "rift-study", name: "Sinclair's study", rows: RIFT_STUDY, ground: GROUND.courtyard, sound: "tower" },
+        { suffix: "study", style: "rift-study", name: "Sinclair's study", rows: RIFT_STUDY, ground: GROUND.courtyard, sound: "tower", writing: "sinclair" },
     ];
 }
 
@@ -1653,7 +1653,7 @@ export class Interiors {
         const maps = floors.map((floor, k) => {
             const map = readPlan(`${key}/${floor.suffix}`, floor.name, floor.rows, { ground: floor.ground });
 
-            Object.assign(map, { origin: [origin[0], origin[1] + k * ORIGINS.step], style: floor.style, look: floor.look ?? null, finish: floor.finish ?? null, patron: floor.patron ?? null, sound: floor.sound, building: key, layout: floor.layout ?? null, people: building.people ?? "human" });
+            Object.assign(map, { origin: [origin[0], origin[1] + k * ORIGINS.step], style: floor.style, look: floor.look ?? null, finish: floor.finish ?? null, patron: floor.patron ?? null, writing: floor.writing ?? null, sound: floor.sound, building: key, layout: floor.layout ?? null, people: building.people ?? "human" });
 
             return map;
         });

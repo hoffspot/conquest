@@ -15,6 +15,8 @@
 // - what they've heard tell of (docs/GAME.md *Rumours of places*): what the criers have told of
 //   the places round their towns, and what's said of the hells' cults, as it was said, who said
 //   it, and which way it is, till each is found;
+// - what they've read of what's written and left to be found (core/writings.js: Sinclair's
+//   journal), each to be read again (app/reader.js);
 // - and, by a button at its top, the last messages they were told across the screen (the HUD's
 //   banner: hud.js message), the newest first, and how long ago.
 //
@@ -164,6 +166,7 @@ export class JournalPanel {
 
         /** What the player asks (the game does it). */
         this.onAbandon = () => {};
+        this.onRead = () => {};
         this.onClose = () => {};
     }
 
@@ -178,10 +181,11 @@ export class JournalPanel {
      * ruler, war: [names], allies: [names], towns, regard: [{ name, words, tone }], fate (a line, or
      * null: serving another, fallen, ruling the continent) }, done: [{
      * title, from, state }], heard: [{ words, from, where, found }] (what they've heard tell of:
-     * those still to find first), messages: the last told, oldest first (keepMessage) }.
+     * those still to find first), writings: [{ id, title, found }] (what they've read: core/
+     * writings.js), messages: the last told, oldest first (keepMessage) }.
      */
     show(shown) {
-        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], messages = [] } = shown;
+        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], writings = [], messages = [] } = shown;
 
         this.shown = shown;
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
@@ -277,6 +281,28 @@ export class JournalPanel {
         }
 
         sections.push(this.#section("Heard tell", told));
+
+        // What they've read, each to be read again
+        if (writings.length) {
+            const read = element("ul", "journal-list writings");
+
+            read.append(
+                ...writings.map(({ id, title, found }) => {
+                    const row = element("li", "journal-writing");
+                    const about = element("div", "journal-writing-about");
+                    const again = element("button", "journal-button", "Read");
+
+                    about.append(element("span", "journal-writing-title", title), element("span", "journal-writing-found", found));
+                    again.type = "button";
+                    again.setAttribute("aria-label", `Read ${title}`);
+                    again.addEventListener("click", () => this.onRead(id));
+                    row.append(about, again);
+
+                    return row;
+                }),
+            );
+            sections.push(this.#section("Writings", read));
+        }
 
         // Their people
         if (people) {

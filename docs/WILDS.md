@@ -1207,7 +1207,8 @@ among them, now and then, by night (WAR.md *The Behemoth of the Rift*).
   `riftStudy`), two floors 12 m across. Below, his hall gone to ruin: his shelves of books, his long
   table with books left open on it, heaps of what's fallen, old bones and someone who died there,
   and the rift's green light seeping up through a crack across the floor. Above, his study, open
-  to the sky: his shelves, his table, his lectern with his journal open on it, and his hoard.
+  to the sky: his shelves, his table, his lectern with his journal open on it, to be read there
+  and kept (GAME.md *Writings*), and his hoard.
 - **Kept** (`LAIRS`, `within`: host.js `#lairs`) once a player's within 100 m, back 40 minutes
   after it's slain. The rift stalker is in the study by the hoard (its chest locked while it
   lives, an old relic in it), with a riftling; two riftlings hold the hall; the rest prowl round

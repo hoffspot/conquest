@@ -769,6 +769,30 @@ as a wagon!"
   find*): its beasts out towards the nearest, on a hunting ground short of it, and a look round
   where one's said to be.
 
+### Writings (core/writings.js, app/reader.js)
+
+What's written down and left where it was, to be found and read there: the wizard Sinclair's
+journal, open on his lectern in his study at the top of the Tower of Sar Mordal (docs/WILDS.md
+*The Tower of Sar Mordal*; its floor's `writing`, core/insides.js). Ten pages: how he came to the
+tower with his wife Maren and found the world thin there; the Oculus, the glass he looked through
+into the red sky beyond; the working that failed, and the rift that opened from the other side
+while he slept; Maren killed by what came through it; his going through after them; and, years
+later, in another hand, a guild scout's note.
+
+- **Read where it lies**: the lectern tapped (the pointer a hand over it, before any way out
+  behind it), the player walks up to the square before it and it opens; or opens at once, if
+  they're by it already (app/game.js `readHere`).
+- **The reader** (app/reader.js): an old book open over the game, a page at a time, its heading,
+  how it's written (a shaking hand, a pencil) and who signed it; its pages turned on and back by
+  its buttons or the arrow keys, and shut by its button or Escape. The book's opened and its pages
+  turned as the journal's and the pack's are (`bookOpen`, `pageTurn`).
+- **Kept** the first time it's read, with what the player's talked of (their talk memory's
+  `writings`: its id; `keepRead`), in their world, and told so: "The journal of Sinclair of Sar
+  Mordal: kept in your journal, under Writings."
+- **In the journal** (app/journal.js, *Writings*): each read, where it was found, to read again
+  anywhere (its *Read* button).
+- Only the player's own game shows it: nothing of it is the host's.
+
 ## The battle (core/battle.js)
 
 The battle runs in fixed steps of 50 ms, the same on every device, whatever the frame rate.
