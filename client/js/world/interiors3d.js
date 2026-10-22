@@ -5649,7 +5649,8 @@ function benchOfTools(solid, piece) {
  * floorboards and walls, the door south, windows either side of it; the counter across the room
  * under its cloth; its shelves along the walls, its racks of blades or shields, its stands of
  * harness, its display tables, its benches, casks and strongboxes; a rug up from the door; a
- * master's banners either side of the counter; lit by torches on the walls and candle stands.
+ * master's banners either side of the counter; lit by torches on the side walls and either side of
+ * the door, and candle stands.
  */
 function shop(map) {
     const solid = new Solid();
@@ -5733,7 +5734,7 @@ function shop(map) {
     }
 
     const stands = at("votive").map((stand) => candleStand(solid, stand));
-    const torches = [[0.3, map.height / 2], [map.width - 0.3, map.height / 2], [map.width / 2, map.height - 0.3]].map(([x, z]) => wallTorch(solid, m(x), m(z)));
+    const torches = [[0.3, map.height / 2], [map.width - 0.3, map.height / 2], [doorMiddle - 1.7, map.height - 0.3], [doorMiddle + 1.7, map.height - 0.3]].map(([x, z]) => wallTorch(solid, m(x), m(z)));
 
     // (The models wanted, read from now on: buildingInterior furnishes the room with them)
     for (const name of new Set(props.map(({ model }) => model))) {
