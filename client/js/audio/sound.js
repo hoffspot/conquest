@@ -496,6 +496,16 @@ function creaturesRecorded() {
         ...each,
         slimeSizzle: { volume: 0.4 },
         dragonBreath: { volume: 0.75, instead: "fireball" },
+        // (The kaiju's, not in the game yet: heard in the model viewer, its clips played, and in
+        // the sound studio; its voice deep, so louder)
+        kaijuCall: { volume: 0.95 },
+        kaijuAttack: { volume: 0.9 },
+        kaijuHurt: { volume: 0.75 },
+        kaijuDeath: { volume: 0.95 },
+        kaijuGrowl: { volume: 0.55 },
+        kaijuCharge: { volume: 0.7 },
+        kaijuBreath: { volume: 0.9, instead: "fireball" },
+        kaijuStep: { volume: 0.8 },
         wingbeat: { volume: 0.6 },
         smallWings: { volume: 0.4 },
         deathThudSmall: { volume: 0.6, instead: "fall" },

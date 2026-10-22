@@ -31,9 +31,12 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { clone as cloneScene } from "three/addons/utils/SkeletonUtils.js";
 import { ASSETS } from "../app/assets.js";
+import { RECORDED } from "../audio/recorded.js";
+import { Sound } from "../audio/sound.js";
 import { HERO_PEOPLES } from "../app/heroes.js";
 import { filesOf } from "../app/catalog.js";
 import { BEAMS, EnergyBreath } from "../beasts/beam.js";
+import { CLIP_SOUNDS } from "../beasts/sounds.js";
 import { dressCreature, restsOf } from "../beasts/beast.js";
 import { LOOKS } from "../beasts/looks.js";
 import { hasModel, MODELS, modelOf, wantModel } from "../beasts/model.js";
@@ -500,6 +503,57 @@ function thingAvatar(object, clips = [], { hover = false, beam = null } = {}) {
     };
 }
 
+// --- Its sounds ---
+
+// (Its sounds as the game plays them: none downloaded till a model that makes them is shown, and
+// none heard till a click or key starts the browser's sound; those playing, to stop them, and
+// every one asked for, for scripts)
+const sound = new Sound({ budget: Infinity });
+const sounding = [];
+const heard = [];
+
+for (const event of ["pointerdown", "keydown"]) {
+    addEventListener(event, () => sound.unlock(), { capture: true });
+}
+
+// When a sound's loudest (s into it: its loudest variant's)
+const loudestIn = (name) => Math.max(0, ...(RECORDED[name] ?? []).map(({ peak = 0 }) => peak));
+
+/** The sounds of the clip playing from one moment of it to the next (round its end, if it's gone round), started in time to be heard when they're to be, at the speed it's played. */
+function hear(from, to) {
+    const cues = CLIP_SOUNDS[current.thing?.asset]?.[watch.clip] ?? [];
+    const passed = (t) => (to >= from ? t > from && t <= to : t > from || t <= to);
+
+    for (const [when, name, peak] of cues) {
+        if (!passed(Math.max(0, peak ? when - loudestIn(name) : when))) {
+            continue;
+        }
+
+        heard.push({ clip: watch.clip, name, at: when });
+
+        // (Slower than half speed, nothing: a sound slowed that far is no use)
+        if (watch.speed >= 0.5) {
+            const ahead = (when - to) / watch.speed;
+            const source = sound.play(name, { rate: watch.speed, ...(peak ? { peakAt: ahead } : { delay: Math.max(0, ahead) }) });
+
+            if (source) {
+                sounding.push(source);
+            }
+        }
+    }
+}
+
+/** Every sound of its clips still playing stopped (it's paused, or does something else). */
+function hush() {
+    for (const source of sounding.splice(0)) {
+        try {
+            source.stop();
+        } catch {
+            // (Done already)
+        }
+    }
+}
+
 // --- The creature ---
 
 status.textContent = "Loading the body…";
@@ -587,6 +641,9 @@ function show(id, which = seed) {
 
     // (A thing does none of it: it stands, or plays its clips)
     document.querySelector("#bottom").hidden = Boolean(current.thing);
+
+    // (Its sounds turned off and on, if it makes any)
+    document.querySelector("#sound-option").hidden = !CLIP_SOUNDS[current.thing?.asset];
 
     // (Its skins, if it has others: the one chosen worn, if it has that one)
     showSkins();
@@ -689,6 +746,9 @@ function showThing(id) {
     object.traverse((node) => {
         node.visible = !node.userData.lod;
     });
+
+    // (Its clips' sounds downloaded, if they make any)
+    sound.want([...new Set(Object.values(CLIP_SOUNDS[name] ?? {}).flatMap((cues) => cues.map(([, which]) => which)))]);
     current = { ...thing, avatar: thingAvatar(object, read?.animations ?? [], { hover: kind === "model", beam: read ? BEAMS[name] : null }), thing: { asset: name, read: Boolean(read), skins: Object.keys(skinsOf(name)) }, name: label, about: read ? made : "On its way…" };
 
     if (!read) {
@@ -796,6 +856,7 @@ function act(what, which = null, variant = null, { again: repeated = false } = {
     watch.elapsed = 0;
     avatar.actions.revive();
     again = 0;
+    hush();
 
     // (One of the people standing, walking or running: off guard, their weapon put away, and not
     // sat down, as the game's are going about; each motion as the motion check plays it)
@@ -887,7 +948,9 @@ function playClip(name) {
     current.doing = { what: "clip", which: name, variant: null };
     watch.clip = name;
     watch.clipAt = 0;
+    watch.from = -1;
     watch.elapsed = 0;
+    hush();
     avatar.actions.revive();
     avatar.plan.hold(name, 0);
     shown(name);
@@ -936,9 +999,17 @@ function advance(seconds, step = 1 / 60) {
     // (One of its model's clips alone: on through it, round again or held at its end)
     if (watch.clip) {
         const length = avatar.plan.lengths[watch.clip];
+        // (From its start, if it's just begun: what's heard as it does)
+        const from = watch.from ?? watch.clipAt;
 
         watch.clipAt = watch.loop ? (watch.clipAt + seconds) % length : Math.min(length, watch.clipAt + seconds);
+        watch.from = null;
         avatar.plan.hold(watch.clip, watch.clipAt);
+
+        // (Heard only as it plays on: not held at its end, and not round again once it's not looped)
+        if (watch.clipAt !== from) {
+            hear(from, watch.clipAt);
+        }
 
         return;
     }
@@ -1002,6 +1073,7 @@ const looks = {
     scrub: document.querySelector("#scrub"),
     skeleton: document.querySelector("#skeleton"),
     wireframe: document.querySelector("#wireframe"),
+    sound: document.querySelector("#sound"),
     moves: document.querySelector("#moves"),
     clips: document.querySelector("#clips"),
     details: document.querySelector("#details"),
@@ -1010,6 +1082,11 @@ const looks = {
 /** Play on as it's drawn, or pause (`on`). */
 function play(on) {
     watch.playing = on;
+
+    if (!on) {
+        hush();
+    }
+
     looks.play.querySelector(".label").textContent = on ? "Pause" : "Play";
     looks.play.setAttribute("aria-label", on ? "Pause" : "Play");
     looks.play.dataset.playing = String(on);
@@ -1568,6 +1645,7 @@ looks.scrub.addEventListener("input", () => {
 });
 looks.skeleton.addEventListener("change", showBones);
 looks.wireframe.addEventListener("change", () => wireframe(current.avatar.object, looks.wireframe.checked));
+looks.sound.addEventListener("change", () => sound.setEnabled(looks.sound.checked));
 
 // (The panel of all that, shown or not: shown to start with where there's room for it)
 const inspect = document.querySelector("#inspect");
@@ -1737,6 +1815,10 @@ window.lab = {
     },
     watch: () => ({ ...watch, past: rewind.past, kept: rewind.kept.length, bones: bones?.bones.length ?? 0, moves: movesOf().map(({ label }) => label), clips: Object.keys(current.avatar.plan?.lengths ?? {}) }),
     details: () => detailsOf(current.avatar.object),
+    // (Every sound its clips have asked for, as they played: { clip, name, at }; and whether the
+    // browser's sound is going)
+    heard: () => heard.map((one) => ({ ...one })),
+    sounding: () => sound.playing,
     // (A beam it breathes, what it's doing: beasts/beam.js)
     breath: () => current.avatar.breath?.state ?? null,
     // (How it's laid out and seen: how much of the view the bars and panel cover; where the middle
