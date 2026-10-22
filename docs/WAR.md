@@ -2269,8 +2269,8 @@ A big band of raiders comes down one of a town's roads to attack it, and a big f
 own people marches out to meet them at its edge (`core/invasions.js`, the host's `#invasions`).
 The first comes to a character five minutes after they land in a town, whichever town that is; the
 rest come now and then while they're in towns, each as big as the devices in it can draw and keep
-moving. A character's first is bandits'; every one after, any of five bands. The war horn and music
-are to come.
+moving. A character's first is bandits'; every one after, any of five bands, or by night, one time
+in three, the Behemoth of the Rift (below).
 
 **When** (`INVASION`, Progress `invasion`: `clockOf`):
 - **Time in towns**, counted for each character every second (`tick`) while they're in a town,
@@ -2315,6 +2315,9 @@ soldiers; the host's steps took 4 to 6.5 ms on the mean.
   two squads of bomb throwers (`bombers`: a fortieth of them each, at least two), out on their
   line's flanks, a sword up close and goblin bombs lobbed from 11 m (core/weapons.js `bombardier`)
   that toss the raiders they burst by off their feet.
+- **Where they stand**: neither line on a square with no way from it to where the lines meet (a
+  yard shut in among buildings: the host's `#spots`, `to`), so none of them is left there for the
+  whole of it.
 - **Who fights whom** (the host's `#against`): the raiders are everyone's enemies and everyone
   theirs; a raider's fellows don't take up its grudges (battle.js `lone`), each picks its own fights.
   In a character's **first** invasion the raiders leave them be, and their followers and creatures
@@ -2396,8 +2399,54 @@ the armoury, and 162 gold, 7 merit with the guilds, 12 standing.", 14 seconds, o
 **With thanks**), the town's horn blown for it. What's on the raiders they fell is theirs as it is
 on any foe (core/progress.js `LOOT.raider`: no people's uniform).
 
+**The Behemoth of the Rift** (`BEHEMOTH`; the beast itself: WILDS.md *The Behemoth of the Rift*).
+By night (the torches lit: core/light.js `torchesLit`), one invasion in three of those due comes as
+one of the great beasts out of the rift by the Tower of Sar Mordal, in place of a band; never a
+character's first (`isBehemoth`, rolled apart from the band, so whichever band would come
+otherwise still does).
+- **It comes** out 150 m beyond the town's edge on one of its roads (`out`), its roar heard there
+  twice from afar in place of the raiders' horn, walking on its own way to 10 m beyond the edge
+  (`stops`). It never goes into the town after anyone (battle.js `keepOut`): those within its edge
+  are no one it fights.
+- **The town's whole strength** marches out to meet it: as big as the devices there can draw
+  (`SIZE`, above), all of it the town's but the room the Behemoth takes itself (`costs`: 20
+  soldiers' worth), so 40 at 60 and 340 at 360; its bomb throwers 6% of them, in two squads on
+  the line's flanks, three at least in each (`bombers`, `least`). Each goes after it as far as
+  90 m from their place in the line (`leash`), so all of them do. It's no one's first: it fights
+  every player from the start, and they it.
+- **How strong** (`behemothSides`): its hit points 130 for each of the town's soldiers who meet
+  it, and a quarter more for each for every one of them (`hp`, `grows`): 5,600 against the 40 of
+  an invasion of 60, 15,500 against 100, 73,100 against 340. The more of them, the better they
+  fight it: their arrows can't miss so big a beast, and it can't be at all of them at once. Played
+  headless with the army alone (the player standing aside) in the start towns of 18 worlds, 43
+  fights at 60, 120, 240 and 360 (12, 18, 9 and 4), the town held 28 times, about two in three at
+  each size, and kept 36 to 44% of its soldiers on the mean when it did; from the first blow, the
+  fight lasted a minute and a half at 60, three minutes at 360. Its archers, casters and bomb
+  throwers do much of it: whoever's after it is in the fight while they see any of its body as
+  far as they reach (WILDS.md).
+- **How it ends** (`#invasionsOn`): slain, the town held ("The Behemoth of the Rift is slain
+  before Marleyworth!", and the crier's "The Behemoth of the Rift is slain! The town thanks every
+  brave soul who stood for it!"); with all but 5% of the town's soldiers fallen (`last`), it goes
+  back the way it came, the town not held, 60 m further than it came (`away`), and is let go of;
+  and 15 minutes after it came (`lasts`), back it goes.
+- **Thanks** (`#wounded`, `behemothReward`, `BEHEMOTH_REWARD`): every blow struck at it by a
+  player or theirs (their followers, the creatures they've called or raised) is counted for them,
+  and once it's over they're thanked for the share of its hit points they dealt it: 900 gold for
+  all of it, so much of it as they dealt (half if the town fell); the guilds' merit (3, and up to
+  24 more for all of it) and the town's thanks (4, and up to 30 more). One who dealt it 8% of its
+  hit points, the town held, has the lord's own purse, a piece from the armoury and the rest of
+  the lord's reward, as for raiders ("Marleyworth thanks you for the wounds you dealt the
+  Behemoth, 12% of its strength: 108 gold, 6 merit with the guilds, 8 standing.").
+- **The crier** cries it coming ("A great beast out of the rift, on the north road! Every able
+  hand, defend the town!", and "To the north road, and drive it off!").
+- `test/invasions.test.js`: by night only, one time in three, never in anyone's first; the
+  town's whole strength against it, everyone's enemy, on to the town's edge; slain, the town
+  held, those who wounded it thanked by their share; going back once all but a few of the town's
+  are down. `test/kaiju.test.js`: never after anyone in the town.
+
 **Called up** (debug): the debug overlay's **Invasion** brings one to the town the player's in now
-(the host's `invade` command), as one due would come.
+(the host's `invade` command), as one due would come; its band's list has the Behemoth of the Rift
+too.
 
 **Kept.** The invasions on and how many there've been are in the host's snapshot (`invasions`,
 `invaded`; `SNAPSHOT_VERSION` 30, none in a world kept before), each character's time in towns
@@ -2406,7 +2455,7 @@ with what they carry (`Progress.invasion`), and a world's rules say whether inva
 player's device can draw is in the host's snapshot too (each player's `budget`; `SNAPSHOT_VERSION`
 31, none told in a world kept before), and told by their game (`NET_VERSION` 146). The bands
 changed what two games share again (`NET_VERSION` 147), and so did the band named in the thanks
-(148).
+(148), and the Behemoth of the Rift (149).
 
 ### Playing together (M11)
 

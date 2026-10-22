@@ -17,7 +17,8 @@
 //    bones on the graphics card, nothing on the page. Those far from the camera are drawn with
 //    fewer triangles still (CROWD.far), as another draw of the same.
 // Each soldier drawn so has a CrowdAvatar: an avatar (avatar.js) as far as the game's concerned,
-// placed, turned, struck and fallen as one is, its moves told to the crowd.
+// placed, turned, struck and fallen as one is, its moves told to the crowd; thrown by a blast, its
+// whole figure flung tumbling along its arc as its fall plays (one drawn in full goes limp).
 //
 // One drawn in full can be drawn in a crowd for a while too (a stand-in: app/game.js #thronging),
 // its body kept but not drawn (OFFSTAGE) nor posed: the stand-in drawn where it is, as it's going
@@ -1021,6 +1022,10 @@ export class CrowdAvatar {
         this.fallen = null;
         this.guarding = false;
 
+        /** Thrown by a blast (#toss), if it is: { from, to, flight, up, ground, start, rises, axis, height }. */
+        this.tossed = null;
+        this.tumble = new THREE.Quaternion();
+
         /** How far through a stride it is (0 to 1), walking or running. */
         this.stride = Math.random();
 
@@ -1084,14 +1089,21 @@ export class CrowdAvatar {
             dodge: () => this.#start("hit"),
             knockdown: () => this.#start("hit"),
             die: () => {
-                this.fallen = this.time;
+                this.fallen ??= this.time;
                 this.doing = null;
+
+                if (this.tossed) {
+                    this.tossed.rises = null;
+                }
 
                 return crowd.kinds.get(key)?.template?.table.die.lands ?? 1;
             },
             revive: () => {
                 this.fallen = null;
+                this.tossed = null;
             },
+            // (Thrown by a blast: flung whole, as one in full is limp, #toss)
+            toss: (options) => this.#toss(options),
             emote() {},
             stopEmote() {},
             rest() {},
@@ -1101,6 +1113,59 @@ export class CrowdAvatar {
         };
 
         crowd.join(this);
+    }
+
+    // Thrown by a blast (as one drawn in full is, limp: actions.js toss; here its whole figure): from
+    // where it is, to land about `to` ([x, z] in the world) `flight` seconds later, its arc `up`
+    // metres high over the ground (`ground(x, z)`, metres), going once head over heels away from
+    // where it was thrown from as its fall plays, to lie where it lands as its fall ends; up again
+    // `seconds` after it was thrown (null: dead, it lies there). How long till it lands (seconds)
+    #toss({ to, flight, up, ground, seconds = null }) {
+        const from = this.object.position.clone();
+        const way = new THREE.Vector3(to[0] - from.x, 0, to[1] - from.z);
+
+        this.tossed = { from, to, flight: Math.max(0.3, flight), up, ground, start: this.time, rises: seconds, axis: way.lengthSq() > 1e-6 ? new THREE.Vector3().crossVectors(_up, way.normalize()) : new THREE.Vector3(1, 0, 0) };
+        this.fallen = this.time;
+        this.doing = null;
+
+        return this.tossed.flight;
+    }
+
+    /** Is it thrown (#toss) and not on its feet again yet? */
+    get thrown() {
+        return Boolean(this.tossed);
+    }
+
+    /** Is it in the air, thrown (#toss), not down yet? */
+    get airborne() {
+        return Boolean(this.tossed) && this.time - this.tossed.start < this.tossed.flight;
+    }
+
+    // Thrown (#toss), `dt` seconds on: along its arc, turning over as it goes, down where it lands;
+    // lying there, then up again once it's time (where its actor is, `x`, `z`). Whether it's still
+    // thrown (and placed so)
+    #flung(dt, x, z) {
+        const tossed = this.tossed;
+        const u = Math.min(1, (this.time + dt - tossed.start) / tossed.flight);
+        const [lx, lz] = [tossed.from.x + (tossed.to[0] - tossed.from.x) * u, tossed.from.z + (tossed.to[1] - tossed.from.z) * u];
+
+        this.time += dt;
+
+        if (tossed.rises !== null && this.time - tossed.start >= tossed.rises) {
+            this.tossed = null;
+            this.fallen = null;
+            this.tumble.identity();
+            Object.assign(this.follow, { x: lx, z: lz, vx: 0, vz: 0 });
+
+            return false;
+        }
+
+        this.object.position.set(lx, tossed.ground(lx, lz) + 4 * tossed.up * u * (1 - u), lz);
+        this.last.copy(this.object.position);
+        Object.assign(this.follow, { x, z, vx: 0, vz: 0 });
+        this.tumble.setFromAxisAngle(tossed.axis, u < 1 ? Math.PI * 2 * (u * u * (3 - 2 * u)) : 0);
+
+        return true;
     }
 
     // A move begun (`seconds` long, as it's played: the recorded one's sped up or slowed to it)
@@ -1121,6 +1186,11 @@ export class CrowdAvatar {
 
     /** Follow its actor, as an avatar does (avatar.js update); its stride kept with how far it's gone. */
     update(dt, x, z, facing, steer = true) {
+        // (Thrown: flung along its arc, lying where it lands, till it's up: #flung)
+        if (this.tossed && this.#flung(dt, x, z)) {
+            return;
+        }
+
         const follow = this.follow;
         const decay = Math.exp(-FOLLOW * dt);
         const ex = follow.x - x;
@@ -1182,12 +1252,18 @@ export class CrowdAvatar {
         return target.set(this.object.position.x + c * across + s * 0.3, this.object.position.y + this.character.height * 0.72, this.object.position.z - s * across + c * 0.3);
     }
 
-    /** Where it's drawn: its place, turned the way it faces, at its size. */
+    /** Where it's drawn: its place, turned the way it faces (and over about its middle, thrown: #flung), at its size. */
     placed() {
-        _quaternion.setFromAxisAngle(_up, this.facing);
+        _quaternion.setFromAxisAngle(_up, this.facing).premultiply(this.tumble);
         _scale.setScalar(this.size);
 
-        return _matrix.compose(this.object.position, _quaternion, _scale).clone();
+        if (!this.tossed) {
+            return _matrix.compose(this.object.position, _quaternion, _scale).clone();
+        }
+
+        const middle = new THREE.Vector3(0, this.character.height * 0.5, 0);
+
+        return _matrix.compose(this.object.position.clone().add(middle).sub(middle.clone().applyQuaternion(this.tumble)), _quaternion, _scale).clone();
     }
 
     /**

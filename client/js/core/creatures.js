@@ -35,6 +35,12 @@ import { cos, hypot, pow, sin } from "./exact.js";
 /** The team the wild's creatures are all on. */
 export const WILD = "beasts";
 
+/**
+ * The team of what comes through the rift outside the Tower of Sar Mordal (the Behemoth of the
+ * Rift: CREATURES kaiju): everyone's enemy, whatever their side, and everyone its (host.js #against).
+ */
+export const RIFT = "rift";
+
 /** How many tiers there are, and how much stronger each is than the last (hit points and blows each). */
 export const TIERS = 10;
 export const TIER_GROWTH = 1.18;
@@ -52,6 +58,36 @@ const BARREN = new Set(["sea", "lake", "beach"]);
 // A creature's pack, and how it grows further out: its least to start with, one more every
 // PACK_EVERY tiers above its least tier, up to its most
 const PACK_EVERY = 2;
+
+/**
+ * How the colossal fight (the Behemoth of the Rift: CREATURES kaiju, battle.js #colossus), in
+ * metres and ms:
+ *  - `body`: the middle of its body, `ahead` metres before where it stands (where its model's made
+ *    standing, under its hips: its hind feet 2.5 metres before that, its fore feet 12), and how
+ *    far it reaches every way from there (`half`): the squares it stands over (battle.js
+ *    `footprint`), what's after it closing to the nearest of them;
+ *  - `sight`: how far it sees whoever it'd fight; `turn`: how fast it turns (radians a second);
+ *  - `tread`: whoever's under it as it walks, every `every` ms: within `reach` of its body's
+ *    middle, hurt (`damage`) and thrown aside (`toss`); standing, its feet shifted every `still`
+ *    ms, whoever's within `round` of its body's middle (under it, or hard against it);
+ *  - its moves, each its weapon's attack of that id (weapons.js NATURAL kaiju), made no sooner
+ *    than `every` ms after it last made it: `slam`, its jaws slammed down `ahead` metres before
+ *    where it stands (or `near`, whichever catches more), `radius` round, whenever anyone's there;
+ *    `roar`, everyone within `radius` thrown off their feet, once `crowd` of them are; `breath`,
+ *    raked over the ground from `reach[0]` to `reach[1]` metres before its mouth (`mouth` metres
+ *    before where it stands: as beasts/beam.js aims it), a blast `radius` round where it lands
+ *    every `tick` ms, whoever it catches hurt once and thrown, whenever enough of them (`crowd`)
+ *    stand where it would land (or all of them about, with fewer left).
+ */
+export const COLOSSUS = Object.freeze({
+    body: Object.freeze({ ahead: 7, half: 6 }),
+    sight: 90,
+    turn: 0.6,
+    tread: Object.freeze({ every: 700, still: 1800, reach: 6.5, round: 7.5, damage: Object.freeze([5, 9]), toss: 1.2 }),
+    slam: Object.freeze({ ahead: 16, near: 10, radius: 5, toss: 1.6, every: 5000 }),
+    roar: Object.freeze({ radius: 15, toss: 2, crowd: 5, every: 18000 }),
+    breath: Object.freeze({ mouth: 15.9, reach: Object.freeze([13, 18]), radius: 4, tick: 250, toss: 2.6, crowd: 3, every: 12000 }),
+});
 
 /**
  * Every creature: its name, hit points and weapon (at the first tier's), walking and chasing
@@ -76,7 +112,8 @@ const PACK_EVERY = 2;
  * `call`'s (the ants' nest's Ant Monster); bursting as it dies (`burst`: a bomb of that `kind` left
  * where it falls, battle.js BOMBS, its `damage` at the blast's heart: a hell's Cinder Husk). How
  * little some kinds of harm hurt it (`wards`: { fire, water, air, earth, magic }, a share kept
- * off each, as a player's charms keep it: battle.js `charmed`, half at most).
+ * off each, as a player's charms keep it: battle.js `charmed`, half at most). One too vast for any
+ * of that fights its own way (`colossus`: COLOSSUS, battle.js #colossus).
  */
 export const CREATURES = Object.freeze({
     // Near home, everywhere
@@ -236,6 +273,12 @@ export const CREATURES = Object.freeze({
     // heavy; drawn from a bought model of its own once that's read, a horned stand-in till then:
     // beasts/model.js, beasts/looks.js)
     fiend: { name: "Fiend", hp: 78, weapon: "fiend", speed: 1.2, chase: 3.1, temper: "aggressive", roam: 8, leash: 24, pack: [1, 3], tiers: [9, 10], biomes: [], blood: "red", armor: 0.15, darkSight: true, steady: true },
+    // (The Behemoth of the Rift: one of the great beasts of the other world come through the rift
+    // outside the Tower of Sar Mordal (docs/WILDS.md *The Kaiju*), 36 metres long and 13 tall,
+    // drawn from a bought model of its own (beasts/model.js). On no side but its own (RIFT), it's
+    // everyone's enemy; too vast to be thrown, it fights its own way (`colossus`: battle.js
+    // #colossus) and is met only where one's come against a town by night)
+    kaiju: { name: "Behemoth of the Rift", hp: 2400, weapon: "kaiju", speed: 1.5, chase: 2.2, temper: "aggressive", roam: 0, leash: 400, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "ichor", armor: 0.3, perilous: true, darkSight: true, steady: true, colossus: COLOSSUS },
 });
 
 /**
@@ -420,9 +463,9 @@ export function notable(wild, { master = false } = {}) {
  * boss (`boss`), its bomb and its call as its `boss` has them.
  */
 export function traitsOf(creature, { boss = false } = {}) {
-    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null, lurk = null, burst = null } = CREATURES[creature] ?? {};
+    const { steady = false, keep = null, bomb = null, call = null, boss: asBoss = null, hover = null, lurk = null, burst = null, colossus = null } = CREATURES[creature] ?? {};
 
-    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}), ...(lurk ? { lurk: { ...lurk } } : {}), ...(burst ? { burst: { ...burst, damage: [...burst.damage] } } : {}) };
+    return { steady, keep, bomb: bomb ? { ...bomb, damage: [...bomb.damage], ...(boss ? asBoss?.bomb : {}) } : null, hover: hover ? { ...hover } : null, ...(call ? { call: { ...call, count: [...call.count], ...(boss ? asBoss?.call : {}) } } : {}), ...(lurk ? { lurk: { ...lurk } } : {}), ...(burst ? { burst: { ...burst, damage: [...burst.damage] } } : {}), ...(colossus ? { colossus: structuredClone(colossus) } : {}) };
 }
 
 /** The round an elite walks ([[x, y], ...] metres): ELITES.stops evenly about where it was put out (`at`), ELITES.loop metres off. */

@@ -222,6 +222,71 @@ export const BANDS = Object.freeze({
     }),
 });
 
+/**
+ * The Behemoth of the Rift's invasion (creatures.js kaiju): one of the great beasts out of the rift
+ * by the Tower of Sar Mordal, come down a town's road by night, its whole strength marching out to
+ * meet it. In place of a band (`id`, as an invasion's band), the one creature (`creature`):
+ *  - **When**: by night only (the torches lit: core/light.js torchesLit), one time in `share` of
+ *    the invasions due then; never a character's first;
+ *  - **Where it comes**: out `out` metres beyond the town's edge on the road, walking on its own
+ *    way (battle.js #colossus) to `stops` metres beyond its edge, where the town's line meets it;
+ *  - **The town's side**: as big as the devices there can draw (SIZE) but the room the Behemoth
+ *    takes itself (`costs`: as many soldiers' worth), all of it the town's, its bomb throwers
+ *    `bombers` of it (in two squads on its flanks, at least `least` each); each of them going
+ *    after it as far as `leash` metres from their place in the line, so all of them do;
+ *  - **How strong**: its hit points `hp` for each of the town's soldiers who meets it, and
+ *    `grows` more for each for every one of them (the more of them, the better they fight it:
+ *    their arrows can't miss so big a beast): a close fight the town wins about two times in
+ *    three, at any size (docs/WAR.md *The Behemoth of the Rift*);
+ *  - **How it ends**: the Behemoth slain, the town held; the town's soldiers fallen but `last` of
+ *    them (a share), it goes back the way it came (`away` metres further, and gone); gone on
+ *    `lasts` ms, it goes back;
+ *  - **What it says**: its name (`label`), what it's called after (`many`), the crier's cries of it
+ *    coming (`cry`: its road `{way}`) and once it's slain (`beaten`).
+ */
+export const BEHEMOTH = Object.freeze({
+    id: "behemoth",
+    creature: "kaiju",
+    share: 1 / 3,
+    out: 150,
+    stops: 10,
+    leash: 90,
+    costs: 20,
+    bombers: 0.06,
+    least: 3,
+    hp: 130,
+    grows: 0.25,
+    away: 60,
+    last: 0.05,
+    lasts: 900000,
+    label: "The Behemoth of the Rift",
+    many: "the Behemoth",
+    cry: "A great beast out of the rift, on the {way} road!",
+    beaten: "The Behemoth of the Rift is slain!",
+});
+
+/** What an invasion's band says of itself (BANDS'; the Behemoth's, BEHEMOTH): its label, many, cry and beaten. */
+export const bandOf = (band) => (band === BEHEMOTH.id ? BEHEMOTH : BANDS[band]);
+
+/**
+ * Whether an invasion due at a town is the Behemoth's (BEHEMOTH): by night (`dark`), never in
+ * anyone's first (`first`), one time in BEHEMOTH.share (`roll`: 0 to 1).
+ */
+export const isBehemoth = ({ dark, first, roll }) => dark && !first && roll < BEHEMOTH.share;
+
+/**
+ * How the town meets the Behemoth with `size` in all it can draw: { defenders (all of them the
+ * town's, its bomb throwers among them), bombers (in each of its squads: `squads` of them), hp
+ * (the Behemoth's hit points: BEHEMOTH.hp for each of its soldiers, and `grows` more for each for
+ * every one of them) }.
+ */
+export function behemothSides(size = INVASION.size) {
+    const defenders = Math.max(SIZE.least - BEHEMOTH.costs, size - BEHEMOTH.costs);
+    const { squads } = INVASION.bombers;
+
+    return { defenders, bombers: Math.max(BEHEMOTH.least, Math.round(defenders * BEHEMOTH.bombers)), squads, hp: Math.round(defenders * (BEHEMOTH.hp + BEHEMOTH.grows * defenders)) };
+}
+
 /** How near the sea a town is to be for a band that comes only by the sea (`coastal`): cells of the world plan's (CELL metres). */
 export const COAST = 12;
 
@@ -324,6 +389,32 @@ export function rewardOf({ felled, of, held = true }) {
     };
 }
 
+/**
+ * What wounding the Behemoth is worth to someone (BEHEMOTH): for the share of its hit points they
+ * dealt it (`share`, 0 to 1), the town held or not (`held`): a bounty of `bounty` gold for all of
+ * it, a share each; the guilds' merit and the town's thanks, each so much for taking part, so much
+ * more for all of it; and once they've dealt it `big` of its hit points, the town held, its lord's
+ * purse and a piece from its armoury besides (REWARD). Nothing, for none dealt.
+ */
+export const BEHEMOTH_REWARD = Object.freeze({ bounty: 900, merit: Object.freeze([3, 24]), thanks: Object.freeze([4, 30]), big: 0.08 });
+
+export function behemothReward({ share, held = true }) {
+    if (!(share > 0)) {
+        return { gold: 0, merit: 0, thanks: 0, big: false };
+    }
+
+    const { bounty, merit, thanks, big } = BEHEMOTH_REWARD;
+    const lord = held && share >= big;
+    const whole = Math.min(1, share);
+
+    return {
+        gold: Math.max(1, Math.round(bounty * whole * (held ? 1 : 0.5))) + (lord ? REWARD.purse : 0),
+        merit: merit[0] + Math.round(merit[1] * whole) + (lord ? REWARD.bigMerit : 0),
+        thanks: thanks[0] + Math.round(thanks[1] * whole) + (lord ? REWARD.bigThanks : 0),
+        big: lord,
+    };
+}
+
 /** How the crier opens his calls while an invasion's on (core/crying.js OPENINGS, his others). */
 export const ALARM = "To arms! To arms!";
 
@@ -333,8 +424,10 @@ export const ALARM = "To arms! To arms!";
  * road, then his plea to every able hand, the adventurers first, to defend the town.
  */
 export function criesOf(band, way) {
-    return [`${BANDS[band].cry.replace("{way}", way)} Every able hand, defend the town!`, `Adventurers! Able hands! To the ${way} road, and drive them off!`];
+    const them = band === BEHEMOTH.id ? "it" : "them";
+
+    return [`${bandOf(band).cry.replace("{way}", way)} Every able hand, defend the town!`, `Adventurers! Able hands! To the ${way} road, and drive ${them} off!`];
 }
 
 /** The crier's thanks once they're beaten off (at most 90 characters): the band's own `beaten`, and the town's thanks. */
-export const thanksOf = (band) => `${BANDS[band].beaten} The town thanks every brave soul who stood for it!`;
+export const thanksOf = (band) => `${bandOf(band).beaten} The town thanks every brave soul who stood for it!`;

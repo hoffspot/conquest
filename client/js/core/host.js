@@ -30,12 +30,12 @@ import { dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
-import { bandFor, BANDS, BOMBER, COAST, dueAfter, INVASION, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
+import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, BOMBER, COAST, dueAfter, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
 import { waysOut } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
 import { compass } from "./ways.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
-import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, lairOf, memberOf, menaces, outByDay, packOf, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
+import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, lairOf, memberOf, menaces, outByDay, packOf, RIFT, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
 import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from "./insides.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
@@ -50,7 +50,7 @@ import { ADJECTIVES } from "./war/peoples.js";
 import { CONVOY, HOLDINGS, RISING, SQUAD_NAMES, SQUADS, STAGES, War, WORKED } from "./war/war.js";
 import { countOut, crierOf, errandsOf, TOWNSFOLK_REACH, townsfolkOf, wardErrandsOf } from "./townsfolk.js";
 import { distanceBetween, longestReach, WEAPONS } from "./weapons.js";
-import { dropTiles } from "./navigation.js";
+import { dropTiles, navigatorOf } from "./navigation.js";
 import { FORTS, footprintOf } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
 import { BODIES, fightingValue, groupsOf, opposition, scalingOf, sideStrength, STRENGTH, wholeOf, withinBudget } from "./strength.js";
@@ -287,6 +287,9 @@ export const HONOURS = 200;
 /** How long the fallen soldiers lie before they're taken away (battle ms). */
 const FALLEN_MS = 10000;
 
+/** How near where they're to go the way from a square must come for it to be one to stand on (host.js #spots `to`: metres). */
+const SPOT_WAY = 2;
+
 /** How long one of the wild's creatures lies where it fell (ms): long enough to be raised (Zombify). */
 const CORPSE_MS = 30000;
 
@@ -388,7 +391,7 @@ export const PLAYER_ROLES = Object.freeze(["owner", "trusted", "player"]);
 
 // What a player does that gets them up from resting (waiting on the rest to rest too: RULES rest
 // "everyone"): going somewhere, fighting, casting, trading
-const STIRS = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "trade", "travel", "table", "fieldBattle", "invade"]);
+const STIRS = new Set(["move", "ahead", "engage", "approach", "enter", "cast", "ability", "trade", "travel", "table", "fieldBattle", "invade", "rift"]);
 
 /**
  * How long a camp's slept by, as the player chooses (host.js `#camp`'s `until`): so many of the
@@ -1631,6 +1634,9 @@ export class Host {
                 return this.debugs(playerId) ? this.#fieldBattle(player, actor, command.size, command.facing ?? actor.facing) : refuse("command");
             case "invade":
                 return this.debugs(playerId) ? this.#invadeNow(player, command.band ?? null) : refuse("command");
+            case "rift":
+                // (The Behemoth of the Rift before them, coming at them: the debug overlay's)
+                return this.debugs(playerId) ? this.#riftBefore(actor) : refuse("command");
             case "budget":
                 // (How big an invasion their device can draw, as their game's measured it: core/
                 // invasions.js sizeFor)
@@ -2457,6 +2463,8 @@ export class Host {
     // What happened in the battle, for the players' skills: blows landed (up close, from afar)
     // and taken, heals, stuns, running out of breath; and what's on those they fell
     #learn(event) {
+        this.#wounded(event);
+
         // (What a player's followers do, their leader's: their Command grows by it, and what they
         // bring down counts for them)
         const leads = this.followers.get(event.by);
@@ -3413,8 +3421,14 @@ export class Host {
     // peoples stand in the war; anyone of no people's (the orc) against everyone, the peoples'
     // soldiers too; anyone, without a war. The wild's creatures (creatures.js) are every player's
     // enemies, and the soldiers' and followers' when they're a menace or fighting; no one else's
-    // (the orc's)
+    // (the orc's). What's come through the rift (RIFT) is everyone's, and everyone its
     #against(a, b) {
+        // (The Behemoth of the Rift and its kind: against everything that lives, the wild's
+        // creatures and an invasion's raiders too)
+        if (a.team === RIFT || b.team === RIFT) {
+            return a.team !== b.team;
+        }
+
         const [sa, sb] = [this.soldiers.get(a.id), this.soldiers.get(b.id)];
 
         // (A field battle's other army, everyone's enemy; and everyone theirs: #fieldBattle)
@@ -4086,12 +4100,13 @@ export class Host {
     }
 
     // An invasion called up in the town a player's in, now (the debug overlay's Invasion): as one
-    // due would come, theirs counted as come, of a band (BANDS: any, by the sea or not), or as one
-    // due would have; refused out of a town or city, or with one on
+    // due would come, theirs counted as come, of a band (BANDS: any, by the sea or not; or the
+    // Behemoth of the Rift, BEHEMOTH, by day or night), or as one due would have; refused out of a
+    // town or city, or with one on
     #invadeNow(player, band) {
         const town = this.#townOf(player);
 
-        if (!town || this.invasions.length || (band !== null && !Object.hasOwn(BANDS, band))) {
+        if (!town || this.invasions.length || (band !== null && band !== BEHEMOTH.id && !Object.hasOwn(BANDS, band))) {
             return refuse("command");
         }
 
@@ -4137,9 +4152,16 @@ export class Host {
         const size = told.length ? Math.min(...told) : INVASION.size;
         const random = createRandom([...`${id}:${town.id}`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0);
         const place = this.#placeOf(town.id);
+        const first = there.some(({ progress }) => !progress.invasion.seen);
 
-        band ??= bandFor({ first: there.some(({ progress }) => !progress.invasion.seen), coastal: this.#byTheSea(place), random });
+        // (By night, now and then, the Behemoth of the Rift in place of a band: rolled apart from
+        // the band, so what band comes otherwise is as it was)
+        const rift = createRandom([...`${id}:${town.id}:rift`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0);
 
+        band ??= isBehemoth({ dark: this.#dark(), first, roll: rift.next() }) ? BEHEMOTH.id : null;
+        band ??= bandFor({ first, coastal: this.#byTheSea(place), random });
+
+        const behemoth = band === BEHEMOTH.id;
         const ways = waysOut(this.world.plan, place);
         const angle = ways.length ? random.pick(ways) : random.next() * 2 * Math.PI;
         const out = [cos(angle), sin(angle)];
@@ -4147,72 +4169,60 @@ export class Host {
         const inward = atan2(-out[0], -out[1]);
         const outward = atan2(out[0], out[1]);
         const meet = along(town.edge + INVASION.meet);
-        const from = along(town.edge + INVASION.out);
+        const from = along(town.edge + (behemoth ? BEHEMOTH.out : INVASION.out));
         const people = this.war?.town(town.id)?.owner ?? town.people;
-        const { invaders, defenders, bombers, squads } = sidesOf(size);
-        const { mix, chiefs, chief: chiefArms, chiefHp, hp, armor = 0, march, leash = {}, advance = true, stand = 0 } = BANDS[band];
         const formations = { invaders: `${id}-invaders`, defenders: `${id}-defenders` };
         const ids = { invaders: [], defenders: [] };
-        const free = this.#spots();
+        // (None of either line where there's no way out to where they meet)
+        const free = this.#spots("town", { to: meet });
+        const townLine = { anchor: along(town.edge - INVASION.inside), facing: outward, to: [meet[0] - out[0] * 1.5, meet[1] - out[1] * 1.5] };
 
-        // The raiders' line: its chiefs spread along its shield line
-        const raiderRoles = rolesOf(invaders, mix);
-        const front = raiderRoles.flatMap((role, k) => (role === "front" ? [k] : []));
-        const leaders = Math.max(1, Math.round(invaders / chiefs));
-        const chiefsAt = new Set(Array.from({ length: Math.min(leaders, front.length) }, (_, k) => front[Math.floor((k * front.length) / leaders)]));
+        if (behemoth) {
+            // The Behemoth, out of the rift down the road; the town's whole strength to meet it
+            const sides = behemothSides(size);
+            const beast = this.#riftBeast(from, { facing: inward, hp: sides.hp });
 
-        // The town's: its bomb throwers last, as archers, set out on its flanks behind the line's
-        // ends, a squad either side
-        const defenderRoles = [...rolesOf(defenders - bombers * squads, DOCTRINES[people] ?? DOCTRINES.human), ...new Array(bombers * squads).fill("archer")];
-        const defenderPlaces = linePlaces(defenderRoles);
-        const firstBomber = defenderRoles.length - bombers * squads;
-        const wing = Math.max(0, ...defenderPlaces.slice(0, firstBomber).map(([right]) => Math.abs(right))) + FORMATION.apart * 2;
+            // (Coming on to the town's edge, and never into it after anyone: battle.js #colossus)
+            Object.assign(this.battle.actor(beast).wild, { goal: along(town.edge + BEHEMOTH.stops), keepOut: { middle: [...town.middle], within: town.edge } });
+            this.wild.get(beast).invasion = id;
+            ids.invaders.push(beast);
+            ids.defenders.push(...this.#townLine(id, formations.defenders, people, sides, { ...townLine, free, leash: BEHEMOTH.leash }));
+        } else {
+            const { invaders, defenders, bombers, squads } = sidesOf(size);
+            const { mix, chiefs, chief: chiefArms, chiefHp, hp, armor = 0, march, leash = {}, advance = true, stand = 0 } = BANDS[band];
 
-        for (let k = firstBomber; k < defenderRoles.length; k++) {
-            const [squad, one] = [Math.floor((k - firstBomber) / bombers), (k - firstBomber) % bombers];
-
-            defenderPlaces[k] = [(squad ? 1 : -1) * (wing + (one % 2) * FORMATION.apart), FORMATION.rank * (1 + Math.floor(one / 2))];
-        }
-
-        const lines = [
-            { side: "invader", formation: formations.invaders, people: band, anchor: from, facing: inward, roles: raiderRoles, places: linePlaces(raiderRoles), to: [meet[0] + out[0] * (1.5 + stand), meet[1] + out[1] * (1.5 + stand)], speed: march, advance },
-            { side: "defender", formation: formations.defenders, people, anchor: along(town.edge - INVASION.inside), facing: outward, roles: defenderRoles, places: defenderPlaces, to: [meet[0] - out[0] * 1.5, meet[1] - out[1] * 1.5], speed: INVASION.march, advance: true },
-        ];
-
-        for (const { side, formation, people: theirs, anchor, facing, roles, places, to, speed, advance: closing } of lines) {
+            // The raiders' line: its chiefs spread along its shield line
+            const raiderRoles = rolesOf(invaders, mix);
+            const front = raiderRoles.flatMap((role, k) => (role === "front" ? [k] : []));
+            const leaders = Math.max(1, Math.round(invaders / chiefs));
+            const chiefsAt = new Set(Array.from({ length: Math.min(leaders, front.length) }, (_, k) => front[Math.floor((k * front.length) / leaders)]));
+            const places = linePlaces(raiderRoles);
             const counts = {};
 
-            this.battle.formation(formation, { anchor, facing, to, speed, advance: closing });
+            this.battle.formation(formations.invaders, { anchor: from, facing: inward, to: [meet[0] + out[0] * (1.5 + stand), meet[1] + out[1] * (1.5 + stand)], speed: march, advance });
 
-            roles.forEach((role, k) => {
+            raiderRoles.forEach((role, k) => {
                 let square;
 
                 try {
-                    square = free(placeAt({ anchor, facing }, places[k]));
+                    square = free(placeAt({ anchor: from, facing: inward }, places[k]));
                 } catch {
                     return;
                 }
 
                 const each = (counts[role] = (counts[role] ?? -1) + 1);
-                const orders = { square, patrol: [square], facing, leash: ROLES[role].leash, armed: true, formation: { id: formation, slot: places[k], role } };
+                const chief = chiefsAt.has(k);
+                const one = `${id}/raider-${ids.invaders.length}`;
+                const weapon = chief ? chiefArms : raiderArms(band, role, each);
 
-                if (side === "invader") {
-                    const chief = chiefsAt.has(k);
-                    const one = `${id}/raider-${ids.invaders.length}`;
-                    const weapon = chief ? chiefArms : raiderArms(band, role, each);
-
-                    // (Casting and healing as the town's soldiers in their roles do: soldierOf, the fire's
-                    // school theirs)
-                    this.#enlist(one, { people: theirs, ...soldierOf(theirs, role), weapon, name: chief ? BANDS[band].names.chief : raiderName(band, role, weapon), record: { invasion: id, side, role, chief }, ...orders, leash: leash[role] ?? orders.leash, armor, hp: Math.round(KINDS.soldier.hp * (chief ? chiefHp : hp)), lone: true });
-                    ids.invaders.push(one);
-                } else {
-                    const bomber = k >= firstBomber;
-                    const one = `${id}/defender-${ids.defenders.length}`;
-
-                    this.#enlist(one, { people: theirs, ...(bomber ? { weapon: BOMBER } : soldierOf(theirs, role, each)), name: bomber ? "bomb thrower" : "soldier", record: { invasion: id, side, role }, ...orders });
-                    ids.defenders.push(one);
-                }
+                // (Casting and healing as the town's soldiers in their roles do: soldierOf, the fire's
+                // school theirs)
+                this.#enlist(one, { people: band, ...soldierOf(band, role), weapon, name: chief ? BANDS[band].names.chief : raiderName(band, role, weapon), record: { invasion: id, side: "invader", role, chief }, square, patrol: [square], facing: inward, leash: leash[role] ?? ROLES[role].leash, armed: true, formation: { id: formations.invaders, slot: places[k], role }, armor, hp: Math.round(KINDS.soldier.hp * (chief ? chiefHp : hp)), lone: true });
+                ids.invaders.push(one);
             });
+
+            // The town's
+            ids.defenders.push(...this.#townLine(id, formations.defenders, people, { defenders, bombers, squads }, { ...townLine, free }));
         }
 
         // (The players in the town: in it)
@@ -4225,7 +4235,7 @@ export class Host {
                 continue;
             }
 
-            if (!clock.seen) {
+            if (!clock.seen && !behemoth) {
                 spared.push(player.id);
             }
 
@@ -4246,7 +4256,7 @@ export class Host {
             edge: town.edge,
             way,
             from,
-            exit: along(town.edge + INVASION.out + INVASION.away),
+            exit: along(town.edge + (behemoth ? BEHEMOTH.out + BEHEMOTH.away : INVASION.out + INVASION.away)),
             facing: inward,
             formations,
             invaders: ids.invaders,
@@ -4259,8 +4269,70 @@ export class Host {
             broke: null,
             held: null,
             over: null,
+            // (The Behemoth's: it, what each player and theirs dealt it, #wounded, and how many of
+            // the town's met it)
+            ...(behemoth ? { beast: ids.invaders[0], dealt: {}, mustered: ids.defenders.length } : {}),
         });
         this.#event("invasion", { change: "coming", id, place: town.id, name: town.name, band, people, way, at: [...from], ids: [...ids.invaders, ...ids.defenders], spared: [...spared] });
+    }
+
+    // A blow struck at the Behemoth of an invasion (BEHEMOTH): what it dealt counted for whoever
+    // dealt it, a player or theirs (their follower, or a creature they called or raised), to
+    // thank them by once it's over (#thank)
+    #wounded(event) {
+        if (event.type !== "hit" || !event.by || !(event.damage > 0)) {
+            return;
+        }
+
+        const invasion = this.invasions.find(({ beast }) => beast === event.id);
+        const owner = invasion ? this.#ownerOf(this.battle.actor(event.by) ?? { id: event.by }) : null;
+
+        if (owner && this.players.has(owner) && invasion.broke === null) {
+            invasion.dealt[owner] = (invasion.dealt[owner] ?? 0) + event.damage;
+        }
+    }
+
+    // A town's line against an invasion (core/formation.js), `count` of them its people's (`people`)
+    // soldiers in their roles (DOCTRINES), formed `anchor` (facing `facing`) and marching to `to`,
+    // closing with whoever they see; and its bomb throwers last, as archers, set out on its flanks
+    // behind the line's ends, a squad either side (`bombers` in each of `squads`). On the squares
+    // `free` has free; each going after an enemy as far as its role does (ROLES' leash), or as far
+    // as `leash` (metres: against the Behemoth, all of them). Their ids
+    #townLine(id, formation, people, { defenders, bombers, squads }, { anchor, facing, to, free, leash = null }) {
+        const roles = [...rolesOf(defenders - bombers * squads, DOCTRINES[people] ?? DOCTRINES.human), ...new Array(bombers * squads).fill("archer")];
+        const places = linePlaces(roles);
+        const firstBomber = roles.length - bombers * squads;
+        const wing = Math.max(0, ...places.slice(0, firstBomber).map(([right]) => Math.abs(right))) + FORMATION.apart * 2;
+        const ids = [];
+
+        for (let k = firstBomber; k < roles.length; k++) {
+            const [squad, one] = [Math.floor((k - firstBomber) / bombers), (k - firstBomber) % bombers];
+
+            places[k] = [(squad ? 1 : -1) * (wing + (one % 2) * FORMATION.apart), FORMATION.rank * (1 + Math.floor(one / 2))];
+        }
+
+        this.battle.formation(formation, { anchor, facing, to, speed: INVASION.march, advance: true });
+
+        const counts = {};
+
+        roles.forEach((role, k) => {
+            let square;
+
+            try {
+                square = free(placeAt({ anchor, facing }, places[k]));
+            } catch {
+                return;
+            }
+
+            const each = (counts[role] = (counts[role] ?? -1) + 1);
+            const bomber = k >= firstBomber;
+            const one = `${id}/defender-${ids.length}`;
+
+            this.#enlist(one, { people, ...(bomber ? { weapon: BOMBER } : soldierOf(people, role, each)), name: bomber ? "bomb thrower" : "soldier", record: { invasion: id, side: "defender", role }, square, patrol: [square], facing, leash: leash ?? ROLES[role].leash, armed: true, formation: { id: formation, slot: places[k], role } });
+            ids.push(one);
+        });
+
+        return ids;
     }
 
     // Whether an invasion's raider leaves a player (and theirs) be: it's their first, and they've
@@ -4302,17 +4374,30 @@ export class Host {
 
             const standing = (ids) => ids.filter((id) => !this.battle.actor(id).dead);
             const raiders = standing(invasion.invaders);
-            const ended = now - invasion.at >= INVASION.lasts;
+            const behemoth = invasion.band === BEHEMOTH.id;
+            const ended = now - invasion.at >= (behemoth ? BEHEMOTH.lasts : INVASION.lasts);
 
             const close = raiders.filter((id) => INVASION.close.includes(this.soldiers.get(id)?.role) || this.soldiers.get(id)?.chief);
-            const routed = raiders.length <= Math.ceil(invasion.size * (BANDS[invasion.band].rout ?? INVASION.rout)) || !close.length;
-            const fell = !standing(invasion.defenders).length;
+            // (The Behemoth's: slain, or all but a few of the town's fallen: BEHEMOTH.last)
+            const routed = behemoth ? !raiders.length : raiders.length <= Math.ceil(invasion.size * (BANDS[invasion.band].rout ?? INVASION.rout)) || !close.length;
+            const fell = behemoth ? standing(invasion.defenders).length <= Math.floor(invasion.mustered * BEHEMOTH.last) : !standing(invasion.defenders).length;
 
             if (invasion.broke === null && (routed || fell || ended)) {
-                // (Held if they broke, or, when it's gone on too long, the town's still the more)
+                // (Held if they broke, or, when it's gone on too long, the town's still the more;
+                // the Behemoth's only if it's slain, else it goes back the way it came)
                 invasion.broke = now;
-                invasion.held = routed || (!fell && raiders.length <= standing(invasion.defenders).length);
-                this.battle.formation(invasion.formations.invaders, { broken: invasion.held, facing: invasion.facing + Math.PI, to: [...invasion.exit], speed: invasion.held ? INVASION.run : BANDS[invasion.band].march, advance: false });
+                invasion.held = behemoth ? routed : routed || (!fell && raiders.length <= standing(invasion.defenders).length);
+
+                if (behemoth) {
+                    const beast = this.battle.actor(invasion.beast);
+
+                    if (beast && !beast.dead) {
+                        Object.assign(beast.wild, { goal: [...invasion.exit], leaving: true });
+                    }
+                } else {
+                    this.battle.formation(invasion.formations.invaders, { broken: invasion.held, facing: invasion.facing + Math.PI, to: [...invasion.exit], speed: invasion.held ? INVASION.run : BANDS[invasion.band].march, advance: false });
+                }
+
                 this.battle.formation(invasion.formations.defenders, { to: null, advance: false });
                 this.#event("invasion", { change: invasion.held ? "repelled" : "fell", id: invasion.id, place: invasion.place, name: invasion.name, band: invasion.band, people: invasion.people });
                 this.#thank(invasion);
@@ -4359,9 +4444,13 @@ export class Host {
     // REWARD.big of them, the town held, its lord's purse and a rare piece from its armoury besides
     // (like their own weapon, or a ring or an amulet)
     #thank(invasion) {
-        for (const [id, felled] of Object.entries(invasion.felled)) {
+        const behemoth = invasion.band === BEHEMOTH.id;
+        const whole = behemoth ? (this.battle.actor(invasion.beast)?.maxHp ?? 1) : invasion.size;
+
+        for (const [id, felled] of Object.entries(behemoth ? invasion.dealt : invasion.felled)) {
             const player = this.players.get(id);
-            const reward = rewardOf({ felled, of: invasion.size, held: invasion.held });
+            // (The Behemoth's: for the share of it they dealt, BEHEMOTH_REWARD)
+            const reward = behemoth ? behemothReward({ share: felled / whole, held: invasion.held }) : rewardOf({ felled, of: invasion.size, held: invasion.held });
 
             if (!player || !reward.gold) {
                 continue;
@@ -4392,22 +4481,36 @@ export class Host {
                 this.#give(player, structuredClone(piece));
             }
 
-            this.#event("invasion", { change: "thanks", id: invasion.id, player: id, name: invasion.name, band: invasion.band, people: invasion.people, felled, of: invasion.size, gold: reward.gold, merit, thanks: invasion.people === player.realm ? reward.thanks : 0, big: reward.big, piece });
+            this.#event("invasion", { change: "thanks", id: invasion.id, player: id, name: invasion.name, band: invasion.band, people: invasion.people, felled: behemoth ? Math.round(felled) : felled, of: whole, gold: reward.gold, merit, thanks: invasion.people === player.realm ? reward.thanks : 0, big: reward.big, piece });
         }
     }
 
     // Free squares near spots in the world (or on a map of a building's), one each (none taken
-    // twice, nor anyone's)
-    #spots(map = "town") {
+    // twice, nor anyone's); with `to` (a point, metres), only those with a way there (not a yard
+    // shut in among buildings, nowhere to go from it: within SPOT_WAY of it, the way's end)
+    #spots(map = "town", { to = null } = {}) {
         const squares = squaresOf(this.world.maps[map]);
         const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
+        const navigator = to ? navigatorOf(this.battle.maps[map]) : null;
+        // (Where they're to go: or the ground nearest it anyone can stand on)
+        const there = navigator ? (navigator.nearest(to) ?? to) : null;
+        const goes = ([x, y]) => {
+            const end = navigator.path([x + 0.5, y + 0.5], there).at(-1);
+
+            return Boolean(end) && hypot(end[0] - there[0], end[1] - there[1]) <= SPOT_WAY;
+        };
 
         return ([x, y]) => {
-            const square = nearestFree(squares, [Math.floor(x), Math.floor(y)], { taken, within: 24 });
+            // (Each it can't go from, passed over: none left near, nearestFree's throw)
+            for (;;) {
+                const square = nearestFree(squares, [Math.floor(x), Math.floor(y)], { taken, within: 24 });
 
-            taken.add(squareKey(...square));
+                taken.add(squareKey(...square));
 
-            return square;
+                if (!navigator || goes(square)) {
+                    return square;
+                }
+            }
         };
     }
 
@@ -6411,7 +6514,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -6844,6 +6947,58 @@ export class Host {
             // further, `sight`, and drawn as a champion "elite")
             wild: { creature, tier: at, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: elite ? ELITES.loop + ELITES.leash : spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town", ...traitsOf(creature, { boss: champion === "boss" }), ...(walks ? { round: walks.stops, stop: walks.at } : {}), ...(champion ? { champion, regalia } : {}), ...(lead ? { elite: true, sight: ELITES.sight, champion: "elite", regalia: null } : {}) },
         });
+    }
+
+    // The Behemoth of the Rift come into the world (CREATURES kaiju), standing on the square nearest
+    // `at` ([x, y] metres) clear of anyone, on `map`, facing `facing` (radians from south, towards
+    // east): one of the wild's (its spoils when it falls) but kept in it till it does (`rift`), on
+    // the rift's side alone (RIFT), everyone's enemy, fighting its own way (battle.js #colossus),
+    // its hit points `hp` (else its kind's × `health`). Its id
+    #riftBeast(at, { map = "town", facing = 0, health = 1, hp = null } = {}) {
+        const { creature } = BEHEMOTH;
+        const spec = CREATURES[creature];
+        const id = `${creature}-${this.battle.time}`;
+        // (Its blows as its own weapon has them: none of the mightiest's tiers on top)
+        const power = 1;
+        const taken = new Set(this.battle.actors.filter((each) => each.map === map && !each.dead).map(({ square: [x, y] }) => squareKey(x, y)));
+        const square = nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), [Math.floor(at[0]), Math.floor(at[1])], { taken, within: 12 });
+
+        this.wild.set(id, { creature, tier: TIERS, pack: id, camp: null, lair: null, master: false, rift: true });
+        this.battle.add({
+            id,
+            kind: "beast",
+            name: spec.name,
+            weapon: spec.weapon,
+            team: RIFT,
+            square,
+            map,
+            ai: "colossus",
+            facing,
+            armed: true,
+            hp: hp ?? Math.round(spec.hp * health),
+            speed: spec.speed,
+            chase: spec.chase,
+            power: { melee: power, ranged: power },
+            armor: spec.armor,
+            wild: { creature, tier: TIERS, temper: spec.temper, guard: 0, roam: 0, leash: spec.leash, pack: id, leader: null, menace: true, unique: true, darkSight: true, ...traitsOf(creature) },
+        });
+        this.#event("roused", { ids: [id], creature });
+
+        return id;
+    }
+
+    // The Behemoth of the Rift called up before a player (the debug overlay's): 70 metres off the
+    // way they face, turned to them
+    #riftBefore(actor) {
+        if (actor.map !== "town" || [...this.wild].some(([id, one]) => one.rift && !this.battle.actor(id)?.dead)) {
+            return refuse("command");
+        }
+
+        const at = [actor.x + sin(actor.facing) * 70, actor.y + cos(actor.facing) * 70];
+
+        this.#riftBeast(at, { facing: atan2(actor.x - at[0], actor.y - at[1]) });
+
+        return OK;
     }
 
     // A creature let go (wandered off, far from every player)

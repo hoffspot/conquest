@@ -14,6 +14,7 @@ import { readGltf } from "../world/art/engine/models.js";
 import { candidatesAt, tierAt } from "../core/creatures.js";
 import { THEMES } from "../core/dungeons/themes.js";
 import { landAt } from "../core/worldplan/plan.js";
+import { BEAMS, EnergyBreath } from "./beam.js";
 import { Breath } from "./breath.js";
 
 // One of a hell's flayed (MODELS): its catalog entry, how long and tall it's made, how much bigger
@@ -60,13 +61,35 @@ const gorger = (asset, made, scale, attacks) => Object.freeze({
  * of its clips are what (`clips`: `hover`, hanging in the air, battle.js #hover; `run`, running;
  * `react` and `dead`, its flinch and its fall, if it has them: fallOf), and its ways of
  * attacking (`attacks`, the special ones `specials`, as named: weapons.js `animation`; up in the
- * air, `aloft`'s in their place) and resting (`rests`), each a clip; when in a clip it breathes
+ * air, `aloft`'s in their place; each played through the whole of its clip, or through as much
+ * of it as `spans` says, [from, to] seconds) and resting (`rests`), each a clip; when in a clip it breathes
  * fire (`fire`, by clip: seconds into it) and from where (`mouth`, if it does); its joints for the
  * game's (`joints`: beast.js BONES' names, by the model's bones' names as the glTF loader gives
  * them); and how fast (metres a second, as it's drawn) it goes when its walk plays at its own pace
  * (`pace`), and its run (`runPace`).
  */
 export const MODELS = Object.freeze({
+    // (The Behemoth of the Rift: drawn 36 metres long, as it's made. Its jaws slammed down (the
+    // start of its Roar, its head reared and brought down), its roar, and its atomic breath (its
+    // Energy Breath, the beam it breathes drawn from its catalog's entry: beasts/beam.js BEAMS),
+    // each played as far into its clip as the move lasts (weapons.js NATURAL kaiju), at its own
+    // pace; its flinch the start of its Hit React; falling in its Faint, held where it lies. No
+    // run: it walks, its walk's own pace a little faster than it ever goes)
+    kaiju: Object.freeze({
+        asset: "beast-kaiju",
+        length: 36,
+        made: Object.freeze({ long: 36, tall: 13 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", react: "Hit React", dead: "Faint" }),
+        attacks: Object.freeze({}),
+        specials: Object.freeze({ slam: "Roar", roar: "Roar", breath: "Energy Breath" }),
+        spans: Object.freeze({ slam: Object.freeze([0, 1.6]), roar: Object.freeze([0, 7.6]), breath: Object.freeze([0, 6]) }),
+        rests: Object.freeze({}),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "Spine002", body: "Hip", head: "Head", mouth: "lipjaw", left: "FFoot_L" }),
+        mouth: null,
+        pace: 3.1,
+        flinch: 1.3,
+    }),
     dreadthorn: Object.freeze({
         asset: "beast-dreadthorn",
         length: 17,
@@ -1041,13 +1064,14 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
         over(model.rests[rest.name], rest.w, loop(model.rests[rest.name], rest.t));
     }
 
-    // Attacking: the clip for its way, through to its end, eased in and out at either end
+    // Attacking: the clip for its way, through to its end (or as much of it as its `spans` says),
+    // eased in and out at either end
     const way = attack && clipOf(model, attack.style, hovering);
 
     if (way) {
         const u = Math.min(1, Math.max(0, attack.u));
 
-        over(way, smoothstep(Math.min(u / 0.06, (1 - u) / 0.06)), at(way, u * (lengths[way] || 1)));
+        over(way, smoothstep(Math.min(u / 0.06, (1 - u) / 0.06)), at(way, attackTime(model, attack.style, way, u, lengths)));
     }
 
     // Struck: the start of its flinch, eased in and out (none, if it has none)
@@ -1058,6 +1082,30 @@ export function poseOf(model, { speed = 0, attack = null, rest = null, react = n
     }
 
     return posed.filter(({ weight }) => weight > 1e-4);
+}
+
+// How far into its clip (seconds) an attack its way (`style`, its clip `clip`) is, `u` of the way
+// through it (0 to 1): through the whole of the clip, or as much of it as its `spans` says
+function attackTime(model, style, clip, u, lengths) {
+    const [from, to] = model.spans?.[style] ?? [0, lengths[clip] || 1];
+
+    return from + u * (to - from);
+}
+
+/**
+ * Where a model's beam (beasts/beam.js BEAMS: its catalog entry's, if it breathes one) is in its
+ * clip at this moment of an attack (BeastAvatar's attack: { style, u }): { clip, time } in its
+ * breath's clip, or null (none drawn).
+ */
+export function beamAt(model, attack, lengths) {
+    const beam = BEAMS[model.asset];
+    const clip = attack && clipOf(model, attack.style);
+
+    if (!beam || clip !== beam.clip) {
+        return null;
+    }
+
+    return { clip, time: attackTime(model, attack.style, clip, Math.min(1, Math.max(0, attack.u)), lengths) };
 }
 
 /**
@@ -1090,7 +1138,7 @@ export function breathing(model, attack, lengths, aloft = false) {
         return false;
     }
 
-    const seconds = attack.u * (lengths[clip] || 1);
+    const seconds = attackTime(model, attack.style, clip, attack.u, lengths);
 
     return seconds >= window[0] && seconds <= window[1];
 }
@@ -1142,6 +1190,19 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
         node.castShadow = false;
         node.receiveShadow = true;
     });
+
+    // (Its beam, if it breathes one (beasts/beam.js BEAMS): its glow made to charge, in copies of
+    // its materials that can, those drawn and flushed in their place)
+    const beam = BEAMS[model.asset] ? new EnergyBreath(scene, BEAMS[model.asset], { groundAt }) : null;
+
+    if (beam) {
+        scene.traverse((node) => {
+            if (node.isSkinnedMesh) {
+                materials.set(node.material.name, node.material);
+                drawn.set(node, node.material);
+            }
+        });
+    }
 
     // (Its shadow from its least detailed level only: there all the time, casting it; not its own
     // level shown, drawn leaving nothing on the screen. A layer of its own won't do: three.js casts
@@ -1219,6 +1280,10 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
         object.add(breath.object);
     }
 
+    if (beam) {
+        object.add(beam.object);
+    }
+
     return {
         object,
         height: model.made.tall * size,
@@ -1237,6 +1302,7 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
         levels,
         showLevel,
         breath,
+        beam,
         lengths,
 
         pose(inputs) {
@@ -1267,6 +1333,14 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
             }
 
             mixer.update(0);
+
+            // (Its beam, breathing one: aimed, lit and drawn for where its breath's clip is, its
+            // head and neck turned to aim it over what the clip has; none, else)
+            if (beam) {
+                const breathing = inputs.dead || inputs.seen === false ? null : beamAt(model, inputs.attack, lengths);
+
+                beam.at(breathing?.clip ?? null, breathing?.time ?? 0);
+            }
 
             // (Fallen dead with no fall of its own: rolled onto its back, fallOf)
             const fall = fallOf(model, inputs.dead, lengths);
@@ -1311,6 +1385,7 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
         dispose() {
             unseen.dispose();
             breath?.dispose();
+            beam?.dispose();
             mixer.stopAllAction();
             mixer.uncacheRoot(scene);
         },

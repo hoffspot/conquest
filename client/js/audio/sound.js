@@ -251,7 +251,8 @@ export const FOOTSTEPS = Object.freeze({ walk: 0.13, pace: 0.03, run: 0.26, runn
  * How each kind of feet sounds (beasts/beast.js gait.feet; a person's own when none's said),
  * `volume` and `rate` times a person's: feet and paws step on the footing under them, paws softer
  * and lighter; a spider's legs skitter, a slime squelches, a serpent's scales slither and a
- * frog's webbed feet slap (`sound`), whatever's under them.
+ * frog's webbed feet slap (`sound`), whatever's under them; and the Behemoth of the Rift's come
+ * down as the Kaiju's do, at their own pace (the biggest's slowed undone), heard `far` metres off.
  */
 export const GAITS = Object.freeze({
     feet: { volume: 1, rate: 1 },
@@ -260,6 +261,7 @@ export const GAITS = Object.freeze({
     slime: { sound: "squelch", volume: 1, rate: 1 },
     scales: { sound: "slither", volume: 1, rate: 1 },
     webbed: { sound: "squelch", volume: 0.6, rate: 1.5 },
+    colossal: { sound: "kaijuStep", volume: 1.6, rate: Math.SQRT2, far: 80 },
 });
 
 /**
@@ -330,6 +332,9 @@ export const CREATURE_VOICES = Object.freeze({
     wyvern: { family: "dragon", rate: 1.15, fall: "deathThudBig", wings: "wingbeat" },
     dragon: { family: "dragon", fall: "deathThudBig", wings: "wingbeat", fire: "dragonBreath" },
     dreadthorn: { family: "dragon", rate: 0.8, fall: "deathThudBig", wings: "wingbeat", fire: "dragonBreath" },
+    // (The Behemoth of the Rift: the Kaiju's own voice, its roar, its strikes, its cries struck and
+    // its death; its atomic breath charged and fired as it breathes: app/game.js)
+    kaiju: { family: "kaiju", fall: "deathThudBig" },
     wildBull: { family: "dragon", rate: 1.2, fall: "deathThudBig" },
     capeBuffalo: { family: "dragon", rate: 1.1, fall: "deathThudBig" },
     kelpie: { family: "dragon", rate: 1.24, fall: "deathThudBig" },
@@ -493,8 +498,8 @@ function creaturesRecorded() {
         ...each,
         slimeSizzle: { volume: 0.4 },
         dragonBreath: { volume: 0.75, instead: "fireball" },
-        // (The kaiju's, not in the game yet: heard in the model viewer, its clips played, and in
-        // the sound studio; its voice deep, so louder)
+        // (The kaiju's: the Behemoth of the Rift's in the game (CREATURE_VOICES, GAITS), and in the
+        // model viewer as its clips play; its voice deep, so louder)
         kaijuCall: { volume: 0.95 },
         kaijuAttack: { volume: 0.9 },
         kaijuHurt: { volume: 0.75 },
@@ -1664,10 +1669,10 @@ export class Sound {
      * seen someone to go after, or it's about its business), attacking ("attack", loudest `hitAt`
      * seconds from now, as its blow lands), hurt ("hurt") or dying ("death"), `delay` seconds
      * from now, as its family sounds at its own pitch; with what's heard with it (a magma slime's
-     * sizzle, the bats' fluttering: under all but its hurt). Returns its source, or null if it has
-     * no such voice.
+     * sizzle, the bats' fluttering: under all but its hurt); heard as far off as a call or a blow
+     * is, or `far` metres. Returns its source, or null if it has no such voice.
      */
-    voice(creature, what, at, { hitAt = null, delay = 0 } = {}) {
+    voice(creature, what, at, { hitAt = null, delay = 0, far = null } = {}) {
         const voice = CREATURE_VOICES[creature];
         const name = voice ? uttered(voice.family, what) : null;
 
@@ -1679,7 +1684,7 @@ export class Sound {
             this.play(voice.with, { at, delay });
         }
 
-        return this.play(name, { at, rate: voice.rate ?? 1, delay, peakAt: hitAt, far: what === "call" ? CALL_FAR : FAR });
+        return this.play(name, { at, rate: voice.rate ?? 1, delay, peakAt: hitAt, far: far ?? (what === "call" ? CALL_FAR : FAR) });
     }
 
     /**
@@ -1711,7 +1716,7 @@ export class Sound {
             this.play(worn.step, { at, volume: volume * loud * lilt * worn.with, delay, far: FOOTSTEPS.far, rate, made });
         }
 
-        return this.play(gait.sound ?? STEPS[surface] ?? "stepDirt", { at, volume: volume * loud * lilt, delay, far: FOOTSTEPS.far, rate, variant, made });
+        return this.play(gait.sound ?? STEPS[surface] ?? "stepDirt", { at, volume: volume * loud * lilt, delay, far: gait.far ?? FOOTSTEPS.far, rate, variant, made });
     }
 
     /**

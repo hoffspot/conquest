@@ -1,7 +1,7 @@
 import { expect, test } from "./fixtures.js";
 import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 import { Explored } from "../client/js/core/explored.js";
-import { REWARD, SIZE } from "../client/js/core/invasions.js";
+import { BEHEMOTH, REWARD, SIZE } from "../client/js/core/invasions.js";
 import { branchesFound, fareOf } from "../client/js/core/portals.js";
 import { guilds, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
 
@@ -12687,6 +12687,144 @@ test("the wild's people-shaped creatures past the bodies' budget are drawn in th
     };
 
     expect(await playUntil(page, inFull, { seconds: 60 })).toBe(true);
+});
+
+test("the Behemoth of the Rift called up out in the open: drawn from its model at once, its bar across the top; its atomic breath raked over the player, thrown limp", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=5");
+
+    // (Out in an open field, the lone orc out of the way: the debug overlay's call-up, 70 m off
+    // the way they face)
+    const called = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { squaresOf } = await import("./js/core/grid.js");
+        const squares = squaresOf(game.host.world.maps.town);
+        const me = game.battle.actor(game.me);
+        const open = ([cx, cy]) => [...Array(21).keys()].every((j) => [...Array(21).keys()].every((i) => !squares.blocked(cx - 30 + i * 3, cy - 30 + j * 3)));
+        let spot = null;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        for (let far = 120; far <= 400 && !spot; far += 20) {
+            for (let k = 0; k < 16 && !spot; k++) {
+                const at = [Math.floor(me.x + Math.sin((k / 16) * Math.PI * 2) * far), Math.floor(me.y + Math.cos((k / 16) * Math.PI * 2) * far)];
+
+                spot = open(at) ? at : null;
+            }
+        }
+
+        game.host.battle.place(game.me, "town", spot);
+        me.facing = 0;
+        me.hp = me.maxHp = 5000;
+
+        return game.host.command(game.me, { type: "rift" }).ok && game.battle.actors.some((actor) => actor.ai === "colossus");
+    });
+
+    expect(called).toBe(true);
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.avatars.get(window.pellagos.game.battle.actors.find((actor) => actor.ai === "colossus").id)?.model), { seconds: 120, realTime: true })).toBe(true);
+    await expect(page.locator("#bossbar .name")).toHaveText("Behemoth of the Rift");
+
+    // (Before it, the way they face, where its breath lands, alone, a few metres into its sweep,
+    // so it's well alight as it gets to them: it breathes on them as it would on three. Its beam's
+    // drawn though its body's off the top of the screen, as the camera looks down on them)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const kaiju = game.battle.actors.find((actor) => actor.ai === "colossus");
+
+        game.host.battle.place(kaiju.id, "town", [Math.floor(me.x), Math.floor(me.y + 34)]);
+        Object.assign(kaiju, { facing: Math.PI, moveAt: {}, readyAt: 0, rethinkAt: 0 });
+        kaiju.wild.colossus.breath.crowd = 1;
+    });
+    expect(await playUntil(page, () => window.pellagos.game.avatars.get(window.pellagos.game.me).thrown, { seconds: 20 })).toBe(true);
+
+    const breathed = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const kaiju = game.battle.actors.find((actor) => actor.ai === "colossus");
+
+        return { attack: kaiju.attack?.attack.id ?? null, beam: game.avatars.get(kaiju.id).plan.beam.state, hp: game.battle.actor(game.me).hp };
+    });
+
+    expect(breathed.attack).toBe("atomicBreath");
+    expect(breathed.beam.firing).toBe(true);
+    expect(breathed.hp).toBeLessThan(5000);
+});
+
+test("the Behemoth of the Rift against the town: its roar heard twice where it comes out, the call told, the town's whole strength out to meet it, its bar across the top as it nears; wounded by the player and slain, the town thanks them for their share of it", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=2");
+
+    // (The lone orc out of the way; every voice raised heard; as small an invasion as comes)
+    await page.evaluate((least) => {
+        const { game } = window.pellagos;
+        const voice = game.sound.voice.bind(game.sound);
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        window.voices = [];
+        game.sound.voice = (creature, what, at, options = {}) => {
+            window.voices.push([creature, what, options.delay ?? 0, Boolean(at), options.far ?? null]);
+
+            return voice(creature, what, at, options);
+        };
+        game.advance(0.1, { render: false });
+        game.host.command(game.me, { type: "budget", invasion: least });
+        game.invade("behemoth");
+    }, SIZE.least);
+    expect(await playUntil(page, () => window.pellagos.game.host.invasions.length > 0 && /Behemoth/.test(document.querySelector("#banner").textContent))).toBe(true);
+
+    const coming = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [invasion] = game.host.invasions;
+
+        return { band: invasion.band, defenders: invasion.defenders.length, invaders: invasion.invaders.length, roars: window.voices.filter(([creature, what]) => creature === "kaiju" && what === "call"), told: document.querySelector("#banner").textContent };
+    });
+
+    expect(coming).toMatchObject({ band: "behemoth", defenders: SIZE.least - BEHEMOTH.costs, invaders: 1 });
+    expect(coming.roars).toHaveLength(2);
+    expect(coming.roars.every(([, , , at, far]) => at && far > 300)).toBe(true);
+    expect(coming.told).toMatch(/^The Behemoth of the Rift comes on the [a-z-]+ road! .+ calls every able hand to its defence\./);
+
+    // (Brought nearer: its bar across the top)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [invasion] = game.host.invasions;
+        const me = game.battle.actor(game.me);
+
+        game.host.battle.place(invasion.beast, "town", [Math.floor(me.x), Math.floor(me.y - 60)]);
+    });
+    expect(await playUntil(page, () => document.querySelector("#bossbar .name")?.textContent === "Behemoth of the Rift", { seconds: 10 })).toBe(true);
+
+    // The player at it, up against its body, landing a few blows; then it's slain
+    const dealt = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const [invasion] = game.host.invasions;
+        const me = game.battle.actor(game.me);
+        const beast = game.battle.actor(invasion.beast);
+        const [x0, y0] = beast.footprint;
+
+        me.hp = me.maxHp = 1e6;
+        game.host.battle.place(game.me, "town", [x0 - 1, y0 + 2]);
+        game.host.command(game.me, { type: "engage", target: beast.id });
+
+        for (let k = 0; k < 600 && !(invasion.dealt[game.me] >= 30); k++) {
+            game.advance(1 / 30, { render: false, wait: true });
+
+            if (k % 30 === 0) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        Object.assign(beast, { hp: 0, dead: true, respawnAt: Infinity });
+
+        return invasion.dealt[game.me] ?? 0;
+    });
+
+    expect(dealt).toBeGreaterThanOrEqual(30);
+    expect(await playUntil(page, () => /thanks you for the wounds you dealt the Behemoth, \d+% of its strength: \d+ gold/.test(document.querySelector("#banner").textContent))).toBe(true);
+    await expect(page.locator("#bossbar")).toBeHidden();
 });
 
 test("an invasion's raiders felled by the player: thanked for them by the town as it holds, by the name of their band, and played on", async ({ page }) => {

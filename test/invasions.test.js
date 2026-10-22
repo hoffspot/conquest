@@ -2,7 +2,8 @@
 // town, a band of bandits comes down one of its roads, and the town's own people march out to
 // meet them at its edge, the stronger side, two squads of bomb throwers among them. In a
 // character's first the raiders leave them be till they strike one; in those after, they don't.
-// Beaten down to a quarter, the raiders run; whoever felled them is thanked for it.
+// Beaten down to a quarter, the raiders run; whoever felled them is thanked for it. By night, now
+// and then, the Behemoth of the Rift comes in a band's place, the town's whole strength against it.
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 
@@ -10,6 +11,13 @@ const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", 
 
 let ALARM;
 let BANDS;
+let BEHEMOTH;
+let BEHEMOTH_REWARD;
+let behemothReward;
+let behemothSides;
+let isBehemoth;
+let RIFT;
+let DAY;
 let bandFor;
 let raiderName;
 let NATURAL;
@@ -49,7 +57,9 @@ let encode;
 let world;
 
 before(async () => {
-    ({ ALARM, BANDS, BOMBER, INVASION, REWARD, SIZE, bandFor, clockOf, criesOf, dueAfter, isDue, isSize, raiderArms, raiderName, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
+    ({ ALARM, BANDS, BEHEMOTH, BEHEMOTH_REWARD, BOMBER, INVASION, REWARD, SIZE, bandFor, behemothReward, behemothSides, clockOf, criesOf, dueAfter, isBehemoth, isDue, isSize, raiderArms, raiderName, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
+    ({ RIFT } = await import("../client/js/core/creatures.js"));
+    ({ DAY } = await import("../client/js/core/daytime.js"));
     ({ ROLES } = await import("../client/js/core/formation.js"));
     ({ BUDGET, InvasionBudget } = await import("../client/js/app/budget.js"));
     ({ OPENINGS } = await import("../client/js/core/crying.js"));
@@ -655,5 +665,174 @@ describe("the bands that invade (core/invasions.js BANDS, characters/soldiers.js
         assert.ok(invasion.broke !== null && invasion.held);
         assert.equal(host.battle.formations[invasion.formations.invaders].broken, true);
         assert.deepEqual(game.events.map(({ change }) => change), ["coming", "repelled"]);
+    });
+});
+
+// The world's clock set to `time` ms after midnight on its second day (core/daytime.js: the war's
+// turns, a minute each, and the time into the next)
+function clockTo(host, time) {
+    const elapsed = DAY.length + time - DAY.start;
+
+    Object.assign(host.war, { turn: Math.floor(elapsed / 60000), clock: elapsed % 60000 });
+}
+
+describe("the Behemoth of the Rift's invasion (core/invasions.js BEHEMOTH, core/host.js #invade)", () => {
+    it("comes by night only, one time in three of the invasions due then, never in anyone's first; as strong as the town's who meet it", () => {
+        assert.equal(isBehemoth({ dark: true, first: false, roll: 0 }), true);
+        assert.equal(isBehemoth({ dark: true, first: false, roll: BEHEMOTH.share - 1e-9 }), true);
+        assert.equal(isBehemoth({ dark: true, first: false, roll: BEHEMOTH.share }), false, "one time in three");
+        assert.equal(isBehemoth({ dark: false, first: false, roll: 0 }), false, "never by day");
+        assert.equal(isBehemoth({ dark: true, first: true, roll: 0 }), false, "never in anyone's first");
+        assert.ok(Math.abs(BEHEMOTH.share - 1 / 3) < 1e-9);
+
+        for (const size of [SIZE.least, INVASION.size, SIZE.most.high]) {
+            const { defenders, bombers, squads, hp } = behemothSides(size);
+
+            assert.equal(defenders, size - BEHEMOTH.costs, `${size}: all of it the town's but the room the Behemoth takes`);
+            assert.ok(bombers >= BEHEMOTH.least && bombers * squads < defenders / 4);
+            assert.equal(hp, Math.round(defenders * (BEHEMOTH.hp + BEHEMOTH.grows * defenders)), "its hit points so many for each who meets it, more for each the more of them");
+        }
+    });
+
+    it("thanks whoever wounded it by the share they dealt it: half the bounty if the town fell, the lord's purse for a good share of it held", () => {
+        assert.deepEqual(behemothReward({ share: 0 }), { gold: 0, merit: 0, thanks: 0, big: false });
+
+        const little = behemothReward({ share: 0.01 });
+        const more = behemothReward({ share: 0.05 });
+        const big = behemothReward({ share: BEHEMOTH_REWARD.big });
+
+        assert.ok(little.gold >= 1 && more.gold > little.gold && more.merit >= little.merit && more.thanks >= little.thanks, "more for more of it");
+        assert.ok(!more.big && big.big && big.gold === Math.round(BEHEMOTH_REWARD.bounty * BEHEMOTH_REWARD.big) + REWARD.purse, "the lord's purse for a good share");
+        assert.equal(behemothReward({ share: 0.05, held: false }).gold, Math.round(more.gold / 2), "half, the town not held");
+        assert.equal(behemothReward({ share: BEHEMOTH_REWARD.big, held: false }).big, false);
+        assert.deepEqual(behemothReward({ share: 2 }), behemothReward({ share: 1 }), "no more than all of it");
+    });
+
+    it("comes in place of a band now and then by night, once a character's past their first; never by day, nor in their first", () => {
+        // (Each invasion's due, its id as `k` has it: whether it's the Behemoth rolled for each)
+        const due = (time, k, invasion = { seen: 1, clock: INVASION.every[1], due: INVASION.every[0] }) => {
+            const game = inTown({ invasion });
+
+            clockTo(game.host, time);
+            game.host.invaded = k;
+            play(game, INVASION.settle + 2000, () => game.host.invasions.length > 0);
+
+            return game.host.invasions[0]?.band;
+        };
+        const night = 58 * 60000;
+        const bands = [0, 1, 2, 3, 4, 5].map((k) => due(night, k));
+
+        assert.ok(bands.includes(BEHEMOTH.id) && bands.some((band) => Object.hasOwn(BANDS, band)), `by night, now and then (${bands})`);
+
+        const rolled = bands.flatMap((band, k) => (band === BEHEMOTH.id ? [k] : [])).slice(0, 2);
+
+        assert.ok(rolled.every((k) => Object.hasOwn(BANDS, due(30 * 60000, k))), "never by day");
+        assert.ok(rolled.every((k) => due(night, k, { clock: INVASION.first }) === "bandits"), "never in their first");
+    });
+
+    it("brings the town's whole strength out against it, as many as the devices there can draw, everyone's enemy, coming on to the town's edge", () => {
+        const game = inTown({ invasion: { seen: 1 } });
+        const { host, me } = game;
+
+        assert.ok(host.command(HOST_PLAYER, { type: "budget", invasion: 120 }).ok);
+        assert.ok(host.command(HOST_PLAYER, { type: "invade", band: BEHEMOTH.id }).ok);
+        play(game, 1000);
+
+        const [invasion] = host.invasions;
+        const beast = host.battle.actor(invasion.beast);
+        const defenders = invasion.defenders.map((id) => host.battle.actor(id));
+        const sides = behemothSides(120);
+        const out = Math.hypot(beast.x - invasion.middle[0], beast.y - invasion.middle[1]);
+
+        assert.deepEqual(invasion.invaders, [invasion.beast], "it alone");
+        assert.ok(beast.team === RIFT && beast.ai === "colossus" && beast.wild.creature === BEHEMOTH.creature);
+        assert.equal(beast.maxHp, sides.hp);
+        assert.ok(Math.abs(out - (invasion.edge + BEHEMOTH.out)) < 4, "out of the rift down the road");
+        assert.equal(defenders.length, sides.defenders, "the town's whole strength");
+        assert.equal(invasion.mustered, sides.defenders);
+        assert.equal(defenders.filter((one) => one.weapon === BOMBER).length, sides.bombers * sides.squads, "its bomb throwers");
+        assert.ok(defenders.every((one) => one.team === "human" && one.leash === BEHEMOTH.leash), "each after it as far as it goes");
+        assert.ok(host.battle.hostile(beast, me) && defenders.every((one) => host.battle.hostile(beast, one)), "everyone's enemy");
+        assert.deepEqual(invasion.spared, [], "no one's first");
+        assert.deepEqual(beast.wild.keepOut, { middle: invasion.middle, within: invasion.edge }, "never into the town after anyone");
+        assert.ok(Math.abs(Math.hypot(beast.wild.goal[0] - invasion.middle[0], beast.wild.goal[1] - invasion.middle[1]) - (invasion.edge + BEHEMOTH.stops)) < 1, "on to its edge");
+
+        const [coming] = game.events;
+
+        assert.equal(coming.change, "coming");
+        assert.equal(coming.band, BEHEMOTH.id);
+        assert.ok(coming.ids.includes(invasion.beast));
+    });
+
+    it("is slain, the town held, and those who wounded it thanked by the share they dealt it", () => {
+        const game = inTown({ invasion: { seen: 1 } });
+        const { host, me, player } = game;
+
+        player.standing.register();
+        host.command(HOST_PLAYER, { type: "invade", band: BEHEMOTH.id });
+        play(game, 1000);
+
+        const [invasion] = host.invasions;
+        const beast = host.battle.actor(invasion.beast);
+
+        // (The player at it, up against its body, landing a few blows)
+        const [x0, y0] = beast.footprint;
+        let blows = 0;
+
+        Object.assign(me, { hp: 1e6, maxHp: 1e6 });
+        host.battle.place(HOST_PLAYER, "town", [x0 - 1, y0 + 2]);
+        assert.ok(host.command(HOST_PLAYER, { type: "engage", target: beast.id }).ok);
+
+        for (let k = 0; k < 2000 && blows < 3; k++) {
+            blows += host.advance(STEP_MS).filter((event) => event.type === "hit" && event.id === beast.id && event.by === HOST_PLAYER).length;
+        }
+
+        assert.equal(blows, 3, "the player's blows landed");
+
+        const dealt = invasion.dealt[HOST_PLAYER];
+        const gold = player.progress.gold;
+
+        assert.ok(dealt > 0, "counted for them");
+
+        // (Slain)
+        Object.assign(beast, { hp: 0, dead: true, respawnAt: Infinity });
+        play(game, 2000);
+
+        const thanks = game.events.find(({ change }) => change === "thanks");
+        const reward = behemothReward({ share: dealt / beast.maxHp, held: true });
+
+        assert.ok(invasion.held, "the town held");
+        assert.deepEqual(game.events.map(({ change }) => change).slice(0, 2), ["coming", "repelled"]);
+        assert.ok(thanks && thanks.player === HOST_PLAYER && thanks.band === BEHEMOTH.id && thanks.of === beast.maxHp);
+        assert.equal(thanks.felled, Math.round(dealt));
+        assert.equal(thanks.gold, reward.gold);
+        assert.equal(player.progress.gold, gold + reward.gold);
+        assert.equal(thanks.merit, reward.merit);
+    });
+
+    it("goes back the way it came once all but a few of the town's are down, the town not held, and is let go of", () => {
+        const game = inTown({ invasion: { seen: 1 } });
+        const { host } = game;
+
+        host.command(HOST_PLAYER, { type: "invade", band: BEHEMOTH.id });
+
+        const [invasion] = host.invasions;
+        const beast = host.battle.actor(invasion.beast);
+        const fell = (ids) => ids.forEach((id) => Object.assign(host.battle.actor(id), { hp: 0, dead: true, respawnAt: Infinity }));
+        const last = Math.floor(invasion.mustered * BEHEMOTH.last);
+
+        // (All but one more than a few: it fights on)
+        fell(invasion.defenders.slice(last + 1));
+        play(game, 2000);
+        assert.equal(invasion.broke, null);
+
+        fell(invasion.defenders.slice(last));
+        play(game, 2000);
+        assert.ok(invasion.broke !== null && invasion.held === false, "the town not held");
+        assert.ok(beast.wild.leaving && Math.hypot(beast.wild.goal[0] - invasion.exit[0], beast.wild.goal[1] - invasion.exit[1]) < 1, "going back the way it came");
+
+        play(game, BEHEMOTH.lasts, () => !host.invasions.length);
+        assert.deepEqual(game.events.map(({ change }) => change), ["coming", "fell", "over"]);
+        assert.equal(host.battle.actor(beast.id), null, "let go of, gone");
     });
 });

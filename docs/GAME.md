@@ -1504,7 +1504,11 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   of the bottom of the picture.
 - **Out of doors it draws back** for a foe much taller than the player (a wyvern, a drake: 15%
   for each metre over 2.5) or far from them (an archer: 7% for each metre past 4), up to half as
-  far again, easing there over a second or so (view.js `BIG_FOE`, `backFor`).
+  far again, easing there over a second or so (view.js `BIG_FOE`, `backFor`). For the colossal
+  (the Behemoth of the Rift, 13 m tall: WILDS.md), within 90 m of it, it draws back up to 2.4
+  times as far (`colossal`), looking 16 degrees less steeply down to see up to its head (`lower`).
+- **A boss's bar** (hud.js `boss`): within 150 m of the Behemoth of the Rift, its name and
+  strength are across the top of the screen (`#bossbar`), till it falls or they're further off.
 - **What's in the way of the foe is cut through** too: a second dithered hole round them, as
   big as they are (town3d.js `CUTAWAY`), through the town's buildings and trees and, now, the
   world's woods (chunks3d.js: the woodland's bark and leaves cut as the town's are).

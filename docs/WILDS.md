@@ -1067,9 +1067,10 @@ back along the ground while planted.
   `test/model.test.js`: every clip and bone each names in its model, those the ant borrows (and the
   bones they're played on) in the Ant Monster's; the ant's poses before and after it's lent them.
 
-**The Kaiju** (`beast-kaiju`: HuyKhoi2407's Kaiju, bought on Fab, 36 m long and 13 m tall) isn't in
-the game yet: the model viewer shows it (*Coming to the wilds*), every clip as it was made. Its
-Energy Breath is an atomic breath (`beasts/beam.js`, `BEAMS`), as a kaiju's should be:
+**The Kaiju** (`beast-kaiju`: HuyKhoi2407's Kaiju, bought on Fab, 36 m long and 13 m tall) is the
+Behemoth of the Rift in the game (*The Behemoth of the Rift*, below); the model viewer shows it
+among the mightiest, and every clip as it was made (`?model=beast-kaiju`). Its Energy Breath is an
+atomic breath (`beasts/beam.js`, `BEAMS`), as a kaiju's should be:
 
 - **Charging** (0.3 s in to 1.3): the glow on its spines and body (its emissive map) lit from its
   tail's tip to its head, a bright crest running along it, turning from green to blue-white and
@@ -1097,12 +1098,13 @@ Energy Breath is an atomic breath (`beasts/beam.js`, `BEAMS`), as a kaiju's shou
 - `e2e/model-viewer.spec.js`: nothing of it before it charges or in its other clips; charging,
   its glow lit; firing, aimed, its glow at its brightest, landing 10 to 20 m in front of its mouth,
   and the beam's blue-white drawn.
-- **Its sounds** (`scripts/sounds/creatures.js`, `kaiju…`; heard in the model viewer as its clips
-  play, at the moments measured from them: `beasts/sounds.js` `CLIP_SOUNDS`): all mixed from CC0
+- **Its sounds** (`scripts/sounds/creatures.js`, `kaiju…`; heard in the game as the Behemoth of the
+  Rift's, below, and in the model viewer as its clips play, at the moments measured from them:
+  `beasts/sounds.js` `CLIP_SOUNDS`): all mixed from CC0
   recordings on OpenGameArt to sound like a kaiju. Its roar is a monster's snarls with a demon's
   held call and a troll's roar, slowed a little, its rumble taken off, 4.75 s, a rasp up to 4 kHz
   over a band near 250 Hz; in its Roar a short cry cut from them as its head goes up (its attack's,
-  as its blows will be once it's in the game) and its roar as its jaws open wide. Struck, a short
+  as its every move is in the game) and its roar as its jaws open wide. Struck, a short
   cry, higher; then it roars back. Its death is its roar slowed and dying away, then the crash of a
   great beast falling as it hits the ground, a footfall's thud with it. It growls now and then
   standing (a demon's growl slowed and muffled). Drawing breath, its snarls play backwards,
@@ -1114,6 +1116,77 @@ Energy Breath is an atomic breath (`beasts/beam.js`, `BEAMS`), as a kaiju's shou
   each a recorded sound the game knows how loud to play and the sound studio describes, at a
   moment inside a clip its model has. `e2e/model-viewer.spec.js`: heard as its clips play, at
   those moments, none paused, and the Sound option turning them off and on.
+
+### The Behemoth of the Rift (creatures.js `kaiju`, `COLOSSUS`; battle.js `#colossus`)
+
+One of the great beasts of the other world, come through the rift outside the Tower of Sar Mordal.
+Drawn from the Kaiju's model (`beasts/model.js` MODELS `kaiju`), 36 m long and 13 m tall, as
+it's made; its stand-in till that's read is the Dreadthorn's body, wingless and twice as big
+again, its spines glowing green (`beasts/looks.js`).
+
+- **On no side but its own** (`RIFT`, host.js `#against`): everyone's enemy, the players', the
+  soldiers', an invasion's raiders' and the wild's creatures', and everyone its.
+- **Too vast to be moved**: never thrown, stunned, staggered, knocked down, frightened, slowed,
+  calmed or made to falter by a spell; what burns, poisons or bleeds it takes hold.
+- **Its body as wide as it's drawn.** Where it stands is under its hips, where its model's made
+  standing (its hind feet 2.5 m before that, its fore feet 12). Its body's middle is 7 m before
+  that, and the squares 6 m round it are its `footprint`, moved with it each step: whoever's after
+  it closes to the nearest of them (as on a fortification's walls), not its middle.
+- **Its own walk** (`#stride`, in place of a character's): turning no faster than 0.6 radians a
+  second, toward the next corner of its way or to whom it's after, stepping on as it turns (more
+  slowly the further it has to turn), through whoever's in its way. Walking, it treads on whoever's
+  under it every 0.7 s: within 6.5 m of its body's middle, hurt and thrown aside (`tread`).
+  Standing, it shifts its feet every 1.8 s on whoever's within 7.5 m of its body's middle (under it,
+  or hard against it: `still`, `round`).
+- **Whom it fights** (`#colossalTarget`, looked at again every second): of the enemies it sees
+  within 90 m, standing, those within reach of its jaws first (as far from its body's middle as
+  they land, 14 m); of them, the one with the most of their fellows within 6 m of them, those where
+  its breath would land counting more. On its way it walks over whoever's at its feet.
+- **Where it goes**: on to them till they're under its jaws (16 m before where it stands), then it
+  stands its ground, turned to them, and never backs off. Its breath catches them as they come
+  within its reach on the way.
+- **Seen**, by night as by day, as far off as anyone looks (battle.js `canSee`): towering and aglow,
+  and to the nearest of its body's squares, not where it stands. Whoever's after it is in a fight
+  while they see its body as far as they reach, however far off where it stands is (`#inFight`):
+  their weapons drawn, not put away. One under it strikes the square of it next to theirs
+  (`#aimAt`).
+- **Its moves** (`#colossalMove`; weapons.js `kaiju`; each no sooner than its `every` after the
+  last), the first it's ready to make that would catch anyone:
+  - **Its atomic breath** (every 12 s at most), when three or more stand where it would land, or
+    all of them about with fewer left. Its Energy Breath plays: its glow charges for 1.3 s, then
+    the beam's raked over the ground from 13 to 18 m before its mouth (its mouth 15.9 m before
+    where it stands), over 3.3 s, the way it faces then. A blast every quarter of a second where it
+    lands (`#rake`), 4 m round: whoever it catches hurt once a breath (18 to 28), burning half the
+    time, and thrown back, away from it, up to 7.8 m. It's drawn by its beam (`beasts/beam.js`),
+    aimed where the battle has it land.
+  - **Its jaws slammed down** (every 5 s), 16 m before where it stands or 10 m (whichever catches
+    more), 5 m round: 26 to 38, most of a soldier's 40. The start of its Roar, its head reared and
+    brought down.
+  - **Its roar** (every 18 s), once five or more are within 15 m of its body's middle: all of them
+    thrown off their feet, its Roar played through its bellow.
+  Each plays as much of its clip as the move lasts (MODELS `spans`), at the clip's own pace. Struck
+  it flinches in the start of its Hit React; it falls in its Faint, held where it lies.
+- **Heard** in the Kaiju's own sounds (*The Kaiju*, above; sound.js `CREATURE_VOICES` `kaiju`):
+  its roar as it sets on someone (and twice, 450 m off, as it comes against a town), every move
+  loudest as it lands, its cry struck, its death; its breath charging, loudest as it fires, and
+  fired, heard 120 m off (app/game.js); each foot coming down as it walks, heard 80 m off
+  (sound.js `GAITS` `colossal`); and falling, the crash of a great beast.
+- **Seen**: its jaws slammed down and its roar shake the ground (spellfx.js `quake`: earth thrown up
+  and dust rolling out, a shockwave for its roar, a little dust under its tread), and the camera
+  within 60 m. Within 150 m of the player its name and strength are across the top of the screen
+  (hud.js `boss`), and within 90 m the camera frames it, drawn back as far as it's tall and looking
+  up at it (view.js `BIG_FOE` `colossal`). Its model's read the moment it comes, and it's drawn
+  before anyone else, from its model at once.
+- **Its spoils**: scales off its hide, a dorsal spine that still glows, and its heart (spoils.js).
+- **Called up** before the player, 70 m off the way they face, by the debug overlay's *Behemoth of
+  the Rift* (host.js `"rift"`).
+- **Comes against a town** by night, now and then, in place of a band of raiders (WAR.md
+  *Invasions*, *The Behemoth of the Rift*).
+- `test/kaiju.test.js`: its breath raked over those where it lands, each hurt once and thrown away
+  from it; its jaws, its roar, its tread, walking and standing; its walk on them till they're under
+  its jaws, turning slowly, its body's squares with it, whoever's in its way brought down; never
+  after anyone in a town it's come against; everyone's enemy, nothing that stuns, frightens or
+  slows it taking hold.
 
 ### A place's creatures, ready before they're met (beasts/model.js, app/readying.js)
 

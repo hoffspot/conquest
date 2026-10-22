@@ -1902,6 +1902,11 @@ friction and next to no bounce.
   `die`, thrown, says how long until it does.
 - **A creature's body** (beasts/beast.js, no rig) tumbles whole along the arc, rolling over and
   landing on its side, and rights itself as it's let up (dead, it falls dead there).
+- **One drawn in a crowd** (world/crowd.js `CrowdAvatar.toss`: a field battle's soldiers past the
+  few drawn in full, the most of them in a fight with the Behemoth of the Rift) has no rig of its
+  own to go limp: its whole figure's flung along the same arc, going once head over heels about
+  its middle away from where it was thrown from as its fall plays, and lies where it lands as its
+  fall ends; up again when it's let up, standing (dead, it lies there).
 - **Tested by throwing it.** `test/actions.test.js` throws bodies of three builds four ways, up
   again and dead: never a joint past its range, the trunk never in the ground, landing within
   0.8 m of where it's thrown to and up by when it's let up.

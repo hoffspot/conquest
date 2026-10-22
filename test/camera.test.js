@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { CameraFollow, PITCH } from "../client/js/app/camera.js";
-import { backFor, framed, PORTRAIT, toneOf } from "../client/js/world/view.js";
+import { backFor, BIG_FOE, framed, PORTRAIT, toneOf } from "../client/js/world/view.js";
 
 const FRAME = 1 / 60;
 const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -463,6 +463,12 @@ describe("drawing back in a fight (world/view.js backFor)", () => {
         assert.equal(backFor(9, 2), 1.5, "a dragon: half as far again");
         assert.equal(backFor(1.8, 12), 1.5, "an archer 12 m off: as far as it goes");
         assert.ok(Math.abs(backFor(1.8, 8) - 1.28) < 1e-9, "8 m off: 28%");
+    });
+
+    it("draws back further for the colossal, as far as it's tall (the Behemoth of the Rift: BIG_FOE colossal)", () => {
+        assert.equal(backFor(13, 30, BIG_FOE.colossal), BIG_FOE.colossal, "13 m tall, 30 m off: as far as it goes");
+        assert.ok(Math.abs(backFor(9, 2, BIG_FOE.colossal) - 1.975) < 1e-9, "no further than its height has it");
+        assert.ok(BIG_FOE.colossal > BIG_FOE.most);
     });
 });
 

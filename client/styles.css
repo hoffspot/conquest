@@ -4901,6 +4901,40 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     margin: 18px 0 0;
 }
 
+/* The great foe's bar (hud.js boss: the Behemoth of the Rift's): its name over its health, across
+the top under the buttons, clear of the minimap */
+#bossbar {
+    position: absolute;
+    z-index: 6;
+    top: calc(var(--safe-top) + 66px);
+    left: calc(var(--safe-left) + var(--minimap-size) + 24px);
+    right: calc(var(--safe-right) + 12px);
+    max-width: 520px;
+    margin-inline: auto;
+    text-align: center;
+    pointer-events: none;
+    animation: appear 0.4s ease-out;
+}
+
+#bossbar .name {
+    font-family: var(--font-display);
+    font-size: 17px;
+    letter-spacing: 0.04em;
+    color: var(--gold-bright);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+    margin-bottom: 4px;
+}
+
+#bossbar .bar {
+    height: 12px;
+    border: 1px solid rgba(120, 255, 180, 0.35);
+    box-shadow: 0 0 10px rgba(64, 255, 144, 0.25);
+}
+
+#bossbar .bar .fill {
+    background: linear-gradient(180deg, #ff8a64, #a8201a);
+}
+
 #banner {
     position: absolute;
     z-index: 7;

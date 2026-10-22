@@ -688,6 +688,11 @@ export class BeastAvatar {
         }
     }
 
+    /** Is it breathing a beam (beasts/beam.js: one that breathes one, attacking), that reaches far beyond its body? */
+    get beaming() {
+        return Boolean(this.plan.beam && this.doing.attack) && !this.doing.dead;
+    }
+
     /** Is it thrown (actions.toss) and not on its feet again yet? */
     get thrown() {
         return Boolean(this.doing.tossed);

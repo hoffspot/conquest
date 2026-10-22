@@ -142,6 +142,7 @@ const ABOUT = {
     blackWidow: ["Black widow", "The ants' nests, hanging unseen under the galleries' roofs, and one a mini-boss: a Widow matriarch"],
     dragon: ["Drake", "The drake's lair: for the mightiest"],
     dreadthorn: ["Dreadthorn", "A Dreadthorn's lair: the mightiest of all"],
+    kaiju: ["Behemoth of the Rift", "Out of the rift by the Tower of Sar Mordal, against a town by night: everyone's enemy"],
     moonfang: ["Moonfang", "A werewolves' den: for the mightiest"],
     ghost: ["Restless ghost", "The ruins and ruined castles, with their dead"],
     wraith: ["Wraith", "The ruins and ruined castles, with their dead"],
@@ -1393,7 +1394,7 @@ const groups = [
     ["The restless dead", ["ghost", "wraith"]],
     ["The ants' nests", ["ant", "greatCentipede", "dungeonSpider", "eliteDungeonSpider", "giantCockroach", "dungeonWasp", "dungeonScorpion", "blackWidow", "antMonster"]],
     ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord"]],
-    ["For the mightiest", ["dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "cultLeader", "demonLord"]],
+    ["For the mightiest", ["kaiju", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "cultLeader", "demonLord"]],
 ];
 
 for (const [label, ids] of groups) {

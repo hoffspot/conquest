@@ -608,6 +608,21 @@ export const LOOKS = Object.freeze({
         colours: { fur: 0x2c241e, saddle: 0x16100c, mask: 0x221a14, belly: 0x6a5440, dark: 0x0c0806, wings: 0x3a2a20, wingBones: 0x1e1610, claws: 0xd8ccb0, ivory: 0xe0d4b8, eyes: 0xffb020, glow: 0xff7010 },
         attacks: ["bite", "swipe", "tailSlap", "stamp"], rests: ["lie", "yawn", "stretch", "sniff"], specials: ["breath"],
     },
+    // (The Behemoth of the Rift: the Dreadthorn's body for now, wingless and twice as big again
+    // (about 36 metres long, as its own model is), near black, its spines glowing green; its own
+    // model once that's read: beasts/model.js)
+    kaiju: {
+        body: "quadruped",
+        scale: [2.95, 2.95],
+        length: 4.4, height: 2.4, girth: 0.7, width: 0.56, chest: 1.18, haunch: 1.14, neck: 1.6, neckUp: 0.6,
+        head: [0.4, 0.3, 0.56], snout: { length: 0.8, radius: 0.2, taper: 0.6, flat: 1.1 }, teeth: 14, brows: true, slit: true, eyeSize: 0.5, crouch: 1.4,
+        ears: "none", horns: 0, horned: false, frill: 9, legs: 0.36, claws: 1.4, talons: true,
+        tail: { length: 6, radius: 0.4, lift: -0.2, curl: 0.04, spade: 0 }, plates: 26, flat: true, roughness: 0.8, bellyBands: true,
+        spines: true,
+        colours: { fur: 0x1c211c, saddle: 0x0e120e, mask: 0x181c18, belly: 0x3a3e34, dark: 0x080a08, claws: 0x9a9a88, ivory: 0xc8c8b4, eyes: 0x60ff9a, glow: 0x40ff90 },
+        attacks: ["bite", "stamp"], rests: ["sniff", "stretch"], specials: ["breath"],
+        feet: "colossal",
+    },
     // (The restless dead of the ruins: a ghost, the pale shade of one who lived there long ago; a
     // wraith, a black-robed horror with nothing under its cowl but two cold lights)
     ghost: {
