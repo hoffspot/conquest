@@ -2489,6 +2489,9 @@ otherwise still does).
   Behemoth, 12% of its strength: 108 gold, 6 merit with the guilds, 8 standing.").
 - **The crier** cries it coming ("A great beast out of the rift, on the north road! Every able
   hand, defend the town!", and "To the north road, and drive it off!").
+- **The townsfolk** run indoors as it comes, each in at the nearest door on their rounds, and stay
+  in till it's slain or gone; then come out of the doors they went in by, one after another
+  (GAME.md *Townsfolk*, *Sheltering from the Behemoth*). The crier stays out, crying it.
 - `test/invasions.test.js`: by night only, one time in three, never in anyone's first; the
   town's whole strength against it, everyone's enemy, on to the town's edge; slain, the town
   held, those who wounded it thanked by their share; going back once all but a few of the town's
@@ -2509,7 +2512,8 @@ player's device can draw is in the host's snapshot too (each player's `budget`; 
 31, none told in a world kept before), and told by their game (`NET_VERSION` 146). The bands
 changed what two games share again (`NET_VERSION` 147), and so did the band named in the thanks
 (148), the Behemoth of the Rift (149), each people's own bombs (150), the rift's own creatures
-in the Tower of Sar Mordal (151), and the town's siege engines (152).
+in the Tower of Sar Mordal (151), the town's siege engines (152), and the townsfolk sheltering from
+the Behemoth (153).
 
 ### Playing together (M11)
 

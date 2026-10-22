@@ -280,6 +280,45 @@ export function crierOf({ place, kind, people = "human", name = "", errands, see
     return namePeople([crier], hashOf(`${place}|crier's name|${seed}`), people)[0];
 }
 
+/**
+ * The townsfolk taking shelter from the Behemoth of the Rift (host.js #sheltering): while it comes
+ * on their town and still stands, each runs (`pace` m/s) to the nearest door on any of their
+ * place's townsfolk's rounds (errandsOf's and wardErrandsOf's kinds in `doors`: a house's, a
+ * tradesman's, the church's, the tavern's, the guild's, the hall's, a castle's keep's) and goes in,
+ * or ducks in wherever they are once they've been `within` ms on the way; their crier stays out,
+ * crying it. Once it's slain or gone, they come out of the doors they went in by, one every `apart`
+ * ms, and go about their business again.
+ */
+export const SHELTER = Object.freeze({ pace: 3.2, within: 40000, apart: 1500, doors: Object.freeze(["home", "trade", "church", "tavern", "guild", "hall", "keep"]) });
+
+/** The doors on a place's townsfolk's rounds (`folk`: townsfolkOf's, their routines' stops of SHELTER's kinds): [{ square, facing }], each once. */
+export function doorsOf(folk) {
+    const seen = new Set();
+    const doors = [];
+
+    for (const { square, facing, group } of folk.flatMap(({ routine }) => routine?.stops ?? [])) {
+        const key = `${square[0]},${square[1]}`;
+
+        if (SHELTER.doors.includes(group) && !seen.has(key)) {
+            seen.add(key);
+            doors.push({ square: [...square], facing });
+        }
+    }
+
+    return doors;
+}
+
+/**
+ * Where one of the townsfolk at `at` ([x, y] metres) takes shelter (SHELTER): the nearest of
+ * `doors` (doorsOf's), as a routine going there at a run (battle.js #routine: its one stop, the
+ * door, facing it); or null if there's none.
+ */
+export function shelterOf([x, y], doors) {
+    const door = doors.reduce((best, each) => (!best || hypot(each.square[0] + 0.5 - x, each.square[1] + 0.5 - y) < hypot(best.square[0] + 0.5 - x, best.square[1] + 0.5 - y) ? each : best), null);
+
+    return door ? { order: "cycle", pace: SHELTER.pace, wait: [0, 0], stops: [{ square: [...door.square], facing: door.facing, group: "shelter", wait: [0, 0] }] } : null;
+}
+
 /** How many are out at a place of a kind: TOWNSFOLK's by day, NIGHT_SHARE of them at night. */
 export function countOut(kind, night = false) {
     const day = TOWNSFOLK[kind] ?? 0;
