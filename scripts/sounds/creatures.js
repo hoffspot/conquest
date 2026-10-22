@@ -1,8 +1,9 @@
 // The creatures' recorded sounds (scripts/build-sounds.js): each family's call, attack, hurt and
 // death (wolf, bear, boar, big cat, rat, snake, croc, frog, slime, bats, spider, skeleton, ghost,
-// wight, treant, dragon, goblin, troll, and two men's voices), wings, a magma slime's sizzle, a
-// dragon's fire, bodies falling by size, and the player's breath. All CC0 or public domain, each
-// source's page saying so (checked 2026-10-07). Real animals where there are any (the NPS's wolves,
+// wight, treant, dragon, goblin, troll, the kaiju, and two men's voices), wings, a magma slime's
+// sizzle, a dragon's fire, the kaiju's atomic breath, growl, charging and footfall, bodies falling
+// by size, and the player's breath. All CC0 or public domain, each source's page saying so
+// (checked 2026-10-07; the kaiju's 2026-10-22). Real animals where there are any (the NPS's wolves,
 // grizzlies and bison; a pet rat, a cobra, wild boars, an alligator, a frog); for the rest the
 // nearest real thing (a hissing cockroach for a spider, a tree creaking for a treant, a lion, a
 // bison and an alligator slowed for a dragon), slowed or sped like tape where a creature's bigger
@@ -75,6 +76,19 @@ export const SOURCES = {
     "oga-qubodup-ghostmoan02": { url: "https://opengameart.org/sites/default/files/qubodup-GhostMoans.zip", member: "qubodup-GhostMoans/wav/qubodup-GhostMoan02.wav", title: "Ghost Monster Voice Moaning & Growling (GhostMoan02)", by: "qubodup", page: "https://opengameart.org/content/ghost-monster-voice-moaning-growling", licence: "CC0" },
     "oga-qubodup-ghostmoan04": { url: "https://opengameart.org/sites/default/files/qubodup-GhostMoans.zip", member: "qubodup-GhostMoans/wav/qubodup-GhostMoan04.wav", title: "Ghost Monster Voice Moaning & Growling (GhostMoan04)", by: "qubodup", page: "https://opengameart.org/content/ghost-monster-voice-moaning-growling", licence: "CC0" },
     "oga-qubodup-ghostmoan05": { url: "https://opengameart.org/sites/default/files/qubodup-GhostMoans.zip", member: "qubodup-GhostMoans/wav/qubodup-GhostMoan05.wav", title: "Ghost Monster Voice Moaning & Growling (GhostMoan05)", by: "qubodup", page: "https://opengameart.org/content/ghost-monster-voice-moaning-growling", licence: "CC0" },
+    "oga-chunky-explosion": { url: "https://opengameart.org/sites/default/files/Chunky%20Explosion.mp3", title: "Chunky Explosion", by: "Joth", page: "https://opengameart.org/content/chunky-explosion", licence: "CC0" },
+    "oga-creature-stomp-01": { url: "https://opengameart.org/sites/default/files/80-CC0-creature-sfx-2.zip", member: "stomp_01.ogg", title: "80 CC0 creture SFX #2 (stomp_01)", by: "rubberduck", page: "https://opengameart.org/content/80-cc0-creture-sfx-2", licence: "CC0" },
+    "oga-deathboom": { url: "https://opengameart.org/sites/default/files/deathboom.wav", title: "Electricity Game Sound Pack (deathboom)", by: "faxcorp", page: "https://opengameart.org/content/electricity-game-sound-pack", licence: "CC0" },
+    "oga-demon-call-one-voice": { url: "https://opengameart.org/sites/default/files/monsters_or_beasts.7z", member: "Monsters or Beasts/Demon Call One Voice.wav", title: "Monster or beast sounds (Demon Call One Voice)", by: "pauliuw", page: "https://opengameart.org/content/monster-or-beast-sounds", licence: "CC0" },
+    "oga-demon-growl": { url: "https://opengameart.org/sites/default/files/monsters_or_beasts.7z", member: "Monsters or Beasts/Demon Growl.wav", title: "Monster or beast sounds (Demon Growl)", by: "pauliuw", page: "https://opengameart.org/content/monster-or-beast-sounds", licence: "CC0" },
+    "oga-monster-snarl-attack": { url: "https://opengameart.org/sites/default/files/monster-snarl-attack.ogg", title: "Monster snarls (monster-snarl-attack)", by: "Darsycho", page: "https://opengameart.org/content/monster-snarls", licence: "CC0" },
+    "oga-monster-snarls": { url: "https://opengameart.org/sites/default/files/monster-snarls.ogg", title: "Monster snarls (monster-snarls)", by: "Darsycho", page: "https://opengameart.org/content/monster-snarls", licence: "CC0" },
+    "oga-overloading": { url: "https://opengameart.org/sites/default/files/overloading.wav", title: "Overloading Sound", by: "jwiese", page: "https://opengameart.org/content/overloading-sound", licence: "CC0" },
+    "oga-rumbling20": { url: "https://opengameart.org/sites/default/files/rumbling20.wav", title: "Rumbling Sound Effects (rumbling20)", by: "bretbernhoft", page: "https://opengameart.org/content/rumbling-sound-effects", licence: "CC0" },
+    "oga-scifi-explosion-01": { url: "https://opengameart.org/sites/default/files/sci-fi-sfx.zip", member: "explosion_01.ogg", title: "50 CC0 Sci-Fi SFX (explosion_01)", by: "rubberduck", page: "https://opengameart.org/content/50-cc0-sci-fi-sfx", licence: "CC0" },
+    "oga-scifi-explosion-02": { url: "https://opengameart.org/sites/default/files/sci-fi-sfx.zip", member: "explosion_02.ogg", title: "50 CC0 Sci-Fi SFX (explosion_02)", by: "rubberduck", page: "https://opengameart.org/content/50-cc0-sci-fi-sfx", licence: "CC0" },
+    "oga-scifi-rocket-01": { url: "https://opengameart.org/sites/default/files/sci-fi-sfx.zip", member: "rocket_01.ogg", title: "50 CC0 Sci-Fi SFX (rocket_01)", by: "rubberduck", page: "https://opengameart.org/content/50-cc0-sci-fi-sfx", licence: "CC0" },
+    "oga-troll-roars": { url: "https://opengameart.org/sites/default/files/troll-roars.ogg", title: "Big scary troll sounds (troll-roars)", by: "Darsycho", page: "https://opengameart.org/content/big-scary-troll-sounds", licence: "CC0" },
     "oga-undead-1": { url: "https://opengameart.org/sites/default/files/undead-moans.zip", member: "undead-1.ogg", title: "Undead Moans (undead-1)", by: "AntumDeluge", page: "https://opengameart.org/content/undead-moans", licence: "CC0" },
     "oga-undead-3": { url: "https://opengameart.org/sites/default/files/undead-moans.zip", member: "undead-3.ogg", title: "Undead Moans (undead-3)", by: "AntumDeluge", page: "https://opengameart.org/content/undead-moans", licence: "CC0" },
     "oga-undead-4": { url: "https://opengameart.org/sites/default/files/undead-moans.zip", member: "undead-4.ogg", title: "Undead Moans (undead-4)", by: "AntumDeluge", page: "https://opengameart.org/content/undead-moans", licence: "CC0" },
@@ -544,6 +558,48 @@ export const SOUNDS = {
         { layers: [{ from: "freesound-257358", cut: [488160, 547200], rate: 0.9 }], fadeOut: 300, trim: 0.0138, cap: 1.341, peak: 0.174 },
         { layers: [{ from: "freesound-347337", cut: [304800, 364800], rate: 0.9 }], trim: 0.0208, cap: 1.3681, peak: 0.155 },
         { layers: [{ from: "freesound-347337", cut: [475680, 530400], rate: 0.9 }], trim: 0.033, cap: 1.198, peak: 0.127 },
+    ],
+    // (The Kaiju's, all mixed from CC0 recordings on OpenGameArt to sound like a kaiju: its roar a
+    // monster's snarls with a demon's held call and a troll's roar, slowed, its rumble taken off;
+    // its other cries cut from the same, shorter, higher or slowed and dying away; its growl a
+    // demon's slowed and muffled; its breath drawn in its snarls played backwards, swelling into an
+    // overload; its atomic breath an explosion's blast, then a demon's growl roaring over a rumble
+    // and a rocket, slowed, its snarls under it, into a second explosion over a deep boom as it
+    // stops, fitted to its beam; and its footfall a sci-fi explosion and a stomp, slowed)
+    kaijuCall: [
+        { layers: [{ from: "oga-monster-snarls", cut: [5760, 168000], rate: 0.95, hp: 150, fadeIn: 20, fadeOut: 300 }, { from: "oga-monster-snarls", cut: [237600, 316800], rate: 0.95, hp: 150, at: 3.3, fadeIn: 250, fadeOut: 250 }, { from: "oga-demon-call-one-voice", cut: [96000, 326400], hp: 200, gain: -4, fadeIn: 120, fadeOut: 300 }, { from: "oga-troll-roars", cut: [336000, 420000], rate: 0.85, hp: 150, at: 0.05, fadeIn: 30, fadeOut: 300 }, { from: "oga-monster-snarl-attack", cut: [14400, 240000], hp: 700, gain: -9, fadeIn: 50, fadeOut: 300 }], cap: 4.75, fadeOut: 120, peak: 0.255 },
+        { layers: [{ from: "oga-monster-snarls", cut: [237600, 398400], rate: 0.9, hp: 150, fadeIn: 20, fadeOut: 300 }, { from: "oga-monster-snarls", cut: [5760, 91200], rate: 0.9, hp: 150, at: 3.55, fadeIn: 250, fadeOut: 250 }, { from: "oga-demon-call-one-voice", cut: [336000, 566400], rate: 0.95, hp: 200, gain: -4, fadeIn: 120, fadeOut: 300 }, { from: "oga-troll-roars", cut: [175200, 254400], rate: 0.8, hp: 150, at: 0.05, fadeIn: 30, fadeOut: 300 }, { from: "oga-monster-snarl-attack", cut: [288000, 518400], hp: 700, gain: -9, fadeIn: 50, fadeOut: 300 }], cap: 5, fadeOut: 150, peak: 0.13 },
+    ],
+    kaijuAttack: [
+        { layers: [{ from: "oga-troll-roars", cut: [336000, 374400], rate: 0.85, hp: 150, fadeOut: 150 }, { from: "oga-monster-snarls", cut: [5760, 45600], rate: 0.95, hp: 150, gain: -3, fadeOut: 150 }], peak: 0.23 },
+        { layers: [{ from: "oga-troll-roars", cut: [2400, 38400], rate: 0.85, hp: 150, fadeOut: 150 }, { from: "oga-monster-snarls", cut: [237600, 273600], rate: 0.95, hp: 150, gain: -3, fadeOut: 150 }], peak: 0.295 },
+        { layers: [{ from: "oga-troll-roars", cut: [175200, 211200], rate: 0.82, hp: 150, fadeOut: 150 }, { from: "oga-monster-snarls", cut: [96000, 132000], rate: 0.95, hp: 150, gain: -3, fadeOut: 150 }], peak: 0.215 },
+    ],
+    kaijuHurt: [
+        { layers: [{ from: "oga-troll-roars", cut: [340800, 362400], rate: 1.15, hp: 180, fadeOut: 80 }, { from: "oga-monster-snarls", cut: [14400, 36000], rate: 1.2, hp: 180, gain: -4, fadeOut: 80 }], peak: 0.07 },
+        { layers: [{ from: "oga-troll-roars", cut: [177600, 199200], rate: 1.2, hp: 180, fadeOut: 80 }, { from: "oga-monster-snarls", cut: [244800, 266400], rate: 1.2, hp: 180, gain: -4, fadeOut: 80 }], peak: 0.1 },
+        { layers: [{ from: "oga-troll-roars", cut: [4800, 26400], rate: 1.25, hp: 180, fadeOut: 80 }, { from: "oga-monster-snarls", cut: [105600, 127200], rate: 1.25, hp: 180, gain: -4, fadeOut: 80 }], peak: 0.155 },
+    ],
+    kaijuDeath: [
+        { layers: [{ from: "oga-monster-snarls", cut: [5760, 168000], rate: 0.72, hp: 120, ramp: [0, -14, 1.5], fadeOut: 1200 }, { from: "oga-demon-call-one-voice", cut: [96000, 240000], rate: 0.72, hp: 150, ramp: [0, -14, 1.5], gain: -4, fadeOut: 1200 }, { from: "oga-troll-roars", cut: [336000, 420000], rate: 0.65, hp: 120, ramp: [0, -10, 1.5], fadeOut: 800 }], cap: 4.2, peak: 0.34 },
+        { layers: [{ from: "oga-monster-snarls", cut: [237600, 384000], rate: 0.68, hp: 120, ramp: [0, -12, 1.2], fadeOut: 1200 }, { from: "oga-demon-call-one-voice", cut: [336000, 480000], rate: 0.7, hp: 150, ramp: [0, -12, 1.2], gain: -4, fadeOut: 1200 }, { from: "oga-troll-roars", cut: [175200, 254400], rate: 0.62, hp: 120, ramp: [0, -10, 1.2], fadeOut: 800 }], cap: 4.2, peak: 0.205 },
+    ],
+    kaijuGrowl: [
+        { layers: [{ from: "oga-demon-growl", cut: [24000, 96000], rate: 0.8, lp: 1500, fadeIn: 200, fadeOut: 500 }, { from: "oga-monster-snarls", cut: [48000, 105600], rate: 0.62, lp: 1500, gain: -4, fadeIn: 200, fadeOut: 500 }], level: -24, peak: 0.21 },
+        { layers: [{ from: "oga-demon-growl", cut: [120000, 182400], rate: 0.75, lp: 1200, fadeIn: 200, fadeOut: 500 }, { from: "oga-monster-snarls", cut: [264000, 312000], rate: 0.6, lp: 1500, gain: -4, fadeIn: 200, fadeOut: 500 }], level: -24, peak: 0.205 },
+    ],
+    kaijuCharge: [
+        { layers: [{ from: "oga-monster-snarls", cut: [96000, 158400], rate: 0.85, reverse: true, ramp: [-24, 0, 2], fadeIn: 150, fadeOut: 40 }, { from: "oga-overloading", cut: [201600, 264000], ramp: [-18, 0, 1.5], gain: -4, fadeIn: 150, fadeOut: 40 }], peak: 1.485 },
+        { layers: [{ from: "oga-monster-snarls", cut: [264000, 321600], rate: 0.85, reverse: true, ramp: [-24, 0, 2], fadeIn: 150, fadeOut: 40 }, { from: "oga-overloading", cut: [192000, 254400], ramp: [-18, 0, 1.5], gain: -4, fadeIn: 150, fadeOut: 40 }], peak: 1.365 },
+    ],
+    kaijuBreath: [
+        { layers: [{ from: "oga-chunky-explosion", cut: [0, 115200], fadeOut: 900 }, { from: "oga-demon-growl", cut: [14400, 192000], hp: 90, gain: 1, at: 0.15, fadeIn: 150, fadeOut: 400 }, { from: "oga-rumbling20", cut: [480000, 672000], hp: 60, lp: 1200, gain: -5, at: 0.05, fadeIn: 80, fadeOut: 400 }, { from: "oga-scifi-rocket-01", cut: [0, 96000], rate: 0.6, gain: -1, at: 0.2, fadeIn: 100, fadeOut: 400 }, { from: "oga-chunky-explosion", cut: [0, 86400], gain: -3, at: 3.25, fadeOut: 700 }, { from: "oga-deathboom", cut: [14400, 120000], gain: -5, at: 3.2, fadeIn: 30, fadeOut: 600 }, { from: "oga-monster-snarls", cut: [5760, 168000], rate: 0.8, hp: 150, gain: -6, at: 0.25, fadeIn: 200, fadeOut: 400 }], cap: 5, fadeOut: 500, peak: 3.32 },
+        { layers: [{ from: "oga-scifi-explosion-02", cut: [0, 59040], fadeOut: 500 }, { from: "oga-chunky-explosion", cut: [9600, 115200], gain: -4, fadeOut: 900 }, { from: "oga-demon-growl", cut: [57600, 235200], hp: 90, gain: 1, at: 0.15, fadeIn: 150, fadeOut: 400 }, { from: "oga-rumbling20", cut: [1920000, 2112000], hp: 60, lp: 1200, gain: -5, at: 0.05, fadeIn: 80, fadeOut: 400 }, { from: "oga-scifi-rocket-01", cut: [0, 96000], rate: 0.55, gain: -1, at: 0.2, fadeIn: 100, fadeOut: 400 }, { from: "oga-scifi-explosion-01", cut: [0, 88320], gain: -2, at: 3.25, fadeOut: 700 }, { from: "oga-deathboom", cut: [14400, 120000], gain: -5, at: 3.2, fadeIn: 30, fadeOut: 600 }, { from: "oga-monster-snarls", cut: [237600, 398400], rate: 0.8, hp: 150, gain: -6, at: 0.25, fadeIn: 200, fadeOut: 400 }], cap: 5, fadeOut: 500, peak: 3.34 },
+    ],
+    kaijuStep: [
+        { layers: [{ from: "oga-scifi-explosion-01", cut: [0, 88320], rate: 0.8, lp: 3000, fadeOut: 300 }, { from: "oga-creature-stomp-01", cut: [0, 21120], rate: 0.8, gain: -2, fadeOut: 60 }], peak: 0.135 },
+        { layers: [{ from: "oga-scifi-explosion-01", cut: [0, 88320], rate: 0.72, lp: 3000, fadeOut: 300 }, { from: "oga-creature-stomp-01", cut: [0, 21120], rate: 0.7, gain: -2, fadeOut: 60 }, { from: "oga-deathboom", cut: [19200, 67200], gain: -8, fadeIn: 10, fadeOut: 400 }], peak: 0.06 },
+        { layers: [{ from: "oga-scifi-explosion-02", cut: [0, 59040], rate: 0.75, lp: 3000, fadeOut: 300 }, { from: "oga-creature-stomp-01", cut: [0, 21120], rate: 0.85, gain: -2, fadeOut: 60 }], peak: 0.055 },
     ],
     wingbeat: [
         { layers: [{ from: "freesound-670509", cut: [26400, 75840], hp: 70 }], fadeOut: 152.325, trim: 0.0145, cap: 1.0155, peak: 0.654 },

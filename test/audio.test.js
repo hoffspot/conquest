@@ -13,6 +13,7 @@ import { useSound, wearSound } from "../client/js/audio/handling.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
 import { ARMOUR, BATTLE_OUT, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
+import { CLIP_SOUNDS } from "../client/js/beasts/sounds.js";
 import { BEDS, LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
 import { CREATURES } from "../client/js/core/creatures.js";
 import { THEMES } from "../client/js/core/dungeons/themes.js";
@@ -631,14 +632,15 @@ describe("playing sounds (sound.js)", () => {
 
         // (Every sound downloaded once it's wanted used: the spells', and the creatures' and the
         // player's breath; the ambience's anywhere, at any time of day, and its doors, a tavern's
-        // stairs and hearth, a church's bell; all but the rain and thunder, with no weather yet,
-        // heard only in the sound studio)
+        // stairs and hearth, a church's bell; those a coming model's clips make, heard in the
+        // model viewer (beasts/sounds.js: the Kaiju's); all but the rain and thunder, with no
+        // weather yet, heard only in the sound studio)
         const heard = everywhere().flatMap((facts) => {
             const { beds, calls, wants } = ambienceOf(facts);
 
             return [...Object.keys(beds), ...Object.keys(calls), ...wants];
         });
-        const used = new Set([...Object.keys(SPELLS).flatMap((id) => Object.values(spellSounds(id))), "teleportIn", "fizzle", "spellCircle", "fire", "arcane", ...Object.keys(CREATURES).flatMap(creatureSounds), "breath", ...heard, ...Object.keys(PLACES).map(doorOf), "crackle", "churchBell", ...ITEM_SOUNDS]);
+        const used = new Set([...Object.keys(SPELLS).flatMap((id) => Object.values(spellSounds(id))), "teleportIn", "fizzle", "spellCircle", "fire", "arcane", ...Object.keys(CREATURES).flatMap(creatureSounds), "breath", ...heard, ...Object.keys(PLACES).map(doorOf), "crackle", "churchBell", ...ITEM_SOUNDS, ...Object.values(CLIP_SOUNDS).flatMap((clips) => Object.values(clips).flatMap((cues) => cues.map(([, name]) => name)))]);
 
         assert.deepEqual(ON_DEMAND.filter((name) => !used.has(name)), ["rainLoop", "thunder"]);
     });

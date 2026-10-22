@@ -26,13 +26,16 @@
 //   ON_DEMAND), from Freesound, OpenGameArt's packs, Kenney's and the VCSL's.
 //
 //   npm run build:sounds
+//   npm run build:sounds -- kaijuCall kaijuStep    (only these made again)
 //
 // Each recording is downloaded once (into .cache: Freesound's public previews, MP3s, as the
 // originals need a login; a pack's archive whole), made mono, its rumble taken away (both ways,
 // so nothing's shifted), and each sound cut from it where it starts to where it's died away
 // (picked by ear and eye for being alike, clean, and on the beat). Each is faded in and out, made
 // as loud as the rest (LEVEL, by its loudest 30 ms, as synth.js's are), and saved as an MP3 named
-// for what's in it, so browsers and the service worker can keep them for good.
+// for what's in it, so browsers and the service worker can keep them for good. Named, only those
+// sounds are made again, from only their recordings: the rest are kept as recorded.js has them
+// (each must be there already), so a few can be added or changed without downloading the rest.
 
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -220,7 +223,7 @@ function encodeMp3(samples, bitrate = BITRATE) {
     return Buffer.concat(parts.map((part) => Buffer.from(part.buffer, part.byteOffset, part.length)));
 }
 
-async function main() {
+async function main(only = []) {
     const recordings = new Map();
     const list = {};
     const written = new Set();
@@ -229,8 +232,38 @@ async function main() {
 
     await mkdir(OUT, { recursive: true });
 
+    // (Only some made again, if they're named: each of the rest kept as it is, its files and its
+    // recordings' credits with it)
+    const names = [...Object.keys(STEPS).map((surface) => `step${surface[0].toUpperCase()}${surface.slice(1)}`), ...Object.values(AREAS).flatMap((area) => Object.keys(area.SOUNDS))];
+    const unknown = only.filter((name) => !names.includes(name));
+    const before = only.length ? (await import(`${LIST.href}?${Date.now()}`)).RECORDED : {};
+    const kept = (name, credit) => {
+        if (!before[name]) {
+            throw new Error(`${name} isn't made yet: name it too`);
+        }
+
+        list[name] = before[name].map((made) => ({ ...made }));
+
+        for (const { file, from } of list[name]) {
+            written.add(file);
+
+            for (const key of from) {
+                sources[key] = credit(key);
+            }
+        }
+    };
+
+    if (unknown.length) {
+        throw new Error(`no such sounds: ${unknown.join(", ")}`);
+    }
+
     for (const [surface, steps] of Object.entries(STEPS)) {
         const name = `step${surface[0].toUpperCase()}${surface.slice(1)}`;
+
+        if (only.length && !only.includes(name)) {
+            kept(name, (id) => ({ title: RECORDINGS[id].name, by: "Nox_Sound", page: `https://freesound.org/s/${id}/`, licence: "CC0" }));
+            continue;
+        }
 
         list[name] = [];
 
@@ -259,11 +292,20 @@ async function main() {
 
     for (const area of Object.values(AREAS)) {
         for (const [name, variants] of Object.entries(area.SOUNDS)) {
-            list[name] = [];
-
             if (ON_DEMAND.has(area) || area.ON_DEMAND?.includes(name)) {
                 wanted.push(name);
             }
+
+            if (only.length && !only.includes(name)) {
+                kept(name, (key) => {
+                    const { title, by, page, licence } = area.SOURCES[key];
+
+                    return { title, by, page, licence };
+                });
+                continue;
+            }
+
+            list[name] = [];
 
             for (const [k, variant] of variants.entries()) {
                 // (Under its own, its area's defaults, if it has any: scripts/sounds LAYER, RECIPE)
@@ -343,10 +385,10 @@ export const SOURCES = Object.freeze({
 ${credits.join("\n")}
 });
 `);
-    console.log(`${written.size} sounds, ${(bytes / 1024).toFixed(0)} KB`);
+    console.log(`${written.size} sounds, ${(bytes / 1024).toFixed(0)} KB made${only.length ? ` (${only.join(", ")}; the rest kept)` : ""}`);
 }
 
 // (Run, not imported)
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-    await main();
+    await main(process.argv.slice(2));
 }

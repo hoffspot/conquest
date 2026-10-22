@@ -1097,6 +1097,23 @@ Energy Breath is an atomic breath (`beasts/beam.js`, `BEAMS`), as a kaiju's shou
 - `e2e/model-viewer.spec.js`: nothing of it before it charges or in its other clips; charging,
   its glow lit; firing, aimed, its glow at its brightest, landing 10 to 20 m in front of its mouth,
   and the beam's blue-white drawn.
+- **Its sounds** (`scripts/sounds/creatures.js`, `kaiju…`; heard in the model viewer as its clips
+  play, at the moments measured from them: `beasts/sounds.js` `CLIP_SOUNDS`): all mixed from CC0
+  recordings on OpenGameArt to sound like a kaiju. Its roar is a monster's snarls with a demon's
+  held call and a troll's roar, slowed a little, its rumble taken off, 4.75 s, a rasp up to 4 kHz
+  over a band near 250 Hz; in its Roar a short cry cut from them as its head goes up (its attack's,
+  as its blows will be once it's in the game) and its roar as its jaws open wide. Struck, a short
+  cry, higher; then it roars back. Its death is its roar slowed and dying away, then the crash of a
+  great beast falling as it hits the ground, a footfall's thud with it. It growls now and then
+  standing (a demon's growl slowed and muffled). Drawing breath, its snarls play backwards,
+  swelling into an overload, loudest as it fires; its atomic breath is an explosion's blast, then a
+  demon's growl roaring over a deep rumble and a slowed rocket, its snarls under it, into a second
+  explosion over a deep boom as the beam stops. Each foot coming down, walking or running, is a
+  sci-fi explosion's crack and a stomp, slowed, rolling away into a rumble, its thud as the foot
+  is at its lowest. Each sound has two or three takes, played in turn. `test/clip-sounds.test.js`:
+  each a recorded sound the game knows how loud to play and the sound studio describes, at a
+  moment inside a clip its model has. `e2e/model-viewer.spec.js`: heard as its clips play, at
+  those moments, none paused, and the Sound option turning them off and on.
 
 ### A place's creatures, ready before they're met (beasts/model.js, app/readying.js)
 
@@ -1230,6 +1247,12 @@ The panel and playback:
   length, played alone as it was made (`modelBody`'s `hold`), and slid through. One built in code
   has none: its moves are worked out as it plays. The Kaiju breathes its beam in its Energy Breath
   (*The Kaiju*, above); `window.lab.breath()` says what it's doing.
+- **Sound** (on the playback bar, 🔊 on a phone, shown only with something that makes any): what
+  its clips sound like (the Kaiju's: *The Kaiju*, above), as the game plays sounds
+  (`audio/sound.js`), its recordings downloaded once it's shown, heard from the first click or key
+  press (as browsers want). Heard as a clip plays on, slower or faster as it's played (but not
+  slower than half speed), and stopped when it's paused, stepped through or does something else;
+  off, nothing. `window.lab.heard()` lists what its clips have asked to be heard, and when.
 - **Details** (`detailsOf`): how it's made (a model's file and its size, or the game's code); its
   source (a prop's maker and licence, as the catalog has them); how tall and long it is (a
   thing, how wide, deep and tall); the triangles, vertices, meshes and materials drawn of it as

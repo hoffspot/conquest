@@ -655,6 +655,81 @@ test("and the Kaiju's atomic breath: its glow charged from its tail, then a beam
     expect(roaring.blue).toBeLessThan(0.002);
 });
 
+test("and the Kaiju's sounds, as its clips play: its roar, its cries, its breath drawn and its beam, a thud as each foot comes down, none paused, and the Sound option", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+
+    // (Its recordings downloaded once it's shown)
+    const downloaded = new Set();
+
+    page.on("response", (response) => {
+        const file = response.url().split("/").pop().split("?")[0];
+
+        if (response.ok() && /^kaiju-[a-z]+-\d/.test(file)) {
+            downloaded.add(file.replace(/-\d+\.[0-9a-f]{8}\.mp3$/, ""));
+        }
+    });
+    await openViewer(page, "/model-viewer.html?model=beast-kaiju&clip=Idle");
+    await page.waitForFunction(() => window.lab.watch().clip === "Idle", null, { timeout: 60000 });
+
+    // (The browser's sound started with a click, as browsers want; and the playback bar's Sound
+    // turning it off and on again)
+    await page.locator("#play").click();
+    await expect.poll(() => page.evaluate(() => window.lab.sounding()), { timeout: 10000 }).toBe(true);
+    await page.locator("#sound").uncheck();
+    expect(await page.evaluate(() => window.lab.sounding())).toBe(false);
+    await page.locator("#sound").check();
+    await expect.poll(() => page.evaluate(() => window.lab.sounding()), { timeout: 10000 }).toBe(true);
+    await expect.poll(() => [...downloaded].sort(), { timeout: 30000 }).toEqual(["kaiju-attack", "kaiju-breath", "kaiju-call", "kaiju-charge", "kaiju-death", "kaiju-growl", "kaiju-hurt", "kaiju-step"]);
+
+    // (A clip played through from its start, a thirtieth of a second at a time: what it was heard
+    // making, and when in it)
+    const through = (clip) =>
+        page.evaluate((name) => {
+            const before = window.lab.heard().length;
+
+            window.lab.pause();
+            window.lab.clip(name);
+
+            for (let k = 0; k < 300; k++) {
+                window.lab.advance(1 / 30);
+            }
+
+            return window.lab.heard().slice(before).map(({ name: sound, at }) => [sound, Math.round(at * 100) / 100]);
+        }, clip);
+
+    expect(await through("Roar")).toEqual([
+        ["kaijuAttack", 1.5],
+        ["kaijuCall", 3.25],
+    ]);
+    expect(await through("Energy Breath")).toEqual([
+        ["kaijuCharge", 1.3],
+        ["kaijuBreath", 1.25],
+    ]);
+    expect((await through("Faint")).map(([sound]) => sound)).toEqual(["kaijuDeath", "deathThudBig", "kaijuStep"]);
+
+    // (Its walk: each of its four feet down three times in its ten seconds)
+    const walking = await through("Walk");
+
+    expect(walking.length).toBe(12);
+    expect(walking.every(([sound]) => sound === "kaijuStep")).toBe(true);
+
+    // (Paused, stepped on a frame at a time, it's silent)
+    const paused = await page.evaluate(() => {
+        const before = window.lab.heard().length;
+
+        window.lab.clip("Roar");
+        window.lab.pause();
+
+        for (let k = 0; k < 120; k++) {
+            window.lab.step(1);
+        }
+
+        return window.lab.heard().length - before;
+    });
+
+    expect(paused).toBe(0);
+});
+
 test("and the Greater Demon: its own showcase and the roar cut from it, the human clips played on its skeleton, its one mesh, and whose it is", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?model=beast-greater-demon&clip=Pound");
