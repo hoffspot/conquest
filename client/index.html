@@ -230,6 +230,10 @@
             </div>
             <p class="worldmap-note" id="worldmapnote" role="status" hidden></p>
             <div class="worldmap-tools">
+                <!-- In a party: tapped, the next tap on the map pings it for the party -->
+                <button type="button" id="worldmapping" class="hud-button" aria-label="Ping the map for your party" aria-pressed="false" title="Ping the map for your party" hidden>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.6 4.6a10.4 10.4 0 0 0 0 14.8M19.4 4.6a10.4 10.4 0 0 1 0 14.8"/></svg>
+                </button>
                 <button type="button" id="worldmapunpin" class="hud-button" aria-label="Take the pin away" title="Take the pin away" hidden>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="8" r="4"/><path d="M10 12v9M15 15l6 6M21 15l-6 6"/></svg>
                 </button>

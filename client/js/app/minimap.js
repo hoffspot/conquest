@@ -20,7 +20,7 @@ import { allAtOnce, Steps } from "../core/steps.js";
 import { GROUND, HOUSE_STYLES, PLOT } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { LAND_COLOURS } from "../world/ground.js";
-import { drawBuildingIcon, drawSearch } from "./mapicons.js";
+import { drawBuildingIcon, drawPing, drawSearch } from "./mapicons.js";
 
 // Colours (RGB) of the ground and of what stands on it
 const GROUND_COLOURS = {
@@ -474,9 +474,10 @@ export class Minimap {
      * gone into and the places worth finding ([{ kind, x, z, rim (who holds a place, its colour) }]),
      * and `elites`, the wild's elites near enough to be marked ([{ x, z, targeted }]: ELITE_MARK);
      * and the circles to search for the treasures the player's hunting (`searches`: [{ id, x, z,
-     * radius, grade, own }]: app/game.js treasureCircles).
+     * radius, grade, own }]: app/game.js treasureCircles); and the party's pings (`pings`: [{ x,
+     * z, age (seconds) }]: app/game.js pingView).
      */
-    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [] }, now = performance.now()) {
+    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], pings = [] }, now = performance.now()) {
         const { canvas, context, map } = this;
 
         this.drawn = now;
@@ -648,6 +649,17 @@ export class Minimap {
 
             star(context, x, y, ELITE_MARK.size * (k < 1 ? 0.85 : 1) * (1 + 0.08 * Math.sin(now / 220)));
             this.elites.push({ x, y, edge: k < 1 });
+        }
+
+        // The party's pings: further than shown, at the edge the way each is, as the elites are
+        // (those drawn kept for tests: `pings`, and whether at the edge)
+        this.pings = [];
+
+        for (const ping of pings) {
+            const [x, y, k] = marked(ping);
+
+            drawPing(context, x, y, { size: k < 1 ? 11 : 15, age: ping.age });
+            this.pings.push({ x, y, edge: k < 1 });
         }
 
         // The player: an arrowhead pointing the way they face (0 is south, towards east positive)
