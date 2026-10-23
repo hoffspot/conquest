@@ -106,11 +106,34 @@ function nameBoard(solid, face, [u0, u1, v0, v1], texture, name, frame) {
 // The front of a house's storey (as house.js lays it out), as a face
 const frontOf = (level) => ({ origin: [level.box[0], level.y, level.box[3]], across: [1, 0, 0], out: [0, 0, 1], length: level.box[1] - level.box[0] });
 
+// A name board over a door (overDoor: a tavern's, the guild's, the town hall's, a shop's), however
+// many storeys there are: its foot `clear` metres over the door (its frame, 0.12 m round it, a
+// little clear of the door's top, and above the windows and the awnings over them), where whoever
+// walks up to it, the camera behind them looking at it, sees it before them; the ground floor at
+// least `ground` tall (metres) under a storey above, room over the door for the board and for its
+// sign; and its sign hung past the board's end, `aside` metres on (a shop's no further from the
+// door's middle than `reach`: inside a master's banners, shopfront.js dressShop), its top `over`
+// metres above the board's
+const OVER_DOOR = Object.freeze({ clear: 0.42, ground: Object.freeze({ tavern: 4.1, guild: 4.3, hall: 4, shop: 3.8 }), aside: 0.45, reach: 2.75, over: 0.2 });
+
+// A name over a door `door` high (world pixels) on a board `board` wide in the middle of the
+// ground floor's front, as tall as its width has it, room allowing: how high its foot and top are
+function overDoor(solid, ground, door, board, texture, name, frame) {
+    const face = frontOf(ground);
+    const middle = face.length / 2;
+    const v0 = door + m(OVER_DOOR.clear);
+    const v1 = v0 + Math.min((board * 9) / 56, ground.height - v0 - m(0.15));
+
+    nameBoard(solid, face, [middle - board / 2, middle + board / 2, v0, v1], texture, name, frame);
+
+    return [v0, v1];
+}
+
 /**
  * A tavern (its layout piece says which: its name, the picture on its sign, how many storeys),
  * built as a house of its town is (house.js), stone, brick or timber-framed, with a wide door in
- * the middle of its front, its name on a board along the front (over the door, on one storey)
- * and its sign hanging from a bracket by the door; a lantern, and barrels and a bench outside.
+ * the middle of its front, its name on a board over it (OVER_DOOR) and its sign hanging from a
+ * bracket past the board's end; a lantern by the door, and barrels and a bench outside.
  * The town's first, "Wenches and Ale", is stone below and a jettied timber-framed floor above,
  * its sign a barmaid raising two tankards.
  */
@@ -125,6 +148,7 @@ export async function tavern(piece) {
     const reveal = HOUSE_STYLES[style].reveal + 0.04;
     const [width, depth] = [w * 20, h * 20];
     const board = Math.min(m(5.6), width - m(3.2));
+    const door = m(2.3);
     const plan = planHouse({
         w,
         h,
@@ -135,42 +159,27 @@ export async function tavern(piece) {
         y: piece.y,
         facing: piece.facing,
         front: depth - m(ENTRY) + m(reveal),
-        entrance: { width: m(1.8), height: m(2.3) },
-        board,
+        entrance: { width: m(1.8), height: door },
         ground: wenches ? "stone-warm" : null,
         jettied: wenches ? true : null,
-        lofty: m(own.storeys < 2 ? 4 : 3.2),
+        lofty: m(own.storeys < 2 ? 4 : OVER_DOOR.ground.tavern),
     });
     const solid = buildHouse(plan);
     const oak = plan.frame ?? "timber";
     const ground = plan.levels[0];
     const face = frontOf(ground);
     const middle = face.length / 2;
-    const boardHeight = (board * 9) / 56;
 
-    // The name: along the upper floor's front, or over the door
-    if (plan.levels.length > 1) {
-        const level = plan.levels[1];
-        const v0 = Math.min(level.height - boardHeight - m(0.35), m(1.05));
-
-        nameBoard(solid, frontOf(level), [middle - board / 2, middle + board / 2, v0, v0 + boardHeight], nameBoardTexture({ name: own.name }), `board ${own.name}`, oak);
-    } else {
-        const small = Math.min(board, m(4.4));
-        const v0 = m(2.55);
-
-        nameBoard(solid, face, [middle - small / 2, middle + small / 2, v0, v0 + Math.min((small * 9) / 56, ground.height - v0 - m(0.2))], nameBoardTexture({ name: own.name }), `board ${own.name}`, oak);
-    }
-
-    // The sign, hanging by the door out over the street, and a lantern on the other side (on one
-    // storey, past the ends of the name board)
-    const aside = plan.levels.length > 1 ? m(1.9) : Math.min(board, m(4.4)) / 2 + m(0.55);
+    // The name over the door, and the sign hanging past the board's end out over the street (its
+    // stay tied up to the wall above it, under a storey that isn't jettied out over it)
+    const [v0, v1] = overDoor(solid, ground, door, board, nameBoardTexture({ name: own.name }), `board ${own.name}`, oak);
     const texture = wenches ? hangingSignTexture() : emblemSignTexture({ name: own.name, emblem: own.emblem, count: own.count, tint: seedOf(piece) % 6 });
+    const top = v1 + m(OVER_DOOR.over);
 
-    const top = Math.min(m(3.2), ground.height - m(0.1));
+    hangingSign(solid, face, middle + board / 2 + m(OVER_DOOR.aside), top, texture, `sign ${own.name}`, { width: 1, height: 1.2, above: plan.levels.length > 1 && !plan.jetty ? 0.5 : (ground.height - top) / m(1) - 0.05 });
 
-    hangingSign(solid, face, middle + aside, top, texture, `sign ${own.name}`, { width: 1, height: 1.2, above: plan.levels.length > 1 ? 0.5 : (ground.height - top) / m(1) - 0.05 });
-
-    const lantern = [face.origin[0] + middle - aside + m(0.45), m(2.2), face.origin[2] + m(0.22)];
+    // A lantern on the other side of the door, its arm under the board
+    const lantern = [face.origin[0] + middle - m(1.45), v0 - m(0.55), face.origin[2] + m(0.22)];
 
     solid.beam([lantern[0], lantern[1] + m(0.35), face.origin[2]], [lantern[0], lantern[1] + m(0.35), lantern[2]], m(0.04), m(0.04), material("iron"));
     solid.box(lantern[0] - m(0.12), lantern[1] - m(0.18), lantern[2] - m(0.12), lantern[0] + m(0.12), lantern[1] + m(0.18), lantern[2] + m(0.12), material("glass-lit"));
@@ -193,8 +202,9 @@ export async function tavern(piece) {
 
 /**
  * The adventurers' guild: a big hall of stone, brick or timber, two storeys, its wide door in the
- * middle of its front under its name on a board, its crest (a shield over crossed swords) hanging
- * by the door, banners either side, and a board of notices outside.
+ * middle of its front under its name on a board (OVER_DOOR), its crest (a shield over crossed
+ * swords) hanging past the board's end, banners under it either side of the door, and a board of
+ * notices outside.
  */
 export async function guild(piece) {
     await loadSignFont();
@@ -205,6 +215,7 @@ export async function guild(piece) {
     const reveal = HOUSE_STYLES[style].reveal + 0.04;
     const [width, depth] = [w * 20, h * 20];
     const board = Math.min(m(7), width - m(4));
+    const door = m(2.6);
     const plan = planHouse({
         w,
         h,
@@ -215,35 +226,34 @@ export async function guild(piece) {
         y: piece.y,
         facing: piece.facing,
         front: depth - m(ENTRY) + m(reveal),
-        entrance: { width: m(2.2), height: m(2.6) },
-        board,
+        entrance: { width: m(2.2), height: door },
         jettied: false,
+        lofty: m(OVER_DOOR.ground.guild),
     });
     const solid = buildHouse(plan);
     const ground = plan.levels[0];
     const face = frontOf(ground);
     const middle = face.length / 2;
-    const level = plan.levels[1];
-    const boardHeight = (board * 9) / 56;
-    const v0 = Math.min(level.height - boardHeight - m(0.3), m(0.9));
+    const [v0, v1] = overDoor(solid, ground, door, board, nameBoardTexture({ name: "Adventurers' Guild", ground: "#1f3552", dark: "#0e1a2a" }), "board guild", plan.frame ?? "timber");
 
-    nameBoard(solid, frontOf(level), [middle - board / 2, middle + board / 2, v0, v0 + boardHeight], nameBoardTexture({ name: "Adventurers' Guild", ground: "#1f3552", dark: "#0e1a2a" }), "board guild", plan.frame ?? "timber");
-    // (Its sign beyond the banner on that side, not through it)
-    hangingSign(solid, face, middle + m(2.9), m(3.1), emblemSignTexture({ name: "Adventurers' Guild", emblem: "shield", tint: 2 }), "sign guild");
+    hangingSign(solid, face, middle + board / 2 + m(OVER_DOOR.aside), v1 + m(OVER_DOOR.over), emblemSignTexture({ name: "Adventurers' Guild", emblem: "shield", tint: 2 }), "sign guild");
 
-    // Banners in the guild's blue and gold, hanging from poles either side of the door
+    // Banners in the guild's blue and gold either side of the door, hanging from poles under the
+    // board (`hung`: their poles' height)
+    const hung = v0 - m(0.2);
+
     for (const side of [-1, 1]) {
         const u = middle + side * m(1.9);
         const at = (d, v) => [face.origin[0] + u + d, v, face.origin[2] + m(0.25)];
 
-        solid.beam([face.origin[0] + u - m(0.45), m(3.6), face.origin[2]], [face.origin[0] + u - m(0.45), m(3.6), face.origin[2] + m(0.3)], m(0.05), m(0.05), material("iron"));
-        solid.beam(at(-m(0.45), m(3.6)), at(m(0.45), m(3.6)), m(0.06), m(0.06), material("timber"));
+        solid.beam([face.origin[0] + u - m(0.45), hung, face.origin[2]], [face.origin[0] + u - m(0.45), hung, face.origin[2] + m(0.3)], m(0.05), m(0.05), material("iron"));
+        solid.beam(at(-m(0.45), hung), at(m(0.45), hung), m(0.06), m(0.06), material("timber"));
 
-        const cloth = [at(-m(0.4), m(3.55)), at(m(0.4), m(3.55)), at(m(0.4), m(1.9)), at(0, m(1.65)), at(-m(0.4), m(1.9))];
+        const cloth = [at(-m(0.4), hung - m(0.05)), at(m(0.4), hung - m(0.05)), at(m(0.4), hung - m(1.35)), at(0, hung - m(1.6)), at(-m(0.4), hung - m(1.35))];
 
         solid.facing(cloth, [0, 0, 1], material("paint-blue"));
         solid.facing(cloth, [0, 0, -1], material("paint-blue"));
-        solid.facing([at(-m(0.1), m(3.1)), at(m(0.1), m(3.1)), at(m(0.1), m(2.3)), at(-m(0.1), m(2.3))].map(([x, y, z]) => [x, y, z + 0.1]), [0, 0, 1], material("cloth-gold"));
+        solid.facing([at(-m(0.1), hung - m(0.4)), at(m(0.1), hung - m(0.4)), at(m(0.1), hung - m(1.1)), at(-m(0.1), hung - m(1.1))].map(([x, y, z]) => [x, y, z + 0.1]), [0, 0, 1], material("cloth-gold"));
     }
 
     // A board of notices on two posts beside the door, papers pinned to it
@@ -478,7 +488,8 @@ export function windmill({ w, h }) {
 /**
  * A town hall: the town's biggest house near the market, made over (setpieces/town.js), in its
  * street's look: a wide door in the middle of its front up a step, "Town Hall" on a board over
- * it, a sign of the keys of the town, and lanterns either side of the door.
+ * it (OVER_DOOR), a sign of the keys of the town past the board's end, and lanterns either side
+ * of the door.
  */
 export async function hall(piece) {
     await loadSignFont();
@@ -489,6 +500,7 @@ export async function hall(piece) {
     const reveal = HOUSE_STYLES[style].reveal + 0.04;
     const [width, depth] = [w * 20, h * 20];
     const board = Math.min(m(5.5), width - m(3));
+    const door = m(2.5);
     const plan = planHouse({
         w,
         h,
@@ -499,33 +511,32 @@ export async function hall(piece) {
         y: piece.y,
         facing: piece.facing,
         front: depth - m(ENTRY) + m(reveal),
-        entrance: { width: m(2), height: m(2.5) },
-        board,
+        entrance: { width: m(2), height: door },
         jettied: false,
+        lofty: m(OVER_DOOR.ground.hall),
     });
     const solid = buildHouse(plan);
     const ground = plan.levels[0];
     const face = frontOf(ground);
     const middle = face.length / 2;
-    const level = plan.levels[1];
-    const boardHeight = (board * 9) / 56;
-    const v0 = Math.min(level.height - boardHeight - m(0.3), m(0.9));
+    const [v0, v1] = overDoor(solid, ground, door, board, nameBoardTexture({ name: "Town Hall", ground: "#4a1c1c", dark: "#260c0c" }), "board hall", plan.frame ?? "timber");
 
-    nameBoard(solid, frontOf(level), [middle - board / 2, middle + board / 2, v0, v0 + boardHeight], nameBoardTexture({ name: "Town Hall", ground: "#4a1c1c", dark: "#260c0c" }), "board hall", plan.frame ?? "timber");
-    hangingSign(solid, face, middle + m(1.9), m(3), emblemSignTexture({ name: "Town Hall", emblem: "keys", tint: seedOf(piece) % 6 }), "sign hall");
+    hangingSign(solid, face, middle + board / 2 + m(OVER_DOOR.aside), v1 + m(OVER_DOOR.over), emblemSignTexture({ name: "Town Hall", emblem: "keys", tint: seedOf(piece) % 6 }), "sign hall");
 
-    // A stone step before the door, and a lantern on an iron arm either side of it
+    // A stone step before the door, and a lantern on an iron arm either side of it, under the
+    // board (`arm`: how high its arm is)
     const [x0, z] = [face.origin[0] + middle, face.origin[2]];
+    const arm = v0 - m(0.27);
 
     solid.box(x0 - m(1.5), 0, z, x0 + m(1.5), m(0.3), z + m(0.8), material("stone"));
 
     for (const side of [-1, 1]) {
         const x = x0 + side * m(1.5);
 
-        solid.beam([x, m(2.6), z], [x, m(2.6), z + m(0.45)], m(0.05), m(0.05), material("iron"));
-        solid.box(x - m(0.14), m(2.15), z + m(0.3), x + m(0.14), m(2.55), z + m(0.58), material("iron"));
-        solid.box(x - m(0.1), m(2.2), z + m(0.34), x + m(0.1), m(2.5), z + m(0.54), material("glass-lit"));
-        lanternLight(solid, [x, m(2.35), z + m(0.44)]);
+        solid.beam([x, arm, z], [x, arm, z + m(0.45)], m(0.05), m(0.05), material("iron"));
+        solid.box(x - m(0.14), arm - m(0.45), z + m(0.3), x + m(0.14), arm - m(0.05), z + m(0.58), material("iron"));
+        solid.box(x - m(0.1), arm - m(0.4), z + m(0.34), x + m(0.1), arm - m(0.1), z + m(0.54), material("glass-lit"));
+        lanternLight(solid, [x, arm - m(0.25), z + m(0.44)]);
     }
 
     return solid.toObject();
@@ -760,20 +771,11 @@ export async function barracks(piece) {
     return solid.toObject();
 }
 
-// A shop's name board (shop): over its door, however many storeys it has, its foot this far up
-// from its floor (metres: just clear of the door, above its windows and the awnings over them),
-// where whoever walks up to it, the camera behind them looking at it, sees it before them (as
-// other peoples' shops have theirs); its ground floor at least `ground` tall (metres) on two
-// storeys, with room above the door for a long name's board; and its sign hung past the board's
-// end, `aside` metres on (but no further from the door's middle than `reach`: inside a master's
-// banners, shopfront.js dressShop), its top `over` metres above the board's
-const SHOP_BOARD = Object.freeze({ foot: 2.42, ground: 3.5, aside: 0.45, reach: 2.75, over: 0.4 });
-
 /**
  * A specialist's or a master's shop (shopfront.js SHOPFRONTS: a swordsmith's, an armorer's, an
  * occult scriptorium, an alchemist's; the Master Swordsmith's, the Master Armorer's, the Mystic
  * Emporium): the house it was, made over (timber if it was a cottage), its name on a board over
- * the door (SHOP_BOARD), its sign hanging past the board's end, a striped awning over the window
+ * the door (OVER_DOOR), its sign hanging past the board's end, a striped awning over the window
  * either side, and what it sells set out before it (dressShop).
  */
 export async function shop(piece) {
@@ -788,6 +790,7 @@ export async function shop(piece) {
     const [width, depth] = [w * 20, h * 20];
     const board = Math.min(m(front.name.length > 12 ? 5.4 : 4.4), width - m(3.2));
     const storeys = piece.storeys ?? 1;
+    const door = m(2.3);
     const plan = planHouse({
         w,
         h,
@@ -798,9 +801,9 @@ export async function shop(piece) {
         y: piece.y,
         facing: piece.facing,
         front: depth - m(ENTRY) + m(reveal),
-        entrance: { width: m(1.6), height: m(2.3) },
+        entrance: { width: m(1.6), height: door },
         jettied: false,
-        lofty: m(storeys < 2 ? 4 : SHOP_BOARD.ground),
+        lofty: m(storeys < 2 ? 4 : OVER_DOOR.ground.shop),
     });
     const solid = buildHouse(plan);
     const oak = plan.frame ?? "timber";
@@ -809,17 +812,11 @@ export async function shop(piece) {
     const middle = face.length / 2;
     const texture = nameBoardTexture({ name: front.name, ground: front.ground, dark: front.dark });
 
-    // Its name over the door, as low as it'll go (SHOP_BOARD), as tall as the board's width
-    // has it, room allowing
-    const v0 = m(SHOP_BOARD.foot);
-    const v1 = v0 + Math.min((board * 9) / 56, ground.height - v0 - m(0.15));
+    // Its name over the door, and its sign hung past the board's end, clear of the awnings below
+    const [, v1] = overDoor(solid, ground, door, board, texture, `board ${piece.name}`, oak);
+    const top = v1 + m(OVER_DOOR.over);
 
-    nameBoard(solid, face, [middle - board / 2, middle + board / 2, v0, v1], texture, `board ${piece.name}`, oak);
-
-    // Its sign hung past the board's end, clear of the awnings below
-    const top = v1 + m(SHOP_BOARD.over);
-
-    hangingSign(solid, face, middle + Math.min(board / 2 + m(SHOP_BOARD.aside), m(SHOP_BOARD.reach)), top, emblemSignTexture({ name: front.name, emblem: front.emblem, tint: front.tint }), `sign ${piece.name}`, { width: 0.9, height: 1.08, above: plan.levels.length > 1 ? 0.5 : (ground.height - top) / m(1) - 0.05 });
+    hangingSign(solid, face, middle + Math.min(board / 2 + m(OVER_DOOR.aside), m(OVER_DOOR.reach)), top, emblemSignTexture({ name: front.name, emblem: front.emblem, tint: front.tint }), `sign ${piece.name}`, { width: 0.9, height: 1.08, above: plan.levels.length > 1 ? 0.5 : (ground.height - top) / m(1) - 0.05 });
 
     // A striped awning over each window of the ground floor, clear of the door (a master's shop
     // has banners instead)
