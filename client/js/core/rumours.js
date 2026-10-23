@@ -208,14 +208,15 @@ export function landmarkOf(plan, place, town) {
  * What's said of a place (`place`: rumouredOf's) in a town (`town`: { id, at }): which way it is
  * from the town, what stands by it (landmarkOf's) or else how far it is on foot, a hook, and
  * something wild of it, each picked by the place and the town (so the same said every time).
+ * Shown it from somewhere else (a shrine, core/shrines.js), `from` says what: "the shrine".
  */
-export function rumourWord(plan, place, town) {
+export function rumourWord(plan, place, town, { from = "town" } = {}) {
     const lines = LINES[place.kind];
     const which = hashOf(`${place.id}:${town.id}`);
     const far = hypot(place.at[0] - town.at[0], place.at[1] - town.at[1]);
     const by = landmarkOf(plan, place, town);
     const near = by ? (by.farmer ? `, out by old ${by.farmer}'s farm at ${by.name}` : `, out by ${by.name}`) : far <= RUMOURS.walk ? ", not an hour's walk" : ", an hour or two on foot";
-    const where = `${compass(town.at, place.at)} of town${near}`;
+    const where = `${compass(town.at, place.at)} of ${from}${near}`;
 
     return `${lines.hooks[which % lines.hooks.length].replace("{where}", where)} ${lines.tales[Math.floor(which / 7) % lines.tales.length]}`;
 }
