@@ -760,12 +760,21 @@ export async function barracks(piece) {
     return solid.toObject();
 }
 
+// A shop's name board (shop): over its door, however many storeys it has, its foot this far up
+// from its floor (metres: just clear of the door, above its windows and the awnings over them),
+// where whoever walks up to it, the camera behind them looking at it, sees it before them (as
+// other peoples' shops have theirs); its ground floor at least `ground` tall (metres) on two
+// storeys, with room above the door for a long name's board; and its sign hung past the board's
+// end, `aside` metres on (but no further from the door's middle than `reach`: inside a master's
+// banners, shopfront.js dressShop), its top `over` metres above the board's
+const SHOP_BOARD = Object.freeze({ foot: 2.42, ground: 3.5, aside: 0.45, reach: 2.75, over: 0.4 });
+
 /**
  * A specialist's or a master's shop (shopfront.js SHOPFRONTS: a swordsmith's, an armorer's, an
  * occult scriptorium, an alchemist's; the Master Swordsmith's, the Master Armorer's, the Mystic
- * Emporium): the house it was, made over (timber if it was a cottage), its name along the floor
- * above (or over the door), its sign by the door, a striped awning over the window either side,
- * and what it sells set out before it (dressShop).
+ * Emporium): the house it was, made over (timber if it was a cottage), its name on a board over
+ * the door (SHOP_BOARD), its sign hanging past the board's end, a striped awning over the window
+ * either side, and what it sells set out before it (dressShop).
  */
 export async function shop(piece) {
     await loadSignFont();
@@ -790,35 +799,27 @@ export async function shop(piece) {
         facing: piece.facing,
         front: depth - m(ENTRY) + m(reveal),
         entrance: { width: m(1.6), height: m(2.3) },
-        board,
         jettied: false,
-        lofty: m(storeys < 2 ? 4 : 3.2),
+        lofty: m(storeys < 2 ? 4 : SHOP_BOARD.ground),
     });
     const solid = buildHouse(plan);
     const oak = plan.frame ?? "timber";
     const ground = plan.levels[0];
     const face = frontOf(ground);
     const middle = face.length / 2;
-    const boardHeight = (board * 9) / 56;
     const texture = nameBoardTexture({ name: front.name, ground: front.ground, dark: front.dark });
 
-    // Its name: along the floor above, or over the door
-    if (plan.levels.length > 1) {
-        const level = plan.levels[1];
-        const v0 = Math.min(level.height - boardHeight - m(0.35), m(1.05));
+    // Its name over the door, as low as it'll go (SHOP_BOARD), as tall as the board's width
+    // has it, room allowing
+    const v0 = m(SHOP_BOARD.foot);
+    const v1 = v0 + Math.min((board * 9) / 56, ground.height - v0 - m(0.15));
 
-        nameBoard(solid, frontOf(level), [middle - board / 2, middle + board / 2, v0, v0 + boardHeight], texture, `board ${piece.name}`, oak);
-    } else {
-        const small = Math.min(board, m(4));
-        const v0 = m(2.6);
+    nameBoard(solid, face, [middle - board / 2, middle + board / 2, v0, v1], texture, `board ${piece.name}`, oak);
 
-        nameBoard(solid, face, [middle - small / 2, middle + small / 2, v0, v0 + Math.min((small * 9) / 56, ground.height - v0 - m(0.2))], texture, `board ${piece.name}`, oak);
-    }
+    // Its sign hung past the board's end, clear of the awnings below
+    const top = v1 + m(SHOP_BOARD.over);
 
-    const aside = plan.levels.length > 1 ? m(1.6) : Math.min(board, m(4)) / 2 + m(0.55);
-    const top = Math.min(m(3.2), ground.height - m(0.1));
-
-    hangingSign(solid, face, middle + aside, top, emblemSignTexture({ name: front.name, emblem: front.emblem, tint: front.tint }), `sign ${piece.name}`, { width: 0.9, height: 1.08, above: plan.levels.length > 1 ? 0.5 : (ground.height - top) / m(1) - 0.05 });
+    hangingSign(solid, face, middle + Math.min(board / 2 + m(SHOP_BOARD.aside), m(SHOP_BOARD.reach)), top, emblemSignTexture({ name: front.name, emblem: front.emblem, tint: front.tint }), `sign ${piece.name}`, { width: 0.9, height: 1.08, above: plan.levels.length > 1 ? 0.5 : (ground.height - top) / m(1) - 0.05 });
 
     // A striped awning over each window of the ground floor, clear of the door (a master's shop
     // has banners instead)

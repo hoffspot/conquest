@@ -2997,16 +2997,21 @@ facing south; each is turned about its middle to face the way the layout says:
     dark red board over it, the sign of the town's keys by the door, and a lantern either side.
   - **The shops** (art/kits/shopfront.js; the specialists' and the masters'): the house it was, in
     its street's look (a cottage's made timber, its eaves clear of the name), its door in the
-    middle of its front up a step, its name on a board over it
-    or along the floor above ("Swordsmith", "Armorer", "Occult Scriptorium", "Alchemist", "Master
-    Swordsmith", "Master Armorer", "Mystic Emporium") and its sign by the door: a sword, a great
-    helm, an open book and quill, a flask, crossed blades under a crown, a helm, and a glowing
-    orb (new emblems: emblems.js). A striped awning over each window (a master's has banners in
-    velvet and gold instead), and what it sells set out either side of the door (`dressShop`): a
-    rack of blades and a whetstone; a harness on its stand and a board of shields; a lectern with
-    a book open on it and tomes stacked by a skull; a shelf of bottles and herbs hung to dry; the
-    Emporium's orb glowing on a marble pillar between lanterns of violet and green glass. Each
-    people builds its own (`shop` in each kit), as its barracks: the elves a round hall of marble
+    middle of its front up a step, its name on a board just over it, however many storeys it has
+    ("Swordsmith", "Armorer", "Occult Scriptorium", "Alchemist", "Master Swordsmith", "Master
+    Armorer", "Mystic Emporium"; landmarks.js `SHOP_BOARD`: its foot 2.42 m up from the floor,
+    clear of the door and above the windows and their awnings, its ground floor 3.5 m tall at
+    least on two storeys to have room for it). So whoever walks up to it, the camera behind them,
+    sees it before them: tilted forward (15 degrees down) from 7 m off and further, at the
+    camera's usual 35 degrees from 4 m (along the floor above, as it was, it was never in view
+    walking up to it). Its sign hangs past the board's end, above the awnings (inside a master's
+    banners): a sword, a great helm, an open book and quill, a flask, crossed blades under a
+    crown, a helm, and a glowing orb (new emblems: emblems.js). A striped awning over each window
+    (a master's has banners in velvet and gold instead), and what it sells set out either side of
+    the door (`dressShop`): a rack of blades and a whetstone; a harness on its stand and a board
+    of shields; a lectern with a book open on it and tomes stacked by a skull; a shelf of bottles
+    and herbs hung to dry; the Emporium's orb glowing on a marble pillar between lanterns of
+    violet and green glass. Each people builds its own (`shop` in each kit), as its barracks: the elves a round hall of marble
     under one petal roof, its name on a board standing by the way in; the dark elves a thorn
     house; the cat folk a mud-brick town house; the lizard folk a plastered house on its platform
     under a band of glyphs; the orcs a longhouse, its name hung under its porch and its sign
