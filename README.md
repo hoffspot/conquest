@@ -224,8 +224,8 @@ points; at none, a character falls. You get up again in the market square five s
 with full health; the orc comes back to its corner half a minute after it falls.
 
 **The tavern.** Facing the market square (or, where it can't, a street) stands *Wenches and Ale*,
-its name in gold blackletter on a red board along its front and, hanging from an iron bracket by
-the door, a painted sign of a barmaid raising two foaming tankards. **Tap its door**: a green
+its name in gold blackletter on a red board over its door and, hanging from an iron bracket past
+the board's end, a painted sign of a barmaid raising two foaming tankards. **Tap its door**: a green
 glow traces round it, and you walk up to it and go in, coming out a few steps inside, facing
 into the room, the camera behind you under the ceiling looking across it (and the same off the
 stairs, turned from them; coming out of a building, you face the street). A door or the stairs
