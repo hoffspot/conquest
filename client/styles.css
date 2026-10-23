@@ -5473,6 +5473,20 @@ dialog#worldmap::backdrop {
     gap: 8px;
 }
 
+/* The ping button (in a party): green, as the party's pings are, and ringed while the next tap
+   pings */
+#worldmapping svg {
+    stroke: #8fe0a0;
+}
+
+#worldmapping svg circle {
+    fill: #8fe0a0;
+}
+
+#worldmapping[aria-pressed="true"] {
+    box-shadow: 0 0 0 2px #58d26e, 0 0 12px rgba(88, 210, 110, 0.7);
+}
+
 /* The key, in the bottom left: folded away to its "Key" button at first, opened above it with a
    tap (main.js toggleLegend), and folded away again with another; no taller than the screen has
    room for, scrolled if it's more */

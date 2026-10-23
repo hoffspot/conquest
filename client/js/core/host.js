@@ -42,7 +42,7 @@ import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from ".
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
 import { rollSpoils } from "./spoils.js";
-import { campTier, CHUNK, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
+import { campTier, CHUNK, CHUNKS, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
 import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf } from "./war/muster.js";
 import { brokenOf, SIDES, STOCKADE, walkwayOf } from "./war/stockade.js";
@@ -1734,7 +1734,7 @@ export class Host {
     /**
      * Advance the world by `ms` (the battle's whole steps: battle.js advance; the war's turns).
      * Returns what happened: the battle's events, and the host's own ("join", "leave", "open",
-     * "close", "explored", "talk", "effect", "roused" (the wild's creatures put out), "trade"; "war", with each of the war's events, and "turn",
+     * "close", "explored" (`by` another of their party: #share), "talk", "effect", "roused" (the wild's creatures put out), "trade"; "war", with each of the war's events, and "turn",
      * once each of its turns is over; "away", a player marked away or back, and "afk", one to be
      * sent out of the world for it: AFK; "treasure", a treasure map read, its keepers woken, it dug
      * up or given up: #treasures).
@@ -2044,6 +2044,13 @@ export class Host {
                     this.#event("explored", { id: event.id, building: building.key });
                 }
 
+                // (And on their party's: found by them too, for good)
+                for (const id of building ? this.fellows(event.id) : []) {
+                    if (this.players.get(id)?.explored.enter(building.key)) {
+                        this.#event("explored", { id, building: building.key, by: event.id });
+                    }
+                }
+
                 // (A branch of the guild: its portal open to them from any other, from now on)
                 const branch = branchOf(building, this.world.start);
 
@@ -2053,12 +2060,21 @@ export class Host {
             }
         }
 
-        // Out in the world, the chunk each player's in is visited: the fog lifts off it
+        // Out in the world, the chunk each player's in is visited: the fog lifts off it, for their
+        // party too (#share)
         for (const player of this.players.values()) {
             const actor = this.battle.actor(player.id);
 
-            if (actor?.map === "town" && player.explored.visit(actor.x, actor.y)) {
+            if (actor?.map !== "town") {
+                continue;
+            }
+
+            if (player.explored.visit(actor.x, actor.y)) {
                 this.#event("explored", { id: player.id });
+            }
+
+            for (const id of this.fellows(player.id)) {
+                this.#share(player, this.players.get(id), actor.x, actor.y);
             }
         }
 
@@ -2127,6 +2143,51 @@ export class Host {
             this.#scoutsSee();
             this.#event("turn", { turn: this.war.turn });
         }
+    }
+
+    // Where a player is out in the world (x, y metres) found by another of their party (`fellow`)
+    // too, for good: the chunk visited, and the places worth finding round it (#findable: as the
+    // maps have them, Explored sighted) that they hadn't found kept as found by the player first,
+    // to be told
+    #share(player, fellow, x, y) {
+        const explored = fellow?.explored;
+        const [cx, cy] = [Math.floor(x / CHUNK), Math.floor(y / CHUNK)];
+
+        if (!explored || explored.isVisited(cx, cy)) {
+            return;
+        }
+
+        const near = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].flatMap((dx) => (cx + dx < 0 || cx + dx >= CHUNKS ? [] : (this.#findable().get((cy + dy) * CHUNKS + cx + dx) ?? []))));
+        const unfound = near.filter(({ at }) => !explored.sighted(...at));
+
+        explored.visit(x, y);
+
+        const found = unfound.filter(({ at }) => explored.sighted(...at)).map(({ id }) => id);
+
+        for (const id of found) {
+            explored.foundBy(id, player.hero.name);
+        }
+
+        this.#event("explored", { id: fellow.id, by: player.id, ...(found.length ? { name: player.hero.name, places: found } : {}) });
+    }
+
+    // The places worth finding in the world (places.js placesOf: its sites and wild camps; and its
+    // dungeons' ways in), by the chunk each is in (cy * CHUNKS + cx): [{ id, at }], worked out once
+    #findable() {
+        if (!this.findable) {
+            const plan = this.world.plan;
+            const all = plan ? [...placesOf(plan), ...plan.sites.filter(({ kind }) => kind === "dungeon")] : [];
+
+            this.findable = new Map();
+
+            for (const { id, at } of all) {
+                const k = Math.floor(at[1] / CHUNK) * CHUNKS + Math.floor(at[0] / CHUNK);
+
+                this.findable.set(k, [...(this.findable.get(k) ?? []), { id, at }]);
+            }
+        }
+
+        return this.findable;
     }
 
     // What the camps' scouts of each player's people and their friends see (war.js sight: as far
@@ -8719,8 +8780,9 @@ export class Host {
     // What a player does about parties (a "party" command, `do`): ask another to theirs (`who`:
     // a player not in one, nor asked already; theirs not full), say yes to being asked (joining
     // the asker's, or making one with them), say no (the asker told), leave theirs; or, its
-    // leader, put someone out of it or make them its leader
-    #partyCommand(player, { do: what, who = null }) {
+    // leader, put someone out of it or make them its leader; or show the rest of it somewhere on
+    // the map (`at`: [x, y] metres, the world's: a ping, gone after a while, nothing kept of it)
+    #partyCommand(player, { do: what, who = null, at = null }) {
         const party = this.partyFor(player.id);
 
         switch (what) {
@@ -8803,6 +8865,18 @@ export class Host {
                 }
 
                 this.#quit(player.id, "left");
+
+                return OK;
+            case "ping":
+                if (!party) {
+                    return refuse("unpartied");
+                }
+
+                if (!Array.isArray(at) || at.length !== 2 || !at.every((v) => Number.isFinite(v) && v >= 0 && v <= WORLD_SIZE)) {
+                    return refuse("command");
+                }
+
+                this.#tellParty(party, { change: "ping", who: player.id, name: player.hero.name, at: [at[0], at[1]] });
 
                 return OK;
             case "remove":

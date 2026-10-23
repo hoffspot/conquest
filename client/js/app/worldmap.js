@@ -10,6 +10,8 @@
 // the buttons to zoom or come back to where they are. Hold a finger (or the mouse) down somewhere
 // to drop a pin there (or on the pin, to take it away), shown with the way there from where they
 // are (the terrain plan's M7g) and how far that is beside it; tap twice somewhere to run there.
+// In a party, the places another of it found for them are said to be theirs to find (from near
+// in), and its pings are shown as they come, rings swelling out from each (app/mapicons.js PING).
 //
 // Opened from a guild's portal (core/portals.js), it's the travel map: the same land and fog, but
 // of the buildings only the guild's branches open to the player, each however far out it's
@@ -22,7 +24,7 @@
 
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
-import { drawBuildingIcon, drawSearch, drawWarMark, FORT_ICONS } from "./mapicons.js";
+import { drawBuildingIcon, drawPing, drawSearch, drawWarMark, FORT_ICONS } from "./mapicons.js";
 import { FORD_MARK, grassOf, paintPatch, WATER_COLOURS } from "./minimap.js";
 
 // The land's picture: pixels to a cell of the plan (32 metres)
@@ -53,10 +55,13 @@ const DETAIL_KEEP = 240;
 const DETAIL_RESTING = 48;
 
 // The settlements' names from this near (metres to a pixel, at most), and the icons over the
-// buildings gone into from this near, this big (pixels)
+// buildings gone into from this near, this big (pixels); and who found a place for the player
+// (another of their party) said under its icon from this near, in this colour
 const NAMES_FROM = 20;
 const ICONS_FROM = 6;
 const ICON_SIZE = 24;
+const FINDERS_FROM = 3;
+const FINDER_COLOUR = "#bfeec8";
 
 // The travel map's branches: how big their icons (pixels), and how near one a tap chooses it
 // (pixels, from its middle)
@@ -273,6 +278,12 @@ export class WorldMap {
 
         /** Heard with the point tapped twice ([x, z], metres): to run there. */
         this.onDoubleTap = null;
+
+        /**
+         * Asked for the party's pings to show, as they are now ([{ x, z (metres), age (seconds),
+         * name, own }]: app/game.js pingView), or null (none shown).
+         */
+        this.pingsOf = null;
 
         // The pin ({ x, z } metres, or null) and the way to it ([[x, z], ...] metres, or null);
         // the hold under way (its timer), and the last tap (for a double tap)
@@ -612,6 +623,7 @@ export class WorldMap {
 
         // The buildings the player's gone into
         const icons = [];
+        const finders = [];
 
         if (view.scale <= ICONS_FROM) {
             for (const icon of this.icons) {
@@ -620,6 +632,20 @@ export class WorldMap {
                 if (x > -ICON_SIZE && y > -ICON_SIZE && x < width + ICON_SIZE && y < height + ICON_SIZE) {
                     drawBuildingIcon(context, icon.kind, x, y, ICON_SIZE, icon.rim);
                     icons.push(icon.kind);
+
+                    // (Found for them by another of their party: who, under it)
+                    if (icon.finder && view.scale <= FINDERS_FROM) {
+                        context.font = `italic 600 11px Georgia, "Times New Roman", serif`;
+                        context.textAlign = "center";
+                        context.textBaseline = "top";
+                        context.lineJoin = "round";
+                        context.lineWidth = 3;
+                        context.strokeStyle = "rgba(20, 14, 8, 0.85)";
+                        context.strokeText(`found by ${icon.finder}`, x, y + ICON_SIZE * 0.6);
+                        context.fillStyle = FINDER_COLOUR;
+                        context.fillText(`found by ${icon.finder}`, x, y + ICON_SIZE * 0.6);
+                        finders.push(icon.finder);
+                    }
                 }
             }
         }
@@ -764,6 +790,32 @@ export class WorldMap {
             this.#drawPin(at);
         }
 
+        // The party's pings, fog or no, each with who made it: kept moving while there are any
+        const pings = this.pingsOf?.() ?? [];
+
+        for (const ping of pings) {
+            const [x, y] = at(ping.x, ping.z);
+
+            if (x < -40 || y < -40 || x > width + 40 || y > height + 40) {
+                continue;
+            }
+
+            drawPing(context, x, y, { size: 26, age: ping.age });
+            context.font = `600 12px Georgia, "Times New Roman", serif`;
+            context.textAlign = "center";
+            context.textBaseline = "top";
+            context.lineJoin = "round";
+            context.lineWidth = 3;
+            context.strokeStyle = "rgba(20, 14, 8, 0.85)";
+            context.strokeText(ping.name, x, y + 10);
+            context.fillStyle = FINDER_COLOUR;
+            context.fillText(ping.name, x, y + 10);
+        }
+
+        if (pings.length) {
+            this.redraw();
+        }
+
         // Where the player is, the way they face
         if (this.player) {
             const [x, y] = at(this.player.x, this.player.z);
@@ -785,7 +837,7 @@ export class WorldMap {
             context.restore();
         }
 
-        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, marks: (this.marks ?? []).length, heard: (this.heard ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
+        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, finders, pings: pings.length, marks: (this.marks ?? []).length, heard: (this.heard ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
     }
 
     // The war table's map: a shade over all but what its people see now (draw's)

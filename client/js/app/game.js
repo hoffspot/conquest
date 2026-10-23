@@ -51,7 +51,7 @@ import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
 import { useSound, wearSound } from "../audio/handling.js";
 import { CREATURE_VOICES, creatureSounds, ITEM_SOUNDS, spellSounds } from "../audio/sound.js";
-import { FORT_ICONS, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
+import { FORT_ICONS, PING, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
 import { buildingView } from "./building.js";
 import { battleMapView, heededText } from "./battlemap.js";
 import { PALISADE } from "../core/war/armies.js";
@@ -119,7 +119,7 @@ import { EMBER_SCALE } from "../world/fire.js";
 import { GLOW_SCALE } from "../world/lights.js";
 import { CarriedTorches } from "../world/carried.js";
 import { LightGlobes } from "../world/globes.js";
-import { PinMarks, WAY_LINE } from "../world/pin3d.js";
+import { PingBeacons, PinMarks, WAY_LINE } from "../world/pin3d.js";
 import { TreasureGlints } from "../world/treasure3d.js";
 import { SMOKE_SHARE } from "../world/smoke.js";
 import { FarLand } from "../world/far/far.js";
@@ -825,6 +825,8 @@ export class Game {
      *     loadExplored: core/explored.js Explored's toJSON).
      * @param {Function} [options.onExplore] - Hears it whenever they find more (to keep it).
      * @param {Function} [options.onWorldMap] - Asked to open the world map (the minimap held).
+     * @param {Function} [options.onPing] - Hears whenever a ping comes from the player's party
+     *     (pingView: for the world map to show it, if it's open).
      * @param {Host} [options.host] - The world's host (core/host.js): made here if not given
      *     (playing alone), with the player joining it.
      * @param {string} [options.me] - The player's id in it.
@@ -857,7 +859,7 @@ export class Game {
      *     (save.js loadTold: `#once`).
      * @param {Function} [options.onTold] - Hears them whenever there's another (to keep them).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, onPing = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -1255,7 +1257,16 @@ export class Game {
          */
         this.onExplore = onExplore;
         this.onWorldMap = onWorldMap;
+        this.onPing = onPing;
         this.landmarks = { version: -1, icons: [] };
+
+        /**
+         * The party's pings ([{ id, who, name, x, z (metres), at (the clock's seconds) }]: the
+         * newest PING.most, each for PING.lasts: #pinged), and when the player last made one.
+         */
+        this.pings = [];
+        this.pingCount = 0;
+        this.pingedAt = -Infinity;
         /** The adventurers' caches the player's seen (their ids: core/caches.js), marked on the maps. */
         this.cachesSeen = new Set();
         this.talking = null;
@@ -1620,6 +1631,7 @@ export class Game {
         this.carried = new CarriedTorches(view.scene);
         this.globes = new LightGlobes(view.scene);
         this.pinMarks = new PinMarks(view.scene, view.far.scene);
+        this.pingBeacons = new PingBeacons(view.scene, view.far.scene);
         this.glints = new TreasureGlints(view.scene);
 
         // (A pin kept from before: the world's ground for finding the way to it worked out now,
@@ -2424,6 +2436,7 @@ export class Game {
         this.carried?.dispose();
         this.globes?.dispose();
         this.pinMarks?.dispose();
+        this.pingBeacons?.dispose();
         this.glints?.dispose();
         this.flyers?.dispose();
 
@@ -3254,6 +3267,9 @@ export class Game {
 
         // (Where a treasure the player's hunting is buried, once they're near: it glints)
         this.#glinting();
+
+        // (The party's pings, in the world: #pinging)
+        this.#pinging();
 
         if (this.chunks && this.mapId === "town") {
             const { x, z } = this.avatars.get(this.me).object.position;
@@ -4629,6 +4645,8 @@ export class Game {
             icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons(), ...this.dungeonIcons(), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
             // (The circles to search for the treasures they're hunting: #treasureCircles)
             searches: this.mapId === "town" ? this.treasureCircles() : [],
+            // (The party's pings: pingView)
+            pings: this.mapId === "town" ? this.pingView() : [],
         });
     }
 
@@ -4943,8 +4961,10 @@ export class Game {
         const outside = this.#outside(actor);
         const facing = this.avatars.get(this.me)?.facing ?? actor.facing;
         const seen = ({ x, z }) => this.explored.sighted(x, z);
+        // (Who found it for them, if another of their party did: core/explored.js finderOf)
+        const finder = (icon) => (this.explored.finderOf(icon.id) ? { ...icon, finder: this.explored.finderOf(icon.id) } : icon);
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen), ...this.dungeonIcons().filter(seen), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen).map(finder), ...this.dungeonIcons().filter(seen).map(finder), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
     }
 
     /**
@@ -4954,6 +4974,68 @@ export class Game {
      */
     treasureCircles() {
         return (this.host?.treasuresOf?.(this.me) ?? []).map(({ id, centre: [x, z], radius, grade, owner }) => ({ id, x, z, radius, grade, own: owner === this.me }));
+    }
+
+    /**
+     * The party's pings as they are now (#pinged), for the maps: [{ id, x, z (metres), age
+     * (seconds), name (who made it), own (the player's) }].
+     */
+    pingView() {
+        return this.pings.filter(({ at }) => this.clock - at < PING.lasts).map(({ id, who, name, x, z, at }) => ({ id, x, z, age: this.clock - at, name, own: who === this.me }));
+    }
+
+    /**
+     * Show the player's party somewhere on the map ([x, z] metres, the world's): a ping (core/
+     * host.js, a "party" command's "ping"), one each PING.every at most. { ok, reason
+     * ("unpartied", or "soon") }; refused by the host, what's refused said.
+     */
+    ping([x, z]) {
+        if (!this.host.partyFor(this.me)) {
+            return { ok: false, reason: "unpartied" };
+        }
+
+        if (this.clock - this.pingedAt < PING.every) {
+            return { ok: false, reason: "soon" };
+        }
+
+        this.pingedAt = this.clock;
+        this.#command({ type: "party", do: "ping", at: [x, z] }, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                this.sound?.play("denied");
+            }
+        });
+
+        return { ok: true };
+    }
+
+    // A ping from the player's party (their own too: core/host.js), shown on both maps and in the
+    // world for PING.lasts, the newest PING.most; heard, and another's said (which way it is from
+    // the player); and the world map told, to show it
+    #pinged({ who, name, at: [x, z] }) {
+        const where = bearing(this.#whereAmI(), [x, z]);
+
+        this.pings = [...this.pings.filter(({ at }) => this.clock - at < PING.lasts), { id: ++this.pingCount, who, name, x, z, at: this.clock }].slice(-PING.most);
+        this.sound?.play("pinSet");
+
+        if (who !== this.me) {
+            this.hud.message(`${name} pings the map${where === "here" ? ", right here" : where ? `, ${where}` : ""}.`, 3);
+        }
+
+        this.onPing();
+    }
+
+    // The party's pings out in the world, each a column of their green light where it was made,
+    // fading as it gets older (world/pin3d.js PingBeacons)
+    #pinging() {
+        const ground = this.mapId === "town" ? this.groundOf("town") : null;
+        const live = ground ? this.pingView() : [];
+
+        if (live.length || this.pingBeacons.shown.size) {
+            this.pingBeacons.set(live.map(({ id, x, z, age }) => ({ id, x, y: ground(x, z), z, fade: 1 - age / PING.lasts })));
+        }
+
+        this.pingBeacons.update(this.clock, this.view.far.camera.far);
     }
 
     // Where a treasure the player's hunting is buried (where its keepers were put out about, or
@@ -5224,6 +5306,16 @@ export class Game {
     // The player's found more of the world: keep it
     #explored() {
         this.onExplore(this.explored);
+    }
+
+    // Places another of the player's party found for them (core/host.js #share: `places`, plan
+    // place ids, found by `name`), said: the one by its name, or what it is; or how many
+    #sharedFinds({ name, places }) {
+        const plan = this.world.plan;
+        const one = places.length === 1 ? (placesOf(plan).find(({ id }) => id === places[0]) ?? plan.sites.find(({ id }) => id === places[0])) : null;
+        const what = one?.name ?? (one ? `${/^[aeiou]/.test(one.kind) ? "an" : "a"} ${one.kind}` : null);
+
+        this.hud.message(what ? `${name} found ${what}: it's on your map.` : `${name} found ${places.length} places: they're on your map.`, 3.5);
     }
 
     // Who the player was told to fight (and is still alive), or null
@@ -7618,6 +7710,12 @@ export class Game {
 
     #partyEvent(event) {
         if (event.id !== this.me) {
+            return;
+        }
+
+        if (event.change === "ping") {
+            this.#pinged({ who: event.who, name: event.name, at: event.at });
+
             return;
         }
 
@@ -10121,12 +10219,16 @@ export class Game {
                 break;
             case "explored":
                 // (Marked on the maps, and kept; a branch of the guild's portal open to them now,
-                // said)
+                // said; and the places another of their party found for them, said: #sharedFinds)
                 if (event.id === this.me) {
                     this.#explored();
 
                     if (event.portal) {
                         this.hud.message("This branch of the guild is open to you now: step through to it from any other branch's portal.", 4);
+                    }
+
+                    if (event.places?.length) {
+                        this.#sharedFinds(event);
                     }
                 }
 

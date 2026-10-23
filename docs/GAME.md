@@ -3708,7 +3708,9 @@ draws it scaled to fit, then which way the camera looks (a wedge from the player
 over the ground, or the way they face when it looks straight down: always the same size, 30% of
 the minimap across and 63 degrees wide, however the camera's tilted or zoomed, fading out over
 its far two-thirds: `LOOK`), where the player is going, the enemies (red dots, the target ringed), an icon over each building the
-player has gone into and each place worth finding round them (below), and the player (an arrowhead pointing the way they face). A tap on it walks
+player has gone into and each place worth finding round them (below), the party's pings out in
+the world (docs/WAR.md *Parties*: a green dot with rings swelling out from it; further than it
+shows, smaller, at its edge the way it is, as the wild's elites are), and the player (an arrowhead pointing the way they face). A tap on it walks
 the player there, or fights an enemy within 12 pixels of the tap; a double tap runs; holding it
 (0.55 s, without moving) opens the world map. Inside, each floor is painted from its plan: the
 floor, walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and
@@ -4059,8 +4061,16 @@ same button holds the war's key.
   player moves (at most every 0.3 s, once they've moved a metre), every 1.5 s while it falls
   short (as the tiles round the player come in), and across the world again once they're 40 m
   off it.
+- **In a party** (docs/WAR.md *Parties*): the places another of the party found for the player
+  first say who under their icons, 3 metres to a pixel or closer ("found by Bryn", in the party's
+  pale green). The party's pings are drawn as they come, fog or no, each a green dot with two rings
+  swelling out from it over and over (app/mapicons.js `drawPing`), who made it under it, kept
+  moving while there are any. Its ping button (rings round a dot, over the pin's: only in a
+  party) makes the next tap a ping (`pingMode`, the bar at the top saying so, ringed green till
+  then; Cancel or the button again calls it off), said: "Pinged: your party sees it on their
+  maps, and a column of green light there".
 - **Tapped twice** (two taps within 350 ms and 18 pixels; not while picking somewhere for
-  Wizard's Walk): the place is the player's destination, run to as a double tap in the world would
+  Wizard's Walk, nor pinging): the place is the player's destination, run to as a double tap in the world would
   (app/journey.js `Journey`): the map closes and they run (walking on once out of breath) a leg at
   a time, each an order to a point on the way 72 m ahead, over the navigation mesh, the next sent
   as they near its end. If they stop getting nearer for 5 s or stray 48 m off it, the way's found

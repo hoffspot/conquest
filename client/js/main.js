@@ -1034,6 +1034,7 @@ async function playing(save, { world, place, war }) {
             keepPlace();
         },
         onWorldMap: openWorldMap,
+        onPing: pingShown,
         pin: loadPin(place),
         onPin: (pin) => savePin(place, pin),
         place: loadPlace(place),
@@ -1383,6 +1384,10 @@ async function openWorldMap({ pick = null, travel = null, build = null, war = nu
     state.picking = pick;
     state.travel = travel;
     state.plans = build;
+    state.pingMode = false;
+    $("#worldmapping").hidden = true;
+    $("#worldmapping").setAttribute("aria-pressed", "false");
+    map.pingsOf = null;
     $("#worldmappick").hidden = !pick && !travel && !build && !war;
     $("#worldmappicktext").textContent = "Wizard's Walk: tap somewhere you've been";
     $("#worldmaptitle").textContent = travel ? "Guild portal" : build ? "The council's plans" : war ? "The war table" : "The world";
@@ -1526,7 +1531,47 @@ async function openWorldMap({ pick = null, travel = null, build = null, war = nu
     };
     $("#worldmapunpin").hidden = !game.pin;
     $("#worldmapnote").hidden = true;
+
+    // (In a party: its pings shown as they come, and the button to make one)
+    $("#worldmapping").hidden = !game.host.partyFor(game.me);
+    map.pingsOf = () => game.pingView();
     map.open(game.worldMapView());
+}
+
+// The world map's ping button tapped (`on`: pinging, or called off): the next tap on the map shows
+// the party where (app/game.js ping), what's said of it told; Cancel, or the button again, calls
+// it off, and the map's taps are as they were (Wizard's Walk's pick kept)
+function pingMode(on = !state.pingMode) {
+    const map = state.worldMap;
+
+    state.pingMode = on;
+    $("#worldmapping").setAttribute("aria-pressed", String(on));
+    $("#worldmappick").hidden = !on && !state.picking;
+    $("#worldmappicktext").textContent = on ? "Ping: tap where to show your party" : "Wizard's Walk: tap somewhere you've been";
+
+    if (!map || !$("#worldmap").open) {
+        return;
+    }
+
+    if (on) {
+        state.unpinged = map.onPick;
+        map.onPick = (point) => {
+            const result = state.game?.ping(point);
+
+            pingMode(false);
+            mapNote(result?.ok ? "Pinged: your party sees it on their maps, and a column of green light there" : result?.reason === "soon" ? "Wait a moment to ping again" : "You're not in a party");
+        };
+    } else {
+        map.onPick = state.unpinged ?? null;
+        state.unpinged = null;
+    }
+}
+
+// A ping from the party come while the world map's open on the world: drawn
+function pingShown() {
+    if ($("#worldmap").open && state.worldMap?.pingsOf) {
+        state.worldMap.redraw();
+    }
 }
 
 // The world map's pin taken away
@@ -1656,8 +1701,12 @@ function closeWorldMap() {
     state.warLive = 0;
     state.warTable = null;
 
+    state.pingMode = false;
+    state.unpinged = null;
+
     if (state.worldMap) {
         state.worldMap.onPick = null;
+        state.worldMap.pingsOf = null;
         state.worldMap.travel = null;
         state.worldMap.build = null;
         state.worldMap.war = null;
@@ -1797,7 +1846,8 @@ async function warKey(colour) {
 
 $("#worldmapclose").addEventListener("click", closeWorldMap);
 $("#worldmaplegendtoggle").addEventListener("click", toggleLegend);
-$("#worldmapcancel").addEventListener("click", closeWorldMap);
+$("#worldmapcancel").addEventListener("click", () => (state.pingMode ? pingMode(false) : closeWorldMap()));
+$("#worldmapping").addEventListener("click", () => pingMode());
 $("#worldmapin").addEventListener("click", () => state.worldMap?.zoom(0.6));
 $("#worldmapout").addEventListener("click", () => state.worldMap?.zoom(1 / 0.6));
 $("#worldmaphere").addEventListener("click", () => state.worldMap?.centre());
@@ -2228,6 +2278,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
         wheels: save ? loadWheels(save) : null,
         onWheels: save ? (wheels) => saveWheels(save, wheels) : () => {},
         onWorldMap: openWorldMap,
+        onPing: pingShown,
         told: save ? loadTold(save) : [],
         onTold: save ? (told) => saveTold(save, told) : () => {},
     });
