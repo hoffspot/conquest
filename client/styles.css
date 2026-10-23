@@ -4569,9 +4569,112 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     color: var(--gold);
 }
 
-/* The journal's button between it and the last messages told, in its header */
-.journal-toggle {
+/* The journal's tabs, under its header: the journal, the bestiary, the last messages told */
+.journal-tabs {
+    display: flex;
+    gap: 6px;
+    padding: 8px 16px 2px;
+}
+
+.journal-tab {
+    flex: 1;
     min-height: 32px;
+}
+
+.journal-tab[aria-pressed="true"] {
+    background: rgba(220, 180, 106, 0.38);
+    border-color: var(--gold);
+    color: var(--gold-bright);
+}
+
+/* The bestiary (app/bestiary.js): each kind met, its level beside it as pips, each opening its
+   page; a kind mastered edged in gold */
+.bestiary-about {
+    margin-top: 8px;
+}
+
+.bestiary-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    padding: 4px 12px;
+    font: inherit;
+    font-size: 15px;
+    text-align: left;
+    color: var(--ink);
+    background: var(--field);
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+.bestiary-row:hover {
+    background: rgba(220, 180, 106, 0.14);
+}
+
+.bestiary-row.mastered {
+    border-color: var(--gold);
+}
+
+.bestiary-name {
+    flex: 1;
+}
+
+.bestiary-title {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.bestiary-pips {
+    display: flex;
+    gap: 3px;
+}
+
+.bestiary-pip {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1px solid rgba(220, 180, 106, 0.6);
+}
+
+.bestiary-pip.on {
+    background: var(--gold);
+}
+
+/* A kind's page: the way back, its name and level, how far to the next; each part of it as far as
+   it's been found out, what's still to find faded */
+.bestiary-back {
+    margin: 10px 0 8px;
+}
+
+.bestiary-page-name {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--gold-bright);
+}
+
+.bestiary-section {
+    display: grid;
+    gap: 6px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: var(--field);
+    border: 1px solid var(--field-border);
+}
+
+.bestiary-line {
+    margin: 0;
+    font-size: 14px;
+    color: var(--ink);
+}
+
+.bestiary-section.shut .bestiary-line {
+    font-style: italic;
+    color: var(--muted);
 }
 
 /* The last messages told across the screen (the HUD's banner), the newest first */

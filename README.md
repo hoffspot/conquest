@@ -718,7 +718,9 @@ client/                 The game (static files served to the browser)
                         shop's wares (tapped, a row opens to say what it is). gearinfo.js says
                         what gear does, and what's rolled on a shop's as it's bought
     journal.js          The journal: the player's rank, their requests, their people, their
-                        company; and the last ten messages told across the screen
+                        company; the bestiary (bestiary.js: a page for each creature met, as
+                        far as it's been found out); and the last ten messages told across
+                        the screen
     spellbook.js        The spellbook: the schools, how far they've grown, every spell known
                         and still to come; spellicons.js draws each spell's icon
     fate.js             The war's great turns for the player's people: victory, brought under
@@ -767,6 +769,8 @@ client/                 The game (static files served to the browser)
                         damage, dying and coming back; the orc's patrol
     weapons.js          The weapons and their attacks (and the wild's creatures' own)
     creatures.js        The wild's creatures: what each is, where and how strong (docs/WILDS.md)
+    bestiary.js         What a player's found out about each kind of creature, by seeing,
+                        tracking and slaying it; its words in lore/bestiary.js (docs/GAME.md)
     caches.js           The adventurers' caches out in the wilds: where, who keeps them, what's in them
     dungeons/           The dungeons (see docs/DUNGEONS.md): build.js cooks a dungeon up from a
                         seed and a theme; themes.js the themes; layouts.js how each is dug;

@@ -442,7 +442,8 @@ describe("treasure hunted (host.js #treasures)", () => {
         assert.deepEqual(copy.snapshot().treasures, host.snapshot().treasures);
         assert.equal(copy.checksum(), host.checksum());
 
-        assert.equal(SNAPSHOT_VERSION, 32);
+        // (Kept in snapshots from version 32 on)
+        assert.ok(SNAPSHOT_VERSION >= 32);
 
         const forward = SNAPSHOT_STEPS[31]({ version: 31, players: [] });
 

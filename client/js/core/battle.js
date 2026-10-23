@@ -67,6 +67,7 @@
 // interface to show. Pure JavaScript with seeded random numbers, no DOM.
 
 import { AFFLICTIONS, shareOf } from "./afflictions.js";
+import { RESEARCH } from "./bestiary.js";
 import { placeAt, placesOf } from "./formation.js";
 import { bonusOf, chainAfter, isWhole, lapsed, mighty, PRISMATIC, sigilSpell } from "./prismatic.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
@@ -5092,7 +5093,10 @@ export class Battle {
         const school = spell ? (SPELLS[spell]?.school ?? "magic") : null;
         const element = spell ? null : elementOf(attack);
         const warded = this.#warded(target, { school, element });
-        const factor = (!magic && this.buffOf(attacker, "surge") ? SPELLS.surge.might : 1) * (!magic && this.buffOf(target, "inertialBarrier") ? SPELLS.inertialBarrier.physical : 1) * (warded ? WARD : 1) * (this.buffOf(target, "surge") ? SPELLS.surge.exposed : 1) * charmed(target, school, element);
+        // (A kind of creature Mastered in a player's bestiary, `mastered`: struck the harder, they
+        // know where to: core/bestiary.js RESEARCH `edge`)
+        const known = target.wild && attacker?.mastered?.includes(target.wild.creature) ? RESEARCH.edge : 1;
+        const factor = (!magic && this.buffOf(attacker, "surge") ? SPELLS.surge.might : 1) * (!magic && this.buffOf(target, "inertialBarrier") ? SPELLS.inertialBarrier.physical : 1) * (warded ? WARD : 1) * (this.buffOf(target, "surge") ? SPELLS.surge.exposed : 1) * charmed(target, school, element) * known;
         // (What can't be warded, charmed or shielded against: Prismatic Destruction's, `sure`)
         const whole = sure || factor === 1 ? base : Math.max(1, Math.round(base * factor));
 
