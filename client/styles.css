@@ -4649,6 +4649,34 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     margin: 10px 0 8px;
 }
 
+.bestiary-head {
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    gap: 12px;
+}
+
+.bestiary-head-about {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+/* Its portrait (app/game.js portraitOf), framed; dark till it's drawn */
+.bestiary-portrait {
+    width: 112px;
+    height: 112px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #221c16;
+    border: 1px solid rgba(220, 180, 106, 0.5);
+}
+
+.bestiary-portrait-picture {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
 .bestiary-page-name {
     margin: 0;
     font-family: var(--font-display);

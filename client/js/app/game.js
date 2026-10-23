@@ -27,7 +27,7 @@ import { Character } from "../characters/character.js";
 import { folkLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
-import { BeastAvatar, dressingCreature, sizeOf } from "../beasts/beast.js";
+import { BeastAvatar, dressCreature, dressingCreature, sizeOf } from "../beasts/beast.js";
 import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsInside, modelsMet, modelsNear, readyModels, wantModel } from "../beasts/model.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
@@ -324,6 +324,14 @@ const ATTACKERS = Object.freeze({ most: 6 });
 // drawn before their likeness is (s: game.js #likeness)
 const PARTY_MENU_EVERY = 0.25;
 const LIKENESS_AFTER = 0.5;
+
+// A kind of creature's portrait in the bestiary (portraitOf): how big (pixels square), how much
+// brighter than the screen it's toned, how much of the picture it fills (view.js portrait `fit`),
+// how long after it's built it's drawn (ms: drawn at once, it comes out blank, as a likeness does)
+// and how many times it's tried, how long its model's waited for (ms: else its stand-in's drawn),
+// and how high above the camera it stands (metres: out of everything's shadow and every fire's
+// light)
+const PORTRAIT = Object.freeze({ size: 224, bright: 1.15, fit: 0.86, after: 600, tries: 3, patience: 8000, up: 600 });
 
 // Whether a likeness came back with nothing on it, all one colour: drawn before its subject was
 function blank({ data }) {
@@ -881,6 +889,10 @@ export class Game {
         // the wheel held open on one
         this.partyLikenesses = new Map();
         this.likenessSince = new Map();
+
+        // Each kind of creature's portrait in the bestiary, by its id: a picture's URL (or null,
+        // if it couldn't be drawn), when it's drawn (portraitOf)
+        this.portraits = new Map();
         this.allyTarget = null;
         this.lastMemberTap = null;
         this.memberWheel = null;
@@ -7846,6 +7858,85 @@ export class Game {
         }
     }
 
+    /**
+     * A kind of creature's portrait for its page in the bestiary (app/journal.js): one of its kind
+     * as the game draws it (beasts/beast.js dressCreature: from its model, once that's read; its
+     * stand-in if it can't be in time), holding what it fights with, whole, alone, lit as on a
+     * fair day (view.js portrait). Drawn once, and kept for the rest of the game. Resolves with a
+     * picture's URL, or null if it couldn't be drawn (and it's tried again next time it's asked).
+     */
+    portraitOf(kind) {
+        if (!this.portraits.has(kind)) {
+            this.portraits.set(
+                kind,
+                this.#portray(kind)
+                    .catch(() => null)
+                    .then((url) => {
+                        if (!url) {
+                            this.portraits.delete(kind);
+                        }
+
+                        return url;
+                    }),
+            );
+        }
+
+        return this.portraits.get(kind);
+    }
+
+    async #portray(kind) {
+        const spec = CREATURES[kind];
+
+        if (!spec || !this.kit) {
+            return null;
+        }
+
+        // (Its model read first, if it's drawn from one: waited for a while)
+        if (MODELS[kind] && !modelOf(kind)) {
+            await Promise.race([wantModel(kind, "soon"), new Promise((resolve) => setTimeout(resolve, PORTRAIT.patience))]);
+        }
+
+        const weapon = WEAPONS[spec.weapon];
+        const avatar = dressCreature(this.kit, kind, { seed: 1, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(spec.weapon) : null });
+        const { x, z } = this.view.camera.position;
+        const y = this.view.camera.position.y + PORTRAIT.up;
+
+        // (High above the camera, seen by nothing but the portrait's: on no layer of its own;
+        // standing as it does at rest, a moment in)
+        avatar.place(x, z, 0);
+
+        for (let k = 0; k < 6; k++) {
+            avatar.object.position.y = y;
+            avatar.update(0.1, x, z, 0);
+        }
+
+        avatar.object.position.y = y;
+        avatar.object.traverse((node) => node.layers.disableAll());
+        this.view.scene.add(avatar.object);
+        this.view.upload([avatar.object], { hidden: true });
+
+        try {
+            for (let k = 0; k < PORTRAIT.tries; k++) {
+                await new Promise((resolve) => setTimeout(resolve, PORTRAIT.after));
+
+                const picture = await this.view.portrait(avatar.object, { facing: 0, whole: true, size: PORTRAIT.size, bright: PORTRAIT.bright, fair: true, fit: PORTRAIT.fit });
+
+                if (picture && !blank(picture)) {
+                    const canvas = Object.assign(document.createElement("canvas"), { width: picture.width, height: picture.height });
+
+                    canvas.getContext("2d").putImageData(picture, 0, 0);
+
+                    return canvas.toDataURL("image/png");
+                }
+            }
+
+            return null;
+        } finally {
+            avatar.object.removeFromParent();
+            avatar.character.dispose();
+        }
+    }
+
     // Someone's likeness for their icon (view.js portrait), into `cache` (by id: null while it's
     // drawn, then an ImageData), once they've been drawn in full (not one of a crowd) for
     // LIKENESS_AFTER: drawn the moment they're built, they'd come out blank (the picture all the
@@ -8073,7 +8164,7 @@ export class Game {
             // (The treasures they're hunting: their own to give up, their party's shown)
             treasures: this.host.treasuresOf(this.me).map(({ id, grade, owner, name, centre }) => ({ id, title: itemLabel({ id: "treasureMap", quality: grade }), from: owner === this.me ? "Your map" : `${name}'s map`, where: at ? bearing(at, centre) : "", grade, own: owner === this.me })),
             writings: (this.memory.writings ?? []).filter((id) => WRITINGS[id]).map((id) => ({ id, title: WRITINGS[id].title, found: WRITINGS[id].found })),
-            bestiary: bestiaryOf(this.progress.bestiary.kinds),
+            bestiary: { ...bestiaryOf(this.progress.bestiary.kinds), portraitOf: (kind) => this.portraitOf(kind) },
             messages: this.messages,
         });
     }
