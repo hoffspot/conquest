@@ -4369,6 +4369,20 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     color: var(--rarity);
 }
 
+/* The trails read signs on: as a request's; once tracked home, edged in the signs' pale green */
+.journal-trail {
+    display: grid;
+    gap: 4px;
+    padding: 8px 12px 10px;
+    border-radius: 10px;
+    background: var(--field);
+    border: 1px solid var(--field-border);
+}
+
+.journal-trail.tracked {
+    border-color: rgba(216, 240, 192, 0.55);
+}
+
 /* What the player's heard tell of: as it was said, who said it, and which way it is; faded once found */
 .journal-heard {
     display: grid;

@@ -55,6 +55,7 @@ import { dropTiles, navigatorOf } from "./navigation.js";
 import { FORTS, footprintOf } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
 import { BODIES, fightingValue, groupsOf, opposition, scalingOf, sideStrength, STRENGTH, wholeOf, withinBudget } from "./strength.js";
+import { signOf, TRAILS, trailCreature, trailsOf } from "./tracks.js";
 import { gradeOfMap, huntersOf, nearTreasure, placeTreasure, rollTreasure, TREASURE, treasureBand, treasureCount, TREASURES, treasureTier, withMap } from "./treasure.js";
 
 /** The id of the player whose game the world runs in (the only one, playing alone). */
@@ -575,7 +576,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 33;
+export const SNAPSHOT_VERSION = 34;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -621,6 +622,9 @@ export const SNAPSHOT_STEPS = Object.freeze({
         players: snapshot.players.map((player) => ({ ...player, progress: { bestiary: {}, ...player.progress } })),
         battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => (snapshot.players.some(({ id }) => id === actor.id) ? { mastered: [], ...actor } : actor)) },
     }),
+    // 34: the signs each player's read on the trails out of the wild's camps and lairs, and the
+    // homes they've tracked them to (core/tracks.js, core/explored.js: none yet)
+    33: (snapshot) => ({ ...snapshot, version: 34, players: snapshot.players.map((player) => ({ ...player, explored: { signs: [], tracked: [], ...player.explored } })) }),
 });
 
 /**
@@ -737,6 +741,8 @@ export const REFUSALS = Object.freeze({
     hunting: "You're on the trail of three treasures already: dig one up, or give one up in your journal.",
     unmapped: "The map's marks fit nothing round here: try it somewhere else.",
     treasure: "No such treasure.",
+    // (A sign on a trail: core/tracks.js, #readSign)
+    sign: "There's no sign of anything there to read.",
     // (At the war table: core/wartable.js, #atTable)
     table: "Stand at the war table to give its orders.",
     orderRank: "Only a Lord or a Councillor gives the army its orders.",
@@ -1617,6 +1623,8 @@ export class Host {
                 return this.#partyCommand(player, command);
             case "treasure":
                 return this.#treasureCommand(player, command);
+            case "read":
+                return this.#readSign(player, actor, command.sign);
             case "buy":
                 return this.#buy(player, actor, command);
             case "sell":
@@ -1737,7 +1745,8 @@ export class Host {
      * "close", "explored" (`by` another of their party: #share), "talk", "effect", "roused" (the wild's creatures put out), "trade"; "war", with each of the war's events, and "turn",
      * once each of its turns is over; "away", a player marked away or back, and "afk", one to be
      * sent out of the world for it: AFK; "treasure", a treasure map read, its keepers woken, it dug
-     * up or given up: #treasures).
+     * up or given up: #treasures; "bestiary", a kind's research gone up a level: #researched;
+     * "sign", a sign on a trail read, and its home tracked: #readSign).
      */
     advance(ms) {
         this.recorder?.(["a", ms]);
@@ -2772,6 +2781,38 @@ export class Host {
         }
 
         this.#outfit(player);
+    }
+
+    // A sign on a trail out of a camp or a lair read (a "read" command: core/tracks.js), its reader
+    // beside it out in the wilds: told which way the trail runs home, and what made it the better
+    // known (core/bestiary.js read); TRAILS.tracked of its home's signs read, the home's tracked,
+    // marked on their maps (core/explored.js). Read again, told again, and no more learnt
+    #readSign(player, actor, id) {
+        const plan = this.world.plan;
+        const found = plan ? signOf(plan, id) : null;
+
+        if (!found || actor.map !== "town") {
+            return refuse("sign");
+        }
+
+        const { trail, sign } = found;
+
+        if (hypot(actor.x - sign.at[0], actor.y - sign.at[1]) > TRAILS.reach + 1) {
+            return refuse("far");
+        }
+
+        const creature = trailCreature(plan, trail, this.#homeOf(player));
+        const first = player.explored.read(sign.id);
+        const read = trailsOf(plan).filter(({ home }) => home.id === trail.home.id).reduce((count, { signs }) => count + signs.filter((each) => player.explored.signs.has(each.id)).length, 0);
+        const tracked = read >= TRAILS.tracked && player.explored.track(trail.home.id);
+
+        this.#event("sign", { id: player.id, sign: sign.id, creature, home: trail.home.id, way: sign.way, read, again: !first, tracked });
+
+        if (first) {
+            this.#researched(player, player.progress.bestiary.read(creature));
+        }
+
+        return { ok: true };
     }
 
     // What a player finds on a foe they've felled: gold, and things (into their pack, while there's room)
@@ -8010,6 +8051,18 @@ export class Host {
 
         this.#opened(id, "cache", { at: cache.at, maps: [], map: "town", square: cache.chest, people: "human", tier: cache.tier, fought: cache.fought ?? [] });
         this.#event("cache", { cache: id, change: "opened" });
+    }
+
+    // --- Trails (core/tracks.js; docs/WILDS.md *Tracking*) ---
+
+    /**
+     * What wore a trail (core/tracks.js trailsOf's) as a player finds it: a camp's folk as strong
+     * as it is from their home; or null, for no such player.
+     */
+    trailCreatureOf(playerId, trail) {
+        const player = this.players.get(playerId);
+
+        return player && this.world.plan ? trailCreature(this.world.plan, trail, this.#homeOf(player)) : null;
     }
 
     // --- Treasure maps (core/treasure.js; docs/WILDS.md *Treasure maps*) ---

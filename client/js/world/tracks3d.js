@@ -2,12 +2,12 @@
 // foot down (app/game.js, its avatar's footfalls), as its feet are (PRINTS: a dog's paw, a cat's,
 // a bear's broad one; a cloven hoof; a drake's three-toed claw; a lizard's splayed toes; a boot, a
 // bare foot, a frog's webbed one; a spider's or a centipede's pricks; a serpent's slither, a
-// slime's smear), deeper in what takes a print well (snow, mud, sand) and fainter in grass, none
-// on stone, boards or water (TAKES). Each lies along the ground where it slopes, darkening it as
-// the contact shadows do (contacts.js: right by day and by night alike, and fogged away with the
-// ground), and fades: it's there TRACKS.lasts seconds, then gone over TRACKS.fade more. All of them
-// are one instanced quad, a single draw call, the oldest let go once there are TRACKS.most; their
-// shapes are drawn once onto a canvas, a cell each (printAtlas).
+// slime's smear), deeper in what takes a print well (snow, mud, sand) and fainter in grass and in a
+// wood's fallen leaves, none on stone, boards or water (TAKES). Each lies along the ground where it
+// slopes, darkening it as the contact shadows do (contacts.js: right by day and by night alike,
+// and fogged away with the ground), and fades: it's there TRACKS.lasts seconds, then gone over
+// TRACKS.fade more. All of them are one instanced quad, a single draw call, the oldest let go once
+// there are TRACKS.most; their shapes are drawn once onto a canvas, a cell each (printAtlas).
 
 import * as THREE from "three";
 
@@ -44,7 +44,7 @@ const ROWS = Math.ceil(KINDS.length / COLUMNS);
 const CELL = 128;
 
 /** How well each footing takes a print (audio/footing.js's names): none on what doesn't. */
-export const TAKES = Object.freeze({ snow: 1, mud: 1, sand: 0.9, dirt: 0.75, grass: 0.5, gravel: 0.3 });
+export const TAKES = Object.freeze({ snow: 1, mud: 1, sand: 0.9, dirt: 0.75, grass: 0.5, leaves: 0.45, gravel: 0.3 });
 
 // The kinds whose prints aren't their feet's (beasts/beast.js gait.feet, LOOKS' hooves): their own
 const OWN = Object.freeze({
@@ -72,6 +72,9 @@ const BAREFOOT = new Set(["goblin", "goblinBomber", "goblinKing", "troll", "fros
 // What each kind of feet leaves (beasts/beast.js FEET)
 const FEET = Object.freeze({ paws: "paw", feet: "bare", legs: "pricks", slime: "smear", scales: "slither", webbed: "webbed", colossal: "claw" });
 
+// The feet each body has, unless its look says (beasts/beast.js FEET)
+const BODY_FEET = Object.freeze({ quadruped: "paws", biped: "feet", humanoid: "feet", arachnid: "legs", blob: "slime", serpent: "scales", frog: "webbed" });
+
 /**
  * The print a kind of creature leaves (a PRINTS key), from its kind and its feet (`gait`: its
  * avatar's, beasts/beast.js; none for one drawn as a person: their boots or bare feet; `hooves`:
@@ -91,6 +94,19 @@ export function printOf(kind, gait = null, { hooves = false } = {}) {
     }
 
     return hooves && gait.feet === "paws" ? "hoof" : (FEET[gait.feet] ?? null);
+}
+
+/**
+ * The print a kind leaves, and how big it is, without one of it to hand (a trail's, core/
+ * tracks.js): from its look (`look`: beasts/looks.js; none, or people-shaped, drawn as a person),
+ * as big as one of it seen (`size`: its gait's) or its look's middling size. { print (or null),
+ * size }.
+ */
+export function lookPrint(kind, look, size = null) {
+    const big = size ?? (look?.scale ? (look.scale[0] + look.scale[1]) / 2 : 1);
+    const person = !look || look.body === "humanoid";
+
+    return { print: printOf(kind, person ? null : { size: big, feet: look.feet ?? BODY_FEET[look.body] ?? null }, { hooves: Boolean(look?.hooves) }), size: big };
 }
 
 /**

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { LOOKS } from "../client/js/beasts/looks.js";
 import { CREATURES } from "../client/js/core/creatures.js";
-import { footAt, printOf, PRINTS, TAKES, Tracks, TRACKS } from "../client/js/world/tracks3d.js";
+import { footAt, lookPrint, printOf, PRINTS, TAKES, Tracks, TRACKS } from "../client/js/world/tracks3d.js";
 
 describe("tracks on the ground (world/tracks3d.js)", () => {
     it("has a print for each of the wild's creatures as its feet are: paws, hooves, claws, boots and bare feet, a slither, a smear; none for what flies or floats", () => {
@@ -39,7 +39,18 @@ describe("tracks on the ground (world/tracks3d.js)", () => {
         }
     });
 
-    it("puts each foot where it comes down beside the one stepping: a four-legged one's forefeet ahead and hind behind, left and right either side", () => {
+    it("has the print of a kind without one of it to hand, from its look, as big as one's been seen or as its look is (a trail's)", () => {
+        assert.deepEqual(lookPrint("wolf", LOOKS.wolf), { print: "paw", size: 1 });
+        assert.deepEqual(lookPrint("wolf", LOOKS.wolf, 1.3), { print: "paw", size: 1.3 });
+        assert.equal(lookPrint("boar", LOOKS.boar).print, "hoof");
+        assert.equal(lookPrint("bandit", LOOKS.bandit).print, "boot");
+        assert.equal(lookPrint("goblin", LOOKS.goblin).print, "bare");
+        assert.equal(lookPrint("caveSpider", LOOKS.caveSpider).print, "pricks");
+        assert.equal(lookPrint("dragon", LOOKS.dragon).print, "claw");
+        assert.deepEqual(lookPrint("cultist", undefined), { print: "boot", size: 1 });
+    });
+
+        it("puts each foot where it comes down beside the one stepping: a four-legged one's forefeet ahead and hind behind, left and right either side", () => {
         const [lfAcross, lfAhead] = footAt("lf", 1);
         const [rhAcross, rhAhead] = footAt("rh", 1);
         const [leftAcross, leftAhead] = footAt("left", 1.75);
@@ -52,8 +63,9 @@ describe("tracks on the ground (world/tracks3d.js)", () => {
         assert.ok(Math.abs(footAt("lf", 2)[1]) === 2 * Math.abs(footAt("lf", 1)[1]), "as far out as it's big");
     });
 
-    it("takes a print best in snow, mud and sand, faintly in grass, none on stone, boards or water", () => {
+    it("takes a print best in snow, mud and sand, faintly in grass and fallen leaves, none on stone, boards or water", () => {
         assert.ok(TAKES.snow === 1 && TAKES.mud === 1 && TAKES.sand > TAKES.dirt && TAKES.dirt > TAKES.grass && TAKES.grass > TAKES.gravel);
+        assert.ok(TAKES.leaves > TAKES.gravel && TAKES.leaves < TAKES.dirt);
 
         for (const footing of ["stone", "wood", "water"]) {
             assert.equal(TAKES[footing], undefined, footing);

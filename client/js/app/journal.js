@@ -19,6 +19,8 @@
 //   journal), each to be read again (app/reader.js);
 // - the treasures they're hunting (core/treasure.js): their own maps' and their party's, which way
 //   each is, their own each to be given up;
+// - the trails they've read signs on (core/tracks.js): what made each, how many of its signs
+//   they've read and which way the last ran, till they've tracked it home (then where that is);
 // - by a tab at its top, the bestiary: a page for each kind of creature met, telling as much of
 //   it as they've found out (core/bestiary.js; its pages made by app/bestiary.js and given it, so
 //   the journal, wanted before the game's loaded (app/save.js), needs nothing of the creatures);
@@ -209,14 +211,15 @@ export class JournalPanel {
      * title, from, state }], heard: [{ words, from, where, found }] (what they've heard tell of:
      * those still to find first), writings: [{ id, title, found }] (what they've read: core/
      * writings.js), treasures: [{ id, title, from, where, grade, own }] (the treasures they're
-     * hunting: core/treasure.js), bestiary (what's been found out about each kind of creature: {
+     * hunting: core/treasure.js), trails: [{ title, words, where, tracked }] (the trails they've
+     * read signs on: core/tracks.js, those still to follow first), bestiary (what's been found out about each kind of creature: {
      * met: the kinds met (app/bestiary.js contentsOf), of: how many kinds there are, levels: how
      * many levels each has, pageOf(kind): its page, app/bestiary.js pageOf, or null; and
      * portraitOf(kind): a promise of its portrait's URL, or null: app/game.js portraitOf }),
      * messages: the last told, oldest first (keepMessage) }.
      */
     show(shown) {
-        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], writings = [], treasures = [], bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
+        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], writings = [], treasures = [], trails = [], bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
 
         this.shown = shown;
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
@@ -349,6 +352,25 @@ export class JournalPanel {
             );
 
             sections.push(this.#section("Treasure hunts", hunts));
+        }
+
+        // The trails they've read signs on, and where they lead
+        if (trails.length) {
+            const followed = element("ul", "journal-list trails");
+
+            followed.append(
+                ...trails.map(({ title, words, where, tracked }) => {
+                    const row = element("li", `journal-trail${tracked ? " tracked" : ""}`);
+                    const head = element("div", "journal-request-head");
+
+                    head.append(element("span", "journal-request-title", title), element("span", "journal-request-from", tracked ? "Tracked" : "Following"));
+                    row.append(head, element("p", "journal-request-text", words), element("p", "journal-request-progress", where));
+
+                    return row;
+                }),
+            );
+
+            sections.push(this.#section("Trails", followed));
         }
 
         // What they've read, each to be read again
