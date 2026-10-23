@@ -6302,6 +6302,62 @@ test("the journal keeps the last ten messages told across the screen, behind a b
     await expect(rows.first()).toContainText("2 times");
 });
 
+test("the wild's creatures leave their prints on the ground as they go out in the world, as their feet are: a wolf its paws, a boar its hooves, a bandit his boots; fading by the clock", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    // (Out of town, a wolf, a boar and a bandit wandering by the player)
+    await page.evaluate(async () => {
+        const { CREATURES } = await import("/js/core/creatures.js");
+        const { game } = window.pellagos;
+        const { host, battle, world } = game;
+        const [mx, my] = world.stamp.middle;
+        const at = [Math.floor(mx - 150), Math.floor(my - 20)];
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", at, { facing: Math.PI });
+        Object.assign(battle.actor(game.me), { hp: 1e6, maxHp: 1e6 });
+
+        for (const [k, kind] of ["wolf", "boar", "bandit"].entries()) {
+            const id = `walker-${kind}`;
+
+            host.wild.set(id, { creature: kind, tier: 2, pack: id, camp: null, lair: null, master: false });
+            battle.add({ id, kind: "beast", name: CREATURES[kind].name, weapon: CREATURES[kind].weapon, team: "beasts", square: [at[0] - 3 + k * 3, at[1] - 4], ai: "wild", hp: 1e6, speed: 1.2, chase: 1.2, wild: { creature: kind, tier: 2, temper: "defensive", guard: 0, roam: 6, leash: 12, pack: id, leader: null, menace: false } });
+        }
+    });
+
+    // (Each kind of print made: tracks3d.js PRINTS' order is the atlas's. Whatever else the wild
+    // puts out about the player leaves its own too)
+    const printed = () => {
+        const { tracks } = window.pellagos.game;
+        const kinds = ["paw", "cat", "broad", "hoof", "claw", "lizard", "boot", "bare", "webbed", "pricks", "slither", "smear"];
+        const made = new Set([...tracks.cells.slice(0, tracks.mesh.count)].map((cell) => kinds[cell]));
+
+        return ["paw", "hoof", "boot"].every((kind) => made.has(kind));
+    };
+
+    expect(await playUntil(page, printed, { seconds: 90 })).toBe(true);
+
+    // Drawn out in the world, each lying on the ground there and made by the game's clock
+    const prints = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { tracks } = game;
+        const matrix = new (tracks.mesh.instanceMatrix.array.constructor)(16);
+        const out = [];
+
+        for (let k = 0; k < tracks.mesh.count; k++) {
+            matrix.set(tracks.mesh.instanceMatrix.array.subarray(k * 16, k * 16 + 16));
+            out.push({ y: matrix[13], ground: tracks.groundAt(matrix[12], matrix[14]), made: tracks.made[k], depth: tracks.depths[k] });
+        }
+
+        return { visible: tracks.mesh.visible, clock: game.clock, out };
+    });
+
+    expect(prints.visible).toBe(true);
+    expect(prints.out.every(({ y, ground }) => Math.abs(y - ground) < 0.05)).toBe(true);
+    expect(prints.out.every(({ made, depth }) => made <= prints.clock && depth > 0 && depth <= 1)).toBe(true);
+});
+
 test("the bestiary: a creature seen and slain written in, its page in the journal opening a part at a time, its portrait drawn; and the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
     test.setTimeout(180000);

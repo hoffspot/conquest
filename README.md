@@ -850,6 +850,8 @@ client/                 The game (static files served to the browser)
     flyers3d.js         What flies over the world: flocks of each land's birds, wyverns over
                         the wild lands, the drake near its lair
     drops3d.js          Things dropped on the ground: a bundle, its icon floating over it
+    tracks3d.js         The prints the wild's creatures leave on the ground as they go, as
+                        their feet are, fading after a few minutes
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
                         its splashes and pools, smoke and embers, the target ring, heals'

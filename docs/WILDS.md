@@ -722,6 +722,37 @@ mandrake's sap, a skeleton's, a draugr's and a wight lord's bone chips, a rock t
 chips, a hodmedod's straw, lava from a magma slime, shadow from a black shuck, a shadow stalker, a
 wraith or a mare, a ghost's pale motes.
 
+## Their tracks
+
+Each of the wild's creatures leaves a print on the ground where it sets a foot down, out in the
+world (world/tracks3d.js; app/game.js `#printed`, from its avatar's footfalls, as they're heard),
+so where they've been can be seen, and followed. Only what's drawn in full leaves them, and only
+what has feet to leave them with: nothing that flies, floats or swarms (bats, rooks, wisps,
+ghosts...), nothing on another map than the world's own.
+
+- **As its feet are** (`printOf`, `PRINTS`): a dog's paw, four toes and their claws (the wolves,
+  the hounds, the hyenas); a cat's, round and clawless (the puma, the jaguar, the chimera); a
+  bear's broad one, five toes and long claws (the brown bear, the Nandi bear, the badger); a
+  cloven hoof (whatever's hooved: the boar, the bull, the hart, the buffalo...); a drake's
+  three-toed claw and its heel's spur (the drake, the wyverns, the Dreadthorn, the Behemoth's,
+  huge); a lizard's splayed toes (the crocodile, the salamander, the basilisk...); a boot's sole
+  and heel, its tread showing (the people-shaped: bandits, cultists...), or a bare foot (goblins,
+  trolls, ogres, the dead...); a frog's webbed foot; a spider's or a centipede's eight pricks; a
+  serpent's slither; a slime's smear. Each as big as the one leaving it (its gait's `size`).
+- **Where each foot comes down** (`footAt`): a four-legged one's forefeet ahead of its middle and
+  its hind behind, left and right either side; a two-legged one's either side; a serpent's or a
+  slime's under it. Its toes the way it faces.
+- **As deep as the ground takes it** (`TAKES`, by what's underfoot as it's heard: audio/
+  footing.js): snow and mud deepest, then sand, bare earth and roads, grass faint (and tall grass
+  hides it), scree fainter still; none on stone, boards or in water.
+- **Drawn** as the contact shadows under everyone are (world/contacts.js): darkening the ground,
+  so right by day and by night, and fogged away with it; lying along the ground where it slopes.
+  All of them one instanced quad, a single draw call: as many as 768 at once (`TRACKS.most`),
+  the oldest let go for the newest. Each lies there three minutes (`lasts`), then fades over one
+  more (`fade`). Their shapes are drawn once onto a canvas, a cell each (`printAtlas`).
+- Only the player's own game draws them: nothing of them is the host's, and both ends of a game
+  needn't agree on them.
+
 ## What they leave
 
 A creature brought down may leave something: its parts (a wolf's pelt and fangs, a boar's tusks

@@ -103,6 +103,7 @@ import { FortAvatar, Forts } from "../world/forts3d.js";
 import { EngineAvatar } from "../world/siege3d.js";
 import { Stockades } from "../world/stockades3d.js";
 import { ContactShadows } from "../world/contacts.js";
+import { footAt, printOf, TAKES, Tracks } from "../world/tracks3d.js";
 import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
 import { Ailments3D } from "../world/ailments3d.js";
@@ -1697,6 +1698,10 @@ export class Game {
         this.effects = new Effects(view.scene);
         this.contacts = new ContactShadows();
         view.scene.add(this.contacts.mesh);
+        // (The prints on the ground out in the world: on its ground, whatever map the player's on)
+        this.tracks = new Tracks();
+        this.tracks.groundAt = this.groundOf("town");
+        view.scene.add(this.tracks.mesh);
         this.ailments = new Ailments3D(this.effects.group);
         // (Its fire, flashes and fireballs lighting what's round them as the world's fires do, each
         // a light of its own: lightsNow, #lightNear; not lent the view's lamps)
@@ -2185,7 +2190,15 @@ export class Game {
             const [ox, oz] = this.originOf(mapId);
             const { x, z } = avatar.object.position;
 
-            this.sound?.step(this.#footingAt(this.world.maps?.[mapId] ?? this.world, x - ox, z - oz), avatar.object.position, { speed, ...avatar.gait, armour: armourOf(avatar.character) });
+            const footing = this.#footingAt(this.world.maps?.[mapId] ?? this.world, x - ox, z - oz);
+
+            this.sound?.step(footing, avatar.object.position, { speed, ...avatar.gait, armour: armourOf(avatar.character) });
+
+            // (One of the wild's, out in the world: its print left where its foot came down, as
+            // deep as the ground there takes it, tracks3d.js)
+            if (actor?.wild && mapId === "town" && TAKES[footing]) {
+                this.#printed(actor, avatar, foot, footing);
+            }
         };
         character.object.name = id;
         this.view.scene.add(character.object);
@@ -2411,6 +2424,7 @@ export class Game {
         INTERIOR_GLOW.daylight.value = 1;
         this.effects?.dispose();
         this.contacts?.dispose();
+        this.tracks?.dispose();
         this.navBaker?.dispose();
         this.navigationView?.dispose();
 
@@ -2994,6 +3008,12 @@ export class Game {
 
         this.clock += dt;
         TREE_WIND.time.value = this.clock;
+
+        // (The prints on the ground fading by the clock, seen only out in the world)
+        if (this.tracks) {
+            this.tracks.update(this.clock);
+            this.tracks.mesh.visible = this.tracks.mesh.count > 0 && mine?.map === "town";
+        }
         // (A hell's way in standing in the open swirling by the same clock as the veils indoors: veil.js)
         VEIL.time.value = this.clock % VEIL.loop;
 
@@ -6539,6 +6559,25 @@ export class Game {
 
         // (On an army's camp's walkway, or a stair up to it: its boards)
         return footing(k >= 0 && chunk.bridge[k] === RAISED ? GROUND.planks : ground, { land: map.biomeAt(sx, sz), height: map.heightAt?.(x, z) ?? 0, wet: k >= 0 && Boolean(chunk.water[k]) && !chunk.bridge[k] });
+    }
+
+    // One of the wild's footfalls printed on the ground (tracks3d.js): as its feet are (its gait's,
+    // or a person's boots or bare feet), where that foot came down beside it, its toes the way
+    // it faces, as big as it is
+    #printed(actor, avatar, foot, footing) {
+        const kind = actor.wild.creature;
+        const print = printOf(kind, avatar instanceof BeastAvatar ? avatar.gait : null, { hooves: Boolean(CREATURE_LOOKS[kind]?.hooves) });
+
+        if (!print) {
+            return;
+        }
+
+        const size = avatar.gait?.size ?? (avatar.character.height ?? 1.75) / 1.75;
+        const facing = avatar.facing ?? avatar.object.rotation.y;
+        const [across, ahead] = footAt(foot, size);
+        const { x, z } = avatar.object.position;
+
+        this.tracks.print(print, x - Math.cos(facing) * across + Math.sin(facing) * ahead, z + Math.sin(facing) * across + Math.cos(facing) * ahead, facing, size, TAKES[footing], this.clock);
     }
 
     // Someone going up or down the stairs (they're there at once: battle.js cross), heard as a few
