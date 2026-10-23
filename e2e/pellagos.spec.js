@@ -9332,7 +9332,28 @@ test("in a party: a place another of it finds is on the player's map for good, w
     expect(found).toMatchObject({ sighted: true, finder: "Bram", icon: "Bram" });
     expect(await page.evaluate(() => window.told.some((text) => /^Bram found .+: it's on your map\.$/.test(text))), JSON.stringify(await page.evaluate(() => window.told))).toBe(true);
 
-    // Bram pings by it: on the minimap (at its edge, it's so far) and in the world, said
+    // The world map, close in by the place: who found it; no ping on it yet
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("m");
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn, null, { polling: 100 });
+
+    const map = await page.evaluate(([x, z]) => {
+        const { game, worldMap } = window.pellagos;
+
+        // (The world on under the map, played with others, only as the test moves it: what's
+        // tapped on the map answered at once)
+        game.stop();
+
+        worldMap.view = { scale: 2, x, z };
+        worldMap.draw();
+
+        return { pings: worldMap.drawn.pings, finders: worldMap.drawn.finders, button: !document.querySelector("#worldmapping").hidden };
+    }, found.at);
+
+    expect(map).toEqual({ pings: 0, finders: ["Bram"], button: true });
+
+    // Bram pings by it, the map open: drawn on it as it comes; on the minimap (at its edge, it's so
+    // far) and in the world; said
     const pinged = await page.evaluate(([x, y]) => {
         const { game } = window.pellagos;
 
@@ -9349,28 +9370,8 @@ test("in a party: a place another of it finds is on the player's map for good, w
     expect(pinged.pings).toEqual([{ name: "Bram", own: false }]);
     expect(pinged.minimap).toEqual([expect.objectContaining({ edge: true })]);
     expect(pinged).toMatchObject({ column: expect.stringMatching(/^ping \d+ column near$/), seen: true });
+    await page.waitForFunction(() => window.pellagos.worldMap.drawn.pings === 1, null, { polling: 100 });
     expect(await page.evaluate(() => window.told.some((text) => /^Bram pings the map, [\d.]+ k?m [a-z-]+\.$/.test(text))), JSON.stringify(await page.evaluate(() => window.told))).toBe(true);
-
-    // The world map: Bram's ping on it, and close in by the place, who found it
-    await page.evaluate(() => window.pellagos.game.start());
-    await page.keyboard.press("m");
-    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn, null, { polling: 100 });
-
-    const map = await page.evaluate(([x, z]) => {
-        const { game, worldMap } = window.pellagos;
-        const pings = worldMap.drawn.pings;
-
-        // (The world on under the map, played with others, only as the test moves it: what's
-        // tapped on the map answered at once)
-        game.stop();
-
-        worldMap.view = { scale: 2, x, z };
-        worldMap.draw();
-
-        return { pings, finders: worldMap.drawn.finders, button: !document.querySelector("#worldmapping").hidden };
-    }, found.at);
-
-    expect(map).toEqual({ pings: 1, finders: ["Bram"], button: true });
 
     // The ping button, then a tap on the map: the player's own ping, for the party
     const button = page.locator("#worldmapping");

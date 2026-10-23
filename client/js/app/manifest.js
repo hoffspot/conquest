@@ -68,7 +68,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/reader.js", 4357],
             ["js/app/readying.js", 4809],
             ["js/app/scramble.js", 4211],
-            ["js/app/session.js", 4654],
+            ["js/app/session.js", 4747],
             ["js/app/sigil.js", 6495],
             ["js/app/spellbook.js", 8125],
             ["js/app/spellicons.js", 56402],
