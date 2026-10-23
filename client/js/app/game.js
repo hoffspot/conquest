@@ -62,6 +62,7 @@ import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, 
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
+import { TREASURE } from "../core/treasure.js";
 import { shopPrice } from "../core/stock.js";
 import { CHAT, PACE } from "../core/netplay.js";
 import { WorldRunner } from "../core/runner.js";
@@ -117,6 +118,7 @@ import { GLOW_SCALE } from "../world/lights.js";
 import { CarriedTorches } from "../world/carried.js";
 import { LightGlobes } from "../world/globes.js";
 import { PinMarks, WAY_LINE } from "../world/pin3d.js";
+import { TreasureGlints } from "../world/treasure3d.js";
 import { SMOKE_SHARE } from "../world/smoke.js";
 import { FarLand } from "../world/far/far.js";
 import { farReach } from "../world/far/levels.js";
@@ -752,7 +754,7 @@ const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, thanks: 14 });
 const HEARD_FOUND = 5;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1604,6 +1606,7 @@ export class Game {
         this.carried = new CarriedTorches(view.scene);
         this.globes = new LightGlobes(view.scene);
         this.pinMarks = new PinMarks(view.scene, view.far.scene);
+        this.glints = new TreasureGlints(view.scene);
 
         // (A pin kept from before: the world's ground for finding the way to it worked out now,
         // while it's loading, not in the first frames)
@@ -1727,6 +1730,9 @@ export class Game {
             this.#command({ type: "abandon", request: id }, () => this.journal.open && this.#showJournal());
         };
         this.journal.onRead = (id) => this.read(id);
+        this.journal.onGiveUpTreasure = (id) => {
+            this.#command({ type: "treasure", do: "abandon", treasure: id }, () => this.journal.open && this.#showJournal());
+        };
         this.journal.onClose = () => this.closeJournal();
         this.reader = new ReaderPanel(this.hud.root);
         this.reader.onTurn = () => this.sound?.play("pageTurn");
@@ -2404,6 +2410,7 @@ export class Game {
         this.carried?.dispose();
         this.globes?.dispose();
         this.pinMarks?.dispose();
+        this.glints?.dispose();
         this.flyers?.dispose();
 
         this.spellFx?.dispose();
@@ -3230,6 +3237,9 @@ export class Game {
 
         // (The world map's pin, the way there, and running there)
         this.#pinned();
+
+        // (Where a treasure the player's hunting is buried, once they're near: it glints)
+        this.#glinting();
 
         if (this.chunks && this.mapId === "town") {
             const { x, z } = this.avatars.get(this.me).object.position;
@@ -4603,6 +4613,8 @@ export class Game {
             destination: actor.order?.type === "move" && !this.steering?.steering ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
             icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons(), ...this.dungeonIcons(), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
+            // (The circles to search for the treasures they're hunting: #treasureCircles)
+            searches: this.mapId === "town" ? this.treasureCircles() : [],
         });
     }
 
@@ -4616,7 +4628,7 @@ export class Game {
         }
 
         for (const cache of this.host.caches.values()) {
-            if (!this.cachesSeen.has(cache.id) && !cache.opened && Math.hypot(me.x - cache.at[0], me.y - cache.at[1]) <= CACHE_SEEN) {
+            if (!cache.treasure && !this.cachesSeen.has(cache.id) && !cache.opened && Math.hypot(me.x - cache.at[0], me.y - cache.at[1]) <= CACHE_SEEN) {
                 this.cachesSeen.add(cache.id);
                 this.hud.message(`An adventurer's cache, and ${CACHE_BANDS[cache.band]?.name ?? "brigands"} keeping it. Put them all down to open it.`, 4);
             }
@@ -4918,7 +4930,40 @@ export class Game {
         const facing = this.avatars.get(this.me)?.facing ?? actor.facing;
         const seen = ({ x, z }) => this.explored.sighted(x, z);
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen), ...this.dungeonIcons().filter(seen), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen), ...this.dungeonIcons().filter(seen), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
+    }
+
+    /**
+     * The treasures the player's hunting (theirs and their party's: core/treasure.js, Host
+     * treasuresOf), as circles to search on the maps: [{ id, x, z (its middle, metres), radius,
+     * grade (its map's make), own (theirs) }].
+     */
+    treasureCircles() {
+        return (this.host?.treasuresOf?.(this.me) ?? []).map(({ id, centre: [x, z], radius, grade, owner }) => ({ id, x, z, radius, grade, own: owner === this.me }));
+    }
+
+    // Where a treasure the player's hunting is buried (where its keepers were put out about, or
+    // where the map has it) glinting, once they're near enough to see it (TREASURE.seen), out in
+    // the world; and twinkling
+    #glinting() {
+        const me = this.battle.actor(this.me);
+        const spots = [];
+
+        if (me && this.mapId === "town" && this.host?.treasures?.size) {
+            for (const treasure of this.host.treasuresOf(this.me)) {
+                const [x, z] = treasure.spot ?? treasure.at;
+
+                if (Math.hypot(me.x - x, me.y - z) <= TREASURE.seen) {
+                    spots.push({ id: treasure.id, x, y: this.#groundOn("town", x, z), z });
+                }
+            }
+        }
+
+        if (spots.length || this.glints.shown.size) {
+            this.glints.set(spots);
+        }
+
+        this.glints.update(this.clock);
     }
 
     /**
@@ -7082,9 +7127,13 @@ export class Game {
             // (The dead's, an old relic of theirs in it, named; an adventurer's cache: its lock
             // turned, and its lid up)
             // (A dungeon's boss's hoard: a share of it for each player in the dungeon)
-            this.hud.message(event.relic ? `The chest's open, and in your share an old relic of theirs: the ${event.relic}. Tap it to take it.` : event.cache ? (event.away ? "The adventurer's cache is open: your share waits at its mark." : "The adventurer's cache is open, your share in it: tap it to take it.") : event.hoard ? "The hoard is open, and your share of it lies before you: tap it to take it." : "The chest's open, your share in it: tap it to take it.", event.relic || event.hoard ? 4 : 3);
-            this.sound?.play("lockpick");
-            this.sound?.play("chestOpen", { delay: 0.45 });
+            this.hud.message(event.treasure ? (event.away ? "The treasure's dug up: your share waits where it was buried." : "You dig up the treasure: your share of it lies before you. Tap it to take it.") : event.relic ? `The chest's open, and in your share an old relic of theirs: the ${event.relic}. Tap it to take it.` : event.cache ? (event.away ? "The adventurer's cache is open: your share waits at its mark." : "The adventurer's cache is open, your share in it: tap it to take it.") : event.hoard ? "The hoard is open, and your share of it lies before you: tap it to take it." : "The chest's open, your share in it: tap it to take it.", event.relic || event.hoard ? 4 : 3);
+            // (A treasure dug up isn't locked: its lid's just lifted)
+            if (!event.treasure) {
+                this.sound?.play("lockpick");
+            }
+
+            this.sound?.play("chestOpen", { delay: event.treasure ? 0 : 0.45 });
         } else if (event.type === "spoils") {
             if (this.#once("spoils")) {
                 this.hud.message(`The ${CREATURES[event.creature]?.name.toLowerCase() ?? "creature"} dropped something. ${SPOILS_HINT}`, SPOILS_TOLD);
@@ -7493,6 +7542,42 @@ export class Game {
     // Parties of players (core/host.js PARTY): asked to one (Accept, Decline, or Ignore: let go
     // unanswered, the one asking not told; with Refuse party invites on, not even asked), and what
     // comes of asking, and of the party: who joins, leaves, is put out or leads, or that it's no more
+    // A treasure map read, its keepers woken, it dug up or given up (core/host.js #treasures): told
+    // the player if it's theirs or their party's. Read: where it leads, written in their journal
+    // and drawn on their maps (a quill's scratch); woken: who keep it, to those near; dug up by
+    // the others, who weren't there for it; given up, theirs
+    #treasureEvent(event) {
+        const host = this.host;
+        const reader = event.id ?? event.owner;
+        const ours = reader === this.me || host.fellows(this.me).includes(reader);
+        const name = host.players.get(reader)?.hero.name ?? "Someone";
+        const map = itemLabel({ id: "treasureMap", quality: event.grade ?? host.treasures.get(event.treasure)?.grade ?? "common" });
+
+        if (!ours) {
+            return;
+        }
+
+        if (event.change === "marked") {
+            const at = this.#whereAmI();
+            const where = at ? bearing(at, event.centre) : "";
+
+            this.hud.message(reader === this.me ? `The ${map.toLowerCase()} shows somewhere ${where}: it's marked on your world map, and your party's. Search the circle.` : `${name}'s ${map.toLowerCase()}: where it leads is marked on your world map. Search the circle.`, 4);
+            this.sound?.play("quill");
+        } else if (event.change === "roused") {
+            const treasure = host.treasures.get(event.treasure);
+            const me = this.battle.actor(this.me);
+            const keepers = CACHE_BANDS[treasure?.band]?.name ?? "brigands";
+
+            if (treasure && me && Math.hypot(me.x - treasure.centre[0], me.y - treasure.centre[1]) <= treasure.radius + TREASURE.rouse * 2) {
+                this.hud.message(`Whoever buried it left ${keepers} keeping it. Put them all down to dig it up.`, 4);
+            }
+        } else if (event.change === "found" && !event.shared.includes(this.me)) {
+            this.hud.message(`${event.owner === this.me ? "Your" : `${name}'s`} treasure's been dug up, without you.`, 3);
+        } else if (event.change === "abandoned" && reader === this.me) {
+            this.hud.message("You give up the hunt: its circle's gone from your maps.", 3);
+        }
+    }
+
     #partyEvent(event) {
         if (event.id !== this.me) {
             return;
@@ -7861,6 +7946,8 @@ export class Game {
                 }),
             most: this.host.mostFollowers(this.me),
             heard: this.#heardTell(at),
+            // (The treasures they're hunting: their own to give up, their party's shown)
+            treasures: this.host.treasuresOf(this.me).map(({ id, grade, owner, name, centre }) => ({ id, title: itemLabel({ id: "treasureMap", quality: grade }), from: owner === this.me ? "Your map" : `${name}'s map`, where: at ? bearing(at, centre) : "", grade, own: owner === this.me })),
             writings: (this.memory.writings ?? []).filter((id) => WRITINGS[id]).map((id) => ({ id, title: WRITINGS[id].title, found: WRITINGS[id].found })),
             messages: this.messages,
         });
@@ -8220,7 +8307,7 @@ export class Game {
             const def = ITEMS[stack.id];
             const label = itemLabel(stack);
 
-            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll ? "Read" : def.oil ? "Apply" : def.bomb ? "Throw" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot || def.charm ? describe(stack, progress, { index, label, haggle }) : null };
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb ? "Throw" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot || def.charm ? describe(stack, progress, { index, label, haggle }) : null };
         });
         const me = this.battle.actor(this.me);
         const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50 });
@@ -10021,6 +10108,9 @@ export class Game {
                 break;
             case "party":
                 this.#partyEvent(event);
+                break;
+            case "treasure":
+                this.#treasureEvent(event);
                 break;
             case "carried": {
                 // (Gone with a pop from where they were, and come with one where they come to,

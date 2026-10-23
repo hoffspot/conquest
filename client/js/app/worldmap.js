@@ -22,7 +22,7 @@
 
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
-import { drawBuildingIcon, drawWarMark, FORT_ICONS } from "./mapicons.js";
+import { drawBuildingIcon, drawSearch, drawWarMark, FORT_ICONS } from "./mapicons.js";
 import { FORD_MARK, grassOf, paintPatch, WATER_COLOURS } from "./minimap.js";
 
 // The land's picture: pixels to a cell of the plan (32 metres)
@@ -326,12 +326,13 @@ export class WorldMap {
      * finding near where they've been, rimmed in who holds them), marks where their
      * requests take them (`marks`: [{ x, z, label }]), the places they've heard tell of and are
      * still to find (`heard`: [{ x, z, radius, hell }]: app/game.js heardCircles, faint circles
-     * round about where each is), and their pin (`pin`: { x, z }, or null)
+     * round about where each is), the circles to search for the treasures they're hunting
+     * (`searches`: [{ x, z, radius, grade, own }]: app/game.js treasureCircles), and their pin (`pin`: { x, z }, or null)
      * and the way to it (`way`: [[x, z], ...], or null). Or as the travel map (`travel`: the
      * branches), the building screen (`build`: { plans, forts }), or the war table's map (`war`:
      * app/battlemap.js battleMapView's).
      */
-    open({ player, icons = [], marks = [], heard = [], pin = null, way = null, travel = null, build = null, war = null }) {
+    open({ player, icons = [], marks = [], heard = [], searches = [], pin = null, way = null, travel = null, build = null, war = null }) {
         const only = Boolean(travel || build || war);
 
         this.land ??= paintLand(this.world.plan);
@@ -342,6 +343,7 @@ export class WorldMap {
         this.icons = only ? [] : icons;
         this.marks = only ? [] : marks;
         this.heard = only ? [] : heard;
+        this.searches = only ? [] : searches;
         this.pin = only ? null : pin;
         this.way = only ? null : way;
         this.lastTap = null;
@@ -714,6 +716,19 @@ export class WorldMap {
             }
 
             context.restore();
+        }
+
+        // The circles to search for the treasures they're hunting, fog or no: never smaller than a
+        // heard-of place's
+        for (const { x: sx, z: sz, radius, grade, own } of this.searches ?? []) {
+            const [x, y] = at(sx, sz);
+            const r = Math.max(HEARD_LEAST, radius / view.scale);
+
+            if (x < -r || y < -r || x > width + r || y > height + r) {
+                continue;
+            }
+
+            drawSearch(context, x, y, r, grade, { cross: Math.min(16, Math.max(8, r * 0.5)), own });
         }
 
         // Where the player's requests take them: a gold ring with a star in it, fog or no

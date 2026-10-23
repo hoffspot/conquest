@@ -121,6 +121,17 @@ export const ITEMS = Object.freeze({
         use: { safety: true },
         price: 25,
     },
+    // A treasure map (core/treasure.js): read out in the world, where it leads is marked as a circle
+    // to search on the reader's world map and their party's (host.js #readMap). It comes in every
+    // make gear does (its `quality`), the rarer leading the further, kept the fiercer and the
+    // richer; found now and then in chests, and a common one sold at the adventurers' guild
+    treasureMap: {
+        label: "Treasure map",
+        about: "Read it out in the wilds: where it leads is marked on your world map, and your party's, as a circle to search. Something keeps what's buried there. The rarer the map, the further off, the fiercer its keepers and the richer the treasure. Your party shares it. Three at a time.",
+        map: true,
+        use: { treasure: true },
+        price: 40,
+    },
     // A goblin's bomb, lit and thrown at a foe up to `reach` metres off (battle.js lob, BOMBS): it
     // lands, fizzes and bursts, hurting (`damage`, at its heart) and throwing their side round it;
     // found on goblins, never sold
@@ -209,7 +220,8 @@ export const LINES = Object.freeze({
  *   temple's healing draughts.
  * - **The adventurers' guild**: what a new adventurer needs (the elements' first tomes, the first
  *   spells' scrolls, draughts and cures, the Stamina Boost, the Scroll of Safety, a wand and the
- *   rest), and it buys everything, the creatures' parts and the tomes too.
+ *   rest; a treasure map, only ever common: core/treasure.js), and it buys everything, the
+ *   creatures' parts and the tomes too.
  */
 export const SHOPS = Object.freeze({
     smith: { items: [...ARMS, ...ARMOUR, ...UNIFORM], best: "masterwork", tiered: true, line: ["arms", "armour"] },
@@ -226,7 +238,7 @@ export const SHOPS = Object.freeze({
     watch: { items: ["sword", "hammer", "greatsword", "axe", "bow", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "bracers", "gloves", "greaves", "leatherBoots", "boots", ...UNIFORM], best: "fine", line: ["arms", "armour"] },
     tavern: { items: ["ale", "meal"], best: "common", line: ["provisions"] },
     temple: { items: ["potion"], best: "common", line: ["draughts"] },
-    guild: { items: ["wand", "grimoire", "spellward", "wizardHat", "amulet", "ring", "potion", "staminaBoost", "glowcapDraught", "scrollOfSafety", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf), ...STARTING_SCROLLS], best: "fine" },
+    guild: { items: ["wand", "grimoire", "spellward", "wizardHat", "amulet", "ring", "potion", "staminaBoost", "glowcapDraught", "scrollOfSafety", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf), ...STARTING_SCROLLS, "treasureMap"], best: "fine" },
 });
 
 /**
@@ -247,7 +259,7 @@ export const WARE_KINDS = Object.freeze({ weapon: "Weapons", offHand: "Shields a
 export function wareKind(id) {
     const def = ITEMS[id];
 
-    return !def ? "supplies" : def.tome || def.scroll ? "tome" : def.part ? "spoils" : def.charm ? "charm" : def.slot === "mainHand" ? "weapon" : def.slot === "offHand" ? "offHand" : def.jewel ? "jewel" : def.slot ? "worn" : "supplies";
+    return !def ? "supplies" : def.tome || def.scroll || def.map ? "tome" : def.part ? "spoils" : def.charm ? "charm" : def.slot === "mainHand" ? "weapon" : def.slot === "offHand" ? "offHand" : def.jewel ? "jewel" : def.slot ? "worn" : "supplies";
 }
 
 /** Whether a thing comes in every make (QUALITIES), as gear and charms do; else it's only ever common. */
@@ -255,10 +267,10 @@ export const comesInMakes = (id) => Boolean(ITEMS[id]?.slot || ITEMS[id]?.charm)
 
 /**
  * How rare a thing is (a QUALITIES make: the colour it's shown in, and the shops that keep it):
- * gear and charms as well made as they are; a draught, scroll or tome as rare as it is
- * (goods.js `rarity`), or common.
+ * gear, charms and treasure maps as well made as they are; a draught, scroll or tome as rare as
+ * it is (goods.js `rarity`), or common.
  */
-export const gradeOf = ({ id, quality = "common" }) => (comesInMakes(id) ? (QUALITIES[quality] ? quality : "common") : (ITEMS[id]?.rarity ?? "common"));
+export const gradeOf = ({ id, quality = "common" }) => (comesInMakes(id) || ITEMS[id]?.map ? (QUALITIES[quality] ? quality : "common") : (ITEMS[id]?.rarity ?? "common"));
 
 /**
  * The order a shop's wares are shown in ({ id, quality }, as wares has them): by kind

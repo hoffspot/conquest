@@ -427,6 +427,50 @@ export const WORKS_ICONS = Object.freeze({ "lumber mill": "mill", mine: "mine", 
 /** Each kind of fortification's icon (LOOKS), rimmed as a works' is, by its people (WORKS_RIMS). */
 export const FORT_ICONS = Object.freeze({ tower: "guardTower", garrison: "garrison" });
 
+/**
+ * The colours a treasure's circle to search is drawn in (core/treasure.js), by its map's make, as
+ * the make's own (styles.css .rarity-*): a common map's parchment, a fine one's blue, a
+ * masterwork's gold, a rare one's violet, a very rare one's rose, a legendary one's orange.
+ */
+export const SEARCH_COLOURS = Object.freeze({ common: "236, 220, 186", fine: "106, 166, 255", masterwork: "232, 195, 90", rare: "176, 124, 255", veryRare: "255, 106, 168", legendary: "240, 138, 58" });
+
+/**
+ * A treasure's circle to search, drawn on a map (`x`, `y` its middle and `r` its radius, pixels;
+ * `grade` its map's make): faintly filled, a dashed ring round it in its make's colour (SEARCH_
+ * COLOURS), an X at its middle `cross` pixels across, its own map's (`own`) bolder.
+ */
+export function drawSearch(context, x, y, r, grade, { cross = 10, own = true } = {}) {
+    const colour = SEARCH_COLOURS[grade] ?? SEARCH_COLOURS.common;
+
+    context.save();
+    context.beginPath();
+    context.arc(x, y, r, 0, Math.PI * 2);
+    context.fillStyle = `rgba(${colour}, ${own ? 0.14 : 0.08})`;
+    context.fill();
+    context.setLineDash([7, 4]);
+    context.lineWidth = own ? 2.4 : 1.6;
+    context.strokeStyle = `rgba(${colour}, 0.95)`;
+    context.stroke();
+    context.setLineDash([]);
+
+    // (The X, over a dark stroke so it reads on any ground)
+    const half = cross / 2;
+
+    context.beginPath();
+    context.moveTo(x - half, y - half);
+    context.lineTo(x + half, y + half);
+    context.moveTo(x + half, y - half);
+    context.lineTo(x - half, y + half);
+    context.lineCap = "round";
+    context.lineWidth = 4;
+    context.strokeStyle = "rgba(30, 18, 8, 0.85)";
+    context.stroke();
+    context.lineWidth = 2.2;
+    context.strokeStyle = `rgb(${colour})`;
+    context.stroke();
+    context.restore();
+}
+
 // The paths, made once (Path2D: only in the browser)
 let paths = null;
 

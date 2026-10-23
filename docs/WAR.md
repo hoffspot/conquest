@@ -621,8 +621,9 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     buy?", which she answers: everything, the spoils of the wild that no one else takes too):
     what a new adventurer needs, up to fine: wands, grimoires, spellwards, wizards' hats,
     jewellery, draughts and cures, a glowcap draught, the Stamina Boost potion and the Scroll of
-    Safety (below), the scrolls of each school's first spell and Stun's (`STARTING_SCROLLS`), and
-    the tomes that open the elements' schools, and Light's;
+    Safety (below), the scrolls of each school's first spell and Stun's (`STARTING_SCROLLS`), the
+    tomes that open the elements' schools, and Light's, and a treasure map, only ever common
+    (docs/WILDS.md *Treasure maps*);
   - the specialists, in every town, city and capital, by its market (docs/GAME.md *Its shops*,
     *A shop*), each with a new assortment each day, better made than a blacksmith's, and a daily
     special (below): a swordsmith's arms (always a sword among them), an armorer's shields

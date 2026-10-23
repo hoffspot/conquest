@@ -4349,9 +4349,24 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     color: var(--gold);
 }
 
-.journal-request .journal-button {
+.journal-request .journal-button,
+.journal-treasure .journal-button {
     justify-self: end;
     min-height: 32px;
+}
+
+/* The treasures hunted: as a request's, the map named in its make's colour */
+.journal-treasure {
+    display: grid;
+    gap: 4px;
+    padding: 8px 12px 10px;
+    border-radius: 10px;
+    background: var(--field);
+    border: 1px solid var(--field-border);
+}
+
+.journal-treasure .journal-request-title[class*="rarity-"]:not(.rarity-common) {
+    color: var(--rarity);
 }
 
 /* What the player's heard tell of: as it was said, who said it, and which way it is; faded once found */

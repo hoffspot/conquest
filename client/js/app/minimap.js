@@ -20,7 +20,7 @@ import { allAtOnce, Steps } from "../core/steps.js";
 import { GROUND, HOUSE_STYLES, PLOT } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { LAND_COLOURS } from "../world/ground.js";
-import { drawBuildingIcon } from "./mapicons.js";
+import { drawBuildingIcon, drawSearch } from "./mapicons.js";
 
 // Colours (RGB) of the ground and of what stands on it
 const GROUND_COLOURS = {
@@ -472,9 +472,11 @@ export class Minimap {
      * targeted, ally (one of the player's party) }], `destination` [x, z] or null, `look` the way the player's looking over the
      * ground (radians, as `facing`: 0 south, towards +z) or null, `icons` over the buildings
      * gone into and the places worth finding ([{ kind, x, z, rim (who holds a place, its colour) }]),
-     * and `elites`, the wild's elites near enough to be marked ([{ x, z, targeted }]: ELITE_MARK).
+     * and `elites`, the wild's elites near enough to be marked ([{ x, z, targeted }]: ELITE_MARK);
+     * and the circles to search for the treasures the player's hunting (`searches`: [{ id, x, z,
+     * radius, grade, own }]: app/game.js treasureCircles).
      */
-    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [] }, now = performance.now()) {
+    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [] }, now = performance.now()) {
         const { canvas, context, map } = this;
 
         this.drawn = now;
@@ -559,6 +561,20 @@ export class Minimap {
             context.strokeStyle = "#ffe6a0";
             context.lineWidth = 1.5;
             context.stroke();
+        }
+
+        // The circles to search for the treasures the player's hunting, where they're in sight
+        // (those drawn kept for tests: `searches`, by id)
+        this.searches = [];
+
+        for (const search of searches) {
+            const [x, y] = at(search.x, search.z);
+            const r = search.radius * scale;
+
+            if (x > -r && y > -r && x < width + r && y < height + r) {
+                drawSearch(context, x, y, r, search.grade, { cross: Math.min(10, Math.max(6, r * 0.35)), own: search.own });
+                this.searches.push(search.id);
+            }
         }
 
         // Everyone else: enemies red, the player's party green, the one the player is set to fight ringed
