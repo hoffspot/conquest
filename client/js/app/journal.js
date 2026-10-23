@@ -17,6 +17,8 @@
 //   it, and which way it is, till each is found;
 // - what they've read of what's written and left to be found (core/writings.js: Sinclair's
 //   journal), each to be read again (app/reader.js);
+// - the treasures they're hunting (core/treasure.js): their own maps' and their party's, which way
+//   each is, their own each to be given up;
 // - and, by a button at its top, the last messages they were told across the screen (the HUD's
 //   banner: hud.js message), the newest first, and how long ago.
 //
@@ -166,6 +168,7 @@ export class JournalPanel {
 
         /** What the player asks (the game does it). */
         this.onAbandon = () => {};
+        this.onGiveUpTreasure = () => {};
         this.onRead = () => {};
         this.onClose = () => {};
     }
@@ -182,10 +185,11 @@ export class JournalPanel {
      * null: serving another, fallen, ruling the continent) }, done: [{
      * title, from, state }], heard: [{ words, from, where, found }] (what they've heard tell of:
      * those still to find first), writings: [{ id, title, found }] (what they've read: core/
-     * writings.js), messages: the last told, oldest first (keepMessage) }.
+     * writings.js), treasures: [{ id, title, from, where, grade, own }] (the treasures they're
+     * hunting: core/treasure.js), messages: the last told, oldest first (keepMessage) }.
      */
     show(shown) {
-        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], writings = [], messages = [] } = shown;
+        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], writings = [], treasures = [], messages = [] } = shown;
 
         this.shown = shown;
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
@@ -281,6 +285,34 @@ export class JournalPanel {
         }
 
         sections.push(this.#section("Heard tell", told));
+
+        // The treasures they're hunting, their own each to be given up
+        if (treasures.length) {
+            const hunts = element("ul", "journal-list treasures");
+
+            hunts.append(
+                ...treasures.map(({ id, title, from, where, grade, own }) => {
+                    const row = element("li", "journal-treasure");
+                    const head = element("div", "journal-request-head");
+
+                    head.append(element("span", `journal-request-title rarity-${grade}`, title), element("span", "journal-request-from", from));
+                    row.append(head, element("p", "journal-request-progress", [where, "the circle's on your world map"].filter(Boolean).join(" · ")));
+
+                    if (own) {
+                        const give = element("button", "journal-button", "Give up");
+
+                        give.type = "button";
+                        give.setAttribute("aria-label", `Give up the hunt for ${title}`);
+                        give.addEventListener("click", () => this.onGiveUpTreasure(id));
+                        row.append(give);
+                    }
+
+                    return row;
+                }),
+            );
+
+            sections.push(this.#section("Treasure hunts", hunts));
+        }
 
         // What they've read, each to be read again
         if (writings.length) {

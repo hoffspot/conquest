@@ -536,6 +536,99 @@ band of the land's brigands has found it and keeps it (`core/caches.js`, the hos
 The caches and how far each player's crossed the wilds since the last are kept in a snapshot
 (`SNAPSHOT_VERSION` 7), so a player joining finds them where they are.
 
+## Treasure maps
+
+Now and then a chest holds a map of where something was buried, and any adventurers' guild sells
+a plain one (`core/treasure.js`, the host's `#treasures`). Read out in the wilds, it marks a circle
+to search on its reader's maps, and their party's; whoever buried it left a band to keep it.
+- **The map.** One thing (`treasureMap`, progress.js ITEMS) in every make gear comes in: common,
+  fine, masterwork, rare, very rare and legendary (`MAP_GRADES`), named for it ("Rare treasure
+  map") and shown in its colour, worth more the rarer (its make's price, as gear's). It's read
+  from the pack ("Read"), kept with the tomes and scrolls.
+- **Where it's had.**
+  - **Bought:** a common one, 40 gold, at any adventurers' guild; never a better one, and no other
+    shop has them.
+  - **In a share of a chest** (`MAP_FINDS`, `withMap`: each player's share rolled for itself):
+    - one in ten of a place's chests and of the adventurers' caches;
+    - one in twelve of a dungeon's chests (never its fallen's remains);
+    - three in ten of a hoard (a drake's, a dungeon boss's);
+    - half of a great hoard (a Dreadthorn's, the Tower of Sar Mordal's).
+
+    How well made it is goes by the chest's tier (`MAP_MAKES`, `foundMap`; a lair's hoard, its
+    master's: a drake's and a Dreadthorn's the tenth):
+    - tiers 1 and 2: common, now and then fine;
+    - tiers 3 and 4: up to masterwork;
+    - tiers 5 and 6: up to very rare;
+    - tiers 7 and 8: up to legendary, now and then;
+    - tiers 9 and 10: rare or better, a legendary one in seven.
+  - **In a treasure dug up:** one in eight of the shares holds another, as well made or the next
+    better.
+- **Read.** Only out in the world (not in a building: "Read it out in the world, under the open
+  sky."), and three of a player's own at most at once (`TREASURE.most`: "You're on the trail of
+  three treasures already").
+  - **Where it leads** (`placeTreasure`): as far off as its make has it (`TREASURES` `reach`), any
+    way, 150 m in from the world's edge, on the ground a cache could be on (`cacheClear`: dry, off
+    the roads, clear of the settlements, the places worth finding, the camps, any cache or other
+    treasure), with a way there across the world from where it was read (core/journey.js
+    `wayAcross`).
+  - **What's marked:** a circle round the spot, its make's `radius` wide, its middle anywhere that
+    keeps the spot within two thirds of the way to its edge.
+  - **What it's called:** the map's gone from the pack, and its reader's told which way and how
+    far ("The rare treasure map shows somewhere 1.2 km south-west…"), with a quill's scratch.
+  - **Nowhere found** ("The map's marks fit nothing round here"): the map's kept.
+
+  | Make | How far (m) | Circle (m) | Keepers | Tiers up | Leader | Gold | Gear | Prize |
+  |---|---|---|---|---|---|---|---|---|
+  | Common | 300–700 | 40 | 3–4 | 0 | | ×1.5 | 1–2 | |
+  | Fine | 450–950 | 50 | 3–5 | 0 | | ×2 | 1–2 | fine |
+  | Masterwork | 600–1,300 | 60 | 4–5 | 1 | | ×3 | 2–3 | masterwork |
+  | Rare | 800–1,700 | 75 | 4–6 | 1 | | ×4.5 | 2–3 | rare |
+  | Very rare | 1,000–2,200 | 90 | 5–6 | 2 | elite | ×6 | 2–3 | very rare |
+  | Legendary | 1,300–2,800 | 110 | 5–7 | 2 | elite | ×9 | 3–4 | legendary |
+- **Who hunts it** (`huntersOf`): its reader, and whoever's in their party (*Parties*, docs/WAR.md),
+  now. Each of them has its circle on their world map and minimap (`drawSearch`, app/mapicons.js:
+  a dashed ring in the map's make's colour, faintly filled, an X at its middle; their own bolder
+  than another's), and the hunt in their journal (*Treasure hunts*: which way, and whose map), their
+  own each to give up ("Give up": the `treasure` command, `do` "abandon"; its keepers let go). Told
+  when one of their party reads one ("Bryn's fine treasure map: where it leads is marked…"). Anyone
+  else sees nothing of it.
+- **Its keepers wake** once one of its hunters out in the world comes within 40 m of its circle
+  (`TREASURE.rouse`, `nearTreasure`).
+  - **Where they stand:** about where it's buried, on open enough ground for them, as near where
+    the map has it as can be (within 12 m: `TREASURE.shift`; `spot`, kept from then on).
+  - **Who they are:** a band of the land there (`CACHE_BANDS`, as a cache's: outlaws, goblin raiders,
+    goblins under a troll, the restless dead, cultists), as many as its make has (`treasureCount`).
+  - **How strong:** as a cache there would be, its make's tiers more (`treasureTier`: the land's
+    tier or the reader's might when it was read, whichever's the more), up to the tenth.
+  - **How they keep it:** as a cache's band keeps it (#putBand, shared with the caches), against
+    the side of the group the hunter's in.
+  - **Its leader:** a very rare or legendary map's is an elite (*Elites*: three times the hit
+    points, its prize when it falls).
+  - **What's told:** those of its hunters near it: "Whoever buried it left outlaws keeping it. Put
+    them all down to dig it up."
+  - **What's seen:** nothing above ground. Within 15 m of where it's buried (`TREASURE.seen`), its
+    hunters see it glint (world/treasure3d.js: a twinkling gold star over a mound of turned earth).
+  - **Let go** with the caches once every player's further than 200 m, and its circle's width
+    twice over and 40 m more, from them (never while a hunter's near enough to wake them again).
+    The treasure stays where it was buried, for them to wake afresh.
+- **Dug up** once the last of them falls (#unearth).
+  - **Who has a share:** each of its hunters within 39 m of it (as at a cache), and each who struck
+    or felled one of them (`fought`) wherever they are, told so ("The treasure's dug up: your share
+    waits where it was buried."). Another player there, in no party with its reader, has none.
+  - **Each share** (`rollTreasure`), theirs alone to take where it was buried, for five minutes:
+    - gold: 20 to 45 times its make's `gold`, 35% more for each tier past the first;
+    - gear as well made as a cache's at its tier, as many as its make has;
+    - from a fine map on, a prize as well made as the map;
+    - a healing draught;
+    - now and then (`TREASURE.map`) another map.
+
+    Its lid's lifted ("You dig up the treasure…"), with no lock to turn.
+  - **The hunt's done**, and its hunters not there are told ("Bryn's treasure's been dug up,
+    without you.").
+
+The treasures hunted are kept in a snapshot (`SNAPSHOT_VERSION` 32, none in a world kept before),
+so a player joining finds them as they are; what's said between games changed (`NET_VERSION` 155).
+
 ## By night
 
 The world's clock has a day and a night (docs/GAME.md, *Day and night*), and the wild has its own

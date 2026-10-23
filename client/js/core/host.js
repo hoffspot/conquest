@@ -16,7 +16,7 @@
 
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
-import { cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
+import { CACHE_BANDS, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
@@ -54,6 +54,7 @@ import { dropTiles, navigatorOf } from "./navigation.js";
 import { FORTS, footprintOf } from "./war/forts.js";
 import { atan2, cos, hypot, sin } from "./exact.js";
 import { BODIES, fightingValue, groupsOf, opposition, scalingOf, sideStrength, STRENGTH, wholeOf, withinBudget } from "./strength.js";
+import { gradeOfMap, huntersOf, nearTreasure, placeTreasure, rollTreasure, TREASURE, treasureBand, treasureCount, TREASURES, treasureTier, withMap } from "./treasure.js";
 
 /** The id of the player whose game the world runs in (the only one, playing alone). */
 export const HOST_PLAYER = "player";
@@ -573,7 +574,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 31;
+export const SNAPSHOT_VERSION = 32;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -609,6 +610,8 @@ export const SNAPSHOT_STEPS = Object.freeze({
     29: (snapshot) => ({ ...snapshot, version: 30, invaded: 0, invasions: [] }),
     // 31: how big an invasion each player's device can draw (Host `budget`: none told yet)
     30: (snapshot) => ({ ...snapshot, version: 31, players: snapshot.players.map((player) => ({ budget: null, ...player })) }),
+    // 32: the treasures hunted (Host #treasures: none yet)
+    31: (snapshot) => ({ ...snapshot, version: 32, treasures: [], nextTreasure: 1 }),
 });
 
 /**
@@ -720,6 +723,11 @@ export const REFUSALS = Object.freeze({
     reading: "You're reading one already.",
     known: "You know that spell already.",
     unexplored: "You haven't been there.",
+    // (A treasure map: core/treasure.js, #readMap)
+    unsheltered: "Read it out in the world, under the open sky.",
+    hunting: "You're on the trail of three treasures already: dig one up, or give one up in your journal.",
+    unmapped: "The map's marks fit nothing round here: try it somewhere else.",
+    treasure: "No such treasure.",
     // (At the war table: core/wartable.js, #atTable)
     table: "Stand at the war table to give its orders.",
     orderRank: "Only a Lord or a Councillor gives the army its orders.",
@@ -1013,6 +1021,17 @@ export class Host {
         this.caches = new Map();
         this.nextCache = 1;
         this.travel = new Map();
+
+        /**
+         * The treasures hunted (core/treasure.js), by id: { id, owner (whose map it was: a
+         * player's id), name (theirs), grade (the map's make), tier (its keepers'), band (who keep
+         * it: caches.js CACHE_BANDS' id), people (the maker of a people's piece in it), at (where
+         * the map has it: [x, y]), spot (where it's dug up, once its keepers have been out: [x, y],
+         * or null), centre and radius (the circle to search), cache (its keepers out about it, as an
+         * adventurer's cache's are: the cache's id, or null), read (when: the battle's ms) }.
+         */
+        this.treasures = new Map();
+        this.nextTreasure = 1;
 
         /**
          * The dungeons a player's come to (core/dungeons: docs/DUNGEONS.md), by site id: {
@@ -1587,6 +1606,8 @@ export class Host {
                 return this.#answer(player, Boolean(command.come));
             case "party":
                 return this.#partyCommand(player, command);
+            case "treasure":
+                return this.#treasureCommand(player, command);
             case "buy":
                 return this.#buy(player, actor, command);
             case "sell":
@@ -1706,7 +1727,8 @@ export class Host {
      * Returns what happened: the battle's events, and the host's own ("join", "leave", "open",
      * "close", "explored", "talk", "effect", "roused" (the wild's creatures put out), "trade"; "war", with each of the war's events, and "turn",
      * once each of its turns is over; "away", a player marked away or back, and "afk", one to be
-     * sent out of the world for it: AFK).
+     * sent out of the world for it: AFK; "treasure", a treasure map read, its keepers woken, it dug
+     * up or given up: #treasures).
      */
     advance(ms) {
         this.recorder?.(["a", ms]);
@@ -1841,9 +1863,10 @@ export class Host {
                     this.#clearedBy(beast.lair, heart, lair?.maps);
 
                     if (lair?.hoard && this.ground.has(`chest-${beast.lair}`)) {
-                        const { hoard = "hoard", relic = false } = LAIRS[this.#siteOf(beast.lair).kind];
+                        const { hoard = "hoard", relic = false, master } = LAIRS[this.#siteOf(beast.lair).kind];
 
-                        this.#opened(beast.lair, hoard, { at: heart, maps: lair.maps, map: lair.hoard.map, square: lair.hoard.square, people: "human", tier: 1, relic });
+                        // (Its gold as its own; a treasure map in it as well made as its master's tier)
+                        this.#opened(beast.lair, hoard, { at: heart, maps: lair.maps, map: lair.hoard.map, square: lair.hoard.square, people: "human", tier: 1, mapTier: master[1], relic });
                     }
                 }
 
@@ -2175,6 +2198,8 @@ export class Host {
             caches: structuredClone([...this.caches.entries()]),
             dungeons: structuredClone([...this.dungeons.entries()]),
             nextCache: this.nextCache,
+            treasures: structuredClone([...this.treasures.entries()]),
+            nextTreasure: this.nextTreasure,
             travel: structuredClone([...this.travel.entries()]),
             ground: structuredClone([...this.ground.values()]),
             campfires: structuredClone(this.campfires),
@@ -2345,6 +2370,8 @@ export class Host {
         host.caches = new Map(structuredClone(snapshot.caches ?? []));
         host.dungeons = new Map(structuredClone(snapshot.dungeons ?? []));
         host.nextCache = snapshot.nextCache ?? 1;
+        host.treasures = new Map(structuredClone(snapshot.treasures ?? []));
+        host.nextTreasure = snapshot.nextTreasure ?? 1;
         host.travel = new Map(structuredClone(snapshot.travel ?? []));
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
         host.nextGround = snapshot.nextGround ?? 1;
@@ -3329,6 +3356,11 @@ export class Host {
             this.#event("used", { id: player.id, item });
 
             return thrown;
+        }
+
+        // (A treasure map: read out in the world, where it leads marked for them and their party)
+        if (use.treasure) {
+            return this.#readMap(player, actor, index);
         }
 
         if (use.safety && player.safety) {
@@ -6753,6 +6785,7 @@ export class Host {
         this.#lairs(places);
         this.#places(places, homes);
         this.#caches(homes);
+        this.#treasures();
         this.#dungeons(places);
 
         // (Those together as one: the wild about them all counted once, and put out about their
@@ -7608,7 +7641,7 @@ export class Host {
     // more dangerous its land, CHEST_GOLD; and what the dead guarded, one of their old relics
     // each, `relic`; a cache's, core/caches.js rollCache, as rich as its band was strong), theirs
     // alone to take, where it stood (`map`, `square`)
-    #opened(id, kind, { at, maps, map, square, people, tier, relic = false, fought = [] }) {
+    #opened(id, kind, { at, maps, map, square, people, tier, mapTier = tier, relic = false, fought = [] }) {
         this.ground.delete(`chest-${id}`);
 
         for (const player of this.players.values()) {
@@ -7624,6 +7657,9 @@ export class Host {
             if (kind !== "cache") {
                 bundle.gold = Math.round(bundle.gold * (1 + CHEST_GOLD * (tier - 1)));
             }
+
+            // (A treasure map in it now and then: core/treasure.js MAP_FINDS, as rare as its tier)
+            withMap(bundle, kind, mapTier, this.random, { relic });
 
             const ground = `ground-${this.nextGround++}`;
 
@@ -7666,8 +7702,12 @@ export class Host {
 
         for (const [id, cache] of [...this.caches]) {
             const fighting = cache.ids.some((each) => (this.battle.actor(each)?.target ?? null) !== null);
+            // (A treasure's keepers kept out as far again as its circle is wide, and the way to
+            // wake them: never let go while a hunter's near enough to wake them again)
+            const treasure = cache.treasure ? this.treasures.get(cache.treasure) : null;
+            const far = CACHES.far + (treasure ? treasure.radius * 2 + TREASURE.rouse : 0);
 
-            if (!fighting && !homes.some(({ at: [x, y] }) => hypot(x - cache.at[0], y - cache.at[1]) < CACHES.far)) {
+            if (!fighting && !homes.some(({ at: [x, y] }) => hypot(x - cache.at[0], y - cache.at[1]) < far)) {
                 for (const each of [...cache.ids]) {
                     if (!this.battle.actor(each)?.dead) {
                         this.#release(each);
@@ -7765,29 +7805,44 @@ export class Host {
             }).map((player) => player.progress.might()));
             const tier = cacheTier(tierAt(heart, homes.map(({ home }) => home), landAt(plan, ...heart).biome), might);
             const band = cacheBand(landAt(plan, ...heart).biome, this.random);
-            const count = cacheCount(tier, this.random);
-            const side = group ? this.#side(group) : null;
-            const scale = side ? scalingOf(side.opposition) : null;
-            const folk = this.#scaled(count - 1, scale, heart);
-            const id = `cache-${this.nextCache++}`;
-            const keeps = { cache: id, pack: id, temper: "territorial", guard: CACHES.guard };
-            const ids = this.#pack({ creature: band.leader, tier: Math.min(TIERS, tier + CACHES.lead), count: 1 }, [heart[0] + 1.5, heart[1]], { ...keeps, master: true, roam: 2, health: scale?.leader ?? 1 });
-            const round = roundOf(heart);
 
-            startsOf(folk.count).forEach((stop, k) => {
-                ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, round[stop], { ...keeps, roam: CACHES.round * 2, round: { stops: round, at: stop }, health: folk.health, extra: k >= count - 1 }));
-            });
-
-            this.#keepPack(ids, { strength: side?.strength ?? 1, least: count - 1, creature: band.folk, tier, keeps: { cache: id, temper: "territorial", guard: CACHES.guard, roam: CACHES.round * 2 } });
-
-            this.caches.set(id, { id, at: heart, chest, band: band.id, tier, ids, opened: false });
-            this.ground.set(`chest-${id}`, { id: `chest-${id}`, chest: true, locked: true, cache: id, for: null, map: "town", square: [...chest], until: null });
-            this.#event("cache", { cache: id, change: "put", band: band.id, at: heart, ids });
+            this.#putBand(heart, chest, { band, tier, count: cacheCount(tier, this.random), group });
 
             return true;
         }
 
         return false;
+    }
+
+    // A cache's band put out about its heart ([x, y]; its `chest` square): their leader by it, the
+    // rest on their round about it; against the side of the `group` they're in (#side), more of the
+    // band and each tougher, their leader tougher still (strength.js SCALING); an `elite` leading
+    // them (a treasure's, its map's make's: core/treasure.js TREASURES). Its chest locked till the
+    // last falls; a treasure's (`treasure`: its id) buried, dug up once they have (#unearth). Its id
+    #putBand(heart, chest, { band, tier, count, group = null, elite = false, treasure = null }) {
+        const side = group ? this.#side(group) : null;
+        const scale = side ? scalingOf(side.opposition) : null;
+        const folk = this.#scaled(count - 1, scale, heart);
+        const id = `cache-${this.nextCache++}`;
+        const keeps = { cache: id, pack: id, temper: "territorial", guard: CACHES.guard };
+        const ids = this.#pack({ creature: band.leader, tier: Math.min(TIERS, tier + CACHES.lead), count: 1 }, [heart[0] + 1.5, heart[1]], { ...keeps, master: true, roam: 2, health: scale?.leader ?? 1, ...(elite ? { elite: true } : {}) });
+        const round = roundOf(heart);
+
+        startsOf(folk.count).forEach((stop, k) => {
+            ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, round[stop], { ...keeps, roam: CACHES.round * 2, round: { stops: round, at: stop }, health: folk.health, extra: k >= count - 1 }));
+        });
+
+        this.#keepPack(ids, { strength: side?.strength ?? 1, least: count - 1, creature: band.folk, tier, keeps: { cache: id, temper: "territorial", guard: CACHES.guard, roam: CACHES.round * 2 } });
+
+        this.caches.set(id, { id, at: heart, chest, band: band.id, tier, ids, opened: false, ...(treasure ? { treasure } : {}) });
+
+        if (!treasure) {
+            this.ground.set(`chest-${id}`, { id: `chest-${id}`, chest: true, locked: true, cache: id, for: null, map: "town", square: [...chest], until: null });
+        }
+
+        this.#event("cache", { cache: id, change: "put", band: band.id, at: heart, ids, ...(treasure ? { treasure } : {}) });
+
+        return id;
     }
 
     // One of a cache's guards fallen: once every one of them is, it's opened, a share of what's in
@@ -7802,8 +7857,179 @@ export class Host {
         }
 
         cache.opened = true;
+
+        // (A treasure's keepers: it's dug up)
+        if (cache.treasure) {
+            this.#unearth(cache);
+
+            return;
+        }
+
         this.#opened(id, "cache", { at: cache.at, maps: [], map: "town", square: cache.chest, people: "human", tier: cache.tier, fought: cache.fought ?? [] });
         this.#event("cache", { cache: id, change: "opened" });
+    }
+
+    // --- Treasure maps (core/treasure.js; docs/WILDS.md *Treasure maps*) ---
+
+    /** The treasures a player's hunting: theirs, and those of their party's (core/treasure.js huntersOf). */
+    treasuresOf(playerId) {
+        return [...this.treasures.values()].filter((treasure) => huntersOf(treasure, [playerId], (id) => this.fellows(id)).length > 0);
+    }
+
+    // A treasure map read (the stack at `index` in a player's pack): out in the world, and not on
+    // the trail of TREASURE.most of their own already; where it leads (core/treasure.js
+    // placeTreasure, from where they stand), marked for them and their party, its keepers as strong
+    // as the land there and the reader are (treasureTier), and the map gone. Refused, it's kept
+    #readMap(player, actor, index) {
+        const plan = this.world.plan;
+
+        if (actor.map !== "town" || !plan) {
+            return refuse("unsheltered");
+        }
+
+        if ([...this.treasures.values()].filter(({ owner }) => owner === player.id).length >= TREASURE.most) {
+            return refuse("hunting");
+        }
+
+        const grade = gradeOfMap(player.progress.pack[index].quality);
+        const overworld = this.world.maps.town;
+        const others = [...this.treasures.values(), ...this.caches.values()].map(({ at }) => at);
+        const found = placeTreasure(plan, [actor.x, actor.y], grade, this.random, { nearRoad: (x, y, within) => overworld.nearRoad?.(x, y, within) ?? false, others });
+
+        if (!found) {
+            return refuse("unmapped");
+        }
+
+        const homes = [...this.players.values()].map((each) => this.#homeOf(each)).filter(Boolean);
+        const land = landAt(plan, ...found.at);
+        const tier = treasureTier(homes.length ? tierAt(found.at, homes, land.biome) : 1, player.progress.might(), grade);
+        const item = player.progress.take(index, 1);
+        const id = `treasure-${this.nextTreasure++}`;
+
+        this.treasures.set(id, { id, owner: player.id, name: player.hero.name, grade, tier, band: treasureBand(land.biome, this.random), people: land.race ?? "human", at: found.at, spot: null, centre: found.centre, radius: found.radius, cache: null, read: this.battle.time });
+        this.#event("used", { id: player.id, item });
+        this.#event("treasure", { id: player.id, treasure: id, change: "marked", grade, centre: found.centre, radius: found.radius });
+
+        return OK;
+    }
+
+    // What a player does about a treasure they're hunting (a "treasure" command): give up their
+    // own (`do` "abandon", `treasure` its id), its keepers let go
+    #treasureCommand(player, { do: what, treasure: id }) {
+        const treasure = this.treasures.get(id);
+
+        if (what !== "abandon" || !treasure || treasure.owner !== player.id) {
+            return refuse("treasure");
+        }
+
+        const cache = treasure.cache ? this.caches.get(treasure.cache) : null;
+
+        for (const each of cache?.ids ?? []) {
+            if (this.battle.actor(each) && !this.battle.actor(each).dead) {
+                this.#release(each);
+            }
+        }
+
+        if (cache) {
+            this.caches.delete(cache.id);
+            this.#event("cache", { cache: cache.id, change: "gone" });
+        }
+
+        this.treasures.delete(id);
+        this.#event("treasure", { id: player.id, treasure: id, change: "abandoned" });
+
+        return OK;
+    }
+
+    // The treasures hunted: for each whose keepers aren't out, once one of its hunters (its
+    // reader, or one of their party) out in the world comes near its circle (core/treasure.js
+    // nearTreasure), those keeping it put out about where it's buried (#unbury); let go again with
+    // the caches, once every player's left them far behind (#caches), to be put out afresh
+    #treasures() {
+        for (const treasure of this.treasures.values()) {
+            if (treasure.cache && this.caches.has(treasure.cache)) {
+                continue;
+            }
+
+            treasure.cache = null;
+
+            const near = huntersOf(treasure, [...this.players.keys()], (id) => this.fellows(id)).filter((id) => {
+                const actor = this.battle.actor(id);
+
+                return actor && !actor.dead && actor.map === "town" && nearTreasure(treasure, [actor.x, actor.y]);
+            });
+
+            if (near.length) {
+                this.#unbury(treasure, near[0]);
+            }
+        }
+    }
+
+    // A treasure's keepers put out (a hunter, `by`, come near): where it's buried found the first
+    // time (on open enough ground for them, as near where the map has it as can be: core/treasure.js
+    // TREASURE.shift), its band of the land there (CACHE_BANDS), as many as its map's make has
+    // (treasureCount), an elite leading them if it has one, against the side of the group the
+    // hunter's in
+    #unbury(treasure, by) {
+        if (!treasure.spot) {
+            const squares = squaresOf(this.world.maps.town);
+            const open = (at) => openAround(at, (x, y) => squares.blocked(x, y));
+
+            for (let reach = 0; reach <= TREASURE.shift && !treasure.spot; reach += 2) {
+                const around = Math.max(1, Math.round(reach * 1.5));
+
+                for (let k = 0; k < around && !treasure.spot; k++) {
+                    const angle = (k / around) * Math.PI * 2;
+                    const at = [Math.floor(treasure.at[0] + cos(angle) * reach) + 0.5, Math.floor(treasure.at[1] + sin(angle) * reach) + 0.5];
+
+                    if (open(at)) {
+                        treasure.spot = at;
+                    }
+                }
+            }
+
+            treasure.spot ??= [...treasure.at];
+        }
+
+        const group = this.#groups().find(({ players }) => players.some(({ id }) => id === by)) ?? null;
+        const chest = [Math.floor(treasure.spot[0]), Math.floor(treasure.spot[1])];
+
+        treasure.cache = this.#putBand(treasure.spot, chest, { band: { id: treasure.band, ...CACHE_BANDS[treasure.band] }, tier: treasure.tier, count: treasureCount(treasure.grade, this.random), group, elite: TREASURES[treasure.grade].elite, treasure: treasure.id });
+        this.#event("treasure", { treasure: treasure.id, change: "roused", by, owner: treasure.owner });
+    }
+
+    // A treasure's keepers all fallen (its `cache`): it's dug up where it was buried, a share of it
+    // for each of its hunters there (as at a cache: #atPlace), or who fought its keepers (`fought`)
+    // wherever they are (told so: `away`), each their own (core/treasure.js rollTreasure); and the
+    // hunt's done
+    #unearth(cache) {
+        const treasure = this.treasures.get(cache.treasure);
+
+        if (!treasure) {
+            return;
+        }
+
+        const hunters = new Set(huntersOf(treasure, [...this.players.keys()], (id) => this.fellows(id)));
+        const shared = [];
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+            const there = Boolean(actor) && this.#atPlace(actor, cache.at, []);
+
+            if (!hunters.has(player.id) || !actor || actor.dead || (!there && !(cache.fought ?? []).includes(player.id))) {
+                continue;
+            }
+
+            const bundle = rollTreasure(treasure.tier, treasure.grade, this.random, { people: treasure.people });
+            const ground = `ground-${this.nextGround++}`;
+
+            this.ground.set(ground, { id: ground, bundle, for: player.id, from: "chest", map: "town", square: [...cache.chest], until: this.battle.time + GROUND_MS });
+            this.#event("spoils", { id: player.id, ground, from: cache.id, creature: "chest", treasure: treasure.grade, ...(there ? {} : { away: true }) });
+            shared.push(player.id);
+        }
+
+        this.treasures.delete(treasure.id);
+        this.#event("treasure", { treasure: treasure.id, change: "found", owner: treasure.owner, grade: treasure.grade, shared });
     }
 
     // A player, or one of theirs (`by`: a follower, a creature called or raised), fighting a
@@ -8058,6 +8284,11 @@ export class Host {
             }
 
             const bundle = dropped.hoard ? rollHoard(hoardTier(level.tier, player.progress.might()), this.random) : dropped.remains ? rollFallen(level.tier, this.random) : rollCoffer(level.tier, this.random);
+
+            // (A treasure map in a chest or the hoard now and then: core/treasure.js MAP_FINDS)
+            if (!dropped.remains) {
+                withMap(bundle, dropped.hoard ? "hoard" : "dungeon", level.tier, this.random);
+            }
             const ground = `ground-${this.nextGround++}`;
             const from = dropped.remains ? "remains" : "chest";
 

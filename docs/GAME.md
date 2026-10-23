@@ -783,6 +783,21 @@ as a wagon!"
   find*): its beasts out towards the nearest, on a hunting ground short of it, and a look round
   where one's said to be.
 
+### Treasure hunts (core/treasure.js; docs/WILDS.md *Treasure maps*)
+
+A treasure map read out in the wilds marks where it leads for its reader and their party:
+- **On the world map and the minimap** (app/game.js `treasureCircles`, app/mapicons.js
+  `drawSearch`): a dashed ring round about where it's buried, faintly filled, an X at its middle,
+  in the map's make's colour (a common map's parchment, a fine one's blue, a masterwork's gold, a
+  rare one's violet, a very rare one's rose, a legendary one's orange); the player's own bolder than
+  their party's. Fog or no, till it's dug up or given up.
+- **In the journal** (app/journal.js, *Treasure hunts*): each map named in its make's colour, whose
+  it was, and which way and how far its circle is from the player now; their own each with a
+  *Give up* button (the hunt let go, its keepers with it).
+- **Where it's buried** glints once the player's within 15 m of it (world/treasure3d.js
+  `TreasureGlints`: a gold four-pointed star over a mound of turned earth, twinkling, turning and
+  swelling about every second and a half), for its hunters only.
+
 ### Writings (core/writings.js, app/reader.js)
 
 What's written down and left where it was, to be found and read there: the wizard Sinclair's
