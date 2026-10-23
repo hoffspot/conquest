@@ -4,13 +4,14 @@
 // adventurers' guild's branches whose portals they can step through to (core/portals.js: by their
 // places' ids), each one they've been into; and the signs they've read on the trails out of the
 // wild's camps and lairs (core/tracks.js: by their ids), and the homes they've tracked those trails
-// to (by the camp's or site's id), marked on their maps. In a party, what each finds is found by
-// the others too (Host #share), and kept by them for good: the places worth finding one of them
-// found first, by whom (`found`), for the maps to say.
+// to (by the camp's or site's id), marked on their maps; and the rings of standing stones they've
+// stood in (core/rings.js: by their sites' ids), each one's moon theirs to know. In a party, what
+// each finds is found by the others too (Host #share), and kept by them for good: the places worth
+// finding one of them found first, by whom (`found`), for the maps to say.
 //
 // Kept with the saved game (app/save.js): the buildings as their keys, the chunks as one bit each
-// (the world's 128 by 128 chunks in 2 KB), written as base64, the branches, the signs and the homes
-// as their ids, and who found what for them as { place's id: name }. One kept from before there
+// (the world's 128 by 128 chunks in 2 KB), written as base64, the branches, the signs, the homes
+// and the rings as their ids, and who found what for them as { place's id: name }. One kept from before there
 // were portals has none (`portals` null), till the host works out which they'd found (Host join).
 
 import { fromBase64, toBase64 } from "./wire.js";
@@ -20,7 +21,7 @@ export class Explored {
     /**
      * @param {object} [kept] - As `toJSON` gave it: { entered: [keys], visited: base64, portals: [ids], found: { id: name }, signs: [ids], tracked: [ids] }.
      */
-    constructor({ entered = [], visited = "", portals = null, found = {}, signs = [], tracked = [] } = {}) {
+    constructor({ entered = [], visited = "", portals = null, found = {}, signs = [], tracked = [], rings = [] } = {}) {
         this.entered = new Set(entered.filter((key) => typeof key === "string"));
         this.visited = typeof visited === "string" && visited ? fromBase64(visited, (CHUNKS * CHUNKS) / 8) : new Uint8Array((CHUNKS * CHUNKS) / 8);
 
@@ -33,6 +34,9 @@ export class Explored {
         /** The trails' signs read (core/tracks.js ids), and the homes tracked (camps' and sites' ids). */
         this.signs = new Set((Array.isArray(signs) ? signs : []).filter((id) => typeof id === "string"));
         this.tracked = new Set((Array.isArray(tracked) ? tracked : []).filter((id) => typeof id === "string"));
+
+        /** The rings of standing stones stood in (their sites' ids: core/rings.js). */
+        this.rings = new Set((Array.isArray(rings) ? rings : []).filter((id) => typeof id === "string"));
 
         /** Goes up by one whenever anything's found (for what's drawn from it to know to redraw). */
         this.version = 0;
@@ -114,6 +118,18 @@ export class Explored {
         return true;
     }
 
+    /** A ring of standing stones stood in (core/rings.js: its site's id): returns whether it's the first time. */
+    standIn(id) {
+        if (typeof id !== "string" || this.rings.has(id)) {
+            return false;
+        }
+
+        this.rings.add(id);
+        this.version++;
+
+        return true;
+    }
+
     /** Has the player been in this chunk (cx, cy: chunks from the world's north-west corner)? */
     isVisited(cx, cy) {
         if (cx < 0 || cy < 0 || cx >= CHUNKS || cy >= CHUNKS) {
@@ -179,6 +195,6 @@ export class Explored {
      * something for them, and no signs or homes till they've read or tracked any).
      */
     toJSON() {
-        return { entered: [...this.entered], visited: toBase64(this.visited), ...(this.portals ? { portals: [...this.portals] } : {}), ...(this.found.size ? { found: Object.fromEntries(this.found) } : {}), ...(this.signs.size ? { signs: [...this.signs] } : {}), ...(this.tracked.size ? { tracked: [...this.tracked] } : {}) };
+        return { entered: [...this.entered], visited: toBase64(this.visited), ...(this.portals ? { portals: [...this.portals] } : {}), ...(this.found.size ? { found: Object.fromEntries(this.found) } : {}), ...(this.signs.size ? { signs: [...this.signs] } : {}), ...(this.tracked.size ? { tracked: [...this.tracked] } : {}), ...(this.rings.size ? { rings: [...this.rings] } : {}) };
     }
 }

@@ -693,7 +693,7 @@ export function loadExplored(save) {
         return { entered: [], visited: "" };
     }
 
-    return { entered: explored.entered ?? [], visited: explored.visited ?? "", ...(Array.isArray(explored.portals) ? { portals: explored.portals } : {}), ...(isObject(explored.found) ? { found: explored.found } : {}), ...(Array.isArray(explored.signs) ? { signs: explored.signs } : {}), ...(Array.isArray(explored.tracked) ? { tracked: explored.tracked } : {}) };
+    return { entered: explored.entered ?? [], visited: explored.visited ?? "", ...(Array.isArray(explored.portals) ? { portals: explored.portals } : {}), ...(isObject(explored.found) ? { found: explored.found } : {}), ...(Array.isArray(explored.signs) ? { signs: explored.signs } : {}), ...(Array.isArray(explored.tracked) ? { tracked: explored.tracked } : {}), ...(Array.isArray(explored.rings) ? { rings: explored.rings } : {}) };
 }
 
 /** Keep what's been found in a saved game (not in one that isn't saved: ?play). */

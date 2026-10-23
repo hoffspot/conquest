@@ -6577,6 +6577,122 @@ test("a shrine out in the land: tapped, walked up to and prayed at; its god's gi
     expect(await page.evaluate((id) => window.pellagos.game.host.command(window.pellagos.game.me, { type: "pray", shrine: id }), shrine.id)).toEqual({ ok: false, reason: "prayed" });
 });
 
+test("the rings of standing stones as Lunara's moon roads: stepped into by night, the player carried to the ring tonight's moon wakes, aglow, both in the journal; under a full moon, the world map's rings stood in to choose from", async ({ page }) => {
+    await page.goto("/?play&seed=2");
+    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
+
+    // The ring nearest the player's town, and the one its moon road leads to on some night;
+    // stepped into on that night, 2 hours after its sunset
+    const rings = await page.evaluate(async () => {
+        const { DAY, dayOf, elapsedOf } = await import("/js/core/daytime.js");
+        const { FULL_MOON, moonRoad, PHASES, phaseOfNight, ringName, ringsOf } = await import("/js/core/rings.js");
+        const { game } = window.pellagos;
+        const { host, battle, world } = game;
+        const me = battle.actor(game.me);
+        const far = ({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y);
+        const from = [...ringsOf(world.plan)].sort((a, b) => far(a) - far(b))[0];
+        const phase = [1, 2, 3, 5, 6, 7].find((moon) => moonRoad(world.plan, from, moon));
+        const road = moonRoad(world.plan, from, phase);
+        // (The nights to come, from tomorrow's: the first whose moon is a phase)
+        const today = dayOf(elapsedOf(host.war));
+        const night = (day) => day * DAY.length - DAY.start + DAY.sets + DAY.length / 12;
+        const nightWith = (moon) => night(Array.from({ length: 16 }, (_, k) => today + 1 + k).find((day) => phaseOfNight(night(day)) === moon));
+        const heart = (ring) => world.maps.town.sites.heartOf(ring.site);
+        const [x, y] = heart(from);
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(host.war, { turn: Math.floor(nightWith(phase) / 60000), clock: nightWith(phase) % 60000 });
+        host.battle.place(game.me, "town", [Math.floor(x), Math.floor(y)], { facing: Math.PI });
+        Object.assign(battle.actor(game.me), { hp: 1e6, maxHp: 1e6 });
+        window.testRoad = { heart: heart(road), from: heart(from), full: nightWith(FULL_MOON) };
+
+        return { from: { id: from.site.id, name: ringName(world.plan, from), phase: PHASES[from.phase] }, road: { id: road.site.id, name: ringName(world.plan, road), phase: PHASES[road.phase] } };
+    });
+
+    // Carried: in the other ring's middle, what the stones did said, its moonlight about them
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        return Math.hypot(me.x - window.testRoad.heart[0], me.y - window.testRoad.heart[1]) < 5 && game.moonGates.shown.size > 0;
+    }, { seconds: 10 })).toBe(true);
+
+    const carried = await page.evaluate((id) => {
+        const { game } = window.pellagos;
+
+        return { said: game.messages.map(({ text }) => text), stood: [...game.explored.rings], glow: game.moonGates.shown.get(id)?.bright ?? null };
+    }, rings.road.id);
+
+    expect(carried.said).toContain(`These stones are Lunara's roads: this ring wakes under the ${rings.from.phase}. It's in your journal.`);
+    expect(carried.said).toContain(`The stones hum, and the moonlight carries you: you stand in ${rings.road.name}.`);
+    expect(new Set(carried.stood)).toEqual(new Set([rings.from.id, rings.road.id]));
+    expect(carried.glow).toBe(true);
+
+    // Both rings in the journal, with the moon each wakes under; this one awake tonight
+    await page.evaluate(() => window.pellagos.game.toggleJournal());
+
+    const roads = page.getByRole("dialog", { name: "Journal" }).locator(".moon-roads");
+
+    await expect(roads).toContainText(`Tonight's moon: the ${rings.road.phase}.`);
+    await expect(roads.locator(".journal-trail.tracked")).toContainText("Awake tonight");
+    await expect(roads.locator(".journal-trail.tracked")).toContainText(rings.road.name.replace(/^the s/, "The s"));
+    await expect(roads).toContainText(`Wakes under the ${rings.from.phase}`);
+    await page.evaluate(() => window.pellagos.game.toggleJournal());
+
+    // Under a full moon, stepped out of the ring and back in: the world map, its rings stood in to
+    // choose from; the first one chosen, walked to
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [x, y] = window.testRoad.heart;
+        const { full } = window.testRoad;
+
+        Object.assign(game.host.war, { turn: Math.floor(full / 60000), clock: full % 60000 });
+        game.host.battle.place(game.me, "town", [Math.floor(x) + 12, Math.floor(y)], { facing: Math.PI });
+    });
+    await playUntil(page, () => window.pellagos.game.host.players.get(window.pellagos.game.me).inRing === null, { seconds: 2 });
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [x, y] = window.testRoad.heart;
+
+        // (Played as it is, the map opened over it)
+        game.host.battle.place(game.me, "town", [Math.floor(x), Math.floor(y)], { facing: Math.PI });
+        game.start();
+    });
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.branches, null, { timeout: 30000, polling: 100 });
+
+    const map = await page.evaluate(() => ({ title: document.querySelector("#worldmaptitle").textContent, text: document.querySelector("#worldmappicktext").textContent, travel: window.pellagos.worldMap.travel }));
+
+    expect(map.title).toBe("The moon roads");
+    expect(map.text).toBe("Tap a ring you've stood in, and the moon carries you there.");
+    expect(new Set(map.travel.map(({ id }) => id))).toEqual(new Set([rings.from.id, rings.road.id]));
+    expect(map.travel.find(({ here }) => here).id).toBe(rings.road.id);
+
+    const spot = await page.evaluate((id) => {
+        const map = window.pellagos.worldMap;
+        const { x, z } = map.travel.find((branch) => branch.id === id);
+        const rect = map.canvas.getBoundingClientRect();
+
+        return { x: rect.left + (x - map.view.x) / map.view.scale + rect.width / 2, y: rect.top + (z - map.view.z) / map.view.scale + rect.height / 2 };
+    }, rings.from.id);
+
+    await page.mouse.click(spot.x, spot.y);
+    await expect(page.locator("#portaltitle")).toHaveText(`Walk the moon road to ${rings.from.name.replace(/^the s/, "The s")}?`);
+    await expect(page.locator("#portalgo")).toHaveText("Step into the moonlight");
+    await page.locator("#portalgo").click();
+    await page.waitForFunction(() => !document.querySelector("#worldmap").open, null, { timeout: 10000 });
+    await page.waitForFunction(
+        () => {
+            const { game } = window.pellagos;
+            const me = game.battle.actor(game.me);
+
+            return Math.hypot(me.x - window.testRoad.from[0], me.y - window.testRoad.from[1]) < 5;
+        },
+        null,
+        { timeout: 10000, polling: 100 },
+    );
+});
+
 test("the bestiary: a creature seen and slain written in, its page in the journal opening a part at a time, its portrait drawn; and the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
     test.setTimeout(180000);

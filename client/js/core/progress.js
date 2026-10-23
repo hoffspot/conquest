@@ -330,6 +330,22 @@ export const RELICS = Object.freeze({
     of: ["the Last King", "the Drowned Queen", "the Barrow Lord", "the Hollow Saint", "the Fallen Abbot", "the Forgotten House", "the Old Kings", "the Ashen Bride", "the Pale Knight", "the Lost Prince"],
 });
 
+/**
+ * A relic of moonsilver, what Lunara's guardian keeps at a ring of standing stones under a full moon
+ * (core/rings.js TRIAL): a legendary amulet or ring, named for her.
+ */
+export const MOONSILVER = Object.freeze({ amulet: ["Torc", "Locket", "Pendant"], ring: ["Band", "Seal"], of: "of the Silver Lady" });
+
+/** A relic of moonsilver (MOONSILVER), made (random.js random). */
+export function rollMoonsilver(random) {
+    const id = random.chance(0.5) ? "amulet" : "ring";
+    const relic = rollGear(id, "legendary", random);
+
+    relic.name = `Moonsilver ${MOONSILVER[id][Math.floor(random.next() * MOONSILVER[id].length) % MOONSILVER[id].length]} ${MOONSILVER.of}`;
+
+    return relic;
+}
+
 /** One of the dead's relics (RELICS), made (random.js random): a legendary amulet or ring, with its own name. */
 export function rollRelic(random) {
     const id = random.chance(0.5) ? "amulet" : "ring";
@@ -520,7 +536,8 @@ export function rollMake(random) {
 /**
  * What a fallen foe of a kind has on them (random.js random; `people`: theirs, for their
  * uniform's pieces), or what's in a place's chest: { gold, items }. Gear comes with its bonuses
- * rolled; and, the dead's (`relic`), one of their relics (rollRelic).
+ * rolled; and, the dead's (`relic`), one of their relics (rollRelic); or, Lunara's guardian's
+ * (`relic` "moonsilver"), a relic of moonsilver (rollMoonsilver).
  */
 export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "human", relic = false } = {}) {
     const table = LOOT[kind];
@@ -540,7 +557,7 @@ export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "huma
 
     // (What the restless dead guarded: one of their relics too, `relic`)
     if (relic) {
-        bundle.items.push(rollRelic(random));
+        bundle.items.push(relic === "moonsilver" ? rollMoonsilver(random) : rollRelic(random));
     }
 
     return bundle;

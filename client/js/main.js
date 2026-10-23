@@ -1390,7 +1390,7 @@ async function openWorldMap({ pick = null, travel = null, build = null, war = nu
     map.pingsOf = null;
     $("#worldmappick").hidden = !pick && !travel && !build && !war;
     $("#worldmappicktext").textContent = "Wizard's Walk: tap somewhere you've been";
-    $("#worldmaptitle").textContent = travel ? "Guild portal" : build ? "The council's plans" : war ? "The war table" : "The world";
+    $("#worldmaptitle").textContent = travel ? (travel.title ?? "Guild portal") : build ? "The council's plans" : war ? "The war table" : "The world";
     $("#worldmapkey").hidden = Boolean(travel || build || war);
     $("#warmapkey").hidden = !war;
     $("#worldmaplegend").hidden = Boolean(travel || build);
@@ -1472,12 +1472,13 @@ async function openWorldMap({ pick = null, travel = null, build = null, war = nu
         const others = travel.branches.filter(({ here }) => !here).length;
         const off = travel.off > 0 ? ` ${travel.rank}: ${travel.off >= 1 ? "free" : `${Math.round(travel.off * 100)}% off`}.` : "";
 
-        $("#worldmappicktext").textContent = others ? `Tap a branch of the guild to step through to it.${off}` : "No other branch is open to you yet: go into one, and its portal opens to you.";
+        // (Or the moon roads under a full moon: `moon`, the rings they've stood in)
+        $("#worldmappicktext").textContent = travel.moon ? (others ? "Tap a ring you've stood in, and the moon carries you there." : "You've stood in no other ring yet: stand in one, and the moon can carry you to it.") : others ? `Tap a branch of the guild to step through to it.${off}` : "No other branch is open to you yet: go into one, and its portal opens to you.";
         map.onPick = (point) => {
             const branch = map.branchAt(point);
 
             if (!branch) {
-                mapNote("Tap one of the guild's branches");
+                mapNote(travel.moon ? "Tap one of the rings" : "Tap one of the guild's branches");
             } else if (branch.here) {
                 mapNote("You're here");
             } else {
@@ -1596,6 +1597,20 @@ function mapNote(text, ms = 2800) {
 // takes off it), and whether they have it
 function askTravel(branch, travel) {
     const dialog = $("#portal");
+
+    // (A ring under a full moon: no fare, the moonlight stepped into)
+    if (travel.moon) {
+        $("#portaltitle").textContent = `Walk the moon road to ${branch.name}?`;
+        $("#portalnote").textContent = `${branch.metres >= 1000 ? `${(branch.metres / 1000).toFixed(1)} km` : `${Math.round(branch.metres / 10) * 10} m`} away. Your party in the ring goes with you.`;
+        $("#portalgo").disabled = false;
+        $("#portalgo").textContent = "Step into the moonlight";
+        state.portal = { branch, travel };
+        dialog.showModal();
+        $("#portalgo").focus();
+
+        return;
+    }
+
     const km = branch.metres >= 1000 ? `${(branch.metres / 1000).toFixed(1)} km` : `${Math.round(branch.metres / 10) * 10} m`;
     const off = travel.off >= 1 ? `free at ${travel.rank} rank` : travel.off > 0 ? `${Math.round(travel.off * 100)}% off at ${travel.rank} rank` : "";
     const short = branch.fare > travel.gold;
