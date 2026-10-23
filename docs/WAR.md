@@ -2653,9 +2653,27 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   loot on it, a guild's request for it counts for each, and each grows as much the stronger for
   it as it had hit points, in the skill of what's in their own hand (a bow's marksman, anything
   else's blade: `#credit`).
+- **Found together** (`#share`). Out in the world, the chunk each of them stands in is found by
+  the rest of the party too, wherever they are, as if they'd been there: the fog lifts off it on
+  their maps and the places round it are found (core/explored.js `sighted`), as are the buildings
+  any of them goes into. A guild's portal still opens only to those who've been in its branch.
+  It's kept for good, after the party's gone, but nothing's shared from before they were in it or
+  after they've left. The places worth finding (core/places.js `placesOf`, and the dungeons' ways
+  in) that another found for them first are kept with who found them (`Explored.found`, kept with
+  the character), and they're told: "Bryn found an abbey: it's on your map." (or how many). The
+  world map says so under each, close in: "found by Bryn".
+- **Pings** (`ping`, with `at`: [x, y] metres, anywhere on the world's map; out of a party,
+  refused). The world map's ping button (in a party only), then a tap, shows the whole party where
+  for 30 seconds (app/mapicons.js `PING`; one each second and a half at most): a green dot with
+  rings swelling out from it on the world map and the minimap (at the minimap's edge, the way it
+  is, if it's further), with who made it on the world map; out in the world, a column of green
+  light 420 m high where it is, as the pin's is (world/pin3d.js `PingBeacons`), fading as it gets
+  older. The newest four are shown. Each hears the pin's note, and another's is said with which
+  way it is ("Bryn pings the map, 640 m north-east."). The host only tells the party of it
+  (`party` events, `change: "ping"`): nothing of it's kept.
 - **Kept.** Parties, and who's been asked, are carried in the world's snapshot (`SNAPSHOT_VERSION`
   24) and done by commands like anything else, so every copy has them alike; what two games share
-  changed (`NET_VERSION` 100).
+  changed (`NET_VERSION` 100; with shared finds and pings, 157).
 - **Talk** (`core/netplay.js` `CHAT`, `Hosting.chat`; the party menu's Chat tab, docs/GAME.md).
   What's said in a party isn't done to the world, and isn't for everyone in it, so it isn't a
   command: a joined player's line goes to the host alone (`{ kind: "chat", text }`), and the host

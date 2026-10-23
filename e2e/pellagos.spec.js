@@ -9295,6 +9295,116 @@ test("a treasure map read out in the wilds: its circle on the world map and the 
     expect(hunt.told).toContain("You dig up the treasure: your share of it lies before you. Tap it to take it.");
 });
 
+test("in a party: a place another of it finds is on the player's map for good, who found it said and shown; a ping from them on both maps and in the world, the player's own from the world map's ping button, each gone after a while", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Bram comes into the world and the player's party, and goes off to a place the player's never found
+    const found = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { host, battle } = game;
+        const { placesOf } = await import("/js/core/places.js");
+        const me = battle.actor(game.me);
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // (Every word on the banner kept)
+        window.told = [];
+        new MutationObserver((records) => window.told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+
+        host.join({ id: "guest", hero: { ...host.players.get(game.me).hero, name: "Bram" } });
+        battle.place("guest", "town", [me.square[0] + 24, me.square[1]]);
+        host.command(game.me, { type: "party", do: "invite", who: "guest" });
+        host.command("guest", { type: "party", do: "accept" });
+        game.advance(0.25);
+
+        const far = ({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y);
+        const place = placesOf(game.world.plan).filter(({ at }) => !game.explored.sighted(...at)).sort((a, b) => far(a) - far(b))[0];
+
+        battle.place("guest", "town", [Math.floor(place.at[0]), Math.floor(place.at[1])]);
+        game.advance(0.25);
+        game.advance(0.25);
+
+        return { id: place.id, at: place.at, far: far(place), sighted: game.explored.sighted(...place.at), finder: game.explored.finderOf(place.id), icon: game.worldMapView().icons.find(({ id }) => id === place.id)?.finder ?? null };
+    });
+
+    expect(found.far).toBeGreaterThan(200);
+    expect(found).toMatchObject({ sighted: true, finder: "Bram", icon: "Bram" });
+    expect(await page.evaluate(() => window.told.some((text) => /^Bram found .+: it's on your map\.$/.test(text))), JSON.stringify(await page.evaluate(() => window.told))).toBe(true);
+
+    // The world map, close in by the place: who found it; no ping on it yet
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("m");
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn, null, { polling: 100 });
+
+    const map = await page.evaluate(([x, z]) => {
+        const { game, worldMap } = window.pellagos;
+
+        // (The world on under the map, played with others, only as the test moves it: what's
+        // tapped on the map answered at once)
+        game.stop();
+
+        worldMap.view = { scale: 2, x, z };
+        worldMap.draw();
+
+        return { pings: worldMap.drawn.pings, finders: worldMap.drawn.finders, button: !document.querySelector("#worldmapping").hidden };
+    }, found.at);
+
+    expect(map).toEqual({ pings: 0, finders: ["Bram"], button: true });
+
+    // Bram pings by it, the map open: drawn on it as it comes; on the minimap (at its edge, it's so
+    // far) and in the world; said
+    const pinged = await page.evaluate(([x, y]) => {
+        const { game } = window.pellagos;
+
+        game.host.command("guest", { type: "party", do: "ping", at: [x, y] });
+        game.advance(0.1, { render: false });
+        game.minimap.drawn = -Infinity;
+        game.advance(0.05, { render: false });
+
+        const [drawn] = game.pingBeacons.shown.values();
+
+        return { pings: game.pingView().map(({ name, own }) => ({ name, own })), minimap: game.minimap.pings, column: drawn?.near.name, seen: drawn?.near.parent === game.view.scene && drawn?.far.parent === game.view.far.scene };
+    }, found.at);
+
+    expect(pinged.pings).toEqual([{ name: "Bram", own: false }]);
+    expect(pinged.minimap).toEqual([expect.objectContaining({ edge: true })]);
+    expect(pinged).toMatchObject({ column: expect.stringMatching(/^ping \d+ column near$/), seen: true });
+    await page.waitForFunction(() => window.pellagos.worldMap.drawn.pings === 1, null, { polling: 100 });
+    expect(await page.evaluate(() => window.told.some((text) => /^Bram pings the map, [\d.]+ k?m [a-z-]+\.$/.test(text))), JSON.stringify(await page.evaluate(() => window.told))).toBe(true);
+
+    // The ping button, then a tap on the map: the player's own ping, for the party
+    const button = page.locator("#worldmapping");
+
+    await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#worldmappicktext")).toHaveText("Ping: tap where to show your party");
+    await page.locator("#worldmapcanvas").click();
+    await expect(page.locator("#worldmapnote")).toHaveText("Pinged: your party sees it on their maps, and a column of green light there");
+    await expect(button).toHaveAttribute("aria-pressed", "false");
+    await page.evaluate(() => window.pellagos.game.advance(0.1, { render: false }));
+    await page.waitForFunction(() => window.pellagos.game.pingView().length === 2, null, { polling: 100 });
+    await page.waitForFunction(() => window.pellagos.worldMap.drawn.pings === 2, null, { polling: 100 });
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#worldmap")).toBeHidden();
+
+    // After a while, both gone; what Bram found still theirs
+    const after = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+
+        // (Half a second a step: there's nothing in it to see till then)
+        game.advance(32, { frame: 0.5, render: false });
+        game.advance(0.1, { render: true });
+
+        return { pings: game.pingView().length, columns: game.pingBeacons.shown.size };
+    });
+
+    expect(after).toEqual({ pings: 0, columns: 0 });
+    expect(await page.evaluate((id) => window.pellagos.game.explored.finderOf(id), found.id)).toBe("Bram");
+});
+
 test("now and then, past the land nearest home, an elite leads its kind: gilded and radiant, its plate in gold, a star on the minimap from 80 m (at its edge while further than it shows); felled, its prize for the player near", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");

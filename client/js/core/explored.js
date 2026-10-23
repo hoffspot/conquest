@@ -2,26 +2,31 @@
 // shown on the minimap and the world map with an icon of what each is; the chunks of the world
 // they've set foot in, the rest of the world map hidden under a fog until they have; and the
 // adventurers' guild's branches whose portals they can step through to (core/portals.js: by their
-// places' ids), each one they've been into.
+// places' ids), each one they've been into. In a party, what each finds is found by the others
+// too (Host #share), and kept by them for good: the places worth finding one of them found first,
+// by whom (`found`), for the maps to say.
 //
 // Kept with the saved game (app/save.js): the buildings as their keys, the chunks as one bit each
-// (the world's 128 by 128 chunks in 2 KB), written as base64, and the branches as their ids. One
-// kept from before there were portals has none (`portals` null), till the host works out which
-// they'd found (Host join).
+// (the world's 128 by 128 chunks in 2 KB), written as base64, the branches as their ids, and
+// who found what for them as { place's id: name }. One kept from before there were portals has
+// none (`portals` null), till the host works out which they'd found (Host join).
 
 import { fromBase64, toBase64 } from "./wire.js";
 import { CHUNK, CHUNKS } from "./worldplan/plan.js";
 
 export class Explored {
     /**
-     * @param {object} [kept] - As `toJSON` gave it: { entered: [keys], visited: base64, portals: [ids] }.
+     * @param {object} [kept] - As `toJSON` gave it: { entered: [keys], visited: base64, portals: [ids], found: { id: name } }.
      */
-    constructor({ entered = [], visited = "", portals = null } = {}) {
+    constructor({ entered = [], visited = "", portals = null, found = {} } = {}) {
         this.entered = new Set(entered.filter((key) => typeof key === "string"));
         this.visited = typeof visited === "string" && visited ? fromBase64(visited, (CHUNKS * CHUNKS) / 8) : new Uint8Array((CHUNKS * CHUNKS) / 8);
 
         /** The guild's branches open to step through to (plan place ids), or null till worked out. */
         this.portals = Array.isArray(portals) ? new Set(portals.filter((id) => typeof id === "string")) : null;
+
+        /** The places another of their party found for them first (plan place ids), by whom (their name). */
+        this.found = new Map(found && typeof found === "object" ? Object.entries(found).filter(([, name]) => typeof name === "string") : []);
 
         /** Goes up by one whenever anything's found (for what's drawn from it to know to redraw). */
         this.version = 0;
@@ -64,6 +69,19 @@ export class Explored {
         this.version++;
 
         return true;
+    }
+
+    /** Who found a place (a plan place's id) for the player, if another of their party did first (their name), or null. */
+    finderOf(id) {
+        return this.found.get(id) ?? null;
+    }
+
+    /** Another of the player's party (`name`) found a place for them first (a plan place's id). */
+    foundBy(id, name) {
+        if (!this.found.has(id)) {
+            this.found.set(id, name);
+            this.version++;
+        }
     }
 
     /** Has the player been in this chunk (cx, cy: chunks from the world's north-west corner)? */
@@ -125,8 +143,11 @@ export class Explored {
         return count;
     }
 
-    /** What to keep: { entered: [keys], visited: base64, portals: [ids] } (no `portals` till they're worked out). */
+    /**
+     * What to keep: { entered: [keys], visited: base64, portals: [ids], found: { id: name } } (no
+     * `portals` till they're worked out, and no `found` till another's found something for them).
+     */
     toJSON() {
-        return { entered: [...this.entered], visited: toBase64(this.visited), ...(this.portals ? { portals: [...this.portals] } : {}) };
+        return { entered: [...this.entered], visited: toBase64(this.visited), ...(this.portals ? { portals: [...this.portals] } : {}), ...(this.found.size ? { found: Object.fromEntries(this.found) } : {}) };
     }
 }

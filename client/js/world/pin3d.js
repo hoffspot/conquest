@@ -1,7 +1,8 @@
 // The world map's pin in the world (the terrain plan's M7g, §9 Pins on the world map): a round
 // column of blue light rising very high into the sky where it's dropped, seen from far off, and a
 // thin, half-transparent, glowing blue line along the ground from the player to its foot, the way
-// they'd walk.
+// they'd walk. And the pings of the player's party (app/mapicons.js PING): each a lower column of
+// the party's green light where it was made, as the pin's, fading as it gets older.
 //
 // The column is a strip that always turns to face the camera (round, from wherever it's seen),
 // drawn twice: in the near pass where it's within the near camera's reach (FAR.nearFar), over the
@@ -22,6 +23,9 @@ import { FAR } from "./far/levels.js";
  */
 export const PIN_COLUMN = Object.freeze({ height: 900, half: 1.4, glow: 6, least: 0.006, core: [0.78, 0.92, 1.0], edge: [0.18, 0.48, 1.0], strength: 1.5, haze: 0.45 });
 
+/** How a ping's column looks, as the pin's (PIN_COLUMN: its glow, its least width and its haze the same): in the party's green. */
+export const PING_COLUMN = Object.freeze({ height: 420, half: 1.1, core: [0.82, 1.0, 0.84], edge: [0.14, 0.82, 0.26], strength: 1.4 });
+
 /**
  * How the line along the ground looks: how wide (metres), how high over the ground (metres, over
  * the grass's roots), how far along it's drawn at most (metres: past it, the column shows the
@@ -33,6 +37,8 @@ const COLUMN_VERTEX = /* glsl */ `
 uniform vec3 foot;
 uniform float reach;
 uniform float time;
+uniform float coreHalf;
+uniform float height;
 attribute vec2 at;
 varying vec2 vAt;
 varying float vHaze;
@@ -46,8 +52,8 @@ void main() {
     vec3 base = cameraPosition + rel * k;
     vec2 away = normalize(rel.xz + vec2(0.0001));
     vec3 side = vec3(-away.y, 0.0, away.x);
-    float wide = max(${PIN_COLUMN.half.toFixed(3)}, far * ${PIN_COLUMN.least.toFixed(5)}) * k;
-    vec3 world = base + side * at.x * wide * ${PIN_COLUMN.glow.toFixed(1)} + vec3(0.0, at.y * ${PIN_COLUMN.height.toFixed(1)} * k, 0.0);
+    float wide = max(coreHalf, far * ${PIN_COLUMN.least.toFixed(5)}) * k;
+    vec3 world = base + side * at.x * wide * ${PIN_COLUMN.glow.toFixed(1)} + vec3(0.0, at.y * height * k, 0.0);
 
     vAt = vec2(at.x * ${PIN_COLUMN.glow.toFixed(1)}, at.y);
     vHaze = 1.0 - ${PIN_COLUMN.haze.toFixed(2)} * smoothstep(300.0, 4000.0, far);
@@ -60,6 +66,9 @@ void main() {
 const COLUMN_FRAGMENT = /* glsl */ `
 uniform float time;
 uniform float nearPass;
+uniform vec3 core;
+uniform vec3 edge;
+uniform float strength;
 varying vec2 vAt;
 varying float vHaze;
 varying float vDepth;
@@ -69,21 +78,22 @@ void main() {
     if ((nearPass > 0.5) != (vDepth < ${(FAR.nearFar * 0.97).toFixed(1)})) discard;
 
     float across = abs(vAt.x);
-    float core = exp(-across * across * 1.8);
+    float middle = exp(-across * across * 1.8);
     float glow = exp(-across * 0.9) * 0.45;
     float up = vAt.y;
     float fade = (1.0 - smoothstep(0.25, 1.0, up)) * smoothstep(0.0, 0.002, up);
     // (Light rising up it, slowly)
     float rising = 0.82 + 0.18 * sin(up * 140.0 - time * 2.2);
-    vec3 colour = mix(vec3(${PIN_COLUMN.edge.join(", ")}), vec3(${PIN_COLUMN.core.join(", ")}), core);
-    float strength = (core + glow) * fade * rising * vHaze * ${PIN_COLUMN.strength.toFixed(2)};
+    vec3 colour = mix(edge, core, middle);
 
-    gl_FragColor = vec4(colour * strength, 1.0);
+    gl_FragColor = vec4(colour * (middle + glow) * fade * rising * vHaze * strength, 1.0);
 }
 `;
 
 const RING_FRAGMENT = /* glsl */ `
 uniform float time;
+uniform vec3 edge;
+uniform float strength;
 varying vec2 vUv;
 
 void main() {
@@ -91,9 +101,9 @@ void main() {
     float off = (r - 0.62 - 0.05 * sin(time * 2.0)) * 9.0;
     float ring = exp(-off * off) * 0.8;
     float pool = (1.0 - smoothstep(0.0, 1.0, r)) * 0.35;
-    float strength = (ring + pool) * (1.0 - smoothstep(0.9, 1.0, r));
+    float lit = (ring + pool) * (1.0 - smoothstep(0.9, 1.0, r));
 
-    gl_FragColor = vec4(vec3(${PIN_COLUMN.edge.join(", ")}) * strength * 1.4, 1.0);
+    gl_FragColor = vec4(edge * lit * strength, 1.0);
 }
 `;
 
@@ -139,6 +149,57 @@ void main() {
 const additive = (uniforms, vertexShader, fragmentShader) =>
     new THREE.ShaderMaterial({ uniforms, vertexShader, fragmentShader, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, fog: false, toneMapped: false, side: THREE.DoubleSide });
 
+// A column's strip: from its foot up, turned to the camera in its shader (its rows closer together
+// low down, where it's seen near)
+function columnStrip() {
+    const strip = new THREE.BufferGeometry();
+    const rows = 24;
+    const at = [];
+    const index = [];
+
+    for (let r = 0; r <= rows; r++) {
+        const up = (r / rows) ** 2;
+
+        at.push(-1, up, 1, up);
+
+        if (r < rows) {
+            index.push(r * 2, r * 2 + 1, r * 2 + 2, r * 2 + 1, r * 2 + 3, r * 2 + 2);
+        }
+    }
+
+    strip.setAttribute("at", new THREE.Float32BufferAttribute(at, 2));
+    strip.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(at.length * 1.5), 3));
+    strip.setIndex(index);
+
+    return strip;
+}
+
+// A column in a pass (`near`, or the far pass), its look (`look`: PIN_COLUMN's or PING_COLUMN's)
+// and where it stands, how far the far pass sees and the time shared (`shared`: { foot, reach,
+// time }), as bright as `strength` has it ({ value }), named
+function column(strip, near, look, shared, strength, name) {
+    const uniforms = { ...shared, nearPass: { value: near ? 1 : 0 }, coreHalf: { value: look.half }, height: { value: look.height }, core: { value: new THREE.Vector3(...look.core) }, edge: { value: new THREE.Vector3(...look.edge) }, strength };
+    const mesh = new THREE.Mesh(strip, additive(uniforms, COLUMN_VERTEX, COLUMN_FRAGMENT));
+
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 5;
+    mesh.name = `${name} ${near ? "near" : "far"}`;
+    mesh.visible = false;
+
+    return mesh;
+}
+
+// The glow on the ground round a column's foot (`look`: its colours), as bright as `strength` has it ({ value })
+function footRing(look, time, strength, name) {
+    const ring = new THREE.Mesh(new THREE.PlaneGeometry(7, 7).rotateX(-Math.PI / 2), additive({ time, edge: { value: new THREE.Vector3(...look.edge) }, strength }, RING_VERTEX, RING_FRAGMENT));
+
+    ring.name = name;
+    ring.visible = false;
+    ring.renderOrder = 4;
+
+    return ring;
+}
+
 export class PinMarks {
     /**
      * @param {THREE.Scene} scene - The near pass's (view.js scene).
@@ -149,47 +210,14 @@ export class PinMarks {
         this.foot = { value: new THREE.Vector3() };
         this.reach = { value: 1000 };
 
-        // The column: a strip from its foot up, turned to the camera in its shader (one in each pass)
-        const strip = new THREE.BufferGeometry();
-        const rows = 24;
-        const at = [];
-        const index = [];
+        // The column: a strip from its foot up, turned to the camera in its shader (one in each
+        // pass); and the glow on the ground round its foot
+        const shared = { foot: this.foot, reach: this.reach, time: this.time };
 
-        for (let r = 0; r <= rows; r++) {
-            // (Its rows closer together low down, where it's seen near)
-            const up = (r / rows) ** 2;
-
-            at.push(-1, up, 1, up);
-
-            if (r < rows) {
-                index.push(r * 2, r * 2 + 1, r * 2 + 2, r * 2 + 1, r * 2 + 3, r * 2 + 2);
-            }
-        }
-
-        strip.setAttribute("at", new THREE.Float32BufferAttribute(at, 2));
-        strip.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(at.length * 1.5), 3));
-        strip.setIndex(index);
-        this.strip = strip;
-
-        const column = (near) => {
-            const mesh = new THREE.Mesh(strip, additive({ foot: this.foot, reach: this.reach, time: this.time, nearPass: { value: near ? 1 : 0 } }, COLUMN_VERTEX, COLUMN_FRAGMENT));
-
-            mesh.frustumCulled = false;
-            mesh.renderOrder = 5;
-            mesh.name = `pin column ${near ? "near" : "far"}`;
-            mesh.visible = false;
-
-            return mesh;
-        };
-
-        this.near = column(true);
-        this.far = column(false);
-
-        // The glow on the ground round its foot
-        this.ring = new THREE.Mesh(new THREE.PlaneGeometry(7, 7).rotateX(-Math.PI / 2), additive({ time: this.time }, RING_VERTEX, RING_FRAGMENT));
-        this.ring.name = "pin ring";
-        this.ring.visible = false;
-        this.ring.renderOrder = 4;
+        this.strip = columnStrip();
+        this.near = column(this.strip, true, PIN_COLUMN, shared, { value: PIN_COLUMN.strength }, "pin column");
+        this.far = column(this.strip, false, PIN_COLUMN, shared, { value: PIN_COLUMN.strength }, "pin column");
+        this.ring = footRing(PIN_COLUMN, this.time, { value: 1.4 }, "pin ring");
 
         // The line along the ground: as many points as it can have made room for once, those it
         // has drawn (a strip each side of the way between each two)
@@ -299,5 +327,76 @@ export class PinMarks {
         this.strip.dispose();
         this.ring.geometry.dispose();
         this.line.geometry.dispose();
+    }
+}
+
+export class PingBeacons {
+    /**
+     * @param {THREE.Scene} scene - The near pass's (view.js scene).
+     * @param {THREE.Scene} farScene - The far pass's (view.far.scene).
+     */
+    constructor(scene, farScene) {
+        this.scene = scene;
+        this.farScene = farScene;
+        this.time = { value: 0 };
+        this.reach = { value: 1000 };
+        this.strip = columnStrip();
+
+        /** What's drawn, by the ping's id: { near, far, ring, foot, strength }. */
+        this.shown = new Map();
+    }
+
+    /**
+     * The pings to show (`pings`: [{ id, x, y (the ground's height there), z, fade (1 new, down to
+     * 0 as it goes) }] world metres), each as it was (and those no longer in it let go).
+     */
+    set(pings) {
+        const wanted = new Set(pings.map(({ id }) => id));
+
+        for (const [id, drawn] of [...this.shown]) {
+            if (!wanted.has(id)) {
+                for (const mesh of [drawn.near, drawn.far, drawn.ring]) {
+                    mesh.removeFromParent();
+                    mesh.material.dispose();
+                }
+
+                drawn.ring.geometry.dispose();
+                this.shown.delete(id);
+            }
+        }
+
+        for (const { id, x, y, z, fade } of pings) {
+            let drawn = this.shown.get(id);
+
+            if (!drawn) {
+                const foot = { value: new THREE.Vector3() };
+                const strength = { value: 0 };
+                const glow = { value: 0 };
+                const shared = { foot, reach: this.reach, time: this.time };
+
+                drawn = { foot, strength, glow, near: column(this.strip, true, PING_COLUMN, shared, strength, `ping ${id} column`), far: column(this.strip, false, PING_COLUMN, shared, strength, `ping ${id} column`), ring: footRing(PING_COLUMN, this.time, glow, `ping ${id} ring`) };
+                drawn.near.visible = drawn.far.visible = drawn.ring.visible = true;
+                this.scene.add(drawn.near, drawn.ring);
+                this.farScene.add(drawn.far);
+                this.shown.set(id, drawn);
+            }
+
+            drawn.foot.value.set(x, y, z);
+            drawn.ring.position.set(x, y + 0.06, z);
+            drawn.strength.value = PING_COLUMN.strength * fade;
+            drawn.glow.value = 1.4 * fade;
+        }
+    }
+
+    /** The time (seconds), for the light rising up the columns; and how far the far pass sees (metres). */
+    update(time, farReach) {
+        this.time.value = time;
+        this.reach.value = farReach * 0.9;
+    }
+
+    /** Let go of it all. */
+    dispose() {
+        this.set([]);
+        this.strip.dispose();
     }
 }

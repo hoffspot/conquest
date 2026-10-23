@@ -10,7 +10,7 @@ import { CROSSING, crossingsOf, JOURNEY, lengthOf, nearestAlong, pointAlong, way
 import { buildWorld } from "../client/js/core/overworld.js";
 import { CELL, CELLS, WATER } from "../client/js/core/worldplan/plan.js";
 import { FAR } from "../client/js/world/far/levels.js";
-import { PIN_COLUMN, PinMarks, WAY_LINE } from "../client/js/world/pin3d.js";
+import { PING_COLUMN, PingBeacons, PIN_COLUMN, PinMarks, WAY_LINE } from "../client/js/world/pin3d.js";
 
 const world = buildWorld({ seed: 1 });
 const plan = world.plan;
@@ -180,7 +180,7 @@ describe("the pin in the world (world/pin3d.js)", () => {
         assert.equal(marks.near.material.uniforms.nearPass.value, 1);
         assert.equal(marks.far.material.uniforms.nearPass.value, 0);
         assert.match(marks.near.material.fragmentShader, new RegExp(`vDepth < ${(FAR.nearFar * 0.97).toFixed(1)}`));
-        assert.match(marks.near.material.vertexShader, new RegExp(`${PIN_COLUMN.height.toFixed(1)}`));
+        assert.deepEqual([marks.near.material.uniforms.height.value, marks.near.material.uniforms.coreHalf.value, marks.near.material.uniforms.edge.value.toArray()], [PIN_COLUMN.height, PIN_COLUMN.half, PIN_COLUMN.edge]);
         assert.ok(marks.near.material.blending === THREE.AdditiveBlending && !marks.near.material.depthWrite && !marks.near.castShadow);
 
         // (Out past the far land: brought in as far as it reaches)
@@ -218,5 +218,37 @@ describe("the pin in the world (world/pin3d.js)", () => {
         marks.setLine([[0, 0, 0]]);
         assert.equal(marks.line.visible, false);
         marks.dispose();
+    });
+
+    it("stands a column of the party's green light at each ping, lower than the pin's and fading as it gets older; let go of once it's gone", () => {
+        const [near, far] = [new THREE.Scene(), new THREE.Scene()];
+        const beacons = new PingBeacons(near, far);
+
+        beacons.set([
+            { id: 1, x: 10, y: 4, z: 20, fade: 1 },
+            { id: 2, x: -5, y: 0, z: 3, fade: 0.5 },
+        ]);
+
+        const [one, two] = [beacons.shown.get(1), beacons.shown.get(2)];
+
+        assert.equal(near.children.length, 4, "(a column's near part and a glow round its foot, each)");
+        assert.equal(far.children.length, 2);
+        assert.deepEqual(one.foot.value.toArray(), [10, 4, 20]);
+        assert.deepEqual([one.near.material.uniforms.height.value, one.near.material.uniforms.edge.value.toArray()], [PING_COLUMN.height, PING_COLUMN.edge]);
+        assert.ok(PING_COLUMN.height < PIN_COLUMN.height);
+        assert.equal(one.near.material.uniforms.strength.value, PING_COLUMN.strength);
+        assert.equal(two.far.material.uniforms.strength.value, PING_COLUMN.strength * 0.5);
+        assert.equal(one.near.material.vertexShader, new PinMarks(new THREE.Scene(), new THREE.Scene()).near.material.vertexShader, "(the pin's own column)");
+
+        // (One gone: let go of; the other as it was, fainter)
+        beacons.set([{ id: 2, x: -5, y: 0, z: 3, fade: 0.25 }]);
+        assert.deepEqual([...beacons.shown.keys()], [2]);
+        assert.equal(beacons.shown.get(2), two);
+        assert.equal(two.near.material.uniforms.strength.value, PING_COLUMN.strength * 0.25);
+        assert.equal(near.children.length + far.children.length, 3);
+        beacons.update(3, 3000);
+        assert.equal(two.far.material.uniforms.reach.value, 2700);
+        beacons.dispose();
+        assert.equal(near.children.length + far.children.length, 0);
     });
 });

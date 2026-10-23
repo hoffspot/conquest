@@ -471,6 +471,44 @@ export function drawSearch(context, x, y, r, grade, { cross = 10, own = true } =
     context.restore();
 }
 
+/**
+ * Pings from the player's party (core/host.js, a "party" command's "ping"): how long one's shown
+ * (`lasts`, seconds), how soon after one a player may make another (`every`, seconds), how many
+ * are shown at once (`most`: the newest), how often its rings swell out (`pulse`, seconds), and
+ * its colour (red, green, blue: the party's green, as the minimap has them).
+ */
+export const PING = Object.freeze({ lasts: 30, every: 1.5, most: 4, pulse: 1.4, colour: "88, 210, 110" });
+
+/**
+ * A ping, drawn on a map (`x`, `y` where it is, pixels): a green dot, ringed in the dark so it
+ * reads on any ground, and rings swelling out from it to `size` pixels over and over; fainter as
+ * it gets older (`age`, seconds, of PING.lasts).
+ */
+export function drawPing(context, x, y, { size = 22, age = 0 } = {}) {
+    const fade = 1 - 0.6 * Math.min(1, Math.max(0, age / PING.lasts));
+
+    context.save();
+    context.lineWidth = 2.5;
+
+    for (const offset of [0, 0.5]) {
+        const t = (age / PING.pulse + offset) % 1;
+
+        context.beginPath();
+        context.arc(x, y, size * (0.2 + 0.8 * t), 0, Math.PI * 2);
+        context.strokeStyle = `rgba(${PING.colour}, ${((1 - t) * 0.95 * fade).toFixed(3)})`;
+        context.stroke();
+    }
+
+    context.beginPath();
+    context.arc(x, y, 4.5, 0, Math.PI * 2);
+    context.fillStyle = `rgba(${PING.colour}, ${fade.toFixed(3)})`;
+    context.fill();
+    context.lineWidth = 1.5;
+    context.strokeStyle = "rgba(20, 8, 4, 0.9)";
+    context.stroke();
+    context.restore();
+}
+
 // The paths, made once (Path2D: only in the browser)
 let paths = null;
 
