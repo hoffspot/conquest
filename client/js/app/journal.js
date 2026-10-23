@@ -17,6 +17,8 @@
 //   it, and which way it is, till each is found;
 // - what they've read of what's written and left to be found (core/writings.js: Sinclair's
 //   journal), each to be read again (app/reader.js);
+// - the treasures they're hunting (core/treasure.js): their own maps' and their party's, which way
+//   each is, their own each to be given up;
 // - by a tab at its top, the bestiary: a page for each kind of creature met, telling as much of
 //   it as they've found out (core/bestiary.js; its pages made by app/bestiary.js and given it, so
 //   the journal, wanted before the game's loaded (app/save.js), needs nothing of the creatures);
@@ -189,6 +191,7 @@ export class JournalPanel {
 
         /** What the player asks (the game does it). */
         this.onAbandon = () => {};
+        this.onGiveUpTreasure = () => {};
         this.onRead = () => {};
         this.onClose = () => {};
     }
@@ -205,13 +208,14 @@ export class JournalPanel {
      * null: serving another, fallen, ruling the continent) }, done: [{
      * title, from, state }], heard: [{ words, from, where, found }] (what they've heard tell of:
      * those still to find first), writings: [{ id, title, found }] (what they've read: core/
-     * writings.js), bestiary (what's been found out about each kind of creature: { met: the kinds
-     * met (app/bestiary.js contentsOf), of: how many kinds there are, levels: how many levels
-     * each has, pageOf(kind): its page, app/bestiary.js pageOf, or null }), messages: the last
-     * told, oldest first (keepMessage) }.
+     * writings.js), treasures: [{ id, title, from, where, grade, own }] (the treasures they're
+     * hunting: core/treasure.js), bestiary (what's been found out about each kind of creature: {
+     * met: the kinds met (app/bestiary.js contentsOf), of: how many kinds there are, levels: how
+     * many levels each has, pageOf(kind): its page, app/bestiary.js pageOf, or null }), messages:
+     * the last told, oldest first (keepMessage) }.
      */
     show(shown) {
-        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], writings = [], bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
+        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], writings = [], treasures = [], bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
 
         this.shown = shown;
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
@@ -317,6 +321,34 @@ export class JournalPanel {
         }
 
         sections.push(this.#section("Heard tell", told));
+
+        // The treasures they're hunting, their own each to be given up
+        if (treasures.length) {
+            const hunts = element("ul", "journal-list treasures");
+
+            hunts.append(
+                ...treasures.map(({ id, title, from, where, grade, own }) => {
+                    const row = element("li", "journal-treasure");
+                    const head = element("div", "journal-request-head");
+
+                    head.append(element("span", `journal-request-title rarity-${grade}`, title), element("span", "journal-request-from", from));
+                    row.append(head, element("p", "journal-request-progress", [where, "the circle's on your world map"].filter(Boolean).join(" · ")));
+
+                    if (own) {
+                        const give = element("button", "journal-button", "Give up");
+
+                        give.type = "button";
+                        give.setAttribute("aria-label", `Give up the hunt for ${title}`);
+                        give.addEventListener("click", () => this.onGiveUpTreasure(id));
+                        row.append(give);
+                    }
+
+                    return row;
+                }),
+            );
+
+            sections.push(this.#section("Treasure hunts", hunts));
+        }
 
         // What they've read, each to be read again
         if (writings.length) {

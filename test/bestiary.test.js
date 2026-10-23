@@ -291,10 +291,10 @@ describe("the bestiary in play (core/host.js)", () => {
     it("carries a world kept before there was one on, every player's empty", () => {
         const { host } = outside();
         const snapshot = host.snapshot();
-        const old = { ...snapshot, version: 31, players: snapshot.players.map(({ progress: { bestiary: _bestiary, ...progress }, ...player }) => ({ ...player, progress })), battle: { ...snapshot.battle, actors: snapshot.battle.actors.map(({ mastered: _mastered, ...actor }) => actor) } };
-        const stepped = SNAPSHOT_STEPS[31](structuredClone(old));
+        const old = { ...snapshot, version: 32, players: snapshot.players.map(({ progress: { bestiary: _bestiary, ...progress }, ...player }) => ({ ...player, progress })), battle: { ...snapshot.battle, actors: snapshot.battle.actors.map(({ mastered: _mastered, ...actor }) => actor) } };
+        const stepped = SNAPSHOT_STEPS[32](structuredClone(old));
 
-        assert.equal(stepped.version, 32);
+        assert.equal(stepped.version, 33);
         assert.ok(stepped.players.every(({ progress }) => progress.bestiary && Object.keys(progress.bestiary).length === 0));
         assert.deepEqual(stepped.battle.actors.find(({ id }) => id === HOST_PLAYER).mastered, []);
         assert.deepEqual(Host.restore(buildWorld({ seed: 2 }), stepped).players.get(HOST_PLAYER).progress.bestiary.kinds, {});

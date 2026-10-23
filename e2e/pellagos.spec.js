@@ -9171,6 +9171,130 @@ test("an adventurer's cache turns up ahead of a player crossing the wilds, off t
     expect(cache.gone).toBe(true);
 });
 
+test("a treasure map read out in the wilds: its circle on the world map and the minimap and in the journal; its keepers woken as the player comes near; where it's buried glinting; put down, it's dug up, the player's share in it, and the hunt's done", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Out in the wilds 300 m north of the start town, a common map in the pack
+    await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // (Every word on the banner kept)
+        window.told = [];
+        new MutationObserver((records) => window.told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+
+        window.settle = async (steps, render = false) => {
+            for (let k = 0; k < steps; k++) {
+                player.hp = player.maxHp;
+                game.advance(0.25, { render });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+        window.goTo = (x, y) => Object.assign(player, { x, y, path: [], order: null, progress: null, target: null });
+        window.goTo(player.x, player.y - 300);
+        await window.settle(2);
+        game.host.players.get("player").progress.stow({ id: "treasureMap", quality: "common" }, 1);
+    });
+
+    // Read from the pack, as the player would
+    const pack = page.locator(".pack");
+
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("i");
+    await expect(pack).toBeVisible();
+    await page.evaluate(() => window.pellagos.game.stop());
+    await pack.locator('.carried .pack-cell[data-item="treasureMap"]').click();
+    await expect(pack.locator(".pack-about")).toContainText("Read it out in the wilds");
+    await pack.locator(".pack-about").getByRole("button", { name: /^Read/ }).click();
+    expect(await playUntil(page, () => document.querySelector("#banner")?.textContent.includes("The treasure map shows somewhere"), { seconds: 2 })).toBe(true);
+    await page.evaluate(() => window.pellagos.game.closePack());
+    await expect(pack).toBeHidden();
+
+    const hunt = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { host } = game;
+        const player = game.battle.actor("player");
+        const { settle, goTo, told } = window;
+
+        game.stop();
+
+        const [treasure] = host.treasures.values();
+
+        if (!treasure) {
+            return null;
+        }
+
+        game.toggleJournal();
+
+        const journal = [...document.querySelectorAll(".journal-treasure .journal-request-title")].map((node) => node.textContent);
+
+        game.closeJournal();
+
+        const marked = { left: host.players.get("player").progress.count("treasureMap"), map: game.worldMapView().searches, journal, keepers: treasure.cache };
+
+        // By its circle: its keepers woken, and the circle on the minimap
+        const [dx, dy] = [player.x - treasure.centre[0], player.y - treasure.centre[1]];
+        const d = Math.hypot(dx, dy);
+
+        goTo(treasure.centre[0] + (dx / d) * (treasure.radius + 30), treasure.centre[1] + (dy / d) * (treasure.radius + 30));
+        await settle(4, true);
+        game.minimap.drawn = -Infinity;
+        game.advance(0.1);
+
+        const cache = host.caches.get(treasure.cache);
+        const woken = { keepers: cache?.ids.length ?? 0, treasure: cache?.treasure === treasure.id, minimap: game.minimap.searches.includes(treasure.id), chest: host.ground.has(`chest-${cache?.id}`), glint: game.glints.shown.size };
+
+        // Near where it's buried: it glints
+        goTo(treasure.spot[0] + 6, treasure.spot[1]);
+        await settle(2, true);
+
+        const glint = game.glints.shown.get(treasure.id);
+        const glinting = { glint: glint?.sprite.name, mound: glint?.mound.name, seen: Boolean(glint && glint.sprite.parent === game.view.scene) };
+
+        // Put down: dug up, the player's share in it
+        for (let round = 0; round < 4 && cache.ids.some((id) => !game.battle.actor(id)?.dead); round++) {
+            for (const id of cache.ids) {
+                game.battle.afflict(id, "poison", { by: "player", damage: 1e7 });
+            }
+
+            await settle(8);
+        }
+
+        game.advance(0.1);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const share = [...host.ground.values()].find((dropped) => dropped.from === "chest" && dropped.for === "player");
+
+        return {
+            marked,
+            woken,
+            glinting,
+            dug: { gone: !host.treasures.size, open: game.drops.drawn.get(share?.id)?.object.children[0].name, gold: share?.bundle.gold, items: share?.bundle.items.length, searches: game.worldMapView().searches.length, glints: game.glints.shown.size },
+            told,
+        };
+    });
+
+    expect(hunt).not.toBeNull();
+    expect(hunt.marked).toMatchObject({ left: 0, keepers: null, journal: ["Treasure map"] });
+    expect(hunt.marked.map).toEqual([expect.objectContaining({ grade: "common", own: true, radius: 40 })]);
+    expect(hunt.told.some((text) => /^The treasure map shows somewhere .+: it's marked on your world map, and your party's\. Search the circle\.$/.test(text)), JSON.stringify(hunt.told)).toBe(true);
+    expect(hunt.woken.keepers).toBeGreaterThanOrEqual(3);
+    expect(hunt.woken).toMatchObject({ treasure: true, minimap: true, chest: false, glint: 0 });
+    expect(hunt.told.some((text) => /^Whoever buried it left .+ keeping it\. Put them all down to dig it up\.$/.test(text)), JSON.stringify(hunt.told)).toBe(true);
+    expect(hunt.glinting).toEqual({ glint: expect.stringMatching(/^treasure glint/), mound: expect.stringMatching(/^treasure mound/), seen: true });
+    expect(hunt.dug).toMatchObject({ gone: true, open: "chest-open", searches: 0, glints: 0 });
+    expect(hunt.dug.gold).toBeGreaterThan(0);
+    expect(hunt.dug.items).toBeGreaterThanOrEqual(2);
+    expect(hunt.told).toContain("You dig up the treasure: your share of it lies before you. Tap it to take it.");
+});
+
 test("now and then, past the land nearest home, an elite leads its kind: gilded and radiant, its plate in gold, a star on the minimap from 80 m (at its edge while further than it shows); felled, its prize for the player near", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");

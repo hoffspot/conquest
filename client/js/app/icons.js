@@ -1098,6 +1098,16 @@ export const ITEM_ICONS = Object.freeze({
         <path d="M-15,-19 L15,-19 C15,-1 9,12 0,21 C-9,12 -15,-1 -15,-19 Z" fill="none" stroke="#c9d1d8" stroke-width="1.6" transform="scale(0.9) translate(0 -1)"/>`,
 
     // A flask of red draught, stoppered
+    // A treasure map (core/treasure.js): a torn sheet of parchment, its corner curled, a dotted
+    // trail across it past two hills to a red X, and a compass star in its corner
+    treasureMap: `
+        <path d="M-17,-15 L-9,-17 L-1,-14 L8,-17 L17,-14 L16,-3 L18,8 L15,16 L5,14 L-4,17 L-12,15 L-17,17 L-15,5 L-18,-5 Z" fill="url(#icon-parchment)" stroke="#6a4a1a" stroke-width="1.2" stroke-linejoin="round"/>
+        <path d="M17,-14 C12,-12 12,-8 16,-6" fill="#c9a66a" stroke="#6a4a1a" stroke-width="1"/>
+        <path d="M-12,1 L-8,-5 L-4,1 Z M-6,1 L-1,-7 L4,1 Z" fill="#8a7048" stroke="#4a3418" stroke-width="0.8" stroke-linejoin="round"/>
+        <path d="M-13,12 C-8,6 -2,10 2,6 C6,2 4,-2 9,-3" fill="none" stroke="#8a2a1a" stroke-width="1.4" stroke-dasharray="2 2" stroke-linecap="round"/>
+        <path d="M8,-8 L14,-2 M14,-8 L8,-2" stroke="#c8202a" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="${star(-11, -9, 3.6, 1.1, 4, 0)}" fill="#5a3a12"/>
+        <circle cx="-11" cy="-9" r="1" fill="#e8d8a8"/>`,
     // A goblin's bomb: a round black pot, a band of rope round it, its wick lit and sparking
     goblinBomb: `
         <circle cx="-2" cy="5" r="14" fill="#2b2522" stroke="#0e0b09" stroke-width="1.4"/>
