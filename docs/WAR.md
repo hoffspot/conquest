@@ -2671,9 +2671,16 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   older. The newest four are shown. Each hears the pin's note, and another's is said with which
   way it is ("Bryn pings the map, 640 m north-east."). The host only tells the party of it
   (`party` events, `change: "ping"`): nothing of it's kept.
+- **Markers shared** (`mark`, with `at`, `icon` and `words`: one of the player's markers on the
+  world map, docs/GAME.md *The world map*; core/markers.js). Every other one of the party is given
+  it, kept as one of their own and said to be from them ("Bram shares a marker with you (Danger:
+  "Wolves' den"), 400 m north-east. It's on your map."), unless they've ten already ("take one
+  away to keep the next"); the one who shared it's told it's on their maps. As with a ping, the
+  host only tells the party (`party` events, `change: "mark"`, its words tidied: `markerWords`);
+  refused out of a party, off the map, or for an icon there isn't.
 - **Kept.** Parties, and who's been asked, are carried in the world's snapshot (`SNAPSHOT_VERSION`
   24) and done by commands like anything else, so every copy has them alike; what two games share
-  changed (`NET_VERSION` 100; with shared finds and pings, 157).
+  changed (`NET_VERSION` 100; with shared finds and pings, 157; with markers shared, 158).
 - **Talk** (`core/netplay.js` `CHAT`, `Hosting.chat`; the party menu's Chat tab, docs/GAME.md).
   What's said in a party isn't done to the world, and isn't for everyone in it, so it isn't a
   command: a joined player's line goes to the host alone (`{ kind: "chat", text }`), and the host

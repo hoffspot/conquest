@@ -29,6 +29,7 @@
 // and write is guarded: without it the game still plays, it just doesn't remember.
 
 import { isGuid, withGuid } from "../core/guid.js";
+import { markersOf } from "../core/markers.js";
 import { ELEMENT_TOMES } from "../core/spells.js";
 import { MESSAGES_KEPT } from "./journal.js";
 import { decode, encode } from "../core/wire.js";
@@ -38,11 +39,11 @@ const WORLDS_KEY = "pellagos.worlds";
 const SETTINGS_KEY = "pellagos.settings";
 
 // What's kept of each character, each under its own key (and what an export of them carries)
-const KINDS = Object.freeze(["save", "talks", "explored", "progress", "standing", "followers", "wheels", "pin", "place", "vitals", "world", "messages", "told"]);
+const KINDS = Object.freeze(["save", "talks", "explored", "progress", "standing", "followers", "wheels", "pin", "markers", "place", "vitals", "world", "messages", "told"]);
 
 // Of them, what goes with a character wherever they go, and what each world keeps of them
 const CARRIED = Object.freeze(["save", "progress", "wheels", "messages", "told"]);
-const PLACED = Object.freeze(["talks", "explored", "standing", "followers", "pin", "place", "vitals"]);
+const PLACED = Object.freeze(["talks", "explored", "standing", "followers", "pin", "markers", "place", "vitals"]);
 
 // A character's id, a world's and a place's: eight letters and digits, none the same as another's
 const ID = /^[a-z0-9]{8}$/;
@@ -794,6 +795,16 @@ export function loadPin(save) {
 /** Keep where the character's pinned on the world map (or that they've none: null), in a saved game. */
 export function savePin(save, pin) {
     return save?.id ? write(keyOf(save, "pin"), { created: save.created, seed: save.seed, pin }) : false;
+}
+
+/** The character's markers on the world map, in a saved game (core/markers.js markersOf), or none (none kept, or another game's). */
+export function loadMarkers(save) {
+    return markersOf(own(save, "markers")?.markers);
+}
+
+/** Keep the character's markers on the world map, in a saved game. */
+export function saveMarkers(save, markers) {
+    return save?.id ? write(keyOf(save, "markers"), { created: save.created, seed: save.seed, markers }) : false;
 }
 
 /**

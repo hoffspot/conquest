@@ -9405,6 +9405,133 @@ test("in a party: a place another of it finds is on the player's map for good, w
     expect(await page.evaluate((id) => window.pellagos.game.explored.finderOf(id), found.id)).toBe("Bram");
 });
 
+test("markers on the world map: one put down with its button, what it marks and its words chosen; tapped, shared with the party; one shared by another kept as the player's; taken away; ten at most; on the minimap too", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Bram comes into the world and the player's party
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { host, battle } = game;
+        const me = battle.actor(game.me);
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // (Every word on the banner kept)
+        window.told = [];
+        new MutationObserver((records) => window.told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+
+        host.join({ id: "guest", hero: { ...host.players.get(game.me).hero, name: "Bram" } });
+        battle.place("guest", "town", [me.square[0] + 24, me.square[1]]);
+        host.command(game.me, { type: "party", do: "invite", who: "guest" });
+        host.command("guest", { type: "party", do: "accept" });
+        game.advance(0.25, { render: false });
+        game.start();
+    });
+
+    // The world map (the world on under it only as the test moves it)
+    await page.keyboard.press("m");
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn, null, { polling: 100 });
+    await page.evaluate(() => window.pellagos.game.stop());
+
+    const canvas = page.locator("#worldmapcanvas");
+    const box = await canvas.boundingBox();
+    const dialog = page.locator("#marker");
+
+    // Its button, then a tap 30 pixels east of the player: what it marks and its words asked
+    await page.locator("#worldmapmark").click();
+    await expect(page.locator("#worldmapmark")).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#worldmappicktext")).toHaveText("Marker: tap where to put it");
+    await canvas.click({ position: { x: box.width / 2 + 30, y: box.height / 2 } });
+    await expect(dialog).toBeVisible();
+    await expect(page.locator("#markertitle")).toHaveText("New marker");
+    await expect(dialog.locator(".marker-kind")).toHaveCount(8);
+    await dialog.locator('.marker-kind[data-icon="danger"]').click();
+    await expect(dialog.locator('.marker-kind[data-icon="danger"]')).toHaveAttribute("aria-checked", "true");
+    await page.locator("#markerwords").fill("  Wolves'   den ");
+    await dialog.getByRole("button", { name: "Put it there" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator("#worldmapnote")).toHaveText("Marked: tap it to share it or take it away");
+
+    const put = await page.evaluate(() => {
+        const { game, worldMap } = window.pellagos;
+        const [marker] = game.markerView();
+        const player = worldMap.player;
+
+        return { marker, east: marker.x - player.x, drawn: worldMap.drawn.markers };
+    });
+
+    expect(put.marker).toMatchObject({ icon: "danger", words: "Wolves' den", from: null });
+    expect(put.east).toBeGreaterThan(0);
+
+    // Tapped (its head, over its point): what it is, and shared with the party
+    const head = await page.evaluate(([x, z]) => {
+        const { view } = window.pellagos.worldMap;
+        const canvas = document.querySelector("#worldmapcanvas");
+
+        return { x: (x - view.x) / view.scale + canvas.clientWidth / 2, y: (z - view.z) / view.scale + canvas.clientHeight / 2 - 22 };
+    }, [put.marker.x, put.marker.z]);
+
+    await canvas.click({ position: head });
+    await expect(dialog).toBeVisible();
+    await expect(page.locator("#markertitle")).toHaveText("Wolves' den");
+    await expect(page.locator("#markernote")).toContainText("Danger");
+    await expect(dialog.locator("#markermenu button")).toHaveText(["Share with your party", "Run there", "Take it away", "Close"]);
+    await dialog.getByRole("button", { name: "Share with your party" }).click();
+    await expect(dialog).toBeHidden();
+    await page.evaluate(() => window.pellagos.game.advance(0.1, { render: false }));
+    expect(await page.evaluate(() => window.told)).toContain("Shared with your party: it's on their maps now.");
+
+    // Bram shares one: kept as the player's, said to be his, and drawn on the open map
+    await page.evaluate(([x, z]) => {
+        const { game } = window.pellagos;
+
+        game.host.command("guest", { type: "party", do: "mark", at: [x, z + 20], icon: "loot", words: "Old chest" });
+        game.advance(0.1, { render: false });
+    }, [put.marker.x, put.marker.z]);
+    await page.waitForFunction(() => window.pellagos.worldMap.drawn.markers === 2, null, { polling: 100 });
+
+    const shared = await page.evaluate(() => window.pellagos.game.markerView()[1]);
+
+    expect(shared).toMatchObject({ icon: "loot", words: "Old chest", from: "Bram" });
+    expect(await page.evaluate(() => window.told.some((text) => /^Bram shares a marker with you \(Loot: "Old chest"\)(, .+)?\. It's on your map\.$/.test(text))), JSON.stringify(await page.evaluate(() => window.told))).toBe(true);
+
+    // The player's own taken away
+    await canvas.click({ position: head });
+    await expect(page.locator("#markertitle")).toHaveText("Wolves' den");
+    await dialog.getByRole("button", { name: "Take it away" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator("#worldmapnote")).toHaveText("The marker's taken away");
+    expect(await page.evaluate(() => window.pellagos.game.markerView().map(({ words }) => words))).toEqual(["Old chest"]);
+
+    // Ten at most: the button says so
+    await page.evaluate(([x, z]) => {
+        const { game } = window.pellagos;
+
+        for (let k = 0; k < 9; k++) {
+            game.addMarker([x + k * 50, z + 400], { icon: "flag" });
+        }
+    }, [put.marker.x, put.marker.z]);
+    await page.locator("#worldmapmark").click();
+    await expect(page.locator("#worldmapnote")).toHaveText("10 markers already: tap one to take it away first");
+    await expect(page.locator("#worldmapmark")).toHaveAttribute("aria-pressed", "false");
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#worldmap")).toBeHidden();
+
+    // On the minimap, Bram's, near the player
+    const minimap = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.minimap.drawn = -Infinity;
+        game.advance(0.05, { render: false });
+
+        return game.minimap.markers;
+    });
+
+    expect(minimap).toContain(shared.id);
+});
+
 test("now and then, past the land nearest home, an elite leads its kind: gilded and radiant, its plate in gold, a star on the minimap from 80 m (at its edge while further than it shows); felled, its prize for the player near", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");

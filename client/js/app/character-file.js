@@ -39,7 +39,7 @@ export const CHARACTER_EXTENSION = ".pellagos-character";
 export const CHARACTER_LIMIT = 32 * 1024 * 1024;
 
 // Kept of a character that's of the world they lived in: let go of with it
-const WORLDLY = ["talks", "explored", "standing", "pin", "place", "told", "world"];
+const WORLDLY = ["talks", "explored", "standing", "pin", "markers", "place", "told", "world"];
 
 /** Why a file can't be read: `newer` if a newer version of the game made it. */
 export class CharacterFileError extends Error {
