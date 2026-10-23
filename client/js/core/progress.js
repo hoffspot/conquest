@@ -22,6 +22,7 @@
 import { CURES } from "./afflictions.js";
 import { BREWS, CHARM_ROLLS, CHARMS, charmStats, SCROLLS, STARTING_SCROLLS } from "./goods.js";
 import { blockMost, disguiseOf, GEAR, GEAR_SLOTS, gearName, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
+import { Bestiary } from "./bestiary.js";
 import { clockOf } from "./invasions.js";
 import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, GUILD_TOMES, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
 import { PARTS } from "./spoils.js";
@@ -629,10 +630,10 @@ function gearOf(kept, hero) {
 /** A player's skills, gold, pack and gear. */
 export class Progress {
     /**
-     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { slot: piece }, invasion }.
+     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { slot: piece }, invasion, bestiary }.
      * @param {object} [hero] - Their hero (for the weapon they started with, and their spiked boots).
      */
-    constructor({ skills = {}, schools = null, spells = [], spellXp = {}, gold = 20, pack = [], gear = null, invasion = null } = {}, { weapon = "sword", boots = false } = {}) {
+    constructor({ skills = {}, schools = null, spells = [], spellXp = {}, gold = 20, pack = [], gear = null, invasion = null, bestiary = null } = {}, { weapon = "sword", boots = false } = {}) {
         this.skills = Object.fromEntries(Object.keys(TREES).map((tree) => [tree, Math.max(0, Number(skills[tree]) || 0)]));
 
         /**
@@ -671,6 +672,9 @@ export class Progress {
          * they're in now and how long they've been there).
          */
         this.invasion = clockOf(invasion);
+
+        /** What they've found out about each kind of creature (core/bestiary.js): carried with them, wherever they go. */
+        this.bestiary = new Bestiary(bestiary);
     }
 
     /** A school of magic's tier (1 to its last: 5 for Healing, 7 for the elements). */
@@ -1217,7 +1221,7 @@ export class Progress {
 
     /** What's kept. */
     toJSON() {
-        return { skills: { ...this.skills }, schools: { ...this.schools }, spells: [...this.spells], spellXp: { ...this.spellXp }, gold: this.gold, pack: this.pack.map((stack) => (stack ? { ...stack } : null)), gear: structuredClone(this.gear), invasion: { ...this.invasion } };
+        return { skills: { ...this.skills }, schools: { ...this.schools }, spells: [...this.spells], spellXp: { ...this.spellXp }, gold: this.gold, pack: this.pack.map((stack) => (stack ? { ...stack } : null)), gear: structuredClone(this.gear), invasion: { ...this.invasion }, bestiary: this.bestiary.toJSON() };
     }
 }
 

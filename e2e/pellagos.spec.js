@@ -6302,6 +6302,72 @@ test("the journal keeps the last ten messages told across the screen, behind a b
     await expect(rows.first()).toContainText("2 times");
 });
 
+test("the bestiary: a creature seen and slain written in, its page in the journal opening a part at a time; and the next time", async ({ page }) => {
+    // (Played twice: more than the usual time)
+    test.setTimeout(180000);
+    await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
+
+    const continued = async () => {
+        await title(page);
+        await page.locator("#continuebutton").click();
+        await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+    };
+    const journal = page.getByRole("dialog", { name: "Journal" });
+
+    await continued();
+
+    // Out of town, a wolf by the player, all but dead; the player sets on it
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { host, battle, world } = game;
+        const [mx, my] = world.stamp.middle;
+        const at = [Math.floor(mx - 140), Math.floor(my - 20)];
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", at, { facing: Math.PI / 2 });
+        host.wild.set("test-wolf", { creature: "wolf", tier: 2, pack: "test-wolf", camp: null, lair: null, master: false });
+        battle.add({ id: "test-wolf", kind: "beast", name: "Wolf", weapon: "wolf", team: "beasts", square: [at[0] + 1, at[1]], ai: "wild", hp: 1, speed: 0.01, chase: 0.01, wild: { creature: "wolf", tier: 2, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: "test-wolf", leader: null, menace: false } });
+        host.command(game.me, { type: "engage", target: "test-wolf" });
+    });
+
+    expect(await playUntil(page, () => window.pellagos.game.progress.bestiary.entry("wolf").slain === 1, { seconds: 20 })).toBe(true);
+
+    // Told, and written in: seen and slain
+    expect(await page.evaluate(() => window.pellagos.game.messages.some(({ text }) => text.startsWith("New in your bestiary: Wolf.")))).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.progress.bestiary.entry("wolf"))).toEqual({ points: 2, seen: true, signs: 0, slain: 1, level: 1 });
+
+    // Its tab in the journal: the kinds met, the wolf among them, Sighted
+    await page.evaluate(() => window.pellagos.game.toggleJournal());
+    await expect(journal).toBeVisible();
+    await journal.getByRole("button", { name: "Bestiary" }).click();
+    await expect(journal).toContainText("1 of 97 kinds of creature met");
+    await expect(journal.getByRole("heading", { name: "The wilds" })).toBeVisible();
+
+    // Its page: what it is, open; the rest shut, and how to open them
+    await journal.getByRole("button", { name: "Wolf: Sighted, 1 of 4" }).click();
+    await expect(journal.getByRole("heading", { name: "Wolf" })).toBeVisible();
+    await expect(journal.getByRole("heading", { name: "What it is" })).toBeVisible();
+    await expect(journal).toContainText("Grey wolves run in packs");
+    await expect(journal).toContainText("Seen · 1 slain");
+    await expect(journal.locator(".bestiary-section.shut")).toHaveCount(3);
+    await expect(journal.locator(".bestiary-section.shut").first()).toContainText("At Known: watch for it, read the signs it leaves, and slay it to learn more.");
+
+    // Back to the contents, then the journal; closed
+    await journal.getByRole("button", { name: "Back to the bestiary" }).click();
+    await expect(journal.getByRole("button", { name: "Wolf: Sighted, 1 of 4" })).toBeVisible();
+    await journal.getByRole("button", { name: "Journal" }).click();
+    await expect(journal.getByRole("heading", { name: "Standing" })).toBeVisible();
+    await page.evaluate(() => window.pellagos.game.toggleJournal());
+    await expect(journal).toBeHidden();
+
+    // The next time they play: still there
+    await continued();
+    await page.keyboard.press("j");
+    await journal.getByRole("button", { name: "Bestiary" }).click();
+    await expect(journal.getByRole("button", { name: "Wolf: Sighted, 1 of 4" })).toBeVisible();
+});
+
 test("where the player is is kept whenever the game stops (paused, the page closed or hidden), and the next time they carry on there", async ({ page }) => {
     // (Played three times: more than the usual time)
     test.setTimeout(180000);

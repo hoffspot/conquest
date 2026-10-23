@@ -17,8 +17,11 @@
 //   it, and which way it is, till each is found;
 // - what they've read of what's written and left to be found (core/writings.js: Sinclair's
 //   journal), each to be read again (app/reader.js);
-// - and, by a button at its top, the last messages they were told across the screen (the HUD's
-//   banner: hud.js message), the newest first, and how long ago.
+// - by a tab at its top, the bestiary: a page for each kind of creature met, telling as much of
+//   it as they've found out (core/bestiary.js; its pages made by app/bestiary.js and given it, so
+//   the journal, wanted before the game's loaded (app/save.js), needs nothing of the creatures);
+// - and, by another, the last messages they were told across the screen (the HUD's banner: hud.js
+//   message), the newest first, and how long ago.
 //
 // It only shows and asks: what's done is the host's (core/host.js commands), through the game.
 
@@ -143,25 +146,45 @@ export class JournalPanel {
         this.close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
         this.close.addEventListener("click", () => this.onClose());
 
-        // (The last messages told, or the journal again)
-        this.toggle = element("button", "journal-button journal-toggle", "Messages");
-        this.toggle.type = "button";
-        this.toggle.setAttribute("aria-pressed", "false");
-        this.toggle.addEventListener("click", () => {
-            this.view = this.view === "messages" ? "journal" : "messages";
+        header.append(this.title, this.rank, this.close);
 
-            if (this.shown) {
-                this.show(this.shown);
-            }
-        });
-        header.append(this.title, this.rank, this.toggle, this.close);
+        // (Its views, a tab for each: the journal, the bestiary, the last messages told)
+        const tabs = element("nav", "journal-tabs");
 
-        /** What's shown: the journal, or the last messages told ("messages"). */
+        tabs.setAttribute("aria-label", "The journal's pages");
+        this.tabs = Object.fromEntries(
+            [
+                ["journal", "Journal"],
+                ["bestiary", "Bestiary"],
+                ["messages", "Messages"],
+            ].map(([view, label]) => {
+                const tab = element("button", "journal-button journal-tab", label);
+
+                tab.type = "button";
+                tab.addEventListener("click", () => {
+                    this.view = view;
+                    this.page = null;
+
+                    if (this.shown) {
+                        this.show(this.shown);
+                    }
+                });
+                tabs.append(tab);
+
+                return [view, tab];
+            }),
+        );
+
+        /**
+         * What's shown: the journal, the bestiary ("bestiary": its contents, or a kind's page,
+         * `page`), or the last messages told ("messages").
+         */
         this.view = "journal";
+        this.page = null;
         this.shown = null;
 
         this.body = element("div", "journal-body");
-        this.panel.append(header, this.body);
+        this.panel.append(header, tabs, this.body);
         root.append(this.panel);
 
         /** What the player asks (the game does it). */
@@ -182,19 +205,32 @@ export class JournalPanel {
      * null: serving another, fallen, ruling the continent) }, done: [{
      * title, from, state }], heard: [{ words, from, where, found }] (what they've heard tell of:
      * those still to find first), writings: [{ id, title, found }] (what they've read: core/
-     * writings.js), messages: the last told, oldest first (keepMessage) }.
+     * writings.js), bestiary (what's been found out about each kind of creature: { met: the kinds
+     * met (app/bestiary.js contentsOf), of: how many kinds there are, levels: how many levels
+     * each has, pageOf(kind): its page, app/bestiary.js pageOf, or null }), messages: the last
+     * told, oldest first (keepMessage) }.
      */
     show(shown) {
-        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], writings = [], messages = [] } = shown;
+        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], writings = [], bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
 
         this.shown = shown;
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
         this.panel.hidden = false;
-        this.toggle.textContent = this.view === "messages" ? "Journal" : "Messages";
-        this.toggle.setAttribute("aria-pressed", String(this.view === "messages"));
+
+        for (const [view, tab] of Object.entries(this.tabs)) {
+            tab.setAttribute("aria-pressed", String(this.view === view));
+        }
 
         if (this.view === "messages") {
             this.body.replaceChildren(this.#messages(messages));
+
+            return;
+        }
+
+        if (this.view === "bestiary") {
+            const page = this.page ? bestiary.pageOf(this.page) : null;
+
+            this.body.replaceChildren(...(page ? this.#creature(page) : this.#bestiary(bestiary)));
 
             return;
         }
@@ -369,6 +405,93 @@ export class JournalPanel {
     hide() {
         this.panel.hidden = true;
         this.view = "journal";
+        this.page = null;
+    }
+
+    // The bestiary's contents: each kind met, by where it's met (app/bestiary.js contentsOf), its
+    // level beside it, each opening its page
+    #bestiary({ met, of, levels }) {
+        const sections = [element("p", "journal-note bestiary-about", `${met.length} of ${of} kinds of creature met. Watch for them, read the signs they leave on their trails, and slay them to learn more: mastered, you strike them harder, and the adventurers' guilds pay for your notes.`)];
+
+        for (const group of [...new Set(met.map(({ group: each }) => each))]) {
+            const list = element("ul", "journal-list bestiary");
+
+            list.append(
+                ...met
+                    .filter((one) => one.group === group)
+                    .map(({ kind, name, level, title }) => {
+                        const row = element("li", "bestiary-entry");
+                        const open = element("button", `bestiary-row${level >= levels ? " mastered" : ""}`);
+
+                        open.type = "button";
+                        open.setAttribute("aria-label", `${name}: ${title}, ${level} of ${levels}`);
+                        open.append(element("span", "bestiary-name", name), element("span", "bestiary-title", title), this.#pips(level, levels));
+                        open.addEventListener("click", () => {
+                            this.page = kind;
+                            this.show(this.shown);
+                            this.body.scrollTop = 0;
+                        });
+                        row.append(open);
+
+                        return row;
+                    }),
+            );
+            sections.push(this.#section(group, list));
+        }
+
+        if (!met.length) {
+            sections.push(element("p", "journal-empty", "Nothing met yet. Whatever you see out in the wilds, in the dungeons and in the hells is written in here."));
+        }
+
+        return sections;
+    }
+
+    // A kind's page in the bestiary, as far as it's been found out (app/bestiary.js pageOf), and
+    // the way back
+    #creature(page) {
+        const back = element("button", "journal-button bestiary-back", "All creatures");
+        const head = element("div", "journal-standing bestiary-head");
+        const bar = element("div", "journal-bar");
+        const fill = element("div", "journal-fill");
+
+        back.type = "button";
+        back.setAttribute("aria-label", "Back to the bestiary");
+        back.addEventListener("click", () => {
+            this.page = null;
+            this.show(this.shown);
+        });
+        fill.style.width = `${page.to === null ? 100 : Math.round(((page.points - page.from) / (page.to - page.from)) * 100)}%`;
+        bar.append(fill);
+        head.append(
+            element("h3", "bestiary-page-name", page.name),
+            element("p", "journal-line", `${page.title}, ${page.level} of ${page.levels}`),
+            this.#pips(page.level, page.levels),
+            bar,
+            element("p", "journal-note", [page.next ? `${page.next} next.` : "Mastered: there's no more to learn of it.", page.counts].filter(Boolean).join(" · ")),
+        );
+
+        const sections = page.sections.map(({ heading, open, lines }) => {
+            const body = element("div", `bestiary-section${open ? "" : " shut"}`);
+
+            body.append(...lines.map((line) => element("p", "bestiary-line", line)));
+
+            return this.#section(heading, body);
+        });
+
+        return [back, head, ...sections];
+    }
+
+    // A kind's level, as pips: one for each of its `levels`, filled as far as it's come
+    #pips(level, levels) {
+        const pips = element("span", "bestiary-pips");
+
+        pips.setAttribute("aria-hidden", "true");
+
+        for (let k = 0; k < levels; k++) {
+            pips.append(element("span", `bestiary-pip${k < level ? " on" : ""}`));
+        }
+
+        return pips;
     }
 
     // The last messages told, the newest first
