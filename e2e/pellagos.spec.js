@@ -6446,6 +6446,72 @@ test("a trail out of a camp: its prints and signs seen near it, a sign tapped wa
     expect(await page.evaluate(() => ({ signs: window.pellagos.game.explored.signs.size, tracked: [...window.pellagos.game.explored.tracked] }))).toEqual({ signs: 3, tracked: [trail.home] });
 });
 
+test("a bear's den out in the wild: in its glade, drawn as the player comes near, its master and its kind out, on the world map once found; a trail out of it leading to it", async ({ page }) => {
+    await page.goto("/?play&seed=2");
+    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
+
+    // Out by the bear's den nearest the player's town, 25 m off
+    const den = await page.evaluate(async () => {
+        const { densOf } = await import("/js/core/dens.js");
+        const { game } = window.pellagos;
+        const { host, battle, world } = game;
+        const me = battle.actor(game.me);
+        const near = ({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y);
+        const ours = densOf(world.plan)
+            .filter(({ kind }) => kind === "bear's den")
+            .sort((a, b) => near(a) - near(b))[0];
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [Math.floor(ours.at[0]), Math.floor(ours.at[1]) + 25], { facing: Math.PI });
+        Object.assign(battle.actor(game.me), { hp: 1e6, maxHp: 1e6 });
+        window.testDen = ours.id;
+
+        return { id: ours.id, at: ours.at };
+    });
+
+    // Drawn, and its bear out: its master, a tier up
+    expect(await playUntil(page, () => window.pellagos.game.denProps.shown.has(window.testDen) && (window.pellagos.game.host.dens.get(window.testDen)?.ids.length ?? 0) > 0, { seconds: 20 })).toBe(true);
+
+    const out = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const ids = game.host.dens.get(window.testDen).ids;
+        const drawn = game.denProps.shown.get(window.testDen);
+        const { x, z } = drawn.position;
+        // (The trees round it, in its chunk and those about it: none in its glade)
+        const trees = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].flatMap((dx) => game.world.maps.town.chunkAt(Math.floor(x) + dx * 64, Math.floor(z) + dy * 64)?.trees ?? []));
+
+        return { creatures: ids.map((id) => game.host.wild.get(id).creature), masters: ids.filter((id) => game.host.wild.get(id).master).length, parts: drawn.children.length, glade: trees.filter((tree) => Math.hypot(tree.x - x, tree.y - z) < 12).length };
+    });
+
+    expect(out.creatures.every((creature) => creature === "bear")).toBe(true);
+    expect(out.masters).toBe(1);
+    expect(out.parts).toBeGreaterThan(5);
+    expect(out.glade).toBe(0);
+
+    // Found, on the world map; and a trail out of it, its sign read, leading to it
+    expect(await page.evaluate((id) => window.pellagos.game.worldMapView().icons.some((icon) => icon.id === id && icon.kind === "lair"), den.id)).toBe(true);
+
+    const told = await page.evaluate(async (id) => {
+        const { trailsOf } = await import("/js/core/tracks.js");
+        const { game } = window.pellagos;
+        const trail = trailsOf(game.world.plan).find(({ home }) => home.id === id);
+        const [x, y] = trail.signs[0].at;
+
+        game.host.battle.place(game.me, "town", [Math.floor(x), Math.floor(y)], { facing: Math.PI });
+
+        game.host.command(game.me, { type: "read", sign: trail.signs[0].id });
+
+        for (let k = 0; k < 15; k++) {
+            game.advance(1 / 30, { render: false, wait: true });
+        }
+
+        return game.messages.map(({ text }) => text).find((text) => text.includes(" sign: ")) ?? "";
+    }, den.id);
+
+    expect(told).toMatch(/^Brown bear sign: .+ toward a bear's den \(1 of 3 signs read\)\.$/);
+});
+
 test("the bestiary: a creature seen and slain written in, its page in the journal opening a part at a time, its portrait drawn; and the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
     test.setTimeout(180000);

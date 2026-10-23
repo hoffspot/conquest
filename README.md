@@ -772,8 +772,9 @@ client/                 The game (static files served to the browser)
     creatures.js        The wild's creatures: what each is, where and how strong (docs/WILDS.md)
     bestiary.js         What a player's found out about each kind of creature, by seeing,
                         tracking and slaying it; its words in lore/bestiary.js (docs/GAME.md)
-    tracks.js           The trails out of the wild's camps and lairs, their signs to read, and
-                        what wore each (docs/WILDS.md *Tracking*)
+    tracks.js           The trails out of the wild's camps, dens and lairs, their signs to read,
+                        and what wore each (docs/WILDS.md *Tracking*)
+    dens.js             The roaming beasts' dens: where each kind keeps one, and what keeps it
     caches.js           The adventurers' caches out in the wilds: where, who keeps them, what's in them
     dungeons/           The dungeons (see docs/DUNGEONS.md): build.js cooks a dungeon up from a
                         seed and a theme; themes.js the themes; layouts.js how each is dug;
@@ -857,6 +858,8 @@ client/                 The game (static files served to the browser)
                         their feet are, fading after a few minutes
     signs3d.js          The signs on the trails out of the wild's camps and lairs: scuffed
                         earth, a snapped stick, a pale glint till it's read
+    dens3d.js           The roaming beasts' dens: a bear's mound, a boars' wallow, a cat's rock,
+                        a wyverns' nest, a knucker's pool
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
                         its splashes and pools, smoke and embers, the target ring, heals'
