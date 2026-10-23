@@ -707,8 +707,9 @@ export const PROGRESS_FORMAT = 2;
 
 /**
  * What the character of a saved game ({ seed, created }) has grown into and carries (core/
- * progress.js Progress's toJSON: { skills, schools, spells, spellXp, gold, pack, gear, invasion });
- * nothing yet for another game. (Kept before the elements' tomes: every element open, as it was)
+ * progress.js Progress's toJSON: { skills, schools, spells, spellXp, gold, pack, gear, invasion,
+ * bestiary }); nothing yet for another game. (Kept before the elements' tomes: every element open,
+ * as it was)
  */
 export function loadProgress(save) {
     const progress = own(save, "progress");
@@ -728,6 +729,7 @@ export function loadProgress(save) {
         pack: progress.pack ?? [],
         gear: progress.gear ?? null,
         invasion: progress.invasion ?? null,
+        bestiary: progress.bestiary ?? null,
     };
 }
 

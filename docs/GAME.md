@@ -822,6 +822,56 @@ later, in another hand, a guild scout's note.
   anywhere (its *Read* button).
 - Only the player's own game shows it: nothing of it is the host's.
 
+### The bestiary (core/bestiary.js, app/bestiary.js)
+
+A page in the journal for each kind of creature the player has met, filling in as they find out
+more of it, as a hunter's research does in Monster Hunter. Every creature has a page (all 97 in
+core/creatures.js `CREATURES`): the wilds', each people's own, the camps' and lairs', the ants'
+nests', the hells' and the Rift's.
+
+- **Research** (core/bestiary.js `Bestiary`, `RESEARCH`): each kind earns points, and its page goes
+  up a level as they add up:
+
+  | Earned by | Points |
+  | --- | ---: |
+  | The first sight of one (as far off as 30 m, light allowing: battle.js `canSee`) | 1 |
+  | A sign of one read on a trail (docs/WILDS.md, to come) | 2 |
+  | One slain (by the player, or by those fighting at their side) | 1 |
+  | One of the mightiest slain: a perilous one, a lair's master, an elite at the head of its kind, a dungeon's boss or mini-boss, the Behemoth | 5 |
+
+  | Level | Points | Opens |
+  | --- | ---: | --- |
+  | Sighted | 1 | **What it is** (core/lore/bestiary.js `BESTIARY_LORE`): a few lines, and where it's met |
+  | Known | 4 | **Its ways**: how it sets on whoever comes, how many go together (and who guards a lair's master), when it's out, the camps and lairs it keeps to, the sign of it on its trail, how far out it's met |
+  | Studied | 8 | **How it fights**: its hit points at its least and most level, the share of every blow it turns, the harm it keeps off, what it can't be done (thrown), and each of its attacks (its harm, its reach, what it leaves) |
+  | Mastered | 14 | **What it leaves**: each thing it may drop and how often; and the player's edge on it |
+
+  Slain unseen (in the dark, from afar), one counts as seen too. Seen once is enough: the sight
+  of it earns nothing more.
+- **Mastered**: the player knows where to strike it, and every blow, shot and spell of theirs at
+  its kind lands a tenth harder (`RESEARCH.edge`: battle.js `#hit`, the player's actor's
+  `mastered`, set by host.js `#outfit`). And the adventurers' guilds pay for their notes on it,
+  gold (and merit on their card, if they're registered): 12 gold and 6 more for each level out it's
+  first met, 2 merit and half a merit more a level; twice as much for the mightiest (`PAY`,
+  `payOf`: 24 gold for a wolf's, 144 for the Dreadthorn's).
+- **Told** (host.js `#sighting`, `#slew`, `#researched`; the `bestiary` event): "New in your
+  bestiary: Wolf. (J for your journal.)" and a quill heard writing; "Your bestiary: Wolf, known
+  now."; "Wolf: mastered. You know where to strike it now, 10% harder. The adventurers' guild
+  pays you 24 gold for your notes, and 3 merit on your card." with the cue for a rank and coins.
+- **In the journal** (app/journal.js, its *Bestiary* tab; app/bestiary.js): how many of the 97
+  kinds have been met, then each met, by where (the wilds, each people's wilds, lairs and
+  strongholds, the ants' nests, the hells), the best known first, its level beside it as four
+  pips (gold-edged once it's mastered). Each opens its page: its name, its level and how far to
+  the next, how many seen, read and slain, and each part of it as far as it's been found out,
+  what's still to find shut ("At Studied: watch for it, read the signs it leaves, and slay it to
+  learn more."). Every word of it is the game's own: the creature's table, its weapon's, what it
+  leaves (spoils.js), and its lines in core/lore/bestiary.js.
+- **Kept with the character** (core/progress.js Progress `bestiary`: each kind's points, whether
+  it's been seen, and how many of its signs read and how many slain), as what they carry is,
+  into whatever world they go, and in every snapshot (`SNAPSHOT_VERSION` 33: an older world's
+  players with none yet). Both ends of a game must agree on what's seen and slain and on the
+  edge: `NET_VERSION` 156.
+
 ## The battle (core/battle.js)
 
 The battle runs in fixed steps of 50 ms, the same on every device, whatever the frame rate.
@@ -4949,9 +4999,9 @@ it.
   their foe one over the other down the middle; left of the attackers' icons), whichever is
   clear of them and the icons (or covers least of them), staying there while that's clear, eased there (moved as it is, its width kept), and back once
   the fight's over (hud.js `keepClear`, `messagePlace`). The last ten are kept for the journal
-  (journal.js `keepMessage`, `MESSAGES_KEPT`): its Messages button, at its top, shows them, the
+  (journal.js `keepMessage`, `MESSAGES_KEPT`): its Messages tab, at its top, shows them, the
   newest first, each with how long ago it was told, and the same message told again running
-  counted ("2 times, last 5 min ago"); the button, now Journal, goes back. Refusals and the like,
+  counted ("2 times, last 5 min ago"); its Journal tab goes back. Refusals and the like,
   shown less than two seconds ("Can't do that.", "Out of breath": `KEPT_FROM`), aren't news and
   aren't kept, nor one shown till the next ("The picture was lost…").
   **A foe slain** that's the player's to be told of (one they or a follower felled, or one they

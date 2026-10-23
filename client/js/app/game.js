@@ -39,6 +39,8 @@ import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { aloftShare, BOMBS, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
+import { MASTERED, RESEARCH } from "../core/bestiary.js";
+import { bestiaryOf } from "./bestiary.js";
 import { townOf } from "../core/insides.js";
 import { holderOf, LAIR_KINDS, PLACE_BANDS, placesOf } from "../core/places.js";
 import { CHUNK } from "../core/worldplan/plan.js";
@@ -754,7 +756,7 @@ const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, thanks: 14 });
 const HEARD_FOUND = 5;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -7064,6 +7066,30 @@ export class Game {
     // --- Growing stronger (core/progress.js) ---
 
     // The player's progress changed (a rank, loot, trade, gear): told, shown, and kept
+    // A kind of creature's research gone up a level in the player's bestiary (core/bestiary.js):
+    // said and heard, and kept; Mastered, the guild's pay for their notes on it (gold, and merit on
+    // their card) with it; the journal shown again if it's open
+    #studied({ creature, to, gold = 0, merit = 0 }) {
+        const name = CREATURES[creature]?.name ?? creature;
+
+        if (to >= MASTERED) {
+            this.hud.message(`${name}: mastered. You know where to strike it now, ${Math.round((RESEARCH.edge - 1) * 100)}% harder. The adventurers' guild pays you ${gold} gold for your notes${merit ? `, and ${merit} merit on your card` : ""}.`, 5);
+            this.sound?.play("levelUp");
+            this.sound?.play("coins", { delay: 0.4 });
+            this.hud.setGold(this.progress.gold);
+            this.onStanding(this.standing);
+        } else {
+            this.hud.message(to === 1 ? `New in your bestiary: ${name}. (J for your journal.)` : `Your bestiary: ${name}, ${RESEARCH.levels[to - 1].name.toLowerCase()} now.`, 3);
+            this.sound?.play("quill");
+        }
+
+        this.onProgress(this.progress);
+
+        if (this.journal?.open) {
+            this.#showJournal();
+        }
+    }
+
     #progressed(event) {
         // (Someone else buying from the shop this player's trading with: what it has left, shown)
         if (event.type === "bought" && event.id !== this.me && event.from === this.shopping?.keeper && this.pack?.open) {
@@ -7949,6 +7975,7 @@ export class Game {
             // (The treasures they're hunting: their own to give up, their party's shown)
             treasures: this.host.treasuresOf(this.me).map(({ id, grade, owner, name, centre }) => ({ id, title: itemLabel({ id: "treasureMap", quality: grade }), from: owner === this.me ? "Your map" : `${name}'s map`, where: at ? bearing(at, centre) : "", grade, own: owner === this.me })),
             writings: (this.memory.writings ?? []).filter((id) => WRITINGS[id]).map((id) => ({ id, title: WRITINGS[id].title, found: WRITINGS[id].found })),
+            bestiary: bestiaryOf(this.progress.bestiary.kinds),
             messages: this.messages,
         });
     }
@@ -10010,6 +10037,12 @@ export class Game {
                     if (event.portal) {
                         this.hud.message("This branch of the guild is open to you now: step through to it from any other branch's portal.", 4);
                     }
+                }
+
+                break;
+            case "bestiary":
+                if (event.id === this.me) {
+                    this.#studied(event);
                 }
 
                 break;

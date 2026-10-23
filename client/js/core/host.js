@@ -26,6 +26,7 @@ import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
 import { carriesTorch, lighting, skyLight, torchesLit } from "./light.js";
 import { ABILITIES, alike, ARMOR_CAP, buys, gradeOf, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
+import { MASTERED, payOf, RESEARCH } from "./bestiary.js";
 import { dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
@@ -574,7 +575,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 32;
+export const SNAPSHOT_VERSION = 33;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -612,6 +613,14 @@ export const SNAPSHOT_STEPS = Object.freeze({
     30: (snapshot) => ({ ...snapshot, version: 31, players: snapshot.players.map((player) => ({ budget: null, ...player })) }),
     // 32: the treasures hunted (Host #treasures: none yet)
     31: (snapshot) => ({ ...snapshot, version: 32, treasures: [], nextTreasure: 1 }),
+    // 33: what each player's found out about each kind of creature (core/bestiary.js: nothing
+    // yet), and so the kinds each strikes the harder (their actor's `mastered`: none)
+    32: (snapshot) => ({
+        ...snapshot,
+        version: 33,
+        players: snapshot.players.map((player) => ({ ...player, progress: { bestiary: {}, ...player.progress } })),
+        battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => (snapshot.players.some(({ id }) => id === actor.id) ? { mastered: [], ...actor } : actor)) },
+    }),
 });
 
 /**
@@ -2059,6 +2068,7 @@ export class Host {
             this.#muster();
             this.#townsfolk();
             this.#wilds();
+            this.#sighting();
             this.#watchRequests();
         }
 
@@ -2610,6 +2620,7 @@ export class Host {
     #credit(player, fallen) {
         this.#loot(player, fallen);
         this.#felled(player, fallen);
+        this.#slew(player, fallen);
 
         // (One of an invasion's raiders: one more they've felled of it, to be thanked for)
         const raider = this.soldiers.get(fallen.id);
@@ -2629,8 +2640,77 @@ export class Host {
 
             this.#loot(fellow, fallen);
             this.#felled(fellow, fallen);
+            this.#slew(fellow, fallen);
             this.#gain(fellow, WEAPONS[actor.weapon]?.attacks.some(({ kind }) => kind === "ranged") ? "marksman" : "blade", fallen.maxHp ?? 0);
         }
+    }
+
+    // One of the wild's a player (or one fighting with them) slew, in their bestiary (core/
+    // bestiary.js): seen, if it wasn't (slain in the dark, or from afar), and slain; one of the
+    // mightiest (a perilous one, a lair's master, an elite at the head of its kind, a dungeon's boss
+    // or mini-boss, the Behemoth) the more
+    #slew(player, fallen) {
+        const wild = this.wild.get(fallen.id);
+
+        if (!wild) {
+            return;
+        }
+
+        const mighty = Boolean(CREATURES[wild.creature]?.perilous || (wild.lair && wild.master) || wild.elite === "lead" || wild.champion || wild.rift);
+
+        this.#researched(player, player.progress.bestiary.see(wild.creature));
+        this.#researched(player, player.progress.bestiary.slay(wild.creature, { mighty }));
+    }
+
+    // Each creature a player sees for the first time (as far off as RESEARCH.sight, light allowing:
+    // battle.js canSee), in their bestiary
+    #sighting() {
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (!actor || actor.dead) {
+                continue;
+            }
+
+            for (const [id, { creature }] of this.wild) {
+                if (player.progress.bestiary.kinds[creature]?.seen) {
+                    continue;
+                }
+
+                const one = this.battle.actor(id);
+
+                if (one && !one.dead && one.map === actor.map && hypot(one.x - actor.x, one.y - actor.y) <= RESEARCH.sight && this.battle.canSee(actor, one, RESEARCH.sight)) {
+                    this.#researched(player, player.progress.bestiary.see(creature));
+                }
+            }
+        }
+    }
+
+    // A kind's research gone up a level in a player's bestiary (`change`: Bestiary's, or null),
+    // told; Mastered, their notes on it paid for by the adventurers' guilds (gold, and merit to
+    // the registered: payOf), and their blows at it the harder from now on (#outfit)
+    #researched(player, change) {
+        if (!change) {
+            return;
+        }
+
+        if (change.to < MASTERED) {
+            this.#event("bestiary", { id: player.id, ...change });
+
+            return;
+        }
+
+        const { gold, merit } = payOf(change.creature);
+        const earned = player.standing.guild ? merit : 0;
+
+        player.progress.gold += gold;
+        this.#event("bestiary", { id: player.id, ...change, gold, merit: earned });
+
+        for (const up of player.standing.earn(earned)) {
+            this.#event("guild", { id: player.id, change: "rank", ...up });
+        }
+
+        this.#outfit(player);
     }
 
     // What a player finds on a foe they've felled: gold, and things (into their pack, while there's room)
@@ -2704,6 +2784,8 @@ export class Host {
         player.charms = charmsOf(player.progress);
         actor.dodge = bonus.dodge;
         actor.shield = player.progress.guard(bonus);
+        // (The kinds of creature they know where to strike: Mastered in their bestiary)
+        actor.mastered = player.progress.bestiary.mastered();
 
         // (And a boon that multiplies the breath, a Stamina Boost: twice as much, while it lasts;
         // or how fast it comes back, an afterglow)
