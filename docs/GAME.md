@@ -2981,32 +2981,38 @@ facing south; each is turned about its middle to face the way the layout says:
   - **Taverns**, built as the houses are (timber-framed, stone or brick, as the tavern's seed
     says), one storey or two, with a wide door in the middle of the front. The tavern's name is
     painted in gold blackletter (UnifrakturMaguntia, kits/signs.js, loaded as a web font) on a
-    board along the upper floor (over the door, on one storey), on a ground of oxblood, green,
-    blue or black. Its sign hangs from an iron bracket by the door: the tavern's emblem
+    board just over the door, however many storeys it has (landmarks.js `OVER_DOOR`, as the
+    guild's, the town hall's and the shops' are: its frame 30 cm clear of the door's top, so
+    whoever walks up to it, the camera behind them, sees it before them; along the floor above,
+    as it was, it was never in view walking up to it), on a ground of oxblood, green, blue or
+    black; its ground floor 4.1 m tall at least on two storeys to have room for it and its sign. Its
+    sign hangs from an iron bracket past the board's end: the tavern's emblem
     (kits/emblems.js: 25 of them, a stag, a boar, bells, a crown, a rose, a ship, keys... one of
     them or as many as the name says) painted in gold on a coloured field in a gilt frame, the
-    name on a scroll under it. A lantern hangs on the other side of the door, with barrels and a
-    bench outside. *Wenches and Ale* is stone below and a jettied, timber-framed floor above,
-    its sign a barmaid in a red bodice raising two foaming tankards.
+    name on a scroll under it. A lantern hangs on the other side of the door, under the board,
+    with barrels and a bench outside. *Wenches and Ale* is stone below and a jettied,
+    timber-framed floor above, its sign a barmaid in a red bodice raising two foaming tankards.
   - **The adventurers' guild**: a two-storey hall of stone, timber or brick, 16 by 12 metres,
-    its name on a blue board, blue banners with gold either side of the door, its crest (a
-    shield over crossed swords) hanging beyond the right-hand banner, and a board of notices
-    outside.
+    its name on a blue board just over its door (its ground floor 4.3 m tall), blue banners with
+    gold hanging under the board either side of the door, its crest (a shield over crossed
+    swords) hanging past the board's end, and a board of notices outside.
   - **The town hall**: the house it was, in its street's look (a cottage's made timber, for a
     storey above), with a wide door in the middle of its front up a stone step, "Town Hall" on a
-    dark red board over it, the sign of the town's keys by the door, and a lantern either side.
+    dark red board just over it (its ground floor 4 m tall), the sign of the town's keys past
+    the board's end, and a lantern either side of the door, under the board.
   - **The shops** (art/kits/shopfront.js; the specialists' and the masters'): the house it was, in
     its street's look (a cottage's made timber, its eaves clear of the name), its door in the
     middle of its front up a step, its name on a board just over it, however many storeys it has
     ("Swordsmith", "Armorer", "Occult Scriptorium", "Alchemist", "Master Swordsmith", "Master
-    Armorer", "Mystic Emporium"; landmarks.js `SHOP_BOARD`: its foot 2.42 m up from the floor,
-    clear of the door and above the windows and their awnings, its ground floor 3.5 m tall at
-    least on two storeys to have room for it). So whoever walks up to it, the camera behind them,
-    sees it before them: tilted forward (15 degrees down) from 7 m off and further, at the
-    camera's usual 35 degrees from 4 m (along the floor above, as it was, it was never in view
-    walking up to it). Its sign hangs past the board's end, above the awnings (inside a master's
-    banners): a sword, a great helm, an open book and quill, a flask, crossed blades under a
-    crown, a helm, and a glowing orb (new emblems: emblems.js). A striped awning over each window
+    Armorer", "Mystic Emporium"; landmarks.js `OVER_DOOR`: its foot 2.72 m up from the floor,
+    its frame 30 cm clear of the door's top and above the windows and their awnings, its ground
+    floor 3.8 m tall at least on two storeys to have room for it). So whoever walks up to it, the
+    camera tilted forward behind them (15 degrees down), sees it whole before them from 4 m off
+    and further (along the floor above, as it was, it was never in view walking up to it; at the
+    camera's usual 35 degrees down, it's above the view close up). Its sign hangs past the
+    board's end, above the awnings (inside a master's banners): a sword, a great helm, an open
+    book and quill, a flask, crossed blades under a crown, a helm, and a glowing orb (new
+    emblems: emblems.js). A striped awning over each window
     (a master's has banners in velvet and gold instead), and what it sells set out either side of
     the door (`dressShop`): a rack of blades and a whetstone; a harness on its stand and a board
     of shields; a lectern with a book open on it and tomes stacked by a skull; a shelf of bottles
