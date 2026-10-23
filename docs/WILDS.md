@@ -722,6 +722,78 @@ mandrake's sap, a skeleton's, a draugr's and a wight lord's bone chips, a rock t
 chips, a hodmedod's straw, lava from a magma slime, shadow from a black shuck, a shadow stalker, a
 wraith or a mare, a ghost's pale motes.
 
+## Their tracks
+
+Each of the wild's creatures leaves a print on the ground where it sets a foot down, out in the
+world (world/tracks3d.js; app/game.js `#printed`, from its avatar's footfalls, as they're heard),
+so where they've been can be seen, and followed. Only what's drawn in full leaves them, and only
+what has feet to leave them with: nothing that flies, floats or swarms (bats, rooks, wisps,
+ghosts...), nothing on another map than the world's own.
+
+- **As its feet are** (`printOf`, `PRINTS`): a dog's paw, four toes and their claws (the wolves,
+  the hounds, the hyenas); a cat's, round and clawless (the puma, the jaguar, the chimera); a
+  bear's broad one, five toes and long claws (the brown bear, the Nandi bear, the badger); a
+  cloven hoof (whatever's hooved: the boar, the bull, the hart, the buffalo...); a drake's
+  three-toed claw and its heel's spur (the drake, the wyverns, the Dreadthorn, the Behemoth's,
+  huge); a lizard's splayed toes (the crocodile, the salamander, the basilisk...); a boot's sole
+  and heel, its tread showing (the people-shaped: bandits, cultists...), or a bare foot (goblins,
+  trolls, ogres, the dead...); a frog's webbed foot; a spider's or a centipede's eight pricks; a
+  serpent's slither; a slime's smear. Each as big as the one leaving it (its gait's `size`).
+- **Where each foot comes down** (`footAt`): a four-legged one's forefeet ahead of its middle and
+  its hind behind, left and right either side; a two-legged one's either side; a serpent's or a
+  slime's under it. Its toes the way it faces.
+- **As deep as the ground takes it** (`TAKES`, by what's underfoot as it's heard: audio/
+  footing.js): snow and mud deepest, then sand, bare earth and roads, grass and a wood's fallen
+  leaves faint (and tall grass hides it), scree fainter still; none on stone, boards or in water.
+- **Drawn** as the contact shadows under everyone are (world/contacts.js): darkening the ground,
+  so right by day and by night, and fogged away with it; lying along the ground where it slopes.
+  All of them one instanced quad, a single draw call: as many as 768 at once (`TRACKS.most`),
+  the oldest let go for the newest. Each lies there three minutes (`lasts`), then fades over one
+  more (`fade`). Their shapes are drawn once onto a canvas, a cell each (`printAtlas`).
+- Only the player's own game draws them: nothing of them is the host's, and both ends of a game
+  needn't agree on them.
+
+## Tracking
+
+The wild's camps and its perilous sites wear trails out into the country round them, as Monster
+Hunter's tracks and a hexcrawl's spoor do: found and followed, sign by sign, a trail leads home
+(core/tracks.js; host.js `#readSign`; app/game.js `#trailing`, `#signRead`).
+
+- **The trails** (`trailsOf`, laid out once from the world plan, the same on every machine): each
+  wild camp wears two (`TRAILS.camp`), each perilous site three (`TRAILS.lair`: the drake's and the
+  Dreadthorns' lairs, the werewolves' den, the ruined castles, the Tower of Sar Mordal, and the
+  cults' camps at the hells' ways in). Each starts 30 m out of its home (`from`) and winds on 170
+  to 250 m (`length`) in 8 m steps (`step`), its way turned a little at each (`wander`) but drawn
+  back to it, round the water and 25 m clear of the settlements (`clear`). One that can't get
+  half as far as the shortest isn't worn. Seed 2 has 168, to 83 homes.
+- **What wore it** (`trailCreature`): a camp's folk, as strong as the camp is from the reader's
+  home (as its folk are when met: creatures.js `campFolk`); a lair's master on its first, its
+  guards on the others, one kind after another (the drake, then wyverns).
+- **Its signs** (`signs`): three along each, 92%, 60% and 28% of the way out (`TRAILS.signs`), the
+  furthest first: what's to be found of what made it (core/lore/bestiary.js `sign`: a line of
+  four-toed prints in single file, split-hoof prints and the earth rooted up...), and which way
+  the trail runs home from there (`way`: "north-east", toward a point well back along it).
+- **Seen** (world/signs3d.js `TrailSigns`) within 40 m: a patch of scuffed earth with a snapped
+  stick across it, and over it, till it's read, a pale green glint that swells and fades, slower
+  than a treasure's. Tapped (the pointer's hand over it), the player walks up and reads it
+  (`#keepToSign`, as a lectern's read). Within 45 m, the trail's prints too (tracks3d.js
+  `lookPrint`: as big as one of its kind's been seen, or as its look is), a stride apart, one
+  foot then the other, their toes toward its home; fainter than fresh ones (`TRAIL_SEEN.depth`),
+  as deep as the ground takes them, and lasting. Laid again once the player's gone 12 m on.
+- **Read** (a "read" command, within `TRAILS.reach` 3 m of it, out in the world): told what made
+  it, what it is and which way the trail runs, toward what ("toward a wolf pack's camp", `HOMES`),
+  and how many of its home's signs they've read; the first time, the quill heard, and its maker
+  the better known (core/bestiary.js `read`: 2 points). Read again, told again, nothing more.
+- **Tracked**: three of a home's signs read (`TRAILS.tracked`: one trail followed to its end, or
+  any three of its trails'), its home's tracked (core/explored.js `tracked`): told where it is,
+  a pin's note heard, and marked on the minimap and the world map with a pale paw (app/mapicons.js
+  `drawTracked`), on the world map whether it's been found or not.
+- **In the journal** (Trails): a note for each home they've read signs toward, the latest first,
+  those still to follow before those tracked: what made it, how many signs they've read, which
+  way the last ran and where it is now; once tracked, that it is, and where.
+- **Kept** with what they've found of the world (core/explored.js `signs`, `tracked`): in the
+  save, and in a snapshot (`SNAPSHOT_VERSION` 34: a world from before, its players none read).
+
 ## What they leave
 
 A creature brought down may leave something: its parts (a wolf's pelt and fangs, a boar's tusks

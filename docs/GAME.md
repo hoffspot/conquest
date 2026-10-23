@@ -798,6 +798,17 @@ A treasure map read out in the wilds marks where it leads for its reader and the
   `TreasureGlints`: a gold four-pointed star over a mound of turned earth, twinkling, turning and
   swelling about every second and a half), for its hunters only.
 
+### Trails (core/tracks.js; docs/WILDS.md *Tracking*)
+
+The signs read on the trails out of the wild's camps and lairs, toward each home:
+- **In the journal** (app/journal.js, *Trails*): a note for each home, the latest read first,
+  those still to follow before those tracked: what wore it ("Wolf trail"), how many of its signs
+  they've read of the three that track it, which way the last ran and toward what, and which way
+  and how far that sign is from them now; once tracked, that it's marked on their map, and which
+  way and how far the home is.
+- **On the world map and the minimap**: a tracked home's icon, with a pale paw at its corner
+  (app/mapicons.js `drawTracked`); on the world map whether it's been found or not.
+
 ### Writings (core/writings.js, app/reader.js)
 
 What's written down and left where it was, to be found and read there: the wizard Sinclair's
@@ -835,7 +846,7 @@ nests', the hells' and the Rift's.
   | Earned by | Points |
   | --- | ---: |
   | The first sight of one (as far off as 30 m, light allowing: battle.js `canSee`) | 1 |
-  | A sign of one read on a trail (docs/WILDS.md, to come) | 2 |
+  | A sign of one read on a trail (docs/WILDS.md *Tracking*) | 2 |
   | One slain (by the player, or by those fighting at their side) | 1 |
   | One of the mightiest slain: a perilous one, a lair's master, an elite at the head of its kind, a dungeon's boss or mini-boss, the Behemoth | 5 |
 
