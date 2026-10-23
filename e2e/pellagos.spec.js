@@ -6212,12 +6212,15 @@ test("an envoy on the road near the player goes by with their escort; struck dow
     expect(met.map(({ name }) => name)).toEqual(["Orcish envoy", "Orcish escort", "Orcish escort"]);
     expect(met.some(({ drawn }) => drawn)).toBe(true);
 
-    // Struck down: waylaid, and the player told
+    // Struck down: waylaid, and the player told (every word on the banner kept: something else
+    // can be told just after, a beast new to the bestiary seen as the world goes on)
     const fell = await page.evaluate((id) => {
         const { game } = window.pellagos;
         const envoy = game.battle.actor(id);
         const player = game.battle.actor("player");
 
+        window.told = [];
+        new MutationObserver((records) => window.told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
         envoy.hp = 1;
         Object.assign(player, { square: [envoy.square[0] + 1, envoy.square[1]], x: envoy.square[0] + 1.5, y: envoy.square[1] + 0.5, to: null, path: [] });
         game.battle.command("player", { type: "engage", target: id });
@@ -6233,7 +6236,7 @@ test("an envoy on the road near the player goes by with their escort; struck dow
 
     expect(fell.gone).toBe(true);
     expect(fell.grudge).toBeLessThan(-5);
-    await expect(page.locator("#banner")).toContainText("envoy to the Elves has been struck down by the Humans");
+    await expect.poll(() => page.evaluate(() => window.told.some((text) => text.includes("envoy to the Elves has been struck down by the Humans"))), { timeout: 20000 }).toBe(true);
 
     // The journal: the orcs bear the humans a grudge
     const journal = page.getByRole("dialog", { name: "Journal" });
@@ -7786,8 +7789,9 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     await key.click();
     await expect(key).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator("#worldmapkey")).toBeVisible();
-    await expect(page.locator("#worldmapkey li")).toHaveCount(18);
+    await expect(page.locator("#worldmapkey li")).toHaveCount(19);
     await expect(page.locator("#worldmapkey li", { hasText: "Mystic Emporium" })).toBeVisible();
+    await expect(page.locator("#worldmapkey li", { hasText: "Your markers (up to 10): tap one to share it or take it away" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Heard tell of: somewhere in it" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Strange lights by night" })).toBeVisible();
 
