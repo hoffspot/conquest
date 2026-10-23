@@ -6302,7 +6302,7 @@ test("the journal keeps the last ten messages told across the screen, behind a b
     await expect(rows.first()).toContainText("2 times");
 });
 
-test("the bestiary: a creature seen and slain written in, its page in the journal opening a part at a time; and the next time", async ({ page }) => {
+test("the bestiary: a creature seen and slain written in, its page in the journal opening a part at a time, its portrait drawn; and the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
     test.setTimeout(180000);
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
@@ -6352,6 +6352,32 @@ test("the bestiary: a creature seen and slain written in, its page in the journa
     await expect(journal).toContainText("Seen · 1 slain");
     await expect(journal.locator(".bestiary-section.shut")).toHaveCount(3);
     await expect(journal.locator(".bestiary-section.shut").first()).toContainText("At Known: watch for it, read the signs it leaves, and slay it to learn more.");
+
+    // Its portrait beside its name: a wolf as the game draws one, on the dark, not a blank picture
+    const portrait = journal.locator(".bestiary-portrait-picture");
+
+    await expect(portrait).toBeVisible({ timeout: 60000 });
+    await expect(portrait).toHaveAttribute("alt", "Wolf, as it looks");
+
+    const drawn = await portrait.evaluate((picture) => {
+        const canvas = Object.assign(document.createElement("canvas"), { width: picture.naturalWidth, height: picture.naturalHeight });
+        const context = canvas.getContext("2d");
+
+        context.drawImage(picture, 0, 0);
+
+        const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+        const colours = new Set();
+
+        for (let k = 0; k < data.length; k += 4 * 13) {
+            colours.add(`${data[k] >> 4},${data[k + 1] >> 4},${data[k + 2] >> 4}`);
+        }
+
+        return { width: canvas.width, colours: colours.size, corner: [...data.slice(0, 3)] };
+    });
+
+    expect(drawn.width).toBe(224);
+    expect(drawn.colours).toBeGreaterThan(20);
+    expect(Math.max(...drawn.corner)).toBeLessThan(60);
 
     // Back to the contents, then the journal; closed
     await journal.getByRole("button", { name: "Back to the bestiary" }).click();

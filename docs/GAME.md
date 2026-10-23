@@ -861,11 +861,19 @@ nests', the hells' and the Rift's.
 - **In the journal** (app/journal.js, its *Bestiary* tab; app/bestiary.js): how many of the 97
   kinds have been met, then each met, by where (the wilds, each people's wilds, lairs and
   strongholds, the ants' nests, the hells), the best known first, its level beside it as four
-  pips (gold-edged once it's mastered). Each opens its page: its name, its level and how far to
-  the next, how many seen, read and slain, and each part of it as far as it's been found out,
-  what's still to find shut ("At Studied: watch for it, read the signs it leaves, and slay it to
-  learn more."). Every word of it is the game's own: the creature's table, its weapon's, what it
-  leaves (spoils.js), and its lines in core/lore/bestiary.js.
+  pips (gold-edged once it's mastered). Each opens its page: its portrait, its name, its level
+  and how far to the next, how many seen, read and slain, and each part of it as far as it's been
+  found out, what's still to find shut ("At Studied: watch for it, read the signs it leaves, and
+  slay it to learn more."). Every word of it is the game's own: the creature's table, its
+  weapon's, what it leaves (spoils.js), and its lines in core/lore/bestiary.js.
+- **Its portrait** (app/game.js `portraitOf`, `PORTRAIT`): one of its kind as the game draws it
+  (beasts/beast.js `dressCreature`: from its own model, waited for up to 8 s and else its
+  stand-in; people-shaped ones holding what they fight with), standing at rest, alone, high above
+  the camera where no shadow or fire reaches it, seen three-quarters on and a little from above,
+  lit as on a fair day whatever the hour, on the paperdoll's dark: drawn once into a picture of
+  its own (world/view.js `portrait`, 224 pixels square, framed on all of it as it's posed: `fit`)
+  and kept for the rest of the game, shown beside its name in a gold frame. It's drawn when its
+  page is first opened (a second or so: dark till then), and tried again if it came out blank.
 - **Kept with the character** (core/progress.js Progress `bestiary`: each kind's points, whether
   it's been seen, and how many of its signs read and how many slain), as what they carry is,
   into whatever world they go, and in every snapshot (`SNAPSHOT_VERSION` 33: an older world's
