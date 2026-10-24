@@ -4783,6 +4783,26 @@ options shows the four slots (or six) as they rise; tap one, then what goes in i
 learnt and carried that can go on either wheel (`assignable("quick")`), each saying who it's
 used on ("On your foe", "On yourself").
 
+**A press never waits on its lift** (app/press.js `Press`, one for each slot). A phone's Safari
+doesn't always say a finger's been lifted: a swipe in from the screen's edge, or since iOS 27 a
+touch it hands to a gesture of its own, never ends, and a slot that waited on it heard no touch
+again till the page was loaded again (as a player found, Vigor and the draught at either end the
+slots it happened to). So:
+- a touch on a slot still pressed takes over from the press lost, and is used once;
+- a press ends the moment it can't be a tap (held, flicked, slid off), and every way it ends
+  (lifted, called off by the browser, the slot no longer keeping the pointer: `lostpointercapture`)
+  goes through one drop, done before the game's told, so a use that fails can't leave it held;
+- a hold only changes the slot if it's still the same press and the bar's still up;
+- it's let go of, nothing used, as the bar's put away, the game stops listening (the menu, a
+  pause: `#deafen`), the page's hidden or closed, or the page loses the player (`blur`);
+- and a moment after every finger's off the screen (`touchend`, none left on it: 0.1 s,
+  `BARE_MS`, for the press's own lift to be heard first), a press a finger began before
+  then is dropped, as Flutter does for iOS 27.
+
+Each press lost, dropped as the next began or once no finger was on the screen, is kept in the
+debug log ("Press lost", game.js `#pressLost`): the slot, what was in it, how long it was held,
+how it was found and whether the bar was up.
+
 Each action (`ACTIONS`, or `item:` and a thing to use: `actionOf`) has an icon (app/icons.js:
 SVG, in colours that say what it does: a glowing green cross for Vigor, gold stars round a violet
 dazed head for Stun, every spell its own (app/spellicons.js); a red draught, a steaming bowl, a frothing tankard; for the
@@ -5013,7 +5033,14 @@ it.
    when it was off till asked for is forgotten once, for the new default: save.js
    `stickDefaults`); turned off, it goes, and tapping alone walks. The keys steer whether it's
    shown or not, nothing is said of the stick in the opening hint while it's off, and a pause
-   lets go of whatever was held. Nothing else takes the stick's touches from it (what lies over
+   lets go of whatever was held. A thumb on the stick isn't waited on for its lift alone, as a
+   quick action's press isn't (*The quick actions*): a phone's Safari doesn't always say a finger's
+   lifted, and a stick left held ran the player on with nothing touching it, the next thumb on it
+   ignored. A thumb down on it while another's held takes over from the one lost; it's let go of,
+   the player stopped, as the stick no longer keeps the pointer (`lostpointercapture`), as the
+   page's closed (`pagehide`), and 0.1 s after every finger's off the screen (press.js `BARE_MS`),
+   if it went down before then. Each one lost is kept in the debug log ("Press lost", game.js
+   `#pressLost`). Nothing else takes the stick's touches from it (what lies over
    its corner, the hint and the floating words, takes no touches), and its circle doesn't blur
    what's behind it, which a phone's GPU did afresh every frame. *The mouse pointer*
    (app/pointer.js): with a mouse (a fine pointer that hovers: a touch screen has none), it's a
@@ -5698,7 +5725,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   with, walking with Shift held, and stopping let go; out of breath, walking on the way they're
   held (or the stick's pushed) till a quarter of their stamina is back, the order given again
   walking all the while, then running at once, and not stuttering back to a walk as it goes down
-  again; still walking let go and held again before it's back.
+  again; still walking let go and held again before it's back. A thumb whose lift is lost: another
+  thumb taking over (the lost one told, its late lift nothing); let go of and stopped as the stick
+  no longer keeps the pointer or the page's closed; a moment after every finger's off the screen,
+  one that went down before let go of, stopped and told, one down since kept, and a mouse's.
 - `test/sky.test.js`: the sky's dome round the camera, drawn behind everything, its horizon the
   haze's colour; birds for every land, a dozen triangles or so each; flocks of the land's birds
   now and then, never too many, at their heights, gone once far off; a wyvern over the lands they
@@ -5883,6 +5913,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   put away 3 s after the fight; held, Quick actions opened at that slot, Rumble put in it), six
   across (only icons on a phone held upright and names on its side; Mend Wounds flicked down to
   Vigor and up to Detraumatize with its name said, bouncing at either end and on Stun; the 5 key),
+  a press whose lift is lost (swallowed before the page hears it: let go of as the slot lets go of
+  the pointer, or once no finger's on the screen, or taken over by the next touch and kept in the
+  debug log; let go of as the bar's put away or the page loses the player; a hold and Back
+  leaving the next tap heard),
   and a
   phone screen. Drawing without a GPU is slow, so fights are played on with
   `game.advance(seconds)`, which runs the game without drawing each frame.

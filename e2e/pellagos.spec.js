@@ -13156,6 +13156,242 @@ test.describe("on a phone", () => {
         expect((await state()).hp).toBeGreaterThan(10);
     });
 
+    test("a quick action's press whose lift is lost, as a phone's Safari loses it, never leaves its slot deaf: let go of as the slot's let go of, or once no finger's on the screen, or taken over by the next touch (kept in the debug log); let go of as the bar's put away or the page loses the player; a hold and Back leave the next tap heard", async ({ page }) => {
+        test.setTimeout(180000);
+        await page.goto("/?play&seed=1");
+        await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
+
+        // (In a fight with the orc, stunned, the player hurt and carrying five draughts; each slot's
+        // use and hold heard)
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const { battle } = game;
+            const player = battle.actor("player");
+            const orc = battle.actor("orc");
+            const square = [player.square[0] + 3, player.square[1] - 2];
+            const bar = game.quickBar;
+            const { onUse, onChoose } = bar;
+
+            game.host.players.get(game.me).progress.pack[0] = { id: "potion", quality: "common", count: 5 };
+            game.stop();
+            Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null, stunnedUntil: battle.time + 600000 });
+            game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+            game.previous.set("orc", { x: orc.x, y: orc.y });
+            player.hp = 10;
+            battle.command("player", { type: "engage", target: "orc" });
+            game.advance(0.1);
+            window.heard = [];
+            bar.onUse = (slot) => {
+                window.heard.push(`use ${slot}`);
+                onUse(slot);
+            };
+            bar.onChoose = (slot) => {
+                window.heard.push(`choose ${slot}`);
+                onChoose(slot);
+            };
+        });
+
+        const slot = (n) => page.locator(`.quickbar .quick-slot[data-slot="${n}"]`);
+        const heard = () => page.evaluate(() => window.heard);
+        const forget = () => page.evaluate(() => {
+            window.heard.length = 0;
+            window.pellagos.telemetry.clear();
+        });
+        const lost = () => page.evaluate(() => window.pellagos.telemetry.events.filter((event) => event.kind === "press").map(({ slot, how, up }) => ({ slot, how, up })));
+        // (Longer than a hold: a press left held would be taken for one by now)
+        const longer = () => page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 700)));
+
+        // (A finger down on a slot and lifted, as a phone's are; and the next of each of these events
+        // swallowed before the page hears it, as Safari loses them: let go of after)
+        const cdp = await page.context().newCDPSession(page);
+        const touch = async (type, n) => {
+            const box = n === undefined ? null : await slot(n).boundingBox();
+
+            await cdp.send("Input.dispatchTouchEvent", { type, touchPoints: box ? [{ x: box.x + box.width / 2, y: box.y + box.height / 2, id: 0 }] : [] });
+        };
+        const swallow = (...types) => page.evaluate((types) => {
+            window.swallowed = types.map((type) => {
+                const swallowing = (event) => {
+                    event.stopImmediatePropagation();
+                    window.removeEventListener(type, swallowing, true);
+                };
+
+                window.addEventListener(type, swallowing, true);
+
+                return [type, swallowing];
+            });
+        }, types);
+        const unswallow = () => page.evaluate(() => window.swallowed.forEach(([type, swallowing]) => window.removeEventListener(type, swallowing, true)));
+
+        await expect(page.locator(".quickbar")).toHaveClass(/up/);
+        await expect(slot(0).locator(".quick-label")).toHaveText("Vigor");
+        await expect(slot(3).locator(".quick-label")).toHaveText("Draught");
+
+        // The lift lost and the finger's leaving the screen too, the slot let go of after: nothing
+        // used or changed, and the next tap used
+        await forget();
+        await swallow("pointerup", "touchend");
+        await touch("touchStart", 3);
+        await touch("touchEnd");
+        await longer();
+        await unswallow();
+        expect(await heard()).toEqual([]);
+        await slot(3).tap();
+        await expect.poll(heard).toEqual(["use 3"]);
+
+        // Lost and the slot never let go of (as iOS 27 does), but the finger's left the screen:
+        // dropped a moment after, before it'd be taken for a hold, and kept in the debug log
+        await forget();
+        await swallow("pointerup", "lostpointercapture");
+        await touch("touchStart", 0);
+        await touch("touchEnd");
+        await longer();
+        await unswallow();
+        expect(await heard()).toEqual([]);
+        expect(await lost()).toEqual([{ slot: 0, how: "bare", up: true }]);
+        await slot(0).tap();
+        await expect.poll(heard).toEqual(["use 0"]);
+
+        // All of it lost: the next touch takes over, used once, the press lost kept in the debug
+        // log; and no hold after. (Touched again at once, before the lost press would be taken for
+        // a hold)
+        await forget();
+        await swallow("pointerup", "lostpointercapture", "touchend");
+        await touch("touchStart", 3);
+        await touch("touchEnd");
+        await touch("touchStart", 3);
+        await touch("touchEnd");
+        await unswallow();
+        await longer();
+        expect(await heard()).toEqual(["use 3"]);
+        expect(await lost()).toEqual([{ slot: 3, how: "again", up: true }]);
+
+        // The page losing the player (another app's come up) with a finger on a slot: let go of,
+        // nothing as it's lifted
+        await forget();
+        await touch("touchStart", 3);
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await touch("touchEnd");
+        await longer();
+        expect(await heard()).toEqual([]);
+        await slot(3).tap();
+        await expect.poll(heard).toEqual(["use 3"]);
+
+        // The fight over (lingered out) with a finger on Vigor: put away, let go of; lifted, nothing;
+        // in the next fight, Vigor tapped is used
+        await forget();
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const player = game.battle.actor("player");
+
+            Object.assign(game.battle.actor("orc"), { target: null, attack: null, dead: true, respawnAt: Infinity });
+            Object.assign(player, { order: null, attack: null });
+            game.advance(0.1);
+        });
+        await touch("touchStart", 0);
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+
+            game.fightUntil = game.clock;
+            game.advance(0.05);
+        });
+        await expect(page.locator(".quickbar")).not.toHaveClass(/up/);
+        await touch("touchEnd");
+        await longer();
+        expect(await heard()).toEqual([]);
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const { battle } = game;
+            const orc = battle.actor("orc");
+
+            Object.assign(orc, { dead: false, hp: orc.maxHp, stunnedUntil: battle.time + 600000 });
+            battle.command("player", { type: "engage", target: "orc" });
+            game.advance(0.1);
+        });
+        await expect(page.locator(".quickbar")).toHaveClass(/up/);
+        await slot(0).tap();
+        await expect.poll(heard).toEqual(["use 0"]);
+
+        // Held: changed in Quick actions, the finger still down as it opens; Back, and the next tap
+        // used. (Played on: a game that's stopped has no menu to pause at)
+        await forget();
+        await page.evaluate(() => window.pellagos.game.start());
+        const second = await slot(1).boundingBox();
+
+        await touch("touchStart", 1);
+        await expect(page.locator("#menuquick")).toBeVisible();
+        // (Slid up a little as it's lifted, so the browser doesn't take the lift for a tap on what's
+        // now under it: Back to the game, over the slot at the foot of a phone's screen)
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: second.x + second.width / 2, y: second.y + second.height / 2 - 40, id: 0 }] });
+        await touch("touchEnd");
+        expect(await heard()).toEqual(["choose 1"]);
+        await page.locator("#quickback").tap();
+        await expect(page.locator("#menu")).not.toBeVisible();
+        await slot(1).tap();
+        await expect.poll(heard).toEqual(["choose 1", "use 1"]);
+    });
+
+    test("a thumb on the thumb stick whose lift is lost, as a phone's Safari loses it, never runs the player on: let go of, stopped, once no finger's on the screen; with that lost too, the next thumb on it takes over (kept in the debug log)", async ({ page }) => {
+        test.setTimeout(180000);
+        await playing(page, "/?play&seed=1");
+        await clearestWayAhead(page);
+
+        const zone = await page.locator("#stickzone").boundingBox();
+        const middle = { x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 };
+        const held = () => page.evaluate(() => document.querySelector("#stickzone").classList.contains("held"));
+        const lost = () => page.evaluate(() => window.pellagos.telemetry.events.filter((event) => event.kind === "press").map(({ slot, how }) => ({ slot, how })));
+
+        // (A thumb on the stick, as a phone's are; and the next of each of these events swallowed
+        // before the page hears it, as Safari loses them)
+        const cdp = await page.context().newCDPSession(page);
+        const touch = (type, up = 0) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x: middle.x, y: middle.y - up, id: 0 }] });
+        const swallow = (...types) => page.evaluate((types) => {
+            window.swallowed = types.map((type) => {
+                const swallowing = (event) => {
+                    event.stopImmediatePropagation();
+                    window.removeEventListener(type, swallowing, true);
+                };
+
+                window.addEventListener(type, swallowing, true);
+
+                return [type, swallowing];
+            });
+        }, types);
+        const unswallow = () => page.evaluate(() => window.swallowed.forEach(([type, swallowing]) => window.removeEventListener(type, swallowing, true)));
+
+        await page.evaluate(() => window.pellagos.telemetry.clear());
+
+        // Pushed to its rim, running, and lifted, the lift lost and the stick never let go of the
+        // pointer (as iOS 27 does), but the finger's left the screen: stopped a moment after, told
+        await swallow("pointerup", "lostpointercapture");
+        await touch("touchStart");
+        await touch("touchMove", 80);
+        expect((await told(page)).order?.run).toBe(true);
+        await touch("touchEnd");
+        await expect.poll(async () => (await told(page)).order).toBe(null);
+        await unswallow();
+        expect(await held()).toBe(false);
+        expect(await lost()).toEqual([{ slot: "stick", how: "bare" }]);
+
+        // All of it lost, the finger's leaving the screen too: running on till the next thumb on it,
+        // which takes over (pushed a little way, walking), and stops them as it's lifted
+        await page.evaluate(() => window.pellagos.telemetry.clear());
+        await swallow("pointerup", "lostpointercapture", "touchend");
+        await touch("touchStart");
+        await touch("touchMove", 80);
+        await touch("touchEnd");
+        await unswallow();
+        expect((await told(page)).order?.run).toBe(true);
+        expect(await held()).toBe(true);
+        await touch("touchStart");
+        await touch("touchMove", 34);
+        await expect.poll(async () => (await told(page)).order?.run).toBe(false);
+        expect(await lost()).toEqual([{ slot: "stick", how: "again" }]);
+        await touch("touchEnd");
+        await expect.poll(async () => (await told(page)).order).toBe(null);
+        expect(await held()).toBe(false);
+    });
+
     test("fits the screen: the title, making a character and the game's buttons; runs where the ground is double-tapped", async ({ page }) => {
         await title(page);
 
