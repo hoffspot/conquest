@@ -196,10 +196,23 @@ piece held lit whole; a ring round it running down the time left (red in its las
 stronger every attack spell is under it. Whole, its heart's a white star and it pulses: tapped
 (or clicked), Prismatic Destruction's cast. Each spell of a chain is a glass bell, higher as it
 climbs; a piece, a run of them; the sigil whole, a run up two octaves; broken or faded, the bells
-falling (audio/catalog.js, "The Prismatic sigil"), each said in a message too. A piece just
-earned, the sigil pulses in that element's colour, its petal the brightest and its heart a star
-of that colour: tapped, that element's Prismatic spell is cast, as its element's greatest spells
-are cast and land, a glass chord rung over its landing.
+falling (audio/catalog.js, "The Prismatic sigil"). A piece just earned, the sigil pulses in that
+element's colour, its petal the brightest and its heart a star of that colour: tapped, that
+element's Prismatic spell is cast, as its element's greatest spells are cast and land, a glass
+chord rung over its landing.
+
+The chain's never told in a message: the sigil shows it all, and says it to a screen reader and
+as its tooltip (what it holds, and what tapping it casts):
+- **A piece earned, or the sigil made whole:** it flares, a ring bursting out from it in the
+  piece's colour (white, whole), as it begins to pulse.
+- **Spent:** it's gone at once, the spell cast from it.
+- **Broken** (the next spell not landed in time): a sharp red flash, the sigil shaking, its petals
+  cracking off and spinning out, its heart and ring red and its strength struck through, gone in
+  0.9 s (`SIGIL_ENDS`).
+- **Faded** (the whole sigil not cast in time): a soft white flash, the sigil shrinking and fading
+  out over 1.6 s.
+- With reduced motion, no burst, shaking or cracking: broken, red, or faded, white, it fades where
+  it is.
 
 (`SNAPSHOT_VERSION` 29: every actor's chain, none in a world kept before, and a seat's ruler told
 as one, `ruler`; `NET_VERSION` 123: both ends of a game must agree on every chain, and on what

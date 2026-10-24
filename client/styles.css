@@ -1493,7 +1493,8 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
 
 /* The Prismatic sigil (app/sigil.js): over the player's card while a chain is live (rising with
    it, over the quick actions in a fight), a petal for each element, a ring running down its time;
-   a piece just earned, pulsing in its element's colour, and whole, pulsing white, to be tapped */
+   a piece just earned, pulsing in its element's colour, and whole, pulsing white, to be tapped;
+   flaring as a piece is earned or it's made whole; and let lapse, shown going (SIGIL_ENDS) */
 #hud .sigil {
     position: absolute;
     right: 0;
@@ -1613,6 +1614,178 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
+/* (A piece earned, or the sigil whole: a ring bursting out in its colour) */
+.sigil-burst {
+    fill: none;
+    stroke: var(--flare, #ffffff);
+    stroke-width: 3;
+    opacity: 0;
+    transform-box: fill-box;
+    transform-origin: center;
+    pointer-events: none;
+}
+
+.sigil.flare .sigil-burst {
+    animation: sigil-flare 0.7s ease-out;
+}
+
+/* (Let lapse: not to be tapped as it goes) */
+#hud .sigil.ending {
+    pointer-events: none;
+}
+
+/* (The chain broken: a sharp red flash, the petals cracking off, its strength struck through) */
+.sigil.broken .sigil-emblem {
+    animation: sigil-broken 0.9s ease-in forwards;
+}
+
+.sigil.broken .sigil-back {
+    animation: sigil-broken-back 0.9s ease-out forwards;
+}
+
+.sigil.broken .sigil-heart {
+    fill: #ff3b2f;
+}
+
+.sigil.broken .sigil-petal .sigil-shape,
+.sigil.broken .sigil-petal .sigil-fill {
+    transform-box: view-box;
+    transform-origin: 0 0;
+    animation: sigil-crack 0.9s cubic-bezier(0.2, 0.7, 0.4, 1) forwards;
+}
+
+.sigil.broken .sigil-petal[data-element="earth"] .sigil-shape,
+.sigil.broken .sigil-petal[data-element="earth"] .sigil-fill,
+.sigil.broken .sigil-petal[data-element="water"] .sigil-shape,
+.sigil.broken .sigil-petal[data-element="water"] .sigil-fill {
+    animation-name: sigil-crack-back;
+}
+
+.sigil.broken .sigil-time {
+    stroke: #ff3b2f;
+}
+
+.sigil.broken .sigil-bonus {
+    color: #ff6a5a;
+    text-decoration: line-through;
+    animation: sigil-out 0.9s ease-in forwards;
+}
+
+/* (The sigil left whole to fade: a soft white flash, fading out) */
+.sigil.faded .sigil-emblem {
+    animation: sigil-faded 1.6s ease-out forwards;
+}
+
+.sigil.faded .sigil-bonus {
+    animation: sigil-out 1.6s ease-in forwards;
+}
+
+@keyframes sigil-flare {
+    from {
+        opacity: 0.95;
+        transform: scale(0.7);
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(1.7);
+    }
+}
+
+@keyframes sigil-broken {
+    0% {
+        filter: drop-shadow(0 0 16px #ff2a1a);
+        transform: translateX(0);
+    }
+
+    10% {
+        transform: translateX(-3px);
+    }
+
+    20% {
+        transform: translateX(3px);
+    }
+
+    30% {
+        filter: drop-shadow(0 0 8px #ff2a1a);
+        transform: translateX(-2px);
+    }
+
+    40% {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    100% {
+        opacity: 0;
+        filter: drop-shadow(0 0 2px #ff2a1a);
+    }
+}
+
+@keyframes sigil-broken-back {
+    0% {
+        fill: rgba(220, 30, 20, 0.9);
+        stroke: #ff6a5a;
+    }
+
+    100% {
+        fill: rgba(16, 12, 24, 0.72);
+        stroke: rgba(255, 106, 90, 0.4);
+    }
+}
+
+@keyframes sigil-crack {
+    0%,
+    15% {
+        transform: translate(0, 0) rotate(0);
+    }
+
+    100% {
+        transform: translate(0, -9px) rotate(14deg);
+        opacity: 0;
+    }
+}
+
+@keyframes sigil-crack-back {
+    0%,
+    15% {
+        transform: translate(0, 0) rotate(0);
+    }
+
+    100% {
+        transform: translate(0, -9px) rotate(-14deg);
+        opacity: 0;
+    }
+}
+
+@keyframes sigil-faded {
+    0% {
+        opacity: 1;
+        filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.5)) brightness(1);
+    }
+
+    20% {
+        opacity: 1;
+        filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.95)) brightness(1.6);
+    }
+
+    100% {
+        opacity: 0;
+        filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0)) brightness(1);
+        transform: scale(0.85);
+    }
+}
+
+@keyframes sigil-out {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+    }
+}
+
 @keyframes sigil-climb {
     from {
         stroke-opacity: 0.45;
@@ -1670,6 +1843,19 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     .sigil.offered .sigil-emblem {
         animation: none;
         filter: drop-shadow(0 0 10px var(--offer));
+    }
+
+    /* (Let lapse: red, or white, fading out where it is; no burst, shaking or cracking) */
+    .sigil.flare .sigil-burst,
+    .sigil.broken .sigil-petal .sigil-shape,
+    .sigil.broken .sigil-petal .sigil-fill {
+        animation: none;
+    }
+
+    .sigil.broken .sigil-emblem,
+    .sigil.faded .sigil-emblem {
+        animation-name: sigil-out;
+        filter: none;
     }
 }
 

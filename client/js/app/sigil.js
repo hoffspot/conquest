@@ -8,7 +8,10 @@
 // heart a star of that colour: tapped (or clicked), the element's Prismatic spell's cast, spending
 // it, till another element's first spell lands. Whole, the four petals lit, it pulses, its heart a
 // white star: tapped, Prismatic Destruction's cast. Each on the enemy the player's set to fight.
-// Gone with the chain.
+// A piece earned, or the sigil made whole, it flares, a ring bursting out from it in the piece's
+// colour (white, whole). Gone with the chain: spent, at once; let lapse, it says so itself, with no
+// message (SIGIL_ENDS): the chain broken, a sharp red flash, its petals cracking off, its strength
+// struck through; the sigil left whole to fade, a soft white flash, fading out.
 //
 // It only shows and hears: the game (game.js) says what the chain is and what to do.
 
@@ -18,6 +21,16 @@ import { PETAL } from "./spellicons.js";
 
 /** Each element's colour in the sigil (as its icon has it: spellicons.js prismatic). */
 export const SIGIL_COLOURS = Object.freeze({ fire: "#ff7a2e", earth: "#c49a4a", air: "#bfe6ff", water: "#3c9cff" });
+
+/**
+ * How a chain let lapse ends on the sigil (battle.js "prism" events: "broken", the next spell not
+ * landed in time; "faded", the whole sigil not cast in time): for how long it's shown going (`ms`
+ * of battle time, as long as styles.css's sigil-broken and sigil-faded), and what it says meanwhile.
+ */
+export const SIGIL_ENDS = Object.freeze({
+    broken: Object.freeze({ ms: 900, said: "The Prismatic chain is broken: its strength is lost." }),
+    faded: Object.freeze({ ms: 1600, said: "The Prismatic sigil fades, its power unspent." }),
+});
 
 /**
  * The share of a chain's time left by `time` (ms of battle time), 0 to 1: of the window for its
@@ -65,6 +78,7 @@ export class Sigil {
             <circle class="sigil-time" r="29" pathLength="1" transform="rotate(-90)"/>
             ${ELEMENTS.map((element, k) => `<g class="sigil-petal" data-element="${element}" style="--element: ${SIGIL_COLOURS[element]}" transform="rotate(${k * 90})"><path class="sigil-shape" d="${PETAL}"/><path class="sigil-fill" d="${PETAL}"/></g>`).join("")}
             <path class="sigil-heart" d="M0,-7 L2.4,-2.4 L7,0 L2.4,2.4 L0,7 L-2.4,2.4 L-7,0 L-2.4,-2.4 Z"/>
+            <circle class="sigil-burst" r="30"/>
         </svg><span class="sigil-bonus"></span>`;
         this.petals = new Map([...this.element.querySelectorAll(".sigil-petal")].map((petal) => [petal.dataset.element, petal]));
         this.time = this.element.querySelector(".sigil-time");
@@ -79,12 +93,23 @@ export class Sigil {
 
         this.drawn = null;
         this.left = -1;
+
+        /** A chain let lapse, being shown going: { how (SIGIL_ENDS'), until (ms of battle time) }, or null. */
+        this.ending = null;
+
+        // (Whether a chain's drawn on it still, hidden or not, to be shown going: its end may be
+        // heard after the frame that hid it)
+        this.held = false;
     }
 
     /** Show a chain as it stands (core/prismatic.js; null for none: hidden), at `time` (ms of battle time). */
     show(prism, time) {
+        if (this.ending && (prism || time >= this.ending.until)) {
+            this.#ended();
+        }
+
         if (!prism) {
-            if (!this.element.hidden) {
+            if (!this.element.hidden && !this.ending) {
                 this.element.hidden = true;
                 this.drawn = null;
             }
@@ -99,6 +124,7 @@ export class Sigil {
 
         if (drawn !== this.drawn) {
             this.drawn = drawn;
+            this.held = true;
             this.element.hidden = false;
             this.element.classList.toggle("whole", whole);
             this.element.classList.toggle("offered", Boolean(offered));
@@ -125,6 +151,47 @@ export class Sigil {
             this.time.style.strokeDashoffset = (1 - left).toFixed(4);
             this.element.classList.toggle("late", left < 0.3);
         }
+    }
+
+    /**
+     * A chain let lapse (`how`: "broken" or "faded", SIGIL_ENDS), at `time` (ms of battle time):
+     * the sigil, as it last stood, shown going till its time's up, saying so to a screen reader.
+     */
+    end(how, time) {
+        const ending = SIGIL_ENDS[how];
+
+        if (!ending || !this.held) {
+            return;
+        }
+
+        this.ending = { how, until: time + ending.ms };
+        this.element.hidden = false;
+        this.element.classList.remove("whole", "offered", "late", "flare");
+        this.element.classList.add("ending", how);
+        this.element.setAttribute("aria-label", ending.said);
+        this.element.title = ending.said;
+    }
+
+    /**
+     * A piece of the sigil earned (`kind`: its element), or the sigil made whole ("whole"): a ring
+     * bursting out from it, in the piece's colour (white, whole).
+     */
+    flare(kind) {
+        this.element.style.setProperty("--flare", SIGIL_COLOURS[kind] ?? "#ffffff");
+        // (Begun again, should one still be going)
+        this.element.classList.remove("flare");
+        void this.element.offsetWidth;
+        this.element.classList.add("flare");
+    }
+
+    // A chain let lapse shown gone: hidden (or, a new one begun, drawn afresh)
+    #ended() {
+        this.element.classList.remove("ending", this.ending.how);
+        this.element.hidden = true;
+        this.ending = null;
+        this.held = false;
+        this.drawn = null;
+        this.left = -1;
     }
 
     dispose() {

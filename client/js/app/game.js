@@ -97,7 +97,7 @@ import { RAISED } from "../core/overworld.js";
 import { heightAt as landHeightAt } from "../core/terrain/height.js";
 import { GROUND } from "../core/setpieces/pieces.js";
 import { CAST_FAILURES, ELEMENT_TOME_PRICE, ELEMENT_TOMES, GROWTH_XP, lookOf, SCHOOLS, SPELLS, TOMES } from "../core/spells.js";
-import { CHAIN, ELEMENT_SPELLS, nextOf, sigilSpell } from "../core/prismatic.js";
+import { nextOf, sigilSpell } from "../core/prismatic.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
@@ -11923,28 +11923,23 @@ export class Game {
 
     // A Prismatic chain of the player's gone on, or gone (core/prismatic.js; battle.js "prism"):
     // each spell of it a glass bell, higher as it climbs; a piece of the sigil, the sigil whole,
-    // and everything lost, told
-    #prismHeard({ id, change, spell, step, pieces }) {
+    // and everything lost, heard and shown on the sigil alone (app/sigil.js), never told in a
+    // message: a piece or the sigil whole, flaring; let lapse, broken or faded, shown going
+    #prismHeard({ id, change, spell, step }) {
         if (id !== this.me) {
             return;
         }
 
-        const stronger = (share) => `every attack spell ${Math.round(share * 100)}% stronger`;
-        const school = SPELLS[spell]?.school ?? "";
-
         if (change === "start" || change === "step") {
             this.sound?.play("chainStep", { rate: 2 ** ((step - 1) / 12) });
         } else if (change === "piece") {
-            this.hud.message(`${school[0]?.toUpperCase() ?? ""}${school.slice(1)}'s piece of the Prismatic sigil: ${stronger(pieces.length * CHAIN.piece)}. Tap the sigil for ${SPELLS[ELEMENT_SPELLS[school]]?.label}, spending it, or go on to another element, from its first spell, within ${CHAIN.window / 1000} seconds.`, 4.5);
+            this.sigil.flare(SPELLS[spell]?.school);
             this.sound?.play("sigilPiece");
         } else if (change === "whole") {
-            this.hud.message(`The Prismatic sigil is whole: ${stronger(pieces.length * CHAIN.piece)}. Tap it to cast Prismatic Destruction, within ${CHAIN.ready / 1000} seconds!`, 4);
+            this.sigil.flare("whole");
             this.sound?.play("sigilWhole");
-        } else if (change === "broken") {
-            this.hud.message("The Prismatic chain is broken: its strength is lost.", 2.5);
-            this.sound?.play("chainBroken");
-        } else if (change === "faded") {
-            this.hud.message("The Prismatic sigil fades, its power unspent.", 2.5);
+        } else if (change === "broken" || change === "faded") {
+            this.sigil.end(change, this.battle.time);
             this.sound?.play("chainBroken");
         }
     }

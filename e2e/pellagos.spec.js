@@ -12542,7 +12542,7 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     await expect(page.locator("#menucontrols")).toBeVisible();
 });
 
-test("a Prismatic chain: an element's spell cast from the quick actions rolls its slot on to the next, ringed and pulsing, every attack spell 5% stronger a spell; at the last, its piece of the sigil, the other elements ringed, the sigil pulsing in its colour till the next element's begun; let lapse, all lost; a piece just earned, the sigil tapped casts its element's Prismatic spell on the foe; whole, Prismatic Destruction", async ({ page }) => {
+test("a Prismatic chain: an element's spell cast from the quick actions rolls its slot on to the next, ringed and pulsing, every attack spell 5% stronger a spell; at the last, its piece of the sigil, flaring, the other elements ringed, the sigil pulsing in its colour till the next element's begun; let lapse, all lost, the sigil shown broken; a piece just earned, the sigil tapped casts its element's Prismatic spell on the foe; whole, left to fade, shown fading; whole, Prismatic Destruction; none of it told in a message", async ({ page }) => {
     test.setTimeout(120000);
     await page.setViewportSize({ width: 402, height: 874 });
     await playing(page, "/?play&seed=1");
@@ -12555,6 +12555,19 @@ test("a Prismatic chain: an element's spell cast from the quick actions rolls it
     const prism = () => page.evaluate(() => window.pellagos.game.battle.actor("player").prism);
     // (What a slot shows, its own name: not the one rolling out of it)
     const label = (n) => slot(n).locator(":scope > .quick-label");
+    // (Everything the player's been told in a message)
+    const told = () => page.evaluate(() => window.pellagos.game.messages.map(({ text }) => text).join("\n"));
+    // (Played on till just after the chain's let lapse: its next spell's time up, or the whole
+    // sigil's to be cast, core/prismatic.js CHAIN.window and CHAIN.ready)
+    const lapse = () =>
+        page.evaluate(() => {
+            const { game } = window.pellagos;
+            const { battle } = game;
+            const { at, pieces, readyAt } = battle.actor("player").prism;
+            const left = pieces.length === 4 ? 15000 - (battle.time - readyAt) : 10000 - (battle.time - at);
+
+            game.advance(Math.max(0, left) / 1000 + 0.15);
+        });
 
     // Fire's spells and Rumble learnt, Burn and Rumble in the quick actions; a hardy orc brought
     // near, and set on (stunned, so it doesn't stagger the player as they cast)
@@ -12605,9 +12618,9 @@ test("a Prismatic chain: an element's spell cast from the quick actions rolls it
     await expect(label(2)).toHaveText("Burstflame");
     await expect(sigil.locator(".sigil-bonus")).toHaveText("+5%");
 
-    // (Cast up to Inferno) Hellfire, the last: fire's piece, 25%; Burn back in its slot, unringed,
-    // and Rumble's ringed in earth's colour, the next chain's to begin; the sigil pulsing in fire's
-    // colour, Prismatic Fire to be cast with it
+    // (Cast up to Inferno) Hellfire, the last: fire's piece, 25%, the sigil flaring in fire's
+    // colour, not told; Burn back in its slot, unringed, and Rumble's ringed in earth's colour, the
+    // next chain's to begin; the sigil pulsing in fire's colour, Prismatic Fire to be cast with it
     await page.evaluate(() => {
         const { battle } = window.pellagos.game;
 
@@ -12618,14 +12631,15 @@ test("a Prismatic chain: an element's spell cast from the quick actions rolls it
     await slot(2).click();
     await play(2.4);
     expect(await prism()).toMatchObject({ element: null, pieces: ["fire"] });
-    await expect(page.locator("#banner")).toContainText("Fire's piece of the Prismatic sigil: every attack spell 25% stronger");
+    await expect(sigil).toHaveClass(/flare/);
+    expect(await sigil.evaluate((element) => element.style.getPropertyValue("--flare"))).toBe("#ff7a2e");
+    expect(await told()).not.toContain("piece of the Prismatic sigil");
     await expect(petal("fire")).toHaveClass(/held/);
     await expect(sigil.locator(".sigil-bonus")).toHaveText("+25%");
     await expect(label(2)).toHaveText("Burn");
     await expect(slot(2)).not.toHaveClass(/chain/);
     await expect(label(3)).toHaveText("Rumble");
     await expect(slot(3)).toHaveAttribute("data-chain", "earth");
-    await expect(page.locator("#banner")).toContainText("Tap the sigil for Prismatic Fire, spending it, or go on to another element");
     await expect(sigil).toHaveClass(/offered/);
     await expect(petal("fire")).toHaveClass(/offered/);
     await expect(sigil).toHaveAttribute("aria-label", /fire's piece just earned: cast Prismatic Fire on your foe/);
@@ -12639,12 +12653,18 @@ test("a Prismatic chain: an element's spell cast from the quick actions rolls it
     await sigil.click();
     await expect(page.locator("#banner")).toHaveText("Nothing in the Prismatic sigil to cast: an element's spells cast in order, first to last, earn its piece");
 
-    // Nothing more cast for ten seconds: broken, everything lost
-    await play(10.2);
+    // Nothing more cast for ten seconds: broken, everything lost; the sigil shown breaking, saying
+    // so, not told in a message, and gone within a second
+    await lapse();
     expect(await prism()).toBeNull();
-    await expect(page.locator("#banner")).toHaveText("The Prismatic chain is broken: its strength is lost.");
-    await expect(sigil).toBeHidden();
+    await expect(sigil).toBeVisible();
+    await expect(sigil).toHaveClass(/broken/);
+    await expect(sigil).toHaveAttribute("aria-label", "The Prismatic chain is broken: its strength is lost.");
+    expect(await told()).not.toContain("chain is broken");
     await expect(slot(3)).not.toHaveClass(/chain/);
+    await play(1);
+    await expect(sigil).toBeHidden();
+    await expect(sigil).not.toHaveClass(/broken/);
 
     // Water's piece just earned: tapped, the sigil casts Prismatic Water on the orc, a quarter of
     // its whole health gone, frozen and slowed; the sigil spent
@@ -12663,6 +12683,24 @@ test("a Prismatic chain: an element's spell cast from the quick actions rolls it
     await expect(sigil).toBeHidden();
     expect(await page.evaluate(() => window.pellagos.game.battle.actor("orc").hp)).toBeLessThanOrEqual(5000 - 1250);
     expect(await page.evaluate(() => window.pellagos.game.battle.actor("orc").afflictions.some(({ kind }) => kind === "slow"))).toBe(true);
+
+    // The sigil whole, left a second from fading: faded, the sigil shown fading, saying so, not
+    // told in a message, and gone within two seconds
+    await page.evaluate(() => {
+        const { battle } = window.pellagos.game;
+
+        battle.actor("player").prism = { element: null, step: 0, at: battle.time, pieces: ["fire", "earth", "air", "water"], readyAt: battle.time - 14000 };
+        window.pellagos.game.advance(0.05);
+    });
+    await expect(sigil).toHaveClass(/whole/);
+    await lapse();
+    await expect(sigil).toBeVisible();
+    await expect(sigil).toHaveClass(/faded/);
+    await expect(sigil).not.toHaveClass(/whole/);
+    await expect(sigil).toHaveAttribute("aria-label", "The Prismatic sigil fades, its power unspent.");
+    expect(await told()).not.toContain("sigil fades");
+    await play(1.7);
+    await expect(sigil).toBeHidden();
 
     // The four pieces held, the sigil whole: every attack spell twice as strong, no slot ringed;
     // tapped, Prismatic Destruction cast on the orc, which it kills; the sigil spent
