@@ -583,7 +583,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 37;
+export const SNAPSHOT_VERSION = 38;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -646,6 +646,14 @@ export const SNAPSHOT_STEPS = Object.freeze({
     // #ringStep: none; the rings they've stood in kept with what they've found, none yet), and the
     // full moon's trial out (Host #moonTrials: none)
     36: (snapshot) => ({ ...snapshot, version: 37, players: snapshot.players.map((player) => ({ inRing: null, ...player })), trials: [] }),
+    // 38: when each band's invasion's lines charged (Host #charge: none yet), and whether each
+    // formation's charging (battle.js formation: none)
+    37: (snapshot) => ({
+        ...snapshot,
+        version: 38,
+        invasions: (snapshot.invasions ?? []).map((invasion) => (invasion.beast === undefined ? { charged: null, ...invasion } : invasion)),
+        battle: { ...snapshot.battle, formations: Object.fromEntries(Object.entries(snapshot.battle.formations ?? {}).map(([id, formation]) => [id, { charge: false, ...formation }])) },
+    }),
 });
 
 /**
@@ -5042,9 +5050,10 @@ export class Host {
             over: null,
             // (The Behemoth's: it, what each player and theirs dealt it, #wounded, and how many of
             // the town's met it. A band's: how many of the town's met it, where its reinforcements
-            // go and the town's come out from, when the first blow was struck, and how many of it
-            // came in all, its reinforcements too: #reinforceInvasion)
-            ...(behemoth ? { beast: ids.invaders[0], dealt: {}, mustered: ids.defenders.length } : { mustered: ids.defenders.length, meet: [...meet], rally: [...townLine.anchor], fightAt: null, raised: 0, came: ids.invaders.length }),
+            // go and the town's come out from, when its lines charged (#charge), when the first
+            // blow was struck, and how many of it came in all, its reinforcements too:
+            // #reinforceInvasion)
+            ...(behemoth ? { beast: ids.invaders[0], dealt: {}, mustered: ids.defenders.length } : { mustered: ids.defenders.length, meet: [...meet], rally: [...townLine.anchor], charged: null, fightAt: null, raised: 0, came: ids.invaders.length }),
         });
         this.#event("invasion", { change: "coming", id, place: town.id, name: town.name, band, people, way, at: [...from], ids: [...ids.invaders, ...ids.defenders], spared: [...spared] });
     }
@@ -5192,6 +5201,15 @@ export class Host {
             const behemoth = invasion.band === BEHEMOTH.id;
             const ended = now - invasion.at >= (behemoth ? BEHEMOTH.lasts : INVASION.lasts);
 
+            // (A band's: its lines near enough each other, both charging: #charge)
+            if (!behemoth && invasion.broke === null && (invasion.charged ?? null) === null) {
+                const [theirs, ours] = [this.battle.formations[invasion.formations.invaders], this.battle.formations[invasion.formations.defenders]];
+
+                if (theirs && ours && hypot(theirs.anchor[0] - ours.anchor[0], theirs.anchor[1] - ours.anchor[1]) <= INVASION.charge.at) {
+                    this.#charge(invasion, theirs, ours);
+                }
+            }
+
             // (A band's: from the first blow, each side's fallen made good a while, neither
             // breaking meanwhile: #reinforceInvasion)
             if (!behemoth && invasion.broke === null && invasion.fightAt === null && [...raiders, ...standing(invasion.defenders)].some((id) => this.battle.actor(id).target !== null)) {
@@ -5268,6 +5286,53 @@ export class Host {
         }
     }
 
+    // A band's invasion's two lines near enough each other (INVASION.charge `at`): both charging
+    // at a run, on till their fronts are `gap` apart in the middle (a band that stands off, BANDS
+    // `advance` false, standing, the town's line charging on to it), and everyone of either side
+    // who fights up close going after an enemy as far as the charge's `leash` from their place in
+    // their line, and looking as far, so all of them close and fight (#charging); both sides'
+    // horns blown for it (the "invasion" event, "charge")
+    #charge(invasion, theirs, ours) {
+        const { speed, gap } = INVASION.charge;
+        const apart = hypot(theirs.anchor[0] - ours.anchor[0], theirs.anchor[1] - ours.anchor[1]);
+        // (From the town's line towards the raiders', and where the two meet)
+        const [ux, uy] = apart > 0 ? [(theirs.anchor[0] - ours.anchor[0]) / apart, (theirs.anchor[1] - ours.anchor[1]) / apart] : [-sin(invasion.facing), -cos(invasion.facing)];
+        const both = theirs.advance;
+        const [mx, my] = both ? [(theirs.anchor[0] + ours.anchor[0]) / 2, (theirs.anchor[1] + ours.anchor[1]) / 2] : theirs.anchor;
+        const short = both ? gap / 2 : gap;
+
+        invasion.charged = this.battle.time;
+        this.battle.formation(invasion.formations.defenders, { to: [mx - ux * short, my - uy * short], speed, charge: true, advance: true });
+
+        if (both) {
+            this.battle.formation(invasion.formations.invaders, { to: [mx + ux * short, my + uy * short], speed, charge: true });
+        }
+
+        for (const id of [...invasion.invaders, ...invasion.defenders]) {
+            const actor = this.battle.actor(id);
+
+            if (actor && !actor.dead && this.#charging(invasion, this.soldiers.get(id))) {
+                Object.assign(actor, { leash: Math.max(actor.leash ?? 0, INVASION.charge.leash), sight: INVASION.charge.sight });
+            }
+        }
+
+        this.#event("invasion", { change: "charge", id: invasion.id, place: invasion.place, band: invasion.band, at: [mx, my], raiders: [...theirs.anchor], town: [...ours.anchor] });
+    }
+
+    // Whether one of an invasion's lines (`soldier`: its record, host.soldiers') charges with it,
+    // its lines having charged (#charge): any who fight up close (INVASION.close, and the chiefs),
+    // going after an enemy as far as the charge's `leash` from their place in their line, and
+    // looking as far as its `sight`
+    #charging(invasion, soldier) {
+        return (invasion.charged ?? null) !== null && (INVASION.close.includes(soldier?.role) || Boolean(soldier?.chief));
+    }
+
+    // How one of an invasion's lines come up to it (#reinforceInvasion) goes after an enemy: as
+    // its role does (`leash`), or, its lines having charged, as those charging do (#charging)
+    #chargingWith(invasion, role, leash) {
+        return this.#charging(invasion, { role }) ? { leash: Math.max(leash, INVASION.charge.leash), sight: INVASION.charge.sight } : { leash };
+    }
+
     // A band's invasion's fallen made good (INVASION.reinforce): its raiders' back up to `raiders`
     // of the line that came, up the road from where it came out, its line's roles in its own mix,
     // armed as its own are (no chiefs); the town's to `town` of its own, out of the town where its
@@ -5311,7 +5376,7 @@ export class Host {
             const one = `${invasion.id}/raider-r${invasion.raised++}`;
             const weapon = raiderArms(invasion.band, role, invasion.raised);
 
-            this.#enlist(one, { people: invasion.band, ...soldierOf(invasion.band, role), weapon, name: raiderName(invasion.band, role, weapon), record: { invasion: invasion.id, side: "invader", role, chief: false }, square, patrol: [square], facing: invasion.facing, leash: leash[role] ?? ROLES[role].leash, armed: true, formation: { id: invasion.formations.invaders, slot: rear(invasion.formations.invaders, k), role }, armor, hp: Math.round(KINDS.soldier.hp * hp), lone: true });
+            this.#enlist(one, { people: invasion.band, ...soldierOf(invasion.band, role), weapon, name: raiderName(invasion.band, role, weapon), record: { invasion: invasion.id, side: "invader", role, chief: false }, square, patrol: [square], facing: invasion.facing, ...this.#chargingWith(invasion, role, leash[role] ?? ROLES[role].leash), armed: true, formation: { id: invasion.formations.invaders, slot: rear(invasion.formations.invaders, k), role }, armor, hp: Math.round(KINDS.soldier.hp * hp), lone: true });
             invasion.invaders.push(one);
             invasion.came += 1;
             ids.push(one);
@@ -5333,7 +5398,7 @@ export class Host {
             const each = (counts[role] = (counts[role] ?? -1) + 1);
             const one = `${invasion.id}/defender-r${invasion.raised++}`;
 
-            this.#enlist(one, { people: invasion.people, ...soldierOf(invasion.people, role, each), name: "soldier", record: { invasion: invasion.id, side: "defender", role }, square, patrol: [square], facing: outward, leash: ROLES[role].leash, armed: true, formation: { id: invasion.formations.defenders, slot: rear(invasion.formations.defenders, k), role } });
+            this.#enlist(one, { people: invasion.people, ...soldierOf(invasion.people, role, each), name: "soldier", record: { invasion: invasion.id, side: "defender", role }, square, patrol: [square], facing: outward, ...this.#chargingWith(invasion, role, ROLES[role].leash), armed: true, formation: { id: invasion.formations.defenders, slot: rear(invasion.formations.defenders, k), role } });
             invasion.defenders.push(one);
             ids.push(one);
         });

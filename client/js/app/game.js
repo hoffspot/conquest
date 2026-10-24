@@ -783,7 +783,7 @@ const BELL = Object.freeze({ reach: 160, every: 180, volume: 1.6 });
 // An invasion's horns (audio/synth.js): heard as far off as this (metres); the raiders' blown again
 // so long after it's first blown as they come (seconds), and the town's answering so long after
 // that first; and the lord's thanks shown so long (seconds) for a good share of them felled
-const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, thanks: 14 });
+const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, charge: 1.2, thanks: 14 });
 
 // How far off the wild's hunters are heard in a build-up after a long calm (metres: core/director.js
 // PACING's `from`, and more)
@@ -6776,7 +6776,8 @@ export class Game {
     // war horn blown where they come out and the town's answering from its line (#invasionHorn),
     // and, at the town the player's in or near, the player told the way the raiders come (in their
     // first, that the raiders leave them be this time till they strike one, and won't next time),
-    // the town's crier crying it out (#invasionCry). Reinforced: those come up drawn. Beaten off: the raiders' horn as they run, the player told, and the crier's
+    // the town's crier crying it out (#invasionCry). Charging: the raiders' horn from their line,
+    // and the town's answering from its own. Reinforced: those come up drawn. Beaten off: the raiders' horn as they run, the player told, and the crier's
     // thanks; the town's soldiers fallen, the raiders' horn, and told. And the player thanked for
     // the raiders they felled: the gold, the merit and the standing, and, for a good share of them,
     // the lord's thanks, in a panel of its own, the town's horn blown for it: their own purse and a
@@ -6789,6 +6790,12 @@ export class Game {
         const near = this.progress.invasion.place === event.place || Boolean(invasion && me?.map === "town" && Math.hypot(me.x - invasion.middle[0], me.y - invasion.middle[1]) <= invasion.edge + INVASION.out + INVASION.away);
 
         switch (event.change) {
+            case "charge":
+                // (The two lines charging each other: core/host.js #charge)
+                this.#invasionHorn("warHorn", event.raiders);
+                this.#invasionHorn("townHorn", event.town, HORNS.charge);
+
+                break;
             case "reinforced":
                 // (More of either side come up to the fight: core/host.js #reinforceInvasion)
                 this.enlisting.push(...event.ids);

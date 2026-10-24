@@ -202,6 +202,41 @@ describe("an army in its line of battle (battle.js formation)", () => {
         }
     });
 
+    it("charging, runs on to where it's going though some of it's fighting, the rest running with it; there, it stops charging and halts to fight as any does", () => {
+        const battle = new Battle(open(60, 90), { seed: 3 });
+        const soldiers = army(battle, { id: "f", team: "hero", anchor: [30, 12], size: 20, to: [30, 50], advance: true });
+
+        battle.formation("f", { speed: 2.2, charge: true });
+        // (An orc in its way, hard to bring down, that some of it stop to fight)
+        battle.add({ id: "orc", kind: "soldier", team: "orcs", weapon: "cleaver", square: [34, 24], hp: 100000, ai: "patrol", patrol: [[34, 24]] });
+
+        const marched = [];
+        let fought = false;
+        let ran = 0;
+        let there = null;
+
+        run(battle, 30000, () => {
+            const fighting = soldiers.some(({ target }) => target === "orc");
+
+            fought ||= fighting;
+
+            if (fighting && battle.formations.f.charge) {
+                marched.push(battle.formations.f.anchor[1]);
+                ran = Math.max(ran, soldiers.filter((one) => !one.dead && one.target === null && one.walkPace === one.chaseSpeed).length);
+            }
+
+            there ??= battle.formations.f.charge ? null : { anchor: [...battle.formations.f.anchor], to: battle.formations.f.to };
+        });
+
+        assert.ok(fought, "some of it fought the orc on the way");
+        assert.ok(marched.length > 10 && marched.at(-1) - marched[0] > 5, `on while they fought (${marched[0]} to ${marched.at(-1)})`);
+        assert.ok(ran >= 10, `the rest running with it (${ran})`);
+        assert.deepEqual(there, { anchor: [30, 50], to: null }, "no longer charging once it's there");
+
+        // (Then, as any line that advances, back to the orc to fight it, halting while it does)
+        assert.ok(battle.formations.f.anchor[1] < 50, "closing with the orc");
+    });
+
     it("closes its ranks over its fallen: those behind step up into the front rank's gaps, the line narrows, each of its role", () => {
         const battle = new Battle(open(60, 90), { seed: 3 });
         const soldiers = army(battle, { id: "f", team: "hero", anchor: [30, 20], size: 40 });
