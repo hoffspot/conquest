@@ -481,6 +481,11 @@
             <div class="card title">
                 <h1 class="wordmark" id="titlename">Pellagos</h1>
                 <p class="tagline">A market town on the edge of the wilds. Something prowls its fields.</p>
+                <!-- An update downloaded in the background (app/updater.js): started here, downloading nothing more; at the top, where a phone held on its side shows it -->
+                <div class="title-update" id="titleupdate" role="status" hidden>
+                    <p class="note">An update to the game's downloaded.</p>
+                    <button type="button" class="button quiet" id="updatebutton">Start it</button>
+                </div>
                 <div class="menu">
                     <button type="button" id="continuebutton" class="button primary" hidden>Continue</button>
                     <button type="button" id="newbutton" class="button">New character</button>
@@ -497,11 +502,6 @@
                     <ul class="title-worlds" id="titleworlds"></ul>
                 </div>
                 <p class="note warning" id="titlenote" role="status" hidden></p>
-                <!-- An update downloaded in the background (app/updater.js): started here, downloading nothing more -->
-                <div class="title-update" id="titleupdate" role="status" hidden>
-                    <p class="note">An update to the game's downloaded.</p>
-                    <button type="button" class="button quiet" id="updatebutton">Start it</button>
-                </div>
                 <label class="switch" title="Show how fast the game runs and what it draws">
                     <input type="checkbox" id="debugswitch" role="switch">
                     <span class="track" aria-hidden="true"></span>
