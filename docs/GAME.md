@@ -4781,7 +4781,12 @@ pauses (when no one else is playing in the world) at **Game options, Controls, Q
 (app/quicksetup.js) with that slot chosen, and Back to the game carries on. Quick actions in Game
 options shows the four slots (or six) as they rise; tap one, then what goes in it: "Nothing", or anything
 learnt and carried that can go on either wheel (`assignable("quick")`), each saying who it's
-used on ("On your foe", "On yourself").
+used on ("On your foe", "On yourself"). The click a browser fires as the finger's lifted lands on
+whatever's under it by then: after a hold (Quick actions opened over the finger still down) or an
+empty slot's tap, that's Quick actions, its **Back to the game** lying over the slot at the foot of
+a phone's screen, and it closed again at once. A click within 0.7 s of a finger's lift from a slot
+(`TAP_CLICK_MS`) that lands anywhere but the bar is swallowed; after a tap, the click lands on the
+slot itself, and goes as it did.
 
 **A press never waits on its lift** (app/press.js `Press`, one for each slot). A phone's Safari
 doesn't always say a finger's been lifted: a swipe in from the screen's edge, or since iOS 27 a
@@ -5916,7 +5921,8 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   a press whose lift is lost (swallowed before the page hears it: let go of as the slot lets go of
   the pointer, or once no finger's on the screen, or taken over by the next touch and kept in the
   debug log; let go of as the bar's put away or the page loses the player; a hold and Back
-  leaving the next tap heard),
+  leaving the next tap heard), Quick actions opened by a hold or an empty slot's tap staying open
+  as the finger's lifted, its Back to the game under it,
   and a
   phone screen. Drawing without a GPU is slow, so fights are played on with
   `game.advance(seconds)`, which runs the game without drawing each frame.

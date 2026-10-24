@@ -13318,19 +13318,78 @@ test.describe("on a phone", () => {
         // used. (Played on: a game that's stopped has no menu to pause at)
         await forget();
         await page.evaluate(() => window.pellagos.game.start());
-        const second = await slot(1).boundingBox();
-
         await touch("touchStart", 1);
         await expect(page.locator("#menuquick")).toBeVisible();
-        // (Slid up a little as it's lifted, so the browser doesn't take the lift for a tap on what's
-        // now under it: Back to the game, over the slot at the foot of a phone's screen)
-        await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: second.x + second.width / 2, y: second.y + second.height / 2 - 40, id: 0 }] });
         await touch("touchEnd");
         expect(await heard()).toEqual(["choose 1"]);
         await page.locator("#quickback").tap();
         await expect(page.locator("#menu")).not.toBeVisible();
         await slot(1).tap();
         await expect.poll(heard).toEqual(["choose 1", "use 1"]);
+    });
+
+    test("a quick action held, or an empty one tapped, opens Quick actions, and the finger's lift isn't taken for a tap on what's under it there (Back to the game, over the slot at the foot of the screen): it stays open till Back's tapped", async ({ page }) => {
+        test.setTimeout(180000);
+        await playing(page, "/?play&seed=1");
+
+        // (In a fight with the orc, stunned; the fourth slot emptied; played on, for there to be a
+        // menu to pause at)
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const { battle } = game;
+            const player = battle.actor("player");
+            const orc = battle.actor("orc");
+            const square = [player.square[0] + 3, player.square[1] - 2];
+
+            game.stop();
+            Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null, stunnedUntil: battle.time + 600000 });
+            game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+            game.previous.set("orc", { x: orc.x, y: orc.y });
+            game.setQuick(["vigor", "stun", "burn", null, null, null]);
+            battle.command("player", { type: "engage", target: "orc" });
+            game.advance(0.1);
+            game.start();
+        });
+
+        const slot = (n) => page.locator(`.quickbar .quick-slot[data-slot="${n}"]`);
+        const menu = page.locator("#menu");
+        // (Longer than the click a browser fires after a lift may take to come)
+        const longer = () => page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 800)));
+        const cdp = await page.context().newCDPSession(page);
+        const touch = async (type, n) => {
+            const box = n === undefined ? null : await slot(n).boundingBox();
+
+            await cdp.send("Input.dispatchTouchEvent", { type, touchPoints: box ? [{ x: box.x + box.width / 2, y: box.y + box.height / 2, id: 0 }] : [] });
+        };
+
+        await expect(page.locator(".quickbar")).toHaveClass(/up/);
+        await expect(slot(3)).toHaveClass(/empty/);
+
+        // Held: Quick actions opens over the finger still down; lifted, it stays open
+        await touch("touchStart", 1);
+        await expect(page.locator("#menuquick")).toBeVisible();
+        await touch("touchEnd");
+        await longer();
+        await expect(menu).toBeVisible();
+        await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Quick action 2");
+        await page.locator("#quickback").tap();
+        await expect(menu).not.toBeVisible();
+        expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
+
+        // An empty slot tapped: its choices opened, and they stay open
+        await touch("touchStart", 3);
+        await touch("touchEnd");
+        await expect(page.locator("#menuquick")).toBeVisible();
+        await longer();
+        await expect(menu).toBeVisible();
+        await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Quick action 4");
+        await page.locator("#quickback").tap();
+        await expect(menu).not.toBeVisible();
+
+        // (A tap on a slot that's used still goes as it did: no menu)
+        await slot(0).tap();
+        await longer();
+        await expect(menu).not.toBeVisible();
     });
 
     test("a thumb on the thumb stick whose lift is lost, as a phone's Safari loses it, never runs the player on: let go of, stopped, once no finger's on the screen; with that lost too, the next thumb on it takes over (kept in the debug log)", async ({ page }) => {

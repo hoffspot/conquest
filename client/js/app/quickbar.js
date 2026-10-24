@@ -169,6 +169,40 @@ export class QuickBar {
         for (const type of ["touchend", "touchcancel"]) {
             document.addEventListener(type, this.bare, { capture: true, passive: true });
         }
+
+        // (The click a browser fires after a finger's lifted from a slot lands on whatever's under
+        // it by then: the slot, after a tap; but Quick actions, after a hold (opened over the finger
+        // still down) or an empty slot's tap, where "Back to the game" lies over the slot at the
+        // foot of a phone's screen and would close it again at once. One that comes within
+        // TAP_CLICK_MS of the lift, anywhere but the bar, is swallowed)
+        this.holding = null;
+        this.liftedAt = -Infinity;
+        this.lifted = (event) => {
+            if (event.pointerId !== this.holding && !this.element.contains(event.target)) {
+                return;
+            }
+
+            this.holding = null;
+            this.liftedAt = event.type === "pointerup" ? performance.now() : -Infinity;
+        };
+        this.swallow = (event) => {
+            if (performance.now() - this.liftedAt > TAP_CLICK_MS) {
+                return;
+            }
+
+            this.liftedAt = -Infinity;
+
+            if (!this.element.contains(event.target)) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }
+        };
+
+        for (const type of ["pointerup", "pointercancel"]) {
+            window.addEventListener(type, this.lifted, true);
+        }
+
+        window.addEventListener("click", this.swallow, true);
     }
 
     /** Show four of them (with their names) or six across (`count`: QUICK_SHOWN). */
@@ -189,7 +223,8 @@ export class QuickBar {
         let lifted = -Infinity;
 
         press.onUse = () => this.onUse(index);
-        press.onChoose = () => {
+        press.onChoose = (pointer) => {
+            this.holding = pointer;
             globalThis.navigator?.vibrate?.(12);
             this.onChoose(index);
         };
@@ -392,6 +427,11 @@ export class QuickBar {
             document.removeEventListener(type, this.bare, { capture: true });
         }
 
+        for (const type of ["pointerup", "pointercancel"]) {
+            window.removeEventListener(type, this.lifted, true);
+        }
+
+        window.removeEventListener("click", this.swallow, true);
         this.element.remove();
     }
 }
