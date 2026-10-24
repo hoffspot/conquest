@@ -699,6 +699,8 @@ client/                 The game (static files served to the browser)
     loader.js           Downloads everything, counting every byte; manifest.js lists it
     catalog.js          Files known by their hash (path?h=hash): what this page's release keeps,
                         told to the service worker; assets.js is the catalog
+    updater.js          Updates downloaded in the background: a newer release's files the
+                        service worker doesn't keep, then started from the title screen
     fetcher.js          The downloader: the catalog's models in the background, a part at a time,
                         paced to keep out of the way of playing together, checked and kept
     session.js          The 3D view and the character kit, and starting games

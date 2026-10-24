@@ -18,7 +18,7 @@
 
 import { ASSETS } from "./app/assets.js";
 import { mappedOf, releaseOf } from "./app/catalog.js";
-import { isInstalledApp, isIOS, keepLoaded, lockLandscape, looked, registerServiceWorker } from "./app/device.js";
+import { isInstalledApp, isIOS, keepDownloads, keepLoaded, lockLandscape, looked, registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { Fetcher } from "./app/fetcher.js";
 import { FullScreen } from "./app/fullscreen.js";
@@ -27,6 +27,7 @@ import { MANIFEST } from "./app/manifest.js";
 import { Pointer } from "./app/pointer.js";
 import { forgetInWorld, inWorldOf, keepInWorld, REJOIN, REJOIN_STAGES, rejoinWords } from "./app/rejoin.js";
 import { telemetry } from "./app/telemetry.js";
+import { Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
 import { enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
 import { MARKER_ICONS, MARKER_NAMES, MARKERS } from "./core/markers.js";
@@ -81,6 +82,10 @@ window.pellagos = {
     },
     get telemetry() {
         return telemetry;
+    },
+    /** Updates downloaded in the background (app/updater.js). */
+    get updater() {
+        return state.updater;
     },
     /** Whether the page has let go of anything the graphics card has (world/release.js). */
     released: () => released.any,
@@ -164,6 +169,13 @@ function listGroups(loader) {
 // Downloads count for most of the bar; starting the view and unpacking the body the rest
 const DOWNLOAD_SHARE = 0.85;
 
+// How much of the game's loaded, and, if any came from this device (what the service worker
+// keeps), how much of it was downloaded: so a load that downloads nothing doesn't look like one
+// that downloads everything
+function loadedOf(loader) {
+    return `${formatBytes(loader.loaded)} of ${formatBytes(loader.total)}${loader.kept ? `, ${formatBytes(loader.downloaded)} downloaded` : ""}`;
+}
+
 async function load() {
     show("loading");
 
@@ -181,7 +193,7 @@ async function load() {
         if (now - drawn > 50 || loader.loaded >= loader.total) {
             drawn = now;
             refresh();
-            setProgress((loader.loaded / loader.total) * DOWNLOAD_SHARE, `Downloading ${loader.current.split("/").pop() || "…"}`, `${formatBytes(loader.loaded)} of ${formatBytes(loader.total)}`);
+            setProgress((loader.loaded / loader.total) * DOWNLOAD_SHARE, `${loader.currentKept ? "Loading" : "Downloading"} ${loader.current.split("/").pop() || "…"}`, loadedOf(loader));
         }
     });
 
@@ -190,7 +202,9 @@ async function load() {
     const steps = [];
     const step = (label, share) => {
         steps.push({ label, at: performance.now() });
-        setProgress(DOWNLOAD_SHARE + share * (1 - DOWNLOAD_SHARE), label, `${formatBytes(loader.total)} downloaded in ${(loader.time / 1000).toFixed(1)} s`);
+        const time = `${(loader.time / 1000).toFixed(1)} s`;
+
+        setProgress(DOWNLOAD_SHARE + share * (1 - DOWNLOAD_SHARE), label, loader.kept ? `${formatBytes(loader.total)} in ${time}: ${formatBytes(loader.downloaded)} downloaded, the rest from this device` : `${formatBytes(loader.total)} downloaded in ${time}`);
     };
 
     step("Starting the 3D engine", 0);
@@ -260,6 +274,8 @@ function title() {
     state.save = save;
     show("title");
     $("#titlenote").hidden = true;
+    $("#titleupdate").hidden = !state.updater?.ready;
+    state.updater?.check();
     continueButton.hidden = !save;
     note.hidden = !save;
     // (Shown with none kept too: to bring one in from a file, or make a world)
@@ -4646,6 +4662,40 @@ function showAdapted() {
     }
 }
 
+// --- Updates ---
+
+// How often the updater's asked whether it's time to look for an update (ms: it looks every
+// UPDATES.every itself), while the page is shown
+const UPDATES_ASKED = 60000;
+
+// Updates downloaded in the background while the game's open (app/updater.js): looked for every
+// so often, and as the title screen's shown; once one's all there, said on the title screen, with
+// a button to start it (the page loaded again, downloading nothing), and said once in a game
+function watchForUpdates(release) {
+    const workers = navigator.serviceWorker;
+
+    state.updater = new Updater({
+        release: release.release,
+        base: document.baseURI,
+        post: (message) => {
+            if (!workers?.controller) {
+                return false;
+            }
+
+            workers.controller.postMessage(message);
+
+            return true;
+        },
+    });
+    state.updater.onReady = () => {
+        $("#titleupdate").hidden = document.body.dataset.screen !== "title";
+        state.game?.hud?.message("An update to the game's downloaded: it starts the next time the game's loaded.", 5);
+    };
+    workers?.addEventListener("message", (event) => state.updater.heard(event.data));
+    setInterval(() => document.hidden || state.updater.check(), UPDATES_ASKED);
+    $("#updatebutton").addEventListener("click", () => location.reload());
+}
+
 // --- Off we go ---
 
 // How long the loader waits on a first visit for the service worker to take over, so that what it
@@ -4664,6 +4714,8 @@ async function start() {
     debug.show(settings.debug);
     debug.watch({ fetcher });
     registerServiceWorker(release);
+    watchForUpdates(release);
+    keepDownloads();
 
     // The debug log (Game options): the last game's, if it fell over while playing, kept as a
     // crash; what the browser says takes long, listened for; work done a step at a time that

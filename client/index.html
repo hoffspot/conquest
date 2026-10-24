@@ -32,7 +32,7 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=fd4d23aa37",
+                    "./js/app/assets.js": "./js/app/assets.js?h=3717ad5d4b",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=75d04a21c9",
                     "./js/app/budget.js": "./js/app/budget.js?h=56125585f0",
@@ -42,7 +42,7 @@
                     "./js/app/character-file.js": "./js/app/character-file.js?h=8fc08f4d25",
                     "./js/app/creator.js": "./js/app/creator.js?h=7fd3466b50",
                     "./js/app/debug.js": "./js/app/debug.js?h=50119b4718",
-                    "./js/app/device.js": "./js/app/device.js?h=d37c8ee606",
+                    "./js/app/device.js": "./js/app/device.js?h=d3701a0855",
                     "./js/app/doors.js": "./js/app/doors.js?h=94b9294183",
                     "./js/app/fate.js": "./js/app/fate.js?h=862fcbe9db",
                     "./js/app/fetcher.js": "./js/app/fetcher.js?h=dcdeb4ee97",
@@ -57,7 +57,7 @@
                     "./js/app/icons.js": "./js/app/icons.js?h=5064833b4f",
                     "./js/app/journal.js": "./js/app/journal.js?h=05a490ba29",
                     "./js/app/journey.js": "./js/app/journey.js?h=c089c49e7e",
-                    "./js/app/loader.js": "./js/app/loader.js?h=f369c5a266",
+                    "./js/app/loader.js": "./js/app/loader.js?h=9bf378d6ef",
                     "./js/app/manifest.js": "./js/app/manifest.js?h=30f5fd2e46",
                     "./js/app/mapicons.js": "./js/app/mapicons.js?h=56f23c7e72",
                     "./js/app/minimap.js": "./js/app/minimap.js?h=c160136171",
@@ -84,6 +84,7 @@
                     "./js/app/telemetry.js": "./js/app/telemetry.js?h=7852cb9907",
                     "./js/app/throng.js": "./js/app/throng.js?h=a99cd2abe2",
                     "./js/app/together.js": "./js/app/together.js?h=91b5fbc29d",
+                    "./js/app/updater.js": "./js/app/updater.js?h=78825da8b2",
                     "./js/app/wheel.js": "./js/app/wheel.js?h=ff8b0fb015",
                     "./js/app/wheelsetup.js": "./js/app/wheelsetup.js?h=f211b796e1",
                     "./js/app/worldlink.js": "./js/app/worldlink.js?h=2847d5c85f",
@@ -287,7 +288,7 @@
                     "./js/core/worldplan/settle.js": "./js/core/worldplan/settle.js?h=75f4607a0d",
                     "./js/core/worldplan/terrain.js": "./js/core/worldplan/terrain.js?h=d0b35d7867",
                     "./js/core/writings.js": "./js/core/writings.js?h=bc540994f2",
-                    "./js/main.js": "./js/main.js?h=a1b10f5456",
+                    "./js/main.js": "./js/main.js?h=81bf82e951",
                     "./js/world/ailments3d.js": "./js/world/ailments3d.js?h=1d60de08f8",
                     "./js/world/art/engine/atlas.js": "./js/world/art/engine/atlas.js?h=ef27e19379",
                     "./js/world/art/engine/leafcards.js": "./js/world/art/engine/leafcards.js?h=1052ff62f1",
@@ -446,19 +447,21 @@
             }
         </script>
         <script>
-            // A new version of the game comes with a new service worker (sw.js), which takes over
-            // as soon as it is installed. A page loaded before that may be a mix of old and new
-            // files, so reload it, unless a game is under way. (This is here rather than in the
-            // game's code because the page is always the new version's.)
+            // A new version of the game may come with a new service worker (sw.js), which takes
+            // over as soon as it is installed. A page open since before then is reloaded into the
+            // new version, unless a game is under way, or it's still loading: a page asks only for
+            // its own release's files, each by its hash (the import map above), so one loading is
+            // whole whichever worker gives them, and loading it twice over is only slower. (This is
+            // here rather than in the game's code because the page is always the new version's.)
             if (navigator.serviceWorker?.controller) {
                 navigator.serviceWorker.addEventListener("controllerchange", () => {
-                    if (!window.pellagos?.playing) {
+                    if (!window.pellagos?.playing && document.body.dataset.screen !== "loading") {
                         window.location.reload();
                     }
                 }, { once: true });
             }
         </script>
-        <script type="module" src="js/main.js?h=a1b10f5456"></script>
+        <script type="module" src="js/main.js?h=81bf82e951"></script>
     </head>
     <body>
         <!-- The world, and the character being made, are drawn here, behind every screen -->
@@ -480,6 +483,11 @@
             <div class="card title">
                 <h1 class="wordmark" id="titlename">Pellagos</h1>
                 <p class="tagline">A market town on the edge of the wilds. Something prowls its fields.</p>
+                <!-- An update downloaded in the background (app/updater.js): started here, downloading nothing more; at the top, where a phone held on its side shows it -->
+                <div class="title-update" id="titleupdate" role="status" hidden>
+                    <p class="note">An update to the game's downloaded.</p>
+                    <button type="button" class="button quiet" id="updatebutton">Start it</button>
+                </div>
                 <div class="menu">
                     <button type="button" id="continuebutton" class="button primary" hidden>Continue</button>
                     <button type="button" id="newbutton" class="button">New character</button>
@@ -1336,7 +1344,7 @@
                         <input type="checkbox" id="fullscreenswitch" role="switch">
                         <span class="track" aria-hidden="true"></span>
                     </label>
-                    <p class="adapted" id="fullscreennote" hidden>For full screen on an iPhone, add Pellagos to your Home Screen (Share, then Add to Home Screen) and play it from there.</p>
+                    <p class="adapted" id="fullscreennote" hidden>For full screen on an iPhone, add Pellagos to your Home Screen (Share, then Add to Home Screen) and play it from there. It keeps what it's downloaded for good there, too: Safari lets go of it after a week without a game.</p>
                     <label class="switch option">
                         <span class="text">Screen shake<small>The greatest spells shake the view</small></span>
                         <input type="checkbox" id="shakeswitch" role="switch">
