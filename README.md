@@ -309,7 +309,9 @@ own buildings; the ruins and the enemy camps are still to come.
 **What the wilds deal.** Every few hundred metres you cross the wilds, something turns up ahead of
 you, dealt from a deck: a fallen adventurer's remains to search (a note in their hand, now and
 then, of somewhere near), an old campsite that's safe to camp at, fresh tracks leading to a pack
-nearby, or an adventurers' cache.
+nearby, an adventurers' cache, or a stranger on the way: a pedlar with odds and ends to sell, a
+wounded hunter who'll tell you of a place nearby if you heal them, or hungry bandits who want food
+or gold to let you by, and fight if you refuse.
 
 **Adventurers' caches.** Now and then as you cross the wilds, a chest some adventurer
 left behind turns up ahead of you, well away from the roads, kept by three to five brigands of that

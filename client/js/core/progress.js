@@ -202,8 +202,9 @@ export const LINES = Object.freeze({
  * what it buys (`line`: LINES); whether its stock is each day's (`daily`: so many things
  * (`picks`), so many of each (`count`), of which makes, or as rare (`grades`), and its daily
  * special's (`special`), and what else may be its special as if it were of the rarest
- * (`specials`: the Mystic Emporium's Tome of Explosion, now and then), and what it always has
- * (`always`): core/stock.js), and how much more it asks (`markup`).
+ * (`specials`: the Mystic Emporium's Tome of Explosion, now and then), how often it has a special
+ * at all (`sometimes`; always, without), and what it always has (`always`): core/stock.js), and
+ * how much more it asks (`markup`).
  *
  * - **A blacksmith** (`smith`): every weapon and piece of armour, and its people's uniform, as well
  *   made as the player buying is mighty (`tiered`: SMITH_MAKES).
@@ -223,6 +224,9 @@ export const LINES = Object.freeze({
  *   spells' scrolls, draughts and cures, the Stamina Boost, the Scroll of Safety, a wand and the
  *   rest; a treasure map, only ever common: core/treasure.js), and it buys everything, the
  *   creatures' parts and the tomes too.
+ * - **A pedlar** met out in the wilds (core/director.js STRANGERS): odds and ends, a healing
+ *   draught and a few more draughts and cures each day, and some days a common treasure map or a
+ *   charm, a little dearer than in town.
  */
 export const SHOPS = Object.freeze({
     smith: { items: [...ARMS, ...ARMOUR, ...UNIFORM], best: "masterwork", tiered: true, line: ["arms", "armour"] },
@@ -239,6 +243,7 @@ export const SHOPS = Object.freeze({
     watch: { items: ["sword", "hammer", "greatsword", "axe", "bow", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "bracers", "gloves", "greaves", "leatherBoots", "boots", ...UNIFORM], best: "fine", line: ["arms", "armour"] },
     tavern: { items: ["ale", "meal"], best: "common", line: ["provisions"] },
     temple: { items: ["potion"], best: "common", line: ["draughts"] },
+    pedlar: { items: ["potion", "glowcapDraught", ...Object.keys(CURES)], best: "common", line: ["draughts"], markup: 1.25, daily: { picks: 4, count: [1, 3], grades: { common: 1 }, special: { rare: 1 }, specials: ["treasureMap", ...Object.keys(CHARMS)], sometimes: 0.5, always: ["potion"] } },
     guild: { items: ["wand", "grimoire", "spellward", "wizardHat", "amulet", "ring", "potion", "staminaBoost", "glowcapDraught", "scrollOfSafety", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf), ...STARTING_SCROLLS, "treasureMap"], best: "fine" },
 });
 

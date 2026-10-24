@@ -1403,6 +1403,10 @@ const KEYED_RESTS = {
     arcanist: [PRIEST_RESTS[4], renamed(LOOKING_OVER, "holding a phial to the light"), renamed(BARKEEP_RESTS[1], "stroking the chin"), PRIEST_RESTS[2], ADVENTURER_RESTS[1]],
     // (An abbey's herbalist, as a temple's acolyte at prayer, and among their jars)
     herbalist: [PRIEST_RESTS[0], renamed(LOOKING_OVER, "holding a phial to the light"), PRIEST_RESTS[2], PRIEST_RESTS[4], ADVENTURER_RESTS[1]],
+    // (The strangers met out in the wilds: a pedlar resting by the way, as the townsfolk do and a
+    // hand to the chin; a hunter hurt, wiping the sweat from their brow, rubbing their neck)
+    pedlar: [ADVENTURER_RESTS[1], renamed(BARMAID_RESTS[4], "stretching the back"), renamed(BARKEEP_RESTS[1], "a hand to the chin"), ADVENTURER_RESTS[4], GLANCING_BACK],
+    hunter: [renamed(BARMAID_RESTS[0], "wiping the brow"), renamed(BARKEEP_RESTS[4], "rubbing the neck"), ADVENTURER_RESTS[4], ADVENTURER_RESTS[1], GLANCING_BACK],
 };
 
 // Who rests the clips' ways too, after their own five (those with their hands full, the priests
@@ -1424,6 +1428,7 @@ const CLIP_RESTS = {
     quartermaster: [TALKING],
     arcanist: [TALKING],
     herbalist: [TALKING],
+    pedlar: [TALKING],
 };
 
 export const RESTS = Object.freeze(Object.fromEntries(Object.entries(KEYED_RESTS).map(([role, rests]) => [role, [...rests, ...(CLIP_RESTS[role] ?? [])]])));

@@ -1037,6 +1037,76 @@ export const TREES = Object.freeze({
             },
         },
     },
+    // The strangers met out in the wilds (core/director.js STRANGERS). A pedlar resting by the way
+    // with their pack: chatty, a little sly, everything in it a bargain to hear them tell it; their
+    // odds and ends (progress.js SHOPS pedlar), and some days something special
+    pedlar: keeperTree({
+        shop: "pedlar",
+        first: ["Well met! First face I've seen since the ford. {name}, pedlar, at your service. Odds and ends for the road?", "Easy, friend, I'm only a pedlar. {name}'s the name. Draughts, cures, this and that: all you'll want out here, and no town for miles."],
+        again: ["{player}! The road brings us together again. Something for the way?", "Back again, {player}? I've not sold out yet."],
+        ask: "Isn't it dangerous, out here alone?",
+        answer: ["Dangerous? I've a quick pair of legs and nothing a wolf wants. Bandits, now: I pay them in gossip.", "It is. That's why it's dearer than in town, friend: you're paying for my nerve as much as my wares."],
+        special: ["Something special in the bottom of the pack, since you ask: {special}. {specialPrice} gold, and it's yours.", "I picked this up on the road: {special}. {specialPrice} gold. You'll not see another out here."],
+        gone: ["Nothing special today, I'm afraid. What you see is what I've got.", "Special? Only my company. Have a look at what I've got."],
+    }),
+    // A hunter lying hurt, a beast's work: healed (a healing draught given, a healing spell cast on
+    // them: { draught }, { healer }, whether the player has one), they tell of a place round about
+    // (app/game.js, once they're tended: { tended }); turned down, they limp off
+    woundedHunter: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { tended: true }, lines: ["You've my thanks, {player}. I'll not forget it.", "Good as new, near enough. Mind how you go out there."] },
+                    { if: { met: false }, lines: ["Easy... I'm no threat. {name}, hunter. A boar had me in the side, and I've bled more than I like. Have you anything to heal me?", "Thank the gods, someone. {name}. A wolf caught me napping, and I can't walk far like this. Can you help me?"] },
+                    { lines: ["Still here, as you see. You've nothing for this wound?", "Back again? I could use that help, if you've any."] },
+                ],
+                choices: [
+                    { if: { tended: false, draught: true }, say: "Here, drink this. (A healing draught)", next: null, do: [{ tend: "draught" }] },
+                    { if: { tended: false, healer: true }, say: "Hold still, let me see to it. (Cast a healing spell)", next: null, do: [{ tend: "spell" }] },
+                    { if: { tended: false }, say: "What did this to you?", next: "beast" },
+                    { if: { tended: false }, say: "I've nothing to spare. I'm sorry.", next: "refused", do: [{ tend: "no" }] },
+                    { if: { tended: true }, say: "Safe travels.", next: null },
+                    { if: { tended: false }, say: "Hold on. I'll be back.", next: null },
+                ],
+            },
+            beast: {
+                say: ["Came out of the brush at me before I'd nocked an arrow. I put one in it, for all the good it did. It's still out there.", "Bigger than any I've seen these parts. Something's driving them down from the high ground, mark me."],
+                choices: "greet",
+            },
+            refused: {
+                say: ["No... no, I understand. I'll manage. I always have.", "Then I'll limp on as I can. Watch yourself out there."],
+                choices: [FAREWELL],
+            },
+        },
+    },
+    // Hungry bandits barring the way: food or gold ({toll} gold; { food }, { toll }: whether the
+    // player has the one or the other), or they fight; paid ({ paid }), they let them by
+    bandits: {
+        start: "greet",
+        nodes: {
+            greet: {
+                say: [
+                    { if: { paid: true }, lines: ["We've had ours. Go on, before the lads change their minds.", "Off with you. We're square."] },
+                    { lines: ["That's far enough, friend. We've not eaten in three days, and you look well fed. Food, or {toll} gold, and you go on your way.", "Hold there. Times are hard, and this road's ours. Something to eat, or {toll} gold, and no one gets hurt.", "Easy now. We're hungry, not cruel. Food or {toll} gold, and you walk on by."] },
+                ],
+                choices: [
+                    { if: { paid: false, food: true }, say: "Here, take some food.", next: "fed", do: [{ toll: "food" }] },
+                    { if: { paid: false, toll: true }, say: "Here's your gold. ({toll} gold)", next: "paid", do: [{ toll: "gold" }] },
+                    { if: { paid: false }, say: "You'll get nothing from me.", next: null, do: [{ toll: "refuse" }] },
+                    { if: { paid: true }, say: "Farewell.", next: null },
+                ],
+            },
+            fed: {
+                say: ["Meat! Gods be good. On your way, friend, and no hard feelings.", "That'll fill a belly or two. Off you go, then. We never saw you."],
+                choices: [FAREWELL],
+            },
+            paid: {
+                say: ["Pleasure doing business. Mind the road.", "There, that wasn't so hard. Go on."],
+                choices: [FAREWELL],
+            },
+        },
+    },
     // An adventurer at the guild: seasoned, a little wry, glad to give advice
     adventurer: {
         start: "greet",
