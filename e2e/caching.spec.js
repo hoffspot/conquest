@@ -1,8 +1,8 @@
 import { expect, test } from "./fixtures.js";
 
-// The service worker (client/sw.js) in a real browser: the game's data kept by the hash of its
-// bytes and never downloaded again, what no release in use lists let go of, and the game started
-// offline (generated/asset_streaming_plan.md, section 5).
+// The service worker (client/sw.js) in a real browser: the game's data and code kept by the hash
+// of their bytes and never downloaded again, what no release in use lists let go of, and the game
+// started offline (generated/asset_streaming_plan.md, section 5; generated/game_delivery_plan.md).
 
 test.beforeEach(async ({ page }) => {
     page.on("pageerror", (error) => {
@@ -32,7 +32,7 @@ test("keeps the game's data by its hash, downloads none of it again, lets go of 
         }
     });
 
-    // What this release keeps by hash: the manifest's data
+    // What this release keeps by hash of the data it downloads before it starts: the manifest's
     const listed = await page.evaluate(async () => {
         const { MANIFEST } = await import("./js/app/manifest.js");
 
@@ -50,8 +50,10 @@ test("keeps the game's data by its hash, downloads none of it again, lets go of 
         return url;
     });
 
-    // Loaded again, through the worker: each kept as it's downloaded, the older copy let go of
+    // Loaded again, through the worker: each kept as it's downloaded (the manifest's data, and the
+    // code, which the page asks for by hash too: its import map), the older copy let go of
     const fetched = [];
+    const asked = () => [...new Set(fetched.filter(({ byWorker }) => !byWorker).map(({ url }) => url))].sort();
 
     context.on("request", (request) => {
         if (request.url().includes("?h=")) {
@@ -60,21 +62,26 @@ test("keeps the game's data by its hash, downloads none of it again, lets go of 
     });
 
     await title(page, () => page.reload());
-    await expect.poll(() => kept(page), { timeout: 30000 }).toEqual(listed);
-    expect(listed).not.toContain(older);
+
+    const loaded = asked();
+
+    expect(loaded).toEqual(expect.arrayContaining(listed));
+    expect(loaded).toContainEqual(expect.stringMatching(/\/js\/main\.js\?h=[0-9a-f]{10}$/));
+    await expect.poll(() => kept(page), { timeout: 30000 }).toEqual(loaded);
+    expect(loaded).not.toContain(older);
 
     // And again: each asked for by the page and answered from what's kept, none downloaded
     fetched.length = 0;
     await title(page, () => page.reload());
-    expect(fetched.filter(({ byWorker }) => !byWorker).map(({ url }) => url).sort()).toEqual(listed);
+    expect(asked()).toEqual(loaded);
     expect(fetched.filter(({ byWorker }) => byWorker)).toEqual([]);
 
-    // The worker knows the page's release
+    // The worker knows the page's release, which lists all it keeps
     const state = await page.evaluate(async () => (await (await caches.open("pellagos-state-v2")).match(new URL("sw-state.json", document.baseURI).href))?.json());
     const { ASSETS } = await page.evaluate(() => import("./js/app/assets.js").then(({ ASSETS }) => ({ ASSETS: { release: ASSETS.release } })));
 
     expect(state.newest).toBe(ASSETS.release);
-    expect(state.releases[ASSETS.release].boot.sort()).toEqual(listed);
+    expect(state.releases[ASSETS.release].boot).toEqual(expect.arrayContaining(loaded));
 
     // Offline, the game starts all the same
     await context.setOffline(true);

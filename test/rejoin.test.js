@@ -1,6 +1,6 @@
 // Back into a world after a crash or a reload (client/js/app/rejoin.js): where the player is in
-// another's world, kept on this device while they're there; gone back into within half an hour,
-// stage by stage; let go of once they've left.
+// another's world, or their own open to friends, kept on this device while they're there; gone
+// back into within half an hour, stage by stage; let go of once they've left.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { forgetInWorld, inWorldOf, keepInWorld, REJOIN, REJOIN_STAGES, rejoinWords } from "../client/js/app/rejoin.js";
@@ -14,6 +14,7 @@ const storage = () => {
 
 const server = { kind: "server", server: "studio-mac.local:8480", world: "w1", worldName: "Thornwick", serverName: "Tom's Mac mini", hero: 2, character: null, name: "Ada" };
 const friend = { kind: "friend", code: "ABCD", broker: "wss://studio-mac.local:8480/broker", character: "c1", name: "Ada", host: "Wren" };
+const hosting = { kind: "hosting", code: "WXYZ", token: "t0k3n", broker: "wss://studio-mac.local:8480/broker", listed: true, character: "c1", name: "Ada" };
 
 describe("back into a world (rejoin.js)", () => {
     it("keeps where the player is, as of when it was written, and gives it back for half an hour", () => {
@@ -26,6 +27,10 @@ describe("back into a world (rejoin.js)", () => {
         // (Written again as they play: the half hour from then)
         keepInWorld(kept, friend, 1000 + REJOIN.within);
         assert.deepEqual(inWorldOf(kept, 1000 + 2 * REJOIN.within - 1), { ...friend, at: 1000 + REJOIN.within });
+
+        // (Their own, open to friends)
+        keepInWorld(kept, hosting, 5000);
+        assert.deepEqual(inWorldOf(kept, 6000), { ...hosting, at: 5000 });
         assert.equal(REJOIN.within, 30 * 60 * 1000);
         assert.equal(REJOIN.every, 10000);
     });
@@ -40,7 +45,7 @@ describe("back into a world (rejoin.js)", () => {
         keepInWorld(kept, server, 5000);
         assert.equal(inWorldOf(kept, 4000), null, "written after now");
 
-        for (const record of [{ ...friend, code: "abc" }, { ...server, world: 3 }, { kind: "hosting" }, null]) {
+        for (const record of [{ ...friend, code: "abc" }, { ...server, world: 3 }, { ...hosting, token: null }, { ...hosting, character: null }, { kind: "elsewhere" }, null]) {
             kept.setItem(REJOIN.key, JSON.stringify({ ...record, at: 1000 }));
             assert.equal(inWorldOf(kept, 2000), null, JSON.stringify(record));
         }
@@ -74,10 +79,15 @@ describe("back into a world (rejoin.js)", () => {
             REJOIN_STAGES.friend.map(([id]) => id),
             ["reach", "find", "ask"],
         );
-        assert.ok([...REJOIN_STAGES.server, ...REJOIN_STAGES.friend].every(([, words]) => /^[A-Z][a-z ,]+$/.test(words)));
+        assert.deepEqual(
+            REJOIN_STAGES.hosting.map(([id]) => id),
+            ["load", "reopen"],
+        );
+        assert.ok([...REJOIN_STAGES.server, ...REJOIN_STAGES.friend, ...REJOIN_STAGES.hosting].every(([, words]) => /^[A-Z][a-z ,]+$/.test(words)));
 
         assert.deepEqual(rejoinWords(server), { title: "Back into Thornwick", about: "On Tom's Mac mini, as Ada." });
         assert.deepEqual(rejoinWords(friend), { title: "Back into Wren's world", about: "By its code, ABCD, as Ada." });
+        assert.deepEqual(rejoinWords(hosting), { title: "Back into your world", about: "Opening it to your friends again, under its code, WXYZ, as Ada." });
         assert.deepEqual(rejoinWords({ kind: "friend", code: "ABCD" }), { title: "Back into your friend's world", about: "By its code, ABCD." });
         assert.deepEqual(rejoinWords({ kind: "server", server: "s", world: "w" }), { title: "Back into your world", about: "On its server." });
     });

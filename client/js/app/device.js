@@ -117,6 +117,19 @@ export function looked(ms) {
     });
 }
 
+/**
+ * Ask the service worker to keep files the page loaded by their hashes before it took over (a
+ * first visit: main.js and what it imports), from the browser's own copies (sw.js keepLoaded).
+ * Nothing if it hasn't taken over.
+ */
+export function keepLoaded(urls) {
+    const worker = globalThis.navigator?.serviceWorker?.controller;
+
+    if (worker && urls.length) {
+        worker.postMessage({ kind: "keep", urls });
+    }
+}
+
 export function registerServiceWorker(release) {
     if ("serviceWorker" in navigator && window.isSecureContext) {
         // (With when the page started, so the worker can tell which release is the newest)

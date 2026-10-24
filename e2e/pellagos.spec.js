@@ -189,9 +189,12 @@ test("loads everything, listing what it downloads, then shows the title", async 
     expect(loaded.groups).toEqual([true, true, true, true, true, true]);
 });
 
-test("loaded again, the game asks the server for none of its code, engine, WebAssembly, body or fonts: the service worker keeps each by the hash of its bytes, and gives what its workers ask for by name from the same copies; a file it hasn't, it fetches, that one alone", async ({ page, context }) => {
+test("loaded again, the game asks the server for none of its code, engine, WebAssembly, body or fonts: the service worker keeps each by the hash of its bytes, and gives what its workers ask for by name from the same copies; a file it hasn't, it fetches, that one alone", async ({ page }) => {
     // (Played twice over, and a third time: more than the usual time)
     test.setTimeout(300000);
+
+    // (The page's own: each test's page is in a browser of its own, e2e/fixtures.js)
+    const context = page.context();
 
     // What reaches the server: what the service worker fetches, and anything the page fetches that
     // the service worker doesn't answer
@@ -244,10 +247,12 @@ test("loaded again, the game asks the server for none of its code, engine, WebAs
     expect(files(fetched).toSorted()).toEqual([gone, "/js/app/version.js"].toSorted());
 });
 
-test("an update's downloaded in the background: the page finds a release newer than its own, the service worker downloads what of it it doesn't keep, that alone, and the title screen says so, with a button that starts it", async ({ page, context }) => {
+test("an update's downloaded in the background: the page finds a release newer than its own, the service worker downloads what of it it doesn't keep, that alone, and the title screen says so, with a button that starts it", async ({ page }) => {
     test.setTimeout(240000);
 
-    // What the service worker fetches
+    // What the service worker fetches (in the page's own context: each test's page is in a
+    // browser of its own, e2e/fixtures.js)
+    const context = page.context();
     const fetched = [];
 
     context.on("request", (request) => request.serviceWorker() && fetched.push(new URL(request.url()).pathname));

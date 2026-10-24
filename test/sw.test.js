@@ -313,6 +313,24 @@ describe("service worker", () => {
         assert.equal(worker.requests.length, 1);
     });
 
+    it("keeps what a page loaded by hash before it took over (a first visit: main.js and its imports) when the page asks, from the browser's copy, checked by its hash; one kept already, another site's, or one without a hash, not fetched", async () => {
+        const files = { "/js/main.js": "the main module", "/js/app/device.js": "the device module", "/js/app/debug.js": "a newer debug module" };
+        const worker = loadServiceWorker({ files, stored: { [BOOT]: { [address(["/js/app/fullscreen.js", "kept"])]: "kept" } } });
+        const main = address(["/js/main.js", "the main module"]);
+        const device = address(["/js/app/device.js", "the device module"]);
+        const debug = address(["/js/app/debug.js", "the debug module"]);
+        const fullscreen = address(["/js/app/fullscreen.js", "kept"]);
+
+        await worker.tell("page-1", { kind: "keep", urls: [main, device, debug, fullscreen, "https://elsewhere.example/js/main.js?h=0123456789", "/js/app/version.js"].map(full) });
+
+        assert.deepEqual(worker.requests, [main, device, debug].map((url) => ({ url: full(url), cache: "force-cache" })));
+        assert.deepEqual(worker.kept(BOOT).sort(), [fullscreen, main, device].map(full).sort());
+
+        // (Asked for by the page next time: from what's kept)
+        assert.equal(await (await worker.request(main)).text(), "the main module");
+        assert.equal(worker.requests.length, 3);
+    });
+
     it("hands on, but doesn't keep, a file whose bytes aren't the ones its hash names (a release published meanwhile)", async () => {
         const worker = loadServiceWorker({ files: { "/characters/human.bin": "a newer body" } });
         const url = address(["/characters/human.bin", "the body"]);
