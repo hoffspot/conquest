@@ -6226,14 +6226,18 @@ test("an envoy on the road near the player goes by with their escort; struck dow
             game.advance(1);
         }
 
+        // (What the player was told across the screen, as kept for the journal: before it's
+        // played on as it is, when another message, a creature new in the bestiary, could follow it)
+        const told = game.messages.map(({ text }) => text).join("\n");
+
         game.start();
 
-        return { gone: !game.host.war.force("force-950"), grudge: game.host.war.realm("orc").standing.human ?? 0 };
+        return { gone: !game.host.war.force("force-950"), grudge: game.host.war.realm("orc").standing.human ?? 0, told };
     }, met[0].id);
 
     expect(fell.gone).toBe(true);
     expect(fell.grudge).toBeLessThan(-5);
-    await expect(page.locator("#banner")).toContainText("envoy to the Elves has been struck down by the Humans");
+    expect(fell.told).toContain("envoy to the Elves has been struck down by the Humans");
 
     // The journal: the orcs bear the humans a grudge
     const journal = page.getByRole("dialog", { name: "Journal" });
