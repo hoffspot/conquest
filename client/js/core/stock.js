@@ -68,7 +68,8 @@ function choicesOf(items, grades) {
  * What a shop with a daily stock (progress.js SHOPS `daily`) has in on a day (`day`: core/
  * daytime.js dayOf) of a world (`seed`), the shop being the one kept at `key` (stockKey) by
  * `people`: { wares: [{ id, quality, count, people? }] (each so many), special: the thing it is,
- * made (madeOf: what's rolled on it already) }; or null, for a shop without one. The same for
+ * made (madeOf: what's rolled on it already), or null on a day it has none }; or null, for a shop
+ * without one. The same for
  * the same world, shop and day; another assortment the next.
  */
 export function dailyStock(shop, { seed = 1, key = "", day = 0, people = "human" } = {}) {
@@ -100,10 +101,12 @@ export function dailyStock(shop, { seed = 1, key = "", day = 0, people = "human"
     }
 
     // Its special: one thing, of the rarest (or what it may have in as if it were: `specials`),
-    // the more likely the more it's worth
+    // the more likely the more it's worth; a shop with one only `sometimes` (a pedlar's), none
+    // other days
     const rarest = Math.max(...Object.values(daily.special));
     const specials = [...choicesOf(SHOPS[shop].items, daily.special), ...(daily.specials ?? []).map((id) => ({ id, quality: "common", weight: rarest }))];
-    const pick = specials.length ? random.pickWeighted(specials, ({ id, weight }) => weight * (ITEMS[id]?.price ?? 1)) : null;
+    const today = daily.sometimes === undefined || random.next() < daily.sometimes;
+    const pick = specials.length && today ? random.pickWeighted(specials, ({ id, weight }) => weight * (ITEMS[id]?.price ?? 1)) : null;
     const special = pick && madeOf({ id: pick.id, quality: pick.quality, people: ITEMS[pick.id]?.uniform ? maker : null }, random);
 
     return { wares, special };

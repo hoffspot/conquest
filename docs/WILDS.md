@@ -489,7 +489,7 @@ dice did, so that crossing them is more than one guarded chest after another.
   cache's is (*Adventurers' caches*, below): on foot, out of the settlements, afresh for everyone
   together once one's dealt to any of them.
 - **The deck** (`DIRECTOR.cards`, `shuffled`): an adventurer's cache, a fallen adventurer's
-  remains, an old campsite, fresh tracks. Each comes once a deck, in an order of its own, the deck shuffled
+  remains, an old campsite, fresh tracks, a stranger, something across the way. Each comes once a deck, in an order of its own, the deck shuffled
   again once it's all been dealt, never with the card just dealt first again (Left 4 Dead's
   director dealt its bosses so: no two of the same running). Each player has their own, kept in
   the world's snapshot (`travel`). A card with nowhere to go ahead waits for the next look.
@@ -526,8 +526,60 @@ dice did, so that crossing them is more than one guarded chest after another.
   on their minimap the way they lead, prints being hard to make out in long grass. Follow them and
   find the pack first, or see what made them and steer clear. Let go after six minutes, once their pack's all gone, or once every player's 140 m
   from where they start.
+- **A stranger** (`STRANGERS`, the host's `#putStranger`): someone met on the way, put out where a
+  cache would be. The next of three, each met once before any again, as the cards are (each
+  player's `strangers`, kept with their deck). Let go once every player's 180 m off and none's
+  fighting them.
+  - *A pedlar*, resting by the way, their pannier on their back and a walking staff in hand (one of
+    the folk, `pedlar`, characters/folk.js). Said within 40 m ("A pedlar, resting by the way with
+    their pack: they'll have odds and ends to sell."). Talked to, they sell out of their own stock
+    for the day (`SHOPS.pedlar`, core/stock.js): a healing draught always, and three more of the
+    common draughts and cures, one to three of each. Half the days there's a special too, a common
+    treasure map or a common charm (`sometimes`). All a quarter dearer than in town (`markup`).
+  - *A wounded hunter*, in greens with their bow and quiver slung, down to 30% of their health
+    (`hunter`). Said within 40 m ("Someone's down ahead, hurt…"). Healed, with a healing draught
+    given them in a talk (the least the player has: `HEALING_DRAUGHTS`) or a healing spell cast on
+    them (in a talk, the least the player knows that's ready, or any time from the wheel), they
+    tell whoever healed them of the nearest place within 1.5 km that player hasn't found, as a
+    fallen adventurer's note does (`noteOf`). It's written in the journal ("A hunter you healed"),
+    its circle on the world map, said with a quill's scratch. Eight seconds later they go on their
+    way, 60 m off from the nearest player. Turned down in a talk, or left unhealed three minutes
+    after a player first came within 40 m, they limp off at half their pace.
+  - *Hungry bandits*: three or four outlaws, their chief and his band (`CACHE_BANDS.bandits`), as
+    strong as the land there, no one's enemy till they're refused (`neutral`). The chief hails a
+    player who comes within 14 m ("Hold there, friend!"; "Bandits bar your way, hungry: they want
+    food or gold to let you by…"). Talked to (any of them), they want food (two cuts of the wild's
+    meat, else a hot meal: `foodFor`) or gold (12 to 20, 35% more for each tier past the first:
+    `banditToll`). Paid, they let everyone by. Refused, or walked away from (a hailed player 30 m
+    from their chief, unpaid), they draw their blades and fight like any of the wild's, after that
+    player.
+- **Something across the way** (`OBSTACLES`, the host's `#putObstacle`): a fallen tree or a
+  rockslide, long since down (one or the other at random), 45 to 70 m ahead of the player, across
+  the way they're going, road or not. Out of the settlements and away from the places worth
+  finding and every other cache, find and obstacle (`cacheClear`), on land, its squares all free.
+  - *Over its squares*: a tree seven squares long and one wide, rocks four across and three deep,
+    along the world's axis nearest across the way (`obstacleBox`: no slipping through it corner to
+    corner). The world blocks them as its chunks are made (overworld.js `setObstacles`), the way
+    round's found again (`dropTiles`), and the ground under it's drawn again. Drawn by
+    world/obstacles3d.js: the trunk on the ground, its roots torn up in a plate of soil at one end,
+    broken branches and a little dead leaf at the other; or boulders heaped over it, stones round.
+  - *Said* within 40 m ("A fallen tree lies across the way ahead. Go round it, or hold on it to
+    clear it."). Tapped, the player walks up to it and is told to hold on it.
+  - *Cleared* (the `clear` command, `#clearing`): held on, the player walks up to it and sets to it
+    within 2.5 m of it, stopped, swinging at it every 1.1 s (their weapon's blow, a chop or a crush
+    heard). It's six seconds' work alone for a tree, eight for rocks, at a second's work a second;
+    twice as quick with an axe or a hammer, 1.75 with a cleaver, 1.5 with a greatsword (`TOOLS`),
+    and everyone at it together adds theirs. It costs 5 stamina a second; out of breath, they leave
+    off, told so. They leave off too once they let go, walk off or fight.
+  - *Cleared, it's gone for everyone*, and it's a game of chance (`clearedTurnsUp`): 30% of the time
+    brigands were waiting (`OBSTACLES.brigands`: the land's cache band, three or four, out 7 to
+    10 m round it) and jump whoever cleared it the moment they have ("It was a trap!"); 40% of the
+    time a cart's load spilled under it long ago, a share for each who cleared it where it lay
+    (`rollSpilled`: 8 to 20 gold, 35% more for each tier past the first, and half the time a hot
+    meal, an ale, a healing draught, a bandage or a glowcap draught); otherwise only the way clear.
+  - Let go once every player's 200 m away and no one's clearing it.
 - **Let go** once every player's 220 m away (`FINDS.far`); another comes later. Nothing's kept in
-  a snapshot till one's been dealt.
+  a snapshot till one's been dealt (`finds`, `fresh`, `strangers`, `obstacles`).
 - **The pacing** (`PACING`, the host's `#pace`; Left 4 Dead's director: "Algorithm adjusts pacing,
   not difficulty"), kept for each player with their deck:
   - *A quiet spell after a hard fight*: a fight a player fell below half their health in (or
@@ -926,6 +978,48 @@ worshipped only at the shrines:
   - a camp's always made there, whatever's about (`campRefusal`);
   - a rest there cures the poisons, the sicknesses and the withering curse (`SHRINE.cures`:
     poisoned, envenomed, diseased, the pox, withered), told as each goes ("cured").
+
+## Moon roads
+
+The rings of standing stones out in the land (the world plan's sites of kind "standing stones":
+seed 2 has 14) are Lunara's roads (core/rings.js; host.js `#ringStep`, `#walkMoonRoad`; app/game.js
+`#ringEvent`, `openMoonRoads`, `#moonlit`).
+
+- **Each ring's moon** (`ringsOf`): each ring bound to one of the moon's eight phases (`PHASES`, a
+  world day each: daytime.js `MOON_DAYS`), dealt round them in an order of the world's own so each
+  phase has one or two. A night's phase is the moon's at its sunset, held till sunrise
+  (`phaseOfNight`).
+- **Stood in**: once a player steps into a ring's middle (`RING.middle` 2.6 m of its heart, by its
+  flat stone), its moon is theirs to know (core/explored.js `rings`, kept with what they've found):
+  told the first time, the quill heard, and in the journal (*Moon roads*: tonight's moon, and each
+  ring they've stood in with the moon it wakes under and where it is, those woken tonight edged).
+- **By night** (stepping in each time: `inRing`):
+  - **under most moons**, they're carried to the ring bound to tonight's (`moonRoad`: of two, the
+    one they're not in, or the nearer), with the others of their party standing within its stones
+    (`RING.round` 9.5 m) and each one's company (their followers, unless told to wait, and what's
+    at their side), each set down in its middle (and not carried on from there till they step out
+    and in again); told, a burst of moonlight where they come to (world/spellfx.js `moon`);
+  - **under a full moon**, every ring's awake: the world map opens as the moon roads (the travel
+    map's way: app/worldmap.js, main.js), showing the rings they've stood in with their moons; one
+    tapped and agreed to ("Step into the moonlight"), they're carried there with their party in the
+    ring (a `moonroad` command: refused if they're in no ring's middle or haven't stood in that one,
+    or if it isn't a full moon);
+  - **under a new moon**, the rings sleep: told so.
+- **Seen** within 80 m by night while they're awake (world/moongates3d.js `MoonGates`): a pale circle
+  of moonlight on the ground in each one's middle, where to step, and a soft light over it, both
+  breathing slowly, the ring tonight's moon wakes (or every one, under a full moon) the brighter.
+- **The full moon's trial** (`TRIAL`, `trialOf`; host.js `#moonTrials`, `#trialFell`): on each
+  full-moon night one ring (by the night, the same every time) holds Lunara's guardian, the Pale
+  Stag (a hart) or the Silver Wolf (a dire wolf), turn about each full moon: moon-touched, a
+  champion "moon" (dungeons/play.js `CHAMPIONS`: four times as hardy, its blows a quarter again as
+  hard; beasts/champions.js: bigger, pale as moonsilver, its eyes brighter), two tiers above the
+  land there. Woken once a player's within 60 m, by its flat stone, a locked chest by it; let go,
+  the chest with it, at daybreak or once every player's 140 m off. Slain, a share for each player
+  there with a relic of moonsilver in it (progress.js `rollMoonsilver`: a legendary amulet or ring,
+  "Moonsilver Torc of the Silver Lady"), and not woken again that night; one of the mightiest in the
+  bestiary. Told to those near, as it wakes (the wake's chime) and as it falls; and under a full
+  moon the journal says where it is tonight.
+- **Kept** in a snapshot: each player's `inRing`, the trial out (`trials`): `SNAPSHOT_VERSION` 37.
 
 ## Tracking
 
