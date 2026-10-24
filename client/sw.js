@@ -22,7 +22,9 @@
 // catalog.js). What no release in use lists any more is let go of: the newest release's files,
 // and those of each page still open on an older one, are kept, the rest deleted (collect). The
 // catalog's models are let go of too, the least recently used first, when they come to more than
-// the room set aside for them; never the files the game needs to start.
+// the room set aside for them; never the files the game needs to start. The parts of a model the
+// downloader has so far (kept by it, so a download cut off by a reload carries on) are let go of
+// once no release in use lists the model, or it's kept whole.
 //
 // Pages (index.html, which names its release's code by hash: its import map), version.js and
 // whatever else no release keeps by hash are fetched from the network first (so updates show up
@@ -62,7 +64,12 @@ const ASSETS = `${CACHE_PREFIX}assets-v2`;
 // JSON response, so it outlasts the worker: the browser stops it when it's idle)
 const STATE = `${CACHE_PREFIX}state-v2`;
 
-const CACHES = [SHELL, BOOT, ASSETS, STATE];
+// The parts of the catalog's files the downloader has so far (js/app/fetcher.js), each by its
+// file's address and where it starts in it (`&part=`), so a download cut off by a reload carries on
+const PARTS = `${CACHE_PREFIX}parts-v1`;
+const PART = /&part=\d+$/;
+
+const CACHES = [SHELL, BOOT, ASSETS, STATE, PARTS];
 
 // The one cache the game kept everything in before these (by name): its copies are taken on
 const OLD_CACHE = `${CACHE_PREFIX}v1`;
@@ -601,6 +608,19 @@ async function collect() {
 
     known.used = Object.fromEntries(Object.entries(known.used).filter(([url]) => kept.has(url)));
     await saveState();
+
+    // (And the parts of files no release in use lists, or kept whole now: the downloader lets go
+    // of a file's parts once it's all here, but not if the page closed first)
+    const wanted = new Set(names.flatMap((name) => [...known.releases[name].boot, ...known.releases[name].assets]));
+    const parts = await caches.open(PARTS);
+
+    for (const request of await parts.keys()) {
+        const file = request.url.replace(PART, "");
+
+        if (!wanted.has(file) || kept.has(file)) {
+            await parts.delete(request);
+        }
+    }
 }
 
 async function sizeOf(cache, request) {

@@ -702,7 +702,8 @@ client/                 The game (static files served to the browser)
     updater.js          Updates downloaded in the background: a newer release's files the
                         service worker doesn't keep, then started from the title screen
     fetcher.js          The downloader: the catalog's models in the background, a part at a time,
-                        paced to keep out of the way of playing together, checked and kept
+                        paced to keep out of the way of playing together, checked and kept; a
+                        model cut off by a reload carried on from the parts it kept
     session.js          The 3D view and the character kit, and starting games
     creator.js          Making a character; heroes.js has random ones and names
     game.js             Playing: the world, the battle, the characters, taps and the camera
