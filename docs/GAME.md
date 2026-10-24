@@ -774,6 +774,9 @@ as a wagon!"
 - **In the journal** (app/journal.js, *Heard tell*): each as it was said, who said it and where,
   and which way and how far it is from the player now (the middle of its circle: roughly); those
   still to find first, the newest first, then the last five found, faded.
+- **Shown at a shrine**: a god prayed to shows somewhere near the shrine still to be found (docs/
+  WILDS.md *Shrines*), kept as a crier's rumour is, said in the same words but "of the shrine",
+  "Shown at the shrine of" its god; circled on the map as theirs are.
 - **On the world map** (app/game.js `heardCircles`, app/worldmap.js): a faint dashed circle round
   about each still to find, a "?" in its middle, fog or no. 200 m across from its middle to its
   edge (`RUMOURS.radius`), its middle off the place's by 30 to 70% of that, which way by the place's
