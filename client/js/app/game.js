@@ -78,6 +78,7 @@ import { describeLeader } from "../core/war/peoples.js";
 import { CRY, newsCount, newsSince, peopleOf, rumourOfRuler, rumoursAt } from "../core/war/news.js";
 import { bubbleSeconds, CALLING, callOf } from "../core/crying.js";
 import { ALARM, bandOf, BEHEMOTH, BOMBERS, criesOf, INVASION, thanksOf } from "../core/invasions.js";
+import { burntCry, burntIn, burntWords, rebuiltWords, stageOf } from "../core/burnt.js";
 import { createRandom } from "../core/random.js";
 import { cultNear, cultWays, cultWord } from "../core/cultword.js";
 import { circleOf, rumouredBy, rumoursNear, rumourWord, RUMOURS } from "../core/rumours.js";
@@ -819,7 +820,7 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1647,6 +1648,8 @@ export class Game {
             const [x, y] = this.battle.actor(this.me)?.map === "town" ? this.battle.actor(this.me).square : world.spawns.player;
 
             this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth, cliffs: view.quality.cliffs });
+            // (The settlements' houses the Behemoth of the Rift has burnt, as they are now: #syncBurnt)
+            this.chunks.burntOf = (place, index) => this.#burntStage(place, index);
             this.chunks.setSpacing(view.quality.ground);
             view.scene.add(this.chunks.object);
             // (The tall grass over the land round the player, as the chunks there are drawn)
@@ -1690,6 +1693,8 @@ export class Game {
         this.town = await time("town", () => buildTown(world, {
             groundAt: this.groundOf("town") ?? undefined,
             landAt: (x, z) => world.maps?.town?.biomeAt?.(x, z) ?? "meadow",
+            // (Its houses the Behemoth of the Rift has burnt, as they are now: #syncBurnt)
+            burntOf: (index) => this.#burntStage(world.start?.id, index),
             onProgress: (count) => {
                 done = built + count;
                 report(count < world.town.pieces.length ? `Building the town (${count} of ${world.town.pieces.length})` : `Planting trees (${count - world.town.pieces.length} of ${world.trees.length})`);
@@ -3186,6 +3191,7 @@ export class Game {
             this.fortsClock = 0.5;
             this.#syncForts();
             this.#syncStockades();
+            this.#syncBurnt();
 
             const took = performance.now() - started;
 
@@ -6902,6 +6908,9 @@ export class Game {
                     this.#invasionHorn("warHorn", this.#invasionLine(invasion, INVASION.meet));
                 }
 
+                // (The Behemoth's: what it burns as it goes told with it, #burnt)
+                this.fell = behemoth ? event.place : null;
+
                 if (near) {
                     this.hud.message(behemoth ? `${event.name}'s soldiers have fallen. The Behemoth goes back the way it came.` : `${event.name}'s soldiers have fallen. The ${band.many} go back the way they came.`, 4);
                 }
@@ -6939,6 +6948,27 @@ export class Game {
         }
     }
 
+    // Houses burnt by the Behemoth of the Rift as it's turned back from a town, or built again
+    // (core/host.js #burn, #burntOn; core/burnt.js): a player in that town told, with the fall
+    // if that's what it followed, and its crier crying the fire; and its houses drawn as they are
+    // now
+    #burnt(event) {
+        const me = this.battle.actor(this.me);
+        const here = this.progress.invasion.place === event.place || Boolean(event.middle && me?.map === "town" && Math.hypot(me.x - event.middle[0], me.y - event.middle[1]) <= event.edge + INVASION.out + INVASION.away);
+
+        if (event.change === "alight" && here) {
+            const count = event.pieces.length;
+
+            this.hud.message(this.fell === event.place ? `${event.name}'s soldiers have fallen. The Behemoth goes back the way it came. ${burntWords(count)}` : burntCry(count, event.way), 6);
+            this.#invasionCry(event.place, burntCry(count, event.way), { alarm: false });
+        } else if (event.change === "rebuilt" && here) {
+            this.hud.message(rebuiltWords(event.name), 4);
+        }
+
+        this.fell = null;
+        this.#syncBurnt();
+    }
+
     // An invasion's horn (audio/synth.js) blown at a point of the open world's (the battle's
     // metres), `delay` seconds from now, heard as far off as HORNS.far
     #invasionHorn(name, [x, y], delay = 0) {
@@ -6966,7 +6996,7 @@ export class Game {
 
     // A town's crier crying out (an invasion's), if he's out and the player's within his bell's
     // reach (BELL): his words over his head, his bell rung, and his own cries put off a while
-    #invasionCry(place, words) {
+    #invasionCry(place, words, { alarm = true } = {}) {
         const crier = this.battle.actor(`crier:${place}`);
         const me = this.battle.actor(this.me);
         const avatar = crier ? this.avatars.get(crier.id) : null;
@@ -6975,7 +7005,7 @@ export class Game {
             return;
         }
 
-        this.hud.say(crier.id, `${ALARM}\n${words}`, 1 + bubbleSeconds(words));
+        this.hud.say(crier.id, alarm ? `${ALARM}\n${words}` : words, 1 + bubbleSeconds(words));
         this.crierCalls ??= new Map();
         this.crierCalls.set(crier.id, { ...this.crierCalls.get(crier.id), next: this.clock * 1000 + CALLING.every[0] });
 
@@ -7501,7 +7531,7 @@ export class Game {
             facts.forge = interior.forge ? { ...interior.forge, far: far(interior.forge) } : null;
         } else if (overworld?.biomeAt) {
             this.surroundings ??= new Surroundings(overworld);
-            facts = { ...facts, ...this.surroundings.at(me.x, me.z, { height: me.y, lights: this.nearLights ?? [], lit: torchesLit(elapsedOf(this.host.war)) }) };
+            facts = { ...facts, ...this.surroundings.at(me.x, me.z, { height: me.y, lights: this.nearLights ?? [], lit: torchesLit(elapsedOf(this.host.war)), works: this.#works() }) };
 
             // (Whose lands these are, as first claimed, for their music: straight away as the
             // game starts, then once they've been in them LAND_HEARD; in the wild between, it
@@ -10001,6 +10031,69 @@ export class Game {
     // The fortifications standing near the player drawn (world/forts3d.js), each turned with its
     // front (its door, its gate) towards home, away from the enemy it faces, its people's banner
     // by it; those far off, or gone, let go
+    // How far on a house of a place's (by its id and its layout's index) is from being burnt by
+    // the Behemoth of the Rift, as last looked at (#syncBurnt): core/burnt.js stageOf's, or null
+    #burntStage(place, index) {
+        this.burntNow ??= this.#burntPlaces();
+
+        return this.burntNow.get(place)?.get(index) ?? null;
+    }
+
+    // The houses burnt in every place now, and how far on each is: Map(place, Map(index, stage))
+    #burntPlaces() {
+        const now = elapsedOf(this.host.war);
+
+        return new Map([...new Set((this.host.burnt ?? []).map(({ place }) => place))].map((place) => [place, burntIn(this.host.burnt, place, now)]));
+    }
+
+    // The houses the Behemoth of the Rift burnt drawn as they are now (core/burnt.js): where any
+    // has burnt, gone on to its next stage or stands whole again, its place's buildings built
+    // again (the start town's blocks it's in: town3d.js rebuild; a settlement's chunks:
+    // chunks3d.js rebuild)
+    #syncBurnt() {
+        const was = this.burntNow ?? new Map();
+        const now = this.#burntPlaces();
+
+        this.burntNow = now;
+
+        for (const place of new Set([...was.keys(), ...now.keys()])) {
+            const [before, after] = [was.get(place) ?? new Map(), now.get(place) ?? new Map()];
+            const changed = [...new Set([...before.keys(), ...after.keys()])].filter((index) => before.get(index) !== after.get(index));
+
+            if (!changed.length) {
+                continue;
+            }
+
+            if (place === this.world.start?.id) {
+                this.town?.rebuild?.(changed);
+            } else {
+                this.chunks?.rebuild(place);
+            }
+        }
+    }
+
+    // The houses the Behemoth of the Rift burnt being built again now (framed or roofed: core/
+    // burnt.js), [{ x, z }] (their middles, metres): in the start town, or a settlement laid out
+    #works() {
+        const works = [];
+
+        for (const [place, houses] of this.burntNow ?? []) {
+            const start = place === this.world.start?.id;
+            const laid = start ? null : this.world.maps?.town?.settlements?.laid?.get(place);
+            const pieces = start ? this.world.town.pieces : laid?.town.pieces;
+            const origin = start ? this.world.origin ?? 0 : laid?.at;
+            const [ox, oz] = Array.isArray(origin) ? origin : [origin, origin];
+
+            for (const [index, stage] of houses) {
+                if ((stage === "framed" || stage === "roofed") && pieces?.[index]) {
+                    works.push({ x: ox + pieces[index].x, z: oz + pieces[index].y });
+                }
+            }
+        }
+
+        return works;
+    }
+
     #syncForts() {
         const war = this.host?.war;
         const me = this.battle.actor(this.me);
@@ -11201,6 +11294,9 @@ export class Game {
                 break;
             case "invasion":
                 this.#invasion(event);
+                break;
+            case "burnt":
+                this.#burnt(event);
                 break;
             case "townsfolk":
                 // (One of a place's townsfolk in at a door from the Behemoth of the Rift, or out of it
@@ -12618,6 +12714,24 @@ export class Game {
         this.#command({ type: "invade", band }, (result) => {
             if (!result.ok) {
                 this.hud.message("Only in a town or city of the world you've opened, with no invasion on", 2.5);
+            }
+        });
+    }
+
+    /**
+     * Houses near the player burnt as the Behemoth of the Rift burns them, as if the town had
+     * fallen so long ago that they're halfway through `stage` now (core/burnt.js BURNT.stages: to
+     * see each stage of their burning and building again), `count` of them or as many as it burns
+     * unhurt (the debug overlay's): host.js "burn".
+     */
+    burn(stage = "burning", count = null) {
+        const now = elapsedOf(this.host.war);
+        const agos = Array.from({ length: 4 * 60 + 1 }, (_, k) => k * (DAY.length / 60)).filter((ago) => stageOf(now - ago, now) === stage);
+        const ago = stage === "burning" ? 0 : (agos[Math.floor(agos.length / 2)] ?? 0);
+
+        this.#command({ type: "burn", ago, count }, (result) => {
+            if (!result.ok) {
+                this.hud.message("Only in a town or city of the world you've opened, with a house near you not burnt yet", 2.5);
             }
         });
     }

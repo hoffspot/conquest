@@ -27,6 +27,9 @@ const ROUND = 22;
 const MARKET = 60;
 const SMITHY = 80;
 
+// A house the Behemoth burnt being built again (core/burnt.js), heard this far off (metres)
+const WORKS = 60;
+
 // The braziers heard crackling while they're lit: the shrines', and those lit only at night, a
 // hell's camp's (world/lights.js LIGHTS)
 const BRAZIERS = new Set(["brazier", "brazier-night"]);
@@ -46,10 +49,11 @@ export class Surroundings {
     /**
      * What's round (x, z) (metres), for audio/ambience.js ambienceOf (all but the place and the
      * time): `height`, how high the ground is there (metres: as the player stands on it, not
-     * worked out again), `lights`, the lights drawn near ([{ x, z, kind }]: world/lights.js), and
-     * whether the torches and braziers are `lit`.
+     * worked out again), `lights`, the lights drawn near ([{ x, z, kind }]: world/lights.js),
+     * whether the torches and braziers are `lit`, and the houses the Behemoth burnt being built
+     * again (`works`: [{ x, z }], their middles: core/burnt.js).
      */
-    at(x, z, { height = 0, lights = [], lit = false } = {}) {
+    at(x, z, { height = 0, lights = [], lit = false, works = [] } = {}) {
         const land = this.#landAt(x, z);
         const settled = this.#settled(x, z);
         const places = this.#placesNear(x, z);
@@ -63,6 +67,9 @@ export class Surroundings {
             smithy: nearest(places.smithies, x, z, SMITHY),
             fire: nearest(lights.filter(({ kind }) => kind === "fire"), x, z)?.far ?? Infinity,
             brazier: lit ? (nearest(lights.filter(({ kind }) => BRAZIERS.has(kind)), x, z)?.far ?? Infinity) : Infinity,
+            // (A house the Behemoth set burning, its fires; or one being built again)
+            blaze: nearest(lights.filter(({ kind }) => kind === "blaze"), x, z)?.far ?? Infinity,
+            works: nearest(works, x, z, WORKS),
         };
     }
 

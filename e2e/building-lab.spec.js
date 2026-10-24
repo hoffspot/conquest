@@ -31,6 +31,69 @@ test("builds a street of every style of house in a few draw calls, and the town"
     expect(town.address).toBe("?seed=7&show=town");
 });
 
+test("shows a street's houses as the Behemoth of the Rift leaves them, burning, then burnt out, then framed and roofed again, each in a few draw calls; and a village's, drawn in its chunks", async ({ page }) => {
+    test.setTimeout(240000);
+
+    // (What's drawn: the counts, and every part's name: its smoke, its fires, its materials)
+    const seen = () =>
+        page.evaluate(() => {
+            const names = new Set();
+
+            window.buildingLab.state.built.traverse((node) => {
+                names.add(node.name);
+
+                if (node.isMesh) {
+                    [node.material].flat().forEach(({ name }) => names.add(`material ${name}`));
+                }
+            });
+
+            return { stats: window.buildingLab.state.stats, address: location.search, names: [...names] };
+        });
+
+    await page.goto("/building-lab.html?seed=7&show=street");
+    await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
+
+    const whole = await seen();
+    const stages = {};
+
+    expect(whole.names).toContain("chimney smoke");
+    expect(whole.names).not.toContain("blaze smoke");
+
+    for (const stage of ["burning", "burnt", "framed", "roofed"]) {
+        await page.locator("#burnt").selectOption(stage);
+        await page.waitForFunction((asked) => window.buildingLab.state.ready && location.search.endsWith(`&burnt=${asked}`), stage, { timeout: 120000 });
+        stages[stage] = await seen();
+        expect(stages[stage].stats.pieces, stage).toBe(20);
+        expect(stages[stage].stats.calls, stage).toBeLessThan(30);
+    }
+
+    // Burning: its roof fallen in (fewer triangles, though its beams and ash are added), great
+    // fires in it, their dark smoke rising; its hearths out
+    expect(stages.burning.stats.triangles).toBeLessThan(whole.stats.triangles);
+    expect(stages.burning.names).toEqual(expect.arrayContaining(["blaze smoke", "lights"]));
+    expect(stages.burning.names).not.toContain("chimney smoke");
+    // Burnt the next day: smouldering, its fires out
+    expect(stages.burnt.names).toContain("chimney smoke");
+    expect(stages.burnt.names).not.toContain("blaze smoke");
+    // Framed: new timbers and scaffolding (more triangles than it stood with); its hearths out
+    expect(stages.framed.stats.triangles).toBeGreaterThan(whole.stats.triangles);
+    expect(stages.framed.names).not.toContain("chimney smoke");
+    // Roofed: the scaffolding still up, its hearths not yet lit
+    expect(stages.roofed.stats.triangles).toBeGreaterThan(whole.stats.triangles);
+    expect(stages.roofed.names).not.toContain("chimney smoke");
+    expect(stages.roofed.address).toBe("?seed=7&show=street&burnt=roofed");
+
+    // A village's out in the world, drawn in its chunks as the game draws them
+    await page.goto("/building-lab.html?seed=21&show=village&burnt=burning");
+    await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
+
+    const village = await seen();
+
+    expect(village.stats.pieces).toBeGreaterThan(10);
+    expect(village.names).toContain("blaze smoke");
+    expect(village.stats.calls).toBeLessThan(120);
+});
+
 test("builds the taverns with their names and signs, the guild, the churches of every grade, the smithy, a town hall, a keep, barracks and a guardhouse, and the shops", async ({ page }) => {
     await page.goto("/building-lab.html?seed=7&show=landmarks");
     await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });

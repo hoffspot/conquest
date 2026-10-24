@@ -2518,6 +2518,35 @@ otherwise still does).
   brave soul who stood for it!"); with all but 5% of the town's soldiers fallen (`last`), it goes
   back the way it came, the town not held, 60 m further than it came (`away`), and is let go of;
   and 15 minutes after it came (`lasts`), back it goes.
+- **Burnt houses** (core/burnt.js; host.js `#burn`, `#burntOn`): turned back from a town it
+  hasn't been slain before, its breath sets the houses nearest where it stood alight as it goes
+  ("Marleyworth's soldiers have fallen. The Behemoth goes back the way it came. Its breath sets
+  four houses alight as it goes."; the crier: "Fire by the north road! Four houses burning! Every
+  hand to the buckets!").
+  - **How many**: 2 with it all but slain, 6 with it unhurt, and between by how much of its hit
+    points it had left (`burntCount`: `least`, `most`).
+  - **Which**: the town's houses nearest where it stood (no further out than it comes, 10 m beyond
+    the edge), within 60 m of it (`housesToBurn`, `within`): those along its streets and the
+    back buildings behind them. Never what can be gone into: the tavern, the guild, the church,
+    the smithy, the hall, the barracks and the shops (landmarks), so nothing a player goes to is
+    lost. Nor one burning already, if it falls again before they're built.
+  - **Built again over three days**, by the world's clock (a day an hour of play: core/
+    daytime.js; `stagesOf`):
+    - **burning** till the sun's up, at least 4 minutes of play (`burns`): its roof fallen in,
+      its walls broken off and blackened, great fires in it, their dark smoke rising (GAME.md
+      *The town*), its crackle heard further off than a camp fire's;
+    - **burnt** the next day: a blackened shell, smouldering;
+    - **framed** the day after: its walls mended, new timbers up for its roof, scaffolding round
+      it, the carpenters' hammers heard by day;
+    - **roofed** the third day till sunset: roofed again, the scaffolding still up;
+    - then **whole**, and let go of ("The houses the Behemoth burnt in Marleyworth stand whole
+      again.", to a player in the town).
+  - No one's home or trade is at a burnt house till then, so its townsfolk don't go to its door,
+    nor shelter at it (GAME.md *Townsfolk*).
+  - **Called up** (debug): the debug overlay's **Burnt houses** burns the six houses nearest the
+    player in the town they're in (as many as it burns unhurt), back-dated so they're halfway
+    through the stage chosen (the host's `burn` command: `count`, 1 to 10, and `ago`, up to four
+    days).
 - **Thanks** (`#wounded`, `behemothReward`, `BEHEMOTH_REWARD`): every blow struck at it by a
   player or theirs (their followers, the creatures they've called or raised) is counted for them,
   and once it's over they're thanked for the share of its hit points they dealt it: 900 gold for
@@ -2537,7 +2566,12 @@ otherwise still does).
   are down. `test/kaiju.test.js`: never after anyone in the town. `test/siege.test.js`: the
   engines' weapons, the catapult's pot bursting as it lands and setting alight, the ballista's
   bolt, what doesn't take to them, and their crews. `e2e/pellagos.spec.js`: the engines drawn
-  from their models, rolled, letting fly and wrecked.
+  from their models, rolled, letting fly and wrecked. `test/burnt.test.js`: how many houses
+  burn and which, each stage's end, kept with the world and let go of once whole, none to them
+  on the townsfolk's rounds, each stage drawn, and heard. `e2e/pellagos.spec.js`: houses burnt
+  in the start town drawn burning, told and heard, then each stage drawn as the clock goes on,
+  and whole again, told; `e2e/building-lab.spec.js`: a street's at each stage, and a village's
+  in its chunks.
 
 **Called up** (debug): the debug overlay's **Invasion** brings one to the town the player's in now
 (the host's `invade` command), as one due would come; its band's list has the Behemoth of the Rift
@@ -2552,9 +2586,12 @@ player's device can draw is in the host's snapshot too (each player's `budget`; 
 changed what two games share again (`NET_VERSION` 147), and so did the band named in the thanks
 (148), the Behemoth of the Rift (149), each people's own bombs (150), the rift's own creatures
 in the Tower of Sar Mordal (151), the town's siege engines (152), the townsfolk sheltering from
-the Behemoth (153), an invasion's reinforcements (154), and its lines' charge (171). When its
-lines charged is kept with it (`charged`), and whether each line's charging with the battle's
-lines (`charge`): `SNAPSHOT_VERSION` 38, neither in a world kept before.
+the Behemoth (153), an invasion's reinforcements (154), its lines' charge (171), and the houses
+the Behemoth burns (174). When its lines charged is kept with it (`charged`), and whether each
+line's charging with the battle's lines (`charge`): `SNAPSHOT_VERSION` 38, neither in a world kept
+before. The houses the Behemoth's burnt, till they're whole again, are in the host's snapshot
+(`burnt`: each town's, its layout's pieces, and when it fell): `SNAPSHOT_VERSION` 39, none in a
+world kept before.
 
 ### Playing together (M11)
 

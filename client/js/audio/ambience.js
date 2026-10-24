@@ -32,7 +32,7 @@ const BARE = new Set(["sea", "snow", "tundra", "mountain", "volcanic"]);
 const FEW_BIRDS = { savannah: 0.5, badlands: 0.35, volcanic: 0.15, beach: 0.5, heath: 0.7, marsh: 0.7 };
 
 // How far off each bed's heard (metres: loudest at hand, nothing beyond)
-const REACH = { stream: 35, river: 60, falls: 90, sea: 120, lake: 45, frogs: 60, market: 45, fire: 16, brazier: 10, hearth: 14, smithy: 70, gulls: 150, heart: 40, forge: 60 };
+const REACH = { stream: 35, river: 60, falls: 90, sea: 120, lake: 45, frogs: 60, market: 45, fire: 16, blaze: 32, brazier: 10, hearth: 14, smithy: 70, works: 55, gulls: 150, heart: 40, forge: 60 };
 
 /**
  * The Halls of Bone's heart (`heart`): how loud it's heard anywhere in them, however far off (a
@@ -167,7 +167,7 @@ function indoors({ place, hearth = Infinity, heart = Infinity, forge = null }) {
     return { beds: heard, rates: { ...rates }, calls: called, wants: [...wants, doorOf(place)].filter(Boolean), murmur };
 }
 
-function outdoors({ land = "meadow", high = false, water = {}, settled = 0, market = Infinity, fire = Infinity, brazier = Infinity, smithy = null, time = DAY.day }) {
+function outdoors({ land = "meadow", high = false, water = {}, settled = 0, market = Infinity, fire = Infinity, blaze = Infinity, brazier = Infinity, smithy = null, works = null, time = DAY.day }) {
     const light = daylight(time);
     const dark = 1 - light;
     const town = Math.max(0, Math.min(1, settled));
@@ -193,10 +193,11 @@ function outdoors({ land = "meadow", high = false, water = {}, settled = 0, mark
     bed("nightLoop", BARE.has(land) || high ? 0 : 0.8 * dark * (1 - 0.6 * town));
     bed("frogsLoop", 0.8 * dark * Math.max(land === "marsh" ? 1 : 0, near(far("lake"), REACH.frogs)));
 
-    // A town's bustle (quieter at night), its market's by day; a fire's crackle close by
+    // A town's bustle (quieter at night), its market's by day; a fire's crackle close by, and a
+    // burning house's, louder and further
     bed("townLoop", 0.8 * town * (0.35 + 0.65 * light));
     bed("marketLoop", 0.9 * light * near(market, REACH.market));
-    bed("campfireLoop", 0.8 * near(fire, REACH.fire));
+    bed("campfireLoop", Math.max(0.8 * near(fire, REACH.fire), 1.3 * near(blaze, REACH.blaze)));
     bed("brazierLoop", 0.6 * near(brazier, REACH.brazier));
 
     // Birds: by day, the dawn's chorus at first light, crows over open land, gulls by the sea, an
@@ -219,8 +220,12 @@ function outdoors({ land = "meadow", high = false, water = {}, settled = 0, mark
     call("cowMoo", FARMED.has(land) && light > 0.25 ? 1 : 0, { often: 1 - 0.8 * town });
     call("sheepBleat", FARMED.has(land) && light > 0.25 ? 1 : 0, { often: 1 - 0.8 * town });
 
-    // The smith's hammer from the smithy, by day
-    call("distantHammer", smithy && light > 0.25 ? near(smithy.far, REACH.smithy) ** 0.5 : 0, { at: smithy });
+    // The smith's hammer from the smithy, by day; or the carpenters' from a burnt house being
+    // built again, whichever's nearer
+    const smith = smithy && light > 0.25 ? near(smithy.far, REACH.smithy) ** 0.5 : 0;
+    const building = works && light > 0.25 ? near(works.far, REACH.works) ** 0.5 : 0;
+
+    call("distantHammer", Math.max(smith, building), { at: building > smith ? works : smithy });
 
     // (And downloaded now: the leaves in the trees; in a town, its doors and its church's bell)
     return { beds, rates: {}, calls, wants: ["leaves", ...(town > 0 ? ["door", "churchBell"] : [])], murmur: null };
