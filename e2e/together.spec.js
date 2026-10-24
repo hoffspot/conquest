@@ -297,6 +297,72 @@ test("a visitor to a world on the host's device is remembered there by their own
     await guestContext.close();
 });
 
+test("the same character coming into a world on another device takes theirs over where they stand: the first device told it's let go and back at the title, the second told it carries on", async ({ ownBrowser: browser }) => {
+    const contexts = await Promise.all([browser.newContext(), browser.newContext(), browser.newContext()]);
+    const [host, first, second] = await Promise.all(contexts.map((context) => context.newPage()));
+    // (The same character on both devices: the same id of its own)
+    const syl = { ...ELF, hero: { ...ELF.hero, guid: "6b8f2c1d-4e3a-4b5c-8d7e-9f0a1b2c3d4e" } };
+
+    await cheaply(host, first, second);
+
+    for (const page of [host, first, second]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await first.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), syl);
+    await second.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), syl);
+    await host.goto("/?play&seed=2");
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+
+    // Syl comes in on the first, and walks a little way
+    await first.goto(`/?join=${code}`);
+    await first.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(first);
+
+    const guests = () => host.evaluate(() => [...window.pellagos.game.host.players.keys()].filter((id) => id !== "player"));
+
+    await expect.poll(guests, { timeout: 30000 }).toHaveLength(1);
+
+    const [id] = await guests();
+    const onward = await first.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const to = [me.square[0], me.square[1] + 3];
+
+        game.remote.command({ type: "move", to });
+
+        return to;
+    });
+
+    await expect.poll(() => host.evaluate((id) => window.pellagos.game.battle.actor(id).square, id), { timeout: 60000 }).toEqual(onward);
+
+    // On the second: Syl taken over, where they stand; the first told, back at the title
+    await second.goto(`/?join=${code}`);
+    await second.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(second);
+    await expect(second.locator("#banner")).toContainText("Your other session in this world was closed: you carry on here.", { timeout: 30000 });
+    await expect(first.locator("#titlenote")).toHaveText("You went into this world on another device, so this one has let go.", { timeout: 30000 });
+    expect(await first.evaluate(() => window.pellagos.playing)).toBe(false);
+    expect(await guests()).toEqual([id]);
+    expect(await second.evaluate(() => window.pellagos.game.me)).toBe(id);
+    expect(await host.evaluate((id) => window.pellagos.game.battle.actor(id).square, id)).toEqual(onward);
+    expect(await second.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).square)).toEqual(onward);
+
+    await Promise.all(contexts.map((context) => context.close()));
+});
+
 // A human who joins by the host's own town, carrying two wolf pelts
 const BRYN = {
     version: 1,

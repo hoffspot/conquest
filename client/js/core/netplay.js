@@ -51,7 +51,9 @@
 //                    { kind: "again" }                         (gone astray: the world again)
 //                    { kind: "ping", t }                       (t: the joiner's clock, ms)
 //                    { kind: "chat", text }                    (a line to their party)
-//   host -> joiner   { kind: "welcome", version, id, seed, race, snapshot }
+//   host -> joiner   { kind: "welcome", version, id, seed, race, snapshot, took }
+//                                                    (took: their character was in the world
+//                                                    already, on another link: theirs now)
 //                    { kind: "ops", step, ops }                (what's been done, in order, up to step)
 //                    { kind: "motion", step, units }           (base64: core/motion.js)
 //                    { kind: "pong", t, step }
@@ -60,7 +62,9 @@
 //                    { kind: "refused", reason }
 //                    { kind: "chat", from, name, text }        (a line said in their party)
 //                    { kind: "unsaid", reason }                (one of theirs not said: CHAT_REFUSED)
-//                    { kind: "kicked", reason }                (sent out of the world: "afk", away too long)
+//                    { kind: "kicked", reason }                (sent out of the world: "afk", away too long;
+//                                                    "elsewhere", their character taken over on
+//                                                    another link: Hosting #takeOver)
 //
 // Pure: no DOM, no network. Hosting and Joining are given how to send, and told what's heard.
 
@@ -73,7 +77,7 @@ import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 171;
+export const NET_VERSION = 172;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -148,6 +152,7 @@ export function versionShort(other) {
 /** Why a player was sent out of a world (Hosting.kick), as they're told it. */
 export const NET_KICKS = Object.freeze({
     afk: "Disconnected for being away.",
+    elsewhere: "You went into this world on another device, so this one has let go.",
 });
 
 /**
@@ -256,7 +261,7 @@ export class Hosting {
         this.onJoin = () => {};
         this.onLeave = () => {};
 
-        /** Told when one's sent out (peer), once they've been told why: to close their link. */
+        /** Told when one's sent out (peer, and why: "afk", "elsewhere"), once they've been told why: to close their link. */
         this.onKick = () => {};
 
         /** The most players in the world at once (on the world server: its owner's setting). */
@@ -267,6 +272,15 @@ export class Hosting {
          * otherwise (the world server: the player its tickets know, and which of their heroes).
          */
         this.idOf = () => `guest-${this.nextGuest++}`;
+
+        /**
+         * Whether one joining is known by the character they bring (a player's own world, each who
+         * joins a new guest), the same character coming in again on another link taking theirs
+         * over (#takeOver); or not (the world server's, false: known by the player its tickets
+         * know, idOf, theirs taken over only under the same id: never another player's by a copy
+         * of their character).
+         */
+        this.byCharacter = true;
 
         /**
          * The character each who joins brings into the world (peer, and the character they sent:
@@ -483,12 +497,6 @@ export class Hosting {
             return;
         }
 
-        if (this.host.players.size >= this.most) {
-            refuse("full");
-
-            return;
-        }
-
         // (Or refused saying why, if it can say: a world server's, a character copied in already)
         const brought = this.characterOf(peer, character);
 
@@ -498,13 +506,28 @@ export class Hosting {
             return;
         }
 
-        const id = this.idOf(peer);
+        // (The same character in the world already, through another link: another device, or one
+        // gone dead without a word, its place still kept: taken over, as they stand. The same
+        // player with another, where a player plays one at a time: that one goes, kept as it goes,
+        // and this one comes)
+        const same = this.#playing(peer, brought);
 
-        if (this.host.players.has(id)) {
-            refuse("here");
+        if (same) {
+            this.#takeOver(peer, same);
 
             return;
         }
+
+        const id = this.idOf(peer);
+
+        if (this.host.players.has(id)) {
+            this.#sendOff(id, "elsewhere");
+        } else if (this.host.players.size >= this.most) {
+            refuse("full");
+
+            return;
+        }
+
         const { world } = this.host;
 
         // (What's been done so far, to those already in; then their coming)
@@ -519,6 +542,69 @@ export class Hosting {
         }
 
         this.onJoin(id, peer);
+    }
+
+    // The player in the world already whose link one joining (`peer`, with the character they
+    // bring, `brought`: made safe, characterFrom) is to take over: where each who joins is known by
+    // their character (byCharacter: a player's own world), whichever of those joined plays the same
+    // one, by its own id (core/guid.js); else (the world server's) the one under the id they'd play
+    // as (idOf: the player's, or their hero's), unless it's plainly another character (both with
+    // their own ids, and those differ). Never the host's own player. Or null
+    #playing(peer, brought) {
+        const guid = brought.hero?.guid;
+        const theirs = (player) => this.host.players.get(player)?.hero?.guid;
+
+        if (this.byCharacter) {
+            return isGuid(guid) ? ([...this.players.values()].find((player) => player !== HOST_PLAYER && theirs(player) === guid) ?? null) : null;
+        }
+
+        const id = this.idOf(peer);
+
+        return id !== HOST_PLAYER && this.host.players.has(id) && !(isGuid(guid) && isGuid(theirs(id)) && theirs(id) !== guid) ? id : null;
+    }
+
+    // One joining taking over their character in the world (`id`), from the link they were on
+    // (`peer`'s now): that one told why ("elsewhere") and let go of, its link closed by whoever runs
+    // it (onKick), its character left as it stands, not gone and come again; and this one sent the
+    // world as it is, told it took them over
+    #takeOver(peer, id) {
+        const old = [...this.players].find(([, player]) => player === id)?.[0];
+        const { world } = this.host;
+
+        this.flush();
+
+        if (old !== undefined) {
+            this.#send(old, "kicked", encode({ kind: "kicked", reason: "elsewhere" }));
+            this.players.delete(old);
+            this.onKick(old, "elsewhere");
+        }
+
+        this.players.set(peer, id);
+        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot(), took: true }));
+
+        if (this.paused) {
+            this.#send(peer, "paused", encode({ kind: "paused", paused: true }));
+        }
+
+        this.onJoin(id, peer);
+    }
+
+    // One in the world sent out for another of the same player's coming in (`reason`): told why,
+    // gone as one who leaves is (kept as they go), their link closed by whoever runs it
+    #sendOff(id, reason) {
+        const peer = [...this.players].find(([, player]) => player === id)?.[0];
+
+        this.flush();
+
+        if (peer === undefined) {
+            this.#left(id);
+
+            return;
+        }
+
+        this.#send(peer, "kicked", encode({ kind: "kicked", reason }));
+        this.gone(peer);
+        this.onKick(peer, reason);
     }
 
     // A joined player's command, done as the host's own are
@@ -609,7 +695,7 @@ export class Hosting {
         this.flush();
         this.#send(peer, "kicked", encode({ kind: "kicked", reason }));
         this.gone(peer);
-        this.onKick(peer);
+        this.onKick(peer, reason);
 
         return true;
     }
@@ -626,6 +712,12 @@ export class Hosting {
         }
 
         this.players.delete(peer);
+        this.#left(id, peer);
+    }
+
+    // A player out of the world (`id`, and the link they were on, if any): whoever runs it told,
+    // with their character as it's to be kept, where they were and as they were
+    #left(id, peer) {
         this.said.delete(id);
 
         const place = this.host.placeOf(id);
@@ -669,6 +761,9 @@ export class Joining {
         /** Its copy of the world (a Host, as the host's was), once it's made; its player's id in it. */
         this.host = null;
         this.me = null;
+
+        /** Whether its character was in the world already when it came, on another link, and it took them over (Hosting #takeOver). */
+        this.took = false;
 
         /** What's been done in the host's world, not yet done in this copy. */
         this.queue = [];
@@ -758,6 +853,8 @@ export class Joining {
         switch (message?.kind) {
             case "welcome":
                 this.me = message.id;
+                // (Their character was in the world already, on another link: taken over, as it stood)
+                this.took = message.took === true;
                 this.queue = [];
                 this.#waiting = 0;
                 this.#last = null;

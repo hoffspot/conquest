@@ -11,10 +11,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
+import { newGuid } from "../client/js/core/guid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
 import { MOTION } from "../client/js/core/motion.js";
-import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, MOST_PLAYERS, NET_VERSION, PACE, PLAYOUT, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
+import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
@@ -290,6 +291,96 @@ describe("playing together (netplay.js)", () => {
         hosting.stop();
         assert.deepEqual([...host.players.keys()], [HOST_PLAYER]);
         assert.equal(host.recorder, null);
+    });
+
+    it("has the same character coming in on another link take theirs over as it stands: the old link told why and let go of, the new one sent the world and told; no one else's, nor the host's", () => {
+        const { host, hosting, join, play, catchUp } = opened();
+        const ada = { ...guest("Bryn"), hero: { ...guest("Bryn").hero, guid: newGuid() } };
+        const kicks = [];
+        const left = [];
+
+        hosting.onKick = (peer, reason) => kicks.push({ peer, reason });
+        hosting.onLeave = (id) => left.push(id);
+
+        const first = join(ada);
+        const told = [];
+
+        first.joining.onKicked = (reason) => told.push(reason);
+        play(5);
+
+        // (Hurt, and somewhere of their own, on the first link)
+        Object.assign(host.battle.actor("guest-1"), { hp: 7 });
+
+        const where = (id) => ({ hp: host.battle.actor(id).hp, square: [...host.battle.actor(id).square] });
+        const before = where("guest-1");
+        const second = join(ada);
+
+        catchUp(first.joining);
+
+        // (Taken over: the second link plays them, as they stood; the first told why, its link closed)
+        assert.deepEqual([...hosting.players], [[second.peer, "guest-1"]]);
+        assert.deepEqual(told, ["elsewhere"]);
+        assert.equal(NET_KICKS.elsewhere, "You went into this world on another device, so this one has let go.");
+        assert.deepEqual(kicks, [{ peer: first.peer, reason: "elsewhere" }]);
+        assert.deepEqual(left, [], "not gone and come again");
+        assert.deepEqual(where("guest-1"), before);
+        assert.equal(second.joining.me, "guest-1");
+        assert.equal(second.joining.took, true, "told it took them over");
+        assert.equal(second.joining.host.checksum(), host.checksum());
+
+        // (Another character, or one with no id of its own, comes in as a new guest; nor is the
+        // host's own player ever taken over)
+        const bryn = join({ ...guest("Bryn"), hero: { ...guest("Bryn").hero, guid: newGuid() } });
+        const plain = join(guest("Cai"));
+        const host_ = join({ ...guest("Ada"), hero: { ...guest("Ada").hero, guid: host.players.get(HOST_PLAYER).hero.guid ?? newGuid() } });
+
+        assert.deepEqual([bryn, plain, host_].map(({ peer }) => hosting.players.get(peer)), ["guest-2", "guest-3", "guest-4"]);
+        assert.equal(kicks.length, 1);
+    });
+
+    it("has a player who plays one character at a time (a world server's, under their own id) take theirs over coming in again; coming in with another, the one in the world goes, kept as it goes; another player with a copy of theirs never takes it", () => {
+        const { host, hosting, join, play } = opened();
+        const kicks = [];
+        const left = [];
+        const as = (name) => ({ ...guest(name), hero: { ...guest(name).hero, guid: newGuid() } });
+        const ada = as("Ada");
+
+        hosting.idOf = () => "player-a";
+        hosting.byCharacter = false;
+        hosting.onKick = (peer, reason) => kicks.push({ peer, reason });
+        hosting.onLeave = (id, peer, character) => left.push({ id, peer, name: character.hero.name });
+
+        const first = join(ada);
+
+        play(3);
+
+        const second = join(ada);
+
+        assert.deepEqual([...hosting.players], [[second.peer, "player-a"]]);
+        assert.deepEqual(kicks, [{ peer: first.peer, reason: "elsewhere" }]);
+        assert.deepEqual(left, []);
+
+        // (Another of theirs: the one in the world sent off, kept as it goes; this one in)
+        const third = join(as("Bryn"));
+
+        assert.deepEqual([...hosting.players], [[third.peer, "player-a"]]);
+        assert.deepEqual(kicks.at(-1), { peer: second.peer, reason: "elsewhere" });
+        assert.deepEqual(left, [{ id: "player-a", peer: second.peer, name: "Ada" }]);
+        assert.equal(host.players.get("player-a").hero.name, "Bryn");
+        assert.equal(third.joining.took, false);
+
+        // (Another player, with a copy of that character, their own id: in beside them, not taking theirs)
+        const copied = { ...guest("Bryn"), hero: { ...guest("Bryn").hero, guid: host.players.get("player-a").hero.guid } };
+
+        hosting.idOf = () => "player-b";
+
+        const fourth = join(copied);
+
+        assert.deepEqual([...hosting.players], [
+            [third.peer, "player-a"],
+            [fourth.peer, "player-b"],
+        ]);
+        assert.equal(fourth.joining.took, false);
     });
 
     it("sets right a copy gone astray: at the next check it asks for the world again, and carries on from it", () => {

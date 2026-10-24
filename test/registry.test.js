@@ -148,8 +148,15 @@ describe("a world in a thread of its own (server/world-worker.js, world-thread.j
         assert.deepEqual([actor.x, actor.y], [kept.place.x, kept.place.y], "where they left");
         assert.equal(actor.hp, kept.vitals.hp ?? actor.maxHp);
 
-        // (In twice as the same hero: refused)
-        assert.equal((await play(world, "p4", { hero: 1 })).refused, "here");
+        // (In twice as the same hero, on another device: that one takes the hero over where they
+        // stand, the first sent out, told why: core/netplay.js Hosting #takeOver)
+        const again = await play(world, "p4", { hero: 1 });
+
+        assert.equal(again.refused, null);
+        assert.equal(again.welcome.id, "ADA0000001.1");
+        assert.equal(again.welcome.took, true);
+        await until(() => back.kicked, "the first sent out");
+        assert.equal(back.kicked, "elsewhere");
 
         // The server going down with them in it: their hero kept from the world's last save when it's next opened
         await world.save("turn");

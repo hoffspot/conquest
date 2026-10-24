@@ -94,6 +94,13 @@ from then on (`access.json`: `identity`, `playerName`):
 - **In another world** they're a player of that world's, known by the same identity.
 - The Players tab names them by the name they go by, and shows their player id.
 
+**Coming in again while they're in** (on another device, or after a crash): their hero in the world
+is theirs to take over where it stands (docs/WAR.md *Coming in again on another device*); the
+other device is sent out (`closed elsewhere`). A link that drops without saying it's leaving (or
+goes silent for a minute: server/play.js `PLAY_LIMITS.timeout`) keeps its place for five minutes
+(`grace`), to come back to on a new link; not back by then, its place is let go of and its player
+is out of the world, their hero kept as on any exit.
+
 Their **code** is their secret key written out (nine groups of six letters and digits, the last
 two catching a mistyped one), to carry them to another device: the game's **You** panel shows it,
 copies it, saves it as a file, or shows it as a code to scan, and takes one from another device.

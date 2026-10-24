@@ -2507,6 +2507,12 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
         joining.ready();
     }
 
+    // (Their character was in the world already, on another device or on a link gone dead without
+    // a word: theirs here now, as it stood: core/netplay.js Hosting #takeOver)
+    if (welcome.took) {
+        state.hud.message("Your other session in this world was closed: you carry on here.", 5);
+    }
+
     // (Nothing downloaded till the steps it keeps in hand have settled, 5 s at least, and 30 s at
     // most: a game that can't keep up with the host may never settle)
     fetcher.hold("joining", { for: 5000, until: () => !game.remote || Math.abs(game.remote.held - game.remote.delay) < 1, most: 30000 });

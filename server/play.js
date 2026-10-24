@@ -10,12 +10,16 @@
 //                    "data\n..."                 to the world (core/netplay.js: hello, command...)
 //                    "ping"                      still there?  -> "pong"
 //   server -> game   "data\n..."                 from the world (welcome, ops, state, paused...)
-//                    "closed REASON"             out, and why: kicked, afk, banned, key-revoked,
+//                    "closed REASON"             out, and why: kicked, afk, elsewhere (their character
+//                                                taken over on another device), banned, key-revoked,
 //                                                world-deleted, server-stopping, or a refusal
 //
 // A socket that hasn't entered a world within PLAY_LIMITS.enterWithin is closed. One whose link
-// drops (without saying it's leaving) keeps its place for PLAY_LIMITS.grace, its player not present
-// meanwhile (world-worker.js), and can take it back with the token it was given.
+// drops (without saying it's leaving, or found dead: silent for PLAY_LIMITS.timeout) keeps its place
+// for PLAY_LIMITS.grace, five minutes, its player not present meanwhile (world-worker.js), and can
+// take it back with the token it was given; not back by then, it's let go of, its player out of the
+// world. Their player coming in again meanwhile, on another device or after a crash, takes their
+// character over (core/netplay.js Hosting #takeOver): the place kept for the old link let go.
 
 import { createHash } from "node:crypto";
 import { connectionOf, guard, Refusal, urlOf } from "./guards.js";
@@ -33,7 +37,7 @@ export const PLAY_PROTOCOL = "pellagos.play.1";
  * dropped link's place is kept, and how often each's asked whether it's still there (and let go
  * if it doesn't answer for `timeout`); all ms but `message` and `backlog`.
  */
-export const PLAY_LIMITS = Object.freeze({ message: 64 * 1024, backlog: 8 * 1024 * 1024, enterWithin: 10000, grace: 30000, ping: 20000, timeout: 60000 });
+export const PLAY_LIMITS = Object.freeze({ message: 64 * 1024, backlog: 8 * 1024 * 1024, enterWithin: 10000, grace: 300000, ping: 20000, timeout: 60000 });
 
 // The WebSocket handshake's magic (RFC 6455 section 1.3)
 const MAGIC = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";

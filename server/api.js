@@ -216,14 +216,19 @@ export function apiHandler(server, { mac = false } = {}) {
         }
 
         const { state } = registry.lifeOf(world);
+        // (Their own in it now, on another device or a link gone dead, theirs to take over: not counted)
+        const others = state?.players.filter((one) => one.id && one.player !== principal.player?.id) ?? [];
 
-        if ((state?.players.filter((one) => one.id).length ?? 0) >= meta.settings.mostPlayers) {
+        if (others.length >= meta.settings.mostPlayers) {
             throw refuse("full", { message: "That world's full." });
         }
 
         const entered = await access.enter(principal);
-        // (Theirs kept there: each, whether it's a copy, and of which of theirs, by its own id)
-        const heroes = meta.heroes === "kept" ? (await server.worlds.get(world).heroes.list(entered.player)).map(({ slot, name, race, origin }) => ({ slot, name, race, origin })) : [];
+        // (Theirs kept there: each, whether it's a copy, and of which of theirs, by its own id; and any
+        // in the world now, not yet kept, on another device or a link gone dead, to take over)
+        const keptHeroes = meta.heroes === "kept" ? (await server.worlds.get(world).heroes.list(entered.player)).map(({ slot, name, race, origin }) => ({ slot, name, race, origin })) : [];
+        const inPlay = meta.heroes === "kept" ? (state?.players ?? []).filter((one) => one.id && one.player === entered.player && Number.isInteger(one.slot) && !keptHeroes.some(({ slot }) => slot === one.slot)) : [];
+        const heroes = [...keptHeroes, ...inPlay.map(({ slot, name, race }) => ({ slot, name, race, origin: null }))].sort((a, b) => a.slot - b.slot);
         const { life, position } = registry.lifeOf(world);
 
         return { ...entered, world, card: cardOf(world), heroes, life, position, play: { path: PLAY_PATH, protocol: PLAY_PROTOCOL } };

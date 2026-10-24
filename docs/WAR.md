@@ -2623,6 +2623,24 @@ world. Each player's last command is kept in the world (its snapshot), so every 
 at the same step; the host sends them out (`Hosting.kick`, from core/runner.js), and their going
 is recorded as any going is. (`SNAPSHOT_VERSION` 27; `NET_VERSION` 112.)
 
+**Coming in again on another device** (core/netplay.js `Hosting` `#takeOver`). One whose character
+is in the world already, on another device, or on a link gone dead without a word (a crash, a
+phone gone from its network) whose place is still kept, takes it over as it stands, at once: the
+new link plays them from there, told "Your other session in this world was closed: you carry on
+here."; the old one's sent out, told "You went into this world on another device, so this one has
+let go." (`NET_KICKS` `elsewhere`), back to the title, its link closed. The character isn't gone
+and come again: nothing about them is kept or changed for it. Which is the same character:
+- **in a world a browser hosts** (each who joins a new guest: `byCharacter`), the same character
+  by its own id (core/guid.js); one with none never takes another over, nor does anyone the host's
+  own player;
+- **on a world server** (`byCharacter` false), the same player (their ticket's, their identity's)
+  under the same id: their hero, by its slot, in a world that keeps heroes (`/enter` lists theirs
+  in the world now, not yet kept, to choose); themselves, in one they visit with their own. Never
+  another player's, by a copy of their character. The same player coming with another character
+  where they play one at a time: the one in the world goes, kept as it goes, and this one comes.
+A player in the world isn't counted against its room for one taking theirs over (`full`).
+(`NET_VERSION` 172.)
+
 **Worlds with no host player** (core/host.js `RULES`; generated/world_server_plan.md §3.2). A
 world keeps its rules with it, so every copy plays by them. A world a browser hosts has today's:
 its host's player passes the time by sleeping, and may call up a field battle (debug). A world a

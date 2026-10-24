@@ -107,6 +107,9 @@ const peers = new Map();
 let keeping = Promise.resolve();
 
 hosting.most = settings.mostPlayers;
+// (Each known by the player their ticket proves, theirs taken over only under the same id: never
+// another player's by a copy of their character)
+hosting.byCharacter = false;
 hosting.roleOf = (peer) => peers.get(peer)?.role ?? "player";
 hosting.idOf = (peer) => {
     const one = peers.get(peer);
@@ -122,9 +125,11 @@ hosting.onAway = (peer, hidden) => {
     peers.get(peer).hidden = hidden;
     look();
 };
-hosting.onKick = (peer) => {
+// (One sent out, told why: away too long, "afk"; or their character taken over on another device,
+// "elsewhere", left in the world as it stands: core/netplay.js Hosting #takeOver)
+hosting.onKick = (peer, reason = "afk") => {
     peers.delete(peer);
-    post({ type: "close", peer, reason: "afk" });
+    post({ type: "close", peer, reason });
     look();
 };
 hosting.onLeave = (id, peer, character) => {
@@ -180,6 +185,16 @@ async function characterFor(one, { character, hero = "new" }) {
         one.slot = hero;
 
         return forward(await stored.heroes.get(one.player, hero), one.player);
+    }
+
+    // (One of theirs in the world now, on another device or a link gone dead, not yet kept: theirs
+    // to take over as it stands, core/netplay.js Hosting #takeOver)
+    const inWorld = Number.isInteger(hero) ? host.players.get(heroId(one.player, hero)) : null;
+
+    if (inWorld) {
+        one.slot = hero;
+
+        return { hero: inWorld.hero, progress: {} };
     }
 
     // (A slot neither kept nor taken by one of theirs in the world now, from another device, not yet kept)
@@ -302,7 +317,7 @@ function report() {
         const id = hosting.players.get(peer) ?? null;
         const playing = id === null ? null : host.players.get(id);
 
-        return { peer, player, slot, id, name: playing?.hero?.name ?? null, away: Boolean(playing?.away), linked, ready, hidden };
+        return { peer, player, slot, id, name: playing?.hero?.name ?? null, race: playing?.hero?.race ?? null, away: Boolean(playing?.away), linked, ready, hidden };
     });
     const memory = process.memoryUsage();
 

@@ -19,8 +19,8 @@ import { decode, encode } from "../client/js/core/wire.js";
 import { verifyIdentity } from "../server/access/identity.js";
 import { newToken } from "../server/access/tokens.js";
 import { guard, hostsOf, originsOf, Refusal } from "../server/guards.js";
-import { PLAY_PROTOCOL } from "../server/play.js";
-import { Socket } from "../server/relay.js";
+import { PLAY_LIMITS, PLAY_PROTOCOL } from "../server/play.js";
+import { RECONNECTING, Socket } from "../server/relay.js";
 import { REMEMBERED } from "../server/storage/visitors.js";
 import { WorldServer } from "../server/world-server.js";
 
@@ -232,6 +232,47 @@ describe("the world server on the Wi-Fi (server/world-server.js, api.js, play.js
 
         assert.match(journal, /The key "Players' key" was revoked/);
         assert.ok(!journal.includes(world.playerKey) && !journal.includes(world.playerKey.replace(/-/g, "")), "no key in the journal");
+    });
+
+    it("lets a player come in again on another device, or after their link's gone dead, taking their hero over where it stands: the other link told and sent out; a dropped link's place kept five minutes", async () => {
+        const made = (await server.call("POST", "/worlds", { auth: `Key ${server.adminKey}`, body: { name: "Dunmere", race: "human", seed: 4 } })).json;
+        const entered = await server.call("POST", "/enter", { body: { world: made.world, key: made.playerKey, net: NET_VERSION } });
+        const first = await play(server, made.world, entered.json.session);
+        const id = first.message("welcome").id;
+        // (Back in by their ticket: a session of their own, the hero they have here)
+        const back = async () => {
+            const again = await server.call("POST", "/enter", { body: { world: made.world, key: made.playerKey, ticket: entered.json.ticket } });
+
+            // (Their hero in the world now, not yet kept, theirs to choose)
+            assert.equal(again.json.player, entered.json.player);
+            assert.deepEqual(again.json.heroes, [{ slot: 1, name: "Ada", race: "human", origin: null }]);
+
+            return play(server, made.world, again.json.session, { hero: 1 });
+        };
+
+        await until(() => server.registry.lifeOf(made.world).state?.running, "the clock to run");
+
+        // On another device while the first's still in: theirs, taken over; the first told and sent out
+        const second = await back();
+
+        assert.equal(second.message("welcome").id, id);
+        assert.equal(second.message("welcome").took, true);
+        assert.ok(second.message("welcome").snapshot.players.some((player) => player.id === id));
+        await until(() => first.line("closed"), "the first sent out");
+        assert.equal(first.message("kicked").reason, "elsewhere");
+        assert.equal(first.line("closed"), "closed elsewhere");
+
+        // Its link gone dead without a word (its place kept), and in again: taken over, not refused
+        second.close(RECONNECTING);
+        await wait(500);
+
+        const third = await back();
+
+        assert.equal(third.message("welcome").id, id);
+        assert.equal(third.message("welcome").took, true);
+        assert.equal(third.message("refused"), null);
+        assert.equal(PLAY_LIMITS.grace, 5 * 60 * 1000, "a dropped link's place kept five minutes, then let go of");
+        third.close();
     });
 
     it("copies a character into a world that takes copies once, by anyone, as the world's own; never takes a copy home; takes one made in a world of its own home, out of it for good, only while they're not in it", async () => {
