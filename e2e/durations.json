@@ -226,6 +226,7 @@
     "sound-studio.spec.js › describes every sound, and plays each, its recordings and its made variants (if it has any), once started": 11.5,
     "together.spec.js › a visitor to a world on the host's device is remembered there by their own id: gone, what the world knows of them is kept with it, and back, they're where they left": 86.5,
     "together.spec.js › a world opened to others: an elf joins it by its code, is brought in by the elves' town, walks in the host's world, and leaves; closed, whoever's in it is told": 138.5,
+    "together.spec.js › the same character coming into a world on another device takes theirs over where they stand: the first device told it's let go and back at the title, the second told it carries on": 178,
     "together.spec.js › two players make a party: one asks from the party menu, the other says no, then yes; each has the other's icon at the top of their party, the leader crowned, allied in both worlds; they talk in its chat, unread lines on the Party button; one leaves, and the party's no more": 126.1,
     "together.spec.js › two players side by side trade face to face: one asks, the other says yes, each offers, both agree, and it changes hands in both worlds": 95.5,
     "together.spec.js › two players walk about a while: the joined copy's checked against the host's every fifth of a second and never drifts; the guest's hero drawn going at once; what's sent measured": 94.8,

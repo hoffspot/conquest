@@ -84,6 +84,7 @@ export const SERVER_REFUSALS = Object.freeze({
     gone: "Your place in that world wasn't kept.",
     kicked: "You were sent out of the world.",
     afk: "You were away too long, so you were sent out of the world.",
+    elsewhere: "You went into this world on another device, so this one has let go.",
     "key-revoked": "The key you came in by was revoked.",
     "world-deleted": "That world was deleted.",
     "set-aside": "The world's owner set it aside for now: it's saved, and you can come back in.",
