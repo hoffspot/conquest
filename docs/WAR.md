@@ -2680,7 +2680,7 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   refused out of a party, off the map, or for an icon there isn't.
 - **Kept.** Parties, and who's been asked, are carried in the world's snapshot (`SNAPSHOT_VERSION`
   24) and done by commands like anything else, so every copy has them alike; what two games share
-  changed (`NET_VERSION` 100; with shared finds and pings, 157; with markers shared, 159).
+  changed (`NET_VERSION` 100; with shared finds and pings, 157; with markers shared, 160).
 - **Talk** (`core/netplay.js` `CHAT`, `Hosting.chat`; the party menu's Chat tab, docs/GAME.md).
   What's said in a party isn't done to the world, and isn't for everyone in it, so it isn't a
   command: a joined player's line goes to the host alone (`{ kind: "chat", text }`), and the host
