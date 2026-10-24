@@ -783,11 +783,19 @@ const BELL = Object.freeze({ reach: 160, every: 180, volume: 1.6 });
 // that first; and the lord's thanks shown so long (seconds) for a good share of them felled
 const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, thanks: 14 });
 
+// How far off the wild's hunters are heard in a build-up after a long calm (metres: core/director.js
+// PACING's `from`, and more)
+const PACE_HEARD = 160;
+
+// How long after the drums are first heard in a build-up they're beaten again (seconds: as long as
+// their beat, audio/synth.js warDrums)
+const DRUMS_AGAIN = 2;
+
 // How many of the places the player's heard tell of and found since the journal keeps (the last)
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -4760,6 +4768,41 @@ export class Game {
                 this.cachesSeen.add(cache.id);
                 this.hud.message(`An adventurer's cache, and ${CACHE_BANDS[cache.band]?.name ?? "brigands"} keeping it. Put them all down to open it.`, 4);
             }
+        }
+    }
+
+    // The wilds director's pacing for the player (core/director.js PACING; host.js #pace): a quiet
+    // spell after a hard fight, said; a build-up after a long calm, the land's hunters heard ahead
+    // (folk with hands drumming; beasts calling, others answering; drums, a beast with no call),
+    // said which way; and as they come, said
+    #paced({ change, creature, at }) {
+        if (change === "quiet") {
+            this.hud.message("The wild grows quiet round you, for a while.", 3);
+
+            return;
+        }
+
+        const name = CREATURES[creature]?.name?.toLowerCase() ?? "something";
+
+        if (change === "hunt") {
+            this.hud.message(CREATURES[creature]?.hands ? "Here they come!" : "They're on you!", 2.5);
+
+            return;
+        }
+
+        const [ox, oz] = this.originOf("town");
+        const heard = new THREE.Vector3(ox + at[0], this.#groundOn("town", at[0], at[1]), oz + at[1]);
+        const which = bearing(this.#whereAmI(), at)?.replace(/^[\d.]+ k?m /, "") ?? "out there";
+        const drums = CREATURES[creature]?.hands || !this.sound?.voice?.(creature, "call", heard, { far: PACE_HEARD });
+
+        if (drums) {
+            // (Beaten twice over, as they come on)
+            this.sound?.play("warDrums", { at: heard, far: PACE_HEARD });
+            this.sound?.play("warDrums", { at: heard, far: PACE_HEARD, delay: DRUMS_AGAIN });
+            this.hud.message(`Drums, somewhere off to the ${which}. They're coming this way.`, 4);
+        } else {
+            this.sound?.voice?.(creature, "call", heard.clone().add(new THREE.Vector3(6, 0, -4)), { far: PACE_HEARD, delay: 1.3 });
+            this.hud.message(`A ${name} calls, somewhere off to the ${which}, and others answer.`, 4);
         }
     }
 
@@ -10668,6 +10711,12 @@ export class Game {
                 // (A peaceful find let go, every player gone far from it: off the maps)
                 if (event.change === "gone") {
                     this.findsSeen.delete(event.find);
+                }
+
+                break;
+            case "pace":
+                if (event.id === this.me) {
+                    this.#paced(event);
                 }
 
                 break;

@@ -26,6 +26,31 @@ export const DIRECTOR = Object.freeze({ every: [250, 450], cards: Object.freeze(
 export const PEACEFUL = Object.freeze(["remains", "campsite"]);
 
 /**
+ * The pacing (Left 4 Dead's director: "Algorithm adjusts pacing, not difficulty"):
+ * - a hard fight, one a player fell below `hard` of their health in (or fell): once it's over (no
+ *   foe after them for `over` ms), a quiet spell of `quiet` ms ([least, most]), the wild about
+ *   them only `fewer` of what it would be, no elite, and the next card dealt a peaceful one;
+ * - a long calm, `calm` ms and `calmMetres` crossed without a fight: a build-up, the land's
+ *   hunters heard ahead of them (`from` metres off, [least, most], within `spread` radians of the
+ *   way they're going): beasts calling, folk drumming; `warn` ms later ([least, most]), they come
+ *   for them.
+ */
+export const PACING = Object.freeze({ hard: 0.5, over: 5000, quiet: [60000, 90000], fewer: 0.5, calm: 240000, calmMetres: 400, from: [70, 90], spread: 0.8, warn: [12000, 20000] });
+
+/**
+ * A deck (`deck`: the cards still to deal, the next first) with a peaceful card next: the first
+ * of its peaceful ones brought to the front; or, none left in it, the deck shuffled again
+ * (shuffled: never `last`, the one just dealt, first) and its first peaceful one brought to the
+ * front, so none's dealt twice a deck.
+ */
+export function peacefulNext(deck, random, last = null) {
+    const cards = deck.some((card) => PEACEFUL.includes(card)) ? deck : shuffled(random, last);
+    const k = cards.findIndex((card) => PEACEFUL.includes(card) && (cards === deck || card !== last));
+
+    return k > 0 ? [cards[k], ...cards.slice(0, k), ...cards.slice(k + 1)] : [...cards];
+}
+
+/**
  * A deck shuffled (random.js random): each card once, in an order of its own; never `last` (the
  * card just dealt) first, so no card comes twice running.
  */
