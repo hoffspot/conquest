@@ -784,6 +784,8 @@ client/                 The game (static files served to the browser)
     dens.js             The roaming beasts' dens: where each kind keeps one, and what keeps it
     shrines.js          The wayside shrines: each to one of the twelve gods, its gift, its
                         sanctuary (the gods themselves in lore/gods.js)
+    rings.js            The rings of standing stones as moon roads: the moon each wakes under,
+                        where tonight's leads, and the full moon's trial
     caches.js           The adventurers' caches out in the wilds: where, who keeps them, what's in them
     dungeons/           The dungeons (see docs/DUNGEONS.md): build.js cooks a dungeon up from a
                         seed and a theme; themes.js the themes; layouts.js how each is dug;
@@ -869,6 +871,8 @@ client/                 The game (static files served to the browser)
                         earth, a snapped stick, a pale glint till it's read
     dens3d.js           The roaming beasts' dens: a bear's mound, a boars' wallow, a cat's rock,
                         a wyverns' nest, a knucker's pool
+    moongates3d.js      The rings of standing stones by night: moonlight in their middles while
+                        the moon wakes them
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
                         its splashes and pools, smoke and embers, the target ring, heals'

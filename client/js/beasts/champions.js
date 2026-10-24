@@ -11,13 +11,15 @@ import { EQUIPMENT } from "../characters/equipment.js";
  * By rank: how much bigger than others of its kind (`scale`), and how much brighter what glows on
  * it (`glow`: its eyes, a wraith's light); the colour its body's tinted, if any (`tint`). A dungeon's
  * boss or mini-boss, or a hell's level's own boss (`floor`); or one of the wild's elites
- * (core/creatures.js ELITES), gilded, and radiant besides (world/ailments3d.js "elite").
+ * (core/creatures.js ELITES), gilded, and radiant besides (world/ailments3d.js "elite"); or
+ * Lunara's guardian under a full moon (`moon`: core/rings.js TRIAL), pale as moonsilver.
  */
 export const CHAMPION_LOOKS = Object.freeze({
     boss: { scale: 1.22, glow: 1.6 },
     floor: { scale: 1.16, glow: 1.4 },
     mini: { scale: 1.1, glow: 1.25 },
     elite: { scale: 1.25, glow: 1.8, tint: 0xf4dc9c },
+    moon: { scale: 1.3, glow: 2, tint: 0xdce6ff },
 });
 
 /**

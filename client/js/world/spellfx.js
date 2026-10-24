@@ -2643,6 +2643,8 @@ const APPEARING = {
     portal: { colour: 0x6fb0ff, glow: [0xdff2ff, 0x2a5fb8] },
     safety: { colour: SAFETY.colour, glow: SAFETY.glow },
     risen: { colour: 0x3aaa4a, glow: [0xb8ff9a, 0x0a2a10] },
+    // (Carried by a moon road between the rings of standing stones: core/rings.js)
+    moon: { colour: 0xc8d8ff, glow: [0xffffff, 0x7a90d8] },
     over: { colour: 0x9a4aff },
     lost: { colour: 0x9a4aff },
 };
