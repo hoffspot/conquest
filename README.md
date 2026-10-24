@@ -752,7 +752,8 @@ client/                 The game (static files served to the browser)
     interiors.js        Inside buildings: the tavern's floors, drawn as plans of their squares
     insides.js          Every building that can be gone into: its door, and its floors and folk
                         made the first time they're wanted
-    explored.js         What the player has found: the buildings gone into, the chunks walked
+    explored.js         What the player has found: the buildings gone into, the chunks walked,
+                        the trails' signs read and the homes tracked
     portals.js          The guild's portals: the branches open to step through to, and their fares
     host.js             The one authority over a running world: its players (by id), their
                         commands, the buildings near them got ready, kept and made again
@@ -771,6 +772,8 @@ client/                 The game (static files served to the browser)
     creatures.js        The wild's creatures: what each is, where and how strong (docs/WILDS.md)
     bestiary.js         What a player's found out about each kind of creature, by seeing,
                         tracking and slaying it; its words in lore/bestiary.js (docs/GAME.md)
+    tracks.js           The trails out of the wild's camps and lairs, their signs to read, and
+                        what wore each (docs/WILDS.md *Tracking*)
     caches.js           The adventurers' caches out in the wilds: where, who keeps them, what's in them
     dungeons/           The dungeons (see docs/DUNGEONS.md): build.js cooks a dungeon up from a
                         seed and a theme; themes.js the themes; layouts.js how each is dug;
@@ -850,6 +853,10 @@ client/                 The game (static files served to the browser)
     flyers3d.js         What flies over the world: flocks of each land's birds, wyverns over
                         the wild lands, the drake near its lair
     drops3d.js          Things dropped on the ground: a bundle, its icon floating over it
+    tracks3d.js         The prints the wild's creatures leave on the ground as they go, as
+                        their feet are, fading after a few minutes
+    signs3d.js          The signs on the trails out of the wild's camps and lairs: scuffed
+                        earth, a snapped stick, a pale glint till it's read
     avatar.js           A character in the world, following its place in the battle
     effects.js          Arrows, bolts, fireballs, sparks, dust, fire, arcane light, blood and
                         its splashes and pools, smoke and embers, the target ring, heals'

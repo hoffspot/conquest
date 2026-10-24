@@ -27,7 +27,7 @@ import { Character } from "../characters/character.js";
 import { folkLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
-import { BeastAvatar, dressingCreature, sizeOf } from "../beasts/beast.js";
+import { BeastAvatar, dressCreature, dressingCreature, sizeOf } from "../beasts/beast.js";
 import { fetchModel, forgetModels, keptModels, MODEL_LINGER, MODELS, modelOf, modelsInside, modelsMet, modelsNear, readyModels, wantModel } from "../beasts/model.js";
 import { herds, makingHerdTemplate } from "../beasts/herd.js";
 import { forget as forgetBodies, kept as keptBodies } from "../beasts/sculpt.js";
@@ -39,6 +39,8 @@ import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { aloftShare, BOMBS, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
+import { BESTIARY_LORE } from "../core/lore/bestiary.js";
+import { homeWords, signOf, signsNear, TRAILS, trailsNear } from "../core/tracks.js";
 import { MASTERED, RESEARCH } from "../core/bestiary.js";
 import { bestiaryOf } from "./bestiary.js";
 import { townOf } from "../core/insides.js";
@@ -104,6 +106,8 @@ import { FortAvatar, Forts } from "../world/forts3d.js";
 import { EngineAvatar } from "../world/siege3d.js";
 import { Stockades } from "../world/stockades3d.js";
 import { ContactShadows } from "../world/contacts.js";
+import { footAt, lookPrint, printOf, TAKES, Tracks } from "../world/tracks3d.js";
+import { TrailSigns } from "../world/signs3d.js";
 import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
 import { Ailments3D } from "../world/ailments3d.js";
@@ -326,6 +330,14 @@ const ATTACKERS = Object.freeze({ most: 6 });
 const PARTY_MENU_EVERY = 0.25;
 const LIKENESS_AFTER = 0.5;
 
+// A kind of creature's portrait in the bestiary (portraitOf): how big (pixels square), how much
+// brighter than the screen it's toned, how much of the picture it fills (view.js portrait `fit`),
+// how long after it's built it's drawn (ms: drawn at once, it comes out blank, as a likeness does)
+// and how many times it's tried, how long its model's waited for (ms: else its stand-in's drawn),
+// and how high above the camera it stands (metres: out of everything's shadow and every fire's
+// light)
+const PORTRAIT = Object.freeze({ size: 224, bright: 1.15, fit: 0.86, after: 600, tries: 3, patience: 8000, up: 600 });
+
 // Whether a likeness came back with nothing on it, all one colour: drawn before its subject was
 function blank({ data }) {
     for (let k = 4; k < data.length; k += 4 * 37) {
@@ -473,6 +485,13 @@ const APPROACH_RETRY = 60000;
 // How near a hell's way in the player must be (metres, out in the world) to be told its cult's
 // rite is broken (#delved): as near as the rite's kept for (core/creatures.js RITES)
 const RITE_HEARD = 110;
+
+// The trails out of the wild's camps and lairs (core/tracks.js; #trailing): how near the player
+// their signs are drawn (`signs`, metres) and their prints (`prints`), laid again once they've gone
+// `again` metres on; how far apart a print falls from the next, against how big what made them
+// is (`stride`: [a share of its size, least, most metres]), and how deep they are against fresh
+// ones (`depth`)
+const TRAIL_SEEN = Object.freeze({ signs: 40, prints: 45, again: 12, stride: Object.freeze([0.6, 0.45, 2.4]), depth: 0.85 });
 
 // Who's heard of the nearest hell's cult, and will say (#cultWords): those whose trade it is to
 // hear things, always; of the rest who'd say (dialogue.js: those asked "Anything strange out
@@ -757,7 +776,7 @@ const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, thanks: 14 });
 const HEARD_FOUND = 5;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -887,6 +906,10 @@ export class Game {
         // the wheel held open on one
         this.partyLikenesses = new Map();
         this.likenessSince = new Map();
+
+        // Each kind of creature's portrait in the bestiary, by its id: a picture's URL (or null,
+        // if it couldn't be drawn), when it's drawn (portraitOf)
+        this.portraits = new Map();
         this.allyTarget = null;
         this.lastMemberTap = null;
         this.memberWheel = null;
@@ -1276,6 +1299,8 @@ export class Game {
         this.toPortal = null;
         this.toTable = null;
         this.toLectern = null;
+        // (And the sign on a trail they're walking up to, to read: #keepToSign)
+        this.toSign = null;
     }
 
     /** This game's player, as the host has them (core/host.js players). */
@@ -1695,6 +1720,18 @@ export class Game {
         this.effects = new Effects(view.scene);
         this.contacts = new ContactShadows();
         view.scene.add(this.contacts.mesh);
+        // (The prints on the ground out in the world: on its ground, whatever map the player's on)
+        this.tracks = new Tracks();
+        this.tracks.groundAt = this.groundOf("town");
+        view.scene.add(this.tracks.mesh);
+        // (And the trails out of the wild's camps and lairs near the player: their prints, which
+        // don't fade, and their signs to read, #trailing; how big each kind's seen, for its prints)
+        this.trailPrints = new Tracks();
+        this.trailPrints.groundAt = this.groundOf("town");
+        view.scene.add(this.trailPrints.mesh);
+        this.trailSigns = new TrailSigns(view.scene);
+        this.trailsAt = null;
+        this.gaitsSeen = new Map();
         this.ailments = new Ailments3D(this.effects.group);
         // (Its fire, flashes and fireballs lighting what's round them as the world's fires do, each
         // a light of its own: lightsNow, #lightNear; not lent the view's lamps)
@@ -2183,7 +2220,20 @@ export class Game {
             const [ox, oz] = this.originOf(mapId);
             const { x, z } = avatar.object.position;
 
-            this.sound?.step(this.#footingAt(this.world.maps?.[mapId] ?? this.world, x - ox, z - oz), avatar.object.position, { speed, ...avatar.gait, armour: armourOf(avatar.character) });
+            const footing = this.#footingAt(this.world.maps?.[mapId] ?? this.world, x - ox, z - oz);
+
+            this.sound?.step(footing, avatar.object.position, { speed, ...avatar.gait, armour: armourOf(avatar.character) });
+
+            // (One of the wild's, out in the world: its print left where its foot came down, as
+            // deep as the ground there takes it, tracks3d.js; and how big its kind is, for the
+            // prints on its trails)
+            if (actor?.wild && avatar instanceof BeastAvatar && avatar.gait?.size) {
+                this.gaitsSeen.set(actor.wild.creature, avatar.gait.size);
+            }
+
+            if (actor?.wild && mapId === "town" && TAKES[footing]) {
+                this.#printed(actor, avatar, foot, footing);
+            }
         };
         character.object.name = id;
         this.view.scene.add(character.object);
@@ -2409,6 +2459,9 @@ export class Game {
         INTERIOR_GLOW.daylight.value = 1;
         this.effects?.dispose();
         this.contacts?.dispose();
+        this.tracks?.dispose();
+        this.trailPrints?.dispose();
+        this.trailSigns?.dispose();
         this.navBaker?.dispose();
         this.navigationView?.dispose();
 
@@ -2992,6 +3045,12 @@ export class Game {
 
         this.clock += dt;
         TREE_WIND.time.value = this.clock;
+
+        // (The prints on the ground fading by the clock, seen only out in the world)
+        if (this.tracks) {
+            this.tracks.update(this.clock);
+            this.tracks.mesh.visible = this.tracks.mesh.count > 0 && mine?.map === "town";
+        }
         // (A hell's way in standing in the open swirling by the same clock as the veils indoors: veil.js)
         VEIL.time.value = this.clock % VEIL.loop;
 
@@ -3233,6 +3292,7 @@ export class Game {
         this.#keepToPortal();
         this.#keepToTable();
         this.#keepToLectern();
+        this.#keepToSign();
         this.#restPlayer();
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawDrops();
@@ -3265,6 +3325,8 @@ export class Game {
 
         // (Where a treasure the player's hunting is buried, once they're near: it glints)
         this.#glinting();
+        // (The trails out of the wild's camps and lairs near them: their prints and signs)
+        this.#trailing();
 
         // (The party's pings, in the world: #pinging)
         this.#pinging();
@@ -4640,7 +4702,7 @@ export class Game {
             // on ahead of them, never where they're going)
             destination: actor.order?.type === "move" && !this.steering?.steering ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
-            icons: this.mapId === "town" ? [...this.icons(), ...this.placeIcons(), ...this.dungeonIcons(), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
+            icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
             // (The circles to search for the treasures they're hunting: #treasureCircles)
             searches: this.mapId === "town" ? this.treasureCircles() : [],
             // (The party's pings: pingView; and the player's markers: markerView)
@@ -4963,7 +5025,10 @@ export class Game {
         // (Who found it for them, if another of their party did: core/explored.js finderOf)
         const finder = (icon) => (this.explored.finderOf(icon.id) ? { ...icon, finder: this.explored.finderOf(icon.id) } : icon);
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.placeIcons().filter(seen).map(finder), ...this.dungeonIcons().filter(seen).map(finder), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
+        // (And the camps and lairs they've tracked home, found or not: core/tracks.js)
+        const known = (icon) => seen(icon) || this.explored.tracked.has(icon.id);
+
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
     }
 
     /**
@@ -5059,6 +5124,98 @@ export class Game {
         }
 
         this.glints.update(this.clock);
+    }
+
+    // The trails out of the wild's camps and lairs near the player (core/tracks.js), out in the
+    // world: their signs within TRAIL_SEEN.signs, each glinting till it's read (signs3d.js); and
+    // their prints within TRAIL_SEEN.prints, laid again once they've gone TRAIL_SEEN.again on
+    #trailing() {
+        const me = this.battle.actor(this.me);
+        const plan = this.world.plan;
+
+        if (!plan || !me || me.map !== "town") {
+            if (this.trailSigns.shown.size) {
+                this.trailSigns.set([]);
+            }
+
+            this.trailPrints.mesh.visible = false;
+
+            return;
+        }
+
+        const signs = signsNear(plan, [me.x, me.y], TRAIL_SEEN.signs).map(({ sign: { id, at: [x, z] } }) => ({ id, x, y: this.#groundOn("town", x, z), z, read: this.explored.signs.has(id) }));
+
+        if (signs.length || this.trailSigns.shown.size) {
+            this.trailSigns.set(signs);
+        }
+
+        this.trailSigns.update(this.clock);
+
+        if (!this.trailsAt || Math.hypot(me.x - this.trailsAt[0], me.y - this.trailsAt[1]) > TRAIL_SEEN.again) {
+            this.trailsAt = [me.x, me.y];
+            this.#layTrails(plan, me);
+        }
+
+        this.trailPrints.mesh.visible = this.trailPrints.mesh.count > 0;
+    }
+
+    // The prints along the trails near the player (core/tracks.js), each of what wore it (Host
+    // trailCreatureOf), as big as one of its kind's been seen (or as its look is: tracks3d.js
+    // lookPrint), a stride apart, one foot and then the other, their toes toward its home; as deep
+    // as the ground takes them, fainter than fresh ones, and lasting (laid at the clock's start,
+    // their own clock never going on)
+    #layTrails(plan, me) {
+        const map = this.world.maps?.town;
+        const [ox, oz] = this.originOf("town");
+        const [share, least, most] = TRAIL_SEEN.stride;
+
+        this.trailPrints.clear();
+
+        if (!map) {
+            return;
+        }
+
+        for (const trail of trailsNear(plan, [me.x, me.y], TRAIL_SEEN.prints)) {
+            const creature = this.host.trailCreatureOf(this.me, trail);
+            const { print, size } = creature ? lookPrint(creature, CREATURE_LOOKS[creature], this.gaitsSeen.get(creature)) : { print: null };
+
+            if (!print) {
+                continue;
+            }
+
+            const stride = Math.min(most, Math.max(least, size * share));
+            let on = 0;
+            let foot = "left";
+
+            for (let k = 1; k < trail.points.length; k++) {
+                const [[hx, hy], [fx, fy]] = [trail.points[k - 1], trail.points[k]];
+                const length = Math.hypot(fx - hx, fy - hy);
+                const facing = Math.atan2(hx - fx, hy - fy);
+
+                for (; on < length; on += stride) {
+                    const [x, z] = [hx + ((fx - hx) * on) / length, hy + ((fy - hy) * on) / length];
+                    const [across] = footAt(foot, size);
+                    const [px, pz] = [x - Math.cos(facing) * across, z + Math.sin(facing) * across];
+                    const takes = Math.hypot(px - me.x, pz - me.y) <= TRAIL_SEEN.prints ? TAKES[this.#footingAt(map, px, pz)] : 0;
+
+                    foot = foot === "left" ? "right" : "left";
+
+                    if (takes) {
+                        this.trailPrints.print(print, ox + px, oz + pz, facing, size, takes * TRAIL_SEEN.depth, 0);
+                    }
+                }
+
+                on -= length;
+            }
+        }
+    }
+
+    // The places' icons (`icons`: placeIcons', dungeonIcons'), those the player's tracked home by
+    // their trails' signs (core/tracks.js, Explored tracked) marked so (`tracked`) for the maps
+    #trackedMarks(icons) {
+        const tracked = this.explored.tracked;
+
+        return tracked.size ? icons.map((icon) => (tracked.has(icon.id) ? { ...icon, tracked: true } : icon)) : icons;
     }
 
     /**
@@ -6638,6 +6795,25 @@ export class Game {
         return footing(k >= 0 && chunk.bridge[k] === RAISED ? GROUND.planks : ground, { land: map.biomeAt(sx, sz), height: map.heightAt?.(x, z) ?? 0, wet: k >= 0 && Boolean(chunk.water[k]) && !chunk.bridge[k] });
     }
 
+    // One of the wild's footfalls printed on the ground (tracks3d.js): as its feet are (its gait's,
+    // or a person's boots or bare feet), where that foot came down beside it, its toes the way
+    // it faces, as big as it is
+    #printed(actor, avatar, foot, footing) {
+        const kind = actor.wild.creature;
+        const print = printOf(kind, avatar instanceof BeastAvatar ? avatar.gait : null, { hooves: Boolean(CREATURE_LOOKS[kind]?.hooves) });
+
+        if (!print) {
+            return;
+        }
+
+        const size = avatar.gait?.size ?? (avatar.character.height ?? 1.75) / 1.75;
+        const facing = avatar.facing ?? avatar.object.rotation.y;
+        const [across, ahead] = footAt(foot, size);
+        const { x, z } = avatar.object.position;
+
+        this.tracks.print(print, x - Math.cos(facing) * across + Math.sin(facing) * ahead, z + Math.sin(facing) * across + Math.cos(facing) * ahead, facing, size, TAKES[footing], this.clock);
+    }
+
     // Someone going up or down the stairs (they're there at once: battle.js cross), heard as a few
     // treads on what's at the stairs' end (`at`, on the player's floor), coming up to it (`coming`)
     // louder and louder, going away quieter and quieter
@@ -7805,6 +7981,43 @@ export class Game {
         }
     }
 
+    // A sign on a trail read (host.js #readSign): what made it, what it is, and which way the trail
+    // runs home from it, said, with how many of its home's signs they've read; the last of those,
+    // its home tracked, where that is and that it's on their maps. Kept, and in their journal
+    // (#trailNotes)
+    #signRead({ sign, creature, way, read, again, tracked }) {
+        const found = this.world.plan ? signOf(this.world.plan, sign) : null;
+
+        if (!found) {
+            return;
+        }
+
+        const name = CREATURES[creature]?.name ?? "Something";
+        const what = BESTIARY_LORE[creature]?.sign ?? "the marks of something passing";
+        const home = homeWords(found.trail.home);
+        const where = bearing(this.#whereAmI(), found.trail.home.at);
+
+        if (tracked) {
+            this.hud.message(`${name} sign: ${what}. You've tracked it home: ${home}, ${where === "here" ? "close by" : where}. It's marked on your map.`, 5);
+            this.sound?.play("pinSet");
+        } else if (again || this.explored.tracked.has(found.trail.home.id)) {
+            this.hud.message(`${name} sign${again ? ", read before" : `: ${what}`}. The trail runs ${way} from here, toward ${home}${this.explored.tracked.has(found.trail.home.id) ? ", which you've tracked" : ""}.`, 3.5);
+
+            if (!again) {
+                this.sound?.play("quill");
+            }
+        } else {
+            this.hud.message(`${name} sign: ${what}. The trail runs ${way} from here, toward ${home} (${read} of ${TRAILS.tracked} signs read).`, 5);
+            this.sound?.play("quill");
+        }
+
+        this.#explored();
+
+        if (this.journal.open) {
+            this.#showJournal();
+        }
+    }
+
     #partyEvent(event) {
         if (event.id !== this.me) {
             return;
@@ -7958,6 +8171,85 @@ export class Game {
 
         if (this.partyPanel?.open && this.clock - (this.partyShownAt ?? -Infinity) >= PARTY_MENU_EVERY) {
             this.#showParty();
+        }
+    }
+
+    /**
+     * A kind of creature's portrait for its page in the bestiary (app/journal.js): one of its kind
+     * as the game draws it (beasts/beast.js dressCreature: from its model, once that's read; its
+     * stand-in if it can't be in time), holding what it fights with, whole, alone, lit as on a
+     * fair day (view.js portrait). Drawn once, and kept for the rest of the game. Resolves with a
+     * picture's URL, or null if it couldn't be drawn (and it's tried again next time it's asked).
+     */
+    portraitOf(kind) {
+        if (!this.portraits.has(kind)) {
+            this.portraits.set(
+                kind,
+                this.#portray(kind)
+                    .catch(() => null)
+                    .then((url) => {
+                        if (!url) {
+                            this.portraits.delete(kind);
+                        }
+
+                        return url;
+                    }),
+            );
+        }
+
+        return this.portraits.get(kind);
+    }
+
+    async #portray(kind) {
+        const spec = CREATURES[kind];
+
+        if (!spec || !this.kit) {
+            return null;
+        }
+
+        // (Its model read first, if it's drawn from one: waited for a while)
+        if (MODELS[kind] && !modelOf(kind)) {
+            await Promise.race([wantModel(kind, "soon"), new Promise((resolve) => setTimeout(resolve, PORTRAIT.patience))]);
+        }
+
+        const weapon = WEAPONS[spec.weapon];
+        const avatar = dressCreature(this.kit, kind, { seed: 1, equipment: weapon?.equipment ?? [], guard: weapon ? guardOf(spec.weapon) : null });
+        const { x, z } = this.view.camera.position;
+        const y = this.view.camera.position.y + PORTRAIT.up;
+
+        // (High above the camera, seen by nothing but the portrait's: on no layer of its own;
+        // standing as it does at rest, a moment in)
+        avatar.place(x, z, 0);
+
+        for (let k = 0; k < 6; k++) {
+            avatar.object.position.y = y;
+            avatar.update(0.1, x, z, 0);
+        }
+
+        avatar.object.position.y = y;
+        avatar.object.traverse((node) => node.layers.disableAll());
+        this.view.scene.add(avatar.object);
+        this.view.upload([avatar.object], { hidden: true });
+
+        try {
+            for (let k = 0; k < PORTRAIT.tries; k++) {
+                await new Promise((resolve) => setTimeout(resolve, PORTRAIT.after));
+
+                const picture = await this.view.portrait(avatar.object, { facing: 0, whole: true, size: PORTRAIT.size, bright: PORTRAIT.bright, fair: true, fit: PORTRAIT.fit });
+
+                if (picture && !blank(picture)) {
+                    const canvas = Object.assign(document.createElement("canvas"), { width: picture.width, height: picture.height });
+
+                    canvas.getContext("2d").putImageData(picture, 0, 0);
+
+                    return canvas.toDataURL("image/png");
+                }
+            }
+
+            return null;
+        } finally {
+            avatar.object.removeFromParent();
+            avatar.character.dispose();
         }
     }
 
@@ -8185,10 +8477,11 @@ export class Game {
                 }),
             most: this.host.mostFollowers(this.me),
             heard: this.#heardTell(at),
+            trails: this.#trailNotes(at),
             // (The treasures they're hunting: their own to give up, their party's shown)
             treasures: this.host.treasuresOf(this.me).map(({ id, grade, owner, name, centre }) => ({ id, title: itemLabel({ id: "treasureMap", quality: grade }), from: owner === this.me ? "Your map" : `${name}'s map`, where: at ? bearing(at, centre) : "", grade, own: owner === this.me })),
             writings: (this.memory.writings ?? []).filter((id) => WRITINGS[id]).map((id) => ({ id, title: WRITINGS[id].title, found: WRITINGS[id].found })),
-            bestiary: bestiaryOf(this.progress.bestiary.kinds),
+            bestiary: { ...bestiaryOf(this.progress.bestiary.kinds), portraitOf: (kind) => this.portraitOf(kind) },
             messages: this.messages,
         });
     }
@@ -8222,6 +8515,43 @@ export class Game {
         });
 
         return [...told.filter(({ found }) => !found), ...told.filter(({ found }) => found).slice(0, HEARD_FOUND)];
+    }
+
+    // The trails the player's read signs on (core/tracks.js; Explored signs), a note for each home
+    // they lead to, for the journal: [{ title ("Wolf trail"), words (how many of its signs they've
+    // read and which way the last ran, or that they've tracked it home), where (which way and how
+    // far that sign is from them now, or its home), tracked }], those still to follow first, the
+    // latest read first
+    #trailNotes(at) {
+        const plan = this.world.plan;
+        const homes = new Map();
+
+        if (!plan) {
+            return [];
+        }
+
+        for (const id of this.explored.signs) {
+            const found = signOf(plan, id);
+
+            if (found) {
+                const read = (homes.get(found.trail.home.id)?.read ?? 0) + 1;
+
+                homes.delete(found.trail.home.id);
+                homes.set(found.trail.home.id, { last: found, read });
+            }
+        }
+
+        const notes = [...homes.values()].reverse().map(({ last: { trail, sign }, read }) => {
+            const name = CREATURES[this.host.trailCreatureOf(this.me, trail)]?.name ?? "Something";
+            const tracked = this.explored.tracked.has(trail.home.id);
+            const home = homeWords(trail.home);
+
+            return tracked
+                ? { title: `${name} trail`, words: `Tracked home to ${home}: it's marked on your map.`, where: at ? `About ${bearing(at, trail.home.at)}` : "", tracked }
+                : { title: `${name} trail`, words: `${read} of ${TRAILS.tracked} signs read. The last ran ${sign.way}, toward ${home}.`, where: at ? `Last sign about ${bearing(at, sign.at)}` : "", tracked };
+        });
+
+        return [...notes.filter(({ tracked }) => !tracked), ...notes.filter(({ tracked }) => tracked)];
     }
 
     // Whether the character's yet to be told something told only once (`what`: "spoils", the first
@@ -10362,6 +10692,12 @@ export class Game {
             case "treasure":
                 this.#treasureEvent(event);
                 break;
+            case "sign":
+                if (event.id === this.me) {
+                    this.#signRead(event);
+                }
+
+                break;
             case "carried": {
                 // (Gone with a pop from where they were, and come with one where they come to,
                 // each if it's heard here; the player's own heard wherever they go)
@@ -11339,13 +11675,15 @@ export class Game {
         const enemy = who;
         // (A lectern before any way out behind it: it stands in the room, in front of its stairs)
         const lectern = enemy ? null : this.#lecternAt(clientX, clientY);
-        const door = enemy || lectern ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
-        const portal = enemy || door || lectern ? null : this.#portalAt(clientX, clientY);
-        const table = enemy || door || portal || lectern ? null : this.#warTableAt(clientX, clientY);
-        const ground = enemy || door || portal || table || lectern ? null : this.view.pickGround(clientX, clientY);
+        // (A sign on a trail, out in the wilds: core/tracks.js)
+        const sign = enemy || lectern ? null : this.#signAt(clientX, clientY);
+        const door = enemy || lectern || sign ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
+        const portal = enemy || door || lectern || sign ? null : this.#portalAt(clientX, clientY);
+        const table = enemy || door || portal || lectern || sign ? null : this.#warTableAt(clientX, clientY);
+        const ground = enemy || door || portal || table || lectern || sign ? null : this.view.pickGround(clientX, clientY);
         const [ox, oz] = this.originOf(this.mapId);
 
-        this.#order({ enemy, door, portal, table, lectern, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
+        this.#order({ enemy, door, portal, table, lectern, sign, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
     }
 
     /**
@@ -11433,7 +11771,7 @@ export class Game {
      * What a click at a point on the view would do, for the pointer to show (app/pointer.js AIMS):
      * "attack" an enemy, "talk" to someone (or trade with another player), "hand" for something
      * on the ground to pick up or search (or the war table, to open its map; or a lectern, to read
-     * what's on it), "enter" for a door,
+     * what's on it; or a sign on a trail), "enter" for a door,
      * the stairs or the guild's portal; null for the ground (or the player). As tap() chooses, in
      * its order, without doing any of it.
      */
@@ -11446,7 +11784,7 @@ export class Game {
             return me && !this.battle.hostile(who, me) && !this.host.invader(who.id) ? "talk" : "attack";
         }
 
-        if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point)) || this.#lecternAt(clientX, clientY)) {
+        if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point)) || this.#lecternAt(clientX, clientY) || this.#signAt(clientX, clientY)) {
             return "hand";
         }
 
@@ -11555,6 +11893,51 @@ export class Game {
         if (atWriting(writing.piece, me.x, me.y)) {
             this.readHere();
         }
+    }
+
+    // A sign on a trail out in the wilds (core/tracks.js; signs3d.js), if that's what was tapped:
+    // its id
+    #signAt(clientX, clientY) {
+        return this.mapId === "town" && this.trailSigns.shown.size ? this.trailSigns.at(this.view.rayAt(clientX, clientY)) : null;
+    }
+
+    // Walking up to a sign on a trail (it was tapped): there and stopped, it's read; told to do
+    // anything else, gone in somewhere, or stopped short, it's forgotten
+    #keepToSign() {
+        if (!this.toSign) {
+            return;
+        }
+
+        const me = this.battle.actor(this.me);
+        const found = this.world.plan ? signOf(this.world.plan, this.toSign) : null;
+
+        if (!me || me.dead || me.map !== "town" || !found) {
+            this.toSign = null;
+
+            return;
+        }
+
+        if (me.order || me.path.length) {
+            return;
+        }
+
+        const id = this.toSign;
+
+        this.toSign = null;
+
+        if (Math.hypot(me.x - found.sign.at[0], me.y - found.sign.at[1]) <= TRAILS.reach) {
+            this.#readSign(id);
+        }
+    }
+
+    // Read a sign on a trail the player's beside (host.js #readSign): what came of it's said as
+    // it's heard (#signRead)
+    #readSign(id) {
+        this.#command({ type: "read", sign: id }, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+            }
+        });
     }
 
     /**
@@ -12439,7 +12822,7 @@ export class Game {
     // Send the player to fight an enemy, through a door (or up or down the stairs), or to a point
     // on the ground ([x, z] metres, on their map), running if told to or tapped twice in quick
     // succession (in the same place: the view or the minimap)
-    #order({ enemy, door = null, portal = null, table = null, lectern = null, ground }, { clientX, clientY, run, time, from }) {
+    #order({ enemy, door = null, portal = null, table = null, lectern = null, sign = null, ground }, { clientX, clientY, run, time, from }) {
         const player = this.battle.actor(this.me);
         const last = this.lastTap;
 
@@ -12535,6 +12918,25 @@ export class Game {
             return;
         }
 
+        // A sign on a trail: up to it, and it's read (#keepToSign)
+        if (sign) {
+            const [ox, oz] = this.originOf(player.map);
+            const [x, y] = signOf(this.world.plan, sign).sign.at;
+            const square = [Math.floor(x), Math.floor(y)];
+
+            if (Math.hypot(player.x - x, player.y - y) <= TRAILS.reach && !player.path.length) {
+                this.#readSign(sign);
+
+                return;
+            }
+
+            this.#command({ type: "move", to: square, run });
+            this.toSign = sign;
+            this.effects.markTarget(ox + square[0] + 0.5, oz + square[1] + 0.5);
+
+            return;
+        }
+
         if (!ground) {
             return;
         }
@@ -12586,7 +12988,7 @@ export class Game {
     // or hosting; joined to another's world, once the host's done it and it's been done here too)
     #command(command, then = null) {
         // (Anything the player does themselves ends running somewhere far: not resisting a
-        // summons, done for them; and walking up to the portal, the war table or a lectern)
+        // summons, done for them; and walking up to the portal, the war table, a lectern or a sign)
         if (!this.journeying && !(command.type === "summoned" && !command.come)) {
             this.journey = null;
         }
@@ -12594,6 +12996,7 @@ export class Game {
         this.toPortal = null;
         this.toTable = null;
         this.toLectern = null;
+        this.toSign = null;
 
         if (this.remote) {
             return this.remote.command(command, this.#predicting(command, then));

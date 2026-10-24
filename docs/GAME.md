@@ -798,6 +798,17 @@ A treasure map read out in the wilds marks where it leads for its reader and the
   `TreasureGlints`: a gold four-pointed star over a mound of turned earth, twinkling, turning and
   swelling about every second and a half), for its hunters only.
 
+### Trails (core/tracks.js; docs/WILDS.md *Tracking*)
+
+The signs read on the trails out of the wild's camps and lairs, toward each home:
+- **In the journal** (app/journal.js, *Trails*): a note for each home, the latest read first,
+  those still to follow before those tracked: what wore it ("Wolf trail"), how many of its signs
+  they've read of the three that track it, which way the last ran and toward what, and which way
+  and how far that sign is from them now; once tracked, that it's marked on their map, and which
+  way and how far the home is.
+- **On the world map and the minimap**: a tracked home's icon, with a pale paw at its corner
+  (app/mapicons.js `drawTracked`); on the world map whether it's been found or not.
+
 ### Writings (core/writings.js, app/reader.js)
 
 What's written down and left where it was, to be found and read there: the wizard Sinclair's
@@ -835,7 +846,7 @@ nests', the hells' and the Rift's.
   | Earned by | Points |
   | --- | ---: |
   | The first sight of one (as far off as 30 m, light allowing: battle.js `canSee`) | 1 |
-  | A sign of one read on a trail (docs/WILDS.md, to come) | 2 |
+  | A sign of one read on a trail (docs/WILDS.md *Tracking*) | 2 |
   | One slain (by the player, or by those fighting at their side) | 1 |
   | One of the mightiest slain: a perilous one, a lair's master, an elite at the head of its kind, a dungeon's boss or mini-boss, the Behemoth | 5 |
 
@@ -861,11 +872,19 @@ nests', the hells' and the Rift's.
 - **In the journal** (app/journal.js, its *Bestiary* tab; app/bestiary.js): how many of the 97
   kinds have been met, then each met, by where (the wilds, each people's wilds, lairs and
   strongholds, the ants' nests, the hells), the best known first, its level beside it as four
-  pips (gold-edged once it's mastered). Each opens its page: its name, its level and how far to
-  the next, how many seen, read and slain, and each part of it as far as it's been found out,
-  what's still to find shut ("At Studied: watch for it, read the signs it leaves, and slay it to
-  learn more."). Every word of it is the game's own: the creature's table, its weapon's, what it
-  leaves (spoils.js), and its lines in core/lore/bestiary.js.
+  pips (gold-edged once it's mastered). Each opens its page: its portrait, its name, its level
+  and how far to the next, how many seen, read and slain, and each part of it as far as it's been
+  found out, what's still to find shut ("At Studied: watch for it, read the signs it leaves, and
+  slay it to learn more."). Every word of it is the game's own: the creature's table, its
+  weapon's, what it leaves (spoils.js), and its lines in core/lore/bestiary.js.
+- **Its portrait** (app/game.js `portraitOf`, `PORTRAIT`): one of its kind as the game draws it
+  (beasts/beast.js `dressCreature`: from its own model, waited for up to 8 s and else its
+  stand-in; people-shaped ones holding what they fight with), standing at rest, alone, high above
+  the camera where no shadow or fire reaches it, seen three-quarters on and a little from above,
+  lit as on a fair day whatever the hour, on the paperdoll's dark: drawn once into a picture of
+  its own (world/view.js `portrait`, 224 pixels square, framed on all of it as it's posed: `fit`)
+  and kept for the rest of the game, shown beside its name in a gold frame. It's drawn when its
+  page is first opened (a second or so: dark till then), and tried again if it came out blank.
 - **Kept with the character** (core/progress.js Progress `bestiary`: each kind's points, whether
   it's been seen, and how many of its signs read and how many slain), as what they carry is,
   into whatever world they go, and in every snapshot (`SNAPSHOT_VERSION` 33: an older world's

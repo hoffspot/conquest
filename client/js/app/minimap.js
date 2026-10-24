@@ -20,7 +20,7 @@ import { allAtOnce, Steps } from "../core/steps.js";
 import { GROUND, HOUSE_STYLES, PLOT } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { LAND_COLOURS } from "../world/ground.js";
-import { drawBuildingIcon, drawMarker, drawPing, drawSearch } from "./mapicons.js";
+import { drawBuildingIcon, drawMarker, drawPing, drawSearch, drawTracked } from "./mapicons.js";
 
 // Colours (RGB) of the ground and of what stands on it
 const GROUND_COLOURS = {
@@ -624,6 +624,11 @@ export class Minimap {
             if (x > -ICON_SIZE && y > -ICON_SIZE && x < width + ICON_SIZE && y < height + ICON_SIZE) {
                 drawBuildingIcon(context, icon.kind, x, y, ICON_SIZE, icon.rim);
                 this.icons.push(icon.kind);
+
+                // (Tracked home by its trails' signs: marked so, core/tracks.js)
+                if (icon.tracked) {
+                    drawTracked(context, x, y, ICON_SIZE);
+                }
             }
         }
 

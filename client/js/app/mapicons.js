@@ -606,6 +606,37 @@ export function drawMarker(context, x, y, icon, { size = 22 } = {}) {
     context.restore();
 }
 
+/**
+ * The mark of a camp or lair tracked home by its trails' signs (core/tracks.js), drawn at the
+ * lower right of its icon (centred at x, y, `size` pixels across): a pale paw on a dark disc.
+ */
+export function drawTracked(context, x, y, size) {
+    const r = size * 0.24;
+    const [cx, cy] = [x + size * 0.42, y + size * 0.42];
+    const dot = (dx, dy, rx, ry) => {
+        context.beginPath();
+        context.ellipse(cx + dx * r, cy + dy * r, rx * r, ry * r, 0, 0, Math.PI * 2);
+        context.fill();
+    };
+
+    context.save();
+    context.beginPath();
+    context.arc(cx, cy, r * 1.25, 0, Math.PI * 2);
+    context.fillStyle = "rgba(30, 20, 10, 0.9)";
+    context.fill();
+    context.lineWidth = 1.2;
+    context.strokeStyle = "#d8f0c0";
+    context.stroke();
+    context.fillStyle = "#d8f0c0";
+    dot(0, 0.3, 0.42, 0.34);
+
+    for (const [dx, dy] of [[-0.55, -0.2], [-0.2, -0.55], [0.2, -0.55], [0.55, -0.2]]) {
+        dot(dx, dy, 0.16, 0.2);
+    }
+
+    context.restore();
+}
+
 // The paths, made once (Path2D: only in the browser)
 let paths = null;
 

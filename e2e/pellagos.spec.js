@@ -1788,7 +1788,12 @@ test("the mouse pointer a sword over the page, over the view showing what a clic
     await page.evaluate(() => window.pellagos.game.start());
     expect(await cursor()).toContain("images/pointer/shaken-48.png");
     expect(await cursor("#packbutton")).toContain("images/pointer/shaken-48.png");
+    // (Held still again while it goes out: drawn in software, each frame takes about a second, and
+    // the pointer's timer and each look at it wait for the frame drawing to end, so it going out
+    // 1.5 s after the shake would be seen only after several, seconds late)
+    await page.evaluate(() => window.pellagos.game.stop());
     await expect.poll(cursor, { timeout: 4000 }).not.toContain("shaken");
+    await page.evaluate(() => window.pellagos.game.start());
 
     // Large, and turned off: the system's own pointer
     await set("#largepointerswitch", true);
@@ -6305,7 +6310,151 @@ test("the journal keeps the last ten messages told across the screen, behind a b
     await expect(rows.first()).toContainText("2 times");
 });
 
-test("the bestiary: a creature seen and slain written in, its page in the journal opening a part at a time; and the next time", async ({ page }) => {
+test("the wild's creatures leave their prints on the ground as they go out in the world, as their feet are: a wolf its paws, a boar its hooves, a bandit his boots; fading by the clock", async ({ page }) => {
+    await playing(page, "/?play&seed=2");
+
+    // (Out of town, a wolf, a boar and a bandit wandering by the player)
+    await page.evaluate(async () => {
+        const { CREATURES } = await import("/js/core/creatures.js");
+        const { game } = window.pellagos;
+        const { host, battle, world } = game;
+        const [mx, my] = world.stamp.middle;
+        const at = [Math.floor(mx - 150), Math.floor(my - 20)];
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", at, { facing: Math.PI });
+        Object.assign(battle.actor(game.me), { hp: 1e6, maxHp: 1e6 });
+
+        for (const [k, kind] of ["wolf", "boar", "bandit"].entries()) {
+            const id = `walker-${kind}`;
+
+            host.wild.set(id, { creature: kind, tier: 2, pack: id, camp: null, lair: null, master: false });
+            battle.add({ id, kind: "beast", name: CREATURES[kind].name, weapon: CREATURES[kind].weapon, team: "beasts", square: [at[0] - 3 + k * 3, at[1] - 4], ai: "wild", hp: 1e6, speed: 1.2, chase: 1.2, wild: { creature: kind, tier: 2, temper: "defensive", guard: 0, roam: 6, leash: 12, pack: id, leader: null, menace: false } });
+        }
+    });
+
+    // (Each kind of print made: tracks3d.js PRINTS' order is the atlas's. Whatever else the wild
+    // puts out about the player leaves its own too)
+    const printed = () => {
+        const { tracks } = window.pellagos.game;
+        const kinds = ["paw", "cat", "broad", "hoof", "claw", "lizard", "boot", "bare", "webbed", "pricks", "slither", "smear"];
+        const made = new Set([...tracks.cells.slice(0, tracks.mesh.count)].map((cell) => kinds[cell]));
+
+        return ["paw", "hoof", "boot"].every((kind) => made.has(kind));
+    };
+
+    expect(await playUntil(page, printed, { seconds: 90 })).toBe(true);
+
+    // Drawn out in the world, each lying on the ground there and made by the game's clock
+    const prints = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { tracks } = game;
+        const matrix = new (tracks.mesh.instanceMatrix.array.constructor)(16);
+        const out = [];
+
+        for (let k = 0; k < tracks.mesh.count; k++) {
+            matrix.set(tracks.mesh.instanceMatrix.array.subarray(k * 16, k * 16 + 16));
+            out.push({ y: matrix[13], ground: tracks.groundAt(matrix[12], matrix[14]), made: tracks.made[k], depth: tracks.depths[k] });
+        }
+
+        return { visible: tracks.mesh.visible, clock: game.clock, out };
+    });
+
+    expect(prints.visible).toBe(true);
+    expect(prints.out.every(({ y, ground }) => Math.abs(y - ground) < 0.05)).toBe(true);
+    expect(prints.out.every(({ made, depth }) => made <= prints.clock && depth > 0 && depth <= 1)).toBe(true);
+});
+
+test("a trail out of a camp: its prints and signs seen near it, a sign tapped walked up to and read, which way it runs told; three read, its camp tracked, on the world map and in the journal; and the next time", async ({ page }) => {
+    // (Played twice: more than the usual time)
+    test.setTimeout(180000);
+    await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
+
+    const continued = async () => {
+        await title(page);
+        await page.locator("#continuebutton").click();
+        await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+    };
+    const journal = page.getByRole("dialog", { name: "Journal" });
+
+    await continued();
+
+    // A little way from the first sign of the trail out of the camp nearest the player's town
+    const trail = await page.evaluate(async () => {
+        const { trailsOf } = await import("/js/core/tracks.js");
+        const { CREATURES } = await import("/js/core/creatures.js");
+        const { game } = window.pellagos;
+        const { host, battle, world } = game;
+        const me = battle.actor(game.me);
+        const near = ({ signs: [{ at }] }) => Math.hypot(at[0] - me.x, at[1] - me.y);
+        const ours = trailsOf(world.plan)
+            .filter(({ home }) => home.kind === "camp")
+            .sort((a, b) => near(a) - near(b))[0];
+        const [x, y] = ours.signs[0].at;
+        const creature = host.trailCreatureOf(game.me, ours);
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [Math.floor(x) + 3, Math.floor(y) + 2], { facing: Math.PI });
+        Object.assign(battle.actor(game.me), { hp: 1e6, maxHp: 1e6 });
+        window.testSign = ours.signs[0].id;
+
+        return { home: ours.home.id, signs: ours.signs.map(({ id, at }) => ({ id, at })), creature, name: CREATURES[creature].name };
+    });
+
+    // Seen: the sign glinting, and the trail's prints
+    expect(await playUntil(page, () => Boolean(window.pellagos.game.trailSigns.shown.get(window.testSign)?.sprite) && window.pellagos.game.trailPrints.mesh.count > 0, { seconds: 10 })).toBe(true);
+
+    // Tapped: walked up to, and read; told what made it and which way the trail runs, and it's in
+    // their bestiary
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.advance(1 / 30, { render: true, wait: true });
+
+        const at = game.view.toScreen(game.trailSigns.shown.get(window.testSign).at.clone());
+
+        game.tap(at.x, at.y);
+    });
+    expect(await playUntil(page, () => window.pellagos.game.explored.signs.has(window.testSign), { seconds: 15 })).toBe(true);
+    expect(await page.evaluate(() => window.pellagos.game.messages.map(({ text }) => text).filter((text) => text.includes(" sign: ")))).toEqual([expect.stringMatching(new RegExp(`^${trail.name} sign: .+\\. The trail runs [a-z-]+ from here, toward .+ \\(1 of 3 signs read\\)\\.$`))]);
+    expect(await page.evaluate((creature) => window.pellagos.game.progress.bestiary.entry(creature).signs, trail.creature)).toBe(1);
+    expect(await playUntil(page, () => !window.pellagos.game.trailSigns.shown.get(window.testSign)?.sprite, { seconds: 2 })).toBe(true);
+
+    // The other two read: its camp tracked, told, and marked on the world map, found or not
+    for (const sign of trail.signs.slice(1)) {
+        await page.evaluate(({ id, at }) => {
+            const { game } = window.pellagos;
+
+            game.host.battle.place(game.me, "town", [Math.floor(at[0]), Math.floor(at[1])], { facing: Math.PI });
+            game.host.command(game.me, { type: "read", sign: id });
+        }, sign);
+        await playUntil(page, () => false, { seconds: 0.5 });
+    }
+
+    const tracked = await page.evaluate((home) => {
+        const { game } = window.pellagos;
+
+        return { tracked: [...game.explored.tracked], told: game.messages.some(({ text }) => text.includes("You've tracked it home: ")), marked: game.worldMapView().icons.filter((icon) => icon.tracked).map(({ id }) => id), home };
+    }, trail.home);
+
+    expect(tracked).toEqual({ tracked: [trail.home], told: true, marked: [trail.home], home: trail.home });
+
+    // In the journal: its trail, tracked home
+    await page.evaluate(() => window.pellagos.game.toggleJournal());
+    await expect(journal).toBeVisible();
+    await expect(journal.getByRole("heading", { name: "Trails" })).toBeVisible();
+    await expect(journal.locator(".journal-trail.tracked")).toContainText(`${trail.name} trail`);
+    await expect(journal.locator(".journal-trail.tracked")).toContainText("Tracked home to");
+    await page.evaluate(() => window.pellagos.game.toggleJournal());
+
+    // The next time they play: still read, still tracked
+    await continued();
+    expect(await page.evaluate(() => ({ signs: window.pellagos.game.explored.signs.size, tracked: [...window.pellagos.game.explored.tracked] }))).toEqual({ signs: 3, tracked: [trail.home] });
+});
+
+test("the bestiary: a creature seen and slain written in, its page in the journal opening a part at a time, its portrait drawn; and the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
     test.setTimeout(180000);
     await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), SAVE);
@@ -6355,6 +6504,32 @@ test("the bestiary: a creature seen and slain written in, its page in the journa
     await expect(journal).toContainText("Seen · 1 slain");
     await expect(journal.locator(".bestiary-section.shut")).toHaveCount(3);
     await expect(journal.locator(".bestiary-section.shut").first()).toContainText("At Known: watch for it, read the signs it leaves, and slay it to learn more.");
+
+    // Its portrait beside its name: a wolf as the game draws one, on the dark, not a blank picture
+    const portrait = journal.locator(".bestiary-portrait-picture");
+
+    await expect(portrait).toBeVisible({ timeout: 60000 });
+    await expect(portrait).toHaveAttribute("alt", "Wolf, as it looks");
+
+    const drawn = await portrait.evaluate((picture) => {
+        const canvas = Object.assign(document.createElement("canvas"), { width: picture.naturalWidth, height: picture.naturalHeight });
+        const context = canvas.getContext("2d");
+
+        context.drawImage(picture, 0, 0);
+
+        const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
+        const colours = new Set();
+
+        for (let k = 0; k < data.length; k += 4 * 13) {
+            colours.add(`${data[k] >> 4},${data[k + 1] >> 4},${data[k + 2] >> 4}`);
+        }
+
+        return { width: canvas.width, colours: colours.size, corner: [...data.slice(0, 3)] };
+    });
+
+    expect(drawn.width).toBe(224);
+    expect(drawn.colours).toBeGreaterThan(20);
+    expect(Math.max(...drawn.corner)).toBeLessThan(60);
 
     // Back to the contents, then the journal; closed
     await journal.getByRole("button", { name: "Back to the bestiary" }).click();
@@ -7778,8 +7953,8 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     await expect(page.getByRole("heading", { name: "The world" })).toBeVisible();
     // (Its key folded away at first to its "Key" button in the corner, the map seen whole; tapped,
     // open above it, within the screen: each kind of building gone into, a barracks' and the seven
-    // shops among them; the fog; the circles of what's been heard tell of, and a hell's cult's; and
-    // the pin. Tapped again, folded away)
+    // shops among them; the fog; the circles of what's been heard tell of, and a hell's cult's; a
+    // camp or lair tracked home; and the pin. Tapped again, folded away)
     const key = page.getByRole("button", { name: "Key", exact: true });
     const viewport = page.viewportSize();
 
@@ -7789,11 +7964,12 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     await key.click();
     await expect(key).toHaveAttribute("aria-expanded", "true");
     await expect(page.locator("#worldmapkey")).toBeVisible();
-    await expect(page.locator("#worldmapkey li")).toHaveCount(19);
+    await expect(page.locator("#worldmapkey li")).toHaveCount(20);
     await expect(page.locator("#worldmapkey li", { hasText: "Mystic Emporium" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Your markers (up to 10): tap one to share it or take it away" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Heard tell of: somewhere in it" })).toBeVisible();
     await expect(page.locator("#worldmapkey li", { hasText: "Strange lights by night" })).toBeVisible();
+    await expect(page.locator("#worldmapkey li", { hasText: "Tracked home by its trails" })).toBeVisible();
 
     const opened = await page.locator("#worldmaplegend").boundingBox();
 

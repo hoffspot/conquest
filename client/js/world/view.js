@@ -341,6 +341,10 @@ const REACH_ROUND = 1;
 const _point = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _likeness = new THREE.Box3();
+const _fitAhead = new THREE.Vector3();
+const _fitAcross = new THREE.Vector3();
+const _fitUp = new THREE.Vector3();
+const _fitCorner = new THREE.Vector3();
 const _likenessPart = new THREE.Box3();
 const _toCamera = new THREE.Vector3();
 const _eye = new THREE.Vector3();
@@ -1564,29 +1568,35 @@ export class View {
      * A portrait of someone (`subject`: their object; `tall` metres; facing `facing` radians, as
      * the object's turned), head and shoulders from in front of them (or, `whole`, a creature not
      * shaped as a person, all of it, from a little to its side), alone on the paperdoll's dark
-     * (LIKENESS): drawn once into a picture of its own and read back. Resolves with its pixels (an
-     * ImageData, LIKENESS.size square), or null where they can't be read back.
+     * (LIKENESS): drawn once into a picture of its own and read back, `size` pixels square, toned
+     * `bright` times as bright as the screen; lit as it is where it stands, or (`fair`) as on a fair
+     * day, whatever the time of day, as the paperdoll is; and a creature whole framed on the ball
+     * round it, or (`fit`) on all of it as it's seen from there, `fit` of the picture (a bestiary's
+     * portrait: app/game.js portraitOf). Resolves with its pixels (an ImageData), or null where
+     * they can't be read back.
      */
-    async portrait(subject, { tall = 1.7, facing = subject.rotation.y, whole = false } = {}) {
+    async portrait(subject, { tall = 1.7, facing = subject.rotation.y, whole = false, size = LIKENESS.size, bright = LIKENESS.bright, fair = false, fit = null } = {}) {
         const renderer = this.renderer;
-        const { layer, size, span, at, fov } = LIKENESS;
+        const { layer, span, at, fov } = LIKENESS;
 
         // (Drawn as the screen is, untoned and linear, in a picture deep enough to tone after:
-        // half floats where they can be read back, else bytes, clipped)
-        if (!this.portraits) {
+        // half floats where they can be read back, else bytes, clipped; one for each size)
+        this.portraits ??= new Map();
+
+        if (!this.portraits.has(size)) {
             const target = new THREE.WebGLRenderTarget(size, size, { type: THREE.HalfFloatType });
             const deep = renderer.capabilities.textureTypeReadable(THREE.HalfFloatType);
             const camera = new THREE.PerspectiveCamera(fov, 1, 0.05, 400);
 
             camera.layers.set(layer);
-            this.portraits = { target: deep ? target : new THREE.WebGLRenderTarget(size, size), deep, camera };
+            this.portraits.set(size, { target: deep ? target : new THREE.WebGLRenderTarget(size, size), deep, camera });
 
             if (!deep) {
                 target.dispose();
             }
         }
 
-        const { target, deep, camera } = this.portraits;
+        const { target, deep, camera } = this.portraits.get(size);
 
         // (Its shaders for drawing into a picture of its own made first, in the background where
         // the browser can (KHR_parallel_shader_compile): three.js draws into one untoned and
@@ -1625,15 +1635,43 @@ export class View {
 
         if (whole) {
             subject.updateMatrixWorld(true);
-            subject.traverse((node) => {
+            subject[fit ? "traverseVisible" : "traverse"]((node) => {
                 if (node.visible && node.geometry) {
+                    // (Framed on all of it, `fit`: what's shown of it, a skinned part as it's
+                    // posed, not as it was made, which may be far bigger)
+                    if (fit && node.isSkinnedMesh) {
+                        node.computeBoundingBox();
+                        box.union(_likenessPart.copy(node.boundingBox).applyMatrix4(node.matrixWorld));
+
+                        return;
+                    }
+
                     node.geometry.boundingBox ?? node.geometry.computeBoundingBox();
                     box.union(_likenessPart.copy(node.geometry.boundingBox).applyMatrix4(node.matrixWorld));
                 }
             });
         }
 
-        if (!box.isEmpty()) {
+        if (!box.isEmpty() && fit) {
+            // (Near enough that every corner of the box round it is within `fit` of the picture,
+            // across and up, seen from where the camera looks from: its way round and a little above)
+            const middle = box.getCenter(_point);
+            const way = facing + LIKENESS.aside;
+            const ahead = _fitAhead.set(-Math.sin(way), -0.25, -Math.cos(way)).normalize();
+            const across = _fitAcross.crossVectors(ahead, _fitUp.set(0, 1, 0)).normalize();
+            const up = _fitUp.crossVectors(across, ahead);
+            const reach = Math.tan((fov * Math.PI) / 360) * fit;
+            let back = 0;
+
+            for (let k = 0; k < 8; k++) {
+                const corner = _fitCorner.set(k & 1 ? box.max.x : box.min.x, k & 2 ? box.max.y : box.min.y, k & 4 ? box.max.z : box.min.z).sub(middle);
+
+                back = Math.max(back, corner.dot(ahead) + Math.abs(corner.dot(across)) / reach, corner.dot(ahead) + Math.abs(corner.dot(up)) / reach);
+            }
+
+            camera.position.copy(middle).addScaledVector(ahead, -back);
+            camera.lookAt(middle);
+        } else if (!box.isEmpty()) {
             const middle = box.getCenter(_point);
             const back = box.getSize(_up).length() / 2 / LIKENESS.snug / Math.sin((fov * Math.PI) / 360);
             const way = facing + LIKENESS.aside;
@@ -1653,6 +1691,18 @@ export class View {
 
         const background = this.scene.background;
         const shadows = renderer.shadowMap.autoUpdate;
+        // (Lit as on a fair day, `fair`, as the paperdoll is: the sun's and the sky's light as they
+        // are out of doors at noon, and the screen's exposure)
+        const lit = fair ? { colour: _colour.copy(this.sun.color), strength: this.sun.intensity, environment: this.scene.environment, exposure: renderer.toneMappingExposure } : null;
+
+        if (lit) {
+            this.sun.color.set(OUTDOORS.sun[0]);
+            this.sun.intensity = OUTDOORS.sun[1];
+            this.scene.environment = this.environments?.outdoors.texture ?? this.scene.environment;
+            renderer.toneMappingExposure = EXPOSURE;
+        }
+
+        const exposure = renderer.toneMappingExposure;
 
         this.scene.background = PREVIEW_BACKGROUND;
         renderer.shadowMap.autoUpdate = false;
@@ -1664,6 +1714,13 @@ export class View {
         renderer.shadowMap.autoUpdate = shadows;
         this.scene.background = background;
         subject.traverse((node) => node.layers.disable(layer));
+
+        if (lit) {
+            this.sun.color.copy(lit.colour);
+            this.sun.intensity = lit.strength;
+            this.scene.environment = lit.environment;
+            renderer.toneMappingExposure = lit.exposure;
+        }
 
         const read = deep ? new Uint16Array(size * size * 4) : new Uint8Array(size * size * 4);
 
@@ -1680,7 +1737,7 @@ export class View {
         for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
                 const from = ((size - 1 - y) * size + x) * 4;
-                const [r, g, b] = toneOf(linear(from), linear(from + 1), linear(from + 2), renderer.toneMappingExposure * LIKENESS.bright);
+                const [r, g, b] = toneOf(linear(from), linear(from + 1), linear(from + 2), exposure * bright);
 
                 pixels.data.set([r, g, b, 255], (y * size + x) * 4);
             }

@@ -2,23 +2,25 @@
 // shown on the minimap and the world map with an icon of what each is; the chunks of the world
 // they've set foot in, the rest of the world map hidden under a fog until they have; and the
 // adventurers' guild's branches whose portals they can step through to (core/portals.js: by their
-// places' ids), each one they've been into. In a party, what each finds is found by the others
-// too (Host #share), and kept by them for good: the places worth finding one of them found first,
-// by whom (`found`), for the maps to say.
+// places' ids), each one they've been into; and the signs they've read on the trails out of the
+// wild's camps and lairs (core/tracks.js: by their ids), and the homes they've tracked those trails
+// to (by the camp's or site's id), marked on their maps. In a party, what each finds is found by
+// the others too (Host #share), and kept by them for good: the places worth finding one of them
+// found first, by whom (`found`), for the maps to say.
 //
 // Kept with the saved game (app/save.js): the buildings as their keys, the chunks as one bit each
-// (the world's 128 by 128 chunks in 2 KB), written as base64, the branches as their ids, and
-// who found what for them as { place's id: name }. One kept from before there were portals has
-// none (`portals` null), till the host works out which they'd found (Host join).
+// (the world's 128 by 128 chunks in 2 KB), written as base64, the branches, the signs and the homes
+// as their ids, and who found what for them as { place's id: name }. One kept from before there
+// were portals has none (`portals` null), till the host works out which they'd found (Host join).
 
 import { fromBase64, toBase64 } from "./wire.js";
 import { CHUNK, CHUNKS } from "./worldplan/plan.js";
 
 export class Explored {
     /**
-     * @param {object} [kept] - As `toJSON` gave it: { entered: [keys], visited: base64, portals: [ids], found: { id: name } }.
+     * @param {object} [kept] - As `toJSON` gave it: { entered: [keys], visited: base64, portals: [ids], found: { id: name }, signs: [ids], tracked: [ids] }.
      */
-    constructor({ entered = [], visited = "", portals = null, found = {} } = {}) {
+    constructor({ entered = [], visited = "", portals = null, found = {}, signs = [], tracked = [] } = {}) {
         this.entered = new Set(entered.filter((key) => typeof key === "string"));
         this.visited = typeof visited === "string" && visited ? fromBase64(visited, (CHUNKS * CHUNKS) / 8) : new Uint8Array((CHUNKS * CHUNKS) / 8);
 
@@ -27,6 +29,10 @@ export class Explored {
 
         /** The places another of their party found for them first (plan place ids), by whom (their name). */
         this.found = new Map(found && typeof found === "object" ? Object.entries(found).filter(([, name]) => typeof name === "string") : []);
+
+        /** The trails' signs read (core/tracks.js ids), and the homes tracked (camps' and sites' ids). */
+        this.signs = new Set((Array.isArray(signs) ? signs : []).filter((id) => typeof id === "string"));
+        this.tracked = new Set((Array.isArray(tracked) ? tracked : []).filter((id) => typeof id === "string"));
 
         /** Goes up by one whenever anything's found (for what's drawn from it to know to redraw). */
         this.version = 0;
@@ -82,6 +88,30 @@ export class Explored {
             this.found.set(id, name);
             this.version++;
         }
+    }
+
+    /** A sign on a trail read (core/tracks.js: its id): returns whether it's the first time. */
+    read(id) {
+        if (typeof id !== "string" || this.signs.has(id)) {
+            return false;
+        }
+
+        this.signs.add(id);
+        this.version++;
+
+        return true;
+    }
+
+    /** A camp or lair tracked home (its id), marked on the maps: returns whether it's the first time. */
+    track(id) {
+        if (typeof id !== "string" || this.tracked.has(id)) {
+            return false;
+        }
+
+        this.tracked.add(id);
+        this.version++;
+
+        return true;
     }
 
     /** Has the player been in this chunk (cx, cy: chunks from the world's north-west corner)? */
@@ -144,10 +174,11 @@ export class Explored {
     }
 
     /**
-     * What to keep: { entered: [keys], visited: base64, portals: [ids], found: { id: name } } (no
-     * `portals` till they're worked out, and no `found` till another's found something for them).
+     * What to keep: { entered: [keys], visited: base64, portals: [ids], found: { id: name }, signs:
+     * [ids], tracked: [ids] } (no `portals` till they're worked out, no `found` till another's found
+     * something for them, and no signs or homes till they've read or tracked any).
      */
     toJSON() {
-        return { entered: [...this.entered], visited: toBase64(this.visited), ...(this.portals ? { portals: [...this.portals] } : {}), ...(this.found.size ? { found: Object.fromEntries(this.found) } : {}) };
+        return { entered: [...this.entered], visited: toBase64(this.visited), ...(this.portals ? { portals: [...this.portals] } : {}), ...(this.found.size ? { found: Object.fromEntries(this.found) } : {}), ...(this.signs.size ? { signs: [...this.signs] } : {}), ...(this.tracked.size ? { tracked: [...this.tracked] } : {}) };
     }
 }

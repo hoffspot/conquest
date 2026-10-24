@@ -26,7 +26,7 @@
 
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
-import { drawBuildingIcon, drawMarker, drawPing, drawSearch, drawWarMark, FORT_ICONS, MARKER_COLOURS } from "./mapicons.js";
+import { drawBuildingIcon, drawMarker, drawPing, drawSearch, drawTracked, drawWarMark, FORT_ICONS, MARKER_COLOURS } from "./mapicons.js";
 import { FORD_MARK, grassOf, paintPatch, WATER_COLOURS } from "./minimap.js";
 
 // The land's picture: pixels to a cell of the plan (32 metres)
@@ -660,9 +660,10 @@ export class WorldMap {
             }
         }
 
-        // The buildings the player's gone into
+        // The buildings the player's gone into (and the camps and lairs they've tracked home)
         const icons = [];
         const finders = [];
+        const tracked = [];
 
         if (view.scale <= ICONS_FROM) {
             for (const icon of this.icons) {
@@ -684,6 +685,12 @@ export class WorldMap {
                         context.fillStyle = FINDER_COLOUR;
                         context.fillText(`found by ${icon.finder}`, x, y + ICON_SIZE * 0.6);
                         finders.push(icon.finder);
+                    }
+
+                    // (Tracked home by its trails' signs: marked so, core/tracks.js)
+                    if (icon.tracked) {
+                        drawTracked(context, x, y, ICON_SIZE);
+                        tracked.push(icon.id);
                     }
                 }
             }
@@ -903,7 +910,7 @@ export class WorldMap {
             context.restore();
         }
 
-        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, finders, pings: pings.length, markers: markers.length, marks: (this.marks ?? []).length, heard: (this.heard ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
+        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, finders, tracked, pings: pings.length, markers: markers.length, marks: (this.marks ?? []).length, heard: (this.heard ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
     }
 
     // The war table's map: a shade over all but what its people see now (draw's)

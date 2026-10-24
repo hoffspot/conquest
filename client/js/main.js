@@ -1896,7 +1896,7 @@ function toggleLegend() {
 
 // The map's key: each icon, and the fog
 async function keyOf() {
-    const { drawBuildingIcon, drawMarker } = await import("./app/mapicons.js");
+    const { drawBuildingIcon, drawMarker, drawTracked } = await import("./app/mapicons.js");
     const list = $("#worldmapkey");
 
     list.replaceChildren();
@@ -1950,6 +1950,15 @@ async function keyOf() {
         item.append(glyph, label);
         list.append(item);
     }
+
+    // (A camp or a lair tracked home by its trails' signs: its icon with a pale paw)
+    const tracked = document.createElement("li");
+    const paw = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });
+
+    drawBuildingIcon(paw.getContext("2d"), "camp", 20, 20, 32);
+    drawTracked(paw.getContext("2d"), 20, 20, 32);
+    tracked.append(paw, "Tracked home by its trails");
+    list.append(tracked);
 
     // (The pin: held down to drop it; and tapping twice to run)
     const pin = document.createElement("li");
