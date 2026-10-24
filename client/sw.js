@@ -8,7 +8,9 @@
 // changes a file changes its address. A copy is kept only once its bytes are checked against its
 // hash: a server that has since moved on to another version (a release published while a page was
 // loading) hands that one on, which is used but not kept. One being fetched (the loader's) is
-// waited for, not fetched twice (generated/game_delivery_plan.md).
+// waited for, not fetched twice (generated/game_delivery_plan.md). What a page loaded before the
+// worker took over (on a first visit, main.js and what it imports) is kept when the page asks,
+// from the browser's own copy (keepLoaded).
 //
 // A file asked for by name that a release keeps by hash (a worker's modules, as the import map
 // doesn't reach into workers; the font; the WebAssembly the navigation's glue fetches) is its copy
@@ -111,6 +113,8 @@ self.addEventListener("message", (event) => {
         event.waitUntil(heard(event.source.id, message));
     } else if (message?.kind === "used" && Array.isArray(message.urls)) {
         event.waitUntil(usedAll(message.urls));
+    } else if (message?.kind === "keep" && Array.isArray(message.urls)) {
+        event.waitUntil(keepLoaded(message.urls));
     }
 });
 
@@ -297,6 +301,45 @@ async function keep(url, hash, bytes, headers) {
     await used(url);
 
     return true;
+}
+
+// What a page loaded by hash before the worker took over (on a first visit, main.js and what it
+// imports: js/app/device.js keepLoaded), kept now, from the browser's own copy, just downloaded
+// (downloaded again only if the browser hasn't one), each checked by its hash as any file kept is
+async function keepLoaded(urls) {
+    for (const url of urls) {
+        let address;
+
+        try {
+            address = new URL(url);
+        } catch {
+            continue;
+        }
+
+        const hash = address.searchParams.get("h");
+
+        if (address.origin !== self.location.origin || !HASH.test(hash ?? "")) {
+            continue;
+        }
+
+        const { ready, leave } = inLine(url);
+
+        await ready;
+
+        try {
+            if (!(await (await caches.open(BOOT)).match(url)) && !(await (await caches.open(ASSETS)).match(url))) {
+                const response = await fetch(url, { cache: "force-cache" });
+
+                if (response.ok && response.type === "basic") {
+                    await keep(url, hash, await response.arrayBuffer(), response.headers);
+                }
+            }
+        } catch {
+            // (Offline: kept as the next page asks for it)
+        } finally {
+            leave();
+        }
+    }
 }
 
 // A copy of a file saved without its hash (the shell's, as the cache before these kept it), taken

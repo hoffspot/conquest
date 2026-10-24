@@ -4889,7 +4889,9 @@ it.
    hash, fetches a file the loader's fetching once (the page importing it straight after waits for
    it), and lets go of what no release in use lists: the newest's, and that of each page still
    open on an older one (generated/asset_streaming_plan.md, section 5). On a first visit the
-   loader waits for the service worker to take over (3 s at most), so it keeps what's downloaded.
+   loader waits for the service worker to take over (3 s at most), so it keeps what's downloaded,
+   and the page then asks it to keep `main.js` and what it imports, which came before it took
+   over, from the browser's own copies.
    The page itself, and `version.js` (stamped with the commit after the manifest's made), are
    checked with the server on each load. The game's own server (`npm start`, `npm run
    world-server`) tags each file by its hash, so one that's the same is "not modified" whatever
