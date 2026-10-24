@@ -5,7 +5,7 @@ import { once } from "node:events";
 import { readFile } from "node:fs/promises";
 import { after, before, describe, it } from "node:test";
 import { createServer } from "../server/index.js";
-import { rangeOf } from "../server/static.js";
+import { encodingFor, rangeOf, sameVersion } from "../server/static.js";
 
 let server;
 let baseUrl;
@@ -72,6 +72,62 @@ describe("HTTP server", () => {
         assert.ok((await older.arrayBuffer()).byteLength > 0);
     });
 
+    it("tags each file by the hash of its bytes: the same version is \"not modified\" whatever date it was written, in any encoding; another isn't; nor is a copy newer than the file (one rolled back)", async () => {
+        const first = await fetch(`${baseUrl}/js/main.js`, { headers: { "Accept-Encoding": "identity" } });
+        const tag = first.headers.get("etag");
+        const hash = createHash("sha256").update(Buffer.from(await first.arrayBuffer())).digest("hex").slice(0, 10);
+
+        assert.equal(tag, `"${hash}"`);
+
+        for (const sent of [tag, `W/${tag}`, `"${hash}.br"`, `"0123456789", "${hash}.gzip"`, "*"]) {
+            const same = await fetch(`${baseUrl}/js/main.js`, { headers: { "If-None-Match": sent } });
+
+            assert.equal(same.status, 304, sent);
+            assert.equal((await same.arrayBuffer()).byteLength, 0, sent);
+        }
+
+        // (Another version, even with the date the file was written: all of it, as the tag's asked
+        // by first)
+        const other = await fetch(`${baseUrl}/js/main.js`, { headers: { "If-None-Match": "\"0123456789\"", "If-Modified-Since": first.headers.get("last-modified") } });
+
+        assert.equal(other.status, 200);
+        assert.ok((await other.arrayBuffer()).byteLength > 0);
+
+        // (A copy dated after the file: one of a newer version, the file rolled back since)
+        const newer = await fetch(`${baseUrl}/js/main.js`, { headers: { "If-Modified-Since": new Date(Date.parse(first.headers.get("last-modified")) + 60000).toUTCString() } });
+
+        assert.equal(newer.status, 200);
+        await newer.arrayBuffer();
+    });
+
+    it("sends code and pages compressed, brotli where it's taken and gzip where it isn't (as over plain http), each tagged so; models, pictures and parts as they are", async () => {
+        const file = await readFile(new URL("../client/js/app/game.js", import.meta.url));
+        const hash = createHash("sha256").update(file).digest("hex").slice(0, 10);
+
+        for (const [accepted, encoding] of [["gzip, deflate, br, zstd", "br"], ["gzip, deflate", "gzip"], ["br;q=0, gzip", "gzip"], ["identity", null]]) {
+            const response = await fetch(`${baseUrl}/js/app/game.js`, { headers: { "Accept-Encoding": accepted } });
+
+            assert.equal(response.headers.get("content-encoding"), encoding, accepted);
+            assert.equal(response.headers.get("etag"), `"${hash}${encoding ? `.${encoding}` : ""}"`, accepted);
+            assert.equal(response.headers.get("vary"), "Accept-Encoding", accepted);
+            assert.ok(encoding ? Number(response.headers.get("content-length")) < file.length / 3 : Number(response.headers.get("content-length")) === file.length, `${accepted}: ${response.headers.get("content-length")} bytes of ${file.length}`);
+            assert.ok(Buffer.from(await response.arrayBuffer()).equals(file), accepted);
+        }
+
+        for (const path of ["/characters/human.bin", "/models/kaykit/hexagons_medieval.png"]) {
+            const response = await fetch(baseUrl + path, { headers: { "Accept-Encoding": "br, gzip" } });
+
+            assert.equal(response.headers.get("content-encoding"), null, path);
+            await response.arrayBuffer();
+        }
+
+        const part = await fetch(`${baseUrl}/js/app/game.js`, { headers: { "Accept-Encoding": "br", "Range": "bytes=0-99" } });
+
+        assert.equal(part.status, 206);
+        assert.equal(part.headers.get("content-encoding"), null);
+        assert.ok(Buffer.from(await part.arrayBuffer()).equals(file.subarray(0, 100)));
+    });
+
     it("does not serve files outside the client directory", async () => {
         for (const path of ["/../package.json", "/%2e%2e/package.json", "/..%2fpackage.json", "/%2e%2e%2fserver/index.js"]) {
             const response = await fetch(baseUrl + path);
@@ -123,6 +179,28 @@ describe("HTTP server", () => {
     it("returns 404 for missing files and 405 for other methods", async () => {
         assert.equal((await fetch(`${baseUrl}/nope.js`)).status, 404);
         assert.equal((await fetch(`${baseUrl}/`, { method: "POST" })).status, 405);
+    });
+});
+
+describe("what a browser's sent in and has (encodingFor, sameVersion)", () => {
+    it("sends brotli where it's taken, else gzip, else as it is; never one taken at q=0", () => {
+        assert.equal(encodingFor("gzip, deflate, br, zstd"), "br");
+        assert.equal(encodingFor("gzip, deflate"), "gzip");
+        assert.equal(encodingFor("br;q=0, gzip;q=0.5"), "gzip");
+        assert.equal(encodingFor("BR"), "br");
+        assert.equal(encodingFor("identity"), null);
+        assert.equal(encodingFor(undefined), null);
+        assert.equal(encodingFor("gzip;q=0"), null);
+    });
+
+    it("knows the copy a browser has by its tag's hash, in any encoding, weak or strong, among several; or any for *", () => {
+        assert.equal(sameVersion('"0123456789"', "0123456789"), true);
+        assert.equal(sameVersion('W/"0123456789.br"', "0123456789"), true);
+        assert.equal(sameVersion('"aaaaaaaaaa", "0123456789.gzip"', "0123456789"), true);
+        assert.equal(sameVersion("*", "0123456789"), true);
+        assert.equal(sameVersion('"aaaaaaaaaa"', "0123456789"), false);
+        assert.equal(sameVersion('W/"6adcb970-9a606"', "0123456789"), false);
+        assert.equal(sameVersion("", "0123456789"), false);
     });
 });
 

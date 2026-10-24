@@ -357,6 +357,8 @@ already copied serves a player offline straight after the update.
   - `Cache-Control: public, max-age=31536000, immutable` for a `?h=` request whose hash is the
     file's (it's one version forever). The hash is worked out once for each version of the file;
     a wrong one is served as anything else is;
+  - since the delivery plan's stage 1 (generated/game_delivery_plan.md): every file tagged by that
+    hash (`ETag`), and text sent compressed (brotli or gzip); parts never are;
   - the rest as before.
 - **The relay and the models on one machine** share its upstream. A game hosted for many players
   should serve its models from Pages or a CDN. An `ASSETS_BASE` setting in the catalog moves where
