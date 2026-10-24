@@ -315,7 +315,7 @@ describe("a burnt house drawn (world/art/kits/burnt.js)", () => {
         assert.ok(left.top <= shape.eaves + 0.01, `its roof fallen in (${left.top.toFixed(1)} over eaves ${shape.eaves.toFixed(1)})`);
         assert.ok(left.top > shape.base + (shape.eaves - shape.base) * BURNT_LOOKS.burning.walls[0], "its walls standing in part");
         assert.ok(left.colour < corners(meshesOf(whole)).colour * 0.5, "blackened");
-        assert.ok(named(added(made), "timber-char").length && named(added(made), "earth-sooty").length, "its charred beams, and the ash");
+        assert.ok(named(added(made), "timber-char").length && named(added(made), "soil").length, "its charred beams, and the ash");
 
         const fires = made.userData.lights.filter(([, , , kind]) => kind === "blaze");
 
