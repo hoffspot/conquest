@@ -6923,7 +6923,7 @@ dialog.worlds input.text.code-entry {
     align-items: center;
     justify-content: center;
     gap: 6px 12px;
-    margin: 12px 0 0;
+    margin: 14px 0 0;
 }
 
 .title-server-name {
