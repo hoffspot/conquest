@@ -490,13 +490,19 @@ describe("service worker", () => {
         assert.equal(await (await worker.request(version[0])).text(), "version v2");
     });
 
-    it("tells the page's loader a copy it gives it is one it keeps (a header); an import, the copy as it's kept", async () => {
+    it("tells the page's loader a copy it gives it is one it keeps (a header); an import, the copy without it, as a response of its own", async () => {
         const game = ["/js/app/game.js", "game v1"];
         const worker = loadServiceWorker({ files: { [game[0]]: game[1] } });
 
         assert.equal((await worker.request(address(game))).headers.get("X-Pellagos-Kept"), null);
         assert.equal((await worker.request(address(game))).headers.get("X-Pellagos-Kept"), "1");
-        assert.equal((await worker.request(address(game), { destination: "script" })).headers.get("X-Pellagos-Kept"), null);
+
+        const imported = await worker.request(address(game), { destination: "script" });
+
+        assert.equal(imported.headers.get("X-Pellagos-Kept"), null);
+        assert.equal(imported.headers.get("Content-Type"), "text/javascript");
+        assert.equal(await imported.text(), "game v1");
+        assert.equal(worker.requests.length, 1);
     });
 
     it("gives the catalog's files 1 GiB at most, whatever the browser says it has (recent Chrome says 10 GiB more than it's using, whatever the disk)", async () => {

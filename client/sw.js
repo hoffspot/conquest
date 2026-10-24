@@ -176,16 +176,17 @@ function inLine(url) {
 // screen can tell what came from this device from what was downloaded
 const KEPT = "X-Pellagos-Kept";
 
-// A copy kept here, given to the loader (a fetch(): no `destination`) said to be kept; to an
-// import, as it's kept, so Chrome keeps its compiled code with it
+// A copy kept here, handed over as a response of its own, its bytes read from what's kept as
+// they're wanted: given as it's kept (the cache's own response), Chrome sometimes failed an import
+// of it on a page's first visit, the service worker taking over as the page loaded (about one in
+// 25 loads, on a busy machine: "Failed to fetch dynamically imported module"). To the loader (a
+// fetch(): no `destination`), said to be kept
 function handed(response, destination) {
-    if (destination) {
-        return response;
-    }
-
     const headers = new Headers(response.headers);
 
-    headers.set(KEPT, "1");
+    if (!destination) {
+        headers.set(KEPT, "1");
+    }
 
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
