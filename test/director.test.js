@@ -6,8 +6,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
-import { WILD } from "../client/js/core/creatures.js";
-import { DIRECTOR, FINDS, FRESH, freshTrail, noteOf, PACING, PEACEFUL, peacefulNext, rollRemains, shuffled, WELL_RESTED } from "../client/js/core/director.js";
+import { LOOKS } from "../client/js/beasts/looks.js";
+import { CREATURES, WILD } from "../client/js/core/creatures.js";
+import { DIRECTOR, FINDS, FRESH, freshTrail, noteOf, PACING, PEACEFUL, peacefulNext, rollRemains, shuffled, TRACKLESS, WELL_RESTED } from "../client/js/core/director.js";
 import { hypot } from "../client/js/core/exact.js";
 import { HOST_PLAYER, Host, REST, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -15,6 +16,7 @@ import { CHEST_GOLD } from "../client/js/core/places.js";
 import { createRandom } from "../client/js/core/random.js";
 import { TREASURE_MAP } from "../client/js/core/treasure.js";
 import { decode, encode } from "../client/js/core/wire.js";
+import { lookPrint } from "../client/js/world/tracks3d.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 
@@ -374,6 +376,10 @@ describe("the wilds director's pacing (director.js PACING; host.js #pace)", () =
 });
 
 describe("the wilds director's fresh tracks (director.js FRESH; host.js #putTracks)", () => {
+    it("knows what leaves no prints as the world draws them (what flies, floats or swarms)", () => {
+        assert.deepEqual([...TRACKLESS].sort(), Object.keys(CREATURES).filter((id) => !lookPrint(id, LOOKS[id]).print).sort());
+    });
+
     it("lays a fresh trail from just ahead of one place to a little short of another, wandering a little", () => {
         const points = freshTrail([0, 0], [0, 80], createRandom(4));
         const along = points.map(([, y]) => y);
@@ -401,6 +407,7 @@ describe("the wilds director's fresh tracks (director.js FRESH; host.js #putTrac
 
         assert.ok(pack.length >= 1 && pack.every((one) => !one.dead));
         assert.equal(host.wild.get(pack[0].id).creature, tracks.creature);
+        assert.ok(!TRACKLESS.has(tracks.creature), `(${tracks.creature}: they leave prints)`);
         assert.ok(pack.some((one) => hypot(one.x - end[0], one.y - end[1]) <= FRESH.short + FRESH.step + 6), "(leading to them)");
 
         // (The pack all gone: the tracks too, told)

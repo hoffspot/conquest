@@ -9522,6 +9522,76 @@ test("the wilds director deals a fallen adventurer's remains ahead of a player c
     expect(dealt.told).toContain("Well rested.");
 });
 
+test("the wilds director lays fresh tracks ahead of a player crossing the wilds, leading to a pack out near them: their prints drawn, said once come upon; gone once the pack is", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const fresh = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { host } = game;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // (Every word on the banner kept)
+        const told = [];
+
+        new MutationObserver((records) => told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+
+        const settle = async (steps, render = false) => {
+            for (let k = 0; k < steps; k++) {
+                player.hp = player.maxHp;
+                game.advance(0.25, { render });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+        const goTo = (x, y) => Object.assign(player, { x, y, square: [Math.floor(x), Math.floor(y)], path: [], order: null, progress: null, target: null });
+
+        // Out in the wilds 600 m north of the start town (what prints are drawn there before), going
+        // north, owed the tracks card
+        goTo(player.x, player.y - 600);
+        await settle(2, true);
+
+        const before = game.trailPrints.mesh.count;
+
+        host.travel.set("player", { at: [player.x, player.y], walked: 600, next: 600, heading: [0, -1], deck: ["tracks"] });
+        await settle(4);
+
+        const [tracks] = host.fresh.values();
+
+        if (!tracks) {
+            return null;
+        }
+
+        // On them: drawn, and said
+        goTo(...tracks.points[1]);
+        await settle(4, true);
+
+        const drawn = game.trailPrints.mesh.count;
+        const pack = [...host.wild].filter(([, one]) => one.pack === tracks.pack).map(([id]) => game.battle.actor(id));
+
+        // The pack gone: the tracks too
+        for (const one of pack) {
+            Object.assign(one, { dead: true, respawnAt: Infinity, target: null });
+        }
+
+        await settle(4, true);
+
+        return { creature: tracks.creature, points: tracks.points.length, before, drawn, after: game.trailPrints.mesh.count, seen: game.freshSeen.has(tracks.id), gone: !host.fresh.has(tracks.id), told };
+    });
+
+    expect(fresh).not.toBeNull();
+    expect(fresh.points).toBeGreaterThanOrEqual(3);
+    expect(fresh.drawn).toBeGreaterThan(fresh.before);
+    expect(fresh.after).toBeLessThan(fresh.drawn);
+    expect(fresh).toMatchObject({ seen: true, gone: true });
+    expect(fresh.told.some((text) => /^Fresh tracks, not long made: an? .+'s, and not alone\. They lead off to the [a-z-]+\.$/.test(text)), JSON.stringify(fresh.told)).toBe(true);
+});
+
 test("a treasure map read out in the wilds: its circle on the world map and the minimap and in the journal; its keepers woken as the player comes near; where it's buried glinting; put down, it's dug up, the player's share in it, and the hunt's done", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

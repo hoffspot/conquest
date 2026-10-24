@@ -17,7 +17,7 @@
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
 import { CACHE_BANDS, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
-import { DIRECTOR, FINDS, FRESH, freshTrail, noteOf, PACING, peacefulNext, rollRemains, shuffled, WELL_RESTED } from "./director.js";
+import { DIRECTOR, FINDS, FRESH, freshTrail, noteOf, PACING, peacefulNext, rollRemains, shuffled, TRACKLESS, WELL_RESTED } from "./director.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
@@ -8321,7 +8321,8 @@ export class Host {
     // Fresh tracks (core/director.js FRESH) laid before a player (`actor`, going the way of
     // `heading`, or any way): to the nearest pack of the wild's roaming within FRESH reach of them,
     // those ahead first; or, none, one of the land's put out ahead of them (creatures.js
-    // encounterAt); kept to be drawn (`fresh`) and told. Whether they could be
+    // encounterAt); never to what leaves no prints (TRACKLESS); kept to be drawn (`fresh`) and
+    // told. Whether they could be
     #putTracks(actor, heading, homes) {
         const plan = this.world.plan;
         const [hx, hy] = heading ?? [0, 1];
@@ -8332,7 +8333,7 @@ export class Host {
             .filter(([id, one]) => {
                 const each = this.battle.actor(id);
 
-                return each && !each.dead && each.map === "town" && each.target === null && !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && far(each) >= FRESH.reach[0] && far(each) <= FRESH.reach[1];
+                return each && !each.dead && each.map === "town" && each.target === null && !TRACKLESS.has(one.creature) && !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && far(each) >= FRESH.reach[0] && far(each) <= FRESH.reach[1];
             })
             .map(([id]) => this.battle.actor(id))
             .sort((a, b) => Number(ahead(b)) - Number(ahead(a)) || far(a) - far(b) || (a.id < b.id ? -1 : 1));
@@ -8350,7 +8351,7 @@ export class Host {
 
             const home = homes.find(({ at: where }) => where && hypot(where[0] - actor.x, where[1] - actor.y) < 1)?.home ?? at;
             const encounter = encounterAt(plan, at, [home], this.random, this.#dark());
-            const ids = encounter ? this.#pack(encounter, at, {}) : [];
+            const ids = encounter && !TRACKLESS.has(encounter.creature) ? this.#pack(encounter, at, {}) : [];
 
             target = ids.length ? this.battle.actor(ids[0]) : null;
         }
