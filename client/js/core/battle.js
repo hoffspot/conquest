@@ -17,7 +17,9 @@
 // Fighting is automatic:
 //  - The player goes where they're told (a "move" order) and, whenever they're standing still,
 //    attacks any enemy within reach of their weapon. Told to "engage" an enemy, they walk until
-//    it's within reach, then attack it.
+//    it's within reach, then attack it. Locked on one (engaged with lock: true), it stays their
+//    target wherever they go, struck before any other in reach, till it falls or is LOCK_REACH
+//    off (#keepLock).
 //  - An enemy patrols between its patrol points (or keeps its post). When it sees an enemy of
 //    its (within SIGHT squares, with nothing in the way, and within its leash of its post or its
 //    round), or one of its own it can see is fighting one, it chases them and attacks whenever
@@ -598,6 +600,9 @@ const AHEAD = 400;
 const MOVE_ON = 1.5;
 const MOVE_LEGS = 8;
 
+// How far off (metres) an enemy a player's locked on (their `lock`) gets before it's let go
+export const LOCK_REACH = 40;
+
 /**
  * Sliding past what's in the way of an "ahead" order (a lamppost, a tree, a wall gone along at a
  * slant): when the straight way's clear for less than `clear` metres, the ways `turns` (radians)
@@ -831,6 +836,9 @@ export class Battle {
             // Who it's talking to (an id), if anyone
             talkingTo: null,
             order: null,
+            // The enemy a player's locked on (an id: kept their target as they go, #keepLock), or
+            // null
+            lock: null,
             attack: null,
             readyAt: 0,
             staggeredUntil: 0,
@@ -1337,6 +1345,9 @@ export class Battle {
                 actor.order = { type: "engage", target: order.target, run: Boolean(order.run), ...(order.stand ? { stand: true } : {}) };
                 actor.pathGoal = null;
 
+                // (Locked on it, or on it already: kept; set on another without, the lock let go)
+                actor.lock = order.lock || actor.lock === order.target ? order.target : null;
+
                 // (Set on it where they stand: wherever they were going, they stop)
                 if (order.stand) {
                     actor.path = [];
@@ -1347,6 +1358,16 @@ export class Battle {
             case "approach":
                 actor.order = { type: "approach", target: order.target, run: Boolean(order.run) };
                 actor.pathGoal = null;
+                break;
+            case "unlock":
+                // (Let go of whoever they were locked on, and set on no one till they choose
+                // again; anywhere else they were going, still going)
+                if (actor.order?.type === "engage") {
+                    actor.order = null;
+                    actor.path = [];
+                }
+
+                actor.lock = null;
                 break;
             case "enter": {
                 const link = this.links.find(({ id: linkId }) => linkId === order.link);
@@ -1985,6 +2006,10 @@ export class Battle {
     // --- Deciding what to do ---
 
     #think(actor) {
+        if (actor.lock) {
+            this.#keepLock(actor);
+        }
+
         if (actor.dead) {
             if (this.time >= actor.respawnAt) {
                 this.#respawn(actor);
@@ -2465,12 +2490,26 @@ export class Battle {
 
         // (Unseen, they strike only on purpose: told to engage it)
         if (!actor.path.length && !this.buffOf(actor, "invisibility")) {
-            // (Not a creature that's leaving everyone be: only on purpose, told to engage it)
-            const target = this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy) && !(enemy.wild?.temper === "defensive" && enemy.target === null));
+            // (Locked on one in reach: it, not whoever's nearest. Not a creature that's leaving
+            // everyone be: only on purpose, told to engage it or locked on it)
+            const locked = actor.lock ? this.actor(actor.lock) : null;
+            const target = locked && locked.map === actor.map && this.#reachable(actor, locked) ? locked : this.#nearestEnemy(actor, (enemy) => this.#reachable(actor, enemy) && !(enemy.wild?.temper === "defensive" && enemy.target === null));
 
             if (target) {
                 this.#attack(actor, target);
             }
+        }
+    }
+
+    // A player locked on an enemy (their `lock`), let go of it once it's fallen, or no enemy of
+    // theirs now, or LOCK_REACH off; or somewhere else (through a door, up the stairs), unless
+    // they're going after it; or once they've fallen themselves
+    #keepLock(actor) {
+        const target = this.actor(actor.lock);
+        const after = actor.order?.type === "engage" && actor.order.target === actor.lock;
+
+        if (actor.dead || !target || target.dead || !this.hostile(actor, target) || (target.map === actor.map ? hypot(target.x - actor.x, target.y - actor.y) >= LOCK_REACH : !after)) {
+            actor.lock = null;
         }
     }
 

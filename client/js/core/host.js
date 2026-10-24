@@ -584,7 +584,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 39;
+export const SNAPSHOT_VERSION = 40;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -657,6 +657,8 @@ export const SNAPSHOT_STEPS = Object.freeze({
     }),
     // 39: the houses the Behemoth of the Rift has burnt (core/burnt.js, Host #burn: none yet)
     38: (snapshot) => ({ ...snapshot, version: 39, burnt: [] }),
+    // 40: the enemy each player's locked on (battle.js `lock`: none yet)
+    39: (snapshot) => ({ ...snapshot, version: 40, battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => ({ lock: null, ...actor })) } }),
 });
 
 /**
@@ -1557,9 +1559,11 @@ export class Host {
     /**
      * Do what a player asks, if it can be done. A command is one of:
      *  - { type: "move", to: [x, y] }, { type: "ahead", facing, reach? }, { type: "engage", target }
-     *    (stand: true, set on them where they stand), { type: "approach", target },
-     *    { type: "enter", link }, { type: "stop" }: orders for their character in the battle
-     *    (battle.js command), with run: true to run;
+     *    (stand: true, set on them where they stand; lock: true, locked on them, their target
+     *    wherever they go till they fall or are far off), { type: "approach", target },
+     *    { type: "enter", link }, { type: "stop" }, { type: "unlock" } (let go of whoever they're
+     *    locked on): orders for their character in the battle (battle.js command), with run: true
+     *    to run;
      *  - { type: "cast", spell, target }: cast a spell (target: an id, or none for themselves);
      *  - { type: "talk", with }: start talking to one of the folk (an id), or stop (null);
      *  - { type: "emote", emote }: show an emote (core/emotes.js EMOTES: a wave, a bow), standing;
@@ -1666,7 +1670,9 @@ export class Host {
                     actor.foes[target.id] = this.battle.time + FOE_MS;
                 }
 
-                return this.#order(actor, { type: command.type, target: target.id, run, ...(command.type === "engage" && command.stand ? { stand: true } : {}) });
+                // (Locked on it: their target wherever they go, till it falls or is far off: battle.js
+                // #keepLock)
+                return this.#order(actor, { type: command.type, target: target.id, run, ...(command.type === "engage" && command.stand ? { stand: true } : {}), ...(command.type === "engage" && command.lock ? { lock: true } : {}) });
             }
             case "enter": {
                 const link = this.battle.links.find(({ id }) => id === command.link);
@@ -1699,6 +1705,9 @@ export class Host {
             }
             case "stop":
                 return this.#order(actor, { type: "stop" });
+            case "unlock":
+                // (Locked on an enemy: let go, and set on no one)
+                return this.#order(actor, { type: "unlock" });
             case "cast": {
                 // (Only the spells they know: their schools' up to their tiers, and those learnt; and
                 // the Prismatic sigil's, which the battle lets them cast with it whole (Prismatic

@@ -441,7 +441,7 @@ const LINK_EVERY = 500;
 
 // The commands that set the player's hero going otherwise than where they're sent, or stop them:
 // not drawn ahead of the copy (app/predict.js)
-const STEERING = new Set(["engage", "approach", "enter", "stop", "cancel", "summoned", "trade"]);
+const STEERING = new Set(["engage", "approach", "enter", "stop", "unlock", "cancel", "summoned", "trade"]);
 
 // How long a joined game goes without a step from the host before its player's told it's waiting (ms)
 const WAITING_AFTER = 2000;
@@ -1178,6 +1178,11 @@ export class Game {
         this.autoSnag = false;
         this.snagOnly = null;
         this.snagTried = new Set();
+
+        // Whether whoever the player sets on is locked on (Game options: Auto target lock): their
+        // target wherever they go, till it falls or is 40 m off (battle.js `lock`, #keepLock).
+        // Off, only an enemy whose icon's held is locked on
+        this.autoLock = true;
 
         // The mouse pointer (app/pointer.js), told what a click on the view would do where the
         // mouse is (#aim); where the mouse is over the view (null: off it), and when it was looked at
@@ -6199,13 +6204,23 @@ export class Game {
         return one?.name ?? (one ? `${/^[aeiou]/.test(one.kind) ? "an" : "a"} ${one.kind}` : null);
     }
 
-    // Who the player was told to fight (and is still alive), or null
+    // Who the player was told to fight, or else is locked on (and is still alive), or null
     #target() {
         const player = this.battle.actor(this.me);
-        const order = player && !player.dead ? player.order : null;
-        const target = order?.type === "engage" ? this.battle.actor(order.target) : null;
+
+        if (!player || player.dead) {
+            return null;
+        }
+
+        const target = this.battle.actor(player.order?.type === "engage" ? player.order.target : player.lock);
 
         return target && !target.dead && target.map === player.map ? target : null;
+    }
+
+    // What an engage order of the player's carries: locked on whoever it's at, with Auto target
+    // lock on (#target, battle.js `lock`)
+    #locking() {
+        return this.autoLock ? { lock: true } : {};
     }
 
     // Who the player is fighting: who they were told to fight, or the nearest enemy after them
@@ -6249,9 +6264,9 @@ export class Game {
     }
 
     // Those attacking the player, an icon each down the right side (hud.js attackers), and whoever
-    // the player's set on (#target), marked: the first ATTACKERS.most, in the order they came to
-    // it; each with their likeness, drawn once (view.js portrait) when they're drawn in full (not
-    // one of a crowd)
+    // the player's set on (#target), marked (and locked on, as such): the first ATTACKERS.most, in
+    // the order they came to it; each with their likeness, drawn once (view.js portrait) when
+    // they're drawn in full (not one of a crowd)
     #attackers() {
         const player = this.battle.actor(this.me);
         const target = this.#target();
@@ -6282,13 +6297,15 @@ export class Game {
             this.#likeness(this.likenesses, actor.id);
         }
 
-        this.hud.attackers(shown.map((actor) => ({ id: actor.id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, target: actor === target, picture: this.likenesses.get(actor.id) ?? null })));
+        this.hud.attackers(shown.map((actor) => ({ id: actor.id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, target: actor === target, locked: actor === target && player.lock === actor.id, picture: this.likenesses.get(actor.id) ?? null })));
     }
 
     // An attacker's icon tapped or held (hud.js onAttacker; `time`: ms, as performance.now()): held,
-    // set on them, walking up into reach of what's in hand; tapped twice in quick succession,
-    // running; tapped once, set on them where the player stands (whoever they were set on, they
-    // stop), or, tapped on whoever they're set on, stopping going after them
+    // set on them and locked on (Auto target lock on or not), walking up into reach of what's in
+    // hand; tapped twice in quick succession, running; tapped once, set on them where the player
+    // stands (whoever they were set on, they stop), or, tapped on whoever they're locked on, let
+    // go (set on no one), or on whoever they're set on, stopping going after them. With Auto
+    // target lock on, set on them, locked on (#locking); off, whoever they were locked on let go
     #attackerPressed(id, gesture, time) {
         const player = this.battle.actor(this.me);
         const enemy = this.battle.actor(id);
@@ -6301,22 +6318,26 @@ export class Game {
         }
 
         const chosen = player.order?.type === "engage" && player.order.target === id;
+        let unlocked = false;
 
         this.#endTalk();
         this.approaching = null;
 
         if (gesture === "hold") {
-            this.#command({ type: "engage", target: id });
+            this.#command({ type: "engage", target: id, lock: true });
         } else if (last?.id === id && time - last.time <= DOUBLE_TAP_MS) {
             this.lastIconTap = null;
-            this.#command({ type: "engage", target: id, run: true });
+            this.#command({ type: "engage", target: id, run: true, ...this.#locking() });
+        } else if (player.lock === id) {
+            unlocked = true;
+            this.#command({ type: "unlock" });
         } else if (chosen) {
             this.#halt();
         } else {
-            this.#command({ type: "engage", target: id, stand: true });
+            this.#command({ type: "engage", target: id, stand: true, ...this.#locking() });
         }
 
-        if (!chosen) {
+        if (!chosen && !unlocked) {
             this.sound?.play("lock");
         }
     }
@@ -13313,7 +13334,7 @@ export class Game {
             return { ok: true };
         }
 
-        const command = spell ? { type: "cast", spell, target: on } : ability ? { type: "ability", ability, target: on } : order ? { type: order, target } : item ? { type: "use", item, target: on } : emote ? { type: "emote", emote } : null;
+        const command = spell ? { type: "cast", spell, target: on } : ability ? { type: "ability", ability, target: on } : order ? { type: order, target, ...(order === "engage" ? this.#locking() : {}) } : item ? { type: "use", item, target: on } : emote ? { type: "emote", emote } : null;
 
         const heard = (result) => {
             // (Setting on someone: the lock heard, as a tap on an enemy)
@@ -13980,7 +14001,7 @@ export class Game {
         if (enemy) {
             const chosen = player.order?.type === "engage" && player.order.target === enemy.id;
 
-            this.#command(run ? { type: "engage", target: enemy.id, run } : { type: "engage", target: enemy.id, stand: true });
+            this.#command(run ? { type: "engage", target: enemy.id, run, ...this.#locking() } : { type: "engage", target: enemy.id, stand: true, ...this.#locking() });
 
             if (!chosen) {
                 this.sound?.play("lock");

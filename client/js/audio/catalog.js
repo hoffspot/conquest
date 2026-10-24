@@ -389,7 +389,7 @@ export const CATALOG = Object.freeze({
     tap: { group: "The interface", label: "Tap", about: "A small single wooden tick, the softest of them all (Vrymaa's box).", plays: "A reply chosen in a talk; the world map's pin taken away, or one of the player's markers, or one of theirs shared with their party; one of the party chosen to help, or let go; a party order done (another player asked, put out, made leader; leaving); something said in the party's chat; the minimap folded into its compass; a quick action flicked with no other spell of its school that way." },
     talk: { group: "The interface", label: "Talk", about: "A card slid over felt: a soft, papery swish (Kenney's).", plays: "A talk begun." },
     denied: { group: "The interface", label: "Refused", about: "Two dull wooden knocks, the second softer: \"tok-tok, no\" (Kenney's).", plays: "A slice of the wheel that can't be used; anything refused but for gold (too far, on cooldown, no room); a request failed." },
-    lock: { group: "The interface", label: "Target", about: "A key turning in a lock: one soft metallic click (Jan Schupke's).", plays: "An enemy chosen to fight." },
+    lock: { group: "The interface", label: "Target", about: "A key turning in a lock: one soft metallic click (Jan Schupke's).", plays: "An enemy chosen to fight (with Auto target lock on, locked on), or locked on by holding its icon." },
 
     // Cues (scripts/sounds/items.js: the Versilian Community Sample Library's, in the music's D Dorian)
     slain: { group: "Cues", label: "Slain", about: "Two hand chimes struck together, low on D.", plays: "A foe the player or a follower felled, or one the player fought in the last 30 seconds, hitting the ground." },

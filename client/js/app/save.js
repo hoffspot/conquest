@@ -111,6 +111,9 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     autoSnag: false,
     snagGrades: null,
     snagKinds: null,
+    // (Auto target lock: whoever the player sets on stays their target as they run from it, till it
+    // falls or is 40 m off; off, only an enemy's icon held locks on: app/game.js `autoLock`)
+    autoLock: true,
     // The camera (app/game.js cameraSettings): whether it follows round behind the player as they
     // walk (off: it stays turned the way it's left); whether in a fight it frames it, three-
     // quarters on and clear of what stands round (the battle cam); how far a drag turns and tilts
