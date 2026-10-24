@@ -669,7 +669,7 @@ export const SOUNDS = {
     warHorn: { variants: 2, volume: 0.7, make: (random) => horn(random, [[98, 1.85, 0.03]]) },
     // (And the wild's folk drumming as they come for a player after a long calm: core/director.js
     // PACING; a rolling beat, the last three quicker)
-    warDrums: { variants: 2, volume: 0.7, make: (random) => drums(random, [[0, 1], [0.55, 0.65], [1.1, 1], [1.65, 0.65], [2.2, 1], [2.47, 0.8], [2.74, 1]], 3.6) },
+    warDrums: { variants: 2, volume: 0.7, make: (random) => drums(random, [[0, 1], [0.36, 0.65], [0.72, 1], [0.9, 0.8], [1.08, 1]], 1.9) },
     retreatHorn: { variants: 1, volume: 0.6, make: (random) => horn(random, [[110, 0.45], [98, 1.35, 0.3]], { gap: 0.1 }) },
     townHorn: { variants: 1, volume: 0.6, make: (random) => horn(random, [[196, 0.3], [262, 0.3], [392, 1.15, 0.02]], { gap: 0.07 }) },
 

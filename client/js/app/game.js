@@ -785,6 +785,10 @@ const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, thanks: 14 });
 // PACING's `from`, and more)
 const PACE_HEARD = 160;
 
+// How long after the drums are first heard in a build-up they're beaten again (seconds: as long as
+// their beat, audio/synth.js warDrums)
+const DRUMS_AGAIN = 2;
+
 // How many of the places the player's heard tell of and found since the journal keeps (the last)
 const HEARD_FOUND = 5;
 
@@ -4785,7 +4789,9 @@ export class Game {
         const drums = CREATURES[creature]?.hands || !this.sound?.voice?.(creature, "call", heard, { far: PACE_HEARD });
 
         if (drums) {
+            // (Beaten twice over, as they come on)
             this.sound?.play("warDrums", { at: heard, far: PACE_HEARD });
+            this.sound?.play("warDrums", { at: heard, far: PACE_HEARD, delay: DRUMS_AGAIN });
             this.hud.message(`Drums, somewhere off to the ${which}. They're coming this way.`, 4);
         } else {
             this.sound?.voice?.(creature, "call", heard.clone().add(new THREE.Vector3(6, 0, -4)), { far: PACE_HEARD, delay: 1.3 });
