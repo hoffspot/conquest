@@ -72,7 +72,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, onServer: null, worldsAfter: null, worldAsk: null };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null };
 
 window.pellagos = {
     get game() {
@@ -2520,9 +2520,24 @@ function leftWorld(why) {
 
 // --- Worlds on servers (generated/world_server_plan.md §8.1, §6) ---
 
-// The game's side of world servers (app/servers.js), loaded the first time it's wanted
+// The game's side of world servers (app/servers.js), loaded the first time it's wanted: once, one
+// module after the other, whoever wants it meanwhile waiting on that one load. (A player's iPhone,
+// asked for it by two at once as the page opened, gave one of them the module before it had run:
+// "Cannot access 'KnownServers' before initialization"; loaded again if a load fails)
+async function loadServers() {
+    try {
+        const servers = await import("./app/servers.js");
+
+        return [servers, await import("./app/you.js")];
+    } catch (error) {
+        state.serversLoading = null;
+
+        throw error;
+    }
+}
+
 async function serversOf() {
-    const [servers, you] = await Promise.all([import("./app/servers.js"), import("./app/you.js")]);
+    const [servers, you] = await (state.serversLoading ??= loadServers());
 
     state.servers ??= new servers.KnownServers();
     // (The player's own identity, shown coming into a server's worlds: made the first time,

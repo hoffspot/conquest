@@ -639,11 +639,14 @@ export class Battle {
      *     enemies (the host's: how their peoples stand in the war); else they always are.
      * @param {Function} [options.allied] - Whether two characters are never enemies, whatever
      *     their peoples or what's passed between them (the host's: in one party).
+     * @param {Function} [options.haven] - Whether someone's in a sanctuary (the host's: a shrine's,
+     *     core/shrines.js), the wild's creatures never going after them there.
      */
-    constructor(world, { seed = 1, relations = null, allied = null } = {}) {
+    constructor(world, { seed = 1, relations = null, allied = null, haven = null } = {}) {
         this.world = world;
         this.relations = relations;
         this.allied = allied;
+        this.haven = haven;
 
         // The maps (the world itself if it has only the one) and the links between them
         this.maps = world.maps ?? { town: world };
@@ -1112,8 +1115,8 @@ export class Battle {
     }
 
     /** A battle on `world` carrying on from a snapshot (snapshot()), its teams standing as `relations` has them. */
-    static restore(world, snapshot, { relations = null, allied = null } = {}) {
-        const battle = new Battle(world, { seed: snapshot.seed, relations, allied });
+    static restore(world, snapshot, { relations = null, allied = null, haven = null } = {}) {
+        const battle = new Battle(world, { seed: snapshot.seed, relations, allied, haven });
 
         Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1, bombs: structuredClone(snapshot.bombs ?? []), nextBomb: snapshot.nextBomb ?? 1, breaths: structuredClone(snapshot.breaths ?? []), formations: structuredClone(snapshot.formations ?? {}) });
         battle.random.state = snapshot.random;
@@ -1661,8 +1664,8 @@ export class Battle {
     /**
      * Can `a` see `b`: on the same map, within SIGHT squares (out in the world at night, only as
      * far as the light where `b` is lets them: light.js sightAt, `this.light`; as far as ever for
-     * a creature that sees in the dark, creatures.js `darkSight`, or of the colossal, towering and
-     * aglow), with nothing that blocks sight between their middles (the map's opaque squares:
+     * a creature that sees in the dark, creatures.js `darkSight`, or one given to, `darkSight`
+     * (Lunara's gift: core/shrines.js), or of the colossal, towering and aglow), with nothing that blocks sight between their middles (the map's opaque squares:
      * houses and trees, not barrels or a well, outdoors; walls, not tables, indoors)? (`range`: as
      * far as they look, if further than SIGHT: a spell's caster, as far as it reaches. To the
      * colossal: to the nearest of the squares its body stands over, #aimAt)
@@ -1671,7 +1674,7 @@ export class Battle {
         const colossal = Boolean(b.wild?.colossus && b.footprint);
         const to = colossal ? this.#aimAt(b, a.square) : b.square;
 
-        return a.map === b.map && this.#sees(a.map, a.square, to, a.map === this.lightMap && !a.wild?.darkSight && !colossal ? range * sightAt(this.light, to) : range);
+        return a.map === b.map && this.#sees(a.map, a.square, to, a.map === this.lightMap && !a.wild?.darkSight && !a.darkSight && !colossal ? range * sightAt(this.light, to) : range);
     }
 
     // Can someone on a map at one square see another square: within `range` (SIGHT), nothing opaque
@@ -2580,9 +2583,10 @@ export class Battle {
         const home = actor.spawn;
         const provoked = (enemy) => (actor.foes[enemy.id] ?? -Infinity) > this.time;
         // (Struck by them lately, it or its pack: after them however far, unseen or not, till
-        // DEFEND_MS after the last blow. Else not beyond its leash of home)
+        // DEFEND_MS after the last blow. Else not beyond its leash of home, nor into a sanctuary:
+        // those chasing give up at its edge, `haven`)
         const struck = (other) => (actor.struckBy?.[other.id] ?? -Infinity) > this.time;
-        const leashed = (other) => struck(other) || distanceBetween(home, other.square) <= wild.leash;
+        const leashed = (other) => struck(other) || (distanceBetween(home, other.square) <= wild.leash && !this.haven?.(other));
         const rouses = (enemy) => provoked(enemy) || wild.temper === "aggressive" || (wild.temper === "territorial" && distanceBetween(actor.square, enemy.square) <= wild.guard);
         const seen = this.#nearestSeen(actor, (enemy) => leashed(enemy) && rouses(enemy));
 

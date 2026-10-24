@@ -1,5 +1,6 @@
 // The gods of Pellagos: the Six of the Hearth, worshipped together in every temple, each temple
-// under one of them as its patron.
+// under one of them as its patron; and the six gods of the wide world, the Wild Six, worshipped
+// at the wayside shrines with the Six (core/shrines.js), never in a temple.
 //
 // In the beginning there was only the Silence, and in it one ember: the Hearth. It burned alone
 // for an age of ages, and in its loneliness it broke into six sparks, and each spark woke as a god.
@@ -84,3 +85,77 @@ export const GOD_IDS = Object.freeze(Object.keys(GODS));
 export function patronOf(random) {
     return random.pick(GOD_IDS);
 }
+
+/**
+ * The gods of the wide world, the Wild Six: not the Hearth's sparks but the world's own, worshipped
+ * at the wayside shrines out in the land (core/shrines.js), each shrine to one of them or to one
+ * of the Six; never in a temple. Lunara's are the rings of standing stones.
+ */
+export const WILD_GODS = Object.freeze({
+    tharos: {
+        name: "Tharos",
+        title: "the Thunderlord",
+        domain: "the sky, storms and kings",
+        colours: ["#3a5a8a", "#e8e0b0"],
+        symbol: "a crown of three lightning bolts",
+        story: "Tharos was born of the first storm that broke over the Hearth's smoke, and he has ruled the sky since. Kings swear by his crown, and when thunder rolls over the hills the old folk say he is counting his lightning. He favours the bold and strikes down the oathbreaker.",
+        festival: "The Day of Thunders, when the summer storms come",
+        sayings: ["By the Thunderlord's crown.", "May Tharos hold his hand."],
+    },
+    nerreth: {
+        name: "Nerreth",
+        title: "the Deep-Caller",
+        domain: "the sea, the rivers and all deep water",
+        colours: ["#1f5a6a", "#9ad0c8"],
+        symbol: "a trident wound with kelp",
+        story: "Nerreth lay down in the Hearth's tears and became the sea. He keeps every river that runs to him and every drowned thing they carry. Fishers leave him the first of the catch, and sailors pour wine over the side before they sail out of sight of land.",
+        festival: "The Turning Tide, at the spring equinox",
+        sayings: ["Nerreth keep you afloat.", "The Deep remembers."],
+    },
+    ceryn: {
+        name: "Ceryn",
+        title: "the Harvest Mother",
+        domain: "fields, flocks and plenty",
+        colours: ["#c89a3a", "#7a5a2a"],
+        symbol: "a sheaf of wheat bound with a red ribbon",
+        story: "Ceryn walked behind Aurelia's dawn and planted where it fell. Every furrow is hers and every full barn a gift of hers; the last sheaf of each harvest is plaited into her likeness and kept over the door till spring.",
+        festival: "Harvest Home, when the last sheaf is cut",
+        sayings: ["Ceryn fill your barn.", "May your bread rise."],
+    },
+    lunara: {
+        name: "Lunara",
+        title: "the Silver Lady",
+        domain: "the moon, the night and the old stones",
+        colours: ["#c8d0e0", "#3a3a6a"],
+        symbol: "a crescent moon over a ring of stones",
+        story: "Lunara is the Hearth's reflection in the dark water, and she watches over all that walks by night. The rings of standing stones are her roads: on the right night, under the right moon, they carry those who step into them from one ring to another. Wolves sing to her and hunters by night pray she lights their way.",
+        festival: "The Silver Night, the first full moon of autumn",
+        sayings: ["Lunara light your road.", "By the Silver Lady."],
+    },
+    wick: {
+        name: "Wick",
+        title: "the Wayfarer",
+        domain: "roads, luck and clever hands",
+        colours: ["#6a7a3a", "#d8b060"],
+        symbol: "a coin with a door on each face",
+        story: "Wick was a spark that would not settle; it ran off down the first road the world had and has never stopped. He is the god of travellers and traders, of the lucky throw and the light-fingered. Coins left at his shrines are gone by morning, and no one minds.",
+        festival: "Fools' Day, at the turn of the year",
+        sayings: ["Wick turn your coin.", "Luck on your road."],
+    },
+    bacchar: {
+        name: "Bacchar",
+        title: "the Merry Lord",
+        domain: "wine, feasts and revels",
+        colours: ["#7a2a5a", "#d0a040"],
+        symbol: "a cup wreathed in vines",
+        story: "Bacchar found the first grapes rotting on the vine, and laughed, and made wine of them. He loosens tongues and mends quarrels, and makes cowards brave for an evening; every tavern keeps a cup for him on the high shelf, filled and never drunk.",
+        festival: "The Pressing, when the grapes come in",
+        sayings: ["Bacchar fill your cup.", "To the Merry Lord."],
+    },
+});
+
+/** Every god there is, the Six of the Hearth and the Wild Six: those the shrines are to. */
+export const PANTHEON = Object.freeze({ ...GODS, ...WILD_GODS });
+
+/** The twelve's ids: the Six in the order they woke, then the Wild Six. */
+export const PANTHEON_IDS = Object.freeze(Object.keys(PANTHEON));
