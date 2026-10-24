@@ -25,7 +25,7 @@ const hashOf = (body) => createHash("sha256").update(body).digest("hex").slice(0
 // and with the network failing if asked. `stored` is what the caches hold to start with
 // ({ name: { path: body } }), `open` the pages open (their ids), `estimate` what the browser says
 // of its storage.
-function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["page-1"], estimate } = {}) {
+function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["page-1"], estimate, tags = false } = {}) {
     const handlers = {};
     const store = new Map();
     const requests = [];
@@ -90,7 +90,16 @@ function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["
             }
 
             const body = files[new URL(url).pathname] ?? clock.version ?? "new version";
-            const response = new Response(body, { status: 200, headers: { "Cache-Control": "max-age=600", "Content-Type": "text/javascript" } });
+            // (With `tags`, tagged by its hash, as the game's own server tags it, and "not modified"
+            // if asked with that tag)
+            const tag = tags ? `"${hashOf(body)}"` : null;
+            const asked = new Headers(options.headers ?? {}).get("if-none-match");
+
+            if (asked) {
+                requests.at(-1).tagged = asked;
+            }
+
+            const response = tag && asked === tag ? new Response(null, { status: 304, headers: { ETag: tag } }) : new Response(body, { status: 200, headers: { "Cache-Control": "max-age=600", "Content-Type": "text/javascript", ...(tag ? { ETag: tag } : {}) } });
 
             // A response from the page's own site, as browsers give them
             return Object.defineProperty(response, "type", { value: "basic" });
@@ -108,12 +117,12 @@ function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["
 
     // Send a request to the service worker, as the page would (a path on the game's site, or an
     // address elsewhere). Returns its response, or undefined if it leaves the request alone.
-    const request = async (path, { mode = "cors", page = "page-1", range } = {}) => {
+    const request = async (path, { mode = "cors", page = "page-1", range, destination = "" } = {}) => {
         let responded;
         const waiting = [];
 
         handlers.fetch({
-            request: { url: full(path), method: "GET", mode, headers: new Headers(range ? { range } : {}) },
+            request: { url: full(path), method: "GET", mode, destination, headers: new Headers(range ? { range } : {}) },
             clientId: mode === "navigate" ? "" : page,
             respondWith: (promise) => {
                 responded = promise;
@@ -460,6 +469,40 @@ describe("service worker", () => {
 
         assert.deepEqual(said.at(-1), { kind: "unfetched", release: "r2", files: 1, missing: 1 });
         assert.deepEqual(worker.kept(BOOT), []);
+    });
+
+    it("checks a page (or anything asked for by name) with the server by its own copy's tag, so \"not modified\" doesn't hang on the browser's HTTP cache; changed, the new one", async () => {
+        const version = ["/js/app/version.js", "version v1"];
+        const worker = loadServiceWorker({ tags: true, files: { [version[0]]: version[1] } });
+
+        assert.equal(await (await worker.request(version[0])).text(), "version v1");
+        worker.clock.now += 60001;
+        assert.equal(await (await worker.request(version[0])).text(), "version v1");
+        assert.deepEqual(worker.requests, [
+            { url: full(version[0]), cache: "no-cache" },
+            { url: full(version[0]), cache: "no-store", tagged: `"${hashOf("version v1")}"` },
+        ]);
+
+        // (Changed on the server: all of it, the new one)
+        worker.files[version[0]] = "version v2";
+        worker.clock.now += 60001;
+        assert.equal(await (await worker.request(version[0])).text(), "version v2");
+    });
+
+    it("tells the page's loader a copy it gives it is one it keeps (a header); an import, the copy as it's kept", async () => {
+        const game = ["/js/app/game.js", "game v1"];
+        const worker = loadServiceWorker({ files: { [game[0]]: game[1] } });
+
+        assert.equal((await worker.request(address(game))).headers.get("X-Pellagos-Kept"), null);
+        assert.equal((await worker.request(address(game))).headers.get("X-Pellagos-Kept"), "1");
+        assert.equal((await worker.request(address(game), { destination: "script" })).headers.get("X-Pellagos-Kept"), null);
+    });
+
+    it("gives the catalog's files 1 GiB at most, whatever the browser says it has (recent Chrome says 10 GiB more than it's using, whatever the disk)", async () => {
+        const worker = loadServiceWorker({ estimate: { quota: 10 * 1024 ** 3, usage: 0 } });
+
+        assert.equal(await worker.context.room(0), 1024 ** 3);
+        assert.equal(await loadServiceWorker({ estimate: { quota: 600 * 1024 ** 2, usage: 0 } }).context.room(0), 300 * 1024 ** 2);
     });
 
     it("takes over the copies the cache before it kept, taking on those now known by their hash rather than downloading them again", async () => {

@@ -178,7 +178,8 @@ shows at once.
 | **1** | The server: tags by hash, `If-None-Match` first, exact dates, compression. This plan | `server/static.js`, `test/server.test.js` |
 | **2** | Every file by its hash: the manifest and the import map, the page's release, the worker's plain-address mapping (workers' imports, fonts, WebAssembly) and waiting for a file being fetched; the worker registered before the loader | `scripts/build-manifest.js`, `client/index.html`, `client/js/app/{manifest,catalog,loader}.js`, `client/sw.js`, tests |
 | **3** | Updates in the background, and the reload at a quiet moment | `client/js/app/` (an updater), `client/sw.js`, `client/index.html`, `client/js/main.js` |
-| **4** | Keeping it, and seeing it: own tags for pages, `persist()`, Safari's note, the models' room capped, a part-downloaded model carried on, the loading screen's figure | `client/sw.js`, `client/js/main.js`, `client/js/app/{device,fetcher}.js`, the options |
+| **4** | Keeping it, and seeing it: own tags for pages, `persist()`, Safari's note, the models' room capped, the loading screen's figure | `client/sw.js`, `client/js/main.js`, `client/js/app/{device,loader}.js`, the options |
+| **5** | A part-downloaded model carried on after a reload, its parts kept as they come | `client/js/app/fetcher.js`, `client/sw.js` |
 
 ## 5. Tests and measurements
 

@@ -18,7 +18,7 @@
 
 import { ASSETS } from "./app/assets.js";
 import { mappedOf, releaseOf } from "./app/catalog.js";
-import { isInstalledApp, isIOS, keepLoaded, lockLandscape, looked, registerServiceWorker } from "./app/device.js";
+import { isInstalledApp, isIOS, keepDownloads, keepLoaded, lockLandscape, looked, registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { Fetcher } from "./app/fetcher.js";
 import { FullScreen } from "./app/fullscreen.js";
@@ -169,6 +169,13 @@ function listGroups(loader) {
 // Downloads count for most of the bar; starting the view and unpacking the body the rest
 const DOWNLOAD_SHARE = 0.85;
 
+// How much of the game's loaded, and, if any came from this device (what the service worker
+// keeps), how much of it was downloaded: so a load that downloads nothing doesn't look like one
+// that downloads everything
+function loadedOf(loader) {
+    return `${formatBytes(loader.loaded)} of ${formatBytes(loader.total)}${loader.kept ? `, ${formatBytes(loader.downloaded)} downloaded` : ""}`;
+}
+
 async function load() {
     show("loading");
 
@@ -186,7 +193,7 @@ async function load() {
         if (now - drawn > 50 || loader.loaded >= loader.total) {
             drawn = now;
             refresh();
-            setProgress((loader.loaded / loader.total) * DOWNLOAD_SHARE, `Downloading ${loader.current.split("/").pop() || "…"}`, `${formatBytes(loader.loaded)} of ${formatBytes(loader.total)}`);
+            setProgress((loader.loaded / loader.total) * DOWNLOAD_SHARE, `${loader.currentKept ? "Loading" : "Downloading"} ${loader.current.split("/").pop() || "…"}`, loadedOf(loader));
         }
     });
 
@@ -195,7 +202,9 @@ async function load() {
     const steps = [];
     const step = (label, share) => {
         steps.push({ label, at: performance.now() });
-        setProgress(DOWNLOAD_SHARE + share * (1 - DOWNLOAD_SHARE), label, `${formatBytes(loader.total)} downloaded in ${(loader.time / 1000).toFixed(1)} s`);
+        const time = `${(loader.time / 1000).toFixed(1)} s`;
+
+        setProgress(DOWNLOAD_SHARE + share * (1 - DOWNLOAD_SHARE), label, loader.kept ? `${formatBytes(loader.total)} in ${time}: ${formatBytes(loader.downloaded)} downloaded, the rest from this device` : `${formatBytes(loader.total)} downloaded in ${time}`);
     };
 
     step("Starting the 3D engine", 0);
@@ -4706,6 +4715,7 @@ async function start() {
     debug.watch({ fetcher });
     registerServiceWorker(release);
     watchForUpdates(release);
+    keepDownloads();
 
     // The debug log (Game options): the last game's, if it fell over while playing, kept as a
     // crash; what the browser says takes long, listened for; work done a step at a time that

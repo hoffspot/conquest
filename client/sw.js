@@ -85,6 +85,10 @@ const RECORDING = /\.[0-9a-f]{8}\.mp3$/;
 const FRESH = 60000;
 const checked = new Map();
 
+// The most room the catalog's files are given, whatever the browser says it has (bytes): recent
+// Chrome says it has what's used and 10 GiB more, whatever the disk (generated/game_delivery_plan.md)
+const ROOM_MOST = 1024 ** 3;
+
 // How long a file kept by its hash is kept even if no release in use lists it (ms): the page that
 // asked for it may not have said its release yet
 const GRACE = 10 * 60000;
@@ -161,7 +165,25 @@ function inLine(url) {
     return { ready: ahead, leave };
 }
 
-async function byHash(request, hash, event) {
+// What a page's loader is told of a copy it's given that's kept here (a header), so the loading
+// screen can tell what came from this device from what was downloaded
+const KEPT = "X-Pellagos-Kept";
+
+// A copy kept here, given to the loader (a fetch(): no `destination`) said to be kept; to an
+// import, as it's kept, so Chrome keeps its compiled code with it
+function handed(response, destination) {
+    if (destination) {
+        return response;
+    }
+
+    const headers = new Headers(response.headers);
+
+    headers.set(KEPT, "1");
+
+    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+async function byHash(request, hash, event, destination = request.destination) {
     // (A part of a file: the downloader asks for one a part at a time, and keeps the whole itself:
     // not in line)
     const part = Boolean(request.headers?.has("range"));
@@ -171,7 +193,7 @@ async function byHash(request, hash, event) {
     await ready;
 
     try {
-        return await fromKept(request, hash, event, part, () => {
+        return await fromKept(request, hash, event, part, destination, () => {
             keeping = true;
 
             return leave;
@@ -185,12 +207,12 @@ async function byHash(request, hash, event) {
 
 // What byHash answers with: the copy kept, else the network's (kept once it's all here; `kept()`
 // says it's being kept, and gives what to call once it is)
-async function fromKept(request, hash, event, part, kept) {
+async function fromKept(request, hash, event, part, destination, kept) {
     const url = request.url;
     const boot = await (await caches.open(BOOT)).match(url);
 
     if (boot) {
-        return boot;
+        return handed(boot, destination);
     }
 
     // (The catalog's are let go of the least recently used first, so when each is used counts)
@@ -199,7 +221,7 @@ async function fromKept(request, hash, event, part, kept) {
     if (asset) {
         event.waitUntil(used(url));
 
-        return asset;
+        return part ? asset : handed(asset, destination);
     }
 
     if (part) {
@@ -211,7 +233,7 @@ async function fromKept(request, hash, event, part, kept) {
     const taken = await takeOn(url, hash);
 
     if (taken) {
-        return taken;
+        return handed(taken, destination);
     }
 
     const response = await fetch(url, { cache: "no-cache" });
@@ -329,7 +351,7 @@ async function byName(request, event) {
     const listed = request.headers?.has?.("range") ? null : await hashedOf(request.url, event.clientId);
 
     if (listed) {
-        return byHash(new Request(listed), new URL(listed).searchParams.get("h"), event);
+        return byHash(new Request(listed), new URL(listed).searchParams.get("h"), event, request.destination);
     }
 
     if (RECORDING.test(url.pathname)) {
@@ -632,11 +654,11 @@ async function sizeOf(cache, request) {
 }
 
 // The room for the catalog's files: half of what the browser would let the game keep besides
-// everything else it keeps (all of it, where the browser doesn't say)
+// everything else it keeps (all of it, where the browser doesn't say), ROOM_MOST at most
 async function room(optional) {
     const estimate = await self.navigator?.storage?.estimate?.().catch(() => undefined);
 
-    return estimate?.quota ? Math.max(0, (estimate.quota - (estimate.usage ?? 0) + optional) / 2) : Infinity;
+    return Math.min(ROOM_MOST, estimate?.quota ? Math.max(0, (estimate.quota - (estimate.usage ?? 0) + optional) / 2) : Infinity);
 }
 
 // The cache before these kept everything by name: its copies go to the shell, from where those
@@ -729,8 +751,21 @@ async function networkFirst(request, event) {
     }
 
     try {
-        // Pages are fetched by address, as a page request can't be copied with different options
-        const response = await fetch(request.mode === "navigate" ? request.url : request, { cache: "no-cache" });
+        // Checked by the saved copy's own tag, where it has one: so "not modified" doesn't depend
+        // on the browser's HTTP cache still holding the file, which it may have let go of. Else
+        // by the browser's own (pages are fetched by address, as a page request can't be copied
+        // with different options)
+        const saved = await cache.match(request);
+        const tag = saved?.headers.get("ETag");
+        const response = tag ? await fetch(request.url, { cache: "no-store", headers: { "If-None-Match": tag } }) : await fetch(request.mode === "navigate" ? request.url : request, { cache: "no-cache" });
+
+        if (tag && response.status === 304) {
+            if (key) {
+                remember(key, Date.now());
+            }
+
+            return fresh(saved);
+        }
 
         if (!response.ok || response.type !== "basic") {
             return response;
