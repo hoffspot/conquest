@@ -7,7 +7,10 @@
 // - a fallen adventurer's remains, to search (FINDS remains): a little gold, now and then a piece
 //   of gear, a draught or a treasure map, and sometimes a note in their hand of somewhere near;
 // - an old campsite (FINDS campsite): a ring of stones, the ashes long cold. Camped at, it's safe
-//   with the wild nearer than anywhere else, and they wake well rested (WELL_RESTED).
+//   with the wild nearer than anywhere else, and they wake well rested (WELL_RESTED);
+// - fresh tracks (FRESH): a short trail of prints, made not long ago, leading from just ahead of
+//   them to a pack of the land's beasts or folk out now (or an elite and its kind), to follow and
+//   find them first, or to see what made them and steer clear.
 //
 // Pure data and arithmetic, no DOM; the world's host deals them (host.js #caches, #putFind).
 
@@ -20,7 +23,45 @@ import { ITEMS, rollBoost } from "./progress.js";
 import { foundMap } from "./treasure.js";
 
 /** How often a card's dealt: one each `every` metres ([least, most]) a player crosses the wilds; and the cards in a deck. */
-export const DIRECTOR = Object.freeze({ every: [250, 450], cards: Object.freeze(["cache", "remains", "campsite"]) });
+export const DIRECTOR = Object.freeze({ every: [250, 450], cards: Object.freeze(["cache", "remains", "campsite", "tracks"]) });
+
+/**
+ * Fresh tracks: the pack they lead to, one roaming within `reach` metres ([least, most]) of the
+ * player (the nearest ahead of them first), or, none, one of the land's put out `ahead` metres
+ * before them ([least, most], within `spread` radians of the way they're going): within the 90 m
+ * the wild's roaming packs are kept about a player (host.js WILDS far); the trail from `start`
+ * metres ahead of the player to `short` metres short of the pack, in steps of `step` metres,
+ * wandering as much as `wander` of a step aside at each; said once a player's within `seen`
+ * metres of its prints; let go `lasts` ms after it's made, once its pack's all gone, or once
+ * every player's `far` away.
+ */
+export const FRESH = Object.freeze({ reach: [30, 85], ahead: [60, 85], spread: 0.6, start: 8, short: 10, step: 6, wander: 0.25, seen: 12, lasts: 6 * 60000, far: 140 });
+
+/**
+ * What leaves no prints, what flies, floats or swarms (creatures.js ids): no fresh tracks lead to
+ * them. (As world/tracks3d.js draws prints, from their looks: test/director.test.js holds the two
+ * to each other.)
+ */
+export const TRACKLESS = Object.freeze(new Set(["bats", "rookFlock", "vultureFlock", "wisp", "pixies", "mare", "locustSwarm", "bloodflies", "dungeonWasp", "ghost", "wraith"]));
+
+/**
+ * A fresh trail from one place to another ([x, y] metres; random.js random): its points, from
+ * FRESH `start` metres along the way to `short` short of the end, every `step` metres, wandering
+ * a little from the straight way and coming back to it.
+ */
+export function freshTrail(from, to, random) {
+    const far = hypot(to[0] - from[0], to[1] - from[1]);
+    const [ux, uy] = [(to[0] - from[0]) / far, (to[1] - from[1]) / far];
+    const points = [];
+    let aside = 0;
+
+    for (let along = FRESH.start; along <= far - FRESH.short; along += FRESH.step) {
+        aside = Math.max(-3, Math.min(3, aside + (random.next() * 2 - 1) * FRESH.step * FRESH.wander));
+        points.push([from[0] + ux * along - uy * aside, from[1] + uy * along + ux * aside]);
+    }
+
+    return points;
+}
 
 /** The cards that are no fight: what's dealt after a hard one (the pacing). */
 export const PEACEFUL = Object.freeze(["remains", "campsite"]);

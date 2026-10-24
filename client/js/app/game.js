@@ -38,7 +38,8 @@ import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { aloftShare, BOMBS, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
-import { FINDS } from "../core/director.js";
+import { FINDS, FRESH } from "../core/director.js";
+import { compass } from "../core/ways.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { homeWords, signOf, signsNear, TRAILS, trailsNear } from "../core/tracks.js";
@@ -1309,6 +1310,8 @@ export class Game {
         this.cachesSeen = new Set();
         /** The wilds director's peaceful finds the player's seen (their ids: core/director.js), marked on the maps. */
         this.findsSeen = new Set();
+        /** The fresh tracks the player's come upon (their ids: core/director.js FRESH), said once. */
+        this.freshSeen = new Set();
         // (The shrines come near, told whose each is: #nearShrine)
         this.shrinesNear = new Set();
         this.talking = null;
@@ -4744,6 +4747,8 @@ export class Game {
             // (The party's pings: pingView; and the player's markers: markerView)
             pings: this.mapId === "town" ? this.pingView() : [],
             markers: this.mapId === "town" ? this.markers : [],
+            // (The fresh tracks they've come upon, the way they lead: #freshTrails)
+            trails: this.mapId === "town" ? this.#freshTrails() : [],
         });
     }
 
@@ -5307,12 +5312,40 @@ export class Game {
 
         this.trailSigns.update(this.clock);
 
-        if (!this.trailsAt || Math.hypot(me.x - this.trailsAt[0], me.y - this.trailsAt[1]) > TRAIL_SEEN.again) {
+        // (Laid again as the player goes, or as the wilds director lays fresh tracks or they go)
+        const fresh = [...(this.host.fresh?.keys() ?? [])].join();
+
+        if (!this.trailsAt || Math.hypot(me.x - this.trailsAt[0], me.y - this.trailsAt[1]) > TRAIL_SEEN.again || fresh !== this.freshLaid) {
             this.trailsAt = [me.x, me.y];
+            this.freshLaid = fresh;
             this.#layTrails(plan, me);
         }
 
+        this.#spyFresh(me);
+
         this.trailPrints.mesh.visible = this.trailPrints.mesh.count > 0;
+    }
+
+    // The fresh tracks the player's come upon (#spyFresh), for the minimap to show the way they lead
+    // (prints can be hard to see in long grass): [{ id, points }]
+    #freshTrails() {
+        return [...(this.host.fresh?.values() ?? [])].filter(({ id }) => this.freshSeen.has(id)).map(({ id, points }) => ({ id, points }));
+    }
+
+    // Fresh tracks the wilds director's laid (core/director.js FRESH) come upon by the player for
+    // the first time (within FRESH.seen of their prints): said, what made them and which way they
+    // lead
+    #spyFresh(me) {
+        for (const tracks of this.host.fresh?.values() ?? []) {
+            if (!this.freshSeen.has(tracks.id) && tracks.points.some(([x, y]) => Math.hypot(x - me.x, y - me.y) <= FRESH.seen)) {
+                this.freshSeen.add(tracks.id);
+
+                const name = CREATURES[tracks.creature]?.name?.toLowerCase() ?? "something";
+                const way = compass(tracks.points[0], tracks.points.at(-1));
+
+                this.hud.message(`Fresh tracks, not long made: ${/^[aeiou]/.test(name) ? "an" : "a"} ${name}'s, and not alone. They lead off to the ${way}: they're on your minimap.`, 4.5);
+            }
+        }
     }
 
     // The roaming beasts' dens within DEN_LOOK.seen of the player (core/dens.js), out in the world,
@@ -5346,8 +5379,13 @@ export class Game {
             return;
         }
 
-        for (const trail of trailsNear(plan, [me.x, me.y], TRAIL_SEEN.prints)) {
-            const creature = this.host.trailCreatureOf(this.me, trail);
+        // (The trails out of the wild's homes, worn; and the wilds director's fresh tracks, made
+        // not long ago, deeper: core/director.js FRESH)
+        const near = ({ points }) => points.some(([x, y]) => Math.hypot(x - me.x, y - me.y) <= TRAIL_SEEN.prints + 10);
+        const fresh = [...(this.host.fresh?.values() ?? [])].filter(near).map((tracks) => ({ ...tracks, fresh: true }));
+
+        for (const trail of [...trailsNear(plan, [me.x, me.y], TRAIL_SEEN.prints), ...fresh]) {
+            const creature = trail.fresh ? trail.creature : this.host.trailCreatureOf(this.me, trail);
             const { print, size } = creature ? lookPrint(creature, CREATURE_LOOKS[creature], this.gaitsSeen.get(creature)) : { print: null };
 
             if (!print) {
@@ -5372,7 +5410,7 @@ export class Game {
                     foot = foot === "left" ? "right" : "left";
 
                     if (takes) {
-                        this.trailPrints.print(print, ox + px, oz + pz, facing, size, takes * TRAIL_SEEN.depth, 0);
+                        this.trailPrints.print(print, ox + px, oz + pz, facing, size, takes * (trail.fresh ? 1 : TRAIL_SEEN.depth), 0);
                     }
                 }
 

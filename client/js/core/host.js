@@ -17,7 +17,7 @@
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
 import { CACHE_BANDS, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
-import { DIRECTOR, FINDS, noteOf, PACING, peacefulNext, rollRemains, shuffled, WELL_RESTED } from "./director.js";
+import { DIRECTOR, FINDS, FRESH, freshTrail, noteOf, PACING, peacefulNext, rollRemains, shuffled, TRACKLESS, WELL_RESTED } from "./director.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
@@ -1074,6 +1074,14 @@ export class Host {
          */
         this.finds = new Map();
         this.nextFind = 1;
+
+        /**
+         * The fresh tracks the wilds director's laid (core/director.js FRESH), by id: { id,
+         * creature (what made them), pack (the pack they lead to), points ([[x, y]...]: the
+         * prints' way, from the player's end), until (when they're let go: the battle's ms) }.
+         */
+        this.fresh = new Map();
+        this.nextFresh = 1;
 
         /**
          * The treasures hunted (core/treasure.js), by id: { id, owner (whose map it was: a
@@ -2395,6 +2403,7 @@ export class Host {
             nextTreasure: this.nextTreasure,
             travel: structuredClone([...this.travel.entries()]),
             ...(this.nextFind > 1 ? { finds: structuredClone([...this.finds.entries()]), nextFind: this.nextFind } : {}),
+            ...(this.nextFresh > 1 ? { fresh: structuredClone([...this.fresh.entries()]), nextFresh: this.nextFresh } : {}),
             ground: structuredClone([...this.ground.values()]),
             campfires: structuredClone(this.campfires),
             nextGround: this.nextGround,
@@ -2570,6 +2579,8 @@ export class Host {
         host.travel = new Map(structuredClone(snapshot.travel ?? []));
         host.finds = new Map(structuredClone(snapshot.finds ?? []));
         host.nextFind = snapshot.nextFind ?? 1;
+        host.fresh = new Map(structuredClone(snapshot.fresh ?? []));
+        host.nextFresh = snapshot.nextFresh ?? 1;
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
         host.nextGround = snapshot.nextGround ?? 1;
         host.campfires = structuredClone(snapshot.campfires ?? []);
@@ -8120,6 +8131,17 @@ export class Host {
             }
         }
 
+        // (Fresh tracks old, left far behind, or their pack all gone: let go)
+        for (const [id, tracks] of [...this.fresh]) {
+            const [x, y] = tracks.points[0];
+            const pack = [...this.wild].some(([each, one]) => one.pack === tracks.pack && this.battle.actor(each) && !this.battle.actor(each).dead);
+
+            if (this.battle.time >= tracks.until || !pack || !homes.some(({ at }) => hypot(at[0] - x, at[1] - y) < FRESH.far)) {
+                this.fresh.delete(id);
+                this.#event("tracks", { tracks: id, change: "gone" });
+            }
+        }
+
         for (const [id, cache] of [...this.caches]) {
             const fighting = cache.ids.some((each) => (this.battle.actor(each)?.target ?? null) !== null);
             // (A treasure's keepers kept out as far again as its circle is wide, and the way to
@@ -8298,7 +8320,9 @@ export class Host {
 
         const card = was.deck[0];
 
-        if (!(card === "cache" ? this.#putCache(actor, was.heading, homes, group) : this.#putFind(card, actor, was.heading, homes))) {
+        const dealt = card === "cache" ? this.#putCache(actor, was.heading, homes, group) : card === "tracks" ? this.#putTracks(actor, was.heading, homes) : this.#putFind(card, actor, was.heading, homes);
+
+        if (!dealt) {
             return false;
         }
 
@@ -8362,6 +8386,59 @@ export class Host {
         }
 
         this.#event("find", { find: id, change: "put", kind, at: heart });
+
+        return true;
+    }
+
+    // Fresh tracks (core/director.js FRESH) laid before a player (`actor`, going the way of
+    // `heading`, or any way): to the nearest pack of the wild's roaming within FRESH reach of them,
+    // those ahead first; or, none, one of the land's put out ahead of them (creatures.js
+    // encounterAt); never to what leaves no prints (TRACKLESS); kept to be drawn (`fresh`) and
+    // told. Whether they could be
+    #putTracks(actor, heading, homes) {
+        const plan = this.world.plan;
+        const [hx, hy] = heading ?? [0, 1];
+        const now = this.battle.time;
+        const far = (one) => hypot(one.x - actor.x, one.y - actor.y);
+        const ahead = (one) => (one.x - actor.x) * hx + (one.y - actor.y) * hy > 0;
+        const roaming = [...this.wild]
+            .filter(([id, one]) => {
+                const each = this.battle.actor(id);
+
+                return each && !each.dead && each.map === "town" && each.target === null && !TRACKLESS.has(one.creature) && !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && far(each) >= FRESH.reach[0] && far(each) <= FRESH.reach[1];
+            })
+            .map(([id]) => this.battle.actor(id))
+            .sort((a, b) => Number(ahead(b)) - Number(ahead(a)) || far(a) - far(b) || (a.id < b.id ? -1 : 1));
+        let target = roaming[0] ?? null;
+
+        for (let tries = 0; !target && tries < 8; tries++) {
+            const turn = (this.random.next() * 2 - 1) * (heading ? FRESH.spread : Math.PI);
+            const reach = this.random.int(...FRESH.ahead);
+            const [c, s] = [cos(turn), sin(turn)];
+            const at = [actor.x + (hx * c - hy * s) * reach, actor.y + (hx * s + hy * c) * reach];
+
+            if (!clearOfSettlements(plan, at, WILDS.clear) || landAt(plan, ...at).water || this.world.maps.town.nearRoad?.(...at, WILDS.road)) {
+                continue;
+            }
+
+            const home = homes.find(({ at: where }) => where && hypot(where[0] - actor.x, where[1] - actor.y) < 1)?.home ?? at;
+            const encounter = encounterAt(plan, at, [home], this.random, this.#dark());
+            const ids = encounter && !TRACKLESS.has(encounter.creature) ? this.#pack(encounter, at, {}) : [];
+
+            target = ids.length ? this.battle.actor(ids[0]) : null;
+        }
+
+        const one = target ? this.wild.get(target.id) : null;
+        const points = one ? freshTrail([actor.x, actor.y], [target.x, target.y], this.random) : [];
+
+        if (points.length < 3) {
+            return false;
+        }
+
+        const id = `fresh-${this.nextFresh++}`;
+
+        this.fresh.set(id, { id, creature: one.creature, pack: one.pack, points, until: now + FRESH.lasts });
+        this.#event("tracks", { tracks: id, change: "put", creature: one.creature, at: points[0] });
 
         return true;
     }
