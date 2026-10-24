@@ -697,7 +697,8 @@ export class WorldMap {
         }
 
         // The travel map's branches, however far out: each a guild's icon, with its town's name
-        // and its fare (or that it's where they are, ringed)
+        // and its fare (or that it's where they are, ringed); or, the moon roads', each a ring of
+        // standing stones (its `icon`), with what's under it (its `note`)
         for (const branch of this.travel ?? []) {
             const [x, y] = at(branch.x, branch.z);
 
@@ -713,13 +714,13 @@ export class WorldMap {
                 context.stroke();
             }
 
-            drawBuildingIcon(context, "guild", x, y, BRANCH_SIZE);
+            drawBuildingIcon(context, branch.icon ?? "guild", x, y, BRANCH_SIZE);
             context.font = `600 14px Georgia, "Times New Roman", serif`;
             context.textAlign = "center";
             context.textBaseline = "middle";
             context.lineJoin = "round";
 
-            for (const [text, dy, colour] of [[branch.name, -BRANCH_SIZE * 0.85, "#f6ead0"], [branch.here ? "You are here" : branch.fare ? `${branch.fare} gold` : "Free", BRANCH_SIZE * 0.85, branch.here ? "#8fd2ff" : "#f0c96a"]]) {
+            for (const [text, dy, colour] of [[branch.name, -BRANCH_SIZE * 0.85, "#f6ead0"], [branch.here ? "You are here" : (branch.note ?? (branch.fare ? `${branch.fare} gold` : "Free")), BRANCH_SIZE * 0.85, branch.here ? "#8fd2ff" : "#f0c96a"]]) {
                 context.lineWidth = 4;
                 context.strokeStyle = "rgba(20, 14, 8, 0.85)";
                 context.strokeText(text, x, y + dy);
@@ -727,7 +728,7 @@ export class WorldMap {
                 context.fillText(text, x, y + dy);
             }
 
-            icons.push("guild");
+            icons.push(branch.icon ?? "guild");
         }
 
         // The building screen: their people's fortifications standing, each with its strength

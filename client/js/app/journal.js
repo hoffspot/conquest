@@ -21,6 +21,8 @@
 //   each is, their own each to be given up;
 // - the trails they've read signs on (core/tracks.js): what made each, how many of its signs
 //   they've read and which way the last ran, till they've tracked it home (then where that is);
+// - the moon roads (core/rings.js): tonight's moon, and the rings of standing stones they've stood
+//   in, the moon each wakes under and where it is;
 // - by a tab at its top, the bestiary: a page for each kind of creature met, telling as much of
 //   it as they've found out (core/bestiary.js; its pages made by app/bestiary.js and given it, so
 //   the journal, wanted before the game's loaded (app/save.js), needs nothing of the creatures);
@@ -212,14 +214,16 @@ export class JournalPanel {
      * those still to find first), writings: [{ id, title, found }] (what they've read: core/
      * writings.js), treasures: [{ id, title, from, where, grade, own }] (the treasures they're
      * hunting: core/treasure.js), trails: [{ title, words, where, tracked }] (the trails they've
-     * read signs on: core/tracks.js, those still to follow first), bestiary (what's been found out about each kind of creature: {
+     * read signs on: core/tracks.js, those still to follow first), moonRoads: { tonight, rings: [{
+     * name, phase, where, tonight }], trial (where Lunara's guardian is tonight, under a full moon)
+     * } or null (the rings stood in: core/rings.js), bestiary (what's been found out about each kind of creature: {
      * met: the kinds met (app/bestiary.js contentsOf), of: how many kinds there are, levels: how
      * many levels each has, pageOf(kind): its page, app/bestiary.js pageOf, or null; and
      * portraitOf(kind): a promise of its portrait's URL, or null: app/game.js portraitOf }),
      * messages: the last told, oldest first (keepMessage) }.
      */
     show(shown) {
-        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], writings = [], treasures = [], trails = [], bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
+        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], writings = [], treasures = [], trails = [], moonRoads = null, bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
 
         this.shown = shown;
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
@@ -371,6 +375,27 @@ export class JournalPanel {
             );
 
             sections.push(this.#section("Trails", followed));
+        }
+
+        // The moon roads: tonight's moon, and the rings they've stood in
+        if (moonRoads) {
+            const roads = element("ul", "journal-list moon-roads");
+
+            roads.append(
+                element("li", "journal-empty", `Tonight's moon: the ${moonRoads.tonight}. By night, step into a ring's middle and the stones carry you to the ring it wakes. Under a full moon, choose any ring you've stood in; under a new moon, they sleep.`),
+                ...(moonRoads.trial ? [element("li", "journal-empty", moonRoads.trial)] : []),
+                ...moonRoads.rings.map(({ name, phase, where, tonight }) => {
+                    const row = element("li", `journal-trail${tonight ? " tracked" : ""}`);
+                    const head = element("div", "journal-request-head");
+
+                    head.append(element("span", "journal-request-title", name), element("span", "journal-request-from", tonight ? "Awake tonight" : `The ${phase}`));
+                    row.append(head, element("p", "journal-request-progress", [`Wakes under the ${phase}`, where].filter(Boolean).join(" · ")));
+
+                    return row;
+                }),
+            );
+
+            sections.push(this.#section("Moon roads", roads));
         }
 
         // What they've read, each to be read again

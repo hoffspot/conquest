@@ -979,6 +979,48 @@ worshipped only at the shrines:
   - a rest there cures the poisons, the sicknesses and the withering curse (`SHRINE.cures`:
     poisoned, envenomed, diseased, the pox, withered), told as each goes ("cured").
 
+## Moon roads
+
+The rings of standing stones out in the land (the world plan's sites of kind "standing stones":
+seed 2 has 14) are Lunara's roads (core/rings.js; host.js `#ringStep`, `#walkMoonRoad`; app/game.js
+`#ringEvent`, `openMoonRoads`, `#moonlit`).
+
+- **Each ring's moon** (`ringsOf`): each ring bound to one of the moon's eight phases (`PHASES`, a
+  world day each: daytime.js `MOON_DAYS`), dealt round them in an order of the world's own so each
+  phase has one or two. A night's phase is the moon's at its sunset, held till sunrise
+  (`phaseOfNight`).
+- **Stood in**: once a player steps into a ring's middle (`RING.middle` 2.6 m of its heart, by its
+  flat stone), its moon is theirs to know (core/explored.js `rings`, kept with what they've found):
+  told the first time, the quill heard, and in the journal (*Moon roads*: tonight's moon, and each
+  ring they've stood in with the moon it wakes under and where it is, those woken tonight edged).
+- **By night** (stepping in each time: `inRing`):
+  - **under most moons**, they're carried to the ring bound to tonight's (`moonRoad`: of two, the
+    one they're not in, or the nearer), with the others of their party standing within its stones
+    (`RING.round` 9.5 m) and each one's company (their followers, unless told to wait, and what's
+    at their side), each set down in its middle (and not carried on from there till they step out
+    and in again); told, a burst of moonlight where they come to (world/spellfx.js `moon`);
+  - **under a full moon**, every ring's awake: the world map opens as the moon roads (the travel
+    map's way: app/worldmap.js, main.js), showing the rings they've stood in with their moons; one
+    tapped and agreed to ("Step into the moonlight"), they're carried there with their party in the
+    ring (a `moonroad` command: refused if they're in no ring's middle or haven't stood in that one,
+    or if it isn't a full moon);
+  - **under a new moon**, the rings sleep: told so.
+- **Seen** within 80 m by night while they're awake (world/moongates3d.js `MoonGates`): a pale circle
+  of moonlight on the ground in each one's middle, where to step, and a soft light over it, both
+  breathing slowly, the ring tonight's moon wakes (or every one, under a full moon) the brighter.
+- **The full moon's trial** (`TRIAL`, `trialOf`; host.js `#moonTrials`, `#trialFell`): on each
+  full-moon night one ring (by the night, the same every time) holds Lunara's guardian, the Pale
+  Stag (a hart) or the Silver Wolf (a dire wolf), turn about each full moon: moon-touched, a
+  champion "moon" (dungeons/play.js `CHAMPIONS`: four times as hardy, its blows a quarter again as
+  hard; beasts/champions.js: bigger, pale as moonsilver, its eyes brighter), two tiers above the
+  land there. Woken once a player's within 60 m, by its flat stone, a locked chest by it; let go,
+  the chest with it, at daybreak or once every player's 140 m off. Slain, a share for each player
+  there with a relic of moonsilver in it (progress.js `rollMoonsilver`: a legendary amulet or ring,
+  "Moonsilver Torc of the Silver Lady"), and not woken again that night; one of the mightiest in the
+  bestiary. Told to those near, as it wakes (the wake's chime) and as it falls; and under a full
+  moon the journal says where it is tonight.
+- **Kept** in a snapshot: each player's `inRing`, the trial out (`trials`): `SNAPSHOT_VERSION` 37.
+
 ## Tracking
 
 The wild's camps, dens and perilous sites wear trails out into the country round them, as Monster
