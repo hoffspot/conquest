@@ -4783,6 +4783,26 @@ options shows the four slots (or six) as they rise; tap one, then what goes in i
 learnt and carried that can go on either wheel (`assignable("quick")`), each saying who it's
 used on ("On your foe", "On yourself").
 
+**A press never waits on its lift** (app/press.js `Press`, one for each slot). A phone's Safari
+doesn't always say a finger's been lifted: a swipe in from the screen's edge, or since iOS 27 a
+touch it hands to a gesture of its own, never ends, and a slot that waited on it heard no touch
+again till the page was loaded again (as a player found, Vigor and the draught at either end the
+slots it happened to). So:
+- a touch on a slot still pressed takes over from the press lost, and is used once;
+- a press ends the moment it can't be a tap (held, flicked, slid off), and every way it ends
+  (lifted, called off by the browser, the slot no longer keeping the pointer: `lostpointercapture`)
+  goes through one drop, done before the game's told, so a use that fails can't leave it held;
+- a hold only changes the slot if it's still the same press and the bar's still up;
+- it's let go of, nothing used, as the bar's put away, the game stops listening (the menu, a
+  pause: `#deafen`), the page's hidden or closed, or the page loses the player (`blur`);
+- and a moment after every finger's off the screen (`touchend`, none left on it: 0.1 s,
+  `BARE_MS`, for the press's own lift to be heard first), a press a finger began before
+  then is dropped, as Flutter does for iOS 27.
+
+Each press lost, dropped as the next began or once no finger was on the screen, is kept in the
+debug log ("Press lost", game.js `#pressLost`): the slot, what was in it, how long it was held,
+how it was found and whether the bar was up.
+
 Each action (`ACTIONS`, or `item:` and a thing to use: `actionOf`) has an icon (app/icons.js:
 SVG, in colours that say what it does: a glowing green cross for Vigor, gold stars round a violet
 dazed head for Stun, every spell its own (app/spellicons.js); a red draught, a steaming bowl, a frothing tankard; for the
@@ -5883,6 +5903,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   put away 3 s after the fight; held, Quick actions opened at that slot, Rumble put in it), six
   across (only icons on a phone held upright and names on its side; Mend Wounds flicked down to
   Vigor and up to Detraumatize with its name said, bouncing at either end and on Stun; the 5 key),
+  a press whose lift is lost (swallowed before the page hears it: let go of as the slot lets go of
+  the pointer, or once no finger's on the screen, or taken over by the next touch and kept in the
+  debug log; let go of as the bar's put away or the page loses the player; a hold and Back
+  leaving the next tap heard),
   and a
   phone screen. Drawing without a GPU is slow, so fights are played on with
   `game.advance(seconds)`, which runs the game without drawing each frame.

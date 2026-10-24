@@ -1242,7 +1242,7 @@ async function snagChanged({ all = false } = {}) {
 
 // The debug log (app/telemetry.js): each event kept, the newest first, its summary opening on
 // what was going on then; copied as text, to send to whoever's looking into it
-const LOG_KINDS = { freeze: "Freeze", slow: "Slow", error: "Error", crash: "Crash", lost: "Picture lost" };
+const LOG_KINDS = { freeze: "Freeze", slow: "Slow", error: "Error", crash: "Crash", lost: "Picture lost", press: "Press lost" };
 
 function showLog() {
     const entries = telemetry.events.map((event) => {

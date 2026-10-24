@@ -17,13 +17,19 @@
 // (a phone held upright) only their icons are shown (styles.css), a flicked spell's name said a
 // moment over its slot.
 //
+// A slot's press never waits on its lift (app/press.js): a phone's Safari doesn't always say a
+// finger's lifted, and a slot left waiting heard no touch again till the page was loaded again. A
+// touch on a slot still pressed takes over from the press lost; a press is let go of as the bar's
+// put away, the game stops listening, the page is hidden or loses the player, and once every
+// finger's off the screen (a moment after: press.js BARE_MS).
+//
 // It only shows and hears: the game (game.js) says what's in each and what to do.
 
 import { useDefs } from "./icons.js";
+import { BARE_MS, Press } from "./press.js";
 import { actionOf, iconOf, offensive, QUICK, QUICK_SHOWN } from "./wheel.js";
 
-/** How long a slot's held before it's to be changed (ms), not tapped. */
-export const QUICK_HOLD_MS = 500;
+export { QUICK_HOLD_MS } from "./press.js";
 
 /** How long the quick actions stay up once the fight's over (seconds), so they don't flicker. */
 export const QUICK_LINGER = 3;
@@ -34,10 +40,6 @@ export const QUICK_REFUSALS = Object.freeze({
     none: "You've none left",
     weapon: "Not with that weapon",
 });
-
-// How far a finger can stray from where it went down and still tap (pixels): as far up or down,
-// more up or down than across, and it's a flick
-const STRAY = 24;
 
 /**
  * A flicked slot's reel: how long the old spell takes to roll out and the new one in (ms), and
@@ -115,6 +117,9 @@ export class QuickBar {
         this.element.setAttribute("role", "toolbar");
         this.element.setAttribute("aria-label", "Quick actions");
         this.element.inert = true;
+
+        /** Each slot's press (app/press.js), by index. */
+        this.presses = [];
         this.slots = QUICK.map((_, index) => this.#listen(quickSlot(index), index));
         this.named = Object.assign(document.createElement("span"), { className: "quick-name" });
         this.named.setAttribute("aria-hidden", "true");
@@ -137,7 +142,33 @@ export class QuickBar {
         /** Hears a slot flicked (its index, and "up" or "down"), to turn its spell to another of its school. */
         this.onFlick = () => {};
 
+        /** Hears a slot's press dropped as lost (its index, and Press onStale's: how long it was held, and how it was found), for the debug log. */
+        this.onStale = () => {};
+
         this.left = QUICK.map(() => 0);
+
+        // (Let go of as the page loses the player or is hidden; and dropped, if begun before, a
+        // moment after every finger's off the screen: Safari can lose a finger's lift, not its
+        // touch's end)
+        this.away = () => this.release();
+        this.hiding = () => document.hidden && this.release();
+        this.bare = (event) => {
+            if (event.touches.length > 0) {
+                return;
+            }
+
+            const at = performance.now();
+
+            clearTimeout(this.baring);
+            this.baring = setTimeout(() => this.presses.forEach((press) => press.bare(at)), BARE_MS);
+        };
+        window.addEventListener("blur", this.away);
+        window.addEventListener("pagehide", this.away);
+        document.addEventListener("visibilitychange", this.hiding);
+
+        for (const type of ["touchend", "touchcancel"]) {
+            document.addEventListener(type, this.bare, { capture: true, passive: true });
+        }
     }
 
     /** Show four of them (with their names) or six across (`count`: QUICK_SHOWN). */
@@ -148,63 +179,49 @@ export class QuickBar {
         this.slots.forEach((slot, index) => (slot.hidden = index >= this.shown));
     }
 
-    // A slot tapped (used), held (changed) or flicked up or down (its spell turned); Enter or Space
-    // on it, as a tap. (A tap's used as the finger's lifted; the click a browser fires after it is
-    // the tap's, not another: a phone's Chrome gives it no count, as the keyboard's has none, but
-    // says it's a finger's)
+    // A slot tapped (used), held (changed) or flicked up or down (its spell turned: app/press.js);
+    // Enter or Space on it, as a tap. (A tap's used as the finger's lifted; the click a browser
+    // fires after it is the tap's, not another: a phone's Chrome gives it no count, as the
+    // keyboard's has none, but says it's a finger's)
     #listen(slot, index) {
-        let press = null;
+        const press = new Press({ live: () => this.up });
+        const heard = (event) => ({ pointer: event.pointerId, x: event.clientX, y: event.clientY, button: event.button, kind: event.pointerType });
         let lifted = -Infinity;
 
-        const end = (use) => (event) => {
-            if (press?.pointer !== event.pointerId) {
-                return;
-            }
-
-            clearTimeout(press.hold);
-            lifted = event.timeStamp;
-
-            if (use && !press.held) {
-                this.onUse(index);
-            }
-
-            press = null;
+        press.onUse = () => this.onUse(index);
+        press.onChoose = () => {
+            globalThis.navigator?.vibrate?.(12);
+            this.onChoose(index);
         };
+        press.onFlick = (way) => this.onFlick(index, way);
+        press.onStale = (lost) => this.onStale(index, lost);
+        this.presses[index] = press;
 
         slot.addEventListener("pointerdown", (event) => {
-            if (press || event.button > 0) {
+            if (!press.down(heard(event))) {
                 return;
             }
 
             event.preventDefault();
-            slot.setPointerCapture?.(event.pointerId);
-            press = { pointer: event.pointerId, x: event.clientX, y: event.clientY, held: false };
-            press.hold = setTimeout(() => {
-                press.held = true;
-                globalThis.navigator?.vibrate?.(12);
-                this.onChoose(index);
-            }, QUICK_HOLD_MS);
-        });
-        slot.addEventListener("pointermove", (event) => {
-            if (press?.pointer !== event.pointerId || press.held) {
-                return;
-            }
 
-            const [dx, dy] = [event.clientX - press.x, event.clientY - press.y];
-
-            // (Flicked up or down, the moment it's gone far enough: its spell turned; slid off it
-            // any other way, neither)
-            if (Math.abs(dy) >= STRAY && Math.abs(dy) > Math.abs(dx)) {
-                clearTimeout(press.hold);
-                press.held = true;
-                this.onFlick(index, dy < 0 ? "up" : "down");
-            } else if (Math.hypot(dx, dy) > STRAY) {
-                clearTimeout(press.hold);
-                press.held = true;
+            try {
+                slot.setPointerCapture?.(event.pointerId);
+            } catch {
+                // (A pointer already gone: its press is let go of as the others are)
             }
         });
-        slot.addEventListener("pointerup", end(true));
-        slot.addEventListener("pointercancel", end(false));
+        slot.addEventListener("pointermove", (event) => press.move(heard(event)));
+        slot.addEventListener("pointerup", (event) => {
+            lifted = event.timeStamp;
+            press.up(heard(event));
+        });
+        slot.addEventListener("pointercancel", (event) => {
+            lifted = event.timeStamp;
+            press.cancel(heard(event));
+        });
+        // (Kept to the slot no longer: after a lift or a cancel, as the browser lets go of it, nothing
+        // to drop; otherwise, lost)
+        slot.addEventListener("lostpointercapture", (event) => press.cancel(heard(event)));
         slot.addEventListener("contextmenu", (event) => event.preventDefault());
         slot.addEventListener("click", (event) => {
             // (Only the keyboard's: a tap's heard as the finger's lifted, and its click isn't)
@@ -226,6 +243,17 @@ export class QuickBar {
         this.element.classList.toggle("up", up);
         this.element.inert = !up;
         this.root.classList.toggle("quick-up", up);
+
+        // (Put away with a finger still on a slot: no lift's heard by a slot put away)
+        if (!up) {
+            this.release();
+        }
+    }
+
+    /** Let go of every slot's press, nothing used (the bar put away, the game not listening, the page hidden). */
+    release() {
+        clearTimeout(this.baring);
+        this.presses.forEach((press) => press.release());
     }
 
     /**
@@ -355,6 +383,15 @@ export class QuickBar {
     dispose() {
         clearTimeout(this.naming);
         this.raise(false);
+        this.release();
+        window.removeEventListener("blur", this.away);
+        window.removeEventListener("pagehide", this.away);
+        document.removeEventListener("visibilitychange", this.hiding);
+
+        for (const type of ["touchend", "touchcancel"]) {
+            document.removeEventListener(type, this.bare, { capture: true });
+        }
+
         this.element.remove();
     }
 }
