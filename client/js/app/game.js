@@ -38,6 +38,7 @@ import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { aloftShare, BOMBS, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
+import { FINDS } from "../core/director.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { homeWords, signOf, signsNear, TRAILS, trailsNear } from "../core/tracks.js";
@@ -110,6 +111,7 @@ import { ContactShadows } from "../world/contacts.js";
 import { footAt, lookPrint, printOf, TAKES, Tracks } from "../world/tracks3d.js";
 import { TrailSigns } from "../world/signs3d.js";
 import { DEN_LOOK, DenProps } from "../world/dens3d.js";
+import { FIND_LOOK, FindProps } from "../world/finds3d.js";
 import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
 import { Ailments3D } from "../world/ailments3d.js";
@@ -1292,6 +1294,8 @@ export class Game {
         this.pingedAt = -Infinity;
         /** The adventurers' caches the player's seen (their ids: core/caches.js), marked on the maps. */
         this.cachesSeen = new Set();
+        /** The wilds director's peaceful finds the player's seen (their ids: core/director.js), marked on the maps. */
+        this.findsSeen = new Set();
         this.talking = null;
         this.approaching = null;
         this.talkVariety = new Variety();
@@ -1736,6 +1740,8 @@ export class Game {
         this.gaitsSeen = new Map();
         // (The roaming beasts' dens near the player: #denning)
         this.denProps = new DenProps(view.scene);
+        // (The wilds director's peaceful finds near the player: #findsNear)
+        this.findProps = new FindProps(view.scene);
         this.ailments = new Ailments3D(this.effects.group);
         // (Its fire, flashes and fireballs lighting what's round them as the world's fires do, each
         // a light of its own: lightsNow, #lightNear; not lent the view's lamps)
@@ -2467,6 +2473,7 @@ export class Game {
         this.trailPrints?.dispose();
         this.trailSigns?.dispose();
         this.denProps?.dispose();
+        this.findProps?.dispose();
         this.navBaker?.dispose();
         this.navigationView?.dispose();
 
@@ -3302,6 +3309,7 @@ export class Game {
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawDrops();
         this.#spyCaches();
+        this.#spyFinds();
         this.#drawMinimap(target);
 
         if (this.squares?.object.visible) {
@@ -3334,6 +3342,7 @@ export class Game {
         // and the dens near them)
         this.#trailing();
         this.#denning();
+        this.#findsNear();
 
         // (The party's pings, in the world: #pinging)
         this.#pinging();
@@ -4709,7 +4718,7 @@ export class Game {
             // on ahead of them, never where they're going)
             destination: actor.order?.type === "move" && !this.steering?.steering ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
-            icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.#trackedMarks(this.denIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
+            icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.#trackedMarks(this.denIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons(), ...this.findIcons()] : [],
             // (The circles to search for the treasures they're hunting: #treasureCircles)
             searches: this.mapId === "town" ? this.treasureCircles() : [],
             // (The party's pings: pingView; and the player's markers: markerView)
@@ -4733,6 +4742,76 @@ export class Game {
                 this.hud.message(`An adventurer's cache, and ${CACHE_BANDS[cache.band]?.name ?? "brigands"} keeping it. Put them all down to open it.`, 4);
             }
         }
+    }
+
+    // A note found on a fallen adventurer's remains (core/director.js noteOf: of a place round about
+    // the player hasn't found, `id`), heard tell of as a crier tells it, by the settlement nearest
+    // the place (memory.heard: { id, town, turn, note }): written in the journal, its circle on the
+    // map, said with a quill's scratch
+    #noteFound(id) {
+        const plan = this.world.plan;
+        const place = plan ? rumouredBy(plan, id) : null;
+
+        if (!place || (this.memory.heard ?? []).some((one) => one.id === id)) {
+            return;
+        }
+
+        const far = ({ at }) => Math.hypot(at[0] - place.at[0], at[1] - place.at[1]);
+        const town = [...plan.places].sort((a, b) => far(a) - far(b))[0];
+
+        this.memory.heard = [...(this.memory.heard ?? []), { id, town: town.id, turn: this.host.war?.turn ?? 0, note: true }];
+        this.#keepTalks();
+        this.hud.message(`In their hand, a note: it tells of ${this.#placeCalled(id) ?? "somewhere"} near ${town.name}. It's in your journal, and on your map.`, 4.5);
+        this.sound?.play("quill", { delay: 0.6 });
+    }
+
+    // A peaceful find the wilds director's dealt (core/director.js FINDS) come within sight of the
+    // player for the first time: said, and marked on their maps from then on
+    #spyFinds() {
+        const me = this.battle.actor(this.me);
+
+        if (!me || me.dead || me.map !== "town" || !this.host?.finds?.size) {
+            return;
+        }
+
+        for (const find of this.host.finds.values()) {
+            if (!this.findsSeen.has(find.id) && Math.hypot(me.x - find.at[0], me.y - find.at[1]) <= FINDS.seen) {
+                this.findsSeen.add(find.id);
+
+                if (!find.searched) {
+                    this.hud.message(find.kind === "remains" ? "The remains of an adventurer who fell out here long ago. Search them: they may have left something." : "An old campsite: a ring of stones, the ashes long cold. A good place to make camp: safe from the wild, and you'd wake well rested.", 4);
+                }
+            }
+        }
+    }
+
+    // The peaceful finds within FIND_LOOK.seen of the player, out in the world, each drawn as its
+    // kind's is (finds3d.js), on the ground where it lies
+    #findsNear() {
+        const me = this.battle.actor(this.me);
+        const near = me && me.map === "town" && this.host?.finds?.size ? [...this.host.finds.values()].filter(({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y) <= FIND_LOOK.seen) : [];
+
+        if (near.length || this.findProps.shown.size) {
+            this.findProps.set(
+                near.map(({ id, kind, at: [x, z] }) => ({ id, kind, x, z })),
+                (x, z) => this.#groundOn("town", x, z),
+            );
+        }
+    }
+
+    /**
+     * The peaceful finds the player's seen (core/director.js FINDS), as icons for the maps: [{ id,
+     * kind ("remains" or "campsite"), x, z (metres), rim (grey once the remains are searched) }];
+     * gone with them.
+     */
+    findIcons() {
+        const finds = this.host?.finds;
+
+        if (!finds?.size || !this.findsSeen.size) {
+            return [];
+        }
+
+        return [...finds.values()].filter(({ id }) => this.findsSeen.has(id)).map(({ id, kind, at: [x, z], searched }) => ({ id, kind, x, z, rim: searched ? PLACE_RIMS.cleared : null }));
     }
 
     /**
@@ -5050,7 +5129,7 @@ export class Game {
         // camps and lairs they've tracked home, found or not: core/tracks.js)
         const known = (icon) => this.explored.knows(icon.id, icon.x, icon.z) || this.explored.tracked.has(icon.id);
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.#trackedMarks(this.denIcons().filter(known)), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.#trackedMarks(this.denIcons().filter(known)), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons(), ...this.findIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
     }
 
     /**
@@ -7584,9 +7663,15 @@ export class Game {
 
             this.sound?.play("coins");
         } else if (event.type === "spoils" && event.creature === "remains") {
-            // (One of a dungeon's fallen searched: what's left on them, a share for each player near)
-            this.hud.message("You search the remains of one who fell here: what was left on them is at your feet. Tap it to take it.", 3);
+            // (One of a dungeon's fallen searched, or a fallen adventurer's out in the wilds: what's
+            // left on them, a share for each player near; and now and then a note in their hand of
+            // somewhere near, heard tell of: #noteFound)
+            this.hud.message(event.find ? "You search the remains of the fallen adventurer: what was left on them is at your feet. Tap it to take it." : "You search the remains of one who fell here: what was left on them is at your feet. Tap it to take it.", 3);
             this.sound?.play("pickup");
+
+            if (event.note) {
+                this.#noteFound(event.note);
+            }
         } else if (event.type === "spoils" && event.creature === "chest") {
             // (The dead's, an old relic of theirs in it, named; an adventurer's cache: its lock
             // turned, and its lid up)
@@ -8572,7 +8657,7 @@ export class Game {
             const found = this.#foundOf(one);
             const circle = !one.hell || one.hell === "near" ? circleOf(place.id, place.at) : null;
 
-            return [{ words, from: one.hell ? `Said in ${town.name}` : `The crier in ${town.name}`, where: circle && at && !found ? `About ${bearing(at, circle.at)}` : "", found }];
+            return [{ words, from: one.hell ? `Said in ${town.name}` : one.note ? "A fallen adventurer's note" : `The crier in ${town.name}`, where: circle && at && !found ? `About ${bearing(at, circle.at)}` : "", found }];
         });
 
         return [...told.filter(({ found }) => !found), ...told.filter(({ found }) => found).slice(0, HEARD_FOUND)];
@@ -10390,6 +10475,13 @@ export class Game {
                 // (A cache let go, every player gone far from it: off the maps)
                 if (event.change === "gone") {
                     this.cachesSeen.delete(event.cache);
+                }
+
+                break;
+            case "find":
+                // (A peaceful find let go, every player gone far from it: off the maps)
+                if (event.change === "gone") {
+                    this.findsSeen.delete(event.find);
                 }
 
                 break;

@@ -8,7 +8,8 @@ how strong, how they behave, how they're kept about the players, and how they're
 animated.
 
 The code: `client/js/core/creatures.js` (what each is), `core/battle.js` (how they fight),
-`core/host.js` (keeping them about the players, and the elites), `core/caches.js` (the adventurers'
+`core/host.js` (keeping them about the players, and the elites), `core/director.js` (what the wilds
+deal as a player crosses them), `core/caches.js` (the adventurers'
 caches and the brigands keeping them), `core/weapons.js` `NATURAL` (their fangs, claws
 and breath), `core/afflictions.js` (what lingers after their blows, and the cures),
 `client/js/beasts/` (how each looks and moves), and `world/effects.js`, `world/ailments3d.js`
@@ -479,14 +480,50 @@ stronger members, `docs/DUNGEONS.md`, which are only a tier up.)
     made as a cache's two tiers further out would be. Never common; mostly fine to rare, now and
     then very rare or legendary, and better the further out.
 
+## The wilds director
+
+Every so far a player crosses the wilds, something's dealt ahead of them from a deck of what the
+wilds hold (`core/director.js`, the host's `#caches` and `#deal`), as the old tabletop wilderness
+dice did, so that crossing them is more than one guarded chest after another.
+- **How often** (`DIRECTOR.every`): every 250 to 450 m crossed (rolled each time), counted as a
+  cache's is (*Adventurers' caches*, below): on foot, out of the settlements, afresh for everyone
+  together once one's dealt to any of them.
+- **The deck** (`DIRECTOR.cards`, `shuffled`): an adventurer's cache, a fallen adventurer's
+  remains, an old campsite. Each comes once a deck, in an order of its own, the deck shuffled
+  again once it's all been dealt, never with the card just dealt first again (Left 4 Dead's
+  director dealt its bosses so: no two of the same running). Each player has their own, kept in
+  the world's snapshot (`travel`). A card with nowhere to go ahead waits for the next look.
+- **Where** (`#spotAhead`): as a cache is, 70 to 100 m ahead, on open ground clear of the roads,
+  the settlements, the places worth finding and every other cache and find.
+- **A fallen adventurer's remains** (`FINDS.remains`): bones stretched out where they lay, a cloak
+  gone to rags under them, a sword rusting by their hand and a pack by their head (world/finds3d.js).
+  Said once a player's within 60 m ("The remains of an adventurer who fell out here long ago.
+  Search them: they may have left something.") and marked on their maps with a skull. Tapped,
+  they're searched (a chest that's no chest: `#searchRemains`), a share for each player near
+  (`rollRemains`): 6 to 16 gold, 35% more for each tier past the first; a piece of gear 35% of the
+  time, made as a cache's is at the land's tier; a healing draught 40%; a treasure map 20%, made as
+  a chest's at the tier. Half the time there's a note in their hand, of the nearest place within
+  1.5 km that player hasn't found (`noteOf`, of those rumours are told of): written in the journal
+  as a crier's rumour is ("A fallen adventurer's note"), its circle on the world map, said with a
+  quill's scratch. Searched once; their mark greyed after.
+- **An old campsite** (`FINDS.campsite`): a ring of stones round a bed of ash and burnt logs, a
+  log to sit on and a lean-to of branches. Said within 60 m ("An old campsite… A good place to
+  make camp: safe from the wild, and you'd wake well rested.") and marked with its fire ring.
+  Camped at within 8 m of its ring: a camp's only refused for the wild with something hostile
+  within 16 m (not 40), the fire's lit in its ring, and they wake well rested (`WELL_RESTED`: the
+  breath back half again as fast and every heal 10% more, for 20 minutes, kept between visits as
+  any boon is).
+- **Let go** once every player's 220 m away (`FINDS.far`); another comes later. Nothing's kept in
+  a snapshot till one's been dealt.
+
 ## Adventurers' caches
 
 Here and there out in the wilds lies a chest some adventurer stowed and never came back for, and a
 band of the land's brigands has found it and keeps it (`core/caches.js`, the host's `#caches`).
-- **Where.** About every half a kilometre a player crosses the wilds (350 to 650 m, rolled each
-  time: `CACHES.every`), one turns up 70 to 100 m ahead of them, within about 35° of the way
-  they're going. Only ground crossed on foot out of the settlements counts: not a step in a town,
-  nor a leap of more than 20 m in half a second (carried by magic or a portal). It's put on open,
+- **Where.** It's one of the wilds director's cards (*The wilds director*, above): one turns up
+  70 to 100 m ahead of a player, within about 35° of the way they're going. Only ground crossed on
+  foot out of the settlements counts: not a step in a town, nor a leap of more than 20 m in half a
+  second (carried by magic or a portal). It's put on open,
   dry ground (85% of the squares out to its guards' round free to walk on, and every stop on the
   round: `openAround`), at least 25 m from every road, track and trail with its guards' round and
   all (32 m from the cache), 80 m clear of every settlement, 90 m from the places worth finding and
