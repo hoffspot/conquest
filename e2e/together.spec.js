@@ -433,6 +433,97 @@ const BRYN = {
     },
 };
 
+test("a guest whose game's reloaded goes straight back into the host's world by its code, each stage of the way shown, where they stood; a world no longer open there says so, to try again, or cancel", async ({ ownBrowser: browser }) => {
+    const [hostContext, guestContext] = await Promise.all([browser.newContext(), browser.newContext()]);
+    const [host, guest] = await Promise.all([hostContext.newPage(), guestContext.newPage()]);
+    const syl = { ...ELF, hero: { ...ELF.hero, guid: "1d2c3b4a-5e6f-4a7b-8c9d-0e1f2a3b4c5d" } };
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => {
+        if (!localStorage.getItem("pellagos.characters")) {
+            localStorage.setItem("pellagos.save", JSON.stringify(save));
+        }
+    }, syl);
+    // (Each stage of the way back in, as it's marked: "reach:now", "reach:done", ...)
+    await guest.addInitScript(() => {
+        window.stagesSeen = [];
+        document.addEventListener("DOMContentLoaded", () => {
+            new MutationObserver((changes) => {
+                for (const { target, attributeName } of changes) {
+                    if (attributeName === "data-state" && target.dataset.state !== "waiting") {
+                        window.stagesSeen.push(`${target.dataset.stage}:${target.dataset.state}`);
+                    }
+                }
+            }).observe(document.querySelector("#rejoinstages"), { subtree: true, attributes: true });
+        });
+    });
+    await host.goto("/?play&seed=2");
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+    const hostName = await host.evaluate(() => window.pellagos.game.self.hero.name);
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+
+    // Syl joins by the code: where she is kept, written as she plays
+    await guest.goto(`/?join=${code}`);
+    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(guest);
+
+    const guests = () => host.evaluate(() => [...window.pellagos.game.host.players.keys()].filter((id) => id !== "player"));
+    const where = () => guest.evaluate(() => (({ x, y }) => ({ x, y }))(window.pellagos.game.battle.actor(window.pellagos.game.me)));
+    const kept = () => guest.evaluate(() => JSON.parse(localStorage.getItem("pellagos.inworld")));
+
+    await expect.poll(guests, { timeout: 30000 }).toHaveLength(1);
+    expect(await kept()).toMatchObject({ kind: "friend", code, host: hostName, name: "Syl" });
+
+    const stood = await where();
+    const rejoin = guest.locator("#rejoin");
+
+    // Reloaded (its join link and all): straight back in by the code, the dialog naming whose world
+    // and who, each stage under way and then done, in order; in again as Syl, where she stood
+    await guest.reload();
+    await expect(rejoin).toBeVisible({ timeout: 60000 });
+    await expect(rejoin.locator("#rejointitle")).toHaveText(`Back into ${hostName}'s world`);
+    await expect(rejoin.locator("#rejoinabout")).toHaveText(`By its code, ${code}, as Syl.`);
+    await expect(guest.locator("#join")).toBeHidden();
+    await playing(guest);
+    await expect(rejoin).toBeHidden();
+    expect(await guest.evaluate(() => window.stagesSeen)).toEqual(["reach:now", "reach:done", "find:now", "find:done", "ask:now"]);
+    expect(await guest.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Syl");
+    await expect.poll(guests, { timeout: 30000 }).toHaveLength(1);
+
+    const now = await where();
+
+    expect(Math.hypot(now.x - stood.x, now.y - stood.y)).toBeLessThan(1.5);
+
+    // Gone back into a world no longer open under its code: that stage crossed out, said why, Try
+    // again; cancelled, the title, nothing to go back into
+    await guest.evaluate(() => localStorage.setItem("pellagos.inworld", JSON.stringify({ ...JSON.parse(localStorage.getItem("pellagos.inworld")), code: "ZZZZ" })));
+    await guest.goto("/");
+    await expect(rejoin.locator('li[data-stage="find"]')).toHaveAttribute("data-state", "failed", { timeout: 60000 });
+    await expect(rejoin.locator('li[data-stage="reach"]')).toHaveAttribute("data-state", "done");
+    await expect(rejoin.locator("#rejoinproblem")).toHaveText("There's no world open with that code.");
+    await expect(rejoin.getByRole("button", { name: "Try again" })).toBeVisible();
+    await rejoin.getByRole("button", { name: "Cancel" }).click();
+    await expect(rejoin).toBeHidden();
+    await expect(guest.locator("#title")).toBeVisible();
+    expect(await kept()).toBeNull();
+});
+
 test("two players side by side trade face to face: one asks, the other says yes, each offers, both agree, and it changes hands in both worlds", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();

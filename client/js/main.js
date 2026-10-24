@@ -25,6 +25,7 @@ import { FullScreen } from "./app/fullscreen.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
 import { Pointer } from "./app/pointer.js";
+import { forgetInWorld, inWorldOf, keepInWorld, REJOIN, REJOIN_STAGES, rejoinWords } from "./app/rejoin.js";
 import { telemetry } from "./app/telemetry.js";
 import { builtAt, codeVersion } from "./app/version.js";
 import { enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
@@ -72,7 +73,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null };
 
 window.pellagos = {
     get game() {
@@ -97,6 +98,9 @@ window.pellagos = {
     },
     get together() {
         return state.together;
+    },
+    get inWorld() {
+        return state.inWorld;
     },
     debug,
     fetcher,
@@ -2063,6 +2067,7 @@ if (typeof ResizeObserver === "function") {
 
 function quit() {
     keepPlace();
+    inWorld(null);
     closeWorldMap();
     $("#menu").close();
     $("#invite").close();
@@ -2322,24 +2327,38 @@ async function join(event) {
     // (The one Continue as... carries on with, from now)
     playedSave(save);
     state.save = save;
+    $("#joingo").disabled = true;
+    joinByCode(code, save, {
+        stage: () => ($("#joinstatus").textContent = "Joining…"),
+        problem: (words) => {
+            $("#joingo").disabled = false;
+            $("#joinstatus").textContent = words;
+        },
+    });
+}
 
+// Into a friend's world by its code, as `save`, through `broker` (a server's broker's address;
+// null, the old relay; unless given, joinBroker's): how it goes told to `tell` ({ stage, problem,
+// waiting?, done?, gone? }: the join dialog's line of words, or the way back in's stages,
+// REJOIN_STAGES friend), and once the world's come, played, kept to go back into (app/rejoin.js)
+async function joinByCode(code, save, tell, { broker = undefined } = {}) {
     const { joinWorld, RELAY_ERRORS, NET_KICKS, NET_REFUSALS, versionWords } = await import("./app/together.js");
 
-    $("#joingo").disabled = true;
-    $("#joinstatus").textContent = "Joining…";
+    tell.stage("reach");
 
     // (Nothing downloaded from here till the world's come and the game's settled into it)
     fetcher.hold("joining");
 
     let joined;
 
-    const broker = await joinBroker();
+    const through = broker === undefined ? await joinBroker() : broker ? { address: broker } : null;
 
     try {
         joined = await joinWorld({
-            ...(broker ? { broker } : {}),
+            ...(through ? { broker: through } : {}),
             code,
             character: characterOf(save),
+            onStage: (stage) => tell.stage(stage),
             onClosed: () => leftWorld("The world's host has closed it to others."),
             onLink: (link) => {
                 holdForLink(link);
@@ -2348,29 +2367,39 @@ async function join(event) {
                     state.game.link = link;
                 }
             },
-            onDrop: () => leftWorld("The link to the world was lost."),
+            onDrop: () => leftWorld("The link to the world was lost.", { again: true }),
         });
     } catch (error) {
         fetcher.release("joining");
-        $("#joingo").disabled = false;
-        $("#joinstatus").textContent = RELAY_ERRORS[error.message] ?? RELAY_ERRORS.unreachable;
+        tell.problem(RELAY_ERRORS[error.message] ?? RELAY_ERRORS.unreachable);
 
         return;
     }
 
+    // (Cancelled meanwhile)
+    if (tell.gone?.()) {
+        joined.close();
+        fetcher.release("joining");
+
+        return;
+    }
+
+    tell.stage("ask");
     setTogether(joined);
     joined.joining.onRefused = (reason, said) => {
         joined.close();
         setTogether(null);
-        $("#joingo").disabled = false;
         // (Another version: which is the newer, and what to do, by the host's version where it says it)
-        $("#joinstatus").textContent = reason === "version" ? versionWords(said?.net) : (NET_REFUSALS[reason] ?? "You couldn't join that world.");
+        tell.problem(reason === "version" ? versionWords(said?.net) : (NET_REFUSALS[reason] ?? "You couldn't join that world."));
     };
     joined.joining.onKicked = (reason) => {
         joined.close();
         leftWorld(NET_KICKS[reason] ?? "You were sent out of the world.");
     };
-    joined.joining.onWelcome = (welcome) => playJoined(save, welcome, joined.joining);
+    joined.joining.onWelcome = (welcome) => {
+        tell.done?.();
+        playJoined(save, welcome, joined.joining, { rejoin: { kind: "friend", code, broker: through?.address ?? null, character: save.id ?? null } });
+    };
     joined.joining.onState = () => {
         fetcher.hold("the world again", { for: 5000 });
         state.game?.rehost();
@@ -2455,8 +2484,9 @@ async function playJoined(save, welcome, joining, options = {}) {
 }
 
 // (`server`: a world on a world server, told once the game's ready, so its clock goes on; `kept`:
-// one that keeps its heroes, whose hero's the world's, not this device's to keep)
-async function playingJoined(save, welcome, joining, { server = false, kept = false } = {}) {
+// one that keeps its heroes, whose hero's the world's, not this device's to keep; `rejoin`, where
+// it is, kept to go back into should the game fall over: app/rejoin.js)
+async function playingJoined(save, welcome, joining, { server = false, kept = false, rejoin = null } = {}) {
     const { createJoinedGame } = state.modules;
     const { view, kit, sound } = state.session;
     const keep = (write) => (kept || !save ? () => {} : write);
@@ -2523,6 +2553,10 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
         joining.ready();
     }
 
+    if (rejoin) {
+        inWorld({ ...rejoin, name: game.self?.hero?.name ?? null, ...(rejoin.kind === "friend" ? { host: game.hostName } : {}) });
+    }
+
     // (Their character was in the world already, on another device or on a link gone dead without
     // a word: theirs here now, as it stood: core/netplay.js Hosting #takeOver)
     if (welcome.took) {
@@ -2534,8 +2568,12 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     fetcher.hold("joining", { for: 5000, until: () => !game.remote || Math.abs(game.remote.held - game.remote.delay) < 1, most: 30000 });
 }
 
-// Out of a world joined (its host gone, or the link lost): back to the title, saying why
-function leftWorld(why) {
+// Out of a world joined (its host gone, or the link lost): back to the title, saying why; the link
+// lost (`again`), straight back in, as after a crash (goBackIn)
+function leftWorld(why, { again = false } = {}) {
+    const record = state.inWorld;
+
+    inWorld(null, { keep: again });
     setTogether(null);
     state.onServer = null;
     $("#worldpanel").close();
@@ -2553,6 +2591,202 @@ function leftWorld(why) {
     title();
     $("#titlenote").textContent = why;
     $("#titlenote").hidden = false;
+
+    if (again && record) {
+        goBackIn(record, { why });
+    }
+}
+
+// Where the player is, in another's world, kept to go back into should the game fall over or be
+// reloaded (app/rejoin.js), and written again every REJOIN.every while they're there; null, let go
+// of (or, `keep`, left as last written: they're going straight back in)
+function inWorld(record, { keep = false } = {}) {
+    clearInterval(state.inWorldEvery);
+    state.inWorld = record;
+
+    if (!record) {
+        if (!keep) {
+            forgetInWorld(localStorage);
+        }
+
+        return;
+    }
+
+    const game = state.game;
+
+    keepInWorld(localStorage, record);
+    state.inWorldEvery = setInterval(() => {
+        if (state.game === game && state.inWorld === record) {
+            keepInWorld(localStorage, record);
+        } else {
+            clearInterval(state.inWorldEvery);
+        }
+    }, REJOIN.every);
+}
+
+// Back into the world the player was in (app/rejoin.js: `record`) when the game last stopped
+// without leaving it, or whose link's just been lost (`why`): at once, each stage of the way shown
+// as it's come to (REJOIN_STAGES), what's wrong if it can't get there and a way to try again.
+// Cancel stops it, and lets the world go
+async function goBackIn(record, { why = "" } = {}) {
+    const attempt = { record, at: null };
+    const words = rejoinWords(record);
+    const stages = REJOIN_STAGES[record.kind];
+    const gone = () => state.goingBackIn !== attempt;
+    // (Each stage before `id` done, `id` as `how`, the rest still to come)
+    const mark = (id, how) => {
+        const at = stages.findIndex(([each]) => each === id);
+
+        attempt.at = id;
+
+        for (const [k, li] of [...$("#rejoinstages").children].entries()) {
+            const next = k < at ? "done" : k === at ? how : "waiting";
+
+            if (li.dataset.state !== next) {
+                li.dataset.state = next;
+            }
+        }
+    };
+
+    state.goingBackIn = attempt;
+    $("#rejointitle").textContent = words.title;
+    $("#rejoinabout").textContent = words.about;
+    $("#rejoinwhy").textContent = why;
+    $("#rejoinwhy").hidden = !why;
+    $("#rejoinstages").replaceChildren(
+        ...stages.map(([id, label]) => {
+            const li = Object.assign(document.createElement("li"), { textContent: label });
+
+            li.dataset.stage = id;
+            li.dataset.state = "waiting";
+
+            return li;
+        }),
+    );
+    $("#rejoinnote").textContent = "";
+    $("#rejoinproblem").textContent = "";
+    $("#rejoinproblem").hidden = true;
+    $("#rejoinretry").hidden = true;
+
+    if (!$("#rejoin").open) {
+        $("#rejoin").showModal();
+    }
+
+    const tell = {
+        stage: (id) => !gone() && mark(id, "now"),
+        waiting: (text) => !gone() && ($("#rejoinnote").textContent = text),
+        problem: (text) => {
+            if (gone()) {
+                return;
+            }
+
+            mark(attempt.at ?? stages[0][0], "failed");
+            $("#rejoinnote").textContent = "";
+            $("#rejoinproblem").textContent = text;
+            $("#rejoinproblem").hidden = false;
+            $("#rejoinretry").hidden = false;
+            $("#rejoinretry").focus();
+        },
+        done: () => {
+            if (!gone()) {
+                state.goingBackIn = null;
+                $("#rejoin").close();
+            }
+        },
+        gone,
+    };
+
+    if (record.kind === "server") {
+        serverBackIn(record, tell);
+    } else {
+        friendBackIn(record, tell);
+    }
+}
+
+// Back into a friend's world (goBackIn), by its code, as the character played there
+function friendBackIn(record, tell) {
+    const save = loadCharacters(WEAPONS).find(({ id }) => id === record.character);
+
+    if (!save) {
+        tell.stage("reach");
+        tell.problem("The character you were playing there isn't on this device any more.");
+
+        return;
+    }
+
+    playedSave(save);
+    state.save = save;
+    state.joinAs = save;
+    joinByCode(record.code, save, tell, { broker: record.broker });
+}
+
+// Back into a world on a server (goBackIn): the server reached, the player shown to be who they
+// are, their place in the world found, and the hero they were playing taken in again (theirs by its
+// slot, or by its name, in a world that keeps heroes; else the character on this device)
+async function serverBackIn(record, tell) {
+    const { ServerClient } = await serversOf();
+    const server = state.servers.get(record.server);
+
+    tell.stage("reach");
+
+    if (!server) {
+        tell.problem("That server isn't remembered on this device any more: add it again from Worlds on servers.");
+
+        return;
+    }
+
+    const client = new ServerClient(server, { servers: state.servers, player: state.you?.proving });
+    let entered;
+
+    try {
+        await client.reach();
+
+        if (tell.gone()) {
+            return;
+        }
+
+        tell.stage("prove");
+        await client.prove();
+
+        if (tell.gone()) {
+            return;
+        }
+
+        tell.stage("enter");
+        entered = await client.enter({ world: record.world });
+    } catch (error) {
+        tell.problem(error.message);
+
+        return;
+    }
+
+    if (tell.gone()) {
+        return;
+    }
+
+    const kept = entered.card?.heroes === "kept";
+    const save = record.character ? (loadCharacters(WEAPONS).find(({ id }) => id === record.character) ?? null) : null;
+    const hero = kept ? (Number.isInteger(record.hero) ? record.hero : entered.heroes?.find(({ name }) => name === record.name)?.slot) : undefined;
+
+    if (kept ? !entered.heroes?.some(({ slot }) => slot === hero) : !save) {
+        tell.problem(kept ? "Your hero there wasn't found: choose who goes in from Worlds on servers." : "The character you were playing there isn't on this device any more.");
+
+        return;
+    }
+
+    state.joinAs = save ?? state.joinAs;
+    playServerWorld(client, entered, { save, hero, tell });
+}
+
+// The way back in cancelled: whatever link it had made closed, and the world let go of
+function cancelBackIn() {
+    state.goingBackIn = null;
+    $("#rejoin").close();
+    state.together?.close();
+    setTogether(null);
+    state.onServer = null;
+    fetcher.release("joining");
+    inWorld(null);
 }
 
 // --- Worlds on servers (generated/world_server_plan.md §8.1, §6) ---
@@ -3530,17 +3764,13 @@ function bringFromFile(client, entered) {
  * world that doesn't keep heroes, as `save`; then played as a joined world is. A `character`
  * given (one brought in from a file) comes in as it is.
  */
-async function playServerWorld(client, entered, { save = null, hero = undefined, character: given = null }) {
+async function playServerWorld(client, entered, { save = null, hero = undefined, character: given = null, tell = worldsTell() }) {
     const { SERVER_REFUSALS } = await serversOf();
     const { NET_REFUSALS, NET_KICKS, versionWords } = await import("./app/together.js");
     const kept = entered.card?.heroes === "kept";
     const character = given ?? (save ? characterOf(save) : {});
 
-    if (!$("#worlds").open) {
-        $("#worlds").showModal();
-    }
-
-    $("#worldsstatus").textContent = "Going in…";
+    tell.stage("open");
     fetcher.hold("joining");
 
     let joined;
@@ -3551,7 +3781,7 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
             session: entered.session,
             character,
             hero,
-            onWaiting: (place) => ($("#worldsstatus").textContent = `The server's running as many worlds as it can: yours is ${place === 1 ? "next" : `number ${place}`} in line to open…`),
+            onWaiting: (place) => tell.waiting(`The server's running as many worlds as it can: yours is ${place === 1 ? "next" : `number ${place}`} in line to open…`),
             onClosed: (reason) => leftWorld(SERVER_REFUSALS[reason] ?? "You were sent out of the world."),
             onLink: (link) => {
                 holdForLink(link);
@@ -3560,14 +3790,24 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
                     state.game.link = link;
                 }
             },
-            onDrop: () => leftWorld("The link to the world was lost."),
+            onDrop: () => leftWorld("The link to the world was lost.", { again: true }),
         });
     } catch (error) {
         fetcher.release("joining");
-        $("#worldsstatus").textContent = error.message;
+        tell.problem(error.message);
 
         return;
     }
+
+    // (Cancelled meanwhile)
+    if (tell.gone?.()) {
+        joined.close();
+        fetcher.release("joining");
+
+        return;
+    }
+
+    tell.stage("ask");
 
     if (save && !kept) {
         playedSave(save);
@@ -3580,15 +3820,27 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
         joined.close();
         setTogether(null);
         state.onServer = null;
-        $("#worldsstatus").textContent = reason === "version" ? versionWords(said?.net, { server: true }) : (NET_REFUSALS[reason] ?? SERVER_REFUSALS[reason] ?? "You couldn't go into that world.");
+        tell.problem(reason === "version" ? versionWords(said?.net, { server: true }) : (NET_REFUSALS[reason] ?? SERVER_REFUSALS[reason] ?? "You couldn't go into that world."));
     };
     joined.joining.onKicked = (reason) => {
         joined.close();
         leftWorld(NET_KICKS[reason] ?? "You were sent out of the world.");
     };
     joined.joining.onWelcome = (welcome) => {
-        $("#worlds").close();
-        playJoined(save, welcome, joined.joining, { kept, server: true });
+        tell.done();
+        playJoined(save, welcome, joined.joining, {
+            kept,
+            server: true,
+            rejoin: {
+                kind: "server",
+                server: client.record.key,
+                world: entered.world,
+                worldName: entered.card?.name ?? null,
+                serverName: client.record.name ?? entered.card?.server?.name ?? null,
+                hero: Number.isInteger(hero) ? hero : null,
+                character: !kept && save ? (save.id ?? null) : null,
+            },
+        });
     };
     joined.joining.onState = () => {
         fetcher.hold("the world again", { for: 5000 });
@@ -3600,6 +3852,25 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
     joined.joining.onPong = (rtt) => {
         fetcher.measure(rtt, { strained: joined.joining.delay > delay });
         delay = joined.joining.delay;
+    };
+}
+
+// How going into a world on a server goes, told on the Worlds screen as ever: a line of words, the
+// screen closed once the world's come
+function worldsTell() {
+    return {
+        stage: (stage) => {
+            if (stage === "open") {
+                if (!$("#worlds").open) {
+                    $("#worlds").showModal();
+                }
+
+                $("#worldsstatus").textContent = "Going in…";
+            }
+        },
+        waiting: (words) => ($("#worldsstatus").textContent = words),
+        problem: (words) => ($("#worldsstatus").textContent = words),
+        done: () => $("#worlds").close(),
     };
 }
 
@@ -3918,6 +4189,13 @@ $("#worldsguideclose").addEventListener("click", () => $("#worldsguide").close()
 $("#joinbutton").addEventListener("click", () => openJoin());
 $("#joinform").addEventListener("submit", join);
 $("#joincancel").addEventListener("click", () => $("#join").close());
+$("#rejoinretry").addEventListener("click", () => state.goingBackIn && goBackIn(state.goingBackIn.record));
+$("#rejoincancel").addEventListener("click", cancelBackIn);
+// (Escape cancels it too)
+$("#rejoin").addEventListener("cancel", (event) => {
+    event.preventDefault();
+    cancelBackIn();
+});
 $("#joinchange").addEventListener("click", () => openCharacters("join"));
 $("#invitebutton").addEventListener("click", invite);
 $("#inviteback").addEventListener("click", closeInvite);
@@ -4343,7 +4621,14 @@ async function start() {
 
     title();
 
-    if (params.has("join")) {
+    // (In another's world when the game last stopped, without leaving it, half an hour ago at most:
+    // straight back in)
+    const wasIn = inWorldOf(localStorage);
+
+    // (Its join link followed, back into that world; another's, that one's asked to join)
+    if (wasIn && (!params.has("join") || params.get("join").toUpperCase() === wasIn.code)) {
+        goBackIn(wasIn);
+    } else if (params.has("join")) {
         openJoin(params.get("join"), { at: params.get("at") });
     } else if (location.hash === "#test") {
         history.replaceState(null, "", `${location.pathname}${location.search}`);

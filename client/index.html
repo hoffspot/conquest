@@ -288,6 +288,22 @@
             </form>
         </dialog>
 
+        <!-- Back into a world after a crash or a reload, or its link lost (app/rejoin.js; main.js
+             goBackIn): each stage of the way as it's come to, what's wrong if it can't get there,
+             Try again, and Cancel -->
+        <dialog id="rejoin" class="together rejoin" aria-labelledby="rejointitle">
+            <h2 id="rejointitle">Back into the world</h2>
+            <p class="note" id="rejoinabout"></p>
+            <p class="note" id="rejoinwhy" hidden></p>
+            <ol class="rejoin-stages" id="rejoinstages" aria-live="polite"></ol>
+            <p class="note" id="rejoinnote" role="status"></p>
+            <p class="note warning" id="rejoinproblem" role="alert" hidden></p>
+            <div class="menu">
+                <button type="button" class="button primary" id="rejoinretry" hidden>Try again</button>
+                <button type="button" class="button" id="rejoincancel">Cancel</button>
+            </div>
+        </dialog>
+
         <!-- Worlds kept on world servers (generated/world_server_plan.md §8.1): the servers known,
              each's worlds (those listed, and those a key or ticket's held for), servers added by an
              address, and short codes and invite links; worlds made; servers and tickets carried -->

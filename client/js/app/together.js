@@ -568,10 +568,14 @@ export async function openWorld(game, { address = null, broker = null, onChange 
  * heard), link (the RelayLink, or BrokerJoin), close() }. Hears onClosed() if the host closes the
  * world; onLink("lost") when its link's dropped and it's coming back on another, onLink("away")
  * when the host's has, onLink(null) once all's well again (the world asked for again); and
- * onDrop() if the link's lost for good.
+ * onDrop() if the link's lost for good. Tells onStage("find") once the server's reached, the world
+ * still to be found by its code (app/rejoin.js REJOIN_STAGES).
  */
-export async function joinWorld({ code, character, address = null, broker = null, onClosed = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING }) {
+export async function joinWorld({ code, character, address = null, broker = null, onStage = () => {}, onClosed = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING }) {
     const link = broker ? await BrokerJoin.open(broker.address, peerOptions(broker)) : await RelayLink.open(address ?? relayAddress(), timing);
+
+    // (The server reached: the world to be found by its code, and linked to)
+    onStage("find");
 
     try {
         await link.join(cleanCode(code));

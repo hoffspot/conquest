@@ -224,6 +224,7 @@
     "secure.spec.js › on the server's computer, the management page says what the router forwards and how the internet sees the home; or why it won't, and how to forward the port by hand": 3,
     "secure.spec.js › on the server's computer, the management page sets it up to get free certificates (a DuckDNS name), shows how that goes, never the token, and stops it": 2.5,
     "sound-studio.spec.js › describes every sound, and plays each, its recordings and its made variants (if it has any), once started": 11.5,
+    "together.spec.js › a guest whose game's reloaded goes straight back into the host's world by its code, each stage of the way shown, where they stood; a world no longer open there says so, to try again, or cancel": 156.1,
     "together.spec.js › a visitor to a world on the host's device is remembered there by their own id: gone, what the world knows of them is kept with it, and back, they're where they left": 86.5,
     "together.spec.js › a world opened to others: an elf joins it by its code, is brought in by the elves' town, walks in the host's world, and leaves; closed, whoever's in it is told": 138.5,
     "together.spec.js › the same character coming into a world on another device takes theirs over where they stand: the first device told it's let go and back at the title, the second told it carries on": 178,
@@ -242,5 +243,6 @@
     "worlds.spec.js › a world made on a server and shared by an invite link: both play in it, leave, and it waits; the second comes back to the same hero": 86.2,
     "worlds.spec.js › a world on this device brought to a server (Bring my world) with a character who's been in it: told how, and what comes with it; refused a key that makes no worlds; then a world of the server's, in its land, its owner going in as that character": 28,
     "worlds.spec.js › a world that takes copies: a character on this device copied in once, told first what a copy is, and one from a file, told what was changed; each the world's own, never taken home; a world whose characters are its own: one made there taken home, out of it for good": 58.8,
+    "worlds.spec.js › back into a world on a server after the game's reloaded: straight back in, each stage of the way shown as it's come to, as the same character where they stood; a stage that can't be got past says why, to try again; Cancel stops it and lets the world go": 210.4,
     "worlds.spec.js › the server's own address shows its worlds on the title: one open to anyone joined with a tap, no key or link, choosing which of theirs visits it": 23.8
 }

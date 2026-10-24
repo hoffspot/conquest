@@ -455,6 +455,87 @@ test("the server's own address shows its worlds on the title: one open to anyone
     expect(await page.evaluate((world) => Boolean(JSON.parse(localStorage.getItem("pellagos.servers")).servers[0].worlds[world].ticket), made.world)).toBe(true);
 });
 
+test("back into a world on a server after the game's reloaded: straight back in, each stage of the way shown as it's come to, as the same character where they stood; a stage that can't be got past says why, to try again; Cancel stops it and lets the world go", async ({ page }) => {
+    await ready(page, save("Tamsin", "human", "sword"));
+    // (Each stage of the way back in, as it's marked: "reach:now", "reach:done", ...)
+    await page.addInitScript(() => {
+        window.stagesSeen = [];
+        document.addEventListener("DOMContentLoaded", () => {
+            new MutationObserver((changes) => {
+                for (const { target, attributeName } of changes) {
+                    if (attributeName === "data-state" && target.dataset.state !== "waiting") {
+                        window.stagesSeen.push(`${target.dataset.stage}:${target.dataset.state}`);
+                    }
+                }
+            }).observe(document.querySelector("#rejoinstages"), { subtree: true, attributes: true });
+        });
+    });
+
+    const made = await server.createWorld({ name: "Hollowmere", seed: 47, race: "human", heroes: "brought", settings: { open: true } });
+    const rejoin = page.locator("#rejoin");
+    const kept = () => page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.inworld")));
+    const where = () => page.evaluate(() => (({ x, y }) => ({ x, y }))(window.pellagos.game.battle.actor(window.pellagos.game.me)));
+    const backIn = async () => {
+        await playing(page);
+        await expect(rejoin).toBeHidden();
+        expect(await page.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Tamsin");
+
+        const now = await where();
+
+        expect(Math.hypot(now.x - stood.x, now.y - stood.y)).toBeLessThan(1.5);
+    };
+
+    // In, as Tamsin, by the world's open door: where they are kept, written as they play
+    await page.goto(`${base}/`);
+    await page.locator(`#titleserver li[data-world="${made.world}"]`).getByRole("button").click({ timeout: 30000 });
+    await page.locator("#worldask").getByRole("button", { name: /^Tamsin/ }).click({ timeout: 60000 });
+    await playing(page);
+
+    const stood = await where();
+    const record = await kept();
+
+    expect(record).toMatchObject({ kind: "server", world: made.world, worldName: "Hollowmere", hero: null, name: "Tamsin" });
+    expect(record.character).toEqual(expect.any(String));
+    expect(Date.now() - record.at).toBeLessThan(60000);
+
+    // Reloaded: straight back in, the dialog naming where and who, each stage marked under way and
+    // then done, in order; then in the world again as Tamsin, where she stood
+    await page.reload();
+    await expect(rejoin).toBeVisible({ timeout: 60000 });
+    await expect(rejoin.locator("#rejointitle")).toHaveText("Back into Hollowmere");
+    await expect(rejoin.locator("#rejoinabout")).toHaveText(/, as Tamsin\.$/);
+    await backIn();
+    expect(await page.evaluate(() => window.stagesSeen)).toEqual(["reach:now", "reach:done", "prove:now", "prove:done", "enter:now", "enter:done", "open:now", "open:done", "ask:now"]);
+    expect(server.access.world(made.world).players()).toHaveLength(1);
+
+    // Its place in the world refused (the server unreachable for it): that stage crossed out, said
+    // why, Try again; tried again once it's reachable, back in
+    await page.route("**/api/v1/enter", (route) => route.abort());
+    await page.reload();
+    await expect(rejoin.locator('li[data-stage="enter"]')).toHaveAttribute("data-state", "failed", { timeout: 60000 });
+    await expect(rejoin.locator('li[data-stage="prove"]')).toHaveAttribute("data-state", "done");
+    await expect(rejoin.locator('li[data-stage="open"]')).toHaveAttribute("data-state", "waiting");
+    await expect(rejoin.locator("#rejoinproblem")).toBeVisible();
+    await expect(rejoin.locator("#rejoinproblem")).not.toBeEmpty();
+    await page.unroute("**/api/v1/enter");
+    await rejoin.getByRole("button", { name: "Try again" }).click();
+    await backIn();
+
+    // Held up finding its place, and cancelled: the title, the world let go of; reloaded again,
+    // nothing to go back into
+    await page.route("**/api/v1/enter", () => {});
+    await page.reload();
+    await expect(rejoin.locator('li[data-stage="enter"]')).toHaveAttribute("data-state", "now", { timeout: 60000 });
+    await rejoin.getByRole("button", { name: "Cancel" }).click();
+    await expect(rejoin).toBeHidden();
+    await expect(page.locator("#title")).toBeVisible();
+    expect(await kept()).toBeNull();
+    await page.unroute("**/api/v1/enter");
+    await page.reload();
+    await expect(page.locator("#titleserver")).toBeVisible({ timeout: 30000 });
+    await expect(rejoin).toBeHidden();
+});
+
 test("You: the player's own name and id, the same on every server; their code carries them to a new device, where the world knows them as the same player, ticket or none", async ({ browser }) => {
     const first = await browser.newContext();
     const second = await browser.newContext();
