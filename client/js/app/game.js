@@ -1801,6 +1801,7 @@ export class Game {
         this.quickBar.onUse = (slot) => this.quick(slot);
         this.quickBar.onChoose = (slot) => this.onChooseQuick(slot);
         this.quickBar.onFlick = (slot, way) => this.flickQuick(slot, way);
+        this.quickBar.onStale = (slot, lost) => this.#pressLost(slot, lost);
         this.sigil = new Sigil(this.hud.plate);
         this.sigil.onCast = () => this.castPrismatic();
         this.talk = new TalkPanel(this.hud.root);
@@ -2421,6 +2422,7 @@ export class Game {
         this.pointers.clear();
         this.pinch = null;
         this.wheel?.hide();
+        this.quickBar?.release();
 
         // (Whatever was steering the player as their keys and thumb stop being listened to: if the
         // world goes on, they're stopped now; if it's stopped, as soon as it starts again; never left
@@ -13060,6 +13062,24 @@ export class Game {
         this.sound?.play("wheelSelect");
 
         return { key: next, turned: true };
+    }
+
+    // A quick action's press lost (app/press.js: its lift never heard, as a phone's Safari can lose
+    // it, and dropped as the next began or once no finger was on the screen), kept in the debug log:
+    // which slot, what was in it, how long it was held, how it was found and whether the bar was up
+    #pressLost(slot, { ms, how, last }) {
+        const found = how === "bare" ? "let go of once no finger was on the screen" : "taken over by the next";
+
+        telemetry.keep("press", {
+            summary: `Quick action ${slot + 1}'s press was lost, its lift never heard: ${found}, ${(ms / 1000).toFixed(1)} s after it began`,
+            slot,
+            action: this.wheels.quick[slot] ?? null,
+            ms: Math.round(ms),
+            how,
+            last,
+            up: this.quickBar.up,
+            state: this.telemetryState(),
+        });
     }
 
     /**
