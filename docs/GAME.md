@@ -4896,6 +4896,15 @@ it.
    checked with the server on each load. The game's own server (`npm start`, `npm run
    world-server`) tags each file by its hash, so one that's the same is "not modified" whatever
    date a release gave it, and sends code and pages compressed (brotli or gzip).
+   An update's downloaded in the background while the game's open (`app/updater.js`): every 15
+   minutes (and as the title screen's shown, after that), the page asks for itself afresh and
+   reads its import map; a release with another name is newer. Its manifest and catalog (named
+   there by their hashes) say the rest of its files, and the service worker downloads those it
+   doesn't keep, one at a time, each checked by its hash and kept as in use till a page on it says
+   so. Once they're all there the title screen says an update's downloaded, with **Start it** (the
+   page loaded again, downloading nothing more); in a game, it's said once, to start the next
+   time. A new service worker taking over no longer reloads a page that's still loading (it's
+   whole whichever worker gives it its files, each by its hash), so the start isn't run twice.
 2. **The title.** **Continue as** the character played last, in the world they're in; make a
    **New character**; choose another of those kept (**Characters on this device**, up to six), or
    a world (**Worlds on this device**, up to eight) and who goes in; join a world someone else has

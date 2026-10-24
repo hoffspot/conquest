@@ -6916,6 +6916,16 @@ dialog.worlds input.text.code-entry {
     text-align: left;
 }
 
+/* An update downloaded in the background, and the button to start it */
+.title-update {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 6px 12px;
+    margin: 14px 0 0;
+}
+
 .title-server-name {
     font-size: 16px;
     margin: 0 0 4px;

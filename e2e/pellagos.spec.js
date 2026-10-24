@@ -244,6 +244,48 @@ test("loaded again, the game asks the server for none of its code, engine, WebAs
     expect(files(fetched).toSorted()).toEqual([gone, "/js/app/version.js"].toSorted());
 });
 
+test("an update's downloaded in the background: the page finds a release newer than its own, the service worker downloads what of it it doesn't keep, that alone, and the title screen says so, with a button that starts it", async ({ page }) => {
+    test.setTimeout(240000);
+
+    // What the service worker fetches (in the page's own context: each test's page is in a
+    // browser of its own, e2e/fixtures.js)
+    const context = page.context();
+    const fetched = [];
+
+    context.on("request", (request) => request.serviceWorker() && fetched.push(new URL(request.url()).pathname));
+
+    await title(page);
+    await expect(page.locator("#titleupdate")).toBeHidden();
+    expect(await page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+
+    // (As if this page were an older release's, and the newer one had changed hud.js: the page
+    // on the server is the newer one, and the service worker doesn't keep its hud.js)
+    fetched.length = 0;
+
+    const changed = await page.evaluate(async () => {
+        const cache = await caches.open("pellagos-boot-v2");
+        const url = (await cache.keys()).map(({ url }) => url).find((url) => url.includes("/js/app/hud.js?h="));
+
+        await cache.delete(url);
+
+        const { updater } = window.pellagos;
+
+        updater.release = "0000000000";
+        await updater.check({ asked: true });
+
+        return new URL(url).pathname;
+    });
+
+    await expect(page.locator("#titleupdate")).toBeVisible({ timeout: 30000 });
+    expect(fetched.filter((path) => path.endsWith(".js"))).toEqual([changed]);
+    expect(await page.evaluate(() => window.pellagos.updater.ready?.release)).toBe(await page.evaluate(() => window.pellagos.updater.next.release));
+
+    // Started: the page loaded again, its title with nothing more to say
+    await page.locator("#updatebutton").click();
+    await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
+    await expect(page.locator("#titleupdate")).toBeHidden();
+});
+
 test("the title's wordmark fits its card, every letter painted: on a computer, with a scrollbar's room taken from the card, and on a phone", async ({ page }) => {
     // Its letters' first and last, against its own box, which its gradient's painted in (its
     // letters as far from either side, the space after its last letter not counted)
