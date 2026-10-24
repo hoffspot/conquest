@@ -255,10 +255,14 @@ kept file was last used. That avoids a second store, and an IndexedDB dependency
 | `pellagos-boot-v2` | The manifest's data by `?h=`: the body and its skin | Cache-first, never checked; collected (§5.4) but never to make room |
 | `pellagos-assets-v2` | The catalog's files by `?h=` | Cache-first, never checked; collected, and let go of to make room |
 | `pellagos-state-v2` | What the worker knows (`sw-state.json`) | Not served |
+| `pellagos-parts-v1` | The parts of a file the downloader has so far, by `?h=…&part=` where each starts | Not served: the downloader reads them back after a reload; collected once no release in use lists the file, or it's kept whole |
 
 A file downloaded whole goes to `assets` if a release heard of lists it as the catalog's, and to
 `boot` otherwise. A request with a `Range` header (A2's downloader) goes straight to the server:
-the downloader puts the whole file together, checks it and keeps it itself.
+the downloader puts the whole file together, checks it and keeps it itself. It keeps each part as
+it comes (`parts`), so a file part-downloaded when the page is closed or reloaded is carried on
+from where it got to, and lets go of them once the file's kept whole
+(generated/game_delivery_plan.md, stage 5).
 
 Each name's `-v2` is a version: changing one lets go of all that cache holds, and nothing else.
 It's never changed for a release. The shell's is changed to let go of code no release uses any

@@ -17,6 +17,9 @@
 // A file's checked against its hash once it's all here, then kept where the service worker keeps
 // the catalog's (sw.js), and handed over (a Blob). A file already kept isn't fetched. Either way
 // the service worker's told it's been used, so it's among the last let go of if room runs short.
+// Its parts are kept as they come, so a file part-downloaded when the page is closed or reloaded
+// is carried on from where it got to (generated/game_delivery_plan.md, 3.6); they're let go of
+// once it's all here.
 //
 // A file the player's waiting for (at a place's door while its creatures' models come: app/
 // readying.js) is hurried: fetched before the rest, at quiet times too, and, playing alone, as
@@ -65,9 +68,12 @@ const PARKED = 60000;
 const TRIES = 3;
 const RETRY = 2000;
 
-// Where the service worker keeps files by hash (sw.js): the catalog's, and the manifest's
+// Where the service worker keeps files by hash (sw.js): the catalog's, and the manifest's; and
+// the parts of those being downloaded, each by its file's address and where it starts in it
+// (`&part=` that many bytes in)
 const ASSETS_CACHE = "pellagos-assets-v2";
 const BOOT_CACHE = "pellagos-boot-v2";
+const PARTS_CACHE = "pellagos-parts-v1";
 
 const TYPES = { glb: "model/gltf-binary", gltf: "model/gltf+json", bin: "application/octet-stream", png: "image/png", jpg: "image/jpeg", webp: "image/webp", ktx2: "image/ktx2" };
 
@@ -260,7 +266,7 @@ export class Fetcher {
 
         this.#unpark();
 
-        const entry = this.parked.get(url) ?? { url, path, hash, bytes, parts: [], received: 0, tries: 0, retryAt: -Infinity };
+        const entry = this.parked.get(url) ?? { url, path, hash, bytes, parts: [], stored: [], received: 0, tries: 0, retryAt: -Infinity };
 
         this.parked.delete(url);
         Object.assign(entry, { priority: rank, order: this.order++, hurry });
@@ -365,7 +371,8 @@ export class Fetcher {
         return { rate, throughput, base, queueing, together, current, queued: this.queue.length, hurried: this.queue.filter(({ hurry }) => hurry).length, quiet: this.quiet, thrifty: this.thrifty, done: this.done, failed: this.failed, fetched: this.fetched };
     }
 
-    // From what's kept, if it is; else into the queue
+    // From what's kept, if it is; else into the queue, carrying on from its parts kept (a page
+    // before this one's), if any; all of them kept, finished at once
     async #start(entry) {
         const kept = await this.#kept(entry.url);
 
@@ -381,8 +388,90 @@ export class Fetcher {
             return;
         }
 
+        if (entry.received === 0) {
+            await this.#resume(entry);
+
+            if (this.entries.get(entry.url) !== entry) {
+                return;
+            }
+        }
+
+        if (entry.received >= entry.bytes) {
+            try {
+                await this.#finish(entry);
+            } catch (error) {
+                this.failed++;
+                this.#settle(entry, error instanceof Error ? error : new Error(String(error)));
+            }
+
+            return;
+        }
+
         this.queue.push(entry);
         this.#run();
+    }
+
+    // A part, as it's kept: by its file's address and where it starts
+    #partOf(entry, from) {
+        return `${entry.url}&part=${from}`;
+    }
+
+    // The file's parts kept, from its start for as long as they follow on from each other
+    async #resume(entry) {
+        if (!this.digest) {
+            return;
+        }
+
+        try {
+            const cache = await this.caches?.open(PARTS_CACHE);
+
+            while (cache && entry.received < entry.bytes) {
+                const response = await cache.match(this.#partOf(entry, entry.received));
+                const bytes = response && new Uint8Array(await response.arrayBuffer());
+
+                if (!bytes?.length) {
+                    break;
+                }
+
+                entry.parts.push(bytes);
+                entry.stored.push(entry.received);
+                entry.received += bytes.length;
+            }
+        } catch {
+            // (Nowhere to keep things, or a part unreadable: from where it got to)
+        }
+    }
+
+    // A part kept as it comes, where the file's kept once it's all here (not where it can't be
+    // checked: a file unchecked isn't kept)
+    async #store(entry, from, bytes) {
+        if (!this.digest) {
+            return;
+        }
+
+        try {
+            await (await this.caches?.open(PARTS_CACHE))?.put(this.#partOf(entry, from), new Response(bytes, { headers: { "Content-Type": "application/octet-stream", "Content-Length": String(bytes.length) } }));
+            entry.stored.push(from);
+        } catch {
+            // (No room, or nowhere to keep it: a reload starts it again from here)
+        }
+    }
+
+    // Its parts let go of: it's all here (kept whole), or not the file its hash says
+    async #unstore(entry) {
+        if (!entry.stored.length) {
+            return;
+        }
+
+        try {
+            const cache = await this.caches?.open(PARTS_CACHE);
+
+            await Promise.all(entry.stored.map((from) => cache?.delete(this.#partOf(entry, from))));
+        } catch {
+            // (Let go of by the service worker later: sw.js collect)
+        }
+
+        entry.stored = [];
     }
 
     async #kept(url) {
@@ -536,6 +625,7 @@ export class Fetcher {
                 entry.received += bytes.length;
                 this.fetched += bytes.length;
                 this.controller.delivered({ bytes: bytes.length, ms: this.now() - asked });
+                await this.#store(entry, from, bytes);
             } else if (response.ok) {
                 await this.#whole(entry, response);
             } else {
@@ -595,6 +685,7 @@ export class Fetcher {
 
         if (bytes.length !== entry.bytes || (digest && hash !== entry.hash)) {
             this.failed++;
+            await this.#unstore(entry);
             this.#settle(entry, new Error(`${entry.path} isn't the file its hash says: changed on the server`));
 
             return;
@@ -612,6 +703,7 @@ export class Fetcher {
             // (Not kept: no room, or nowhere to keep it. Handed over all the same)
         }
 
+        await this.#unstore(entry);
         this.done++;
         this.#settle(entry, new Blob([bytes], { type }));
     }

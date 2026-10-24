@@ -24,7 +24,9 @@
 // catalog.js). What no release in use lists any more is let go of: the newest release's files,
 // and those of each page still open on an older one, are kept, the rest deleted (collect). The
 // catalog's models are let go of too, the least recently used first, when they come to more than
-// the room set aside for them; never the files the game needs to start.
+// the room set aside for them; never the files the game needs to start. The parts of a model the
+// downloader has so far (kept by it, so a download cut off by a reload carries on) are let go of
+// once no release in use lists the model, or it's kept whole.
 //
 // Pages (index.html, which names its release's code by hash: its import map), version.js and
 // whatever else no release keeps by hash are fetched from the network first (so updates show up
@@ -64,7 +66,12 @@ const ASSETS = `${CACHE_PREFIX}assets-v2`;
 // JSON response, so it outlasts the worker: the browser stops it when it's idle)
 const STATE = `${CACHE_PREFIX}state-v2`;
 
-const CACHES = [SHELL, BOOT, ASSETS, STATE];
+// The parts of the catalog's files the downloader has so far (js/app/fetcher.js), each by its
+// file's address and where it starts in it (`&part=`), so a download cut off by a reload carries on
+const PARTS = `${CACHE_PREFIX}parts-v1`;
+const PART = /&part=\d+$/;
+
+const CACHES = [SHELL, BOOT, ASSETS, STATE, PARTS];
 
 // The one cache the game kept everything in before these (by name): its copies are taken on
 const OLD_CACHE = `${CACHE_PREFIX}v1`;
@@ -169,16 +176,17 @@ function inLine(url) {
 // screen can tell what came from this device from what was downloaded
 const KEPT = "X-Pellagos-Kept";
 
-// A copy kept here, given to the loader (a fetch(): no `destination`) said to be kept; to an
-// import, as it's kept, so Chrome keeps its compiled code with it
+// A copy kept here, handed over as a response of its own, its bytes read from what's kept as
+// they're wanted: given as it's kept (the cache's own response), Chrome sometimes failed an import
+// of it on a page's first visit, the service worker taking over as the page loaded (about one in
+// 25 loads, on a busy machine: "Failed to fetch dynamically imported module"). To the loader (a
+// fetch(): no `destination`), said to be kept
 function handed(response, destination) {
-    if (destination) {
-        return response;
-    }
-
     const headers = new Headers(response.headers);
 
-    headers.set(KEPT, "1");
+    if (!destination) {
+        headers.set(KEPT, "1");
+    }
 
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
@@ -644,6 +652,19 @@ async function collect() {
 
     known.used = Object.fromEntries(Object.entries(known.used).filter(([url]) => kept.has(url)));
     await saveState();
+
+    // (And the parts of files no release in use lists, or kept whole now: the downloader lets go
+    // of a file's parts once it's all here, but not if the page closed first)
+    const wanted = new Set(names.flatMap((name) => [...known.releases[name].boot, ...known.releases[name].assets]));
+    const parts = await caches.open(PARTS);
+
+    for (const request of await parts.keys()) {
+        const file = request.url.replace(PART, "");
+
+        if (!wanted.has(file) || kept.has(file)) {
+            await parts.delete(request);
+        }
+    }
 }
 
 async function sizeOf(cache, request) {

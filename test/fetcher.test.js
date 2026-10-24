@@ -40,6 +40,7 @@ function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, connect
                 put: async (url, response) => {
                     store.set(url, new Response(await response.arrayBuffer(), { headers: response.headers }));
                 },
+                delete: async (url) => store.delete(url),
             };
         },
     };
@@ -91,7 +92,8 @@ function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, connect
         }), { status: 200 });
     };
 
-    const fetcher = new Fetcher({
+    // (Another downloader on the same site: the page loaded again)
+    const another = () => new Fetcher({
         base: BASE,
         fetch,
         caches,
@@ -104,10 +106,11 @@ function world({ files = [], ranges = true, rtt = 50, speed = 1024 * KB, connect
         connection,
         tell,
     });
+    const fetcher = another();
 
     const kept = (path) => stores.get("pellagos-assets-v2")?.get(new URL(`${path}?h=${files.find((each) => each.path === path)?.hash}`, BASE).href);
 
-    return { fetcher, clock, requests, kept, stores };
+    return { fetcher, another, clock, requests, kept, stores };
 }
 
 const bytesOf = async (blob) => new Uint8Array(await blob.arrayBuffer());
@@ -337,6 +340,55 @@ describe("the downloader", () => {
         assert.equal(await fetcher.want(dragon), null);
         assert.deepEqual(await bytesOf(await fetcher.want(dragon)), dragon.data);
         assert.deepEqual(requests.map(({ from }) => from / KB), [0, 256, 512]);
+    });
+
+    it("keeps a file's parts as they come, so the page loaded again carries on from where it got to (all of them there, fetching nothing); lets go of them once it's all here", async () => {
+        const dragon = file("models/dragon.glb", 600 * KB);
+        const parts = (stores) => [...(stores.get("pellagos-parts-v1")?.keys() ?? [])];
+        const address = new URL(`${dragon.path}?h=${dragon.hash}`, BASE).href;
+
+        for (const { closedAt, fetched } of [{ closedAt: 2, fetched: 88 * KB }, { closedAt: 3, fetched: 0 }]) {
+            const { fetcher, another, requests, stores, kept } = world({
+                files: [dragon],
+                onRequest: (_, count) => {
+                    if (count === closedAt) {
+                        fetcher.drop(dragon);
+                    }
+                },
+            });
+
+            // (The page closed as a part comes: the parts that came kept, that one too)
+            assert.equal(await fetcher.want(dragon), null);
+
+            while (fetcher.running) {
+                await new Promise((resolve) => setImmediate(resolve));
+            }
+
+            assert.deepEqual(parts(stores), [0, 256, 512].slice(0, closedAt).map((at) => `${address}&part=${at * KB}`));
+
+            const again = another();
+
+            assert.deepEqual(await bytesOf(await again.want(dragon)), dragon.data);
+            assert.deepEqual(requests.map(({ from }) => from / KB), [0, 256, 512]);
+            assert.equal(again.fetched, fetched);
+            assert.deepEqual(new Uint8Array(await kept(dragon.path).arrayBuffer()), dragon.data);
+            assert.deepEqual(parts(stores), []);
+        }
+    });
+
+    it("lets go of parts kept that aren't the file its hash says, and fetches it afresh", async () => {
+        const dragon = file("models/dragon.glb", 100 * KB);
+        const { fetcher, requests, stores } = world({ files: [dragon] });
+        const address = new URL(`${dragon.path}?h=${dragon.hash}`, BASE).href;
+
+        // (All of it there, but not the file: zeros, say)
+        await (await fetcher.caches.open("pellagos-parts-v1")).put(`${address}&part=0`, new Response(new Uint8Array(100 * KB)));
+
+        await assert.rejects(fetcher.want(dragon), /isn't the file its hash says/);
+        assert.equal(requests.length, 0);
+        assert.deepEqual([...stores.get("pellagos-parts-v1").keys()], []);
+        assert.deepEqual(await bytesOf(await fetcher.want(dragon)), dragon.data);
+        assert.equal(requests.length, 1);
     });
 
     it("hurries a file the player's waiting for: fetched at a quiet time, before the rest, and alone with its parts back to back; saying how much of it's here as it comes", async () => {

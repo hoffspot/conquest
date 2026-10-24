@@ -124,8 +124,10 @@ release's code, and a game under way keeps its own release's modules even if an 
 - Pages and anything else not listed: network-first as now, but checked with the server using the
   worker's own copy's tag (`If-None-Match`), not the browser's HTTP cache, so a 304 doesn't depend
   on a cache the browser may have emptied.
-- A file served from what's kept is handed over as kept (not wrapped in a new response), so Chrome
-  keeps its compiled code with it.
+- A file served from what's kept is handed over as a response of its own, its bytes read from what's
+  kept. (First it was handed over as kept, for Chrome to keep its compiled code with it; but Chrome
+  then sometimes failed an import on a first visit, about one load in 25 on a busy machine: "Failed
+  to fetch dynamically imported module".)
 - Registered before the loader starts, so on a first visit it's there to keep what's downloaded.
 
 ### 3.4 The server (`server/static.js`)
@@ -198,7 +200,8 @@ shows at once.
 - Which reload Safari's button is on an iPhone (a normal reload, or "from origin", which skips the
   service worker and would download everything whatever we do): to be checked on the phone with
   Web Inspector.
-- Whether Chrome keeps compiled code for modules served from Cache Storage, measured in a trace.
+- Whether Chrome keeps compiled code for modules a service worker hands over as responses of its
+  own, measured in a trace; and why one handed over as Cache Storage keeps it failed on a first visit.
 - HTTP/2 on the world server, alongside its own TLS handling.
 - Moving rarely used code (playing together, characters' files, the wheels' set-up) out of the
   boot download, into the background, as the models are.

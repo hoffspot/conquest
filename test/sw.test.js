@@ -11,6 +11,7 @@ const ORIGIN = "https://example.github.io";
 const SHELL = "pellagos-shell-v2";
 const BOOT = "pellagos-boot-v2";
 const ASSETS = "pellagos-assets-v2";
+const PARTS = "pellagos-parts-v1";
 
 // Ten minutes and a moment: past the time a file just kept is kept whatever the releases say
 const GRACE = 10 * 60000 + 1;
@@ -489,13 +490,19 @@ describe("service worker", () => {
         assert.equal(await (await worker.request(version[0])).text(), "version v2");
     });
 
-    it("tells the page's loader a copy it gives it is one it keeps (a header); an import, the copy as it's kept", async () => {
+    it("tells the page's loader a copy it gives it is one it keeps (a header); an import, the copy without it, as a response of its own", async () => {
         const game = ["/js/app/game.js", "game v1"];
         const worker = loadServiceWorker({ files: { [game[0]]: game[1] } });
 
         assert.equal((await worker.request(address(game))).headers.get("X-Pellagos-Kept"), null);
         assert.equal((await worker.request(address(game))).headers.get("X-Pellagos-Kept"), "1");
-        assert.equal((await worker.request(address(game), { destination: "script" })).headers.get("X-Pellagos-Kept"), null);
+
+        const imported = await worker.request(address(game), { destination: "script" });
+
+        assert.equal(imported.headers.get("X-Pellagos-Kept"), null);
+        assert.equal(imported.headers.get("Content-Type"), "text/javascript");
+        assert.equal(await imported.text(), "game v1");
+        assert.equal(worker.requests.length, 1);
     });
 
     it("gives the catalog's files 1 GiB at most, whatever the browser says it has (recent Chrome says 10 GiB more than it's using, whatever the disk)", async () => {
@@ -669,6 +676,27 @@ describe("service worker", () => {
 
         assert.deepEqual(worker.kept(ASSETS), [full(address(assets[0]))]);
         assert.deepEqual(worker.kept(BOOT), [full(address(boot[0]))]);
+    });
+
+    it("keeps the parts of a model the downloader has so far (a download cut off by a reload carries on), till no release in use lists it or it's kept whole", async () => {
+        const dragon = ["/models/dragon.glb", "a dragon"];
+        const wyvern = ["/models/wyvern.glb", "a wyvern"];
+        const chest = ["/models/chest.glb", "a chest"];
+        const part = (file, from) => `${address(file)}&part=${from}`;
+        const worker = loadServiceWorker({
+            stored: {
+                [PARTS]: { [part(dragon, 0)]: "a dra", [part(dragon, 5)]: "gon", [part(wyvern, 0)]: "a wy", [part(chest, 0)]: "a ch" },
+                [ASSETS]: { [address(chest)]: "a chest" },
+            },
+        });
+
+        // (Not let go of as an old copy, nor before a page has said its release)
+        await worker.activate();
+        assert.equal(worker.kept(PARTS).length, 4);
+
+        // The dragon's being downloaded; the wyvern's no longer in the catalog; the chest's all here
+        await worker.tell("page-1", release("r1", { assets: [dragon, chest] }, 1));
+        assert.deepEqual(worker.kept(PARTS), [full(part(dragon, 0)), full(part(dragon, 5))]);
     });
 
     it("leaves other sites alone", async () => {
