@@ -330,7 +330,7 @@ export const ROLES = Object.freeze({
         rests: [
             { name: "looking about", hitAt: 1, duration: 3.4 },
             { name: "stretching the back", hitAt: 1, duration: 2.6 },
-            { name: "a hand to the chin", hitAt: 1, duration: 2.8 },
+            { name: "a yawn", hitAt: 1, duration: 2.8 },
             { name: "shifting the weight", hitAt: 1, duration: 3.2 },
             { name: "a glance back", hitAt: 1, duration: 2.2 },
             { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
@@ -340,7 +340,7 @@ export const ROLES = Object.freeze({
         title: "Hunter",
         rests: [
             { name: "wiping the brow", hitAt: 1, duration: 2.4 },
-            { name: "rubbing the neck", hitAt: 1, duration: 2.8 },
+            { name: "catching the breath", hitAt: 0.9, duration: 2.4 },
             { name: "shifting the weight", hitAt: 1, duration: 3.2 },
             { name: "looking about", hitAt: 1, duration: 3.4 },
             { name: "a glance back", hitAt: 1, duration: 2.2 },
