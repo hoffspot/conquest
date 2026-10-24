@@ -40,6 +40,7 @@ import { compass } from "./ways.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, lairOf, memberOf, menaces, outByDay, packOf, RIFT, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
 import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from "./insides.js";
+import { MARKER_ICONS, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
@@ -8968,9 +8969,12 @@ export class Host {
     // a player not in one, nor asked already; theirs not full), say yes to being asked (joining
     // the asker's, or making one with them), say no (the asker told), leave theirs; or, its
     // leader, put someone out of it or make them its leader; or show the rest of it somewhere on
-    // the map (`at`: [x, y] metres, the world's: a ping, gone after a while, nothing kept of it)
-    #partyCommand(player, { do: what, who = null, at = null }) {
+    // the map (`at`: [x, y] metres, the world's: a ping, gone after a while, nothing kept of it),
+    // or share one of their markers with them (`mark`: `at`, its `icon` and `words`, core/
+    // markers.js: each of the rest given it to keep, if they've room, nothing kept of it here)
+    #partyCommand(player, { do: what, who = null, at = null, icon = null, words = "" }) {
         const party = this.partyFor(player.id);
+        const onMap = Array.isArray(at) && at.length === 2 && at.every((v) => Number.isFinite(v) && v >= 0 && v <= WORLD_SIZE);
 
         switch (what) {
             case "invite": {
@@ -9055,15 +9059,16 @@ export class Host {
 
                 return OK;
             case "ping":
+            case "mark":
                 if (!party) {
                     return refuse("unpartied");
                 }
 
-                if (!Array.isArray(at) || at.length !== 2 || !at.every((v) => Number.isFinite(v) && v >= 0 && v <= WORLD_SIZE)) {
+                if (!onMap || (what === "mark" && !MARKER_ICONS.includes(icon))) {
                     return refuse("command");
                 }
 
-                this.#tellParty(party, { change: "ping", who: player.id, name: player.hero.name, at: [at[0], at[1]] });
+                this.#tellParty(party, { change: what, who: player.id, name: player.hero.name, at: [at[0], at[1]], ...(what === "mark" ? { icon, words: markerWords(words) } : {}) });
 
                 return OK;
             case "remove":

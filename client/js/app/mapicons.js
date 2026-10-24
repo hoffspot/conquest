@@ -510,6 +510,103 @@ export function drawPing(context, x, y, { size = 22, age = 0 } = {}) {
 }
 
 /**
+ * Each marker's colour (core/markers.js MARKER_ICONS): its rim and its sign. A flag red, a star
+ * gold, danger a bone white, loot gold-brown, a camp's tent orange, something to see blue, herbs
+ * green, a mystery violet.
+ */
+export const MARKER_COLOURS = Object.freeze({ flag: "#e8604e", star: "#f0c96a", danger: "#ece4cf", loot: "#d9a24a", camp: "#e8903f", sight: "#7cbcff", herbs: "#72d276", mystery: "#c8a6ff" });
+
+// Each marker's sign, on a grid 24 across centred on 0, 0 ([path, fill, stroke, width]; a mystery's
+// is a question mark, written)
+const MARKER_SIGNS = {
+    flag: [
+        ["M-5,9 V-9", null, "sign", 2.4],
+        ["M-5,-9 L8,-5 L-5,-1 Z", "sign", null, 0],
+    ],
+    star: [["M0,-9 L2.6,-3.2 L8.6,-2.8 L4,1.2 L5.4,7.4 L0,4.2 L-5.4,7.4 L-4,1.2 L-8.6,-2.8 L-2.6,-3.2 Z", "sign", null, 0]],
+    danger: [
+        ["M0,-9 a7.5,7.5 0 0 1 7.5,7.5 v3 h-3 v4.5 h-9 v-4.5 h-3 v-3 a7.5,7.5 0 0 1 7.5,-7.5 z", "sign", null, 0],
+        ["M-3,-2 m-2,0 a2,2 0 1 0 4,0 a2,2 0 1 0 -4,0 M3,-2 m-2,0 a2,2 0 1 0 4,0 a2,2 0 1 0 -4,0", "#2a1a10", null, 0],
+    ],
+    loot: [
+        ["M-8.5,-1.5 h17 v9 h-17 z", "sign", null, 0],
+        ["M-8.5,-2.5 v-2.5 a3,3 0 0 1 3,-3 h11 a3,3 0 0 1 3,3 v2.5 z", "sign", null, 0],
+        ["M-1.6,-1.5 h3.2 v4 h-3.2 z", "#2a1a10", null, 0],
+    ],
+    camp: [
+        ["M-9.5,8 L0,-9 L9.5,8 Z", "sign", null, 0],
+        ["M0,8 L-3.2,8 L0,1.5 L3.2,8 Z", "#2a1a10", null, 0],
+    ],
+    sight: [
+        ["M-10,0 Q0,-9 10,0 Q0,9 -10,0 Z", "sign", null, 0],
+        ["M-3.4,0 a3.4,3.4 0 1 0 6.8,0 a3.4,3.4 0 1 0 -6.8,0", "#2a1a10", null, 0],
+    ],
+    herbs: [
+        ["M0,9 V-3", null, "sign", 2],
+        ["M0,3 q-9,-1 -8,-10 q7,1 8,10 z M0,0 q9,-1 8,-10 q-7,1 -8,10 z", "sign", null, 0],
+    ],
+    mystery: [],
+};
+
+let markerPaths = null;
+
+/**
+ * One of the player's markers, drawn on a map (core/markers.js): a pin of its colour (MARKER_
+ * COLOURS), its point at `x`, `y` (pixels) and its head `size` pixels across over it, dark, with
+ * its sign in it.
+ */
+export function drawMarker(context, x, y, icon, { size = 22 } = {}) {
+    const colour = MARKER_COLOURS[icon] ?? MARKER_COLOURS.flag;
+    const r = size / 2;
+
+    markerPaths ??= Object.fromEntries(Object.entries(MARKER_SIGNS).map(([id, parts]) => [id, parts.map(([d]) => new Path2D(d))]));
+    context.save();
+    context.translate(x, y - r * 1.9);
+
+    // (The pin: its head round, narrowing to its point)
+    context.beginPath();
+    context.moveTo(0, r * 1.9);
+    context.arc(0, 0, r, Math.PI * 0.75, Math.PI * 0.25);
+    context.closePath();
+    context.fillStyle = "rgba(26, 18, 10, 0.92)";
+    context.fill();
+    context.lineWidth = 2.2;
+    context.lineJoin = "round";
+    context.strokeStyle = colour;
+    context.stroke();
+
+    // (Its sign, in its head)
+    if (icon === "mystery") {
+        context.font = `bold ${Math.round(r * 1.35)}px Georgia, "Times New Roman", serif`;
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillStyle = colour;
+        context.fillText("?", 0, r * 0.08);
+    } else {
+        const scale = (r * 1.2) / 20;
+
+        context.scale(scale, scale);
+        (MARKER_SIGNS[icon] ?? []).forEach(([, fill, stroke, width], k) => {
+            const path = markerPaths[icon][k];
+
+            if (fill) {
+                context.fillStyle = fill === "sign" ? colour : fill;
+                context.fill(path);
+            }
+
+            if (stroke) {
+                context.lineWidth = width;
+                context.lineCap = "round";
+                context.strokeStyle = stroke === "sign" ? colour : stroke;
+                context.stroke(path);
+            }
+        });
+    }
+
+    context.restore();
+}
+
+/**
  * The mark of a camp or lair tracked home by its trails' signs (core/tracks.js), drawn at the
  * lower right of its icon (centred at x, y, `size` pixels across): a pale paw on a dark disc.
  */

@@ -12,6 +12,8 @@
 // are (the terrain plan's M7g) and how far that is beside it; tap twice somewhere to run there.
 // In a party, the places another of it found for them are said to be theirs to find (from near
 // in), and its pings are shown as they come, rings swelling out from each (app/mapicons.js PING).
+// The player's markers (core/markers.js) are on it wherever they are, fog or no; tapped, one's
+// chosen.
 //
 // Opened from a guild's portal (core/portals.js), it's the travel map: the same land and fog, but
 // of the buildings only the guild's branches open to the player, each however far out it's
@@ -24,7 +26,7 @@
 
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
-import { drawBuildingIcon, drawPing, drawSearch, drawTracked, drawWarMark, FORT_ICONS } from "./mapicons.js";
+import { drawBuildingIcon, drawMarker, drawPing, drawSearch, drawTracked, drawWarMark, FORT_ICONS, MARKER_COLOURS } from "./mapicons.js";
 import { FORD_MARK, grassOf, paintPatch, WATER_COLOURS } from "./minimap.js";
 
 // The land's picture: pixels to a cell of the plan (32 metres)
@@ -62,6 +64,12 @@ const ICONS_FROM = 6;
 const ICON_SIZE = 24;
 const FINDERS_FROM = 3;
 const FINDER_COLOUR = "#bfeec8";
+
+// The player's markers: their heads this big (pixels), their words under them from this near
+// (metres to a pixel, at most), and how near a marker's head a tap chooses it (pixels)
+const MARKER_SIZE = 24;
+const MARKER_WORDS_FROM = 8;
+const MARKER_REACH = 20;
 
 // The travel map's branches: how big their icons (pixels), and how near one a tap chooses it
 // (pixels, from its middle)
@@ -285,6 +293,18 @@ export class WorldMap {
          */
         this.pingsOf = null;
 
+        /**
+         * Asked for the player's markers, as they are now ([{ id, x, z (metres), icon, words, from
+         * }]: app/game.js markerView), or null (none shown).
+         */
+        this.markersOf = null;
+
+        /**
+         * Heard with the point tapped once ([x, z], metres), before it's taken as the first of two:
+         * whether it chose something (a marker: then it's not).
+         */
+        this.onTap = null;
+
         // The pin ({ x, z } metres, or null) and the way to it ([[x, z], ...] metres, or null);
         // the hold under way (its timer), and the last tap (for a double tap)
         this.pin = null;
@@ -384,6 +404,25 @@ export class WorldMap {
     /** The travel map's branch at a point (metres: [x, z]), tapped: the nearest near enough, or null. */
     branchAt(point) {
         return this.#nearest(this.travel, point);
+    }
+
+    /**
+     * The player's marker at a point (metres: [x, z]), tapped: the one whose head (over its point)
+     * is nearest it within MARKER_REACH pixels, or null.
+     */
+    markerAt([x, z]) {
+        const lift = MARKER_SIZE * 0.95 * this.view.scale;
+        let best = null;
+
+        for (const marker of this.markersOf?.() ?? []) {
+            const pixels = Math.hypot(marker.x - x, marker.z - lift - z) / this.view.scale;
+
+            if (pixels <= MARKER_REACH && (!best || pixels < best.pixels)) {
+                best = { marker, pixels };
+            }
+        }
+
+        return best?.marker ?? null;
     }
 
     /** The building screen's plan at a point (metres: [x, z]), tapped: the nearest near enough, or null. */
@@ -797,6 +836,33 @@ export class WorldMap {
             this.#drawPin(at);
         }
 
+        // The player's markers, fog or no: their words under them, near in (or whose they were)
+        const markers = this.markersOf?.() ?? [];
+
+        for (const marker of markers) {
+            const [x, y] = at(marker.x, marker.z);
+
+            if (x < -60 || y < -20 || x > width + 60 || y > height + MARKER_SIZE * 2) {
+                continue;
+            }
+
+            drawMarker(context, x, y, marker.icon, { size: MARKER_SIZE });
+
+            const words = view.scale <= MARKER_WORDS_FROM ? (marker.words || (marker.from ? `${marker.from}'s` : "")) : "";
+
+            if (words) {
+                context.font = `600 12px Georgia, "Times New Roman", serif`;
+                context.textAlign = "center";
+                context.textBaseline = "top";
+                context.lineJoin = "round";
+                context.lineWidth = 3;
+                context.strokeStyle = "rgba(20, 14, 8, 0.85)";
+                context.strokeText(words, x, y + 3);
+                context.fillStyle = MARKER_COLOURS[marker.icon] ?? FINDER_COLOUR;
+                context.fillText(words, x, y + 3);
+            }
+        }
+
         // The party's pings, fog or no, each with who made it: kept moving while there are any
         const pings = this.pingsOf?.() ?? [];
 
@@ -844,7 +910,7 @@ export class WorldMap {
             context.restore();
         }
 
-        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, finders, tracked, pings: pings.length, marks: (this.marks ?? []).length, heard: (this.heard ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
+        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, finders, tracked, pings: pings.length, markers: markers.length, marks: (this.marks ?? []).length, heard: (this.heard ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
     }
 
     // The war table's map: a shade over all but what its people see now (draw's)
@@ -1461,6 +1527,9 @@ export class WorldMap {
         // (Picking somewhere: a tap, not a drag)
         if (this.onPick && tapped) {
             this.onPick(this.pointAt(sx, sy));
+        } else if (tapped && this.onTap?.(this.pointAt(sx, sy))) {
+            // (Something chosen with it: not the first of two)
+            this.lastTap = null;
         } else if (this.onDoubleTap && tapped) {
             // (Twice, quickly, in the same place: run there)
             const last = this.lastTap;

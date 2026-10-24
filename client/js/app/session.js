@@ -52,15 +52,15 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
  * in where one of the hero's people starts), for a hero: { name, shape, look, weapon, race } (and what's kept of it: its
  * talks and what it's found, and what it's grown into and carries, and who hears of them; the
  * world's war as it was kept, and who hears of it; who opens the world map, and who's told when
- * the party shows them somewhere on it; where they've
- * pinned on it, and who hears of that; where they were and how, when the game last stopped; the
- * last messages they were told, and who hears of them; and what they've been told once and
- * needn't be again, and who hears of that).
+ * the party shows them somewhere on it; where they've pinned on it and the markers they've put
+ * on it, and who hears of those; where they were and how, when the game last stopped; the last
+ * messages they were told, and who hears of them; and what they've been told once and needn't
+ * be again, and who hears of that).
  */
-export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, onPing, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels, pin, onPin, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
+export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, onPing, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels, pin, onPin, markers = [], onMarkers = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
     const world = buildWorld({ seed, race: hero.race ?? "human" });
 
-    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, onPing, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels, pin, onPin, place, vitals, messages, onMessages, told, onTold });
+    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, onPing, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels, pin, onPin, markers, onMarkers, place, vitals, messages, onMessages, told, onTold });
 }
 
 /**

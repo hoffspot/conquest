@@ -230,6 +230,10 @@
             </div>
             <p class="worldmap-note" id="worldmapnote" role="status" hidden></p>
             <div class="worldmap-tools">
+                <!-- Tapped, the next tap on the map puts a marker there (its kind and words asked) -->
+                <button type="button" id="worldmapmark" class="hud-button" aria-label="Put a marker on the map" aria-pressed="false" title="Put a marker on the map">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s-6-6.2-6-11a6 6 0 0 1 12 0c0 4.8-6 11-6 11z"/><path d="M12 8v6M9 11h6"/></svg>
+                </button>
                 <!-- In a party: tapped, the next tap on the map pings it for the party -->
                 <button type="button" id="worldmapping" class="hud-button" aria-label="Ping the map for your party" aria-pressed="false" title="Ping the map for your party" hidden>
                     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.5 7.5a6.4 6.4 0 0 0 0 9M16.5 7.5a6.4 6.4 0 0 1 0 9M4.6 4.6a10.4 10.4 0 0 0 0 14.8M19.4 4.6a10.4 10.4 0 0 1 0 14.8"/></svg>
@@ -594,6 +598,19 @@
                 <button type="button" class="button primary" id="portalgo">Step through</button>
                 <button type="button" class="button" id="portalback">Stay</button>
             </div>
+        </dialog>
+
+        <!-- A marker on the world map: a new one's kind and words chosen; or one tapped, shared with the
+             party, run to, or taken away -->
+        <dialog id="marker" class="together" aria-labelledby="markertitle" aria-describedby="markernote">
+            <h2 id="markertitle">New marker</h2>
+            <p class="note" id="markernote"></p>
+            <div class="marker-kinds" id="markerkinds" role="radiogroup" aria-label="What it marks"></div>
+            <div class="marker-words" id="markerwordsbox">
+                <label class="field" for="markerwords">Words of your own</label>
+                <input type="text" id="markerwords" class="text" maxlength="24" autocomplete="off" spellcheck="false" placeholder="Wolves' den">
+            </div>
+            <div class="menu" id="markermenu"></div>
         </dialog>
 
         <!-- A plan chosen on the building screen (the ruler's): what it is and costs, asked first -->

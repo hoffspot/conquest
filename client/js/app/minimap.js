@@ -20,7 +20,7 @@ import { allAtOnce, Steps } from "../core/steps.js";
 import { GROUND, HOUSE_STYLES, PLOT } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { LAND_COLOURS } from "../world/ground.js";
-import { drawBuildingIcon, drawPing, drawSearch, drawTracked } from "./mapicons.js";
+import { drawBuildingIcon, drawMarker, drawPing, drawSearch, drawTracked } from "./mapicons.js";
 
 // Colours (RGB) of the ground and of what stands on it
 const GROUND_COLOURS = {
@@ -185,6 +185,9 @@ const HOLD_MS = 550;
 
 // How big the icons over the buildings gone into are (pixels)
 const ICON_SIZE = 22;
+
+// The player's markers on it: their heads this big (pixels)
+const MARKER_SIZE = 16;
 
 // A little variation from square to square, the same every time (-1 to 1)
 const jitter = (x, y) => {
@@ -474,10 +477,11 @@ export class Minimap {
      * gone into and the places worth finding ([{ kind, x, z, rim (who holds a place, its colour) }]),
      * and `elites`, the wild's elites near enough to be marked ([{ x, z, targeted }]: ELITE_MARK);
      * and the circles to search for the treasures the player's hunting (`searches`: [{ id, x, z,
-     * radius, grade, own }]: app/game.js treasureCircles); and the party's pings (`pings`: [{ x,
-     * z, age (seconds) }]: app/game.js pingView).
+     * radius, grade, own }]: app/game.js treasureCircles); the party's pings (`pings`: [{ x, z,
+     * age (seconds) }]: app/game.js pingView); and the player's markers (`markers`: [{ id, x, z,
+     * icon }]: app/game.js markerView).
      */
-    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], pings = [] }, now = performance.now()) {
+    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], pings = [], markers = [] }, now = performance.now()) {
         const { canvas, context, map } = this;
 
         this.drawn = now;
@@ -575,6 +579,18 @@ export class Minimap {
             if (x > -r && y > -r && x < width + r && y < height + r) {
                 drawSearch(context, x, y, r, search.grade, { cross: Math.min(10, Math.max(6, r * 0.35)), own: search.own });
                 this.searches.push(search.id);
+            }
+        }
+
+        // The player's markers, where they're in sight (those drawn kept for tests: `markers`, by id)
+        this.markers = [];
+
+        for (const marker of markers) {
+            const [x, y] = at(marker.x, marker.z);
+
+            if (x > -MARKER_SIZE && y > -MARKER_SIZE && x < width + MARKER_SIZE && y < height + MARKER_SIZE * 2) {
+                drawMarker(context, x, y, marker.icon, { size: MARKER_SIZE });
+                this.markers.push(marker.id);
             }
         }
 

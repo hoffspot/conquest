@@ -3724,7 +3724,8 @@ the minimap across and 63 degrees wide, however the camera's tilted or zoomed, f
 its far two-thirds: `LOOK`), where the player is going, the enemies (red dots, the target ringed), an icon over each building the
 player has gone into and each place worth finding round them (below), the party's pings out in
 the world (docs/WAR.md *Parties*: a green dot with rings swelling out from it; further than it
-shows, smaller, at its edge the way it is, as the wild's elites are), and the player (an arrowhead pointing the way they face). A tap on it walks
+shows, smaller, at its edge the way it is, as the wild's elites are), the player's markers in its
+view (*The world map*), and the player (an arrowhead pointing the way they face). A tap on it walks
 the player there, or fights an enemy within 12 pixels of the tap; a double tap runs; holding it
 (0.55 s, without moving) opens the world map. Inside, each floor is painted from its plan: the
 floor, walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and
@@ -4075,6 +4076,22 @@ same button holds the war's key.
   player moves (at most every 0.3 s, once they've moved a metre), every 1.5 s while it falls
   short (as the tiles round the player come in), and across the world again once they're 40 m
   off it.
+- **Markers** (core/markers.js; drawn by app/mapicons.js `drawMarker`): up to ten of the
+  player's own (`MARKERS.most`), anywhere on the map, fog or no, each a pin with a round head in
+  its colour and its sign in it: a flag (red), a star (gold), danger (a skull, bone white), loot (a
+  chest, gold-brown), a camp (a tent, orange), sight (an eye, blue), herbs (a sprig, green) or a
+  mystery (a question mark, violet). Its button (a pin with a plus, over the pin's) makes the next
+  tap put one there (`mapMode`: Cancel, or the button again, calls it off; with ten, "10 markers
+  already: tap one to take it away first"): the marker's dialog (`#marker`, main.js `askMarker`)
+  asks what it marks (the eight, each drawn as on the map, the one chosen ringed) and a few words of
+  the player's own (24 letters at most, tidied as a line said in a party is: `markerWords`). The
+  words are under it, 8 metres to a pixel or closer, in its colour (or, for one shared without
+  any, whose it was: "Bram's"). Tapped (its head, within 20 pixels; then it's not the first of two
+  taps), the dialog says what it is, which way and how far, and who shared it, with **Share with
+  your party** (in one: docs/WAR.md *Parties*), **Run there** (as a double tap), **Take it away**
+  and **Close**. They're kept with the character in each world (save.js `loadMarkers`), as the pin
+  is, and on the minimap too (16 pixels) where they're in its view. In the key: "Your markers (up
+  to 10): tap one to share it or take it away".
 - **In a party** (docs/WAR.md *Parties*): the places another of the party found for the player
   first say who under their icons, 3 metres to a pixel or closer ("found by Bryn", in the party's
   pale green). The party's pings are drawn as they come, fog or no, each a green dot with two rings
