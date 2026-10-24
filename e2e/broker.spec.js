@@ -146,6 +146,86 @@ test("a player's own world through the server's broker: listed on it, joined fro
     await expect.poll(() => server.broker.listings.size, { timeout: 30000 }).toBe(0);
 });
 
+test("a host whose game's reloaded opens their world to friends again under its code, each stage shown, and the friend in it goes straight back in", async ({ ownBrowser: browser }) => {
+    const host = await (await browser.newContext()).newPage();
+    const guest = await (await browser.newContext()).newPage();
+    const bram = { ...ELF, hero: { ...ELF.hero, name: "Bram", race: "human", weapon: "sword", guid: "7a6b5c4d-3e2f-4a1b-9c8d-7e6f5a4b3c2d" } };
+    const syl = { ...ELF, hero: { ...ELF.hero, guid: "2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e" } };
+
+    // (Each a character kept on their device, from the first time it's opened; the host's stages of
+    // the way back in, as they're marked)
+    for (const [page, character] of [
+        [host, bram],
+        [guest, syl],
+    ]) {
+        await page.addInitScript((character) => {
+            localStorage.setItem("pellagos.settings", JSON.stringify({ quality: "low", renderScale: 0.5, shadows: false }));
+
+            if (!localStorage.getItem("pellagos.characters")) {
+                localStorage.setItem("pellagos.save", JSON.stringify(character));
+            }
+
+            window.stagesSeen = [];
+            document.addEventListener("DOMContentLoaded", () => {
+                new MutationObserver((changes) => {
+                    for (const { target, attributeName } of changes) {
+                        if (attributeName === "data-state" && target.dataset.state !== "waiting") {
+                            window.stagesSeen.push(`${target.dataset.stage}:${target.dataset.state}`);
+                        }
+                    }
+                }).observe(document.querySelector("#rejoinstages"), { subtree: true, attributes: true });
+            });
+        }, character);
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    // Bram plays, and opens his world through the server: kept to open again
+    await host.goto(`${base}/`);
+    await host.locator("#continuebutton").click({ timeout: 60000 });
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 30000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+    expect(await host.evaluate(() => JSON.parse(localStorage.getItem("pellagos.inworld")))).toMatchObject({ kind: "hosting", code, name: "Bram", listed: false });
+
+    // Syl joins by its code
+    await guest.goto(`${base}/?join=${code}`);
+    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(guest);
+    await expect.poll(() => host.evaluate(() => window.pellagos.game.others().length), { timeout: 30000 }).toBe(1);
+
+    // Bram's game reloaded: his world loaded and opened to friends again, the dialog naming it and
+    // each stage under way and then done; under its code, told so
+    await host.reload();
+
+    const rejoin = host.locator("#rejoin");
+
+    await expect(rejoin).toBeVisible({ timeout: 60000 });
+    await expect(rejoin.locator("#rejointitle")).toHaveText("Back into your world");
+    await expect(rejoin.locator("#rejoinabout")).toHaveText(`Opening it to your friends again, under its code, ${code}, as Bram.`);
+    await playing(host);
+    await expect(rejoin).toBeHidden({ timeout: 60000 });
+    expect(await host.evaluate(() => window.stagesSeen)).toEqual(["load:now", "load:done", "reopen:now"]);
+    expect(await host.evaluate(() => window.pellagos.together.code)).toBe(code);
+    await expect(host.locator("#banner")).toContainText(`Your world's open to friends again, under its code, ${code}: those who were in it are coming back.`);
+
+    // Syl's game, told the world was opened again, goes straight back in by its code
+    await expect(guest.locator("#rejoin #rejointitle")).toHaveText("Back into Bram's world", { timeout: 60000 });
+    await playing(guest);
+    await expect(guest.locator("#rejoin")).toBeHidden();
+    await expect.poll(() => host.evaluate(() => window.pellagos.game.others().length), { timeout: 60000 }).toBe(1);
+    expect(await guest.evaluate(() => document.querySelector("#playerplate .name").textContent)).toBe("Syl");
+});
+
 test("a host no direct link gets through to is joined relayed by the server; and hidden from its list once the server doesn't relay", async ({ ownBrowser: browser }) => {
     const host = await (await browser.newContext()).newPage();
     const guest = await (await browser.newContext()).newPage();
