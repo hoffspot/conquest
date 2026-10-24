@@ -15,7 +15,7 @@ import { newGuid } from "../client/js/core/guid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
 import { MOTION } from "../client/js/core/motion.js";
-import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
+import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
@@ -681,6 +681,72 @@ describe("playing together (netplay.js)", () => {
         assert.equal(joining.rtt, 75, "(smoothed)");
         assert.deepEqual(pongs, [80, 40], "each as it was heard (for the downloader)");
         assert.ok(post.length === 0);
+    });
+
+    it("has a joined game tell the host how long a word to it and back's been taking, with each ping: the slowest of them the host's to show", () => {
+        const { hosting, join, deliver } = opened();
+        let clock = 0;
+        const first = join(guest("Bryn"), { clock: () => clock });
+        const second = join(guest("Cai"), { clock: () => clock });
+
+        assert.equal(hosting.slowest(), null, "none timed yet");
+
+        // (Each times a round trip; told the next time it pings)
+        first.joining.ping();
+        clock += 120;
+        deliver();
+        second.joining.ping();
+        clock += 300;
+        deliver();
+        assert.deepEqual([first.joining.lately, second.joining.lately], [120, 300]);
+        first.joining.ping();
+        second.joining.ping();
+        deliver();
+
+        assert.equal(hosting.slowest(), 300);
+
+        // (Gone: theirs no longer counted)
+        hosting.gone(second.peer);
+        assert.equal(hosting.slowest(), 120);
+    });
+
+    it("says how long a word to the host and back's taken lately by the middle of the latest few round trips, the first held up as the world's built soon forgotten", () => {
+        let now = 0;
+        const sent = [];
+        const joining = new Joining({ send: (text) => sent.push(decode(text)), clock: () => now });
+        const trip = (ms) => {
+            joining.ping();
+
+            const { t } = sent.at(-1);
+
+            now += ms;
+            joining.hear(encode({ kind: "pong", t, step: 0 }));
+        };
+
+        assert.equal(joining.lately, null, "none timed yet");
+        joining.ping();
+        assert.equal(sent.at(-1).rtt, undefined, "nothing to tell the host yet");
+
+        // (The first held up 15 s, the page busy building the world; then a quick link)
+        trip(15000);
+        assert.equal(joining.lately, 15000);
+        trip(40);
+        assert.equal(joining.lately, 40, "of two, the quicker");
+        trip(60);
+        assert.equal(joining.lately, 60);
+        assert.ok(joining.rtt > 5000, "smoothed, still slow to forget it");
+
+        // (Told the host with the next ping)
+        joining.ping();
+        assert.equal(sent.at(-1).rtt, 60);
+
+        // (Only the latest LATELY count: a slow link's slow)
+        for (let k = 0; k < LATELY; k++) {
+            trip(500 + k);
+        }
+
+        assert.equal(joining.lately, 502);
+        assert.equal(joining.trips.length, LATELY);
     });
 
     it("keeps steps in hand to cover how late the host's steps come, all but the latest few: the fewest when they come evenly; more while a link's held up often enough (a phone's), till it's been steady a while; none counted over a pause", () => {

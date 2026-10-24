@@ -2405,6 +2405,17 @@ async function joinBroker() {
     return (await pageServer())?.server?.broker ? { address: brokerOf(addressOf(location.origin)) } : null;
 }
 
+// How a friend's world is linked, for the HUD's orb (app/worldlink.js): through a server's broker,
+// "direct" or "relayed" as it's come to be (app/peer.js BrokerJoin `how`; null while it's still
+// finding out); through the old relay, always "relayed"
+function linkHow(link) {
+    if (!link) {
+        return null;
+    }
+
+    return "how" in link ? link.how : "relayed";
+}
+
 // Playing together or not (a world opened or joined, app/together.js; or null): the downloader
 // told, so it keeps out of the way of the game's messages, and, alone again, what it was holding
 // back for let go of
@@ -2481,6 +2492,11 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     state.worldMap?.dispose();
     state.worldMap = null;
     state.game = game;
+    // (Who the world's with, and how, for the HUD's orb: app/worldlink.js; on a world server, its
+    // world and the server, else a friend's, linked directly or through the server's broker)
+    game.linkAbout = server
+        ? { kind: "server", world: state.onServer?.entered?.card?.name ?? null, server: state.onServer?.client?.record?.name ?? state.onServer?.client?.card?.server?.name ?? null }
+        : { kind: "friend", how: () => linkHow(state.together?.link) };
     await kit.ready;
     await game.build(({ label, done, total }) => setProgress(done / total, label, `${done} of ${total}`));
     game.showSquares(settings.squares);

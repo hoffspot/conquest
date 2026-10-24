@@ -2893,7 +2893,10 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     signal 48% → 9.5%, 3G 44% → 17% (and drawn stopped in 4.8% → 0.8% of frames on 4G).
   - Only what's drawn changes: the copy of the world is never touched, so the rules never guess.
 - **Timing the link.** Once a second, a joined game asks the host how long a word takes to it and
-  back (`ping`, `pong`: the host answers at once, not at its next sending).
+  back (`ping`, `pong`: the host answers at once, not at its next sending). Each ping says how long
+  it's been taking lately (`rtt`, once it's timed one: the middle of its latest five round trips,
+  `Joining` `lately`, `LATELY`), so the host knows the slowest of its friends' links (`Hosting`
+  `slowest`) for the HUD's scrying orb (docs/GAME.md *The world's link*; `NET_VERSION` 173).
 - **Debug.** The debug overlay's `Net` line shows, joined, that round trip, the steps in hand
   against those it means to keep (and how late they come, all but the latest tenth), the checks made and found astray, the
   resyncs, and what it's hearing a second; hosting, how many have joined and what's sent them a

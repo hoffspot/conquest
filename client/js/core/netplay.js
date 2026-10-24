@@ -49,7 +49,10 @@
 //                    { kind: "away", hidden }                  (its page hidden, or shown again)
 //                    { kind: "command", seq, command }
 //                    { kind: "again" }                         (gone astray: the world again)
-//                    { kind: "ping", t }                       (t: the joiner's clock, ms)
+//                    { kind: "ping", t, rtt }                  (t: the joiner's clock, ms; rtt: how long
+//                                                    a word to the host and back's taken it lately,
+//                                                    ms, once it's timed one: Joining lately; the
+//                                                    host's, to show)
 //                    { kind: "chat", text }                    (a line to their party)
 //   host -> joiner   { kind: "welcome", version, id, seed, race, snapshot, took }
 //                                                    (took: their character was in the world
@@ -77,7 +80,7 @@ import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 172;
+export const NET_VERSION = 173;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -108,6 +111,12 @@ export const PACE = Object.freeze({ behind: 6, catchUp: 40, catchUpMs: 8, tooFar
  * in hand over the last `settle` ms (slower sooner than faster: running out stops everyone,
  * having a few too many only shows them a little later).
  */
+/**
+ * How many of a joined game's latest round trips to the host its link's told by (Joining `lately`:
+ * the middle one), so one held up by the page itself (busy, as the world's built) doesn't count.
+ */
+export const LATELY = 5;
+
 export const PLAYOUT = Object.freeze({ least: 2, most: 8, window: 2000, remember: 20000, spare: 0.1, late: 1000, slower: 0.1, faster: 0.05, gain: 0.05, settle: 1000 });
 
 /** Why a game can't join: shown to its player (a version's own words: versionWords). */
@@ -242,6 +251,9 @@ export class Hosting {
 
         /** Those who've joined (by peer): their player's id in the world. */
         this.players = new Map();
+
+        /** How long a word to each who's joined and back takes, as they've said (by peer: ms, their pings'). */
+        this.rtts = new Map();
 
         /** What's been done since it was last sent, and whether it's time to say how the world stands. */
         this.ops = [];
@@ -407,9 +419,14 @@ export class Hosting {
 
                 break;
             case "ping":
-                // (At once: how long a word takes to come and go, not how long till the next flush)
+                // (At once: how long a word takes to come and go, not how long till the next flush;
+                // and how long it's been taking them, as they say)
                 if (this.players.has(peer) && Number.isFinite(message.t)) {
                     this.#send(peer, "pong", encode({ kind: "pong", t: message.t, step: this.#step() }));
+
+                    if (Number.isFinite(message.rtt) && message.rtt >= 0) {
+                        this.rtts.set(peer, message.rtt);
+                    }
                 }
 
                 break;
@@ -576,6 +593,7 @@ export class Hosting {
         if (old !== undefined) {
             this.#send(old, "kicked", encode({ kind: "kicked", reason: "elsewhere" }));
             this.players.delete(old);
+            this.rtts.delete(old);
             this.onKick(old, "elsewhere");
         }
 
@@ -712,7 +730,15 @@ export class Hosting {
         }
 
         this.players.delete(peer);
+        this.rtts.delete(peer);
         this.#left(id, peer);
+    }
+
+    /** The slowest of the links to those who've joined, as they've said (ms), or null if none's said yet. */
+    slowest() {
+        const said = [...this.players.keys()].map((peer) => this.rtts.get(peer)).filter(Number.isFinite);
+
+        return said.length ? Math.max(...said) : null;
     }
 
     // A player out of the world (`id`, and the link they were on, if any): whoever runs it told,
@@ -804,6 +830,9 @@ export class Joining {
         this.held = 0;
         this.rtt = null;
 
+        /** The latest round trips to the host (ms, at most LATELY of them, as they came: `lately`). */
+        this.trips = [];
+
         /** What's been heard (characters of text), by kind. */
         this.received = {};
 
@@ -886,6 +915,12 @@ export class Joining {
                     const took = Math.max(0, this.clock() - message.t);
 
                     this.rtt = this.rtt === null ? took : this.rtt + (took - this.rtt) / 8;
+                    this.trips.push(took);
+
+                    if (this.trips.length > LATELY) {
+                        this.trips.shift();
+                    }
+
                     this.onPong(took);
                 }
 
@@ -985,9 +1020,27 @@ export class Joining {
         this.send(encode({ kind: "away", hidden: Boolean(hidden) }));
     }
 
-    /** Ask the host how long a word takes to it and back (rtt, once its pong comes). */
+    /**
+     * How long a word to the host and back's taken lately (ms), as the HUD's orb shows it: the
+     * middle of the latest LATELY round trips (of an even few, the quicker), or null till one's
+     * timed. (Not `rtt`, which is smoothed over many, and so slow to forget the first, often held
+     * up as the world's built.)
+     */
+    get lately() {
+        if (!this.trips.length) {
+            return null;
+        }
+
+        const sorted = [...this.trips].sort((a, b) => a - b);
+
+        return sorted[Math.floor((sorted.length - 1) / 2)];
+    }
+
+    /** Ask the host how long a word takes to it and back (rtt, once its pong comes), telling it how long it's been taking lately. */
     ping() {
-        this.send(encode({ kind: "ping", t: this.clock() }));
+        const lately = this.lately;
+
+        this.send(encode({ kind: "ping", t: this.clock(), ...(lately === null ? {} : { rtt: Math.round(lately) }) }));
     }
 
     // The host's sending of what's been done up to `step` heard, `steps` of its steps in it: how

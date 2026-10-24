@@ -65,9 +65,12 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
 
     await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), ELF);
 
-    // The host plays, and opens their world from the menu: a code, and a link to join by
+    // The host plays, and opens their world from the menu: a code, and a link to join by. (Alone
+    // in it, at home: the lantern in the minimap's corner)
     await host.goto("/?play&seed=2");
     await playing(host);
+    await expect(host.locator("#worldlink")).toHaveAttribute("data-link", "home");
+    await expect(host.locator("#worldlink")).toHaveAttribute("aria-label", "Your own world, here on this device.");
     await host.locator("#menubutton").click();
     await host.locator("#invitebutton").click();
 
@@ -114,6 +117,58 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
 
     expect(there.realm).toBe("elf");
     expect(there.others.map(({ name, people }) => `${name}, the ${people}`)).toEqual(["Syl, the Elves"]);
+
+    // Away, both: the orb, glowing as well as the link holds, said for what it is. (Here, two pages
+    // drawing the world in software, each holding up the other's words a frame or more: however
+    // long that is.) Its first round trip, held up as the guest's page built the world, forgotten
+    const orb = (page) => page.locator("#worldlink");
+    const said = { strong: "good", fair: "fair", "weak: expect delays": "poor" };
+
+    await expect(orb(guest)).toHaveAttribute("data-link", "away");
+    await expect(orb(guest)).toHaveAttribute("aria-label", /^In .+'s world, linked (directly|through the server)\. A word there and back: \d+ ms\. The link's (strong|fair|weak: expect delays)\.$/, { timeout: 15000 });
+    await expect(orb(host)).toHaveAttribute("data-link", "away");
+    await expect(orb(host)).toHaveAttribute("aria-label", /^Your world, open to friends: 1 friend in it\. The slowest link: a word there and back in \d+ ms\. The link's (strong|fair|weak: expect delays)\.$/, { timeout: 15000 });
+
+    for (const page of [guest, host]) {
+        const words = await orb(page).getAttribute("aria-label");
+
+        expect(await orb(page).getAttribute("data-quality")).toBe(said[words.match(/The link's (.+)\.$/)[1]]);
+    }
+
+    expect(await guest.evaluate(() => window.pellagos.game.remote.lately)).toBeLessThan(5000);
+
+    // As good as can be (the guest's round trips 80 ms, and so its host's, no more timed meanwhile):
+    // green, said so; tapped, said across the screen. The link dropped: red, flickering, and back
+    await guest.evaluate(() => {
+        const { remote } = window.pellagos.game;
+
+        remote.ping = () => {};
+        remote.trips = [80];
+    });
+    await host.evaluate(() => {
+        const { hosting } = window.pellagos.game;
+
+        for (const peer of hosting.players.keys()) {
+            hosting.rtts.set(peer, 80);
+        }
+    });
+    await expect(orb(guest)).toHaveAttribute("data-quality", "good");
+    await expect(orb(guest)).toHaveAttribute("aria-label", /^In .+'s world, linked (directly|through the server)\. A word there and back: 80 ms\. The link's strong\.$/);
+    await expect(orb(host)).toHaveAttribute("data-quality", "good");
+    await expect(orb(host)).toHaveAttribute("aria-label", "Your world, open to friends: 1 friend in it. The slowest link: a word there and back in 80 ms. The link's strong.");
+    await orb(guest).click();
+    await expect(guest.locator("#banner")).toHaveText(/^In .+'s world, linked (directly|through the server)\. A word there and back: 80 ms\. The link's strong\.$/);
+    await guest.evaluate(() => (window.pellagos.game.link = "lost"));
+    await expect(orb(guest)).toHaveAttribute("data-quality", "lost");
+    await expect(orb(guest)).toHaveAttribute("aria-label", /The link's dropped: reconnecting…$/);
+    expect(await orb(guest).evaluate((button) => getComputedStyle(button.querySelector(".orb-ball")).animationName)).toBe("orb-flicker");
+    await guest.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.link = null;
+        delete game.remote.ping;
+    });
+    await expect(orb(guest)).not.toHaveAttribute("data-quality", "lost");
 
     // The guest walks: done in the host's world, and in their copy alike
     const to = await guest.evaluate(() => {
