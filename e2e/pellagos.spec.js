@@ -6364,7 +6364,9 @@ test("the wild's creatures leave their prints on the ground as they go out in th
 
     expect(prints.visible).toBe(true);
     expect(prints.out.every(({ y, ground }) => Math.abs(y - ground) < 0.05)).toBe(true);
-    expect(prints.out.every(({ made, depth }) => made <= prints.clock && depth > 0 && depth <= 1)).toBe(true);
+    // (Each one's time as the GPU's float32 holds it: one made on the last frame can come out a hair
+    // over the clock itself, never over it as the float32 holds it)
+    expect(prints.out.every(({ made, depth }) => made <= Math.fround(prints.clock) && depth > 0 && depth <= 1)).toBe(true);
 });
 
 test("a trail out of a camp: its prints and signs seen near it, a sign tapped walked up to and read, which way it runs told; three read, its camp tracked, on the world map and in the journal; and the next time", async ({ page }) => {
