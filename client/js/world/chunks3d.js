@@ -175,6 +175,28 @@ export class Chunks {
 
         /** Bumped whenever a chunk is drawn or thrown away (to know when what's drawn changes). */
         this.version = 0;
+
+        /**
+         * How far on a house of a settlement's is from being burnt by the Behemoth of the Rift
+         * (by its place's id and its layout's index: core/burnt.js stageOf's), or null: set by
+         * the game. Its chunk built again when it changes (rebuild).
+         */
+        this.burntOf = () => null;
+    }
+
+    /**
+     * The buildings of the chunks drawn that any of a place's pieces are in built again (its
+     * houses burnt, or further on being built again: burntOf), what was drawn of them kept till
+     * they are.
+     */
+    rebuild(place) {
+        for (const drawn of this.drawn.values()) {
+            if (!drawn.drawing && (drawn.job || drawn.buildings) && this.#piecesOf(drawn.cx, drawn.cy).some((piece) => piece.place === place)) {
+                this.building = this.building.filter((other) => other !== drawn);
+                drawn.job = null;
+                this.#queue(drawn);
+            }
+        }
     }
 
     /** Draw every chunk within `reach` of a point (metres) at once (when the game starts). */
@@ -589,8 +611,12 @@ export class Chunks {
 
         const merged = joined(job.parts);
 
+        // (Built again: what was drawn before let go of now, as this takes its place)
+        this.#unbuild(drawn);
+
         merged.name = "buildings";
         drawn.buildings = merged;
+        drawn.made = [merged];
         drawn.far = false;
         drawn.signs = [];
 
@@ -616,24 +642,16 @@ export class Chunks {
 
         drawn.lights = job.lights;
 
-        if (lit) {
-            drawn.object.add(lit);
+        for (const made of [lit, pools, cloth, smoke]) {
+            if (made) {
+                drawn.object.add(made);
+                drawn.made.push(made);
+            }
         }
 
-        if (pools) {
-            drawn.object.add(pools);
-        }
-
-        if (cloth) {
-            drawn.object.add(cloth);
-        }
-
-        if (smoke) {
-            drawn.object.add(smoke);
-        }
-
-        // (And the great trees they're built round, the elves', planted with the rest)
-        if (job.trees.length) {
+        // (And the great trees they're built round, the elves', planted with the rest: once, not
+        // again as its buildings are built again)
+        if (job.trees.length && !drawn.grown) {
             drawn.grown = this.woodland.plant(
                 job.trees.map((tree) => ({ ...tree, tint: this.#tintOf(tree.variant, tree.x, tree.z) })),
                 this.groundAt,
@@ -960,27 +978,63 @@ export class Chunks {
         object.add(lot.object);
 
         // The buildings and props of any settlement in it, to be built a few at a time
-        // (And each people's castle and places, and their lookouts: sites.js; and the yards behind
-        // its houses that are there (core/settlements.js), standing on the ground as it lies under
-        // each: kits/yards.js)
-        const yards = (this.overworld.settlements?.yardsIn?.(cx, cy) ?? []).map((yard) => ({ ...yard, lie: lieOf(yard, this.groundAt) }));
-        const pieces = [...(this.overworld.settlements?.piecesIn(cx, cy).filter(({ kind }) => kind !== "tree") ?? []), ...yards, ...(this.overworld.sites?.piecesIn(cx, cy) ?? [])];
-
-        if (pieces.length) {
-            const group = new THREE.Group();
-
-            group.scale.setScalar(PIXEL);
-            group.updateMatrixWorld();
-
-            // (Each piece built, then its parts made ready to merge: `built` the one whose parts
-            // aren't yet)
-            drawn.job = { pieces, index: 0, group, waiting: false, trees: [], smoke: [], cloth: [], lights: [], built: null, parts: [], panes: [] };
-            this.building.push(drawn);
-        }
-
+        this.#queue(drawn);
         drawn.drawing = false;
         object.visible = true;
         this.version++;
+    }
+
+    // The pieces of the settlements in a chunk (but their trees: the woodland's), each people's
+    // castle and places, and their lookouts (sites.js), and the yards behind its houses that are
+    // there (core/settlements.js), standing on the ground as it lies under each (kits/yards.js);
+    // a house burnt by the Behemoth of the Rift marked how far on it is (`burnt`: burntOf)
+    #piecesOf(cx, cy) {
+        const yards = (this.overworld.settlements?.yardsIn?.(cx, cy) ?? []).map((yard) => ({ ...yard, lie: lieOf(yard, this.groundAt) }));
+        const settled = (this.overworld.settlements?.piecesIn(cx, cy).filter(({ kind }) => kind !== "tree") ?? []).map((piece) => {
+            const burnt = piece.kind === "house" ? this.burntOf(piece.place, piece.index) : null;
+
+            return burnt ? { ...piece, burnt } : piece;
+        });
+
+        return [...settled, ...yards, ...(this.overworld.sites?.piecesIn(cx, cy) ?? [])];
+    }
+
+    // A chunk's buildings and props to be built a few at a time (#build), merged once they all
+    // are (#finish)
+    #queue(drawn) {
+        const pieces = this.#piecesOf(drawn.cx, drawn.cy);
+
+        if (!pieces.length) {
+            return;
+        }
+
+        const group = new THREE.Group();
+
+        group.scale.setScalar(PIXEL);
+        group.updateMatrixWorld();
+
+        // (Each piece built, then its parts made ready to merge: `built` the one whose parts
+        // aren't yet)
+        drawn.job = { pieces, index: 0, group, waiting: false, trees: [], smoke: [], cloth: [], lights: [], built: null, parts: [], panes: [] };
+        this.building.push(drawn);
+    }
+
+    // What a chunk's buildings were drawn as let go of (built again: rebuild), as they're
+    // replaced: their merged meshes, their lights, banners, smoke and windows' light on the
+    // ground, and their signs' pictures
+    #unbuild(drawn) {
+        for (const mesh of drawn.made ?? []) {
+            mesh.removeFromParent();
+            mesh.traverse((node) => node.geometry?.dispose());
+        }
+
+        for (const texture of drawn.signs ?? []) {
+            releaseSign(texture);
+        }
+
+        drawn.made = [];
+        drawn.signs = [];
+        drawn.lights = [];
     }
 
     // Throw a chunk away

@@ -48,6 +48,7 @@ export const FIRES = Object.freeze({
     brazier: { width: 0.5, height: 0.66, tongues: 6, spread: 0.13, rate: 2.9, steady: 1, lean: 0.4, heat: 1, embers: 18, smoke: "torch", night: false, twist: 1 },
     "brazier-night": { width: 0.5, height: 0.66, tongues: 6, spread: 0.13, rate: 2.9, steady: 1, lean: 0.4, heat: 1, embers: 18, smoke: null, night: true, twist: 1 },
     fire: { width: 0.85, height: 1.05, tongues: 8, spread: 0.24, rate: 1.8, steady: 1, lean: 0.52, heat: 0.92, embers: 36, smoke: "fire", night: false, twist: 1 },
+    blaze: { width: 1.6, height: 2.6, tongues: 10, spread: 0.55, rate: 1.25, steady: 1, lean: 0.7, heat: 1, embers: 60, smoke: "blaze", night: false, twist: 1 },
     hearth: { width: 0.8, height: 0.62, tongues: 7, spread: 0.26, rate: 2.1, steady: 0.9, lean: 1e3, heat: 1, embers: 0, smoke: null, night: false, twist: 0.8 },
     forge: { width: 0.7, height: 0.5, tongues: 6, spread: 0.2, rate: 2.6, steady: 1, lean: 1e3, heat: 1.15, embers: 0, smoke: null, night: false, twist: 0.6 },
     spell: { width: 0.6, height: 1, tongues: 6, spread: 0.2, rate: 3, steady: 1.2, lean: 0.6, heat: 1.25, embers: 20, smoke: null, night: false, twist: 3 },

@@ -213,7 +213,8 @@ export class Settlements {
 
     /**
      * The pieces of the settlements laid out near a chunk whose middles are in it, in the world's
-     * metres: [{ ...piece, x, y (its middle, metres, in the world), place (its settlement's id) }].
+     * metres: [{ ...piece, x, y (its middle, metres, in the world), place (its settlement's id),
+     * index (its place in its layout's pieces) }].
      */
     piecesIn(cx, cy) {
         const [x0, y0] = [cx * CHUNK, cy * CHUNK];
@@ -226,11 +227,11 @@ export class Settlements {
                 continue;
             }
 
-            for (const piece of settlement.town.pieces) {
+            for (const [index, piece] of settlement.town.pieces.entries()) {
                 const [x, y] = [piece.x + settlement.at[0], piece.y + settlement.at[1]];
 
                 if (x >= x0 && y >= y0 && x < x0 + CHUNK && y < y0 + CHUNK) {
-                    found.push({ ...piece, x, y, place: place.id });
+                    found.push({ ...piece, x, y, place: place.id, index });
                 }
             }
         }
