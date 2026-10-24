@@ -22,6 +22,7 @@ import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
 import { rumouredBy, rumoursNear } from "./rumours.js";
+import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
 import { carriesTorch, lighting, skyLight, torchesLit } from "./light.js";
@@ -2143,6 +2144,7 @@ export class Host {
         if (this.battle.time >= this.lookAt) {
             this.lookAt = this.battle.time + RELEVANCE.every;
             this.#lookAround();
+            this.#spotting();
             this.#muster();
             this.#townsfolk();
             this.#wilds();
@@ -2209,7 +2211,7 @@ export class Host {
 
     // Where a player is out in the world (x, y metres) found by another of their party (`fellow`)
     // too, for good: the chunk visited, and the places worth finding round it (#findable: as the
-    // maps have them, Explored sighted) that they hadn't found kept as found by the player first,
+    // maps have them, Explored knows) that they hadn't found kept as found by the player first,
     // to be told
     #share(player, fellow, x, y) {
         const explored = fellow?.explored;
@@ -2220,11 +2222,11 @@ export class Host {
         }
 
         const near = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].flatMap((dx) => (cx + dx < 0 || cx + dx >= CHUNKS ? [] : (this.#findable().get((cy + dy) * CHUNKS + cx + dx) ?? []))));
-        const unfound = near.filter(({ at }) => !explored.sighted(...at));
+        const unfound = near.filter(({ id, at }) => !explored.knows(id, ...at));
 
         explored.visit(x, y);
 
-        const found = unfound.filter(({ at }) => explored.sighted(...at)).map(({ id }) => id);
+        const found = unfound.filter(({ id, at }) => explored.knows(id, ...at)).map(({ id }) => id);
 
         for (const id of found) {
             explored.foundBy(id, player.hero.name);
@@ -2233,16 +2235,72 @@ export class Host {
         this.#event("explored", { id: fellow.id, by: player.id, ...(found.length ? { name: player.hero.name, places: found } : {}) });
     }
 
-    // The places worth finding in the world (places.js placesOf: its sites and wild camps; and its
-    // dungeons' ways in), by the chunk each is in (cy * CHUNKS + cx): [{ id, at }], worked out once
+    // What each player out in the world sees from high ground (core/sighting.js: on a rise well
+    // above the land round them), looked for each time the host looks round: the places worth
+    // finding they hadn't found (#findables) that the land between doesn't hide, kept as spotted
+    // (Explored spot) and told, the nearest first; and found by the rest of their party too, as
+    // the player's finds, as where they go is (#share). (A look's a few tenths of a millisecond:
+    // nine heights to tell high ground, and along the way to each place within a kilometre)
+    #spotting() {
+        const plan = this.world.plan;
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (!plan || !actor || actor.dead || actor.map !== "town") {
+                continue;
+            }
+
+            const at = [actor.x, actor.y];
+            const unfound = this.#findables().filter(({ id, at: [x, y] }) => hypot(x - at[0], y - at[1]) <= SIGHTING.reach[1] && !player.explored.knows(id, x, y));
+            const seen = unfound.length ? sightedFrom(plan, at, unfound) : [];
+
+            if (!seen.length) {
+                continue;
+            }
+
+            for (const id of seen) {
+                player.explored.spot(id);
+            }
+
+            this.#event("explored", { id: player.id, spotted: seen });
+
+            for (const id of this.fellows(player.id)) {
+                const fellow = this.players.get(id);
+                const found = unfound.filter((place) => seen.includes(place.id) && !fellow.explored.knows(place.id, ...place.at)).map((place) => place.id);
+
+                for (const place of found) {
+                    fellow.explored.spot(place);
+                    fellow.explored.foundBy(place, player.hero.name);
+                }
+
+                if (found.length) {
+                    this.#event("explored", { id: fellow.id, by: player.id, name: player.hero.name, places: found });
+                }
+            }
+        }
+    }
+
+    // The places worth finding in the world (places.js placesOf: its sites and wild camps; its
+    // dungeons' ways in; and the roaming beasts' dens, dens.js): [{ id, at }], worked out once
+    // (#findables)
+    #findables() {
+        if (!this.findables) {
+            const plan = this.world.plan;
+
+            this.findables = (plan ? [...placesOf(plan), ...plan.sites.filter(({ kind }) => kind === "dungeon"), ...densOf(plan)] : []).map(({ id, at }) => ({ id, at }));
+        }
+
+        return this.findables;
+    }
+
+    // The places worth finding (#findables), by the chunk each is in (cy * CHUNKS + cx): [{ id,
+    // at }], worked out once
     #findable() {
         if (!this.findable) {
-            const plan = this.world.plan;
-            const all = plan ? [...placesOf(plan), ...plan.sites.filter(({ kind }) => kind === "dungeon")] : [];
-
             this.findable = new Map();
 
-            for (const { id, at } of all) {
+            for (const { id, at } of this.#findables()) {
                 const k = Math.floor(at[1] / CHUNK) * CHUNKS + Math.floor(at[0] / CHUNK);
 
                 this.findable.set(k, [...(this.findable.get(k) ?? []), { id, at }]);
@@ -10879,12 +10937,12 @@ export class Host {
 
                 return to && war.liege(to.owner) === liege ? null : "void";
             }
-            // (A guild's look round: seen once the player's been near enough, by the maps' rule,
-            // or within REQUEST_REACH.survey of it)
+            // (A guild's look round: seen once the player's been near enough, or seen it from high
+            // ground, by the maps' rule; or within REQUEST_REACH.survey of it)
             case "survey": {
                 const place = rumouredBy(this.world.plan, request.target.place);
 
-                return !place ? "void" : player.explored?.sighted(...place.at) || near(place.at, REQUEST_REACH.survey) ? "ready" : null;
+                return !place ? "void" : player.explored?.knows(place.id, ...place.at) || near(place.at, REQUEST_REACH.survey) ? "ready" : null;
             }
             case "scout": {
                 if (request.target.force) {

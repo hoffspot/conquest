@@ -2658,10 +2658,11 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   their maps and the places round it are found (core/explored.js `sighted`), as are the buildings
   any of them goes into. A guild's portal still opens only to those who've been in its branch.
   It's kept for good, after the party's gone, but nothing's shared from before they were in it or
-  after they've left. The places worth finding (core/places.js `placesOf`, and the dungeons' ways
-  in) that another found for them first are kept with who found them (`Explored.found`, kept with
+  after they've left. The places worth finding (core/places.js `placesOf`, the dungeons' ways
+  in, and the dens: docs/WILDS.md *Dens*) that another found for them first are kept with who found them (`Explored.found`, kept with
   the character), and they're told: "Bryn found an abbey: it's on your map." (or how many). The
-  world map says so under each, close in: "found by Bryn".
+  world map says so under each, close in: "found by Bryn". The places one of them sees from high
+  ground (docs/WILDS.md *Seen from high ground*) are found by the rest too, kept and told so.
 - **Pings** (`ping`, with `at`: [x, y] metres, anywhere on the world's map; out of a party,
   refused). The world map's ping button (in a party only), then a tap, shows the whole party where
   for 30 seconds (app/mapicons.js `PING`; one each second and a half at most): a green dot with
@@ -2680,7 +2681,7 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   refused out of a party, off the map, or for an icon there isn't.
 - **Kept.** Parties, and who's been asked, are carried in the world's snapshot (`SNAPSHOT_VERSION`
   24) and done by commands like anything else, so every copy has them alike; what two games share
-  changed (`NET_VERSION` 100; with shared finds and pings, 157; with markers shared, 161).
+  changed (`NET_VERSION` 100; with shared finds and pings, 157; with markers shared, 161; with places seen from high ground, 162; with the moon roads, 163).
 - **Talk** (`core/netplay.js` `CHAT`, `Hosting.chat`; the party menu's Chat tab, docs/GAME.md).
   What's said in a party isn't done to the world, and isn't for everyone in it, so it isn't a
   command: a joined player's line goes to the host alone (`{ kind: "chat", text }`), and the host

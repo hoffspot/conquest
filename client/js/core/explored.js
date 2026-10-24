@@ -4,24 +4,27 @@
 // adventurers' guild's branches whose portals they can step through to (core/portals.js: by their
 // places' ids), each one they've been into; and the signs they've read on the trails out of the
 // wild's camps and lairs (core/tracks.js: by their ids), and the homes they've tracked those trails
-// to (by the camp's or site's id), marked on their maps; and the rings of standing stones they've
-// stood in (core/rings.js: by their sites' ids), each one's moon theirs to know. In a party, what
-// each finds is found by the others too (Host #share), and kept by them for good: the places worth
-// finding one of them found first, by whom (`found`), for the maps to say.
+// to (by the camp's or site's id), marked on their maps; the rings of standing stones they've
+// stood in (core/rings.js: by their sites' ids), each one's moon theirs to know; and the places
+// worth finding they've seen from high ground (core/sighting.js: by their ids), found without
+// going near (`spotted`). In a party, what each finds is found by the others too (Host #share),
+// and kept by them for good: the places worth finding one of them found first, by whom (`found`),
+// for the maps to say.
 //
 // Kept with the saved game (app/save.js): the buildings as their keys, the chunks as one bit each
-// (the world's 128 by 128 chunks in 2 KB), written as base64, the branches, the signs, the homes
-// and the rings as their ids, and who found what for them as { place's id: name }. One kept from before there
-// were portals has none (`portals` null), till the host works out which they'd found (Host join).
+// (the world's 128 by 128 chunks in 2 KB), written as base64, the branches, the signs, the homes,
+// the rings and the places spotted as their ids, and who found what for them as { place's id:
+// name }. One kept from before there were portals has none (`portals` null), till the host works
+// out which they'd found (Host join).
 
 import { fromBase64, toBase64 } from "./wire.js";
 import { CHUNK, CHUNKS } from "./worldplan/plan.js";
 
 export class Explored {
     /**
-     * @param {object} [kept] - As `toJSON` gave it: { entered: [keys], visited: base64, portals: [ids], found: { id: name }, signs: [ids], tracked: [ids] }.
+     * @param {object} [kept] - As `toJSON` gave it: { entered: [keys], visited: base64, portals: [ids], found: { id: name }, signs: [ids], tracked: [ids], rings: [ids], spotted: [ids] }.
      */
-    constructor({ entered = [], visited = "", portals = null, found = {}, signs = [], tracked = [], rings = [] } = {}) {
+    constructor({ entered = [], visited = "", portals = null, found = {}, signs = [], tracked = [], rings = [], spotted = [] } = {}) {
         this.entered = new Set(entered.filter((key) => typeof key === "string"));
         this.visited = typeof visited === "string" && visited ? fromBase64(visited, (CHUNKS * CHUNKS) / 8) : new Uint8Array((CHUNKS * CHUNKS) / 8);
 
@@ -37,6 +40,9 @@ export class Explored {
 
         /** The rings of standing stones stood in (their sites' ids: core/rings.js). */
         this.rings = new Set((Array.isArray(rings) ? rings : []).filter((id) => typeof id === "string"));
+
+        /** The places worth finding seen from high ground (plan place ids, and dungeons' sites'). */
+        this.spotted = new Set((Array.isArray(spotted) ? spotted : []).filter((id) => typeof id === "string"));
 
         /** Goes up by one whenever anything's found (for what's drawn from it to know to redraw). */
         this.version = 0;
@@ -130,6 +136,28 @@ export class Explored {
         return true;
     }
 
+    /** A place worth finding (its id) seen from high ground (core/sighting.js): returns whether it's the first time. */
+    spot(id) {
+        if (typeof id !== "string" || this.spotted.has(id)) {
+            return false;
+        }
+
+        this.spotted.add(id);
+        this.version++;
+
+        return true;
+    }
+
+    /**
+     * Has the player found a place worth finding (its id; x, y: where it is, metres, the world's):
+     * been near it (sighted), or seen it from high ground (spotted). The one rule for it: the maps'
+     * icons of places, the rumours of those still to find (core/rumours.js) and the guild's
+     * requests to survey them alike.
+     */
+    knows(id, x, y) {
+        return this.spotted.has(id) || this.sighted(x, y);
+    }
+
     /** Has the player been in this chunk (cx, cy: chunks from the world's north-west corner)? */
     isVisited(cx, cy) {
         if (cx < 0 || cy < 0 || cx >= CHUNKS || cy >= CHUNKS) {
@@ -147,9 +175,8 @@ export class Explored {
     }
 
     /**
-     * Has the player found somewhere (x, y: metres, the world's): been in the chunk it's in, or in
-     * one of the eight round it. The one rule for it: the maps' icons of places (app/game.js
-     * worldMapView) and the rumours of those still to find (core/rumours.js) alike.
+     * Has the player been near somewhere (x, y: metres, the world's): in the chunk it's in, or in
+     * one of the eight round it. A place worth finding is found so, or seen from high ground (knows).
      */
     sighted(x, y) {
         const [cx, cy] = [Math.floor(x / CHUNK), Math.floor(y / CHUNK)];
@@ -191,10 +218,11 @@ export class Explored {
 
     /**
      * What to keep: { entered: [keys], visited: base64, portals: [ids], found: { id: name }, signs:
-     * [ids], tracked: [ids] } (no `portals` till they're worked out, no `found` till another's found
-     * something for them, and no signs or homes till they've read or tracked any).
+     * [ids], tracked: [ids], rings: [ids], spotted: [ids] } (no `portals` till they're worked out,
+     * no `found` till another's found something for them, and no signs, homes, rings or places
+     * spotted till there are any).
      */
     toJSON() {
-        return { entered: [...this.entered], visited: toBase64(this.visited), ...(this.portals ? { portals: [...this.portals] } : {}), ...(this.found.size ? { found: Object.fromEntries(this.found) } : {}), ...(this.signs.size ? { signs: [...this.signs] } : {}), ...(this.tracked.size ? { tracked: [...this.tracked] } : {}), ...(this.rings.size ? { rings: [...this.rings] } : {}) };
+        return { entered: [...this.entered], visited: toBase64(this.visited), ...(this.portals ? { portals: [...this.portals] } : {}), ...(this.found.size ? { found: Object.fromEntries(this.found) } : {}), ...(this.signs.size ? { signs: [...this.signs] } : {}), ...(this.tracked.size ? { tracked: [...this.tracked] } : {}), ...(this.rings.size ? { rings: [...this.rings] } : {}), ...(this.spotted.size ? { spotted: [...this.spotted] } : {}) };
     }
 }

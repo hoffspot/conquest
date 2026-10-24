@@ -682,9 +682,10 @@ export function saveTalks(save, { memory, knowledge }) {
 
 /**
  * What the character of a saved game ({ seed, created }) has found of its world (core/explored.js
- * Explored's toJSON: { entered, visited, portals, found, signs, tracked }: no `portals` kept from
- * before there were portals, worked out from the rest as they join; no `found` till another of
- * their party found something for them; no signs read or homes tracked till they've any);
+ * Explored's toJSON: { entered, visited, portals, found, signs, tracked, spotted }: no `portals`
+ * kept from before there were portals, worked out from the rest as they join; no `found` till
+ * another of their party found something for them; no signs read, homes tracked or places seen
+ * from high ground till they've any);
  * nothing yet for another game.
  */
 export function loadExplored(save) {
@@ -694,7 +695,7 @@ export function loadExplored(save) {
         return { entered: [], visited: "" };
     }
 
-    return { entered: explored.entered ?? [], visited: explored.visited ?? "", ...(Array.isArray(explored.portals) ? { portals: explored.portals } : {}), ...(isObject(explored.found) ? { found: explored.found } : {}), ...(Array.isArray(explored.signs) ? { signs: explored.signs } : {}), ...(Array.isArray(explored.tracked) ? { tracked: explored.tracked } : {}), ...(Array.isArray(explored.rings) ? { rings: explored.rings } : {}) };
+    return { entered: explored.entered ?? [], visited: explored.visited ?? "", ...(Array.isArray(explored.portals) ? { portals: explored.portals } : {}), ...(isObject(explored.found) ? { found: explored.found } : {}), ...(Array.isArray(explored.signs) ? { signs: explored.signs } : {}), ...(Array.isArray(explored.tracked) ? { tracked: explored.tracked } : {}), ...(Array.isArray(explored.rings) ? { rings: explored.rings } : {}), ...(Array.isArray(explored.spotted) ? { spotted: explored.spotted } : {}) };
 }
 
 /** Keep what's been found in a saved game (not in one that isn't saved: ?play). */
