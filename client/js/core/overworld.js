@@ -28,6 +28,7 @@ import { MAP_ORIGINS } from "./interiors.js";
 import { LONE_TREES, loneTreesNear, loneTreesOf, nearLone } from "./lonetrees.js";
 import { hashOf } from "./noise.js";
 import { createRandom } from "./random.js";
+import { DEN, densOf } from "./dens.js";
 import { Settlements, squareOf, waysOut } from "./settlements.js";
 import { byRank, SIGNED, signpostBeside, signpostPiece } from "./signposts.js";
 import { CLEARING, footprintOf } from "./war/forts.js";
@@ -949,14 +950,16 @@ export class Overworld {
     }
 
     // The places near a chunk that trees and the land's features keep clear of: the settlements
-    // still to be built, the sites and the camps, where each is
+    // still to be built, the sites, the camps and the roaming beasts' dens, where each is
     #clearingsNear(x0, y0) {
         const near = ({ at, radius }) => at[0] > x0 - radius && at[0] < x0 + CHUNK + radius && at[1] > y0 - radius && at[1] < y0 + CHUNK + radius;
         const camps = this.#campsNear(x0, y0, x0 + CHUNK, y0 + CHUNK, CLEAR_OF_PLACES).map((camp) => ({ at: this.campAt(camp), radius: CLEAR_OF_PLACES }));
+        // (The dens: core/dens.js, as much round each as DEN.ground)
+        const dens = this.plan ? densOf(this.plan).map(({ at }) => ({ at, radius: DEN.ground })) : [];
         // (And the armies' camps' stockades standing: setStockades)
         const stockades = [...this.stockades.values()].map(({ clearing }) => clearing);
 
-        return [...this.clearings, ...camps, ...stockades].filter(near);
+        return [...this.clearings, ...camps, ...dens, ...stockades].filter(near);
     }
 
     // The pads (terrain/ground.js) reaching into a chunk: the town, the settlements' squares, the

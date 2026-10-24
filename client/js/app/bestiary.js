@@ -10,6 +10,7 @@
 // Every word of it is the game's own (CREATURES, weapons.js, spoils.js): pageOf.
 
 import { CAMP_FOLK, CREATURES, LAIRS, RITES, tierPower } from "../core/creatures.js";
+import { DENS as BEAST_DENS } from "../core/dens.js";
 import { MASTERED, RESEARCH, levelAt, payOf } from "../core/bestiary.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
@@ -132,13 +133,19 @@ export function guardsOf(kind) {
     return listed([...counts].map(([guard, count]) => many(count, CREATURES[guard]?.name.toLowerCase() ?? guard)));
 }
 
-/** The homes a kind keeps to, in words: the camps and the lairs it holds or guards. */
+/** The homes a kind keeps to, in words: the camps, the dens (core/dens.js) and the lairs it holds or guards. */
 export function homesOf(kind) {
     const homes = [];
 
     for (const [faction, folk] of Object.entries(CAMP_FOLK)) {
         if (folk.some(([creature]) => creature === kind)) {
             homes.push(CAMPS[faction] ?? `${faction}' camps`);
+        }
+    }
+
+    for (const { creature, all } of Object.values(BEAST_DENS)) {
+        if (creature === kind) {
+            homes.push(all);
         }
     }
 

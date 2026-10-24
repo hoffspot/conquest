@@ -1,6 +1,7 @@
-// The trails out of the wild's camps and lairs (docs/WILDS.md *Tracking*), to follow home as a
-// hunter does: each camp's folk wear TRAILS.camp of them out into the wilds, each perilous site's
-// (a lair, a ruined castle, the Tower of Sar Mordal, a hell's way in) TRAILS.lair, winding out
+// The trails out of the wild's camps, dens and lairs (docs/WILDS.md *Tracking*), to follow home as
+// a hunter does: each camp's folk wear TRAILS.camp of them out into the wilds, each den's beasts
+// TRAILS.den (core/dens.js), each perilous site's (a lair, a ruined castle, the Tower of Sar
+// Mordal, a hell's way in) TRAILS.lair, winding out
 // from it round what can't be crossed (water, the settlements). Along each, TRAILS.signs.length
 // signs of what made it (a scrape, a dropping, a tuft caught on a thorn: core/lore/bestiary.js
 // `sign`), the furthest first: read, each tells which way the trail runs home and adds to what the
@@ -11,24 +12,25 @@
 // once for each plan.
 
 import { campFolk, LAIRS, lairOf } from "./creatures.js";
+import { DENS, densOf } from "./dens.js";
 import { cos, hypot, sin, TAU } from "./exact.js";
 import { createRandom } from "./random.js";
 import { compass } from "./ways.js";
 import { campTier, landAt, SETTLEMENTS, WATER, WORLD_SIZE } from "./worldplan/plan.js";
 
 /**
- * How many trails each camp wears out (`camp`) and each perilous site (`lair`); how far out of it
- * one starts (`from`, metres) and how long it runs on from there (`length`: [least, most]), in
- * steps of `step` metres, turning as much as `wander` (radians) at each, kept off the water and
- * `clear` metres off the settlements' edges; where along it its signs lie (`signs`: a share of its
+ * How many trails each camp wears out (`camp`), each den (`den`) and each perilous site (`lair`);
+ * how far out of it one starts (`from`, metres) and how long it runs on from there (`length`:
+ * [least, most]), in steps of `step` metres, turning as much as `wander` (radians) at each, kept
+ * off the water and `clear` metres off the settlements' edges; where along it its signs lie (`signs`: a share of its
  * length, out from where it starts, the furthest first); how near a sign the reader must be to read
  * it (`reach`, metres); and how many of a home's signs read track it home (`tracked`).
  */
-export const TRAILS = Object.freeze({ camp: 2, lair: 3, from: 30, length: [170, 250], step: 8, wander: 0.35, clear: 25, signs: Object.freeze([0.92, 0.6, 0.28]), reach: 3, tracked: 3 });
+export const TRAILS = Object.freeze({ camp: 2, den: 2, lair: 3, from: 30, length: [170, 250], step: 8, wander: 0.35, clear: 25, signs: Object.freeze([0.92, 0.6, 0.28]), reach: 3, tracked: 3 });
 
 /**
- * What each home is called, by a camp's faction, a perilous site's kind or a rite's theme: the
- * words for where a trail leads.
+ * What each home is called, by a camp's faction, a den's kind (core/dens.js DENS `one`), a perilous
+ * site's kind or a rite's theme: the words for where a trail leads.
  */
 export const HOMES = Object.freeze({
     bandits: "a bandits' camp",
@@ -39,6 +41,7 @@ export const HOMES = Object.freeze({
     trolls: "a trolls' camp",
     raiders: "a raiders' camp",
     cultists: "a cultists' camp",
+    ...Object.fromEntries(Object.entries(DENS).map(([kind, { one }]) => [kind, one])),
     "dragon's lair": "the drake's lair",
     "dreadthorn's lair": "a Dreadthorn's lair",
     "werewolf's den": "the werewolves' den",
@@ -141,19 +144,20 @@ function wear(plan, home, k, angle) {
     return { id, home, k, points, signs };
 }
 
-// The homes trails lead to: the wild camps (of a faction that has folk), and the perilous sites
-// and the hells' ways in (creatures.js lairOf)
+// The homes trails lead to: the wild camps (of a faction that has folk), the dens (core/dens.js),
+// and the perilous sites and the hells' ways in (creatures.js lairOf)
 function homesOf(plan) {
     const camps = (plan.camps ?? []).map((camp) => ({ id: camp.id, kind: "camp", what: camp.faction, at: camp.at, trails: TRAILS.camp }));
+    const dens = densOf(plan).map((den) => ({ id: den.id, kind: "den", what: den.kind, at: den.at, trails: TRAILS.den }));
     const lairs = (plan.sites ?? []).filter((site) => lairOf(site)).map((site) => ({ id: site.id, kind: LAIRS[site.kind] ? "lair" : "rite", what: LAIRS[site.kind] ? site.kind : site.theme, at: site.at, trails: TRAILS.lair }));
 
-    return [...camps, ...lairs];
+    return [...camps, ...dens, ...lairs];
 }
 
 /**
  * Every trail in the world (laid out once for a plan): [{ id ("camp-3/1": its home's id and which
- * of its trails), home ({ id, kind: "camp" | "lair" | "rite", what (a camp's faction, a site's
- * kind, a rite's theme: HOMES), at }), k, points ([[x, y], ...] metres, out from near its home),
+ * of its trails), home ({ id, kind: "camp" | "den" | "lair" | "rite", what (a camp's faction, a
+ * den's kind, a site's kind, a rite's theme: HOMES), at }), k, points ([[x, y], ...] metres, out from near its home),
  * signs ([{ id ("camp-3/1:0"), index (0, the furthest out), at, way (the way it runs home from
  * there: "north-east") }]) }].
  */
@@ -224,11 +228,15 @@ export function trailsNear(plan, [x, y], within) {
 
 /**
  * What wore a trail, as one whose home is at `from` ([x, y] metres: where their people start)
- * finds it: a camp's folk at its tier from there (creatures.js campFolk); a lair's master on its
- * first trail, its guards on the others, one kind after another.
+ * finds it: a camp's folk at its tier from there (creatures.js campFolk); a den's beasts; a lair's
+ * master on its first trail, its guards on the others, one kind after another.
  */
 export function trailCreature(plan, trail, from) {
     const { home, k } = trail;
+
+    if (home.kind === "den") {
+        return DENS[home.what].creature;
+    }
 
     if (home.kind === "camp") {
         const camp = plan.camps.find(({ id }) => id === home.id);

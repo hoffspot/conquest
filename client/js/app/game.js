@@ -41,6 +41,7 @@ import { CACHE_BANDS } from "../core/caches.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { homeWords, signOf, signsNear, TRAILS, trailsNear } from "../core/tracks.js";
+import { densOf } from "../core/dens.js";
 import { MASTERED, RESEARCH } from "../core/bestiary.js";
 import { bestiaryOf } from "./bestiary.js";
 import { townOf } from "../core/insides.js";
@@ -107,6 +108,7 @@ import { Stockades } from "../world/stockades3d.js";
 import { ContactShadows } from "../world/contacts.js";
 import { footAt, lookPrint, printOf, TAKES, Tracks } from "../world/tracks3d.js";
 import { TrailSigns } from "../world/signs3d.js";
+import { DEN_LOOK, DenProps } from "../world/dens3d.js";
 import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
 import { Ailments3D } from "../world/ailments3d.js";
@@ -1722,6 +1724,8 @@ export class Game {
         this.trailSigns = new TrailSigns(view.scene);
         this.trailsAt = null;
         this.gaitsSeen = new Map();
+        // (The roaming beasts' dens near the player: #denning)
+        this.denProps = new DenProps(view.scene);
         this.ailments = new Ailments3D(this.effects.group);
         // (Its fire, flashes and fireballs lighting what's round them as the world's fires do, each
         // a light of its own: lightsNow, #lightNear; not lent the view's lamps)
@@ -2452,6 +2456,7 @@ export class Game {
         this.tracks?.dispose();
         this.trailPrints?.dispose();
         this.trailSigns?.dispose();
+        this.denProps?.dispose();
         this.navBaker?.dispose();
         this.navigationView?.dispose();
 
@@ -3315,8 +3320,10 @@ export class Game {
 
         // (Where a treasure the player's hunting is buried, once they're near: it glints)
         this.#glinting();
-        // (The trails out of the wild's camps and lairs near them: their prints and signs)
+        // (The trails out of the wild's camps, dens and lairs near them: their prints and signs;
+        // and the dens near them)
         this.#trailing();
+        this.#denning();
 
         // (The party's pings, in the world: #pinging)
         this.#pinging();
@@ -4692,7 +4699,7 @@ export class Game {
             // on ahead of them, never where they're going)
             destination: actor.order?.type === "move" && !this.steering?.steering ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
-            icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
+            icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.#trackedMarks(this.denIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
             // (The circles to search for the treasures they're hunting: #treasureCircles)
             searches: this.mapId === "town" ? this.treasureCircles() : [],
             // (The party's pings: pingView)
@@ -4863,6 +4870,20 @@ export class Game {
     }
 
     /**
+     * The roaming beasts' dens (core/dens.js), as icons for the maps: [{ id, kind ("lair"), x, z
+     * (metres), rim (a beast's) }].
+     */
+    denIcons() {
+        const plan = this.world.plan;
+
+        if (this.denMarks?.plan !== plan) {
+            this.denMarks = { plan, icons: plan ? densOf(plan).map(({ id, at: [x, z] }) => ({ id, kind: "lair", x, z, rim: PLACE_RIMS.beast })) : [] };
+        }
+
+        return this.denMarks.icons;
+    }
+
+    /**
      * The icons over the buildings the player has gone into ([{ kind, x, z }]: metres, on the
      * world outside), for the maps.
      */
@@ -5017,7 +5038,7 @@ export class Game {
         // (And the camps and lairs they've tracked home, found or not: core/tracks.js)
         const known = (icon) => seen(icon) || this.explored.tracked.has(icon.id);
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.#trackedMarks(this.denIcons().filter(known)), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
     }
 
     /**
@@ -5146,6 +5167,21 @@ export class Game {
         }
 
         this.trailPrints.mesh.visible = this.trailPrints.mesh.count > 0;
+    }
+
+    // The roaming beasts' dens within DEN_LOOK.seen of the player (core/dens.js), out in the world,
+    // each drawn as its kind's is (dens3d.js), on the ground where it lies
+    #denning() {
+        const me = this.battle.actor(this.me);
+        const plan = this.world.plan;
+        const near = plan && me && me.map === "town" ? densOf(plan).filter(({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y) <= DEN_LOOK.seen) : [];
+
+        if (near.length || this.denProps.shown.size) {
+            this.denProps.set(
+                near.map(({ id, kind, at: [x, z], seed }) => ({ id, kind, x, z, seed })),
+                (x, z) => this.#groundOn("town", x, z),
+            );
+        }
     }
 
     // The prints along the trails near the player (core/tracks.js), each of what wore it (Host
