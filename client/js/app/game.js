@@ -85,6 +85,8 @@ import { ADJECTIVES } from "../core/war/peoples.js";
 import { RESOURCES, RISING, STAGES } from "../core/war/war.js";
 import { GODS, PANTHEON } from "../core/lore/gods.js";
 import { GIFTS, godWords, SHRINE, shrineOf, shrinesOf } from "../core/shrines.js";
+import { FULL_MOON, NEW_MOON, nightOf, PHASES, phaseOfNight, ringName, ringOf, ringsOf, TRIAL, trialOf } from "../core/rings.js";
+import { MoonGates } from "../world/moongates3d.js";
 import { ACT_TIMES, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
 import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
@@ -794,7 +796,7 @@ const DRUMS_AGAIN = 2;
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "dungeon", "cache", "find", "pace"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1760,6 +1762,8 @@ export class Game {
         this.gaitsSeen = new Map();
         // (The roaming beasts' dens near the player: #denning)
         this.denProps = new DenProps(view.scene);
+        // (And the rings of standing stones' middles, aglow by night while they're awake: #moonlit)
+        this.moonGates = new MoonGates(view.scene);
         // (The wilds director's peaceful finds near the player: #findsNear)
         this.findProps = new FindProps(view.scene);
         this.ailments = new Ailments3D(this.effects.group);
@@ -2493,6 +2497,7 @@ export class Game {
         this.trailPrints?.dispose();
         this.trailSigns?.dispose();
         this.denProps?.dispose();
+        this.moonGates?.dispose();
         this.findProps?.dispose();
         this.navBaker?.dispose();
         this.navigationView?.dispose();
@@ -3362,9 +3367,11 @@ export class Game {
         // (The trails out of the wild's camps, dens and lairs near them: their prints and signs;
         // and the dens near them)
         this.#trailing();
-        // (And a shrine come near: whose it is)
-        this.#nearShrine();
         this.#denning();
+        // (And a shrine come near: whose it is; the rings of standing stones aglow by night; and
+        // the wilds director's finds near them)
+        this.#nearShrine();
+        this.#moonlit();
         this.#findsNear();
 
         // (The party's pings, in the world: #pinging)
@@ -8284,6 +8291,120 @@ export class Game {
         }
     }
 
+    // A player come into a ring of standing stones' middle (host.js #ringStep): the first time,
+    // what moon it wakes under (kept, and in their journal); by night under a new moon, that the
+    // stones sleep; under a full moon, the moon roads opened for them to choose (openMoonRoads);
+    // by day, that the stones are quiet. A moon road walked is said as it's carried ("carried")
+    #ringEvent({ ring: id, phase, first, night, tonight }) {
+        const said = [];
+
+        if (first) {
+            said.push(`These stones are Lunara's roads: this ring wakes under the ${PHASES[phase]}. It's in your journal.`);
+            this.sound?.play("quill");
+        }
+
+        if (night && tonight === NEW_MOON) {
+            said.push("The stones are cold and still: under the new moon the rings sleep.");
+        } else if (night && tonight === FULL_MOON) {
+            said.push("The full moon wakes every ring: choose one you've stood in, and the stones carry you there.");
+        } else if (!night && !first) {
+            said.push(`The stones are quiet by day. This ring wakes under the ${PHASES[phase]}.`);
+        }
+
+        if (said.length) {
+            this.hud.message(said.join(" "), 5);
+        }
+
+        this.#explored();
+
+        if (night && tonight === FULL_MOON) {
+            this.openMoonRoads(id);
+        }
+
+        if (this.journal.open) {
+            this.#showJournal();
+        }
+    }
+
+    /**
+     * Under a full moon, standing in a ring's middle (`here`: its site's id), the moon roads: the
+     * world map showing the rings they've stood in (core/rings.js), each with the moon it wakes
+     * under; one tapped and agreed to, the stones carry them there with their party in the ring
+     * (a "moonroad" command: host.js #moonRoadTo). Returns the rings shown.
+     */
+    openMoonRoads(here) {
+        const plan = this.world.plan;
+        const from = plan ? ringOf(plan, here) : null;
+
+        if (!from) {
+            return [];
+        }
+
+        const rings = ringsOf(plan)
+            .filter(({ site }) => this.explored.rings.has(site.id))
+            .map((ring) => ({ id: ring.site.id, name: ringName(plan, ring).replace(/^the s/, "The s"), x: ring.at[0], z: ring.at[1], metres: Math.hypot(ring.at[0] - from.at[0], ring.at[1] - from.at[1]), fare: 0, here: ring === from, icon: "stones", note: PHASES[ring.phase] }));
+
+        this.onWorldMap({
+            travel: {
+                branches: rings,
+                gold: 0,
+                rank: "",
+                off: 0,
+                moon: true,
+                title: "The moon roads",
+                choose: (to) =>
+                    this.#command({ type: "moonroad", to }, (result) => {
+                        if (!result?.ok) {
+                            this.hud.message(REFUSALS[result?.reason] ?? REFUSALS.command, 3);
+                        }
+                    }),
+            },
+        });
+
+        return rings;
+    }
+
+    // The full moon's trial (host.js #moonTrials): Lunara's guardian woken in a ring, or fallen, said
+    // to the player if they're near it (TRIAL.far), with the wake's sound
+    #trialEvent({ change, ring: id, title }) {
+        const me = this.battle.actor(this.me);
+        const ring = this.world.plan ? ringOf(this.world.plan, id) : null;
+
+        if (!ring || !me || me.map !== "town" || Math.hypot(me.x - ring.at[0], me.y - ring.at[1]) > TRIAL.far) {
+            return;
+        }
+
+        if (change === "woken") {
+            this.hud.message(`In ${ringName(this.world.plan, ring)}, ${title}, Lunara's guardian, stands silver in the full moon's light. It keeps a relic of moonsilver.`, 5);
+            this.sound?.play("wake");
+        } else if (change === "fallen") {
+            this.hud.message("Lunara's guardian falls, and its moonsilver is there to take on the flat stone.", 4);
+        }
+    }
+
+    // The rings of standing stones near the player out in the world, their middles aglow by night
+    // while the moon wakes them (not the new moon's: core/rings.js), the one tonight's moon is
+    // bound to (or every one, under a full moon) the brighter (world/moongates3d.js)
+    #moonlit() {
+        const me = this.battle.actor(this.me);
+        const plan = this.world.plan;
+        const night = daylight(timeOfDay(elapsedOf(this.host.war))) < 0.2;
+        const tonight = phaseOfNight(elapsedOf(this.host.war));
+        const near = plan && me && me.map === "town" && night && tonight !== NEW_MOON ? ringsOf(plan).filter(({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y) <= MoonGates.SEEN) : [];
+
+        if (near.length || this.moonGates.shown.size) {
+            this.moonGates.set(
+                near.map((ring) => {
+                    const [x, z] = this.world.maps.town?.sites?.placedAt(ring.site) ?? ring.at;
+
+                    return { id: ring.site.id, x, y: this.#groundOn("town", x, z), z, bright: tonight === FULL_MOON || ring.phase === tonight };
+                }),
+            );
+        }
+
+        this.moonGates.update(this.clock);
+    }
+
     #partyEvent(event) {
         if (event.id !== this.me) {
             return;
@@ -8744,6 +8865,7 @@ export class Game {
             most: this.host.mostFollowers(this.me),
             heard: this.#heardTell(at),
             trails: this.#trailNotes(at),
+            moonRoads: this.#moonNotes(at),
             // (The treasures they're hunting: their own to give up, their party's shown)
             treasures: this.host.treasuresOf(this.me).map(({ id, grade, owner, name, centre }) => ({ id, title: itemLabel({ id: "treasureMap", quality: grade }), from: owner === this.me ? "Your map" : `${name}'s map`, where: at ? bearing(at, centre) : "", grade, own: owner === this.me })),
             writings: (this.memory.writings ?? []).filter((id) => WRITINGS[id]).map((id) => ({ id, title: WRITINGS[id].title, found: WRITINGS[id].found })),
@@ -8820,6 +8942,29 @@ export class Game {
         });
 
         return [...notes.filter(({ tracked }) => !tracked), ...notes.filter(({ tracked }) => tracked)];
+    }
+
+    // The rings of standing stones the player's stood in (core/rings.js; Explored rings), for the
+    // journal: { tonight (tonight's moon, or the coming night's), rings: [{ name, phase (the moon it
+    // wakes under), where (which way and how far it is from them), tonight (it wakes tonight) }] },
+    // the nearest first; or null, if they've stood in none
+    #moonNotes(at) {
+        const plan = this.world.plan;
+
+        if (!plan || !this.explored.rings.size) {
+            return null;
+        }
+
+        const tonight = phaseOfNight(elapsedOf(this.host.war));
+        const trial = tonight === FULL_MOON ? trialOf(plan, nightOf(elapsedOf(this.host.war))) : null;
+        const far = (ring) => (at ? Math.hypot(ring.at[0] - at[0], ring.at[1] - at[1]) : 0);
+        const rings = ringsOf(plan)
+            .filter(({ site }) => this.explored.rings.has(site.id))
+            .sort((a, b) => far(a) - far(b))
+            .map((ring) => ({ name: ringName(plan, ring).replace(/^the s/, "The s"), phase: PHASES[ring.phase], where: at ? bearing(at, ring.at) : "", tonight: tonight === FULL_MOON || ring.phase === tonight }));
+
+        // (Under a full moon, where Lunara's guardian keeps its moonsilver tonight: core/rings.js TRIAL)
+        return { tonight: PHASES[tonight], rings, ...(trial?.ring ? { trial: `Tonight ${trial.guardian.title}, Lunara's guardian, keeps ${ringName(plan, trial.ring)}${at ? `, ${bearing(at, trial.ring.at)}` : ""}, and a relic of moonsilver with it.` } : {}) };
     }
 
     // Whether the character's yet to be told something told only once (`what`: "spoils", the first
@@ -10990,6 +11135,15 @@ export class Game {
                 }
 
                 break;
+            case "ring":
+                if (event.id === this.me) {
+                    this.#ringEvent(event);
+                }
+
+                break;
+            case "trial":
+                this.#trialEvent(event);
+                break;
             case "cured":
                 // (Rested in a shrine's sanctuary: core/shrines.js)
                 if (event.id === this.me) {
@@ -11029,7 +11183,10 @@ export class Game {
                 if (event.id === this.me) {
                     const branch = event.why === "portal" ? this.world.plan?.places.find(({ id }) => id === event.to)?.name : null;
 
-                    this.hud.message({ teleport: "The world lurches, and you're somewhere else entirely.", recall: "You stand at the temple's door.", walk: "One step, and you're there.", summoned: "You're at their side.", safety: `Safe: the market square of ${this.world.start?.name ?? "home"}.`, portal: `Through the portal: the guild's branch in ${branch ?? "another town"}${event.fare ? `, for ${event.fare} gold` : ""}.` }[event.why] ?? "", 3);
+                    // (A moon road walked: core/rings.js)
+                    const ring = event.why === "moon" && this.world.plan ? ringOf(this.world.plan, event.ring) : null;
+
+                    this.hud.message({ moon: ring ? `The stones hum, and the moonlight carries you: you stand in ${ringName(this.world.plan, ring)}.` : "", teleport: "The world lurches, and you're somewhere else entirely.", recall: "You stand at the temple's door.", walk: "One step, and you're there.", summoned: "You're at their side.", safety: `Safe: the market square of ${this.world.start?.name ?? "home"}.`, portal: `Through the portal: the guild's branch in ${branch ?? "another town"}${event.fare ? `, for ${event.fare} gold` : ""}.` }[event.why] ?? "", 3);
                 }
 
                 break;
