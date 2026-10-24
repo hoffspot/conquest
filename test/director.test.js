@@ -7,9 +7,9 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { WILD } from "../client/js/core/creatures.js";
-import { DIRECTOR, FINDS, noteOf, PEACEFUL, rollRemains, shuffled, WELL_RESTED } from "../client/js/core/director.js";
+import { DIRECTOR, FINDS, noteOf, PACING, PEACEFUL, peacefulNext, rollRemains, shuffled, WELL_RESTED } from "../client/js/core/director.js";
 import { hypot } from "../client/js/core/exact.js";
-import { HOST_PLAYER, Host, REST } from "../client/js/core/host.js";
+import { HOST_PLAYER, Host, REST, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { CHEST_GOLD } from "../client/js/core/places.js";
 import { createRandom } from "../client/js/core/random.js";
@@ -246,5 +246,129 @@ describe("the wilds director in play (host.js #caches, #deal, #putFind)", () => 
         run(again, 6000);
         assert.equal(again.checksum(), host.checksum());
         assert.equal("finds" in new Host(buildWorld({ seed: 2 }), { populate: false }).snapshot(), false, "(none kept till one's dealt)");
+    });
+});
+
+describe("the wilds director's pacing (director.js PACING; host.js #pace)", () => {
+    // Out in the wilds 300 m north-east of the start town (seed 2), on foot, the land quiet
+    function outside(deck = ["cache", "remains", "campsite"]) {
+        const context = hosted(deck);
+        const { world, me, host } = context;
+        const [sx, sy] = world.start.at;
+
+        put(me, [Math.floor(sx + 212), Math.floor(sy + 212)]);
+        host.travel.set(HOST_PLAYER, { at: [me.x, me.y], walked: 0, next: 1e9, heading: [Math.SQRT1_2, Math.SQRT1_2], deck: [...deck] });
+
+        return context;
+    }
+
+    const wolf = (host, id, [x, y]) => host.battle.add({ id, kind: "beast", weapon: "wolf", team: WILD, square: [x, y], ai: "wild", wild: { creature: "wolf", tier: 1, temper: "aggressive", guard: 0, roam: 4, leash: 10, pack: id, leader: null, menace: true, unique: false, darkSight: true } });
+
+    it("puts a peaceful card next after a hard fight: the first in the deck, or the deck shuffled again, never the one just dealt first", () => {
+        const random = createRandom(5);
+
+        assert.deepEqual(peacefulNext(["cache", "campsite"], random), ["campsite", "cache"]);
+        assert.deepEqual(peacefulNext(["remains"], random, "cache"), ["remains"]);
+
+        for (let seed = 1; seed < 80; seed++) {
+            for (const last of PEACEFUL) {
+                const deck = peacefulNext(["cache"], createRandom(seed), last);
+
+                assert.ok(PEACEFUL.includes(deck[0]) && deck[0] !== last, `(seed ${seed}, after ${last}: ${deck})`);
+                assert.deepEqual([...deck].sort(), [...DIRECTOR.cards].sort(), "(a deck shuffled again)");
+            }
+        }
+    });
+
+    it("follows a hard fight with a quiet spell: told, the next card a peaceful one, fewer of the wild about them and no elite", () => {
+        const context = outside();
+        const { host, me } = context;
+
+        // A fight that took the player below half their health
+        wolf(host, "wolf-a", [me.square[0] + 3, me.square[1]]);
+        host.battle.actor("wolf-a").target = HOST_PLAYER;
+        me.hp = me.maxHp * 0.3;
+        run(host, 1000);
+        assert.ok(host.travel.get(HOST_PLAYER).pace.fight, "(in a fight)");
+
+        Object.assign(host.battle.actor("wolf-a"), { dead: true, respawnAt: Infinity, target: null });
+        me.hp = me.maxHp;
+
+        const events = run(host, PACING.over + 1000);
+        const { pace, deck } = host.travel.get(HOST_PLAYER);
+
+        assert.ok(events.some(({ type, id, change }) => type === "pace" && id === HOST_PLAYER && change === "quiet"));
+        assert.ok(pace.quietUntil - host.battle.time >= PACING.quiet[0] - PACING.over - 1000 && pace.quietUntil - host.battle.time <= PACING.quiet[1]);
+        assert.ok(PEACEFUL.includes(deck[0]), `(next: ${deck[0]})`);
+
+        // (Fewer of the wild come about them meanwhile: those out gone, half as many come back)
+        const roaming = () => [...host.wild].filter(([id, one]) => !one.camp && !one.den && !one.lair && !one.place && !one.cache && host.battle.actor(id) && !host.battle.actor(id).dead && hypot(host.battle.actor(id).x - me.x, host.battle.actor(id).y - me.y) < WILDS.about);
+
+        for (const [id] of roaming()) {
+            Object.assign(host.battle.actor(id), { dead: true, respawnAt: Infinity, target: null });
+        }
+
+        run(host, 3000);
+        assert.ok(roaming().length >= 1 && roaming().length <= Math.round(WILDS.count * PACING.fewer), `${roaming().length} come about them`);
+    });
+
+    it("leaves an easy fight be: no quiet spell", () => {
+        const context = outside();
+        const { host, me } = context;
+
+        wolf(host, "wolf-b", [me.square[0] + 3, me.square[1]]);
+        host.battle.actor("wolf-b").target = HOST_PLAYER;
+        me.hp = me.maxHp * 0.9;
+        run(host, 1000);
+        Object.assign(host.battle.actor("wolf-b"), { dead: true, respawnAt: Infinity, target: null });
+
+        const events = run(host, PACING.over + 1000);
+
+        assert.ok(!events.some(({ type, change }) => type === "pace" && change === "quiet"));
+        assert.equal(host.travel.get(HOST_PLAYER).deck[0], "cache");
+    });
+
+    it("builds up after a long calm: the land's hunters heard ahead, then come for the player, running", () => {
+        const context = outside();
+        const { host, me } = context;
+
+        run(host, 600);
+
+        const pace = host.travel.get(HOST_PLAYER).pace;
+
+        Object.assign(pace, { lastFight: host.battle.time - PACING.calm - 1, calm: PACING.calmMetres + 10 });
+
+        const heard = run(host, 1000).find(({ type, change }) => type === "pace" && change === "build");
+
+        assert.ok(heard, "(a build-up)");
+
+        const far = hypot(heard.at[0] - me.x, heard.at[1] - me.y);
+
+        assert.ok(far >= PACING.from[0] - 2 && far <= PACING.from[1] + 2, `${far} m off`);
+        assert.ok(heard.creature, "(what's coming)");
+        assert.ok(!run(host, PACING.warn[0] - 1500).some(({ type, change }) => type === "pace" && change === "hunt"), "(not yet)");
+
+        const hunt = run(host, PACING.warn[1] - PACING.warn[0] + 2000).find(({ type, change }) => type === "pace" && change === "hunt");
+
+        assert.ok(hunt?.ids.length >= 2, "(they come)");
+        assert.ok(hunt.ids.every((id) => host.battle.actor(id).order?.target === HOST_PLAYER || host.battle.actor(id).target === HOST_PLAYER), "(for the player)");
+        assert.equal(host.travel.get(HOST_PLAYER).pace.build, null);
+    });
+
+    it("carries the pace on exactly from a snapshot", () => {
+        const context = outside();
+        const { host } = context;
+
+        run(host, 600);
+        Object.assign(host.travel.get(HOST_PLAYER).pace, { lastFight: host.battle.time - PACING.calm - 1, calm: PACING.calmMetres + 10 });
+        run(host, 1000);
+        assert.ok(host.travel.get(HOST_PLAYER).pace.build);
+
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        assert.deepEqual(again.travel.get(HOST_PLAYER), host.travel.get(HOST_PLAYER));
+        run(host, 25000);
+        run(again, 25000);
+        assert.equal(again.checksum(), host.checksum());
     });
 });

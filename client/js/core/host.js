@@ -17,7 +17,7 @@
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
 import { CACHE_BANDS, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
-import { DIRECTOR, FINDS, noteOf, rollRemains, shuffled, WELL_RESTED } from "./director.js";
+import { DIRECTOR, FINDS, noteOf, PACING, peacefulNext, rollRemains, shuffled, WELL_RESTED } from "./director.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
@@ -1057,7 +1057,11 @@ export class Host {
          * to be: DIRECTOR.every, rolled once they're as far as the least it could be; null till
          * then), heading (the way they were last going: [x, y], one long; or null), deck (the
          * cards still to deal, the next first: shuffled, once there's been one), last (the card
-         * dealt last, or none) }).
+         * dealt last, or none), pace (the pacing's, core/director.js PACING: { fight (the fight
+         * they're in: { lowest, their health's least share in it }, or null), lastFight (when they
+         * last fought: the battle's ms), calm (metres crossed since), quietUntil (a quiet spell's
+         * end), build (a build-up's hunters to come: { at, creature, tier, count, due }, or null) })
+         * }).
          */
         this.caches = new Map();
         this.nextCache = 1;
@@ -7156,11 +7160,13 @@ export class Host {
 
             // (One fewer for each felled near them lately: the ground they cleared stays clear)
             const cleared = this.cleared.filter(({ at: [x, y] }) => nearAny(x, y)).length;
-            const room = Math.round((WILDS.count + (dark ? WILDS.night : 0)) * scale.count) - about - cleared;
+            // (In a quiet spell after a hard fight, fewer, and no elite: the pacing, #pace)
+            const quiet = group.players.some(({ id }) => this.#quiet(id));
+            const room = Math.round((WILDS.count + (dark ? WILDS.night : 0)) * scale.count * (quiet ? PACING.fewer : 1)) - about - cleared;
 
             // (Now and then, where the land's wild enough, an elite and its kind instead, further
             // off: ELITES)
-            if (room > 0 && !(this.#eliteDue(group) && this.random.next() < ELITES.chance && this.#putOutElite(group, [actor.x, actor.y], dark, scale, side.strength))) {
+            if (room > 0 && !(!quiet && this.#eliteDue(group) && this.random.next() < ELITES.chance && this.#putOutElite(group, [actor.x, actor.y], dark, scale, side.strength))) {
                 this.#putOut([actor.x, actor.y], this.#homeOf(leader), room, dark, scale, side.strength);
             }
         }
@@ -8159,10 +8165,15 @@ export class Host {
 
                 if (clearOfSettlements(this.world.plan, at, WILDS.clear)) {
                     was.walked += step;
+
+                    if (was.pace) {
+                        was.pace.calm += step;
+                    }
                 }
             }
 
             was.at = at;
+            this.#pace(player, actor, was, homes);
 
             // (How far the next is, rolled once they're as far as the least it could be)
             if (was.next === null && was.walked >= DIRECTOR.every[0]) {
@@ -8184,6 +8195,97 @@ export class Host {
                 }
             }
         }
+    }
+
+    // The wilds director's pacing for a player (`actor`; `was`: how they've come, their deck and
+    // their pace: core/director.js PACING): a hard fight over, a quiet spell, the next card a
+    // peaceful one; a long calm, a build-up, the land's hunters heard ahead of them (#buildUp), and
+    // a while later come for them (#hunt)
+    #pace(player, actor, was, homes) {
+        const now = this.battle.time;
+        const pace = (was.pace ??= { fight: null, lastFight: now, calm: 0, quietUntil: 0, build: null });
+        const fighting = actor.target !== null || this.battle.actors.some((other) => !other.dead && other.map === actor.map && (other.target === actor.id || other.attack?.target === actor.id) && this.battle.hostile(other, actor));
+
+        if (fighting) {
+            pace.fight ??= { lowest: 1 };
+            pace.fight.lowest = Math.min(pace.fight.lowest, actor.hp / actor.maxHp);
+            Object.assign(pace, { lastFight: now, calm: 0 });
+
+            return;
+        }
+
+        // (A fight over: a hard one, a quiet spell after, and the next card a peaceful one)
+        if (pace.fight && now - pace.lastFight >= PACING.over) {
+            if (pace.fight.lowest <= PACING.hard) {
+                pace.quietUntil = now + this.random.int(...PACING.quiet);
+                was.deck = peacefulNext(was.deck ?? shuffled(this.random), this.random, was.last ?? null);
+                this.#event("pace", { id: player.id, change: "quiet", until: pace.quietUntil });
+            }
+
+            pace.fight = null;
+        }
+
+        if (pace.build && now >= pace.build.due) {
+            this.#hunt(actor, pace.build);
+            Object.assign(pace, { build: null, lastFight: now, calm: 0 });
+
+            return;
+        }
+
+        // (A long calm, out in the wilds: a build-up)
+        if (!pace.build && !pace.fight && now >= pace.quietUntil && now - pace.lastFight >= PACING.calm && pace.calm >= PACING.calmMetres) {
+            pace.build = this.#buildUp(player, actor, was.heading, homes);
+
+            if (pace.build) {
+                this.#event("pace", { id: player.id, change: "build", creature: pace.build.creature, at: pace.build.at });
+            }
+        }
+    }
+
+    // A build-up ahead of a player (`actor`, going the way of `heading`, or any way): where the
+    // land's hunters are heard from (PACING `from` metres off, within `spread` of the way they're
+    // going, out of the settlements, on dry land), what they are there (creatures.js encounterAt)
+    // and when they come: { at, creature, tier, count, due }; or null, nowhere for them
+    #buildUp(player, actor, heading, homes) {
+        const plan = this.world.plan;
+        const [hx, hy] = heading ?? [0, 1];
+        const home = homes.find(({ at }) => at && hypot(at[0] - actor.x, at[1] - actor.y) < 1)?.home ?? this.#homeOf(player);
+
+        for (let tries = 0; tries < 8; tries++) {
+            const turn = (this.random.next() * 2 - 1) * PACING.spread;
+            const reach = this.random.int(...PACING.from);
+            const [c, s] = [cos(turn), sin(turn)];
+            const at = [actor.x + (hx * c - hy * s) * reach, actor.y + (hx * s + hy * c) * reach];
+
+            if (!clearOfSettlements(plan, at, WILDS.clear) || landAt(plan, ...at).water) {
+                continue;
+            }
+
+            const encounter = encounterAt(plan, at, [home], this.random, this.#dark());
+
+            if (encounter) {
+                return { at, creature: encounter.creature, tier: encounter.tier, count: Math.max(2, encounter.count), due: this.battle.time + this.random.int(...PACING.warn) };
+            }
+        }
+
+        return null;
+    }
+
+    // A build-up's hunters (`build`: #buildUp's) put out where they were heard, and sent at the
+    // player (`actor`), running
+    #hunt(actor, build) {
+        const ids = this.#pack({ creature: build.creature, tier: build.tier, count: build.count }, build.at, {});
+
+        for (const id of ids) {
+            this.battle.command(id, { type: "engage", target: actor.id, run: true });
+        }
+
+        this.#event("pace", { id: actor.id, change: "hunt", creature: build.creature, ids });
+    }
+
+    // Whether a player (by id) is in a quiet spell (the pacing's: #pace)
+    #quiet(id) {
+        return (this.travel.get(id)?.pace?.quietUntil ?? 0) > this.battle.time;
     }
 
     // The wilds director's next card dealt ahead of a player (`actor`; `was`: how they've come, and
