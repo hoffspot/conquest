@@ -26,10 +26,11 @@
 //    card's been given, the sounds, the way-finding's WebAssembly, the bodies' own copies) past
 //    each of TELEMETRY.memory.marks, or the page's heap near its limit (TELEMETRY.memory.heap of
 //    it). With what holds it, and what's going on.
-//  - **A press lost**: a quick action's press whose lift was never heard (app/press.js: a phone's
-//    Safari can lose it), dropped as the next began or once no finger was on the screen. With the
-//    slot, what was in it, how long it was held, how it was found, whether the bar was up, and
-//    what's going on (app/game.js #pressLost).
+//  - **A press lost**: a quick action's press, or a thumb on the thumb stick, whose lift was never
+//    heard (app/press.js, app/steering.js: a phone's Safari can lose it), dropped as the next began
+//    or once no finger was on the screen. With the slot (or "stick"), what was in it, how long it
+//    was held, how it was found, whether the bar was up, and what's going on (app/game.js
+//    #pressLost).
 //
 // Each event names the code it came from (its commit's first 10 digits, written into app/version.js
 // as the site's put together: "dev" for a copy run from the repository) and the assets' release

@@ -17,6 +17,16 @@
 // it did. Or, asked for in Game options (`floating`), it springs up under the thumb wherever it
 // lands in the bottom left of the screen, as Apple's guidelines and the camera study's
 // recommendation 7 have it: fewer glances down to find it, less drift off it.
+//
+// A thumb on the stick is never waited on for its lift alone, as a quick action's press isn't
+// (app/press.js): a phone's Safari doesn't always say a finger's lifted, and a stick left held
+// would run the player on with nothing touching it. A thumb down on it while another's held takes
+// over from the one lost; it's let go of as the stick no longer keeps the pointer
+// (`lostpointercapture`), as the page loses the player or is closed, and a moment after every
+// finger's off the screen (BARE_MS), if it went down before then. Each one lost is told (`lost`),
+// for the debug log.
+
+import { BARE_MS } from "./press.js";
 
 // How far the way has to turn before the order's given again (radians, about 7 degrees), and how
 // often it's given again anyway while the input's held (ms), in case they stopped short of where
@@ -62,6 +72,7 @@ export class Steering {
     #sent = null;
     #frame = 0;
     #listeners = [];
+    #baring = 0;
     #how;
 
     /**
@@ -74,6 +85,9 @@ export class Steering {
      * @param {(facing: number, run: boolean) => void} how.go - Send them straight ahead that way.
      * @param {() => void} how.stop - Stop them.
      * @param {() => number} [how.breath] - How much of their stamina they have (0 to 1).
+     * @param {(lost: { ms: number, how: string }) => void} [how.lost] - Told of a thumb let go
+     *   of as lost (its lift never heard): how long it was held, and how it was found ("again":
+     *   another thumb down on the stick; "bare": every finger off the screen).
      */
     constructor(how) {
         this.#how = how;
@@ -84,14 +98,22 @@ export class Steering {
         this.#on(document, "keydown", (event) => this.#key(event, true));
         this.#on(document, "keyup", (event) => this.#key(event, false));
 
-        // Keys aren't let go of while the page isn't listening, so they're dropped instead
+        // Keys aren't let go of while the page isn't listening, so they're dropped instead (and
+        // the stick, as the page's closed or put away)
         this.#on(window, "blur", () => this.release());
+        this.#on(window, "pagehide", () => this.release());
 
         this.#on(how.zone, "pointerdown", (event) => this.#thumbDown(event));
         this.#on(how.zone, "pointermove", (event) => this.#thumbMoved(event));
 
-        for (const type of ["pointerup", "pointercancel"]) {
+        // (The stick no longer keeping the pointer: after a lift or a cancel, as the browser lets go
+        // of it, the thumb's already gone; otherwise, it's lost)
+        for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
             this.#on(how.zone, type, (event) => this.#thumbUp(event));
+        }
+
+        for (const type of ["touchend", "touchcancel"]) {
+            this.#on(document, type, (event) => this.#fingersOff(event), { capture: true, passive: true });
         }
     }
 
@@ -136,19 +158,20 @@ export class Steering {
         this.#winded = false;
         this.#letGoOfStick();
 
-        for (const [target, type, listener] of this.#listeners) {
-            target.removeEventListener(type, listener);
+        for (const [target, type, listener, options] of this.#listeners) {
+            target.removeEventListener(type, listener, options);
         }
 
         this.#listeners = [];
         cancelAnimationFrame(this.#frame);
+        clearTimeout(this.#baring);
         this.#frame = 0;
         this.#sent = null;
     }
 
-    #on(target, type, listener) {
-        target.addEventListener(type, listener);
-        this.#listeners.push([target, type, listener]);
+    #on(target, type, listener, options) {
+        target.addEventListener(type, listener, options);
+        this.#listeners.push([target, type, listener, options]);
     }
 
     #key(event, down) {
@@ -183,8 +206,13 @@ export class Steering {
     }
 
     #thumbDown(event) {
-        if (this.#stick || this.#how.looking() === null) {
+        if (this.#how.looking() === null) {
             return;
+        }
+
+        // (Another thumb still held: its lift was lost, and this one takes over)
+        if (this.#stick) {
+            this.#lost("again");
         }
 
         // The stick stays put, so the way it's pushed is measured from its middle, wherever the
@@ -198,8 +226,14 @@ export class Steering {
             Object.assign(ring.style, { left: `${x - rect.x - ring.offsetWidth / 2}px`, top: `${y - rect.y - ring.offsetHeight / 2}px`, bottom: "auto" });
         }
 
-        this.#stick = { id: event.pointerId, x, y, right: 0, forward: 0, far: 0 };
-        this.#how.zone.setPointerCapture?.(event.pointerId);
+        this.#stick = { id: event.pointerId, kind: event.pointerType, at: performance.now(), x, y, right: 0, forward: 0, far: 0 };
+
+        try {
+            this.#how.zone.setPointerCapture?.(event.pointerId);
+        } catch {
+            // (A pointer already gone: let go of as the others are)
+        }
+
         this.#how.zone.classList.add("held");
 
         event.preventDefault();
@@ -236,12 +270,48 @@ export class Steering {
         event.preventDefault();
     }
 
+    // Every finger off the screen: a moment after (for the thumb's own lift to be heard first), a
+    // thumb that went down before then was lost, and is let go of (a mouse's isn't a finger's)
+    #fingersOff(event) {
+        if (event.touches.length > 0) {
+            return;
+        }
+
+        const at = performance.now();
+
+        clearTimeout(this.#baring);
+        this.#baring = setTimeout(() => {
+            if (this.#stick && this.#stick.kind !== "mouse" && this.#stick.at <= at) {
+                this.#lost("bare");
+            }
+        }, BARE_MS);
+    }
+
+    // A thumb whose lift was never heard let go of, the player stopped (unless another's taking
+    // over), and told
+    #lost(how) {
+        const ms = performance.now() - this.#stick.at;
+
+        this.#letGoOfStick();
+
+        if (how === "bare") {
+            this.#halt();
+        }
+
+        this.#how.lost?.({ ms, how });
+    }
+
     #letGoOfStick() {
         if (!this.#stick) {
             return;
         }
 
-        this.#how.zone.releasePointerCapture?.(this.#stick.id);
+        try {
+            this.#how.zone.releasePointerCapture?.(this.#stick.id);
+        } catch {
+            // (A pointer the browser's already forgotten, as a lost one may be)
+        }
+
         this.#how.zone.classList.remove("held");
         this.#stick = null;
         this.#knobAt(0, 0);

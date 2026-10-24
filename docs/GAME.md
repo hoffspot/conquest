@@ -5018,7 +5018,14 @@ it.
    when it was off till asked for is forgotten once, for the new default: save.js
    `stickDefaults`); turned off, it goes, and tapping alone walks. The keys steer whether it's
    shown or not, nothing is said of the stick in the opening hint while it's off, and a pause
-   lets go of whatever was held. Nothing else takes the stick's touches from it (what lies over
+   lets go of whatever was held. A thumb on the stick isn't waited on for its lift alone, as a
+   quick action's press isn't (*The quick actions*): a phone's Safari doesn't always say a finger's
+   lifted, and a stick left held ran the player on with nothing touching it, the next thumb on it
+   ignored. A thumb down on it while another's held takes over from the one lost; it's let go of,
+   the player stopped, as the stick no longer keeps the pointer (`lostpointercapture`), as the
+   page's closed (`pagehide`), and 0.1 s after every finger's off the screen (press.js `BARE_MS`),
+   if it went down before then. Each one lost is kept in the debug log ("Press lost", game.js
+   `#pressLost`). Nothing else takes the stick's touches from it (what lies over
    its corner, the hint and the floating words, takes no touches), and its circle doesn't blur
    what's behind it, which a phone's GPU did afresh every frame. *The mouse pointer*
    (app/pointer.js): with a mouse (a fine pointer that hovers: a touch screen has none), it's a
@@ -5703,7 +5710,10 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   with, walking with Shift held, and stopping let go; out of breath, walking on the way they're
   held (or the stick's pushed) till a quarter of their stamina is back, the order given again
   walking all the while, then running at once, and not stuttering back to a walk as it goes down
-  again; still walking let go and held again before it's back.
+  again; still walking let go and held again before it's back. A thumb whose lift is lost: another
+  thumb taking over (the lost one told, its late lift nothing); let go of and stopped as the stick
+  no longer keeps the pointer or the page's closed; a moment after every finger's off the screen,
+  one that went down before let go of, stopped and told, one down since kept, and a mouse's.
 - `test/sky.test.js`: the sky's dome round the camera, drawn behind everything, its horizon the
   haze's colour; birds for every land, a dozen triangles or so each; flocks of the land's birds
   now and then, never too many, at their heights, gone once far off; a wyvern over the lands they

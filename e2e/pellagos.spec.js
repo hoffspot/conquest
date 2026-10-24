@@ -12975,6 +12975,67 @@ test.describe("on a phone", () => {
         await expect.poll(heard).toEqual(["choose 1", "use 1"]);
     });
 
+    test("a thumb on the thumb stick whose lift is lost, as a phone's Safari loses it, never runs the player on: let go of, stopped, once no finger's on the screen; with that lost too, the next thumb on it takes over (kept in the debug log)", async ({ page }) => {
+        test.setTimeout(180000);
+        await playing(page, "/?play&seed=1");
+        await clearestWayAhead(page);
+
+        const zone = await page.locator("#stickzone").boundingBox();
+        const middle = { x: zone.x + zone.width / 2, y: zone.y + zone.height / 2 };
+        const held = () => page.evaluate(() => document.querySelector("#stickzone").classList.contains("held"));
+        const lost = () => page.evaluate(() => window.pellagos.telemetry.events.filter((event) => event.kind === "press").map(({ slot, how }) => ({ slot, how })));
+
+        // (A thumb on the stick, as a phone's are; and the next of each of these events swallowed
+        // before the page hears it, as Safari loses them)
+        const cdp = await page.context().newCDPSession(page);
+        const touch = (type, up = 0) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x: middle.x, y: middle.y - up, id: 0 }] });
+        const swallow = (...types) => page.evaluate((types) => {
+            window.swallowed = types.map((type) => {
+                const swallowing = (event) => {
+                    event.stopImmediatePropagation();
+                    window.removeEventListener(type, swallowing, true);
+                };
+
+                window.addEventListener(type, swallowing, true);
+
+                return [type, swallowing];
+            });
+        }, types);
+        const unswallow = () => page.evaluate(() => window.swallowed.forEach(([type, swallowing]) => window.removeEventListener(type, swallowing, true)));
+
+        await page.evaluate(() => window.pellagos.telemetry.clear());
+
+        // Pushed to its rim, running, and lifted, the lift lost and the stick never let go of the
+        // pointer (as iOS 27 does), but the finger's left the screen: stopped a moment after, told
+        await swallow("pointerup", "lostpointercapture");
+        await touch("touchStart");
+        await touch("touchMove", 80);
+        expect((await told(page)).order?.run).toBe(true);
+        await touch("touchEnd");
+        await expect.poll(async () => (await told(page)).order).toBe(null);
+        await unswallow();
+        expect(await held()).toBe(false);
+        expect(await lost()).toEqual([{ slot: "stick", how: "bare" }]);
+
+        // All of it lost, the finger's leaving the screen too: running on till the next thumb on it,
+        // which takes over (pushed a little way, walking), and stops them as it's lifted
+        await page.evaluate(() => window.pellagos.telemetry.clear());
+        await swallow("pointerup", "lostpointercapture", "touchend");
+        await touch("touchStart");
+        await touch("touchMove", 80);
+        await touch("touchEnd");
+        await unswallow();
+        expect((await told(page)).order?.run).toBe(true);
+        expect(await held()).toBe(true);
+        await touch("touchStart");
+        await touch("touchMove", 34);
+        await expect.poll(async () => (await told(page)).order?.run).toBe(false);
+        expect(await lost()).toEqual([{ slot: "stick", how: "again" }]);
+        await touch("touchEnd");
+        await expect.poll(async () => (await told(page)).order).toBe(null);
+        expect(await held()).toBe(false);
+    });
+
     test("fits the screen: the title, making a character and the game's buttons; runs where the ground is double-tapped", async ({ page }) => {
         await title(page);
 
