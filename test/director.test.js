@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { WILD } from "../client/js/core/creatures.js";
-import { DIRECTOR, FINDS, noteOf, PACING, PEACEFUL, peacefulNext, rollRemains, shuffled, WELL_RESTED } from "../client/js/core/director.js";
+import { DIRECTOR, FINDS, FRESH, freshTrail, noteOf, PACING, PEACEFUL, peacefulNext, rollRemains, shuffled, WELL_RESTED } from "../client/js/core/director.js";
 import { hypot } from "../client/js/core/exact.js";
 import { HOST_PLAYER, Host, REST, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -50,11 +50,11 @@ function hosted(deck) {
 
 // The player walked out of the start town (seed 2's: north-east), `step` metres each half a
 // second, from `from` metres out, till something's dealt before them (or they've gone `metres`):
-// how far they went, where they are, and what was dealt ({ cache } or { find })
+// how far they went, where they are, and what was dealt ({ cache }, { find } or { tracks })
 function walk({ host, world, me }, { metres = 1500, step = 8, from = 0 } = {}) {
     const [sx, sy] = world.start.at;
     // (By the ids handed out: the last one dealt may be let go as the next's dealt)
-    const [caches, finds] = [host.nextCache, host.nextFind];
+    const [caches, finds, fresh] = [host.nextCache, host.nextFind, host.nextFresh];
 
     for (let d = from; d <= metres; d += step) {
         const at = [Math.floor(sx + Math.SQRT1_2 * d), Math.floor(sy + Math.SQRT1_2 * d)];
@@ -63,12 +63,12 @@ function walk({ host, world, me }, { metres = 1500, step = 8, from = 0 } = {}) {
         me.hp = me.maxHp;
         run(host, 500);
 
-        if (host.nextCache > caches || host.nextFind > finds) {
-            return { d, at, cache: host.nextCache > caches ? host.caches.get(`cache-${caches}`) : null, find: host.nextFind > finds ? host.finds.get(`find-${finds}`) : null };
+        if (host.nextCache > caches || host.nextFind > finds || host.nextFresh > fresh) {
+            return { d, at, cache: host.nextCache > caches ? host.caches.get(`cache-${caches}`) : null, find: host.nextFind > finds ? host.finds.get(`find-${finds}`) : null, tracks: host.nextFresh > fresh ? host.fresh.get(`fresh-${fresh}`) : null };
         }
     }
 
-    return { d: null, at: [me.x, me.y], cache: null, find: null };
+    return { d: null, at: [me.x, me.y], cache: null, find: null, tracks: null };
 }
 
 describe("the wilds director's deck (director.js)", () => {
@@ -370,5 +370,67 @@ describe("the wilds director's pacing (director.js PACING; host.js #pace)", () =
         run(host, 25000);
         run(again, 25000);
         assert.equal(again.checksum(), host.checksum());
+    });
+});
+
+describe("the wilds director's fresh tracks (director.js FRESH; host.js #putTracks)", () => {
+    it("lays a fresh trail from just ahead of one place to a little short of another, wandering a little", () => {
+        const points = freshTrail([0, 0], [0, 80], createRandom(4));
+        const along = points.map(([, y]) => y);
+
+        assert.ok(points.length >= 10);
+        assert.ok(Math.abs(along[0] - FRESH.start) < 0.01 && along.at(-1) <= 80 - FRESH.short + 0.01);
+        assert.ok(along.every((y, k) => !k || y > along[k - 1]), "(on towards it)");
+        assert.ok(points.every(([x]) => Math.abs(x) <= 3) && points.some(([x]) => Math.abs(x) > 0.2), "(wandering a little)");
+    });
+
+    it("leads fresh tracks to a pack of the wild's out near the player (or one put out ahead), told; let go once that pack's all gone", () => {
+        const context = hosted(["tracks"]);
+        const { host } = context;
+        const { find, cache } = walk(context);
+
+        assert.equal(find, null);
+        assert.equal(cache, null);
+
+        const [tracks] = host.fresh.values();
+
+        assert.ok(tracks, "(fresh tracks laid)");
+
+        const pack = [...host.wild].filter(([, one]) => one.pack === tracks.pack).map(([id]) => host.battle.actor(id));
+        const end = tracks.points.at(-1);
+
+        assert.ok(pack.length >= 1 && pack.every((one) => !one.dead));
+        assert.equal(host.wild.get(pack[0].id).creature, tracks.creature);
+        assert.ok(pack.some((one) => hypot(one.x - end[0], one.y - end[1]) <= FRESH.short + FRESH.step + 6), "(leading to them)");
+
+        // (The pack all gone: the tracks too, told)
+        for (const one of pack) {
+            Object.assign(one, { dead: true, respawnAt: Infinity, target: null });
+        }
+
+        const gone = run(host, 1000);
+
+        assert.ok(!host.fresh.has(tracks.id));
+        assert.ok(gone.some(({ type, tracks: id, change }) => type === "tracks" && id === tracks.id && change === "gone"));
+    });
+
+    it("lets fresh tracks go once they're old, and carries them on exactly from a snapshot", () => {
+        const context = hosted(["tracks"]);
+        const { host } = context;
+
+        walk(context);
+
+        const [tracks] = host.fresh.values();
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        assert.deepEqual([...again.fresh.entries()], [...host.fresh.entries()]);
+        assert.equal(again.nextFresh, host.nextFresh);
+        run(host, 3000);
+        run(again, 3000);
+        assert.equal(again.checksum(), host.checksum());
+
+        tracks.until = host.battle.time;
+        run(host, 1000);
+        assert.ok(!host.fresh.has(tracks.id), "(old: gone)");
     });
 });
