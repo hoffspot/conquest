@@ -37,7 +37,7 @@ async function until(test, what, ms = 10000) {
 }
 
 // A world server on loopback, its broker's listings lasting `expire` ms, the STUN servers it tells of none
-async function serve({ settings = {}, expire = BROKER_LIMITS.expire, signals = BROKER_LIMITS.signals } = {}) {
+async function serve({ settings = {}, expire = BROKER_LIMITS.expire, reloading = BROKER_LIMITS.reloading, signals = BROKER_LIMITS.signals } = {}) {
     const folder = await mkdtemp(path.join(os.tmpdir(), "pellagos-broker-"));
 
     made.push(folder);
@@ -48,7 +48,7 @@ async function serve({ settings = {}, expire = BROKER_LIMITS.expire, signals = B
     await server.settings.change(settings);
     await server.listen(0, "127.0.0.1");
     server.broker.close();
-    server.broker = attachBroker([server.http, server.https], server, { limits: { ...BROKER_LIMITS, expire, signals }, ice: [] });
+    server.broker = attachBroker([server.http, server.https], server, { limits: { ...BROKER_LIMITS, expire, reloading, signals }, ice: [] });
 
     return server;
 }
@@ -333,13 +333,56 @@ describe("the broker", () => {
         again.send(`keep ${id} ${token}`);
         assert.equal(await again.next("error "), "error gone");
 
-        // (A host that leaves: down at once)
+        // (A host that leaves, withdrawing it: down at once)
         const [leaving, leavingId] = await announce(server);
 
         await watcher.next("+ ", 0);
+        leaving.send(`withdraw ${leavingId}`);
         leaving.close(1000);
         assert.equal(await watcher.next("- ", 1), `- ${leavingId}`);
         [again, late, watcher].forEach((link) => link.close());
+    });
+
+    it("keeps a world whose host's link closed without withdrawing it (its page closing or reloading) longer than one dropped; the page started again takes it back afresh, those in it told to come in again", async () => {
+        const server = await serve({ expire: 300, reloading: 1500 });
+        const [host, id, token] = await announce(server);
+        const joiner = await open(server);
+
+        joiner.send(`connect ${id}`);
+
+        const peer = (await joiner.next("peer ")).split(" ")[1];
+
+        joiner.send(`relay ${peer}`);
+        await joiner.next("relay ");
+
+        // (Closed, not withdrawn: those in it told it's away, and kept past when a dropped one would go)
+        host.close(1000);
+        assert.equal(await joiner.next("away", 0), "away");
+        await wait(600);
+        assert.equal(server.broker.listings.has(id), true);
+
+        // (Taken back afresh by the page started again, under its code: those in it from before
+        // told to come in again, and let go of)
+        const again = await open(server);
+
+        again.send(`keep ${id} ${token}\n${JSON.stringify({ players: 1, afresh: true })}`);
+        assert.equal(await again.next("announced "), `announced ${id} ${token}`);
+        assert.equal(await again.next("here"), "here");
+        assert.equal(await joiner.next("closed"), "closed again");
+        assert.equal(server.broker.listings.get(id).joiners.size, 0);
+
+        // (Come in again)
+        const back = await open(server);
+
+        back.send(`connect ${id}`);
+        assert.match(await back.next("peer "), /^peer p\d+$/);
+
+        // (Closed again, and not taken back: let go of once its time's up)
+        again.close(1000);
+        assert.equal(await back.next("away", 0), "away");
+        await wait(1800);
+        assert.equal(server.broker.listings.has(id), false);
+        [joiner, back].forEach((link) => link.close());
     });
 
     it("refuses a bad announcement, more than 3 from one address, a joiner for a world that isn't there, and anything it doesn't know", async () => {
