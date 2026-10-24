@@ -295,6 +295,24 @@ describe("service worker", () => {
         assert.equal(worker.requests.length, 1);
     });
 
+    it("keeps what a page loaded by hash before it took over (a first visit: main.js and its imports) when the page asks, from the browser's copy, checked by its hash; one kept already, another site's, or one without a hash, not fetched", async () => {
+        const files = { "/js/main.js": "the main module", "/js/app/device.js": "the device module", "/js/app/debug.js": "a newer debug module" };
+        const worker = loadServiceWorker({ files, stored: { [BOOT]: { [address(["/js/app/fullscreen.js", "kept"])]: "kept" } } });
+        const main = address(["/js/main.js", "the main module"]);
+        const device = address(["/js/app/device.js", "the device module"]);
+        const debug = address(["/js/app/debug.js", "the debug module"]);
+        const fullscreen = address(["/js/app/fullscreen.js", "kept"]);
+
+        await worker.tell("page-1", { kind: "keep", urls: [main, device, debug, fullscreen, "https://elsewhere.example/js/main.js?h=0123456789", "/js/app/version.js"].map(full) });
+
+        assert.deepEqual(worker.requests, [main, device, debug].map((url) => ({ url: full(url), cache: "force-cache" })));
+        assert.deepEqual(worker.kept(BOOT).sort(), [fullscreen, main, device].map(full).sort());
+
+        // (Asked for by the page next time: from what's kept)
+        assert.equal(await (await worker.request(main)).text(), "the main module");
+        assert.equal(worker.requests.length, 3);
+    });
+
     it("hands on, but doesn't keep, a file whose bytes aren't the ones its hash names (a release published meanwhile)", async () => {
         const worker = loadServiceWorker({ files: { "/characters/human.bin": "a newer body" } });
         const url = address(["/characters/human.bin", "the body"]);
@@ -325,6 +343,74 @@ describe("service worker", () => {
 
         assert.deepEqual(worker.requests, [{ url: full(url), cache: undefined, range: "bytes=0-99" }]);
         assert.deepEqual([...worker.kept(BOOT), ...worker.kept(ASSETS)], []);
+    });
+
+    it("gives a file asked for by name (a worker's module, the font, the WebAssembly) its copy by hash, if the release lists it, without the network; anything else as before", async () => {
+        const navworker = ["/js/world/navworker.js", "navworker v1"];
+        const font = ["/fonts/Sign.woff2", "font v1"];
+        const worker = loadServiceWorker({ files: { [navworker[0]]: navworker[1], [font[0]]: font[1] } });
+
+        await worker.tell("page-1", release("r1", { boot: [navworker, font] }, 1));
+
+        // (Kept as the loader fetched them by hash)
+        await worker.request(address(navworker));
+        await worker.request(address(font));
+        worker.requests.length = 0;
+
+        assert.equal(await (await worker.request(navworker[0])).text(), "navworker v1");
+        assert.equal(await (await worker.request(font[0], { page: "worker-7" })).text(), "font v1");
+        assert.deepEqual(worker.requests, []);
+
+        // (Not listed: from the network first, as before; nor a part of one)
+        await worker.request("/js/other.js");
+        await worker.request(navworker[0], { range: "bytes=0-9" });
+        assert.deepEqual(worker.requests.map(({ url }) => url), [full("/js/other.js"), full(navworker[0])]);
+    });
+
+    it("gives a page its own release's copy of a file asked for by name, and what's not a page it knows (a worker) the newest's", async () => {
+        const old = ["/js/world/navworker.js", "navworker v1"];
+        const now = ["/js/world/navworker.js", "navworker v2"];
+        const worker = loadServiceWorker({ open: ["page-1", "page-2"] });
+
+        // (Each page's kept as its loader fetched it by hash, the server on each version then)
+        await worker.tell("page-1", release("r1", { boot: [old] }, 1));
+        worker.files[old[0]] = old[1];
+        await worker.request(address(old), { page: "page-1" });
+        await worker.tell("page-2", release("r2", { boot: [now] }, 2));
+        worker.files[now[0]] = now[1];
+        await worker.request(address(now), { page: "page-2" });
+        worker.requests.length = 0;
+
+        assert.equal(await (await worker.request(old[0], { page: "page-1" })).text(), "navworker v1");
+        assert.equal(await (await worker.request(old[0], { page: "page-2" })).text(), "navworker v2");
+        assert.equal(await (await worker.request(old[0], { page: "worker-3" })).text(), "navworker v2");
+        assert.deepEqual(worker.requests, []);
+    });
+
+    it("fetches a file by hash once though it's asked for again while it comes (the page importing what the loader's fetching)", async () => {
+        const game = ["/js/app/game.js", "game v1"];
+        const worker = loadServiceWorker({ files: { [game[0]]: game[1] } });
+        const [first, second] = await Promise.all([worker.request(address(game)), worker.request(address(game))]);
+
+        assert.equal(await first.text(), "game v1");
+        assert.equal(await second.text(), "game v1");
+        assert.equal(worker.requests.length, 1);
+        assert.deepEqual(worker.kept(BOOT), [full(address(game))]);
+    });
+
+    it("lists a release's files as a page tells them, each time (a release told before with fewer keeps them all)", async () => {
+        const game = ["/js/app/game.js", "game v1"];
+        const body = ["/characters/vitruvian.bin", "body v1"];
+        const worker = loadServiceWorker({ files: { [game[0]]: game[1], [body[0]]: body[1] } });
+
+        await worker.tell("page-1", release("r1", { boot: [body] }, 1));
+        await worker.request(address(body));
+        await worker.request(address(game));
+        await worker.tell("page-1", release("r1", { boot: [body, game] }, 1));
+        worker.clock.now += GRACE;
+        await worker.activate();
+
+        assert.deepEqual(worker.kept(BOOT).toSorted(), [full(address(body)), full(address(game))].toSorted());
     });
 
     it("takes over the copies the cache before it kept, taking on those now known by their hash rather than downloading them again", async () => {

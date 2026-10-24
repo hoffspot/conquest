@@ -82,6 +82,37 @@ export function setUpInstall({ button, hint }) {
  *     service worker once it's running, and again to any update's that takes over, so it keeps
  *     those files and can let go of what no release in use lists.
  */
+/**
+ * Wait (at most `ms`) for the service worker to be looking after the page: at once if it already
+ * is, as it is after the first visit. On the first, it's just been registered, and what the loader
+ * downloads before it takes over isn't kept, so it's given a moment first.
+ */
+export function looked(ms) {
+    const workers = globalThis.navigator?.serviceWorker;
+
+    if (!workers || !window.isSecureContext || workers.controller) {
+        return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+        workers.addEventListener("controllerchange", resolve, { once: true });
+        setTimeout(resolve, ms);
+    });
+}
+
+/**
+ * Ask the service worker to keep files the page loaded by their hashes before it took over (a
+ * first visit: main.js and what it imports), from the browser's own copies (sw.js keepLoaded).
+ * Nothing if it hasn't taken over.
+ */
+export function keepLoaded(urls) {
+    const worker = globalThis.navigator?.serviceWorker?.controller;
+
+    if (worker && urls.length) {
+        worker.postMessage({ kind: "keep", urls });
+    }
+}
+
 export function registerServiceWorker(release) {
     if ("serviceWorker" in navigator && window.isSecureContext) {
         // (With when the page started, so the worker can tell which release is the newest)

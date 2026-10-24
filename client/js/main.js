@@ -17,8 +17,8 @@
 // ?quality=). ?join=CODE opens the title's Join a world with the code in it.
 
 import { ASSETS } from "./app/assets.js";
-import { releaseOf } from "./app/catalog.js";
-import { isInstalledApp, isIOS, lockLandscape, registerServiceWorker } from "./app/device.js";
+import { mappedOf, releaseOf } from "./app/catalog.js";
+import { isInstalledApp, isIOS, keepLoaded, lockLandscape, looked, registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { Fetcher } from "./app/fetcher.js";
 import { FullScreen } from "./app/fullscreen.js";
@@ -4648,8 +4648,18 @@ function showAdapted() {
 
 // --- Off we go ---
 
+// How long the loader waits on a first visit for the service worker to take over, so that what it
+// downloads is kept (ms)
+const FIRST_LOOKED = 3000;
+
 async function start() {
-    const release = releaseOf(MANIFEST, ASSETS, document.baseURI);
+    // (This release's files: the manifest's, and the modules the page's import map names, main.js's
+    // own address among them, each by its hash)
+    const modules = mappedOf(document.querySelector('script[type="importmap"]')?.textContent, document.baseURI).concat(/\?h=/.test(import.meta.url) ? [import.meta.url] : []);
+    const release = releaseOf(MANIFEST, ASSETS, document.baseURI, modules);
+
+    // (Whether the service worker's looking after the page already: not on a first visit)
+    const looking = Boolean(globalThis.navigator?.serviceWorker?.controller);
 
     debug.show(settings.debug);
     debug.watch({ fetcher });
@@ -4679,6 +4689,17 @@ async function start() {
     });
 
     try {
+        await looked(FIRST_LOOKED);
+
+        // (On a first visit, main.js and what it imports came before the service worker took
+        // over, so it didn't keep them: it's asked to now, from the browser's copies. Its other
+        // modules are the manifest's, which the loader downloads through it)
+        if (!looking) {
+            const manifest = new Set(releaseOf(MANIFEST, ASSETS, document.baseURI).boot);
+
+            keepLoaded(modules.filter((url) => !manifest.has(url)));
+        }
+
         await load();
     } catch (error) {
         console.error(error);

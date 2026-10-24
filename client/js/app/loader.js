@@ -1,11 +1,12 @@
 // Downloads everything the game needs before it starts (manifest.js), reading each file as it
 // arrives so the loading screen shows how far it has really got: byte by byte, group by group.
 //
-// Data files (the body, masks, models: those listed with a hash) are fetched by their hash
-// (path?h=hash, which the service worker keeps for good), kept in memory and handed out from
+// Every file is fetched by its hash (path?h=hash, which the service worker keeps for good). Data
+// files (the body, masks, models: the TYPES below) are kept in memory too, and handed out from
 // there by their names: loadFile() is a stand-in for fetch(), and urlOf() gives a blob URL for
-// Three.js's loaders. Code is only downloaded, into the browser's cache, for the page to import
-// straight after.
+// Three.js's loaders. Code, the fonts and the WebAssembly are only downloaded, for the page to
+// import or ask for straight after (the code by the same address, from its import map; the rest
+// by name, which the service worker maps to the same copy).
 //
 // No Three.js here: this runs before it has downloaded.
 
@@ -71,7 +72,7 @@ export class Loader {
         }
 
         // (Data is kept, by its name; code isn't: the page imports it from the cache)
-        const keep = Boolean(hash);
+        const keep = Boolean(hash && TYPES[path.split(".").pop()]);
         const chunks = [];
         let received = 0;
 

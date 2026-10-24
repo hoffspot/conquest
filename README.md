@@ -645,7 +645,7 @@ client/                 The game (static files served to the browser)
   index.html            The screens: loading, title, making a character, the game, the menu, debug
   styles.css            Layout for every screen size, from phones to desktops
   manifest.webmanifest  Lets the game be installed as an app
-  sw.js                 Service worker: keeps a copy of the game for offline play, its data by
+  sw.js                 Service worker: keeps a copy of the game for offline play, every file by
                         the hash of its bytes, letting go of what no release in use lists
   characters/           The bodies characters are made from: CharMorph's Vitruvian, the game's
                         (made by npm run build:vitruvian), and MakeHuman's (npm run

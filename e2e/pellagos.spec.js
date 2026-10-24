@@ -189,6 +189,61 @@ test("loads everything, listing what it downloads, then shows the title", async 
     expect(loaded.groups).toEqual([true, true, true, true, true, true]);
 });
 
+test("loaded again, the game asks the server for none of its code, engine, WebAssembly, body or fonts: the service worker keeps each by the hash of its bytes, and gives what its workers ask for by name from the same copies; a file it hasn't, it fetches, that one alone", async ({ page }) => {
+    // (Played twice over, and a third time: more than the usual time)
+    test.setTimeout(300000);
+
+    // (The page's own: each test's page is in a browser of its own, e2e/fixtures.js)
+    const context = page.context();
+
+    // What reaches the server: what the service worker fetches, and anything the page fetches that
+    // the service worker doesn't answer
+    const fetched = [];
+    const heard = (url) => fetched.push(new URL(url).pathname);
+
+    context.on("request", (request) => request.serviceWorker() && heard(request.url()));
+    page.on("requestfinished", async (request) => {
+        const response = await request.response();
+
+        if (response && !response.fromServiceWorker() && !request.serviceWorker()) {
+            heard(request.url());
+        }
+    });
+
+    // (The first time, looked after by the service worker from the start: it's given a moment to
+    // take over before the loader starts)
+    await playing(page, "/?play&seed=1");
+    expect(await page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+
+    const files = (paths) => paths.filter((path) => /\.(m?js|wasm|woff2|bin)$|\/characters\//.test(path));
+    const first = files(fetched);
+
+    expect(first).toContain("/js/app/game.js");
+    expect(first).toContain("/js/world/navworker.js");
+
+    // Again: none of them but version.js (stamped with the commit after the manifest's made, so asked
+    // for by name: scripts/stamp-version.js)
+    fetched.length = 0;
+    await page.reload();
+    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000, polling: 250 });
+    expect(files(fetched)).toEqual(["/js/app/version.js"]);
+
+    // One the service worker hasn't (as if it changed): that one alone, by its hash
+    const gone = await page.evaluate(async () => {
+        const cache = await caches.open("pellagos-boot-v2");
+        const url = (await cache.keys()).map(({ url }) => url).find((url) => url.includes("/js/app/hud.js?h="));
+
+        await cache.delete(url);
+
+        return new URL(url).pathname;
+    });
+
+    fetched.length = 0;
+    await page.reload();
+    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000, polling: 250 });
+    expect(files(fetched).toSorted()).toEqual([gone, "/js/app/version.js"].toSorted());
+});
+
 test("the title's wordmark fits its card, every letter painted: on a computer, with a scrollbar's room taken from the card, and on a phone", async ({ page }) => {
     // Its letters' first and last, against its own box, which its gradient's painted in (its
     // letters as far from either side, the space after its last letter not counted)

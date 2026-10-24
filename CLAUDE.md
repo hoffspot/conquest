@@ -39,7 +39,8 @@ checks, auto-merge, branch updates). This session can read them but not change t
 Others contribute too, so a green pull request can go stale (contribution.md, section 6):
 
 - Merge `origin/main` into the branch; don't rebase.
-- Regenerate rather than hand-merge `client/js/app/manifest.js` and `package-lock.json`. If both
+- Regenerate rather than hand-merge `client/js/app/manifest.js`, `client/js/app/assets.js`, the
+  import map in `client/index.html` (`npm run build:manifest`) and `package-lock.json`. If both
   sides bumped a version number, take the higher one and add one.
 - Merge only once CI is green on that up-to-date head and `main` hasn't moved since.
 - Use auto-merge where it's turned on.

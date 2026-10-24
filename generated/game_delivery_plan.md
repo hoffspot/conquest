@@ -159,6 +159,11 @@ release's code, and a game under way keeps its own release's modules even if an 
   asks the player.
 - Safari: Game options says that a game not added to the Home Screen may lose what it's
   downloaded after 7 days unused, with how to add it.
+- The room kept for the catalog's models: the service worker takes half of what the browser says
+  is left (`navigator.storage.estimate()`), but recent Chrome says a made-up figure (what's used
+  and 10 GiB more), so it's capped at what's sensible for a phone.
+- A model part-downloaded when the page is closed or reloaded is carried on from where it got to,
+  not started again (its parts kept as they come).
 
 ### 3.7 Seeing it work
 
@@ -173,7 +178,7 @@ shows at once.
 | **1** | The server: tags by hash, `If-None-Match` first, exact dates, compression. This plan | `server/static.js`, `test/server.test.js` |
 | **2** | Every file by its hash: the manifest and the import map, the page's release, the worker's plain-address mapping (workers' imports, fonts, WebAssembly) and waiting for a file being fetched; the worker registered before the loader | `scripts/build-manifest.js`, `client/index.html`, `client/js/app/{manifest,catalog,loader}.js`, `client/sw.js`, tests |
 | **3** | Updates in the background, and the reload at a quiet moment | `client/js/app/` (an updater), `client/sw.js`, `client/index.html`, `client/js/main.js` |
-| **4** | Keeping it, and seeing it: own tags for pages, `persist()`, Safari's note, the loading screen's figure | `client/sw.js`, `client/js/main.js`, `client/js/app/device.js`, the options |
+| **4** | Keeping it, and seeing it: own tags for pages, `persist()`, Safari's note, the models' room capped, a part-downloaded model carried on, the loading screen's figure | `client/sw.js`, `client/js/main.js`, `client/js/app/{device,fetcher}.js`, the options |
 
 ## 5. Tests and measurements
 
