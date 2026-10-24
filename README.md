@@ -775,6 +775,8 @@ client/                 The game (static files served to the browser)
     tracks.js           The trails out of the wild's camps, dens and lairs, their signs to read,
                         and what wore each (docs/WILDS.md *Tracking*)
     dens.js             The roaming beasts' dens: where each kind keeps one, and what keeps it
+    shrines.js          The wayside shrines: each to one of the twelve gods, its gift, its
+                        sanctuary (the gods themselves in lore/gods.js)
     caches.js           The adventurers' caches out in the wilds: where, who keeps them, what's in them
     dungeons/           The dungeons (see docs/DUNGEONS.md): build.js cooks a dungeon up from a
                         seed and a theme; themes.js the themes; layouts.js how each is dug;
