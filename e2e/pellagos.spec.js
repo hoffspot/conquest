@@ -9599,6 +9599,8 @@ test("the wilds director lays fresh tracks ahead of a player crossing the wilds,
 });
 
 test("the wilds director puts strangers on the way: a pedlar selling odds and ends, a wounded hunter healed with a draught telling of a place round about, hungry bandits hailing the player and paid to let them by", async ({ page }) => {
+    // (Three strangers met, each drawn, walked up to and talked to)
+    test.setTimeout(300000);
     await playing(page, "/?play&seed=1");
 
     const pack = page.locator(".pack");
@@ -9649,12 +9651,17 @@ test("the wilds director puts strangers on the way: a pedlar selling odds and en
 
             const one = game.battle.actor(stranger.ids[0]);
 
-            // (Come near: said; the bandits' chief hailing the player)
+            // (Come near: said, and drawn, a step at a time; the bandits' chief hailing the player)
             goTo(one.x + 6, one.y);
             await settle(4, true);
 
+            const hailed = [...(game.hud.said?.keys() ?? [])].includes(one.id) && Boolean(stranger.hailed?.includes("player"));
+
+            for (let k = 0; k < 40 && !game.avatars.has(one.id); k++) {
+                await settle(1, true);
+            }
+
             const drawn = game.avatars.has(one.id);
-            const hailed = [...(game.hud.said?.keys() ?? [])].includes(one.id);
 
             // (Tapped, the camera turned to look past the player at them, till they're talking)
             for (let tap = 0; tap < 8 && one.talkingTo !== "player"; tap++) {

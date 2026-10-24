@@ -8279,9 +8279,9 @@ export class Host {
 
     // The wilds director's next card dealt ahead of a player (`actor`; `was`: how they've come, and
     // the deck: core/director.js), for their `group`: an adventurer's cache (#putCache), a
-    // peaceful find (#putFind), fresh tracks (#putTracks) or a stranger (#putStranger). Dealt, the next's the one after (a deck all dealt shuffled again,
-    // not the one just dealt first); nowhere to put it, it's tried again a moment later. Whether
-    // it was
+    // peaceful find (#putFind), fresh tracks (#putTracks) or a stranger (#putStranger). Dealt,
+    // the next's the one after (a deck all dealt shuffled again, not the one just dealt first);
+    // nowhere to put it, it's tried again a moment later. Whether it was
     #deal(actor, was, homes, group = null) {
         was.deck ??= shuffled(this.random);
 
@@ -8589,7 +8589,7 @@ export class Host {
         }
 
         this.strangers.delete(stranger.id);
-        this.#event("stranger", { stranger: stranger.id, change: "gone" });
+        this.#event("stranger", { stranger: stranger.id, change: "gone", ids: stranger.ids });
     }
 
     // A wounded hunter (`actor`: theirs): met once a player first comes within STRANGERS seen of

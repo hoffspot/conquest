@@ -795,7 +795,7 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "dungeon", "cache", "find", "pace"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "dungeon", "cache", "find", "pace", "stranger"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -4866,16 +4866,29 @@ export class Game {
         }
     }
 
-    // What's said as the strangers out (core/director.js STRANGERS; host.js "stranger" events)
-    // deal with the player, over their heads: hungry bandits' chief hailing them (and told what
-    // they want), paid, and refused or walked away from, the bandits drawing their blades; a
-    // wounded hunter healed, thanking them and telling of a place round about (#noteFound); and
-    // one let go, forgotten
+    // The strangers out (core/director.js STRANGERS; host.js "stranger" events): put out, drawn
+    // (a few at a time, as the wild's are); and what's said as they deal with the player, over
+    // their heads: hungry bandits' chief hailing them (and told what they want), paid, and refused
+    // or walked away from, the bandits drawing their blades; a wounded hunter healed, thanking them
+    // and telling of a place round about (#noteFound); and one let go, gone and forgotten
     #strangerSaid(event) {
         const { change, stranger: id } = event;
 
+        if (change === "put") {
+            this.enlisting.push(...event.ids);
+
+            return;
+        }
+
         if (change === "gone") {
             this.strangersSeen.delete(id);
+            this.#unenlist(event.ids);
+
+            for (const one of event.ids) {
+                if (!this.battle.actor(one)) {
+                    this.#undress(one);
+                }
+            }
 
             return;
         }
