@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { ASSETS } from "../client/js/app/assets.js";
 import { GAME_BODY } from "../client/js/characters/body.js";
 import { expect, test } from "./fixtures.js";
 
@@ -72,12 +73,19 @@ test("downloads a file a part at a time, checks it and keeps it, has it from the
     await expect(page.locator("#debugstats")).toContainText(new RegExp(`Downloads idle {2}\\d+ KB/s of \\d+ KB/s alone {2}0 queued, 2 done \\(${(FILE.bytes / 1024 / 1024).toFixed(1).replace(".", "\\.")} MB\\)`));
 });
 
+// A model in the catalog (assets.js) that comes in two parts, which the game doesn't download till
+// it's wanted: the parts of a file no release lists are let go of as the page's loaded again
+// (sw.js collect), and the catalog's are what the downloader fetches
+const MODEL = ASSETS.models["dungeon-prop-statue-gothic"].files[0];
+
 test("carries on a file part-downloaded when the page's loaded again from where it got to, and lets go of its parts once it's all here", async ({ page }) => {
     const parts = [];
     const PART = 256 * 1024;
+    const total = Math.ceil(MODEL.bytes / PART);
 
+    expect(total).toBeGreaterThan(1);
     page.context().on("request", (request) => {
-        if (request.url().includes(`${PATH}?h=`) && request.headers().range) {
+        if (request.url().includes(`${MODEL.path}?h=`) && request.headers().range) {
             parts.push(request.headers().range);
         }
     });
@@ -92,27 +100,33 @@ test("carries on a file part-downloaded when the page's loaded again from where 
         }
     });
 
-    // Dropped once a part's come (as a page closed then would be): the parts that came are kept
-    const kept = await page.evaluate(async ({ file, part }) => {
+    // Dropped as its first part comes (as a page closed then would be): that part's kept
+    const kept = await page.evaluate(async (file) => {
         const fetcher = window.pellagos.fetcher;
-        const watching = setInterval(() => fetcher.received(file) >= part && fetcher.drop(file), 0);
+        const fetch = fetcher.fetch;
+
+        fetcher.fetch = async (...args) => {
+            const response = await fetch(...args);
+
+            fetcher.drop(file);
+
+            return response;
+        };
 
         await fetcher.want(file, "now");
-        clearInterval(watching);
 
         while (fetcher.running) {
             await new Promise((resolve) => setTimeout(resolve, 20));
         }
 
-        return (await (await caches.open("pellagos-parts-v1")).keys()).map(({ url }) => Number(new URL(url).searchParams.get("part"))).sort((a, b) => a - b);
-    }, { file: FILE, part: PART });
-    const total = Math.ceil(FILE.bytes / PART);
+        fetcher.fetch = fetch;
 
-    expect(kept.length).toBeGreaterThan(0);
-    expect(kept.length).toBeLessThan(total);
-    expect(kept).toEqual(kept.map((_, k) => k * PART));
+        return (await (await caches.open("pellagos-parts-v1")).keys()).map(({ url }) => Number(new URL(url).searchParams.get("part")));
+    }, MODEL);
 
-    // Loaded again, it carries on: only the parts it hadn't, and the file's the file
+    expect(kept).toEqual([0]);
+
+    // Loaded again, it carries on: only the part it hadn't, and the file's the file
     await page.reload();
     await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
     parts.length = 0;
@@ -123,12 +137,8 @@ test("carries on a file part-downloaded when the page's loaded again from where 
         const left = (await (await caches.open("pellagos-parts-v1")).keys()).length;
 
         return { bytes: blob.size, hash: [...digest.subarray(0, 5)].map((byte) => byte.toString(16).padStart(2, "0")).join(""), left };
-    }, FILE);
+    }, MODEL);
 
-    expect(got).toEqual({ bytes: FILE.bytes, hash: FILE.hash, left: 0 });
-
-    const asked = [...new Set(parts)];
-
-    expect(asked.length).toBe(total - kept.length);
-    expect(asked[0]).toBe(`bytes=${kept.length * PART}-${(kept.length + 1) * PART - 1}`);
+    expect(got).toEqual({ bytes: MODEL.bytes, hash: MODEL.hash, left: 0 });
+    expect([...new Set(parts)]).toEqual(Array.from({ length: total - 1 }, (_, k) => `bytes=${(k + 1) * PART}-${Math.min((k + 2) * PART, MODEL.bytes) - 1}`));
 });
