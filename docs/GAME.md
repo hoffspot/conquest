@@ -669,7 +669,8 @@ their looks and errands with them; `SNAPSHOT_VERSION` 5).
 Rift*). While the Behemoth of the Rift comes on their town and still stands, the townsfolk run
 (3.2 m/s, `battle.reroute` and a routine's `pace`) for the nearest door on any of their place's
 townsfolk's rounds (`doorsOf`, `shelterOf`: a house's, a tradesman's, the church's, the tavern's,
-the guild's, the hall's, a castle's keep's; not a stall, the well, the market or a way out) and go
+the guild's, the hall's, a castle's keep's; not a stall, the well, the market or a way out; nor a
+house the Behemoth burnt, till it's built again: `errandsOf` `burnt`, WAR.md *Burnt houses*) and go
 in there, the door heard as they do. One standing at a door already goes straight in. One still
 on the way after 40 seconds goes in wherever they are. Indoors, they're off the streets but kept
 (`indoors`: where they went in, and in the snapshot). Their crier stays out, crying it. Once it's
@@ -3071,6 +3072,32 @@ facing south; each is turned about its middle to face the way the layout says:
   weathering, worked out for every corner, now reads its numbers without taking lists apart,
   which V8 didn't do for free). Most houses are 300 to 2,000 triangles (a two-storey timber
   house with a jettied front about 2,400).
+- **Burnt houses** (kits/burnt.js `burntOf`; core/burnt.js, WAR.md *Burnt houses*): a house the
+  Behemoth of the Rift set burning is built as it stood by whatever builds it (any people's
+  kit: town3d.js `builderOf`), then made over as it is at its stage (`BURNT_LOOKS`):
+  - **burning**, and **burnt** the day after: its glass gone, and whatever grew on it; its walls
+    broken off jagged between three and nine tenths of the way to its eaves (by noise over a
+    couple of metres, a triangle at a time where its middle is, so it breaks off in steps as
+    courses and panels fall: `clipped`), and blackened, more the higher up and in patches,
+    a little brown; its roof fallen in. On the ash over its floor lie heaps of stone and charred
+    boards; what's left of its beams lies across it, fallen at one end or on the ash, a post or
+    two still up. While it burns, two to four great fires leap in it (lights.js `blaze`: their
+    flames 1.6 m across and 2.6 m high, their embers, their light on what's round them, 20 m, as
+    a torch's is, and their smoke, a great dark column 15 m high: smoke.js `blaze`); the day
+    after, two columns of smoke rise from it still;
+  - **framed**: its walls up to its eaves again, soot left on them here and there; new rafters
+    every 60 cm or so up to a ridge, a tie beam across every third pair; scaffolding all round it
+    (two rows of poles every 2.4 m or so, ledgers every 2 m up, boards on the highest lift and
+    every other one below, a brace now and then); timber stacked by its door; no glass in yet;
+  - **roofed**: whole again but a little soot, the scaffolding still up along its front and a
+    side.
+  Its hearth, its lamps and its banners are out till it's whole. Where it's drawn in the start
+  town, the block it's in is built again as it goes from stage to stage (town3d.js `rebuild`,
+  what was drawn kept till it is: its pieces, and their chimneys, banners, lights and windows,
+  kept with each block for it); out in the world, the chunks it's in (chunks3d.js `rebuild`,
+  `burntOf`). The game looks every half second at how far on each is (game.js `#syncBurnt`).
+  The building lab shows a street's or a town's houses at each stage (`&burnt=burning`,
+  `burnt`, `framed`, `roofed`: *Houses*), and a settlement's out in the world.
 - **Special buildings** (kits/landmarks.js), each from its piece of the layout. Every people's
   name boards and hanging signs are clear to see from the street (`test/signs.test.js` looks at
   each of them from in front, from below, from 30° either side and, a sign hanging out from a
@@ -5377,6 +5404,11 @@ server's world by its owners, if its rules allow them the debug commands.
 **Invasion** brings an invasion to the town or city the player's in, now, of the band chosen (any
 of the five, the corsairs too away from the sea) or as one due would come (the host's `invade`
 command: docs/WAR.md *Invasions*), on the same terms.
+
+**Burnt houses** burns the six houses nearest the player in the town or city they're in, as the
+Behemoth of the Rift burns them as it's turned back, back-dated so they're halfway through the
+stage chosen (burning, burnt out, framed or roofed: the host's `burn` command; docs/WAR.md *Burnt
+houses*), on the same terms.
 
 ## The debug log
 

@@ -45,6 +45,7 @@ export const LIGHTS = Object.freeze({
     brazier: { fire: "brazier", flame: true, colour: 0xff8e2c, strength: 6, reach: 12, glow: 1.1 },
     "brazier-night": { fire: "brazier-night", flame: true, colour: 0xff8e2c, strength: 6, reach: 12, glow: 1.1 },
     fire: { fire: "fire", flame: true, colour: 0xff8c28, strength: 8, reach: 14, glow: 1.8 },
+    blaze: { fire: "blaze", flame: true, colour: 0xff7a26, strength: 14, reach: 20, glow: 2.8 },
     spell: { fire: "spell", flame: false, colour: 0xff7a2a, strength: 10, reach: 12, glow: 0 },
     hellgate: { fire: "hellgate", flame: false, colour: 0xff3c16, strength: 13, reach: 14, glow: 2.4 },
     riftTear: { fire: "riftTear", flame: false, colour: 0x40ff90, strength: 12, reach: 16, glow: 2.6 },
@@ -194,8 +195,9 @@ export function lightsMesh(lights) {
         group.add(...burning.children);
     }
 
-    // (Smoke over each that smokes: a torch's thin wisp, a camp fire's fuller column)
-    for (const smoke of ["torch", "fire"]) {
+    // (Smoke over each that smokes: a torch's thin wisp, a camp fire's fuller column, a burning
+    // house's great dark one)
+    for (const smoke of ["torch", "fire", "blaze"]) {
         const tops = fires.filter(({ kind }) => FIRES[kind].smoke === smoke).map(({ x, y, z, kind }) => [x, y + FIRES[kind].height * 0.85, z, 1.01]);
         const mesh = tops.length ? smokeMesh(tops, smoke) : null;
 

@@ -26,12 +26,14 @@ export const SMOKE = Object.freeze({ lit: 0.7, puffs: 9, rise: 8, period: 10, fr
  * Smoke of each kind, as SMOKE has it (`lit`: a share of them drawn at all), and how a fire under
  * it lights it from below (sRGB, as strong as it says; `night`: only as the windows are lit, at
  * night, as a torch is): a chimney's (SMOKE); a torch's or a brazier's, a thin dark wisp; a camp
- * fire's, a fuller, paler column.
+ * fire's, a fuller, paler column; a house's burning (the Behemoth's: core/burnt.js), a great dark
+ * one, rising high.
  */
 export const SMOKES = Object.freeze({
     chimney: { ...SMOKE, glow: 0x000000, glowing: 0, night: false },
     torch: { lit: 1, puffs: 5, rise: 1.6, period: 2.6, from: 0.07, to: 0.5, wind: [0.5, 0.22], wander: 0.08, shade: 0x2c2724, sun: 0x6a625c, thick: 0.4, glow: 0xff8a3a, glowing: 0.9, night: true },
     fire: { lit: 1, puffs: 8, rise: 4.2, period: 5, from: 0.3, to: 1.6, wind: [0.5, 0.22], wander: 0.3, shade: 0x45403c, sun: 0x9a938a, thick: 0.45, glow: 0xff8436, glowing: 1.1, night: false },
+    blaze: { lit: 1, puffs: 12, rise: 15, period: 9, from: 0.8, to: 4, wind: [0.5, 0.22], wander: 0.8, shade: 0x1f1c1a, sun: 0x504943, thick: 0.5, glow: 0xff6a20, glowing: 0.6, night: true },
 });
 
 /** How many of each column's puffs are drawn (0 to 1: QUALITY.smoke, set by the game). */

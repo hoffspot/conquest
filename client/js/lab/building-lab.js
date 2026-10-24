@@ -11,7 +11,9 @@
 // places) for the first of it, or
 // show=wilds-meadow (or any land: wilds-woods, wilds-badlands...) for the land itself, well away
 // from any settlement or road (&undergrowth=0.5 to thin it, 0 for none), or show=home for the
-// middle of the people's homeland; window.buildingLab is there for tests.
+// middle of the people's homeland. &burnt=burning|burnt|framed|roofed shows a street's or a
+// town's houses as the Behemoth of the Rift leaves them and as they're built again (core/burnt.js,
+// world/art/kits/burnt.js). window.buildingLab is there for tests.
 
 import * as THREE from "three";
 import { ASSETS } from "../app/assets.js";
@@ -38,6 +40,7 @@ import { buildGround, landColour } from "../world/ground.js";
 import { PEOPLE_KITS } from "../world/art/peoples/index.js";
 import { readKtx2With } from "../world/art/engine/models.js";
 import { buildTown } from "../world/town3d.js";
+import { BURNT } from "../core/burnt.js";
 import { View } from "../world/view.js";
 
 const $ = (selector) => document.querySelector(selector);
@@ -50,6 +53,7 @@ const HOMELANDS = { human: "meadow", elf: "elfwood", darkElf: "darkwood", cat: "
 const state = {
     seed: Number(params.get("seed")) || 7,
     people: PEOPLES.includes(params.get("people")) ? params.get("people") : "human",
+    burnt: BURNT.stages.includes(params.get("burnt")) ? params.get("burnt") : null,
     show: ["town", "landmarks", "structures", "insides", "castle", "place", "capital", "city", "village", "hamlet", "farmstead", "home", "camps", "forts", ...BIOMES.map(({ id }) => `wilds-${id}`)].includes(params.get("show")) ? params.get("show") : "street",
     built: null,
     frames: [],
@@ -413,6 +417,8 @@ async function build() {
         const place = site ?? world.plan.places.filter((one) => one.kind === state.show && whose(one)).sort((a, b) => distance(a) - distance(b))[0];
         const chunks = new Chunks(world);
 
+        // (Its houses burnt, as they are at that stage, if asked: the place's only)
+        chunks.burntOf = (at) => (at === place.id ? state.burnt : null);
         chunks.fill(place.at[0], place.at[1]);
 
         while (chunks.busy) {
@@ -464,7 +470,8 @@ async function build() {
 
     const group = new THREE.Group();
     const ground = buildGround(settlement ? world : { ...world, ground: Array.from({ length: world.height }, () => new Uint8Array(world.width)) }, { land: landColour(HOMELANDS[state.people], state.people) });
-    const town = await buildTown(world);
+    // (Its houses burnt, as they are at that stage, if asked)
+    const town = await buildTown(world, { burntOf: (index) => (world.town.pieces[index]?.kind === "house" ? state.burnt : null) });
     const lagoon = lagoonOf(world.town.water, world.town.walks);
 
     group.add(ground, town.object, ...(lagoon ? [lagoon] : []));
@@ -492,7 +499,7 @@ function finish(pieces) {
     }));
     $("#status").hidden = true;
     state.ready = true;
-    history.replaceState(null, "", `?seed=${state.seed}${state.people === "human" ? "" : `&people=${state.people}`}&show=${state.show}`);
+    history.replaceState(null, "", `?seed=${state.seed}${state.people === "human" ? "" : `&people=${state.people}`}&show=${state.show}${state.burnt ? `&burnt=${state.burnt}` : ""}`);
 }
 
 function place() {
@@ -576,6 +583,11 @@ $("#another").addEventListener("click", () => {
 });
 $("#show").addEventListener("change", () => {
     state.show = $("#show").value;
+    build();
+});
+$("#burnt").value = state.burnt ?? "";
+$("#burnt").addEventListener("change", () => {
+    state.burnt = $("#burnt").value || null;
     build();
 });
 

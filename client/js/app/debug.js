@@ -26,6 +26,9 @@ const EVERY = 500;
 // to see how many this device draws and plays smoothly
 const FIELD_SIZES = [10, 25, 50, 75, 100, 150, 200];
 
+// The stages of the houses the Behemoth burns (core/burnt.js BURNT.stages), as the overlay names them
+const BURN_STAGES = [["burning", "Burning"], ["burnt", "Burnt out"], ["framed", "Framed"], ["roofed", "Roofed"]];
+
 const element = (tag, attributes = {}, ...children) => {
     const node = document.createElement(tag);
 
@@ -369,6 +372,9 @@ export class Debug {
         const bands = element("select", {}, element("option", { value: "" }, "As it would come"), ...Object.entries(BANDS).map(([id, { label }]) => element("option", { value: id }, label)), element("option", { value: BEHEMOTH.id }, BEHEMOTH.label));
         const invade = element("button", { type: "button", onclick: () => this.game?.invade(bands.value || null) }, "Invade");
         const rift = element("button", { type: "button", onclick: () => this.game?.rift() }, "Call up");
+        // (Houses near the player burnt by the Behemoth, as they'd be so long after: core/burnt.js)
+        const stages = element("select", {}, ...BURN_STAGES.map(([stage, label]) => element("option", { value: stage }, label)));
+        const burn = element("button", { type: "button", onclick: () => this.game?.burn(stages.value) }, "Burn");
 
         quality.value = settings.quality;
         scale.value = settings.renderScale;
@@ -385,6 +391,7 @@ export class Debug {
             element("label", { class: "field" }, "Field battle", armies, muster),
             element("label", { class: "field" }, "Invasion", bands, invade),
             element("label", { class: "field" }, "Behemoth of the Rift", rift),
+            element("label", { class: "field" }, "Burnt houses", stages, burn),
         );
     }
 }

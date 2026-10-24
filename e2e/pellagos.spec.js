@@ -2,6 +2,7 @@ import { expect, test } from "./fixtures.js";
 import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 import { Explored } from "../client/js/core/explored.js";
 import { behemothSides, BOMBERS, ENGINES, INVASION, REWARD, SIZE } from "../client/js/core/invasions.js";
+import { stagesOf } from "../client/js/core/burnt.js";
 import { branchesFound, fareOf } from "../client/js/core/portals.js";
 import { NATURAL } from "../client/js/core/weapons.js";
 import { guilds, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
@@ -14975,6 +14976,79 @@ test("the Behemoth of the Rift against the town: its roar heard twice where it c
     // (The townsfolk out of their doors again, the doors heard, about their business)
     expect(await playUntil(page, () => [...window.pellagos.game.host.folk.values()].filter(({ role }) => role === "townsfolk").every(({ id, indoors }) => !indoors && window.pellagos.game.battle.actor(id)?.routine.pace === undefined), { seconds: 30 })).toBe(true);
     expect(await page.evaluate(() => window.doors.filter(Boolean).length)).toBe(sheltered.folk * 2);
+});
+
+test("the houses the Behemoth of the Rift burns as a town falls: drawn burning, the fire told and its crackle heard; then as the days go by a burnt shell, framed in new timbers, roofed again, and whole, the town told", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=2");
+
+    // (The lone orc out of the way; what's heard kept; three of the houses nearest the player
+    // burnt, as the debug overlay burns them)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const setAmbience = game.sound.setAmbience.bind(game.sound);
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        window.heard = [];
+        game.sound.setAmbience = (ambience) => {
+            window.heard.push(ambience);
+
+            return setAmbience(ambience);
+        };
+        game.advance(0.1, { render: false });
+    });
+    // (No fire's crackle where the player stands before)
+    expect(await playUntil(page, () => window.heard.length > 0, { seconds: 5 })).toBe(true);
+    expect(await page.evaluate(() => window.heard.at(-1).beds.campfireLoop ?? 0)).toBe(0);
+    await page.evaluate(() => window.pellagos.game.burn("burning", 3));
+
+    const [burnt] = await page.evaluate(() => window.pellagos.game.host.burnt);
+    const ends = stagesOf(burnt.at);
+    // (The town's merged meshes now, to tell when its blocks are built again)
+    const meshes = () => page.evaluate(() => window.pellagos.game.town.object.children.filter(({ isMesh }) => isMesh).map(({ uuid }) => uuid));
+    const stageNow = () => page.evaluate((place) => [...(window.pellagos.game.burntNow.get(place) ?? new Map()).values()], burnt.place);
+    // (The world's clock moved on to `at`, ms of play)
+    const goTo = (at) =>
+        page.evaluate((target) => {
+            const { war } = window.pellagos.game.host;
+
+            war.turn += Math.ceil((target - (war.turn * 60000 + war.clock)) / 60000);
+        }, at);
+
+    expect(burnt.pieces).toHaveLength(3);
+    expect(await playUntil(page, () => /^Fire by the/.test(document.querySelector("#banner").textContent), { seconds: 2 })).toBe(true);
+    expect(await page.locator("#banner").textContent()).toMatch(/^Fire by the [a-z-]+ road! Three houses burning! Every hand to the buckets!/);
+
+    // Burning: its blocks built again, great fires in them lighting what's round them, and heard
+    expect(await playUntil(page, () => window.pellagos.game.town.lights.filter(({ kind }) => kind === "blaze").length >= 3, { seconds: 20 })).toBe(true);
+    expect(await stageNow()).toEqual(["burning", "burning", "burning"]);
+    expect(await playUntil(page, () => window.heard.at(-1)?.beds.campfireLoop > 0, { seconds: 5 })).toBe(true);
+
+    // The next day, burnt out: its fires out, its blocks built again
+    const before = await meshes();
+
+    await goTo(ends.burning + 1000);
+    expect(await playUntil(page, () => !window.pellagos.game.town.lights.some(({ kind }) => kind === "blaze"), { seconds: 20 })).toBe(true);
+    expect(await stageNow()).toEqual(["burnt", "burnt", "burnt"]);
+    expect((await meshes()).some((uuid) => !before.includes(uuid))).toBe(true);
+
+    // Framed, then roofed: built again as each, and the carpenters heard at it by day
+    for (const [stage, at] of [["framed", ends.burnt + 1000], ["roofed", ends.framed + 1000]]) {
+        await page.evaluate(([asked, was]) => Object.assign(window, { asked, was }), [stage, await meshes()]);
+        await goTo(at);
+        expect(await playUntil(page, () => [...window.pellagos.game.burntNow.values()].some((houses) => [...houses.values()].includes(window.asked)), { seconds: 5 })).toBe(true);
+        expect(await playUntil(page, () => window.pellagos.game.town.object.children.some(({ isMesh, uuid }) => isMesh && !window.was.includes(uuid)), { seconds: 20 })).toBe(true);
+        expect(await stageNow()).toEqual([stage, stage, stage]);
+    }
+
+    expect(await playUntil(page, () => window.heard.at(-1)?.calls.distantHammer?.volume > 0, { seconds: 5 })).toBe(true);
+
+    // Whole again by the evening: let go of, the town told
+    await goTo(ends.roofed + 1000);
+    expect(await playUntil(page, () => !window.pellagos.game.host.burnt.length && /stand whole again/.test(document.querySelector("#banner").textContent), { seconds: 5 })).toBe(true);
+    expect(await page.locator("#banner").textContent()).toMatch(/^The houses the Behemoth burnt in .+ stand whole again\./);
+    expect(await stageNow()).toEqual([]);
 });
 
 test("a town's siege engines drawn from their models: rolled on their wheels; the catapult's arm flung up and over, its pot of burning pitch flying from its bucket, bursting where it lands; the ballista's bolt loosed, gone from it till another's laid in; set alight and burnt through, each lies wrecked", async ({ page }) => {

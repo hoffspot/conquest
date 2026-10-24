@@ -38,6 +38,7 @@ import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
 import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
 import { FULL_MOON, moonRoad, nightOf, phaseOfNight, RING, ringNear, ringOf, TRIAL, trialOf } from "./rings.js";
 import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, ENGINES, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
+import { burntCount, burntIn, housesToBurn, wholeAt } from "./burnt.js";
 import { waysOut, wayToward } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
 import { compass } from "./ways.js";
@@ -583,7 +584,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 38;
+export const SNAPSHOT_VERSION = 39;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -654,6 +655,8 @@ export const SNAPSHOT_STEPS = Object.freeze({
         invasions: (snapshot.invasions ?? []).map((invasion) => (invasion.beast === undefined ? { charged: null, ...invasion } : invasion)),
         battle: { ...snapshot.battle, formations: Object.fromEntries(Object.entries(snapshot.battle.formations ?? {}).map(([id, formation]) => [id, { charge: false, ...formation }])) },
     }),
+    // 39: the houses the Behemoth of the Rift has burnt (core/burnt.js, Host #burn: none yet)
+    38: (snapshot) => ({ ...snapshot, version: 39, burnt: [] }),
 });
 
 /**
@@ -931,6 +934,13 @@ export class Host {
          */
         this.invaded = 0;
         this.invasions = [];
+
+        /**
+         * The houses burnt by the Behemoth of the Rift in the towns it was turned back from, till
+         * they stand whole again (#burn, #burntOn: core/burnt.js): [{ place (the town's id), name,
+         * pieces (its layout's pieces' indices), at (when it fell: ms of play, the war's clock) }].
+         */
+        this.burnt = [];
 
         /**
          * The works whose guards are out near a player, or the brigands holding them (by the
@@ -1797,6 +1807,10 @@ export class Host {
             case "rift":
                 // (The Behemoth of the Rift before them, coming at them: the debug overlay's)
                 return this.debugs(playerId) ? this.#riftBefore(actor) : refuse("command");
+            case "burn":
+                // (Houses near them burnt as the Behemoth burns them, `ago` ms of play ago: the
+                // debug overlay's)
+                return this.debugs(playerId) ? this.#burnNow(player, actor, command) : refuse("command");
             case "budget":
                 // (How big an invasion their device can draw, as their game's measured it: core/
                 // invasions.js sizeFor)
@@ -2500,6 +2514,7 @@ export class Host {
             fields: structuredClone(this.fields),
             invaded: this.invaded,
             invasions: structuredClone(this.invasions),
+            burnt: structuredClone(this.burnt),
             fallen: structuredClone(this.fallen),
             players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, inRing: player.inRing ?? null, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), budget: player.budget ?? null, ...this.characterOf(player), followers: undefined })),
             done: structuredClone(this.done),
@@ -2692,6 +2707,7 @@ export class Host {
         host.fields = structuredClone(snapshot.fields ?? []);
         host.invaded = snapshot.invaded ?? 0;
         host.invasions = structuredClone(snapshot.invasions ?? []);
+        host.burnt = structuredClone(snapshot.burnt ?? []);
         host.fallen = structuredClone(snapshot.fallen ?? []);
         host.done = structuredClone(snapshot.done);
 
@@ -2748,6 +2764,7 @@ export class Host {
 
         mix(this.war?.turn ?? 0);
         mix(Math.round(this.war?.clock ?? 0));
+        mix(this.burnt.length);
         mix(this.players.size);
         mix(this.ground.size);
 
@@ -4262,11 +4279,13 @@ export class Host {
         const home = id === this.world.start?.id;
         const settlement = !set && !home ? town.settlements.of(this.#placeOf(id)) : null;
         const outside = set?.entrance?.outside;
+        // (No one's home or trade at a house the Behemoth burnt: core/burnt.js)
+        const burnt = new Set(burntIn(this.burnt, id, elapsedOf(this.war)).keys());
         const errands = set
             ? wardErrandsOf({ courts: [...set.courts].map((k) => [k % WORLD_SIZE, Math.floor(k / WORLD_SIZE)]), heart: set.heart, keep: outside ? [outside[0] + 0.5, outside[1] + 0.5] : null }, free)
             : home
-              ? errandsOf(this.world.town, this.world.origin, free)
-              : errandsOf(settlement.town, settlement.at, free);
+              ? errandsOf(this.world.town, this.world.origin, free, { burnt })
+              : errandsOf(settlement.town, settlement.at, free, { burnt });
         const players = [...this.players.keys()].map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead);
         const unseen = (square) => !players.some((actor) => this.battle.canSee(actor, { map: "town", square }));
         const folk = townsfolkOf({ place: id, kind, people, name, errands, count: countOut(kind, torchesLit(elapsedOf(this.war))), seed: this.world.seed ?? 1, start: unseen });
@@ -4806,6 +4825,10 @@ export class Host {
             this.#invasionsOn();
         }
 
+        if (this.burnt.length) {
+            this.#burntOn();
+        }
+
         const now = this.battle.time;
         const passed = (Math.floor(now / INVASION.tick) - Math.floor((now - ms) / INVASION.tick)) * INVASION.tick;
 
@@ -4890,6 +4913,92 @@ export class Host {
         this.#invade(town, { band });
 
         return OK;
+    }
+
+    // --- Houses burnt by the Behemoth of the Rift (core/burnt.js) ---
+
+    // A town's layout and where it's set down (its corner, [x, y] metres in the world): the start
+    // town's, the world's own; or a settlement's, laid out (core/settlements.js); or null
+    #layoutOf(id) {
+        if (id === this.world.start?.id && this.world.town) {
+            const origin = this.world.origin ?? 0;
+
+            return { pieces: this.world.town.pieces, at: Array.isArray(origin) ? origin : [origin, origin] };
+        }
+
+        const place = this.#placeOf(id);
+        const settlement = place ? this.world.maps?.town?.settlements?.of(place) : null;
+
+        return settlement ? { pieces: settlement.town.pieces, at: settlement.at } : null;
+    }
+
+    // A town the Behemoth of the Rift's turned back from, not held: the houses nearest where it
+    // stood set burning, the more of them the less it was wounded (burntCount), none burning
+    // already; told as the "burnt" event ("alight")
+    #burn(invasion) {
+        const beast = this.battle.actor(invasion.beast);
+        const [mx, my] = invasion.middle;
+        // (Where it stood, or the way it came if it's gone; no further out than where it comes to,
+        // beyond the town's edge: BEHEMOTH.stops)
+        const [sx, sy] = beast ? [beast.x, beast.y] : invasion.from;
+        const out = hypot(sx - mx, sy - my) || 1;
+        const reach = Math.min(out, invasion.edge + BEHEMOTH.stops);
+        const stand = [mx + ((sx - mx) / out) * reach, my + ((sy - my) / out) * reach];
+
+        this.#burnAt(invasion, invasion.way, stand, burntCount(beast && beast.maxHp > 0 ? beast.hp / beast.maxHp : 1), elapsedOf(this.war));
+    }
+
+    // The `count` houses of a town (`town`: its id, as `place`, or `id`; its name, middle and
+    // edge) nearest `stand` set burning `at` (ms of play: when it fell), but for those burnt there
+    // already, kept till they stand whole again (#burntOn); and told, with where the town is
+    #burnAt(town, way, stand, count, at) {
+        const place = town.place ?? town.id;
+        const layout = this.#layoutOf(place);
+
+        if (!layout) {
+            return [];
+        }
+
+        const pieces = housesToBurn(layout.pieces, layout.at, stand, count, new Set(burntIn(this.burnt, place, elapsedOf(this.war)).keys()));
+
+        if (pieces.length) {
+            this.burnt.push({ place, name: town.name, pieces, at });
+            this.#event("burnt", { change: "alight", place, name: town.name, middle: [...town.middle], edge: town.edge, way, pieces: [...pieces], at });
+        }
+
+        return pieces;
+    }
+
+    // The houses the Behemoth burnt let go of once they stand whole again (core/burnt.js
+    // wholeAt): told as the "burnt" event ("rebuilt")
+    #burntOn() {
+        const now = elapsedOf(this.war);
+
+        for (const burning of [...this.burnt]) {
+            if (now >= wholeAt(burning.at)) {
+                const town = this.#peopledAt(burning.place);
+
+                this.burnt.splice(this.burnt.indexOf(burning), 1);
+                this.#event("burnt", { change: "rebuilt", place: burning.place, name: burning.name, middle: town ? [...town.middle] : null, edge: town?.edge ?? 0, pieces: [...burning.pieces] });
+            }
+        }
+    }
+
+    // Houses near a player in the town they're in burnt (the debug overlay's): `count` of them (1
+    // to 10; or as many as the Behemoth burns unhurt), as if the town had fallen `ago` ms of play
+    // ago (0 to four days), so each stage of their burning and building again can be seen;
+    // refused out of a town or city
+    #burnNow(player, actor, { count = null, ago = 0 }) {
+        const town = this.#townOf(player);
+        const many = count ?? burntCount(1);
+
+        if (!town || !Number.isInteger(many) || many < 1 || many > 10 || !Number.isFinite(ago) || ago < 0 || ago > 4 * DAY.length) {
+            return refuse("command");
+        }
+
+        const now = elapsedOf(this.war);
+
+        return this.#burnAt(town, compass(town.middle, [actor.x, actor.y]), [actor.x, actor.y], many, now - ago).length ? OK : refuse("command");
     }
 
     // Whether a place is by the sea (within COAST of the world plan's cells of it), for the bands
@@ -5249,6 +5358,11 @@ export class Host {
                 this.battle.formation(invasion.formations.defenders, { to: null, advance: false });
                 this.#event("invasion", { change: invasion.held ? "repelled" : "fell", id: invasion.id, place: invasion.place, name: invasion.name, band: invasion.band, people: invasion.people });
                 this.#thank(invasion);
+
+                // (Turned back from by the Behemoth, the houses nearest it burning: #burn)
+                if (behemoth && !invasion.held) {
+                    this.#burn(invasion);
+                }
             }
 
             // (Those who've got away: gone)

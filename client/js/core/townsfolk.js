@@ -78,9 +78,11 @@ const facingTo = ([x, y], [tx, ty]) => atan2(tx - x, ty - y);
  * null). By kind: the market (its middle and round it), its stalls (in front of each), its well
  * (round it), its tradesmen's houses and the others (in front of each: `trade`, `home`), its
  * church's, tavern's, guild's and hall's doors (in front of their lots), its ways out (a little in
- * from each: the fields beyond) and its yards; each [{ square, facing }], each square once.
+ * from each: the fields beyond) and its yards; each [{ square, facing }], each square once. None
+ * to the houses in `burnt` (their layout's indices: core/burnt.js), no one's home or trade
+ * there till they're built again, and no door to shelter at.
  */
-export function errandsOf(layout, [ox, oy], free) {
+export function errandsOf(layout, [ox, oy], free, { burnt = null } = {}) {
     const errands = Object.fromEntries(Object.keys(LINGER).map((kind) => [kind, []]));
     const seen = new Set();
     const add = (kind, [x, y], looking) => {
@@ -112,7 +114,7 @@ export function errandsOf(layout, [ox, oy], free) {
         add("market", at, centre);
     }
 
-    for (const piece of layout.pieces) {
+    for (const [index, piece] of layout.pieces.entries()) {
         if (piece.kind === "prop" && piece.name === "tent") {
             // (A stall's open front, the way it faces: stood at, looking in at its wares)
             add("stall", before(piece, FRONT / 2), [piece.x, piece.y]);
@@ -122,7 +124,7 @@ export function errandsOf(layout, [ox, oy], free) {
 
                 add("well", [piece.x + cos(angle) * ROUND_WELL, piece.y + sin(angle) * ROUND_WELL], [piece.x, piece.y]);
             }
-        } else if (piece.kind === "house" && !piece.back) {
+        } else if (piece.kind === "house" && !piece.back && !burnt?.has(index)) {
             add(piece.use ? "trade" : "home", before(piece, FRONT), [piece.x, piece.y]);
         } else if (piece.kind === "landmark" && DOORS.has(piece.name)) {
             add(piece.name === "church" ? "church" : piece.name, before(piece, FRONT), [piece.x, piece.y]);

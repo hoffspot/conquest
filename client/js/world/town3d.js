@@ -29,6 +29,7 @@ import { house } from "./art/kits/house.js";
 import { landmark } from "./art/kits/landmarks.js";
 import { neutral } from "./art/kits/neutral.js";
 import { builderFor } from "./art/peoples/index.js";
+import { burntOf } from "./art/kits/burnt.js";
 import { prop } from "./art/kits/props.js";
 import { tree } from "./art/kits/town.js";
 import { lieOf, yard } from "./art/kits/yards.js";
@@ -51,10 +52,21 @@ const catalog = new Map(pieceCatalog().map((piece) => [piece.key, piece]));
 
 /**
  * What builds a piece: its people's kit if it's theirs (peoples/index.js), the castle's pieces
- * left to ruin if it's a ruined castle's (kits/castle.js RUINED), or the builder for its kind.
+ * left to ruin if it's a ruined castle's (kits/castle.js RUINED), or the builder for its kind;
+ * a house burnt by the Behemoth of the Rift made over as it is now (`burnt`: kits/burnt.js).
  */
 export function builderOf(piece) {
-    return builderFor(piece) ?? (piece.ruined ? RUINED[piece.kind] : null) ?? BUILDERS[piece.kind];
+    const build = builderFor(piece) ?? (piece.ruined ? RUINED[piece.kind] : null) ?? BUILDERS[piece.kind];
+
+    if (!build || !piece.burnt) {
+        return build;
+    }
+
+    return (one) => {
+        const built = build(one);
+
+        return built instanceof Promise ? built.then((object) => burntOf(object, one)) : burntOf(built, one);
+    };
 }
 
 /**
@@ -99,13 +111,17 @@ export function heightMap([x0, z0, width, height]) {
  * heights: the height of whatever stands on each of its squares that could hide the player (what's
  * built and the trees, not the props: heightMap's), buildings: the same for what's built alone
  * (BUILT), and props: the same for the props (a well's roof, a stall, a cart: what the battle cam
- * looks past too, game.js) }. The town's corner is at `world.origin` ([x, z] or
- * a number for both), and its squares are `world.stamp`'s (where it's set in the world: [x, z]
- * `at`, its width and height) or the world's own. `onProgress(done, total)` hears as each piece
- * is built; `landAt(x, z)` says what land (BIOMES id) a tree stands in, its leaves coloured as
- * the land colours them (canopy.js).
+ * looks past too, game.js), lights (its torches and lanterns: lights.js lightsOf's), and
+ * rebuild(indices) (the blocks those of its layout's pieces are in built again, as they are now:
+ * its houses burnt by the Behemoth of the Rift, or further on being built again; a promise) }.
+ * The town's corner is at `world.origin` ([x, z] or a number for both), and its squares are
+ * `world.stamp`'s (where it's set in the world: [x, z] `at`, its width and height) or the world's
+ * own. `onProgress(done, total)` hears as each piece is built; `landAt(x, z)` says what land
+ * (BIOMES id) a tree stands in, its leaves coloured as the land colours them (canopy.js);
+ * `burntOf(index)` how far on a house of its layout's is from being burnt (core/burnt.js stageOf's),
+ * or null.
  */
-export async function buildTown(world, { onProgress = () => {}, groundAt = () => 0, landAt = () => "meadow" } = {}) {
+export async function buildTown(world, { onProgress = () => {}, groundAt = () => 0, landAt = () => "meadow", burntOf = () => null } = {}) {
     const art = new THREE.Group();
     const [ox, oz] = Array.isArray(world.origin) ? world.origin : [world.origin, world.origin];
     // (The yards behind its houses too, standing on the ground as it lies under each: kits/yards.js)
@@ -119,22 +135,14 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
 
     art.scale.setScalar(PIXEL);
 
-    // Let the page update (and show the progress) every so often
-    let lastYield = performance.now();
-    const breathe = async () => {
-        if (performance.now() - lastYield > 30) {
-            await new Promise((resolve) => setTimeout(resolve, 0));
-            lastYield = performance.now();
-        }
-    };
-
     // The trees, planted together at the end (trees.js: merged a tile at a time), each turned
     // and sized a little differently: in the town, in the fields, and in the forest round them
     const planted = [];
     const random = createRandom(world.seed * 13 + 5);
     const plant = (x, z, variant, size) => planted.push({ x, z, variant, size: size * random.range(0.9, 1.1), turn: random.next() * Math.PI * 2 });
+    const pieces = [...world.town.pieces.map((piece, index) => ({ piece, index })), ...yards.map((piece) => ({ piece, index: null }))];
 
-    for (const piece of [...world.town.pieces, ...yards]) {
+    for (const { piece, index } of pieces) {
         // (A layout's piece says what it is; the art catalogue's pieces are its sizes)
         const spec = piece.kind ? piece : catalog.get(piece.key);
 
@@ -145,46 +153,21 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
             continue;
         }
 
-        // Everything else is built facing south (by its people's kit, if it's theirs; left to ruin,
-        // if it's a ruined castle's), and turned to face its street (or the market) about its middle
-        const build = builderOf(spec);
+        const object = await townPiece(piece, index, { origin: [ox, oz], groundAt, burntOf });
 
-        if (!build) {
-            onProgress(++done, total);
-            continue;
+        if (object) {
+            // (Trees a piece grows round itself, as the elves build into great trees: planted with
+            // the town's, where they stand as the piece is turned)
+            for (const { x, z, variant, size = 1 } of object.children[0].userData?.trees ?? []) {
+                const [lx, lz] = [(x - piece.w * 10) * PIXEL, (z - piece.h * 10) * PIXEL];
+                const [c, s] = [Math.cos(piece.facing), Math.sin(piece.facing)];
+
+                plant(ox + piece.x + lx * c + lz * s, oz + piece.y - lx * s + lz * c, variant, size);
+            }
+
+            art.add(object);
         }
 
-        // (A piece that fails to build is left out rather than keeping the town from being drawn)
-        let built;
-
-        try {
-            built = await build(spec);
-        } catch (error) {
-            console.warn(`Left out ${spec.key ?? spec.kind}: it failed to build.`, error);
-            onProgress(++done, total);
-            continue;
-        }
-
-        const object = new THREE.Group();
-
-        // (Trees a piece grows round itself, as the elves build into great trees: planted with
-        // the town's, where they stand as the piece is turned)
-        for (const { x, z, variant, size = 1 } of built.userData?.trees ?? []) {
-            const [lx, lz] = [(x - piece.w * 10) * PIXEL, (z - piece.h * 10) * PIXEL];
-            const [c, s] = [Math.cos(piece.facing), Math.sin(piece.facing)];
-
-            plant(ox + piece.x + lx * c + lz * s, oz + piece.y - lx * s + lz * c, variant, size);
-        }
-
-        const y = grounded(built, piece, groundAt, [ox, oz]);
-
-        built.position.set(-piece.w * 10, 0, -piece.h * 10);
-        object.add(built);
-        object.rotation.y = piece.facing;
-        object.position.set((ox + piece.x) / PIXEL, y / PIXEL, (oz + piece.y) / PIXEL);
-        object.userData.built = BUILT.has(spec.kind);
-        object.userData.piece = piece;
-        art.add(object);
         onProgress(++done, total);
         await breathe();
     }
@@ -203,13 +186,6 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
     );
 
     art.updateMatrixWorld(true);
-
-    // (Smoke rising from its chimneys: smoke.js; its banners and flags in the breeze: cloth.js;
-    // its torches and lanterns, lit at night: lights.js)
-    const smoke = smokeMesh(chimneysOf(art));
-    const cloth = clothMesh(clothOf(art));
-    const lights = lightsOf(art);
-    const lit = lightsMesh(lights);
 
     // How high everything stands on each square
     const stand = (box, built, maps = built ? [heights, buildings] : [heights]) => {
@@ -252,56 +228,178 @@ export async function buildTown(world, { onProgress = () => {}, groundAt = () =>
         stand(new THREE.Box3().setFromObject(object), false, [props]);
     }
 
-    // Merged a block at a time (by where each piece's middle is), into the art's one material
+    // Merged a block at a time (by where each piece's middle is), into the art's one material;
+    // each block's pieces, and its chimneys' tops, banners, lights and windows, kept with it (to
+    // build it again: rebuild)
     const object = new THREE.Group();
     const blocks = new Map();
+    const blockOf = new Map();
 
     for (const child of [...art.children]) {
         const { x, y } = child.userData.piece;
         const key = `${Math.floor((ox + x) / TILE)},${Math.floor((oz + y) / TILE)}`;
 
         if (!blocks.has(key)) {
-            const block = new THREE.Group();
-
-            block.scale.setScalar(PIXEL);
-            blocks.set(key, block);
+            blocks.set(key, { pieces: [], meshes: [], smoke: [], cloth: [], lights: [], panes: [] });
         }
 
-        blocks.get(key).add(child);
+        blocks.get(key).pieces.push({ piece: child.userData.piece, index: child.userData.index });
+
+        if (child.userData.index !== null) {
+            blockOf.set(child.userData.index, key);
+        }
     }
 
-    const panes = [];
-
     for (const [key, block] of blocks) {
-        block.updateMatrixWorld(true);
+        const group = new THREE.Group();
 
-        const parts = partsOf(block, { atlas: true });
-        const merged = joined(parts);
-
-        panes.push(...parts.flatMap((part) => part.panes));
-
-        for (const mesh of [...merged.children]) {
-            mesh.name = `${mesh.name} ${key}`;
-            object.add(mesh);
-        }
+        group.scale.setScalar(PIXEL);
+        group.add(...art.children.filter(({ userData }) => block.pieces.some(({ piece }) => piece === userData.piece)));
+        mergeBlock(block, group, key, object);
     }
 
     object.name = "town";
 
-    for (const mesh of [...object.children, ...trees.object.children.filter(({ userData }) => !userData.onGround)]) {
+    for (const mesh of trees.object.children.filter(({ userData }) => !userData.onGround)) {
         cutAway(mesh.material);
     }
 
     object.add(trees.object);
 
-    // (And the light its lit windows throw on the ground at night: windowpools.js)
-    for (const drawn of [smoke, cloth, lit, poolsMesh(panes, groundAt)]) {
-        if (drawn) {
-            object.add(drawn);
+    const town = { object, heights, buildings, props, lights: [], extras: [] };
+
+    // (Smoke rising from its chimneys: smoke.js; its banners and flags in the breeze: cloth.js;
+    // its torches and lanterns, lit at night: lights.js; and the light its lit windows throw on
+    // the ground at night: windowpools.js. All the town's in one mesh of each)
+    const whole = () => {
+        for (const made of town.extras) {
+            made.removeFromParent();
+            made.traverse((node) => node.geometry?.dispose());
         }
+
+        const all = (what) => [...blocks.values()].flatMap((block) => block[what]);
+
+        town.lights = all("lights");
+        town.extras = [smokeMesh(all("smoke")), clothMesh(all("cloth")), lightsMesh(town.lights), poolsMesh(all("panes"), groundAt)].filter(Boolean);
+
+        for (const made of town.extras) {
+            object.add(made);
+        }
+    };
+
+    whole();
+
+    // (Built again, a block at a time, those blocks' pieces built as they are now; what was drawn
+    // of each kept till it's built, one after another)
+    let rebuilding = Promise.resolve();
+
+    town.rebuild = (indices) => {
+        const keys = new Set([...indices].map((index) => blockOf.get(index)).filter(Boolean));
+
+        rebuilding = rebuilding.then(async () => {
+            for (const key of keys) {
+                const block = blocks.get(key);
+                const group = new THREE.Group();
+
+                group.scale.setScalar(PIXEL);
+
+                for (const { piece, index } of block.pieces) {
+                    const made = await townPiece(piece, index, { origin: [ox, oz], groundAt, burntOf });
+
+                    if (made) {
+                        group.add(made);
+                    }
+
+                    await breathe();
+                }
+
+                for (const mesh of block.meshes) {
+                    mesh.removeFromParent();
+                    mesh.geometry.dispose();
+                }
+
+                mergeBlock(block, group, key, object);
+            }
+
+            if (keys.size) {
+                whole();
+            }
+        });
+
+        return rebuilding;
+    };
+
+    return town;
+}
+
+// Let the page update (and show the progress) every so often
+let lastYield = 0;
+
+async function breathe() {
+    if (performance.now() - lastYield > 30) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        lastYield = performance.now();
+    }
+}
+
+// A piece of the town built (by its people's kit, if it's theirs; left to ruin, if it's a ruined
+// castle's; as it is now, if it's a house the Behemoth burnt: builderOf), facing south, then
+// turned to face its street (or the market) about its middle, standing on the ground (metres: the
+// town's corner at `origin`), in world pixels; or null if nothing builds it, or it fails to build
+// (the town drawn without it rather than not at all)
+async function townPiece(piece, index, { origin: [ox, oz], groundAt, burntOf }) {
+    const spec = piece.kind ? piece : catalog.get(piece.key);
+    const burnt = spec.kind === "house" && index !== null ? burntOf(index) : null;
+    const build = builderOf(burnt ? { ...spec, burnt } : spec);
+
+    if (!build) {
+        return null;
     }
 
-    return { object, heights, buildings, props, lights };
+    let built;
+
+    try {
+        built = await build(burnt ? { ...spec, burnt } : spec);
+    } catch (error) {
+        console.warn(`Left out ${spec.key ?? spec.kind}: it failed to build.`, error);
+
+        return null;
+    }
+
+    const object = new THREE.Group();
+    const y = grounded(built, piece, groundAt, [ox, oz]);
+
+    built.position.set(-piece.w * 10, 0, -piece.h * 10);
+    object.add(built);
+    object.rotation.y = piece.facing;
+    object.position.set((ox + piece.x) / PIXEL, y / PIXEL, (oz + piece.y) / PIXEL);
+    object.userData.built = BUILT.has(spec.kind);
+    object.userData.piece = piece;
+    object.userData.index = index;
+
+    return object;
+}
+
+// A block of the town's pieces (`group`: placed, in world pixels) merged into the art's one
+// material and added to the town's `object`, what it's merged into kept with it (`block`: its
+// meshes; its chimneys' tops, banners, lights and windows)
+function mergeBlock(block, group, key, object) {
+    group.updateMatrixWorld(true);
+
+    const parts = partsOf(group, { atlas: true });
+    const merged = joined(parts);
+
+    block.smoke = chimneysOf(group);
+    block.cloth = clothOf(group);
+    block.lights = lightsOf(group);
+    block.panes = parts.flatMap((part) => part.panes);
+    block.meshes = [...merged.children];
+
+    for (const mesh of block.meshes) {
+        mesh.name = `${mesh.name} ${key}`;
+        cutAway(mesh.material);
+        object.add(mesh);
+    }
 }
 
 /**
