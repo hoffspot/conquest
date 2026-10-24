@@ -38,6 +38,7 @@ import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { aloftShare, BOMBS, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
+import { FINDS } from "../core/director.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { homeWords, signOf, signsNear, TRAILS, trailsNear } from "../core/tracks.js";
@@ -113,6 +114,7 @@ import { ContactShadows } from "../world/contacts.js";
 import { footAt, lookPrint, printOf, TAKES, Tracks } from "../world/tracks3d.js";
 import { TrailSigns } from "../world/signs3d.js";
 import { DEN_LOOK, DenProps } from "../world/dens3d.js";
+import { FIND_LOOK, FindProps } from "../world/finds3d.js";
 import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
 import { Ailments3D } from "../world/ailments3d.js";
@@ -784,8 +786,8 @@ const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, thanks: 14 });
 // How many of the places the player's heard tell of and found since the journal keeps (the last)
 const HEARD_FOUND = 5;
 
-// What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial"]);
+/** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1299,6 +1301,8 @@ export class Game {
         this.pingedAt = -Infinity;
         /** The adventurers' caches the player's seen (their ids: core/caches.js), marked on the maps. */
         this.cachesSeen = new Set();
+        /** The wilds director's peaceful finds the player's seen (their ids: core/director.js), marked on the maps. */
+        this.findsSeen = new Set();
         // (The shrines come near, told whose each is: #nearShrine)
         this.shrinesNear = new Set();
         this.talking = null;
@@ -1749,6 +1753,8 @@ export class Game {
         this.denProps = new DenProps(view.scene);
         // (And the rings of standing stones' middles, aglow by night while they're awake: #moonlit)
         this.moonGates = new MoonGates(view.scene);
+        // (The wilds director's peaceful finds near the player: #findsNear)
+        this.findProps = new FindProps(view.scene);
         this.ailments = new Ailments3D(this.effects.group);
         // (Its fire, flashes and fireballs lighting what's round them as the world's fires do, each
         // a light of its own: lightsNow, #lightNear; not lent the view's lamps)
@@ -2481,6 +2487,7 @@ export class Game {
         this.trailSigns?.dispose();
         this.denProps?.dispose();
         this.moonGates?.dispose();
+        this.findProps?.dispose();
         this.navBaker?.dispose();
         this.navigationView?.dispose();
 
@@ -3317,6 +3324,7 @@ export class Game {
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawDrops();
         this.#spyCaches();
+        this.#spyFinds();
         this.#drawMinimap(target);
 
         if (this.squares?.object.visible) {
@@ -3349,9 +3357,11 @@ export class Game {
         // and the dens near them)
         this.#trailing();
         this.#denning();
-        // (And a shrine come near: whose it is; and the rings of standing stones aglow by night)
+        // (And a shrine come near: whose it is; the rings of standing stones aglow by night; and
+        // the wilds director's finds near them)
         this.#nearShrine();
         this.#moonlit();
+        this.#findsNear();
 
         // (The party's pings, in the world: #pinging)
         this.#pinging();
@@ -4727,7 +4737,7 @@ export class Game {
             // on ahead of them, never where they're going)
             destination: actor.order?.type === "move" && !this.steering?.steering ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
-            icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.#trackedMarks(this.denIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
+            icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.#trackedMarks(this.denIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons(), ...this.findIcons()] : [],
             // (The circles to search for the treasures they're hunting: #treasureCircles)
             searches: this.mapId === "town" ? this.treasureCircles() : [],
             // (The party's pings: pingView; and the player's markers: markerView)
@@ -4751,6 +4761,76 @@ export class Game {
                 this.hud.message(`An adventurer's cache, and ${CACHE_BANDS[cache.band]?.name ?? "brigands"} keeping it. Put them all down to open it.`, 4);
             }
         }
+    }
+
+    // A note found on a fallen adventurer's remains (core/director.js noteOf: of a place round about
+    // the player hasn't found, `id`), heard tell of as a crier tells it, by the settlement nearest
+    // the place (memory.heard: { id, town, turn, note }): written in the journal, its circle on the
+    // map, said with a quill's scratch
+    #noteFound(id) {
+        const plan = this.world.plan;
+        const place = plan ? rumouredBy(plan, id) : null;
+
+        if (!place || (this.memory.heard ?? []).some((one) => one.id === id)) {
+            return;
+        }
+
+        const far = ({ at }) => Math.hypot(at[0] - place.at[0], at[1] - place.at[1]);
+        const town = [...plan.places].sort((a, b) => far(a) - far(b))[0];
+
+        this.memory.heard = [...(this.memory.heard ?? []), { id, town: town.id, turn: this.host.war?.turn ?? 0, note: true }];
+        this.#keepTalks();
+        this.hud.message(`In their hand, a note: it tells of ${this.#placeCalled(id) ?? "somewhere"} near ${town.name}. It's in your journal, and on your map.`, 4.5);
+        this.sound?.play("quill", { delay: 0.6 });
+    }
+
+    // A peaceful find the wilds director's dealt (core/director.js FINDS) come within sight of the
+    // player for the first time: said, and marked on their maps from then on
+    #spyFinds() {
+        const me = this.battle.actor(this.me);
+
+        if (!me || me.dead || me.map !== "town" || !this.host?.finds?.size) {
+            return;
+        }
+
+        for (const find of this.host.finds.values()) {
+            if (!this.findsSeen.has(find.id) && Math.hypot(me.x - find.at[0], me.y - find.at[1]) <= FINDS.seen) {
+                this.findsSeen.add(find.id);
+
+                if (!find.searched) {
+                    this.hud.message(find.kind === "remains" ? "The remains of an adventurer who fell out here long ago. Search them: they may have left something." : "An old campsite: a ring of stones, the ashes long cold. A good place to make camp: safe from the wild, and you'd wake well rested.", 4);
+                }
+            }
+        }
+    }
+
+    // The peaceful finds within FIND_LOOK.seen of the player, out in the world, each drawn as its
+    // kind's is (finds3d.js), on the ground where it lies
+    #findsNear() {
+        const me = this.battle.actor(this.me);
+        const near = me && me.map === "town" && this.host?.finds?.size ? [...this.host.finds.values()].filter(({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y) <= FIND_LOOK.seen) : [];
+
+        if (near.length || this.findProps.shown.size) {
+            this.findProps.set(
+                near.map(({ id, kind, at: [x, z] }) => ({ id, kind, x, z })),
+                (x, z) => this.#groundOn("town", x, z),
+            );
+        }
+    }
+
+    /**
+     * The peaceful finds the player's seen (core/director.js FINDS), as icons for the maps: [{ id,
+     * kind ("remains" or "campsite"), x, z (metres), rim (grey once the remains are searched) }];
+     * gone with them.
+     */
+    findIcons() {
+        const finds = this.host?.finds;
+
+        if (!finds?.size || !this.findsSeen.size) {
+            return [];
+        }
+
+        return [...finds.values()].filter(({ id }) => this.findsSeen.has(id)).map(({ id, kind, at: [x, z], searched }) => ({ id, kind, x, z, rim: searched ? PLACE_RIMS.cleared : null }));
     }
 
     /**
@@ -5068,7 +5148,7 @@ export class Game {
         // camps and lairs they've tracked home, found or not: core/tracks.js)
         const known = (icon) => this.explored.knows(icon.id, icon.x, icon.z) || this.explored.tracked.has(icon.id);
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.#trackedMarks(this.denIcons().filter(known)), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.#trackedMarks(this.denIcons().filter(known)), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons(), ...this.findIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
     }
 
     /**
@@ -7602,9 +7682,15 @@ export class Game {
 
             this.sound?.play("coins");
         } else if (event.type === "spoils" && event.creature === "remains") {
-            // (One of a dungeon's fallen searched: what's left on them, a share for each player near)
-            this.hud.message("You search the remains of one who fell here: what was left on them is at your feet. Tap it to take it.", 3);
+            // (One of a dungeon's fallen searched, or a fallen adventurer's out in the wilds: what's
+            // left on them, a share for each player near; and now and then a note in their hand of
+            // somewhere near, heard tell of: #noteFound)
+            this.hud.message(event.find ? "You search the remains of the fallen adventurer: what was left on them is at your feet. Tap it to take it." : "You search the remains of one who fell here: what was left on them is at your feet. Tap it to take it.", 3);
             this.sound?.play("pickup");
+
+            if (event.note) {
+                this.#noteFound(event.note);
+            }
         } else if (event.type === "spoils" && event.creature === "chest") {
             // (The dead's, an old relic of theirs in it, named; an adventurer's cache: its lock
             // turned, and its lid up)
@@ -8732,7 +8818,7 @@ export class Game {
             const words = one.hell ? cultWord(cultNear(plan, town.at), town.name) : rumourWord(plan, place, town, one.shrine ? { from: "the shrine" } : {});
             const found = this.#foundOf(one);
             const circle = !one.hell || one.hell === "near" ? circleOf(place.id, place.at) : null;
-            const from = one.hell ? `Said in ${town.name}` : one.shrine ? `Shown at the shrine of ${PANTHEON[one.shrine]?.name ?? "a god"}` : `The crier in ${town.name}`;
+            const from = one.hell ? `Said in ${town.name}` : one.shrine ? `Shown at the shrine of ${PANTHEON[one.shrine]?.name ?? "a god"}` : one.note ? "A fallen adventurer's note" : `The crier in ${town.name}`;
 
             return [{ words, from, where: circle && at && !found ? `About ${bearing(at, circle.at)}` : "", found }];
         });
@@ -10575,6 +10661,13 @@ export class Game {
                 // (A cache let go, every player gone far from it: off the maps)
                 if (event.change === "gone") {
                     this.cachesSeen.delete(event.cache);
+                }
+
+                break;
+            case "find":
+                // (A peaceful find let go, every player gone far from it: off the maps)
+                if (event.change === "gone") {
+                    this.findsSeen.delete(event.find);
                 }
 
                 break;

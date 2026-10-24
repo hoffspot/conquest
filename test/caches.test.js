@@ -1,5 +1,6 @@
-// The adventurers' caches (client/js/core/caches.js; in play, core/host.js #caches): one put out
-// ahead of a player about every half a kilometre they cross the wilds, clear of the roads, the
+// The adventurers' caches (client/js/core/caches.js; in play, core/host.js #caches): one dealt
+// ahead of a player by the wilds director as they cross the wilds (core/director.js; here it deals
+// caches alone: `caching`), clear of the roads, the
 // settlements and the places worth finding; kept by a band of that land's brigands as strong as
 // the land or the player, their leader by it and the rest walking a round about it; locked till
 // the last of them falls, then a share for each player there; let go once every player's far
@@ -11,6 +12,7 @@ import { CACHE_BANDS, CACHE_GEAR, CACHE_LOOT, CACHE_MAKES, cacheBand, cacheClear
 import { CREATURES, tierAt, tierPower, TIERS } from "../client/js/core/creatures.js";
 import { hypot } from "../client/js/core/exact.js";
 import { GEAR } from "../client/js/core/gear.js";
+import { DIRECTOR } from "../client/js/core/director.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { CHEST_GOLD, placesOf } from "../client/js/core/places.js";
@@ -34,6 +36,9 @@ function run(host, ms) {
 
 const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
 
+// The wilds director dealing a player (by id) caches alone (core/director.js: its deck)
+const caching = (host, id) => host.travel.set(id, { at: [host.battle.actor(id).x, host.battle.actor(id).y], walked: 0, next: null, heading: null, deck: ["cache", "cache", "cache"] });
+
 // A world (seed 2) with its player in it, hard to kill, the orc gone
 function hosted() {
     const world = buildWorld({ seed: 2 });
@@ -46,6 +51,7 @@ function hosted() {
     const me = host.battle.actor(HOST_PLAYER);
 
     Object.assign(me, { hp: 1e6, maxHp: 1e6 });
+    caching(host, HOST_PLAYER);
 
     return { host, world, me };
 }
@@ -200,7 +206,7 @@ describe("the adventurers' caches in play (host.js #caches)", () => {
 
         // (Crossed as far as the least it could be, not further than the most and a step, and
         // counted afresh from there)
-        assert.ok(d >= CACHES.every[0] && d <= CACHES.every[1] + 200, `put out after ${d} m`);
+        assert.ok(d >= DIRECTOR.every[0] && d <= DIRECTOR.every[1] + 200, `put out after ${d} m`);
         assert.equal(travelled.walked, 0);
         assert.ok(off >= CACHES.ahead[0] - 2 && off <= CACHES.ahead[1] + 2, `${off} m ahead`);
         assert.ok((cache.at[0] - at[0]) * Math.SQRT1_2 + (cache.at[1] - at[1]) * Math.SQRT1_2 > 0, "before them");
@@ -351,11 +357,16 @@ describe("the adventurers' caches in play (host.js #caches)", () => {
         const guest = host.battle.actor("guest");
 
         Object.assign(guest, { hp: 1e6, maxHp: 1e6 });
+        caching(host, "guest");
 
-        // Side by side, two metres apart: one between them, both counted afresh
+        // Side by side, two metres apart: one between them, both counted afresh (the guest no
+        // further than the step they've just taken, as the squares fall: up to 6 m each way)
+        let step = 0;
+
         for (let d = 0; d <= 1200 && !host.caches.size; d += 8) {
             const at = [Math.floor(sx + Math.SQRT1_2 * d), Math.floor(sy + Math.SQRT1_2 * d)];
 
+            step = hypot(at[0] + 2.5 - guest.x, at[1] + 0.5 - guest.y);
             put(me, at);
             put(guest, [at[0] + 2, at[1]]);
             run(host, 500);
@@ -364,7 +375,7 @@ describe("the adventurers' caches in play (host.js #caches)", () => {
         assert.equal(host.caches.size, 1);
         assert.equal(host.travel.get(HOST_PLAYER).walked, 0);
         assert.equal(host.travel.get(HOST_PLAYER).next, null);
-        assert.ok(host.travel.get("guest").walked <= 8, `the guest's come ${host.travel.get("guest").walked} m since`);
+        assert.ok(host.travel.get("guest").walked <= step + 1e-9, `the guest's come ${host.travel.get("guest").walked} m since, a step of ${step}`);
         assert.equal(host.travel.get("guest").next, null);
 
         // Its band against the two of them (alike: a side of 2), more of them than for one and
@@ -387,6 +398,7 @@ describe("the adventurers' caches in play (host.js #caches)", () => {
         const other = apart.host.battle.actor("guest");
 
         Object.assign(other, { hp: 1e6, maxHp: 1e6 });
+        caching(apart.host, "guest");
 
         for (let d = 0; d <= 1200 && !apart.host.caches.size; d += 8) {
             const at = [Math.floor(sx + Math.SQRT1_2 * d), Math.floor(sy + Math.SQRT1_2 * d)];
