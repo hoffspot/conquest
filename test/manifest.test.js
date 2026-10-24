@@ -3,9 +3,9 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { describe, test } from "node:test";
-import { catalog, catalogSource, manifestGroups, manifestSource, releaseOf } from "../scripts/build-manifest.js";
+import { catalog, catalogSource, manifestGroups, manifestSource, pageSource, releaseOf, startFiles } from "../scripts/build-manifest.js";
 import { ASSETS } from "../client/js/app/assets.js";
-import { filesOf, releaseOf as releaseTold } from "../client/js/app/catalog.js";
+import { filesOf, mappedOf, releaseOf as releaseTold } from "../client/js/app/catalog.js";
 import { MANIFEST } from "../client/js/app/manifest.js";
 import { GAME_BODY } from "../client/js/characters/body.js";
 import { readHumanFiles } from "../scripts/lib/human-data.js";
@@ -53,14 +53,10 @@ describe("the loader's manifest (client/js/app/manifest.js)", () => {
         }
     });
 
-    test("gives the data (the body and its skin) the hash of its bytes, and the code and fonts, asked for by name, none", async () => {
-        for (const { id, files } of MANIFEST) {
+    test("gives every file the hash of its bytes: the code, the engine, the WebAssembly and the fonts as well as the data", async () => {
+        for (const { files } of MANIFEST) {
             for (const [path, , hash] of files) {
-                if (["body", "skin"].includes(id)) {
-                    assert.equal(hash, await hashOf(path), path);
-                } else {
-                    assert.equal(hash, undefined, path);
-                }
+                assert.equal(hash, await hashOf(path), path);
             }
         }
     });
@@ -77,6 +73,46 @@ describe("the loader's manifest (client/js/app/manifest.js)", () => {
                 assert.ok(!paths.has(path), path);
             }
         }
+    });
+});
+
+describe("the page's import map (client/index.html)", () => {
+    const page = readFile(new URL("../client/index.html", import.meta.url), "utf8");
+    const mapOf = async () => JSON.parse((await page).match(/<script type="importmap">([\s\S]*?)<\/script>/)[1]).imports;
+
+    test("is up to date: run npm run build:manifest after changing the game's code", async () => {
+        assert.equal(await page, await pageSource(await page));
+    });
+
+    test("names every module (those main.js loads itself, and the rest) at its address with the hash of its bytes, \"three\" and the addons by name too; and main.js's script", async () => {
+        const imports = await mapOf();
+        const modules = [...(await startFiles()).map(([path]) => path), "js/app/manifest.js", "js/app/assets.js", ...MANIFEST.flatMap(({ files }) => files.map(([path]) => path)).filter((path) => /\.m?js$/.test(path))];
+
+        for (const path of modules) {
+            assert.equal(imports[`./${path}`], `./${path}?h=${await hashOf(path)}`, path);
+        }
+
+        assert.equal(imports.three, `./vendor/three-r186/three.module.min.js?h=${await hashOf("vendor/three-r186/three.module.min.js")}`);
+        assert.equal(imports["three/addons/"], "./vendor/three-r186/addons/");
+        assert.equal(imports["three/addons/loaders/GLTFLoader.js"], `./vendor/three-r186/addons/loaders/GLTFLoader.js?h=${await hashOf("vendor/three-r186/addons/loaders/GLTFLoader.js")}`);
+        assert.match(await page, new RegExp(`<script type="module" src="js/main\\.js\\?h=${await hashOf("js/main.js")}"></script>`));
+    });
+
+    test("leaves version.js by name, as it's stamped with the commit after it's made (scripts/stamp-version.js)", async () => {
+        assert.equal((await mapOf())["./js/app/version.js"], undefined);
+        assert.ok((await startFiles()).every(([path]) => path !== "js/app/version.js"));
+    });
+
+    test("is read by the page for what it keeps: every address with a hash, in full, once each; none from one it can't read", async () => {
+        const base = "https://example.github.io/conquest/";
+        const mapped = mappedOf((await page).match(/<script type="importmap">([\s\S]*?)<\/script>/)[1], base);
+
+        assert.ok(mapped.includes(`${base}js/app/game.js?h=${await hashOf("js/app/game.js")}`));
+        assert.ok(mapped.every((url) => url.startsWith(base) && /\?h=[0-9a-f]{10}$/.test(url)));
+        assert.equal(new Set(mapped).size, mapped.length);
+        assert.ok(!mapped.some((url) => url.endsWith("/addons/")));
+        assert.deepEqual(mappedOf("not json", base), []);
+        assert.deepEqual(mappedOf(undefined, base), []);
     });
 });
 
@@ -139,20 +175,31 @@ describe("the catalog of models downloaded as they're wanted (client/js/app/asse
 
         changed.models.barrel.files[0].hash = "0123456789";
 
-        assert.equal(releaseOf(groups, await catalog()), ASSETS.release);
+        const started = await startFiles();
+        const restarted = structuredClone(started);
+
+        restarted[0][1] = "0123456789";
+
+        assert.equal(releaseOf(groups, await catalog(), started), ASSETS.release);
         assert.equal(releaseOf(groups, models), releaseOf(structuredClone(groups), structuredClone(models)));
         assert.notEqual(releaseOf(groups, models), ASSETS.release);
         assert.notEqual(releaseOf(groups, changed), releaseOf(groups, models));
+        // (Code main.js loads itself, changed: another release too)
+        assert.notEqual(releaseOf(groups, models, restarted), releaseOf(groups, models, started));
     });
 
-    test("is what a page tells the service worker it keeps: the manifest's data and the catalog's files, by hash", async () => {
+    test("is what a page tells the service worker it keeps: the manifest's files, the page's own modules and the catalog's files, by hash", async () => {
         const models = await catalog({ models: { barrel: { tier: "demand", files: [{ path: "models/kaykit/barrel.gltf" }] } } });
-        const told = releaseTold(MANIFEST, { release: "0123456789", ...models }, "https://example.github.io/conquest/");
+        const main = `https://example.github.io/conquest/js/main.js?h=${await hashOf("js/main.js")}`;
+        const game = `https://example.github.io/conquest/js/app/game.js?h=${await hashOf("js/app/game.js")}`;
+        const told = releaseTold(MANIFEST, { release: "0123456789", ...models }, "https://example.github.io/conquest/", [main, game]);
 
         assert.equal(told.kind, "release");
         assert.equal(told.release, "0123456789");
         assert.ok(told.boot.includes(`https://example.github.io/conquest/characters/${GAME_BODY}.bin?h=${await hashOf(`characters/${GAME_BODY}.bin`)}`));
-        assert.equal(told.boot.length, MANIFEST.flatMap(({ files }) => files).filter(([, , hash]) => hash).length);
+        assert.ok(told.boot.includes(main));
+        // (game.js is in the manifest as well: once)
+        assert.equal(told.boot.length, MANIFEST.flatMap(({ files }) => files).length + 1);
         assert.deepEqual(told.assets, [`https://example.github.io/conquest/models/kaykit/barrel.gltf?h=${await hashOf("models/kaykit/barrel.gltf")}`]);
     });
 

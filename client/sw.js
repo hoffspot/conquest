@@ -1,12 +1,18 @@
 // Service worker: keeps a copy of the game so it starts quickly and plays offline.
 //
-// Files known by a hash of their bytes are kept by that address, path?h=hash: the body, its skin
-// and the models the game downloads before it starts (js/app/manifest.js), and the models it
-// downloads only as they're wanted (js/app/assets.js, the catalog). A copy kept by its hash is the
-// right one for good, so it's never checked with the server again, and a release that changes a
-// file changes its address. A copy is kept only once its bytes are checked against its hash: a
-// server that has since moved on to another version (a release published while a page was
-// loading) hands that one on, which is used but not kept.
+// Files known by a hash of their bytes are kept by that address, path?h=hash: everything the game
+// downloads before it starts (js/app/manifest.js: the code, the engine, the body, its skin, the
+// fonts), the modules main.js loads itself (named by the page's import map, index.html), and the
+// models it downloads only as they're wanted (js/app/assets.js, the catalog). A copy kept by its
+// hash is the right one for good, so it's never checked with the server again, and a release that
+// changes a file changes its address. A copy is kept only once its bytes are checked against its
+// hash: a server that has since moved on to another version (a release published while a page was
+// loading) hands that one on, which is used but not kept. One being fetched (the loader's) is
+// waited for, not fetched twice (generated/game_delivery_plan.md).
+//
+// A file asked for by name that a release keeps by hash (a worker's modules, as the import map
+// doesn't reach into workers; the font; the WebAssembly the navigation's glue fetches) is its copy
+// by hash: the release of the page asking, or (a worker, a page that hasn't said) the newest.
 //
 // Each page tells the worker its release on starting: which files it keeps by hash (js/app/
 // catalog.js). What no release in use lists any more is let go of: the newest release's files,
@@ -14,19 +20,19 @@
 // catalog's models are let go of too, the least recently used first, when they come to more than
 // the room set aside for them; never the files the game needs to start.
 //
-// Code, pages and the rest of the characters' data are fetched from the network first (so updates
-// show up straight away), falling back to the saved copy when offline. They are always checked
-// with the server, never reused from the browser's own caches: a host may let browsers reuse files
-// for a while (GitHub Pages, ten minutes), so right after an update a page could otherwise be put
+// Pages (index.html, which names its release's code by hash: its import map), version.js and
+// whatever else no release keeps by hash are fetched from the network first (so updates show up
+// straight away), falling back to the saved copy when offline. They are always checked with the
+// server, never reused from the browser's own caches: a host may let browsers reuse files for a
+// while (GitHub Pages, ten minutes), so right after an update a page could otherwise be put
 // together from some old files and some new ones, which don't work together. (Files that haven't
-// changed come back as short "not modified" replies, from any host that says when they last did:
-// the game's own server does too, server/static.js.)
+// changed come back as short "not modified" replies, from any host that says when they last did,
+// or tags them: the game's own server tags each file by its hash, server/static.js.)
 //
-// Checked once for a page is enough, though: the loader fetches every file the game needs, and
-// the page then imports the same files, a level of the code at a time, straight after. A file
-// the same page had checked with the server in the last minute comes from the saved copy (just
-// checked, so still the same version as the rest), rather than asking again, 13 round trips deep.
-// A page loaded afresh (a reload) checks everything again, so an update shows at once.
+// Checked once for a page is enough, though: a file the same page had checked with the server in
+// the last minute comes from the saved copy (just checked, so still the same version as the rest),
+// rather than asking again. A page loaded afresh (a reload) checks them again, so an update shows
+// at once.
 //
 // Images and models without a hash come from the saved copy first, then are checked with the
 // server, at most once a minute, so a change shows the next time they're asked for. The music's
@@ -121,18 +127,55 @@ self.addEventListener("fetch", (event) => {
 
     if (hash && HASH.test(hash)) {
         event.respondWith(byHash(request, hash, event));
-    } else if (RECORDING.test(url.pathname)) {
-        event.respondWith(savedFirst(request));
-    } else if (MEDIA.test(url.pathname)) {
-        event.respondWith(savedThenChecked(request, event));
     } else {
-        event.respondWith(networkFirst(request, event));
+        event.respondWith(byName(request, event));
     }
 });
 
 // --- Files kept by their hash ---
 
+// The requests for each file by hash, one at a time (by address: the last in line), so one being
+// fetched (the loader's, the page importing it straight after) is waited for, not fetched twice
+const lines = new Map();
+
+// Join a file's line: `ready` once those ahead are done; `leave` when done with it
+function inLine(url) {
+    const ahead = lines.get(url) ?? Promise.resolve();
+    let leave;
+    const mine = new Promise((resolve) => (leave = resolve));
+    const last = ahead.then(() => mine);
+
+    lines.set(url, last);
+    last.then(() => lines.get(url) === last && lines.delete(url));
+
+    return { ready: ahead, leave };
+}
+
 async function byHash(request, hash, event) {
+    // (A part of a file: the downloader asks for one a part at a time, and keeps the whole itself:
+    // not in line)
+    const part = Boolean(request.headers?.has("range"));
+    const { ready, leave } = part ? { ready: Promise.resolve(), leave: () => {} } : inLine(request.url);
+    let keeping = false;
+
+    await ready;
+
+    try {
+        return await fromKept(request, hash, event, part, () => {
+            keeping = true;
+
+            return leave;
+        });
+    } finally {
+        if (!keeping) {
+            leave();
+        }
+    }
+}
+
+// What byHash answers with: the copy kept, else the network's (kept once it's all here; `kept()`
+// says it's being kept, and gives what to call once it is)
+async function fromKept(request, hash, event, part, kept) {
     const url = request.url;
     const boot = await (await caches.open(BOOT)).match(url);
 
@@ -149,8 +192,7 @@ async function byHash(request, hash, event) {
         return asset;
     }
 
-    // (A part of a file: the downloader asks for one a part at a time, and keeps the whole itself)
-    if (request.headers?.has("range")) {
+    if (part) {
         return fetch(request);
     }
 
@@ -171,10 +213,58 @@ async function byHash(request, hash, event) {
     // Handed to the page as it arrives, and kept once it's all here and checked
     const [page, copy] = response.body.tee();
     const init = { status: response.status, statusText: response.statusText, headers: response.headers };
+    const done = kept();
 
-    event.waitUntil(new Response(copy).arrayBuffer().then((bytes) => keep(url, hash, bytes, response.headers)));
+    event.waitUntil(new Response(copy).arrayBuffer().then((bytes) => keep(url, hash, bytes, response.headers)).finally(done));
 
     return new Response(page, init);
+}
+
+// --- Files asked for by name ---
+
+// Each release's files by name (their addresses without the hash), worked out as first wanted
+const named = new Map();
+
+/** The address with its hash of a file asked for by name that a release keeps (null if none does). */
+async function hashedOf(url, clientId) {
+    const known = await readState();
+    const name = (clientId && known.pages[clientId]) || known.newest;
+    const release = name ? known.releases[name] : null;
+
+    if (!release) {
+        return null;
+    }
+
+    let names = named.get(name);
+
+    if (names?.boot !== release.boot) {
+        names = { boot: release.boot, byName: new Map(release.boot.map((each) => [each.replace(/\?h=[0-9a-f]{10}$/, ""), each])) };
+        named.set(name, names);
+    }
+
+    return names.byName.get(url) ?? null;
+}
+
+// A file asked for by name: its copy by hash if a release keeps it (not a part of one: those are
+// the server's); the music's recordings from what's kept; other images and models from what's kept,
+// then checked; anything else from the network first
+async function byName(request, event) {
+    const url = new URL(request.url);
+    const listed = request.headers?.has?.("range") ? null : await hashedOf(request.url, event.clientId);
+
+    if (listed) {
+        return byHash(new Request(listed), new URL(listed).searchParams.get("h"), event);
+    }
+
+    if (RECORDING.test(url.pathname)) {
+        return savedFirst(request);
+    }
+
+    if (MEDIA.test(url.pathname)) {
+        return savedThenChecked(request, event);
+    }
+
+    return networkFirst(request, event);
 }
 
 async function keptCopy(url) {
@@ -307,7 +397,9 @@ async function heard(page, { release, boot, assets, started }) {
     const known = await readState();
     const own = (list) => (Array.isArray(list) ? list.filter((url) => typeof url === "string" && url.startsWith(`${self.location.origin}/`)) : []);
 
-    known.releases[release] ??= { boot: own(boot), assets: own(assets) };
+    // (Each time it's told, as a page tells it: the same name is the same files, but a release
+    // named before code was kept by hash listed fewer)
+    known.releases[release] = { boot: own(boot), assets: own(assets) };
 
     if (!known.newest || (Number.isFinite(started) && started >= known.newestAt)) {
         known.newest = release;

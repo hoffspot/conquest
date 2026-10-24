@@ -11,10 +11,13 @@
 // and pictures, the fonts, and the navigation meshes' WebAssembly (Recast's glue fetches it
 // itself), are listed too. test/manifest.test.js checks both lists are up to date.
 //
-// Data files (the body, its skin, the models) are listed with a hash of their bytes too, as is
-// every file in the catalog: they're fetched as path?h=hash, so each version is a different
-// address to every cache, and the service worker (client/sw.js) keeps them by it, never checking
-// them again (generated/asset_streaming_plan.md, sections 2 and 5).
+// Every file is listed with a hash of their bytes too, as is every file in the catalog: they're
+// fetched as path?h=hash, so each version is a different address to every cache, and the service
+// worker (client/sw.js) keeps them by it, never checking them again (generated/
+// asset_streaming_plan.md, sections 2 and 5). The page names its own release's code by those
+// addresses: the import map in client/index.html, written here too, points every module (those
+// main.js imports itself as well) at path?h=hash, and main.js's own script at its own
+// (generated/game_delivery_plan.md, 3.1).
 
 import { createHash } from "node:crypto";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
@@ -27,6 +30,11 @@ const client = path.join(root, "client");
 const output = path.join(client, "js/app/manifest.js");
 const catalogOutput = path.join(client, "js/app/assets.js");
 const catalogInput = path.join(client, "models/assets.json");
+const page = path.join(client, "index.html");
+
+// (Files changed after this is made, so they can't be named by a hash: version.js, stamped with
+// the commit by the Pages deploy and the Mac app, scripts/stamp-version.js. Asked for by name)
+const UNHASHED = new Set(["js/app/version.js"]);
 
 // What the loading screen says each body is (body.js BODIES)
 const BODY_DETAILS = {
@@ -46,11 +54,17 @@ const DYNAMIC = /import\s*\(\s*["']([^"']+)["']\s*\)/g;
 // The scripts it starts workers with: new Worker(new URL("...", import.meta.url))
 const WORKER = /new\s+Worker\s*\(\s*new\s+URL\s*\(\s*["']([^"']+)["']/g;
 
-async function importMap() {
-    const html = await readFile(path.join(client, "index.html"), "utf8");
-    const json = html.match(/<script type="importmap">([\s\S]*?)<\/script>/)[1];
+// The import map in index.html: where it's written, and what it says
+const IMPORT_MAP = /(<script type="importmap">)([\s\S]*?)(<\/script>)/;
+const MAIN_SCRIPT = /<script type="module" src="js\/main\.js(?:\?h=[0-9a-f]{10})?"><\/script>/;
 
-    return JSON.parse(json).imports;
+// What the page's import map names by name ("three", "three/addons/"), as written by hand: the
+// rest of it (each module at its hashed address) is made here
+async function importMap() {
+    const html = await readFile(page, "utf8");
+    const imports = JSON.parse(html.match(IMPORT_MAP)[2]).imports;
+
+    return Object.fromEntries(Object.entries(imports).filter(([name]) => !/^[./]/.test(name)).map(([name, target]) => [name, target.replace(/\?h=[0-9a-f]{10}$/, "")]));
 }
 
 // Where an import leads, as a path in the client folder (or null for anywhere else)
@@ -113,10 +127,6 @@ export async function hashOf(file) {
 
 const hashedFiles = async (files) => Promise.all((await sized(files)).map(async ([file, bytes]) => [file, bytes, await hashOf(file)]));
 
-// (Groups of data, which the loader keeps and the service worker keeps by hash; the rest is code
-// and fonts, which the page asks for by their names)
-const HASHED = new Set(["body", "skin"]);
-
 /** The manifest's groups: [{ id, label, detail, files: [[path, bytes, hash?]] }]. */
 export async function manifestGroups() {
     const map = await importMap();
@@ -138,22 +148,28 @@ export async function manifestGroups() {
     const body = JSON.parse(await readFile(path.join(client, `characters/${GAME_BODY}.json`), "utf8"));
     const masks = [...body.masks, ...Object.values(body.pictures ?? {}), ...Object.values(body.skin ?? {})].map((file) => `characters/${file}`).toSorted();
     const three = engine.find((file) => /three-r\d+/.test(file))?.match(/three-r(\d+)/)[1];
-    const groups = [
-        { id: "engine", label: "3D engine", detail: `Three.js r${three}`, files: await sized(engine) },
-        { id: "navigation", label: "Ways over the world", detail: `Recast and Detour (recast-navigation-js ${recast})`, files: await sized(navigation) },
-        { id: "code", label: "Game code", detail: "Pellagos", files: await sized(code) },
-        { id: "body", label: "Body and shapes", detail: BODY_DETAILS[GAME_BODY].body, files: await sized([`characters/${GAME_BODY}.json`, `characters/${GAME_BODY}.bin`]) },
-        { id: "skin", label: "Skin details", detail: BODY_DETAILS[GAME_BODY].skin, files: await sized(masks) },
-        { id: "fonts", label: "Lettering", detail: "UnifrakturMaguntia, for the tavern's signs", files: await sized((await readdir(path.join(client, "fonts"))).filter((name) => name.endsWith(".woff2")).map((name) => `fonts/${name}`)) },
+
+    return [
+        { id: "engine", label: "3D engine", detail: `Three.js r${three}`, files: await hashedFiles(engine) },
+        { id: "navigation", label: "Ways over the world", detail: `Recast and Detour (recast-navigation-js ${recast})`, files: await hashedFiles(navigation) },
+        { id: "code", label: "Game code", detail: "Pellagos", files: await hashedFiles(code) },
+        { id: "body", label: "Body and shapes", detail: BODY_DETAILS[GAME_BODY].body, files: await hashedFiles([`characters/${GAME_BODY}.json`, `characters/${GAME_BODY}.bin`]) },
+        { id: "skin", label: "Skin details", detail: BODY_DETAILS[GAME_BODY].skin, files: await hashedFiles(masks) },
+        { id: "fonts", label: "Lettering", detail: "UnifrakturMaguntia, for the tavern's signs", files: await hashedFiles((await readdir(path.join(client, "fonts"))).filter((name) => name.endsWith(".woff2")).map((name) => `fonts/${name}`)) },
     ];
+}
 
-    for (const group of groups) {
-        if (HASHED.has(group.id)) {
-            group.files = await hashedFiles(group.files.map(([file]) => file));
-        }
-    }
+/**
+ * The modules main.js loads itself, before the loader starts (main.js, and what it imports), each
+ * with its hash: [[path, hash]]. Not the manifest and the catalog, which are made from everything
+ * else (their hashes are put in the import map once they're written), nor what's UNHASHED.
+ */
+export async function startFiles() {
+    const loaded = await closure(["js/main.js"], await importMap(), { dynamic: false });
+    const made = new Set([path.relative(client, output), path.relative(client, catalogOutput)].map((file) => file.split(path.sep).join("/")));
+    const files = [...loaded].filter((file) => !made.has(file) && !UNHASHED.has(file)).sort();
 
-    return groups;
+    return Promise.all(files.map(async (file) => [file, await hashOf(file)]));
 }
 
 /** The manifest module's source text. */
@@ -244,21 +260,24 @@ export async function catalog(source) {
 
 /**
  * What names a release's set of kept files: a hash of their addresses (path?h=hash), the
- * manifest's data and the catalog's, so it changes exactly when one of them does.
+ * manifest's, the catalog's and those main.js loads itself (`started`: [[path, hash]]), so it
+ * changes exactly when one of them does.
  */
-export function releaseOf(groups, { models }) {
+export function releaseOf(groups, { models }, started = []) {
     const addresses = [
         ...groups.flatMap(({ files }) => files.filter(([, , hash]) => hash).map(([file, , hash]) => `${file}?h=${hash}`)),
         ...Object.values(models).flatMap(({ files }) => files.map(({ path: file, hash }) => `${file}?h=${hash}`)),
+        ...started.map(([file, hash]) => `${file}?h=${hash}`),
     ];
 
     return createHash("sha256").update(addresses.sort().join("\n")).digest("hex").slice(0, 10);
 }
 
 /** The catalog module's source text. */
-export async function catalogSource(groups, models) {
+export async function catalogSource(groups, models, started) {
     groups ??= await manifestGroups();
     models ??= await catalog();
+    started ??= await startFiles();
 
     const listed = JSON.stringify(models.models, null, 4).replaceAll("\n", "\n    ");
 
@@ -271,16 +290,76 @@ export async function catalogSource(groups, models) {
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: ${JSON.stringify(releaseOf(groups, models))},
+    release: ${JSON.stringify(releaseOf(groups, models, started))},
     models: ${listed},
 });
 `;
 }
 
+/**
+ * The page's import map: what it names by name ("three" at its hashed address, "three/addons/" as
+ * written, and each of the addons the game imports by name at its hashed address), and every
+ * module, by its address from the page ("./js/app/game.js"), at its hashed address. As the
+ * manifest's and the catalog's own hashes are in it, it's made once those are written.
+ *
+ * @param {Array} groups - The manifest's groups (manifestGroups).
+ * @param {Array} started - What main.js loads itself (startFiles).
+ * @param {Array} made - The manifest and the catalog, each with its hash: [[path, hash]].
+ */
+export async function importMapOf(groups, started, made) {
+    const named = await importMap();
+    const modules = [...groups.flatMap(({ files }) => files.map(([file, , hash]) => [file, hash])), ...started, ...made].filter(([file]) => /\.m?js$/.test(file) && !UNHASHED.has(file));
+    const hashOfFile = new Map(modules);
+    const imports = {};
+
+    for (const [name, target] of Object.entries(named)) {
+        const file = target.replace(/^\.\//, "");
+
+        if (name.endsWith("/")) {
+            imports[name] = target;
+
+            for (const [each, hash] of modules.filter(([each]) => each.startsWith(file))) {
+                imports[`${name}${each.slice(file.length)}`] = `./${each}?h=${hash}`;
+            }
+        } else {
+            imports[name] = hashOfFile.has(file) ? `./${file}?h=${hashOfFile.get(file)}` : target;
+        }
+    }
+
+    for (const [file, hash] of modules.toSorted(([a], [b]) => a.localeCompare(b))) {
+        imports[`./${file}`] = `./${file}?h=${hash}`;
+    }
+
+    return { imports };
+}
+
+/**
+ * The page (index.html) with its import map (importMapOf) and main.js's script at its hashed
+ * address, from the page as it is (`html`).
+ */
+export async function pageSource(html, groups, started, made) {
+    html ??= await readFile(page, "utf8");
+    groups ??= await manifestGroups();
+    started ??= await startFiles();
+    made ??= await Promise.all([output, catalogOutput].map(async (file) => {
+        const relative = path.relative(client, file).split(path.sep).join("/");
+
+        return [relative, await hashOf(relative)];
+    }));
+
+    const indent = html.match(/\n( *)<script type="importmap">/)[1];
+    const map = JSON.stringify(await importMapOf(groups, started, made), null, 4).replaceAll("\n", `\n${indent}    `);
+    const main = started.find(([file]) => file === "js/main.js");
+
+    return html.replace(IMPORT_MAP, (_, open, __, close) => `${open}\n${indent}    ${map}\n${indent}${close}`).replace(MAIN_SCRIPT, `<script type="module" src="js/main.js?h=${main[1]}"></script>`);
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const groups = await manifestGroups();
+    const started = await startFiles();
 
     await writeFile(output, await manifestSource(groups));
-    await writeFile(catalogOutput, await catalogSource(groups));
-    console.log(`Wrote ${path.relative(root, output)} and ${path.relative(root, catalogOutput)}`);
+    await writeFile(catalogOutput, await catalogSource(groups, undefined, started));
+    await writeFile(page, await pageSource(undefined, groups, started));
+    console.log(`Wrote ${path.relative(root, output)}, ${path.relative(root, catalogOutput)} and the import map in ${path.relative(root, page)}`);
 }

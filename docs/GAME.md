@@ -4876,18 +4876,24 @@ it.
    before the loader imports Three.js, so the engine's download is counted too. Debug mode asks the
    GPU's name only once it's shown: asking waits for everything the GPU's been given (over a second
    of the start in software rendering).
-   The service worker (`sw.js`) checks every file with the server once for each page load: the
-   page's imports straight after the loader (13 levels of the code, a round trip each) come from
-   the copies it's just checked, rather than asking again. A reload checks everything afresh, so
-   an update shows at once, whole. Any host that says when a file last changed answers "not
-   modified" for those that haven't, the game's own server (`npm start`) too. With 100 ms added to
-   every reply (a phone's 4G), to the title screen on a repeat visit: 8.7 to 9.1 s before, 6.1 to
-   6.2 now over HTTP/2; 10.8 to 11.5 before, 7.7 to 7.8 now over HTTP/1.1.
-   The data (the body, its skin, the chest) is fetched by the hash of its bytes (`path?h=hash`,
-   the hashes in the manifest), which the service worker keeps for good and never checks again:
-   a release that changes a file changes its address. It keeps a copy only once its bytes match
-   the hash, and lets go of what no release in use lists: the newest's, and that of each page
-   still open on an older one (generated/asset_streaming_plan.md, section 5).
+   Every file is fetched by the hash of its bytes (`path?h=hash`, the hashes in the manifest):
+   the code, the engine, the WebAssembly, the fonts and the data (the body, its skin, the chest).
+   The service worker (`sw.js`) keeps each for good and never asks the server for it again: a
+   release that changes a file changes its address, so a visit after an update downloads only
+   the files it changed, and a reload downloads nothing (generated/game_delivery_plan.md). The page
+   names its own release's code by those addresses (the import map in `index.html`, written by
+   `npm run build:manifest`, and `main.js`'s own script), so a page is only ever its own release's
+   files. What's asked for by name (a worker's modules, which an import map doesn't reach; the
+   font; the WebAssembly Recast's glue fetches) the service worker gives from the same copies, by
+   the release of the page asking (or the newest). It keeps a copy only once its bytes match the
+   hash, fetches a file the loader's fetching once (the page importing it straight after waits for
+   it), and lets go of what no release in use lists: the newest's, and that of each page still
+   open on an older one (generated/asset_streaming_plan.md, section 5). On a first visit the
+   loader waits for the service worker to take over (3 s at most), so it keeps what's downloaded.
+   The page itself, and `version.js` (stamped with the commit after the manifest's made), are
+   checked with the server on each load. The game's own server (`npm start`, `npm run
+   world-server`) tags each file by its hash, so one that's the same is "not modified" whatever
+   date a release gave it, and sends code and pages compressed (brotli or gzip).
 2. **The title.** **Continue as** the character played last, in the world they're in; make a
    **New character**; choose another of those kept (**Characters on this device**, up to six), or
    a world (**Worlds on this device**, up to eight) and who goes in; join a world someone else has

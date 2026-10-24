@@ -17,8 +17,8 @@
 // ?quality=). ?join=CODE opens the title's Join a world with the code in it.
 
 import { ASSETS } from "./app/assets.js";
-import { releaseOf } from "./app/catalog.js";
-import { isInstalledApp, isIOS, lockLandscape, registerServiceWorker } from "./app/device.js";
+import { mappedOf, releaseOf } from "./app/catalog.js";
+import { isInstalledApp, isIOS, lockLandscape, looked, registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
 import { Fetcher } from "./app/fetcher.js";
 import { FullScreen } from "./app/fullscreen.js";
@@ -4563,8 +4563,14 @@ function showAdapted() {
 
 // --- Off we go ---
 
+// How long the loader waits on a first visit for the service worker to take over, so that what it
+// downloads is kept (ms)
+const FIRST_LOOKED = 3000;
+
 async function start() {
-    const release = releaseOf(MANIFEST, ASSETS, document.baseURI);
+    // (This release's files: the manifest's, and the modules the page's import map names, main.js's
+    // own address among them, each by its hash)
+    const release = releaseOf(MANIFEST, ASSETS, document.baseURI, mappedOf(document.querySelector('script[type="importmap"]')?.textContent, document.baseURI).concat(/\?h=/.test(import.meta.url) ? [import.meta.url] : []));
 
     debug.show(settings.debug);
     debug.watch({ fetcher });
@@ -4594,6 +4600,7 @@ async function start() {
     });
 
     try {
+        await looked(FIRST_LOOKED);
         await load();
     } catch (error) {
         console.error(error);
