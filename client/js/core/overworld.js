@@ -360,6 +360,9 @@ export class Overworld {
         /** The fortifications standing (setForts): by id, { kind, box (footprintOf's squares) }. */
         this.forts = new Map();
 
+        /** What's fallen across the way (setObstacles: core/director.js OBSTACLES): by id, { box (its squares) }. */
+        this.obstacles = new Map();
+
         /**
          * The armies' camps' stockades standing (setStockades): by the camp's id, { key (what
          * it's made from), box (its squares), cleared (with the ground round it), clearing (as
@@ -476,6 +479,37 @@ export class Overworld {
     }
 
     /**
+     * What's fallen across the way out in the wilds (core/director.js OBSTACLES; [{ id, box }]: a
+     * fallen tree's or a rockslide's squares, [x0, y0, x1, y1]): those squares blocked as chunks
+     * are made, and those made already that one's come down in or been cleared from let go, to be
+     * made again. Returns the boxes of squares that changed, as setForts.
+     */
+    setObstacles(obstacles) {
+        const next = new Map(obstacles.map(({ id, box }) => [id, { box: [...box] }]));
+        const changed = [...[...this.obstacles].filter(([id]) => !next.has(id)), ...[...next].filter(([id]) => !this.obstacles.has(id))].map(([, { box }]) => box);
+
+        this.obstacles = next;
+        this.#remake(changed);
+
+        return changed;
+    }
+
+    // The chunks over boxes of squares ([x0, y0, x1, y1]) let go, to be made again
+    #remake(boxes) {
+        for (const [x0, y0, x1, y1] of boxes) {
+            for (let cy = Math.floor(y0 / CHUNK); cy <= Math.floor(y1 / CHUNK); cy++) {
+                for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) {
+                    this.chunks.delete(cy * CHUNKS + cx);
+
+                    if (this.last?.cx === cx && this.last?.cy === cy) {
+                        this.last = null;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * The fortifications standing in the world (war.js forts; docs/WAR.md *Fortifications*): the
      * squares each stands over blocked as chunks are made, the ground round them cleared (CLEARING:
      * no crops, no trees), and those made already that one's gone up in or come down from let go,
@@ -489,17 +523,7 @@ export class Overworld {
 
         this.forts = next;
 
-        for (const [x0, y0, x1, y1] of changed) {
-            for (let cy = Math.floor(y0 / CHUNK); cy <= Math.floor(y1 / CHUNK); cy++) {
-                for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) {
-                    this.chunks.delete(cy * CHUNKS + cx);
-
-                    if (this.last?.cx === cx && this.last?.cy === cy) {
-                        this.last = null;
-                    }
-                }
-            }
-        }
+        this.#remake(changed);
 
         return changed;
     }
@@ -539,17 +563,7 @@ export class Overworld {
 
         this.stockades = next;
 
-        for (const [x0, y0, x1, y1] of changed) {
-            for (let cy = Math.floor(y0 / CHUNK); cy <= Math.floor(y1 / CHUNK); cy++) {
-                for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) {
-                    this.chunks.delete(cy * CHUNKS + cx);
-
-                    if (this.last?.cx === cx && this.last?.cy === cy) {
-                        this.last = null;
-                    }
-                }
-            }
-        }
+        this.#remake(changed);
 
         return changed;
     }
@@ -1320,6 +1334,21 @@ export class Overworld {
             const random = createRandom(Math.round(piece.x * 73 + piece.y * 37));
 
             chunk.trees.push({ x: Math.round(piece.x), y: Math.round(piece.y), variant: piece.variant, size: random.range(0.85, 1.05), turn: random.next() * Math.PI * 2 });
+        }
+
+        // What's fallen across the way in it (setObstacles): over its squares (put where they were
+        // free: host.js #putObstacle), a feature of the land's, seen over
+        for (const { box: [ox0, oy0, ox1, oy1] } of this.obstacles.values()) {
+            if (ox1 < x0 || oy1 < y0 || ox0 >= x0 + CHUNK || oy0 >= y0 + CHUNK) {
+                continue;
+            }
+
+            for (let y = Math.max(oy0, y0); y <= Math.min(oy1, y0 + CHUNK - 1); y++) {
+                for (let x = Math.max(ox0, x0); x <= Math.min(ox1, x0 + CHUNK - 1); x++) {
+                    blocked[(y - y0) * CHUNK + (x - x0)] = 1;
+                    solid[(y - y0) * CHUNK + (x - x0)] = 1;
+                }
+            }
         }
 
         // The fortifications standing in it (setForts), over their squares; the ground round them

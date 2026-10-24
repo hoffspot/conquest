@@ -9972,6 +9972,117 @@ test("the wilds director puts strangers on the way: a pedlar selling odds and en
     expect(after.told.some((text) => text.startsWith("Bandits bar your way, hungry")), JSON.stringify(after.told)).toBe(true);
 });
 
+test("the wilds director lays a fallen tree across the way: drawn over its squares, said, the way round it; held on, the player walks up to it and clears it, swinging at it, and it's gone for everyone", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    // Out in the wilds 600 m north of the start town, going north, the next card a fallen tree
+    const laid = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { host } = game;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6, weapon: "axe" });
+
+        // (Every word on the banner kept)
+        window.told = [];
+        new MutationObserver((records) => window.told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+
+        window.settle = async (steps, render = false) => {
+            for (let k = 0; k < steps; k++) {
+                player.hp = player.maxHp;
+                game.advance(0.25, { render });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+
+        const goTo = (x, y) => Object.assign(player, { x, y, square: [Math.floor(x), Math.floor(y)], path: [], order: null, progress: null, target: null });
+        const [sx, sy] = game.world.start.at;
+        const pick = host.random.pick;
+
+        goTo(sx, sy - 600);
+        host.random.pick = (list) => (list.includes("tree") && list.includes("rocks") ? "tree" : pick.call(host.random, list));
+        host.travel.set("player", { at: [player.x, player.y], walked: 600, next: 600, heading: [0, -1], deck: ["obstacle"] });
+        await window.settle(4);
+        host.random.pick = pick;
+
+        const [obstacle] = host.obstacles.values();
+
+        if (!obstacle) {
+            return null;
+        }
+
+        const [x0, y0, x1, y1] = obstacle.box;
+        const blocked = [];
+
+        for (let y = y0; y <= y1; y++) {
+            for (let x = x0; x <= x1; x++) {
+                blocked.push(game.world.maps.town.squares.blocked(x, y));
+            }
+        }
+
+        // (Come near, 8 m off its middle on the way it was coming: said, drawn; the camera looking
+        // at it past the player)
+        goTo(obstacle.at[0] + 0.5, y1 + 8.5);
+        await window.settle(4, true);
+        game.cameraFollow.yaw = Math.atan2(player.x - obstacle.at[0], player.y - obstacle.at[1]);
+        game.cameraFollow.turning = 0;
+        await window.settle(4, true);
+
+        const group = game.obstacleProps.shown.get(obstacle.id);
+        const spot = group && session.view.toScreen(group.position.clone().setY(group.position.y + 0.4));
+
+        return { id: obstacle.id, box: obstacle.box, blocked, drawn: Boolean(group), spot, at: [player.x, player.y] };
+    });
+
+    expect(laid).not.toBeNull();
+    expect(laid.drawn).toBe(true);
+    expect(laid.blocked.length).toBe(7);
+    expect(laid.blocked.every(Boolean)).toBe(true);
+    expect(laid.spot).toBeTruthy();
+
+    // Held on (the game going on, listening): the player walks up to it and clears it, swinging
+    // at it; let go once it's cleared
+    const before = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        Object.assign(player, { stamina: 1e6, maxStamina: 1e6 });
+        game.start();
+
+        return game.avatars.get("player").actions.attacks;
+    });
+
+    await page.mouse.move(laid.spot.x, laid.spot.y);
+    await page.mouse.down();
+    await expect.poll(() => page.evaluate((id) => !window.pellagos.game.host.obstacles.has(id), laid.id), { timeout: 150000, intervals: [1000] }).toBe(true);
+    await page.mouse.up();
+
+    const cleared = await page.evaluate(({ box: [x0, y0] }) => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+
+        // (Swinging at it, as it's cleared: its blows started)
+        return { swung: game.avatars.get("player").actions.attacks, clearing: player.clearing ?? null, toClear: game.toClear, at: [player.x, player.y], free: !game.world.maps.town.squares.blocked(x0, y0) };
+    }, laid);
+
+    expect(cleared).toMatchObject({ clearing: null, toClear: null, free: true });
+    expect(cleared.swung).toBeGreaterThanOrEqual(before + 2);
+    expect(Math.hypot(cleared.at[0] - laid.at[0], cleared.at[1] - laid.at[1])).toBeGreaterThan(3);
+
+    const told = await page.evaluate(() => window.told);
+
+    expect(told).toContain("A fallen tree lies across the way ahead. Go round it, or hold on it to clear it.");
+    expect(told.some((text) => text === "The way's clear." || text === "It was a trap! Brigands burst out of cover!" || text.startsWith("Under the tree, a cart's load, crushed long ago.")), JSON.stringify(told)).toBe(true);
+});
+
 test("a treasure map read out in the wilds: its circle on the world map and the minimap and in the journal; its keepers woken as the player comes near; where it's buried glinting; put down, it's dug up, the player's share in it, and the hunt's done", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

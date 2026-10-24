@@ -69,9 +69,9 @@ export const CATALOG = Object.freeze({
     slash: { group: "Hits", label: "Slash", about: "A blade biting: a sharp, wet slap (a wet towel on a bare back, its brighter half).", plays: "A sword's cut landing on anyone." },
     hack: { group: "Hits", label: "Hack", about: "A heavy blade chopping in: a deeper, wet slap.", plays: "A cleaver's blow landing." },
     cleave: { group: "Hits", label: "Cleave", about: "A long blade sweeping through: a lower, longer slash, ringing.", plays: "A greatsword's cut landing." },
-    chop: { group: "Hits", label: "Chop", about: "An axe's broad blade driven in: deeper than a hack, more thud than ring.", plays: "A battle axe's blow landing; and any weapon's blow on a camp's stakes as they're hacked at in a storm." },
+    chop: { group: "Hits", label: "Chop", about: "An axe's broad blade driven in: deeper than a hack, more thud than ring.", plays: "A battle axe's blow landing; any weapon's blow on a camp's stakes as they're hacked at in a storm; and each swing at a fallen tree across the way, as it's cleared." },
     strike: { group: "Hits", label: "Strike", about: "A wooden staff cracking on a body.", plays: "A staff's blow landing." },
-    crush: { group: "Hits", label: "Crush", about: "A heavy blunt blow: a deep, meaty thud.", plays: "A war hammer's blow landing." },
+    crush: { group: "Hits", label: "Crush", about: "A heavy blunt blow: a deep, meaty thud.", plays: "A war hammer's blow landing; and each swing at rocks come down across the way, as they're cleared." },
     block: { group: "Hits", label: "Block", about: "A blow caught on wood: a hard knock (a blade on an ash spear shaft).", plays: "A blow taken on a shield (a blade's rings on it instead: Clash); and a shot taken by a camp's stakes before someone up on its walkway, or before someone below hacking at them." },
     clash: { group: "Hits", label: "Clash", about: "Steel ringing on steel (a sabre on a sword).", plays: "A sword's or a cleaver's blow, or a skeleton's rusty sword, caught on a shield's iron." },
     pierce: { group: "Hits", label: "Pierce", about: "An arrow thunking into a body.", plays: "An arrow striking anyone." },
@@ -356,7 +356,7 @@ export const CATALOG = Object.freeze({
 
     // Coins and trade (scripts/sounds/items.js)
     coins: { group: "Coins and trade", label: "A purse of coins", about: "A handful of coins shaken in a closed hand, a warm jingle: SpaceJoe's.", plays: "Gold off a felled foe; a share of a convoy's goods fallen on, in gold; buying or selling at a shop; paying for ale, a meal, a room or a blessing; hiring a follower; hungry bandits paid to let the player by; a town's thanks for the raiders felled in an invasion; the adventurers' guild's pay for the player's notes on a kind of creature mastered in their bestiary." },
-    coinPickup: { group: "Coins and trade", label: "Coins picked up", about: "A few coins chinking together as they're scooped up: SpaceJoe's.", plays: "Taking a sack or a chest's share with gold in it; putting on a ring or an amulet." },
+    coinPickup: { group: "Coins and trade", label: "Coins picked up", about: "A few coins chinking together as they're scooped up: SpaceJoe's.", plays: "Taking a sack or a chest's share with gold in it; putting on a ring or an amulet; a cart's load found spilled under a fallen tree or rocks, cleared." },
     tradeDone: { group: "Coins and trade", label: "A trade done", about: "A coin shake, and a hand chime ringing over it (A or D, in the music's key).", plays: "A face-to-face trade with another player agreed and done." },
     buyDenied: { group: "Coins and trade", label: "Too dear", about: "A coin pouch dropped on a table: a soft, dull thud (Canakinsound's).", plays: "Anything refused for want of gold: a shop's wares, a trade, a room, a hire or a step through a guild's portal." },
 

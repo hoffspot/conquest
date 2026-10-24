@@ -2552,7 +2552,7 @@ player's device can draw is in the host's snapshot too (each player's `budget`; 
 changed what two games share again (`NET_VERSION` 147), and so did the band named in the thanks
 (148), the Behemoth of the Rift (149), each people's own bombs (150), the rift's own creatures
 in the Tower of Sar Mordal (151), the town's siege engines (152), the townsfolk sheltering from
-the Behemoth (153), an invasion's reinforcements (154), and its lines' charge (169). When its
+the Behemoth (153), an invasion's reinforcements (154), and its lines' charge (170). When its
 lines charged is kept with it (`charged`), and whether each line's charging with the battle's
 lines (`charge`): `SNAPSHOT_VERSION` 38, neither in a world kept before.
 
