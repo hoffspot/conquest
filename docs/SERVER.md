@@ -298,6 +298,15 @@ the server (its **broker**), and others join it point to point (WebRTC). When th
 connect directly, the server relays them, about 2 KB/s for each player who's joined. The
 **broker** and **relaying** settings turn either off.
 
+A world stays listed while its host's link is open. It's taken down at once when its host closes
+it to others (the game withdraws it). Otherwise it's kept for a while, and those in it told it's
+away (`server/broker.js` `BROKER_LIMITS`):
+- **45 seconds** (`expire`) when the host's link drops without a word, to come back on a new one;
+- **two minutes** (`reloading`) when it closes without withdrawing it (the host's page closing or
+  reloading), long enough for the game started again to load the world and take the listing back
+  under its code (docs/GAME.md, *Back into a world*). Taken back that way, afresh, those in it are
+  told to come in again (`closed again`), and the game goes straight back in.
+
 ## Archives
 
 **Settings › Archive › Archive everything** downloads the whole server as one file

@@ -2111,12 +2111,23 @@ async function invite() {
         return;
     }
 
+    const opened = await openToOthers(game);
+
+    showInvite(opened.problem ?? "");
+}
+
+// The player's own world (`game`'s) opened to others: through the broker of a world server
+// (brokerFor), else the old relay; `reclaim` ({ id, token, listed }), the listing it had before its
+// page was started again, taken back if the broker's kept it, else a new code. Kept to open again
+// should the game fall over or be reloaded (keepHosting). Resolves with { world } (state.together's
+// now), or { problem } (why it couldn't be, in words)
+async function openToOthers(game, { reclaim = null } = {}) {
     const { openWorld, RELAY_ERRORS } = await import("./app/together.js");
     const broker = await brokerFor();
 
     try {
         const world = await openWorld(game, {
-            ...(broker ? { broker: { address: broker.address, listing: await listingOf(game) } } : {}),
+            ...(broker ? { broker: { address: broker.address, listing: { ...(await listingOf(game)), listed: Boolean(reclaim?.listed) }, ...(reclaim ? { reclaim } : {}) } } : {}),
             // (Those who come in: who they are and what they carry theirs, what this world remembers
             // of them its own, kept with it by their own id: save.js visitorOf, keepVisitor)
             ...(state.stay?.world ? { visitors: { arrive: (brought) => visitorOf(state.stay.world.id, brought), leave: (character) => keepVisitor(state.stay.world.id, character) } } : {}),
@@ -2141,6 +2152,7 @@ async function invite() {
             },
             onDrop: () => {
                 setTogether(null);
+                inWorld(null);
                 showInvite(RELAY_ERRORS.unreachable);
 
                 if (state.game === game) {
@@ -2152,14 +2164,27 @@ async function invite() {
 
         // (The downloader timing the round trip over the host's own link, to the relay)
         world.via = broker;
-        $("#invitelist").checked = false;
+        $("#invitelist").checked = Boolean(reclaim?.listed && world.reclaimed);
         setTogether(world);
         world.link.onRtt = (rtt) => fetcher.measure(rtt);
         fetcher.probe = () => world.link.measure();
-        showInvite();
+        keepHosting(world);
+
+        return { world };
     } catch (error) {
-        showInvite(RELAY_ERRORS[error.message] ?? (broker ? `Couldn't reach ${broker.name}'s broker.` : RELAY_ERRORS.unreachable));
+        return { problem: RELAY_ERRORS[error.message] ?? (broker ? `Couldn't reach ${broker.name}'s broker.` : RELAY_ERRORS.unreachable) };
     }
+}
+
+// The player's own world, open to others through a broker, kept to open again should the game fall
+// over or be reloaded (app/rejoin.js: its code and token, to take its listing back). Through the
+// old relay, or played with no character kept (?play), there's nothing to open again
+function keepHosting(world) {
+    if (!world?.via || !world.link?.token || !state.save?.id) {
+        return;
+    }
+
+    inWorld({ kind: "hosting", code: world.code, token: world.link.token, broker: world.via.address, listed: world.link.announcement?.visibility === "listed", character: state.save.id, name: state.save.hero?.name ?? null });
 }
 
 // What's said of a world opened to others, for a broker's listing (plan §8.3)
@@ -2359,7 +2384,8 @@ async function joinByCode(code, save, tell, { broker = undefined } = {}) {
             code,
             character: characterOf(save),
             onStage: (stage) => tell.stage(stage),
-            onClosed: () => leftWorld("The world's host has closed it to others."),
+            // (Its host's page started again, the world opened anew under its code: straight back in)
+            onClosed: (reason) => (reason === "again" ? leftWorld("Your friend's world was opened again.", { again: true }) : leftWorld("The world's host has closed it to others.")),
             onLink: (link) => {
                 holdForLink(link);
 
@@ -2698,9 +2724,64 @@ async function goBackIn(record, { why = "" } = {}) {
 
     if (record.kind === "server") {
         serverBackIn(record, tell);
+    } else if (record.kind === "hosting") {
+        hostBackIn(record, tell);
     } else {
         friendBackIn(record, tell);
     }
+}
+
+// Back into the player's own world, open to friends (goBackIn): loaded as it was kept, then opened
+// to them again, under its code if the broker's kept it (those who were in it sent to come in
+// again), else a new one
+async function hostBackIn(record, tell) {
+    const save = loadCharacters(WEAPONS).find(({ id }) => id === record.character);
+
+    tell.stage("load");
+
+    if (!save) {
+        tell.problem("The character you were playing isn't on this device any more.");
+
+        return;
+    }
+
+    // (Tried again once it's loaded: not loaded again)
+    if (!state.game) {
+        state.save = save;
+        await play(save);
+    }
+
+    const game = state.game;
+
+    if (tell.gone()) {
+        return;
+    }
+
+    if (!game || game.remote) {
+        tell.problem("Your world couldn't be loaded.");
+
+        return;
+    }
+
+    tell.stage("reopen");
+
+    const { world, problem } = state.together ? { world: state.together } : await openToOthers(game, { reclaim: { id: record.code, token: record.token, listed: record.listed } });
+
+    if (problem) {
+        tell.problem(problem);
+
+        return;
+    }
+
+    if (tell.gone()) {
+        world.close();
+        setTogether(null);
+
+        return;
+    }
+
+    tell.done();
+    state.hud.message(world.reclaimed ? `Your world's open to friends again, under its code, ${world.code}: those who were in it are coming back.` : `Your world's open to friends again, under a new code: ${world.code}.`, 6);
 }
 
 // Back into a friend's world (goBackIn), by its code, as the character played there
@@ -4200,10 +4281,14 @@ $("#joinchange").addEventListener("click", () => openCharacters("join"));
 $("#invitebutton").addEventListener("click", invite);
 $("#inviteback").addEventListener("click", closeInvite);
 // (Listed on its broker's server for players there to see, or for its code alone)
-$("#invitelist").addEventListener("change", (event) => state.together?.link?.list?.(event.target.checked));
+$("#invitelist").addEventListener("change", (event) => {
+    state.together?.link?.list?.(event.target.checked);
+    keepHosting(state.together);
+});
 $("#invitestop").addEventListener("click", () => {
     state.together?.close();
     setTogether(null);
+    inWorld(null);
     closeInvite();
 });
 $("#invite").addEventListener("cancel", (event) => {

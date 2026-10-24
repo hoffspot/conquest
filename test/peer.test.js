@@ -210,6 +210,42 @@ describe("a player's own world through the broker", () => {
         assert.deepEqual(host.heard, [[joined.peer, "still here"]]);
     });
 
+    it("takes back its listing from a page started again, under its code: whoever was in it told to come in again; one let go of isn't", async () => {
+        const server = await serve();
+        const first = await hosting(server);
+        const joined = await joining(server, first.code);
+        const reasons = [];
+        const { token } = first.host;
+
+        joined.joiner.onClosed = (reason) => reasons.push(reason);
+
+        // (Its page gone, as one reloading goes: its link to the broker closed, its listing not withdrawn)
+        first.host.closing = true;
+        clearInterval(first.host.keeping);
+        first.host.socket.close(1000);
+        await until(() => server.broker.listings.get(first.code)?.host === null, "its host gone");
+
+        // (The page started again: its listing taken back afresh, the joiner told to come in again)
+        const again = await BrokerHost.open(brokerAt(server), { RTC: FakeRTC, timing: QUICK });
+
+        links.push(again);
+        assert.equal(await again.reclaim(first.code, token, WORLD), first.code);
+        await until(() => reasons.length === 1, "the joiner told");
+        assert.deepEqual(reasons, ["again"]);
+        assert.equal(server.broker.listings.get(first.code).host !== null, true);
+
+        // (Come in again)
+        const back = await joining(server, first.code);
+
+        assert.match(back.peer, /^p\d+$/);
+
+        // (One the broker's let go of: not taken back)
+        const late = await BrokerHost.open(brokerAt(server), { RTC: FakeRTC, timing: QUICK });
+
+        links.push(late);
+        await assert.rejects(late.reclaim("ZZZZ", "nope", WORLD), /gone/);
+    });
+
     it("says its world's no longer open to others when the broker's let its listing go though its link's open (an older server's way), its code not shown on", async () => {
         const server = await serve();
         const host = await hosting(server, { timing: { ...QUICK, keep: 300, ping: 100 } });
