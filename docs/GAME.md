@@ -3714,10 +3714,15 @@ and walls lines, bushes dark green), and each ford a row of pale stones straight
 water, on onto its banks (`fordMark`: as plain as a bridge's planks). That's painted four pixels to the metre: the town once, and the world a
 patch 192 metres square at a time round the player, the town's picture laid in it and the other
 settlements' buildings and props painted over their ground the same way. Once the player's 16
-metres from the patch's middle, the next is begun, as far ahead of them again, and painted a step
-at a time (a chunk's squares, the town, a settlement, a chunk's trees: at most 2 ms a drawing),
-then shown in its place, well before what's shown would reach this one's edge (only a leap across
-the world paints one at once). Painting a whole patch in one frame was 6 to 13 ms on a desktop,
+metres from the patch's middle and going further out (4 m gone since it was shown), the next is
+begun, as far ahead of them again the ways they're going out (24 m at most each way, so put on
+whole chunks' quarters it still holds all that's shown), and painted a step at a time (a chunk's
+squares, the town, a settlement, a chunk's trees: at most 2 ms a drawing), then shown in its
+place, well before what's shown would reach this one's edge (only a leap across the world paints
+one at once). Standing still, none is begun. (A player's iPhone crashed with patches begun over and
+over: one put further ahead didn't hold what was shown, and was let go once painted and begun
+again; and, one put ahead by however far the view was from this one's middle, standing still the
+view was as far from the next one's the other way, and so on, every few frames.) Painting a whole patch in one frame was 6 to 13 ms on a desktop,
 several times that on a phone, every 32 metres or so. Each frame (at most 30 times a second)
 draws it scaled to fit, then which way the camera looks (a wedge from the player the way it looks
 over the ground, or the way they face when it looks straight down: always the same size, 30% of
@@ -4863,7 +4868,9 @@ it.
      war's turn, who's been in it, and when it was last played. Tapped, one asks **Who goes into
      Thornvale?**: each character kept, said to be "here now", "been here before" or "new here",
      and **A new character**, made for it. Someone who's been before carries on where they left
-     off; anyone else comes new to its folk, with all they carry. Each world has **Rename**, and
+     off (core/host.js `placeOf`; should they fall, they get up in their people's starting town,
+     as one new to the world would, wherever they came in: `join`); anyone else comes new to its
+     folk, with all they carry. Each world has **Rename**, and
      **Delete**, which asks first ("its war, and what its folk remember of everyone who's been
      there. Your characters stay"). **A new world** asks its name and, if wanted, its seed: the
      same seed makes the same land again, with a war of its own.

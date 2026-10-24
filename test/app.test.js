@@ -1043,6 +1043,57 @@ describe("the minimap (minimap.js)", () => {
             assert.ok(patches.every((patch, k) => !k || patch.x > patches[k - 1].x + 16), "each ahead of the last");
             assert.ok(steps > patches.length, `${steps} drawings painting`);
         });
+
+        it("paints the next patch so it holds what's shown, however far off the last one's middle the player stands, and paints it once (a player's crash: a patch begun again and again)", () => {
+            const minimap = new Minimap(recording(), world);
+
+            minimap.draw({ player: { x, z, facing: 0 } });
+
+            // (Stood still 20 m east and 31 m south of the patch's middle: the next centred as far
+            // ahead again, then put on whole chunks' quarters, would be 33 m south of them, more
+            // than the 32 the view's half has to spare)
+            const shown = minimap.patch;
+            const at = { x: shown.x + 96 + 20, z: shown.z + 96 + 31, facing: 0 };
+            const begun = new Set();
+
+            for (let k = 0; k < 60; k++) {
+                minimap.draw({ player: at });
+
+                if (minimap.painting) {
+                    begun.add(minimap.painting);
+                }
+            }
+
+            assert.equal(begun.size, 1, `${begun.size} patches begun`);
+            assert.notEqual(minimap.patch, shown, "(the next one shown)");
+
+            const [x0, z0, across] = minimap.shown();
+
+            assert.ok(x0 >= minimap.patch.x && z0 >= minimap.patch.z && x0 + across <= minimap.patch.x + 192 && z0 + across <= minimap.patch.z + 192, "(holding what's shown)");
+
+            // (Walked on east till the next is shown, then stood still: none begun after, not one
+            // put back the other way, and that one back again, over and over)
+            const walked = new Minimap(recording(), world);
+            let k = 0;
+
+            walked.draw({ player: { x, z, facing: 0 } });
+
+            for (const first = walked.patch; walked.patch === first; k++) {
+                walked.draw({ player: { x: x + k, z, facing: 0 } });
+            }
+
+            const stood = new Set();
+
+            for (let n = 0; n < 60; n++) {
+                walked.draw({ player: { x: x + k - 1, z, facing: 0 } });
+
+                if (walked.painting) {
+                    stood.add(walked.painting);
+                }
+            }
+
+            assert.equal(stood.size, 0, `${stood.size} patches begun standing still`);
+        });
     });
 });
 

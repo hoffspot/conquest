@@ -1203,6 +1203,10 @@ export class Host {
         const plain = (value) => (typeof value?.toJSON === "function" ? value.toJSON() : structuredClone(value));
         const as = PLAYER_ROLES.includes(role) ? role : "player";
         let back = place && [place.x, place.y, place.facing].every(Number.isFinite) ? { x: place.x, y: place.y, facing: place.facing } : null;
+        // (Where they get up again should they fall: where they'd have come in new, their people's
+        // starting town, however far from it they come back in; the user, of a player on a world
+        // server: "not being returned to their starting town on death")
+        const home = { square: square && [...square], map };
 
         if (back) {
             try {
@@ -1213,7 +1217,7 @@ export class Host {
             }
         }
 
-        this.recorder?.(["j", { id, hero: structuredClone(hero), talks: { memory: structuredClone(talks.memory ?? {}), knowledge: [...(talks.knowledge ?? [])] }, explored: plain(explored), progress: plain(progress), standing: plain(standing), followers: structuredClone(followers), square: square && [...square], map, ...(as === "player" ? {} : { role: as }), ...(back ? { place: back } : {}), ...(vitals ? { vitals: structuredClone(vitals) } : {}) }]);
+        this.recorder?.(["j", { id, hero: structuredClone(hero), talks: { memory: structuredClone(talks.memory ?? {}), knowledge: [...(talks.knowledge ?? [])] }, explored: plain(explored), progress: plain(progress), standing: plain(standing), followers: structuredClone(followers), square: home.square, map: home.map, ...(as === "player" ? {} : { role: as }), ...(back ? { place: back } : {}), ...(vitals ? { vitals: structuredClone(vitals) } : {}) }]);
 
         if (this.players.has(id)) {
             return this.players.get(id);
@@ -1278,6 +1282,10 @@ export class Host {
 
         if (back && actor.square[0] === Math.floor(back.x) && actor.square[1] === Math.floor(back.y)) {
             Object.assign(actor, back);
+        }
+
+        if (back && home.square) {
+            Object.assign(actor, { spawn: home.square, spawnMap: home.map });
         }
 
         if (vitals) {
