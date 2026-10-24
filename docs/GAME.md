@@ -1024,6 +1024,13 @@ on them.
   the mesh that way (up to 400 metres, or its `reach` if that's shorter: held input asks for 30,
   app/steering.js) meets the mesh's edge (a wall, less its body's width, or the world's).
   Running, it sprints while its stamina lasts, then walks.
+  - *Sliding past what's in the way* (`SLIDE`): with the straight way clear for less than 1.5 m (a
+    lamppost, a tree or a barrel just ahead; a wall gone along at a slant), the ways 20°, 40° and
+    60° to either side are looked along too, each no more than 3 m, and it goes the one that gets
+    it furthest on the way it was sent, if that's half a metre or more. So it slips round a post
+    and goes on, and slides along a wall, while sent straight into a wall it stays where it is.
+    Held input, given again every half second, comes back to the straight way once it's past. (The
+    user: "I keep getting stuck when trying to walk by lampposts and other objects".)
 - **Reach.** A melee attack reaches the eight squares touching the attacker's: N, NE, E, SE, S,
   SW, W and NW (Chebyshev distance 1). A ranged attack reaches any square whose middle is within
   its range and that the attacker can see: a line between the two squares' middles that crosses

@@ -598,6 +598,15 @@ const AHEAD = 400;
 const MOVE_ON = 1.5;
 const MOVE_LEGS = 8;
 
+/**
+ * Sliding past what's in the way of an "ahead" order (a lamppost, a tree, a wall gone along at a
+ * slant): when the straight way's clear for less than `clear` metres, the ways `turns` (radians)
+ * to either side of it are looked along too, each for no more than `leg` metres, and the one that
+ * gets the furthest on the way it was sent is gone along, if that's `least` metres on or more (so
+ * that sent straight into a wall, it doesn't go along it).
+ */
+export const SLIDE = Object.freeze({ clear: 1.5, turns: Object.freeze([0.35, 0.7, 1.05]), leg: 3, least: 0.5 });
+
 // To the centimetre (the ways found, as a host sends them)
 const cm = (value) => Math.round(value * 100) / 100;
 
@@ -1269,15 +1278,38 @@ export class Battle {
             case "ahead": {
                 // Turned that way, and from wherever it is, straight on as far as the mesh goes
                 // (or as far as it was asked to go: held input, given again as it's held, asks
-                // only for the way near by, whose tiles are baked already)
+                // only for the way near by, whose tiles are baked already); something just ahead,
+                // round it a little to one side or the other, if that gets it on (SLIDE)
                 actor.facing = order.facing;
 
                 const reach = order.reach > 0 ? Math.min(order.reach, AHEAD) : AHEAD;
                 const way = this.#route(actor, () => {
                     const [x, y] = [actor.x, actor.y];
-                    const ray = navigatorOf(this.maps[actor.map]).raycast([x, y], [x + sin(order.facing) * reach, y + cos(order.facing) * reach]);
+                    const navigator = navigatorOf(this.maps[actor.map]);
+                    const along = (turn, far) => {
+                        const ray = navigator.raycast([x, y], [x + sin(order.facing + turn) * far, y + cos(order.facing + turn) * far]);
 
-                    return ray ? [ray.point] : [];
+                        return ray ? { point: ray.point, on: hypot(ray.point[0] - x, ray.point[1] - y) * cos(turn) } : null;
+                    };
+                    const straight = along(0, reach);
+
+                    if (straight && straight.on >= SLIDE.clear) {
+                        return [straight.point];
+                    }
+
+                    let best = straight;
+
+                    for (const turn of SLIDE.turns) {
+                        for (const side of [turn, -turn]) {
+                            const each = along(side, Math.min(reach, SLIDE.leg));
+
+                            if (each && each.on >= SLIDE.least && each.on > (best?.on ?? 0) + 0.01) {
+                                best = each;
+                            }
+                        }
+                    }
+
+                    return best ? [best.point] : [];
                 });
                 const end = way.at(-1);
 
