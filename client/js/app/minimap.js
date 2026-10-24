@@ -161,11 +161,19 @@ function star(context, x, y, size) {
 const SPAN = 128;
 const PAINTED = 192;
 
-// The next patch is begun once the view's middle is this far (metres) from this one's, centred as
-// far ahead of it again, and painted a step at a time (at most PAINTING ms a drawing), so it's
+// The next patch is begun once the view's middle is this far (metres) from this one's, the player
+// going further out (a quarter as far gone since it was shown), centred as far ahead of them again
+// the way they're going out, and painted a step at a time (at most PAINTING ms a drawing), so it's
 // ready before the view would go past this one's edge
 const AHEAD = 16;
 const PAINTING = 2;
+
+// How far ahead of the view's middle the next patch's is put at most, each way (metres): so put
+// on whole chunks' quarters (#painting), half of one at most further, it still holds what's
+// shown. (A player's iPhone crashed with patches begun over and over: put further, one was let go
+// once painted, and begun again; and, the next put ahead by how far the view was from this one's
+// middle, standing still the view was as far from the next one's the other way, and so on)
+const AHEAD_MOST = (PAINTED - SPAN) / 2 - CHUNK / 8;
 
 // Water, and bridges over it (RGB)
 export const WATER_COLOURS = { [WET.still]: [58, 104, 130], [WET.river]: [70, 120, 146] };
@@ -741,9 +749,14 @@ export class Minimap {
 
         if (!this.painting && within(this.patch)) {
             const away = [middle[0] - (this.patch.x + PAINTED / 2), middle[1] - (this.patch.z + PAINTED / 2)];
+            const gone = [middle[0] - this.patch.from[0], middle[1] - this.patch.from[1]];
+            // (Each way the view's far from this one's middle and still going further out)
+            const out = away.map((each, k) => Math.abs(each) >= AHEAD && each * gone[k] > 0);
 
-            if (Math.max(...away.map(Math.abs)) >= AHEAD) {
-                this.painting = this.#painting(middle[0] + away[0], middle[1] + away[1]);
+            if (out.some(Boolean) && Math.hypot(...gone) >= AHEAD / 4) {
+                const [ax, az] = away.map((each, k) => (out[k] ? Math.max(-AHEAD_MOST, Math.min(AHEAD_MOST, each)) : 0));
+
+                this.painting = this.#painting(middle[0] + ax, middle[1] + az);
             }
         }
 
@@ -757,7 +770,7 @@ export class Minimap {
             this.painting = null;
 
             if (within(painting)) {
-                this.#show(painting);
+                this.#show(painting, middle);
             }
         }
 
@@ -765,7 +778,7 @@ export class Minimap {
             const now = this.#painting(...middle);
 
             now.steps.take();
-            this.#show(now);
+            this.#show(now, middle);
         }
     }
 
@@ -778,9 +791,9 @@ export class Minimap {
         return { x: px, z: pz, steps: new Steps(paintingPatch(this.world, px, pz, PAINTED, this.town), "minimap patch") };
     }
 
-    // A patch painted, shown
-    #show({ x, z, steps }) {
-        this.patch = { x, z, image: steps.value };
+    // A patch painted, shown, where the view's middle was then (`from`, [x, z] metres)
+    #show({ x, z, steps }, from) {
+        this.patch = { x, z, image: steps.value, from };
         this.town = steps.value.town;
         this.base = steps.value;
     }

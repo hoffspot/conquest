@@ -22,7 +22,7 @@ import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
-import { rumouredBy, rumouredOf } from "./rumours.js";
+import { rumouredBy, rumouredOf, rumoursNear } from "./rumours.js";
 import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
@@ -34,6 +34,7 @@ import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
 import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
+import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
 import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, ENGINES, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
 import { waysOut, wayToward } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
@@ -580,7 +581,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 35;
+export const SNAPSHOT_VERSION = 36;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -631,6 +632,14 @@ export const SNAPSHOT_STEPS = Object.freeze({
     33: (snapshot) => ({ ...snapshot, version: 34, players: snapshot.players.map((player) => ({ ...player, explored: { signs: [], tracked: [], ...player.explored } })) }),
     // 35: the roaming beasts' dens out about the players (core/dens.js, Host #dens: none yet)
     34: (snapshot) => ({ ...snapshot, version: 35, dens: [] }),
+    // 36: the shrines that have answered each player (core/shrines.js, Host #pray: none yet), and
+    // whether each player sees in the dark (Lunara's gift: none)
+    35: (snapshot) => ({
+        ...snapshot,
+        version: 36,
+        players: snapshot.players.map((player) => ({ prayed: {}, ...player })),
+        battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => (snapshot.players.some(({ id }) => id === actor.id) ? { darkSight: false, ...actor } : actor)) },
+    }),
 });
 
 /**
@@ -658,8 +667,12 @@ export const BOUGHT = Object.freeze({
     blessing: { boon: { id: "blessing", label: "Blessed", melee: 0.05, ranged: 0.05, heal: 0.1, armor: 0.03, ms: 600000 } },
 });
 
-/** Every boon there is, bought or drunk, by its id: what one kept between visits is taken as (Host restoreVitals). */
-const BOONS = Object.freeze(Object.fromEntries([...Object.values(BOUGHT), ...Object.values(ITEMS).map(({ use }) => use), { boon: WELL_RESTED }].filter((each) => each?.boon).map(({ boon }) => [boon.id, boon])));
+/**
+ * Every boon there is, bought or drunk, a god's gift at a shrine (core/shrines.js) or a night at an
+ * old campsite (core/director.js WELL_RESTED), by its id: what one kept between visits is taken as
+ * (Host restoreVitals).
+ */
+const BOONS = Object.freeze({ ...Object.fromEntries([...Object.values(BOUGHT), ...Object.values(ITEMS).map(({ use }) => use), { boon: WELL_RESTED }].filter((each) => each?.boon).map(({ boon }) => [boon.id, boon])), ...GIFT_BOONS });
 
 /**
  * A courtesan's company, paid for by talking (dialogue.js courtesan, `{ company: true, price }`):
@@ -747,6 +760,9 @@ export const REFUSALS = Object.freeze({
     hunting: "You're on the trail of three treasures already: dig one up, or give one up in your journal.",
     unmapped: "The map's marks fit nothing round here: try it somewhere else.",
     treasure: "No such treasure.",
+    // (At a shrine: core/shrines.js, #pray)
+    shrine: "There's no shrine there to pray at.",
+    prayed: "The shrine has answered you today. Come back tomorrow.",
     // (A sign on a trail: core/tracks.js, #readSign)
     sign: "There's no sign of anything there to read.",
     // (At the war table: core/wartable.js, #atTable)
@@ -860,7 +876,7 @@ export class Host {
         this.stockaded = null;
         this.#fortsChanged();
         this.#stockadesChanged({ tell: false });
-        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b), allied: (a, b) => this.#allied(a, b) });
+        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b), allied: (a, b) => this.#allied(a, b), haven: (actor) => this.#haven(actor) });
         this.#wire();
 
         /**
@@ -1211,6 +1227,10 @@ export class Host {
         const plain = (value) => (typeof value?.toJSON === "function" ? value.toJSON() : structuredClone(value));
         const as = PLAYER_ROLES.includes(role) ? role : "player";
         let back = place && [place.x, place.y, place.facing].every(Number.isFinite) ? { x: place.x, y: place.y, facing: place.facing } : null;
+        // (Where they get up again should they fall: where they'd have come in new, their people's
+        // starting town, however far from it they come back in; the user, of a player on a world
+        // server: "not being returned to their starting town on death")
+        const home = { square: square && [...square], map };
 
         if (back) {
             try {
@@ -1221,7 +1241,7 @@ export class Host {
             }
         }
 
-        this.recorder?.(["j", { id, hero: structuredClone(hero), talks: { memory: structuredClone(talks.memory ?? {}), knowledge: [...(talks.knowledge ?? [])] }, explored: plain(explored), progress: plain(progress), standing: plain(standing), followers: structuredClone(followers), square: square && [...square], map, ...(as === "player" ? {} : { role: as }), ...(back ? { place: back } : {}), ...(vitals ? { vitals: structuredClone(vitals) } : {}) }]);
+        this.recorder?.(["j", { id, hero: structuredClone(hero), talks: { memory: structuredClone(talks.memory ?? {}), knowledge: [...(talks.knowledge ?? [])] }, explored: plain(explored), progress: plain(progress), standing: plain(standing), followers: structuredClone(followers), square: home.square, map: home.map, ...(as === "player" ? {} : { role: as }), ...(back ? { place: back } : {}), ...(vitals ? { vitals: structuredClone(vitals) } : {}) }]);
 
         if (this.players.has(id)) {
             return this.players.get(id);
@@ -1238,6 +1258,8 @@ export class Host {
             // Boons for a while ([{ id, label, until, melee...}]), and when each ability's ready again
             boons: [],
             readyAt: {},
+            // The shrines that have answered them, by the site's id: the world day they did (#pray)
+            prayed: {},
             discarded: null,
             offers: {},
             // A Scroll of Safety being read ({ until }: SAFETY), or none
@@ -1284,6 +1306,10 @@ export class Host {
 
         if (back && actor.square[0] === Math.floor(back.x) && actor.square[1] === Math.floor(back.y)) {
             Object.assign(actor, back);
+        }
+
+        if (back && home.square) {
+            Object.assign(actor, { spawn: home.square, spawnMap: home.map });
         }
 
         if (vitals) {
@@ -1655,6 +1681,8 @@ export class Host {
                 return this.#treasureCommand(player, command);
             case "read":
                 return this.#readSign(player, actor, command.sign);
+            case "pray":
+                return this.#pray(player, actor, command.shrine);
             case "buy":
                 return this.#buy(player, actor, command);
             case "sell":
@@ -2391,7 +2419,7 @@ export class Host {
             invaded: this.invaded,
             invasions: structuredClone(this.invasions),
             fallen: structuredClone(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), budget: player.budget ?? null, ...this.characterOf(player), followers: undefined })),
+            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), budget: player.budget ?? null, ...this.characterOf(player), followers: undefined })),
             done: structuredClone(this.done),
         };
     }
@@ -2499,7 +2527,7 @@ export class Host {
             }
         }
 
-        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b) });
+        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor) });
         host.#wire();
         host.rules = rulesOf(snapshot.rules);
         host.lookAt = snapshot.lookAt;
@@ -2585,11 +2613,11 @@ export class Host {
             }
         }
 
-        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, discarded, safety, role, lastCommand, away, out, resting, budget } of snapshot.players) {
+        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, prayed, discarded, safety, role, lastCommand, away, out, resting, budget } of snapshot.players) {
             const kept = new Progress(progress, hero);
 
             // (Outfitted as they were: their actor's carried on as it was, charms and all)
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null });
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, prayed: { ...(prayed ?? {}) }, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null });
         }
 
         host.random.state = snapshot.random ?? host.random.state;
@@ -2883,6 +2911,47 @@ export class Host {
         this.#outfit(player);
     }
 
+    // Whether someone's in a shrine's sanctuary out in the world (core/shrines.js sanctuaryAt): the
+    // wild's creatures never going after them there (battle.js `haven`)
+    #haven(actor) {
+        return actor.map === "town" && Boolean(this.world.plan) && sanctuaryAt(this.world.plan, [actor.x, actor.y]) !== null;
+    }
+
+    // A player praying at a shrine (a "pray" command: core/shrines.js), before it out in the world:
+    // its god's gift for SHRINE.ms, in place of another god's (a drink's or a priest's blessing go
+    // on with it), once a world day for each shrine; told, with somewhere near it they've still to
+    // find (core/rumours.js rumoursNear: the nearest, if there's one), for their journal
+    #pray(player, actor, id) {
+        const plan = this.world.plan;
+        const shrine = plan ? shrineOf(plan, id) : null;
+
+        if (!shrine || actor.map !== "town") {
+            return refuse("shrine");
+        }
+
+        const heart = this.world.maps.town?.sites?.heartOf(shrine.site) ?? shrine.at;
+
+        if (hypot(actor.x - heart[0], actor.y - heart[1]) > SHRINE.reach + 1) {
+            return refuse("far");
+        }
+
+        const day = this.war ? dayOf(elapsedOf(this.war)) : Math.floor(this.battle.time / DAY.length);
+
+        if (player.prayed[id] === day) {
+            return refuse("prayed");
+        }
+
+        const gift = GIFT_BOONS[giftId(shrine.god)];
+        const hint = rumoursNear(plan, shrine.at, player.explored)[0] ?? null;
+
+        player.prayed = { ...player.prayed, [id]: day };
+        player.boons = [...player.boons.filter(({ god }) => !god), { ...gift, until: this.battle.time + gift.ms }];
+        this.#outfit(player);
+        this.#event("prayed", { id: player.id, shrine: id, god: shrine.god, boon: gift.id, ...(hint ? { hint: hint.id } : {}) });
+
+        return { ok: true };
+    }
+
     // A sign on a trail out of a camp or a lair read (a "read" command: core/tracks.js), its reader
     // beside it out in the wilds: told which way the trail runs home, and what made it the better
     // known (core/bestiary.js read); TRAILS.tracked of its home's signs read, the home's tracked,
@@ -2953,7 +3022,7 @@ export class Host {
         const bonus = player.progress.bonuses();
 
         for (const boon of player.boons) {
-            for (const key of ["melee", "ranged", "heal", "stun", "spell", "armor"]) {
+            for (const key of ["melee", "ranged", "heal", "stun", "spell", "bash", "armor", "dodge", "hp", "wardFire", "wardWater", "wardAir", "wardEarth", "wardMagic"]) {
                 bonus[key] += boon[key] ?? 0;
             }
         }
@@ -2988,6 +3057,8 @@ export class Host {
         actor.shield = player.progress.guard(bonus);
         // (The kinds of creature they know where to strike: Mastered in their bestiary)
         actor.mastered = player.progress.bestiary.mastered();
+        // (Seeing in the dark as the night's creatures do: Lunara's gift, core/shrines.js)
+        actor.darkSight = player.boons.some(({ darkSight }) => darkSight);
 
         // (And a boon that multiplies the breath, a Stamina Boost: twice as much, while it lasts;
         // or how fast it comes back, an afterglow)
@@ -7409,7 +7480,8 @@ export class Host {
             const reach = WILDS.from + this.random.next() * (WILDS.to - WILDS.from);
             const at = [x + cos(angle) * reach, y + sin(angle) * reach];
 
-            if (!clearOfSettlements(plan, at, WILDS.clear) || landAt(plan, ...at).water || this.world.maps.town.nearRoad?.(...at, WILDS.road) || this.cleared.some(({ at: [cx, cy] }) => hypot(cx - at[0], cy - at[1]) < WILDS.about)) {
+            // (Nor in a shrine's sanctuary: core/shrines.js)
+            if (!clearOfSettlements(plan, at, WILDS.clear) || landAt(plan, ...at).water || this.world.maps.town.nearRoad?.(...at, WILDS.road) || this.cleared.some(({ at: [cx, cy] }) => hypot(cx - at[0], cy - at[1]) < WILDS.about) || sanctuaryAt(plan, at)) {
                 continue;
             }
 
@@ -9552,7 +9624,10 @@ export class Host {
     // Gold found on the fallen, as much more as the charms someone carries have it (core/goods.js
     // CHARMS `fortune`: a lucky coin)
     #fortune(player, gold) {
-        return gold ? Math.round(gold * (1 + player.progress.bonuses().fortune)) : 0;
+        // (And a god's gift's luck: Wick's, core/shrines.js)
+        const luck = player.boons.reduce((sum, { fortune = 0 }) => sum + fortune, 0);
+
+        return gold ? Math.round(gold * (1 + player.progress.bonuses().fortune + luck)) : 0;
     }
 
     // One of the wild's creatures fallen near someone lately, still lying there (the one named, or the nearest): or null
@@ -10358,10 +10433,11 @@ export class Host {
             return "fighting";
         }
 
-        // (At an old campsite, the wild only nearer: core/director.js FINDS campsite)
+        // (At an old campsite, the wild only nearer: core/director.js FINDS campsite; within a
+        // shrine's sanctuary, whatever's about: core/shrines.js)
         const clear = this.#campsiteAt(actor) ? FINDS.campsite.safe : REST.clear;
 
-        if (this.battle.actors.some((other) => !other.dead && other.map === actor.map && this.battle.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) < clear)) {
+        if (!(plan && sanctuaryAt(plan, [actor.x, actor.y])) && this.battle.actors.some((other) => !other.dead && other.map === actor.map && this.battle.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) < clear)) {
             return "hostiles";
         }
 
@@ -10406,6 +10482,13 @@ export class Host {
             this.#event("boon", { id: player.id, boon: WELL_RESTED.id, label: WELL_RESTED.label, change: "on" });
         }
 
+        // (Rested in a shrine's sanctuary: its poisons, sicknesses and curses gone, SHRINE.cures)
+        const sanctuary = this.world.plan ? sanctuaryAt(this.world.plan, [actor.x, actor.y]) : null;
+
+        for (const kind of sanctuary ? SHRINE.cures.filter((each) => actor.afflictions.some((one) => one.kind === each)) : []) {
+            this.battle.cure(actor.id, kind);
+            this.#event("cured", { id: player.id, kind, shrine: sanctuary.site.id });
+        }
         this.#sleep(player, actor, "camp", until);
 
         return OK;
