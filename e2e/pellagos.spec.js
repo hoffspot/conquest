@@ -3875,7 +3875,7 @@ test("tapping the ground walks the player there; double-clicking it runs there, 
     expect(walked.end[1]).toBeLessThan(walked.start[1] - 2);
 });
 
-test("tapping an enemy rings it as the player's target, until they're told to walk away", async ({ page }) => {
+test("tapping an enemy rings it as the player's target, until they're told to walk away (with Auto target lock off; on, still ringed)", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const target = await page.evaluate(() => {
@@ -3887,6 +3887,7 @@ test("tapping an enemy rings it as the player's target, until they're told to wa
         const square = [player.square[0] + 3, player.square[1] - 3];
 
         game.stop();
+        game.autoLock = false;
 
         // The orc, standing a few squares from the player
         Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null });
@@ -3907,13 +3908,28 @@ test("tapping an enemy rings it as the player's target, until they're told to wa
         game.tap(away.x, away.y, { time: performance.now() + 1000 });
         game.advance(0.2);
 
-        return { before, ringed, after: { visible: ring.visible, plate: document.querySelector(".floater.targeted")?.dataset.id ?? null } };
+        const after = { visible: ring.visible, plate: document.querySelector(".floater.targeted")?.dataset.id ?? null };
+
+        // With Auto target lock on, tapped and walked away from again: locked on, still ringed
+        const again = session.view.toScreen(game.avatars.get("orc").point(0.5));
+
+        game.autoLock = true;
+        game.tap(again.x, again.y, { time: performance.now() + 2000 });
+        game.advance(0.5);
+
+        const back = session.view.toScreen(game.avatars.get("player").object.position.clone().setZ(orcAt.z + 6));
+
+        game.tap(back.x, back.y, { time: performance.now() + 3000 });
+        game.advance(0.2);
+
+        return { before, ringed, after, locked: { visible: ring.visible, plate: document.querySelector(".floater.targeted")?.dataset.id ?? null, walking: player.order?.type ?? null, lock: player.lock } };
     });
 
     expect(target.before).toBe(false);
     expect(target.ringed).toEqual({ visible: true, off: expect.any(Number), plate: "orc" });
     expect(target.ringed.off).toBeLessThan(0.01);
     expect(target.after).toEqual({ visible: false, plate: null });
+    expect(target.locked).toEqual({ visible: true, plate: "orc", walking: "move", lock: "orc" });
 });
 
 test("tapping an enemy sets the player on them where they stand; tapped twice, they run up to them; tapped again on the way, or the player tapped, they stop, still set on them; Attack at the top of an enemy's wheel walks up to them", async ({ page }) => {
