@@ -492,6 +492,20 @@ export class BrokerHost extends BrokerSocket {
         return id;
     }
 
+    /**
+     * Take back a listing kept for this world (`id`, `token`, as announced before), its page
+     * started again and the world opened anew (`announcement` as host's): those in it from before
+     * told to come in again (server/broker.js "closed again"). Resolves with its code; rejects
+     * "gone" once the broker's let it go.
+     */
+    async reclaim(id, token, announcement) {
+        await this.ask(`keep ${id} ${token}\n${JSON.stringify({ players: this.playersNow(), visibility: announcement.visibility, afresh: true })}`, "announced");
+        Object.assign(this, { id, token, announcement });
+        this.#keep();
+
+        return id;
+    }
+
     /** Listed for everyone on the server to see (`listed`), or for its code alone. */
     list(listed) {
         this.announcement = { ...this.announcement, visibility: listed ? "listed" : "code" };
@@ -971,8 +985,9 @@ export class BrokerJoin extends BrokerSocket {
                 this.onBack();
                 break;
             case "closed":
+                // (Its host's page started again, its world opened anew: "again")
                 this.closing = true;
-                this.onClosed(null);
+                this.onClosed(words[0] ?? null);
                 break;
             default:
                 break;

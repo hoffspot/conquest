@@ -10,10 +10,15 @@
 //                                                  -> "announced ID TOKEN" (ID: the world's code,
 //                                                     CODE_LENGTH letters; or "error busy",
 //                                                     "error too-many", "error bad")
-//                    "keep ID TOKEN[\n{players, visibility}]"  every 15 s: it's kept while its host's link is
-//                                                  open, and for 45 s once it's closed; from a new
-//                                                  link, it's the host's again -> "announced ID
-//                                                  TOKEN", "here pN pN..." (or "error gone")
+//                    "keep ID TOKEN[\n{players, visibility, afresh}]"  every 15 s: it's kept while its host's
+//                                                  link is open, and for 45 s once it's dropped (two
+//                                                  minutes once it's closed without withdrawing it, as
+//                                                  a page closing or reloading does);
+//                                                  from a new link, it's the host's again ->
+//                                                  "announced ID TOKEN", "here pN pN..." (or "error
+//                                                  gone"); `afresh`, from a page started again, its
+//                                                  world opened anew: those in it told "closed again"
+//                                                  and let go of, to come in again
 //                    "withdraw ID"                 taken down: those joined through it told "closed"
 //                    "to pN\n..."                  relayed, to one who's joined
 //                    "kick pN"                     relayed, put them out
@@ -31,6 +36,8 @@
 //                    "away", "back"                the host's link has dropped (it has till its
 //                                                  listing expires to come back), and it's back
 //                    "closed"                      the world's gone
+//                    "closed again"                its host's page was started again, its world
+//                                                  opened anew under the same code: to come in again
 //
 // A listing (as watchers see it): { id, name, people, players, most, net, direct, local (it can
 // be reached on its own network), through (relayed by the server, not direct), near (probably on
@@ -53,7 +60,9 @@ export const BROKER_PROTOCOL = "pellagos.broker.1";
 /**
  * Its limits: the longest message (bytes: a world's snapshot, relayed to one who's joined, is the
  * biggest; anything else may be `small`), how much may wait to go to one slow to take it, listings
- * per address and in all, how long one lasts once its host's link has closed, how many signals a
+ * per address and in all, how long one lasts once its host's link has dropped (`expire`; `reloading`,
+ * once its link's been closed without withdrawing it, its page closing or reloading: long enough
+ * for a page started again to load its world and take it back), how many signals a
  * connection attempt may pass, how many may join one world at once, how long a new link has to say
  * what it's for, and how often each's asked whether it's still there (let go if it doesn't answer
  * for `timeout`); all ms but the sizes and counts.
@@ -65,6 +74,7 @@ export const BROKER_LIMITS = Object.freeze({
     perAddress: 3,
     listings: 100,
     expire: 45000,
+    reloading: 120000,
     signals: 50,
     joiners: 15,
     sayWithin: 10000,
@@ -240,13 +250,13 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
         lasting(listing);
     };
 
-    // Withdrawn limits.expire from now, unless its host's link is open then: a page in the
+    // Withdrawn limits.expire (or `ms`) from now, unless its host's link is open then: a page in the
     // background, its timers slowed to one a minute, or a computer dozing, keeps it less often than
     // it means to, but its link still answers the broker's pings (one that doesn't, for
     // limits.timeout, is closed), and its code's still good
-    const lasting = (listing) => {
+    const lasting = (listing, ms = limits.expire) => {
         clearTimeout(listing.expiry);
-        listing.expiry = setTimeout(() => (listing.host ? lasting(listing) : withdraw(listing)), limits.expire);
+        listing.expiry = setTimeout(() => (listing.host ? lasting(listing) : withdraw(listing)), ms);
         listing.expiry.unref?.();
     };
 
@@ -320,6 +330,16 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
             listing.host = socket;
             socket.hosting.set(listing.id, listing);
             socket.send(`announced ${listing.id} ${token}`);
+
+            // (Its world opened anew, by a page started again: those in it from before let go of,
+            // to come in again)
+            if (changes?.afresh === true) {
+                for (const peer of [...listing.joiners.keys()]) {
+                    attempts.get(peer)?.socket.send("closed again");
+                    endAttempt(peer, { tellHost: false, say: false });
+                }
+            }
+
             socket.send(["here", ...[...listing.joiners.entries()].filter(([, attempt]) => attempt.relayed).map(([peer]) => peer)].join(" "));
 
             for (const attempt of listing.joiners.values()) {
@@ -515,8 +535,8 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
         }
     };
 
-    // A link closed: no longer watching; any listing it hosted kept till it expires (unless its
-    // host said it was leaving), those relayed through it told it's away
+    // A link closed: no longer watching; any listing it hosted (and hadn't withdrawn) kept till it
+    // expires, those relayed through it told it's away
     const closed = (socket) => {
         sockets.delete(socket);
         watchers.delete(socket);
@@ -530,15 +550,13 @@ export function attachBroker(httpServers, server, { limits = BROKER_LIMITS, ice 
 
             listing.host = null;
 
-            if (socket.left) {
-                withdraw(listing);
-            } else {
-                // (Its host given limits.expire from now to come back on a new link)
-                lasting(listing);
+            // (Not withdrawn, so not taken down: its host's page closed or reloading, its link
+            // closed, kept limits.reloading for a page started again to take it back; its link
+            // dropped without a word, limits.expire to come back on a new one)
+            lasting(listing, socket.left ? limits.reloading : limits.expire);
 
-                for (const attempt of listing.joiners.values()) {
-                    attempt.socket.send("away");
-                }
+            for (const attempt of listing.joiners.values()) {
+                attempt.socket.send("away");
             }
         }
 
