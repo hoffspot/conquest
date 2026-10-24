@@ -9583,6 +9583,73 @@ test("the wilds director deals a fallen adventurer's remains ahead of a player c
     expect(dealt.told).toContain("Well rested.");
 });
 
+test("the wilds director's pacing: after a long calm, the land's hunters heard ahead of the player, told which way; a while later they come for them, said; and after a hard fight, a quiet spell, said", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const heard = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { host } = game;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // (Every word on the banner kept, and every sound played)
+        const told = [];
+        const played = [];
+        const play = game.sound?.play?.bind(game.sound);
+
+        new MutationObserver((records) => told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+
+        if (play) {
+            game.sound.play = (name, options) => {
+                played.push(name);
+
+                return play(name, options);
+            };
+        }
+
+        const settle = (seconds) => {
+            for (let t = 0; t < seconds; t += 0.25) {
+                player.hp = player.maxHp;
+                game.advance(0.25, { render: false });
+            }
+        };
+        const [sx, sy] = game.world.start.at;
+
+        // Out in the wilds 600 m north of the start town, going north, after a long calm
+        Object.assign(player, { x: sx, y: sy - 600, square: [Math.floor(sx), Math.floor(sy - 600)], path: [], order: null, target: null });
+        host.travel.set("player", { at: [player.x, player.y], walked: 0, next: 1e9, heading: [0, -1], deck: ["cache"] });
+        settle(1);
+        Object.assign(host.travel.get("player").pace, { lastFight: game.battle.time - 300000, calm: 500 });
+        settle(1.5);
+
+        const build = host.travel.get("player").pace.build;
+
+        // (A while later: they come for them)
+        settle(22);
+
+        const hunted = told.length;
+
+        // (Then a hard fight, over, those they fought gone: a quiet spell)
+        for (const actor of game.battle.actors.filter((each) => each.wild)) {
+            Object.assign(actor, { dead: true, respawnAt: Infinity, target: null });
+        }
+
+        Object.assign(host.travel.get("player").pace, { fight: { lowest: 0.2 }, lastFight: game.battle.time - 6000, build: null });
+        settle(1);
+
+        return { build: Boolean(build), told, played, hunted };
+    });
+
+    expect(heard.build).toBe(true);
+    expect(heard.told.some((text) => /^(Drums, somewhere off to the [a-z-]+\. They're coming this way\.|An? .+ calls, somewhere off to the [a-z-]+, and others answer\.)$/.test(text)), JSON.stringify(heard.told)).toBe(true);
+    expect(heard.told.some((text) => text.startsWith("Drums")) ? heard.played.includes("warDrums") : true).toBe(true);
+    expect(heard.told.slice(0, heard.hunted).some((text) => text === "Here they come!" || text === "They're on you!"), JSON.stringify(heard.told)).toBe(true);
+    expect(heard.told.at(-1)).toBe("The wild grows quiet round you, for a while.");
+});
+
 test("a treasure map read out in the wilds: its circle on the world map and the minimap and in the journal; its keepers woken as the player comes near; where it's buried glinting; put down, it's dug up, the player's share in it, and the hunt's done", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
