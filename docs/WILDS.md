@@ -8,7 +8,8 @@ how strong, how they behave, how they're kept about the players, and how they're
 animated.
 
 The code: `client/js/core/creatures.js` (what each is), `core/battle.js` (how they fight),
-`core/host.js` (keeping them about the players, and the elites), `core/caches.js` (the adventurers'
+`core/host.js` (keeping them about the players, and the elites), `core/director.js` (what the wilds
+deal as a player crosses them), `core/caches.js` (the adventurers'
 caches and the brigands keeping them), `core/weapons.js` `NATURAL` (their fangs, claws
 and breath), `core/afflictions.js` (what lingers after their blows, and the cures),
 `client/js/beasts/` (how each looks and moves), and `world/effects.js`, `world/ailments3d.js`
@@ -479,14 +480,78 @@ stronger members, `docs/DUNGEONS.md`, which are only a tier up.)
     made as a cache's two tiers further out would be. Never common; mostly fine to rare, now and
     then very rare or legendary, and better the further out.
 
+## The wilds director
+
+Every so far a player crosses the wilds, something's dealt ahead of them from a deck of what the
+wilds hold (`core/director.js`, the host's `#caches` and `#deal`), as the old tabletop wilderness
+dice did, so that crossing them is more than one guarded chest after another.
+- **How often** (`DIRECTOR.every`): every 250 to 450 m crossed (rolled each time), counted as a
+  cache's is (*Adventurers' caches*, below): on foot, out of the settlements, afresh for everyone
+  together once one's dealt to any of them.
+- **The deck** (`DIRECTOR.cards`, `shuffled`): an adventurer's cache, a fallen adventurer's
+  remains, an old campsite, fresh tracks. Each comes once a deck, in an order of its own, the deck shuffled
+  again once it's all been dealt, never with the card just dealt first again (Left 4 Dead's
+  director dealt its bosses so: no two of the same running). Each player has their own, kept in
+  the world's snapshot (`travel`). A card with nowhere to go ahead waits for the next look.
+- **Where** (`#spotAhead`): as a cache is, 70 to 100 m ahead, on open ground clear of the roads,
+  the settlements, the places worth finding and every other cache and find.
+- **A fallen adventurer's remains** (`FINDS.remains`): bones stretched out where they lay, a cloak
+  gone to rags under them, a pack by their head, and their sword thrust upright in the earth by
+  their hand, its hilt over the tall grass (world/finds3d.js); a coin over them till they're searched.
+  Said once a player's within 60 m ("The remains of an adventurer who fell out here long ago.
+  Search them: they may have left something.") and marked on their maps with a skull. Tapped,
+  they're searched (a chest that's no chest: `#searchRemains`), a share for each player near
+  (`rollRemains`): 6 to 16 gold, 35% more for each tier past the first; a piece of gear 35% of the
+  time, made as a cache's is at the land's tier; a healing draught 40%; a treasure map 20%, made as
+  a chest's at the tier. Half the time there's a note in their hand, of the nearest place within
+  1.5 km that player hasn't found (`noteOf`, of those rumours are told of): written in the journal
+  as a crier's rumour is ("A fallen adventurer's note"), its circle on the world map, said with a
+  quill's scratch. Searched once; their mark greyed after.
+- **An old campsite** (`FINDS.campsite`): a ring of stones round a bed of ash and burnt logs, a
+  log to sit on, a lean-to of branches, and a rag tied to a pole by it to find it again over the
+  grass. Said within 60 m ("An old campsite… A good place to
+  make camp: safe from the wild, and you'd wake well rested.") and marked with its fire ring.
+  Camped at within 8 m of its ring: a camp's only refused for the wild with something hostile
+  within 16 m (not 40), the fire's lit in its ring, and they wake well rested (`WELL_RESTED`: the
+  breath back half again as fast and every heal 10% more, for 20 minutes, kept between visits as
+  any boon is).
+- **Fresh tracks** (`FRESH`, the host's `#putTracks`): a short trail of prints, not long made, from
+  8 m ahead of the player to 10 m short of a pack of the wild's roaming 30 to 85 m off (those ahead
+  of them first), or, none, one of the land's put out 60 to 85 m ahead (within the 90 m the wild's
+  roaming packs are kept about a player). Every 6 m, wandering up to 3 m off the straight way
+  (`freshTrail`), drawn as the trails out of the wild's homes are (*Tracking*), but deeper; never
+  to what leaves no prints, what flies, floats or swarms (`TRACKLESS`, held to world/tracks3d.js by
+  a test). Said once a player's within 12 m of them ("Fresh tracks, not long made: a wolf's, and
+  not alone. They lead off to the north-east: they're on your minimap."), and from then on dotted
+  on their minimap the way they lead, prints being hard to make out in long grass. Follow them and
+  find the pack first, or see what made them and steer clear. Let go after six minutes, once their pack's all gone, or once every player's 140 m
+  from where they start.
+- **Let go** once every player's 220 m away (`FINDS.far`); another comes later. Nothing's kept in
+  a snapshot till one's been dealt.
+- **The pacing** (`PACING`, the host's `#pace`; Left 4 Dead's director: "Algorithm adjusts pacing,
+  not difficulty"), kept for each player with their deck:
+  - *A quiet spell after a hard fight*: a fight a player fell below half their health in (or
+    fell), once it's over (no foe after them for 5 seconds), is followed by a minute to a minute
+    and a half of quiet. Half as many of the wild come about them (*Kept about the players*), no
+    elite, and the next card dealt's a peaceful one (`peacefulNext`: the first in the deck, or the
+    deck shuffled again if none's left in it, never the card just dealt first). Said: "The wild
+    grows quiet round you, for a while."
+  - *A build-up after a long calm*: four minutes and 400 m crossed out in the wilds without a
+    fight, and the land's hunters (`encounterAt`, two at least) are heard 70 to 90 m ahead
+    (`#buildUp`): folk with hands drumming (synth.js `warDrums`), beasts calling and others
+    answering (their own call; drums for one that has none), heard up to 160 m off, and said which
+    way ("A wolf calls, somewhere off to the north-east, and others answer."). 12 to 20 seconds
+    later they're put out there and come for the player, running (`#hunt`: "They're on you!", or,
+    folk, "Here they come!").
+
 ## Adventurers' caches
 
 Here and there out in the wilds lies a chest some adventurer stowed and never came back for, and a
 band of the land's brigands has found it and keeps it (`core/caches.js`, the host's `#caches`).
-- **Where.** About every half a kilometre a player crosses the wilds (350 to 650 m, rolled each
-  time: `CACHES.every`), one turns up 70 to 100 m ahead of them, within about 35° of the way
-  they're going. Only ground crossed on foot out of the settlements counts: not a step in a town,
-  nor a leap of more than 20 m in half a second (carried by magic or a portal). It's put on open,
+- **Where.** It's one of the wilds director's cards (*The wilds director*, above): one turns up
+  70 to 100 m ahead of a player, within about 35° of the way they're going. Only ground crossed on
+  foot out of the settlements counts: not a step in a town, nor a leap of more than 20 m in half a
+  second (carried by magic or a portal). It's put on open,
   dry ground (85% of the squares out to its guards' round free to walk on, and every stop on the
   round: `openAround`), at least 25 m from every road, track and trail with its guards' round and
   all (32 m from the cache), 80 m clear of every settlement, 90 m from the places worth finding and

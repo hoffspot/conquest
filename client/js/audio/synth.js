@@ -293,6 +293,21 @@ function horn(random, blasts, { gap = 0.18 } = {}) {
     return out;
 }
 
+// Drums far off: a big drum's beats ([[start (s), loudness]...], over `length` seconds), each a
+// skin's boom (a sine falling from 95 to 52 Hz) with a slap of low noise as the stick lands
+function drums(random, beats, length) {
+    let out = new Float32Array(count(length));
+
+    for (const [start, loud] of beats) {
+        const boom = shape(tone(0.8, (t) => 52 + 43 * Math.exp(-t / 0.05)), hit(0.004, 0.3));
+        const slap = shape(filter(noise(random, 0.12), "lowpass", 380, 0.8), hit(0.002, 0.05));
+
+        out = add(out, add(boom, slap, 0.35), loud, start);
+    }
+
+    return out;
+}
+
 // Notes one after another (a cue): [[frequency, start (s)]...], each ringing for `decay` seconds
 function notes(list, { decay = 0.35, harmonics = [[1, 1], [2, 0.25], [3, 0.08]], length = 1 } = {}) {
     let out = new Float32Array(count(length));
@@ -652,6 +667,9 @@ export const SOUNDS = {
     // falling away; a town's horn, answering them as its soldiers march out, a bright call up a
     // fourth and a fifth (and for one its lord thanks)
     warHorn: { variants: 2, volume: 0.7, make: (random) => horn(random, [[98, 1.85, 0.03]]) },
+    // (And the wild's folk drumming as they come for a player after a long calm: core/director.js
+    // PACING; a rolling beat, the last three quicker)
+    warDrums: { variants: 2, volume: 0.7, make: (random) => drums(random, [[0, 1], [0.36, 0.65], [0.72, 1], [0.9, 0.8], [1.08, 1]], 1.9) },
     retreatHorn: { variants: 1, volume: 0.6, make: (random) => horn(random, [[110, 0.45], [98, 1.35, 0.3]], { gap: 0.1 }) },
     townHorn: { variants: 1, volume: 0.6, make: (random) => horn(random, [[196, 0.3], [262, 0.3], [392, 1.15, 0.02]], { gap: 0.07 }) },
 

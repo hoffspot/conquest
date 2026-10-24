@@ -306,7 +306,12 @@ is drawn round you as you go, with no loading screens: only its far edge in the 
 being built. The hamlets, villages, towns and cities of the world plan are there, each with its
 own buildings; the ruins and the enemy camps are still to come.
 
-**Adventurers' caches.** About every half a kilometre you cross the wilds, a chest some adventurer
+**What the wilds deal.** Every few hundred metres you cross the wilds, something turns up ahead of
+you, dealt from a deck: a fallen adventurer's remains to search (a note in their hand, now and
+then, of somewhere near), an old campsite that's safe to camp at, fresh tracks leading to a pack
+nearby, or an adventurers' cache.
+
+**Adventurers' caches.** Now and then as you cross the wilds, a chest some adventurer
 left behind turns up ahead of you, well away from the roads, kept by three to five brigands of that
 land (outlaws, goblins under an ogre or a troll, the restless dead, cultists) as strong as the land
 or you, whichever's the more, their leader stronger still, the rest walking a round about it. It's

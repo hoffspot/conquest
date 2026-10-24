@@ -338,6 +338,24 @@ const LOOKS = {
             ["M-1.8,-2.6 h3.6 v4.8 h-3.6 z", "#e8c35a", "#2a1608", 0.8],
         ],
     },
+    // (The wilds director's peaceful finds, once seen: core/director.js FINDS. A fallen
+    // adventurer's remains, a skull; an old campsite, its ring of stones round its ashes and logs)
+    remains: {
+        rim: "#d6cdb8",
+        parts: [
+            ["M0,-9 a7.5,7.5 0 0 1 7.5,7.5 v3 h-3 v4.5 h-9 v-4.5 h-3 v-3 a7.5,7.5 0 0 1 7.5,-7.5 z", "#e8e0cc", "#2a1a10", 1],
+            ["M-3,-2 m-2,0 a2,2 0 1 0 4,0 a2,2 0 1 0 -4,0 M3,-2 m-2,0 a2,2 0 1 0 4,0 a2,2 0 1 0 -4,0", "#2a1a10", null, 0],
+            ["M-1.5,6 v2 M1.5,6 v2", null, "#2a1a10", 1],
+        ],
+    },
+    campsite: {
+        rim: "#c98a4a",
+        parts: [
+            ["M-8,4 a8,3.4 0 1 0 16,0 a8,3.4 0 1 0 -16,0", "#6a6460", "#2a1a10", 1],
+            ["M-5.5,3 L5.5,-1 M-5.5,-1 L5.5,3", null, "#2a1608", 2.4],
+            ["M0,-9 q4,4 1.5,8 q-4,-1 -3,-4 q-1,2 -2,3 q-1,-4 3.5,-7 z", "#e8903f", "#7a3a10", 0.8],
+        ],
+    },
     // (Each people's works: docs/WAR.md *The works*; rimmed in the colour of who holds it)
     mill: {
         rim: "#c9a46a",
