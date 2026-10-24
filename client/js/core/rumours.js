@@ -9,7 +9,8 @@
 // Which places, and whether found: the plan's places worth finding (its dungeons, but the hells'
 // (core/cultword.js tells of those); its ruins, caves, lairs, shrines and stones; the wild's
 // watchtowers and camps), the nearest first, those the player hasn't found yet (Explored
-// sighted: the maps' rule, so a rumour's place and its icon on the maps can never disagree).
+// knows: been near, or seen from high ground; the maps' rule, so a rumour's place and its icon on
+// the maps can never disagree).
 // Heard, each is kept with the character (app/game.js: memory.heard), written in the journal
 // ("Heard tell"), and drawn on the world map as a faint circle round about where it is
 // (circleOf), till the place is found.
@@ -172,13 +173,13 @@ export function rumouredBy(plan, id) {
 
 /**
  * The places round `at` ([x, y] metres: a town's) still to be found by the player (`explored`:
- * core/explored.js, its `sighted`), within `reach` metres: rumouredOf's, each with how far it is
+ * core/explored.js, its `knows`), within `reach` metres: rumouredOf's, each with how far it is
  * (`far`, metres), the nearest first (then by id).
  */
 export function rumoursNear(plan, at, explored, { reach = RUMOURS.reach } = {}) {
     return rumouredOf(plan)
         .map((place) => ({ ...place, far: hypot(place.at[0] - at[0], place.at[1] - at[1]) }))
-        .filter(({ far, at: [x, y] }) => far <= reach && !explored.sighted(x, y))
+        .filter(({ id, far, at: [x, y] }) => far <= reach && !explored.knows(id, x, y))
         .sort((a, b) => a.far - b.far || (a.id < b.id ? -1 : 1));
 }
 

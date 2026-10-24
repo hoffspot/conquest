@@ -629,6 +629,34 @@ to search on its reader's maps, and their party's; whoever buried it left a band
 The treasures hunted are kept in a snapshot (`SNAPSHOT_VERSION` 32, none in a world kept before),
 so a player joining finds them as they are; what's said between games changed (`NET_VERSION` 155).
 
+## Seen from high ground
+
+A player on a rise well above the land round them finds the places worth finding that the land
+between doesn't hide, without going near (`core/sighting.js`, the host's `#spotting`; the
+Alexandrian's "visible" locations, spotted from a distance).
+- **High ground** (`highGround`): the land stands at least 10 m above the average of eight points
+  80 m round. About one spot in twenty-one is, in the two worlds scanned (seeds 1 and 2):
+  hilltops, ridges and crags, not the plains.
+- **How far** (`reachOver`): 200 m, and 15 m more for each metre the player stands over the
+  place's ground, up to a kilometre.
+- **In sight** (`inSight`): no land along the way, sampled every 16 m, stands above the line from
+  the player's eyes (1.7 m up) to 4 m over the place's ground. The last 24 m at either end aren't
+  sampled: the rise's own top, and the place's own ground.
+- **What's found** (`sightedFrom`): the places worth finding they hadn't found (`core/places.js`
+  `placesOf`, and the dungeons' ways in), the nearest first: four from a typical rise, thirteen at
+  most in the two worlds scanned. The host looks each time it looks round (every 500 ms); a look
+  takes about a sixth of a millisecond. It's pure arithmetic over the lie of the land
+  (`terrain/height.js` `landHeight`), the same on every copy of the world.
+- **Kept** as spotted (`Explored.spot`, `spotted`, kept with the character; nothing's written till
+  something's seen, so older saves and snapshots carry on as they were). It's found wherever being
+  near would count (`Explored.knows`, the one rule): its icon on the world map, over the fog; the
+  rumour of it done with (`rumoursNear`, the journal's circles); a guild's request to survey it,
+  ready.
+- **Said**, with a quill's scratch: "From up here you can see a ruined castle, 900 m north-east:
+  it's on your map." (or how many).
+- **The party** finds them too, as found by the one who saw them ("Ada found …", and "found by
+  Ada" on the world map), as with shared finds (docs/WAR.md *Parties*).
+
 ## By night
 
 The world's clock has a day and a night (docs/GAME.md, *Day and night*), and the wild has its own

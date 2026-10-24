@@ -9712,6 +9712,60 @@ test("markers on the world map: one put down with its button, what it marks and 
     expect(minimap).toContain(shared.id);
 });
 
+test("from high ground the places in sight are found without going near: said how many, shown on the world map over the fog, none of them been near", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // The player on a rise far out in the wilds with five places in sight (found by scanning the
+    // world: core/sighting.js), none of them found; a look round later, found and said
+    const seen = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const { placesOf } = await import("/js/core/places.js");
+        const plan = game.world.plan;
+        const findable = [...placesOf(plan), ...plan.sites.filter(({ kind }) => kind === "dungeon")];
+        const atOf = (id) => findable.find((place) => place.id === id).at;
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // (Every word on the banner kept)
+        window.told = [];
+        new MutationObserver((records) => window.told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+
+        const before = game.worldMapView().icons.map(({ id }) => id);
+
+        battle.place(game.me, "town", [400, 2524]);
+        game.advance(0.6, { render: false });
+        game.advance(0.05, { render: false });
+
+        const spotted = [...game.explored.spotted];
+
+        return { spotted, before: spotted.filter((id) => before.includes(id)), near: spotted.filter((id) => game.explored.sighted(...atOf(id))), shown: game.worldMapView().icons.filter(({ id }) => spotted.includes(id)).length };
+    });
+
+    expect(seen.spotted).toHaveLength(5);
+    expect(seen).toMatchObject({ before: [], near: [], shown: 5 });
+    expect(await page.evaluate(() => window.told.includes("From up here you can see 5 places: they're on your map.")), JSON.stringify(await page.evaluate(() => window.told))).toBe(true);
+
+    // The world map, close in round the rise: their icons drawn over the fog
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("m");
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn, null, { polling: 100 });
+
+    const drawn = await page.evaluate(() => {
+        const { game, worldMap } = window.pellagos;
+
+        game.stop();
+        worldMap.view = { scale: 4, x: 400, z: 2524 };
+        worldMap.draw();
+
+        return worldMap.drawn.icons.length;
+    });
+
+    expect(drawn).toBeGreaterThanOrEqual(5);
+    await page.keyboard.press("Escape");
+});
+
 test("now and then, past the land nearest home, an elite leads its kind: gilded and radiant, its plate in gold, a star on the minimap from 80 m (at its edge while further than it shows); felled, its prize for the player near", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");

@@ -753,8 +753,9 @@ as a wagon!"
   watchtowers out in the wild; and the wild's camps (bandits, wolves, goblins, giant spiders, the restless dead,
   trolls, raiders, cultists). The nearest to the town first, within 2 km of it (`RUMOURS.reach`),
   and only those the player hasn't found and hasn't heard of (`rumoursNear`).
-- **Found** (core/explored.js `sighted`): the one rule for it, the maps' own: the player's been in
-  the chunk it's in, or one of the eight round it. So a rumour's place and its icon on the maps
+- **Found** (core/explored.js `knows`): the one rule for it, the maps' own: the player's been in
+  the chunk it's in, or one of the eight round it (`sighted`), or they've seen it from high ground
+  (`spotted`: docs/WILDS.md *Seen from high ground*). So a rumour's place and its icon on the maps
   never disagree: the icon shows just as the rumour's found.
 - **What's said** (`rumourWord`): a hook, which way it is from the town, always true, and what
   stands by it, then something wild said of it. What stands by it is the nearest farmstead,
@@ -3771,8 +3772,9 @@ they are: every site the world plan puts out between the settlements and every w
   cleared; a shrine, the stones and a camp keep their own.
 - **Where they're shown:** on the minimap, those in its view, where each stands once it's been set
   down (a site's heart, sites.js `placedAt`; a camp where it's pitched, overworld.js
-  `campPlacedAt`) and at its plan's spot till then. On the world map, only those within a chunk
-  of where the player's been.
+  `campPlacedAt`) and at its plan's spot till then. On the world map, only those found (core/
+  explored.js `knows`): within a chunk of where the player's been, or seen from high ground
+  (docs/WILDS.md *Seen from high ground*).
 
 **An adventurers' cache** (`core/caches.js`; docs/WILDS.md, *Adventurers' caches*) is marked with
 a chest's icon (`cache`: its rounded lid, iron bands and gold lock, rimmed gold) once the player's
