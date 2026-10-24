@@ -3,7 +3,8 @@
 // messages across the middle of the screen (in a fight, moved up under the buttons or down over the
 // quick actions where they'd cover those fighting). Down the right side, an icon for each of those
 // attacking the player: a likeness of them in a red frame, a thin line of their health along its
-// foot, whoever the player's set on glowing and pulsing; tapped or held, the game's told. Under a
+// foot, whoever the player's set on glowing and pulsing, and locked on, in the lock's sights;
+// tapped or held, the game's told. Under a
 // health bar, an orange bar shows stamina while it isn't full; under that, an icon for each thing
 // lingering on them (poison, a web...) on a blood-red disc, then each spell lasting on them (a
 // ward, Reflect...) and each boon (a blessing) on a sapphire tile, darkening round as it wears off:
@@ -24,6 +25,15 @@ const MESSAGE_GAP = 10;
 const MESSAGE_LOW = 150;
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
+
+// The lock's sights round the icon of an attacker the player's locked on (attackers): a bracket at
+// three corners, and a padlock at the fourth, its top left
+const LOCK_SIGHTS = `<svg viewBox="0 0 60 60">
+    <path d="M44,1.5 H58.5 V16 M58.5,44 V58.5 H44 M16,58.5 H1.5 V44" fill="none" stroke="#ffd25a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="9" cy="9" r="8.5" fill="#1d1712" stroke="#ffd25a" stroke-width="1.5"/>
+    <path d="M6,8.5 V6.8 a3,3 0 0 1 6,0 V8.5" fill="none" stroke="#ffd25a" stroke-width="1.7"/>
+    <rect x="4.6" y="8.3" width="8.8" height="6.4" rx="1.3" fill="#ffd25a"/>
+</svg>`;
 
 /**
  * How the bars over the others shrink and fade the farther their characters are from the player's
@@ -756,9 +766,10 @@ export class Hud {
 
     /**
      * The icons down the right side of the screen for those attacking the player, in order (none:
-     * gone): [{ id, name, hp, maxHp, target, picture }] (`target`: whoever the player's set on, its
-     * frame glowing and pulsing; `picture`: an ImageData, their likeness, or null till it's drawn,
-     * their name's first letter shown till then).
+     * gone): [{ id, name, hp, maxHp, target, locked, picture }] (`target`: whoever the player's set
+     * on, its frame glowing and pulsing; `locked`: the player locked on them, the lock's sights
+     * round it and a padlock at its corner; `picture`: an ImageData, their likeness, or null till
+     * it's drawn, their name's first letter shown till then).
      * Tapped, or held (HOLD_MS, not moving off it), each tells onAttacker.
      */
     attackers(list) {
@@ -780,7 +791,7 @@ export class Hud {
             }
         }
 
-        list.forEach(({ id, name, hp, maxHp, target, picture }, k) => {
+        list.forEach(({ id, name, hp, maxHp, target, locked = false, picture }, k) => {
             const icon = this.attackerIcons.get(id) ?? this.#attackerIcon(id);
             const health = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
 
@@ -790,7 +801,8 @@ export class Hud {
 
             icon.initial.textContent = name.slice(0, 1).toUpperCase();
             icon.root.classList.toggle("target", Boolean(target));
-            icon.root.setAttribute("aria-label", target ? `${name}, set on` : name);
+            icon.root.classList.toggle("locked", Boolean(locked));
+            icon.root.setAttribute("aria-label", locked ? `${name}, locked on (tap to let go)` : target ? `${name}, set on` : name);
             icon.root.setAttribute("aria-pressed", String(Boolean(target)));
             icon.health.style.transform = `scaleX(${health.toFixed(3)})`;
 
@@ -806,20 +818,23 @@ export class Hud {
         this.attackerColumn.hidden = list.length === 0;
     }
 
-    // An attacker's icon (attackers): a button with their likeness and a line of their health; a
-    // tap or a hold on it heard
+    // An attacker's icon (attackers): a button with their likeness and a line of their health, and
+    // the lock's sights (shown while locked on them); a tap or a hold on it heard
     #attackerIcon(id) {
         const root = element("button", "attacker");
         const canvas = element("canvas", "attacker-likeness");
         const initial = element("span", "attacker-initial");
         const line = element("span", "attacker-health");
         const health = element("span", "attacker-health-fill");
+        const lock = element("span", "attacker-lock");
 
         root.type = "button";
         root.dataset.id = id;
         line.append(health);
         initial.setAttribute("aria-hidden", "true");
-        root.append(initial, canvas, line);
+        lock.setAttribute("aria-hidden", "true");
+        lock.innerHTML = LOCK_SIGHTS;
+        root.append(initial, canvas, line, lock);
         pressable(root, (gesture, { time }) => this.onAttacker(id, gesture, time));
 
         const icon = { root, canvas, initial, health, painted: false };

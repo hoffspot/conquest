@@ -845,6 +845,7 @@ $("#largepointerswitch").checked = settings.largePointer;
 $("#resistswitch").checked = settings.resistSummons;
 $("#refuseswitch").checked = settings.refuseInvites;
 $("#snagswitch").checked = settings.autoSnag;
+$("#lockswitch").checked = settings.autoLock;
 $("#snagbutton").hidden = !settings.autoSnag;
 $("#followswitch").checked = settings.cameraFollows;
 $("#battlecamswitch").checked = settings.battleCam;
@@ -1091,6 +1092,7 @@ async function playing(save, { world, place, war }) {
     game.refuseInvites = settings.refuseInvites;
     game.autoSnag = settings.autoSnag;
     game.snagFilter = snagChoiceOf();
+    game.autoLock = settings.autoLock;
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -2582,6 +2584,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     game.refuseInvites = settings.refuseInvites;
     game.autoSnag = settings.autoSnag;
     game.snagFilter = snagChoiceOf();
+    game.autoLock = settings.autoLock;
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -4353,6 +4356,7 @@ $("#largepointerswitch").addEventListener("change", (event) => applySetting("lar
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 $("#refuseswitch").addEventListener("change", (event) => applySetting("refuseInvites", event.target.checked));
 $("#snagswitch").addEventListener("change", (event) => applySetting("autoSnag", event.target.checked));
+$("#lockswitch").addEventListener("change", (event) => applySetting("autoLock", event.target.checked));
 $("#snagbutton").addEventListener("click", openSnag);
 $("#snagall").addEventListener("click", () => snagChanged({ all: true }));
 $("#snaggrades").addEventListener("change", () => snagChanged());
@@ -4537,7 +4541,7 @@ function applySetting(key, value) {
     } else if (key === "quickSix") {
         state.game?.showQuick(quickShown());
         state.quickSetup?.showCount(quickShown());
-    } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag") {
+    } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock") {
         if (state.game) {
             state.game[key] = value;
         }

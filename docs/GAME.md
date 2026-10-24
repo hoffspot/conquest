@@ -1678,7 +1678,28 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   player on them where they stand (an `engage` order with `stand`, as tapping them does);
   tapped on whoever they're going after, they stop (`#halt`); tapped twice in quick succession
   (`DOUBLE_TAP_MS`), they run up to them; held (`HOLD_MS`), they walk up to them, into reach of
-  what's in hand (game.js `#attackerPressed`). Pressed from the keyboard, an icon's a tap.
+  what's in hand, locked on (game.js `#attackerPressed`). Pressed from the keyboard, an icon's a
+  tap. With **Auto target lock** on (*Locked on*, below), each of those locks on too, and a tap
+  on whoever they're locked on lets go instead.
+- **Locked on** (Game options, Gameplay: **Auto target lock**, on to start with; game.js
+  `autoLock`): whoever the player sets on, by a tap or a double tap on them or their icon, or
+  Attack on their wheel, is locked on (the `engage` order's `lock`; battle.js `lock`). It stays
+  their target wherever they go: walking or running off from it, it's still ringed, its bar
+  lit, their spells and blows in the quick actions aimed at it (game.js `#target`: who they're
+  set on, or else locked on), and its icon kept down the right, attacking them or not. Once they
+  stand again, it's struck if it's in reach, before whoever's nearer; out of reach, whoever is,
+  as ever (`#obey`); they don't go back after it of their own accord. Set on another, the lock
+  goes with them (with Auto target lock off, set on another without it, the lock's let go and
+  the other set on, not locked on). It's let go once it's fallen, once it's 40 metres off
+  (`LOCK_REACH`) or somewhere else (through a door, unless the player's going after it), and
+  once the player's fallen (`#keepLock`). While they're locked on it, its icon is in the lock's
+  sights: a gold bracket at three of its corners and a padlock at its top left (hud.js
+  `LOCK_SIGHTS`, `.attacker.locked`), told "locked on (tap to let go)". **Tapped**, that icon lets
+  go (an `unlock` command): set on no one, nothing ringed, till they choose someone again;
+  standing, they strike whoever's in reach, as ever; walking somewhere, they walk on. With Auto
+  target lock off, the player's set on whoever they choose as before, unlocked, but an enemy's
+  icon **held** locks on it, walking up to it. What's shared (`NET_VERSION` 176) and kept (each
+  actor's `lock`: `SNAPSHOT_VERSION` 40, none in a world kept before) changed.
 - **The party** (game.js `#partyIcons`; hud.js `party`; core/host.js `partyOf`) is those with the
   player: their hired adventurers (docs/WAR.md *Followers*), then the creatures they've called
   to their side, then the dead they've raised (docs/MAGIC.md), each with an icon down the left
@@ -5112,7 +5133,8 @@ it.
    what's in hand; Attack, at the top of an enemy's wheel, walks up to them. Tapping whoever the
    player's going after, or the player themselves, while they're walking or running anywhere,
    stops them where they are (game.js `#halt`: still set on whoever they were after, where they
-   stand). Where the player and someone else overlap on the screen, a tap's the other's: the
+   stand). With Auto target lock on, whoever's tapped is locked on too, and stays the player's
+   target as they walk off (*Locked on*). Where the player and someone else overlap on the screen, a tap's the other's: the
    player's counted 6 pixels further off (`#whoIsAt`), whichever's looked at first, so a tap on
    whoever stands just beyond their head, the camera behind them, is theirs. The attackers'
    icons down the right side do the same for whoever each is, held
@@ -5258,7 +5280,8 @@ it.
    - **Camera:** Camera follows, the battle cam, Camera turning and Invert tilt (*The camera's
      settings*, above).
    - **Gameplay:** the Auto-snag switch (off to start with) and under it, while it's on, what it
-     takes (its own page: docs/WILDS.md *What they leave*); Resist all summons; Refuse party
+     takes (its own page: docs/WILDS.md *What they leave*); Auto target lock (on to start with:
+     *Locked on*, under *Those attacking the player*); Resist all summons; Refuse party
      invites.
    - **Debug log** (below).
 
