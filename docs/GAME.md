@@ -4889,7 +4889,9 @@ it.
    hash, fetches a file the loader's fetching once (the page importing it straight after waits for
    it), and lets go of what no release in use lists: the newest's, and that of each page still
    open on an older one (generated/asset_streaming_plan.md, section 5). On a first visit the
-   loader waits for the service worker to take over (3 s at most), so it keeps what's downloaded.
+   loader waits for the service worker to take over (3 s at most), so it keeps what's downloaded,
+   and the page then asks it to keep `main.js` and what it imports, which came before it took
+   over, from the browser's own copies.
    The page itself, and `version.js` (stamped with the commit after the manifest's made), are
    checked with the server on each load. The game's own server (`npm start`, `npm run
    world-server`) tags each file by its hash, so one that's the same is "not modified" whatever
@@ -4989,11 +4991,13 @@ it.
    - **Joining** brings the character played last; **Change who comes** chooses another kept, or
      a new one (with fewer than six).
    - **Back into a world** (app/rejoin.js; main.js `goBackIn`). While the player's in another's
-     world (one on a world server, or a friend's joined by its code), where is kept on this device
-     (`pellagos.inworld`: the server and world, or the code and the broker it was joined through;
-     the character on this device, or their hero's slot in a world that keeps them), written again
-     every ten seconds (`REJOIN.every`). It's let go of once they leave as they mean to (Quit),
-     are sent out, or the world's host closes it.
+     world (one on a world server, or a friend's joined by its code), or has their own open to
+     friends through a world server's broker, where is kept on this device (`pellagos.inworld`:
+     the server and world, or the code and the broker it was joined through, or their own world's
+     code and the broker's token to take its listing back; the character on this device, or their
+     hero's slot in a world that keeps them), written again every ten seconds (`REJOIN.every`).
+     It's let go of once they leave as they mean to (Quit, or closing their own to others), are
+     sent out, or the world's host closes it.
      - **When:** the game started again within half an hour of that (`REJOIN.within`), after a
        crash or a reload, it goes straight back in. A join link followed goes back in if it's that
        world's, else it's asked to join as ever. A game whose link's lost for good while playing
@@ -5003,7 +5007,8 @@ it.
        - on a world server: reaching it, showing who they are, finding their place in the world,
          opening the way in, and coming in, the world sent;
        - in a friend's: reaching the server, finding the world by its code (and linking to it),
-         and coming in.
+         and coming in;
+       - in their own: loading it, and opening it to their friends again.
      - **Each stage** is marked under way (a gold ring turning), done (a tick), or where it went
        wrong (a cross), with why, in the words joining uses (the server's, the relay's or the
        host's), and **Try again**. **Cancel** (or Escape) stops it, closing whatever link it had
@@ -5011,6 +5016,12 @@ it.
      - **In:** once the world's come, the loading screen builds it as ever, and the same character
        carries on where they stood. On a world server, their place is kept five minutes, and the
        session left behind is taken over (docs/SERVER.md, *Coming in again while they're in*).
+     - **Their own world, opened again:** the broker keeps its listing two minutes once its host's
+       page has gone without closing it to others (docs/SERVER.md, *Players' own worlds*). Taken
+       back in that time, it's under the same code ("Your world's open to friends again, under its
+       code, ABCD: those who were in it are coming back."), listed as it was, and those who were in
+       it, told it's away meanwhile, are told it's open again and go straight back in. Later, it's
+       opened under a new code, and said so. Through the old relay, there's no code to take back.
    - **You** (app/you.js; docs/SERVER.md, "Players and their codes"), under the title's buttons:
      the player's own identity, the same on every server, made the first time it's wanted (going
      by the name of the character played last). **The name you go by**, kept when it's changed;

@@ -480,8 +480,11 @@ const peerOptions = ({ RTC, timing }) => ({ ...(RTC !== undefined ? { RTC } : {}
 /**
  * Open a game's world to others (its host being this game's): resolves with { code (for others
  * to join by), hosting (core/netplay.js), link (the RelayLink, or BrokerHost), close() (closed to
- * others again) }. Through `broker` ({ address (app/peer.js brokerOf), listing: { name, people,
- * most, net, listed }, and for the tests RTC, timing }) if it's given, else the relay at `address`. Hears onChange() when
+ * others again), reclaimed (whether it's under the code it had before) }. Through `broker` ({
+ * address (app/peer.js brokerOf), listing: { name, people, most, net, listed }, reclaim: { id,
+ * token } (the listing it had, before its page was started again: taken back if the broker's kept
+ * it, those in it before sent to come in again; else a new code), and for the tests RTC, timing })
+ * if it's given, else the relay at `address`. Hears onChange() when
  * someone comes or goes; onLink("lost") when its link's dropped and it's coming back on another,
  * onLink(null) once it has (everyone sent the world again); and onDrop() if the link's lost for good.
  * `visitors` ({ arrive, leave }), if it's given: each who comes in taken as arrive(brought) gives
@@ -492,6 +495,7 @@ const peerOptions = ({ RTC, timing }) => ({ ...(RTC !== undefined ? { RTC } : {}
 export async function openWorld(game, { address = null, broker = null, onChange = () => {}, onLink = () => {}, onDrop = () => {}, timing = LINK_TIMING, visitors = null } = {}) {
     let link;
     let code;
+    let reclaimed = false;
 
     if (broker) {
         const { listed = false, ...listing } = broker.listing;
@@ -503,7 +507,11 @@ export async function openWorld(game, { address = null, broker = null, onChange 
             // (Whether it can be reached, from here and from its own network: the listing rule's)
             const reach = await reachability({ ice: link.ice, ...peerOptions(broker) });
 
-            code = await link.host({ ...listing, players: link.playersNow(), visibility: listed ? "listed" : "code", ...reach, temporary: /iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") });
+            const announcement = { ...listing, players: link.playersNow(), visibility: listed ? "listed" : "code", ...reach, temporary: /iPhone|iPad/.test(globalThis.navigator?.userAgent ?? "") };
+
+            code = broker.reclaim ? await link.reclaim(broker.reclaim.id, broker.reclaim.token, announcement).catch(() => null) : null;
+            reclaimed = code !== null;
+            code ??= await link.host(announcement);
         } catch (error) {
             link.close();
             throw error;
@@ -553,6 +561,7 @@ export async function openWorld(game, { address = null, broker = null, onChange 
         code,
         hosting,
         link,
+        reclaimed,
         close() {
             game.hosting = null;
             hosting.stop();

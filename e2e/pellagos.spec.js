@@ -189,9 +189,12 @@ test("loads everything, listing what it downloads, then shows the title", async 
     expect(loaded.groups).toEqual([true, true, true, true, true, true]);
 });
 
-test("loaded again, the game asks the server for none of its code, engine, WebAssembly, body or fonts: the service worker keeps each by the hash of its bytes, and gives what its workers ask for by name from the same copies; a file it hasn't, it fetches, that one alone", async ({ page, context }) => {
+test("loaded again, the game asks the server for none of its code, engine, WebAssembly, body or fonts: the service worker keeps each by the hash of its bytes, and gives what its workers ask for by name from the same copies; a file it hasn't, it fetches, that one alone", async ({ page }) => {
     // (Played twice over, and a third time: more than the usual time)
     test.setTimeout(300000);
+
+    // (The page's own: each test's page is in a browser of its own, e2e/fixtures.js)
+    const context = page.context();
 
     // What reaches the server: what the service worker fetches, and anything the page fetches that
     // the service worker doesn't answer
