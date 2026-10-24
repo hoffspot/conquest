@@ -182,6 +182,17 @@ const PARTS = {
         m: { wear: [["blueTunic", "shirt"], ["jerkin", null], ["trousers", "breeches"], ["boots"], ["belt"], ["ledger"]], hair: ["short", "swept", "bald"], beard: ["none", "goatee", "short"], build: { weight: [0.3, 0.55], muscle: [0.3, 0.45], belly: [0, 0.3] } },
         f: { wear: [["chemise"], ["velvetBodice"], ["kirtle", "gown"], ["boots"], ["ledger"]], hair: ["topknot", "bob", "long"], build: { weight: [0.35, 0.55], muscle: [0.32, 0.45], bust: [0.4, 0.75] } },
     },
+    // The strangers met out in the wilds (core/director.js STRANGERS): a pedlar, their pannier on
+    // their back and a walking staff in hand; a hunter in greens and leather, their bow and quiver
+    // slung
+    pedlar: {
+        m: { wear: [["brownTunic", "russetTunic", "smock"], ["breeches", "trousers"], ["boots"], ["belt"], ["hood", "leatherCap", null], ["pannier"], ["walkingStaff"]], hair: ["short", "swept", "bald"], beard: ["full", "short", "goatee"], build: { weight: [0.4, 0.75], muscle: [0.4, 0.6], belly: [0, 0.5] } },
+        f: { wear: [["chemise"], [null, "bodice"], ["brownSkirt", "kirtle"], ["boots"], ["hood", "coif", null], ["pannier"], ["walkingStaff"]], hair: ["long", "topknot", "bob"], build: { weight: [0.4, 0.7], muscle: [0.4, 0.55], bust: [0.4, 0.8] } },
+    },
+    hunter: {
+        m: { wear: [["greenTunic", "brownTunic"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["hood", null], ["bow"], ["quiver"]], hair: ["short", "swept", "long"], beard: ["short", "stubble", "full"], build: { weight: [0.4, 0.6], muscle: [0.5, 0.75], belly: [0, 0.1] }, armed: true },
+        f: { wear: [["greenTunic", "brownTunic"], ["jerkin"], ["breeches"], ["boots"], ["belt"], ["hood", null], ["bow"], ["quiver"]], hair: ["ponytail", "long", "bob"], build: { weight: [0.4, 0.55], muscle: [0.45, 0.65], bust: [0.4, 0.7] }, armed: true },
+    },
 };
 
 /** The townsfolk's callings that have looks of their own (core/townsfolk.js CALLINGS'). */

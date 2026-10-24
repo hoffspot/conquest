@@ -9843,6 +9843,135 @@ test("the wilds director lays fresh tracks ahead of a player crossing the wilds,
     expect(fresh.told.some((text) => /^Fresh tracks, not long made: an? .+'s, and not alone\. They lead off to the [a-z-]+: they're on your minimap\.$/.test(text)), JSON.stringify(fresh.told)).toBe(true);
 });
 
+test("the wilds director puts strangers on the way: a pedlar selling odds and ends, a wounded hunter healed with a draught telling of a place round about, hungry bandits hailing the player and paid to let them by", async ({ page }) => {
+    // (Three strangers met, each drawn, walked up to and talked to)
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=1");
+
+    const pack = page.locator(".pack");
+    const talk = page.locator(".talk");
+
+    // Out in the wilds 600 m north of the start town, going north, the next card a stranger (the
+    // one given), walked up to them and tapped till the talk's begun
+    const meet = (kind) =>
+        page.evaluate(async (kind) => {
+            const { game, session } = window.pellagos;
+            const { host } = game;
+            const player = game.battle.actor("player");
+
+            game.stop();
+            Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+            Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+            // (Every word on the banner kept)
+            window.told ??= [];
+
+            if (!window.watching) {
+                window.watching = true;
+                new MutationObserver((records) => window.told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+            }
+
+            const settle = async (steps, render = false) => {
+                for (let k = 0; k < steps; k++) {
+                    player.hp = player.maxHp;
+                    game.advance(0.25, { render });
+
+                    while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                        await new Promise((resolve) => setTimeout(resolve, 0));
+                    }
+                }
+            };
+            const goTo = (x, y) => Object.assign(player, { x, y, square: [Math.floor(x), Math.floor(y)], path: [], order: null, progress: null, target: null });
+            const [sx, sy] = game.world.start.at;
+
+            goTo(sx, sy - 600 - 120 * ["pedlar", "hunter", "bandits"].indexOf(kind));
+            host.travel.set("player", { at: [player.x, player.y], walked: 600, next: 600, heading: [0, -1], deck: ["stranger"], strangers: [kind] });
+            await settle(4);
+
+            const stranger = [...host.strangers.values()].find((each) => each.kind === kind);
+
+            if (!stranger) {
+                return null;
+            }
+
+            const one = game.battle.actor(stranger.ids[0]);
+
+            // (Come near: said, and drawn, a step at a time; the bandits' chief hailing the player)
+            goTo(one.x + 6, one.y);
+            await settle(4, true);
+
+            const hailed = [...(game.hud.said?.keys() ?? [])].includes(one.id) && Boolean(stranger.hailed?.includes("player"));
+
+            for (let k = 0; k < 40 && !game.avatars.has(one.id); k++) {
+                await settle(1, true);
+            }
+
+            const drawn = game.avatars.has(one.id);
+
+            // (Tapped, the camera turned to look past the player at them, till they're talking)
+            for (let tap = 0; tap < 8 && one.talkingTo !== "player"; tap++) {
+                game.cameraFollow.yaw = Math.atan2(player.x - one.x, player.y - one.y);
+                game.cameraFollow.turning = 0;
+                game.advance(0.2);
+
+                const spot = session.view.toScreen(game.avatars.get(one.id).point(0.6));
+
+                if (spot) {
+                    game.tap(spot.x, spot.y, { time: performance.now() + 9000 * (tap + 1) });
+                }
+
+                game.advance(4, { render: false });
+            }
+
+            game.start();
+
+            return { id: stranger.id, one: one.id, name: one.name, toll: stranger.toll ?? null, drawn, hailed, talking: one.talkingTo, gold: game.progress.gold };
+        }, kind);
+
+    // A pedlar: said, drawn; their odds and ends for sale, a healing draught among them
+    const pedlar = await meet("pedlar");
+
+    expect(pedlar).toMatchObject({ drawn: true, talking: "player" });
+    await expect(talk).toBeVisible();
+    await expect(talk.locator(".talk-name")).toHaveText(pedlar.name);
+    await expect(talk.locator(".talk-title")).toHaveText("Pedlar");
+    await talk.getByRole("button", { name: /for sale/ }).click();
+    await expect(pack).toBeVisible();
+    await expect(pack.locator(".pack-title")).toContainText("Trading with");
+    await expect(pack.locator(".wares .pack-row", { hasText: "Healing draught" })).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await expect(pack).toBeHidden();
+
+    // A wounded hunter: given a draught, they tell of a place round about, in the journal and on the map
+    await page.evaluate(() => window.pellagos.game.progress.stow({ id: "potion", quality: "common" }));
+
+    const hunter = await meet("hunter");
+
+    expect(hunter).toMatchObject({ drawn: true, talking: "player" });
+    await expect(talk.locator(".talk-title")).toHaveText("Hunter");
+    await talk.getByRole("button", { name: /Here, drink this/ }).click();
+    await expect(talk).toBeHidden();
+    await expect.poll(() => page.evaluate(() => window.pellagos.game.memory.heard?.at(-1)?.hunter ?? false)).toBe(true);
+
+    // Hungry bandits: their chief hails the player, and wants food or gold; paid, they let them by
+    const bandits = await meet("bandits");
+
+    expect(bandits).toMatchObject({ drawn: true, hailed: true, talking: "player" });
+    await expect(talk.locator(".talk-title")).toHaveText("Outlaw");
+    await expect(talk.locator(".talk-line")).toContainText(`${bandits.toll} gold`);
+    await talk.getByRole("button", { name: /Here's your gold/ }).click();
+    await expect.poll(() => page.evaluate((id) => window.pellagos.game.host.strangers.get(id)?.paid, bandits.id)).toBe("player");
+
+    const after = await page.evaluate(({ id }) => ({ gold: window.pellagos.game.progress.gold, neutral: window.pellagos.game.host.strangers.get(id).ids.every((each) => window.pellagos.game.battle.actor(each).neutral), told: window.told }), bandits);
+
+    expect(after.gold).toBe(bandits.gold - bandits.toll);
+    expect(after.neutral).toBe(true);
+    expect(after.told.some((text) => text.startsWith("A pedlar, resting by the way")), JSON.stringify(after.told)).toBe(true);
+    expect(after.told.some((text) => text.startsWith("Someone's down ahead, hurt")), JSON.stringify(after.told)).toBe(true);
+    expect(after.told.some((text) => new RegExp(`^${hunter.name.split(" ")[0]} tells you of .+ near .+\\. It's in your journal, and on your map\\.$`).test(text)), JSON.stringify(after.told)).toBe(true);
+    expect(after.told.some((text) => text.startsWith("Bandits bar your way, hungry")), JSON.stringify(after.told)).toBe(true);
+});
+
 test("a treasure map read out in the wilds: its circle on the world map and the minimap and in the journal; its keepers woken as the player comes near; where it's buried glinting; put down, it's dug up, the player's share in it, and the hunt's done", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 

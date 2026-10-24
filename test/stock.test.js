@@ -1,9 +1,11 @@
 // The shops' stock (client/js/core/stock.js, with core/progress.js SHOPS and core/host.js;
 // docs/WAR.md *Shops*): a specialist's and a master's new assortment each day and their daily
-// special, as many of each as there are for everyone who plays together; a blacksmith's as well
-// made as the player's mighty; what each shop buys
+// special, as many of each as there are for everyone who plays together; a pedlar's odds and ends
+// out in the wilds, and some days a special; a blacksmith's as well made as the player's mighty;
+// what each shop buys
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { CURES } from "../client/js/core/afflictions.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { dayOf, elapsedOf } from "../client/js/core/daytime.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
@@ -35,8 +37,8 @@ function atShop(shop, progress = {}) {
 }
 
 describe("a shop's daily stock (stock.js)", () => {
-    it("has the specialists and the masters keep a daily stock, a blacksmith not", () => {
-        assert.deepEqual(DAILY, ["swordsmith", "armorer", "scriptorium", "alchemist", "masterSwordsmith", "masterArmorer", "emporium"]);
+    it("has the specialists, the masters and a pedlar keep a daily stock, a blacksmith not", () => {
+        assert.deepEqual(DAILY, ["swordsmith", "armorer", "scriptorium", "alchemist", "masterSwordsmith", "masterArmorer", "emporium", "pedlar"]);
         assert.equal(dailyStock("smith"), null);
         assert.equal(dailyStock("guild"), null);
     });
@@ -52,7 +54,7 @@ describe("a shop's daily stock (stock.js)", () => {
         }
     });
 
-    it("has in what the shop deals in, as well made or as rare as it keeps, so many of each; and a special of the rarest (or one it has in as if it were)", () => {
+    it("has in what the shop deals in, as well made or as rare as it keeps, so many of each; and a special of the rarest (or one it has in as if it were), every day but at a pedlar's", () => {
         for (const shop of DAILY) {
             const { items, daily } = SHOPS[shop];
 
@@ -71,10 +73,32 @@ describe("a shop's daily stock (stock.js)", () => {
                 assert.equal(new Set(shelves.map(({ id, quality }) => `${id}|${quality}`)).size, shelves.length);
                 assert.ok(shelves.every(({ id }) => shelves.filter((ware) => ware.id === id).length <= 2));
 
-                assert.ok(items.includes(special.id), `${shop}'s special ${special.id}`);
+                if (!special) {
+                    assert.ok(daily.sometimes < 1, `${shop} day ${day}: a special`);
+
+                    continue;
+                }
+
+                assert.ok(items.includes(special.id) || daily.specials?.includes(special.id), `${shop}'s special ${special.id}`);
                 assert.ok(daily.special[gradeOf(special)] > 0 || daily.specials?.includes(special.id), `${shop}'s special ${special.id} ${gradeOf(special)}`);
             }
         }
+    });
+
+    it("has a pedlar's odds and ends: a healing draught and a few more draughts and cures, and some days a common treasure map or a charm, a little dearer than in town", () => {
+        const days = Array.from({ length: 200 }, (_, day) => dailyStock("pedlar", { seed: 3, key: "stranger-1", day }));
+        const specials = days.map(({ special }) => special).filter(Boolean);
+
+        for (const { wares: shelves } of days) {
+            assert.ok(shelves.some(({ id }) => id === "potion"));
+            assert.ok(shelves.every(({ id, quality }) => quality === "common" && (id === "potion" || id === "glowcapDraught" || id in CURES)), shelves.map(({ id }) => id).join());
+        }
+
+        assert.ok(Math.abs(specials.length / days.length - SHOPS.pedlar.daily.sometimes) < 0.1, `${specials.length} days of 200 with a special`);
+        assert.ok(specials.every(({ id, quality = "common" }) => (id === "treasureMap" || ITEMS[id].charm) && quality === "common"));
+        assert.ok(specials.some(({ id }) => id === "treasureMap") && specials.some(({ id }) => ITEMS[id].charm));
+        assert.equal(shopPrice({ id: "potion" }, "pedlar"), Math.round(priceOf({ id: "potion" }) * 1.25));
+        assert.ok(shopPrice({ id: "potion" }, "pedlar") > shopPrice({ id: "potion" }, "temple"));
     });
 
     it("has the specialists' wares better made than a blacksmith's best for the mightiest, and the masters' better still", () => {
@@ -189,7 +213,7 @@ describe("what each shop buys (progress.js buys)", () => {
         assert.deepEqual(buyers("ring"), ["emporium", "arcane", "abbey", "guild"]);
         assert.deepEqual(buyers("scrollFireball"), ["scriptorium", "emporium", "arcane", "abbey", "guild"]);
         assert.deepEqual(buyers("luckyCoin"), ["scriptorium", "emporium", "arcane", "abbey", "guild"]);
-        assert.deepEqual(buyers("elixirOfStrength"), ["alchemist", "arcane", "abbey", "temple", "guild"]);
+        assert.deepEqual(buyers("elixirOfStrength"), ["alchemist", "arcane", "abbey", "temple", "pedlar", "guild"]);
         assert.deepEqual(buyers("ale"), ["tavern", "guild"]);
         assert.deepEqual(buyers("wolfPelt"), ["guild"]);
         assert.deepEqual(buyers("tomeFear"), ["scriptorium", "emporium", "arcane", "abbey", "guild"]);

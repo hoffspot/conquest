@@ -2,18 +2,22 @@
 // far a player crosses the wilds, the next card of a shuffled deck dealt ahead of them (an
 // adventurer's cache, a fallen adventurer's remains, an old campsite), each once a deck; the
 // remains searched for a share each, a note in their hand now and then; an old campsite safe to
-// camp at with the wild nearer, its fire lit in the ring, the campers waking well rested
+// camp at with the wild nearer, its fire lit in the ring, the campers waking well rested; fresh
+// tracks to a pack; and the strangers met on the way: a pedlar selling odds and ends, a wounded
+// hunter who tells of a place round about for their healing, hungry bandits wanting food or gold
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { LOOKS } from "../client/js/beasts/looks.js";
 import { CREATURES, WILD } from "../client/js/core/creatures.js";
-import { DIRECTOR, FINDS, FRESH, freshTrail, noteOf, PACING, PEACEFUL, peacefulNext, rollRemains, shuffled, TRACKLESS, WELL_RESTED } from "../client/js/core/director.js";
+import { banditToll, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, noteOf, PACING, PEACEFUL, peacefulNext, rollRemains, shuffled, STRANGERS, TRACKLESS, WELL_RESTED } from "../client/js/core/director.js";
 import { hypot } from "../client/js/core/exact.js";
 import { HOST_PLAYER, Host, REST, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { CHEST_GOLD } from "../client/js/core/places.js";
+import { ITEMS } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
+import { rumouredOf } from "../client/js/core/rumours.js";
 import { TREASURE_MAP } from "../client/js/core/treasure.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { lookPrint } from "../client/js/world/tracks3d.js";
@@ -52,11 +56,12 @@ function hosted(deck) {
 
 // The player walked out of the start town (seed 2's: north-east), `step` metres each half a
 // second, from `from` metres out, till something's dealt before them (or they've gone `metres`):
-// how far they went, where they are, and what was dealt ({ cache }, { find } or { tracks })
+// how far they went, where they are, and what was dealt ({ cache }, { find }, { tracks } or
+// { stranger })
 function walk({ host, world, me }, { metres = 1500, step = 8, from = 0 } = {}) {
     const [sx, sy] = world.start.at;
     // (By the ids handed out: the last one dealt may be let go as the next's dealt)
-    const [caches, finds, fresh] = [host.nextCache, host.nextFind, host.nextFresh];
+    const [caches, finds, fresh, strangers] = [host.nextCache, host.nextFind, host.nextFresh, host.nextStranger];
 
     for (let d = from; d <= metres; d += step) {
         const at = [Math.floor(sx + Math.SQRT1_2 * d), Math.floor(sy + Math.SQRT1_2 * d)];
@@ -65,12 +70,19 @@ function walk({ host, world, me }, { metres = 1500, step = 8, from = 0 } = {}) {
         me.hp = me.maxHp;
         run(host, 500);
 
-        if (host.nextCache > caches || host.nextFind > finds || host.nextFresh > fresh) {
-            return { d, at, cache: host.nextCache > caches ? host.caches.get(`cache-${caches}`) : null, find: host.nextFind > finds ? host.finds.get(`find-${finds}`) : null, tracks: host.nextFresh > fresh ? host.fresh.get(`fresh-${fresh}`) : null };
+        if (host.nextCache > caches || host.nextFind > finds || host.nextFresh > fresh || host.nextStranger > strangers) {
+            return {
+                d,
+                at,
+                cache: host.nextCache > caches ? host.caches.get(`cache-${caches}`) : null,
+                find: host.nextFind > finds ? host.finds.get(`find-${finds}`) : null,
+                tracks: host.nextFresh > fresh ? host.fresh.get(`fresh-${fresh}`) : null,
+                stranger: host.nextStranger > strangers ? host.strangers.get(`stranger-${strangers}`) : null,
+            };
         }
     }
 
-    return { d: null, at: [me.x, me.y], cache: null, find: null, tracks: null };
+    return { d: null, at: [me.x, me.y], cache: null, find: null, tracks: null, stranger: null };
 }
 
 describe("the wilds director's deck (director.js)", () => {
@@ -439,5 +451,240 @@ describe("the wilds director's fresh tracks (director.js FRESH; host.js #putTrac
         tracks.until = host.battle.time;
         run(host, 1000);
         assert.ok(!host.fresh.has(tracks.id), "(old: gone)");
+    });
+});
+
+describe("the strangers met on the way (director.js STRANGERS; host.js #putStranger)", () => {
+    // A stranger of a kind (`kind`) met out in the wilds, the player walked up beside them (their
+    // leader, for the bandits), with a healing draught, a hot meal and gold in their pack
+    function meet(kind) {
+        const context = hosted(["stranger"]);
+        const { host, me } = context;
+
+        host.travel.get(HOST_PLAYER).strangers = [kind];
+
+        const { stranger } = walk(context);
+        const one = host.battle.actor(stranger.ids[0]);
+        const player = host.players.get(HOST_PLAYER);
+
+        player.progress.gold = 500;
+        player.progress.stow({ id: "potion", quality: "common" });
+        player.progress.stow({ id: "meal", quality: "common" });
+        put(me, [one.square[0] + 1, one.square[1]]);
+
+        return { ...context, stranger, one, player };
+    }
+
+    const talk = (host, id) => host.command(HOST_PLAYER, { type: "talk", with: id });
+    const effect = (host, done) => host.command(HOST_PLAYER, { type: "effect", effect: done });
+
+    it("meets each stranger once before any again, as the cards are dealt; asks a toll of hungry bandits richer further out; takes meat for food before a hot meal", () => {
+        for (let seed = 1; seed <= 20; seed++) {
+            const random = createRandom(seed);
+            const round = shuffled(random, null, STRANGERS.kinds);
+
+            assert.deepEqual([...round].sort(), [...STRANGERS.kinds].sort());
+            assert.notEqual(shuffled(random, round.at(-1), STRANGERS.kinds)[0], round.at(-1));
+        }
+
+        const random = createRandom(3);
+        const near = Array.from({ length: 200 }, () => banditToll(1, random));
+        const far = Array.from({ length: 200 }, () => banditToll(6, random));
+
+        assert.ok(near.every((gold) => gold >= STRANGERS.bandits.gold[0] && gold <= STRANGERS.bandits.gold[1]));
+        assert.ok(Math.min(...far) > Math.max(...near) * 0.9, "(richer further out)");
+        assert.ok(DIRECTOR.cards.includes("stranger") && !PEACEFUL.includes("stranger"));
+
+        const meat = Object.keys(ITEMS).find((id) => ITEMS[id].food);
+
+        assert.deepEqual(foodFor([{ id: meat, count: 3 }, { id: "meal", count: 1 }]), [{ id: meat, count: STRANGERS.bandits.meat }]);
+        assert.deepEqual(foodFor([{ id: meat, count: 1 }, { id: "meal", count: 2 }, null]), [{ id: "meal", count: 1 }]);
+        assert.equal(foodFor([{ id: meat, count: 1 }, { id: "potion", count: 4 }]), null);
+    });
+
+    it("puts a pedlar out ahead of the player, resting by the way, who sells odds and ends out of their own stock, a little dearer than in town", () => {
+        const { host, stranger, one, player } = meet("pedlar");
+        const folk = host.folk.get(one.id);
+
+        assert.equal(stranger.kind, "pedlar");
+        assert.ok(one.neutral && one.kind === "folk" && one.role === "pedlar");
+        assert.equal(folk.shop, "pedlar");
+        assert.equal(folk.talk, "pedlar");
+        assert.equal(host.strangerOf(one.id), stranger);
+
+        const stock = host.stockOf(one.id);
+        const potion = stock.wares.find(({ id }) => id === "potion");
+
+        assert.ok(potion, "(a healing draught, always)");
+        assert.deepEqual(talk(host, one.id), { ok: true });
+
+        const gold = player.progress.gold;
+
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: { id: "potion", quality: "common" }, from: one.id }), { ok: true });
+        assert.ok(gold - player.progress.gold > Math.round(ITEMS.potion.price * 1.1), `(${gold - player.progress.gold} gold)`);
+        assert.equal(host.stockOf(one.id).wares.find(({ id }) => id === "potion").left, potion.left - 1);
+    });
+
+    it("has a wounded hunter, healed with a draught, tell the player of a place round about they hadn't found, then go on their way", () => {
+        const { host, stranger, one, player } = meet("hunter");
+
+        assert.ok(one.hp <= one.maxHp * STRANGERS.hunter.wounded + 1, `(${one.hp} of ${one.maxHp})`);
+        assert.deepEqual(effect(host, { tend: "draught" }), { ok: false, reason: "talking" }, "(not talking to them)");
+        assert.deepEqual(talk(host, one.id), { ok: true });
+
+        const draughts = player.progress.held("potion");
+
+        assert.deepEqual(effect(host, { tend: "draught" }), { ok: true });
+
+        const events = run(host, 100);
+        const tended = events.find(({ type, change }) => type === "stranger" && change === "tended");
+
+        assert.equal(player.progress.held("potion"), draughts - 1);
+        assert.equal(one.hp, one.maxHp);
+        assert.equal(stranger.tended, HOST_PLAYER);
+        assert.equal(tended?.by, HOST_PLAYER);
+        assert.equal(tended.place, noteOf(rumouredOf(host.world.plan), stranger.at, (id, x, y) => player.explored.knows(id, x, y)));
+        assert.ok(tended.place, "(somewhere round about)");
+        assert.deepEqual(effect(host, { tend: "draught" }), { ok: false, reason: "command" }, "(once)");
+
+        // (On their way once the talk's over, a while after, at their own pace)
+        talk(host, null);
+
+        const speed = one.speed;
+        const off = run(host, STRANGERS.hunter.thanks + 1000).find(({ type, change }) => type === "stranger" && change === "off");
+
+        assert.equal(off?.limping, false);
+        assert.equal(one.speed, speed);
+        assert.ok(one.routine.stops.length === 1 && hypot(one.routine.stops[0].square[0] - one.x, one.routine.stops[0].square[1] - one.y) > STRANGERS.hunter.away / 2, "(going off)");
+    });
+
+    it("has a wounded hunter healed by a player's healing spell too; turned down, or left unhealed, limping off", () => {
+        const healed = meet("hunter");
+        const progress = healed.player.progress;
+
+        progress.learn("vigor");
+        healed.host.players.get(HOST_PLAYER).readyAt = {};
+        healed.me.spellReadyAt = 0;
+
+        const cast = healed.host.command(HOST_PLAYER, { type: "cast", spell: "vigor", target: healed.one.id });
+
+        assert.deepEqual(cast, { ok: true });
+        assert.ok(run(healed.host, 3000).some(({ type, change, by }) => type === "stranger" && change === "tended" && by === HOST_PLAYER));
+
+        // (Turned down: off at once, limping)
+        const refused = meet("hunter");
+        const speed = refused.one.speed;
+
+        talk(refused.host, refused.one.id);
+        assert.deepEqual(effect(refused.host, { tend: "no" }), { ok: true });
+        assert.ok(run(refused.host, 100).some(({ type, change, limping }) => type === "stranger" && change === "off" && limping));
+        assert.equal(refused.one.speed, speed * STRANGERS.hunter.limp);
+        assert.deepEqual(effect(refused.host, { tend: "draught" }), { ok: false, reason: "command" });
+
+        // (Left unhealed: met as the player came near, and off once they've waited long enough)
+        const left = meet("hunter");
+
+        run(left.host, 1000);
+        assert.ok(left.stranger.met !== null);
+        assert.ok(!run(left.host, STRANGERS.hunter.waits - 3000).some(({ type, change }) => type === "stranger" && change === "off"));
+        assert.ok(run(left.host, 4000).some(({ type, change, limping }) => type === "stranger" && change === "off" && limping));
+    });
+
+    it("has hungry bandits hail a player who comes near, no one's enemy till then; paid in gold, they let them by", () => {
+        const { host, stranger, one, me, player } = meet("bandits");
+        const bandits = stranger.ids.map((id) => host.battle.actor(id));
+
+        assert.ok(bandits.length >= STRANGERS.bandits.count[0] && bandits.length <= STRANGERS.bandits.count[1]);
+        assert.ok(bandits.every((bandit) => bandit.neutral && host.wild.get(bandit.id).stranger === stranger.id));
+        assert.equal(host.wild.get(one.id).creature, "banditChief");
+        assert.ok(stranger.toll >= STRANGERS.bandits.gold[0]);
+        assert.ok(!host.battle.hostile(one, me));
+
+        const hail = run(host, 600).find(({ type, change }) => type === "stranger" && change === "hail");
+
+        assert.equal(hail?.id, HOST_PLAYER);
+        assert.equal(hail.by, one.id);
+        assert.deepEqual(stranger.hailed, [HOST_PLAYER]);
+        assert.deepEqual(talk(host, one.id), { ok: true });
+
+        const gold = player.progress.gold;
+
+        assert.deepEqual(effect(host, { toll: "gold" }), { ok: true });
+        assert.equal(player.progress.gold, gold - stranger.toll);
+        assert.equal(stranger.paid, HOST_PLAYER);
+        assert.deepEqual(effect(host, { toll: "refuse" }), { ok: false, reason: "command" }, "(paid already)");
+
+        // (Walked off: let by)
+        talk(host, null);
+        put(me, [one.square[0] + STRANGERS.bandits.off + 10, one.square[1]]);
+        run(host, 2000);
+        assert.ok(bandits.every((bandit) => bandit.neutral && bandit.target === null));
+    });
+
+    it("has hungry bandits take food for their toll; refused, or walked away from, they fight", () => {
+        const fed = meet("bandits");
+        const meat = Object.keys(ITEMS).find((id) => ITEMS[id].food);
+
+        fed.player.progress.stow({ id: meat, quality: "common" }, 2);
+        run(fed.host, 600);
+        talk(fed.host, fed.one.id);
+        assert.deepEqual(effect(fed.host, { toll: "food" }), { ok: true });
+        assert.equal(fed.player.progress.held(meat), 0, "(the meat taken)");
+        assert.equal(fed.player.progress.held("meal"), 1, "(the meal kept)");
+
+        // (Refused: everyone's enemy, after the player, the talk over)
+        const refused = meet("bandits");
+
+        run(refused.host, 600);
+        talk(refused.host, refused.one.id);
+        assert.deepEqual(effect(refused.host, { toll: "refuse" }), { ok: true });
+
+        const fight = run(refused.host, 600);
+
+        assert.ok(fight.some(({ type, change, id }) => type === "stranger" && change === "fight" && id === HOST_PLAYER));
+        assert.ok(refused.stranger.ids.every((id) => !refused.host.battle.actor(id).neutral));
+        assert.ok(refused.host.battle.hostile(refused.one, refused.me));
+        assert.ok(refused.stranger.ids.some((id) => refused.host.battle.actor(id).target === HOST_PLAYER || refused.host.battle.actor(id).order?.target === HOST_PLAYER));
+        assert.equal(refused.me.talkingTo, null);
+
+        // (Walked away from once hailed, unpaid: the same)
+        const fled = meet("bandits");
+
+        run(fled.host, 600);
+        put(fled.me, [fled.one.square[0] + STRANGERS.bandits.off + 4, fled.one.square[1]]);
+        assert.ok(run(fled.host, 600).some(({ type, change }) => type === "stranger" && change === "fight"));
+        assert.ok(fled.stranger.fight);
+    });
+
+    it("lets a stranger go once every player's far, and carries them on exactly from a snapshot", () => {
+        for (const kind of STRANGERS.kinds) {
+            const { host, stranger, one, me } = meet(kind);
+
+            run(host, 600);
+
+            const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+            assert.deepEqual([...again.strangers.entries()], [...host.strangers.entries()], kind);
+            assert.deepEqual(again.travel.get(HOST_PLAYER), host.travel.get(HOST_PLAYER));
+
+            if (stranger.folk) {
+                assert.deepEqual(again.folk.get(one.id), host.folk.get(one.id));
+                assert.equal(again.folk.get(one.id), again.strangers.get(stranger.id).folk, "(one record)");
+            }
+
+            run(host, 3000);
+            run(again, 3000);
+            assert.equal(again.checksum(), host.checksum(), kind);
+
+            put(me, [Math.floor(stranger.at[0] + STRANGERS.far + 30), Math.floor(stranger.at[1])]);
+
+            const gone = run(host, 1000);
+
+            assert.ok(!host.strangers.has(stranger.id), kind);
+            assert.ok(gone.some(({ type, stranger: id, change }) => type === "stranger" && id === stranger.id && change === "gone"));
+            assert.ok(!host.battle.actor(one.id) && !host.folk.has(one.id), `${kind}: gone from the world`);
+        }
+
+        assert.equal("strangers" in new Host(buildWorld({ seed: 2 }), { populate: false }).snapshot(), false, "(none kept till one's met)");
     });
 });
