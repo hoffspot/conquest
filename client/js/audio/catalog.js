@@ -107,7 +107,7 @@ export const CATALOG = Object.freeze({
 
     // Spells
     castHeal: { group: "Spells", label: "Casting a heal (made)", about: "A rising shimmer, made in code.", plays: "In place of the healing casts' recordings, until they're downloaded." },
-    healed: { group: "Spells", label: "Healed", about: "A warm swell, made in code.", plays: "Healing that isn't a spell's landing (a priest's blessing, a potion); and in place of the healing landings' recordings, until they're downloaded." },
+    healed: { group: "Spells", label: "Healed", about: "A warm swell, made in code.", plays: "Healing that isn't a spell's landing (a priest's blessing, a potion); a prayer answered at a shrine; and in place of the healing landings' recordings, until they're downloaded." },
     stun: { group: "Spells", label: "Stunned", about: "A zap and a dizzy warble.", plays: "Someone stunned." },
 
     // Fire spells (sound.js spellSounds: by the spell's tier; a cast swells to its release, loudest as it's let go)

@@ -6516,6 +6516,67 @@ test("a bear's den out in the wild: in its glade, drawn as the player comes near
     expect(told).toMatch(/^Brown bear sign: .+ toward a bear's den \(1 of 3 signs read\)\.$/);
 });
 
+test("a shrine out in the land: tapped, walked up to and prayed at; its god's gift on the player for half an hour, a place near it shown and written in the journal; once a day", async ({ page }) => {
+    await page.goto("/?play&seed=2");
+    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
+
+    // A few steps from the shrine nearest the player's town
+    const shrine = await page.evaluate(async () => {
+        const { shrinesOf } = await import("/js/core/shrines.js");
+        const { PANTHEON } = await import("/js/core/lore/gods.js");
+        const { GIFTS } = await import("/js/core/shrines.js");
+        const { game } = window.pellagos;
+        const { host, battle, world } = game;
+        const me = battle.actor(game.me);
+        const near = ({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y);
+        const ours = [...shrinesOf(world.plan)].sort((a, b) => near(a) - near(b))[0];
+        const [x, y] = world.maps.town.sites.heartOf(ours.site);
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [Math.floor(x), Math.floor(y) + 6], { facing: Math.PI });
+        window.testShrine = ours.site.id;
+
+        return { id: ours.site.id, god: ours.god, name: PANTHEON[ours.god].name, label: GIFTS[ours.god].label, heart: [x, y] };
+    });
+
+    await playUntil(page, () => false, { seconds: 2 });
+
+    // Tapped (the space before its figure): walked up to, and prayed at
+    await page.evaluate(([x, z]) => {
+        const { game } = window.pellagos;
+
+        game.advance(1 / 30, { render: true, wait: true });
+
+        // (A point there, a little above the ground: a vector as the camera's position is one)
+        const at = game.view.toScreen(game.view.camera.position.clone().set(x, (game.world.maps.town.heightAt?.(x, z) ?? 0) + 1.2, z));
+
+        game.tap(at.x, at.y);
+    }, shrine.heart);
+    expect(await playUntil(page, () => window.pellagos.game.host.players.get(window.pellagos.game.me).boons.some(({ god }) => god), { seconds: 15 })).toBe(true);
+
+    const prayed = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.host.players.get(game.me);
+
+        return { boons: player.boons.filter(({ god }) => god).map(({ god, label, until }) => ({ god, label, left: Math.round((until - game.battle.time) / 60000) })), told: game.messages.at(-1)?.text ?? "", heard: (game.memory.heard ?? []).filter(({ shrine }) => shrine).length };
+    });
+
+    expect(prayed.boons).toEqual([{ god: shrine.god, label: shrine.label, left: 30 }]);
+    expect(prayed.told).toContain(`You kneel at the shrine of ${shrine.name}`);
+    expect(prayed.told).toContain(`${shrine.label}: `);
+
+    // (What the god showed, in the journal, if there was somewhere near still to find)
+    if (prayed.heard) {
+        await page.evaluate(() => window.pellagos.game.toggleJournal());
+        await expect(page.getByRole("dialog", { name: "Journal" })).toContainText(`Shown at the shrine of ${shrine.name}`);
+        await page.evaluate(() => window.pellagos.game.toggleJournal());
+    }
+
+    // Again today: no
+    expect(await page.evaluate((id) => window.pellagos.game.host.command(window.pellagos.game.me, { type: "pray", shrine: id }), shrine.id)).toEqual({ ok: false, reason: "prayed" });
+});
+
 test("the bestiary: a creature seen and slain written in, its page in the journal opening a part at a time, its portrait drawn; and the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
     test.setTimeout(180000);
