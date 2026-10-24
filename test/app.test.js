@@ -23,7 +23,7 @@ import { MACRO_DEFAULTS } from "../client/js/characters/macro.js";
 import { createRandom } from "../client/js/core/random.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
-import { aboutOf, guardOf, heroEquipment } from "../client/js/app/game.js";
+import { aboutOf, guardOf, heroEquipment, HOST_EVENTS } from "../client/js/app/game.js";
 import { BOUGHT } from "../client/js/core/host.js";
 import { distanceLabel } from "../client/js/app/worldmap.js";
 import { weaponNumbers } from "../client/js/app/creator.js";
@@ -1462,5 +1462,18 @@ describe("the loader (loader.js)", () => {
         assert.equal(formatBytes(512), "512 B");
         assert.equal(formatBytes(840 * 1024), "840 KB");
         assert.equal(formatBytes(1.45 * 1024 * 1024), "1.4 MB");
+    });
+});
+
+describe("the host's news, heard (game.js HOST_EVENTS, #hear)", () => {
+    it("hears every kind of the host's news it has a word for (a dungeon's rite broken, a cache or a find let go...)", async () => {
+        const { readFile } = await import("node:fs/promises");
+        const source = await readFile(new URL("../client/js/app/game.js", import.meta.url), "utf8");
+        const start = source.indexOf("    #hear(event) {");
+        const body = source.slice(start, source.indexOf("\n    }\n", start));
+        const words = [...body.matchAll(/^ {12}case "(\w+)":/gm)].map(([, type]) => type);
+
+        assert.ok(start > 0 && words.length > 40, `${words.length} kinds`);
+        assert.deepEqual(words.filter((type) => !HOST_EVENTS.has(type)), [], "(never heard)");
     });
 });
