@@ -4,13 +4,14 @@
 // remains searched for a share each, a note in their hand now and then; an old campsite safe to
 // camp at with the wild nearer, its fire lit in the ring, the campers waking well rested; fresh
 // tracks to a pack; and the strangers met on the way: a pedlar selling odds and ends, a wounded
-// hunter who tells of a place round about for their healing, hungry bandits wanting food or gold
+// hunter who tells of a place round about for their healing, hungry bandits wanting food or gold;
+// and something across the way, a fallen tree or a rockslide, gone round or cleared
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { STEP_MS } from "../client/js/core/battle.js";
+import { STAMINA_RECOVERY, STEP_MS } from "../client/js/core/battle.js";
 import { LOOKS } from "../client/js/beasts/looks.js";
 import { CREATURES, WILD } from "../client/js/core/creatures.js";
-import { banditToll, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, noteOf, PACING, PEACEFUL, peacefulNext, rollRemains, shuffled, STRANGERS, TRACKLESS, WELL_RESTED } from "../client/js/core/director.js";
+import { banditToll, clearedTurnsUp, clearRate, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, noteOf, obstacleBox, OBSTACLES, PACING, PEACEFUL, peacefulNext, rollRemains, rollSpilled, shuffled, STRANGERS, TOOLS, TRACKLESS, WELL_RESTED } from "../client/js/core/director.js";
 import { hypot } from "../client/js/core/exact.js";
 import { HOST_PLAYER, Host, REST, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -19,6 +20,8 @@ import { ITEMS } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { rumouredOf } from "../client/js/core/rumours.js";
 import { TREASURE_MAP } from "../client/js/core/treasure.js";
+import { squaresOf } from "../client/js/core/grid.js";
+import { navigatorOf } from "../client/js/core/navigation.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { lookPrint } from "../client/js/world/tracks3d.js";
 
@@ -56,12 +59,12 @@ function hosted(deck) {
 
 // The player walked out of the start town (seed 2's: north-east), `step` metres each half a
 // second, from `from` metres out, till something's dealt before them (or they've gone `metres`):
-// how far they went, where they are, and what was dealt ({ cache }, { find }, { tracks } or
-// { stranger })
+// how far they went, where they are, and what was dealt ({ cache }, { find }, { tracks },
+// { stranger } or { obstacle })
 function walk({ host, world, me }, { metres = 1500, step = 8, from = 0 } = {}) {
     const [sx, sy] = world.start.at;
     // (By the ids handed out: the last one dealt may be let go as the next's dealt)
-    const [caches, finds, fresh, strangers] = [host.nextCache, host.nextFind, host.nextFresh, host.nextStranger];
+    const [caches, finds, fresh, strangers, obstacles] = [host.nextCache, host.nextFind, host.nextFresh, host.nextStranger, host.nextObstacle];
 
     for (let d = from; d <= metres; d += step) {
         const at = [Math.floor(sx + Math.SQRT1_2 * d), Math.floor(sy + Math.SQRT1_2 * d)];
@@ -70,7 +73,7 @@ function walk({ host, world, me }, { metres = 1500, step = 8, from = 0 } = {}) {
         me.hp = me.maxHp;
         run(host, 500);
 
-        if (host.nextCache > caches || host.nextFind > finds || host.nextFresh > fresh || host.nextStranger > strangers) {
+        if (host.nextCache > caches || host.nextFind > finds || host.nextFresh > fresh || host.nextStranger > strangers || host.nextObstacle > obstacles) {
             return {
                 d,
                 at,
@@ -78,11 +81,12 @@ function walk({ host, world, me }, { metres = 1500, step = 8, from = 0 } = {}) {
                 find: host.nextFind > finds ? host.finds.get(`find-${finds}`) : null,
                 tracks: host.nextFresh > fresh ? host.fresh.get(`fresh-${fresh}`) : null,
                 stranger: host.nextStranger > strangers ? host.strangers.get(`stranger-${strangers}`) : null,
+                obstacle: host.nextObstacle > obstacles ? host.obstacles.get(`obstacle-${obstacles}`) : null,
             };
         }
     }
 
-    return { d: null, at: [me.x, me.y], cache: null, find: null, tracks: null, stranger: null };
+    return { d: null, at: [me.x, me.y], cache: null, find: null, tracks: null, stranger: null, obstacle: null };
 }
 
 describe("the wilds director's deck (director.js)", () => {
@@ -686,5 +690,233 @@ describe("the strangers met on the way (director.js STRANGERS; host.js #putStran
         }
 
         assert.equal("strangers" in new Host(buildWorld({ seed: 2 }), { populate: false }).snapshot(), false, "(none kept till one's met)");
+    });
+});
+
+describe("something across the way (director.js OBSTACLES; host.js #putObstacle, #clearing)", () => {
+    // Something across the way met out in the wilds (a fallen tree, or rocks: `kind`), the player
+    // walked up beside it, holding `weapon`, with breath to spare
+    function come(kind, { weapon = "sword" } = {}) {
+        const context = hosted(["obstacle"]);
+        const { host, me } = context;
+        const pick = host.random.pick;
+
+        host.random.pick = (list) => (list === OBSTACLES.kinds ? kind : pick.call(host.random, list));
+
+        const { obstacle, at } = walk(context);
+
+        host.random.pick = pick;
+
+        const [x0, y0, x1] = obstacle.box;
+
+        put(me, [Math.floor((x0 + x1) / 2), y0 - 1]);
+        Object.assign(me, { weapon, stamina: 1e6, maxStamina: 1e6 });
+
+        return { ...context, obstacle, at };
+    }
+
+    const clear = (host, id) => host.command(HOST_PLAYER, { type: "clear", obstacle: id });
+
+    it("lays a fallen tree or rocks across the way, along the world's axis nearest across it; clears it quicker with an axe-like weapon or a hammer; turns up brigands, something spilled, or nothing", () => {
+        assert.deepEqual(obstacleBox("tree", [10.5, 20.5], [0, 1]), [7, 20, 13, 20]);
+        assert.deepEqual(obstacleBox("tree", [10.5, 20.5], [Math.SQRT1_2, Math.SQRT1_2 * 0.9]), [10, 17, 10, 23]);
+        assert.deepEqual(obstacleBox("rocks", [10.5, 20.5], [0, -1]), [9, 19, 12, 21]);
+        assert.ok(DIRECTOR.cards.includes("obstacle"));
+        assert.equal(clearRate("sword"), 1);
+        assert.ok(["axe", "cleaver", "greatsword", "hammer"].every((weapon) => clearRate(weapon) > 1) && Object.keys(TOOLS).length === 4);
+
+        const random = createRandom(9);
+        const turned = Array.from({ length: 2000 }, () => clearedTurnsUp(random));
+        const share = (what) => turned.filter((each) => each === what).length / turned.length;
+
+        assert.ok(Math.abs(share("brigands") - OBSTACLES.brigands) < 0.04 && Math.abs(share("spilled") - OBSTACLES.spilled) < 0.04 && Math.abs(share(null) - (1 - OBSTACLES.brigands - OBSTACLES.spilled)) < 0.04);
+
+        const spilled = Array.from({ length: 300 }, () => rollSpilled(1, random));
+
+        assert.ok(spilled.every(({ gold, items }) => gold >= OBSTACLES.gold[0] && gold <= OBSTACLES.gold[1] && items.every(({ id }) => OBSTACLES.spill.includes(id))));
+        assert.ok(Math.abs(spilled.filter(({ items }) => items.length).length / spilled.length - OBSTACLES.goods) < 0.1);
+    });
+
+    for (const kind of OBSTACLES.kinds) {
+        it(`lays ${kind === "tree" ? "a fallen tree" : "a rockslide"} across the way ahead of the player, over its squares; the way round it found`, () => {
+            const { host, world, obstacle, at } = come(kind);
+            const [x0, y0, x1, y1] = obstacle.box;
+            const squares = squaresOf(world.maps.town);
+            const off = hypot(obstacle.at[0] - at[0] - 0.5, obstacle.at[1] - at[1] - 0.5);
+
+            assert.equal(obstacle.kind, kind);
+            assert.ok(off >= OBSTACLES.ahead[0] - 3 && off <= OBSTACLES.ahead[1] + 3, `${off} m ahead`);
+            assert.deepEqual([x1 - x0 + 1, y1 - y0 + 1].sort(), kind === "tree" ? [1, OBSTACLES.tree.long] : [OBSTACLES.rocks.deep, OBSTACLES.rocks.across]);
+
+            for (let y = y0; y <= y1; y++) {
+                for (let x = x0; x <= x1; x++) {
+                    assert.ok(squares.blocked(x, y), `(${x}, ${y}) blocked`);
+                }
+            }
+
+            // (Walked round: from one side of it to the other)
+            const long = x1 - x0 > y1 - y0;
+            const [from, to] = long ? [[(x0 + x1) / 2 + 0.5, y0 - 2.5], [(x0 + x1) / 2 + 0.5, y1 + 3.5]] : [[x0 - 2.5, (y0 + y1) / 2 + 0.5], [x1 + 3.5, (y0 + y1) / 2 + 0.5]];
+            const way = navigatorOf(world.maps.town).path(from, to);
+
+            const through = way.slice(1).some(([x, y], k) => {
+                const [px, py] = way[k];
+
+                return Array.from({ length: 40 }, (_, t) => [px + ((x - px) * t) / 39, py + ((y - py) * t) / 39]).some(([sx, sy]) => sx >= x0 && sx < x1 + 1 && sy >= y0 && sy < y1 + 1);
+            });
+
+            assert.ok(way.length > 1 && hypot(way.at(-1)[0] - to[0], way.at(-1)[1] - to[1]) < 1, "(round it)");
+            assert.equal(through, false, "(never through it)");
+            assert.equal(host.obstacles.size, 1);
+        });
+    }
+
+    it("is cleared by a player held on it, a few seconds' work, quicker with an axe, quicker still with another at it; their breath spent; gone for everyone, its squares free", () => {
+        const timeTo = (weapon, { helped = false } = {}) => {
+            const { host, me, world, obstacle } = come("tree", { weapon });
+
+            if (helped) {
+                host.join({ id: "guest", hero: { ...HERO, name: "Bram" } });
+
+                const guest = host.battle.actor("guest");
+
+                put(guest, [me.square[0] + 1, me.square[1]]);
+                Object.assign(guest, { stamina: 1e6, maxStamina: 1e6 });
+                assert.deepEqual(host.command("guest", { type: "clear", obstacle: obstacle.id }), { ok: true });
+            }
+
+            assert.deepEqual(clear(host, obstacle.id), { ok: true });
+            assert.equal(me.clearing, obstacle.id);
+
+            const stamina = me.stamina;
+            const events = [];
+            let ms = 0;
+
+            for (; ms < 20000 && host.obstacles.has(obstacle.id); ms += STEP_MS) {
+                events.push(...host.advance(STEP_MS));
+            }
+
+            const cleared = events.find(({ type, change }) => type === "obstacle" && change === "cleared");
+            const [x0, y0] = obstacle.box;
+
+            assert.ok(cleared, "(cleared)");
+            assert.ok(!squaresOf(world.maps.town).blocked(x0, y0), "(its squares free)");
+            assert.ok(events.some(({ type, boxes }) => type === "obstacles" && boxes.length));
+            assert.ok(events.filter(({ type, change, id }) => type === "obstacle" && change === "swing" && id === HOST_PLAYER).length >= Math.floor(ms / OBSTACLES.swing) - 1, "(swinging at it)");
+            assert.ok(stamina - me.stamina >= ((OBSTACLES.stamina - STAMINA_RECOVERY) * ms) / 1000 - 1, "(breath spent, less what's got back meanwhile)");
+            assert.equal(me.clearing, null);
+            assert.deepEqual(cleared.by.sort(), (helped ? [HOST_PLAYER, "guest"] : [HOST_PLAYER]).sort());
+
+            return ms;
+        };
+        const alone = timeTo("sword");
+
+        assert.ok(Math.abs(alone - OBSTACLES.tree.work * 1000) <= 2 * STEP_MS, `${alone} ms`);
+        assert.ok(Math.abs(timeTo("axe") - (OBSTACLES.tree.work * 1000) / TOOLS.axe) <= 2 * STEP_MS);
+        assert.ok(Math.abs(timeTo("sword", { helped: true }) - alone / 2) <= 2 * STEP_MS);
+    });
+
+    it("leaves off clearing once the player's gone off, is out of breath, or isn't near enough; refused far off, or with no breath", () => {
+        const { host, me, obstacle } = come("rocks");
+
+        // (Far off: refused)
+        put(me, [me.square[0], me.square[1] - 6]);
+        assert.deepEqual(clear(host, obstacle.id), { ok: false, reason: "far" });
+
+        // (Gone off: left off, told)
+        put(me, [me.square[0], me.square[1] + 6]);
+        assert.deepEqual(clear(host, obstacle.id), { ok: true });
+        run(host, 1000);
+        host.command(HOST_PLAYER, { type: "move", to: [me.square[0], me.square[1] - 8] });
+        assert.ok(run(host, 500).some(({ type, change, id }) => type === "obstacle" && change === "left" && id === HOST_PLAYER));
+        assert.equal(me.clearing, null);
+
+        const done = obstacle.done;
+
+        assert.ok(done > 0.5 && done < OBSTACLES.rocks.work);
+        run(host, 1000);
+        assert.equal(obstacle.done, done, "(nothing done meanwhile)");
+
+        // (Out of breath: refused, or left off)
+        put(me, [Math.floor((obstacle.box[0] + obstacle.box[2]) / 2), obstacle.box[1] - 1]);
+        me.stamina = 1;
+        assert.deepEqual(clear(host, obstacle.id), { ok: false, reason: "tired" });
+        me.stamina = OBSTACLES.stamina * 2;
+        me.recovery = 0;
+        assert.deepEqual(clear(host, obstacle.id), { ok: true });
+        assert.ok(run(host, 3000).some(({ type, change, tired }) => type === "obstacle" && change === "left" && tired));
+
+        // (Left off, as asked)
+        me.stamina = 1e6;
+        assert.deepEqual(clear(host, obstacle.id), { ok: true });
+        assert.deepEqual(clear(host, null), { ok: true });
+        assert.equal(me.clearing, null);
+    });
+
+    it("turns up, once cleared, brigands that jump whoever cleared it the moment they have; or something spilled, a share each; or nothing", () => {
+        const clearedWith = (roll) => {
+            const { host, me, obstacle } = come("tree");
+
+            assert.deepEqual(clear(host, obstacle.id), { ok: true });
+            obstacle.done = obstacle.work - 0.001;
+
+            // (The roll for what it turns up, made as it's cleared)
+            const next = host.random.next;
+
+            host.random.next = () => roll;
+
+            const events = host.advance(STEP_MS);
+
+            host.random.next = next;
+
+            return { host, me, obstacle, cleared: events.find(({ type, change }) => type === "obstacle" && change === "cleared") };
+        };
+
+        const jumped = clearedWith(OBSTACLES.brigands / 2);
+
+        assert.equal(jumped.cleared.turned, "brigands");
+        assert.ok(jumped.cleared.ids.length >= OBSTACLES.count[0]);
+        assert.ok(jumped.cleared.ids.every((id) => {
+            const brigand = jumped.host.battle.actor(id);
+
+            return hypot(brigand.x - jumped.obstacle.at[0], brigand.y - jumped.obstacle.at[1]) <= OBSTACLES.from[1] + 2 && (brigand.target === HOST_PLAYER || brigand.order?.target === HOST_PLAYER);
+        }), "(out round it, after the player)");
+
+        const spilled = clearedWith(OBSTACLES.brigands + OBSTACLES.spilled / 2);
+        const [ground] = spilled.cleared.grounds.map((id) => spilled.host.ground.get(id));
+
+        assert.equal(spilled.cleared.turned, "spilled");
+        assert.equal(ground.for, HOST_PLAYER);
+        assert.ok(ground.bundle.gold >= OBSTACLES.gold[0]);
+
+        const nothing = clearedWith(0.99);
+
+        assert.equal(nothing.cleared.turned, null);
+        assert.deepEqual([nothing.cleared.ids, nothing.cleared.grounds], [[], []]);
+    });
+
+    it("lets what's across the way go once every player's far, and carries it on exactly from a snapshot, over its squares", () => {
+        const { host, me, world, obstacle } = come("rocks");
+
+        assert.deepEqual(clear(host, obstacle.id), { ok: true });
+        run(host, 1500);
+
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        assert.deepEqual([...again.obstacles.entries()], [...host.obstacles.entries()]);
+        assert.ok(squaresOf(again.world.maps.town).blocked(obstacle.box[0], obstacle.box[1]));
+        run(host, 3000);
+        run(again, 3000);
+        assert.equal(again.checksum(), host.checksum());
+
+        clear(host, null);
+        put(me, [Math.floor(obstacle.at[0] + OBSTACLES.far + 30), Math.floor(obstacle.at[1])]);
+
+        const gone = run(host, 1000);
+
+        assert.ok(!host.obstacles.has(obstacle.id));
+        assert.ok(gone.some(({ type, obstacle: id, change }) => type === "obstacle" && id === obstacle.id && change === "gone"));
+        assert.ok(!squaresOf(world.maps.town).blocked(obstacle.box[0], obstacle.box[1]), "(its squares free)");
+        assert.equal("obstacles" in new Host(buildWorld({ seed: 2 }), { populate: false }).snapshot(), false, "(none kept till one's dealt)");
     });
 });
