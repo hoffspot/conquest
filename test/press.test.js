@@ -105,19 +105,20 @@ describe("a quick action's press", () => {
         assert.deepEqual(said, ["use"]);
     });
 
-    it("held, changed once, and over: nothing as it's lifted", () => {
+    it("held, changed once (told which pointer, its lift still to come), and over: nothing as it's lifted", () => {
         const { press, said, pass } = pressed();
 
+        press.onChoose = (pointer) => said.push(`choose ${pointer}`);
         press.down(at(1));
         pass(QUICK_HOLD_MS - 1);
         assert.deepEqual(said, []);
         pass(1);
-        assert.deepEqual(said, ["choose"]);
+        assert.deepEqual(said, ["choose 1"]);
         assert.equal(press.pressing, false);
 
         press.up(at(1));
         pass(QUICK_HOLD_MS + 100);
-        assert.deepEqual(said, ["choose"]);
+        assert.deepEqual(said, ["choose 1"]);
     });
 
     it("flicked up or down, turned once, and over: nothing as it's lifted, or held; slid off across, nothing", () => {

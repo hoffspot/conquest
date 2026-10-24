@@ -48,7 +48,7 @@ export class Press {
         /** Hears a tap: lifted where it went down, before it was held. */
         this.onUse = () => {};
 
-        /** Hears a hold: QUICK_HOLD_MS down without straying. */
+        /** Hears a hold: QUICK_HOLD_MS down without straying (the pointer's id: its lift's still to come). */
         this.onChoose = () => {};
 
         /** Hears a flick ("up" or "down"). */
@@ -161,7 +161,7 @@ export class Press {
         this.#drop();
 
         if (this.live()) {
-            this.onChoose();
+            this.onChoose(press.pointer);
         }
     }
 
