@@ -95,8 +95,8 @@ describe("the six makes (progress.js QUALITIES)", () => {
 });
 
 describe("the alchemist's brews (goods.js BREWS)", () => {
-    it("brews twenty-two draughts, elixirs and oils, each with what it does, a price, a make and a colour, carried and sold as supplies", () => {
-        assert.equal(Object.keys(BREWS).length, 22);
+    it("brews twenty-five draughts, elixirs and oils, each with what it does, a price, a make and a colour, carried and sold as supplies", () => {
+        assert.equal(Object.keys(BREWS).length, 25);
 
         for (const [id, brew] of Object.entries(BREWS)) {
             assert.equal(ITEMS[id], brew, id);
@@ -107,8 +107,33 @@ describe("the alchemist's brews (goods.js BREWS)", () => {
             assert.match(ITEM_ICONS[id], /<(path|circle|ellipse|rect)/, `${id} has an icon`);
         }
 
-        // (Stronger healing, the dearer)
+        // (Stronger healing, the dearer; more stamina back, the dearer, the better made)
         assert.ok(BREWS.greaterPotion.use.heal < BREWS.superiorPotion.use.heal && BREWS.greaterPotion.price < BREWS.superiorPotion.price);
+
+        const stamina = ["staminaDraught", "greaterStaminaDraught", "superiorStaminaDraught"].map((id) => BREWS[id]);
+
+        assert.deepEqual(stamina.map(({ rarity }) => rarity), ["common", "fine", "masterwork"]);
+        assert.ok(stamina.every((brew, k) => k === 0 || (brew.use.stamina > stamina[k - 1].use.stamina && brew.price > stamina[k - 1].price)));
+    });
+
+    it("gives a stamina draught's breath back at once, as much as it says and never more than the most there is: a greater one more, a superior one all of it", () => {
+        const host = hosted({ pack: [{ id: "staminaDraught", count: 2 }, { id: "greaterStaminaDraught" }, { id: "superiorStaminaDraught" }] });
+        const player = host.battle.actor(HOST_PLAYER);
+        const drink = (item) => host.command(HOST_PLAYER, { type: "use", item });
+
+        Object.assign(player, { maxStamina: 200, stamina: 0 });
+        assert.deepEqual(drink("staminaDraught"), { ok: true });
+        assert.equal(player.stamina, 40);
+        assert.deepEqual(drink("greaterStaminaDraught"), { ok: true });
+        assert.equal(player.stamina, 140);
+        assert.deepEqual(drink("superiorStaminaDraught"), { ok: true });
+        assert.equal(player.stamina, 200);
+
+        // (Drunk with little to give back: as much as there's room for)
+        player.stamina = 190;
+        assert.deepEqual(drink("staminaDraught"), { ok: true });
+        assert.equal(player.stamina, 200);
+        assert.deepEqual(host.players.get(HOST_PLAYER).progress.pack.filter(Boolean), [], "every draught drunk");
     });
 
     it("gives an elixir's boon a while, one of each at a time: an Elixir of Strength's blows 15% stronger, ten minutes", () => {

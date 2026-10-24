@@ -18,7 +18,9 @@ const boon = (id, label, ms, effect) => ({ boon: { id, label, ms, ...effect } })
 const MINUTES = 60000;
 
 /**
- * The alchemist's brews: healing draughts stronger than the guild's, a draught of endurance, the
+ * The alchemist's brews: healing draughts stronger than the guild's, stamina draughts (breath back
+ * at once, as a healing draught heals: a common one, and a greater and a superior), a draught of
+ * endurance, the
  * elixirs (a boon to blows, shots, spells, armour or healing a while), the warding elixirs (a
  * ward's spell in a bottle, half an hour: spells.js resistFire...), a phial of shadows
  * (Invisibility, a minute), a glowcap draught (Light, a quarter of an hour), oils for a blade
@@ -28,6 +30,9 @@ const MINUTES = 60000;
 export const BREWS = Object.freeze({
     greaterPotion: { label: "Greater healing draught", about: "Heals 60 hit points.", use: { heal: 60 }, price: 45, rarity: "fine", colour: "#d8203a" },
     superiorPotion: { label: "Superior healing draught", about: "Heals 150 hit points.", use: { heal: 150 }, price: 120, rarity: "masterwork", colour: "#ff3a5a" },
+    staminaDraught: { label: "Stamina draught", about: "Gives you back 40 stamina, at once.", use: { stamina: 40 }, price: 10, rarity: "common", colour: "#d87414" },
+    greaterStaminaDraught: { label: "Greater stamina draught", about: "Gives you back 100 stamina, at once.", use: { stamina: 100 }, price: 30, rarity: "fine", colour: "#ec8a1c" },
+    superiorStaminaDraught: { label: "Superior stamina draught", about: "Fills your stamina, at once.", use: { stamina: 1000 }, price: 75, rarity: "masterwork", colour: "#ffad3a" },
     enduranceDraught: { label: "Draught of Endurance", about: "Your breath comes back half again as fast, ten minutes.", use: boon("endurance", "Enduring", 10 * MINUTES, { recoveryTimes: 1.6 }), price: 30, rarity: "fine", colour: "#e8a020" },
     elixirOfStrength: { label: "Elixir of Strength", about: "Your blows 15% stronger, ten minutes.", use: boon("strength", "Strength", 10 * MINUTES, { melee: 0.15 }), price: 55, rarity: "fine", colour: "#c83a1a" },
     elixirOfTheHawk: { label: "Elixir of the Hawk", about: "Your shots 15% stronger, ten minutes.", use: boon("hawk", "Hawk-eyed", 10 * MINUTES, { ranged: 0.15 }), price: 55, rarity: "fine", colour: "#d8c040" },
