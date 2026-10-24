@@ -9782,8 +9782,9 @@ test("markers on the world map: one put down with its button, what it marks and 
 test("from high ground the places in sight are found without going near: said how many, shown on the world map over the fog, none of them been near", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
-    // The player on a rise far out in the wilds with five places in sight (found by scanning the
-    // world: core/sighting.js), none of them found; a look round later, found and said
+    // The player on a rise far out in the wilds with five places in sight, on ground they can stand
+    // on all round (found by scanning the world: core/sighting.js), none of them found; a look
+    // round later, found and said
     const seen = await page.evaluate(async () => {
         const { game } = window.pellagos;
         const { battle } = game;
@@ -9801,7 +9802,7 @@ test("from high ground the places in sight are found without going near: said ho
 
         const before = game.worldMapView().icons.map(({ id }) => id);
 
-        battle.place(game.me, "town", [400, 2524]);
+        battle.place(game.me, "town", [1232, 536]);
         game.advance(0.6, { render: false });
         game.advance(0.05, { render: false });
 
@@ -9823,7 +9824,7 @@ test("from high ground the places in sight are found without going near: said ho
         const { game, worldMap } = window.pellagos;
 
         game.stop();
-        worldMap.view = { scale: 4, x: 400, z: 2524 };
+        worldMap.view = { scale: 4, x: 1232, z: 536 };
         worldMap.draw();
 
         return worldMap.drawn.icons.length;
