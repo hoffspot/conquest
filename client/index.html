@@ -162,6 +162,24 @@
                 </svg>
                 <span id="newsunread" class="party-badge" aria-hidden="true" hidden></span>
             </button>
+            <!-- How the world's linked, in the minimap's corner (app/worldlink.js): at home a lantern, lit;
+                 away a scrying orb on its brass stand, its glow how well the link holds -->
+            <button type="button" id="worldlink" data-link="home" aria-label="Your own world, here on this device." title="Your own world, here on this device." hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <g class="lantern">
+                        <path class="lantern-ring" d="M10.4 4.6a1.6 1.6 0 0 1 3.2 0"/>
+                        <path class="lantern-glass" d="M9.3 7.6h5.4v8.6H9.3z"/>
+                        <path class="lantern-flame" d="M12 9.4c1.4 1.5 1.7 2.8 1.1 4a1.3 1.3 0 0 1-2.4-.2c-.4-1.1.2-2.1 1.3-3.8z"/>
+                        <path class="lantern-cap" d="M8.6 6h6.8l-.9 1.6H9.5zM8.2 16.2h7.6l.7 1.9H7.5z"/>
+                    </g>
+                    <g class="orb">
+                        <circle class="orb-aura" cx="12" cy="10" r="7.4"/>
+                        <circle class="orb-ball" cx="12" cy="10" r="5.2"/>
+                        <path class="orb-glint" d="M9.3 8.4a3.3 3.3 0 0 1 2.5-1.8"/>
+                        <path class="orb-stand" d="M8.7 15.3h6.6l-1.2 2.3h-4.2zM7.6 20.3h8.8M10 17.6l-1.1 2.7M14 17.6l1.1 2.7"/>
+                    </g>
+                </svg>
+            </button>
             <div id="party" role="group" aria-label="Your party">
                 <button type="button" id="partybutton" class="hud-button" aria-label="Party" title="Party (P)">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 11.5a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM3 19.5c0-3.4 2.7-5.6 6-5.6s6 2.2 6 5.6M15.5 5.3a3 3 0 0 1 0 5.9M17.5 14.2c2.1.6 3.5 2.5 3.5 5.3"/></svg>

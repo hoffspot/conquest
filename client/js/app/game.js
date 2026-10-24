@@ -173,6 +173,7 @@ import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
 import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
 import { Sigil } from "./sigil.js";
+import { worldLinkOf } from "./worldlink.js";
 import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, forFriends, offensive, PLACES, QUICK_SHOWN, readWheels, SIDES, WHEELS } from "./wheel.js";
 
 /** What every character wears under their gear: a tunic, and trousers if nothing's on their legs. */
@@ -433,6 +434,9 @@ const RUN_ON = 3;
 // drawn going when swiped straight ahead (m: app/predict.js stops it soon enough)
 const PING_EVERY = 1;
 const AHEAD = 50;
+
+// How often how the world's linked is looked at again, for the HUD (ms: #worldLink)
+const LINK_EVERY = 500;
 
 // The commands that set the player's hero going otherwise than where they're sent, or stop them:
 // not drawn ahead of the copy (app/predict.js)
@@ -930,6 +934,8 @@ export class Game {
         this.toldOnce = new Set(told);
         this.onTold = onTold;
         hud.onMessage = (text, seconds) => this.#told(text, seconds);
+        // (The lantern or the orb tapped: how the world's linked, said)
+        hud.onWorldLink = () => this.linkView && hud.message(this.linkView.words, 4);
 
         // Those attacking the player, an icon each down the right side: since when each has been
         // (the game's clock, s), their likenesses (an ImageData, or null while it's drawn), and
@@ -985,6 +991,17 @@ export class Game {
         this.link = null;
         this.steppedAt = 0;
         this.together = null;
+
+        /**
+         * How the world's linked, shown in the minimap's corner (app/worldlink.js: #worldLink),
+         * and who it's with and how (`linkAbout`, set by whoever joins or opens it: { kind:
+         * "server", world, server } on a world server, { kind: "friend", how () } in a friend's;
+         * null, else), looked at every LINK_EVERY ms, drawn only when it changes.
+         */
+        this.linkAbout = null;
+        this.linkView = null;
+        this.linkKey = null;
+        this.linkAt = -Infinity;
 
         if (!remote) {
             // (Where they were when it last stopped, and as they were: core/host.js join)
@@ -2836,6 +2853,8 @@ export class Game {
             this.#together(steps ? (this.steppedAt = now) : now);
         }
 
+        this.#worldLink(now);
+
         const updated = performance.now();
         const mine = this.avatars.get(this.me);
 
@@ -3106,6 +3125,34 @@ export class Game {
         if (status !== this.together) {
             this.together = status;
             this.hud.status(status);
+        }
+    }
+
+    // How the world's linked, for the HUD's lantern or orb (app/worldlink.js), looked at every
+    // LINK_EVERY ms (`now`): in another's, whose it is (or the world server's, `linkAbout`) and the
+    // round trip to it; with friends in theirs, how many and the slowest of their links; drawn
+    // only when it changes
+    #worldLink(now) {
+        if (now - this.linkAt < LINK_EVERY) {
+            return;
+        }
+
+        this.linkAt = now;
+
+        const guests = this.remote ? 0 : (this.hosting?.players.size ?? 0);
+        const about = this.linkAbout ?? {};
+        const view = worldLinkOf({
+            joined: this.remote ? { rtt: this.remote.lately, host: this.host.players.get(HOST_PLAYER)?.hero?.name ?? null } : null,
+            hosting: guests ? { guests, slowest: this.hosting.slowest() } : null,
+            lost: this.link !== null,
+            about: { ...about, how: typeof about.how === "function" ? about.how() : about.how },
+        });
+        const key = `${view.away} ${view.quality} ${view.words}`;
+
+        if (key !== this.linkKey) {
+            this.linkKey = key;
+            this.linkView = view;
+            this.hud.worldLink(view);
         }
     }
 

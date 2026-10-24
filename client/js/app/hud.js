@@ -186,6 +186,11 @@ export class Hud {
         /** The minimap's canvas (app/minimap.js draws it). */
         this.map = root.querySelector("#minimap");
 
+        /** How the world's linked (app/worldlink.js: worldLink), in the minimap's corner; tapped, onWorldLink's told. */
+        this.linkButton = root.querySelector("#worldlink");
+        this.onWorldLink = () => {};
+        this.linkButton?.addEventListener("click", () => this.onWorldLink());
+
         /** The column down the left for the player's party (party), headed by the Party button. */
         this.partyColumn = root.querySelector("#party");
         this.partyButton = root.querySelector("#partybutton");
@@ -963,6 +968,36 @@ export class Hud {
     status(text) {
         this.netStatus.textContent = text ?? "";
         this.netStatus.hidden = !text;
+    }
+
+    /**
+     * Show how the world's linked (`link`: app/worldlink.js worldLinkOf's { away, quality, words }):
+     * at home the lantern, away the orb glowing as well as the link holds, said in words to a
+     * screen reader and as its tooltip; or, null, none.
+     */
+    worldLink(link) {
+        const button = this.linkButton;
+
+        if (!button) {
+            return;
+        }
+
+        button.hidden = !link;
+
+        if (!link) {
+            return;
+        }
+
+        button.dataset.link = link.away ? "away" : "home";
+
+        if (link.quality) {
+            button.dataset.quality = link.quality;
+        } else {
+            delete button.dataset.quality;
+        }
+
+        button.setAttribute("aria-label", link.words);
+        button.title = link.words;
     }
 
     /**

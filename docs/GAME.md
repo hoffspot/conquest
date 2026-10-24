@@ -4028,6 +4028,35 @@ world). The chunks are a bit each, 128 by 128 of them in 2 KB; kept with a saved
 `pellagos.<id>.explored` (`{ created, seed, entered, visited }`, the chunks as base64), for that
 character only, as the talks are.
 
+### The world's link (app/worldlink.js)
+
+How the world the player's in is linked, in the minimap's top right corner as its fold is in its
+top left (`#worldlink`, a round button 30 pixels across; the minimap folded, beside the compass):
+
+- **At home**, in their own world on this device alone, a lantern, its flame lit and breathing
+  slowly.
+- **Away**, a scrying orb on its brass stand, glowing as well as the link holds: green, amber or
+  red (`linkQuality`, by how long a word takes there and back: under 150 ms good, under 400 ms
+  fair, longer poor: `LINK_QUALITY`; amber till it's first timed), flickering red once it's
+  dropped and the game's reconnecting. Away is:
+  - in another's world: a friend's (joined by code, through a world server's broker) or one on a
+    world server, by the round trip to it: the middle of the latest five (`Joining` `lately`:
+    docs/WAR.md *Timing the link*), so the first, held up as the page builds the world (15 s and
+    more), is soon forgotten;
+  - in their own opened to friends, once one's come into it, by the slowest of their links (each
+    joined game says how long its own has been taking: `Hosting` `slowest`).
+- **Tapped**, it says how in a message for 4 seconds, as it does to a screen reader and as its
+  tooltip (`worldLinkOf`): "Your own world, here on this device."; "In Wren's world, linked
+  directly. A word there and back: 80 ms. The link's strong."; "In Thornwick on Tom's Mac mini. A
+  word there and back: 230 ms. The link's fair."; "Your world, open to friends: 2 friends in it. The
+  slowest link: a word there and back in 140 ms. The link's strong."; "The link's weak: expect
+  delays." when it's poor, "Timing the link…" till it's timed, and "The link's dropped:
+  reconnecting…" (the round trips to the nearest 10 ms).
+
+The game looks at it every half second (game.js `#worldLink`: who it's with and how, `linkAbout`,
+set by main.js as it joins), and the HUD redraws it only when what it shows changes (hud.js
+`worldLink`). With reduced motion, neither the flame nor the orb moves.
+
 ### The world map (app/worldmap.js)
 
 Held on the minimap (or M on a keyboard), the whole screen becomes a map of the world, the game
