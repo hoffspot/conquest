@@ -41,6 +41,7 @@ import { CACHE_BANDS } from "../core/caches.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { homeWords, signOf, signsNear, TRAILS, trailsNear } from "../core/tracks.js";
+import { denOf, densOf } from "../core/dens.js";
 import { MASTERED, RESEARCH } from "../core/bestiary.js";
 import { bestiaryOf } from "./bestiary.js";
 import { townOf } from "../core/insides.js";
@@ -80,7 +81,8 @@ import { cultNear, cultWays, cultWord } from "../core/cultword.js";
 import { circleOf, rumouredBy, rumoursNear, rumourWord, RUMOURS } from "../core/rumours.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { RESOURCES, RISING, STAGES } from "../core/war/war.js";
-import { GODS } from "../core/lore/gods.js";
+import { GODS, PANTHEON } from "../core/lore/gods.js";
+import { GIFTS, godWords, SHRINE, shrineOf, shrinesOf } from "../core/shrines.js";
 import { ACT_TIMES, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
 import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
@@ -108,6 +110,7 @@ import { Stockades } from "../world/stockades3d.js";
 import { ContactShadows } from "../world/contacts.js";
 import { footAt, lookPrint, printOf, TAKES, Tracks } from "../world/tracks3d.js";
 import { TrailSigns } from "../world/signs3d.js";
+import { DEN_LOOK, DenProps } from "../world/dens3d.js";
 import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
 import { Ailments3D } from "../world/ailments3d.js";
@@ -491,6 +494,10 @@ const RITE_HEARD = 110;
 // `again` metres on; how far apart a print falls from the next, against how big what made them
 // is (`stride`: [a share of its size, least, most metres]), and how deep they are against fresh
 // ones (`depth`)
+// How near the player a shrine can be tapped to pray at (metres, out in the world: #shrineAt), and
+// how near a tap's ray passes the space before it (its heart, a little above the ground)
+const SHRINE_TAP = Object.freeze({ seen: 40, near: 2.6, up: 1.2 });
+
 const TRAIL_SEEN = Object.freeze({ signs: 40, prints: 45, again: 12, stride: Object.freeze([0.6, 0.45, 2.4]), depth: 0.85 });
 
 // Who's heard of the nearest hell's cult, and will say (#cultWords): those whose trade it is to
@@ -776,7 +783,7 @@ const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, thanks: 14 });
 const HEARD_FOUND = 5;
 
 // What the host tells of besides the battle's events (#hear)
-const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign"]);
+const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1290,6 +1297,8 @@ export class Game {
         this.pingedAt = -Infinity;
         /** The adventurers' caches the player's seen (their ids: core/caches.js), marked on the maps. */
         this.cachesSeen = new Set();
+        // (The shrines come near, told whose each is: #nearShrine)
+        this.shrinesNear = new Set();
         this.talking = null;
         this.approaching = null;
         this.talkVariety = new Variety();
@@ -1299,8 +1308,10 @@ export class Game {
         this.toPortal = null;
         this.toTable = null;
         this.toLectern = null;
-        // (And the sign on a trail they're walking up to, to read: #keepToSign)
+        // (And the sign on a trail they're walking up to, to read: #keepToSign; and the shrine, to
+        // pray at: #keepToShrine)
         this.toSign = null;
+        this.toShrine = null;
     }
 
     /** This game's player, as the host has them (core/host.js players). */
@@ -1732,6 +1743,8 @@ export class Game {
         this.trailSigns = new TrailSigns(view.scene);
         this.trailsAt = null;
         this.gaitsSeen = new Map();
+        // (The roaming beasts' dens near the player: #denning)
+        this.denProps = new DenProps(view.scene);
         this.ailments = new Ailments3D(this.effects.group);
         // (Its fire, flashes and fireballs lighting what's round them as the world's fires do, each
         // a light of its own: lightsNow, #lightNear; not lent the view's lamps)
@@ -2462,6 +2475,7 @@ export class Game {
         this.tracks?.dispose();
         this.trailPrints?.dispose();
         this.trailSigns?.dispose();
+        this.denProps?.dispose();
         this.navBaker?.dispose();
         this.navigationView?.dispose();
 
@@ -3293,6 +3307,7 @@ export class Game {
         this.#keepToTable();
         this.#keepToLectern();
         this.#keepToSign();
+        this.#keepToShrine();
         this.#restPlayer();
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawDrops();
@@ -3325,8 +3340,12 @@ export class Game {
 
         // (Where a treasure the player's hunting is buried, once they're near: it glints)
         this.#glinting();
-        // (The trails out of the wild's camps and lairs near them: their prints and signs)
+        // (The trails out of the wild's camps, dens and lairs near them: their prints and signs;
+        // and the dens near them)
         this.#trailing();
+        // (And a shrine come near: whose it is)
+        this.#nearShrine();
+        this.#denning();
 
         // (The party's pings, in the world: #pinging)
         this.#pinging();
@@ -4702,7 +4721,7 @@ export class Game {
             // on ahead of them, never where they're going)
             destination: actor.order?.type === "move" && !this.steering?.steering ? [actor.order.to[0] + 0.5, actor.order.to[1] + 0.5] : null,
             look: actor.dead ? null : look,
-            icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
+            icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.#trackedMarks(this.denIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
             // (The circles to search for the treasures they're hunting: #treasureCircles)
             searches: this.mapId === "town" ? this.treasureCircles() : [],
             // (The party's pings: pingView; and the player's markers: markerView)
@@ -4874,6 +4893,20 @@ export class Game {
     }
 
     /**
+     * The roaming beasts' dens (core/dens.js), as icons for the maps: [{ id, kind ("lair"), x, z
+     * (metres), rim (a beast's) }].
+     */
+    denIcons() {
+        const plan = this.world.plan;
+
+        if (this.denMarks?.plan !== plan) {
+            this.denMarks = { plan, icons: plan ? densOf(plan).map(({ id, at: [x, z] }) => ({ id, kind: "lair", x, z, rim: PLACE_RIMS.beast })) : [] };
+        }
+
+        return this.denMarks.icons;
+    }
+
+    /**
      * The icons over the buildings the player has gone into ([{ kind, x, z }]: metres, on the
      * world outside), for the maps.
      */
@@ -5025,10 +5058,11 @@ export class Game {
         // (Who found it for them, if another of their party did: core/explored.js finderOf)
         const finder = (icon) => (this.explored.finderOf(icon.id) ? { ...icon, finder: this.explored.finderOf(icon.id) } : icon);
 
-        // (And the camps and lairs they've tracked home, found or not: core/tracks.js)
-        const known = (icon) => seen(icon) || this.explored.tracked.has(icon.id);
+        // (A place worth finding: been near, or seen from high ground, Explored knows; and the
+        // camps and lairs they've tracked home, found or not: core/tracks.js)
+        const known = (icon) => this.explored.knows(icon.id, icon.x, icon.z) || this.explored.tracked.has(icon.id);
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.#trackedMarks(this.denIcons().filter(known)), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
     }
 
     /**
@@ -5157,6 +5191,21 @@ export class Game {
         }
 
         this.trailPrints.mesh.visible = this.trailPrints.mesh.count > 0;
+    }
+
+    // The roaming beasts' dens within DEN_LOOK.seen of the player (core/dens.js), out in the world,
+    // each drawn as its kind's is (dens3d.js), on the ground where it lies
+    #denning() {
+        const me = this.battle.actor(this.me);
+        const plan = this.world.plan;
+        const near = plan && me && me.map === "town" ? densOf(plan).filter(({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y) <= DEN_LOOK.seen) : [];
+
+        if (near.length || this.denProps.shown.size) {
+            this.denProps.set(
+                near.map(({ id, kind, at: [x, z], seed }) => ({ id, kind, x, z, seed })),
+                (x, z) => this.#groundOn("town", x, z),
+            );
+        }
     }
 
     // The prints along the trails near the player (core/tracks.js), each of what wore it (Host
@@ -5565,11 +5614,35 @@ export class Game {
     // Places another of the player's party found for them (core/host.js #share: `places`, plan
     // place ids, found by `name`), said: the one by its name, or what it is; or how many
     #sharedFinds({ name, places }) {
-        const plan = this.world.plan;
-        const one = places.length === 1 ? (placesOf(plan).find(({ id }) => id === places[0]) ?? plan.sites.find(({ id }) => id === places[0])) : null;
-        const what = one?.name ?? (one ? `${/^[aeiou]/.test(one.kind) ? "an" : "a"} ${one.kind}` : null);
+        const what = places.length === 1 ? this.#placeCalled(places[0]) : null;
 
         this.hud.message(what ? `${name} found ${what}: it's on your map.` : `${name} found ${places.length} places: they're on your map.`, 3.5);
+    }
+
+    // The places worth finding the player's seen from high ground (core/sighting.js; the nearest
+    // first), said with a quill's scratch, as anything written in: one by what it is and which way,
+    // more by how many
+    #spotted(places) {
+        const one = places.length === 1 ? this.#placeOf(places[0]) : null;
+        const where = one ? bearing(this.#whereAmI(), one.at) : null;
+
+        this.hud.message(one ? `From up here you can see ${this.#placeCalled(places[0])}${where && where !== "here" ? `, ${where}` : ""}: it's on your map.` : `From up here you can see ${places.length} places: they're on your map.`, 4);
+        this.sound?.play("quill");
+    }
+
+    // A place worth finding by its id (a plan's place, a dungeon's site, or a den), or null
+    #placeOf(id) {
+        const plan = this.world.plan;
+
+        return placesOf(plan).find((place) => place.id === id) ?? plan.sites.find((site) => site.id === id) ?? denOf(plan, id);
+    }
+
+    // What a place worth finding (its id) is called: its name, or what it is ("a ruined castle");
+    // null if there's none
+    #placeCalled(id) {
+        const one = this.#placeOf(id);
+
+        return one?.name ?? (one ? `${/^[aeiou]/.test(one.kind) ? "an" : "a"} ${one.kind}` : null);
     }
 
     // Who the player was told to fight (and is still alive), or null
@@ -6086,12 +6159,12 @@ export class Game {
     }
 
     // Whether the place a rumour heard is of (memory.heard's: a place's id, core/rumours.js
-    // rumouredBy; or a hell's, the plan's site) has been found (Explored sighted: the maps' rule)
+    // rumouredBy; or a hell's, the plan's site) has been found (Explored knows: the maps' rule)
     #foundOf({ id }) {
         const plan = this.world.plan;
         const place = plan ? (rumouredBy(plan, id) ?? plan.sites.find((site) => site.id === id)) : null;
 
-        return !place || this.explored.sighted(place.at[0], place.at[1]);
+        return !place || this.explored.knows(place.id, place.at[0], place.at[1]);
     }
 
     // Where a crier cries the news ([x, y] metres: his place's, `out` his record, host.js folk), and
@@ -8018,6 +8091,33 @@ export class Game {
         }
     }
 
+    // A player's prayed at a shrine (host.js #pray): its god's gift on them, said, with a burst of
+    // gold light about them and a healing's warmth heard; and somewhere near it they've still to
+    // find, if the god shows them one, written in their journal as what's heard tell of is (a
+    // shrine's: memory.heard `shrine`, its god) and circled on their map
+    #prayed({ shrine, god, hint = null }) {
+        const plan = this.world.plan;
+        const { label, does } = GIFTS[god];
+        const place = hint && plan ? rumouredBy(plan, hint) : null;
+        const avatar = this.avatars.get(this.me);
+
+        this.hud.message(`You kneel at the shrine of ${godWords(god)}. ${label}: ${does}, for half an hour.${place ? ` And as you rise, ${PANTHEON[god].name} shows you something not far off: it's written in your journal.` : ""}`, 6);
+        this.sound?.play("healed");
+
+        if (avatar) {
+            this.spellFx.appear(avatar.object.position.clone(), "recall");
+        }
+
+        if (place && !(this.memory.heard ?? []).some((one) => one.id === place.id)) {
+            this.memory.heard = [...(this.memory.heard ?? []), { id: place.id, town: shrine, turn: this.host.war?.turn ?? 0, shrine: god }];
+            this.#keepTalks();
+        }
+
+        if (this.journal.open) {
+            this.#showJournal();
+        }
+    }
+
     #partyEvent(event) {
         if (event.id !== this.me) {
             return;
@@ -8507,11 +8607,13 @@ export class Game {
                 return [];
             }
 
-            const words = one.hell ? cultWord(cultNear(plan, town.at), town.name) : rumourWord(plan, place, town);
+            // (Shown by a shrine's god as they prayed: core/shrines.js; the shrine its "town")
+            const words = one.hell ? cultWord(cultNear(plan, town.at), town.name) : rumourWord(plan, place, town, one.shrine ? { from: "the shrine" } : {});
             const found = this.#foundOf(one);
             const circle = !one.hell || one.hell === "near" ? circleOf(place.id, place.at) : null;
+            const from = one.hell ? `Said in ${town.name}` : one.shrine ? `Shown at the shrine of ${PANTHEON[one.shrine]?.name ?? "a god"}` : `The crier in ${town.name}`;
 
-            return [{ words, from: one.hell ? `Said in ${town.name}` : `The crier in ${town.name}`, where: circle && at && !found ? `About ${bearing(at, circle.at)}` : "", found }];
+            return [{ words, from, where: circle && at && !found ? `About ${bearing(at, circle.at)}` : "", found }];
         });
 
         return [...told.filter(({ found }) => !found), ...told.filter(({ found }) => found).slice(0, HEARD_FOUND)];
@@ -10573,7 +10675,8 @@ export class Game {
                 break;
             case "explored":
                 // (Marked on the maps, and kept; a branch of the guild's portal open to them now,
-                // said; and the places another of their party found for them, said: #sharedFinds)
+                // said; the places another of their party found for them, said: #sharedFinds; and
+                // those seen from high ground: #spotted)
                 if (event.id === this.me) {
                     this.#explored();
 
@@ -10583,6 +10686,10 @@ export class Game {
 
                     if (event.places?.length) {
                         this.#sharedFinds(event);
+                    }
+
+                    if (event.spotted?.length) {
+                        this.#spotted(event.spotted);
                     }
                 }
 
@@ -10695,6 +10802,19 @@ export class Game {
             case "sign":
                 if (event.id === this.me) {
                     this.#signRead(event);
+                }
+
+                break;
+            case "prayed":
+                if (event.id === this.me) {
+                    this.#prayed(event);
+                }
+
+                break;
+            case "cured":
+                // (Rested in a shrine's sanctuary: core/shrines.js)
+                if (event.id === this.me) {
+                    this.hud.message(`The shrine's peace eases you as you rest: no longer ${AFFLICTIONS[event.kind]?.label.toLowerCase() ?? event.kind}.`, 3);
                 }
 
                 break;
@@ -11675,15 +11795,16 @@ export class Game {
         const enemy = who;
         // (A lectern before any way out behind it: it stands in the room, in front of its stairs)
         const lectern = enemy ? null : this.#lecternAt(clientX, clientY);
-        // (A sign on a trail, out in the wilds: core/tracks.js)
+        // (A sign on a trail, out in the wilds: core/tracks.js; a shrine, to pray at: core/shrines.js)
         const sign = enemy || lectern ? null : this.#signAt(clientX, clientY);
-        const door = enemy || lectern || sign ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
-        const portal = enemy || door || lectern || sign ? null : this.#portalAt(clientX, clientY);
-        const table = enemy || door || portal || lectern || sign ? null : this.#warTableAt(clientX, clientY);
-        const ground = enemy || door || portal || table || lectern || sign ? null : this.view.pickGround(clientX, clientY);
+        const shrine = enemy || lectern || sign ? null : this.#shrineAt(clientX, clientY);
+        const door = enemy || lectern || sign || shrine ? null : this.doors?.at(this.view.rayAt(clientX, clientY), this.mapId) ?? null;
+        const portal = enemy || door || lectern || sign || shrine ? null : this.#portalAt(clientX, clientY);
+        const table = enemy || door || portal || lectern || sign || shrine ? null : this.#warTableAt(clientX, clientY);
+        const ground = enemy || door || portal || table || lectern || sign || shrine ? null : this.view.pickGround(clientX, clientY);
         const [ox, oz] = this.originOf(this.mapId);
 
-        this.#order({ enemy, door, portal, table, lectern, sign, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
+        this.#order({ enemy, door, portal, table, lectern, sign, shrine, ground: ground && [ground.x - ox, ground.z - oz] }, { clientX, clientY, run, time, from: "view" });
     }
 
     /**
@@ -11771,7 +11892,7 @@ export class Game {
      * What a click at a point on the view would do, for the pointer to show (app/pointer.js AIMS):
      * "attack" an enemy, "talk" to someone (or trade with another player), "hand" for something
      * on the ground to pick up or search (or the war table, to open its map; or a lectern, to read
-     * what's on it; or a sign on a trail), "enter" for a door,
+     * what's on it; or a sign on a trail; or a shrine, to pray at), "enter" for a door,
      * the stairs or the guild's portal; null for the ground (or the player). As tap() chooses, in
      * its order, without doing any of it.
      */
@@ -11784,7 +11905,7 @@ export class Game {
             return me && !this.battle.hostile(who, me) && !this.host.invader(who.id) ? "talk" : "attack";
         }
 
-        if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point)) || this.#lecternAt(clientX, clientY) || this.#signAt(clientX, clientY)) {
+        if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point)) || this.#lecternAt(clientX, clientY) || this.#signAt(clientX, clientY) || this.#shrineAt(clientX, clientY)) {
             return "hand";
         }
 
@@ -11936,6 +12057,101 @@ export class Game {
         this.#command({ type: "read", sign: id }, (result) => {
             if (!result.ok) {
                 this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+            }
+        });
+    }
+
+    // A shrine out in the world come within SHRINE_TAP.seen of the player for the first time this
+    // game (core/shrines.js): said whose it is, and that they may pray there (tapping it)
+    #nearShrine() {
+        const me = this.battle.actor(this.me);
+        const plan = this.world.plan;
+
+        if (!plan || !me || me.dead || me.map !== "town") {
+            return;
+        }
+
+        const shrine = shrinesOf(plan).find(({ site, at }) => !this.shrinesNear.has(site.id) && Math.hypot(at[0] - me.x, at[1] - me.y) <= SHRINE_TAP.seen);
+
+        if (shrine) {
+            this.shrinesNear.add(shrine.site.id);
+            this.hud.message(`A shrine to ${godWords(shrine.god)}: ${PANTHEON[shrine.god].domain}. Tap it to pray there.`, 4);
+        }
+    }
+
+    // Where a shrine's heart is (sites.js heartOf: the space before its figure, where they kneel)
+    #shrineHeart(id) {
+        const shrine = shrineOf(this.world.plan, id);
+
+        return this.world.maps.town?.sites?.heartOf(shrine.site) ?? shrine.at;
+    }
+
+    // A shrine out in the world (core/shrines.js) within SHRINE_TAP.seen of the player, if that's
+    // what was tapped (the space before it): its site's id
+    #shrineAt(clientX, clientY) {
+        const me = this.battle.actor(this.me);
+        const plan = this.world.plan;
+
+        if (this.mapId !== "town" || !me || !plan) {
+            return null;
+        }
+
+        const ray = this.view.rayAt(clientX, clientY);
+        let found = null;
+        let nearest = Infinity;
+
+        for (const { site, at } of shrinesOf(plan)) {
+            if (Math.hypot(at[0] - me.x, at[1] - me.y) > SHRINE_TAP.seen) {
+                continue;
+            }
+
+            const [x, z] = this.#shrineHeart(site.id);
+            const point = new THREE.Vector3(x, this.#groundOn("town", x, z) + SHRINE_TAP.up, z);
+            const along = ray.origin.distanceTo(point);
+
+            if (ray.distanceToPoint(point) <= SHRINE_TAP.near && along < nearest) {
+                [found, nearest] = [site.id, along];
+            }
+        }
+
+        return found;
+    }
+
+    // Walking up to a shrine (it was tapped): there and stopped, they pray; told to do anything
+    // else, gone in somewhere, or stopped short, it's forgotten
+    #keepToShrine() {
+        if (!this.toShrine) {
+            return;
+        }
+
+        const me = this.battle.actor(this.me);
+
+        if (!me || me.dead || me.map !== "town" || !this.world.plan) {
+            this.toShrine = null;
+
+            return;
+        }
+
+        if (me.order || me.path.length) {
+            return;
+        }
+
+        const id = this.toShrine;
+        const [x, y] = this.#shrineHeart(id);
+
+        this.toShrine = null;
+
+        if (Math.hypot(me.x - x, me.y - y) <= SHRINE.reach) {
+            this.#pray(id);
+        }
+    }
+
+    // Pray at the shrine the player's before (host.js #pray): what came of it's said as it's heard
+    // (#prayed)
+    #pray(id) {
+        this.#command({ type: "pray", shrine: id }, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 2.5);
             }
         });
     }
@@ -12822,7 +13038,7 @@ export class Game {
     // Send the player to fight an enemy, through a door (or up or down the stairs), or to a point
     // on the ground ([x, z] metres, on their map), running if told to or tapped twice in quick
     // succession (in the same place: the view or the minimap)
-    #order({ enemy, door = null, portal = null, table = null, lectern = null, sign = null, ground }, { clientX, clientY, run, time, from }) {
+    #order({ enemy, door = null, portal = null, table = null, lectern = null, sign = null, shrine = null, ground }, { clientX, clientY, run, time, from }) {
         const player = this.battle.actor(this.me);
         const last = this.lastTap;
 
@@ -12937,6 +13153,25 @@ export class Game {
             return;
         }
 
+        // A shrine: up to it, and they pray there (#keepToShrine)
+        if (shrine) {
+            const [ox, oz] = this.originOf(player.map);
+            const [x, y] = this.#shrineHeart(shrine);
+            const square = [Math.floor(x), Math.floor(y)];
+
+            if (Math.hypot(player.x - x, player.y - y) <= SHRINE.reach && !player.path.length) {
+                this.#pray(shrine);
+
+                return;
+            }
+
+            this.#command({ type: "move", to: square, run });
+            this.toShrine = shrine;
+            this.effects.markTarget(ox + square[0] + 0.5, oz + square[1] + 0.5);
+
+            return;
+        }
+
         if (!ground) {
             return;
         }
@@ -12988,7 +13223,8 @@ export class Game {
     // or hosting; joined to another's world, once the host's done it and it's been done here too)
     #command(command, then = null) {
         // (Anything the player does themselves ends running somewhere far: not resisting a
-        // summons, done for them; and walking up to the portal, the war table, a lectern or a sign)
+        // summons, done for them; and walking up to the portal, the war table, a lectern, a sign or
+        // a shrine)
         if (!this.journeying && !(command.type === "summoned" && !command.come)) {
             this.journey = null;
         }
@@ -12997,6 +13233,7 @@ export class Game {
         this.toTable = null;
         this.toLectern = null;
         this.toSign = null;
+        this.toShrine = null;
 
         if (this.remote) {
             return this.remote.command(command, this.#predicting(command, then));

@@ -629,6 +629,34 @@ to search on its reader's maps, and their party's; whoever buried it left a band
 The treasures hunted are kept in a snapshot (`SNAPSHOT_VERSION` 32, none in a world kept before),
 so a player joining finds them as they are; what's said between games changed (`NET_VERSION` 155).
 
+## Seen from high ground
+
+A player on a rise well above the land round them finds the places worth finding that the land
+between doesn't hide, without going near (`core/sighting.js`, the host's `#spotting`; the
+Alexandrian's "visible" locations, spotted from a distance).
+- **High ground** (`highGround`): the land stands at least 10 m above the average of eight points
+  80 m round. About one spot in twenty-one is, in the two worlds scanned (seeds 1 and 2):
+  hilltops, ridges and crags, not the plains.
+- **How far** (`reachOver`): 200 m, and 15 m more for each metre the player stands over the
+  place's ground, up to a kilometre.
+- **In sight** (`inSight`): no land along the way, sampled every 16 m, stands above the line from
+  the player's eyes (1.7 m up) to 4 m over the place's ground. The last 24 m at either end aren't
+  sampled: the rise's own top, and the place's own ground.
+- **What's found** (`sightedFrom`): the places worth finding they hadn't found (`core/places.js`
+  `placesOf`, the dungeons' ways in, and the dens, *Dens*), the nearest first: four from a typical
+  rise, fifteen at most in the two worlds scanned. The host looks each time it looks round (every
+  500 ms); a look takes about a quarter of a millisecond. It's pure arithmetic over the lie of the land
+  (`terrain/height.js` `landHeight`), the same on every copy of the world.
+- **Kept** as spotted (`Explored.spot`, `spotted`, kept with the character; nothing's written till
+  something's seen, so older saves and snapshots carry on as they were). It's found wherever being
+  near would count (`Explored.knows`, the one rule): its icon on the world map, over the fog; the
+  rumour of it done with (`rumoursNear`, the journal's circles); a guild's request to survey it,
+  ready.
+- **Said**, with a quill's scratch: "From up here you can see a ruined castle, 900 m north-east:
+  it's on your map." (or how many).
+- **The party** finds them too, as found by the one who saw them ("Ada found …", and "found by
+  Ada" on the world map), as with shared finds (docs/WAR.md *Parties*).
+
 ## By night
 
 The world's clock has a day and a night (docs/GAME.md, *Day and night*), and the wild has its own
@@ -753,21 +781,102 @@ ghosts...), nothing on another map than the world's own.
 - Only the player's own game draws them: nothing of them is the host's, and both ends of a game
   needn't agree on them.
 
+## Dens
+
+Out in the wild, where each kind's land is, the roaming beasts keep dens of their own (core/
+dens.js; host.js `#dens`; world/dens3d.js; app/game.js `#denning`): seed 2 has 31.
+
+- **The kinds** (`DENS`): a bear's den (8 a world at most), a boars' wallow (8), a puma's lair (6),
+  a jaguar's lair (4, in the jungles), a wyverns' nest (5) and a knucker's hole (4). Each is kept by
+  the mightiest of its kind round about, its master, and a few more of it (`with`): the boars a
+  sounder of one to three more, the wyverns a mate, the rest one more at most or none.
+- **Where** (`densOf`, laid out once from the world plan, after everything else and by a draw of
+  its own, so nothing else moves): a cell of its kind's land, off the water and the roads, 260 m
+  clear of the settlements' edges (`DEN.clear`), 4 cells from the sites, 5 from the camps and 10
+  from each other; on the flattest ground within 48 m of its cell's middle (terrain/flats.js, as a
+  camp's pitched), and only where that's level (no more than 1.2 m up or down 7 m out from it, a
+  wyverns' nest 2.5 m, up on a crag); and only so far in as the land's nearly strong enough for
+  what keeps it (two tiers short of its kind's least, from every people's start). The trees keep
+  14 m clear round each (`DEN.ground`): a glade.
+- **Its beasts** (`#dens`): put out once a player's within 90 m (`DEN.near`), kept to it
+  (territorial), roaming 7 m; let go once every player's 180 m off (`DEN.far`). Its master a tier
+  up on the rest and 1.6 times as hardy (`DEN.master`); the rest as strong as the den's tier from
+  the home of the player nearest it (`denTier`, as a camp's, within its kind's tiers). More of them
+  and tougher against a stronger side (*A side's strength*). Its master slain is gone 20 minutes
+  (`DEN.back`), and one of the mightiest in the bestiary (5 points). If none could be put out (its
+  ground not made yet), tried again the next step.
+- **Seen** within 140 m (world/dens3d.js `DenProps`), each of a few plain shapes on the ground
+  where it lies: a mound of earth with a dark mouth dug into it, boulders and bones (a bear's); a
+  hollow of wet mud, the earth rooted up round it, a fallen log (a boars'); a flat-topped rock to
+  lie up on, boulders and bones (a puma's or a jaguar's); a ring of heaped sticks round a hollow,
+  eggs in it (a wyverns'); a dark still pool ringed with stones and reeds (a knucker's).
+- **On the maps** as a lair's icon, rimmed as a beast's place: on the minimap near it, on the world
+  map once found (or tracked). Its trails lead to it, as a camp's (*Tracking*).
+- **In the bestiary**: among the homes its kind keeps to ("the bears' dens").
+- **Kept** in a snapshot (`dens`, as the wild camps are: `SNAPSHOT_VERSION` 35, a world from before
+  with none out).
+
+## Shrines
+
+The wayside shrines out in the land (the world plan's sites of kind "shrine": seed 2 has 26) are
+each to one of the twelve gods (core/shrines.js; core/lore/gods.js `PANTHEON`): the Six of the
+Hearth, whose temples are in the towns (theirs alone), and the Wild Six, the world's own gods,
+worshipped only at the shrines:
+
+| God | Of | Their gift at a shrine (`GIFTS`) |
+| --- | --- | --- |
+| Aurelia, the Dawnmother | life, health and vigour | *Aurelia's Dawn*: 20 more hit points, healing a sixth the stronger |
+| Brannoc, the Red Horn | battle and the hunt | *The Red Horn*: blows and shots a twelfth the harder |
+| Ithriel, the Veiled Star | magic | *A Thread of the Veil*: spells a sixth the harder |
+| Morvaine, the Keeper of the Last Gate | death | *The Lantern's Ward*: a quarter of magic's harm kept off, armour 3% |
+| Seliane, the Rose of Evening | love | *The Rose's Grace*: healing a quarter the stronger, breath back a quarter the faster |
+| Dunmar, Anvilhand | crafts and trades | *Anvilhand's Mettle*: armour 6%, the shield's bash 15% |
+| Tharos, the Thunderlord | the sky, storms and kings | *Thunder in the Hand*: stuns a fifth the more, blows a twentieth the harder, a quarter of the storm's harm kept off |
+| Nerreth, the Deep-Caller | the sea and the rivers | *The Tide's Strength*: a quarter more breath, a third of water's harm kept off |
+| Ceryn, the Harvest Mother | fields, flocks and plenty | *Harvest Plenty*: 15 more hit points, breath back a third the faster |
+| Lunara, the Silver Lady | the moon, the night and the old stones | *Moonsight*: seeing in the dark as the night's creatures do, dodging 5% |
+| Wick, the Wayfarer | roads, luck and clever hands | *Fortune's Wink*: dodging 6%, a quarter more gold found |
+| Bacchar, the Merry Lord | wine, feasts and revels | *Revelry*: half as much breath again, blows 6% the harder, armour 2% the less |
+
+- **Which god's** (`shrinesOf`): the twelve dealt out round the world's shrines in an order of its
+  own (its seed's), so every god has two or three; the same every time.
+- **Prayed at** (tapped, the player walks up to the space before its figure, as to a lectern; a
+  `pray` command within `SHRINE.reach` 4 m of its heart: host.js `#pray`): its god's gift for half an
+  hour (`SHRINE.ms`), a boon as a tavern's drink or a priest's blessing is (host.js `#outfit`: its
+  share of each bonus; `darkSight` on the player's actor, battle.js `canSee`; `fortune` in what's
+  found, `#fortune`). One god's at a time: a new one takes the place of another god's, but a drink
+  and the priests' blessing go on with it. Each shrine answers each player once a world day
+  (daytime.js `dayOf`: refused "The shrine has answered you today", `prayed`); kept in a
+  snapshot (`SNAPSHOT_VERSION` 36). Told what it is and does, a healing's warmth heard, a burst of
+  gold light about them.
+- **A hint** (`rumoursNear`): the god shows them somewhere near the shrine they've still to find,
+  the nearest: written in their journal under *Heard tell* as a crier's rumour is ("Shown at the
+  shrine of Lunara"), in the same words but "of the shrine" (rumours.js `rumourWord` `from`), and
+  circled on their map till it's found.
+- **A sanctuary** (`SHRINE.sanctuary` 60 m round where it rests, sites.js `restingOf`:
+  `sanctuaryAt`):
+  - nothing hostile's put out in it (host.js `#putOut`);
+  - the wild's creatures don't go after anyone in it, and those chasing give up at its edge
+    (battle.js `haven`: as if beyond their leash), unless they've just been struck from it;
+  - a camp's always made there, whatever's about (`campRefusal`);
+  - a rest there cures the poisons, the sicknesses and the withering curse (`SHRINE.cures`:
+    poisoned, envenomed, diseased, the pox, withered), told as each goes ("cured").
+
 ## Tracking
 
-The wild's camps and its perilous sites wear trails out into the country round them, as Monster
+The wild's camps, dens and perilous sites wear trails out into the country round them, as Monster
 Hunter's tracks and a hexcrawl's spoor do: found and followed, sign by sign, a trail leads home
 (core/tracks.js; host.js `#readSign`; app/game.js `#trailing`, `#signRead`).
 
 - **The trails** (`trailsOf`, laid out once from the world plan, the same on every machine): each
-  wild camp wears two (`TRAILS.camp`), each perilous site three (`TRAILS.lair`: the drake's and the
-  Dreadthorns' lairs, the werewolves' den, the ruined castles, the Tower of Sar Mordal, and the
-  cults' camps at the hells' ways in). Each starts 30 m out of its home (`from`) and winds on 170
+  wild camp wears two (`TRAILS.camp`), each den two (`TRAILS.den`: *Dens*), each perilous site
+  three (`TRAILS.lair`: the drake's and the Dreadthorns' lairs, the werewolves' den, the ruined
+  castles, the Tower of Sar Mordal, and the cults' camps at the hells' ways in). Each starts 30 m out of its home (`from`) and winds on 170
   to 250 m (`length`) in 8 m steps (`step`), its way turned a little at each (`wander`) but drawn
   back to it, round the water and 25 m clear of the settlements (`clear`). One that can't get
-  half as far as the shortest isn't worn. Seed 2 has 168, to 83 homes.
+  half as far as the shortest isn't worn. Seed 2 has 229, to 114 homes (61 of them to its dens).
 - **What wore it** (`trailCreature`): a camp's folk, as strong as the camp is from the reader's
-  home (as its folk are when met: creatures.js `campFolk`); a lair's master on its first, its
+  home (as its folk are when met: creatures.js `campFolk`); a den's beasts; a lair's master on its first, its
   guards on the others, one kind after another (the drake, then wyverns).
 - **Its signs** (`signs`): three along each, 92%, 60% and 28% of the way out (`TRAILS.signs`), the
   furthest first: what's to be found of what made it (core/lore/bestiary.js `sign`: a line of

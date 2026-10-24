@@ -107,7 +107,7 @@ export const CATALOG = Object.freeze({
 
     // Spells
     castHeal: { group: "Spells", label: "Casting a heal (made)", about: "A rising shimmer, made in code.", plays: "In place of the healing casts' recordings, until they're downloaded." },
-    healed: { group: "Spells", label: "Healed", about: "A warm swell, made in code.", plays: "Healing that isn't a spell's landing (a priest's blessing, a potion); and in place of the healing landings' recordings, until they're downloaded." },
+    healed: { group: "Spells", label: "Healed", about: "A warm swell, made in code.", plays: "Healing that isn't a spell's landing (a priest's blessing, a potion); a prayer answered at a shrine; and in place of the healing landings' recordings, until they're downloaded." },
     stun: { group: "Spells", label: "Stunned", about: "A zap and a dizzy warble.", plays: "Someone stunned." },
 
     // Fire spells (sound.js spellSounds: by the spell's tier; a cast swells to its release, loudest as it's let go)
@@ -379,7 +379,7 @@ export const CATALOG = Object.freeze({
     chestOpen: { group: "In hand", label: "A chest opened", about: "A wooden chest's lid lifted: its latch, then its creak (The_Frisbee_of_Peace's chest and Vrymaa's cupboard).", plays: "A place's chest opening once it's cleared, the player's share in it; a treasure dug up once its keepers are down, the player's share of it." },
     chestClose: { group: "In hand", label: "A chest shut", about: "The lid shut: a thump.", plays: "The last of a chest's share taken." },
     lockpick: { group: "In hand", label: "A lock turned", about: "A key turned in a lockbox, its bolt drawn (Jan Schupke's).", plays: "A place's chest unlocked as it's cleared, before its lid's lifted." },
-    quill: { group: "In hand", label: "A quill", about: "A sharp point scratching over stiff parchment (Vrymaa's: the CC0 recordings of real quills were too noisy).", plays: "A request taken, written in the journal; a place heard tell of from a crier, or a hell's cult from anyone, written there too; signing up at an adventurers' guild; a treasure map read (the player's, or one of their party's), where it leads marked on the world map; a creature new in the bestiary, or its page there gone up a level; a sign read for the first time on a trail out of a camp or a lair." },
+    quill: { group: "In hand", label: "A quill", about: "A sharp point scratching over stiff parchment (Vrymaa's: the CC0 recordings of real quills were too noisy).", plays: "A request taken, written in the journal; a place heard tell of from a crier, or a hell's cult from anyone, written there too; signing up at an adventurers' guild; a treasure map read (the player's, or one of their party's), where it leads marked on the world map; a creature new in the bestiary, or its page there gone up a level; a sign read for the first time on a trail out of a camp or a lair; places worth finding seen from high ground, put on the world map." },
 
     // The interface (scripts/sounds/items.js)
     wheel: { group: "The interface", label: "Action wheel", about: "A soft wooden tok: a woodblock (the Versilian Community Sample Library's), near F above the treble.", plays: "The action wheel opening (on someone, or on one of the party's icons), and turned to its other side." },

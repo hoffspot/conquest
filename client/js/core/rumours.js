@@ -9,7 +9,8 @@
 // Which places, and whether found: the plan's places worth finding (its dungeons, but the hells'
 // (core/cultword.js tells of those); its ruins, caves, lairs, shrines and stones; the wild's
 // watchtowers and camps), the nearest first, those the player hasn't found yet (Explored
-// sighted: the maps' rule, so a rumour's place and its icon on the maps can never disagree).
+// knows: been near, or seen from high ground; the maps' rule, so a rumour's place and its icon on
+// the maps can never disagree).
 // Heard, each is kept with the character (app/game.js: memory.heard), written in the journal
 // ("Heard tell"), and drawn on the world map as a faint circle round about where it is
 // (circleOf), till the place is found.
@@ -172,13 +173,13 @@ export function rumouredBy(plan, id) {
 
 /**
  * The places round `at` ([x, y] metres: a town's) still to be found by the player (`explored`:
- * core/explored.js, its `sighted`), within `reach` metres: rumouredOf's, each with how far it is
+ * core/explored.js, its `knows`), within `reach` metres: rumouredOf's, each with how far it is
  * (`far`, metres), the nearest first (then by id).
  */
 export function rumoursNear(plan, at, explored, { reach = RUMOURS.reach } = {}) {
     return rumouredOf(plan)
         .map((place) => ({ ...place, far: hypot(place.at[0] - at[0], place.at[1] - at[1]) }))
-        .filter(({ far, at: [x, y] }) => far <= reach && !explored.sighted(x, y))
+        .filter(({ id, far, at: [x, y] }) => far <= reach && !explored.knows(id, x, y))
         .sort((a, b) => a.far - b.far || (a.id < b.id ? -1 : 1));
 }
 
@@ -208,14 +209,15 @@ export function landmarkOf(plan, place, town) {
  * What's said of a place (`place`: rumouredOf's) in a town (`town`: { id, at }): which way it is
  * from the town, what stands by it (landmarkOf's) or else how far it is on foot, a hook, and
  * something wild of it, each picked by the place and the town (so the same said every time).
+ * Shown it from somewhere else (a shrine, core/shrines.js), `from` says what: "the shrine".
  */
-export function rumourWord(plan, place, town) {
+export function rumourWord(plan, place, town, { from = "town" } = {}) {
     const lines = LINES[place.kind];
     const which = hashOf(`${place.id}:${town.id}`);
     const far = hypot(place.at[0] - town.at[0], place.at[1] - town.at[1]);
     const by = landmarkOf(plan, place, town);
     const near = by ? (by.farmer ? `, out by old ${by.farmer}'s farm at ${by.name}` : `, out by ${by.name}`) : far <= RUMOURS.walk ? ", not an hour's walk" : ", an hour or two on foot";
-    const where = `${compass(town.at, place.at)} of town${near}`;
+    const where = `${compass(town.at, place.at)} of ${from}${near}`;
 
     return `${lines.hooks[which % lines.hooks.length].replace("{where}", where)} ${lines.tales[Math.floor(which / 7) % lines.tales.length]}`;
 }

@@ -6217,15 +6217,12 @@ test("an envoy on the road near the player goes by with their escort; struck dow
     expect(met.map(({ name }) => name)).toEqual(["Orcish envoy", "Orcish escort", "Orcish escort"]);
     expect(met.some(({ drawn }) => drawn)).toBe(true);
 
-    // Struck down: waylaid, and the player told (every word on the banner kept: something else
-    // can be told just after, a beast new to the bestiary seen as the world goes on)
+    // Struck down: waylaid, and the player told
     const fell = await page.evaluate((id) => {
         const { game } = window.pellagos;
         const envoy = game.battle.actor(id);
         const player = game.battle.actor("player");
 
-        window.told = [];
-        new MutationObserver((records) => window.told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
         envoy.hp = 1;
         Object.assign(player, { square: [envoy.square[0] + 1, envoy.square[1]], x: envoy.square[0] + 1.5, y: envoy.square[1] + 0.5, to: null, path: [] });
         game.battle.command("player", { type: "engage", target: id });
@@ -6234,14 +6231,18 @@ test("an envoy on the road near the player goes by with their escort; struck dow
             game.advance(1);
         }
 
+        // (What the player was told across the screen, as kept for the journal: before it's
+        // played on as it is, when another message, a creature new in the bestiary, could follow it)
+        const told = game.messages.map(({ text }) => text).join("\n");
+
         game.start();
 
-        return { gone: !game.host.war.force("force-950"), grudge: game.host.war.realm("orc").standing.human ?? 0 };
+        return { gone: !game.host.war.force("force-950"), grudge: game.host.war.realm("orc").standing.human ?? 0, told };
     }, met[0].id);
 
     expect(fell.gone).toBe(true);
     expect(fell.grudge).toBeLessThan(-5);
-    await expect.poll(() => page.evaluate(() => window.told.some((text) => text.includes("envoy to the Elves has been struck down by the Humans"))), { timeout: 20000 }).toBe(true);
+    expect(fell.told).toContain("envoy to the Elves has been struck down by the Humans");
 
     // The journal: the orcs bear the humans a grudge
     const journal = page.getByRole("dialog", { name: "Journal" });
@@ -6452,6 +6453,133 @@ test("a trail out of a camp: its prints and signs seen near it, a sign tapped wa
     // The next time they play: still read, still tracked
     await continued();
     expect(await page.evaluate(() => ({ signs: window.pellagos.game.explored.signs.size, tracked: [...window.pellagos.game.explored.tracked] }))).toEqual({ signs: 3, tracked: [trail.home] });
+});
+
+test("a bear's den out in the wild: in its glade, drawn as the player comes near, its master and its kind out, on the world map once found; a trail out of it leading to it", async ({ page }) => {
+    await page.goto("/?play&seed=2");
+    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
+
+    // Out by the bear's den nearest the player's town, 25 m off
+    const den = await page.evaluate(async () => {
+        const { densOf } = await import("/js/core/dens.js");
+        const { game } = window.pellagos;
+        const { host, battle, world } = game;
+        const me = battle.actor(game.me);
+        const near = ({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y);
+        const ours = densOf(world.plan)
+            .filter(({ kind }) => kind === "bear's den")
+            .sort((a, b) => near(a) - near(b))[0];
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [Math.floor(ours.at[0]), Math.floor(ours.at[1]) + 25], { facing: Math.PI });
+        Object.assign(battle.actor(game.me), { hp: 1e6, maxHp: 1e6 });
+        window.testDen = ours.id;
+
+        return { id: ours.id, at: ours.at };
+    });
+
+    // Drawn, and its bear out: its master, a tier up
+    expect(await playUntil(page, () => window.pellagos.game.denProps.shown.has(window.testDen) && (window.pellagos.game.host.dens.get(window.testDen)?.ids.length ?? 0) > 0, { seconds: 20 })).toBe(true);
+
+    const out = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const ids = game.host.dens.get(window.testDen).ids;
+        const drawn = game.denProps.shown.get(window.testDen);
+        const { x, z } = drawn.position;
+        // (The trees round it, in its chunk and those about it: none in its glade)
+        const trees = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].flatMap((dx) => game.world.maps.town.chunkAt(Math.floor(x) + dx * 64, Math.floor(z) + dy * 64)?.trees ?? []));
+
+        return { creatures: ids.map((id) => game.host.wild.get(id).creature), masters: ids.filter((id) => game.host.wild.get(id).master).length, parts: drawn.children.length, glade: trees.filter((tree) => Math.hypot(tree.x - x, tree.y - z) < 12).length };
+    });
+
+    expect(out.creatures.every((creature) => creature === "bear")).toBe(true);
+    expect(out.masters).toBe(1);
+    expect(out.parts).toBeGreaterThan(5);
+    expect(out.glade).toBe(0);
+
+    // Found, on the world map; and a trail out of it, its sign read, leading to it
+    expect(await page.evaluate((id) => window.pellagos.game.worldMapView().icons.some((icon) => icon.id === id && icon.kind === "lair"), den.id)).toBe(true);
+
+    const told = await page.evaluate(async (id) => {
+        const { trailsOf } = await import("/js/core/tracks.js");
+        const { game } = window.pellagos;
+        const trail = trailsOf(game.world.plan).find(({ home }) => home.id === id);
+        const [x, y] = trail.signs[0].at;
+
+        game.host.battle.place(game.me, "town", [Math.floor(x), Math.floor(y)], { facing: Math.PI });
+
+        game.host.command(game.me, { type: "read", sign: trail.signs[0].id });
+
+        for (let k = 0; k < 15; k++) {
+            game.advance(1 / 30, { render: false, wait: true });
+        }
+
+        return game.messages.map(({ text }) => text).find((text) => text.includes(" sign: ")) ?? "";
+    }, den.id);
+
+    expect(told).toMatch(/^Brown bear sign: .+ toward a bear's den \(1 of 3 signs read\)\.$/);
+});
+
+test("a shrine out in the land: tapped, walked up to and prayed at; its god's gift on the player for half an hour, a place near it shown and written in the journal; once a day", async ({ page }) => {
+    await page.goto("/?play&seed=2");
+    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
+
+    // A few steps from the shrine nearest the player's town
+    const shrine = await page.evaluate(async () => {
+        const { shrinesOf } = await import("/js/core/shrines.js");
+        const { PANTHEON } = await import("/js/core/lore/gods.js");
+        const { GIFTS } = await import("/js/core/shrines.js");
+        const { game } = window.pellagos;
+        const { host, battle, world } = game;
+        const me = battle.actor(game.me);
+        const near = ({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y);
+        const ours = [...shrinesOf(world.plan)].sort((a, b) => near(a) - near(b))[0];
+        const [x, y] = world.maps.town.sites.heartOf(ours.site);
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", [Math.floor(x), Math.floor(y) + 6], { facing: Math.PI });
+        window.testShrine = ours.site.id;
+
+        return { id: ours.site.id, god: ours.god, name: PANTHEON[ours.god].name, label: GIFTS[ours.god].label, heart: [x, y] };
+    });
+
+    await playUntil(page, () => false, { seconds: 2 });
+
+    // Tapped (the space before its figure): walked up to, and prayed at
+    await page.evaluate(([x, z]) => {
+        const { game } = window.pellagos;
+
+        game.advance(1 / 30, { render: true, wait: true });
+
+        // (A point there, a little above the ground: a vector as the camera's position is one)
+        const at = game.view.toScreen(game.view.camera.position.clone().set(x, (game.world.maps.town.heightAt?.(x, z) ?? 0) + 1.2, z));
+
+        game.tap(at.x, at.y);
+    }, shrine.heart);
+    expect(await playUntil(page, () => window.pellagos.game.host.players.get(window.pellagos.game.me).boons.some(({ god }) => god), { seconds: 15 })).toBe(true);
+
+    const prayed = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.host.players.get(game.me);
+
+        return { boons: player.boons.filter(({ god }) => god).map(({ god, label, until }) => ({ god, label, left: Math.round((until - game.battle.time) / 60000) })), told: game.messages.at(-1)?.text ?? "", heard: (game.memory.heard ?? []).filter(({ shrine }) => shrine).length };
+    });
+
+    expect(prayed.boons).toEqual([{ god: shrine.god, label: shrine.label, left: 30 }]);
+    expect(prayed.told).toContain(`You kneel at the shrine of ${shrine.name}`);
+    expect(prayed.told).toContain(`${shrine.label}: `);
+
+    // (What the god showed, in the journal, if there was somewhere near still to find)
+    if (prayed.heard) {
+        await page.evaluate(() => window.pellagos.game.toggleJournal());
+        await expect(page.getByRole("dialog", { name: "Journal" })).toContainText(`Shown at the shrine of ${shrine.name}`);
+        await page.evaluate(() => window.pellagos.game.toggleJournal());
+    }
+
+    // Again today: no
+    expect(await page.evaluate((id) => window.pellagos.game.host.command(window.pellagos.game.me, { type: "pray", shrine: id }), shrine.id)).toEqual({ ok: false, reason: "prayed" });
 });
 
 test("the bestiary: a creature seen and slain written in, its page in the journal opening a part at a time, its portrait drawn; and the next time", async ({ page }) => {
@@ -9710,6 +9838,61 @@ test("markers on the world map: one put down with its button, what it marks and 
     });
 
     expect(minimap).toContain(shared.id);
+});
+
+test("from high ground the places in sight are found without going near: said how many, shown on the world map over the fog, none of them been near", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // The player on a rise far out in the wilds with five places in sight, on ground they can stand
+    // on all round (found by scanning the world: core/sighting.js), none of them found; a look
+    // round later, found and said
+    const seen = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const { placesOf } = await import("/js/core/places.js");
+        const plan = game.world.plan;
+        const findable = [...placesOf(plan), ...plan.sites.filter(({ kind }) => kind === "dungeon")];
+        const atOf = (id) => findable.find((place) => place.id === id).at;
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // (Every word on the banner kept)
+        window.told = [];
+        new MutationObserver((records) => window.told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+
+        const before = game.worldMapView().icons.map(({ id }) => id);
+
+        battle.place(game.me, "town", [1232, 536]);
+        game.advance(0.6, { render: false });
+        game.advance(0.05, { render: false });
+
+        const spotted = [...game.explored.spotted];
+
+        return { spotted, before: spotted.filter((id) => before.includes(id)), near: spotted.filter((id) => game.explored.sighted(...atOf(id))), shown: game.worldMapView().icons.filter(({ id }) => spotted.includes(id)).length };
+    });
+
+    expect(seen.spotted).toHaveLength(5);
+    expect(seen).toMatchObject({ before: [], near: [], shown: 5 });
+    expect(await page.evaluate(() => window.told.includes("From up here you can see 5 places: they're on your map.")), JSON.stringify(await page.evaluate(() => window.told))).toBe(true);
+
+    // The world map, close in round the rise: their icons drawn over the fog
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("m");
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn, null, { polling: 100 });
+
+    const drawn = await page.evaluate(() => {
+        const { game, worldMap } = window.pellagos;
+
+        game.stop();
+        worldMap.view = { scale: 4, x: 1232, z: 536 };
+        worldMap.draw();
+
+        return worldMap.drawn.icons.length;
+    });
+
+    expect(drawn).toBeGreaterThanOrEqual(5);
+    await page.keyboard.press("Escape");
 });
 
 test("now and then, past the land nearest home, an elite leads its kind: gilded and radiant, its plate in gold, a star on the minimap from 80 m (at its edge while further than it shows); felled, its prize for the player near", async ({ page }) => {

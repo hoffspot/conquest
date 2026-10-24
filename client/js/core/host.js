@@ -21,7 +21,8 @@ import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
-import { rumouredBy } from "./rumours.js";
+import { rumouredBy, rumoursNear } from "./rumours.js";
+import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
 import { carriesTorch, lighting, skyLight, torchesLit } from "./light.js";
@@ -31,6 +32,8 @@ import { dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
+import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
+import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
 import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, ENGINES, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
 import { waysOut, wayToward } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
@@ -577,7 +580,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 34;
+export const SNAPSHOT_VERSION = 36;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -626,6 +629,16 @@ export const SNAPSHOT_STEPS = Object.freeze({
     // 34: the signs each player's read on the trails out of the wild's camps and lairs, and the
     // homes they've tracked them to (core/tracks.js, core/explored.js: none yet)
     33: (snapshot) => ({ ...snapshot, version: 34, players: snapshot.players.map((player) => ({ ...player, explored: { signs: [], tracked: [], ...player.explored } })) }),
+    // 35: the roaming beasts' dens out about the players (core/dens.js, Host #dens: none yet)
+    34: (snapshot) => ({ ...snapshot, version: 35, dens: [] }),
+    // 36: the shrines that have answered each player (core/shrines.js, Host #pray: none yet), and
+    // whether each player sees in the dark (Lunara's gift: none)
+    35: (snapshot) => ({
+        ...snapshot,
+        version: 36,
+        players: snapshot.players.map((player) => ({ prayed: {}, ...player })),
+        battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => (snapshot.players.some(({ id }) => id === actor.id) ? { darkSight: false, ...actor } : actor)) },
+    }),
 });
 
 /**
@@ -653,8 +666,11 @@ export const BOUGHT = Object.freeze({
     blessing: { boon: { id: "blessing", label: "Blessed", melee: 0.05, ranged: 0.05, heal: 0.1, armor: 0.03, ms: 600000 } },
 });
 
-/** Every boon there is, bought or drunk, by its id: what one kept between visits is taken as (Host restoreVitals). */
-const BOONS = Object.freeze(Object.fromEntries([...Object.values(BOUGHT), ...Object.values(ITEMS).map(({ use }) => use)].filter((each) => each?.boon).map(({ boon }) => [boon.id, boon])));
+/**
+ * Every boon there is, bought or drunk or a god's gift at a shrine (core/shrines.js), by its id:
+ * what one kept between visits is taken as (Host restoreVitals).
+ */
+const BOONS = Object.freeze({ ...Object.fromEntries([...Object.values(BOUGHT), ...Object.values(ITEMS).map(({ use }) => use)].filter((each) => each?.boon).map(({ boon }) => [boon.id, boon])), ...GIFT_BOONS });
 
 /**
  * A courtesan's company, paid for by talking (dialogue.js courtesan, `{ company: true, price }`):
@@ -742,6 +758,9 @@ export const REFUSALS = Object.freeze({
     hunting: "You're on the trail of three treasures already: dig one up, or give one up in your journal.",
     unmapped: "The map's marks fit nothing round here: try it somewhere else.",
     treasure: "No such treasure.",
+    // (At a shrine: core/shrines.js, #pray)
+    shrine: "There's no shrine there to pray at.",
+    prayed: "The shrine has answered you today. Come back tomorrow.",
     // (A sign on a trail: core/tracks.js, #readSign)
     sign: "There's no sign of anything there to read.",
     // (At the war table: core/wartable.js, #atTable)
@@ -855,7 +874,7 @@ export class Host {
         this.stockaded = null;
         this.#fortsChanged();
         this.#stockadesChanged({ tell: false });
-        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b), allied: (a, b) => this.#allied(a, b) });
+        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b), allied: (a, b) => this.#allied(a, b), haven: (actor) => this.#haven(actor) });
         this.#wire();
 
         /**
@@ -1013,6 +1032,8 @@ export class Host {
         // the side grow (#reinforce)
         this.packs = new Map();
         this.wildCamps = new Map();
+        // The roaming beasts' dens out about the players (core/dens.js; #dens), by id: { ids }
+        this.dens = new Map();
         this.lairs = new Map();
         this.slain = {};
 
@@ -1213,6 +1234,8 @@ export class Host {
             // Boons for a while ([{ id, label, until, melee...}]), and when each ability's ready again
             boons: [],
             readyAt: {},
+            // The shrines that have answered them, by the site's id: the world day they did (#pray)
+            prayed: {},
             discarded: null,
             offers: {},
             // A Scroll of Safety being read ({ until }: SAFETY), or none
@@ -1634,6 +1657,8 @@ export class Host {
                 return this.#treasureCommand(player, command);
             case "read":
                 return this.#readSign(player, actor, command.sign);
+            case "pray":
+                return this.#pray(player, actor, command.shrine);
             case "buy":
                 return this.#buy(player, actor, command);
             case "sell":
@@ -1869,12 +1894,17 @@ export class Host {
 
                 // (One of those roaming about the players, felled out in the world: its ground
                 // cleared a while, WILDS.cleared)
-                if (fell?.map === "town" && !beast.camp && !beast.lair && !beast.place && !beast.cache && !beast.dungeon && !beast.works && !this.companions.has(event.id)) {
+                if (fell?.map === "town" && !beast.camp && !beast.den && !beast.lair && !beast.place && !beast.cache && !beast.dungeon && !beast.works && !this.companions.has(event.id)) {
                     this.cleared.push({ at: [fell.x, fell.y], until: this.battle.time + WILDS.cleared });
                 }
 
                 this.#fall(event.id, CORPSE_MS);
                 this.#spoils(event.id, beast);
+
+                // (A den's master: gone from it a while, DEN.back)
+                if (beast.den && beast.master) {
+                    this.slain[beast.den] = this.battle.time + DEN.back;
+                }
 
                 // (One of a rite's: broken once the last of them falls)
                 if (beast.lair && lairOf(this.#siteOf(beast.lair))?.night) {
@@ -2099,6 +2129,7 @@ export class Host {
         if (this.battle.time >= this.lookAt) {
             this.lookAt = this.battle.time + RELEVANCE.every;
             this.#lookAround();
+            this.#spotting();
             this.#muster();
             this.#townsfolk();
             this.#wilds();
@@ -2165,7 +2196,7 @@ export class Host {
 
     // Where a player is out in the world (x, y metres) found by another of their party (`fellow`)
     // too, for good: the chunk visited, and the places worth finding round it (#findable: as the
-    // maps have them, Explored sighted) that they hadn't found kept as found by the player first,
+    // maps have them, Explored knows) that they hadn't found kept as found by the player first,
     // to be told
     #share(player, fellow, x, y) {
         const explored = fellow?.explored;
@@ -2176,11 +2207,11 @@ export class Host {
         }
 
         const near = [-1, 0, 1].flatMap((dy) => [-1, 0, 1].flatMap((dx) => (cx + dx < 0 || cx + dx >= CHUNKS ? [] : (this.#findable().get((cy + dy) * CHUNKS + cx + dx) ?? []))));
-        const unfound = near.filter(({ at }) => !explored.sighted(...at));
+        const unfound = near.filter(({ id, at }) => !explored.knows(id, ...at));
 
         explored.visit(x, y);
 
-        const found = unfound.filter(({ at }) => explored.sighted(...at)).map(({ id }) => id);
+        const found = unfound.filter(({ id, at }) => explored.knows(id, ...at)).map(({ id }) => id);
 
         for (const id of found) {
             explored.foundBy(id, player.hero.name);
@@ -2189,16 +2220,72 @@ export class Host {
         this.#event("explored", { id: fellow.id, by: player.id, ...(found.length ? { name: player.hero.name, places: found } : {}) });
     }
 
-    // The places worth finding in the world (places.js placesOf: its sites and wild camps; and its
-    // dungeons' ways in), by the chunk each is in (cy * CHUNKS + cx): [{ id, at }], worked out once
+    // What each player out in the world sees from high ground (core/sighting.js: on a rise well
+    // above the land round them), looked for each time the host looks round: the places worth
+    // finding they hadn't found (#findables) that the land between doesn't hide, kept as spotted
+    // (Explored spot) and told, the nearest first; and found by the rest of their party too, as
+    // the player's finds, as where they go is (#share). (A look's a few tenths of a millisecond:
+    // nine heights to tell high ground, and along the way to each place within a kilometre)
+    #spotting() {
+        const plan = this.world.plan;
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (!plan || !actor || actor.dead || actor.map !== "town") {
+                continue;
+            }
+
+            const at = [actor.x, actor.y];
+            const unfound = this.#findables().filter(({ id, at: [x, y] }) => hypot(x - at[0], y - at[1]) <= SIGHTING.reach[1] && !player.explored.knows(id, x, y));
+            const seen = unfound.length ? sightedFrom(plan, at, unfound) : [];
+
+            if (!seen.length) {
+                continue;
+            }
+
+            for (const id of seen) {
+                player.explored.spot(id);
+            }
+
+            this.#event("explored", { id: player.id, spotted: seen });
+
+            for (const id of this.fellows(player.id)) {
+                const fellow = this.players.get(id);
+                const found = unfound.filter((place) => seen.includes(place.id) && !fellow.explored.knows(place.id, ...place.at)).map((place) => place.id);
+
+                for (const place of found) {
+                    fellow.explored.spot(place);
+                    fellow.explored.foundBy(place, player.hero.name);
+                }
+
+                if (found.length) {
+                    this.#event("explored", { id: fellow.id, by: player.id, name: player.hero.name, places: found });
+                }
+            }
+        }
+    }
+
+    // The places worth finding in the world (places.js placesOf: its sites and wild camps; its
+    // dungeons' ways in; and the roaming beasts' dens, dens.js): [{ id, at }], worked out once
+    // (#findables)
+    #findables() {
+        if (!this.findables) {
+            const plan = this.world.plan;
+
+            this.findables = (plan ? [...placesOf(plan), ...plan.sites.filter(({ kind }) => kind === "dungeon"), ...densOf(plan)] : []).map(({ id, at }) => ({ id, at }));
+        }
+
+        return this.findables;
+    }
+
+    // The places worth finding (#findables), by the chunk each is in (cy * CHUNKS + cx): [{ id,
+    // at }], worked out once
     #findable() {
         if (!this.findable) {
-            const plan = this.world.plan;
-            const all = plan ? [...placesOf(plan), ...plan.sites.filter(({ kind }) => kind === "dungeon")] : [];
-
             this.findable = new Map();
 
-            for (const { id, at } of all) {
+            for (const { id, at } of this.#findables()) {
                 const k = Math.floor(at[1] / CHUNK) * CHUNKS + Math.floor(at[0] / CHUNK);
 
                 this.findable.set(k, [...(this.findable.get(k) ?? []), { id, at }]);
@@ -2281,6 +2368,7 @@ export class Host {
             eliteRest: [...this.eliteRest.entries()],
             nextWild: this.nextWild,
             wildCamps: [...this.wildCamps.entries()],
+            dens: [...this.dens.entries()],
             lairs: [...this.lairs.entries()],
             slain: { ...this.slain },
             held: [...this.held.entries()],
@@ -2305,7 +2393,7 @@ export class Host {
             invaded: this.invaded,
             invasions: structuredClone(this.invasions),
             fallen: structuredClone(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), budget: player.budget ?? null, ...this.characterOf(player), followers: undefined })),
+            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), budget: player.budget ?? null, ...this.characterOf(player), followers: undefined })),
             done: structuredClone(this.done),
         };
     }
@@ -2413,7 +2501,7 @@ export class Host {
             }
         }
 
-        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b) });
+        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor) });
         host.#wire();
         host.rules = rulesOf(snapshot.rules);
         host.lookAt = snapshot.lookAt;
@@ -2453,6 +2541,7 @@ export class Host {
         host.eliteRest = new Map(snapshot.eliteRest ?? []);
         host.nextWild = snapshot.nextWild ?? 1;
         host.wildCamps = new Map(structuredClone(snapshot.wildCamps ?? []));
+        host.dens = new Map(structuredClone(snapshot.dens ?? []));
         host.lairs = new Map(structuredClone(snapshot.lairs ?? []));
         host.slain = { ...(snapshot.slain ?? {}) };
         host.held = new Map(structuredClone(snapshot.held ?? []));
@@ -2494,11 +2583,11 @@ export class Host {
             }
         }
 
-        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, discarded, safety, role, lastCommand, away, out, resting, budget } of snapshot.players) {
+        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, prayed, discarded, safety, role, lastCommand, away, out, resting, budget } of snapshot.players) {
             const kept = new Progress(progress, hero);
 
             // (Outfitted as they were: their actor's carried on as it was, charms and all)
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null });
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, prayed: { ...(prayed ?? {}) }, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null });
         }
 
         host.random.state = snapshot.random ?? host.random.state;
@@ -2735,7 +2824,7 @@ export class Host {
             return;
         }
 
-        const mighty = Boolean(CREATURES[wild.creature]?.perilous || (wild.lair && wild.master) || wild.elite === "lead" || wild.champion || wild.rift);
+        const mighty = Boolean(CREATURES[wild.creature]?.perilous || ((wild.lair || wild.den) && wild.master) || wild.elite === "lead" || wild.champion || wild.rift);
 
         this.#researched(player, player.progress.bestiary.see(wild.creature));
         this.#researched(player, player.progress.bestiary.slay(wild.creature, { mighty }));
@@ -2790,6 +2879,47 @@ export class Host {
         }
 
         this.#outfit(player);
+    }
+
+    // Whether someone's in a shrine's sanctuary out in the world (core/shrines.js sanctuaryAt): the
+    // wild's creatures never going after them there (battle.js `haven`)
+    #haven(actor) {
+        return actor.map === "town" && Boolean(this.world.plan) && sanctuaryAt(this.world.plan, [actor.x, actor.y]) !== null;
+    }
+
+    // A player praying at a shrine (a "pray" command: core/shrines.js), before it out in the world:
+    // its god's gift for SHRINE.ms, in place of another god's (a drink's or a priest's blessing go
+    // on with it), once a world day for each shrine; told, with somewhere near it they've still to
+    // find (core/rumours.js rumoursNear: the nearest, if there's one), for their journal
+    #pray(player, actor, id) {
+        const plan = this.world.plan;
+        const shrine = plan ? shrineOf(plan, id) : null;
+
+        if (!shrine || actor.map !== "town") {
+            return refuse("shrine");
+        }
+
+        const heart = this.world.maps.town?.sites?.heartOf(shrine.site) ?? shrine.at;
+
+        if (hypot(actor.x - heart[0], actor.y - heart[1]) > SHRINE.reach + 1) {
+            return refuse("far");
+        }
+
+        const day = this.war ? dayOf(elapsedOf(this.war)) : Math.floor(this.battle.time / DAY.length);
+
+        if (player.prayed[id] === day) {
+            return refuse("prayed");
+        }
+
+        const gift = GIFT_BOONS[giftId(shrine.god)];
+        const hint = rumoursNear(plan, shrine.at, player.explored)[0] ?? null;
+
+        player.prayed = { ...player.prayed, [id]: day };
+        player.boons = [...player.boons.filter(({ god }) => !god), { ...gift, until: this.battle.time + gift.ms }];
+        this.#outfit(player);
+        this.#event("prayed", { id: player.id, shrine: id, god: shrine.god, boon: gift.id, ...(hint ? { hint: hint.id } : {}) });
+
+        return { ok: true };
     }
 
     // A sign on a trail out of a camp or a lair read (a "read" command: core/tracks.js), its reader
@@ -2862,7 +2992,7 @@ export class Host {
         const bonus = player.progress.bonuses();
 
         for (const boon of player.boons) {
-            for (const key of ["melee", "ranged", "heal", "stun", "spell", "armor"]) {
+            for (const key of ["melee", "ranged", "heal", "stun", "spell", "bash", "armor", "dodge", "hp", "wardFire", "wardWater", "wardAir", "wardEarth", "wardMagic"]) {
                 bonus[key] += boon[key] ?? 0;
             }
         }
@@ -2897,6 +3027,8 @@ export class Host {
         actor.shield = player.progress.guard(bonus);
         // (The kinds of creature they know where to strike: Mastered in their bestiary)
         actor.mastered = player.progress.bestiary.mastered();
+        // (Seeing in the dark as the night's creatures do: Lunara's gift, core/shrines.js)
+        actor.darkSight = player.boons.some(({ darkSight }) => darkSight);
 
         // (And a boon that multiplies the breath, a Stamina Boost: twice as much, while it lasts;
         // or how fast it comes back, an afterglow)
@@ -6965,7 +7097,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -6975,6 +7107,7 @@ export class Host {
         }
 
         this.#wildCamps(homes);
+        this.#dens(homes);
         this.#lairs(places);
         this.#places(places, homes);
         this.#caches(homes);
@@ -6996,7 +7129,7 @@ export class Host {
 
             const nearAny = (x, y) => group.actors.some((each) => hypot(x - each.x, y - each.y) < WILDS.about);
             const about = [...this.wild].filter(([id, one]) => {
-                const beast = !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon ? this.battle.actor(id) : null;
+                const beast = !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.dungeon ? this.battle.actor(id) : null;
 
                 return beast && !beast.dead && nearAny(beast.x, beast.y);
             }).length;
@@ -7310,7 +7443,8 @@ export class Host {
             const reach = WILDS.from + this.random.next() * (WILDS.to - WILDS.from);
             const at = [x + cos(angle) * reach, y + sin(angle) * reach];
 
-            if (!clearOfSettlements(plan, at, WILDS.clear) || landAt(plan, ...at).water || this.world.maps.town.nearRoad?.(...at, WILDS.road) || this.cleared.some(({ at: [cx, cy] }) => hypot(cx - at[0], cy - at[1]) < WILDS.about)) {
+            // (Nor in a shrine's sanctuary: core/shrines.js)
+            if (!clearOfSettlements(plan, at, WILDS.clear) || landAt(plan, ...at).water || this.world.maps.town.nearRoad?.(...at, WILDS.road) || this.cleared.some(({ at: [cx, cy] }) => hypot(cx - at[0], cy - at[1]) < WILDS.about) || sanctuaryAt(plan, at)) {
                 continue;
             }
 
@@ -7367,7 +7501,7 @@ export class Host {
     // out, its kind with it (`elite` "escort"), and neither going far from there (ELITES); its hit
     // points × `health` against a stronger side (strength.js SCALING); one more than there'd have
     // been against a player alone, `extra` (leaving its gold and its parts only: spoils.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null }) {
         const spec = CREATURES[creature];
         const lead = elite === "lead";
         // (A dungeon's boss or mini-boss: more of it and harder, CHAMPIONS, by its title; an elite,
@@ -7377,7 +7511,7 @@ export class Host {
         const power = tierPower(at) * stands.power;
         const walks = lead ? { stops: eliteRound(square), at: 0 } : round;
 
-        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}) });
+        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}) });
         this.battle.add({
             id,
             kind: "beast",
@@ -7470,7 +7604,7 @@ export class Host {
 
         this.wild.delete(id);
 
-        for (const held of [one.camp && this.wildCamps.get(one.camp), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place), one.cache && this.caches.get(one.cache), one.works && this.worksOut.get(one.works)]) {
+        for (const held of [one.camp && this.wildCamps.get(one.camp), one.den && this.dens.get(one.den), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place), one.cache && this.caches.get(one.cache), one.works && this.worksOut.get(one.works)]) {
             if (held) {
                 held.ids = held.ids.filter((each) => each !== id);
             }
@@ -7533,6 +7667,64 @@ export class Host {
             }
 
             this.wildCamps.set(camp.id, { ids });
+        }
+    }
+
+    // The roaming beasts' dens (core/dens.js) near a player: its master (unless slain lately), a
+    // tier up and the hardier (DEN.master), and a few more of its kind (DENS `with`), as strong as
+    // its tier from the home of the player nearest it, keeping to it; more of them, and tougher,
+    // against a stronger side (strength.js). Let go once every player's far
+    #dens(homes) {
+        const plan = this.world.plan;
+        const near = (at, within) => homes.some(({ at: [x, y] }) => hypot(x - at[0], y - at[1]) < within);
+
+        if (!plan) {
+            return;
+        }
+
+        for (const [id, held] of [...this.dens]) {
+            const den = denOf(plan, id);
+
+            if (!den || !near(den.at, DEN.far)) {
+                for (const each of [...held.ids]) {
+                    if (!this.battle.actor(each)?.dead) {
+                        this.#release(each);
+                    }
+                }
+
+                this.dens.delete(id);
+            }
+        }
+
+        for (const den of densOf(plan)) {
+            if (this.dens.has(den.id) || !near(den.at, DEN.near)) {
+                continue;
+            }
+
+            const nearest = homes.reduce((best, each) => (hypot(each.at[0] - den.at[0], each.at[1] - den.at[1]) < hypot(best.at[0] - den.at[0], best.at[1] - den.at[1]) ? each : best));
+            const tier = denTier(den, nearest.home);
+            const side = this.#sideNear(den.at, "town", DEN.near);
+            const scale = side ? scalingOf(side.opposition) : null;
+            const ids = [];
+            const due = (this.slain[den.id] ?? -Infinity) <= this.battle.time;
+
+            if (due) {
+                ids.push(...this.#pack({ creature: den.creature, tier: Math.min(10, tier + 1), count: 1 }, den.at, { den: den.id, master: true, roam: DEN.roam, temper: "territorial", health: DEN.master * (scale?.leader ?? 1) }));
+            }
+
+            const least = this.random.int(...DENS[den.kind].with);
+            const more = least ? this.#scaled(least, scale, den.at) : { count: 0, health: 1 };
+
+            if (more.count) {
+                ids.push(...this.#pack({ creature: den.creature, tier, count: more.count }, [den.at[0] + 3, den.at[1] + 2], { den: den.id, roam: DEN.roam, temper: "territorial", health: more.health, least }));
+            }
+
+            // (None could be put out there, its ground not made yet: tried again the next time)
+            if (due && !ids.length) {
+                continue;
+            }
+
+            this.dens.set(den.id, { ids });
         }
     }
 
@@ -9123,7 +9315,10 @@ export class Host {
     // Gold found on the fallen, as much more as the charms someone carries have it (core/goods.js
     // CHARMS `fortune`: a lucky coin)
     #fortune(player, gold) {
-        return gold ? Math.round(gold * (1 + player.progress.bonuses().fortune)) : 0;
+        // (And a god's gift's luck: Wick's, core/shrines.js)
+        const luck = player.boons.reduce((sum, { fortune = 0 }) => sum + fortune, 0);
+
+        return gold ? Math.round(gold * (1 + player.progress.bonuses().fortune + luck)) : 0;
     }
 
     // One of the wild's creatures fallen near someone lately, still lying there (the one named, or the nearest): or null
@@ -9929,7 +10124,8 @@ export class Host {
             return "fighting";
         }
 
-        if (this.battle.actors.some((other) => !other.dead && other.map === actor.map && this.battle.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) < REST.clear)) {
+        // (Within a shrine's sanctuary, whatever's about: core/shrines.js)
+        if (!(plan && sanctuaryAt(plan, [actor.x, actor.y])) && this.battle.actors.some((other) => !other.dead && other.map === actor.map && this.battle.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) < REST.clear)) {
             return "hostiles";
         }
 
@@ -9959,6 +10155,14 @@ export class Host {
 
         this.campfires = [...this.campfires.filter(({ player: whose }) => whose !== actor.id), camp];
         this.battle.mend(actor.id, { hp: actor.maxHp, stamina: actor.maxStamina });
+
+        // (Rested in a shrine's sanctuary: its poisons, sicknesses and curses gone, SHRINE.cures)
+        const sanctuary = this.world.plan ? sanctuaryAt(this.world.plan, [actor.x, actor.y]) : null;
+
+        for (const kind of sanctuary ? SHRINE.cures.filter((each) => actor.afflictions.some((one) => one.kind === each)) : []) {
+            this.battle.cure(actor.id, kind);
+            this.#event("cured", { id: player.id, kind, shrine: sanctuary.site.id });
+        }
         this.#sleep(player, actor, "camp", until);
 
         return OK;
@@ -10517,12 +10721,12 @@ export class Host {
 
                 return to && war.liege(to.owner) === liege ? null : "void";
             }
-            // (A guild's look round: seen once the player's been near enough, by the maps' rule,
-            // or within REQUEST_REACH.survey of it)
+            // (A guild's look round: seen once the player's been near enough, or seen it from high
+            // ground, by the maps' rule; or within REQUEST_REACH.survey of it)
             case "survey": {
                 const place = rumouredBy(this.world.plan, request.target.place);
 
-                return !place ? "void" : player.explored?.sighted(...place.at) || near(place.at, REQUEST_REACH.survey) ? "ready" : null;
+                return !place ? "void" : player.explored?.knows(place.id, ...place.at) || near(place.at, REQUEST_REACH.survey) ? "ready" : null;
             }
             case "scout": {
                 if (request.target.force) {
