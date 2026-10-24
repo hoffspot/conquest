@@ -9630,8 +9630,6 @@ test("the wilds director's pacing: after a long calm, the land's hunters heard a
         // (A while later: they come for them)
         settle(22);
 
-        const hunted = told.length;
-
         // (Then a hard fight, over, those they fought gone: a quiet spell)
         for (const actor of game.battle.actors.filter((each) => each.wild)) {
             Object.assign(actor, { dead: true, respawnAt: Infinity, target: null });
@@ -9640,13 +9638,16 @@ test("the wilds director's pacing: after a long calm, the land's hunters heard a
         Object.assign(host.travel.get("player").pace, { fight: { lowest: 0.2 }, lastFight: game.battle.time - 6000, build: null });
         settle(1);
 
-        return { build: Boolean(build), told, played, hunted };
+        // (The banner's words heard: they're kept as the page gets round to it)
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        return { build: Boolean(build), told: told.filter(Boolean), played };
     });
 
     expect(heard.build).toBe(true);
     expect(heard.told.some((text) => /^(Drums, somewhere off to the [a-z-]+\. They're coming this way\.|An? .+ calls, somewhere off to the [a-z-]+, and others answer\.)$/.test(text)), JSON.stringify(heard.told)).toBe(true);
     expect(heard.told.some((text) => text.startsWith("Drums")) ? heard.played.includes("warDrums") : true).toBe(true);
-    expect(heard.told.slice(0, heard.hunted).some((text) => text === "Here they come!" || text === "They're on you!"), JSON.stringify(heard.told)).toBe(true);
+    expect(heard.told.slice(1, -1).some((text) => text === "Here they come!" || text === "They're on you!"), JSON.stringify(heard.told)).toBe(true);
     expect(heard.told.at(-1)).toBe("The wild grows quiet round you, for a while.");
 });
 
