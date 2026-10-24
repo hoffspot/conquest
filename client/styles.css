@@ -5489,6 +5489,44 @@ dialog#worldmap::backdrop {
 
 /* The ping button (in a party): green, as the party's pings are, and ringed while the next tap
    pings */
+/* The marker's dialog (main.js askMarker): what it marks, chosen from a row of them, each drawn
+   as it's drawn on the map, the one chosen ringed in gold */
+.marker-kinds {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin: 12px 0 4px;
+}
+
+.marker-kinds[hidden],
+.marker-words[hidden] {
+    display: none;
+}
+
+.marker-kind {
+    display: grid;
+    justify-items: center;
+    gap: 2px;
+    padding: 6px 2px;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--ink);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.marker-kind canvas {
+    width: 30px;
+    height: 36px;
+}
+
+.marker-kind[aria-checked="true"] {
+    border-color: var(--gold-bright, #ecc882);
+    box-shadow: 0 0 0 2px var(--gold-bright, #ecc882);
+}
+
 #worldmapping svg {
     stroke: #8fe0a0;
 }
@@ -6382,7 +6420,8 @@ dialog.worlds {
 dialog.worlds input.text,
 dialog.worlds select,
 dialog.worlds textarea,
-dialog.you input.text {
+dialog.you input.text,
+#marker input.text {
     width: 100%;
     box-sizing: border-box;
     font: inherit;

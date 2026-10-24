@@ -88,6 +88,7 @@ import { MoonGates } from "../world/moongates3d.js";
 import { ACT_TIMES, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
 import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
+import { MARKER_NAMES, MARKERS, markersOf, withMarker } from "../core/markers.js";
 import { MARGIN as WAY_MARGIN, navigatorOf, releaseNavigation } from "../core/navigation.js";
 import { wasmBytes } from "../core/navigation/recast.js";
 import { RAISED } from "../core/overworld.js";
@@ -845,8 +846,9 @@ export class Game {
      *     loadExplored: core/explored.js Explored's toJSON).
      * @param {Function} [options.onExplore] - Hears it whenever they find more (to keep it).
      * @param {Function} [options.onWorldMap] - Asked to open the world map (the minimap held).
-     * @param {Function} [options.onPing] - Hears whenever a ping comes from the player's party
-     *     (pingView: for the world map to show it, if it's open).
+     * @param {Function} [options.onPing] - Hears whenever the player's party shows them somewhere
+     *     on the map: a ping (pingView), or a marker shared (markerView); for the world map to show
+     *     it, if it's open.
      * @param {Host} [options.host] - The world's host (core/host.js): made here if not given
      *     (playing alone), with the player joining it.
      * @param {string} [options.me] - The player's id in it.
@@ -866,6 +868,10 @@ export class Game {
      * @param {Array} [options.pin] - Where the player's pinned on the world map ([x, z] metres, as
      *     kept: save.js loadPin), or null.
      * @param {Function} [options.onPin] - Hears it whenever it's dropped or taken away (to keep it).
+     * @param {Array} [options.markers] - The player's markers on the world map (core/markers.js:
+     *     as kept, save.js loadMarkers).
+     * @param {Function} [options.onMarkers] - Hears them whenever one's put down, shared with them
+     *     or taken away (to keep them).
      * @param {object} [options.place] - Where the player was out in the world when the game last
      *     stopped ({ x, y, facing }: save.js loadPlace), to carry on there; or null (where the
      *     world puts them: by their home town's tavern).
@@ -879,7 +885,7 @@ export class Game {
      *     (save.js loadTold: `#once`).
      * @param {Function} [options.onTold] - Hears them whenever there's another (to keep them).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, onPing = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, onPing = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, markers = [], onMarkers = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -989,6 +995,10 @@ export class Game {
         this.onPin = onPin;
         this.pinWay = null;
         this.journey = null;
+
+        /** The player's markers on the world map (core/markers.js), and who hears of them. */
+        this.markers = markersOf(markers);
+        this.onMarkers = onMarkers;
 
         /** Trading with a shopkeeper (from their talk): { shop, keeper (their id), name }, or null. */
         this.shopping = null;
@@ -4720,8 +4730,9 @@ export class Game {
             icons: this.mapId === "town" ? [...this.icons(), ...this.#trackedMarks(this.placeIcons()), ...this.#trackedMarks(this.dungeonIcons()), ...this.#trackedMarks(this.denIcons()), ...this.worksIcons(), ...this.fortIcons(), ...this.cacheIcons()] : [],
             // (The circles to search for the treasures they're hunting: #treasureCircles)
             searches: this.mapId === "town" ? this.treasureCircles() : [],
-            // (The party's pings: pingView)
+            // (The party's pings: pingView; and the player's markers: markerView)
             pings: this.mapId === "town" ? this.pingView() : [],
+            markers: this.mapId === "town" ? this.markers : [],
         });
     }
 
@@ -5328,6 +5339,104 @@ export class Game {
         this.pinMarks?.setPin(null);
         this.onPin(null);
         this.sound?.play("tap");
+    }
+
+    // --- The world map's markers (core/markers.js) ---
+
+    /** The player's markers, for the maps: [{ id, x, z (metres), icon, words, from }]. */
+    markerView() {
+        return this.markers.map((marker) => ({ ...marker }));
+    }
+
+    /**
+     * Put a marker down on the world map (`at`: [x, z] metres; anywhere, fog or no) of a kind
+     * (`icon`: MARKER_ICONS'), with a few words of the player's own: { ok, marker }, or { ok:
+     * false, reason: "full" } with MARKERS.most already (or "marker", if it isn't one).
+     */
+    addMarker(at, { icon, words = "" }) {
+        const markers = withMarker(this.markers, { at, icon, words });
+
+        if (!markers) {
+            return { ok: false, reason: this.markers.length >= MARKERS.most ? "full" : "marker" };
+        }
+
+        this.markers = markers;
+        this.onMarkers(this.markerView());
+        this.sound?.play("pinSet");
+
+        return { ok: true, marker: { ...markers.at(-1) } };
+    }
+
+    /** Take one of the player's markers away (its id). Whether there was one. */
+    removeMarker(id) {
+        const left = this.markers.filter((marker) => marker.id !== id);
+
+        if (left.length === this.markers.length) {
+            return false;
+        }
+
+        this.markers = left;
+        this.onMarkers(this.markerView());
+        this.sound?.play("tap");
+
+        return true;
+    }
+
+    /**
+     * Share one of the player's markers (its id) with their party (core/host.js, the "party"
+     * command's "mark": each of the rest given it). { ok }, or { ok: false, reason } ("unpartied",
+     * or "marker" if there's none of that id); refused by the host, what's refused said.
+     */
+    shareMarker(id) {
+        const marker = this.markers.find((one) => one.id === id);
+
+        if (!marker) {
+            return { ok: false, reason: "marker" };
+        }
+
+        if (!this.host.partyFor(this.me)) {
+            return { ok: false, reason: "unpartied" };
+        }
+
+        this.#command({ type: "party", do: "mark", at: [marker.x, marker.z], icon: marker.icon, words: marker.words }, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
+                this.sound?.play("denied");
+            }
+        });
+
+        return { ok: true };
+    }
+
+    // A marker shared by one of the player's party (core/host.js: `who`, named `name`; `at`, its
+    // `icon` and `words`): another's kept as one of the player's own, said to be from them, if
+    // they've room for it (MARKERS.most), and said (which way it is); their own, said to be shared;
+    // and the world map told, to show it
+    #markShared({ who, name, at: [x, z], icon, words }) {
+        const said = `(${MARKER_NAMES[icon]}${words ? `: "${words}"` : ""})`;
+
+        if (who === this.me) {
+            this.hud.message("Shared with your party: it's on their maps now.", 3);
+            this.sound?.play("tap");
+
+            return;
+        }
+
+        const markers = withMarker(this.markers, { at: [x, z], icon, words, from: name });
+
+        if (!markers) {
+            this.hud.message(`${name} shares a marker with you ${said}, but you've ${MARKERS.most} already: take one away to keep the next.`, 4);
+
+            return;
+        }
+
+        const where = bearing(this.#whereAmI(), [x, z]);
+
+        this.markers = markers;
+        this.onMarkers(this.markerView());
+        this.hud.message(`${name} shares a marker with you ${said}${where && where !== "here" ? `, ${where}` : ""}. It's on your map.`, 4);
+        this.sound?.play("pinSet");
+        this.onPing();
     }
 
     /**
@@ -8111,6 +8220,12 @@ export class Game {
 
         if (event.change === "ping") {
             this.#pinged({ who: event.who, name: event.name, at: event.at });
+
+            return;
+        }
+
+        if (event.change === "mark") {
+            this.#markShared(event);
 
             return;
         }

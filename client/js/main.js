@@ -27,7 +27,8 @@ import { MANIFEST } from "./app/manifest.js";
 import { Pointer } from "./app/pointer.js";
 import { telemetry } from "./app/telemetry.js";
 import { builtAt, codeVersion } from "./app/version.js";
-import { enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, saveExplored, saveFollowers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
+import { enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
+import { MARKER_ICONS, MARKER_NAMES, MARKERS } from "./core/markers.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
 import { released } from "./world/release.js";
@@ -1037,6 +1038,8 @@ async function playing(save, { world, place, war }) {
         onPing: pingShown,
         pin: loadPin(place),
         onPin: (pin) => savePin(place, pin),
+        markers: loadMarkers(place),
+        onMarkers: (markers) => saveMarkers(place, markers),
         place: loadPlace(place),
         vitals: loadVitals(place),
         messages: loadMessages(save),
@@ -1384,10 +1387,18 @@ async function openWorldMap({ pick = null, travel = null, build = null, war = nu
     state.picking = pick;
     state.travel = travel;
     state.plans = build;
-    state.pingMode = false;
+    state.mapMode = null;
+    state.unpicked = null;
     $("#worldmapping").hidden = true;
-    $("#worldmapping").setAttribute("aria-pressed", "false");
+    $("#worldmapmark").hidden = true;
+
+    for (const { button } of Object.values(MAP_MODES)) {
+        $(button).setAttribute("aria-pressed", "false");
+    }
+
     map.pingsOf = null;
+    map.markersOf = null;
+    map.onTap = null;
     $("#worldmappick").hidden = !pick && !travel && !build && !war;
     $("#worldmappicktext").textContent = "Wizard's Walk: tap somewhere you've been";
     $("#worldmaptitle").textContent = travel ? (travel.title ?? "Guild portal") : build ? "The council's plans" : war ? "The war table" : "The world";
@@ -1533,42 +1544,179 @@ async function openWorldMap({ pick = null, travel = null, build = null, war = nu
     $("#worldmapunpin").hidden = !game.pin;
     $("#worldmapnote").hidden = true;
 
-    // (In a party: its pings shown as they come, and the button to make one)
+    // (In a party: its pings shown as they come, and the button to make one; and the player's
+    // markers, one tapped asked about, and the button to put one down)
     $("#worldmapping").hidden = !game.host.partyFor(game.me);
+    $("#worldmapmark").hidden = false;
     map.pingsOf = () => game.pingView();
+    map.markersOf = () => game.markerView();
+    map.onTap = (point) => {
+        const marker = map.markerAt(point);
+
+        if (marker) {
+            askMarker({ marker });
+        }
+
+        return Boolean(marker);
+    };
     map.open(game.worldMapView());
 }
 
-// The world map's ping button tapped (`on`: pinging, or called off): the next tap on the map shows
-// the party where (app/game.js ping), what's said of it told; Cancel, or the button again, calls
-// it off, and the map's taps are as they were (Wizard's Walk's pick kept)
-function pingMode(on = !state.pingMode) {
+// The world map's ways of taking the next tap: its ping button's (in a party: the party shown
+// where, app/game.js ping, what's said of it told) and its marker button's (a marker put there,
+// what it marks asked: askMarker)
+const MAP_MODES = {
+    ping: {
+        button: "#worldmapping",
+        said: "Ping: tap where to show your party",
+        tapped: (point) => {
+            const result = state.game?.ping(point);
+
+            mapNote(result?.ok ? "Pinged: your party sees it on their maps, and a column of green light there" : result?.reason === "soon" ? "Wait a moment to ping again" : "You're not in a party");
+        },
+    },
+    mark: { button: "#worldmapmark", said: "Marker: tap where to put it", tapped: (point) => askMarker({ at: point }) },
+};
+
+// One of the world map's buttons for the next tap on it tapped (`mode`: MAP_MODES's), or called off
+// (null): the bar at the top saying what a tap does, the button ringed; Cancel, or the button
+// again, calls it off, and the map's taps are as they were (Wizard's Walk's pick kept)
+function mapMode(mode = null) {
     const map = state.worldMap;
 
-    state.pingMode = on;
-    $("#worldmapping").setAttribute("aria-pressed", String(on));
-    $("#worldmappick").hidden = !on && !state.picking;
-    $("#worldmappicktext").textContent = on ? "Ping: tap where to show your party" : "Wizard's Walk: tap somewhere you've been";
+    if (state.mapMode && map) {
+        map.onPick = state.unpicked ?? null;
+    }
 
-    if (!map || !$("#worldmap").open) {
+    state.unpicked = null;
+    state.mapMode = mode;
+
+    for (const [each, { button }] of Object.entries(MAP_MODES)) {
+        $(button).setAttribute("aria-pressed", String(each === mode));
+    }
+
+    $("#worldmappick").hidden = !mode && !state.picking;
+    $("#worldmappicktext").textContent = mode ? MAP_MODES[mode].said : "Wizard's Walk: tap somewhere you've been";
+
+    if (!mode || !map || !$("#worldmap").open) {
         return;
     }
 
-    if (on) {
-        state.unpinged = map.onPick;
-        map.onPick = (point) => {
-            const result = state.game?.ping(point);
-
-            pingMode(false);
-            mapNote(result?.ok ? "Pinged: your party sees it on their maps, and a column of green light there" : result?.reason === "soon" ? "Wait a moment to ping again" : "You're not in a party");
-        };
-    } else {
-        map.onPick = state.unpinged ?? null;
-        state.unpinged = null;
-    }
+    state.unpicked = map.onPick;
+    map.onPick = (point) => {
+        mapMode(null);
+        MAP_MODES[mode].tapped(point);
+    };
 }
 
-// A ping from the party come while the world map's open on the world: drawn
+// A marker on the world map (core/markers.js), asked about: a new one (`at`: [x, z] metres) what
+// it marks (the first, at first) and the player's words for it, then put down; or one of theirs
+// tapped (`marker`), what it is, which way, how far and whose it was said, and shared with their
+// party (in one), run to, or taken away
+async function askMarker({ at = null, marker = null }) {
+    const game = state.game;
+    const map = state.worldMap;
+    const dialog = $("#marker");
+    const { drawMarker } = await import("./app/mapicons.js");
+    const { bearing } = await import("./app/journal.js");
+    const button = (label, primary, then) => {
+        const each = Object.assign(document.createElement("button"), { type: "button", className: `button${primary ? " primary" : ""}`, textContent: label });
+
+        each.addEventListener("click", then);
+
+        return each;
+    };
+    const done = (said) => {
+        dialog.close();
+        map?.redraw();
+
+        if (said) {
+            mapNote(said);
+        }
+    };
+
+    if (!game || !map) {
+        return;
+    }
+
+    $("#markerkinds").hidden = $("#markerwordsbox").hidden = Boolean(marker);
+
+    // (A new one: what it marks, each drawn as on the map, the one chosen ringed; and its words)
+    if (!marker) {
+        let chosen = MARKER_ICONS[0];
+        const kinds = MARKER_ICONS.map((icon) => {
+            const kind = Object.assign(document.createElement("button"), { type: "button", className: "marker-kind" });
+            const drawing = Object.assign(document.createElement("canvas"), { width: 60, height: 72 });
+            const context = drawing.getContext("2d");
+
+            context.scale(2, 2);
+            drawMarker(context, 15, 34, icon, { size: 22 });
+            kind.dataset.icon = icon;
+            kind.setAttribute("role", "radio");
+            kind.setAttribute("aria-checked", String(icon === chosen));
+            kind.append(drawing, MARKER_NAMES[icon]);
+            kind.addEventListener("click", () => {
+                chosen = icon;
+
+                for (const each of kinds) {
+                    each.setAttribute("aria-checked", String(each.dataset.icon === chosen));
+                }
+            });
+
+            return kind;
+        });
+
+        $("#markertitle").textContent = "New marker";
+        $("#markernote").textContent = "What does it mark? Add a few words if you like: only you see them, unless you share it.";
+        $("#markerkinds").replaceChildren(...kinds);
+        $("#markerwords").value = "";
+        $("#markermenu").replaceChildren(
+            button("Put it there", true, () => {
+                const result = game.addMarker(at, { icon: chosen, words: $("#markerwords").value });
+
+                done(result.ok ? "Marked: tap it to share it or take it away" : `${MARKERS.most} markers already: tap one to take it away first`);
+            }),
+            button("Cancel", false, () => done()),
+        );
+        dialog.showModal();
+        kinds[0].focus();
+
+        return;
+    }
+
+    // (One of theirs: what it is, which way, how far, and whose; shared, run to, or taken away)
+    const where = map.player ? bearing([map.player.x, map.player.z], [marker.x, marker.z]) : "";
+
+    $("#markertitle").textContent = marker.words || MARKER_NAMES[marker.icon];
+    $("#markernote").textContent = `${MARKER_NAMES[marker.icon]}${where ? `, ${where === "here" ? "here" : where}` : ""}${marker.from ? `. Shared with you by ${marker.from}` : ""}.`;
+    $("#markermenu").replaceChildren(
+        ...(game.host.partyFor(game.me)
+            ? [
+                  button("Share with your party", true, () => {
+                      const result = game.shareMarker(marker.id);
+
+                      done(result.ok ? "" : "You're not in a party");
+                  }),
+              ]
+            : []),
+        button("Run there", !game.host.partyFor(game.me), () => {
+            const result = game.journeyTo([marker.x, marker.z]);
+
+            if (result.ok) {
+                dialog.close();
+                closeWorldMap();
+            } else {
+                done(result.reason === "indoors" ? "Step outside to set off" : "A path cannot be found");
+            }
+        }),
+        button("Take it away", false, () => done(game.removeMarker(marker.id) ? "The marker's taken away" : "")),
+        button("Close", false, () => done()),
+    );
+    dialog.showModal();
+    $("#markermenu").querySelector("button").focus();
+}
+
+// A ping, or a marker shared, from the party come while the world map's open on the world: drawn
 function pingShown() {
     if ($("#worldmap").open && state.worldMap?.pingsOf) {
         state.worldMap.redraw();
@@ -1716,12 +1864,18 @@ function closeWorldMap() {
     state.warLive = 0;
     state.warTable = null;
 
-    state.pingMode = false;
-    state.unpinged = null;
+    state.mapMode = null;
+    state.unpicked = null;
+
+    if ($("#marker").open) {
+        $("#marker").close();
+    }
 
     if (state.worldMap) {
         state.worldMap.onPick = null;
         state.worldMap.pingsOf = null;
+        state.worldMap.markersOf = null;
+        state.worldMap.onTap = null;
         state.worldMap.travel = null;
         state.worldMap.build = null;
         state.worldMap.war = null;
@@ -1757,7 +1911,7 @@ function toggleLegend() {
 
 // The map's key: each icon, and the fog
 async function keyOf() {
-    const { drawBuildingIcon, drawTracked } = await import("./app/mapicons.js");
+    const { drawBuildingIcon, drawMarker, drawTracked } = await import("./app/mapicons.js");
     const list = $("#worldmapkey");
 
     list.replaceChildren();
@@ -1839,6 +1993,14 @@ async function keyOf() {
     context.stroke();
     pin.append(glyph, "Hold: drop a pin · tap twice: run there");
     list.append(pin);
+
+    // (A marker: put down with its button, and tapped to share it or take it away)
+    const marker = document.createElement("li");
+    const sign = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });
+
+    drawMarker(sign.getContext("2d"), 22, 42, "flag", { size: 22 });
+    marker.append(sign, `Your markers (up to ${MARKERS.most}): tap one to share it or take it away`);
+    list.append(marker);
 }
 
 // The war table's key, in their people's colour: each of the war's marks, and what's seen now
@@ -1870,8 +2032,17 @@ async function warKey(colour) {
 
 $("#worldmapclose").addEventListener("click", closeWorldMap);
 $("#worldmaplegendtoggle").addEventListener("click", toggleLegend);
-$("#worldmapcancel").addEventListener("click", () => (state.pingMode ? pingMode(false) : closeWorldMap()));
-$("#worldmapping").addEventListener("click", () => pingMode());
+$("#worldmapcancel").addEventListener("click", () => (state.mapMode ? mapMode(null) : closeWorldMap()));
+$("#worldmapping").addEventListener("click", () => mapMode(state.mapMode === "ping" ? null : "ping"));
+$("#worldmapmark").addEventListener("click", () => {
+    if (state.mapMode === "mark") {
+        mapMode(null);
+    } else if ((state.game?.markerView().length ?? 0) >= MARKERS.most) {
+        mapNote(`${MARKERS.most} markers already: tap one to take it away first`);
+    } else {
+        mapMode("mark");
+    }
+});
 $("#worldmapin").addEventListener("click", () => state.worldMap?.zoom(0.6));
 $("#worldmapout").addEventListener("click", () => state.worldMap?.zoom(1 / 0.6));
 $("#worldmaphere").addEventListener("click", () => state.worldMap?.centre());

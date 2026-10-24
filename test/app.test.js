@@ -13,7 +13,7 @@ import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
 import { isGuid } from "../client/js/core/guid.js";
-import { clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLocalWorld, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, SAVE_VERSION, saveExplored, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
+import { clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
 import { ago, KEPT_FROM, keepMessage, MESSAGES_KEPT } from "../client/js/app/journal.js";
 import { encode } from "../client/js/core/wire.js";
 import { Standing } from "../client/js/core/standing.js";
@@ -637,6 +637,26 @@ describe("saving (save.js)", () => {
         // (Anything else kept there isn't a pin)
         globalThis.localStorage.setItem("pellagos.abcd1234.pin", JSON.stringify({ ...save, pin: ["a", 2] }));
         assert.equal(loadPin(save), null);
+    });
+
+    it("keeps a saved game's character's markers on the world map, as markers; not for another", () => {
+        useStorage();
+
+        const save = { id: "abcd1234", seed: 12, created: "2026-10-03T10:00:00.000Z" };
+        const markers = [
+            { id: "marker-1", x: 3190.5, z: 4892.5, icon: "danger", words: "Wolves' den", from: null },
+            { id: "marker-2", x: 3000, z: 4000, icon: "loot", words: "", from: "Bram" },
+        ];
+
+        assert.deepEqual(loadMarkers(save), []);
+        assert.equal(saveMarkers(save, markers), true);
+        assert.deepEqual(loadMarkers(save), markers);
+        assert.deepEqual(loadMarkers({ ...save, seed: 13 }), []);
+        assert.equal(saveMarkers({ seed: 1 }, markers), false);
+
+        // (What isn't one isn't kept as one)
+        globalThis.localStorage.setItem("pellagos.abcd1234.markers", JSON.stringify({ ...save, markers: [{ id: "x", x: 1, z: 2, icon: "unicorn" }, ...markers] }));
+        assert.deepEqual(loadMarkers(save), markers);
     });
 
     it("keeps the last messages a saved game's character was told, the last ten; not for another, nor what isn't one", () => {
