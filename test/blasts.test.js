@@ -454,9 +454,10 @@ describe("Goblin Bombs and the Explosion tome found and sold (spoils.js, stock.j
 
         assert.ok(share > 0.03 && share < 0.25, `${share}`);
 
+        // (A pedlar's specials are their odds and ends: a map or a charm, never the tome)
         for (const [shop, { daily }] of Object.entries(SHOPS)) {
             if (daily && shop !== "emporium") {
-                assert.ok(!(daily.specials ?? []).length, shop);
+                assert.ok(!(daily.specials ?? []).includes(tomeOf("explosion")), shop);
             }
         }
     });

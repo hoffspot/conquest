@@ -10,7 +10,12 @@
 //   with the wild nearer than anywhere else, and they wake well rested (WELL_RESTED);
 // - fresh tracks (FRESH): a short trail of prints, made not long ago, leading from just ahead of
 //   them to a pack of the land's beasts or folk out now (or an elite and its kind), to follow and
-//   find them first, or to see what made them and steer clear.
+//   find them first, or to see what made them and steer clear;
+// - a stranger met on the way (STRANGERS): a pedlar with odds and ends to sell, a hunter lying
+//   hurt who'll tell of a place round about for their healing, or hungry bandits wanting food or
+//   gold to let them by;
+// - something across the way (OBSTACLES): a fallen tree or a rockslide, to go round, or to clear,
+//   a game of chance: something spilled under it, or brigands waiting to jump whoever clears it.
 //
 // Pure data and arithmetic, no DOM; the world's host deals them (host.js #caches, #putFind).
 
@@ -23,7 +28,7 @@ import { ITEMS, rollBoost } from "./progress.js";
 import { foundMap } from "./treasure.js";
 
 /** How often a card's dealt: one each `every` metres ([least, most]) a player crosses the wilds; and the cards in a deck. */
-export const DIRECTOR = Object.freeze({ every: [250, 450], cards: Object.freeze(["cache", "remains", "campsite", "tracks"]) });
+export const DIRECTOR = Object.freeze({ every: [250, 450], cards: Object.freeze(["cache", "remains", "campsite", "tracks", "stranger", "obstacle"]) });
 
 /**
  * Fresh tracks: the pack they lead to, one roaming within `reach` metres ([least, most]) of the
@@ -92,11 +97,12 @@ export function peacefulNext(deck, random, last = null) {
 }
 
 /**
- * A deck shuffled (random.js random): each card once, in an order of its own; never `last` (the
- * card just dealt) first, so no card comes twice running.
+ * A deck shuffled (random.js random): each card once (of `cards`: the director's, or the
+ * strangers'), in an order of its own; never `last` (the card just dealt) first, so no card comes
+ * twice running.
  */
-export function shuffled(random, last = null) {
-    const deck = [...DIRECTOR.cards];
+export function shuffled(random, last = null, cards = DIRECTOR.cards) {
+    const deck = [...cards];
 
     for (let k = deck.length - 1; k > 0; k--) {
         const pick = random.int(0, k);
@@ -178,4 +184,148 @@ export function noteOf(places, at, known) {
     }
 
     return best?.id ?? null;
+}
+
+/**
+ * The strangers met out in the wilds (the "stranger" card), one of `kinds` each time, dealt as
+ * the cards are (each once, shuffled again once all have been met), put out ahead of a player
+ * where a cache would be (host.js #spotAhead); said once a player's within `seen` metres; let go
+ * once every player's `far` away (and none's fighting them):
+ * - a pedlar (`pedlar`): resting by the way with their pack, selling odds and ends (progress.js
+ *   SHOPS pedlar: draughts, a cure or two, sometimes a common map or a charm, a little dearer
+ *   than in town);
+ * - a wounded hunter (`hunter`): down to `wounded` of their health, a beast's work. Healed (a
+ *   healing draught given them, or a healing spell cast on them), they tell whoever healed them
+ *   of a place round about they hadn't found (as a fallen adventurer's note does: noteOf), and go
+ *   on their way `thanks` ms later. Turned down, or left unhealed `waits` ms after a player first
+ *   came near, they limp off (at `limp` of their pace, `away` metres off from the nearest player);
+ * - hungry bandits (`bandits`): `count` ([least, most]) outlaws (caches.js CACHE_BANDS bandits:
+ *   a chief and his band), no one's enemy till they're refused. Their chief hails a player who
+ *   comes within `hail` metres, wanting food (a hot meal, or `meat` cuts of the wild's meat) or
+ *   gold (`gold`, [least, most], CHEST_GOLD more for each tier past the first) to let them by.
+ *   Paid, they do; refused, or walked away from (`off` metres from their chief once hailed), they
+ *   fight.
+ */
+export const STRANGERS = Object.freeze({
+    kinds: Object.freeze(["pedlar", "hunter", "bandits"]),
+    seen: 40,
+    far: 180,
+    hunter: Object.freeze({ wounded: 0.3, thanks: 8000, waits: 3 * 60000, limp: 0.5, away: 60 }),
+    bandits: Object.freeze({ count: [3, 4], hail: 14, off: 30, meat: 2, gold: [12, 20] }),
+});
+
+/** The healing draughts a wounded hunter can be given (progress.js ITEMS), the least first: the one given. */
+export const HEALING_DRAUGHTS = Object.freeze(["potion", "greaterPotion", "superiorPotion"]);
+
+/** The gold hungry bandits want to let a player by, out where the land's of a tier (random.js random): STRANGERS bandits' `gold`, richer further out. */
+export function banditToll(tier, random) {
+    const at = Math.max(1, Math.min(TIERS, tier));
+
+    return Math.round(random.int(...STRANGERS.bandits.gold) * (1 + CHEST_GOLD * (at - 1)));
+}
+
+/**
+ * What of a player's pack (progress.js Progress pack: its stacks, or null) hungry bandits take
+ * for food: STRANGERS bandits' `meat` cuts of the wild's meat (the parts that are food), if they
+ * have so many; else a hot meal. [{ id, count }] to take, or null for nothing to give them.
+ */
+export function foodFor(pack) {
+    const meat = new Map();
+
+    for (const stack of pack) {
+        if (stack && ITEMS[stack.id]?.food) {
+            meat.set(stack.id, (meat.get(stack.id) ?? 0) + stack.count);
+        }
+    }
+
+    const taken = [];
+    let left = STRANGERS.bandits.meat;
+
+    for (const [id, count] of [...meat].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+        if (left > 0) {
+            taken.push({ id, count: Math.min(left, count) });
+            left -= Math.min(left, count);
+        }
+    }
+
+    if (!left) {
+        return taken;
+    }
+
+    return pack.some((stack) => stack?.id === "meal") ? [{ id: "meal", count: 1 }] : null;
+}
+
+/**
+ * Something across the way (the "obstacle" card): a fallen tree or a rockslide, long since down,
+ * across the way a player's going, road or not, `ahead` metres ([least, most]) before them: a
+ * tree `tree` squares long, one wide, lying across their way; rocks `rocks` squares across it and
+ * `deep` along it. Gone round, or cleared: a player held on it within `reach` metres of it does a
+ * second's `work` of it a second (more with the tools for it: TOOLS), their stamina `stamina` a
+ * second the less (none left, they stop), swinging at it every `swing` ms; those at it together
+ * the quicker. Cleared, it's gone for
+ * everyone, and it's a game of chance: brigands waiting to jump whoever cleared it, the moment
+ * they have (`brigands` of the time: the land's cache band, `count` of them, from `from` metres
+ * off), or something spilled under it (`spilled` of the time: `gold` each, [least, most],
+ * CHEST_GOLD more for each tier past the first, and `goods` of the time one of `spill`), or
+ * nothing. Said once a player's within `seen` metres; let go once every player's `far` off.
+ */
+export const OBSTACLES = Object.freeze({
+    kinds: Object.freeze(["tree", "rocks"]),
+    ahead: [45, 70],
+    tree: Object.freeze({ long: 7, work: 6 }),
+    rocks: Object.freeze({ across: 4, deep: 3, work: 8 }),
+    reach: 2.5,
+    stamina: 5,
+    swing: 1100,
+    brigands: 0.3,
+    count: [3, 4],
+    from: [7, 10],
+    spilled: 0.4,
+    gold: [8, 20],
+    goods: 0.5,
+    spill: Object.freeze(["meal", "ale", "potion", "bandage", "glowcapDraught"]),
+    seen: 40,
+    far: 200,
+});
+
+/** How much quicker a player clears with what they hold (core/weapons.js ids): the axe-like weapons and a hammer. */
+export const TOOLS = Object.freeze({ axe: 2, cleaver: 1.75, greatsword: 1.5, hammer: 2 });
+
+/**
+ * The squares an obstacle of a kind lies over ([x0, y0, x1, y1], whole squares, both ends kept),
+ * its middle at `at` ([x, y] metres), across the way of `heading` ([x, y], one long): along the
+ * world's axis nearest across it, so that there's no slipping through it corner to corner.
+ */
+export function obstacleBox(kind, [x, y], [hx, hy]) {
+    const [long, deep] = kind === "tree" ? [OBSTACLES.tree.long, 1] : [OBSTACLES.rocks.across, OBSTACLES.rocks.deep];
+    // (Going more east or west than north or south: it lies north to south)
+    const [w, h] = Math.abs(hx) >= Math.abs(hy) ? [deep, long] : [long, deep];
+    const [x0, y0] = [Math.floor(x - w / 2 + 0.5), Math.floor(y - h / 2 + 0.5)];
+
+    return [x0, y0, x0 + w - 1, y0 + h - 1];
+}
+
+/** How much of an obstacle a player clears a second, holding a weapon (`weapon`: core/weapons.js id): 1, or TOOLS'. */
+export const clearRate = (weapon) => TOOLS[weapon] ?? 1;
+
+/**
+ * What clearing an obstacle turns up (random.js random): "brigands" (OBSTACLES `brigands` of the
+ * time), "spilled" (`spilled`) or null.
+ */
+export function clearedTurnsUp(random) {
+    const roll = random.next();
+
+    return roll < OBSTACLES.brigands ? "brigands" : roll < OBSTACLES.brigands + OBSTACLES.spilled ? "spilled" : null;
+}
+
+/**
+ * A player's share of what spilled under an obstacle, out where the land's of a tier (random.js
+ * random): { gold, items }, OBSTACLES'.
+ */
+export function rollSpilled(tier, random) {
+    const at = Math.max(1, Math.min(TIERS, tier));
+    const gold = Math.round(random.int(...OBSTACLES.gold) * (1 + CHEST_GOLD * (at - 1)));
+    const items = random.chance(OBSTACLES.goods) ? [{ id: random.pick(OBSTACLES.spill), quality: "common" }] : [];
+
+    return { gold, items };
 }

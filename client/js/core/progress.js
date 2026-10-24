@@ -202,8 +202,9 @@ export const LINES = Object.freeze({
  * what it buys (`line`: LINES); whether its stock is each day's (`daily`: so many things
  * (`picks`), so many of each (`count`), of which makes, or as rare (`grades`), and its daily
  * special's (`special`), and what else may be its special as if it were of the rarest
- * (`specials`: the Mystic Emporium's Tome of Explosion, now and then), and what it always has
- * (`always`): core/stock.js), and how much more it asks (`markup`).
+ * (`specials`: the Mystic Emporium's Tome of Explosion, now and then), how often it has a special
+ * at all (`sometimes`; always, without), and what it always has (`always`): core/stock.js), and
+ * how much more it asks (`markup`).
  *
  * - **A blacksmith** (`smith`): every weapon and piece of armour, and its people's uniform, as well
  *   made as the player buying is mighty (`tiered`: SMITH_MAKES).
@@ -223,6 +224,9 @@ export const LINES = Object.freeze({
  *   spells' scrolls, draughts and cures, the Stamina Boost, the Scroll of Safety, a wand and the
  *   rest; a treasure map, only ever common: core/treasure.js), and it buys everything, the
  *   creatures' parts and the tomes too.
+ * - **A pedlar** met out in the wilds (core/director.js STRANGERS): odds and ends, a healing
+ *   draught and a few more draughts and cures each day, and some days a common treasure map or a
+ *   charm, a little dearer than in town.
  */
 export const SHOPS = Object.freeze({
     smith: { items: [...ARMS, ...ARMOUR, ...UNIFORM], best: "masterwork", tiered: true, line: ["arms", "armour"] },
@@ -239,6 +243,7 @@ export const SHOPS = Object.freeze({
     watch: { items: ["sword", "hammer", "greatsword", "axe", "bow", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "bracers", "gloves", "greaves", "leatherBoots", "boots", ...UNIFORM], best: "fine", line: ["arms", "armour"] },
     tavern: { items: ["ale", "meal"], best: "common", line: ["provisions"] },
     temple: { items: ["potion"], best: "common", line: ["draughts"] },
+    pedlar: { items: ["potion", "glowcapDraught", ...Object.keys(CURES)], best: "common", line: ["draughts"], markup: 1.25, daily: { picks: 4, count: [1, 3], grades: { common: 1 }, special: { rare: 1 }, specials: ["treasureMap", ...Object.keys(CHARMS)], sometimes: 0.5, always: ["potion"] } },
     guild: { items: ["wand", "grimoire", "spellward", "wizardHat", "amulet", "ring", "potion", "staminaBoost", "glowcapDraught", "scrollOfSafety", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf), ...STARTING_SCROLLS, "treasureMap"], best: "fine" },
 });
 
@@ -329,6 +334,22 @@ export const RELICS = Object.freeze({
     ring: ["Signet", "Seal", "Band"],
     of: ["the Last King", "the Drowned Queen", "the Barrow Lord", "the Hollow Saint", "the Fallen Abbot", "the Forgotten House", "the Old Kings", "the Ashen Bride", "the Pale Knight", "the Lost Prince"],
 });
+
+/**
+ * A relic of moonsilver, what Lunara's guardian keeps at a ring of standing stones under a full moon
+ * (core/rings.js TRIAL): a legendary amulet or ring, named for her.
+ */
+export const MOONSILVER = Object.freeze({ amulet: ["Torc", "Locket", "Pendant"], ring: ["Band", "Seal"], of: "of the Silver Lady" });
+
+/** A relic of moonsilver (MOONSILVER), made (random.js random). */
+export function rollMoonsilver(random) {
+    const id = random.chance(0.5) ? "amulet" : "ring";
+    const relic = rollGear(id, "legendary", random);
+
+    relic.name = `Moonsilver ${MOONSILVER[id][Math.floor(random.next() * MOONSILVER[id].length) % MOONSILVER[id].length]} ${MOONSILVER.of}`;
+
+    return relic;
+}
 
 /** One of the dead's relics (RELICS), made (random.js random): a legendary amulet or ring, with its own name. */
 export function rollRelic(random) {
@@ -520,7 +541,8 @@ export function rollMake(random) {
 /**
  * What a fallen foe of a kind has on them (random.js random; `people`: theirs, for their
  * uniform's pieces), or what's in a place's chest: { gold, items }. Gear comes with its bonuses
- * rolled; and, the dead's (`relic`), one of their relics (rollRelic).
+ * rolled; and, the dead's (`relic`), one of their relics (rollRelic); or, Lunara's guardian's
+ * (`relic` "moonsilver"), a relic of moonsilver (rollMoonsilver).
  */
 export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "human", relic = false } = {}) {
     const table = LOOT[kind];
@@ -540,7 +562,7 @@ export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "huma
 
     // (What the restless dead guarded: one of their relics too, `relic`)
     if (relic) {
-        bundle.items.push(rollRelic(random));
+        bundle.items.push(relic === "moonsilver" ? rollMoonsilver(random) : rollRelic(random));
     }
 
     return bundle;

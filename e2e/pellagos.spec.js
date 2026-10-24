@@ -6582,6 +6582,122 @@ test("a shrine out in the land: tapped, walked up to and prayed at; its god's gi
     expect(await page.evaluate((id) => window.pellagos.game.host.command(window.pellagos.game.me, { type: "pray", shrine: id }), shrine.id)).toEqual({ ok: false, reason: "prayed" });
 });
 
+test("the rings of standing stones as Lunara's moon roads: stepped into by night, the player carried to the ring tonight's moon wakes, aglow, both in the journal; under a full moon, the world map's rings stood in to choose from", async ({ page }) => {
+    await page.goto("/?play&seed=2");
+    await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
+
+    // The ring nearest the player's town, and the one its moon road leads to on some night;
+    // stepped into on that night, 2 hours after its sunset
+    const rings = await page.evaluate(async () => {
+        const { DAY, dayOf, elapsedOf } = await import("/js/core/daytime.js");
+        const { FULL_MOON, moonRoad, PHASES, phaseOfNight, ringName, ringsOf } = await import("/js/core/rings.js");
+        const { game } = window.pellagos;
+        const { host, battle, world } = game;
+        const me = battle.actor(game.me);
+        const far = ({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y);
+        const from = [...ringsOf(world.plan)].sort((a, b) => far(a) - far(b))[0];
+        const phase = [1, 2, 3, 5, 6, 7].find((moon) => moonRoad(world.plan, from, moon));
+        const road = moonRoad(world.plan, from, phase);
+        // (The nights to come, from tomorrow's: the first whose moon is a phase)
+        const today = dayOf(elapsedOf(host.war));
+        const night = (day) => day * DAY.length - DAY.start + DAY.sets + DAY.length / 12;
+        const nightWith = (moon) => night(Array.from({ length: 16 }, (_, k) => today + 1 + k).find((day) => phaseOfNight(night(day)) === moon));
+        const heart = (ring) => world.maps.town.sites.heartOf(ring.site);
+        const [x, y] = heart(from);
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(host.war, { turn: Math.floor(nightWith(phase) / 60000), clock: nightWith(phase) % 60000 });
+        host.battle.place(game.me, "town", [Math.floor(x), Math.floor(y)], { facing: Math.PI });
+        Object.assign(battle.actor(game.me), { hp: 1e6, maxHp: 1e6 });
+        window.testRoad = { heart: heart(road), from: heart(from), full: nightWith(FULL_MOON) };
+
+        return { from: { id: from.site.id, name: ringName(world.plan, from), phase: PHASES[from.phase] }, road: { id: road.site.id, name: ringName(world.plan, road), phase: PHASES[road.phase] } };
+    });
+
+    // Carried: in the other ring's middle, what the stones did said, its moonlight about them
+    expect(await playUntil(page, () => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        return Math.hypot(me.x - window.testRoad.heart[0], me.y - window.testRoad.heart[1]) < 5 && game.moonGates.shown.size > 0;
+    }, { seconds: 10 })).toBe(true);
+
+    const carried = await page.evaluate((id) => {
+        const { game } = window.pellagos;
+
+        return { said: game.messages.map(({ text }) => text), stood: [...game.explored.rings], glow: game.moonGates.shown.get(id)?.bright ?? null };
+    }, rings.road.id);
+
+    expect(carried.said).toContain(`These stones are Lunara's roads: this ring wakes under the ${rings.from.phase}. It's in your journal.`);
+    expect(carried.said).toContain(`The stones hum, and the moonlight carries you: you stand in ${rings.road.name}.`);
+    expect(new Set(carried.stood)).toEqual(new Set([rings.from.id, rings.road.id]));
+    expect(carried.glow).toBe(true);
+
+    // Both rings in the journal, with the moon each wakes under; this one awake tonight
+    await page.evaluate(() => window.pellagos.game.toggleJournal());
+
+    const roads = page.getByRole("dialog", { name: "Journal" }).locator(".moon-roads");
+
+    await expect(roads).toContainText(`Tonight's moon: the ${rings.road.phase}.`);
+    await expect(roads.locator(".journal-trail.tracked")).toContainText("Awake tonight");
+    await expect(roads.locator(".journal-trail.tracked")).toContainText(rings.road.name.replace(/^the s/, "The s"));
+    await expect(roads).toContainText(`Wakes under the ${rings.from.phase}`);
+    await page.evaluate(() => window.pellagos.game.toggleJournal());
+
+    // Under a full moon, stepped out of the ring and back in: the world map, its rings stood in to
+    // choose from; the first one chosen, walked to
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [x, y] = window.testRoad.heart;
+        const { full } = window.testRoad;
+
+        Object.assign(game.host.war, { turn: Math.floor(full / 60000), clock: full % 60000 });
+        game.host.battle.place(game.me, "town", [Math.floor(x) + 12, Math.floor(y)], { facing: Math.PI });
+    });
+    await playUntil(page, () => window.pellagos.game.host.players.get(window.pellagos.game.me).inRing === null, { seconds: 2 });
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [x, y] = window.testRoad.heart;
+
+        // (Played as it is, the map opened over it)
+        game.host.battle.place(game.me, "town", [Math.floor(x), Math.floor(y)], { facing: Math.PI });
+        game.start();
+    });
+    await page.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.branches, null, { timeout: 30000, polling: 100 });
+
+    const map = await page.evaluate(() => ({ title: document.querySelector("#worldmaptitle").textContent, text: document.querySelector("#worldmappicktext").textContent, travel: window.pellagos.worldMap.travel }));
+
+    expect(map.title).toBe("The moon roads");
+    expect(map.text).toBe("Tap a ring you've stood in, and the moon carries you there.");
+    expect(new Set(map.travel.map(({ id }) => id))).toEqual(new Set([rings.from.id, rings.road.id]));
+    expect(map.travel.find(({ here }) => here).id).toBe(rings.road.id);
+
+    const spot = await page.evaluate((id) => {
+        const map = window.pellagos.worldMap;
+        const { x, z } = map.travel.find((branch) => branch.id === id);
+        const rect = map.canvas.getBoundingClientRect();
+
+        return { x: rect.left + (x - map.view.x) / map.view.scale + rect.width / 2, y: rect.top + (z - map.view.z) / map.view.scale + rect.height / 2 };
+    }, rings.from.id);
+
+    await page.mouse.click(spot.x, spot.y);
+    await expect(page.locator("#portaltitle")).toHaveText(`Walk the moon road to ${rings.from.name.replace(/^the s/, "The s")}?`);
+    await expect(page.locator("#portalgo")).toHaveText("Step into the moonlight");
+    await page.locator("#portalgo").click();
+    await page.waitForFunction(() => !document.querySelector("#worldmap").open, null, { timeout: 10000 });
+    await page.waitForFunction(
+        () => {
+            const { game } = window.pellagos;
+            const me = game.battle.actor(game.me);
+
+            return Math.hypot(me.x - window.testRoad.from[0], me.y - window.testRoad.from[1]) < 5;
+        },
+        null,
+        { timeout: 10000, polling: 100 },
+    );
+});
+
 test("the bestiary: a creature seen and slain written in, its page in the journal opening a part at a time, its portrait drawn; and the next time", async ({ page }) => {
     // (Played twice: more than the usual time)
     test.setTimeout(180000);
@@ -9725,6 +9841,246 @@ test("the wilds director lays fresh tracks ahead of a player crossing the wilds,
     expect(fresh).toMatchObject({ seen: true, gone: true });
     expect(fresh.minimap).toEqual([fresh.id]);
     expect(fresh.told.some((text) => /^Fresh tracks, not long made: an? .+'s, and not alone\. They lead off to the [a-z-]+: they're on your minimap\.$/.test(text)), JSON.stringify(fresh.told)).toBe(true);
+});
+
+test("the wilds director puts strangers on the way: a pedlar selling odds and ends, a wounded hunter healed with a draught telling of a place round about, hungry bandits hailing the player and paid to let them by", async ({ page }) => {
+    // (Three strangers met, each drawn, walked up to and talked to)
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=1");
+
+    const pack = page.locator(".pack");
+    const talk = page.locator(".talk");
+
+    // Out in the wilds 600 m north of the start town, going north, the next card a stranger (the
+    // one given), walked up to them and tapped till the talk's begun
+    const meet = (kind) =>
+        page.evaluate(async (kind) => {
+            const { game, session } = window.pellagos;
+            const { host } = game;
+            const player = game.battle.actor("player");
+
+            game.stop();
+            Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+            Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+            // (Every word on the banner kept)
+            window.told ??= [];
+
+            if (!window.watching) {
+                window.watching = true;
+                new MutationObserver((records) => window.told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+            }
+
+            const settle = async (steps, render = false) => {
+                for (let k = 0; k < steps; k++) {
+                    player.hp = player.maxHp;
+                    game.advance(0.25, { render });
+
+                    while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                        await new Promise((resolve) => setTimeout(resolve, 0));
+                    }
+                }
+            };
+            const goTo = (x, y) => Object.assign(player, { x, y, square: [Math.floor(x), Math.floor(y)], path: [], order: null, progress: null, target: null });
+            const [sx, sy] = game.world.start.at;
+
+            goTo(sx, sy - 600 - 120 * ["pedlar", "hunter", "bandits"].indexOf(kind));
+            host.travel.set("player", { at: [player.x, player.y], walked: 600, next: 600, heading: [0, -1], deck: ["stranger"], strangers: [kind] });
+            await settle(4);
+
+            const stranger = [...host.strangers.values()].find((each) => each.kind === kind);
+
+            if (!stranger) {
+                return null;
+            }
+
+            const one = game.battle.actor(stranger.ids[0]);
+
+            // (Come near: said, and drawn, a step at a time; the bandits' chief hailing the player)
+            goTo(one.x + 6, one.y);
+            await settle(4, true);
+
+            const hailed = [...(game.hud.said?.keys() ?? [])].includes(one.id) && Boolean(stranger.hailed?.includes("player"));
+
+            for (let k = 0; k < 40 && !game.avatars.has(one.id); k++) {
+                await settle(1, true);
+            }
+
+            const drawn = game.avatars.has(one.id);
+
+            // (Tapped, the camera turned to look past the player at them, till they're talking)
+            for (let tap = 0; tap < 8 && one.talkingTo !== "player"; tap++) {
+                game.cameraFollow.yaw = Math.atan2(player.x - one.x, player.y - one.y);
+                game.cameraFollow.turning = 0;
+                game.advance(0.2);
+
+                const spot = session.view.toScreen(game.avatars.get(one.id).point(0.6));
+
+                if (spot) {
+                    game.tap(spot.x, spot.y, { time: performance.now() + 9000 * (tap + 1) });
+                }
+
+                game.advance(4, { render: false });
+            }
+
+            game.start();
+
+            return { id: stranger.id, one: one.id, name: one.name, toll: stranger.toll ?? null, drawn, hailed, talking: one.talkingTo, gold: game.progress.gold };
+        }, kind);
+
+    // A pedlar: said, drawn; their odds and ends for sale, a healing draught among them
+    const pedlar = await meet("pedlar");
+
+    expect(pedlar).toMatchObject({ drawn: true, talking: "player" });
+    await expect(talk).toBeVisible();
+    await expect(talk.locator(".talk-name")).toHaveText(pedlar.name);
+    await expect(talk.locator(".talk-title")).toHaveText("Pedlar");
+    await talk.getByRole("button", { name: /for sale/ }).click();
+    await expect(pack).toBeVisible();
+    await expect(pack.locator(".pack-title")).toContainText("Trading with");
+    await expect(pack.locator(".wares .pack-row", { hasText: "Healing draught" })).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await expect(pack).toBeHidden();
+
+    // A wounded hunter: given a draught, they tell of a place round about, in the journal and on the map
+    await page.evaluate(() => window.pellagos.game.progress.stow({ id: "potion", quality: "common" }));
+
+    const hunter = await meet("hunter");
+
+    expect(hunter).toMatchObject({ drawn: true, talking: "player" });
+    await expect(talk.locator(".talk-title")).toHaveText("Hunter");
+    await talk.getByRole("button", { name: /Here, drink this/ }).click();
+    await expect(talk).toBeHidden();
+    await expect.poll(() => page.evaluate(() => window.pellagos.game.memory.heard?.at(-1)?.hunter ?? false)).toBe(true);
+
+    // Hungry bandits: their chief hails the player, and wants food or gold; paid, they let them by
+    const bandits = await meet("bandits");
+
+    expect(bandits).toMatchObject({ drawn: true, hailed: true, talking: "player" });
+    await expect(talk.locator(".talk-title")).toHaveText("Outlaw");
+    await expect(talk.locator(".talk-line")).toContainText(`${bandits.toll} gold`);
+    await talk.getByRole("button", { name: /Here's your gold/ }).click();
+    await expect.poll(() => page.evaluate((id) => window.pellagos.game.host.strangers.get(id)?.paid, bandits.id)).toBe("player");
+
+    const after = await page.evaluate(({ id }) => ({ gold: window.pellagos.game.progress.gold, neutral: window.pellagos.game.host.strangers.get(id).ids.every((each) => window.pellagos.game.battle.actor(each).neutral), told: window.told }), bandits);
+
+    expect(after.gold).toBe(bandits.gold - bandits.toll);
+    expect(after.neutral).toBe(true);
+    expect(after.told.some((text) => text.startsWith("A pedlar, resting by the way")), JSON.stringify(after.told)).toBe(true);
+    expect(after.told.some((text) => text.startsWith("Someone's down ahead, hurt")), JSON.stringify(after.told)).toBe(true);
+    expect(after.told.some((text) => new RegExp(`^${hunter.name.split(" ")[0]} tells you of .+ near .+\\. It's in your journal, and on your map\\.$`).test(text)), JSON.stringify(after.told)).toBe(true);
+    expect(after.told.some((text) => text.startsWith("Bandits bar your way, hungry")), JSON.stringify(after.told)).toBe(true);
+});
+
+test("the wilds director lays a fallen tree across the way: drawn over its squares, said, the way round it; held on, the player walks up to it and clears it, swinging at it, and it's gone for everyone", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=1");
+
+    // Out in the wilds 600 m north of the start town, going north, the next card a fallen tree
+    const laid = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { host } = game;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6, weapon: "axe" });
+
+        // (Every word on the banner kept)
+        window.told = [];
+        new MutationObserver((records) => window.told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+
+        window.settle = async (steps, render = false) => {
+            for (let k = 0; k < steps; k++) {
+                player.hp = player.maxHp;
+                game.advance(0.25, { render });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+
+        const goTo = (x, y) => Object.assign(player, { x, y, square: [Math.floor(x), Math.floor(y)], path: [], order: null, progress: null, target: null });
+        const [sx, sy] = game.world.start.at;
+        const pick = host.random.pick;
+
+        goTo(sx, sy - 600);
+        host.random.pick = (list) => (list.includes("tree") && list.includes("rocks") ? "tree" : pick.call(host.random, list));
+        host.travel.set("player", { at: [player.x, player.y], walked: 600, next: 600, heading: [0, -1], deck: ["obstacle"] });
+        await window.settle(4);
+        host.random.pick = pick;
+
+        const [obstacle] = host.obstacles.values();
+
+        if (!obstacle) {
+            return null;
+        }
+
+        const [x0, y0, x1, y1] = obstacle.box;
+        const blocked = [];
+
+        for (let y = y0; y <= y1; y++) {
+            for (let x = x0; x <= x1; x++) {
+                blocked.push(game.world.maps.town.squares.blocked(x, y));
+            }
+        }
+
+        // (Come near, 8 m off its middle on the way it was coming: said, drawn; the camera looking
+        // at it past the player)
+        goTo(obstacle.at[0] + 0.5, y1 + 8.5);
+        await window.settle(4, true);
+        game.cameraFollow.yaw = Math.atan2(player.x - obstacle.at[0], player.y - obstacle.at[1]);
+        game.cameraFollow.turning = 0;
+        await window.settle(4, true);
+
+        const group = game.obstacleProps.shown.get(obstacle.id);
+        const spot = group && session.view.toScreen(group.position.clone().setY(group.position.y + 0.4));
+
+        return { id: obstacle.id, box: obstacle.box, blocked, drawn: Boolean(group), spot, at: [player.x, player.y] };
+    });
+
+    expect(laid).not.toBeNull();
+    expect(laid.drawn).toBe(true);
+    expect(laid.blocked.length).toBe(7);
+    expect(laid.blocked.every(Boolean)).toBe(true);
+    expect(laid.spot).toBeTruthy();
+
+    // Held on (the game going on, listening): the player walks up to it and clears it, swinging
+    // at it; let go once it's cleared
+    const before = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        Object.assign(player, { stamina: 1e6, maxStamina: 1e6 });
+        game.start();
+
+        return game.avatars.get("player").actions.attacks;
+    });
+
+    await page.mouse.move(laid.spot.x, laid.spot.y);
+    await page.mouse.down();
+    await expect.poll(() => page.evaluate((id) => !window.pellagos.game.host.obstacles.has(id), laid.id), { timeout: 150000, intervals: [1000] }).toBe(true);
+    await page.mouse.up();
+
+    const cleared = await page.evaluate(({ box: [x0, y0] }) => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+
+        // (Swinging at it, as it's cleared: its blows started)
+        return { swung: game.avatars.get("player").actions.attacks, clearing: player.clearing ?? null, toClear: game.toClear, at: [player.x, player.y], free: !game.world.maps.town.squares.blocked(x0, y0) };
+    }, laid);
+
+    expect(cleared).toMatchObject({ clearing: null, toClear: null, free: true });
+    expect(cleared.swung).toBeGreaterThanOrEqual(before + 2);
+    expect(Math.hypot(cleared.at[0] - laid.at[0], cleared.at[1] - laid.at[1])).toBeGreaterThan(3);
+
+    const told = await page.evaluate(() => window.told);
+
+    expect(told).toContain("A fallen tree lies across the way ahead. Go round it, or hold on it to clear it.");
+    expect(told.some((text) => text === "The way's clear." || text === "It was a trap! Brigands burst out of cover!" || text.startsWith("Under the tree, a cart's load, crushed long ago.")), JSON.stringify(told)).toBe(true);
 });
 
 test("a treasure map read out in the wilds: its circle on the world map and the minimap and in the journal; its keepers woken as the player comes near; where it's buried glinting; put down, it's dug up, the player's share in it, and the hunt's done", async ({ page }) => {

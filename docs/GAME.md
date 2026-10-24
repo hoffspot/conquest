@@ -813,6 +813,14 @@ The signs read on the trails out of the wild's camps and lairs, toward each home
 - **On the world map and the minimap**: a tracked home's icon, with a pale paw at its corner
   (app/mapicons.js `drawTracked`); on the world map whether it's been found or not.
 
+### Moon roads (core/rings.js; docs/WILDS.md *Moon roads*)
+
+The rings of standing stones the player's stood in, and tonight's moon:
+- **In the journal** (app/journal.js, *Moon roads*): tonight's moon and how the rings carry those
+  who step into one by night; under a full moon, where Lunara's guardian keeps its moonsilver
+  tonight; then each ring stood in, the nearest first, with the moon it wakes under and which way and
+  how far it is, those awake tonight edged in pale green.
+
 ### Writings (core/writings.js, app/reader.js)
 
 What's written down and left where it was, to be found and read there: the wizard Sinclair's

@@ -38,7 +38,7 @@ import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { aloftShare, BOMBS, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
-import { FINDS, FRESH } from "../core/director.js";
+import { FINDS, foodFor, FRESH, HEALING_DRAUGHTS, OBSTACLES, STRANGERS } from "../core/director.js";
 import { compass } from "../core/ways.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
@@ -85,6 +85,8 @@ import { ADJECTIVES } from "../core/war/peoples.js";
 import { RESOURCES, RISING, STAGES } from "../core/war/war.js";
 import { GODS, PANTHEON } from "../core/lore/gods.js";
 import { GIFTS, godWords, SHRINE, shrineOf, shrinesOf } from "../core/shrines.js";
+import { FULL_MOON, NEW_MOON, nightOf, PHASES, phaseOfNight, ringName, ringOf, ringsOf, TRIAL, trialOf } from "../core/rings.js";
+import { MoonGates } from "../world/moongates3d.js";
 import { ACT_TIMES, PLAYER_RESTS_AFTER, REST_EVERY, ROLES } from "../core/roles.js";
 import { squaresOf } from "../core/grid.js";
 import { crossingsOf, lengthOf, nearestAlong, pointAlong, wayAcross, wayFrom } from "../core/journey.js";
@@ -114,6 +116,7 @@ import { footAt, lookPrint, printOf, TAKES, Tracks } from "../world/tracks3d.js"
 import { TrailSigns } from "../world/signs3d.js";
 import { DEN_LOOK, DenProps } from "../world/dens3d.js";
 import { FIND_LOOK, FindProps } from "../world/finds3d.js";
+import { OBSTACLE_LOOK, ObstacleProps } from "../world/obstacles3d.js";
 import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
 import { Ailments3D } from "../world/ailments3d.js";
@@ -790,11 +793,29 @@ const PACE_HEARD = 160;
 // their beat, audio/synth.js warDrums)
 const DRUMS_AGAIN = 2;
 
+// What's said of what's across the way (core/director.js OBSTACLES), by its kind: when it's come
+// upon (`seen`), what it's called in being told to hold on it (`it`, `pronoun`), and what spilled
+// under it (`spilled`)
+const OBSTACLE_WORDS = Object.freeze({
+    tree: { seen: "A fallen tree lies across the way ahead. Go round it, or hold on it to clear it.", it: "the fallen tree", pronoun: "it", spilled: "Under the tree, a cart's load, crushed long ago." },
+    rocks: { seen: "Rocks have come down across the way ahead. Go round them, or hold on them to clear them.", it: "the rocks", pronoun: "them", spilled: "Under the rocks, a cart's load, buried long ago." },
+});
+
+// What the strangers met out in the wilds say over their heads (core/director.js STRANGERS): hungry
+// bandits' chief hailing the player, paid, and refused (or walked away from); a wounded hunter
+// healed
+const STRANGER_LINES = Object.freeze({
+    hail: ["Hold there, friend!", "That's far enough!", "Not so fast, traveller."],
+    paid: ["Pleasure doing business.", "On your way, then."],
+    fight: ["Then we'll take it off you!", "Wrong answer. Get them, lads!", "Have it your way!"],
+    tended: ["Bless you. That's better.", "Ah... I can stand. Thank you, friend.", "Gods, that's better. I owe you."],
+});
+
 // How many of the places the player's heard tell of and found since the journal keeps (the last)
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "dungeon", "cache", "find", "pace"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1312,8 +1333,14 @@ export class Game {
         this.findsSeen = new Set();
         /** The fresh tracks the player's come upon (their ids: core/director.js FRESH), said once. */
         this.freshSeen = new Set();
+        /** The strangers the player's come upon (their ids: core/director.js STRANGERS), said once. */
+        this.strangersSeen = new Set();
         // (The shrines come near, told whose each is: #nearShrine)
         this.shrinesNear = new Set();
+        /** What's across the way the player's come upon (their ids: core/director.js OBSTACLES), said once. */
+        this.obstaclesSeen = new Set();
+        // (What's across the way the player's holding on, to clear it: its id, or null; #holdOn)
+        this.toClear = null;
         this.talking = null;
         this.approaching = null;
         this.talkVariety = new Variety();
@@ -1760,8 +1787,11 @@ export class Game {
         this.gaitsSeen = new Map();
         // (The roaming beasts' dens near the player: #denning)
         this.denProps = new DenProps(view.scene);
+        // (And the rings of standing stones' middles, aglow by night while they're awake: #moonlit)
+        this.moonGates = new MoonGates(view.scene);
         // (The wilds director's peaceful finds near the player: #findsNear)
         this.findProps = new FindProps(view.scene);
+        this.obstacleProps = new ObstacleProps(view.scene);
         this.ailments = new Ailments3D(this.effects.group);
         // (Its fire, flashes and fireballs lighting what's round them as the world's fires do, each
         // a light of its own: lightsNow, #lightNear; not lent the view's lamps)
@@ -2416,6 +2446,11 @@ export class Game {
         for (const pointer of this.pointers.values()) {
             clearTimeout(pointer.hold);
             this.#letGo(pointer);
+
+            // (Held on what's across the way: let go of)
+            if (pointer.clearing) {
+                this.#leaveOff();
+            }
         }
 
         this.pointers.clear();
@@ -2493,7 +2528,9 @@ export class Game {
         this.trailPrints?.dispose();
         this.trailSigns?.dispose();
         this.denProps?.dispose();
+        this.moonGates?.dispose();
         this.findProps?.dispose();
+        this.obstacleProps?.dispose();
         this.navBaker?.dispose();
         this.navigationView?.dispose();
 
@@ -3326,11 +3363,14 @@ export class Game {
         this.#keepToLectern();
         this.#keepToSign();
         this.#keepToShrine();
+        this.#keepToObstacle();
         this.#restPlayer();
         this.effects.update(dt, view.pixelsPerMetre());
         this.#drawDrops();
         this.#spyCaches();
         this.#spyFinds();
+        this.#spyStrangers();
+        this.#spyObstacles();
         this.#drawMinimap(target);
 
         if (this.squares?.object.visible) {
@@ -3362,10 +3402,13 @@ export class Game {
         // (The trails out of the wild's camps, dens and lairs near them: their prints and signs;
         // and the dens near them)
         this.#trailing();
-        // (And a shrine come near: whose it is)
-        this.#nearShrine();
         this.#denning();
+        // (And a shrine come near: whose it is; the rings of standing stones aglow by night; and
+        // the wilds director's finds near them)
+        this.#nearShrine();
+        this.#moonlit();
         this.#findsNear();
+        this.#obstaclesNear();
 
         // (The party's pings, in the world: #pinging)
         this.#pinging();
@@ -4805,10 +4848,11 @@ export class Game {
     }
 
     // A note found on a fallen adventurer's remains (core/director.js noteOf: of a place round about
-    // the player hasn't found, `id`), heard tell of as a crier tells it, by the settlement nearest
-    // the place (memory.heard: { id, town, turn, note }): written in the journal, its circle on the
+    // the player hasn't found, `id`), or a place a wounded hunter they healed told of (`hunter`:
+    // their name), heard tell of as a crier tells it, by the settlement nearest the place
+    // (memory.heard: { id, town, turn, note or hunter }): written in the journal, its circle on the
     // map, said with a quill's scratch
-    #noteFound(id) {
+    #noteFound(id, { hunter = null } = {}) {
         const plan = this.world.plan;
         const place = plan ? rumouredBy(plan, id) : null;
 
@@ -4819,9 +4863,9 @@ export class Game {
         const far = ({ at }) => Math.hypot(at[0] - place.at[0], at[1] - place.at[1]);
         const town = [...plan.places].sort((a, b) => far(a) - far(b))[0];
 
-        this.memory.heard = [...(this.memory.heard ?? []), { id, town: town.id, turn: this.host.war?.turn ?? 0, note: true }];
+        this.memory.heard = [...(this.memory.heard ?? []), { id, town: town.id, turn: this.host.war?.turn ?? 0, ...(hunter ? { hunter: true } : { note: true }) }];
         this.#keepTalks();
-        this.hud.message(`In their hand, a note: it tells of ${this.#placeCalled(id) ?? "somewhere"} near ${town.name}. It's in your journal, and on your map.`, 4.5);
+        this.hud.message(hunter ? `${hunter} tells you of ${this.#placeCalled(id) ?? "somewhere"} near ${town.name}. It's in your journal, and on your map.` : `In their hand, a note: it tells of ${this.#placeCalled(id) ?? "somewhere"} near ${town.name}. It's in your journal, and on your map.`, 4.5);
         this.sound?.play("quill", { delay: 0.6 });
     }
 
@@ -4841,6 +4885,296 @@ export class Game {
                 if (!find.searched) {
                     this.hud.message(find.kind === "remains" ? "The remains of an adventurer who fell out here long ago. Search them: they may have left something." : "An old campsite: a ring of stones, the ashes long cold. A good place to make camp: safe from the wild, and you'd wake well rested.", 4);
                 }
+            }
+        }
+    }
+
+    // A stranger the wilds director's put out (core/director.js STRANGERS) come upon by the player
+    // for the first time: a pedlar or a wounded hunter said (hungry bandits say it themselves, as
+    // they hail them: #strangerSaid)
+    #spyStrangers() {
+        const me = this.battle.actor(this.me);
+
+        if (!me || me.dead || me.map !== "town" || !this.host?.strangers?.size) {
+            return;
+        }
+
+        for (const stranger of this.host.strangers.values()) {
+            const one = stranger.folk ? this.battle.actor(stranger.ids[0]) : null;
+
+            if (one && !this.strangersSeen.has(stranger.id) && Math.hypot(me.x - one.x, me.y - one.y) <= STRANGERS.seen) {
+                this.strangersSeen.add(stranger.id);
+
+                if (stranger.kind === "pedlar") {
+                    this.hud.message("A pedlar, resting by the way with their pack: they'll have odds and ends to sell.", 3.5);
+                } else if (!stranger.tended && !stranger.off) {
+                    this.hud.message("Someone's down ahead, hurt: a hunter, by the look of them. Talk to them: they may need help.", 3.5);
+                }
+            }
+        }
+    }
+
+    // The strangers out (core/director.js STRANGERS; host.js "stranger" events): put out, drawn
+    // (a few at a time, as the wild's are); and what's said as they deal with the player, over
+    // their heads: hungry bandits' chief hailing them (and told what they want), paid, and refused
+    // or walked away from, the bandits drawing their blades; a wounded hunter healed, thanking them
+    // and telling of a place round about (#noteFound); and one let go, gone and forgotten
+    #strangerSaid(event) {
+        const { change, stranger: id } = event;
+
+        if (change === "put") {
+            this.enlisting.push(...event.ids);
+
+            return;
+        }
+
+        if (change === "gone") {
+            this.strangersSeen.delete(id);
+            this.#unenlist(event.ids);
+
+            for (const one of event.ids) {
+                if (!this.battle.actor(one)) {
+                    this.#undress(one);
+                }
+            }
+
+            return;
+        }
+
+        const by = event.by ? this.battle.actor(event.by) : null;
+        const say = (lines) => {
+            const words = lines[Math.floor(Math.random() * lines.length)];
+
+            if (by) {
+                this.hud.say(by.id, words, 1 + bubbleSeconds(words));
+            }
+        };
+
+        if (change === "hail" && event.id === this.me) {
+            say(STRANGER_LINES.hail);
+            this.hud.message("Bandits bar your way, hungry: they want food or gold to let you by. Talk to them, or walk away and fight.", 4);
+        } else if (change === "paid" && event.id === this.me) {
+            say(STRANGER_LINES.paid);
+        } else if (change === "fight") {
+            say(STRANGER_LINES.fight);
+
+            if (by) {
+                const [ox, oz] = this.originOf("town");
+
+                this.sound?.play("unsheathe", { at: new THREE.Vector3(ox + by.x, this.#groundOn("town", by.x, by.y), oz + by.y) });
+            }
+
+            if (event.id === this.me) {
+                this.hud.message("The bandits draw their blades!", 2.5);
+            }
+        } else if (change === "tended" && event.by === this.me) {
+            const hunter = this.battle.actor(event.id);
+            const name = hunter?.name?.split(" ")[0] ?? "The hunter";
+
+            if (hunter) {
+                const words = STRANGER_LINES.tended[Math.floor(Math.random() * STRANGER_LINES.tended.length)];
+
+                this.hud.say(hunter.id, words, 1 + bubbleSeconds(words));
+            }
+
+            if (event.place) {
+                this.#noteFound(event.place, { hunter: name });
+            } else {
+                this.hud.message(`${name} thanks you. There's nowhere round here you've not found already, they say, but they'll not forget it.`, 3.5);
+            }
+        }
+    }
+
+    // A healing spell the player would cast on someone (core/spells.js: one of the healing school's
+    // they know that heals, ready now, the least of them first; or, none ready, the least), or null
+    #healingSpell() {
+        const known = Object.keys(SPELLS)
+            .filter((id) => SPELLS[id].school === "healing" && (SPELLS[id].heal || SPELLS[id].full) && this.progress.knows(id))
+            .sort((a, b) => SPELLS[a].tier - SPELLS[b].tier);
+
+        return known.find((id) => this.battle.cooldown(this.me, id) === 0) ?? known[0] ?? null;
+    }
+
+    // Whether something a stranger's talk asks of the game (core/dialogue.js: a wounded hunter's,
+    // hungry bandits') holds: they've been healed (`tended`), the player has a healing draught
+    // (`draught`) or knows a healing spell (`healer`); they've been paid (`paid`), the player has
+    // food they'd take (`food`: foodFor) or gold enough (`toll`). Null for anything else
+    #strangerCheck(stranger, condition) {
+        const [key, want] = Object.entries(condition)[0] ?? [];
+        const holds = {
+            tended: () => Boolean(stranger.tended),
+            draught: () => HEALING_DRAUGHTS.some((id) => this.progress.held(id) > 0),
+            healer: () => Boolean(this.#healingSpell()),
+            paid: () => Boolean(stranger.paid),
+            food: () => Boolean(foodFor(this.progress.pack)),
+            toll: () => this.progress.gold >= (stranger.toll ?? Infinity),
+        }[key];
+
+        return holds ? holds() === want : null;
+    }
+
+    // What's across the way within OBSTACLE_LOOK.seen of the player, out in the world, each drawn
+    // as its kind's is (obstacles3d.js), over its squares
+    #obstaclesNear() {
+        const me = this.battle.actor(this.me);
+        const near = me && me.map === "town" && this.host?.obstacles?.size ? [...this.host.obstacles.values()].filter(({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y) <= OBSTACLE_LOOK.seen) : [];
+
+        if (near.length || this.obstacleProps.shown.size) {
+            const [ox, oz] = this.originOf("town");
+
+            this.obstacleProps.set(
+                near.map(({ id, kind, at: [x, z], box: [x0, y0, x1, y1] }) => ({ id, kind, x: ox + x, z: oz + z, width: x1 - x0 + 1, depth: y1 - y0 + 1 })),
+                (x, z) => this.#groundOn("town", x - ox, z - oz),
+            );
+        }
+    }
+
+    // What's across the way the player's come upon for the first time (within OBSTACLES seen of
+    // it): said, and how to clear it
+    #spyObstacles() {
+        const me = this.battle.actor(this.me);
+
+        if (!me || me.dead || me.map !== "town" || !this.host?.obstacles?.size) {
+            return;
+        }
+
+        for (const obstacle of this.host.obstacles.values()) {
+            if (!this.obstaclesSeen.has(obstacle.id) && Math.hypot(me.x - obstacle.at[0], me.y - obstacle.at[1]) <= OBSTACLES.seen) {
+                this.obstaclesSeen.add(obstacle.id);
+                this.hud.message(OBSTACLE_WORDS[obstacle.kind].seen, 4);
+            }
+        }
+    }
+
+    // What's across the way under a point on the screen (out in the world, drawn): its id, or null
+    #obstacleAt(clientX, clientY) {
+        return this.mapId === "town" && this.obstacleProps?.shown.size ? this.obstacleProps.at(this.view.rayAt(clientX, clientY)) : null;
+    }
+
+    // The player walked up beside what's across the way (`id`): to the square nearest them just
+    // off it
+    #walkTo(id, { run = false } = {}) {
+        const me = this.battle.actor(this.me);
+        const obstacle = this.host.obstacles.get(id);
+
+        if (!me || !obstacle) {
+            return;
+        }
+
+        const [x0, y0, x1, y1] = obstacle.box;
+        const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+        const [x, y] = [clamp(Math.floor(me.x), x0 - 1, x1 + 1), clamp(Math.floor(me.y), y0 - 1, y1 + 1)];
+        const inside = x >= x0 && x <= x1 && y >= y0 && y <= y1;
+
+        this.#command({ type: "move", to: inside ? [x, y0 - 1] : [x, y], run });
+    }
+
+    // Held on what's across the way (`id`, by `pointer`): cleared now, if the player's beside it,
+    // or once they've walked up to it (#keepToObstacle), for as long as it's held
+    #holdOn(pointer, id) {
+        const me = this.battle.actor(this.me);
+        const obstacle = this.host.obstacles.get(id);
+
+        if (!me || me.dead || !obstacle) {
+            return;
+        }
+
+        pointer.clearing = id;
+        this.toClear = id;
+
+        if (!this.#beside(obstacle, me)) {
+            this.#walkTo(id);
+        }
+    }
+
+    // Whether someone (`actor`) is near enough what's across the way to clear it (OBSTACLES reach
+    // of its nearest square)
+    #beside({ box: [x0, y0, x1, y1] }, actor) {
+        return Math.hypot(Math.max(x0 - actor.x, 0, actor.x - (x1 + 1)), Math.max(y0 - actor.y, 0, actor.y - (y1 + 1))) <= OBSTACLES.reach;
+    }
+
+    // Holding on what's across the way (#holdOn): once beside it and stopped, set to clearing it
+    // (refused, told why, and no more); gone, forgotten
+    #keepToObstacle() {
+        const id = this.toClear;
+        const me = this.battle.actor(this.me);
+        const obstacle = id ? this.host.obstacles.get(id) : null;
+
+        if (!id || me?.clearing === id) {
+            return;
+        }
+
+        if (!me || me.dead || !obstacle) {
+            this.toClear = null;
+
+            return;
+        }
+
+        if (me.order || me.path.length || !this.#beside(obstacle, me)) {
+            return;
+        }
+
+        this.#command({ type: "clear", obstacle: id }, (result) => {
+            if (!result.ok) {
+                this.toClear = null;
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.8);
+                this.sound?.play("denied");
+            }
+        });
+    }
+
+    // Let go of what's across the way: no more cleared
+    #leaveOff() {
+        const me = this.battle.actor(this.me);
+
+        this.toClear = null;
+
+        if (me?.clearing) {
+            this.#command({ type: "clear", obstacle: null });
+        }
+    }
+
+    // What's said, seen and heard as what's across the way is cleared (core/director.js
+    // OBSTACLES; host.js "obstacle" events): each swing at it (whoever's at it), their weapon
+    // swung and the wood or the rock heard; the player left off for want of breath, told; cleared,
+    // what it turned up for them (brigands jumping them, what spilled under it, or only the way
+    // clear); and one let go, forgotten
+    #obstacleSaid(event) {
+        const { change, obstacle: id } = event;
+
+        if (change === "gone") {
+            this.obstaclesSeen.delete(id);
+
+            return;
+        }
+
+        if (change === "swing") {
+            const actor = this.battle.actor(event.id);
+            const avatar = this.avatars.get(event.id);
+            // (A blow as their weapon strikes one; with a bow, a wand or a book, as a sword does)
+            const swing = actor && (WEAPONS[actor.weapon]?.attacks?.find(({ kind }) => kind === "melee") ?? WEAPONS.sword.attacks[0]);
+
+            if (avatar && swing) {
+                avatar.actions.startAttack(swing.animation, { hitAt: swing.hitAt / 1000, duration: swing.duration / 1000, arms: true });
+                this.sound?.play(event.kind === "rocks" ? "crush" : "chop", { at: avatar.object.position, delay: swing.hitAt / 1000 });
+            }
+
+            return;
+        }
+
+        if (change === "left" && event.id === this.me && event.tired) {
+            this.hud.message(REFUSALS.tired, 2.5);
+            this.toClear = null;
+
+            return;
+        }
+
+        if (change === "cleared" && event.by.includes(this.me)) {
+            this.toClear = null;
+            this.hud.message(event.turned === "brigands" ? "It was a trap! Brigands burst out of cover!" : event.turned === "spilled" ? `${OBSTACLE_WORDS[event.kind].spilled} Your share's at your feet: tap it to take it.` : "The way's clear.", 3.5);
+
+            if (event.turned === "spilled") {
+                this.sound?.play("coinPickup");
             }
         }
     }
@@ -6099,8 +6433,10 @@ export class Game {
         const building = npc ? this.world.interiors?.of(npc.map) : null;
         const folk = building?.folk ?? this.world.folk ?? [];
 
-        // (Their talk: their role's, or another's: an adventurer drinking at a guild's table)
-        const tree = npc && !npc.dead ? treeFor({ ...npc, talk: npc.kind === "follower" ? "follower" : folk.find(({ id }) => id === npc.id)?.talk }) : null;
+        // (Their talk: their role's, or another's: an adventurer drinking at a guild's table; a
+        // stranger met out in the wilds, theirs: core/director.js STRANGERS)
+        const stranger = npc ? this.host.strangerOf(npc.id) : null;
+        const tree = npc && !npc.dead ? treeFor({ ...npc, talk: npc.kind === "follower" ? "follower" : stranger ? (stranger.folk?.talk ?? "bandits") : folk.find(({ id }) => id === npc.id)?.talk }) : null;
 
         if (!tree) {
             return;
@@ -6114,7 +6450,7 @@ export class Game {
         const out = !building ? this.host.folk.get(npc.id) : null;
         // (An official's words, and what they ask and do; or a crier's, his news)
         const official = this.#officialOf(npc, building, names) ?? this.#crierOf(npc, out, names);
-        const title = soldier?.title ?? folk.find(({ id }) => id === npc.id)?.title ?? out?.title ?? ROLES[npc.role]?.title ?? "";
+        const title = soldier?.title ?? folk.find(({ id }) => id === npc.id)?.title ?? out?.title ?? (stranger?.kind === "bandits" ? "Outlaw" : null) ?? ROLES[npc.role]?.title ?? "";
         Object.assign(names, Object.fromEntries(folk.map(({ id, local = id, name }) => [local, name.split(" ")[0]])));
 
         const upstairs = building?.tavern?.storeys > 1 ? building.tavern.upstairs : null;
@@ -6144,6 +6480,11 @@ export class Game {
             names.hirePrice = String(hire.price);
         }
 
+        // (Hungry bandits: the gold they want)
+        if (stranger?.toll) {
+            names.toll = String(stranger.toll);
+        }
+
         // (A shop with a daily stock: its special today, by name, and what it's asked for)
         const stock = this.host.stockOf(npc.id);
 
@@ -6165,7 +6506,8 @@ export class Game {
             place: building?.name,
             names,
             check: (condition) =>
-                "upstairs" in condition
+                (stranger ? this.#strangerCheck(stranger, condition) : null) ??
+                ("upstairs" in condition
                     ? upstairsIs(condition.upstairs, upstairs)
                     : "stance" in condition
                       ? soldier?.stance === condition.stance
@@ -6185,7 +6527,7 @@ export class Game {
                                     ? Boolean(stock?.specialLeft) === condition.special
                                   : official
                                     ? official.check(condition)
-                                    : true,
+                                    : true),
             memory: this.memory[npc.id],
             knowledge: this.knowledge,
             variety: this.talkVariety,
@@ -6204,21 +6546,40 @@ export class Game {
                     return;
                 }
 
+                // (A healing spell cast on a wounded hunter, as on anyone: the host tells when
+                // it's healed them)
+                if (effect.tend === "spell") {
+                    const spell = this.#healingSpell();
+                    const why = spell ? this.#unready(spell) : "unknown";
+
+                    if (why) {
+                        this.#castHeard({ ok: false, reason: why });
+                    } else {
+                        this.#command({ type: "cast", spell, target: npc.id }, (result) => this.#castHeard(result));
+                    }
+
+                    return;
+                }
+
                 // (What can't be paid for, said; what is, the gold heard counted out)
                 this.#command({ type: "effect", effect }, (result) => {
                     if (!result.ok) {
                         this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
                         this.sound?.play(result.reason === "gold" ? "buyDenied" : "denied");
-                    } else if (effect.price || effect.pay) {
+                    } else if (effect.price || effect.pay || effect.toll === "gold") {
                         this.hud.setGold(this.progress.gold);
                         this.onProgress(this.progress);
                         this.sound?.play("coins");
+                    } else if (effect.toll === "food" || effect.tend === "draught") {
+                        // (Food handed over to hungry bandits; a draught uncorked for a hunter)
+                        this.onProgress(this.progress);
+                        this.sound?.play(effect.tend ? "potionCork" : "drop");
                     }
                 });
 
                 // (Their wares, once the talk's over: their own shop, or their part's, as the host
                 // has it)
-                const keeps = folk.find(({ id }) => id === npc.id)?.shop ?? SHOPKEEPERS[npc.role];
+                const keeps = folk.find(({ id }) => id === npc.id)?.shop ?? out?.shop ?? SHOPKEEPERS[npc.role];
 
                 if (effect.shop && keeps) {
                     this.shopWanted = { shop: keeps, keeper: npc.id, name: npc.name };
@@ -8284,6 +8645,120 @@ export class Game {
         }
     }
 
+    // A player come into a ring of standing stones' middle (host.js #ringStep): the first time,
+    // what moon it wakes under (kept, and in their journal); by night under a new moon, that the
+    // stones sleep; under a full moon, the moon roads opened for them to choose (openMoonRoads);
+    // by day, that the stones are quiet. A moon road walked is said as it's carried ("carried")
+    #ringEvent({ ring: id, phase, first, night, tonight }) {
+        const said = [];
+
+        if (first) {
+            said.push(`These stones are Lunara's roads: this ring wakes under the ${PHASES[phase]}. It's in your journal.`);
+            this.sound?.play("quill");
+        }
+
+        if (night && tonight === NEW_MOON) {
+            said.push("The stones are cold and still: under the new moon the rings sleep.");
+        } else if (night && tonight === FULL_MOON) {
+            said.push("The full moon wakes every ring: choose one you've stood in, and the stones carry you there.");
+        } else if (!night && !first) {
+            said.push(`The stones are quiet by day. This ring wakes under the ${PHASES[phase]}.`);
+        }
+
+        if (said.length) {
+            this.hud.message(said.join(" "), 5);
+        }
+
+        this.#explored();
+
+        if (night && tonight === FULL_MOON) {
+            this.openMoonRoads(id);
+        }
+
+        if (this.journal.open) {
+            this.#showJournal();
+        }
+    }
+
+    /**
+     * Under a full moon, standing in a ring's middle (`here`: its site's id), the moon roads: the
+     * world map showing the rings they've stood in (core/rings.js), each with the moon it wakes
+     * under; one tapped and agreed to, the stones carry them there with their party in the ring
+     * (a "moonroad" command: host.js #moonRoadTo). Returns the rings shown.
+     */
+    openMoonRoads(here) {
+        const plan = this.world.plan;
+        const from = plan ? ringOf(plan, here) : null;
+
+        if (!from) {
+            return [];
+        }
+
+        const rings = ringsOf(plan)
+            .filter(({ site }) => this.explored.rings.has(site.id))
+            .map((ring) => ({ id: ring.site.id, name: ringName(plan, ring).replace(/^the s/, "The s"), x: ring.at[0], z: ring.at[1], metres: Math.hypot(ring.at[0] - from.at[0], ring.at[1] - from.at[1]), fare: 0, here: ring === from, icon: "stones", note: PHASES[ring.phase] }));
+
+        this.onWorldMap({
+            travel: {
+                branches: rings,
+                gold: 0,
+                rank: "",
+                off: 0,
+                moon: true,
+                title: "The moon roads",
+                choose: (to) =>
+                    this.#command({ type: "moonroad", to }, (result) => {
+                        if (!result?.ok) {
+                            this.hud.message(REFUSALS[result?.reason] ?? REFUSALS.command, 3);
+                        }
+                    }),
+            },
+        });
+
+        return rings;
+    }
+
+    // The full moon's trial (host.js #moonTrials): Lunara's guardian woken in a ring, or fallen, said
+    // to the player if they're near it (TRIAL.far), with the wake's sound
+    #trialEvent({ change, ring: id, title }) {
+        const me = this.battle.actor(this.me);
+        const ring = this.world.plan ? ringOf(this.world.plan, id) : null;
+
+        if (!ring || !me || me.map !== "town" || Math.hypot(me.x - ring.at[0], me.y - ring.at[1]) > TRIAL.far) {
+            return;
+        }
+
+        if (change === "woken") {
+            this.hud.message(`In ${ringName(this.world.plan, ring)}, ${title}, Lunara's guardian, stands silver in the full moon's light. It keeps a relic of moonsilver.`, 5);
+            this.sound?.play("wake");
+        } else if (change === "fallen") {
+            this.hud.message("Lunara's guardian falls, and its moonsilver is there to take on the flat stone.", 4);
+        }
+    }
+
+    // The rings of standing stones near the player out in the world, their middles aglow by night
+    // while the moon wakes them (not the new moon's: core/rings.js), the one tonight's moon is
+    // bound to (or every one, under a full moon) the brighter (world/moongates3d.js)
+    #moonlit() {
+        const me = this.battle.actor(this.me);
+        const plan = this.world.plan;
+        const night = daylight(timeOfDay(elapsedOf(this.host.war))) < 0.2;
+        const tonight = phaseOfNight(elapsedOf(this.host.war));
+        const near = plan && me && me.map === "town" && night && tonight !== NEW_MOON ? ringsOf(plan).filter(({ at }) => Math.hypot(at[0] - me.x, at[1] - me.y) <= MoonGates.SEEN) : [];
+
+        if (near.length || this.moonGates.shown.size) {
+            this.moonGates.set(
+                near.map((ring) => {
+                    const [x, z] = this.world.maps.town?.sites?.placedAt(ring.site) ?? ring.at;
+
+                    return { id: ring.site.id, x, y: this.#groundOn("town", x, z), z, bright: tonight === FULL_MOON || ring.phase === tonight };
+                }),
+            );
+        }
+
+        this.moonGates.update(this.clock);
+    }
+
     #partyEvent(event) {
         if (event.id !== this.me) {
             return;
@@ -8744,6 +9219,7 @@ export class Game {
             most: this.host.mostFollowers(this.me),
             heard: this.#heardTell(at),
             trails: this.#trailNotes(at),
+            moonRoads: this.#moonNotes(at),
             // (The treasures they're hunting: their own to give up, their party's shown)
             treasures: this.host.treasuresOf(this.me).map(({ id, grade, owner, name, centre }) => ({ id, title: itemLabel({ id: "treasureMap", quality: grade }), from: owner === this.me ? "Your map" : `${name}'s map`, where: at ? bearing(at, centre) : "", grade, own: owner === this.me })),
             writings: (this.memory.writings ?? []).filter((id) => WRITINGS[id]).map((id) => ({ id, title: WRITINGS[id].title, found: WRITINGS[id].found })),
@@ -8777,7 +9253,7 @@ export class Game {
             const words = one.hell ? cultWord(cultNear(plan, town.at), town.name) : rumourWord(plan, place, town, one.shrine ? { from: "the shrine" } : {});
             const found = this.#foundOf(one);
             const circle = !one.hell || one.hell === "near" ? circleOf(place.id, place.at) : null;
-            const from = one.hell ? `Said in ${town.name}` : one.shrine ? `Shown at the shrine of ${PANTHEON[one.shrine]?.name ?? "a god"}` : one.note ? "A fallen adventurer's note" : `The crier in ${town.name}`;
+            const from = one.hell ? `Said in ${town.name}` : one.shrine ? `Shown at the shrine of ${PANTHEON[one.shrine]?.name ?? "a god"}` : one.note ? "A fallen adventurer's note" : one.hunter ? "A hunter you healed" : `The crier in ${town.name}`;
 
             return [{ words, from, where: circle && at && !found ? `About ${bearing(at, circle.at)}` : "", found }];
         });
@@ -8820,6 +9296,29 @@ export class Game {
         });
 
         return [...notes.filter(({ tracked }) => !tracked), ...notes.filter(({ tracked }) => tracked)];
+    }
+
+    // The rings of standing stones the player's stood in (core/rings.js; Explored rings), for the
+    // journal: { tonight (tonight's moon, or the coming night's), rings: [{ name, phase (the moon it
+    // wakes under), where (which way and how far it is from them), tonight (it wakes tonight) }] },
+    // the nearest first; or null, if they've stood in none
+    #moonNotes(at) {
+        const plan = this.world.plan;
+
+        if (!plan || !this.explored.rings.size) {
+            return null;
+        }
+
+        const tonight = phaseOfNight(elapsedOf(this.host.war));
+        const trial = tonight === FULL_MOON ? trialOf(plan, nightOf(elapsedOf(this.host.war))) : null;
+        const far = (ring) => (at ? Math.hypot(ring.at[0] - at[0], ring.at[1] - at[1]) : 0);
+        const rings = ringsOf(plan)
+            .filter(({ site }) => this.explored.rings.has(site.id))
+            .sort((a, b) => far(a) - far(b))
+            .map((ring) => ({ name: ringName(plan, ring).replace(/^the s/, "The s"), phase: PHASES[ring.phase], where: at ? bearing(at, ring.at) : "", tonight: tonight === FULL_MOON || ring.phase === tonight }));
+
+        // (Under a full moon, where Lunara's guardian keeps its moonsilver tonight: core/rings.js TRIAL)
+        return { tonight: PHASES[tonight], rings, ...(trial?.ring ? { trial: `Tonight ${trial.guardian.title}, Lunara's guardian, keeps ${ringName(plan, trial.ring)}${at ? `, ${bearing(at, trial.ring.at)}` : ""}, and a relic of moonsilver with it.` } : {}) };
     }
 
     // Whether the character's yet to be told something told only once (`what`: "spoils", the first
@@ -10613,6 +11112,20 @@ export class Game {
                 }
 
                 break;
+            case "stranger":
+                this.#strangerSaid(event);
+                break;
+            case "obstacle":
+                this.#obstacleSaid(event);
+                break;
+            case "obstacles":
+                // (Something across the way come down or cleared: the ground under it drawn again,
+                // as the world's squares were made again: core/overworld.js setObstacles)
+                for (const box of event.boxes) {
+                    this.chunks?.redraw(box);
+                }
+
+                break;
             case "muster":
                 this.#muster(event);
                 break;
@@ -10990,6 +11503,15 @@ export class Game {
                 }
 
                 break;
+            case "ring":
+                if (event.id === this.me) {
+                    this.#ringEvent(event);
+                }
+
+                break;
+            case "trial":
+                this.#trialEvent(event);
+                break;
             case "cured":
                 // (Rested in a shrine's sanctuary: core/shrines.js)
                 if (event.id === this.me) {
@@ -11029,7 +11551,10 @@ export class Game {
                 if (event.id === this.me) {
                     const branch = event.why === "portal" ? this.world.plan?.places.find(({ id }) => id === event.to)?.name : null;
 
-                    this.hud.message({ teleport: "The world lurches, and you're somewhere else entirely.", recall: "You stand at the temple's door.", walk: "One step, and you're there.", summoned: "You're at their side.", safety: `Safe: the market square of ${this.world.start?.name ?? "home"}.`, portal: `Through the portal: the guild's branch in ${branch ?? "another town"}${event.fare ? `, for ${event.fare} gold` : ""}.` }[event.why] ?? "", 3);
+                    // (A moon road walked: core/rings.js)
+                    const ring = event.why === "moon" && this.world.plan ? ringOf(this.world.plan, event.ring) : null;
+
+                    this.hud.message({ moon: ring ? `The stones hum, and the moonlight carries you: you stand in ${ringName(this.world.plan, ring)}.` : "", teleport: "The world lurches, and you're somewhere else entirely.", recall: "You stand at the temple's door.", walk: "One step, and you're there.", summoned: "You're at their side.", safety: `Safe: the market square of ${this.world.start?.name ?? "home"}.`, portal: `Through the portal: the guild's branch in ${branch ?? "another town"}${event.fare ? `, for ${event.fare} gold` : ""}.` }[event.why] ?? "", 3);
                 }
 
                 break;
@@ -11695,6 +12220,13 @@ export class Game {
                 pointer.swipe = who.wheel === "self";
             }
 
+            // Held on what's across the way: cleared, for as long as it's held (#holdOn)
+            const obstacle = !who && this.pointers.size === 1 ? this.#obstacleAt(event.clientX, event.clientY) : null;
+
+            if (obstacle) {
+                pointer.hold = setTimeout(() => this.#holdOn(pointer, obstacle), HOLD_MS);
+            }
+
             if (this.pointers.size === 2) {
                 const [a, b] = [...this.pointers.values()];
 
@@ -11786,6 +12318,13 @@ export class Game {
             this.pointers.delete(event.pointerId);
             clearTimeout(pointer.hold);
             this.#letGo(pointer);
+
+            // Let go of what's across the way: no more cleared
+            if (pointer.clearing) {
+                this.#leaveOff();
+
+                return;
+            }
 
             // Let go with the wheel open: whatever was chosen, it closes (in the middle, nothing)
             if (pointer.wheel) {
@@ -11971,6 +12510,17 @@ export class Game {
             return;
         }
 
+        // What's across the way: walked up to, and told it's to be held on to clear it
+        const obstacle = who ? null : this.#obstacleAt(clientX, clientY);
+
+        if (obstacle) {
+            this.lastTap = { time, x: clientX, y: clientY, from: "view" };
+            this.#walkTo(obstacle, { run });
+            this.hud.message(`Hold on ${OBSTACLE_WORDS[this.host.obstacles.get(obstacle)?.kind ?? "tree"].it} to clear ${OBSTACLE_WORDS[this.host.obstacles.get(obstacle)?.kind ?? "tree"].pronoun}, or go round.`, 2.5);
+
+            return;
+        }
+
         const enemy = who;
         // (A lectern before any way out behind it: it stands in the room, in front of its stairs)
         const lectern = enemy ? null : this.#lecternAt(clientX, clientY);
@@ -12084,7 +12634,7 @@ export class Game {
             return me && !this.battle.hostile(who, me) && !this.host.invader(who.id) ? "talk" : "attack";
         }
 
-        if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point)) || this.#lecternAt(clientX, clientY) || this.#signAt(clientX, clientY) || this.#shrineAt(clientX, clientY)) {
+        if (this.drops?.at(clientX, clientY, (point) => this.view.toScreen(point)) || this.#lecternAt(clientX, clientY) || this.#signAt(clientX, clientY) || this.#shrineAt(clientX, clientY) || this.#obstacleAt(clientX, clientY)) {
             return "hand";
         }
 
