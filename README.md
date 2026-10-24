@@ -311,7 +311,9 @@ you, dealt from a deck: a fallen adventurer's remains to search (a note in their
 then, of somewhere near), an old campsite that's safe to camp at, fresh tracks leading to a pack
 nearby, an adventurers' cache, or a stranger on the way: a pedlar with odds and ends to sell, a
 wounded hunter who'll tell you of a place nearby if you heal them, or hungry bandits who want food
-or gold to let you by, and fight if you refuse.
+or gold to let you by, and fight if you refuse; or a fallen tree or a rockslide across your way, to
+go round or to hold on and clear (quicker with an axe or a hammer, quicker still together), a
+cart's load spilled under it, or brigands waiting to jump you the moment it's cleared.
 
 **Adventurers' caches.** Now and then as you cross the wilds, a chest some adventurer
 left behind turns up ahead of you, well away from the roads, kept by three to five brigands of that

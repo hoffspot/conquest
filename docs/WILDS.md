@@ -489,7 +489,7 @@ dice did, so that crossing them is more than one guarded chest after another.
   cache's is (*Adventurers' caches*, below): on foot, out of the settlements, afresh for everyone
   together once one's dealt to any of them.
 - **The deck** (`DIRECTOR.cards`, `shuffled`): an adventurer's cache, a fallen adventurer's
-  remains, an old campsite, fresh tracks, a stranger. Each comes once a deck, in an order of its own, the deck shuffled
+  remains, an old campsite, fresh tracks, a stranger, something across the way. Each comes once a deck, in an order of its own, the deck shuffled
   again once it's all been dealt, never with the card just dealt first again (Left 4 Dead's
   director dealt its bosses so: no two of the same running). Each player has their own, kept in
   the world's snapshot (`travel`). A card with nowhere to go ahead waits for the next look.
@@ -553,8 +553,33 @@ dice did, so that crossing them is more than one guarded chest after another.
     `banditToll`). Paid, they let everyone by. Refused, or walked away from (a hailed player 30 m
     from their chief, unpaid), they draw their blades and fight like any of the wild's, after that
     player.
+- **Something across the way** (`OBSTACLES`, the host's `#putObstacle`): a fallen tree or a
+  rockslide, long since down (one or the other at random), 45 to 70 m ahead of the player, across
+  the way they're going, road or not. Out of the settlements and away from the places worth
+  finding and every other cache, find and obstacle (`cacheClear`), on land, its squares all free.
+  - *Over its squares*: a tree seven squares long and one wide, rocks four across and three deep,
+    along the world's axis nearest across the way (`obstacleBox`: no slipping through it corner to
+    corner). The world blocks them as its chunks are made (overworld.js `setObstacles`), the way
+    round's found again (`dropTiles`), and the ground under it's drawn again. Drawn by
+    world/obstacles3d.js: the trunk on the ground, its roots torn up in a plate of soil at one end,
+    broken branches and a little dead leaf at the other; or boulders heaped over it, stones round.
+  - *Said* within 40 m ("A fallen tree lies across the way ahead. Go round it, or hold on it to
+    clear it."). Tapped, the player walks up to it and is told to hold on it.
+  - *Cleared* (the `clear` command, `#clearing`): held on, the player walks up to it and sets to it
+    within 2.5 m of it, stopped, swinging at it every 1.1 s (their weapon's blow, a chop or a crush
+    heard). It's six seconds' work alone for a tree, eight for rocks, at a second's work a second;
+    twice as quick with an axe or a hammer, 1.75 with a cleaver, 1.5 with a greatsword (`TOOLS`),
+    and everyone at it together adds theirs. It costs 5 stamina a second; out of breath, they leave
+    off, told so. They leave off too once they let go, walk off or fight.
+  - *Cleared, it's gone for everyone*, and it's a game of chance (`clearedTurnsUp`): 30% of the time
+    brigands were waiting (`OBSTACLES.brigands`: the land's cache band, three or four, out 7 to
+    10 m round it) and jump whoever cleared it the moment they have ("It was a trap!"); 40% of the
+    time a cart's load spilled under it long ago, a share for each who cleared it where it lay
+    (`rollSpilled`: 8 to 20 gold, 35% more for each tier past the first, and half the time a hot
+    meal, an ale, a healing draught, a bandage or a glowcap draught); otherwise only the way clear.
+  - Let go once every player's 200 m away and no one's clearing it.
 - **Let go** once every player's 220 m away (`FINDS.far`); another comes later. Nothing's kept in
-  a snapshot till one's been dealt (`finds`, `fresh`, `strangers`).
+  a snapshot till one's been dealt (`finds`, `fresh`, `strangers`, `obstacles`).
 - **The pacing** (`PACING`, the host's `#pace`; Left 4 Dead's director: "Algorithm adjusts pacing,
   not difficulty"), kept for each player with their deck:
   - *A quiet spell after a hard fight*: a fight a player fell below half their health in (or
