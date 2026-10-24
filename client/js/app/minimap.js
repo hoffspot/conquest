@@ -478,10 +478,12 @@ export class Minimap {
      * and `elites`, the wild's elites near enough to be marked ([{ x, z, targeted }]: ELITE_MARK);
      * and the circles to search for the treasures the player's hunting (`searches`: [{ id, x, z,
      * radius, grade, own }]: app/game.js treasureCircles); the party's pings (`pings`: [{ x, z,
-     * age (seconds) }]: app/game.js pingView); and the player's markers (`markers`: [{ id, x, z,
-     * icon }]: app/game.js markerView).
+     * age (seconds) }]: app/game.js pingView); the player's markers (`markers`: [{ id, x, z,
+     * icon }]: app/game.js markerView); and the fresh tracks they've come upon (`trails`: [{ id,
+     * points: [[x, z]...] }]: app/game.js freshTrails), dotted from where they start to where
+     * they lead.
      */
-    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], pings = [], markers = [] }, now = performance.now()) {
+    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], pings = [], markers = [], trails = [] }, now = performance.now()) {
         const { canvas, context, map } = this;
 
         this.drawn = now;
@@ -579,6 +581,29 @@ export class Minimap {
             if (x > -r && y > -r && x < width + r && y < height + r) {
                 drawSearch(context, x, y, r, search.grade, { cross: Math.min(10, Math.max(6, r * 0.35)), own: search.own });
                 this.searches.push(search.id);
+            }
+        }
+
+        // The fresh tracks the player's come upon: a dot every few metres along them, the way they
+        // lead (those drawn kept for tests: `trails`, by id)
+        this.trails = [];
+
+        for (const trail of trails) {
+            const dots = trail.points.map(([x, z]) => at(x, z)).filter(([x, y]) => x > -4 && y > -4 && x < width + 4 && y < height + 4);
+
+            if (dots.length) {
+                context.fillStyle = "#6b3f1d";
+                context.strokeStyle = "rgba(255, 236, 200, 0.85)";
+                context.lineWidth = 1;
+
+                for (const [x, y] of dots) {
+                    context.beginPath();
+                    context.arc(x, y, 2.2, 0, Math.PI * 2);
+                    context.fill();
+                    context.stroke();
+                }
+
+                this.trails.push(trail.id);
             }
         }
 

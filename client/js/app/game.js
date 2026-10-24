@@ -4731,6 +4731,8 @@ export class Game {
             // (The party's pings: pingView; and the player's markers: markerView)
             pings: this.mapId === "town" ? this.pingView() : [],
             markers: this.mapId === "town" ? this.markers : [],
+            // (The fresh tracks they've come upon, the way they lead: #freshTrails)
+            trails: this.mapId === "town" ? this.#freshTrails() : [],
         });
     }
 
@@ -5306,6 +5308,12 @@ export class Game {
         this.trailPrints.mesh.visible = this.trailPrints.mesh.count > 0;
     }
 
+    // The fresh tracks the player's come upon (#spyFresh), for the minimap to show the way they lead
+    // (prints can be hard to see in long grass): [{ id, points }]
+    #freshTrails() {
+        return [...(this.host.fresh?.values() ?? [])].filter(({ id }) => this.freshSeen.has(id)).map(({ id, points }) => ({ id, points }));
+    }
+
     // Fresh tracks the wilds director's laid (core/director.js FRESH) come upon by the player for
     // the first time (within FRESH.seen of their prints): said, what made them and which way they
     // lead
@@ -5317,7 +5325,7 @@ export class Game {
                 const name = CREATURES[tracks.creature]?.name?.toLowerCase() ?? "something";
                 const way = compass(tracks.points[0], tracks.points.at(-1));
 
-                this.hud.message(`Fresh tracks, not long made: ${/^[aeiou]/.test(name) ? "an" : "a"} ${name}'s, and not alone. They lead off to the ${way}.`, 4.5);
+                this.hud.message(`Fresh tracks, not long made: ${/^[aeiou]/.test(name) ? "an" : "a"} ${name}'s, and not alone. They lead off to the ${way}: they're on your minimap.`, 4.5);
             }
         }
     }

@@ -9522,7 +9522,7 @@ test("the wilds director deals a fallen adventurer's remains ahead of a player c
     expect(dealt.told).toContain("Well rested.");
 });
 
-test("the wilds director lays fresh tracks ahead of a player crossing the wilds, leading to a pack out near them: their prints drawn, said once come upon; gone once the pack is", async ({ page }) => {
+test("the wilds director lays fresh tracks ahead of a player crossing the wilds, leading to a pack out near them: their prints drawn, said once come upon and dotted on the minimap; gone once the pack is", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const fresh = await page.evaluate(async () => {
@@ -9572,6 +9572,11 @@ test("the wilds director lays fresh tracks ahead of a player crossing the wilds,
         await settle(4, true);
 
         const drawn = game.trailPrints.mesh.count;
+
+        game.minimap.drawn = -Infinity;
+        game.advance(0.1);
+
+        const minimap = [...game.minimap.trails];
         const pack = [...host.wild].filter(([, one]) => one.pack === tracks.pack).map(([id]) => game.battle.actor(id));
 
         // The pack gone: the tracks too
@@ -9581,7 +9586,7 @@ test("the wilds director lays fresh tracks ahead of a player crossing the wilds,
 
         await settle(4, true);
 
-        return { creature: tracks.creature, points: tracks.points.length, before, drawn, after: game.trailPrints.mesh.count, seen: game.freshSeen.has(tracks.id), gone: !host.fresh.has(tracks.id), told };
+        return { id: tracks.id, creature: tracks.creature, points: tracks.points.length, before, drawn, minimap, after: game.trailPrints.mesh.count, seen: game.freshSeen.has(tracks.id), gone: !host.fresh.has(tracks.id), told };
     });
 
     expect(fresh).not.toBeNull();
@@ -9589,7 +9594,8 @@ test("the wilds director lays fresh tracks ahead of a player crossing the wilds,
     expect(fresh.drawn).toBeGreaterThan(fresh.before);
     expect(fresh.after).toBeLessThan(fresh.drawn);
     expect(fresh).toMatchObject({ seen: true, gone: true });
-    expect(fresh.told.some((text) => /^Fresh tracks, not long made: an? .+'s, and not alone\. They lead off to the [a-z-]+\.$/.test(text)), JSON.stringify(fresh.told)).toBe(true);
+    expect(fresh.minimap).toEqual([fresh.id]);
+    expect(fresh.told.some((text) => /^Fresh tracks, not long made: an? .+'s, and not alone\. They lead off to the [a-z-]+: they're on your minimap\.$/.test(text)), JSON.stringify(fresh.told)).toBe(true);
 });
 
 test("a treasure map read out in the wilds: its circle on the world map and the minimap and in the journal; its keepers woken as the player comes near; where it's buried glinting; put down, it's dug up, the player's share in it, and the hunt's done", async ({ page }) => {

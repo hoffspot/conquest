@@ -519,10 +519,12 @@ dice did, so that crossing them is more than one guarded chest after another.
   8 m ahead of the player to 10 m short of a pack of the wild's roaming 30 to 85 m off (those ahead
   of them first), or, none, one of the land's put out 60 to 85 m ahead (within the 90 m the wild's
   roaming packs are kept about a player). Every 6 m, wandering up to 3 m off the straight way
-  (`freshTrail`), drawn as the trails out of the wild's homes are (*Tracking*), but deeper. Said
-  once a player's within 12 m of them ("Fresh tracks, not long made: a wolf's, and not alone. They
-  lead off to the north-east."). Follow them and find the pack first, or see what made them and
-  steer clear. Let go after six minutes, once their pack's all gone, or once every player's 140 m
+  (`freshTrail`), drawn as the trails out of the wild's homes are (*Tracking*), but deeper; never
+  to what leaves no prints, what flies, floats or swarms (`TRACKLESS`, held to world/tracks3d.js by
+  a test). Said once a player's within 12 m of them ("Fresh tracks, not long made: a wolf's, and
+  not alone. They lead off to the north-east: they're on your minimap."), and from then on dotted
+  on their minimap the way they lead, prints being hard to make out in long grass. Follow them and
+  find the pack first, or see what made them and steer clear. Let go after six minutes, once their pack's all gone, or once every player's 140 m
   from where they start.
 - **Let go** once every player's 220 m away (`FINDS.far`); another comes later. Nothing's kept in
   a snapshot till one's been dealt.
