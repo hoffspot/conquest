@@ -85,6 +85,25 @@ describe("a shop's daily stock (stock.js)", () => {
         }
     });
 
+    it("has an alchemist keep a stamina draught and a Stamina Boost on its shelves every day, the rest of its draughts as the day's picks fall", () => {
+        const days = Array.from({ length: 60 }, (_, day) => dailyStock("alchemist", { seed: 4, key: "town-1/alchemist", day }).wares);
+
+        for (const [day, shelves] of days.entries()) {
+            for (const id of ["staminaDraught", "staminaBoost"]) {
+                assert.ok(shelves.some((ware) => ware.id === id), `day ${day}: ${id}`);
+            }
+
+            assert.equal(shelves.length, SHOPS.alchemist.daily.picks);
+        }
+
+        // (The greater and superior stamina draughts some days, not every day, as the greater healing ones)
+        for (const id of ["greaterStaminaDraught", "superiorStaminaDraught", "greaterPotion"]) {
+            const kept = days.filter((shelves) => shelves.some((ware) => ware.id === id)).length;
+
+            assert.ok(kept > 0 && kept < days.length, `${id}: ${kept} days of ${days.length}`);
+        }
+    });
+
     it("has a pedlar's odds and ends: a healing draught and a few more draughts and cures, and some days a common treasure map or a charm, a little dearer than in town", () => {
         const days = Array.from({ length: 200 }, (_, day) => dailyStock("pedlar", { seed: 3, key: "stranger-1", day }));
         const specials = days.map(({ special }) => special).filter(Boolean);

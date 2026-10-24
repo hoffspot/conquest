@@ -628,7 +628,8 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     *A shop*), each with a new assortment each day, better made than a blacksmith's, and a daily
     special (below): a swordsmith's arms (always a sword among them), an armorer's shields
     and armour, an occult scriptorium's tomes, spell scrolls, charms and the arcane (wands,
-    grimoires, spellwards, wizards' hats), an alchemist's draughts, elixirs, oils and cures;
+    grimoires, spellwards, wizards' hats), an alchemist's draughts, elixirs, oils and cures
+    (always a stamina draught and a Stamina Boost among them);
   - the masters (one of each for each people, each in a different village, town or city of
     theirs, chosen with the world: worldplan/settle.js), each with a new assortment each day of the rare, very rare and legendary, at twice the
     price, and a legendary special: the Master Swordsmith's arms, the Master Armorer's armour,
@@ -687,11 +688,12 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   the smithy or a blessing at the temple is a boon for ten minutes (sharper blows up close; a
   little more of everything), shown on the player's plate while it lasts (a sword on a whetstone,
   sparks flying; a six-pointed star under a halo), and said when it wears off.
-- **The Stamina Boost potion** (20 gold, at the adventurers' guild): drunk, it doubles the
-  player's stamina for five minutes, the most of it and what's left alike (a boon as the others
-  are: `staminaTimes`, host.js `#outfit`); when it wears off, both are halved again. Only one at
-  a time: drinking another while one's working is refused ("One's still working: only one at a
-  time."), and the potion's kept. On the plate, an orange draught with a bolt of lightning.
+- **The Stamina Boost potion** (20 gold, at the adventurers' guild, and every day at an
+  alchemist's): drunk, it doubles the player's stamina for five minutes, the most of it and what's
+  left alike (a boon as the others are: `staminaTimes`, host.js `#outfit`); when it wears off, both
+  are halved again. Only one at a time: drinking another while one's working is refused ("One's
+  still working: only one at a time."), and the potion's kept. On the plate, an orange draught with
+  a bolt of lightning.
 - **The Scroll of Safety** (25 gold, at the adventurers' guild; shown with the tomes, under
   "Tomes and scrolls"): read from the pack (or its wheel), it carries the player to the market
   square of the town they started in, three seconds after they begin (`SAFETY`, host.js
@@ -706,20 +708,23 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
   (`player.safety`, kept in snapshots; `NET_VERSION` 45).
 - **The specialists' goods** (`core/goods.js`, `NET_VERSION` 87): what the alchemists, the
   occult scriptoria and the Mystic Emporia keep (a few at the adventurers' guild).
-  - **The alchemist's brews** (`BREWS`, 22, each its own colour in the bottle; under "Food, drink
-    and draughts"): stronger healing (a greater draught heals 60, 45 gold; a superior one 150,
-    120 gold); a Draught of Endurance (breath back 60% faster, ten minutes); the elixirs, each a
-    boon for ten minutes, one of each at a time (Strength: blows 15% stronger; the Hawk: shots
-    15%; Sorcery: spells 15%; Ironskin: 5% more armour; Mending: healing 20%); the warding
-    elixirs, each a ward's spell on the drinker for half an hour (Fire, Frost, Storm, Stone,
-    Spell, Venom and Plague Warding: Resist Fire, Water, Air, Earth, Magic, Poison and Disease,
+  - **The alchemist's brews** (`BREWS`, 25, each its own colour in the bottle; under "Food, drink
+    and draughts"): stronger healing (a greater draught heals 60, 45 gold; a superior one 150, 120
+    gold); stamina draughts, breath back at once as a healing draught heals (a stamina draught
+    gives back 40, 10 gold, on an alchemist's shelves every day with a Stamina Boost:
+    `SHOPS.alchemist` `always`; a greater one 100, 30 gold; a superior one all of it, 75 gold;
+    `NET_VERSION` 175); a Draught of Endurance (breath back 60% faster, ten minutes); the elixirs,
+    each a boon for ten minutes, one of each at a time (Strength: blows 15% stronger; the Hawk:
+    shots 15%; Sorcery: spells 15%; Ironskin: 5% more armour; Mending: healing 20%); the warding
+    elixirs, each a ward's spell on the drinker for half an hour (Fire, Frost, Storm, Stone, Spell,
+    Venom and Plague Warding: Resist Fire, Water, Air, Earth, Magic, Poison and Disease,
     docs/MAGIC.md); a Phial of Shadows (Invisibility, a minute); a glowcap draught (Light, a
-    quarter of an hour); and the oils, applied to a weapon ("Apply"), one at a time, five
-    minutes: a blow or a shot in four leaves what the oil's for on what it hits (fire oil
-    burning, frost oil a chill that slows, venom oil poison; battle.js `oil`); and the rarest, an
-    alchemist's daily special: an Elixir of Heroes (blows, shots, spells and healing 20%
-    stronger, a quarter of an hour; very rare, 380 gold) and a phoenix draught (every hurt
-    healed and the breath back at once; legendary, 650 gold).
+    quarter of an hour); and the oils, applied to a weapon ("Apply"), one at a time, five minutes:
+    a blow or a shot in four leaves what the oil's for on what it hits (fire oil burning, frost oil
+    a chill that slows, venom oil poison; battle.js `oil`); and the rarest, an alchemist's daily
+    special: an Elixir of Heroes (blows, shots, spells and healing 20% stronger, a quarter of an
+    hour; very rare, 380 gold) and a phoenix draught (every hurt healed and the breath back at
+    once; legendary, 650 gold).
   - **Spell scrolls** (`SCROLLS`, under "Tomes and scrolls"): each casts its spell once, though
     it's never been learnt (docs/MAGIC.md *Spell scrolls*).
   - **Charms** (`CHARMS`, 13, under "Charms"): carried, not worn; each does its good while it's
