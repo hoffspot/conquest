@@ -643,9 +643,9 @@ Alexandrian's "visible" locations, spotted from a distance).
   the player's eyes (1.7 m up) to 4 m over the place's ground. The last 24 m at either end aren't
   sampled: the rise's own top, and the place's own ground.
 - **What's found** (`sightedFrom`): the places worth finding they hadn't found (`core/places.js`
-  `placesOf`, and the dungeons' ways in), the nearest first: four from a typical rise, thirteen at
-  most in the two worlds scanned. The host looks each time it looks round (every 500 ms); a look
-  takes about a sixth of a millisecond. It's pure arithmetic over the lie of the land
+  `placesOf`, the dungeons' ways in, and the dens, *Dens*), the nearest first: four from a typical
+  rise, fifteen at most in the two worlds scanned. The host looks each time it looks round (every
+  500 ms); a look takes about a quarter of a millisecond. It's pure arithmetic over the lie of the land
   (`terrain/height.js` `landHeight`), the same on every copy of the world.
 - **Kept** as spotted (`Explored.spot`, `spotted`, kept with the character; nothing's written till
   something's seen, so older saves and snapshots carry on as they were). It's found wherever being

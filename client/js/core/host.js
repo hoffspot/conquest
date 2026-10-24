@@ -2239,13 +2239,14 @@ export class Host {
         }
     }
 
-    // The places worth finding in the world (places.js placesOf: its sites and wild camps; and its
-    // dungeons' ways in): [{ id, at }], worked out once (#findables)
+    // The places worth finding in the world (places.js placesOf: its sites and wild camps; its
+    // dungeons' ways in; and the roaming beasts' dens, dens.js): [{ id, at }], worked out once
+    // (#findables)
     #findables() {
         if (!this.findables) {
             const plan = this.world.plan;
 
-            this.findables = (plan ? [...placesOf(plan), ...plan.sites.filter(({ kind }) => kind === "dungeon")] : []).map(({ id, at }) => ({ id, at }));
+            this.findables = (plan ? [...placesOf(plan), ...plan.sites.filter(({ kind }) => kind === "dungeon"), ...densOf(plan)] : []).map(({ id, at }) => ({ id, at }));
         }
 
         return this.findables;

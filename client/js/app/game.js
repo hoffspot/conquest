@@ -41,7 +41,7 @@ import { CACHE_BANDS } from "../core/caches.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { homeWords, signOf, signsNear, TRAILS, trailsNear } from "../core/tracks.js";
-import { densOf } from "../core/dens.js";
+import { denOf, densOf } from "../core/dens.js";
 import { MASTERED, RESEARCH } from "../core/bestiary.js";
 import { bestiaryOf } from "./bestiary.js";
 import { townOf } from "../core/insides.js";
@@ -5618,11 +5618,11 @@ export class Game {
         this.sound?.play("quill");
     }
 
-    // A place worth finding by its id (a plan's place, or a dungeon's site), or null
+    // A place worth finding by its id (a plan's place, a dungeon's site, or a den), or null
     #placeOf(id) {
         const plan = this.world.plan;
 
-        return placesOf(plan).find((place) => place.id === id) ?? plan.sites.find((site) => site.id === id) ?? null;
+        return placesOf(plan).find((place) => place.id === id) ?? plan.sites.find((site) => site.id === id) ?? denOf(plan, id);
     }
 
     // What a place worth finding (its id) is called: its name, or what it is ("a ruined castle");

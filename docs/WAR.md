@@ -2658,8 +2658,8 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   their maps and the places round it are found (core/explored.js `sighted`), as are the buildings
   any of them goes into. A guild's portal still opens only to those who've been in its branch.
   It's kept for good, after the party's gone, but nothing's shared from before they were in it or
-  after they've left. The places worth finding (core/places.js `placesOf`, and the dungeons' ways
-  in) that another found for them first are kept with who found them (`Explored.found`, kept with
+  after they've left. The places worth finding (core/places.js `placesOf`, the dungeons' ways
+  in, and the dens: docs/WILDS.md *Dens*) that another found for them first are kept with who found them (`Explored.found`, kept with
   the character), and they're told: "Bryn found an abbey: it's on your map." (or how many). The
   world map says so under each, close in: "found by Bryn". The places one of them sees from high
   ground (docs/WILDS.md *Seen from high ground*) are found by the rest too, kept and told so.
