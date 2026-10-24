@@ -1,10 +1,11 @@
 // The wilds director's peaceful finds (core/director.js FINDS), as they're seen once a player's
 // near (app/game.js #findsNear): each of a few plain shapes, set on the ground where it lies:
 // - a fallen adventurer's remains: a skull, ribs and the long bones stretched out where they lay,
-//   a cloak gone to rags under them, their sword rusting by their hand and their pack by their
-//   head;
+//   a cloak gone to rags under them, their pack by their head, and their sword thrust upright in
+//   the earth by their hand, its hilt over the tall grass;
 // - an old campsite: a ring of stones round a bed of grey ash and logs burnt black, a log rolled up
-//   to sit on, and a lean-to of branches over a pole between two forked sticks.
+//   to sit on, a lean-to of branches over a pole between two forked sticks, and a pole by it with
+//   a rag tied to its top, to find it again over the grass.
 // Drawn for as many as are near at once (FIND_LOOK.seen); their shapes and stuff made once, shared.
 
 import * as THREE from "three";
@@ -141,9 +142,13 @@ export class FindProps {
                 put(g.bone, m.bone, [across, ahead], { up: 0.03, scale: [long, 1, 1], spin: Math.PI / 2 + (next() - 0.5) * 0.4, shadow: false });
             }
 
-            // (Their sword by their hand, rusting; their pack by their head, its flap open)
-            put(g.box, m.rust, [0.55, 0.05], { up: 0.02, scale: [0.06, 0.02, 0.95], spin: 0.15 });
-            put(g.box, m.rust, [0.55, -0.4], { up: 0.03, scale: [0.24, 0.04, 0.05], spin: 0.15 });
+            // (Their sword thrust upright in the earth by their hand, rusting, leaning a little; their
+            // pack by their head, its flap open)
+            const lean = (next() - 0.5) * 0.25;
+
+            put(g.box, m.rust, [0.55, 0.1], { up: 0.42, scale: [0.07, 0.95, 0.02], spin: 0.4, roll: lean });
+            put(g.box, m.rust, [0.55 - Math.sin(lean) * 0.5, 0.1], { up: 0.92, scale: [0.3, 0.05, 0.06], spin: 0.4, roll: lean });
+            put(g.box, m.leather, [0.55 - Math.sin(lean) * 0.62, 0.1], { up: 1.04, scale: [0.045, 0.2, 0.045], spin: 0.4, roll: lean });
             put(g.box, m.leather, [-0.45, -1.05], { up: 0.15, scale: [0.42, 0.3, 0.26], spin: 0.5 + next() * 0.4, tilt: 0.2 });
             put(g.box, m.leather, [-0.3, -0.85], { up: 0.03, scale: [0.36, 0.02, 0.3], spin: 0.6 });
         } else if (kind === "campsite") {
@@ -167,15 +172,19 @@ export class FindProps {
             put(g.log, m.wood, [0, 1.7], { up: 0.12, scale: [1.6, 1.15, 1.15], spin: (next() - 0.5) * 0.3 });
 
             // (The lean-to: a ridge pole on two forked sticks, branches leant on it to the ground)
-            for (const across of [-0.9, 0.9]) {
-                put(g.pole, m.wood, [across, -1.8], { up: 0.55, scale: [1, 1.1, 1] });
+            for (const across of [-0.95, 0.95]) {
+                put(g.pole, m.wood, [across, -1.8], { up: 0.75, scale: [1, 1.5, 1] });
             }
 
-            put(g.pole, m.wood, [0, -1.8], { up: 1.08, scale: [1, 2, 1], roll: Math.PI / 2, spin: Math.PI / 2 });
+            put(g.pole, m.wood, [0, -1.8], { up: 1.48, scale: [1, 2.1, 1], roll: Math.PI / 2, spin: Math.PI / 2 });
 
-            for (let k = 0; k < 8; k++) {
-                put(g.pole, m.wood, [-0.8 + k * 0.23, -2.3], { up: 0.55, scale: [0.9, 1.3, 0.9], tilt: -0.75 + (next() - 0.5) * 0.1 });
+            for (let k = 0; k < 9; k++) {
+                put(g.pole, m.wood, [-0.92 + k * 0.23, -2.45], { up: 0.75, scale: [0.9, 1.75, 0.9], tilt: -0.72 + (next() - 0.5) * 0.1 });
             }
+
+            // (A pole by the fire, a rag tied to its top)
+            put(g.pole, m.wood, [1.4, -0.9], { up: 1.1, scale: [0.9, 2.2, 0.9], tilt: (next() - 0.5) * 0.1 });
+            put(g.box, m.rag, [1.58, -0.9], { up: 2.02, scale: [0.36, 0.26, 0.02], spin: 0.3, roll: 0.25 });
         }
 
         group.name = `find ${id}`;

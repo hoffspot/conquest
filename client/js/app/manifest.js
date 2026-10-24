@@ -352,7 +352,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/far/trees.js", 10425],
             ["js/world/far/volcano.js", 15691],
             ["js/world/fields.js", 2813],
-            ["js/world/finds3d.js", 8676],
+            ["js/world/finds3d.js", 9382],
             ["js/world/fire.js", 27783],
             ["js/world/firelight.js", 4833],
             ["js/world/flesh.js", 27066],
