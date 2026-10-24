@@ -170,7 +170,8 @@ const ARMOUR = Object.freeze(["roundShield", "kiteShield", "towerShield", "cap",
 // The arcane: what's held, worn and carried by those who cast, and charms
 const ARCANA = Object.freeze(["wand", "grimoire", "spellward", "wizardHat", ...Object.keys(CHARMS)]);
 
-// The alchemist's: every draught there is, and the cures
+// The alchemist's: every draught there is, and the cures (a stamina draught and a Stamina Boost
+// on its shelves every day: SHOPS `always`)
 const DRAUGHTS = Object.freeze(["potion", "staminaBoost", ...Object.keys(BREWS), ...Object.keys(CURES)]);
 
 // A specialist's shelves (a swordsmith's, an armorer's, an occult scriptorium's, an alchemist's),
@@ -233,7 +234,7 @@ export const SHOPS = Object.freeze({
     swordsmith: { items: ARMS, best: "veryRare", line: ["arms"], daily: { picks: 9, count: [1, 3], grades: SPECIALIST, special: SPECIALIST_SPECIAL, always: ["sword"] } },
     armorer: { items: ARMOUR, best: "veryRare", line: ["armour"], daily: { picks: 10, count: [1, 3], grades: SPECIALIST, special: SPECIALIST_SPECIAL } },
     scriptorium: { items: [...ARCANA, ...TOMES.map(tomeOf), ...Object.keys(SCROLLS)], best: "veryRare", line: ["arcana"], daily: { picks: 12, count: [1, 3], grades: { common: 0.2, ...SPECIALIST }, special: SPECIALIST_SPECIAL } },
-    alchemist: { items: DRAUGHTS, best: "veryRare", line: ["draughts"], daily: { picks: 12, count: [2, 6], grades: { common: 0.5, ...SPECIALIST }, special: SPECIALIST_SPECIAL } },
+    alchemist: { items: DRAUGHTS, best: "veryRare", line: ["draughts"], daily: { picks: 12, count: [2, 6], grades: { common: 0.5, ...SPECIALIST }, special: SPECIALIST_SPECIAL, always: ["staminaDraught", "staminaBoost"] } },
     masterSwordsmith: { items: ARMS, best: "legendary", line: ["arms"], markup: 2, daily: { picks: 7, count: [1, 1], grades: MASTER, special: MASTER_SPECIAL, always: ["sword"] } },
     masterArmorer: { items: ARMOUR, best: "legendary", line: ["armour"], markup: 2, daily: { picks: 8, count: [1, 1], grades: MASTER, special: MASTER_SPECIAL } },
     emporium: { items: [...ARCANA, "amulet", "ring", ...TOMES.map(tomeOf), ...Object.keys(SCROLLS)], best: "legendary", line: ["arcana", "jewels"], markup: 2, daily: { picks: 10, count: [1, 2], grades: MASTER, special: MASTER_SPECIAL, specials: [tomeOf("explosion")] } },

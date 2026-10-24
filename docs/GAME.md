@@ -1698,7 +1698,7 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   go (an `unlock` command): set on no one, nothing ringed, till they choose someone again;
   standing, they strike whoever's in reach, as ever; walking somewhere, they walk on. With Auto
   target lock off, the player's set on whoever they choose as before, unlocked, but an enemy's
-  icon **held** locks on it, walking up to it. What's shared (`NET_VERSION` 175) and kept (each
+  icon **held** locks on it, walking up to it. What's shared (`NET_VERSION` 176) and kept (each
   actor's `lock`: `SNAPSHOT_VERSION` 40, none in a world kept before) changed.
 - **The party** (game.js `#partyIcons`; hud.js `party`; core/host.js `partyOf`) is those with the
   player: their hired adventurers (docs/WAR.md *Followers*), then the creatures they've called
