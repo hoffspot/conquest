@@ -496,7 +496,8 @@ dice did, so that crossing them is more than one guarded chest after another.
 - **Where** (`#spotAhead`): as a cache is, 70 to 100 m ahead, on open ground clear of the roads,
   the settlements, the places worth finding and every other cache and find.
 - **A fallen adventurer's remains** (`FINDS.remains`): bones stretched out where they lay, a cloak
-  gone to rags under them, a sword rusting by their hand and a pack by their head (world/finds3d.js).
+  gone to rags under them, a pack by their head, and their sword thrust upright in the earth by
+  their hand, its hilt over the tall grass (world/finds3d.js); a coin over them till they're searched.
   Said once a player's within 60 m ("The remains of an adventurer who fell out here long ago.
   Search them: they may have left something.") and marked on their maps with a skull. Tapped,
   they're searched (a chest that's no chest: `#searchRemains`), a share for each player near
@@ -507,7 +508,8 @@ dice did, so that crossing them is more than one guarded chest after another.
   as a crier's rumour is ("A fallen adventurer's note"), its circle on the world map, said with a
   quill's scratch. Searched once; their mark greyed after.
 - **An old campsite** (`FINDS.campsite`): a ring of stones round a bed of ash and burnt logs, a
-  log to sit on and a lean-to of branches. Said within 60 m ("An old campsite… A good place to
+  log to sit on, a lean-to of branches, and a rag tied to a pole by it to find it again over the
+  grass. Said within 60 m ("An old campsite… A good place to
   make camp: safe from the wild, and you'd wake well rested.") and marked with its fire ring.
   Camped at within 8 m of its ring: a camp's only refused for the wild with something hostile
   within 16 m (not 40), the fire's lit in its ring, and they wake well rested (`WELL_RESTED`: the
