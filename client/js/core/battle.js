@@ -679,7 +679,8 @@ export class Battle {
 
         // The formations in it, by id (formation): { anchor: [x, y] (the middle of its front rank),
         // facing, to: where it's marching ([x, y], or null standing), speed (m/s), advance (whether,
-        // standing, it closes with the nearest enemy), engagedAt (when any of it last fought), one
+        // standing, it closes with the nearest enemy), charge (whether it's charging), engagedAt
+        // (when any of it last fought), one
         // of it (`member`: its id, the last to keep its place), and the enemy it's closing with
         // (`sighted`: an id, or null) and when it looks again (`lookAt`); how many of it there were
         // when it last closed its ranks (`strength`), and when it next does (`closeAt`) }
@@ -709,9 +710,11 @@ export class Battle {
      * points in turn (a guard's one point: its post, facing out the way it's added facing). One
      * carrying a shield has `shield` (#hit: { chance, share, spells }). One that's `lone` picks its
      * own fights: its own don't take up its grudges, nor do those it leaves be take up grudges
-     * against it for others of their own it strikes (#provoke: an invasion's raiders).
+     * against it for others of their own it strikes (#provoke: an invasion's raiders). One with a
+     * `sight` (squares) looks for enemies as far as that, not SIGHT (#nearestSeen: an invasion's
+     * close fighters once its lines have charged).
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, lone = false, engine = null }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, lone = false, engine = null, sight = null }) {
         const kindOf = KINDS[kind];
         const type = { ...kindOf, hp: hp ?? kindOf.hp, speed: speed ?? kindOf.speed, chase: chase ?? speed ?? kindOf.chase };
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
@@ -883,6 +886,7 @@ export class Battle {
             casts: casts ? [...casts] : null,
             heals: heals ? [...heals] : null,
             ...(lone ? { lone: true } : {}),
+            ...(sight ? { sight } : {}),
         };
 
         this.actors.push(actor);
@@ -897,7 +901,9 @@ export class Battle {
      * south, towards east), to: where it marches ([x, y]; null, it stands), speed (m/s), advance
      * (whether, standing, it closes with the nearest enemy any of it sees), broken (whether it's
      * broken and running: none of it takes on anyone, each runs for its place, and it marches
-     * whoever's fighting) }, each left as it is if not given. Those in it (add's `formation`) keep
+     * whoever's fighting), charge (whether it's charging: it runs on to where it's going whoever
+     * of it's fighting, each of it running with it, and stops charging once it's there) }, each
+     * left as it is if not given. Those in it (add's `formation`) keep
      * to their places in it as it goes (or the `post`s they're given: [x, y] metres, facing its
      * `facing`, if they have one), and go after enemies as far from them as their role's leash;
      * it stops marching while any of them are fighting, and closes its ranks as they fall
@@ -910,9 +916,9 @@ export class Battle {
             return null;
         }
 
-        const formation = (this.formations[id] ??= { anchor: [0, 0], facing: 0, to: null, speed: 1, advance: false, broken: false, engagedAt: -Infinity, member: null, sighted: null, lookAt: 0, strength: null, closeAt: 0 });
+        const formation = (this.formations[id] ??= { anchor: [0, 0], facing: 0, to: null, speed: 1, advance: false, broken: false, charge: false, engagedAt: -Infinity, member: null, sighted: null, lookAt: 0, strength: null, closeAt: 0 });
 
-        for (const key of ["anchor", "facing", "to", "speed", "advance", "broken"]) {
+        for (const key of ["anchor", "facing", "to", "speed", "advance", "broken", "charge"]) {
             if (settings[key] !== undefined) {
                 formation[key] = Array.isArray(settings[key]) ? [...settings[key]] : settings[key];
             }
@@ -2531,9 +2537,11 @@ export class Battle {
 
         actor.target = null;
 
-        // (One in a formation, well away from its place in it, or its line broken: hurrying back
-        // to it)
-        actor.walkPace = broken || (actor.formation && actor.map === actor.spawnMap && distanceBetween(actor.square, actor.patrol[0]) > RANKS_RUN) ? actor.chaseSpeed : actor.speed;
+        // (One in a formation, well away from its place in it, its line broken or charging:
+        // hurrying back to it, or running with it)
+        const charging = Boolean(actor.formation && this.formations[actor.formation.id]?.charge);
+
+        actor.walkPace = broken || charging || (actor.formation && actor.map === actor.spawnMap && distanceBetween(actor.square, actor.patrol[0]) > RANKS_RUN) ? actor.chaseSpeed : actor.speed;
 
         // Somewhere else than its patrol (it followed someone in): back the way it came
         if (actor.map !== actor.spawnMap) {
@@ -3331,10 +3339,11 @@ export class Battle {
     }
 
     // The nearest enemy it can see that passes `test` (none further than it can see: SIGHT, or
-    // further for one of the wild's that sees further, its `sight`: an elite, creatures.js ELITES)
+    // further for one of the wild's that sees further, its `sight`: an elite, creatures.js ELITES;
+    // or for one that looks further, its own `sight`: an invasion's close fighters, charging)
     #nearestSeen(actor, test = () => true) {
         // (A siege engine as far as it reaches: its crew watch for it)
-        const sight = actor.wild?.sight ?? (actor.engine ? Math.max(SIGHT, longestReach(actor.arms)) : SIGHT);
+        const sight = actor.wild?.sight ?? actor.sight ?? (actor.engine ? Math.max(SIGHT, longestReach(actor.arms)) : SIGHT);
 
         return this.#nearestEnemy(actor, (enemy) => this.canSee(actor, enemy, sight) && test(enemy), sight);
     }
@@ -3379,7 +3388,8 @@ export class Battle {
 
     // Each formation on the march: walked on towards where it's going at its speed, facing that
     // way, and there, standing; or, standing, one that advances (ADVANCE) towards the enemy
-    // nearest it, till its front's on them. Not while any of it's fighting (HOLD_MS)
+    // nearest it, till its front's on them. Not while any of it's fighting (HOLD_MS), unless it's
+    // charging: then on till it's there, where it stops charging
     #march() {
         for (const [id, formation] of Object.entries(this.formations)) {
             if (this.time >= formation.closeAt) {
@@ -3387,7 +3397,7 @@ export class Battle {
                 this.#closeRanks(id, formation);
             }
 
-            if (this.time - formation.engagedAt < HOLD_MS && !formation.broken) {
+            if (this.time - formation.engagedAt < HOLD_MS && !formation.broken && !formation.charge) {
                 continue;
             }
 
@@ -3409,6 +3419,7 @@ export class Battle {
             if (distance <= step) {
                 formation.anchor = [...formation.to];
                 formation.to = null;
+                formation.charge = false;
             } else {
                 formation.anchor = [formation.anchor[0] + (dx / distance) * step, formation.anchor[1] + (dy / distance) * step];
                 formation.facing = atan2(dx, dy);

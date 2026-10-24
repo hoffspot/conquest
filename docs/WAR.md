@@ -1377,7 +1377,10 @@ player first*).
   needed, and with the shield line gone the two-handers are the front.
 - **Feel.** Each line marches as one, halts while any of it fights, and closes with the enemy it
   sees; the shield lines meet and grind, the two-handers fall in at the ends, the archers and
-  casters shoot over them, and the healers keep the line standing. A player in among them has at
+  casters shoot over them, and the healers keep the line standing. A line told to **charge**
+  (battle.js `formation` `charge`: an invasion's, *Invasions* below) runs on to where it's going
+  whoever of it is fighting, each of it running with it (at its chase), and stops charging once
+  it's there. A player in among them has at
   most 6 enemies on them up close and 4 shooting or casting (`AGGRO`); the rest fight the
   player's own.
 
@@ -2367,7 +2370,24 @@ axe is drawn in flight, turning end over end (world/effects.js), and heard as a 
 The model viewer shows any of each band, with any of its weapons, and its chief (WILDS.md, *The
 model viewer*: `?person=raider-northmen&weapon=throwingAxes`, `?person=chief-cult`).
 
-**How it goes** (`#invasionsOn`): the two lines meet and grind. **Reinforced** (`reinforce`,
+**How it goes** (`#invasionsOn`):
+
+- **The charge** (`INVASION.charge`, the host's `#charge`): once the two lines are 30 m apart, both
+  charge at a run (2.2 m/s), on till their fronts are 2 m apart midway between them; a band that
+  stands off (the Ashen Cult) stands, and the town's line charges on to its front. Both sides'
+  horns sound for it, the raiders' from their line and the town's 1.2 s after from its own (the
+  "invasion" event's `charge`). From then on everyone of either side who fights up close (their
+  shield lines and two-handers, the rear guards too, their chiefs, and any who come up after) goes
+  after an enemy as far as 30 m from their place in their line, looking that far for one (not a
+  soldier's 12 m: battle.js `SIGHT`, the actor's `sight`), so all of them close and fight in one
+  press, the archers and casters still shooting from their line and the healers keeping back.
+  Without it, the lines halted short of each other at the first blow, a few at the front
+  fighting while the rest stood in their ranks, out of reach. Measured on the first bandits
+  in seed 2, 10 seconds from the first blow, 23 of the 29 raiders who fight up close were in the
+  thick of it (within 3 m of an enemy; 13 of 22 before) and 21 of the town's 34 (19 of 31), and
+  at 30 seconds none of the town's stood in its ranks (16 of 17 before).
+
+Then the two lines meet and grind. **Reinforced** (`reinforce`,
 `#reinforceInvasion`): from the first blow, for three minutes, every 15 seconds each side's fallen
 are made good. The raiders are brought back up to 70% of the line that came, coming up the road
 from where it came out; the town's to 80% of its own, coming out from where its line formed. Each
@@ -2532,7 +2552,9 @@ player's device can draw is in the host's snapshot too (each player's `budget`; 
 changed what two games share again (`NET_VERSION` 147), and so did the band named in the thanks
 (148), the Behemoth of the Rift (149), each people's own bombs (150), the rift's own creatures
 in the Tower of Sar Mordal (151), the town's siege engines (152), the townsfolk sheltering from
-the Behemoth (153), and an invasion's reinforcements (154).
+the Behemoth (153), an invasion's reinforcements (154), and its lines' charge (168). When its
+lines charged is kept with it (`charged`), and whether each line's charging with the battle's
+lines (`charge`): `SNAPSHOT_VERSION` 38, neither in a world kept before.
 
 ### Playing together (M11)
 

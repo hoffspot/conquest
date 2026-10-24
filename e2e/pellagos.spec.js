@@ -14598,3 +14598,84 @@ test("an invasion: the raiders' war horn blown twice where they come out, the to
     await thanks.getByRole("button", { name: "With thanks" }).click();
     await expect(thanks).toBeHidden();
 });
+
+test("an invasion's two lines charge each other once near: the raiders' horn from their line and the town's answering from its own, both running, and those who fight up close in one press, not standing in their ranks", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=2");
+
+    // (The lone orc out of the way; every horn blown heard, how long after, and whether from
+    // somewhere; as small an invasion as comes)
+    await page.evaluate((least) => {
+        const { game } = window.pellagos;
+        const play = game.sound.play.bind(game.sound);
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        window.horns = [];
+        game.sound.play = (name, options = {}) => {
+            if (name.endsWith("Horn")) {
+                window.horns.push([name, options.delay ?? 0, Boolean(options.at)]);
+            }
+
+            return play(name, options);
+        };
+        game.advance(0.1, { render: false });
+        game.host.command(game.me, { type: "budget", invasion: least });
+        game.invade();
+    }, SIZE.least);
+
+    // Marching on each other till they're near: then both charge, the horns blown
+    expect(await playUntil(page, () => (window.pellagos.game.host.invasions[0]?.charged ?? null) !== null, { seconds: 60 })).toBe(true);
+    await playUntil(page, () => false, { seconds: 1 });
+
+    const charging = await page.evaluate((close) => {
+        const { game } = window.pellagos;
+        const [invasion] = game.host.invasions;
+        const lines = [invasion.formations.invaders, invasion.formations.defenders].map((id) => game.battle.formations[id]);
+        const fighters = [...invasion.invaders, ...invasion.defenders].map((id) => game.battle.actor(id)).filter((one) => one && !one.dead && close.includes(game.host.soldiers.get(one.id).role));
+
+        return {
+            horns: window.horns.slice(3),
+            lines: lines.map(({ charge, speed }) => ({ charge, speed })),
+            fighters: fighters.length,
+            running: fighters.filter((one) => one.walkPace === one.chaseSpeed).length,
+        };
+    }, INVASION.close);
+
+    expect(charging.horns).toEqual([
+        ["warHorn", 0, true],
+        ["townHorn", 1.2, true],
+    ]);
+    expect(charging.lines).toEqual([
+        { charge: true, speed: INVASION.charge.speed },
+        { charge: true, speed: INVASION.charge.speed },
+    ]);
+    expect(charging.running).toBeGreaterThan(charging.fighters * 0.8);
+
+    // Ten seconds from the first blow: those who fight up close in the press, few standing in
+    // their ranks with an enemy near
+    expect(await playUntil(page, () => {
+        const [invasion] = window.pellagos.game.host.invasions;
+
+        return invasion.fightAt !== null && window.pellagos.game.battle.time - invasion.fightAt >= 10000;
+    }, { seconds: 40 })).toBe(true);
+
+    const press = await page.evaluate(([close, sight]) => {
+        const { game } = window.pellagos;
+        const [invasion] = game.host.invasions;
+        const standing = (ids) => ids.map((id) => game.battle.actor(id)).filter((one) => one && !one.dead);
+        const near = (one, foes, within) => foes.some((foe) => Math.hypot(foe.x - one.x, foe.y - one.y) <= within);
+
+        return [[invasion.invaders, invasion.defenders], [invasion.defenders, invasion.invaders]].map(([ours, theirs]) => {
+            const fighters = standing(ours).filter((one) => close.includes(game.host.soldiers.get(one.id).role));
+            const foes = standing(theirs);
+
+            return { fighters: fighters.length, thick: fighters.filter((one) => near(one, foes, 3)).length, idle: fighters.filter((one) => one.target === null && near(one, foes, sight)).length };
+        });
+    }, [INVASION.close, INVASION.charge.sight]);
+
+    for (const side of press) {
+        expect(side.thick).toBeGreaterThanOrEqual(side.fighters * 0.5);
+        expect(side.idle).toBeLessThanOrEqual(side.fighters * 0.2);
+    }
+});
