@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { Battle, BODY, DRAW_MS, KINDS, SHEATHE_AFTER_MS, SHEATHE_MS, SIGHT, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS, WARY_MS } from "../client/js/core/battle.js";
+import { Battle, BODY, DRAW_MS, KINDS, SHEATHE_AFTER_MS, SHEATHE_MS, SIGHT, SLIDE, SPRINT, STAMINA_DRAIN, STAMINA_RECOVERY, STEP_MS, WARY_MS } from "../client/js/core/battle.js";
 import { REFUSALS } from "../client/js/core/host.js";
 import { createRandom } from "../client/js/core/random.js";
 import { CAST_FAILURES, SCHOOLS, SPELL_COOLDOWN, SPELLS } from "../client/js/core/spells.js";
@@ -792,6 +792,42 @@ describe("the battle (battle.js)", () => {
             battle.command("player", { type: "ahead", facing: Math.PI / 2, run: true, reach });
             assert.ok(player.path.at(-1)[0] > 59 && player.path.at(-1)[0] < 60, `to ${player.path.at(-1)} with reach ${reach}`);
         }
+    });
+
+    // Held input (app/steering.js): the same "ahead" order given again every half second, as far
+    // as HELD_REACH, for `ms`
+    const hold = (battle, facing, ms) => {
+        for (let t = 0; t < ms; t += 500) {
+            battle.command("player", { type: "ahead", facing, reach: 30 });
+            run(battle, 500);
+        }
+    };
+
+    it("slides past something just ahead (a lamppost), to one side, and goes on the way it was sent (the user: \"I keep getting stuck when trying to walk by lampposts\")", () => {
+        const rows = Array.from({ length: 9 }, (_, y) => (y === 4 ? "..........#........................." : "...................................."));
+        const battle = new Battle(worldOf(rows), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [5, 4] });
+
+        hold(battle, Math.PI / 2, 6000);
+        assert.ok(player.x > 13, `got to ${player.x.toFixed(2)}, ${player.y.toFixed(2)}`);
+        assert.ok(Math.abs(player.y - 4.5) < 2, "(round it, not far off the way)");
+    });
+
+    it("slides along a wall it's sent into at a slant, as long as that gets it on the way it was sent; sent straight into it, it stays", () => {
+        const rows = ["####################################", ...Array.from({ length: 6 }, () => "....................................")];
+        const battle = new Battle(worldOf(rows), { seed: 1 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 2] });
+
+        // (East, and a little north into the wall)
+        hold(battle, Math.PI / 2 + 0.25, 8000);
+        assert.ok(player.x > 14, `got to ${player.x.toFixed(2)}, ${player.y.toFixed(2)}`);
+        assert.ok(player.y > 1, "(never into the wall)");
+
+        // (North, straight into it: no further, and not along it)
+        const at = [player.x, player.y];
+
+        hold(battle, Math.PI, 2000);
+        assert.ok(Math.hypot(player.x - at[0], player.y - at[1]) < SLIDE.least + 1, `went ${Math.hypot(player.x - at[0], player.y - at[1]).toFixed(2)} m`);
     });
 
     it("stops running when its stamina runs out, and walks the rest of the way", () => {

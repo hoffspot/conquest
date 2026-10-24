@@ -17,11 +17,12 @@
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
 import { CACHE_BANDS, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
-import { DIRECTOR, FINDS, FRESH, freshTrail, noteOf, PACING, peacefulNext, rollRemains, shuffled, TRACKLESS, WELL_RESTED } from "./director.js";
+import { banditToll, clearedTurnsUp, clearRate, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, HEALING_DRAUGHTS, noteOf, obstacleBox, OBSTACLES, PACING, peacefulNext, rollRemains, rollSpilled, shuffled, STRANGERS, TRACKLESS, WELL_RESTED } from "./director.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
+import { namePeople } from "./names.js";
 import { rumouredBy, rumouredOf, rumoursNear } from "./rumours.js";
 import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
@@ -35,6 +36,7 @@ import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf }
 import { createRandom } from "./random.js";
 import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
 import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
+import { FULL_MOON, moonRoad, nightOf, phaseOfNight, RING, ringNear, ringOf, TRIAL, trialOf } from "./rings.js";
 import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, ENGINES, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
 import { waysOut, wayToward } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
@@ -328,7 +330,7 @@ export const PARTY = Object.freeze({ most: 4, reach: 40, askMs: 30000 });
 
 // What a player does that has to do with the world round them (and so ends their Invisibility:
 // casting and striking do too, battle.js); moving about, or seeing to their pack, doesn't
-const SEEN = new Set(["enter", "buy", "sell", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree", "travel"]);
+const SEEN = new Set(["enter", "buy", "sell", "use", "drop", "pickUp", "talk", "effect", "trade", "offer", "agree", "travel", "clear"]);
 
 // The kinds of settlement with a temple (setpieces/town.js), for Word of Recall
 const TEMPLED = new Set(Object.keys(SETTLEMENT_KINDS).filter((kind) => SETTLEMENT_KINDS[kind].landmarks.includes("church")));
@@ -581,7 +583,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 36;
+export const SNAPSHOT_VERSION = 37;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -640,6 +642,10 @@ export const SNAPSHOT_STEPS = Object.freeze({
         players: snapshot.players.map((player) => ({ prayed: {}, ...player })),
         battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => (snapshot.players.some(({ id }) => id === actor.id) ? { darkSight: false, ...actor } : actor)) },
     }),
+    // 37: the ring of standing stones each player's standing in the middle of (core/rings.js, Host
+    // #ringStep: none; the rings they've stood in kept with what they've found, none yet), and the
+    // full moon's trial out (Host #moonTrials: none)
+    36: (snapshot) => ({ ...snapshot, version: 37, players: snapshot.players.map((player) => ({ inRing: null, ...player })), trials: [] }),
 });
 
 /**
@@ -709,6 +715,9 @@ export const REFUSALS = Object.freeze({
     far: "Too far away.",
     talking: "Not talking to them.",
     gold: "Not enough gold.",
+    draught: "You've no healing draught.",
+    tired: "You're too out of breath to clear it: rest a moment.",
+    food: "You've nothing they'd eat: a hot meal, or two cuts of meat.",
     hire: "They're not for hire.",
     company: "You can't lead any more than you have.",
     follower: "They don't follow you.",
@@ -763,6 +772,9 @@ export const REFUSALS = Object.freeze({
     // (At a shrine: core/shrines.js, #pray)
     shrine: "There's no shrine there to pray at.",
     prayed: "The shrine has answered you today. Come back tomorrow.",
+    // (In a ring of standing stones: core/rings.js, #moonRoadTo)
+    ring: "Stand in a ring's middle, and choose another ring you've stood in.",
+    moonless: "Only under a full moon do the stones let you choose where they carry you.",
     // (A sign on a trail: core/tracks.js, #readSign)
     sign: "There's no sign of anything there to read.",
     // (At the war table: core/wartable.js, #atTable)
@@ -1036,6 +1048,9 @@ export class Host {
         this.wildCamps = new Map();
         // The roaming beasts' dens out about the players (core/dens.js; #dens), by id: { ids }
         this.dens = new Map();
+        // The full moon's trial out (core/rings.js TRIAL; #moonTrials), by its id: { ids, night,
+        // ring (its site's id), chest (the square its moonsilver lies on) }
+        this.trials = new Map();
         this.lairs = new Map();
         this.slain = {};
 
@@ -1060,8 +1075,9 @@ export class Host {
          * dealt last, or none), pace (the pacing's, core/director.js PACING: { fight (the fight
          * they're in: { lowest, their health's least share in it }, or null), lastFight (when they
          * last fought: the battle's ms), calm (metres crossed since), quietUntil (a quiet spell's
-         * end), build (a build-up's hunters to come: { at, creature, tier, count, due }, or null) })
-         * }).
+         * end), build (a build-up's hunters to come: { at, creature, tier, count, due }, or null) }),
+         * strangers (the strangers still to meet, the next first: STRANGERS kinds, shuffled once
+         * there's been one), stranger (the one met last, or none) }).
          */
         this.caches = new Map();
         this.nextCache = 1;
@@ -1082,6 +1098,31 @@ export class Host {
          */
         this.fresh = new Map();
         this.nextFresh = 1;
+
+        /**
+         * The strangers the wilds director's put out (core/director.js STRANGERS), by id: { id,
+         * kind ("pedlar", "hunter" or "bandits"), at ([x, y]: where they were put out), tier (the
+         * land's there), ids (theirs in the battle: a pedlar's or a hunter's one, the bandits'
+         * leader first); a pedlar's or a hunter's folk (how they look and talk: as this.folk has
+         * them); a hunter's met (when a player first came near them: the battle's ms, or null),
+         * tended (the player who healed them, or null), due (when they go on their way, once
+         * tended: the battle's ms), off (once they've set off); the bandits' toll (the gold they
+         * want), hailed (the players they've hailed: ids), paid (the player who paid them, or
+         * null), fight (once they've been refused) }.
+         */
+        this.strangers = new Map();
+        this.nextStranger = 1;
+
+        /**
+         * What the wilds director's put across the way (core/director.js OBSTACLES), by id: { id,
+         * kind ("tree" or "rocks"), at ([x, y]: its middle), box (its squares: [x0, y0, x1, y1]),
+         * tier (the land's there), work (seconds alone, to clear it), done (seconds of it done so
+         * far), swings (when each player at it next swings at it: the battle's ms, by their id) }.
+         * Those clearing it have it as their actor's `clearing`.
+         */
+        this.obstacles = new Map();
+        this.nextObstacle = 1;
+        this.#obstaclesChanged({ tell: false });
 
         /**
          * The treasures hunted (core/treasure.js), by id: { id, owner (whose map it was: a
@@ -1260,6 +1301,8 @@ export class Host {
             readyAt: {},
             // The shrines that have answered them, by the site's id: the world day they did (#pray)
             prayed: {},
+            // The ring of standing stones whose middle they're standing in, if any (#ringStep)
+            inRing: null,
             discarded: null,
             offers: {},
             // A Scroll of Safety being read ({ until }: SAFETY), or none
@@ -1502,6 +1545,8 @@ export class Host {
      *  - { type: "cast", spell, target }: cast a spell (target: an id, or none for themselves);
      *  - { type: "talk", with }: start talking to one of the folk (an id), or stop (null);
      *  - { type: "emote", emote }: show an emote (core/emotes.js EMOTES: a wave, a bow), standing;
+     *  - { type: "clear", obstacle }: set to clearing something across the way near them (its
+     *    id: core/director.js OBSTACLES), held on it; or leave off (null);
      *  - { type: "effect", effect }: something done by talking (buying, paying, renting...), to
      *    whoever they're talking to (paid for in gold, if it has a price);
      *  - { type: "buy", item, from }: buy something ({ id, quality }) from a shopkeeper near them
@@ -1683,6 +1728,8 @@ export class Host {
                 return this.#readSign(player, actor, command.sign);
             case "pray":
                 return this.#pray(player, actor, command.shrine);
+            case "moonroad":
+                return this.#moonRoadTo(player, actor, command.to);
             case "buy":
                 return this.#buy(player, actor, command);
             case "sell":
@@ -1719,6 +1766,8 @@ export class Host {
                 return this.#effect(player, actor, command.effect);
             case "camp":
                 return this.#camp(player, actor, command.until ?? null);
+            case "clear":
+                return this.#clear(actor, command.obstacle ?? null);
             case "emote":
                 return this.#emote(actor, command.emote);
             case "trade":
@@ -1884,6 +1933,11 @@ export class Host {
             }
         }
 
+        // (What's across the way being cleared: #clearing)
+        if (this.obstacles.size) {
+            this.#clearing(ms);
+        }
+
         // Scrolls of Safety read through, and their readers carried home (fallen first: lost)
         for (const player of this.players.values()) {
             if (player.safety) {
@@ -1900,6 +1954,15 @@ export class Host {
 
         for (const event of events) {
             const beast = event.type === "death" ? this.wild.get(event.id) : null;
+
+            // (A wounded hunter healed by a player's spell: tended, #tended)
+            if (event.type === "healed" && event.amount > 0 && this.players.has(event.by)) {
+                const stranger = this.strangerOf(event.id);
+
+                if (stranger?.kind === "hunter" && !stranger.tended && !stranger.off) {
+                    this.#tended(stranger, this.players.get(event.by));
+                }
+            }
 
             // (One of a cache's guards struck or felled: whoever did it, a player or one of theirs,
             // has a share of it once it's opened, wherever they are by then: #cacheFell)
@@ -1918,7 +1981,7 @@ export class Host {
 
                 // (One of those roaming about the players, felled out in the world: its ground
                 // cleared a while, WILDS.cleared)
-                if (fell?.map === "town" && !beast.camp && !beast.den && !beast.lair && !beast.place && !beast.cache && !beast.dungeon && !beast.works && !this.companions.has(event.id)) {
+                if (fell?.map === "town" && !beast.camp && !beast.den && !beast.trial && !beast.lair && !beast.place && !beast.cache && !beast.stranger && !beast.dungeon && !beast.works && !this.companions.has(event.id)) {
                     this.cleared.push({ at: [fell.x, fell.y], until: this.battle.time + WILDS.cleared });
                 }
 
@@ -1928,6 +1991,11 @@ export class Host {
                 // (A den's master: gone from it a while, DEN.back)
                 if (beast.den && beast.master) {
                     this.slain[beast.den] = this.battle.time + DEN.back;
+                }
+
+                // (Lunara's guardian under a full moon: its moonsilver taken, #trialFell)
+                if (beast.trial) {
+                    this.#trialFell(beast.trial);
                 }
 
                 // (One of a rite's: broken once the last of them falls)
@@ -2148,6 +2216,9 @@ export class Host {
             for (const id of this.fellows(player.id)) {
                 this.#share(player, this.players.get(id), actor.x, actor.y);
             }
+
+            // (In a ring of standing stones' middle: core/rings.js)
+            this.#ringStep(player, actor);
         }
 
         if (this.battle.time >= this.lookAt) {
@@ -2393,6 +2464,7 @@ export class Host {
             nextWild: this.nextWild,
             wildCamps: [...this.wildCamps.entries()],
             dens: [...this.dens.entries()],
+            trials: structuredClone([...this.trials.entries()]),
             lairs: [...this.lairs.entries()],
             slain: { ...this.slain },
             held: [...this.held.entries()],
@@ -2404,6 +2476,8 @@ export class Host {
             travel: structuredClone([...this.travel.entries()]),
             ...(this.nextFind > 1 ? { finds: structuredClone([...this.finds.entries()]), nextFind: this.nextFind } : {}),
             ...(this.nextFresh > 1 ? { fresh: structuredClone([...this.fresh.entries()]), nextFresh: this.nextFresh } : {}),
+            ...(this.nextStranger > 1 ? { strangers: structuredClone([...this.strangers.entries()]), nextStranger: this.nextStranger } : {}),
+            ...(this.nextObstacle > 1 ? { obstacles: structuredClone([...this.obstacles.entries()]), nextObstacle: this.nextObstacle } : {}),
             ground: structuredClone([...this.ground.values()]),
             campfires: structuredClone(this.campfires),
             nextGround: this.nextGround,
@@ -2419,7 +2493,7 @@ export class Host {
             invaded: this.invaded,
             invasions: structuredClone(this.invasions),
             fallen: structuredClone(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), budget: player.budget ?? null, ...this.characterOf(player), followers: undefined })),
+            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, inRing: player.inRing ?? null, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), budget: player.budget ?? null, ...this.characterOf(player), followers: undefined })),
             done: structuredClone(this.done),
         };
     }
@@ -2568,6 +2642,7 @@ export class Host {
         host.nextWild = snapshot.nextWild ?? 1;
         host.wildCamps = new Map(structuredClone(snapshot.wildCamps ?? []));
         host.dens = new Map(structuredClone(snapshot.dens ?? []));
+        host.trials = new Map(structuredClone(snapshot.trials ?? []));
         host.lairs = new Map(structuredClone(snapshot.lairs ?? []));
         host.slain = { ...(snapshot.slain ?? {}) };
         host.held = new Map(structuredClone(snapshot.held ?? []));
@@ -2581,6 +2656,20 @@ export class Host {
         host.nextFind = snapshot.nextFind ?? 1;
         host.fresh = new Map(structuredClone(snapshot.fresh ?? []));
         host.nextFresh = snapshot.nextFresh ?? 1;
+        host.strangers = new Map(structuredClone(snapshot.strangers ?? []));
+        host.nextStranger = snapshot.nextStranger ?? 1;
+
+        // (A pedlar's or a hunter's look and talk: one of the folk's, the same record)
+        for (const stranger of host.strangers.values()) {
+            if (stranger.folk) {
+                host.folk.set(stranger.folk.id, stranger.folk);
+            }
+        }
+
+        // (What's across the way, over its squares in the world)
+        host.obstacles = new Map(structuredClone(snapshot.obstacles ?? []));
+        host.nextObstacle = snapshot.nextObstacle ?? 1;
+        host.#obstaclesChanged({ tell: false });
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
         host.nextGround = snapshot.nextGround ?? 1;
         host.campfires = structuredClone(snapshot.campfires ?? []);
@@ -2613,11 +2702,11 @@ export class Host {
             }
         }
 
-        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, prayed, discarded, safety, role, lastCommand, away, out, resting, budget } of snapshot.players) {
+        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, prayed, inRing, discarded, safety, role, lastCommand, away, out, resting, budget } of snapshot.players) {
             const kept = new Progress(progress, hero);
 
             // (Outfitted as they were: their actor's carried on as it was, charms and all)
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, prayed: { ...(prayed ?? {}) }, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null });
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, prayed: { ...(prayed ?? {}) }, inRing: inRing ?? null, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null });
         }
 
         host.random.state = snapshot.random ?? host.random.state;
@@ -2909,6 +2998,204 @@ export class Host {
         }
 
         this.#outfit(player);
+    }
+
+    // --- The moon roads (core/rings.js; docs/WILDS.md *Moon roads*) ---
+
+    // A ring of standing stones' heart (sites.js heartOf: by its flat stone), worked out once
+    #ringHeart(ring) {
+        this.ringHearts ??= new Map();
+
+        if (!this.ringHearts.has(ring.site.id)) {
+            this.ringHearts.set(ring.site.id, this.world.maps.town?.sites?.heartOf(ring.site) ?? ring.at);
+        }
+
+        return this.ringHearts.get(ring.site.id);
+    }
+
+    // A player out in the world come into a ring of standing stones' middle (RING.middle of its
+    // heart: core/rings.js), once each time they step in (`inRing`): stood in, its moon theirs to
+    // know; told (a "ring" event). By night, carried by tonight's moon road with those of their
+    // party in its stones (#walkMoonRoad); under a full moon, asked where (a "moonroad" command);
+    // under a new moon, the stones asleep
+    #ringStep(player, actor) {
+        const plan = this.world.plan;
+        const ring = plan && actor.map === "town" && !actor.dead ? ringNear(plan, [actor.x, actor.y]) : null;
+        const heart = ring ? this.#ringHeart(ring) : null;
+        const inside = heart && hypot(actor.x - heart[0], actor.y - heart[1]) <= RING.middle ? ring.site.id : null;
+
+        if (inside === (player.inRing ?? null)) {
+            return;
+        }
+
+        player.inRing = inside;
+
+        if (!inside) {
+            return;
+        }
+
+        const first = player.explored.standIn(inside);
+        const night = this.#dark();
+        const tonight = phaseOfNight(elapsedOf(this.war));
+
+        this.#event("ring", { id: player.id, ring: inside, phase: ring.phase, first, night, tonight });
+
+        const to = night ? moonRoad(plan, ring, tonight) : null;
+
+        if (to) {
+            this.#walkMoonRoad(player, ring, to);
+        }
+    }
+
+    // The full moon's trial (core/rings.js TRIAL) near a player: Lunara's guardian woken in the
+    // night's ring (moon-touched: a "moon" champion, TRIAL.up tiers above the land there from the
+    // home of the player nearest it), and by it its moonsilver in a chest, locked while it stands;
+    // let go, the chest with it, at daybreak, or once every player's TRIAL.far off. Slain, not again
+    // that night
+    #moonTrials(homes) {
+        const plan = this.world.plan;
+        const near = (at, within) => homes.some(({ at: [x, y] }) => hypot(x - at[0], y - at[1]) < within);
+        const elapsed = elapsedOf(this.war);
+        const full = Boolean(plan) && this.#dark() && phaseOfNight(elapsed) === FULL_MOON;
+        const night = nightOf(elapsed);
+
+        for (const [id, held] of [...this.trials]) {
+            const ring = plan ? ringOf(plan, held.ring) : null;
+
+            if (!full || held.night !== night || !ring || !near(ring.at, TRIAL.far)) {
+                for (const each of [...held.ids]) {
+                    if (!this.battle.actor(each)?.dead) {
+                        this.#release(each);
+                    }
+                }
+
+                this.ground.delete(`chest-${id}`);
+                this.trials.delete(id);
+            }
+        }
+
+        const trial = full ? trialOf(plan, night) : null;
+
+        if (!trial?.ring || this.trials.has(trial.id) || (this.slain[trial.id] ?? -Infinity) > this.battle.time || !near(trial.ring.at, TRIAL.near)) {
+            return;
+        }
+
+        const heart = this.#ringHeart(trial.ring);
+        const nearest = homes.reduce((best, each) => (hypot(each.at[0] - heart[0], each.at[1] - heart[1]) < hypot(best.at[0] - heart[0], best.at[1] - heart[1]) ? each : best));
+        const tier = Math.min(10, tierAt(trial.ring.at, [nearest.home]) + TRIAL.up);
+        const { creature, title } = trial.guardian;
+        const ids = this.#pack({ creature, tier, count: 1 }, heart, { trial: trial.id, master: true, champion: "moon", title, roam: 4, temper: "territorial" });
+
+        // (None could be put out there, its ground not made yet: tried again the next time)
+        if (!ids.length) {
+            return;
+        }
+
+        const chest = [Math.floor(heart[0]) + 1, Math.floor(heart[1])];
+
+        this.ground.set(`chest-${trial.id}`, { id: `chest-${trial.id}`, chest: true, locked: true, for: null, map: "town", square: chest, place: trial.id, until: null });
+        this.trials.set(trial.id, { ids, night, ring: trial.ring.site.id, chest });
+        this.#event("trial", { change: "woken", trial: trial.id, ring: trial.ring.site.id, creature, title });
+    }
+
+    // Lunara's guardian slain under the full moon (#moonTrials): its moonsilver taken, a share for
+    // each player there (#opened, "moonsilver": progress.js rollMoonsilver), and not woken again
+    // that night; told
+    #trialFell(id) {
+        const held = this.trials.get(id);
+        const ring = held && this.world.plan ? ringOf(this.world.plan, held.ring) : null;
+
+        this.slain[id] = this.battle.time + DAY.length;
+
+        if (!ring) {
+            return;
+        }
+
+        this.#opened(id, "hoard", { at: this.#ringHeart(ring), maps: [], map: "town", square: held.chest, people: "human", tier: 1, relic: "moonsilver" });
+        this.trials.delete(id);
+        this.#event("trial", { change: "fallen", trial: id, ring: held.ring });
+    }
+
+    // Under a full moon, a player in a ring's middle choosing where the stones carry them (a
+    // "moonroad" command: `to`, another ring they've stood in): carried there (#walkMoonRoad)
+    #moonRoadTo(player, actor, to) {
+        const plan = this.world.plan;
+        const from = plan && player.inRing ? ringOf(plan, player.inRing) : null;
+        const ring = plan ? ringOf(plan, to) : null;
+
+        if (!from || !ring || ring === from || !player.explored.rings.has(to) || actor.dead) {
+            return refuse("ring");
+        }
+
+        if (!this.#dark() || phaseOfNight(elapsedOf(this.war)) !== FULL_MOON) {
+            return refuse("moonless");
+        }
+
+        this.#walkMoonRoad(player, from, ring);
+
+        return { ok: true };
+    }
+
+    // The moon road from one ring to another walked: the player and those of their party standing
+    // within its stones (RING.round of its heart), each carried to the other's middle (and stood
+    // in it: not carried on till they step out and in again), each with their company
+    #walkMoonRoad(player, from, to) {
+        const [heart, there] = [this.#ringHeart(from), this.#ringHeart(to)];
+        const squares = squaresOf(this.world.maps.town);
+        const taken = new Set(this.battle.actors.filter((each) => each.map === "town" && !each.dead).map(({ square: [x, y] }) => squareKey(x, y)));
+        const going = [player, ...this.fellows(player.id).map((id) => this.players.get(id))].filter((one) => {
+            const actor = one && this.battle.actor(one.id);
+
+            return actor && !actor.dead && actor.map === "town" && hypot(actor.x - heart[0], actor.y - heart[1]) <= RING.round;
+        });
+
+        for (const one of going) {
+            const actor = this.battle.actor(one.id);
+            const went = { map: actor.map, x: actor.x, y: actor.y };
+            let square;
+
+            try {
+                square = nearestFree(squares, [Math.floor(there[0]), Math.floor(there[1])], { taken, within: 12 });
+            } catch {
+                continue;
+            }
+
+            taken.add(squareKey(...square));
+
+            const came = this.battle.place(one.id, "town", square, { facing: actor.facing });
+
+            if (!came) {
+                continue;
+            }
+
+            one.inRing = to.site.id;
+            one.explored.standIn(to.site.id);
+            this.#event("carried", { id: one.id, why: "moon", from: went, map: "town", square: came, ring: to.site.id });
+            this.#bringAlong(one.id, squares, taken);
+        }
+    }
+
+    // A player's company (their followers, unless told to wait, and the creatures at their side)
+    // brought to them wherever they are, by them (carried along: the moon roads)
+    #bringAlong(playerId, squares, taken) {
+        const leader = this.battle.actor(playerId);
+
+        for (const id of [...this.#company(playerId), ...[...this.companions].filter(([, one]) => one.leader === playerId).map(([each]) => each)]) {
+            const one = this.battle.actor(id);
+
+            if (!one || one.dead || this.waiting(id)) {
+                continue;
+            }
+
+            try {
+                const square = nearestFree(squares, leader.square, { taken, within: 12 });
+
+                taken.add(squareKey(...square));
+                Object.assign(one, { map: leader.map, spawnMap: leader.map, square, x: square[0] + 0.5, y: square[1] + 0.5, path: [], offPath: false, target: null });
+            } catch {
+                // (No room by them: they'll catch up another time)
+            }
+        }
     }
 
     // Whether someone's in a shrine's sanctuary out in the world (core/shrines.js sanctuaryAt): the
@@ -7132,7 +7419,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon && !one.works && !one.rift && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -7143,6 +7430,7 @@ export class Host {
 
         this.#wildCamps(homes);
         this.#dens(homes);
+        this.#moonTrials(homes);
         this.#lairs(places);
         this.#places(places, homes);
         this.#caches(homes);
@@ -7164,7 +7452,7 @@ export class Host {
 
             const nearAny = (x, y) => group.actors.some((each) => hypot(x - each.x, y - each.y) < WILDS.about);
             const about = [...this.wild].filter(([id, one]) => {
-                const beast = !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.dungeon ? this.battle.actor(id) : null;
+                const beast = !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon ? this.battle.actor(id) : null;
 
                 return beast && !beast.dead && nearAny(beast.x, beast.y);
             }).length;
@@ -7500,7 +7788,7 @@ export class Host {
 
     // A pack of creatures put out at a place (`count` of `creature` at `tier`; out in the world, or
     // on a building's `map`), the first its leader (an `elite` pack's, an elite: ELITES); what
-    // they're of (`camp`, `lair`, `place`, `cache`) and how they keep (`roam`, `temper`, `guard`,
+    // they're of (`camp`, `lair`, `place`, `cache`, `stranger`) and how they keep (`roam`, `temper`, `guard`,
     // the `round` they walk; one `pack` with others, if it's given); against a stronger side, each
     // one's hit points × `health`, its leader's × `leading` (strength.js SCALING), and those past
     // the first `least` (as many as against a player alone) `extra` (#rouse): their ids
@@ -7538,7 +7826,7 @@ export class Host {
     // out, its kind with it (`elite` "escort"), and neither going far from there (ELITES); its hit
     // points × `health` against a stronger side (strength.js SCALING); one more than there'd have
     // been against a player alone, `extra` (leaving its gold and its parts only: spoils.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, trial = null, lair = null, place = null, cache = null, stranger = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null }) {
         const spec = CREATURES[creature];
         const lead = elite === "lead";
         // (A dungeon's boss or mini-boss: more of it and harder, CHAMPIONS, by its title; an elite,
@@ -7548,7 +7836,7 @@ export class Host {
         const power = tierPower(at) * stands.power;
         const walks = lead ? { stops: eliteRound(square), at: 0 } : round;
 
-        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}) });
+        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(trial ? { trial } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(stranger ? { stranger } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}) });
         this.battle.add({
             id,
             kind: "beast",
@@ -7641,7 +7929,7 @@ export class Host {
 
         this.wild.delete(id);
 
-        for (const held of [one.camp && this.wildCamps.get(one.camp), one.den && this.dens.get(one.den), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place), one.cache && this.caches.get(one.cache), one.works && this.worksOut.get(one.works)]) {
+        for (const held of [one.camp && this.wildCamps.get(one.camp), one.den && this.dens.get(one.den), one.trial && this.trials.get(one.trial), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place), one.cache && this.caches.get(one.cache), one.works && this.worksOut.get(one.works)]) {
             if (held) {
                 held.ids = held.ids.filter((each) => each !== id);
             }
@@ -8131,6 +8419,9 @@ export class Host {
             }
         }
 
+        this.#strangersAbout(homes);
+        this.#obstaclesAbout(homes);
+
         // (Fresh tracks old, left far behind, or their pack all gone: let go)
         for (const [id, tracks] of [...this.fresh]) {
             const [x, y] = tracks.points[0];
@@ -8311,16 +8602,26 @@ export class Host {
     }
 
     // The wilds director's next card dealt ahead of a player (`actor`; `was`: how they've come, and
-    // the deck: core/director.js), for their `group`: an adventurer's cache (#putCache), or a
-    // peaceful find (#putFind). Dealt, the next's the one after (a deck all dealt shuffled again,
-    // not the one just dealt first); nowhere to put it, it's tried again a moment later. Whether
-    // it was
+    // the deck: core/director.js), for their `group`: an adventurer's cache (#putCache), a
+    // peaceful find (#putFind), fresh tracks (#putTracks), a stranger (#putStranger) or
+    // something across the way (#putObstacle). Dealt,
+    // the next's the one after (a deck all dealt shuffled again, not the one just dealt first);
+    // nowhere to put it, it's tried again a moment later. Whether it was
     #deal(actor, was, homes, group = null) {
         was.deck ??= shuffled(this.random);
 
         const card = was.deck[0];
 
-        const dealt = card === "cache" ? this.#putCache(actor, was.heading, homes, group) : card === "tracks" ? this.#putTracks(actor, was.heading, homes) : this.#putFind(card, actor, was.heading, homes);
+        const dealt =
+            card === "cache"
+                ? this.#putCache(actor, was.heading, homes, group)
+                : card === "tracks"
+                  ? this.#putTracks(actor, was.heading, homes)
+                  : card === "stranger"
+                    ? this.#putStranger(actor, was, homes)
+                    : card === "obstacle"
+                      ? this.#putObstacle(actor, was.heading, homes)
+                      : this.#putFind(card, actor, was.heading, homes);
 
         if (!dealt) {
             return false;
@@ -8405,7 +8706,7 @@ export class Host {
             .filter(([id, one]) => {
                 const each = this.battle.actor(id);
 
-                return each && !each.dead && each.map === "town" && each.target === null && !TRACKLESS.has(one.creature) && !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && far(each) >= FRESH.reach[0] && far(each) <= FRESH.reach[1];
+                return each && !each.dead && each.map === "town" && each.target === null && !TRACKLESS.has(one.creature) && !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon && !one.works && !one.rift && far(each) >= FRESH.reach[0] && far(each) <= FRESH.reach[1];
             })
             .map(([id]) => this.battle.actor(id))
             .sort((a, b) => Number(ahead(b)) - Number(ahead(a)) || far(a) - far(b) || (a.id < b.id ? -1 : 1));
@@ -8478,6 +8779,565 @@ export class Host {
         this.#event("find", { find: find.id, change: "searched" });
 
         return OK;
+    }
+
+    // A stranger met on the way (core/director.js STRANGERS) put out ahead of a player (`actor`;
+    // `was`: how they've come, and the strangers still to meet) where a cache would be
+    // (#spotAhead): the next of the strangers (each once, as the cards are), a pedlar resting by
+    // the way, a hunter lying hurt (#putWayfarer), or hungry bandits, no one's enemy till they're
+    // refused (#putBandits). Whether they could be
+    #putStranger(actor, was, homes) {
+        const spot = this.#spotAhead(actor, was.heading);
+
+        if (!spot) {
+            return false;
+        }
+
+        const { heart } = spot;
+        const plan = this.world.plan;
+        const id = `stranger-${this.nextStranger}`;
+        const strangers = was.strangers?.length ? was.strangers : shuffled(this.random, was.stranger ?? null, STRANGERS.kinds);
+        const kind = strangers[0];
+        const tier = cacheTier(tierAt(heart, homes.map(({ home }) => home), landAt(plan, ...heart).biome), 0);
+        const folk = kind === "bandits" ? null : this.#putWayfarer(id, kind, heart);
+        const ids = folk ? [folk.id] : kind === "bandits" ? this.#putBandits(id, heart, tier) : [];
+
+        if (!ids.length) {
+            return false;
+        }
+
+        this.nextStranger++;
+        was.strangers = strangers.slice(1);
+        was.stranger = kind;
+
+        const stranger = { id, kind, at: heart, tier, ids };
+
+        if (kind === "bandits") {
+            Object.assign(stranger, { toll: banditToll(tier, this.random), hailed: [], paid: null, fight: false });
+        } else {
+            Object.assign(stranger, { folk }, kind === "hunter" ? { met: null, tended: null, due: null, off: false } : {});
+        }
+
+        this.strangers.set(id, stranger);
+        this.#event("stranger", { stranger: id, change: "put", kind, at: heart, ids });
+
+        return true;
+    }
+
+    // A pedlar or a hunter (`kind`) met out in the wilds (#putStranger's `id`), one of the folk,
+    // standing by `heart` ([x, y]): a pedlar keeping their own shop (progress.js SHOPS pedlar), a
+    // hunter hurt, down to STRANGERS hunter's `wounded` of their health. Their record (this.folk's),
+    // or null, no room for them
+    #putWayfarer(id, kind, heart) {
+        const sex = this.random.chance(0.5) ? "f" : "m";
+        const seed = this.random.int(1, 0x7fffffff);
+        let square;
+
+        try {
+            square = this.#spots()(heart);
+        } catch {
+            return null;
+        }
+
+        const facing = this.random.next() * Math.PI * 2;
+        const [{ name }] = namePeople([{ sex }], seed);
+        const one = { id: `${id}/${kind}`, local: kind, title: kind === "pedlar" ? "Pedlar" : "Hunter", role: kind, look: kind, talk: kind === "pedlar" ? "pedlar" : "woundedHunter", ...(kind === "pedlar" ? { shop: "pedlar" } : {}), sex, seed, name, people: "human", map: "town", square, facing, routine: { order: "cycle", wait: [6000, 12000], stops: [{ square, facing }] }, stranger: id };
+
+        if (!this.#addFolk(one, null)) {
+            return null;
+        }
+
+        if (kind === "hunter") {
+            const actor = this.battle.actor(one.id);
+
+            actor.hp = Math.max(1, Math.round(actor.maxHp * STRANGERS.hunter.wounded));
+        }
+
+        return one;
+    }
+
+    // Hungry bandits (#putStranger's `id`) put out about `heart` ([x, y]): STRANGERS bandits'
+    // `count` of outlaws (caches.js CACHE_BANDS bandits: their chief, then his band), as strong as
+    // the land is (`tier`), no one's enemy (`neutral`) till they're refused. Their ids, their
+    // chief's first
+    #putBandits(id, heart, tier) {
+        const band = CACHE_BANDS.bandits;
+        const count = this.random.int(...STRANGERS.bandits.count);
+        const keeps = { stranger: id, pack: id, temper: "territorial", roam: 3 };
+        const ids = this.#pack({ creature: band.leader, tier, count: 1 }, heart, { ...keeps, master: true });
+
+        for (let k = 1; k < count && ids.length; k++) {
+            const turn = (k / (count - 1)) * Math.PI * 2;
+
+            ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, [heart[0] + cos(turn) * 2.5, heart[1] + sin(turn) * 2.5], keeps));
+        }
+
+        for (const each of ids) {
+            this.battle.actor(each).neutral = true;
+        }
+
+        return ids;
+    }
+
+    /** The stranger (core/director.js STRANGERS: this.strangers') someone in the battle is one of (by their id), or null. */
+    strangerOf(id) {
+        for (const stranger of this.strangers.values()) {
+            if (stranger.ids.includes(id)) {
+                return stranger;
+            }
+        }
+
+        return null;
+    }
+
+    // The strangers out (core/director.js STRANGERS): each let go once every player's far from
+    // them (and none's fighting them); a wounded hunter going on their way, or limping off
+    // (#hunterAbout); hungry bandits hailing a player who comes near, and fighting one who walks
+    // away from them unpaid (#banditsAbout)
+    #strangersAbout(homes) {
+        for (const stranger of [...this.strangers.values()]) {
+            const living = stranger.ids.map((each) => this.battle.actor(each)).filter((each) => each && !each.dead);
+            const at = living[0] ? [living[0].x, living[0].y] : stranger.at;
+            const fighting = living.some((each) => each.target !== null);
+
+            if (!fighting && !homes.some(({ at: [x, y] }) => hypot(x - at[0], y - at[1]) < STRANGERS.far)) {
+                this.#strangerGone(stranger);
+            } else if (stranger.kind === "hunter") {
+                this.#hunterAbout(stranger, living[0] ?? null);
+            } else if (stranger.kind === "bandits") {
+                this.#banditsAbout(stranger, living);
+            }
+        }
+    }
+
+    // A stranger let go (#strangersAbout): a pedlar or a hunter gone from the folk, the bandits
+    // still standing back to the wild
+    #strangerGone(stranger) {
+        for (const id of stranger.ids) {
+            if (stranger.folk) {
+                this.battle.remove(id);
+                this.folk.delete(id);
+            } else if (this.battle.actor(id) && !this.battle.actor(id).dead) {
+                this.#release(id);
+            }
+        }
+
+        this.strangers.delete(stranger.id);
+        this.#event("stranger", { stranger: stranger.id, change: "gone", ids: stranger.ids });
+    }
+
+    // A wounded hunter (`actor`: theirs): met once a player first comes within STRANGERS seen of
+    // them; healed, off on their way STRANGERS hunter's `thanks` ms after; left unhealed `waits` ms
+    // after they were met, limping off (#strangerOff). Not while they're talking
+    #hunterAbout(stranger, actor) {
+        if (!actor || stranger.off) {
+            return;
+        }
+
+        const now = this.battle.time;
+
+        if (stranger.met === null && [...this.players.keys()].some((id) => {
+            const each = this.battle.actor(id);
+
+            return each && !each.dead && each.map === "town" && hypot(each.x - actor.x, each.y - actor.y) <= STRANGERS.seen;
+        })) {
+            stranger.met = now;
+        }
+
+        const due = stranger.tended ? stranger.due : stranger.met !== null ? stranger.met + STRANGERS.hunter.waits : Infinity;
+
+        if (now >= due && actor.talkingTo === null) {
+            this.#strangerOff(stranger, !stranger.tended);
+        }
+    }
+
+    // A wounded hunter healed by a player (a draught given them, or a spell cast on them): told of
+    // a place round about that player hadn't found, as a fallen adventurer's note tells
+    // (core/director.js noteOf: none, if there's none), and on their way STRANGERS hunter's
+    // `thanks` ms after
+    #tended(stranger, player) {
+        const plan = this.world.plan;
+        const place = plan ? noteOf(rumouredOf(plan), stranger.at, (id, x, y) => player.explored.knows(id, x, y)) : null;
+
+        Object.assign(stranger, { tended: player.id, due: this.battle.time + STRANGERS.hunter.thanks });
+        this.#event("stranger", { stranger: stranger.id, change: "tended", id: stranger.ids[0], by: player.id, ...(place ? { place } : {}) });
+    }
+
+    // A wounded hunter off on their way, away from the nearest player (STRANGERS hunter's `away`
+    // metres off), `limping` (at its `limp` of their pace) if they weren't healed
+    #strangerOff(stranger, limping) {
+        const actor = this.battle.actor(stranger.ids[0]);
+
+        stranger.off = true;
+
+        if (!actor) {
+            return;
+        }
+
+        const nearest = [...this.players.keys()].map((id) => this.battle.actor(id)).filter((each) => each && !each.dead && each.map === "town").sort((a, b) => hypot(a.x - actor.x, a.y - actor.y) - hypot(b.x - actor.x, b.y - actor.y))[0];
+        const [dx, dy] = nearest ? [actor.x - nearest.x, actor.y - nearest.y] : [0, 1];
+        const far = hypot(dx, dy) || 1;
+        let square = null;
+
+        try {
+            square = this.#spots()([actor.x + (dx / far) * STRANGERS.hunter.away, actor.y + (dy / far) * STRANGERS.hunter.away]);
+        } catch {
+            // (Nowhere to go: they stay where they are)
+        }
+
+        if (limping) {
+            for (const pace of ["speed", "pace", "walkPace"]) {
+                actor[pace] *= STRANGERS.hunter.limp;
+            }
+        }
+
+        if (square) {
+            this.battle.reroute(actor.id, { order: "cycle", wait: [60000, 60000], stops: [{ square, facing: atan2(dx, dy) }] });
+        }
+
+        this.#event("stranger", { stranger: stranger.id, change: "off", id: actor.id, limping });
+    }
+
+    // Hungry bandits (`living`: those still standing, their leader first if he is): a player who
+    // comes within STRANGERS bandits' `hail` metres of their leader hailed (once), their leader
+    // turning to them; one hailed who walks off unpaid (`off` metres from him), fought
+    // (#banditsFight). Not once they're paid, or fighting
+    #banditsAbout(stranger, living) {
+        if (stranger.fight || stranger.paid || !living.length) {
+            return;
+        }
+
+        const leader = living[0];
+
+        for (const id of this.players.keys()) {
+            const actor = this.battle.actor(id);
+
+            if (!actor || actor.dead || actor.map !== "town") {
+                continue;
+            }
+
+            const far = hypot(actor.x - leader.x, actor.y - leader.y);
+
+            if (!stranger.hailed.includes(id) && far <= STRANGERS.bandits.hail) {
+                stranger.hailed.push(id);
+                leader.facing = atan2(actor.x - leader.x, actor.y - leader.y);
+                this.#event("stranger", { stranger: stranger.id, change: "hail", id, by: leader.id });
+            } else if (stranger.hailed.includes(id) && far > STRANGERS.bandits.off) {
+                this.#banditsFight(stranger, id);
+
+                return;
+            }
+        }
+    }
+
+    // Hungry bandits refused (by a player: `id`), or walked away from: everyone's enemy now, the
+    // wild's, and after that player; any talk with them over
+    #banditsFight(stranger, id) {
+        stranger.fight = true;
+
+        for (const each of stranger.ids) {
+            const bandit = this.battle.actor(each);
+
+            if (bandit && !bandit.dead) {
+                bandit.neutral = false;
+                this.battle.command(each, { type: "engage", target: id, run: true });
+            }
+        }
+
+        for (const player of this.players.keys()) {
+            const actor = this.battle.actor(player);
+
+            if (actor && stranger.ids.includes(actor.talkingTo)) {
+                this.#talk(actor, null);
+            }
+        }
+
+        this.#event("stranger", { stranger: stranger.id, change: "fight", id, by: stranger.ids[0] });
+    }
+
+    // Something done talking with a stranger (core/director.js STRANGERS: the one the player's
+    // talking with): a wounded hunter given a healing draught (the least they have:
+    // HEALING_DRAUGHTS), healed whole and tended (#tended), or turned down (`tend` "no"), limping
+    // off; hungry bandits paid their toll in gold, or in food (foodFor), and letting them by, or
+    // refused (`toll` "refuse"), fighting
+    #strangerEffect(player, actor, effect) {
+        const stranger = this.strangerOf(actor.talkingTo);
+
+        if (effect.tend) {
+            if (stranger?.kind !== "hunter" || stranger.tended || stranger.off) {
+                return refuse("command");
+            }
+
+            if (effect.tend === "no") {
+                this.#strangerOff(stranger, true);
+
+                return OK;
+            }
+
+            const draught = effect.tend === "draught" ? HEALING_DRAUGHTS.find((id) => player.progress.held(id) > 0) : null;
+
+            if (!draught) {
+                return refuse(effect.tend === "draught" ? "draught" : "command");
+            }
+
+            player.progress.remove(draught, 1);
+            this.battle.mend(stranger.ids[0], { hp: this.battle.actor(stranger.ids[0])?.maxHp ?? 0 });
+            this.#tended(stranger, player);
+
+            return OK;
+        }
+
+        if (stranger?.kind !== "bandits" || stranger.fight || stranger.paid) {
+            return refuse("command");
+        }
+
+        if (effect.toll === "refuse") {
+            this.#banditsFight(stranger, actor.id);
+
+            return OK;
+        }
+
+        if (effect.toll === "gold") {
+            if (player.progress.gold < stranger.toll) {
+                return refuse("gold");
+            }
+
+            player.progress.gold -= stranger.toll;
+        } else if (effect.toll === "food") {
+            const food = foodFor(player.progress.pack);
+
+            if (!food) {
+                return refuse("food");
+            }
+
+            for (const { id, count } of food) {
+                player.progress.remove(id, count);
+            }
+        } else {
+            return refuse("command");
+        }
+
+        stranger.paid = actor.id;
+        this.#event("stranger", { stranger: stranger.id, change: "paid", id: actor.id, by: stranger.ids[0], toll: effect.toll });
+
+        return OK;
+    }
+
+    // Something across the way (core/director.js OBSTACLES) put before a player (`actor`, going
+    // the way of `heading`, or any way): a fallen tree or a rockslide, OBSTACLES `ahead` metres
+    // ahead of them (within a cache's spread of the way they're going), lying across their way,
+    // road or not; out of the settlements and away from the places worth finding and every other
+    // cache, find and obstacle (caches.js cacheClear), on land, its squares all free and no one on
+    // them; over them in the world from then on (#obstaclesChanged). Whether it could be
+    #putObstacle(actor, heading, homes) {
+        const plan = this.world.plan;
+        const squares = squaresOf(this.world.maps.town);
+        const [hx, hy] = heading ?? [0, 1];
+        const kind = this.random.pick(OBSTACLES.kinds);
+        const others = [...this.caches.values(), ...this.finds.values(), ...this.obstacles.values()].map(({ at }) => at);
+        const standing = this.battle.actors.filter((each) => !each.dead && each.map === "town");
+
+        for (let tries = 0; tries < 12; tries++) {
+            const turn = (this.random.next() * 2 - 1) * (heading && tries < 8 ? CACHES.spread : Math.PI);
+            const reach = this.random.int(...OBSTACLES.ahead);
+            const [c, s] = [cos(turn), sin(turn)];
+            const at = [actor.x + (hx * c - hy * s) * reach, actor.y + (hx * s + hy * c) * reach];
+            const box = obstacleBox(kind, at, [hx, hy]);
+            const [x0, y0, x1, y1] = box;
+            const over = ([x, y]) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
+            let free = cacheClear(plan, at, { others }) && !standing.some((each) => over(each.square));
+
+            for (let y = y0; free && y <= y1; y++) {
+                for (let x = x0; free && x <= x1; x++) {
+                    free = !squares.blocked(x, y) && !landAt(plan, x + 0.5, y + 0.5).water;
+                }
+            }
+
+            if (!free) {
+                continue;
+            }
+
+            const id = `obstacle-${this.nextObstacle++}`;
+            const middle = [(x0 + x1 + 1) / 2, (y0 + y1 + 1) / 2];
+            const tier = tierAt(middle, homes.map(({ home }) => home), landAt(plan, ...middle).biome);
+
+            this.obstacles.set(id, { id, kind, at: middle, box, tier, work: OBSTACLES[kind].work, done: 0, swings: {} });
+            this.#obstaclesChanged();
+            this.#event("obstacle", { obstacle: id, change: "put", kind, at: middle, box });
+
+            return true;
+        }
+
+        return false;
+    }
+
+    // What's across the way told to the world (overworld.js setObstacles): its squares blocked
+    // (and those of one gone, free again), the way round found again (navigation.js dropTiles),
+    // and told (`tell`), for what's drawn of the ground
+    #obstaclesChanged({ tell = true } = {}) {
+        const town = this.world.maps?.town;
+
+        if (!town?.setObstacles) {
+            return;
+        }
+
+        const boxes = town.setObstacles([...this.obstacles.values()]);
+
+        for (const box of boxes) {
+            dropTiles(town, box);
+        }
+
+        if (tell && boxes.length) {
+            this.#event("obstacles", { boxes });
+        }
+    }
+
+    // How far someone (`actor`) is from something across the way: from the nearest of its squares (metres)
+    #reachOf({ box: [x0, y0, x1, y1] }, actor) {
+        return hypot(Math.max(x0 - actor.x, 0, actor.x - (x1 + 1)), Math.max(y0 - actor.y, 0, actor.y - (y1 + 1)));
+    }
+
+    // A player set to clearing something across the way (`id`: OBSTACLES'), held on it: on their
+    // feet, within its reach, with the breath for it; stopped where they stand, facing it. Or
+    // leaving off (null)
+    #clear(actor, id) {
+        if (id === null) {
+            actor.clearing = null;
+
+            return OK;
+        }
+
+        const obstacle = this.obstacles.get(id);
+
+        if (!obstacle) {
+            return refuse("gone");
+        }
+
+        if (actor.dead) {
+            return refuse("dead");
+        }
+
+        if (actor.map !== "town" || this.#reachOf(obstacle, actor) > OBSTACLES.reach) {
+            return refuse("far");
+        }
+
+        if (actor.stamina < OBSTACLES.stamina) {
+            return refuse("tired");
+        }
+
+        this.battle.command(actor.id, { type: "stop" });
+        actor.clearing = id;
+        actor.facing = atan2(obstacle.at[0] - actor.x, obstacle.at[1] - actor.y);
+        obstacle.swings[actor.id] ??= this.battle.time;
+
+        return OK;
+    }
+
+    // Those clearing what's across the way (#clear), `ms` on: each still on their feet within its
+    // reach, not gone off nor fighting, and with the breath for it (OBSTACLES stamina a second),
+    // doing their share of it (clearRate: more with an axe-like weapon or a hammer), and swinging
+    // at it every OBSTACLES swing ms (told, for it to be seen and heard); one who's left off told
+    // so. Cleared once it's all done, all of them at it together (#obstacleCleared)
+    #clearing(ms) {
+        for (const obstacle of [...this.obstacles.values()]) {
+            const at = [];
+
+            for (const id of this.players.keys()) {
+                const actor = this.battle.actor(id);
+
+                if (actor?.clearing !== obstacle.id) {
+                    continue;
+                }
+
+                const breath = (OBSTACLES.stamina * ms) / 1000;
+                const tired = actor.stamina < breath;
+
+                if (actor.dead || actor.map !== "town" || actor.path.length || actor.order || actor.target !== null || this.#reachOf(obstacle, actor) > OBSTACLES.reach + 0.5 || tired) {
+                    actor.clearing = null;
+                    delete obstacle.swings[id];
+                    this.#event("obstacle", { obstacle: obstacle.id, change: "left", id, ...(tired && !actor.dead ? { tired: true } : {}) });
+
+                    continue;
+                }
+
+                actor.stamina -= breath;
+                obstacle.done += (clearRate(actor.weapon) * ms) / 1000;
+                at.push(actor);
+
+                if (this.battle.time >= (obstacle.swings[id] ?? 0)) {
+                    obstacle.swings[id] = this.battle.time + OBSTACLES.swing;
+                    this.#event("obstacle", { obstacle: obstacle.id, change: "swing", id, kind: obstacle.kind });
+                }
+            }
+
+            if (at.length && obstacle.done >= obstacle.work) {
+                this.#obstacleCleared(obstacle, at);
+            }
+        }
+    }
+
+    // Something across the way cleared (by `clearers`: their actors): gone from the world for
+    // everyone (#obstaclesChanged), and what it turns up (core/director.js clearedTurnsUp):
+    // brigands waiting to jump those who cleared it the moment they have, the land's cache band
+    // there, out OBSTACLES `from` metres off round it and running at them; or what spilled under
+    // it, a share for each who cleared it, theirs to take where it lay (rollSpilled); or nothing
+    #obstacleCleared(obstacle, clearers) {
+        const plan = this.world.plan;
+
+        this.obstacles.delete(obstacle.id);
+
+        for (const actor of clearers) {
+            actor.clearing = null;
+        }
+
+        this.#obstaclesChanged();
+
+        const turned = clearedTurnsUp(this.random);
+        const ids = [];
+        const grounds = [];
+
+        if (turned === "brigands") {
+            const band = cacheBand(landAt(plan, ...obstacle.at).biome, this.random);
+            const count = this.random.int(...OBSTACLES.count);
+
+            for (let k = 0; k < count; k++) {
+                const turn = (k / count) * Math.PI * 2 + this.random.next();
+                const far = this.random.int(...OBSTACLES.from);
+
+                ids.push(...this.#pack({ creature: k ? band.folk : band.leader, tier: obstacle.tier, count: 1 }, [obstacle.at[0] + cos(turn) * far, obstacle.at[1] + sin(turn) * far], {}));
+            }
+
+            ids.forEach((id, k) => this.battle.command(id, { type: "engage", target: clearers[k % clearers.length].id, run: true }));
+        } else if (turned === "spilled") {
+            for (const actor of clearers) {
+                const ground = `ground-${this.nextGround++}`;
+
+                this.ground.set(ground, { id: ground, bundle: rollSpilled(obstacle.tier, this.random), for: actor.id, from: "obstacle", map: "town", square: [Math.floor(obstacle.at[0]), Math.floor(obstacle.at[1])], until: this.battle.time + GROUND_MS });
+                grounds.push(ground);
+            }
+        }
+
+        this.#event("obstacle", { obstacle: obstacle.id, change: "cleared", kind: obstacle.kind, at: obstacle.at, by: clearers.map(({ id }) => id), turned, ids, grounds });
+    }
+
+    // What's across the way let go once every player's OBSTACLES far from it (and no one's
+    // clearing it): gone from the world
+    #obstaclesAbout(homes) {
+        let changed = false;
+
+        for (const obstacle of [...this.obstacles.values()]) {
+            const clearing = [...this.players.keys()].some((id) => this.battle.actor(id)?.clearing === obstacle.id);
+
+            if (!clearing && !homes.some(({ at: [x, y] }) => hypot(x - obstacle.at[0], y - obstacle.at[1]) < OBSTACLES.far)) {
+                this.obstacles.delete(obstacle.id);
+                this.#event("obstacle", { obstacle: obstacle.id, change: "gone" });
+                changed = true;
+            }
+        }
+
+        if (changed) {
+            this.#obstaclesChanged();
+        }
     }
 
     // A cache put out ahead of a player (`actor`, going the way of `heading`, or any way), as
@@ -10332,6 +11192,11 @@ export class Host {
 
         if (effect.follower) {
             return this.#tell(player, actor, effect.follower);
+        }
+
+        // (A wounded hunter given a draught, or turned down; hungry bandits paid, or refused)
+        if (effect.tend || effect.toll) {
+            return this.#strangerEffect(player, actor, effect);
         }
 
         // (A courtesan's company: only hers to give)
