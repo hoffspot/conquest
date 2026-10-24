@@ -225,6 +225,9 @@ test("loaded again, the game asks the server for none of its code, engine, WebAs
     await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000, polling: 250 });
     expect(files(fetched)).toEqual(["/js/app/version.js"]);
 
+    // (And the loading screen knew: all of it from this device, none downloaded)
+    expect(await page.evaluate(() => ({ kept: window.pellagos.loader.kept === window.pellagos.loader.total, downloaded: window.pellagos.loader.downloaded }))).toEqual({ kept: true, downloaded: 0 });
+
     // One the service worker hasn't (as if it changed): that one alone, by its hash
     const gone = await page.evaluate(async () => {
         const cache = await caches.open("pellagos-boot-v2");

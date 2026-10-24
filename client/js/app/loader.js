@@ -30,7 +30,14 @@ export class Loader {
         this.groups = manifest.map((group) => ({ ...group, total: group.files.reduce((sum, [, bytes]) => sum + bytes, 0), loaded: 0, done: 0, time: 0, started: 0 }));
         this.total = this.groups.reduce((sum, group) => sum + group.total, 0);
         this.loaded = 0;
+
+        /** Of what's loaded, how much came from this device (what the service worker keeps: sw.js) and how much was downloaded. */
+        this.kept = 0;
+        this.downloaded = 0;
+
+        /** The file being loaded, and whether it came from this device. */
         this.current = "";
+        this.currentKept = false;
         this.files = new Map();
         this.blobs = new Map();
     }
@@ -71,8 +78,12 @@ export class Loader {
             throw new Error(`Couldn't download ${path} (${response.status})`);
         }
 
-        // (Data is kept, by its name; code isn't: the page imports it from the cache)
+        // (Data is kept, by its name; code isn't: the page imports it from the cache. A copy the
+        // service worker keeps says so: sw.js handed)
         const keep = Boolean(hash && TYPES[path.split(".").pop()]);
+        const fromDevice = response.headers.get("X-Pellagos-Kept") === "1";
+
+        this.currentKept = fromDevice;
         const chunks = [];
         let received = 0;
 
@@ -84,6 +95,13 @@ export class Loader {
             received += length;
             group.loaded += counted;
             this.loaded += counted;
+
+            if (fromDevice) {
+                this.kept += counted;
+            } else {
+                this.downloaded += counted;
+            }
+
             onProgress(this);
         };
 
@@ -114,6 +132,7 @@ export class Loader {
         if (received < bytes) {
             group.loaded += bytes - received;
             this.loaded += bytes - received;
+            this[fromDevice ? "kept" : "downloaded"] += bytes - received;
         }
 
         if (keep) {

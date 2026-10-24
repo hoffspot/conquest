@@ -83,6 +83,23 @@ export function setUpInstall({ button, hint }) {
  *     those files and can let go of what no release in use lists.
  */
 /**
+ * Ask the browser to keep what the game's downloaded for good (navigator.storage.persist), where
+ * it's installed (on the Home Screen, or as an app): where browsers grant it without asking. Not in
+ * a tab, where Firefox asks the player. Resolves to whether it's kept for good.
+ */
+export async function keepDownloads(storage = globalThis.navigator?.storage, installed = isInstalledApp()) {
+    if (!installed || !storage?.persist) {
+        return false;
+    }
+
+    try {
+        return (await storage.persisted?.()) || (await storage.persist());
+    } catch {
+        return false;
+    }
+}
+
+/**
  * Wait (at most `ms`) for the service worker to be looking after the page: at once if it already
  * is, as it is after the first visit. On the first, it's just been registered, and what the loader
  * downloads before it takes over isn't kept, so it's given a moment first.

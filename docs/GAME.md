@@ -4891,7 +4891,18 @@ it.
    open on an older one (generated/asset_streaming_plan.md, section 5). On a first visit the
    loader waits for the service worker to take over (3 s at most), so it keeps what's downloaded.
    The page itself, and `version.js` (stamped with the commit after the manifest's made), are
-   checked with the server on each load. The game's own server (`npm start`, `npm run
+   checked with the server on each load, by the service worker's own copy's tag (`If-None-Match`),
+   so "not modified" doesn't hang on the browser's HTTP cache, which it may have let go. The
+   loading screen says "Loading" for a file from this device (a copy the service worker keeps,
+   which says so: `X-Pellagos-Kept`) and "Downloading" for one that's downloaded, and how much of
+   it all was downloaded ("13.9 MB in 0.4 s: 0.1 MB downloaded, the rest from this device"), so a
+   load that downloads nothing doesn't look like one that downloads everything. Installed (on the
+   Home Screen, or as an app), the game asks the browser to keep what it's downloaded for good
+   (`navigator.storage.persist`: `device.js keepDownloads`), where browsers grant it without
+   asking; on an iPhone in Safari, Game options says it's kept for good on the Home Screen, as
+   Safari lets a site's go after a week unused. The catalog's models are given half the room the
+   browser says it has left, 1 GiB at most (recent Chrome says 10 GiB more than it's using,
+   whatever the disk). The game's own server (`npm start`, `npm run
    world-server`) tags each file by its hash, so one that's the same is "not modified" whatever
    date a release gave it, and sends code and pages compressed (brotli or gzip).
    An update's downloaded in the background while the game's open (`app/updater.js`): every 15
