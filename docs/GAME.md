@@ -4973,6 +4973,29 @@ it.
      kept.
    - **Joining** brings the character played last; **Change who comes** chooses another kept, or
      a new one (with fewer than six).
+   - **Back into a world** (app/rejoin.js; main.js `goBackIn`). While the player's in another's
+     world (one on a world server, or a friend's joined by its code), where is kept on this device
+     (`pellagos.inworld`: the server and world, or the code and the broker it was joined through;
+     the character on this device, or their hero's slot in a world that keeps them), written again
+     every ten seconds (`REJOIN.every`). It's let go of once they leave as they mean to (Quit),
+     are sent out, or the world's host closes it.
+     - **When:** the game started again within half an hour of that (`REJOIN.within`), after a
+       crash or a reload, it goes straight back in. A join link followed goes back in if it's that
+       world's, else it's asked to join as ever. A game whose link's lost for good while playing
+       goes straight back in too, from the title.
+     - **The dialog:** "Back into Thornwick", "On Tom's Mac mini, as Ada." (or "Back into Wren's
+       world", "By its code, ABCD, as Ada."), listing each stage of the way (`REJOIN_STAGES`):
+       - on a world server: reaching it, showing who they are, finding their place in the world,
+         opening the way in, and coming in, the world sent;
+       - in a friend's: reaching the server, finding the world by its code (and linking to it),
+         and coming in.
+     - **Each stage** is marked under way (a gold ring turning), done (a tick), or where it went
+       wrong (a cross), with why, in the words joining uses (the server's, the relay's or the
+       host's), and **Try again**. **Cancel** (or Escape) stops it, closing whatever link it had
+       made, and lets the world go.
+     - **In:** once the world's come, the loading screen builds it as ever, and the same character
+       carries on where they stood. On a world server, their place is kept five minutes, and the
+       session left behind is taken over (docs/SERVER.md, *Coming in again while they're in*).
    - **You** (app/you.js; docs/SERVER.md, "Players and their codes"), under the title's buttons:
      the player's own identity, the same on every server, made the first time it's wanted (going
      by the name of the character played last). **The name you go by**, kept when it's changed;

@@ -6699,6 +6699,86 @@ dialog.together a {
     word-break: break-all;
 }
 
+/* The way back into a world (app/rejoin.js; main.js goBackIn): each stage of it, a mark beside it
+   for how it stands: still to come, a dim ring; under way, a gold ring turning; done, a tick; gone
+   wrong, a cross */
+.rejoin-stages {
+    list-style: none;
+    margin: 14px 0 6px;
+    padding: 0;
+}
+
+.rejoin-stages li {
+    position: relative;
+    padding: 5px 0 5px 30px;
+    line-height: 1.35;
+    color: var(--faint);
+}
+
+.rejoin-stages li::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    margin-top: -9px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    opacity: 0.5;
+    box-sizing: content-box;
+}
+
+.rejoin-stages li[data-state="now"] {
+    color: var(--gold-bright);
+}
+
+.rejoin-stages li[data-state="now"]::before {
+    opacity: 1;
+    border-right-color: transparent;
+    animation: rejoin-turn 0.9s linear infinite;
+}
+
+.rejoin-stages li[data-state="done"] {
+    color: var(--ink);
+}
+
+.rejoin-stages li[data-state="done"]::before {
+    content: "✓";
+    border-color: transparent;
+    opacity: 1;
+    color: var(--ally);
+    font-weight: 800;
+    line-height: 14px;
+    text-align: center;
+}
+
+.rejoin-stages li[data-state="failed"] {
+    color: var(--health-low);
+}
+
+.rejoin-stages li[data-state="failed"]::before {
+    content: "✕";
+    border-color: transparent;
+    opacity: 1;
+    font-weight: 800;
+    line-height: 14px;
+    text-align: center;
+}
+
+@keyframes rejoin-turn {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rejoin-stages li[data-state="now"]::before {
+        animation: none;
+        border-right-color: currentColor;
+    }
+}
+
 /* Worlds on servers (app/servers.js): each server's card (its address, how it is), its worlds
    below it, each a card to enter by; fields for an address, a code, a key, a world to be made */
 dialog.worlds {

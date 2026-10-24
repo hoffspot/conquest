@@ -1378,6 +1378,11 @@ export class Game {
         return this.host.players.get(this.me);
     }
 
+    /** In another's world, the name of whose it is (their hero's); else null. */
+    get hostName() {
+        return this.remote ? (this.host.players.get(HOST_PLAYER)?.hero?.name ?? null) : null;
+    }
+
     /** Where the player stands with their people, and the requests they carry (core/standing.js Standing). */
     get standing() {
         return this.self.standing;
@@ -3142,7 +3147,7 @@ export class Game {
         const guests = this.remote ? 0 : (this.hosting?.players.size ?? 0);
         const about = this.linkAbout ?? {};
         const view = worldLinkOf({
-            joined: this.remote ? { rtt: this.remote.lately, host: this.host.players.get(HOST_PLAYER)?.hero?.name ?? null } : null,
+            joined: this.remote ? { rtt: this.remote.lately, host: this.hostName } : null,
             hosting: guests ? { guests, slowest: this.hosting.slowest() } : null,
             lost: this.link !== null,
             about: { ...about, how: typeof about.how === "function" ? about.how() : about.how },
