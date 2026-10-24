@@ -17,11 +17,12 @@
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
 import { CACHE_BANDS, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
+import { DIRECTOR, FINDS, noteOf, rollRemains, shuffled, WELL_RESTED } from "./director.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
-import { rumouredBy } from "./rumours.js";
+import { rumouredBy, rumouredOf } from "./rumours.js";
 import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
@@ -658,7 +659,7 @@ export const BOUGHT = Object.freeze({
 });
 
 /** Every boon there is, bought or drunk, by its id: what one kept between visits is taken as (Host restoreVitals). */
-const BOONS = Object.freeze(Object.fromEntries([...Object.values(BOUGHT), ...Object.values(ITEMS).map(({ use }) => use)].filter((each) => each?.boon).map(({ boon }) => [boon.id, boon])));
+const BOONS = Object.freeze(Object.fromEntries([...Object.values(BOUGHT), ...Object.values(ITEMS).map(({ use }) => use), { boon: WELL_RESTED }].filter((each) => each?.boon).map(({ boon }) => [boon.id, boon])));
 
 /**
  * A courtesan's company, paid for by talking (dialogue.js courtesan, `{ company: true, price }`):
@@ -1035,14 +1036,24 @@ export class Host {
          * The adventurers' caches out in the wilds (core/caches.js), by id: { id, at ([x, y]: its
          * heart, where its guards walk round), chest (its square), band (CACHE_BANDS' id), tier
          * (its band's, their leader's CACHES.lead more), ids (its guards, their leader first),
-         * opened }; and how far each player's crossed the wilds since the last was put out
-         * before them (by id: { at, walked, next (how far it's to be: CACHES.every, rolled once
-         * they're as far as the least it could be; null till then), heading (the way they were
-         * last going: [x, y], one long; or null) }).
+         * opened }; and how far each player's crossed the wilds since the wilds director last
+         * dealt something before them (core/director.js; by id: { at, walked, next (how far it's
+         * to be: DIRECTOR.every, rolled once they're as far as the least it could be; null till
+         * then), heading (the way they were last going: [x, y], one long; or null), deck (the
+         * cards still to deal, the next first: shuffled, once there's been one), last (the card
+         * dealt last, or none) }).
          */
         this.caches = new Map();
         this.nextCache = 1;
         this.travel = new Map();
+
+        /**
+         * The peaceful finds the wilds director's dealt (core/director.js FINDS), by id: { id,
+         * kind ("remains" or "campsite"), at ([x, y]: its middle), square, tier (the land's
+         * there), searched (remains: once they have been) }.
+         */
+        this.finds = new Map();
+        this.nextFind = 1;
 
         /**
          * The treasures hunted (core/treasure.js), by id: { id, owner (whose map it was: a
@@ -2351,6 +2362,7 @@ export class Host {
             treasures: structuredClone([...this.treasures.entries()]),
             nextTreasure: this.nextTreasure,
             travel: structuredClone([...this.travel.entries()]),
+            ...(this.nextFind > 1 ? { finds: structuredClone([...this.finds.entries()]), nextFind: this.nextFind } : {}),
             ground: structuredClone([...this.ground.values()]),
             campfires: structuredClone(this.campfires),
             nextGround: this.nextGround,
@@ -2524,6 +2536,8 @@ export class Host {
         host.treasures = new Map(structuredClone(snapshot.treasures ?? []));
         host.nextTreasure = snapshot.nextTreasure ?? 1;
         host.travel = new Map(structuredClone(snapshot.travel ?? []));
+        host.finds = new Map(structuredClone(snapshot.finds ?? []));
+        host.nextFind = snapshot.nextFind ?? 1;
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
         host.nextGround = snapshot.nextGround ?? 1;
         host.campfires = structuredClone(snapshot.campfires ?? []);
@@ -3232,6 +3246,11 @@ export class Host {
         // (A dungeon's chest: opened, a share in it for each player there)
         if (dropped.chest && dropped.dungeon) {
             return this.#openDungeonChest(dropped);
+        }
+
+        // (A fallen adventurer's remains out in the wilds: searched, a share for each player there)
+        if (dropped.chest && dropped.find) {
+            return this.#searchRemains(dropped);
         }
 
         // (A bundle of a creature's spoils: its gold, and each thing there's room for; what
@@ -8007,12 +8026,21 @@ export class Host {
         }
     }
 
-    // The adventurers' caches (core/caches.js): those every player's left far behind let go (their
-    // guards, and the cache); and, for each player crossing the wilds (out of the settlements),
-    // one put out ahead of them once they've crossed as far as the last one's CACHES.every had it:
-    // one for those together (#groups), the way each of them has come counted afresh from it
+    // The wilds director (core/director.js): the adventurers' caches (core/caches.js) and the
+    // peaceful finds every player's left far behind let go (a cache's guards too); and, for each
+    // player crossing the wilds (out of the settlements), something dealt ahead of them once
+    // they've crossed as far as DIRECTOR.every had it (#deal): one for those together (#groups),
+    // the way each of them has come counted afresh from it
     #caches(homes) {
         const groups = this.#groups();
+
+        for (const [id, find] of [...this.finds]) {
+            if (!homes.some(({ at: [x, y] }) => hypot(x - find.at[0], y - find.at[1]) < FINDS.far)) {
+                this.ground.delete(`chest-${id}`);
+                this.finds.delete(id);
+                this.#event("find", { find: id, change: "gone" });
+            }
+        }
 
         for (const [id, cache] of [...this.caches]) {
             const fighting = cache.ids.some((each) => (this.battle.actor(each)?.target ?? null) !== null);
@@ -8065,13 +8093,13 @@ export class Host {
             was.at = at;
 
             // (How far the next is, rolled once they're as far as the least it could be)
-            if (was.next === null && was.walked >= CACHES.every[0]) {
-                was.next = this.random.int(...CACHES.every);
+            if (was.next === null && was.walked >= DIRECTOR.every[0]) {
+                was.next = this.random.int(...DIRECTOR.every);
             }
 
             const group = groups.find(({ players }) => players.includes(player)) ?? null;
 
-            if (was.next !== null && was.walked >= was.next && this.#putCache(actor, was.heading, homes, group)) {
+            if (was.next !== null && was.walked >= was.next && this.#deal(actor, was, homes, group)) {
                 const together = group?.players ?? [player];
 
                 for (const each of together) {
@@ -8086,17 +8114,39 @@ export class Host {
         }
     }
 
-    // A cache put out ahead of a player (`actor`, going the way of `heading`, or any way), as
-    // CACHES has it, where it may be (cacheClear: off the roads, away from everywhere; openAround:
-    // on open ground): its band of the land there, as strong as the land or the mightiest player
-    // near it, their leader by it and the rest on their round about it; against the side of the
-    // `group` they're in (#side), more of the band and each tougher, their leader tougher still
-    // (strength.js SCALING); whether it could be
-    #putCache(actor, heading, homes, group = null) {
+    // The wilds director's next card dealt ahead of a player (`actor`; `was`: how they've come, and
+    // the deck: core/director.js), for their `group`: an adventurer's cache (#putCache), or a
+    // peaceful find (#putFind). Dealt, the next's the one after (a deck all dealt shuffled again,
+    // not the one just dealt first); nowhere to put it, it's tried again a moment later. Whether
+    // it was
+    #deal(actor, was, homes, group = null) {
+        was.deck ??= shuffled(this.random);
+
+        const card = was.deck[0];
+
+        if (!(card === "cache" ? this.#putCache(actor, was.heading, homes, group) : this.#putFind(card, actor, was.heading, homes))) {
+            return false;
+        }
+
+        was.last = card;
+        was.deck.shift();
+
+        if (!was.deck.length) {
+            was.deck = shuffled(this.random, card);
+        }
+
+        return true;
+    }
+
+    // Where something's put out ahead of a player (`actor`, going the way of `heading`, or any way)
+    // as a cache is (CACHES: `ahead` metres, within `spread` of the way they're going), where it
+    // may be (caches.js cacheClear: off the roads, away from everywhere and every other cache and
+    // find; openAround: on open ground): its middle and its square ({ heart, square }), or null
+    #spotAhead(actor, heading) {
         const plan = this.world.plan;
         const overworld = this.world.maps.town;
         const squares = squaresOf(overworld);
-        const others = [...this.caches.values()].map(({ at }) => at);
+        const others = [...this.caches.values(), ...this.finds.values()].map(({ at }) => at);
         const [hx, hy] = heading ?? [0, 1];
 
         for (let tries = 0; tries < 12; tries++) {
@@ -8104,28 +8154,107 @@ export class Host {
             const reach = CACHES.ahead[0] + this.random.next() * (CACHES.ahead[1] - CACHES.ahead[0]);
             const [c, s] = [cos(turn), sin(turn)];
             const at = [actor.x + (hx * c - hy * s) * reach, actor.y + (hx * s + hy * c) * reach];
+            const square = [Math.floor(at[0]), Math.floor(at[1])];
+            const heart = [square[0] + 0.5, square[1] + 0.5];
 
-            const chest = [Math.floor(at[0]), Math.floor(at[1])];
-            const heart = [chest[0] + 0.5, chest[1] + 0.5];
+            if (cacheClear(plan, heart, { nearRoad: (x, y, within) => overworld.nearRoad?.(x, y, within) ?? false, others }) && openAround(heart, (x, y) => squares.blocked(x, y))) {
+                return { heart, square };
+            }
+        }
 
-            if (!cacheClear(plan, heart, { nearRoad: (x, y, within) => overworld.nearRoad?.(x, y, within) ?? false, others }) || !openAround(heart, (x, y) => squares.blocked(x, y))) {
+        return null;
+    }
+
+    // A peaceful find (core/director.js FINDS: a fallen adventurer's remains, to search; an old
+    // campsite) put out ahead of a player (#spotAhead), as strong as the land is there (its tier,
+    // for what's in the remains); the remains to search there, a chest that's no chest. Whether it
+    // could be
+    #putFind(kind, actor, heading, homes) {
+        const spot = this.#spotAhead(actor, heading);
+
+        if (!spot) {
+            return false;
+        }
+
+        const { heart, square } = spot;
+        const plan = this.world.plan;
+        const id = `find-${this.nextFind++}`;
+        const tier = tierAt(heart, homes.map(({ home }) => home), landAt(plan, ...heart).biome);
+
+        this.finds.set(id, { id, kind, at: heart, square, tier, searched: false });
+
+        if (kind === "remains") {
+            this.ground.set(`chest-${id}`, { id: `chest-${id}`, chest: true, remains: true, find: id, for: null, map: "town", square: [...square], until: null });
+        }
+
+        this.#event("find", { find: id, change: "put", kind, at: heart });
+
+        return true;
+    }
+
+    // A fallen adventurer's remains searched (`dropped`, their ground's: core/director.js FINDS
+    // remains): in their stead a share for each player near (rollRemains, as rich as the land
+    // there is strong), theirs alone to take where they lay; and now and then a note in their hand
+    // of a place round about that player hasn't found (noteOf), told them as a crier would
+    #searchRemains(dropped) {
+        const find = this.finds.get(dropped.find);
+
+        this.ground.delete(dropped.id);
+
+        if (!find) {
+            return refuse("gone");
+        }
+
+        find.searched = true;
+
+        const plan = this.world.plan;
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+
+            if (!actor || actor.dead || actor.map !== "town" || hypot(actor.x - find.at[0], actor.y - find.at[1]) > SPOILS_REACH) {
                 continue;
             }
 
-            const might = Math.max(0, ...[...this.players.values()].filter((player) => {
-                const each = this.battle.actor(player.id);
+            const bundle = rollRemains(find.tier, this.random, { people: player.realm });
+            const note = plan && this.random.chance(FINDS.remains.note) ? noteOf(rumouredOf(plan), find.at, (id, x, y) => player.explored.knows(id, x, y)) : null;
+            const ground = `ground-${this.nextGround++}`;
 
-                return each && each.map === "town" && hypot(each.x - heart[0], each.y - heart[1]) <= CACHES.near;
-            }).map((player) => player.progress.might()));
-            const tier = cacheTier(tierAt(heart, homes.map(({ home }) => home), landAt(plan, ...heart).biome), might);
-            const band = cacheBand(landAt(plan, ...heart).biome, this.random);
-
-            this.#putBand(heart, chest, { band, tier, count: cacheCount(tier, this.random), group });
-
-            return true;
+            this.ground.set(ground, { id: ground, bundle, for: player.id, from: "remains", map: "town", square: [...find.square], until: this.battle.time + GROUND_MS });
+            this.#event("spoils", { id: player.id, ground, from: dropped.id, creature: "remains", find: find.id, ...(note ? { note } : {}) });
         }
 
-        return false;
+        this.#event("find", { find: find.id, change: "searched" });
+
+        return OK;
+    }
+
+    // A cache put out ahead of a player (`actor`, going the way of `heading`, or any way), as
+    // CACHES has it, where it may be (cacheClear: off the roads, away from everywhere; openAround:
+    // on open ground): its band of the land there, as strong as the land or the mightiest player
+    // near it, their leader by it and the rest on their round about it; against the side of the
+    // `group` they're in (#side), more of the band and each tougher, their leader tougher still
+    // (strength.js SCALING); whether it could be
+    #putCache(actor, heading, homes, group = null) {
+        const spot = this.#spotAhead(actor, heading);
+
+        if (!spot) {
+            return false;
+        }
+
+        const { heart, square: chest } = spot;
+        const plan = this.world.plan;
+        const might = Math.max(0, ...[...this.players.values()].filter((player) => {
+            const each = this.battle.actor(player.id);
+
+            return each && each.map === "town" && hypot(each.x - heart[0], each.y - heart[1]) <= CACHES.near;
+        }).map((player) => player.progress.might()));
+        const tier = cacheTier(tierAt(heart, homes.map(({ home }) => home), landAt(plan, ...heart).biome), might);
+        const band = cacheBand(landAt(plan, ...heart).biome, this.random);
+
+        this.#putBand(heart, chest, { band, tier, count: cacheCount(tier, this.random), group });
+
+        return true;
     }
 
     // A cache's band put out about its heart ([x, y]; its `chest` square): their leader by it, the
@@ -10050,11 +10179,19 @@ export class Host {
             return "fighting";
         }
 
-        if (this.battle.actors.some((other) => !other.dead && other.map === actor.map && this.battle.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) < REST.clear)) {
+        // (At an old campsite, the wild only nearer: core/director.js FINDS campsite)
+        const clear = this.#campsiteAt(actor) ? FINDS.campsite.safe : REST.clear;
+
+        if (this.battle.actors.some((other) => !other.dead && other.map === actor.map && this.battle.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) < clear)) {
             return "hostiles";
         }
 
         return null;
+    }
+
+    // The old campsite (core/director.js FINDS campsite) a player's at, within its `near`, or null
+    #campsiteAt(actor) {
+        return [...this.finds.values()].find((find) => find.kind === "campsite" && actor.map === "town" && hypot(actor.x - find.at[0], actor.y - find.at[1]) <= FINDS.campsite.near) ?? null;
     }
 
     #camp(player, actor, until = null) {
@@ -10069,17 +10206,27 @@ export class Host {
         }
 
         const [dx, dy] = [sin(actor.facing), cos(actor.facing)];
+        // (At an old campsite: the fire lit in its ring of stones, and they wake well rested)
+        const site = this.#campsiteAt(actor);
         const camp = {
             id: `rest-${actor.id}`,
             player: actor.id,
             people: player.realm,
-            fire: [actor.x + dx * 1.6, actor.y + dy * 1.6],
+            fire: site ? [...site.at] : [actor.x + dx * 1.6, actor.y + dy * 1.6],
             tent: { at: [actor.x - dx * 2.4, actor.y - dy * 2.4], facing: actor.facing },
             until: this.battle.time + REST.burns,
         };
 
         this.campfires = [...this.campfires.filter(({ player: whose }) => whose !== actor.id), camp];
         this.battle.mend(actor.id, { hp: actor.maxHp, stamina: actor.maxStamina });
+
+        if (site) {
+            player.boons = [...player.boons.filter(({ id }) => id !== WELL_RESTED.id), { ...WELL_RESTED, until: this.battle.time + WELL_RESTED.ms }];
+            this.#outfit(player);
+            this.#event("find", { find: site.id, change: "camped", by: actor.id });
+            this.#event("boon", { id: player.id, boon: WELL_RESTED.id, label: WELL_RESTED.label, change: "on" });
+        }
+
         this.#sleep(player, actor, "camp", until);
 
         return OK;
