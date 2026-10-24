@@ -107,7 +107,7 @@ export const CATALOG = Object.freeze({
 
     // Spells
     castHeal: { group: "Spells", label: "Casting a heal (made)", about: "A rising shimmer, made in code.", plays: "In place of the healing casts' recordings, until they're downloaded." },
-    healed: { group: "Spells", label: "Healed", about: "A warm swell, made in code.", plays: "Healing that isn't a spell's landing (a priest's blessing, a potion); and in place of the healing landings' recordings, until they're downloaded." },
+    healed: { group: "Spells", label: "Healed", about: "A warm swell, made in code.", plays: "Healing that isn't a spell's landing (a priest's blessing, a potion); a prayer answered at a shrine; and in place of the healing landings' recordings, until they're downloaded." },
     stun: { group: "Spells", label: "Stunned", about: "A zap and a dizzy warble.", plays: "Someone stunned." },
 
     // Fire spells (sound.js spellSounds: by the spell's tier; a cast swells to its release, loudest as it's let go)
@@ -340,7 +340,7 @@ export const CATALOG = Object.freeze({
 
     // War (app/game.js #invasion): an invasion's horns
     warHorn: { group: "War", label: "A war horn", about: "A great horn, made in code: a long, low blast on the G under the bass clef, the lips bending up into it, dying away a little flat.", plays: "An invasion's raiders coming: blown twice, 2.2 seconds apart, where they come out onto the town's road, heard up to 450 metres off; and once where the lines met, once the town's soldiers have all fallen." },
-    warDrums: { group: "War", label: "War drums", about: "A big drum, made in code: a skin's boom falling from 95 to 52 Hz and a slap of low noise as the stick lands, in a rolling beat, the last three quicker.", plays: "The wild's folk (outlaws, goblins, cultists, the restless dead) heard ahead of a player after a long calm, drumming 70 to 90 metres off, heard up to 160 metres off, before they come for them (the wilds director's pacing)." },
+    warDrums: { group: "War", label: "War drums", about: "A big drum, made in code: a skin's boom falling from 95 to 52 Hz and a slap of low noise as the stick lands, in a rolling beat, the last three quicker.", plays: "The wild's folk (outlaws, goblins, cultists, the restless dead) heard ahead of a player after a long calm, drumming 70 to 90 metres off, heard up to 160 metres off, twice over, before they come for them (the wilds director's pacing)." },
     retreatHorn: { group: "War", label: "Sounding the retreat", about: "The same horn, made in code: a short blast, then a long one falling away as it dies.", plays: "An invasion's raiders breaking and running, the town held (not the bandits', who fight to the last): blown where the lines met, heard up to 450 metres off." },
     townHorn: { group: "War", label: "A town's horn", about: "A brighter horn, made in code: a call up a fourth and a fifth (G, C and the G above), the last held.", plays: "A town's soldiers marching out to meet an invasion, 2.4 seconds after the raiders' second blast: blown where their line forms, heard up to 450 metres off; and as a town's lord thanks the player for felling a good share of an invasion's raiders." },
 

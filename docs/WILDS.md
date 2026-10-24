@@ -933,6 +933,52 @@ dens.js; host.js `#dens`; world/dens3d.js; app/game.js `#denning`): seed 2 has 3
 - **Kept** in a snapshot (`dens`, as the wild camps are: `SNAPSHOT_VERSION` 35, a world from before
   with none out).
 
+## Shrines
+
+The wayside shrines out in the land (the world plan's sites of kind "shrine": seed 2 has 26) are
+each to one of the twelve gods (core/shrines.js; core/lore/gods.js `PANTHEON`): the Six of the
+Hearth, whose temples are in the towns (theirs alone), and the Wild Six, the world's own gods,
+worshipped only at the shrines:
+
+| God | Of | Their gift at a shrine (`GIFTS`) |
+| --- | --- | --- |
+| Aurelia, the Dawnmother | life, health and vigour | *Aurelia's Dawn*: 20 more hit points, healing a sixth the stronger |
+| Brannoc, the Red Horn | battle and the hunt | *The Red Horn*: blows and shots a twelfth the harder |
+| Ithriel, the Veiled Star | magic | *A Thread of the Veil*: spells a sixth the harder |
+| Morvaine, the Keeper of the Last Gate | death | *The Lantern's Ward*: a quarter of magic's harm kept off, armour 3% |
+| Seliane, the Rose of Evening | love | *The Rose's Grace*: healing a quarter the stronger, breath back a quarter the faster |
+| Dunmar, Anvilhand | crafts and trades | *Anvilhand's Mettle*: armour 6%, the shield's bash 15% |
+| Tharos, the Thunderlord | the sky, storms and kings | *Thunder in the Hand*: stuns a fifth the more, blows a twentieth the harder, a quarter of the storm's harm kept off |
+| Nerreth, the Deep-Caller | the sea and the rivers | *The Tide's Strength*: a quarter more breath, a third of water's harm kept off |
+| Ceryn, the Harvest Mother | fields, flocks and plenty | *Harvest Plenty*: 15 more hit points, breath back a third the faster |
+| Lunara, the Silver Lady | the moon, the night and the old stones | *Moonsight*: seeing in the dark as the night's creatures do, dodging 5% |
+| Wick, the Wayfarer | roads, luck and clever hands | *Fortune's Wink*: dodging 6%, a quarter more gold found |
+| Bacchar, the Merry Lord | wine, feasts and revels | *Revelry*: half as much breath again, blows 6% the harder, armour 2% the less |
+
+- **Which god's** (`shrinesOf`): the twelve dealt out round the world's shrines in an order of its
+  own (its seed's), so every god has two or three; the same every time.
+- **Prayed at** (tapped, the player walks up to the space before its figure, as to a lectern; a
+  `pray` command within `SHRINE.reach` 4 m of its heart: host.js `#pray`): its god's gift for half an
+  hour (`SHRINE.ms`), a boon as a tavern's drink or a priest's blessing is (host.js `#outfit`: its
+  share of each bonus; `darkSight` on the player's actor, battle.js `canSee`; `fortune` in what's
+  found, `#fortune`). One god's at a time: a new one takes the place of another god's, but a drink
+  and the priests' blessing go on with it. Each shrine answers each player once a world day
+  (daytime.js `dayOf`: refused "The shrine has answered you today", `prayed`); kept in a
+  snapshot (`SNAPSHOT_VERSION` 36). Told what it is and does, a healing's warmth heard, a burst of
+  gold light about them.
+- **A hint** (`rumoursNear`): the god shows them somewhere near the shrine they've still to find,
+  the nearest: written in their journal under *Heard tell* as a crier's rumour is ("Shown at the
+  shrine of Lunara"), in the same words but "of the shrine" (rumours.js `rumourWord` `from`), and
+  circled on their map till it's found.
+- **A sanctuary** (`SHRINE.sanctuary` 60 m round where it rests, sites.js `restingOf`:
+  `sanctuaryAt`):
+  - nothing hostile's put out in it (host.js `#putOut`);
+  - the wild's creatures don't go after anyone in it, and those chasing give up at its edge
+    (battle.js `haven`: as if beyond their leash), unless they've just been struck from it;
+  - a camp's always made there, whatever's about (`campRefusal`);
+  - a rest there cures the poisons, the sicknesses and the withering curse (`SHRINE.cures`:
+    poisoned, envenomed, diseased, the pox, withered), told as each goes ("cured").
+
 ## Tracking
 
 The wild's camps, dens and perilous sites wear trails out into the country round them, as Monster

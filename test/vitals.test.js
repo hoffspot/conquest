@@ -197,4 +197,34 @@ describe("how a player is kept between visits (host.js vitalsOf, restoreVitals)"
         gone.join({ id: "ADA0000002", ...character, place: { x: -5000, y: -5000, facing: 0 } });
         assert.ok(gone.battle.actor("ADA0000002"));
     });
+
+    it("gets a player who came back in far out in the wilds up again in their people's starting town should they fall, not where they came in (the user: \"not being returned to their starting town on death\"), the same on every copy of the world", () => {
+        const host = hosted();
+        const town = host.world.maps.town;
+        const start = [...host.battle.actor(HOST_PLAYER).spawn];
+        const [x, y] = nearestFree(town, [start[0] + 300, start[1] + 40]);
+        const character = host.leave(HOST_PLAYER);
+        const copy = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+        const ops = [];
+
+        host.recorder = (op) => ops.push(decode(encode(op)));
+        host.join({ id: "ADA0000001", ...character, place: { x: x + 0.5, y: y + 0.5, facing: 0 } });
+        copy.join(ops.find(([kind]) => kind === "j")[1]);
+
+        for (const world of [host, copy]) {
+            const actor = world.battle.actor("ADA0000001");
+
+            assert.deepEqual(actor.square, [x, y], "(come in where they left)");
+            assert.deepEqual([actor.spawn, actor.spawnMap], [start, "town"]);
+
+            // (Fallen: up again by the start, as one new to the world would be)
+            Object.assign(actor, { dead: true, hp: 0, respawnAt: world.battle.time });
+            run(world, 200);
+            assert.equal(actor.dead, false);
+            assert.ok(Math.hypot(actor.x - start[0], actor.y - start[1]) < 6, `(got up at ${actor.square}, the start's ${start})`);
+            assert.deepEqual(world.placeOf("ADA0000001"), { x: actor.x, y: actor.y, facing: actor.facing });
+        }
+
+        assert.equal(copy.checksum(), host.checksum());
+    });
 });
