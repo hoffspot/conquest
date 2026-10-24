@@ -5,6 +5,7 @@
     "admin.spec.js › its name, given in Settings, is the server's at once: the page's own, its Overview's, and the game's opened from it; left empty, the computer's own again": 7.2,
     "admin.spec.js › the management page on the server's computer: a world made, started, set aside, backed up and restored, a player's ticket reissued, exported, deleted with its name typed, and brought in again": 7.4,
     "broker.spec.js › a host no direct link gets through to is joined relayed by the server; and hidden from its list once the server doesn't relay": 95.3,
+    "broker.spec.js › a host whose game's reloaded opens their world to friends again under its code, each stage shown, and the friend in it goes straight back in": 200.5,
     "broker.spec.js › a player's own world through the server's broker: listed on it, joined from the Worlds screen point to point; its listing gone when it's closed": 103.8,
     "building-lab.spec.js › builds a street of every style of house in a few draw calls, and the town": 10.6,
     "building-lab.spec.js › builds the taverns with their names and signs, the guild, the churches of every grade, the smithy, a town hall, a keep, and barracks and a guardhouse": 6.3,

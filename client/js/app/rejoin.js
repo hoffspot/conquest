@@ -1,10 +1,12 @@
 // Back into a world after a crash or a reload (docs/GAME.md *Back into a world*). While the player's
-// in another's world (one on a world server, or a friend's, joined by its code), where is kept on
-// this device (`pellagos.inworld`), written again every ten seconds as they play (REJOIN.every),
-// and let go of once they leave it as they mean to (or are sent out). The game started again
-// within half an hour of the last time it was written (REJOIN.within), it goes straight back in:
-// a dialog shows each stage of the way as it's come to (REJOIN_STAGES), and what's wrong if it
-// can't get there, to try again; Cancel stops it.
+// in another's world (one on a world server, or a friend's, joined by its code), or has their own
+// open to friends through a server's broker, where is kept on this device (`pellagos.inworld`),
+// written again every ten seconds as they play (REJOIN.every), and let go of once they leave it as
+// they mean to (or are sent out, or close their own to others). The game started again within
+// half an hour of the last time it was written (REJOIN.within), it goes straight back in (their
+// own world opened to friends again, under its code if the broker's kept it): a dialog shows each
+// stage of the way as it's come to (REJOIN_STAGES), and what's wrong if it can't get there, to try
+// again; Cancel stops it.
 //
 // Pure: main.js keeps it, reads it and follows it (its storage handed in).
 
@@ -28,6 +30,10 @@ export const REJOIN_STAGES = Object.freeze({
         ["find", "Finding the world by its code"],
         ["ask", "Coming in, and the world sent"],
     ]),
+    hosting: Object.freeze([
+        ["load", "Loading your world"],
+        ["reopen", "Opening it to your friends again"],
+    ]),
 });
 
 const CODE = /^[A-Z]{4}$/;
@@ -47,6 +53,10 @@ function valid(record) {
         return typeof record.code === "string" && CODE.test(record.code) ? record : null;
     }
 
+    if (record.kind === "hosting") {
+        return typeof record.code === "string" && CODE.test(record.code) && typeof record.token === "string" && typeof record.broker === "string" && typeof record.character === "string" ? record : null;
+    }
+
     return null;
 }
 
@@ -56,7 +66,9 @@ function valid(record) {
  * slot, in a world that keeps them; else null), character (the id of the character on this device
  * they came as, or null), name (who they are there) }; in a friend's { kind: "friend", code,
  * broker (the address of the server's broker it was joined through, or null for the old relay),
- * character, name, host (whose world it is) }.
+ * character, name, host (whose world it is) }; their own, open to friends through a server's
+ * broker, { kind: "hosting", code, token (the broker's, to take its listing back), broker,
+ * listed (whether it's listed for all on the server to see), character, name }.
  */
 export function keepInWorld(storage, record, now = Date.now()) {
     try {
@@ -97,10 +109,15 @@ export function forgetInWorld(storage) {
 /**
  * What the dialog's headed with, and says under it: { title: "Back into Thornwick", about: "On
  * Tom's Mac mini, as Ada." } on a world server; { title: "Back into Wren's world", about: "By its
- * code, ABCD, as Ada." } in a friend's.
+ * code, ABCD, as Ada." } in a friend's; { title: "Back into your world", about: "Opening it to
+ * your friends again, under its code, ABCD, as Ada." } in their own.
  */
 export function rejoinWords(record) {
     const as = record.name ? `, as ${record.name}` : "";
+
+    if (record.kind === "hosting") {
+        return { title: "Back into your world", about: `Opening it to your friends again, under its code, ${record.code}${as}.` };
+    }
 
     if (record.kind === "server") {
         return { title: `Back into ${record.worldName ?? "your world"}`, about: `On ${record.serverName ?? "its server"}${as}.` };
