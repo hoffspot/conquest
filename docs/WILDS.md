@@ -517,6 +517,21 @@ dice did, so that crossing them is more than one guarded chest after another.
   any boon is).
 - **Let go** once every player's 220 m away (`FINDS.far`); another comes later. Nothing's kept in
   a snapshot till one's been dealt.
+- **The pacing** (`PACING`, the host's `#pace`; Left 4 Dead's director: "Algorithm adjusts pacing,
+  not difficulty"), kept for each player with their deck:
+  - *A quiet spell after a hard fight*: a fight a player fell below half their health in (or
+    fell), once it's over (no foe after them for 5 seconds), is followed by a minute to a minute
+    and a half of quiet. Half as many of the wild come about them (*Kept about the players*), no
+    elite, and the next card dealt's a peaceful one (`peacefulNext`: the first in the deck, or the
+    deck shuffled again if none's left in it, never the card just dealt first). Said: "The wild
+    grows quiet round you, for a while."
+  - *A build-up after a long calm*: four minutes and 400 m crossed out in the wilds without a
+    fight, and the land's hunters (`encounterAt`, two at least) are heard 70 to 90 m ahead
+    (`#buildUp`): folk with hands drumming (synth.js `warDrums`), beasts calling and others
+    answering (their own call; drums for one that has none), heard up to 160 m off, and said which
+    way ("A wolf calls, somewhere off to the north-east, and others answer."). 12 to 20 seconds
+    later they're put out there and come for the player, running (`#hunt`: "They're on you!", or,
+    folk, "Here they come!").
 
 ## Adventurers' caches
 

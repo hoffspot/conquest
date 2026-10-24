@@ -4762,7 +4762,7 @@ export class Game {
         const name = CREATURES[creature]?.name?.toLowerCase() ?? "something";
 
         if (change === "hunt") {
-            this.hud.message(CREATURES[creature]?.hands ? "Here they come!" : `The ${name}s are on you!`, 2.5);
+            this.hud.message(CREATURES[creature]?.hands ? "Here they come!" : "They're on you!", 2.5);
 
             return;
         }
