@@ -241,10 +241,12 @@ test("loaded again, the game asks the server for none of its code, engine, WebAs
     expect(files(fetched).toSorted()).toEqual([gone, "/js/app/version.js"].toSorted());
 });
 
-test("an update's downloaded in the background: the page finds a release newer than its own, the service worker downloads what of it it doesn't keep, that alone, and the title screen says so, with a button that starts it", async ({ page, context }) => {
+test("an update's downloaded in the background: the page finds a release newer than its own, the service worker downloads what of it it doesn't keep, that alone, and the title screen says so, with a button that starts it", async ({ page }) => {
     test.setTimeout(240000);
 
-    // What the service worker fetches
+    // What the service worker fetches (in the page's own context: each test's page is in a
+    // browser of its own, e2e/fixtures.js)
+    const context = page.context();
     const fetched = [];
 
     context.on("request", (request) => request.serviceWorker() && fetched.push(new URL(request.url()).pathname));
