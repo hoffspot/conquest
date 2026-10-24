@@ -12376,6 +12376,7 @@ export class Game {
                     this.#command({ type: "ahead", facing, run, reach: HELD_REACH });
                 },
                 stop: () => this.#command({ type: "stop" }),
+                lost: (lost) => this.#pressLost("stick", lost),
                 breath: () => {
                     const player = this.battle.actor(this.me);
 
@@ -13614,16 +13615,18 @@ export class Game {
         return { key: next, turned: true };
     }
 
-    // A quick action's press lost (app/press.js: its lift never heard, as a phone's Safari can lose
-    // it, and dropped as the next began or once no finger was on the screen), kept in the debug log:
-    // which slot, what was in it, how long it was held, how it was found and whether the bar was up
-    #pressLost(slot, { ms, how, last }) {
+    // A quick action's press lost, or the thumb stick's (`slot`: "stick"; app/press.js,
+    // app/steering.js: its lift never heard, as a phone's Safari can lose it, and dropped as the
+    // next began or once no finger was on the screen), kept in the debug log: which slot, what was
+    // in it, how long it was held, how it was found and whether the bar was up
+    #pressLost(slot, { ms, how, last = null }) {
         const found = how === "bare" ? "let go of once no finger was on the screen" : "taken over by the next";
+        const what = slot === "stick" ? "The thumb stick's touch" : `Quick action ${slot + 1}'s press`;
 
         telemetry.keep("press", {
-            summary: `Quick action ${slot + 1}'s press was lost, its lift never heard: ${found}, ${(ms / 1000).toFixed(1)} s after it began`,
+            summary: `${what} was lost, its lift never heard: ${found}, ${(ms / 1000).toFixed(1)} s after it began`,
             slot,
-            action: this.wheels.quick[slot] ?? null,
+            action: slot === "stick" ? null : (this.wheels.quick[slot] ?? null),
             ms: Math.round(ms),
             how,
             last,
