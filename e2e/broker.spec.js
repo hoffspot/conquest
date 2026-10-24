@@ -216,7 +216,9 @@ test("a host whose game's reloaded opens their world to friends again under its 
     await expect(rejoin).toBeHidden({ timeout: 60000 });
     expect(await host.evaluate(() => window.stagesSeen)).toEqual(["load:now", "load:done", "reopen:now"]);
     expect(await host.evaluate(() => window.pellagos.together.code)).toBe(code);
-    await expect(host.locator("#banner")).toContainText(`Your world's open to friends again, under its code, ${code}: those who were in it are coming back.`);
+    // (Told on the banner, kept in the journal's messages: Syl may be back in already, the banner
+    // saying so in its place)
+    await expect.poll(() => host.evaluate(() => window.pellagos.game.messages.map(({ text }) => text))).toContain(`Your world's open to friends again, under its code, ${code}: those who were in it are coming back.`);
 
     // Syl's game, told the world was opened again, goes straight back in by its code
     await expect(guest.locator("#rejoin #rejointitle")).toHaveText("Back into Bram's world", { timeout: 60000 });
