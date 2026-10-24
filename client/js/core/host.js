@@ -32,6 +32,7 @@ import { dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { createRandom } from "./random.js";
+import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
 import { bandFor, BANDS, behemothReward, behemothSides, BEHEMOTH, bombersOf, COAST, dueAfter, ENGINES, INVASION, isBehemoth, isDue, isSize, raiderArms, raiderName, REWARD, rewardOf, sidesOf } from "./invasions.js";
 import { waysOut, wayToward } from "./settlements.js";
 import { cellIndex, WATER } from "./worldplan/terrain.js";
@@ -578,7 +579,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 34;
+export const SNAPSHOT_VERSION = 35;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -627,6 +628,8 @@ export const SNAPSHOT_STEPS = Object.freeze({
     // 34: the signs each player's read on the trails out of the wild's camps and lairs, and the
     // homes they've tracked them to (core/tracks.js, core/explored.js: none yet)
     33: (snapshot) => ({ ...snapshot, version: 34, players: snapshot.players.map((player) => ({ ...player, explored: { signs: [], tracked: [], ...player.explored } })) }),
+    // 35: the roaming beasts' dens out about the players (core/dens.js, Host #dens: none yet)
+    34: (snapshot) => ({ ...snapshot, version: 35, dens: [] }),
 });
 
 /**
@@ -1014,6 +1017,8 @@ export class Host {
         // the side grow (#reinforce)
         this.packs = new Map();
         this.wildCamps = new Map();
+        // The roaming beasts' dens out about the players (core/dens.js; #dens), by id: { ids }
+        this.dens = new Map();
         this.lairs = new Map();
         this.slain = {};
 
@@ -1862,12 +1867,17 @@ export class Host {
 
                 // (One of those roaming about the players, felled out in the world: its ground
                 // cleared a while, WILDS.cleared)
-                if (fell?.map === "town" && !beast.camp && !beast.lair && !beast.place && !beast.cache && !beast.dungeon && !beast.works && !this.companions.has(event.id)) {
+                if (fell?.map === "town" && !beast.camp && !beast.den && !beast.lair && !beast.place && !beast.cache && !beast.dungeon && !beast.works && !this.companions.has(event.id)) {
                     this.cleared.push({ at: [fell.x, fell.y], until: this.battle.time + WILDS.cleared });
                 }
 
                 this.#fall(event.id, CORPSE_MS);
                 this.#spoils(event.id, beast);
+
+                // (A den's master: gone from it a while, DEN.back)
+                if (beast.den && beast.master) {
+                    this.slain[beast.den] = this.battle.time + DEN.back;
+                }
 
                 // (One of a rite's: broken once the last of them falls)
                 if (beast.lair && lairOf(this.#siteOf(beast.lair))?.night) {
@@ -2330,6 +2340,7 @@ export class Host {
             eliteRest: [...this.eliteRest.entries()],
             nextWild: this.nextWild,
             wildCamps: [...this.wildCamps.entries()],
+            dens: [...this.dens.entries()],
             lairs: [...this.lairs.entries()],
             slain: { ...this.slain },
             held: [...this.held.entries()],
@@ -2502,6 +2513,7 @@ export class Host {
         host.eliteRest = new Map(snapshot.eliteRest ?? []);
         host.nextWild = snapshot.nextWild ?? 1;
         host.wildCamps = new Map(structuredClone(snapshot.wildCamps ?? []));
+        host.dens = new Map(structuredClone(snapshot.dens ?? []));
         host.lairs = new Map(structuredClone(snapshot.lairs ?? []));
         host.slain = { ...(snapshot.slain ?? {}) };
         host.held = new Map(structuredClone(snapshot.held ?? []));
@@ -2784,7 +2796,7 @@ export class Host {
             return;
         }
 
-        const mighty = Boolean(CREATURES[wild.creature]?.perilous || (wild.lair && wild.master) || wild.elite === "lead" || wild.champion || wild.rift);
+        const mighty = Boolean(CREATURES[wild.creature]?.perilous || ((wild.lair || wild.den) && wild.master) || wild.elite === "lead" || wild.champion || wild.rift);
 
         this.#researched(player, player.progress.bestiary.see(wild.creature));
         this.#researched(player, player.progress.bestiary.slay(wild.creature, { mighty }));
@@ -7014,7 +7026,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -7024,6 +7036,7 @@ export class Host {
         }
 
         this.#wildCamps(homes);
+        this.#dens(homes);
         this.#lairs(places);
         this.#places(places, homes);
         this.#caches(homes);
@@ -7045,7 +7058,7 @@ export class Host {
 
             const nearAny = (x, y) => group.actors.some((each) => hypot(x - each.x, y - each.y) < WILDS.about);
             const about = [...this.wild].filter(([id, one]) => {
-                const beast = !one.camp && !one.lair && !one.place && !one.cache && !one.dungeon ? this.battle.actor(id) : null;
+                const beast = !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.dungeon ? this.battle.actor(id) : null;
 
                 return beast && !beast.dead && nearAny(beast.x, beast.y);
             }).length;
@@ -7416,7 +7429,7 @@ export class Host {
     // out, its kind with it (`elite` "escort"), and neither going far from there (ELITES); its hit
     // points × `health` against a stronger side (strength.js SCALING); one more than there'd have
     // been against a player alone, `extra` (leaving its gold and its parts only: spoils.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null }) {
         const spec = CREATURES[creature];
         const lead = elite === "lead";
         // (A dungeon's boss or mini-boss: more of it and harder, CHAMPIONS, by its title; an elite,
@@ -7426,7 +7439,7 @@ export class Host {
         const power = tierPower(at) * stands.power;
         const walks = lead ? { stops: eliteRound(square), at: 0 } : round;
 
-        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}) });
+        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}) });
         this.battle.add({
             id,
             kind: "beast",
@@ -7519,7 +7532,7 @@ export class Host {
 
         this.wild.delete(id);
 
-        for (const held of [one.camp && this.wildCamps.get(one.camp), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place), one.cache && this.caches.get(one.cache), one.works && this.worksOut.get(one.works)]) {
+        for (const held of [one.camp && this.wildCamps.get(one.camp), one.den && this.dens.get(one.den), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place), one.cache && this.caches.get(one.cache), one.works && this.worksOut.get(one.works)]) {
             if (held) {
                 held.ids = held.ids.filter((each) => each !== id);
             }
@@ -7582,6 +7595,64 @@ export class Host {
             }
 
             this.wildCamps.set(camp.id, { ids });
+        }
+    }
+
+    // The roaming beasts' dens (core/dens.js) near a player: its master (unless slain lately), a
+    // tier up and the hardier (DEN.master), and a few more of its kind (DENS `with`), as strong as
+    // its tier from the home of the player nearest it, keeping to it; more of them, and tougher,
+    // against a stronger side (strength.js). Let go once every player's far
+    #dens(homes) {
+        const plan = this.world.plan;
+        const near = (at, within) => homes.some(({ at: [x, y] }) => hypot(x - at[0], y - at[1]) < within);
+
+        if (!plan) {
+            return;
+        }
+
+        for (const [id, held] of [...this.dens]) {
+            const den = denOf(plan, id);
+
+            if (!den || !near(den.at, DEN.far)) {
+                for (const each of [...held.ids]) {
+                    if (!this.battle.actor(each)?.dead) {
+                        this.#release(each);
+                    }
+                }
+
+                this.dens.delete(id);
+            }
+        }
+
+        for (const den of densOf(plan)) {
+            if (this.dens.has(den.id) || !near(den.at, DEN.near)) {
+                continue;
+            }
+
+            const nearest = homes.reduce((best, each) => (hypot(each.at[0] - den.at[0], each.at[1] - den.at[1]) < hypot(best.at[0] - den.at[0], best.at[1] - den.at[1]) ? each : best));
+            const tier = denTier(den, nearest.home);
+            const side = this.#sideNear(den.at, "town", DEN.near);
+            const scale = side ? scalingOf(side.opposition) : null;
+            const ids = [];
+            const due = (this.slain[den.id] ?? -Infinity) <= this.battle.time;
+
+            if (due) {
+                ids.push(...this.#pack({ creature: den.creature, tier: Math.min(10, tier + 1), count: 1 }, den.at, { den: den.id, master: true, roam: DEN.roam, temper: "territorial", health: DEN.master * (scale?.leader ?? 1) }));
+            }
+
+            const least = this.random.int(...DENS[den.kind].with);
+            const more = least ? this.#scaled(least, scale, den.at) : { count: 0, health: 1 };
+
+            if (more.count) {
+                ids.push(...this.#pack({ creature: den.creature, tier, count: more.count }, [den.at[0] + 3, den.at[1] + 2], { den: den.id, roam: DEN.roam, temper: "territorial", health: more.health, least }));
+            }
+
+            // (None could be put out there, its ground not made yet: tried again the next time)
+            if (due && !ids.length) {
+                continue;
+            }
+
+            this.dens.set(den.id, { ids });
         }
     }
 

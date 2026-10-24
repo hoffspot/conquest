@@ -781,21 +781,56 @@ ghosts...), nothing on another map than the world's own.
 - Only the player's own game draws them: nothing of them is the host's, and both ends of a game
   needn't agree on them.
 
+## Dens
+
+Out in the wild, where each kind's land is, the roaming beasts keep dens of their own (core/
+dens.js; host.js `#dens`; world/dens3d.js; app/game.js `#denning`): seed 2 has 31.
+
+- **The kinds** (`DENS`): a bear's den (8 a world at most), a boars' wallow (8), a puma's lair (6),
+  a jaguar's lair (4, in the jungles), a wyverns' nest (5) and a knucker's hole (4). Each is kept by
+  the mightiest of its kind round about, its master, and a few more of it (`with`): the boars a
+  sounder of one to three more, the wyverns a mate, the rest one more at most or none.
+- **Where** (`densOf`, laid out once from the world plan, after everything else and by a draw of
+  its own, so nothing else moves): a cell of its kind's land, off the water and the roads, 260 m
+  clear of the settlements' edges (`DEN.clear`), 4 cells from the sites, 5 from the camps and 10
+  from each other; on the flattest ground within 48 m of its cell's middle (terrain/flats.js, as a
+  camp's pitched), and only where that's level (no more than 1.2 m up or down 7 m out from it, a
+  wyverns' nest 2.5 m, up on a crag); and only so far in as the land's nearly strong enough for
+  what keeps it (two tiers short of its kind's least, from every people's start). The trees keep
+  14 m clear round each (`DEN.ground`): a glade.
+- **Its beasts** (`#dens`): put out once a player's within 90 m (`DEN.near`), kept to it
+  (territorial), roaming 7 m; let go once every player's 180 m off (`DEN.far`). Its master a tier
+  up on the rest and 1.6 times as hardy (`DEN.master`); the rest as strong as the den's tier from
+  the home of the player nearest it (`denTier`, as a camp's, within its kind's tiers). More of them
+  and tougher against a stronger side (*A side's strength*). Its master slain is gone 20 minutes
+  (`DEN.back`), and one of the mightiest in the bestiary (5 points). If none could be put out (its
+  ground not made yet), tried again the next step.
+- **Seen** within 140 m (world/dens3d.js `DenProps`), each of a few plain shapes on the ground
+  where it lies: a mound of earth with a dark mouth dug into it, boulders and bones (a bear's); a
+  hollow of wet mud, the earth rooted up round it, a fallen log (a boars'); a flat-topped rock to
+  lie up on, boulders and bones (a puma's or a jaguar's); a ring of heaped sticks round a hollow,
+  eggs in it (a wyverns'); a dark still pool ringed with stones and reeds (a knucker's).
+- **On the maps** as a lair's icon, rimmed as a beast's place: on the minimap near it, on the world
+  map once found (or tracked). Its trails lead to it, as a camp's (*Tracking*).
+- **In the bestiary**: among the homes its kind keeps to ("the bears' dens").
+- **Kept** in a snapshot (`dens`, as the wild camps are: `SNAPSHOT_VERSION` 35, a world from before
+  with none out).
+
 ## Tracking
 
-The wild's camps and its perilous sites wear trails out into the country round them, as Monster
+The wild's camps, dens and perilous sites wear trails out into the country round them, as Monster
 Hunter's tracks and a hexcrawl's spoor do: found and followed, sign by sign, a trail leads home
 (core/tracks.js; host.js `#readSign`; app/game.js `#trailing`, `#signRead`).
 
 - **The trails** (`trailsOf`, laid out once from the world plan, the same on every machine): each
-  wild camp wears two (`TRAILS.camp`), each perilous site three (`TRAILS.lair`: the drake's and the
-  Dreadthorns' lairs, the werewolves' den, the ruined castles, the Tower of Sar Mordal, and the
-  cults' camps at the hells' ways in). Each starts 30 m out of its home (`from`) and winds on 170
+  wild camp wears two (`TRAILS.camp`), each den two (`TRAILS.den`: *Dens*), each perilous site
+  three (`TRAILS.lair`: the drake's and the Dreadthorns' lairs, the werewolves' den, the ruined
+  castles, the Tower of Sar Mordal, and the cults' camps at the hells' ways in). Each starts 30 m out of its home (`from`) and winds on 170
   to 250 m (`length`) in 8 m steps (`step`), its way turned a little at each (`wander`) but drawn
   back to it, round the water and 25 m clear of the settlements (`clear`). One that can't get
-  half as far as the shortest isn't worn. Seed 2 has 168, to 83 homes.
+  half as far as the shortest isn't worn. Seed 2 has 229, to 114 homes (61 of them to its dens).
 - **What wore it** (`trailCreature`): a camp's folk, as strong as the camp is from the reader's
-  home (as its folk are when met: creatures.js `campFolk`); a lair's master on its first, its
+  home (as its folk are when met: creatures.js `campFolk`); a den's beasts; a lair's master on its first, its
   guards on the others, one kind after another (the drake, then wyverns).
 - **Its signs** (`signs`): three along each, 92%, 60% and 28% of the way out (`TRAILS.signs`), the
   furthest first: what's to be found of what made it (core/lore/bestiary.js `sign`: a line of
