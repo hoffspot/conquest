@@ -203,7 +203,8 @@ test("loaded again, the game asks the server for none of its code, engine, WebAs
 
     context.on("request", (request) => request.serviceWorker() && heard(request.url()));
     page.on("requestfinished", async (request) => {
-        const response = await request.response();
+        // (None once the page's closed, as the test ends with a request still finishing)
+        const response = await request.response().catch(() => null);
 
         if (response && !response.fromServiceWorker() && !request.serviceWorker()) {
             heard(request.url());
