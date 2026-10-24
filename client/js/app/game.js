@@ -41,7 +41,7 @@ import { CACHE_BANDS } from "../core/caches.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { homeWords, signOf, signsNear, TRAILS, trailsNear } from "../core/tracks.js";
-import { densOf } from "../core/dens.js";
+import { denOf, densOf } from "../core/dens.js";
 import { MASTERED, RESEARCH } from "../core/bestiary.js";
 import { bestiaryOf } from "./bestiary.js";
 import { townOf } from "../core/insides.js";
@@ -5058,8 +5058,9 @@ export class Game {
         // (Who found it for them, if another of their party did: core/explored.js finderOf)
         const finder = (icon) => (this.explored.finderOf(icon.id) ? { ...icon, finder: this.explored.finderOf(icon.id) } : icon);
 
-        // (And the camps and lairs they've tracked home, found or not: core/tracks.js)
-        const known = (icon) => seen(icon) || this.explored.tracked.has(icon.id);
+        // (A place worth finding: been near, or seen from high ground, Explored knows; and the
+        // camps and lairs they've tracked home, found or not: core/tracks.js)
+        const known = (icon) => this.explored.knows(icon.id, icon.x, icon.z) || this.explored.tracked.has(icon.id);
 
         return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.#trackedMarks(this.denIcons().filter(known)), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
     }
@@ -5613,11 +5614,35 @@ export class Game {
     // Places another of the player's party found for them (core/host.js #share: `places`, plan
     // place ids, found by `name`), said: the one by its name, or what it is; or how many
     #sharedFinds({ name, places }) {
-        const plan = this.world.plan;
-        const one = places.length === 1 ? (placesOf(plan).find(({ id }) => id === places[0]) ?? plan.sites.find(({ id }) => id === places[0])) : null;
-        const what = one?.name ?? (one ? `${/^[aeiou]/.test(one.kind) ? "an" : "a"} ${one.kind}` : null);
+        const what = places.length === 1 ? this.#placeCalled(places[0]) : null;
 
         this.hud.message(what ? `${name} found ${what}: it's on your map.` : `${name} found ${places.length} places: they're on your map.`, 3.5);
+    }
+
+    // The places worth finding the player's seen from high ground (core/sighting.js; the nearest
+    // first), said with a quill's scratch, as anything written in: one by what it is and which way,
+    // more by how many
+    #spotted(places) {
+        const one = places.length === 1 ? this.#placeOf(places[0]) : null;
+        const where = one ? bearing(this.#whereAmI(), one.at) : null;
+
+        this.hud.message(one ? `From up here you can see ${this.#placeCalled(places[0])}${where && where !== "here" ? `, ${where}` : ""}: it's on your map.` : `From up here you can see ${places.length} places: they're on your map.`, 4);
+        this.sound?.play("quill");
+    }
+
+    // A place worth finding by its id (a plan's place, a dungeon's site, or a den), or null
+    #placeOf(id) {
+        const plan = this.world.plan;
+
+        return placesOf(plan).find((place) => place.id === id) ?? plan.sites.find((site) => site.id === id) ?? denOf(plan, id);
+    }
+
+    // What a place worth finding (its id) is called: its name, or what it is ("a ruined castle");
+    // null if there's none
+    #placeCalled(id) {
+        const one = this.#placeOf(id);
+
+        return one?.name ?? (one ? `${/^[aeiou]/.test(one.kind) ? "an" : "a"} ${one.kind}` : null);
     }
 
     // Who the player was told to fight (and is still alive), or null
@@ -6134,12 +6159,12 @@ export class Game {
     }
 
     // Whether the place a rumour heard is of (memory.heard's: a place's id, core/rumours.js
-    // rumouredBy; or a hell's, the plan's site) has been found (Explored sighted: the maps' rule)
+    // rumouredBy; or a hell's, the plan's site) has been found (Explored knows: the maps' rule)
     #foundOf({ id }) {
         const plan = this.world.plan;
         const place = plan ? (rumouredBy(plan, id) ?? plan.sites.find((site) => site.id === id)) : null;
 
-        return !place || this.explored.sighted(place.at[0], place.at[1]);
+        return !place || this.explored.knows(place.id, place.at[0], place.at[1]);
     }
 
     // Where a crier cries the news ([x, y] metres: his place's, `out` his record, host.js folk), and
@@ -10650,7 +10675,8 @@ export class Game {
                 break;
             case "explored":
                 // (Marked on the maps, and kept; a branch of the guild's portal open to them now,
-                // said; and the places another of their party found for them, said: #sharedFinds)
+                // said; the places another of their party found for them, said: #sharedFinds; and
+                // those seen from high ground: #spotted)
                 if (event.id === this.me) {
                     this.#explored();
 
@@ -10660,6 +10686,10 @@ export class Game {
 
                     if (event.places?.length) {
                         this.#sharedFinds(event);
+                    }
+
+                    if (event.spotted?.length) {
+                        this.#spotted(event.spotted);
                     }
                 }
 
