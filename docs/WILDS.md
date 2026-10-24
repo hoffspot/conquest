@@ -489,7 +489,7 @@ dice did, so that crossing them is more than one guarded chest after another.
   cache's is (*Adventurers' caches*, below): on foot, out of the settlements, afresh for everyone
   together once one's dealt to any of them.
 - **The deck** (`DIRECTOR.cards`, `shuffled`): an adventurer's cache, a fallen adventurer's
-  remains, an old campsite. Each comes once a deck, in an order of its own, the deck shuffled
+  remains, an old campsite, fresh tracks. Each comes once a deck, in an order of its own, the deck shuffled
   again once it's all been dealt, never with the card just dealt first again (Left 4 Dead's
   director dealt its bosses so: no two of the same running). Each player has their own, kept in
   the world's snapshot (`travel`). A card with nowhere to go ahead waits for the next look.
@@ -515,6 +515,15 @@ dice did, so that crossing them is more than one guarded chest after another.
   within 16 m (not 40), the fire's lit in its ring, and they wake well rested (`WELL_RESTED`: the
   breath back half again as fast and every heal 10% more, for 20 minutes, kept between visits as
   any boon is).
+- **Fresh tracks** (`FRESH`, the host's `#putTracks`): a short trail of prints, not long made, from
+  8 m ahead of the player to 10 m short of a pack of the wild's roaming 30 to 85 m off (those ahead
+  of them first), or, none, one of the land's put out 60 to 85 m ahead (within the 90 m the wild's
+  roaming packs are kept about a player). Every 6 m, wandering up to 3 m off the straight way
+  (`freshTrail`), drawn as the trails out of the wild's homes are (*Tracking*), but deeper. Said
+  once a player's within 12 m of them ("Fresh tracks, not long made: a wolf's, and not alone. They
+  lead off to the north-east."). Follow them and find the pack first, or see what made them and
+  steer clear. Let go after six minutes, once their pack's all gone, or once every player's 140 m
+  from where they start.
 - **Let go** once every player's 220 m away (`FINDS.far`); another comes later. Nothing's kept in
   a snapshot till one's been dealt.
 - **The pacing** (`PACING`, the host's `#pace`; Left 4 Dead's director: "Algorithm adjusts pacing,
