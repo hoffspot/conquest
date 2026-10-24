@@ -14,6 +14,10 @@
 // doesn't reach into workers; the font; the WebAssembly the navigation's glue fetches) is its copy
 // by hash: the release of the page asking, or (a worker, a page that hasn't said) the newest.
 //
+// A release a page finds is newer than its own (js/app/updater.js) is downloaded in the background:
+// the files of it that aren't kept, one at a time, each checked by its hash and kept, the page told
+// how far it's got (prefetch). It's kept as in use till a page on it says so.
+//
 // Each page tells the worker its release on starting: which files it keeps by hash (js/app/
 // catalog.js). What no release in use lists any more is let go of: the newest release's files,
 // and those of each page still open on an older one, are kept, the rest deleted (collect). The
@@ -111,6 +115,8 @@ self.addEventListener("message", (event) => {
         event.waitUntil(heard(event.source.id, message));
     } else if (message?.kind === "used" && Array.isArray(message.urls)) {
         event.waitUntil(usedAll(message.urls));
+    } else if (message?.kind === "prefetch" && typeof message.release === "string") {
+        event.waitUntil(prefetch(event.source, message));
     }
 });
 
@@ -218,6 +224,72 @@ async function fromKept(request, hash, event, part, kept) {
     event.waitUntil(new Response(copy).arrayBuffer().then((bytes) => keep(url, hash, bytes, response.headers)).finally(done));
 
     return new Response(page, init);
+}
+
+// --- A newer release, downloaded in the background ---
+
+/**
+ * A release a page found newer than its own (js/app/updater.js): kept as in use (`next`) till a
+ * page on it says so, and the files of it to start with that aren't kept downloaded, one at a
+ * time, each checked by its hash and kept; the page told how far it's got ("prefetching": done of
+ * total) and when they're all there ("prefetched"). (The catalog's are downloaded as they're
+ * wanted, as ever.)
+ */
+async function prefetch(client, { release, boot, assets }) {
+    const known = await readState();
+
+    known.releases[release] = { boot: own(boot), assets: own(assets) };
+    known.next = release;
+    await saveState();
+
+    const wanted = [];
+
+    for (const url of known.releases[release].boot) {
+        if (!(await keptCopy(url))) {
+            wanted.push(url);
+        }
+    }
+
+    let done = 0;
+
+    for (const url of wanted) {
+        await fetchToKeep(url).catch(() => {
+            // (Offline, or the server's moved on: asked for again when the page next looks)
+        });
+        client?.postMessage?.({ kind: "prefetching", release, done: ++done, total: wanted.length });
+    }
+
+    // (All there only if every one was kept)
+    const missing = [];
+
+    for (const url of wanted) {
+        if (!(await keptCopy(url))) {
+            missing.push(url);
+        }
+    }
+
+    client?.postMessage?.({ kind: missing.length ? "unfetched" : "prefetched", release, files: wanted.length, missing: missing.length });
+}
+
+// A file by hash, fetched and kept (in line with any other request for it)
+async function fetchToKeep(url) {
+    const { ready, leave } = inLine(url);
+
+    await ready;
+
+    try {
+        if (await keptCopy(url)) {
+            return;
+        }
+
+        const response = await fetch(url, { cache: "no-cache" });
+
+        if (response.ok && response.type === "basic") {
+            await keep(url, new URL(url).searchParams.get("h"), await response.arrayBuffer(), response.headers);
+        }
+    } finally {
+        leave();
+    }
 }
 
 // --- Files asked for by name ---
@@ -393,13 +465,20 @@ async function usedAll(urls) {
 // the page started last is the newest: a page loaded afresh has the newest code, as it's fetched
 // from the network first. (A page open a while tells its release again when an update's worker
 // takes over, which doesn't make it the newest.)
+// (Of a list of addresses, those on the game's own site)
+const own = (list) => (Array.isArray(list) ? list.filter((url) => typeof url === "string" && url.startsWith(`${self.location.origin}/`)) : []);
+
 async function heard(page, { release, boot, assets, started }) {
     const known = await readState();
-    const own = (list) => (Array.isArray(list) ? list.filter((url) => typeof url === "string" && url.startsWith(`${self.location.origin}/`)) : []);
 
     // (Each time it's told, as a page tells it: the same name is the same files, but a release
     // named before code was kept by hash listed fewer)
     known.releases[release] = { boot: own(boot), assets: own(assets) };
+
+    // (A release downloaded in the background, now a page's own)
+    if (known.next === release) {
+        known.next = null;
+    }
 
     if (!known.newest || (Number.isFinite(started) && started >= known.newestAt)) {
         known.newest = release;
@@ -412,16 +491,19 @@ async function heard(page, { release, boot, assets, started }) {
 }
 
 /**
- * The releases in use: the newest, and each open page's (by name, only those heard of).
+ * The releases in use: the newest, each open page's, and one being downloaded in the background
+ * (`next`) (by name, only those heard of).
  *
- * @param {object} known - What the worker knows: { releases, newest, pages }.
+ * @param {object} known - What the worker knows: { releases, newest, pages, next }.
  * @param {Set<string>} open - The ids of the pages open now.
  */
-function inUse({ releases, newest, pages }, open) {
+function inUse({ releases, newest, pages, next }, open) {
     const names = new Set(Object.entries(pages).filter(([page]) => open.has(page)).map(([, name]) => name));
 
-    if (newest) {
-        names.add(newest);
+    for (const name of [newest, next]) {
+        if (name) {
+            names.add(name);
+        }
     }
 
     return [...names].filter((name) => releases[name]);

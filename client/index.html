@@ -32,7 +32,7 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=8aa4dcd39b",
+                    "./js/app/assets.js": "./js/app/assets.js?h=aad268e6fc",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=75d04a21c9",
                     "./js/app/budget.js": "./js/app/budget.js?h=56125585f0",
@@ -84,6 +84,7 @@
                     "./js/app/telemetry.js": "./js/app/telemetry.js?h=7852cb9907",
                     "./js/app/throng.js": "./js/app/throng.js?h=a99cd2abe2",
                     "./js/app/together.js": "./js/app/together.js?h=de3fe2cfb7",
+                    "./js/app/updater.js": "./js/app/updater.js?h=78825da8b2",
                     "./js/app/wheel.js": "./js/app/wheel.js?h=ff8b0fb015",
                     "./js/app/wheelsetup.js": "./js/app/wheelsetup.js?h=f211b796e1",
                     "./js/app/worldlink.js": "./js/app/worldlink.js?h=2847d5c85f",
@@ -286,7 +287,7 @@
                     "./js/core/worldplan/settle.js": "./js/core/worldplan/settle.js?h=75f4607a0d",
                     "./js/core/worldplan/terrain.js": "./js/core/worldplan/terrain.js?h=d0b35d7867",
                     "./js/core/writings.js": "./js/core/writings.js?h=bc540994f2",
-                    "./js/main.js": "./js/main.js?h=9aec964437",
+                    "./js/main.js": "./js/main.js?h=25970b7acd",
                     "./js/world/ailments3d.js": "./js/world/ailments3d.js?h=1d60de08f8",
                     "./js/world/art/engine/atlas.js": "./js/world/art/engine/atlas.js?h=ef27e19379",
                     "./js/world/art/engine/leafcards.js": "./js/world/art/engine/leafcards.js?h=1052ff62f1",
@@ -444,19 +445,21 @@
             }
         </script>
         <script>
-            // A new version of the game comes with a new service worker (sw.js), which takes over
-            // as soon as it is installed. A page loaded before that may be a mix of old and new
-            // files, so reload it, unless a game is under way. (This is here rather than in the
-            // game's code because the page is always the new version's.)
+            // A new version of the game may come with a new service worker (sw.js), which takes
+            // over as soon as it is installed. A page open since before then is reloaded into the
+            // new version, unless a game is under way, or it's still loading: a page asks only for
+            // its own release's files, each by its hash (the import map above), so one loading is
+            // whole whichever worker gives them, and loading it twice over is only slower. (This is
+            // here rather than in the game's code because the page is always the new version's.)
             if (navigator.serviceWorker?.controller) {
                 navigator.serviceWorker.addEventListener("controllerchange", () => {
-                    if (!window.pellagos?.playing) {
+                    if (!window.pellagos?.playing && document.body.dataset.screen !== "loading") {
                         window.location.reload();
                     }
                 }, { once: true });
             }
         </script>
-        <script type="module" src="js/main.js?h=9aec964437"></script>
+        <script type="module" src="js/main.js?h=25970b7acd"></script>
     </head>
     <body>
         <!-- The world, and the character being made, are drawn here, behind every screen -->
@@ -494,6 +497,11 @@
                     <ul class="title-worlds" id="titleworlds"></ul>
                 </div>
                 <p class="note warning" id="titlenote" role="status" hidden></p>
+                <!-- An update downloaded in the background (app/updater.js): started here, downloading nothing more -->
+                <div class="title-update" id="titleupdate" role="status" hidden>
+                    <p class="note">An update to the game's downloaded.</p>
+                    <button type="button" class="button quiet" id="updatebutton">Start it</button>
+                </div>
                 <label class="switch" title="Show how fast the game runs and what it draws">
                     <input type="checkbox" id="debugswitch" role="switch">
                     <span class="track" aria-hidden="true"></span>

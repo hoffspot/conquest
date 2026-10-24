@@ -136,6 +136,14 @@ function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["
         await finish(waiting);
     };
 
+    // Any other message from a page (`source`: the page, as the worker sees it)
+    const send = async (message, source) => {
+        const waiting = [];
+
+        handlers.message({ data: message, source, waitUntil: (promise) => waiting.push(promise) });
+        await finish(waiting);
+    };
+
     const activate = async () => {
         const waiting = [];
 
@@ -146,7 +154,7 @@ function loadServiceWorker({ offline = false, stored = {}, files = {}, open = ["
     // The addresses a cache holds
     const kept = (name) => [...(store.get(name)?.keys() ?? [])];
 
-    return { request, requests, tell, activate, kept, deleted, clock, files, open, names: () => [...store.keys()], context };
+    return { request, requests, tell, send, activate, kept, deleted, clock, files, open, names: () => [...store.keys()], context };
 }
 
 // A release, as a page tells it (catalog.js, releaseOf): files given as [path, body]
@@ -393,6 +401,47 @@ describe("service worker", () => {
         await worker.activate();
 
         assert.deepEqual(worker.kept(BOOT).toSorted(), [full(address(body)), full(address(game))].toSorted());
+    });
+
+    it("downloads in the background what it doesn't keep of a release a page found newer than its own, one at a time, saying how far it's got; and keeps it till a page on it says so", async () => {
+        const game = ["/js/app/game.js", "game v1"];
+        const hud = ["/js/app/hud.js", "hud v1"];
+        const newer = ["/js/app/game.js", "game v2"];
+        const worker = loadServiceWorker({ open: ["page-1", "page-2"], files: { [game[0]]: game[1], [hud[0]]: hud[1] } });
+        const said = [];
+
+        await worker.tell("page-1", release("r1", { boot: [game, hud] }, 1));
+        await worker.request(address(game));
+        await worker.request(address(hud));
+        worker.requests.length = 0;
+
+        // (The server on the newer release now)
+        worker.files[newer[0]] = newer[1];
+        await worker.send({ kind: "prefetch", ...release("r2", { boot: [newer, hud] }) }, { id: "page-1", postMessage: (message) => said.push(JSON.parse(JSON.stringify(message))) });
+
+        assert.deepEqual(worker.requests.map(({ url }) => url), [full(address(newer))]);
+        assert.deepEqual(said, [{ kind: "prefetching", release: "r2", done: 1, total: 1 }, { kind: "prefetched", release: "r2", files: 1, missing: 0 }]);
+
+        // (Kept though no page is on it yet, long after)
+        worker.clock.now += GRACE;
+        await worker.tell("page-1", release("r1", { boot: [game, hud] }, 1));
+        assert.ok(worker.kept(BOOT).includes(full(address(newer))));
+
+        // A page on it, loaded: everything there, nothing asked for
+        await worker.tell("page-2", release("r2", { boot: [newer, hud] }, 2));
+        assert.equal(await (await worker.request(address(newer), { page: "page-2" })).text(), "game v2");
+        assert.equal(worker.requests.length, 1);
+    });
+
+    it("says a newer release isn't all there if a file of it couldn't be kept (the server moved on again, or offline)", async () => {
+        const newer = ["/js/app/game.js", "game v2"];
+        const worker = loadServiceWorker({ files: { [newer[0]]: "game v3" } });
+        const said = [];
+
+        await worker.send({ kind: "prefetch", ...release("r2", { boot: [newer] }) }, { id: "page-1", postMessage: (message) => said.push(JSON.parse(JSON.stringify(message))) });
+
+        assert.deepEqual(said.at(-1), { kind: "unfetched", release: "r2", files: 1, missing: 1 });
+        assert.deepEqual(worker.kept(BOOT), []);
     });
 
     it("takes over the copies the cache before it kept, taking on those now known by their hash rather than downloading them again", async () => {
