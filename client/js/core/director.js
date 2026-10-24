@@ -10,7 +10,10 @@
 //   with the wild nearer than anywhere else, and they wake well rested (WELL_RESTED);
 // - fresh tracks (FRESH): a short trail of prints, made not long ago, leading from just ahead of
 //   them to a pack of the land's beasts or folk out now (or an elite and its kind), to follow and
-//   find them first, or to see what made them and steer clear.
+//   find them first, or to see what made them and steer clear;
+// - a stranger met on the way (STRANGERS): a pedlar with odds and ends to sell, a hunter lying
+//   hurt who'll tell of a place round about for their healing, or hungry bandits wanting food or
+//   gold to let them by.
 //
 // Pure data and arithmetic, no DOM; the world's host deals them (host.js #caches, #putFind).
 
@@ -23,7 +26,7 @@ import { ITEMS, rollBoost } from "./progress.js";
 import { foundMap } from "./treasure.js";
 
 /** How often a card's dealt: one each `every` metres ([least, most]) a player crosses the wilds; and the cards in a deck. */
-export const DIRECTOR = Object.freeze({ every: [250, 450], cards: Object.freeze(["cache", "remains", "campsite", "tracks"]) });
+export const DIRECTOR = Object.freeze({ every: [250, 450], cards: Object.freeze(["cache", "remains", "campsite", "tracks", "stranger"]) });
 
 /**
  * Fresh tracks: the pack they lead to, one roaming within `reach` metres ([least, most]) of the
@@ -92,11 +95,12 @@ export function peacefulNext(deck, random, last = null) {
 }
 
 /**
- * A deck shuffled (random.js random): each card once, in an order of its own; never `last` (the
- * card just dealt) first, so no card comes twice running.
+ * A deck shuffled (random.js random): each card once (of `cards`: the director's, or the
+ * strangers'), in an order of its own; never `last` (the card just dealt) first, so no card comes
+ * twice running.
  */
-export function shuffled(random, last = null) {
-    const deck = [...DIRECTOR.cards];
+export function shuffled(random, last = null, cards = DIRECTOR.cards) {
+    const deck = [...cards];
 
     for (let k = deck.length - 1; k > 0; k--) {
         const pick = random.int(0, k);
@@ -178,4 +182,73 @@ export function noteOf(places, at, known) {
     }
 
     return best?.id ?? null;
+}
+
+/**
+ * The strangers met out in the wilds (the "stranger" card), one of `kinds` each time, dealt as
+ * the cards are (each once, shuffled again once all have been met), put out ahead of a player
+ * where a cache would be (host.js #spotAhead); said once a player's within `seen` metres; let go
+ * once every player's `far` away (and none's fighting them):
+ * - a pedlar (`pedlar`): resting by the way with their pack, selling odds and ends (progress.js
+ *   SHOPS pedlar: draughts, a cure or two, sometimes a common map or a charm, a little dearer
+ *   than in town);
+ * - a wounded hunter (`hunter`): down to `wounded` of their health, a beast's work. Healed (a
+ *   healing draught given them, or a healing spell cast on them), they tell whoever healed them
+ *   of a place round about they hadn't found (as a fallen adventurer's note does: noteOf), and go
+ *   on their way `thanks` ms later. Turned down, or left unhealed `waits` ms after a player first
+ *   came near, they limp off (at `limp` of their pace, `away` metres off from the nearest player);
+ * - hungry bandits (`bandits`): `count` ([least, most]) outlaws (caches.js CACHE_BANDS bandits:
+ *   a chief and his band), no one's enemy till they're refused. Their chief hails a player who
+ *   comes within `hail` metres, wanting food (a hot meal, or `meat` cuts of the wild's meat) or
+ *   gold (`gold`, [least, most], CHEST_GOLD more for each tier past the first) to let them by.
+ *   Paid, they do; refused, or walked away from (`off` metres from their chief once hailed), they
+ *   fight.
+ */
+export const STRANGERS = Object.freeze({
+    kinds: Object.freeze(["pedlar", "hunter", "bandits"]),
+    seen: 40,
+    far: 180,
+    hunter: Object.freeze({ wounded: 0.3, thanks: 8000, waits: 3 * 60000, limp: 0.5, away: 60 }),
+    bandits: Object.freeze({ count: [3, 4], hail: 14, off: 30, meat: 2, gold: [12, 20] }),
+});
+
+/** The healing draughts a wounded hunter can be given (progress.js ITEMS), the least first: the one given. */
+export const HEALING_DRAUGHTS = Object.freeze(["potion", "greaterPotion", "superiorPotion"]);
+
+/** The gold hungry bandits want to let a player by, out where the land's of a tier (random.js random): STRANGERS bandits' `gold`, richer further out. */
+export function banditToll(tier, random) {
+    const at = Math.max(1, Math.min(TIERS, tier));
+
+    return Math.round(random.int(...STRANGERS.bandits.gold) * (1 + CHEST_GOLD * (at - 1)));
+}
+
+/**
+ * What of a player's pack (progress.js Progress pack: its stacks, or null) hungry bandits take
+ * for food: STRANGERS bandits' `meat` cuts of the wild's meat (the parts that are food), if they
+ * have so many; else a hot meal. [{ id, count }] to take, or null for nothing to give them.
+ */
+export function foodFor(pack) {
+    const meat = new Map();
+
+    for (const stack of pack) {
+        if (stack && ITEMS[stack.id]?.food) {
+            meat.set(stack.id, (meat.get(stack.id) ?? 0) + stack.count);
+        }
+    }
+
+    const taken = [];
+    let left = STRANGERS.bandits.meat;
+
+    for (const [id, count] of [...meat].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
+        if (left > 0) {
+            taken.push({ id, count: Math.min(left, count) });
+            left -= Math.min(left, count);
+        }
+    }
+
+    if (!left) {
+        return taken;
+    }
+
+    return pack.some((stack) => stack?.id === "meal") ? [{ id: "meal", count: 1 }] : null;
 }

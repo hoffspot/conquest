@@ -1990,8 +1990,9 @@ export class Battle {
         // (once it's stopped where it was going)
         const partner = actor.talkingTo === null ? null : this.actor(actor.talkingTo);
 
-        if (partner && !partner.dead && partner.map === actor.map && actor.kind === "soldier" && !this.#nearestSeen(actor)) {
-            // (A soldier on its rounds stops to talk, while there's no enemy about)
+        if (partner && !partner.dead && partner.map === actor.map && (actor.kind === "soldier" || (actor.neutral && actor.ai === "wild")) && !this.#nearestSeen(actor)) {
+            // (A soldier on its rounds stops to talk, while there's no enemy about; and one of the
+            // wild's that's no one's enemy yet: hungry bandits, core/director.js STRANGERS)
             actor.path = [];
             actor.facing = atan2(partner.x - actor.x, partner.y - actor.y);
 

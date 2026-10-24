@@ -3,7 +3,7 @@
 // the apprentice, the priest, an acolyte and the worshippers, a guild's receptionist, or an
 // adventurer (the player, or one of the guild's); a town hall's reeve, clerk and petitioners; a
 // keep's ruler, steward, councillors and sentries; a castle's quartermaster and arcanist; an
-// abbey's herbalist.
+// abbey's herbalist; and the strangers met out in the wilds, a pedlar and a wounded hunter.
 //
 // A role says what the character is called (its `title`, under its name in a talk: dialogue.js),
 // whether it beckons the player over when they come into sight (`beckons`: the courtesans
@@ -321,6 +321,29 @@ export const ROLES = Object.freeze({
             { name: "a bow of the head", hitAt: 0.9, duration: 2.4 },
             { name: "looking about", hitAt: 1, duration: 3.4 },
             { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
+        ],
+    },
+    // The strangers met out in the wilds (core/director.js STRANGERS): a pedlar resting by the way
+    // with their pack, and a hunter hurt by a beast, in pain, waiting on help
+    pedlar: {
+        title: "Pedlar",
+        rests: [
+            { name: "looking about", hitAt: 1, duration: 3.4 },
+            { name: "stretching the back", hitAt: 1, duration: 2.6 },
+            { name: "a yawn", hitAt: 1, duration: 2.8 },
+            { name: "shifting the weight", hitAt: 1, duration: 3.2 },
+            { name: "a glance back", hitAt: 1, duration: 2.2 },
+            { name: "talking", hitAt: 1.2, duration: 3.667, clip: "talking" },
+        ],
+    },
+    hunter: {
+        title: "Hunter",
+        rests: [
+            { name: "wiping the brow", hitAt: 1, duration: 2.4 },
+            { name: "catching the breath", hitAt: 0.9, duration: 2.4 },
+            { name: "shifting the weight", hitAt: 1, duration: 3.2 },
+            { name: "looking about", hitAt: 1, duration: 3.4 },
+            { name: "a glance back", hitAt: 1, duration: 2.2 },
         ],
     },
 });

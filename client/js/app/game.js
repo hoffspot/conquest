@@ -38,7 +38,7 @@ import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
 import { aloftShare, BOMBS, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
-import { FINDS, FRESH } from "../core/director.js";
+import { FINDS, foodFor, FRESH, HEALING_DRAUGHTS, STRANGERS } from "../core/director.js";
 import { compass } from "../core/ways.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
@@ -792,11 +792,21 @@ const PACE_HEARD = 160;
 // their beat, audio/synth.js warDrums)
 const DRUMS_AGAIN = 2;
 
+// What the strangers met out in the wilds say over their heads (core/director.js STRANGERS): hungry
+// bandits' chief hailing the player, paid, and refused (or walked away from); a wounded hunter
+// healed
+const STRANGER_LINES = Object.freeze({
+    hail: ["Hold there, friend!", "That's far enough!", "Not so fast, traveller."],
+    paid: ["Pleasure doing business.", "On your way, then."],
+    fight: ["Then we'll take it off you!", "Wrong answer. Get them, lads!", "Have it your way!"],
+    tended: ["Bless you. That's better.", "Ah... I can stand. Thank you, friend.", "Gods, that's better. I owe you."],
+});
+
 // How many of the places the player's heard tell of and found since the journal keeps (the last)
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1314,6 +1324,8 @@ export class Game {
         this.findsSeen = new Set();
         /** The fresh tracks the player's come upon (their ids: core/director.js FRESH), said once. */
         this.freshSeen = new Set();
+        /** The strangers the player's come upon (their ids: core/director.js STRANGERS), said once. */
+        this.strangersSeen = new Set();
         // (The shrines come near, told whose each is: #nearShrine)
         this.shrinesNear = new Set();
         this.talking = null;
@@ -3336,6 +3348,7 @@ export class Game {
         this.#drawDrops();
         this.#spyCaches();
         this.#spyFinds();
+        this.#spyStrangers();
         this.#drawMinimap(target);
 
         if (this.squares?.object.visible) {
@@ -4812,10 +4825,11 @@ export class Game {
     }
 
     // A note found on a fallen adventurer's remains (core/director.js noteOf: of a place round about
-    // the player hasn't found, `id`), heard tell of as a crier tells it, by the settlement nearest
-    // the place (memory.heard: { id, town, turn, note }): written in the journal, its circle on the
+    // the player hasn't found, `id`), or a place a wounded hunter they healed told of (`hunter`:
+    // their name), heard tell of as a crier tells it, by the settlement nearest the place
+    // (memory.heard: { id, town, turn, note or hunter }): written in the journal, its circle on the
     // map, said with a quill's scratch
-    #noteFound(id) {
+    #noteFound(id, { hunter = null } = {}) {
         const plan = this.world.plan;
         const place = plan ? rumouredBy(plan, id) : null;
 
@@ -4826,9 +4840,9 @@ export class Game {
         const far = ({ at }) => Math.hypot(at[0] - place.at[0], at[1] - place.at[1]);
         const town = [...plan.places].sort((a, b) => far(a) - far(b))[0];
 
-        this.memory.heard = [...(this.memory.heard ?? []), { id, town: town.id, turn: this.host.war?.turn ?? 0, note: true }];
+        this.memory.heard = [...(this.memory.heard ?? []), { id, town: town.id, turn: this.host.war?.turn ?? 0, ...(hunter ? { hunter: true } : { note: true }) }];
         this.#keepTalks();
-        this.hud.message(`In their hand, a note: it tells of ${this.#placeCalled(id) ?? "somewhere"} near ${town.name}. It's in your journal, and on your map.`, 4.5);
+        this.hud.message(hunter ? `${hunter} tells you of ${this.#placeCalled(id) ?? "somewhere"} near ${town.name}. It's in your journal, and on your map.` : `In their hand, a note: it tells of ${this.#placeCalled(id) ?? "somewhere"} near ${town.name}. It's in your journal, and on your map.`, 4.5);
         this.sound?.play("quill", { delay: 0.6 });
     }
 
@@ -4850,6 +4864,130 @@ export class Game {
                 }
             }
         }
+    }
+
+    // A stranger the wilds director's put out (core/director.js STRANGERS) come upon by the player
+    // for the first time: a pedlar or a wounded hunter said (hungry bandits say it themselves, as
+    // they hail them: #strangerSaid)
+    #spyStrangers() {
+        const me = this.battle.actor(this.me);
+
+        if (!me || me.dead || me.map !== "town" || !this.host?.strangers?.size) {
+            return;
+        }
+
+        for (const stranger of this.host.strangers.values()) {
+            const one = stranger.folk ? this.battle.actor(stranger.ids[0]) : null;
+
+            if (one && !this.strangersSeen.has(stranger.id) && Math.hypot(me.x - one.x, me.y - one.y) <= STRANGERS.seen) {
+                this.strangersSeen.add(stranger.id);
+
+                if (stranger.kind === "pedlar") {
+                    this.hud.message("A pedlar, resting by the way with their pack: they'll have odds and ends to sell.", 3.5);
+                } else if (!stranger.tended && !stranger.off) {
+                    this.hud.message("Someone's down ahead, hurt: a hunter, by the look of them. Talk to them: they may need help.", 3.5);
+                }
+            }
+        }
+    }
+
+    // The strangers out (core/director.js STRANGERS; host.js "stranger" events): put out, drawn
+    // (a few at a time, as the wild's are); and what's said as they deal with the player, over
+    // their heads: hungry bandits' chief hailing them (and told what they want), paid, and refused
+    // or walked away from, the bandits drawing their blades; a wounded hunter healed, thanking them
+    // and telling of a place round about (#noteFound); and one let go, gone and forgotten
+    #strangerSaid(event) {
+        const { change, stranger: id } = event;
+
+        if (change === "put") {
+            this.enlisting.push(...event.ids);
+
+            return;
+        }
+
+        if (change === "gone") {
+            this.strangersSeen.delete(id);
+            this.#unenlist(event.ids);
+
+            for (const one of event.ids) {
+                if (!this.battle.actor(one)) {
+                    this.#undress(one);
+                }
+            }
+
+            return;
+        }
+
+        const by = event.by ? this.battle.actor(event.by) : null;
+        const say = (lines) => {
+            const words = lines[Math.floor(Math.random() * lines.length)];
+
+            if (by) {
+                this.hud.say(by.id, words, 1 + bubbleSeconds(words));
+            }
+        };
+
+        if (change === "hail" && event.id === this.me) {
+            say(STRANGER_LINES.hail);
+            this.hud.message("Bandits bar your way, hungry: they want food or gold to let you by. Talk to them, or walk away and fight.", 4);
+        } else if (change === "paid" && event.id === this.me) {
+            say(STRANGER_LINES.paid);
+        } else if (change === "fight") {
+            say(STRANGER_LINES.fight);
+
+            if (by) {
+                const [ox, oz] = this.originOf("town");
+
+                this.sound?.play("unsheathe", { at: new THREE.Vector3(ox + by.x, this.#groundOn("town", by.x, by.y), oz + by.y) });
+            }
+
+            if (event.id === this.me) {
+                this.hud.message("The bandits draw their blades!", 2.5);
+            }
+        } else if (change === "tended" && event.by === this.me) {
+            const hunter = this.battle.actor(event.id);
+            const name = hunter?.name?.split(" ")[0] ?? "The hunter";
+
+            if (hunter) {
+                const words = STRANGER_LINES.tended[Math.floor(Math.random() * STRANGER_LINES.tended.length)];
+
+                this.hud.say(hunter.id, words, 1 + bubbleSeconds(words));
+            }
+
+            if (event.place) {
+                this.#noteFound(event.place, { hunter: name });
+            } else {
+                this.hud.message(`${name} thanks you. There's nowhere round here you've not found already, they say, but they'll not forget it.`, 3.5);
+            }
+        }
+    }
+
+    // A healing spell the player would cast on someone (core/spells.js: one of the healing school's
+    // they know that heals, ready now, the least of them first; or, none ready, the least), or null
+    #healingSpell() {
+        const known = Object.keys(SPELLS)
+            .filter((id) => SPELLS[id].school === "healing" && (SPELLS[id].heal || SPELLS[id].full) && this.progress.knows(id))
+            .sort((a, b) => SPELLS[a].tier - SPELLS[b].tier);
+
+        return known.find((id) => this.battle.cooldown(this.me, id) === 0) ?? known[0] ?? null;
+    }
+
+    // Whether something a stranger's talk asks of the game (core/dialogue.js: a wounded hunter's,
+    // hungry bandits') holds: they've been healed (`tended`), the player has a healing draught
+    // (`draught`) or knows a healing spell (`healer`); they've been paid (`paid`), the player has
+    // food they'd take (`food`: foodFor) or gold enough (`toll`). Null for anything else
+    #strangerCheck(stranger, condition) {
+        const [key, want] = Object.entries(condition)[0] ?? [];
+        const holds = {
+            tended: () => Boolean(stranger.tended),
+            draught: () => HEALING_DRAUGHTS.some((id) => this.progress.held(id) > 0),
+            healer: () => Boolean(this.#healingSpell()),
+            paid: () => Boolean(stranger.paid),
+            food: () => Boolean(foodFor(this.progress.pack)),
+            toll: () => this.progress.gold >= (stranger.toll ?? Infinity),
+        }[key];
+
+        return holds ? holds() === want : null;
     }
 
     // The peaceful finds within FIND_LOOK.seen of the player, out in the world, each drawn as its
@@ -6106,8 +6244,10 @@ export class Game {
         const building = npc ? this.world.interiors?.of(npc.map) : null;
         const folk = building?.folk ?? this.world.folk ?? [];
 
-        // (Their talk: their role's, or another's: an adventurer drinking at a guild's table)
-        const tree = npc && !npc.dead ? treeFor({ ...npc, talk: npc.kind === "follower" ? "follower" : folk.find(({ id }) => id === npc.id)?.talk }) : null;
+        // (Their talk: their role's, or another's: an adventurer drinking at a guild's table; a
+        // stranger met out in the wilds, theirs: core/director.js STRANGERS)
+        const stranger = npc ? this.host.strangerOf(npc.id) : null;
+        const tree = npc && !npc.dead ? treeFor({ ...npc, talk: npc.kind === "follower" ? "follower" : stranger ? (stranger.folk?.talk ?? "bandits") : folk.find(({ id }) => id === npc.id)?.talk }) : null;
 
         if (!tree) {
             return;
@@ -6121,7 +6261,7 @@ export class Game {
         const out = !building ? this.host.folk.get(npc.id) : null;
         // (An official's words, and what they ask and do; or a crier's, his news)
         const official = this.#officialOf(npc, building, names) ?? this.#crierOf(npc, out, names);
-        const title = soldier?.title ?? folk.find(({ id }) => id === npc.id)?.title ?? out?.title ?? ROLES[npc.role]?.title ?? "";
+        const title = soldier?.title ?? folk.find(({ id }) => id === npc.id)?.title ?? out?.title ?? (stranger?.kind === "bandits" ? "Outlaw" : null) ?? ROLES[npc.role]?.title ?? "";
         Object.assign(names, Object.fromEntries(folk.map(({ id, local = id, name }) => [local, name.split(" ")[0]])));
 
         const upstairs = building?.tavern?.storeys > 1 ? building.tavern.upstairs : null;
@@ -6151,6 +6291,11 @@ export class Game {
             names.hirePrice = String(hire.price);
         }
 
+        // (Hungry bandits: the gold they want)
+        if (stranger?.toll) {
+            names.toll = String(stranger.toll);
+        }
+
         // (A shop with a daily stock: its special today, by name, and what it's asked for)
         const stock = this.host.stockOf(npc.id);
 
@@ -6172,7 +6317,8 @@ export class Game {
             place: building?.name,
             names,
             check: (condition) =>
-                "upstairs" in condition
+                (stranger ? this.#strangerCheck(stranger, condition) : null) ??
+                ("upstairs" in condition
                     ? upstairsIs(condition.upstairs, upstairs)
                     : "stance" in condition
                       ? soldier?.stance === condition.stance
@@ -6192,7 +6338,7 @@ export class Game {
                                     ? Boolean(stock?.specialLeft) === condition.special
                                   : official
                                     ? official.check(condition)
-                                    : true,
+                                    : true),
             memory: this.memory[npc.id],
             knowledge: this.knowledge,
             variety: this.talkVariety,
@@ -6211,21 +6357,40 @@ export class Game {
                     return;
                 }
 
+                // (A healing spell cast on a wounded hunter, as on anyone: the host tells when
+                // it's healed them)
+                if (effect.tend === "spell") {
+                    const spell = this.#healingSpell();
+                    const why = spell ? this.#unready(spell) : "unknown";
+
+                    if (why) {
+                        this.#castHeard({ ok: false, reason: why });
+                    } else {
+                        this.#command({ type: "cast", spell, target: npc.id }, (result) => this.#castHeard(result));
+                    }
+
+                    return;
+                }
+
                 // (What can't be paid for, said; what is, the gold heard counted out)
                 this.#command({ type: "effect", effect }, (result) => {
                     if (!result.ok) {
                         this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.6);
                         this.sound?.play(result.reason === "gold" ? "buyDenied" : "denied");
-                    } else if (effect.price || effect.pay) {
+                    } else if (effect.price || effect.pay || effect.toll === "gold") {
                         this.hud.setGold(this.progress.gold);
                         this.onProgress(this.progress);
                         this.sound?.play("coins");
+                    } else if (effect.toll === "food" || effect.tend === "draught") {
+                        // (Food handed over to hungry bandits; a draught uncorked for a hunter)
+                        this.onProgress(this.progress);
+                        this.sound?.play(effect.tend ? "potionCork" : "drop");
                     }
                 });
 
                 // (Their wares, once the talk's over: their own shop, or their part's, as the host
                 // has it)
-                const keeps = folk.find(({ id }) => id === npc.id)?.shop ?? SHOPKEEPERS[npc.role];
+                const keeps = folk.find(({ id }) => id === npc.id)?.shop ?? out?.shop ?? SHOPKEEPERS[npc.role];
 
                 if (effect.shop && keeps) {
                     this.shopWanted = { shop: keeps, keeper: npc.id, name: npc.name };
@@ -8899,7 +9064,7 @@ export class Game {
             const words = one.hell ? cultWord(cultNear(plan, town.at), town.name) : rumourWord(plan, place, town, one.shrine ? { from: "the shrine" } : {});
             const found = this.#foundOf(one);
             const circle = !one.hell || one.hell === "near" ? circleOf(place.id, place.at) : null;
-            const from = one.hell ? `Said in ${town.name}` : one.shrine ? `Shown at the shrine of ${PANTHEON[one.shrine]?.name ?? "a god"}` : one.note ? "A fallen adventurer's note" : `The crier in ${town.name}`;
+            const from = one.hell ? `Said in ${town.name}` : one.shrine ? `Shown at the shrine of ${PANTHEON[one.shrine]?.name ?? "a god"}` : one.note ? "A fallen adventurer's note" : one.hunter ? "A hunter you healed" : `The crier in ${town.name}`;
 
             return [{ words, from, where: circle && at && !found ? `About ${bearing(at, circle.at)}` : "", found }];
         });
@@ -10757,6 +10922,9 @@ export class Game {
                     this.#paced(event);
                 }
 
+                break;
+            case "stranger":
+                this.#strangerSaid(event);
                 break;
             case "muster":
                 this.#muster(event);

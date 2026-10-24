@@ -489,7 +489,7 @@ dice did, so that crossing them is more than one guarded chest after another.
   cache's is (*Adventurers' caches*, below): on foot, out of the settlements, afresh for everyone
   together once one's dealt to any of them.
 - **The deck** (`DIRECTOR.cards`, `shuffled`): an adventurer's cache, a fallen adventurer's
-  remains, an old campsite, fresh tracks. Each comes once a deck, in an order of its own, the deck shuffled
+  remains, an old campsite, fresh tracks, a stranger. Each comes once a deck, in an order of its own, the deck shuffled
   again once it's all been dealt, never with the card just dealt first again (Left 4 Dead's
   director dealt its bosses so: no two of the same running). Each player has their own, kept in
   the world's snapshot (`travel`). A card with nowhere to go ahead waits for the next look.
@@ -526,8 +526,35 @@ dice did, so that crossing them is more than one guarded chest after another.
   on their minimap the way they lead, prints being hard to make out in long grass. Follow them and
   find the pack first, or see what made them and steer clear. Let go after six minutes, once their pack's all gone, or once every player's 140 m
   from where they start.
+- **A stranger** (`STRANGERS`, the host's `#putStranger`): someone met on the way, put out where a
+  cache would be. The next of three, each met once before any again, as the cards are (each
+  player's `strangers`, kept with their deck). Let go once every player's 180 m off and none's
+  fighting them.
+  - *A pedlar*, resting by the way, their pannier on their back and a walking staff in hand (one of
+    the folk, `pedlar`, characters/folk.js). Said within 40 m ("A pedlar, resting by the way with
+    their pack: they'll have odds and ends to sell."). Talked to, they sell out of their own stock
+    for the day (`SHOPS.pedlar`, core/stock.js): a healing draught always, and three more of the
+    common draughts and cures, one to three of each. Half the days there's a special too, a common
+    treasure map or a common charm (`sometimes`). All a quarter dearer than in town (`markup`).
+  - *A wounded hunter*, in greens with their bow and quiver slung, down to 30% of their health
+    (`hunter`). Said within 40 m ("Someone's down ahead, hurt…"). Healed, with a healing draught
+    given them in a talk (the least the player has: `HEALING_DRAUGHTS`) or a healing spell cast on
+    them (in a talk, the least the player knows that's ready, or any time from the wheel), they
+    tell whoever healed them of the nearest place within 1.5 km that player hasn't found, as a
+    fallen adventurer's note does (`noteOf`). It's written in the journal ("A hunter you healed"),
+    its circle on the world map, said with a quill's scratch. Eight seconds later they go on their
+    way, 60 m off from the nearest player. Turned down in a talk, or left unhealed three minutes
+    after a player first came within 40 m, they limp off at half their pace.
+  - *Hungry bandits*: three or four outlaws, their chief and his band (`CACHE_BANDS.bandits`), as
+    strong as the land there, no one's enemy till they're refused (`neutral`). The chief hails a
+    player who comes within 14 m ("Hold there, friend!"; "Bandits bar your way, hungry: they want
+    food or gold to let you by…"). Talked to (any of them), they want food (two cuts of the wild's
+    meat, else a hot meal: `foodFor`) or gold (12 to 20, 35% more for each tier past the first:
+    `banditToll`). Paid, they let everyone by. Refused, or walked away from (a hailed player 30 m
+    from their chief, unpaid), they draw their blades and fight like any of the wild's, after that
+    player.
 - **Let go** once every player's 220 m away (`FINDS.far`); another comes later. Nothing's kept in
-  a snapshot till one's been dealt.
+  a snapshot till one's been dealt (`finds`, `fresh`, `strangers`).
 - **The pacing** (`PACING`, the host's `#pace`; Left 4 Dead's director: "Algorithm adjusts pacing,
   not difficulty"), kept for each player with their deck:
   - *A quiet spell after a hard fight*: a fight a player fell below half their health in (or

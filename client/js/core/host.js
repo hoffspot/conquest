@@ -17,11 +17,12 @@
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
 import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
 import { CACHE_BANDS, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
-import { DIRECTOR, FINDS, FRESH, freshTrail, noteOf, PACING, peacefulNext, rollRemains, shuffled, TRACKLESS, WELL_RESTED } from "./director.js";
+import { banditToll, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, HEALING_DRAUGHTS, noteOf, PACING, peacefulNext, rollRemains, shuffled, STRANGERS, TRACKLESS, WELL_RESTED } from "./director.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
+import { namePeople } from "./names.js";
 import { rumouredBy, rumouredOf, rumoursNear } from "./rumours.js";
 import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
@@ -714,6 +715,8 @@ export const REFUSALS = Object.freeze({
     far: "Too far away.",
     talking: "Not talking to them.",
     gold: "Not enough gold.",
+    draught: "You've no healing draught.",
+    food: "You've nothing they'd eat: a hot meal, or two cuts of meat.",
     hire: "They're not for hire.",
     company: "You can't lead any more than you have.",
     follower: "They don't follow you.",
@@ -1071,8 +1074,9 @@ export class Host {
          * dealt last, or none), pace (the pacing's, core/director.js PACING: { fight (the fight
          * they're in: { lowest, their health's least share in it }, or null), lastFight (when they
          * last fought: the battle's ms), calm (metres crossed since), quietUntil (a quiet spell's
-         * end), build (a build-up's hunters to come: { at, creature, tier, count, due }, or null) })
-         * }).
+         * end), build (a build-up's hunters to come: { at, creature, tier, count, due }, or null) }),
+         * strangers (the strangers still to meet, the next first: STRANGERS kinds, shuffled once
+         * there's been one), stranger (the one met last, or none) }).
          */
         this.caches = new Map();
         this.nextCache = 1;
@@ -1093,6 +1097,20 @@ export class Host {
          */
         this.fresh = new Map();
         this.nextFresh = 1;
+
+        /**
+         * The strangers the wilds director's put out (core/director.js STRANGERS), by id: { id,
+         * kind ("pedlar", "hunter" or "bandits"), at ([x, y]: where they were put out), tier (the
+         * land's there), ids (theirs in the battle: a pedlar's or a hunter's one, the bandits'
+         * leader first); a pedlar's or a hunter's folk (how they look and talk: as this.folk has
+         * them); a hunter's met (when a player first came near them: the battle's ms, or null),
+         * tended (the player who healed them, or null), due (when they go on their way, once
+         * tended: the battle's ms), off (once they've set off); the bandits' toll (the gold they
+         * want), hailed (the players they've hailed: ids), paid (the player who paid them, or
+         * null), fight (once they've been refused) }.
+         */
+        this.strangers = new Map();
+        this.nextStranger = 1;
 
         /**
          * The treasures hunted (core/treasure.js), by id: { id, owner (whose map it was: a
@@ -1916,6 +1934,15 @@ export class Host {
         for (const event of events) {
             const beast = event.type === "death" ? this.wild.get(event.id) : null;
 
+            // (A wounded hunter healed by a player's spell: tended, #tended)
+            if (event.type === "healed" && event.amount > 0 && this.players.has(event.by)) {
+                const stranger = this.strangerOf(event.id);
+
+                if (stranger?.kind === "hunter" && !stranger.tended && !stranger.off) {
+                    this.#tended(stranger, this.players.get(event.by));
+                }
+            }
+
             // (One of a cache's guards struck or felled: whoever did it, a player or one of theirs,
             // has a share of it once it's opened, wherever they are by then: #cacheFell)
             if ((event.type === "hit" || event.type === "death") && event.by) {
@@ -1933,7 +1960,7 @@ export class Host {
 
                 // (One of those roaming about the players, felled out in the world: its ground
                 // cleared a while, WILDS.cleared)
-                if (fell?.map === "town" && !beast.camp && !beast.den && !beast.trial && !beast.lair && !beast.place && !beast.cache && !beast.dungeon && !beast.works && !this.companions.has(event.id)) {
+                if (fell?.map === "town" && !beast.camp && !beast.den && !beast.trial && !beast.lair && !beast.place && !beast.cache && !beast.stranger && !beast.dungeon && !beast.works && !this.companions.has(event.id)) {
                     this.cleared.push({ at: [fell.x, fell.y], until: this.battle.time + WILDS.cleared });
                 }
 
@@ -2428,6 +2455,7 @@ export class Host {
             travel: structuredClone([...this.travel.entries()]),
             ...(this.nextFind > 1 ? { finds: structuredClone([...this.finds.entries()]), nextFind: this.nextFind } : {}),
             ...(this.nextFresh > 1 ? { fresh: structuredClone([...this.fresh.entries()]), nextFresh: this.nextFresh } : {}),
+            ...(this.nextStranger > 1 ? { strangers: structuredClone([...this.strangers.entries()]), nextStranger: this.nextStranger } : {}),
             ground: structuredClone([...this.ground.values()]),
             campfires: structuredClone(this.campfires),
             nextGround: this.nextGround,
@@ -2606,6 +2634,15 @@ export class Host {
         host.nextFind = snapshot.nextFind ?? 1;
         host.fresh = new Map(structuredClone(snapshot.fresh ?? []));
         host.nextFresh = snapshot.nextFresh ?? 1;
+        host.strangers = new Map(structuredClone(snapshot.strangers ?? []));
+        host.nextStranger = snapshot.nextStranger ?? 1;
+
+        // (A pedlar's or a hunter's look and talk: one of the folk's, the same record)
+        for (const stranger of host.strangers.values()) {
+            if (stranger.folk) {
+                host.folk.set(stranger.folk.id, stranger.folk);
+            }
+        }
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
         host.nextGround = snapshot.nextGround ?? 1;
         host.campfires = structuredClone(snapshot.campfires ?? []);
@@ -7355,7 +7392,7 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon && !one.works && !one.rift && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
@@ -7388,7 +7425,7 @@ export class Host {
 
             const nearAny = (x, y) => group.actors.some((each) => hypot(x - each.x, y - each.y) < WILDS.about);
             const about = [...this.wild].filter(([id, one]) => {
-                const beast = !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.dungeon ? this.battle.actor(id) : null;
+                const beast = !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon ? this.battle.actor(id) : null;
 
                 return beast && !beast.dead && nearAny(beast.x, beast.y);
             }).length;
@@ -7724,7 +7761,7 @@ export class Host {
 
     // A pack of creatures put out at a place (`count` of `creature` at `tier`; out in the world, or
     // on a building's `map`), the first its leader (an `elite` pack's, an elite: ELITES); what
-    // they're of (`camp`, `lair`, `place`, `cache`) and how they keep (`roam`, `temper`, `guard`,
+    // they're of (`camp`, `lair`, `place`, `cache`, `stranger`) and how they keep (`roam`, `temper`, `guard`,
     // the `round` they walk; one `pack` with others, if it's given); against a stronger side, each
     // one's hit points × `health`, its leader's × `leading` (strength.js SCALING), and those past
     // the first `least` (as many as against a player alone) `extra` (#rouse): their ids
@@ -7762,7 +7799,7 @@ export class Host {
     // out, its kind with it (`elite` "escort"), and neither going far from there (ELITES); its hit
     // points × `health` against a stronger side (strength.js SCALING); one more than there'd have
     // been against a player alone, `extra` (leaving its gold and its parts only: spoils.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, trial = null, lair = null, place = null, cache = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null }) {
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, trial = null, lair = null, place = null, cache = null, stranger = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null }) {
         const spec = CREATURES[creature];
         const lead = elite === "lead";
         // (A dungeon's boss or mini-boss: more of it and harder, CHAMPIONS, by its title; an elite,
@@ -7772,7 +7809,7 @@ export class Host {
         const power = tierPower(at) * stands.power;
         const walks = lead ? { stops: eliteRound(square), at: 0 } : round;
 
-        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(trial ? { trial } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}) });
+        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(trial ? { trial } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(stranger ? { stranger } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}) });
         this.battle.add({
             id,
             kind: "beast",
@@ -8355,6 +8392,8 @@ export class Host {
             }
         }
 
+        this.#strangersAbout(homes);
+
         // (Fresh tracks old, left far behind, or their pack all gone: let go)
         for (const [id, tracks] of [...this.fresh]) {
             const [x, y] = tracks.points[0];
@@ -8535,16 +8574,16 @@ export class Host {
     }
 
     // The wilds director's next card dealt ahead of a player (`actor`; `was`: how they've come, and
-    // the deck: core/director.js), for their `group`: an adventurer's cache (#putCache), or a
-    // peaceful find (#putFind). Dealt, the next's the one after (a deck all dealt shuffled again,
-    // not the one just dealt first); nowhere to put it, it's tried again a moment later. Whether
-    // it was
+    // the deck: core/director.js), for their `group`: an adventurer's cache (#putCache), a
+    // peaceful find (#putFind), fresh tracks (#putTracks) or a stranger (#putStranger). Dealt,
+    // the next's the one after (a deck all dealt shuffled again, not the one just dealt first);
+    // nowhere to put it, it's tried again a moment later. Whether it was
     #deal(actor, was, homes, group = null) {
         was.deck ??= shuffled(this.random);
 
         const card = was.deck[0];
 
-        const dealt = card === "cache" ? this.#putCache(actor, was.heading, homes, group) : card === "tracks" ? this.#putTracks(actor, was.heading, homes) : this.#putFind(card, actor, was.heading, homes);
+        const dealt = card === "cache" ? this.#putCache(actor, was.heading, homes, group) : card === "tracks" ? this.#putTracks(actor, was.heading, homes) : card === "stranger" ? this.#putStranger(actor, was, homes) : this.#putFind(card, actor, was.heading, homes);
 
         if (!dealt) {
             return false;
@@ -8629,7 +8668,7 @@ export class Host {
             .filter(([id, one]) => {
                 const each = this.battle.actor(id);
 
-                return each && !each.dead && each.map === "town" && each.target === null && !TRACKLESS.has(one.creature) && !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.dungeon && !one.works && !one.rift && far(each) >= FRESH.reach[0] && far(each) <= FRESH.reach[1];
+                return each && !each.dead && each.map === "town" && each.target === null && !TRACKLESS.has(one.creature) && !one.camp && !one.den && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon && !one.works && !one.rift && far(each) >= FRESH.reach[0] && far(each) <= FRESH.reach[1];
             })
             .map(([id]) => this.battle.actor(id))
             .sort((a, b) => Number(ahead(b)) - Number(ahead(a)) || far(a) - far(b) || (a.id < b.id ? -1 : 1));
@@ -8700,6 +8739,348 @@ export class Host {
         }
 
         this.#event("find", { find: find.id, change: "searched" });
+
+        return OK;
+    }
+
+    // A stranger met on the way (core/director.js STRANGERS) put out ahead of a player (`actor`;
+    // `was`: how they've come, and the strangers still to meet) where a cache would be
+    // (#spotAhead): the next of the strangers (each once, as the cards are), a pedlar resting by
+    // the way, a hunter lying hurt (#putWayfarer), or hungry bandits, no one's enemy till they're
+    // refused (#putBandits). Whether they could be
+    #putStranger(actor, was, homes) {
+        const spot = this.#spotAhead(actor, was.heading);
+
+        if (!spot) {
+            return false;
+        }
+
+        const { heart } = spot;
+        const plan = this.world.plan;
+        const id = `stranger-${this.nextStranger}`;
+        const strangers = was.strangers?.length ? was.strangers : shuffled(this.random, was.stranger ?? null, STRANGERS.kinds);
+        const kind = strangers[0];
+        const tier = cacheTier(tierAt(heart, homes.map(({ home }) => home), landAt(plan, ...heart).biome), 0);
+        const folk = kind === "bandits" ? null : this.#putWayfarer(id, kind, heart);
+        const ids = folk ? [folk.id] : kind === "bandits" ? this.#putBandits(id, heart, tier) : [];
+
+        if (!ids.length) {
+            return false;
+        }
+
+        this.nextStranger++;
+        was.strangers = strangers.slice(1);
+        was.stranger = kind;
+
+        const stranger = { id, kind, at: heart, tier, ids };
+
+        if (kind === "bandits") {
+            Object.assign(stranger, { toll: banditToll(tier, this.random), hailed: [], paid: null, fight: false });
+        } else {
+            Object.assign(stranger, { folk }, kind === "hunter" ? { met: null, tended: null, due: null, off: false } : {});
+        }
+
+        this.strangers.set(id, stranger);
+        this.#event("stranger", { stranger: id, change: "put", kind, at: heart, ids });
+
+        return true;
+    }
+
+    // A pedlar or a hunter (`kind`) met out in the wilds (#putStranger's `id`), one of the folk,
+    // standing by `heart` ([x, y]): a pedlar keeping their own shop (progress.js SHOPS pedlar), a
+    // hunter hurt, down to STRANGERS hunter's `wounded` of their health. Their record (this.folk's),
+    // or null, no room for them
+    #putWayfarer(id, kind, heart) {
+        const sex = this.random.chance(0.5) ? "f" : "m";
+        const seed = this.random.int(1, 0x7fffffff);
+        let square;
+
+        try {
+            square = this.#spots()(heart);
+        } catch {
+            return null;
+        }
+
+        const facing = this.random.next() * Math.PI * 2;
+        const [{ name }] = namePeople([{ sex }], seed);
+        const one = { id: `${id}/${kind}`, local: kind, title: kind === "pedlar" ? "Pedlar" : "Hunter", role: kind, look: kind, talk: kind === "pedlar" ? "pedlar" : "woundedHunter", ...(kind === "pedlar" ? { shop: "pedlar" } : {}), sex, seed, name, people: "human", map: "town", square, facing, routine: { order: "cycle", wait: [6000, 12000], stops: [{ square, facing }] }, stranger: id };
+
+        if (!this.#addFolk(one, null)) {
+            return null;
+        }
+
+        if (kind === "hunter") {
+            const actor = this.battle.actor(one.id);
+
+            actor.hp = Math.max(1, Math.round(actor.maxHp * STRANGERS.hunter.wounded));
+        }
+
+        return one;
+    }
+
+    // Hungry bandits (#putStranger's `id`) put out about `heart` ([x, y]): STRANGERS bandits'
+    // `count` of outlaws (caches.js CACHE_BANDS bandits: their chief, then his band), as strong as
+    // the land is (`tier`), no one's enemy (`neutral`) till they're refused. Their ids, their
+    // chief's first
+    #putBandits(id, heart, tier) {
+        const band = CACHE_BANDS.bandits;
+        const count = this.random.int(...STRANGERS.bandits.count);
+        const keeps = { stranger: id, pack: id, temper: "territorial", roam: 3 };
+        const ids = this.#pack({ creature: band.leader, tier, count: 1 }, heart, { ...keeps, master: true });
+
+        for (let k = 1; k < count && ids.length; k++) {
+            const turn = (k / (count - 1)) * Math.PI * 2;
+
+            ids.push(...this.#pack({ creature: band.folk, tier, count: 1 }, [heart[0] + cos(turn) * 2.5, heart[1] + sin(turn) * 2.5], keeps));
+        }
+
+        for (const each of ids) {
+            this.battle.actor(each).neutral = true;
+        }
+
+        return ids;
+    }
+
+    /** The stranger (core/director.js STRANGERS: this.strangers') someone in the battle is one of (by their id), or null. */
+    strangerOf(id) {
+        for (const stranger of this.strangers.values()) {
+            if (stranger.ids.includes(id)) {
+                return stranger;
+            }
+        }
+
+        return null;
+    }
+
+    // The strangers out (core/director.js STRANGERS): each let go once every player's far from
+    // them (and none's fighting them); a wounded hunter going on their way, or limping off
+    // (#hunterAbout); hungry bandits hailing a player who comes near, and fighting one who walks
+    // away from them unpaid (#banditsAbout)
+    #strangersAbout(homes) {
+        for (const stranger of [...this.strangers.values()]) {
+            const living = stranger.ids.map((each) => this.battle.actor(each)).filter((each) => each && !each.dead);
+            const at = living[0] ? [living[0].x, living[0].y] : stranger.at;
+            const fighting = living.some((each) => each.target !== null);
+
+            if (!fighting && !homes.some(({ at: [x, y] }) => hypot(x - at[0], y - at[1]) < STRANGERS.far)) {
+                this.#strangerGone(stranger);
+            } else if (stranger.kind === "hunter") {
+                this.#hunterAbout(stranger, living[0] ?? null);
+            } else if (stranger.kind === "bandits") {
+                this.#banditsAbout(stranger, living);
+            }
+        }
+    }
+
+    // A stranger let go (#strangersAbout): a pedlar or a hunter gone from the folk, the bandits
+    // still standing back to the wild
+    #strangerGone(stranger) {
+        for (const id of stranger.ids) {
+            if (stranger.folk) {
+                this.battle.remove(id);
+                this.folk.delete(id);
+            } else if (this.battle.actor(id) && !this.battle.actor(id).dead) {
+                this.#release(id);
+            }
+        }
+
+        this.strangers.delete(stranger.id);
+        this.#event("stranger", { stranger: stranger.id, change: "gone", ids: stranger.ids });
+    }
+
+    // A wounded hunter (`actor`: theirs): met once a player first comes within STRANGERS seen of
+    // them; healed, off on their way STRANGERS hunter's `thanks` ms after; left unhealed `waits` ms
+    // after they were met, limping off (#strangerOff). Not while they're talking
+    #hunterAbout(stranger, actor) {
+        if (!actor || stranger.off) {
+            return;
+        }
+
+        const now = this.battle.time;
+
+        if (stranger.met === null && [...this.players.keys()].some((id) => {
+            const each = this.battle.actor(id);
+
+            return each && !each.dead && each.map === "town" && hypot(each.x - actor.x, each.y - actor.y) <= STRANGERS.seen;
+        })) {
+            stranger.met = now;
+        }
+
+        const due = stranger.tended ? stranger.due : stranger.met !== null ? stranger.met + STRANGERS.hunter.waits : Infinity;
+
+        if (now >= due && actor.talkingTo === null) {
+            this.#strangerOff(stranger, !stranger.tended);
+        }
+    }
+
+    // A wounded hunter healed by a player (a draught given them, or a spell cast on them): told of
+    // a place round about that player hadn't found, as a fallen adventurer's note tells
+    // (core/director.js noteOf: none, if there's none), and on their way STRANGERS hunter's
+    // `thanks` ms after
+    #tended(stranger, player) {
+        const plan = this.world.plan;
+        const place = plan ? noteOf(rumouredOf(plan), stranger.at, (id, x, y) => player.explored.knows(id, x, y)) : null;
+
+        Object.assign(stranger, { tended: player.id, due: this.battle.time + STRANGERS.hunter.thanks });
+        this.#event("stranger", { stranger: stranger.id, change: "tended", id: stranger.ids[0], by: player.id, ...(place ? { place } : {}) });
+    }
+
+    // A wounded hunter off on their way, away from the nearest player (STRANGERS hunter's `away`
+    // metres off), `limping` (at its `limp` of their pace) if they weren't healed
+    #strangerOff(stranger, limping) {
+        const actor = this.battle.actor(stranger.ids[0]);
+
+        stranger.off = true;
+
+        if (!actor) {
+            return;
+        }
+
+        const nearest = [...this.players.keys()].map((id) => this.battle.actor(id)).filter((each) => each && !each.dead && each.map === "town").sort((a, b) => hypot(a.x - actor.x, a.y - actor.y) - hypot(b.x - actor.x, b.y - actor.y))[0];
+        const [dx, dy] = nearest ? [actor.x - nearest.x, actor.y - nearest.y] : [0, 1];
+        const far = hypot(dx, dy) || 1;
+        let square = null;
+
+        try {
+            square = this.#spots()([actor.x + (dx / far) * STRANGERS.hunter.away, actor.y + (dy / far) * STRANGERS.hunter.away]);
+        } catch {
+            // (Nowhere to go: they stay where they are)
+        }
+
+        if (limping) {
+            for (const pace of ["speed", "pace", "walkPace"]) {
+                actor[pace] *= STRANGERS.hunter.limp;
+            }
+        }
+
+        if (square) {
+            this.battle.reroute(actor.id, { order: "cycle", wait: [60000, 60000], stops: [{ square, facing: atan2(dx, dy) }] });
+        }
+
+        this.#event("stranger", { stranger: stranger.id, change: "off", id: actor.id, limping });
+    }
+
+    // Hungry bandits (`living`: those still standing, their leader first if he is): a player who
+    // comes within STRANGERS bandits' `hail` metres of their leader hailed (once), their leader
+    // turning to them; one hailed who walks off unpaid (`off` metres from him), fought
+    // (#banditsFight). Not once they're paid, or fighting
+    #banditsAbout(stranger, living) {
+        if (stranger.fight || stranger.paid || !living.length) {
+            return;
+        }
+
+        const leader = living[0];
+
+        for (const id of this.players.keys()) {
+            const actor = this.battle.actor(id);
+
+            if (!actor || actor.dead || actor.map !== "town") {
+                continue;
+            }
+
+            const far = hypot(actor.x - leader.x, actor.y - leader.y);
+
+            if (!stranger.hailed.includes(id) && far <= STRANGERS.bandits.hail) {
+                stranger.hailed.push(id);
+                leader.facing = atan2(actor.x - leader.x, actor.y - leader.y);
+                this.#event("stranger", { stranger: stranger.id, change: "hail", id, by: leader.id });
+            } else if (stranger.hailed.includes(id) && far > STRANGERS.bandits.off) {
+                this.#banditsFight(stranger, id);
+
+                return;
+            }
+        }
+    }
+
+    // Hungry bandits refused (by a player: `id`), or walked away from: everyone's enemy now, the
+    // wild's, and after that player; any talk with them over
+    #banditsFight(stranger, id) {
+        stranger.fight = true;
+
+        for (const each of stranger.ids) {
+            const bandit = this.battle.actor(each);
+
+            if (bandit && !bandit.dead) {
+                bandit.neutral = false;
+                this.battle.command(each, { type: "engage", target: id, run: true });
+            }
+        }
+
+        for (const player of this.players.keys()) {
+            const actor = this.battle.actor(player);
+
+            if (actor && stranger.ids.includes(actor.talkingTo)) {
+                this.#talk(actor, null);
+            }
+        }
+
+        this.#event("stranger", { stranger: stranger.id, change: "fight", id, by: stranger.ids[0] });
+    }
+
+    // Something done talking with a stranger (core/director.js STRANGERS: the one the player's
+    // talking with): a wounded hunter given a healing draught (the least they have:
+    // HEALING_DRAUGHTS), healed whole and tended (#tended), or turned down (`tend` "no"), limping
+    // off; hungry bandits paid their toll in gold, or in food (foodFor), and letting them by, or
+    // refused (`toll` "refuse"), fighting
+    #strangerEffect(player, actor, effect) {
+        const stranger = this.strangerOf(actor.talkingTo);
+
+        if (effect.tend) {
+            if (stranger?.kind !== "hunter" || stranger.tended || stranger.off) {
+                return refuse("command");
+            }
+
+            if (effect.tend === "no") {
+                this.#strangerOff(stranger, true);
+
+                return OK;
+            }
+
+            const draught = effect.tend === "draught" ? HEALING_DRAUGHTS.find((id) => player.progress.held(id) > 0) : null;
+
+            if (!draught) {
+                return refuse(effect.tend === "draught" ? "draught" : "command");
+            }
+
+            player.progress.remove(draught, 1);
+            this.battle.mend(stranger.ids[0], { hp: this.battle.actor(stranger.ids[0])?.maxHp ?? 0 });
+            this.#tended(stranger, player);
+
+            return OK;
+        }
+
+        if (stranger?.kind !== "bandits" || stranger.fight || stranger.paid) {
+            return refuse("command");
+        }
+
+        if (effect.toll === "refuse") {
+            this.#banditsFight(stranger, actor.id);
+
+            return OK;
+        }
+
+        if (effect.toll === "gold") {
+            if (player.progress.gold < stranger.toll) {
+                return refuse("gold");
+            }
+
+            player.progress.gold -= stranger.toll;
+        } else if (effect.toll === "food") {
+            const food = foodFor(player.progress.pack);
+
+            if (!food) {
+                return refuse("food");
+            }
+
+            for (const { id, count } of food) {
+                player.progress.remove(id, count);
+            }
+        } else {
+            return refuse("command");
+        }
+
+        stranger.paid = actor.id;
+        this.#event("stranger", { stranger: stranger.id, change: "paid", id: actor.id, by: stranger.ids[0], toll: effect.toll });
 
         return OK;
     }
@@ -10556,6 +10937,11 @@ export class Host {
 
         if (effect.follower) {
             return this.#tell(player, actor, effect.follower);
+        }
+
+        // (A wounded hunter given a draught, or turned down; hungry bandits paid, or refused)
+        if (effect.tend || effect.toll) {
+            return this.#strangerEffect(player, actor, effect);
         }
 
         // (A courtesan's company: only hers to give)
