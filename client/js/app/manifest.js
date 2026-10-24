@@ -49,7 +49,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/doors.js", 12477],
             ["js/app/fate.js", 4610],
             ["js/app/fight.js", 1610],
-            ["js/app/game.js", 621542],
+            ["js/app/game.js", 621685],
             ["js/app/gearinfo.js", 16403],
             ["js/app/governor.js", 6668],
             ["js/app/hero-basics.js", 1775],

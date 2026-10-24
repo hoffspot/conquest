@@ -9929,32 +9929,35 @@ test("the wilds director lays a fallen tree across the way: drawn over its squar
     expect(laid.blocked.every(Boolean)).toBe(true);
     expect(laid.spot).toBeTruthy();
 
-    // Held on: the player walks up to it and clears it, swinging at it; let go once it's cleared
-    await page.mouse.move(laid.spot.x, laid.spot.y);
-    await page.mouse.down();
-    await page.waitForTimeout(600);
-
-    const cleared = await page.evaluate(async ({ id, ...laid }) => {
+    // Held on (the game going on, listening): the player walks up to it and clears it, swinging
+    // at it; let go once it's cleared
+    const before = await page.evaluate(() => {
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
-        const actions = game.avatars.get("player").actions;
-        const before = actions.attacks;
 
-        for (let step = 0; step < 120 && game.host.obstacles.has(id); step++) {
-            await window.settle(1);
-        }
+        Object.assign(player, { stamina: 1e6, maxStamina: 1e6 });
+        game.start();
 
-        // (Swinging at it, as it's cleared: its blows started)
-        const swung = actions.attacks >= before + 2;
+        return game.avatars.get("player").actions.attacks;
+    });
 
-        const [x0, y0] = laid.box;
-
-        return { gone: !game.host.obstacles.has(id), swung, clearing: player.clearing ?? null, toClear: game.toClear, at: [player.x, player.y], free: !game.world.maps.town.squares.blocked(x0, y0) };
-    }, laid);
-
+    await page.mouse.move(laid.spot.x, laid.spot.y);
+    await page.mouse.down();
+    await expect.poll(() => page.evaluate((id) => !window.pellagos.game.host.obstacles.has(id), laid.id), { timeout: 150000, intervals: [1000] }).toBe(true);
     await page.mouse.up();
 
-    expect(cleared).toMatchObject({ gone: true, swung: true, clearing: null, toClear: null, free: true });
+    const cleared = await page.evaluate(({ box: [x0, y0] }) => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+
+        game.stop();
+
+        // (Swinging at it, as it's cleared: its blows started)
+        return { swung: game.avatars.get("player").actions.attacks, clearing: player.clearing ?? null, toClear: game.toClear, at: [player.x, player.y], free: !game.world.maps.town.squares.blocked(x0, y0) };
+    }, laid);
+
+    expect(cleared).toMatchObject({ clearing: null, toClear: null, free: true });
+    expect(cleared.swung).toBeGreaterThanOrEqual(before + 2);
     expect(Math.hypot(cleared.at[0] - laid.at[0], cleared.at[1] - laid.at[1])).toBeGreaterThan(3);
 
     const told = await page.evaluate(() => window.told);

@@ -2442,6 +2442,11 @@ export class Game {
         for (const pointer of this.pointers.values()) {
             clearTimeout(pointer.hold);
             this.#letGo(pointer);
+
+            // (Held on what's across the way: let go of)
+            if (pointer.clearing) {
+                this.#leaveOff();
+            }
         }
 
         this.pointers.clear();
