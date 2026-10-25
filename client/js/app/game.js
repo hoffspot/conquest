@@ -6501,7 +6501,8 @@ export class Game {
 
         const attacking = after.sort((a, b) => since.get(a.id) - since.get(b.id) || (a.id < b.id ? -1 : 1));
         const listed = new Set(attacking.map(({ id }) => id));
-        const rest = player && !player.dead ? this.#enemiesSeen(player).filter((id) => !listed.has(id)).map((id) => this.battle.actor(id)).filter(Boolean) : [];
+        // (Those who've died since they were looked for let go at once, not left till the next look)
+        const rest = player && !player.dead ? this.#enemiesSeen(player).filter((id) => !listed.has(id)).map((id) => this.battle.actor(id)).filter((actor) => actor && !actor.dead) : [];
         const ring = [...attacking, ...rest];
 
         this.enemyRing = ring.map(({ id }) => id);

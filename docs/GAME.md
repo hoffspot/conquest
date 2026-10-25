@@ -1712,7 +1712,8 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   whoever the player's set on first; then those attacking them, in the order they came to it;
   then the rest they can see within 40 m (as far as the lock holds, `ENEMIES.reach`; seen as
   far in the dark as a player sees, *Seeing at night*: `#enemiesSeen`, looked for four times a
-  second, not every frame), the nearest first, their frame fainter and their name read "…, in
+  second, not every frame; one who dies let go at once, not left till the next look), the
+  nearest first, their frame fainter and their name read "…, in
   range" (`.attacker.idle`). Till 2026-10-25 only those attacking them, and whoever they were set
   on, were listed. Each icon: their likeness in a red frame (`--hostile`), a thin line of
   their health along its foot, whoever the player's set on glowing and pulsing (still, asked for
