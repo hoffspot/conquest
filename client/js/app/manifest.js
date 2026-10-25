@@ -142,7 +142,7 @@ export const MANIFEST = Object.freeze([
             ["js/characters/gaze.js", 8914, "412212b7e5"],
             ["js/characters/grip.js", 15318, "9f6a94ff39"],
             ["js/characters/grounding.js", 5384, "dd14d15e6b"],
-            ["js/characters/hair.js", 50341, "2802b6807f"],
+            ["js/characters/hair.js", 50317, "28bb6be0ee"],
             ["js/characters/headwear.js", 14161, "28522cf12a"],
             ["js/characters/items.js", 105772, "a1d8d66751"],
             ["js/characters/kit.js", 2297, "f0151efcc8"],
