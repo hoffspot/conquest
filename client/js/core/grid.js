@@ -41,6 +41,34 @@ export function squaresOf(map) {
     return read.get(map);
 }
 
+/**
+ * Whether the line between two squares (their middles) crosses one `marked(x, y)` says: an opaque
+ * one, for whether one can be seen from the other (core/battle.js canSee). Stepped along a quarter
+ * of a square at a time over its length (`distance`, squares); the square it starts on and the one
+ * it ends on not counted.
+ */
+export function crosses(marked, [ax, ay], [bx, by], distance = Math.sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by))) {
+    const steps = Math.ceil(distance * 4);
+    let [lastX, lastY] = [ax, ay];
+
+    for (let k = 1; k < steps; k++) {
+        const x = Math.floor(ax + 0.5 + ((bx - ax) * k) / steps);
+        const y = Math.floor(ay + 0.5 + ((by - ay) * k) / steps);
+
+        if (x === lastX && y === lastY) {
+            continue;
+        }
+
+        [lastX, lastY] = [x, y];
+
+        if (marked(x, y) && !(x === bx && y === by)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 /** A square's key, for sets of squares (as `taken`): squares must be less than 65,536 across. */
 export const squareKey = (x, y) => y * 65536 + x;
 

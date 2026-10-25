@@ -239,6 +239,18 @@ describe("the places held by outlaws or the dead, in play (host.js #places)", ()
                 } else {
                     assert.ok(off(leader) > off({ map: chest.map, spawn: mark }), `${kind}'s chief moved further in than the plan has them`);
                 }
+
+                // (A watchtower's chief, up its top, seen by whoever comes up its stairs and seeing
+                // them: set on them, not stood in a corner behind the stairs till they come round)
+                if (kind === "watchtower") {
+                    const [up] = ways.filter((end) => end.map === chest.map);
+
+                    me.map = chest.map;
+                    put(me, [...up.arrive]);
+                    assert.ok(host.battle.canSee(me, leader) && host.battle.canSee(leader, me), `${kind}'s chief at ${leader.square} seen from ${up.arrive}`);
+                    run(host, 1500);
+                    assert.equal(leader.target, HOST_PLAYER, `${kind}'s chief goes for whoever comes up`);
+                }
                 assert.ok(within.length >= 2 && folk.some((one) => one.map === "town"));
                 me.map = chest.map;
             }
