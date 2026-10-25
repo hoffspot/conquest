@@ -39,7 +39,7 @@ const { soldierLook } = await import("../client/js/characters/soldiers.js");
 const { allAtOnce } = await import("../client/js/core/steps.js");
 const { WEAPONS } = await import("../client/js/core/weapons.js");
 const { Avatar } = await import("../client/js/world/avatar.js");
-const { CROWD, CROWD_CASTS, CrowdAvatar, figureOf, offstage, OFFSTAGE, onstage, recordingMoves } = await import("../client/js/world/crowd.js");
+const { CROWD, CROWD_CASTS, CROWD_KEEP, Crowd, CrowdAvatar, figureOf, offstage, OFFSTAGE, onstage, recordingMoves } = await import("../client/js/world/crowd.js");
 const { released } = await import("../client/js/world/release.js");
 
 const humanFiles = readHumanFiles();
@@ -304,6 +304,46 @@ describe("a kind's moves (crowd.js recordingMoves)", () => {
         };
 
         assert.ok(heightAt(moves.die.start + moves.die.frames - 1) < heightAt(moves.guard.start) - 0.4, "lying");
+    });
+});
+
+describe("a kind's figure let go of once nobody's of it (crowd.js Crowd)", () => {
+    it("keeps a kind while anyone's of it, and lets one go a minute after the last of it's gone: its figure, picture, moves and what draws it, all off the graphics card", () => {
+        const table = { guard: { start: 0, frames: 40, length: 2, loop: true } };
+        const crowd = new Crowd(new THREE.Scene(), kit);
+        const freed = [];
+        const kindOf = (key) => {
+            const thing = (name) => ({ dispose: () => freed.push(`${key} ${name}`) });
+
+            return { template: { key, table, height: 1.8, geometry: thing("figure"), picture: thing("picture"), moves: thing("moves") }, batch: { draw() {}, dispose: () => freed.push(`${key} batch`) } };
+        };
+        const camera = new THREE.PerspectiveCamera();
+
+        crowd.kinds.set("human:m:sword", kindOf("human:m:sword"));
+        crowd.kinds.set("orc:m:axe", kindOf("orc:m:axe"));
+        camera.updateMatrixWorld();
+
+        // (A soldier of the first kind about, out of sight; nobody of the second)
+        const one = new CrowdAvatar(crowd, "human:m:sword");
+
+        one.object.visible = false;
+
+        crowd.draw(camera, 0, 0);
+        crowd.draw(camera, 0, CROWD_KEEP);
+        assert.deepEqual([...crowd.kinds.keys()], ["human:m:sword", "orc:m:axe"], "a minute: both kept");
+        assert.deepEqual(freed, []);
+
+        crowd.draw(camera, 0, CROWD_KEEP + 1);
+        assert.deepEqual([...crowd.kinds.keys()], ["human:m:sword"], "the one nobody's of let go");
+        assert.deepEqual(freed.sort(), ["orc:m:axe batch", "orc:m:axe figure", "orc:m:axe moves", "orc:m:axe picture"]);
+
+        // The last of the first gone: let go of a minute after
+        one.character.dispose();
+        crowd.draw(camera, 0, CROWD_KEEP * 2);
+        assert.ok(crowd.kinds.has("human:m:sword"));
+        crowd.draw(camera, 0, CROWD_KEEP * 3 + 2);
+        assert.equal(crowd.kinds.size, 0);
+        assert.equal(CROWD_KEEP, 60000);
     });
 });
 

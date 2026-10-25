@@ -11,7 +11,7 @@ import { sampleFiles, scoreFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { useSound, wearSound } from "../client/js/audio/handling.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
-import { ARMOUR, BATTLE_OUT, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { ARMOUR, BATTLE_OUT, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, mp3Rate, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { CLIP_SOUNDS } from "../client/js/beasts/sounds.js";
 import { BEDS, LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
@@ -1990,5 +1990,99 @@ describe("the recorded sounds kept decoded to a budget (sound.js DECODED_BUDGET)
         assert.ok(bytes(sound.decoded) < was / 4 && bytes(sound.mp3s) > mp3s);
         assert.equal(sound.memory(), bytes(sound.buffers) + bytes(sound.instruments) + bytes(sound.musicMp3s) + bytes(sound.decoded) + bytes(sound.mp3s));
         sound.close();
+    });
+});
+
+describe("the recordings decoded at the rate they were recorded at (sound.js mp3Rate, #decodeData)", () => {
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    const read = async (url) => {
+        const data = await readFile(url);
+
+        return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+    };
+
+    // The browser's OfflineAudioContext, decoding at its own rate (its buffers marked as its), or
+    // `fails` to be made at that rate or to decode; each rate one's made at, in `made`
+    function offline({ fails = null } = {}) {
+        const made = [];
+
+        globalThis.OfflineAudioContext = class {
+            constructor(channels, length, rate) {
+                if (fails === "made") {
+                    throw new Error("not at that rate");
+                }
+
+                this.sampleRate = rate;
+                made.push(rate);
+            }
+
+            decodeAudioData(recording) {
+                if (fails === "decoding") {
+                    return Promise.reject(new Error("can't"));
+                }
+
+                return Promise.resolve({ length: recording.byteLength, sampleRate: this.sampleRate, duration: recording.byteLength / this.sampleRate, numberOfChannels: 1, offline: true });
+            }
+        };
+
+        return made;
+    }
+
+    it("reads an MP3's rate from its first frame's header, after any ID3 tag: the music's and the beds' 32 kHz, the rest's 48", async () => {
+        const [[, music]] = musicFiles();
+        const [[, footstep]] = recordedFiles(["stepGrass"]);
+        const [[, bed]] = recordedFiles(["caveDrips"]);
+
+        assert.equal(mp3Rate(await read(music)), 32000);
+        assert.equal(mp3Rate(await read(footstep)), 48000);
+        assert.equal(mp3Rate(await read(bed)), 32000);
+
+        // (MPEG-2's half MPEG-1's, MPEG-2.5's a quarter)
+        assert.equal(mp3Rate(Uint8Array.of(0xff, 0xf3, 0x44, 0xc4).buffer), 24000);
+        assert.equal(mp3Rate(Uint8Array.of(0xff, 0xe3, 0x48, 0xc4).buffer), 8000);
+
+        // (What looks like a frame inside a tag not taken for one)
+        assert.equal(mp3Rate(Uint8Array.of(0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 5, 0xff, 0xf3, 0x44, 0xc4, 0, 0xff, 0xfb, 0x90, 0x00).buffer), 44100);
+
+        // (Nothing to tell it by)
+        assert.equal(mp3Rate(new ArrayBuffer(100)), null);
+        assert.equal(mp3Rate(new ArrayBuffer(0)), null);
+    });
+
+    it("decodes the music's and the beds' at their 32 kHz, not the browser's 48, and the rest at the browser's, with one decoder", async () => {
+        const made = offline();
+
+        try {
+            const { sound } = await started();
+
+            await sound.want("caveDrips");
+            await tick();
+
+            assert.equal(sound.instruments.size, musicFiles().length);
+            assert.ok([...sound.instruments.values()].every((buffer) => buffer.offline && buffer.sampleRate === 32000), "the music's");
+            assert.ok(sound.decoded.get("caveDrips").every((buffer) => buffer.offline && buffer.sampleRate === 32000), "a bed's");
+            assert.ok(sound.decoded.get("stepGrass").every((buffer) => !buffer.offline), "a footstep's 48 kHz, as the browser's");
+            assert.deepEqual(made, [32000]);
+            sound.close();
+        } finally {
+            delete globalThis.OfflineAudioContext;
+        }
+    });
+
+    it("decodes them at the browser's rate where they can't be at their own: no decoder at that rate, or one that won't", async () => {
+        for (const fails of ["made", "decoding"]) {
+            offline({ fails });
+
+            try {
+                const { sound } = await started();
+
+                assert.equal(sound.instruments.size, musicFiles().length, fails);
+                assert.ok([...sound.instruments.values()].every((buffer) => !buffer.offline), fails);
+                sound.close();
+            } finally {
+                delete globalThis.OfflineAudioContext;
+            }
+        }
     });
 });

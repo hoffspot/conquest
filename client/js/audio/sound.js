@@ -36,8 +36,9 @@
 // each other score's (about a megabyte and a half in all) the first time it's wanted, what's
 // heard playing on till they're in, then fading over; and once a score's not been heard for
 // MUSIC_KEPT, the recordings only it plays are let go of, their MP3s kept to decode again.
-// Decoded, a recording's big (the browser's own 32-bit samples, 25 to 30 times its MP3: a bed's 5
-// to 7 MB), so no more than DECODED_BUDGET of the recorded sounds is kept decoded: past it, those
+// Decoded, a recording's big (32-bit samples, 20 to 30 times its MP3: a bed's 3 to 5 MB, decoded
+// at its own 32 kHz rather than the browser's 48: #decodeData, as the music's are), so no more
+// than DECODED_BUDGET of the recorded sounds is kept decoded: past it, those
 // played least lately are let go of (never one sounding), their MP3s kept, each decoded again the
 // next time it's wanted, what's made playing in its place meanwhile, as before it was in.
 // Browsers only let a page make sound once someone has tapped, clicked or pressed a key on it, so
@@ -172,9 +173,10 @@ const BED_KEPT = 60;
 /**
  * How much of the recorded sounds is kept decoded at most (bytes): on a touch screen (a phone or a
  * tablet, with least to spare: Safari on an iPhone closes a page holding too much, and the sound's
- * counted against it), and anywhere else. All of them decoded are about 280 MB at 48 kHz (an
- * iPhone's rate), their MP3s about 10; the ones downloaded at the start about 22 MB, and the beds
- * heard at once in a busy place 20 to 30. Past it, the sounds played least lately are let go of
+ * counted against it), and anywhere else. All of them decoded are about 236 MB (276 if the beds
+ * were decoded at an iPhone's 48 kHz, not their own 32: #decodeData), their MP3s about 10; the
+ * ones downloaded at the start about 22 MB, and the beds heard at once in a busy place 14 to 20.
+ * Past it, the sounds played least lately are let go of
  * (never one sounding, a bed heard or a sound not done), their MP3s kept to decode them again.
  * (Travelling through sixteen places in a few minutes, what was decoded climbed past 150 MB; kept
  * to these, about 90 recordings were decoded again on a phone's, under 30 on a computer's.)
@@ -183,6 +185,39 @@ export const DECODED_BUDGET = Object.freeze({ touch: 48 * 1024 * 1024, other: 96
 
 // What a sound's copy holds (bytes): an MP3's, or its samples' (32-bit, each channel's)
 const bytesOf = (copy) => copy.byteLength ?? (copy.length ?? 0) * (copy.numberOfChannels ?? 1) * 4;
+
+// MPEG audio's sample rates, by its version's (MPEG-1's; MPEG-2's are half them, MPEG-2.5's a
+// quarter) and a frame's header's index
+const MP3_RATES = [44100, 48000, 32000];
+
+/**
+ * The sample rate an MP3 (its bytes) was recorded at, from its first frame's header (after any
+ * ID3 tag), or null if there's no telling: the music's and the ambience's beds' are 32 kHz, the
+ * rest 48 kHz (#decode).
+ */
+export function mp3Rate(mp3) {
+    const bytes = new Uint8Array(mp3);
+    let at = 0;
+
+    if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
+        at = 10 + ((bytes[6] << 21) | (bytes[7] << 14) | (bytes[8] << 7) | bytes[9]) + (bytes[5] & 0x10 ? 10 : 0);
+    }
+
+    for (const end = Math.min(bytes.length - 3, at + 4096); at < end; at++) {
+        if (bytes[at] === 0xff && (bytes[at + 1] & 0xe0) === 0xe0) {
+            const version = (bytes[at + 1] >> 3) & 3;
+            const layer = (bytes[at + 1] >> 1) & 3;
+            const rate = (bytes[at + 2] >> 2) & 3;
+            const bitrate = bytes[at + 2] >> 4;
+
+            if (version !== 1 && layer === 1 && rate !== 3 && bitrate !== 0 && bitrate !== 15) {
+                return MP3_RATES[rate] / (version === 3 ? 1 : version === 2 ? 2 : 4);
+            }
+        }
+    }
+
+    return null;
+}
 
 // One copy of a bed fading into the next: as one falls (cos), the other rises (sin), together as
 // loud as either (their sound unrelated, as a bed's is from one moment to the next)
@@ -780,6 +815,9 @@ export class Sound {
         this.budget = budget;
         this.decoding = new Set();
         this.heard = new Map();
+
+        /** What decodes recordings at their own sample rate, below the browser's sound's (rate → an OfflineAudioContext): #decodeData. */
+        this.decoders = new Map();
 
         /**
          * The recorded sounds downloaded only once wanted (recorded.js ON_DEMAND) asked for so
@@ -1821,7 +1859,7 @@ export class Sound {
             mp3s[variant] = recording;
             this.mp3s.set(name, mp3s);
             this.decoding.add(id);
-            this.context.decodeAudioData(recording.slice(0)).then(
+            this.#decodeData(recording).then(
                 (buffer) => {
                     const variants = this.decoded.get(name) ?? [];
 
@@ -1848,7 +1886,7 @@ export class Sound {
             // (Its MP3 kept, to decode again once it's let go of: #restMusic)
             this.musicMp3s.set(id, recording);
             this.decoding.add(id);
-            this.context.decodeAudioData(recording.slice(0)).then(
+            this.#decodeData(recording).then(
                 (buffer) => {
                     this.decoding.delete(id);
                     this.instruments.set(id, buffer);
@@ -1859,6 +1897,34 @@ export class Sound {
                 },
             );
         }
+    }
+
+    // A recording (its MP3, kept: the browser's given a copy to decode, as it takes what it's
+    // given, leaving the page's empty) decoded at the rate it was recorded at, where that's below
+    // the browser's sound's: the music's and the beds' are 32 kHz, and decoded at the browser's 48
+    // (an iPhone's) they'd hold half as much again for nothing that's heard (each played at a rate
+    // of its own anyway, a note's pitch or a sound's lilt, as the made sounds' 48 kHz are where
+    // the browser's 44.1). Where it can't be (no OfflineAudioContext, or one that won't), at the
+    // browser's sound's, as before
+    #decodeData(recording) {
+        const rate = mp3Rate(recording);
+        const decode = () => this.context.decodeAudioData(recording.slice(0));
+
+        if (!rate || rate >= this.context.sampleRate || !globalThis.OfflineAudioContext) {
+            return decode();
+        }
+
+        if (!this.decoders.has(rate)) {
+            try {
+                this.decoders.set(rate, new globalThis.OfflineAudioContext(1, 1, rate));
+            } catch {
+                this.decoders.set(rate, null);
+            }
+        }
+
+        const decoder = this.decoders.get(rate);
+
+        return decoder ? decoder.decodeAudioData(recording.slice(0)).catch(decode) : decode();
     }
 
     // The music's recordings for the scores `names` not asked for yet (nor had already), asked
@@ -2408,6 +2474,7 @@ export class Sound {
         clearInterval(this.timer);
         this.context?.close?.();
         this.context = null;
+        this.decoders.clear();
     }
 
     #fade(to) {

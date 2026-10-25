@@ -4565,7 +4565,7 @@ test("every tavern can be gone into: got ready as the player comes near, its fol
             return { visited: game.visits.has(key), floors: building.maps.filter((id) => game.interiors.has(id)).length, dressed: window.visit.folk.length, drawn: [...game.avatars.keys()].filter((id) => id.startsWith(`${key}/`)).length };
         };
 
-        return { off: out(25), far: out(50) };
+        return { off: out(14), far: out(50) };
     }, near.key);
 
     expect(away).toEqual({ off: { visited: true, floors: 2, dressed: 0, drawn: 0 }, far: { visited: true, floors: 0, dressed: 0, drawn: 0 } });
@@ -4680,11 +4680,24 @@ test("every tavern can be gone into: got ready as the player comes near, its fol
     })).toBeGreaterThanOrEqual(5);
 });
 
-test("buildings' floors held at most twenty further off than they're built (the furthest let go of first, none built again only to be let go), and counted in what the game holds: each on the page alone, put away till the player goes in", async ({ page }) => {
+test("buildings' floors built only once the player comes to their doors, though they're got ready further off, and held at most twelve further off than they're built (the furthest let go of first, none built again only to be let go), and counted in what the game holds: each on the page alone, put away till the player goes in", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
+    // Got ready as the player comes near, but none of their floors built till they're at the door
+    const ready = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor("player");
+        const off = (visit) => Math.hypot(visit.door.x - me.x, visit.door.z - me.y);
+        const further = [...game.visits.values()].filter((visit) => visit.door && off(visit) > 9);
+
+        return { further: further.length, built: further.filter((visit) => !visit.bare || visit.maps.length || visit.queue.length).map(off) };
+    });
+
+    expect(ready.further).toBeGreaterThan(0);
+    expect(ready.built).toEqual([]);
+
     // The town's buildings that can be gone into, the nearest the player first: each walked up to
-    // and got ready, its floors built
+    // and its floors built
     const keys = await page.evaluate(() => {
         const { game } = window.pellagos;
         const me = game.battle.actor("player");
@@ -4729,40 +4742,63 @@ test("buildings' floors held at most twenty further off than they're built (the 
         return { held: game.interiors.size, MB: memory.interiorsMB, own: Math.round(heldOnPage([...game.interiors.values()].map(({ object }) => object)) / 104857.6) / 10, line: memoryLines(memory)[0] };
     });
 
-    expect(counted.held).toBeGreaterThanOrEqual(4);
+    expect(counted.held).toBeGreaterThanOrEqual(2);
     expect(counted.MB).toBeGreaterThan(1);
     expect(counted.MB).toBeCloseTo(counted.own, 0);
     expect(counted.line).toContain(`floors' ${counted.MB} MB`);
 
-    // Stood where as many of them as can be are further off than they're built, none nearer: at
-    // most one held (as twenty would be in a town that held more), the furthest let go of first
-    const stood = await page.evaluate(() => {
+    // Stood where as many of the town's doors as can be are further off than floors are built but
+    // not so far they're let go of, none nearer; the player made for each of those doors from
+    // there (their floors built, as they're going in) and stood back there each time
+    const spot = await page.evaluate(() => {
         const { game } = window.pellagos;
         const squares = game.world.maps.town.squares;
-        const doors = [...game.visits.values()].filter((visit) => visit.maps.length && visit.door);
-        // (No other building near enough there to be got ready)
-        const all = [...game.world.interiors.buildings.values()].filter((building) => building.entrance).map((building) => building.entrance.door);
+        const all = [...game.world.interiors.buildings.values()].filter((building) => building.entrance && building.door?.ends?.[0]);
         const me = game.battle.actor("player");
         let best = null;
 
-        for (let y = Math.floor(me.y) - 60; y <= me.y + 60; y++) {
-            for (let x = Math.floor(me.x) - 60; x <= me.x + 60; x++) {
-                const offs = doors.map(({ door }) => Math.hypot(door.x - x - 0.5, door.z - y - 0.5));
+        for (let y = Math.floor(me.y) - 40; y <= me.y + 40; y++) {
+            for (let x = Math.floor(me.x) - 40; x <= me.x + 40; x++) {
+                const offs = all.map(({ entrance }) => Math.hypot(entrance.door.x - x - 0.5, entrance.door.z - y - 0.5));
 
-                if (!squares.blocked(x, y) && all.every((door) => Math.hypot(door.x - x - 0.5, door.z - y - 0.5) >= 23) && offs.filter((off) => off < 29).length > (best?.count ?? 1)) {
-                    best = { at: [x, y], count: offs.filter((off) => off < 29).length };
+                if (!squares.blocked(x, y) && offs.every((off) => off >= 9) && offs.filter((off) => off < 15).length > (best?.keys.length ?? 1)) {
+                    best = { at: [x, y], keys: all.filter((_, k) => offs[k] < 15).map(({ key }) => key) };
                 }
             }
         }
 
-        window.put(best.at);
+        for (const key of best?.keys ?? []) {
+            window.put(best.at);
+            game.host.lookAt = 0;
+            game.advance(0.1);
+            game.battle.command("player", { type: "enter", link: `${key}/door` });
+            game.advance(0.05);
+        }
+
+        if (best) {
+            window.put(best.at);
+        }
+
+        return best;
+    });
+
+    expect(spot?.keys.length, JSON.stringify(spot)).toBeGreaterThanOrEqual(2);
+    expect(await playUntil(page, () => [...window.pellagos.game.visits.values()].every((visit) => !visit.queue.length && !visit.steps))).toBe(true);
+
+    // There, at most one held (as twelve would be in a town that held more), the furthest let go
+    // of first
+    const stood = await page.evaluate((best) => {
+        const { game } = window.pellagos;
+        const doors = [...game.visits.values()].filter((visit) => visit.maps.length && visit.door);
+        const count = doors.length;
+
         game.floorsMost = 1;
         game.advance(0.1);
 
         const off = (visit) => Math.hypot(visit.door.x - best.at[0] - 0.5, visit.door.z - best.at[1] - 0.5);
         const kept = doors.filter((visit) => !visit.bare);
         // (Let go of for there being too many, not for being too far off)
-        const gone = doors.filter((visit) => visit.bare && off(visit) <= 30);
+        const gone = doors.filter((visit) => visit.bare && off(visit) <= 16);
         const held = [...game.visits.values()].reduce((sum, visit) => sum + visit.maps.length, 0);
         const floors = kept.reduce((sum, visit) => sum + visit.maps.length, 0);
         const ids = [...game.interiors.keys()].join();
@@ -4770,8 +4806,8 @@ test("buildings' floors held at most twenty further off than they're built (the 
         // (Stood there a while: nothing built again, nothing more let go of)
         game.advance(3);
 
-        return { count: best.count, held, kept: kept.map(off), gone: gone.map(off), floors, steady: [...game.interiors.keys()].join() === ids && [...game.visits.values()].every((visit) => !visit.queue.length && !visit.steps), MB: game.memoryNow().interiorsMB };
-    });
+        return { count, held, kept: kept.map(off), gone: gone.map(off), floors, steady: [...game.interiors.keys()].join() === ids && [...game.visits.values()].every((visit) => !visit.queue.length && !visit.steps), MB: game.memoryNow().interiorsMB };
+    }, spot);
 
     expect(stood.count, JSON.stringify(stood)).toBeGreaterThanOrEqual(2);
     expect(stood.gone.length, JSON.stringify(stood)).toBeGreaterThan(0);
