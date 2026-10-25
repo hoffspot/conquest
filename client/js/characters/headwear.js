@@ -7,7 +7,7 @@
 // (radians) from straight ahead towards the character's left, `up` (radians) from level.
 
 import * as THREE from "three";
-import { HEAD_CENTRE_Z } from "./face.js";
+import { earVertices, HEAD_CENTRE_Z } from "./face.js";
 import { lerpTable, smoothstep } from "./noise.js";
 
 // The table of the head's reach: how many directions round it and up and down, and the lowest
@@ -16,35 +16,8 @@ const AROUND = 48;
 const UPDOWN = 34;
 const LOW = -1.35;
 
-// How far a body's ear is from where its ear-moving shape puts it to count as ear (that shape
-// lifts the whole ear 2 cm; the skin round its root, less)
-const EAR_MOVED = 0.012;
 // How far below the top of where an ear joins the head its join counts as near the top (metres)
 const EAR_TOP = 0.02;
-const ears = new WeakMap();
-
-// The vertices of a body's ears (its "ears set high" shapes move them all together)
-function earVertices(human) {
-    if (!ears.has(human)) {
-        const set = new Set();
-
-        for (const name of ["ears/l-ear-trans-up", "ears/r-ear-trans-up"]) {
-            const target = human.details?.get(name);
-
-            for (let i = 0; target && i < target.vertices.length; i++) {
-                const moved = Math.hypot(target.deltas[i * 3], target.deltas[i * 3 + 1], target.deltas[i * 3 + 2]) * human.deltaUnit;
-
-                if (moved > EAR_MOVED) {
-                    set.add(target.vertices[i]);
-                }
-            }
-        }
-
-        ears.set(human, set);
-    }
-
-    return ears.get(human);
-}
 
 /**
  * A character's head as head-wear fits it, from the head's middle (`middle`, metres, where

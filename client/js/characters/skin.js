@@ -10,9 +10,13 @@
 //
 // Pure data (the DOM is only needed to load the masks: loadMasks), so it can be tested in Node.
 
-import { aboveHairline, beardAmount, faceFrame, nearEar } from "./face.js";
+import { aboveHairline, beardAmount, earGapOf, earVertices, faceFrame, nearEar } from "./face.js";
 import { cells, fbm, gaussian, hash3, smoothstep, valueNoise } from "./noise.js";
 import { allAtOnce } from "../core/steps.js";
+
+// The scalp's painted up to so far from an ear (metres): bare at the first, full at the second, so
+// no more than half a centimetre round it is bare skin
+const EAR_SCALP = [0.002, 0.005];
 
 /** Skin tones, light to dark (sRGB), and a few that aren't human. */
 export const SKIN_TONES = Object.freeze({
@@ -298,6 +302,13 @@ export class SkinAtlas {
         const headBones = new Set([human.boneIndex.get("Head"), human.boneIndex.get("Neck")]);
         const dist2 = (p, q) => (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2 + (p[2] - q[2]) ** 2;
 
+        // How far a point on the head (face coordinates) is from the nearer ear, up to 2 cm (the
+        // scalp's painted to within EAR_SCALP of them); or, a body without its ears' shapes, 2 cm
+        // but where an ear is on the base mesh's head (face.js nearEar)
+        const earPoints = [...earVertices(human, { itself: true })].map((v) => [positions[v * 3] - middle[0], positions[v * 3 + 1] - middle[1], positions[v * 3 + 2] - middle[2]]);
+        const nearest = earPoints.length ? earGapOf(earPoints) : null;
+        const earGap = (x, y, z) => (nearEar(x, y, z) < 0.01 ? 0.02 : nearest ? nearest(x, y, z) : nearEar(x, y, z) > 0.5 ? 0 : 0.02);
+
         // Rasterise the body's triangles in texture space
         const cavity = this.#cavity(human, positions, normals, human.renderIndices("body"));
         const face = [0, 0, 0];
@@ -309,7 +320,7 @@ export class SkinAtlas {
 
             this.covered[i] = 1;
             this.fields.cavity[i] = Math.round(Math.min(1, Math.max(0, 0.5 + 2.5 * (w0 * cavity[v[0]] + w1 * cavity[v[1]] + w2 * cavity[v[2]]))) * 255);
-            this.#texel(i, p, n, face, bone, { eyeX, joints, handBones, footBones, headBones, dist2, masks });
+            this.#texel(i, p, n, face, bone, { eyeX, joints, handBones, footBones, headBones, dist2, masks, earGap });
         });
 
         this.#gutter();
@@ -318,7 +329,7 @@ export class SkinAtlas {
     /** Everything about one texel, from its point on the body. */
     #texel(i, p, n, face, bone, context) {
         const f = this.fields;
-        const { eyeX, joints, handBones, footBones, headBones, dist2, masks } = context;
+        const { eyeX, joints, handBones, footBones, headBones, dist2, masks, earGap } = context;
         const mask = (name) => (masks[name] ? masks[name][i] / 255 : 0);
         const set = (name, value) => (f[name][i] = Math.round(Math.min(1, Math.max(0, value)) * 255));
         const onHead = headBones.has(bone);
@@ -402,7 +413,7 @@ export class SkinAtlas {
             // edges fade as on the head, rather than stopping along the triangles)
             if (ax < 0.09) {
                 set("beard", beardAmount(fx, fy, fz) * (1 - mask("ears")));
-                set("scalp", smoothstep(-0.005, 0.005, aboveHairline(fx, fy, fz)) * (1 - smoothstep(0.35, 0.6, nearEar(fx, fy, fz))) * (1 - mask("ears")));
+                set("scalp", smoothstep(-0.005, 0.005, aboveHairline(fx, fy, fz)) * smoothstep(EAR_SCALP[0], EAR_SCALP[1], earGap(fx, fy, fz)) * (1 - mask("ears")));
             }
 
             return;
@@ -435,7 +446,7 @@ export class SkinAtlas {
         set("beard", beardAmount(fx, fy, fz) * (1 - smoothstep(0.05, 0.4, mask("lips"))) * (1 - mask("ears")));
 
         // Scalp: above the hairline, not on or just round the ears
-        set("scalp", smoothstep(-0.005, 0.005, aboveHairline(fx, fy, fz)) * (1 - smoothstep(0.35, 0.6, nearEar(fx, fy, fz))) * (1 - mask("ears")));
+        set("scalp", smoothstep(-0.005, 0.005, aboveHairline(fx, fy, fz)) * smoothstep(EAR_SCALP[0], EAR_SCALP[1], earGap(fx, fy, fz)) * (1 - mask("ears")));
 
         // War paint: a band across the eyes and down the cheeks
         const band = smoothstep(0.013, 0.009, Math.abs(fy + 0.002)) * smoothstep(0.075, 0.065, ax);
