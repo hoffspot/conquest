@@ -416,8 +416,10 @@ const DOORSTEP = Object.freeze({ far: 20 });
 // A building's floors, built as it's got ready, let go of again once the player's `far` metres
 // from its door (or, inside another building, that building's door is), though the host keeps it
 // got ready to RELEVANCE.far; built again, a piece at a time, once they're `near` it again (as
-// near as the host gets it ready), or all at once if they go straight in
-const FLOORS = Object.freeze({ near: RELEVANCE.near, far: 40 });
+// near as the host gets it ready), or all at once if they go straight in. And no more than `most`
+// held of those further off than `near`, the furthest let go of first: each holds a few megabytes
+// on the page (#interiorsHeld), and an iPhone let the game's tab go holding 59 in a town
+const FLOORS = Object.freeze({ near: RELEVANCE.near, far: 30, most: 20 });
 
 // Gone into a building before its folk are all dressed: the screen kept dark while they're
 // dressed, `budget` ms a frame (their skins painted elsewhere meanwhile), for `most` seconds at
@@ -1044,6 +1046,7 @@ export class Game {
         this.pin = Array.isArray(pin) && pin.length === 2 && pin.every(Number.isFinite) ? [...pin] : null;
         this.onPin = onPin;
         this.pinWay = null;
+        this.pinNear = null;
         this.journey = null;
 
         /** The player's markers on the world map (core/markers.js), and who hears of them. */
@@ -1281,6 +1284,9 @@ export class Game {
         this.visits = new Map();
         this.visitClock = 0;
 
+        /** How many of their floors are held at most, further off than they're built (FLOORS.most). */
+        this.floorsMost = FLOORS.most;
+
         /** Wenches and Ale's folk being dressed from the start, the same way (build), or null. */
         this.tavernFolk = null;
 
@@ -1408,11 +1414,11 @@ export class Game {
      * been given (world/gpumemory.js), the sounds' decoded copies (audio/sound.js memory), the
      * way-finding's WebAssembly (core/navigation/recast.js wasmBytes), the bodies' own copies on
      * the page (their meshes and pictures, kept to be posed and painted again: world/release.js
-     * heldOnPage), all of them together, and how many of what's kept for the world (the beasts'
-     * looks, and the models read: beasts/model.js keptModels). Where the heap isn't told
-     * (Safari), the bodies' copies stand in for it in the total: the least of it,
-     * the most of what grows as more are about (measured in Chromium, a town's 30 bodies took the
-     * heap from 325 to 485 MB).
+     * heldOnPage), the buildings' floors' own copies on the page (#interiorsHeld), all of them
+     * together, and how many of what's kept for the world (the beasts' looks, and the models
+     * read: beasts/model.js keptModels). Where the heap isn't told (Safari), the bodies' and the
+     * floors' copies stand in for it in the total: the least of it, the most of what grows as more
+     * are about (measured in Chromium, a town's 30 bodies took the heap from 325 to 485 MB).
      */
     memoryNow() {
         const heap = globalThis.performance?.memory;
@@ -1420,7 +1426,8 @@ export class Game {
         const sound = this.sound?.memory?.() ?? 0;
         const wasm = wasmBytes();
         const bodies = heldOnPage([...this.avatars.values()].map((avatar) => avatar.object ?? avatar.character?.object));
-        const total = (heap?.usedJSHeapSize ?? bodies) + (this.view.gpuMemory?.total ?? 0) + sound + wasm;
+        const interiors = this.#interiorsHeld();
+        const total = (heap?.usedJSHeapSize ?? bodies + interiors) + (this.view.gpuMemory?.total ?? 0) + sound + wasm;
         const beasts = keptBodies();
         const models = keptModels();
 
@@ -1432,8 +1439,28 @@ export class Game {
             soundMB: megabytes(sound),
             wasmMB: megabytes(wasm),
             bodiesMB: megabytes(bodies),
+            interiorsMB: megabytes(interiors),
             held: { avatars: this.avatars.size, chunks: this.chunks?.drawn.size ?? 0, interiors: this.interiors.size, crowds: this.crowds?.kinds.size ?? 0, beasts: { looks: beasts.looks, unheld: beasts.unheld, MB: megabytes(beasts.bytes) }, models },
         };
+    }
+
+    // The buildings' floors' own copies on the page (world/release.js heldOnPage: their meshes and
+    // pictures, the wares in them shared among them counted once), held while the player's near:
+    // a floor put away till they go in is never given to the graphics card, so it's held here
+    // alone, a few megabytes each (an iPhone let the game's tab go with 59 held, uncounted). Worked
+    // out again only when what's held changes: a floor built or let go of, or its wares put in it
+    #interiorsHeld() {
+        let key = "";
+
+        for (const [id, interior] of this.interiors) {
+            key += `${id}:${interior.object.children.length};`;
+        }
+
+        if (this.interiorsCounted?.key !== key) {
+            this.interiorsCounted = { key, bytes: heldOnPage([...this.interiors.values()].map((interior) => interior.object)) };
+        }
+
+        return this.interiorsCounted.bytes;
     }
 
     get memory() {
@@ -5879,6 +5906,7 @@ export class Game {
         this.pin = [x, z];
         this.pinWay = null;
         this.pinLine = null;
+        this.pinNear = null;
         this.pinFrom = null;
         this.onPin([...this.pin]);
         this.sound?.play("pinSet");
@@ -5891,6 +5919,7 @@ export class Game {
         this.pin = null;
         this.pinWay = null;
         this.pinLine = null;
+        this.pinNear = null;
         this.pinShown = null;
         this.pinMarks?.setPin(null);
         this.onPin(null);
@@ -6083,6 +6112,10 @@ export class Game {
 
         if ((moved && since >= PIN_WAY.every) || (this.pinShort && since >= PIN_WAY.short)) {
             this.#wayToPin(at, { drawn: true });
+        } else if (this.pinNear && this.chunks && this.chunks.groundVersion !== this.pinGround) {
+            // (The ground drawn otherwise, a chunk's corners further apart or nearer: the line laid
+            // on it again)
+            this.pinMarks.setLine(this.#alongGround(this.pinNear));
         }
     }
 
@@ -6108,6 +6141,7 @@ export class Game {
 
         if (!this.pinWay) {
             this.pinLine = null;
+            this.pinNear = null;
             this.pinMarks?.setLine(null);
 
             return;
@@ -6134,20 +6168,29 @@ export class Game {
         this.pinLine = near ? [...near.way, ...wayFrom(rest, near.reach).slice(1)] : [[...at], ...rest];
 
         if (drawn) {
+            this.pinNear = near?.way ?? null;
             this.pinMarks?.setLine(near ? this.#alongGround(near.way) : null);
         }
     }
 
     // A way's points ([x, y] metres) along the ground, every WAY_LINE.step metres for as far as
-    // WAY_LINE.reach: [x, height, z]
+    // WAY_LINE.reach: [x, height, z]. On the ground as it's drawn (chunks3d.js groundDrawnAt: its
+    // corners further apart away from the player, cutting across the land's heights, so that laid
+    // on those the line went under it wherever the land dips); on a deck, the deck (a bridge's, a
+    // walkway's)
     #alongGround(way) {
         const ground = this.groundOf("town");
+        const bare = this.groundOf("town", { bare: true });
         const points = [];
+
+        this.pinGround = this.chunks?.groundVersion ?? null;
 
         for (let d = 0; d <= WAY_LINE.reach; d += WAY_LINE.step) {
             const [x, z] = pointAlong(way, d);
+            const on = ground ? ground(x, z) : 0;
+            const decked = bare && Math.abs(on - bare(x, z)) > 1e-6;
 
-            points.push([x, ground ? ground(x, z) : 0, z]);
+            points.push([x, decked ? on : (this.chunks?.groundDrawnAt(x, z) ?? on), z]);
 
             if (Math.hypot(x - way.at(-1)[0], z - way.at(-1)[1]) < WAY_LINE.step / 2) {
                 break;
@@ -8061,6 +8104,8 @@ export class Game {
             this.#work(visit, until);
             busy ||= Boolean(visit.steps || visit.queue.length);
         }
+
+        this.#fewerFloors();
 
         if (this.tavernFolk) {
             this.#doorstep(this.tavernFolk);
@@ -10376,20 +10421,66 @@ export class Game {
     // they're in (not let go of while they're somewhere else, a cave or a dungeon); let go of only
     // once they're all built, and nothing else of it's being done
     #floorsWanted(visit) {
+        const { near, off } = this.#floorsOff(visit) ?? {};
+
+        if (near === undefined) {
+            return;
+        }
+
+        if (visit.bare && (near || (off !== null && off < FLOORS.near))) {
+            this.#furnish(visit);
+        } else if (!visit.bare && !near && off !== null && off > FLOORS.far && !visit.steps && !visit.queue.length) {
+            this.#bare(visit);
+        }
+    }
+
+    // Whether the player's in a building or making for its door (`near`), and how far they are
+    // from its door (`off`: metres, or null while they're somewhere else, a cave or a dungeon);
+    // or null if there's no telling
+    #floorsOff(visit) {
         const me = this.battle.actor(this.me);
 
         if (!me || !visit.door) {
-            return;
+            return null;
         }
 
         const ours = (map) => this.world.interiors?.of(map)?.key === visit.key;
         const near = ours(me.map) || (me.order?.type === "enter" && Boolean(this.battle.links?.find(({ id }) => id === me.order.link)?.ends.some(({ map }) => ours(map))));
         const from = me.map === "town" ? { x: me.x, z: me.y } : (this.world.interiors?.of(me.map)?.entrance?.door ?? null);
-        const off = from ? Math.hypot(visit.door.x - from.x, visit.door.z - from.z) : null;
 
-        if (visit.bare && (near || (off !== null && off < FLOORS.near))) {
-            this.#furnish(visit);
-        } else if (!visit.bare && !near && off !== null && off > FLOORS.far && !visit.steps && !visit.queue.length) {
+        return { near, off: from ? Math.hypot(visit.door.x - from.x, visit.door.z - from.z) : null };
+    }
+
+    // More floors held than FLOORS.most (`floorsMost`): those of the buildings furthest off let go of first, all
+    // built and none of it being done, as #floorsWanted does further off; only those further off
+    // than FLOORS.near, so that none's let go of only to be built again at once
+    #fewerFloors() {
+        let held = 0;
+
+        for (const visit of this.visits.values()) {
+            held += visit.maps.length;
+        }
+
+        if (held <= this.floorsMost) {
+            return;
+        }
+
+        const spare = [];
+
+        for (const visit of this.visits.values()) {
+            const { near, off } = this.#floorsOff(visit) ?? {};
+
+            if (!visit.bare && visit.maps.length && near === false && off !== null && off >= FLOORS.near && !visit.steps && !visit.queue.length) {
+                spare.push({ visit, off });
+            }
+        }
+
+        for (const { visit } of spare.sort((a, b) => b.off - a.off)) {
+            if (held <= this.floorsMost) {
+                break;
+            }
+
+            held -= visit.maps.length;
             this.#bare(visit);
         }
     }

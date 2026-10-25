@@ -107,8 +107,8 @@ export function bodiesLine(bodies) {
 /**
  * What the game holds (app/game.js memoryNow; else, before a game, what the graphics card's been
  * given: world/gpumemory.js report): all of it, the graphics card's (buffers, pictures, render
- * targets), the sounds', the way-finding's WebAssembly, the bodies' own copies on the page, the
- * page's heap where the browser tells, and how many of what's kept for the world (the beasts'
+ * targets), the sounds', the way-finding's WebAssembly, the bodies' and the buildings' floors' own
+ * copies on the page, the page's heap where the browser tells, and how many of what's kept for the world (the beasts'
  * looks: their bodies kept, and how many of them none's drawn on, beasts/sculpt.js kept; the
  * models read, and how many none's drawn from, beasts/model.js keptModels).
  */
@@ -121,8 +121,8 @@ export function memoryLines(memory, gpu = memory?.gpu ?? null) {
         return [`Memory ${card}${heap ? `  JS heap ${formatBytes(heap.usedJSHeapSize)} of ${formatBytes(heap.jsHeapSizeLimit)}` : ""}`];
     }
 
-    const { totalMB, heapMB, limitMB, soundMB, wasmMB, bodiesMB, held } = memory;
-    const page = [...(wasmMB === undefined ? [] : [`, way-finding ${wasmMB} MB`]), ...(bodiesMB === undefined ? [] : [`, bodies' own copies ${bodiesMB} MB`])].join("");
+    const { totalMB, heapMB, limitMB, soundMB, wasmMB, bodiesMB, interiorsMB, held } = memory;
+    const page = [...(wasmMB === undefined ? [] : [`, way-finding ${wasmMB} MB`]), ...(bodiesMB === undefined ? [] : [`, bodies' own copies ${bodiesMB} MB`]), ...(interiorsMB === undefined ? [] : [`, floors' ${interiorsMB} MB`])].join("");
     const beasts = held.beasts ? `  ${held.beasts.looks} beast looks (${held.beasts.MB} MB, ${held.beasts.unheld} none drawn)` : "";
     const models = held.models ? `  ${held.models.models} models (${held.models.unheld} none drawn from)` : "";
 

@@ -1599,6 +1599,30 @@ export function groundGeometry(heights, step = 1, heightOf = () => null) {
     return geometry;
 }
 
+/**
+ * How high a chunk's ground is drawn at a point (`u`, `v`: metres into it), its corners `step`
+ * metres apart (groundGeometry's): over its triangles, not between all its heights, which the
+ * coarser drawn ground cuts across, above a dip and below a rise. A metre apart, each square's
+ * split from its north-west corner to its south-east; coarser, along its more level diagonal
+ * (far/levels.js splitAlong).
+ */
+export function drawnHeight(heights, step, u, v) {
+    const corners = CHUNK + 1;
+    const count = CHUNK / step;
+    const [i, j] = [Math.min(count - 1, Math.max(0, Math.floor(u / step))), Math.min(count - 1, Math.max(0, Math.floor(v / step)))];
+    const [fx, fz] = [Math.min(1, Math.max(0, u / step - i)), Math.min(1, Math.max(0, v / step - j))];
+    const at = (di, dj) => heights[(j + dj) * step * corners + (i + di) * step];
+    const [a, b, c, d] = [at(0, 0), at(1, 0), at(0, 1), at(1, 1)];
+
+    // (North-west to south-east: its triangles a, c, d and a, d, b)
+    if (step === 1 || Math.abs(a - d) < Math.abs(b - c)) {
+        return fz > fx ? a + (d - c) * fx + (c - a) * fz : a + (b - a) * fx + (d - b) * fz;
+    }
+
+    // (North-east to south-west: a, c, b and b, c, d)
+    return fx + fz < 1 ? a + (b - a) * fx + (c - a) * fz : d + (c - d) * (1 - fx) + (b - d) * (1 - fz);
+}
+
 // A chunk's ground's geometry, lit into its neighbours where their heights are kept
 function chunkGeometry(overworld, chunk, step) {
     const { cx, cy } = chunk;
@@ -1661,13 +1685,17 @@ export function* layingGround(overworld, chunk, land, step = 1, water = null) {
     return mesh;
 }
 
-/** Draw a chunk's ground (layingGround's) with its corners `step` metres apart instead. */
+/** Draw a chunk's ground (layingGround's) with its corners `step` metres apart instead: whether it was drawn otherwise. */
 export function respaceGround(overworld, chunk, mesh, step) {
-    if (mesh.userData.step !== step) {
-        mesh.geometry.dispose();
-        mesh.geometry = chunkGeometry(overworld, chunk, step);
-        mesh.userData.step = step;
+    if (mesh.userData.step === step) {
+        return false;
     }
+
+    mesh.geometry.dispose();
+    mesh.geometry = chunkGeometry(overworld, chunk, step);
+    mesh.userData.step = step;
+
+    return true;
 }
 
 // The material for chunks of grass alone, for each land's colours

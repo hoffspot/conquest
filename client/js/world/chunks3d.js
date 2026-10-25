@@ -38,7 +38,7 @@ import { bushMesh } from "./art/kits/bushes.js";
 import { hedgeBuilding, hedgeMesh, hedgeRuns } from "./art/kits/hedges.js";
 import { fordParts, fordsMesh } from "./art/kits/fords.js";
 import { stepsMesh, stonesOf } from "./art/kits/steps.js";
-import { disposeChunkGround, disposeGrass, FIELDS_CLEAR, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
+import { disposeChunkGround, disposeGrass, drawnHeight, FIELDS_CLEAR, groundMaterial, landColours, layingGround, respaceGround } from "./ground.js";
 import { grassLooks } from "./grassmap.js";
 import { Layouts } from "./layouts.js";
 import { Terrains } from "./terrains.js";
@@ -177,6 +177,12 @@ export class Chunks {
         this.version = 0;
 
         /**
+         * Bumped whenever the ground as it's drawn changes: a chunk drawn or thrown away, or its
+         * ground drawn with its corners further apart or nearer (groundDrawnAt).
+         */
+        this.groundVersion = 0;
+
+        /**
          * How far on a house of a settlement's is from being burnt by the Behemoth of the Rift
          * (by its place's id and its layout's index: core/burnt.js stageOf's), or null: set by
          * the game. Its chunk built again when it changes (rebuild).
@@ -298,10 +304,24 @@ export class Chunks {
         for (const drawn of this.drawn.values()) {
             const ground = drawn.object.children.find(({ name }) => name === "ground");
 
-            if (ground) {
-                respaceGround(this.overworld, this.overworld.chunk(drawn.cx, drawn.cy), ground, this.#spacingOf(drawn.cx, drawn.cy));
+            if (ground && respaceGround(this.overworld, this.overworld.chunk(drawn.cx, drawn.cy), ground, this.#spacingOf(drawn.cx, drawn.cy))) {
+                this.groundVersion++;
             }
         }
+    }
+
+    /**
+     * How high the ground's drawn at a point (metres): over its triangles, its corners as far apart
+     * as they're drawn now (ground.js drawnHeight), which away from the player cut across the
+     * land's own heights (what stands on the ground stands on those); or null where no chunk's
+     * ground is drawn.
+     */
+    groundDrawnAt(x, z) {
+        const [cx, cy] = [Math.floor(x / CHUNK), Math.floor(z / CHUNK)];
+        const drawn = this.drawn.get(key(cx, cy));
+        const ground = drawn?.object.visible ? drawn.object.children.find(({ name }) => name === "ground") : null;
+
+        return ground ? drawnHeight(this.overworld.chunk(cx, cy).heights, ground.userData.step ?? 1, x - cx * CHUNK, z - cy * CHUNK) : null;
     }
 
     /**
@@ -982,6 +1002,7 @@ export class Chunks {
         drawn.drawing = false;
         object.visible = true;
         this.version++;
+        this.groundVersion++;
     }
 
     // The pieces of the settlements in a chunk (but their trees: the woodland's), each people's
@@ -1091,6 +1112,7 @@ export class Chunks {
         drawn.object.removeFromParent();
         this.drawn.delete(key(drawn.cx, drawn.cy));
         this.version++;
+        this.groundVersion++;
     }
 }
 
