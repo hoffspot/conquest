@@ -544,6 +544,10 @@ groomed so it looks kept:
    there, pulled taut.
 4. **Cut.** A bob and long hair end at a hem (clean, a little longer behind), not at random lengths;
    bangs end at the brows; other hair grows shorter low on the head (round the ears, at the nape).
+   A short cut lies close to the head, ends at a hem low at the back, and over the ears is cut
+   level (`overEar`, 1.2 cm below their tops, as it comes down over them from above), its
+   sideburns in front of them about their middles (`SIDEBURN`): the ear framed, not hung over at
+   random lengths (the user: "It should come down to a uniform length over the ear").
 5. **A parting** runs only over the top of the head, with roots all along it a hair's breadth
    either side (an eighth of the strands, at least 30), so it's a thin line; behind the crown the
    hair falls straight down.
@@ -562,11 +566,35 @@ groomed so it looks kept:
    nape and temples over painted scalp, its cards' root edges on hair, not skin. (Once it was
    painted only faintly, its hairline raised 3 cm and its strands fewer: a band of bare scalp
    under it, skin between its cards, and their square root edges stepping along its nape.)
+9. **Round the ears.** Hair grows everywhere a head has it (the user: "make sure there is at least
+   some hair of the correct color everywhere there are typically hair follicles"): the hairline
+   (face.js `HAIRLINE`) comes down a sideburn a centimetre or so wide in front of each ear to about
+   its middle, goes over the ear, and down behind it to the nape. The ear itself is its own
+   vertices, those its "ears set high" shapes move with it (face.js `earVertices`, `itself`: the
+   close-knit ones, not the few of the scalp and cheek round it the shapes move as far), and how
+   far a point is from it is measured from them (`earGapOf`). The scalp's painted to within half a
+   centimetre of it (skin.js `EAR_SCALP`), and hair whose edge shows (`edge`: a short cut, and
+   hair drawn back to a tie or up to a knot) grows to within 4 mm of it (hair.js `EAR_GAP`): no
+   more than half a centimetre round the ear bare (the user). Once a round patch centred on the
+   ear's top, 5 cm across, was kept clear of both, leaving a wedge of bare skin in front of the
+   ear up to the temple, and hair drawn up to a knot starting 2 to 3 cm above the ear in a ragged
+   row. Hair that hangs over the ears grows from further off them, above them, as before (so it
+   isn't pushed out over them), over scalp painted as near.
+10. **Its edge.** Hair whose edge shows starts right at it, from the temples back (round the ears,
+   down the sideburns, along the nape): roots along it half a card's width apart (`EDGE_APART`,
+   from 24,000 points on the head, `EDGE_SAMPLES`), besides those spread over the scalp, so its edge
+   is a line, not wherever the roots happened to fall. Not over the forehead, where hair's combed
+   from it (a fringe, bangs, or swept aside along the hairline). Hair drawn up or back from just
+   above the hairline (not on it) narrows to its root over its first 1.2 cm (`HAIRLINE_ROOT`).
+11. **A crest** stands up along the middle of the head, a fin, its cards facing the sides (seen edge
+   on from in front and behind), not fanned out either side (flat from behind, as it once was).
 
 Tests check that no hair sticks out from the head, falls over the face or down the throat; that
 cut hair ends at its hem, parted hair starts at its parting, the back of the head is covered as
 thickly down the middle as anywhere, no scalp is left bare under hair drawn up to a knot, and a
-ponytail is round, not flat. Growing a character's hair
+ponytail is round, not flat; that no more than half a centimetre round the ears is bare (a
+sideburn, the scalp painted up to them, hair whose edge shows grown up to them), a short cut ends
+level over them, and a crest stands as a fin. Growing a character's hair
 takes about a tenth of a second for the tavern's folk (at their level of detail), a quarter of a
 second at the most detailed.
 

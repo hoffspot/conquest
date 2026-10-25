@@ -15,7 +15,7 @@ import { placed } from "../client/js/characters/character.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
 import { createRandom } from "../client/js/core/random.js";
 import { allAtOnce } from "../client/js/core/steps.js";
-import { aboveHairline, beardAmount, faceFrame } from "../client/js/characters/face.js";
+import { aboveHairline, beardAmount, earGapOf, earVertices, faceFrame } from "../client/js/characters/face.js";
 import { buildHair, HAIRSTYLES } from "../client/js/characters/hair.js";
 import { HeadMap, measureHead, rimLine } from "../client/js/characters/headwear.js";
 import { amplitude, cadence, CURVES, curveAt, NATURAL_SPEED, phaseName, RUN_CURVES, RUN_STANCE, runCadence, runStrideLength, STANCE, strideLength, walkToRunSpeed } from "../client/js/characters/gait.js";
@@ -827,6 +827,83 @@ describe("hair (hair.js)", () => {
         const nape = grown(woman, "topknot").filter(([x, , z]) => z < -0.12 && Math.abs(x) < 0.04);
 
         assert.ok(Math.min(...nape.map(([, y]) => y)) < -0.065, `a topknot's hair comes down to ${Math.min(...nape.map(([, y]) => y)).toFixed(3)} behind`);
+    });
+
+    it("leaves no more than half a centimetre round the ears bare: a sideburn in front of each, the scalp painted up to them, hair whose edge shows grown up to them, and a short cut level over them", () => {
+        // (Each ear itself, not the skin round it: about 6 cm tall)
+        const ears = [...earVertices(human, { itself: true })];
+        const base = human.basePositions;
+
+        for (const side of [1, -1]) {
+            const heights = ears.filter((v) => Math.sign(base[v * 3]) === side).map((v) => base[v * 3 + 1]);
+
+            assert.ok(Math.max(...heights) - Math.min(...heights) > 0.05 && Math.max(...heights) - Math.min(...heights) < 0.075, `an ear ${(Math.max(...heights) - Math.min(...heights)).toFixed(3)} tall`);
+        }
+
+        // (A sideburn: in front of the ear, as low as its middle, is scalp)
+        assert.ok(aboveHairline(0.07, -0.012, -0.045) > 0, "no sideburn");
+
+        // The scalp painted to within half a centimetre of the ears: the head's skin 6 mm to 2 cm off
+        // one, above the hairline, painted in full, all but a texel or so of it (once, a ring 2 to
+        // 3 cm round the middle of where an ear was taken to be was bare)
+        const atlas = new SkinAtlas(human, {}, 256);
+        const { middle } = faceFrame(human, base);
+        const fromMiddle = (v) => [base[v * 3] - middle[0], base[v * 3 + 1] - middle[1], base[v * 3 + 2] - middle[2]];
+        const offEars = earGapOf(ears.map(fromMiddle));
+        const headBone = human.boneIndex.get("Head");
+        const round = [];
+
+        for (let k = 0; k < human.uvs.length / 2; k++) {
+            const v = human.renderSource[k];
+            const [x, y, z] = fromMiddle(v);
+            const off = offEars(x, y, z);
+
+            if (human.partOf[v] === 0 && human.skinIndices[v * 4] === headBone && aboveHairline(x, y, z) > 0.006 && off > 0.006 && off < 0.02) {
+                round.push(atlas.fields.scalp[Math.min(255, Math.floor((1 - human.uvs[k * 2 + 1]) * 256)) * 256 + Math.min(255, Math.floor(human.uvs[k * 2] * 256))]);
+            }
+        }
+
+        assert.ok(round.length > 20 && round.filter((painted) => painted < 200).length / round.length < 0.05, `${round.filter((painted) => painted < 200).length} of ${round.length} points round the ears not painted`);
+
+        for (const who of [woman, man]) {
+            const near = earGapOf(ears.map((v) => who.face.toFace(who.body.positions[v * 3], who.body.positions[v * 3 + 1], who.body.positions[v * 3 + 2])));
+            const left = ears.filter((v) => who.body.positions[v * 3] > 0).map((v) => who.face.toFace(who.body.positions[v * 3], who.body.positions[v * 3 + 1], who.body.positions[v * 3 + 2]));
+            const top = Math.max(...left.map(([, y]) => y));
+            const [front, back] = [Math.max(...left.map(([, , z]) => z)), Math.min(...left.map(([, , z]) => z))];
+
+            // Hair whose edge shows (drawn back to a tie, or cut short) grown right up to the ears:
+            // beside them, within 8 mm, twice as much as when it was rooted 7 mm off them at the least
+            for (const [style, least] of [["ponytail", 35], ["twintails", 50], ["short", 150]]) {
+                const beside = grown(who, style, 0.45).filter(([x, y, z]) => Math.abs(x) > 0.04 && y < top + 0.005 && near(x, y, z) < 0.008).length;
+
+                assert.ok(beside > least, `${style}: ${beside} points of its hair beside the ears`);
+            }
+
+            // A short cut ends level over the ear (HAIRSTYLES.short overEar below its top): the
+            // lowest of it over the ear's middle within 6 mm of that, all along it (behind the ear
+            // it comes down to the nape, and in front, a sideburn, to the ear's middle)
+            const short = grown(who, "short", 0.45);
+
+            for (let z = back + 0.015; z < front - 0.012; z += 0.004) {
+                const lowest = Math.min(...short.filter(([x, , at]) => x > 0.05 && at >= z && at < z + 0.004).map(([, y]) => y));
+
+                assert.ok(Math.abs(top - HAIRSTYLES.short.overEar - lowest) < 0.006, `a short cut over the ear ends ${(top - lowest).toFixed(3)} below its top`);
+            }
+        }
+    });
+
+    it("stands a crest up along the middle of the head, a fin, not fanned out either side (flat from behind, as it once was)", () => {
+        for (const who of [woman, man]) {
+            for (const detail of [0.2, 0.45]) {
+                const crest = grown(who, "mohawk", detail);
+                const across = (points) => points.map(([x]) => Math.abs(x)).sort((a, b) => a - b);
+                const top = across(crest.filter(([, y]) => y > 0.13));
+                const back = across(crest.filter(([, , z]) => z < -0.12));
+
+                assert.ok(top.length > 50 && top.at(-1) < 0.04, `a crest ${top.at(-1)?.toFixed(3)} out from the middle over the top`);
+                assert.ok(back.length > 50 && back[Math.floor(back.length * 0.95)] < 0.035, `a crest ${back[Math.floor(back.length * 0.95)]?.toFixed(3)} out from the middle behind`);
+            }
+        }
     });
 
     it("lies close to the head and hangs straight: nothing sticks out, nothing falls over the face, nothing grows inside the mouth", () => {

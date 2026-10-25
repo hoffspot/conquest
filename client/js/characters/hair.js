@@ -17,7 +17,7 @@
 // follows the body. Under the cards, the scalp is painted in the hair's colour (skin.js).
 
 import * as THREE from "three";
-import { aboveHairline, beardAmount, EAR, faceFrame, HEAD_CENTRE_Z, nearEar } from "./face.js";
+import { aboveHairline, beardAmount, EAR, earGapOf, earVertices, faceFrame, HEAD_CENTRE_Z, nearEar } from "./face.js";
 import { hairCut, underCut } from "./headwear.js";
 import { lerpTable, random, smoothstep, valueNoise } from "./noise.js";
 import { allAtOnce } from "../core/steps.js";
@@ -34,16 +34,16 @@ import { allAtOnce } from "../core/steps.js";
 export const HAIRSTYLES = Object.freeze({
     bald: { label: "Bald", strands: 0, scalp: 0 },
     buzz: { label: "Buzz cut", strands: 0, scalp: 1 },
-    short: { label: "Short", strands: 1800, length: 0.05, lift: 0.1, gravity: 6, flow: "crown", width: 0.016, segments: 4, volume: 0.008, fringe: 0.02 },
+    short: { label: "Short", strands: 2600, length: 0.05, lift: 0.05, gravity: 6, flow: "crown", width: 0.011, segments: 4, volume: 0.006, fringe: 0.02, close: true, hem: [-0.095, -0.2], ragged: 0.003, overEar: 0.012, edge: true },
     swept: { label: "Swept back", strands: 1500, length: 0.13, lift: 0.04, gravity: 30, flow: "back", width: 0.018, segments: 7, volume: 0.008 },
     bob: { label: "Bob", strands: 1600, length: 0.4, lift: 0.03, gravity: 40, flow: "part", width: 0.018, segments: 9, volume: 0.01, hem: [-0.105, -0.115], ragged: 0.004 },
     long: { label: "Long", strands: 1700, length: 0.8, lift: 0.03, gravity: 40, flow: "part", width: 0.02, segments: 14, volume: 0.01, hem: [-0.4, -0.34], ragged: 0.012 },
-    ponytail: { label: "Ponytail", strands: 1300, length: 0.3, lift: 0.02, gravity: 1, flow: "tail", width: 0.016, segments: 6, volume: 0.004, tail: { strands: 220, length: 0.34, width: 0.02, radius: 0.03 } },
+    ponytail: { label: "Ponytail", strands: 1300, length: 0.3, lift: 0.02, gravity: 1, flow: "tail", width: 0.016, segments: 6, volume: 0.004, edge: true, tail: { strands: 220, length: 0.34, width: 0.02, radius: 0.03 } },
     mohawk: { label: "Mohawk", strands: 520, length: 0.11, lift: 1.2, gravity: 0, flow: "up", width: 0.02, segments: 5, volume: 0.004, strip: 0.02, scalp: 0.3, stands: true },
     // (Twin tails: the hair drawn back either side to a tie high on each side of the back of the
     // head, a tail from each, and a short fringe of bangs over the forehead)
-    twintails: { label: "Twin tails", strands: 1400, length: 0.3, lift: 0.02, gravity: 1, flow: "twin", width: 0.016, segments: 6, volume: 0.004, fringe: 0.035, bangs: 0.085, tails: { strands: 170, length: 0.4, width: 0.02, radius: 0.026 } },
-    topknot: { label: "Topknot", strands: 1500, length: 0.3, lift: 0.02, gravity: 0, flow: "knot", width: 0.016, segments: 6, volume: 0.004, knot: true },
+    twintails: { label: "Twin tails", strands: 1400, length: 0.3, lift: 0.02, gravity: 1, flow: "twin", width: 0.016, segments: 6, volume: 0.004, edge: true, fringe: 0.035, bangs: 0.085, tails: { strands: 170, length: 0.4, width: 0.02, radius: 0.026 } },
+    topknot: { label: "Topknot", strands: 1500, length: 0.3, lift: 0.02, gravity: 0, flow: "knot", width: 0.016, segments: 6, volume: 0.004, knot: true, edge: true },
 });
 
 /** Beards: `stubble` is painted on the skin under them (or is all there is). */
@@ -540,13 +540,22 @@ export function hairSetting(character) {
         return (touching ? facing.addScaledVector(touching, 0.5) : facing).normalize();
     };
 
+    // How far a point (face coordinates) is from the nearer ear, as the head's shaped now, up to
+    // 2 cm (hair's kept EAR_GAP off them); or, a body without its ears' shapes, 2 cm but where
+    // an ear is on the base mesh's head (face.js nearEar)
+    const earPoints = [...earVertices(human, { itself: true })].map((v) => face.toFace(positions[v * 3], positions[v * 3 + 1], positions[v * 3 + 2]));
+    const nearest = earPoints.length ? earGapOf(earPoints) : null;
+    const earGap = (x, y, z) => (nearEar(x, y, z) < 0.01 ? 0.02 : nearest ? nearest(x, y, z) : nearEar(x, y, z) > 0.5 ? 0 : 0.02);
+    // (And how high its top is, and how far forward and back it reaches: face coordinates)
+    const ear = earPoints.length ? { top: Math.max(...earPoints.map(([, y]) => y)), front: Math.max(...earPoints.map(([, , z]) => z)), back: Math.min(...earPoints.map(([, , z]) => z)) } : { top: EAR[1] + 0.03, front: EAR[2] + 0.012, back: EAR[2] - 0.016 };
+
     // Where the hair's crown whorl, topknot and ponytail tie are
     const crown = at(0, 0.1, -0.11);
     const knot = at(0, 0.145, -0.085);
     const tie = at(0, 0.035, -0.17);
     const ties = { [-1]: at(-0.085, 0.07, -0.11), 1: at(0.085, 0.07, -0.11) };
 
-    return { human, positions, rig, face, at, headTriangles, head, neck, keepOut, hangingFacing, crown, knot, tie, ties };
+    return { human, positions, rig, face, at, headTriangles, head, neck, keepOut, hangingFacing, crown, knot, tie, ties, earGap, ear };
 }
 
 /**
@@ -576,7 +585,7 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
         shared.setting = setting;
     }
 
-    const { positions, rig, face, at, headTriangles, head, neck, keepOut, hangingFacing, crown, knot } = setting;
+    const { positions, rig, face, at, headTriangles, head, neck, keepOut, hangingFacing, crown, knot, earGap, ear } = setting;
     const builder = new CardBuilder(rig, next);
     // (A point on the head nearest one in face coordinates, a little off it)
     const onHead = (x, y, z) => {
@@ -590,7 +599,8 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
     const ties = cut ? { [-1]: onHead(-0.07, lerpTable(cut, 140) - TIE_UNDER, -0.135), 1: onHead(0.07, lerpTable(cut, 140) - TIE_UNDER, -0.135) } : setting.ties;
 
     if (hair.strands) {
-        const candidates = sampleSurface(positions, headTriangles, hair.strands * 8, next).filter(({ point, normal }) => {
+        // (Where hair grows: on the scalp, outside the head, facing out)
+        const grows = ({ point, normal }) => {
             const [x, y, z] = face.toFace(point.x, point.y, point.z);
             const outward = point.clone().sub(head.centre);
 
@@ -603,9 +613,30 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
                 return false;
             }
 
-            return !(cut && underCut(cut, x, y, z)) && aboveHairline(x, y, z, hair.raise ?? 0) > 0.002 && nearEar(x, y, z) < 0.5;
-        });
-        const roots = candidates.slice(0, hair.strands);
+            return !(cut && underCut(cut, x, y, z)) && aboveHairline(x, y, z, hair.raise ?? 0) > 0.002 && (hair.edge ? earGap(x, y, z) > EAR_GAP : nearEar(x, y, z) < 0.5);
+        };
+        const roots = sampleSurface(positions, headTriangles, hair.strands * 8, next).filter(grows).slice(0, hair.strands);
+
+        // Hair whose edge shows (`edge`: drawn back or up, or cut short) starts right at it, from
+        // the temples back (round the ears, down the sideburns, along the nape), a little over a
+        // card's width apart, so its edge is a line, not wherever the roots happened to fall (a
+        // band of bare scalp under the ears' hair, its cards ending in a ragged row above them).
+        // Not over the forehead, where hair's combed from it (a fringe, bangs, or swept aside
+        // along the hairline); and not hair that hangs over its edge
+        if (hair.edge) {
+            const apart = hair.width * EDGE_APART;
+            const edge = [];
+
+            for (const candidate of sampleSurface(positions, headTriangles, EDGE_SAMPLES, next).filter(grows)) {
+                const [x, y, z] = face.toFace(candidate.point.x, candidate.point.y, candidate.point.z);
+
+                if (Math.abs(Math.atan2(x, z - HEAD_CENTRE_Z)) > EDGE_FROM && Math.min(aboveHairline(x, y, z, hair.raise ?? 0) - 0.002, earGap(x, y, z) - EAR_GAP) < EDGE_BAND && edge.every(({ point }) => point.distanceTo(candidate.point) > apart)) {
+                    edge.push(candidate);
+                }
+            }
+
+            roots.push(...edge.map((candidate) => ({ ...candidate, edge: true })));
+        }
 
         // Parted hair starts right at the parting, and falls away from it either side: roots all
         // along it, a hair's breadth either side, so it's a thin line, not a bald strip
@@ -624,7 +655,7 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
             }
         }
 
-        for (const [n, { point, normal }] of roots.entries()) {
+        for (const [n, { point, normal, edge }] of roots.entries()) {
             if (n % STRANDS_A_STEP === 0) {
                 yield;
             }
@@ -680,6 +711,12 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
 
             direction.applyAxisAngle(outward, swirl).addScaledVector(outward, hair.lift).normalize();
 
+            // (A crest stands up along the middle of the head, a fin, not splayed out either side)
+            if (hair.strip) {
+                direction.x *= 0.15;
+                direction.normalize();
+            }
+
             // Each strand lies in its own layer, the outer ones further off the scalp
             const layer = next();
             const lie = (k) => 0.002 + hair.volume * layer * Math.min(1, k * 4);
@@ -688,6 +725,16 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
             // (Cut hair ends at its hem; a bang at the brows, however low the forehead runs under
             // the hairline)
             const hem = hair.hem ? at(0, hemAt(hair.hem, z) + (next() - 0.5) * 2 * hair.ragged, 0).y : bang ? at(0, BROWS, 0).y : null;
+            // (And hair cut over the ears ends level over them, `overEar` below their tops, as it
+            // comes down over them, from any root above where it's cut; its sideburns in front of
+            // them, level with their middles)
+            const cutOver = hair.overEar === undefined ? null : ear.top - hair.overEar + (next() - 0.5) * 0.002;
+            const cutSideburn = ear.top - SIDEBURN + (next() - 0.5) * 0.002;
+            const overEar = cutOver !== null ? (p) => {
+                const [fx, fy, fz] = face.toFace(p.x, p.y, p.z);
+
+                return Math.abs(fx) > EAR_SIDEWAYS && fz > ear.back - EAR_SIDE && fz < ear.front + EAR_SIDE && ((y > cutOver + EAR_ROOTED && fy < cutOver) || (fz > ear.front - EAR_ROOTED && fy < cutSideburn));
+            } : null;
             const points = grow(start, direction, {
                 // (Uncut hair growing low on the head, round the ears and at the nape, is shorter)
                 length: bang ? hair.bangs * (0.85 + 0.3 * next()) : hair.length * (hem === null && !stop ? (0.9 + 0.2 * next()) * (0.4 + 0.6 * smoothstep(-0.3, 0, outward.y)) : 1),
@@ -707,9 +754,16 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
                 aside: () => at(side, 0, -0.4).sub(at(0, 0, 0)),
                 stop,
                 hem,
+                overEar,
+                close: Boolean(hair.close),
             });
 
-            builder.strand(points, hair.width, (p) => p.clone().sub(head.centre).normalize(), layer);
+            // (A crest's cards face the side: a fin, seen edge on from in front and behind. Hair
+            // drawn up or back from right at the hairline narrows to its root there, so the
+            // hairline's a soft line, not a row of the cards' square ends)
+            const onHairline = !edge && Boolean(stop) && (aboveHairline(x, y, z, hair.raise ?? 0) < HAIRLINE_ROOT || earGap(x, y, z) < EAR_GAP + HAIRLINE_ROOT);
+
+            builder.strand(points, hair.width, hair.strip ? () => SIDEWAYS.clone() : (p) => p.clone().sub(head.centre).normalize(), layer, onHairline ? HAIRLINE_ROOT : 0);
         }
 
         if (hair.tail) {
@@ -788,7 +842,7 @@ export function* growingHair(character, style = "short", beard = "none", { seed 
  * the body the way `drape` says. It ends after `length`, or at the height `hem` (cut hair), or at
  * `stop` (a tie or knot), drawn towards it. Without a `head` (hair standing up), it never lies.
  */
-function grow(root, direction, { length, segments, bend = 0, head = null, lie = () => 0.002, keepOut = () => null, drape = null, around = null, onFace = () => false, aside = null, stop = null, hem = null }) {
+function grow(root, direction, { length, segments, bend = 0, head = null, lie = () => 0.002, keepOut = () => null, drape = null, around = null, onFace = () => false, aside = null, stop = null, hem = null, overEar = null, close = false }) {
     const heading = direction.clone();
     const point = root.clone();
     const out = new THREE.Vector3();
@@ -805,7 +859,7 @@ function grow(root, direction, { length, segments, bend = 0, head = null, lie = 
         // to a tie or knot lies on the head all the way, pulled taut, until it's nearly there
         if (lying) {
             out.copy(point).sub(head.centre).normalize();
-            lying = stop ? point.distanceTo(stop) > 0.035 : out.y > -0.05;
+            lying = stop ? point.distanceTo(stop) > 0.035 : close || out.y > -0.05;
         }
 
         // (Finer steps over the head, where it curves)
@@ -880,7 +934,7 @@ function grow(root, direction, { length, segments, bend = 0, head = null, lie = 
 
         points.push(Object.assign(point.clone(), { hanging: !lying, facing }));
 
-        if (hem !== null && point.y < hem) {
+        if ((hem !== null && point.y < hem) || overEar?.(point)) {
             break;
         }
     }
@@ -914,6 +968,33 @@ const BROWS = 0.03;
 // the crown)
 const PARTING = 0.0015;
 const PARTING_ENDS = -0.105;
+
+// How far above the hairline a root of drawn hair is on it (metres: its card narrows to it over as
+// far), and which way a crest's cards face
+const HAIRLINE_ROOT = 0.012;
+const SIDEWAYS = new THREE.Vector3(1, 0, 0);
+
+// How far off an ear hair whose edge shows grows (metres): so near that no more of the skin round it
+// is bare. (Hair that hangs over the ears grows from further off, above them, so that it isn't
+// pushed out over them: the scalp under it painted as near, skin.js)
+const EAR_GAP = 0.004;
+
+// The roots along hair's edge: within so far of it (metres), so many cards' widths apart, found
+// among so many points on the head; from the temples back (so far round the head from straight
+// ahead, radians)
+const EDGE_BAND = 0.003;
+const EDGE_APART = 0.5;
+const EDGE_SAMPLES = 24000;
+const EDGE_FROM = (66 * Math.PI) / 180;
+
+// Hair cut over the ears: how far in front of an ear and behind it (metres) it ends level with
+// it, how far out to the side of the middle of the head it's over it, and how far above where it's
+// cut it's rooted to be cut (below that, a sideburn's, it's as it grows); and how far below their
+// tops it ends in front of them, its sideburns, about their middles
+const EAR_SIDE = 0.015;
+const EAR_SIDEWAYS = 0.045;
+const EAR_ROOTED = 0.005;
+const SIDEBURN = 0.03;
 
 /** Where cut hair ends (face coordinates' height), from its hem at the back and the front, by how far forward its root is. */
 const hemAt = ([back, front], z) => back + (front - back) * smoothstep(-0.14, -0.02, z);
@@ -1072,7 +1153,7 @@ class CardBuilder {
      * Add a strand (points from root to tip) as a card `width` wide, lying on the surface whose
      * normal at a point is `normalAt(point)`. `layer` (0 to 1): inner layers are darker.
      */
-    strand(points, width, normalAt, layer = 0.5) {
+    strand(points, width, normalAt, layer = 0.5, root = 0) {
         const first = this.positions.length / 3;
         const count = points.length;
         const u = this.next() < 0.5 ? 0 : 0.5;
@@ -1107,7 +1188,7 @@ class CardBuilder {
             normal.normalize();
             side.crossVectors(along, normal).normalize();
 
-            const half = (width / 2) * (1 - 0.45 * t);
+            const half = (width / 2) * (1 - 0.45 * t) * (root ? Math.min(1, 0.15 + (0.85 * along0[k]) / root) : 1);
 
             // Darker at the roots, where less light gets in
             const light = shade * (0.65 + 0.35 * smoothstep(0, 0.35, t));
