@@ -2781,7 +2781,7 @@ test("Auto target lock (Game options, on to start with): an enemy tapped stays t
     expect(far.lock).toBe(null);
 });
 
-test("the player's party: a creature called to their side has an icon down the left under the Party button, a likeness in a violet frame with its health and time; tapped, chosen to help (ringed green, the quick action's Vigor cast on it); held and flicked W, told to wait; the party menu (P) lists it, Follow sets it following, and Dismiss, pressed twice, sends it off", async ({ page }) => {
+test("the player's party: a creature called to their side has an icon down the left under the Party button, a likeness in a violet frame with its health and time; tapped, chosen to help (ringed green, the quick action's Vigor cast on it); held and flicked W, told to wait; held and flicked SW, Dismiss asks first, and it's kept; the party menu (P) lists it, Follow sets it following, and Dismiss, asked first, sends it off", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     // Summon learnt and cast where the player stands
@@ -2895,8 +2895,22 @@ test("the player's party: a creature called to their side has an icon down the l
     expect(opened.slots).toEqual({ n: "unit:assist", e: "unit:follow", w: "unit:wait", sw: "unit:dismiss" });
     expect(waiting).toEqual({ waiting: true, marked: true });
 
+    // Held again and Dismiss chosen on its wheel: asked first (it's for good); kept
+    const ask = page.getByRole("alertdialog", { name: /^Dismiss .+\?$/ });
+
+    await page.mouse.move(cx, cy);
+    await page.mouse.down();
+    await page.waitForTimeout(700);
+    await page.mouse.move(Math.max(1, cx - 26), cy + 26, { steps: 4 });
+    await page.mouse.up();
+    await expect(ask).toBeVisible();
+    await expect(ask.locator("#dismissnote")).toContainText("for good");
+    await ask.getByRole("button", { name: "Keep them" }).click();
+    await expect(ask).toBeHidden();
+    expect(await page.evaluate(() => window.pellagos.game.host.companions.size)).toBe(1);
+
     // The party menu (the game going again a moment, as keys are heard only then): its row,
-    // Follow (it's waiting), then Dismiss asked twice
+    // Follow (it's waiting), then Dismiss, asked first
     await page.evaluate(() => window.pellagos.game.start());
     await page.keyboard.press("p");
 
@@ -2914,9 +2928,10 @@ test("the player's party: a creature called to their side has an icon down the l
     const dismiss = row.getByRole("button", { name: "Dismiss" });
 
     await dismiss.click();
-    await expect(dismiss).toHaveText("Dismiss?");
+    await expect(ask).toBeVisible();
     expect(await page.evaluate(() => window.pellagos.game.host.companions.size)).toBe(1);
-    await dismiss.click();
+    await ask.getByRole("button", { name: /^Dismiss / }).click();
+    await expect(ask).toBeHidden();
 
     const gone = await page.evaluate(() => {
         const { game } = window.pellagos;

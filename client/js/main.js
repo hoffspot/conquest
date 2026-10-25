@@ -74,7 +74,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null, everyone: false };
+const state = { dismiss: null, loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null, everyone: false };
 
 window.pellagos = {
     get game() {
@@ -1110,6 +1110,7 @@ async function playing(save, { world, place, war }) {
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
+    game.onAskDismiss = askDismiss;
     game.showQuick(quickShown());
     debug.watch({ game });
     show("hud");
@@ -1879,6 +1880,27 @@ $("#portalback").addEventListener("click", () => {
     state.portal = null;
     $("#portal").close();
 });
+
+// One of the party to be let go (the party menu's Dismiss, or the wheel's), for good: asked first
+// (`go`: lets them go)
+function askDismiss({ name, note, go }) {
+    $("#dismisstitle").textContent = `Dismiss ${name}?`;
+    $("#dismissnote").textContent = note;
+    $("#dismissgo").textContent = `Dismiss ${name}`;
+    state.dismiss = go;
+    $("#dismissask").showModal();
+    $("#dismissback").focus();
+}
+
+$("#dismissgo").addEventListener("click", () => {
+    const go = state.dismiss;
+
+    state.dismiss = null;
+    $("#dismissask").close();
+    go?.();
+});
+$("#dismissback").addEventListener("click", () => $("#dismissask").close());
+$("#dismissask").addEventListener("close", () => (state.dismiss = null));
 
 // A plan tapped on the building screen: asked first, with what it guards and faces, what it costs
 // and takes to keep up, and whether the stores hold it now
@@ -2681,6 +2703,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
+    game.onAskDismiss = askDismiss;
     game.showQuick(quickShown());
     debug.watch({ game });
     show("hud");

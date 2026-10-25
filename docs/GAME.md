@@ -1736,8 +1736,12 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   or P; shown again four times a second while open, `PARTY_MENU_EVERY`) lists them all, each
   with their likeness (tapped, chosen to help), what they are ("Hired warrior", "Called wolf ·
   4:05 left": `memberKind`), their health, whether they follow or wait, and Follow or Wait and
-  Dismiss (asked twice: "Dismiss?" for three seconds, `DISMISS_SURE_MS`); with no one, how to
-  come by some. On a narrow screen a panel open hides the column, which would cover its edge.
+  Dismiss; with no one, how to come by some. Dismissing's for good (a hired adventurer goes their
+  own way, a creature's gone), so it's asked first, from the menu or the wheel alike: "Dismiss
+  Bryn?", Dismiss Bryn or Keep them (game.js `onAskDismiss`, main.js `askDismiss`: the
+  `#dismissask` dialog), where the menu once asked twice ("Dismiss?" for three seconds); and in
+  talk, "We part here" has them ask "For good?" first, "I'm sure" or "No. Stay with me" back to
+  their orders (dialogue.js `follower`'s `parting`). On a narrow screen a panel open hides the column, which would cover its edge.
   **Playing together** (docs/WAR.md *Parties*), the other players in the player's party head the
   column, the longest in it first (`host.fellows`), before the player's own: gold-framed (`.member
   .player`), the one leading it crowned (`.member.leader`: "leading your party"), their own units

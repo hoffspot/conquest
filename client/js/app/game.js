@@ -1043,6 +1043,12 @@ export class Game {
         /** Hears a quick action held on (its slot), to change what's in it (main.js: Quick actions). */
         this.onChooseQuick = () => {};
 
+        /**
+         * Asks whether one of the party's to be let go, for good ({ name, note, go }: `go` lets them
+         * go; main.js: the dismiss dialog), or null to let them go unasked.
+         */
+        this.onAskDismiss = null;
+
         /** How many quick actions are shown: four, or six across (QUICK_SHOWN; Game options: showQuick). */
         this.quickShown = QUICK_SHOWN.four;
 
@@ -9289,8 +9295,18 @@ export class Game {
         }
     }
 
-    // Tell one of the party to follow, wait or go (core/host.js #orderUnit); said why not, if not
-    #orderUnit(id, order) {
+    // Tell one of the party to follow, wait or go (core/host.js #orderUnit); said why not, if not.
+    // Going's for good, so asked first (onAskDismiss), from the party menu or the wheel alike
+    #orderUnit(id, order, { sure = false } = {}) {
+        if (order === "dismiss" && !sure && this.onAskDismiss) {
+            const name = this.battle.actor(id)?.name ?? "them";
+            const called = Boolean(this.host.companions?.has(id));
+
+            this.onAskDismiss({ name, note: called ? `${name} will be gone for good, its time with you over.` : `${name} will leave your party and go their own way, for good.`, go: () => this.#orderUnit(id, "dismiss", { sure: true }) });
+
+            return;
+        }
+
         this.#command({ type: "order", unit: id, order }, (result) => {
             if (!result.ok) {
                 this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.4);

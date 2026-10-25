@@ -3145,8 +3145,8 @@ say what they'd want and stay where they are.
 the party menu, the same for the creatures by magic at their side, host.js `#orderUnit`, an
 `order` command): wait here (they stand guard where they are), come on (they follow again), go for
 whoever their leader's set on (the `assist` order: after them till they're down, then following
-again; refused, "untargeted", with no one set on), or go their own way (dismissed). A follower
-who falls is gone.
+again; refused, "untargeted", with no one set on), or go their own way (dismissed: asked first,
+in talk or from the party alike, as it's for good). A follower who falls is gone.
 
 **Kept** with the character (`characterOf`'s `followers`: name, calling, looks, people;
 `save.js` `saveFollowers`), so they come along to any world; and in the host's snapshot. The
