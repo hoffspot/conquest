@@ -74,7 +74,7 @@ import { placeAt, placesOf } from "./formation.js";
 import { bonusOf, chainAfter, isWhole, lapsed, mighty, PRISMATIC, sigilSpell } from "./prismatic.js";
 import { crosses, nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
-import { sightAt } from "./light.js";
+import { playerSight, sightAt } from "./light.js";
 import { navigatorOf } from "./navigation.js";
 import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
@@ -1478,7 +1478,7 @@ export class Battle {
      * (staggered, stunned or already casting), "wand" or "grimoire" (it needs one in hand),
      * "healthy" (healing at full health), "uncursed" (a cure with nothing to cure), "lifeless" (no
      * one living there), "corpse" (no one fallen there), "friendly" (not an enemy), "hostile" (an
-     * enemy), "range" or "sight" (CAST_FAILURES says them: none of them the host's own refusals,
+     * enemy), "range", "sight" or "dark" (whyUnseen; CAST_FAILURES says them: none of them the host's own refusals,
      * host.js REFUSALS, but for the cooldown, which is the same).
      */
     cast(id, spellId, targetId = null, { level = 1, at = null } = {}) {
@@ -1547,7 +1547,7 @@ export class Battle {
      * Throw a bomb (a player's Goblin Bomb: BOMBS `kind`) at an enemy (`targetId`) within `reach`
      * metres that they can see, doing `damage` ([least, most] at its heart): an attack, let go as
      * its blow would land. { ok } or why not ({ ok: false, reason }: "midst", in the middle of
-     * a blow or a spell, staggered or stunned; "target", "range", "sight").
+     * a blow or a spell, staggered or stunned; "target", "range", "sight", "dark": whyUnseen).
      */
     lob(id, targetId, { kind, damage, reach }) {
         const actor = this.actor(id);
@@ -1565,8 +1565,10 @@ export class Battle {
             return { ok: false, reason: "range" };
         }
 
-        if (!this.canSee(actor, target, Math.max(SIGHT, reach))) {
-            return { ok: false, reason: "sight" };
+        const unseen = this.whyUnseen(actor, target, Math.max(SIGHT, reach));
+
+        if (unseen) {
+            return { ok: false, reason: unseen };
         }
 
         actor.path = [];
@@ -1616,8 +1618,10 @@ export class Battle {
             return { reason: "range" };
         }
 
-        if (!this.canSee(actor, target, Math.max(SIGHT, spell.reach))) {
-            return { reason: "sight" };
+        const unseen = this.whyUnseen(actor, target, Math.max(SIGHT, spell.reach));
+
+        if (unseen) {
+            return { reason: unseen };
         }
 
         return target;
@@ -1785,7 +1789,8 @@ export class Battle {
 
     /**
      * Can `a` see `b`: on the same map, within SIGHT squares (out in the world at night, only as
-     * far as the light where `b` is lets them: light.js sightAt, `this.light`; as far as ever for
+     * far as the light where `b` is lets them: light.js sightAt, `this.light`, a player further,
+     * light.js playerSight; as far as ever for
      * a creature that sees in the dark, creatures.js `darkSight`, or one given to, `darkSight`
      * (Lunara's gift: core/shrines.js), or of the colossal, towering and aglow), with nothing that blocks sight between their middles (the map's opaque squares:
      * houses and trees, not barrels or a well, outdoors; walls, not tables, indoors)? (`range`: as
@@ -1796,7 +1801,37 @@ export class Battle {
         const colossal = Boolean(b.wild?.colossus && b.footprint);
         const to = colossal ? this.#aimAt(b, a.square) : b.square;
 
-        return a.map === b.map && this.#sees(a.map, a.square, to, a.map === this.lightMap && !a.wild?.darkSight && !a.darkSight && !colossal ? range * sightAt(this.light, to) : range);
+        return a.map === b.map && this.#sees(a.map, a.square, to, a.map === this.lightMap && !a.wild?.darkSight && !a.darkSight && !colossal ? range * this.#lightFor(a, to) : range);
+    }
+
+    // How far, a share of how far they'd see by day, `a` sees someone at a square by the light
+    // there (light.js sightAt): a player further than the rest at night (light.js playerSight)
+    #lightFor(a, square) {
+        const share = sightAt(this.light, square);
+
+        return a.kind === "player" ? playerSight(share) : share;
+    }
+
+    /**
+     * Why `a` can't see `b` within `range` (as canSee looks), or null if they can: "range" (on
+     * another map, or further off than that by day), "sight" (something that blocks sight between
+     * them: a wall, a house, a rock, a tree), or "dark" (within it, nothing between, but further
+     * than the light lets them see: light.js sightAt). What a player's told, casting, shooting or
+     * throwing at someone (spells.js CAST_FAILURES), rather than "can't see it" for all three.
+     */
+    whyUnseen(a, b, range = SIGHT) {
+        if (this.canSee(a, b, range)) {
+            return null;
+        }
+
+        const colossal = Boolean(b.wild?.colossus && b.footprint);
+        const to = colossal ? this.#aimAt(b, a.square) : b.square;
+
+        if (a.map !== b.map || distanceBetween(a.square, to) > range) {
+            return "range";
+        }
+
+        return this.#sees(a.map, a.square, to, range) ? "dark" : "sight";
     }
 
     // Can someone on a map at one square see another square: within `range` (SIGHT), nothing opaque
@@ -3419,7 +3454,8 @@ export class Battle {
 
     /**
      * Why `actorId` couldn't shoot `targetId` from where they stand, with what they hold ("range":
-     * further than it reaches, or elsewhere; "sight": not seen), or null if they could: for a
+     * further than it reaches, or elsewhere; "sight": something in the way; "dark": too far to see
+     * in the light there is: whyUnseen), or null if they could: for a
      * shot made stronger (an aimed shot), refused before it's ready again.
      */
     shotAt(actorId, targetId) {
@@ -3430,7 +3466,7 @@ export class Battle {
             return "range";
         }
 
-        return this.canSee(actor, target, Math.max(SIGHT, reach)) ? null : "sight";
+        return this.whyUnseen(actor, target, Math.max(SIGHT, reach));
     }
 
     // Is someone within a guard's leash of its post, or of the round it walks (always, for those

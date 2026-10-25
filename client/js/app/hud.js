@@ -615,7 +615,7 @@ export class Hud {
      * nearer (`depth`: metres from the camera) over the farther, the one the player's set to fight
      * over them all.
      */
-    place(id, point, { scale = 1, depth = 0 } = {}) {
+    place(id, point, { scale = 1, depth = 0, dim = false } = {}) {
         const plate = this.tracked.get(id);
 
         if (!plate) {
@@ -626,6 +626,12 @@ export class Hud {
 
         if (!plate.hidden) {
             const faint = scale.toFixed(2);
+
+            // (A foe in reach the player can't act on yet, too dark or something in the way: greyed)
+            if (plate.dim !== dim) {
+                plate.dim = dim;
+                plate.classList.toggle("unseen", dim);
+            }
 
             plate.style.transform = `translate3d(${point.x.toFixed(1)}px, ${point.y.toFixed(1)}px, 0) translate(-50%, -100%) scale(${scale.toFixed(3)})`;
 

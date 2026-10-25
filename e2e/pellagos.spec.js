@@ -13441,7 +13441,7 @@ test("a spell tapped on a foe out of reach says so, flashes its slot red and sta
     // Stun tapped: refused, said why, its slot flashed red, not lit
     await slot(1).click();
     await expect(slot(1)).toHaveClass(/refused/);
-    await expect(page.locator("#banner")).toHaveText("Out of reach");
+    await expect(page.locator("#banner")).toHaveText("Out of range");
 
     const after = await page.evaluate(() => {
         const { battle } = window.pellagos.game;

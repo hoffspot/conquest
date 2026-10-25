@@ -35,8 +35,8 @@ import { LOOKS as CREATURE_LOOKS, humanoidLook } from "../beasts/looks.js";
 import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
 import { cheering, greetingOf, isEmote } from "../core/emotes.js";
-import { carriesTorch, sightAt, torchesLit } from "../core/light.js";
-import { aloftShare, BOMBS, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
+import { carriesTorch, playerSight, sightAt, torchesLit } from "../core/light.js";
+import { aloftShare, BOMBS, SIGHT, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
 import { FINDS, foodFor, FRESH, HEALING_DRAUGHTS, OBSTACLES, STRANGERS } from "../core/director.js";
 import { compass } from "../core/ways.js";
@@ -3638,11 +3638,14 @@ export class Game {
 
         // Bars over the heads of the others on the player's map (those that have one), smaller
         // and fainter the farther they are from the player's character, gone where the player
-        // can't see them (less far in the dark: hud.js PLATE_SIZE); the nearer the camera over
-        // the farther
+        // can't see them (less far in the dark, if not as less far as others see: hud.js
+        // PLATE_SIZE, light.js playerSight); the nearer the camera over the farther. A foe within
+        // the player's reach they can't act on (too dark to see that far, or something in the way:
+        // battle.js whyUnseen) dimmed, so it reads as not yet reachable, not as refused for nothing
         const eye = view.camera.position;
         const own = this.avatars.get(this.me)?.object.position;
         const lit = this.mapId === battle.lightMap ? battle.light : null;
+        const reach = mine && !mine.dead ? this.#reachOf(mine) : 0;
 
         for (const actor of battle.actors) {
             const avatar = this.avatars.get(actor.id);
@@ -3651,9 +3654,10 @@ export class Game {
                 const head = avatar.point(1.08, _head);
                 const depth = eye.distanceTo(head);
                 const at = avatar.object.position;
-                const scale = own ? plateScale(Math.hypot(at.x - own.x, at.z - own.z), sightAt(lit, actor.square)) : 1;
+                const scale = own ? plateScale(Math.hypot(at.x - own.x, at.z - own.z), playerSight(sightAt(lit, actor.square))) : 1;
+                const dim = reach > 0 && !actor.dead && actor.map === mine.map && Math.hypot(actor.x - mine.x, actor.y - mine.y) <= reach && battle.hostile(actor, mine) && !battle.canSee(mine, actor, reach);
 
-                hud.place(actor.id, actor.dead || actor.map !== this.mapId ? null : view.toScreen(head), { scale, depth });
+                hud.place(actor.id, actor.dead || actor.map !== this.mapId ? null : view.toScreen(head), { scale, depth, dim });
             }
         }
 
@@ -3896,6 +3900,24 @@ export class Game {
         }
 
         return this.clock < notice.until ? mine : null;
+    }
+
+    // How far the player can act on a foe from where they stand (metres): the furthest of their
+    // weapon's reaches and of the spells they know to cast at one, and never less than they see
+    #reachOf(player) {
+        let reach = SIGHT;
+
+        for (const { reach: arm = 0 } of player.arms ?? []) {
+            reach = Math.max(reach, arm);
+        }
+
+        for (const id of this.progress?.known() ?? []) {
+            if (SPELLS[id]?.target === "enemy") {
+                reach = Math.max(reach, SPELLS[id].reach ?? 0);
+            }
+        }
+
+        return reach;
     }
 
     // Whether someone's drawn as themselves (not one of a crowd, nor waiting to be drawn)

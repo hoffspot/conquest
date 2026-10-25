@@ -1474,6 +1474,23 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   the dark before they see who's there. The host works it out each step (`Host#light`) from what
   every copy of the world has (the clock, the plan, the camps, the fires, who has a torch), only
   near the players, so every copy sees alike. Indoors, and talking, as ever.
+  - **A player sees further** at night than the rest (light.js `PLAYER_SIGHT`, `playerSight`;
+    battle.js `#lightFor`): 60% of their sight on a moonless night and 80% under a full moon, in
+    step between and on to the day's, where the wild and everyone else see 35 to 55%. Their sight
+    is how far they can cast, shoot or throw at someone (as far as it reaches, scaled so: a 16 m
+    spell's 9.6 to 12.8 m, where it was 5.6 to 8.8), and how far bars over others are drawn. At
+    35 to 55%, a foe drawn plainly on the screen 10 to 20 m off, its bar over it, couldn't be cast
+    at, nothing in the way. How far the wild and everyone else see a player is as it was, so a
+    hero with Light or by a torch still sees an ambush before it sees them. `NET_VERSION` 183.
+  - **Why not** (battle.js `whyUnseen`; spells.js `CAST_FAILURES`): a spell, an aimed shot or a
+    bomb at someone the player can't see is refused saying why: "Out of range" (past its reach),
+    "Out of range in the dark" (in its reach, nothing between, but further than the light lets
+    them see), or "Something's in the way" (a wall, a house, a rock or a tree between). It once
+    said "Can't see it" for the last two alike, and "Out of reach" for the first.
+  - **Bars greyed** (hud.js `place`'s `dim`, `.plate.unseen`): a foe within the player's reach
+    (the furthest of their weapon's and the spells they know to cast at one: game.js `#reachOf`)
+    that they can't act on, too dark or something in the way, has its bar greyed, so it reads as
+    not reachable yet before it's tapped.
 - **The Light spell** (docs/MAGIC.md; world/globes.js): its tome at every adventurers' guild for
   10 gold; cast, a globe over the caster's shoulder lights the dark 12 m round them as by day for
   fifteen minutes (cast again to put it out).
@@ -1694,7 +1711,7 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   they are if it's in reach, wherever they're going kept, the swing holding them a moment.
   Out of reach while they steer, it's waited on if it's within 3 m and struck as it comes into
   reach (host.js `BLOW_WAIT`: 0.75 s at most, as a spell's queued); never coming into reach, or
-  further off, it's refused as a spell out of reach is ("Out of reach", its slot flashed red,
+  further off, it's refused as a spell out of reach is ("Out of range", its slot flashed red,
   nothing spent), so the stick, not the blow, says where they go. Set on another, the lock
   goes with them (with Auto target lock off, set on another without it, the lock's let go and
   the other set on, not locked on). It's let go once it's fallen, once it's 40 metres off
@@ -4963,7 +4980,7 @@ While a slice is cooling down (a spell's own cooldown, or a blow's own twelve se
 greyed over as much of it as the cooldown has left, the grey drawing back as it passes. A flick
 at a greyed slice, an empty one or one that can't be used flashes it red and is refused. One the
 game turns down once chosen (a spell or an aimed shot out of reach or out of sight: "Out of
-reach", "Can't see it") flashes red too, not lit as chosen, as does the quick action's slot, and
+range", "Out of range in the dark", "Something's in the way") flashes red too, not lit as chosen, as does the quick action's slot, and
 nothing starts cooling down. The game plays on while it's open; a second finger (a pinch) closes
 it.
 
@@ -5293,7 +5310,8 @@ it.
    over the rest), and the damage each blow does. A bar's full size within 12 m of the player's
    character, and beyond that smaller and fainter evenly with the distance, frame by frame as
    either moves, gone at the edge of sight: 60 m by day, less far in the dark, as far as the
-   player sees there (light.js `sightAt`, as the battle has it: 30 m where they see half as far;
+   player sees there (light.js `sightAt` and `playerSight`, as the battle has it: 36 to 48 m at
+   night;
    `PLATE_SIZE`, `plateScale`). So how big and how solid a bar is says how near its character is;
    the nearer the camera are drawn over the farther, and all of them under the buttons. Each bar
    is put where the camera that draws the frame sees its head: the camera's matrices made as it's
