@@ -227,7 +227,7 @@ describe("your hero, drawn where the rules will have them (app/forecast.js)", ()
         assert.equal(forecast.trip, FORECAST.slowest);
     });
 
-    it("follows a host that plays its steps slower than time goes by (a browser drawing few frames): never far ahead of its word", () => {
+    it("follows a host that plays its steps slower than time goes by (a browser drawing few frames): its time, and what's sent now when it'll have it, at its pace", () => {
         const host = new Host(buildWorld({ seed: 2 }), { populate: false });
 
         host.join({ id: "runner", ...sword });
@@ -244,9 +244,34 @@ describe("your hero, drawn where the rules will have them (app/forecast.js)", ()
             forecast.at(host.battle, "runner", now, 200);
         }
 
-        // (How far ahead of the host's last word it reckons the host's clock to be: a second or so
-        // behind the quickest words of the last second, and its settling; not the ten seconds' drift)
-        assert.ok(forecast.ahead - (latest.time - latest.at) < 1500, `${forecast.ahead - (latest.time - latest.at)} ms`);
+        // (Its words come at once: the host's time now is the last's. What's sent now reaches it a
+        // tenth of a second later, a third of that of its time: not 200 ms of it, nor the ten
+        // seconds' drift of a clock taken to keep time)
+        assert.ok(Math.abs(forecast.pace - 1 / 3) < 0.02, `its pace ${forecast.pace.toFixed(3)}`);
+        assert.ok(Math.abs(forecast.host.time - latest.time) < 50, `its time reckoned ${(forecast.host.time - latest.time).toFixed(0)} ms off`);
+        assert.ok(Math.abs(forecast.present - latest.time - 200 / 3) < 50, `what's sent now had ${(forecast.present - latest.time).toFixed(0)} ms of its time on`);
+    });
+
+    it("keeps time with a host that does (its pace 1): its words held up, or a link's jitter, don't make it out slower", () => {
+        const host = new Host(buildWorld({ seed: 2 }), { populate: false });
+
+        host.join({ id: "runner", ...sword });
+        host.populate();
+
+        const forecast = new Forecast();
+        const hero = selfOf(host.battle.actor("runner"));
+        const jitter = (k) => ((k * 7919) % 41) - 20;
+        let least = Infinity;
+
+        // (Ten words a second for ten seconds, each 100 ms on its way, give or take 20; one in
+        // twenty held up 300 ms)
+        for (let k = 0; k <= 100; k++) {
+            forecast.heard({ time: k * 100, seq: 0, hero, at: k * 100 + 100 + jitter(k) + (k % 20 === 7 ? 300 : 0) });
+            forecast.at(host.battle, "runner", k * 100 + 100, 200);
+            least = Math.min(least, forecast.pace);
+        }
+
+        assert.ok(least > 0.97, `its pace made out ${least.toFixed(3)} at the least`);
     });
 
     it("never touches the copy: its world plays on as the host's did, never astray", () => {

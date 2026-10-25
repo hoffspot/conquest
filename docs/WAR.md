@@ -2945,13 +2945,20 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     What it does is only drawn: no blow it strikes lands, nothing it says is heard, and the copy
     of the world is never touched, so the rules never guess.
   - **When.** The host's time now is reckoned from the quickest of its words of the last second
-    (one held up less than that, a lost segment's, doesn't put it back), and come down to it over
-    about half a second when it's come down: the link's grown slower, or the host's a browser
-    drawing fewer than ten frames a second, which plays its steps slower than time goes by (at
-    most 0.1 s of them a frame). The round trip is the middle of the latest five (`Joining`
-    `lately`: the first, held up while the world's built, soon doesn't count), none taken as over
-    a second, and followed a tenth of a millisecond a millisecond, so they're drawn going a little
-    faster or slower a while, never jumping.
+    (one held up less than that, a lost segment's, doesn't put it back), carried on at its pace,
+    and come down to over about half a second when it's come down (the link's grown slower). Its
+    pace is how fast its time has gone by against the phone's clock over the last 3 s (from the
+    quickest of the first third of its words to the quickest of the last): 1, but for a host
+    that's a browser drawing fewer than ten frames a second, which plays its steps slower than
+    time goes by (at most 0.1 s of them a frame). What takes a word to it and back, and what's
+    gone by since its last, come to that much less of its time: at a third of the pace, what's
+    sent now reaches it a third as far on in its time. The round trip is the middle of the latest
+    five (`Joining` `lately`: the first, held up while the world's built, soon doesn't count),
+    none taken as over a second, and followed a tenth of a millisecond a millisecond, so they're
+    drawn going a little faster or slower a while, never jumping. (Taken as keeping time, a host
+    at a third of the pace had every command a second and more before it was looked for: each
+    tap's walk put right by 5 to 7 m, and past 8 m, put there at once, as the two-player browser
+    test found on main.)
   - **Their own swings and casts, at once.** Each swing or cast of theirs a look ahead begins (its
     battle's `attack` and `cast`) is shown and heard as the present they're drawn in reaches it
     (`begun`), with the hold it puts on them, not as the copy begins it, half a second and more

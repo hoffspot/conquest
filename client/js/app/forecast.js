@@ -41,13 +41,15 @@ import { SPELLS } from "../core/spells.js";
  * none taken as longer than `slowest` ms (a link that slow is held up, not far: they're drawn no
  * further ahead); the host's clock reckoned from the quickest of its words of the last `window`
  * ms (one held up less than that doesn't put it back), and come down to it over about `settle`
- * ms when it's come down (the link's grown slower, or a host drawing few frames plays its steps
- * slower than time goes by); and how fast how far ahead they're drawn follows the round trip as
+ * ms when it's come down (the link's grown slower); how fast the host's battle goes by against
+ * the link's clock found from its words of the last `paced` ms (a host drawing few frames plays
+ * its steps slower than time goes by: what takes a word to it and back, and what goes by after
+ * its last, comes to that much less of its time); and how fast how far ahead they're drawn follows the round trip as
  * it's timed again (`slew`: ms a ms, so they're drawn going a little faster or slower a while,
  * never jumping); a swing or cast of theirs the copy begins within `same` ms of one it began
  * taken for the same one, and those it began kept `kept` ms to know them by.
  */
-export const FORECAST = Object.freeze({ near: 15, most: 24, ahead: 40, blend: 100, slide: 6, longest: 500, snap: 8, rtt: 200, slowest: 1000, window: 1000, settle: 500, slew: 0.1, same: 300, kept: 5000 });
+export const FORECAST = Object.freeze({ near: 15, most: 24, ahead: 40, blend: 100, slide: 6, longest: 500, snap: 8, rtt: 200, slowest: 1000, window: 1000, settle: 500, paced: 3000, slew: 0.1, same: 300, kept: 5000 });
 
 // The commands that move or hold the hero, as the host gives them to its battle (Host.command)
 const ORDERS = {
@@ -73,12 +75,12 @@ export class Forecast {
         this.trip = null;
         this.tripAt = null;
 
-        // How far the host's battle's time is ahead of the link's clock, less a word's way here
-        // (ms), and when it was last brought up to date: the quickest of its words of the last
-        // FORECAST.window ms (`words`: [{ at, ahead }]) at once if they're quicker, else come
-        // down to them a little at a time (#keepUp)
-        this.ahead = null;
-        this.aheadAt = null;
+        // The host's battle's time, less a word's way here, as reckoned at a time of the link's
+        // clock ({ time, at }, #keepUp): from the quickest of its words of the last
+        // FORECAST.paced ms (`words`: [{ at, time }]), carried on at its pace (`pace`: how many
+        // ms of its time go by a ms of the link's clock; 1 but for a host drawing few frames)
+        this.host = null;
+        this.pace = 1;
         this.words = [];
 
         // The battle looked ahead in, and where the hero was in it at each step: { battle, me,
@@ -109,7 +111,8 @@ export class Forecast {
 
     /** The host's word of the hero (Joining.self). */
     heard(self) {
-        this.words = [...this.words.filter(({ at }) => at > self.at - FORECAST.window), { at: self.at, ahead: self.time - self.at }];
+        this.words = [...this.words.filter(({ at }) => at > self.at - FORECAST.paced), { at: self.at, time: self.time }];
+        this.pace += (this.#paced() - this.pace) * 0.3;
         this.self = self;
         this.sent = this.sent.filter(({ seq }) => seq > self.seq);
         this.#again();
@@ -155,12 +158,12 @@ export class Forecast {
 
         this.#keepUp(now);
 
-        // (The host's time now is the link's clock and how far it's ahead, a word's way here (half a
-        // round trip) on; what's sent now reaches it half a round trip after that)
-        const present = now + this.ahead + trip;
+        // (The host's time now is a word's way here (half a round trip) on from its last word as
+        // reckoned; what's sent now reaches it half a round trip after that: each at its pace)
+        const present = this.host.time + this.pace * trip;
 
         if (!this.track) {
-            this.track = this.#made(copy, me, trip);
+            this.track = this.#made(copy, me, trip, now);
 
             if (!this.track) {
                 this.present = this.casting = null;
@@ -220,7 +223,7 @@ export class Forecast {
     }
 
     // A battle of the hero's own, as the host had them, those near them as the copy has them
-    #made(copy, me, trip) {
+    #made(copy, me, trip, now) {
         const self = this.self;
         const hero = copy.actor(me);
 
@@ -247,20 +250,44 @@ export class Forecast {
         const mine = withSelf(battle.actor(me), self.hero);
 
         // (Each command when the host will get it: half a round trip after it was sent, as the
-        // host's time had it then; those it may have by now, at once)
-        const sent = this.sent.map((each) => ({ ...each, time: Math.max(self.time, each.at + this.ahead + trip) })).sort((a, b) => a.time - b.time || a.seq - b.seq);
+        // host's time had it then, at its pace; those it may have by now, at once)
+        const sent = this.sent.map((each) => ({ ...each, time: Math.max(self.time, this.host.time - this.pace * (now - each.at - trip)) })).sort((a, b) => a.time - b.time || a.seq - b.seq);
 
         return { battle, me, sent, next: 0, events: [], steps: [{ time: self.time, x, y, map, ...this.#doing(mine) }] };
     }
 
-    // How far the host's clock is ahead of the link's brought up to `now`: up to the quickest of
-    // its latest words at once, down to it a little at a time (so the present they're drawn in
-    // seldom goes back, and never by much at once)
+    // The host's time (less a word's way here) brought up to `now`: the last reckoning carried on
+    // at its pace; up to the quickest of its words of the last FORECAST.window ms (carried on as
+    // far) at once, down to it a little at a time (so the present they're drawn in seldom goes
+    // back, and never by much at once)
     #keepUp(now) {
-        const quickest = Math.max(...this.words.map(({ ahead }) => ahead));
+        const quickest = Math.max(...this.words.filter(({ at }) => at > now - FORECAST.window).map(({ at, time }) => time + this.pace * (now - at)), this.#carried(this.words.at(-1), now));
+        const carried = this.host ? this.#carried(this.host, now) : -Infinity;
 
-        this.ahead = this.ahead === null || quickest > this.ahead ? quickest : this.ahead + (quickest - this.ahead) * Math.min(1, (now - this.aheadAt) / FORECAST.settle);
-        this.aheadAt = now;
+        this.host = { time: quickest >= carried ? quickest : carried + (quickest - carried) * Math.min(1, (now - this.host.at) / FORECAST.settle), at: now };
+    }
+
+    // A time of the host's (`time`, at `at` of the link's clock) carried on to `now` at its pace
+    #carried({ time, at }, now) {
+        return time + this.pace * (now - at);
+    }
+
+    // How fast the host's battle's time has gone by against the link's clock, of late (its words
+    // of the last FORECAST.paced ms): from the quickest of the first third of them to the quickest
+    // of the last (so how late each came counts for little), as time goes by at most; 1 till
+    // they've come a while
+    #paced() {
+        const words = this.words;
+        const span = words.length > 1 ? words.at(-1).at - words[0].at : 0;
+
+        if (span < FORECAST.paced / 2) {
+            return 1;
+        }
+
+        const quickest = (among) => among.reduce((best, word) => (word.time - word.at > best.time - best.at ? word : best));
+        const [first, last] = [quickest(words.filter(({ at }) => at <= words[0].at + span / 3)), quickest(words.filter(({ at }) => at >= words.at(-1).at - span / 3))];
+
+        return Math.max(0.1, Math.min(1, (last.time - first.time) / Math.max(1, last.at - first.at)));
     }
 
     // The round trip to draw them ahead by at `now`: the link's (`rtt`), come to a little at a time
