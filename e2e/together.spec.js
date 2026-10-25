@@ -129,10 +129,11 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     await expect(orb(host)).toHaveAttribute("data-link", "away");
     await expect(orb(host)).toHaveAttribute("aria-label", /^Your world, open to friends: 1 friend in it\. The slowest link: a word there and back in \d+ ms\. The link's (strong|fair|weak: expect delays)\.$/, { timeout: 15000 });
 
+    // (Both read at once: the orb's drawn again as the link's timed, between two reads)
     for (const page of [guest, host]) {
-        const words = await orb(page).getAttribute("aria-label");
+        const [words, quality] = await orb(page).evaluate((element) => [element.getAttribute("aria-label"), element.dataset.quality]);
 
-        expect(await orb(page).getAttribute("data-quality")).toBe(said[words.match(/The link's (.+)\.$/)[1]]);
+        expect(quality).toBe(said[words.match(/The link's (.+)\.$/)[1]]);
     }
 
     expect(await guest.evaluate(() => window.pellagos.game.remote.lately)).toBeLessThan(5000);
@@ -187,18 +188,35 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     // (Their copy's kept as the host's: never sent again, unless it was too far behind once it had loaded)
     expect(await sentAgain(guest)).toBe(0);
 
-    // The host's page hidden (their phone gone to another app): the guest's told the host's paused
-    // the game; shown again, on it goes
+    // The host's page hidden (their phone gone to another app): the guest's told the host's game
+    // is in the background (their world, on that phone, can't move on); shown again, on it goes,
+    // the host's menu open, as hiding the page opened it, but nothing stopped by it
     const hide = (hidden) => {
         Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden });
         document.dispatchEvent(new Event("visibilitychange"));
     };
 
     await host.evaluate(hide, true);
-    await expect(guest.locator("#netstatus")).toHaveText("The host has paused the game.", { timeout: 30000 });
+    await expect(guest.locator("#netstatus")).toHaveText("The host's game is in the background: the world waits for them.", { timeout: 30000 });
     await host.evaluate(hide, false);
     await expect(guest.locator("#netstatus")).toBeHidden({ timeout: 30000 });
+    await expect(host.locator("#menunote")).toHaveText("Others are playing: the world goes on.");
+
+    // Paused for everyone from the host's menu: the guest's told, and the world stands still (its
+    // time where it was a second later) till the host resumes it
+    await host.locator("#pauseallbutton").click();
+    await expect(host.locator("#menunote")).toHaveText("Paused for everyone, till you resume.");
+    await expect(host.locator("#pauseallbutton")).toBeHidden();
+    await expect(guest.locator("#netstatus")).toHaveText("The host has paused the game.", { timeout: 30000 });
+
+    const stoppedAt = await host.evaluate(() => window.pellagos.game.battle.time);
+
+    await expect.poll(() => guest.evaluate(() => window.pellagos.game.battle.time), { timeout: 30000 }).toBe(stoppedAt);
+    await guest.waitForTimeout(1000);
+    expect(await host.evaluate(() => window.pellagos.game.battle.time)).toBe(stoppedAt);
     await host.locator("#resumebutton").click();
+    await expect(guest.locator("#netstatus")).toBeHidden({ timeout: 30000 });
+    await expect.poll(() => guest.evaluate(() => window.pellagos.game.battle.time), { timeout: 30000 }).toBeGreaterThan(stoppedAt);
 
     // Nothing from the host for a while (its world stopped, without a word): the guest's told
     // they're waiting for it

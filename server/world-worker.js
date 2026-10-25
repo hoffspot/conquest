@@ -8,10 +8,12 @@
 //
 // The world's clock (§4) runs only while someone's present: their link open and their game
 // finished loading (`ready`). It stops in the step the last present player goes (and the world's
-// saved at once), and while every present player's page is hidden (if the world's
-// pauseWhenHidden), or while anyone's still loading (if it holdsWhileJoining). Those in it while
-// it's stopped are told so (Hosting.pause). A player whose link drops isn't present; their place
-// is kept until the supervisor says they've gone.
+// saved at once). Nothing else stops it while anyone else is in it, but one of its owners pausing
+// it for everyone (Pause for everyone, from their menu), till they let it go or their link drops.
+// Alone in it, it stops for its one player while their menu's open, and while their page is hidden
+// (if the world's pauseWhenHidden). Those in it while it's stopped are told so, and why
+// (Hosting.pause, core/netplay.js PAUSES). A player whose link drops isn't present; their place is
+// kept until the supervisor says they've gone.
 //
 // In a world that keeps its players' heroes (storage/heroes.js), a player's hero comes from the
 // disk, not from their game: one of theirs by its slot, or a new one (from the character maker:
@@ -100,7 +102,7 @@ const hosting = new Hosting(host, { send: (peer, text) => post({ type: "send", p
 
 runner.hosting = hosting;
 
-/** Those who've come in, by peer: { player, role, slot, linked, ready, hidden, since, character }. */
+/** Those who've come in, by peer: { player, role, slot, linked, ready, hidden, held, everyone, since, character }. */
 const peers = new Map();
 
 // Heroes being kept, one after another
@@ -123,6 +125,14 @@ hosting.onReady = (peer) => {
 };
 hosting.onAway = (peer, hidden) => {
     peers.get(peer).hidden = hidden;
+    look();
+};
+// (Their menu open, or shut; and if for everyone, Pause for everyone: an owner's to say)
+hosting.onHold = (peer, held, everyone) => {
+    const one = peers.get(peer);
+
+    one.held = held;
+    one.everyone = everyone && one.role === "owner";
     look();
 };
 // (One sent out, told why: away too long, "afk"; or their character taken over on another device,
@@ -283,22 +293,25 @@ let present = 0;
 let last = clock();
 let reported = 0;
 
-// Who's present (in, linked, loaded, or loading too long to wait on), and whether the world's clock runs
+// Who's present (in, linked, loaded, or loading too long to wait on), whether the world's clock
+// runs, and if it doesn't, why: no one's ready yet; one of its owners has paused it for everyone;
+// or alone in it, its one player's menu is open or their page hidden
 function look() {
     const now = clock();
     const here = [...peers.values()].filter((one) => one.linked && hosting.players.has(one.peer));
     const loaded = here.filter((one) => one.ready || now - one.since > WORKER.loading);
-    const loading = here.length - loaded.length;
-    const hidden = loaded.length > 0 && loaded.every((one) => one.hidden);
-    const runs = loaded.length > 0 && !(settings.pauseWhenHidden && hidden) && !(settings.holdWhileJoining && loading > 0);
+    const holder = loaded.find((one) => one.everyone);
+    const alone = here.length === 1 ? loaded[0] : null;
+    const why = !loaded.length ? "waiting" : holder ? "host" : alone && (alone.held || (settings.pauseWhenHidden && alone.hidden)) ? "alone" : null;
+    const runs = why === null;
     const was = present;
 
     present = loaded.length;
+    hosting.pause(why, holder ? (host.players.get(hosting.players.get(holder.peer))?.hero?.name ?? null) : null);
 
     if (runs !== running) {
         running = runs;
         last = now;
-        hosting.pause(!runs && hosting.players.size > 0);
 
         // (Stopped as the last who was present went: saved at once)
         if (!runs && was > 0 && present === 0) {
@@ -363,7 +376,7 @@ setInterval(() => {
 parentPort.on("message", async (message) => {
     switch (message.type) {
         case "enter":
-            peers.set(message.peer, { peer: message.peer, player: message.player, role: message.role, slot: null, linked: true, ready: false, hidden: false, since: clock(), character: null, asked: false });
+            peers.set(message.peer, { peer: message.peer, player: message.player, role: message.role, slot: null, linked: true, ready: false, hidden: false, held: false, everyone: false, since: clock(), character: null, asked: false });
             look();
             break;
         case "data":
@@ -372,7 +385,16 @@ parentPort.on("message", async (message) => {
         case "drop":
         case "back":
             if (peers.has(message.peer)) {
-                peers.get(message.peer).linked = message.type === "back";
+                const one = peers.get(message.peer);
+
+                one.linked = message.type === "back";
+
+                // (Dropped: a pause of theirs for everyone ends with their link, the world going on
+                // for the others; back, their game says again how they are: Joining resync)
+                if (!one.linked) {
+                    one.everyone = false;
+                }
+
                 look();
             }
 

@@ -63,7 +63,7 @@ Keys have a role:
 
 | Role | May |
 | --- | --- |
-| Owner | Everything: its settings, keys, players, backups; the debug commands, if its rules allow them |
+| Owner | Everything: its settings, keys, players, backups; pausing it for everyone, from the game's menu; the debug commands, if its rules allow them |
 | Trusted | Play, and give others keys, if its rules allow it |
 | Player | Play |
 
@@ -216,6 +216,11 @@ In the game, in the world: the menu's **World**.
 - **Open to anyone**: the switch (below).
 - **Make a short code**: for someone who has the game open already, typed on the Worlds screen
   (**Enter a code**). It works once, for half an hour.
+
+In the menu, with anyone else in the world: **Pause for everyone**. The world stops for all in it,
+each told who paused it, till you resume; if your link drops meanwhile, it goes on for the others.
+Nothing else stops a world anyone else is in. Alone in it, your menu stops it, and so does your
+page hidden (its rule **Stopped while its one player's page is hidden**, on unless you turn it off).
 
 ### Playing
 
