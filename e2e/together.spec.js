@@ -92,6 +92,10 @@ test("a world opened to others: an elf joins it by its code, is brought in by th
     await expect(join).toBeVisible({ timeout: 60000 });
     await expect(join.locator("#joincode")).toHaveValue(code);
     await expect(join.locator("#joinwho")).toContainText("You'll come as Syl (elf)");
+
+    // (The link taken out of the page's address once it's read: loaded again, not asked again)
+    expect(new URL(guest.url()).search).toBe("");
+
     await join.getByRole("button", { name: "Join" }).click();
     await playing(guest);
 
@@ -493,8 +497,10 @@ test("a guest whose game's reloaded goes straight back into the host's world by 
     const stood = await where();
     const rejoin = guest.locator("#rejoin");
 
-    // Reloaded (its join link and all): straight back in by the code, the dialog naming whose world
-    // and who, each stage under way and then done, in order; in again as Syl, where she stood
+    // Reloaded (its join link gone from its address once it was read): straight back in by the
+    // code all the same, the dialog naming whose world and who, each stage under way and then
+    // done, in order; in again as Syl, where she stood
+    expect(new URL(guest.url()).search).toBe("");
     await guest.reload();
     await expect(rejoin).toBeVisible({ timeout: 60000 });
     await expect(rejoin.locator("#rejointitle")).toHaveText(`Back into ${hostName}'s world`);
