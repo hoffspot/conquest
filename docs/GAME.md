@@ -2701,12 +2701,19 @@ in the skins worker meanwhile; nothing drawn while it's dark, the frames' time t
 for 3 seconds at most, the rest coming in as they're dressed
 after, then lit: not all of them in the one frame, as before (a guild's dozen, 3.9 s in one
 frame in headless Chromium). Its floors are thrown away sooner than the building's let go, once the
-player's 40 metres from its door (`FLOORS`, `#floorsWanted`; from the door of the building they're
+player's 30 metres from its door (`FLOORS`, `#floorsWanted`; from the door of the building they're
 in, if they're in one), all of them built and nothing else of it being done; built again, a piece
-at a time, once they're back within 22 metres of it, or at once if they go straight in. Walking
-from door to door round the start town (headless Chromium, High, seed 1), the floors kept came to
-3 to 14 MB at each stop, not 11 to 15 MB; back in the square, those within 40 metres of it are
-still kept (13.7 MB, from 14.6). Once the player is 90 metres away (and outside), it's let go: its
+at a time, once they're back within 22 metres of it, or at once if they go straight in. And of the
+buildings further off than that, no more than 20 floors are kept all told (`FLOORS.most`,
+`#fewerFloors`): past it, the furthest buildings' let go of first, never one within 22 metres (it'd
+only be built again at once). A floor's put away till the player goes in, so it's never given to
+the graphics card: it's held on the page alone, a few megabytes each (its building's own parts, 1
+to 3.6 MB in the start town; the wares in it are shared). An iPhone let the game's tab go holding 59
+of them in a crowded town, uncounted then: what they hold is in the debug log now (`interiorsMB`,
+below), and 40 metres became 30. Walking from door to door round the start town (headless
+Chromium, High, seed 1), the floors kept came to 3 to 14 MB at each stop, not 11 to 15 MB; back in
+the square, those within 40 metres of it were still kept (13.7 MB, from 14.6). Once the player is
+90 metres away (and outside), it's let go: its
 folk out of the battle, their characters and any floors thrown away (built again if they come
 back); the plans are kept. Wenches and Ale's floors are built at the start and kept; its folk are
 dressed and let go of at its door as any building's.
@@ -5478,7 +5485,7 @@ and the Debug log page, above the events ("This copy: code 9c6a608eb2, put toget
   the game fell over (a phone's browser loads the page again when it runs out of memory): kept as
   a crash, with those notes, what the game held then among them. With them, how what was held went
   over the minute before (`trend`: at each of the last 30 notes, what was held all told, the
-  graphics card's, the sounds', the bodies' own copies, the heap where it's told, and how many
+  graphics card's, the sounds', the bodies' and the floors' own copies, the heap where it's told, and how many
   bodies and actors: rising as more are dressed, or jumping at the end), and the work begun lately
   (`begun`: the last six, each written down as it takes its first step, `pellagos.working`, core/
   steps.js `Steps.begun`; one begun after the last notes, `afterNotes`, was likely under way as the
@@ -5523,11 +5530,14 @@ nothing a frame), the sounds' decoded copies and the samples and recordings kept
 recorded sounds' MP3s among them, kept to decode them again: *Kept decoded to a budget*, under
 *Sound*), the way-finding's WebAssembly (core/navigation/recast.js `wasmBytes`: it grows as
 tiles are baked and gives nothing back), the bodies' own copies on the page (`bodiesMB`: their meshes and pictures,
-kept to be posed and painted again, each counted once: world/release.js `heldOnPage`), all of them
+kept to be posed and painted again, each counted once: world/release.js `heldOnPage`), the
+buildings' floors' (`interiorsMB`: theirs the same way, the hidden ones never given to the
+graphics card, counted again only when one's built or let go of or its wares come in, game.js
+`#interiorsHeld`; "floors'" in the overlay), all of them
 together, and how many bodies, chunks, interiors and crowd kinds are kept, and the beasts' looks
 kept (how many, their sculpted bodies' and folded pieces' size, and how many none is drawn on:
 beasts/sculpt.js `kept`, WILDS.md *Let go of when none is drawn*). Where the heap isn't
-told, the bodies' copies stand in for it in the total, the least of it: in Chromium, playing on
+told, the bodies' and the floors' copies stand in for it in the total, the least of it: in Chromium, playing on
 in a town while 30 bodies were dressed took the heap from 325 to 485 MB and the page's own
 resident memory to 1.2 GB, the bodies' copies growing about 4.5 MB a body, three-quarters of the
 heap's growth, over a fixed 300 MB or so of the world's own. On a phone the graphics card shares

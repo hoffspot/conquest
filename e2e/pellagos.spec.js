@@ -4528,7 +4528,7 @@ test("every tavern can be gone into: got ready as the player comes near, its fol
             return { visited: game.visits.has(key), floors: building.maps.filter((id) => game.interiors.has(id)).length, dressed: window.visit.folk.length, drawn: [...game.avatars.keys()].filter((id) => id.startsWith(`${key}/`)).length };
         };
 
-        return { off: out(30), far: out(50) };
+        return { off: out(25), far: out(50) };
     }, near.key);
 
     expect(away).toEqual({ off: { visited: true, floors: 2, dressed: 0, drawn: 0 }, far: { visited: true, floors: 0, dressed: 0, drawn: 0 } });
@@ -4641,6 +4641,107 @@ test("every tavern can be gone into: got ready as the player comes near, its fol
 
         return game.battle.actors.filter((actor) => actor.map === player.map && actor.id !== "player" && game.avatars.has(actor.id)).length;
     })).toBeGreaterThanOrEqual(5);
+});
+
+test("buildings' floors held at most twenty further off than they're built (the furthest let go of first, none built again only to be let go), and counted in what the game holds: each on the page alone, put away till the player goes in", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // The town's buildings that can be gone into, the nearest the player first: each walked up to
+    // and got ready, its floors built
+    const keys = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        window.put = ([x, y]) => {
+            const actor = game.battle.actor("player");
+
+            Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
+            game.avatars.get("player").place(x + 0.5, y + 0.5, actor.facing);
+            game.previous.set("player", { x: actor.x, y: actor.y });
+        };
+
+        return [...game.world.interiors.buildings.values()]
+            .filter((building) => building.entrance && building.door?.ends?.[0]?.arrive)
+            .sort((a, b) => Math.hypot(a.entrance.door.x - me.x, a.entrance.door.z - me.y) - Math.hypot(b.entrance.door.x - me.x, b.entrance.door.z - me.y))
+            .slice(0, 5)
+            .map(({ key }) => key);
+    });
+
+    expect(keys.length).toBeGreaterThanOrEqual(4);
+
+    for (const key of keys) {
+        await page.evaluate((key) => {
+            const { game } = window.pellagos;
+
+            window.put(game.world.interiors.buildings.get(key).door.ends[0].arrive);
+            game.host.lookAt = 0;
+            game.advance(0.1);
+        }, key);
+        expect(await playUntil(page, () => [...window.pellagos.game.visits.values()].every((visit) => !visit.queue.length && !visit.steps))).toBe(true);
+    }
+
+    // Counted in what the game holds: their own copies on the page, in the debug overlay
+    const counted = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { heldOnPage } = await import("/js/world/release.js");
+        const { memoryLines } = await import("/js/app/debug.js");
+        const memory = game.memoryNow();
+
+        return { held: game.interiors.size, MB: memory.interiorsMB, own: Math.round(heldOnPage([...game.interiors.values()].map(({ object }) => object)) / 104857.6) / 10, line: memoryLines(memory)[0] };
+    });
+
+    expect(counted.held).toBeGreaterThanOrEqual(4);
+    expect(counted.MB).toBeGreaterThan(1);
+    expect(counted.MB).toBeCloseTo(counted.own, 0);
+    expect(counted.line).toContain(`floors' ${counted.MB} MB`);
+
+    // Stood where as many of them as can be are further off than they're built, none nearer: at
+    // most one held (as twenty would be in a town that held more), the furthest let go of first
+    const stood = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const squares = game.world.maps.town.squares;
+        const doors = [...game.visits.values()].filter((visit) => visit.maps.length && visit.door);
+        // (No other building near enough there to be got ready)
+        const all = [...game.world.interiors.buildings.values()].filter((building) => building.entrance).map((building) => building.entrance.door);
+        const me = game.battle.actor("player");
+        let best = null;
+
+        for (let y = Math.floor(me.y) - 60; y <= me.y + 60; y++) {
+            for (let x = Math.floor(me.x) - 60; x <= me.x + 60; x++) {
+                const offs = doors.map(({ door }) => Math.hypot(door.x - x - 0.5, door.z - y - 0.5));
+
+                if (!squares.blocked(x, y) && all.every((door) => Math.hypot(door.x - x - 0.5, door.z - y - 0.5) >= 23) && offs.filter((off) => off < 29).length > (best?.count ?? 1)) {
+                    best = { at: [x, y], count: offs.filter((off) => off < 29).length };
+                }
+            }
+        }
+
+        window.put(best.at);
+        game.floorsMost = 1;
+        game.advance(0.1);
+
+        const off = (visit) => Math.hypot(visit.door.x - best.at[0] - 0.5, visit.door.z - best.at[1] - 0.5);
+        const kept = doors.filter((visit) => !visit.bare);
+        // (Let go of for there being too many, not for being too far off)
+        const gone = doors.filter((visit) => visit.bare && off(visit) <= 30);
+        const held = [...game.visits.values()].reduce((sum, visit) => sum + visit.maps.length, 0);
+        const floors = kept.reduce((sum, visit) => sum + visit.maps.length, 0);
+        const ids = [...game.interiors.keys()].join();
+
+        // (Stood there a while: nothing built again, nothing more let go of)
+        game.advance(3);
+
+        return { count: best.count, held, kept: kept.map(off), gone: gone.map(off), floors, steady: [...game.interiors.keys()].join() === ids && [...game.visits.values()].every((visit) => !visit.queue.length && !visit.steps), MB: game.memoryNow().interiorsMB };
+    });
+
+    expect(stood.count, JSON.stringify(stood)).toBeGreaterThanOrEqual(2);
+    expect(stood.gone.length, JSON.stringify(stood)).toBeGreaterThan(0);
+    expect(stood.held === stood.floors && (stood.held <= 1 || stood.kept.length === 1), JSON.stringify(stood)).toBe(true);
+    expect(Math.max(...stood.kept, 0)).toBeLessThanOrEqual(Math.min(...stood.gone));
+    expect(stood.steady).toBe(true);
+    expect(stood.MB).toBeLessThan(counted.MB);
 });
 
 test("the smithy: the smith heats, hammers and quenches the work, the apprentice pumps the bellows and turns the grindstone, each heard and seen at it", async ({ page }) => {

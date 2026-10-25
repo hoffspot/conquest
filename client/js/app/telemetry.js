@@ -23,9 +23,9 @@
 //    page fell, as a step of it that takes half a second can be, the page never coming back from
 //    it to say so.
 //  - **Memory**: what the game holds (the page's heap where the browser tells, what the graphics
-//    card's been given, the sounds, the way-finding's WebAssembly, the bodies' own copies) past
-//    each of TELEMETRY.memory.marks, or the page's heap near its limit (TELEMETRY.memory.heap of
-//    it). With what holds it, and what's going on.
+//    card's been given, the sounds, the way-finding's WebAssembly, the bodies' and the buildings'
+//    floors' own copies) past each of TELEMETRY.memory.marks, or the page's heap near its limit
+//    (TELEMETRY.memory.heap of it). With what holds it, and what's going on.
 //  - **A press lost**: a quick action's press, or a thumb on the thumb stick, whose lift was never
 //    heard (app/press.js, app/steering.js: a phone's Safari can lose it), dropped as the next began
 //    or once no finger was on the screen. With the slot (or "stick"), what was in it, how long it
@@ -523,7 +523,7 @@ export class Telemetry {
 
         // (What's held, read at each of the notes: the last minute of it)
         if (memory) {
-            this.#trend.push({ at: round(now / 1000), totalMB: memory.totalMB, gpuMB: memory.gpu?.totalMB ?? null, soundMB: memory.soundMB, bodiesMB: memory.bodiesMB ?? null, heapMB: memory.heapMB, avatars: memory.held?.avatars ?? null, actors: noted.actors ?? null });
+            this.#trend.push({ at: round(now / 1000), totalMB: memory.totalMB, gpuMB: memory.gpu?.totalMB ?? null, soundMB: memory.soundMB, bodiesMB: memory.bodiesMB ?? null, interiorsMB: memory.interiorsMB ?? null, heapMB: memory.heapMB, avatars: memory.held?.avatars ?? null, actors: noted.actors ?? null });
             this.#trend.splice(0, Math.max(0, this.#trend.length - TELEMETRY.trend));
         }
 
