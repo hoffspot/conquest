@@ -138,6 +138,27 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     volumeScale: 2,
 });
 
+/**
+ * The settings for how the player plays, not this device's: what auto-snag does, the target lock,
+ * saying no to summons and invites, and the camera. A hero a world server keeps keeps them with
+ * them (core/host.js OWN `settings`), so they're the player's on whatever device or browser they
+ * come in from (main.js playingJoined); the rest (the screen, the sound, the stick) stay this
+ * device's.
+ */
+export const PLAY_SETTINGS = Object.freeze(["autoSnag", "snagGrades", "snagKinds", "autoLock", "resistSummons", "refuseInvites", "cameraFollows", "battleCam", "dragSpeed", "invertTilt", "shake"]);
+
+/**
+ * Of `given` (settings, or a hero's kept by a world), the play settings (PLAY_SETTINGS) as the
+ * game takes them: each the kind its default is (what auto-snag takes, a list of words, or null
+ * for everything); the rest left out.
+ */
+export function playSettingsOf(given) {
+    const of = given !== null && typeof given === "object" && !Array.isArray(given) ? given : {};
+    const fits = (key, value) => (SETTINGS_DEFAULTS[key] === null ? value === null || (Array.isArray(value) && value.every((one) => typeof one === "string")) : typeof value === typeof SETTINGS_DEFAULTS[key] && (typeof value !== "number" || Number.isFinite(value)));
+
+    return Object.fromEntries(PLAY_SETTINGS.filter((key) => key in of && fits(key, of[key])).map((key) => [key, Array.isArray(of[key]) ? [...of[key]] : of[key]]));
+}
+
 const VOLUMES = ["effectsVolume", "environmentVolume", "musicVolume"];
 
 // Where what's kept is read from: the browser's storage, or an export being read as if it were
@@ -633,19 +654,21 @@ function visitorPlace(id, hero) {
  * characterFrom brings them, come in while it's open to others: by their own id, core/guid.js) as
  * the world takes them in: who they are and what they carry, theirs; what the world remembers of
  * them from before (what its folk know of them and what they learnt there, what they found of it,
- * where they stand and the requests they carry, their followers, where they were and how), its
- * own. Remembered nowhere, the first time, with no id, or the world not kept here.
+ * where they stand and the requests they carry, their followers, where they were and how, where
+ * they'd pinned its map and their markers on it), its own. Remembered nowhere, the first time, with
+ * no id, or the world not kept here.
  */
 export function visitorOf(id, brought) {
     const place = visitorPlace(id, brought.hero);
 
-    return { hero: brought.hero, progress: brought.progress, talks: loadTalks(place), explored: loadExplored(place), standing: loadStanding(place), followers: loadFollowers(place), place: loadPlace(place), vitals: loadVitals(place) };
+    return { hero: brought.hero, progress: brought.progress, talks: loadTalks(place), explored: loadExplored(place), standing: loadStanding(place), followers: loadFollowers(place), place: loadPlace(place), vitals: loadVitals(place), pin: loadPin(place), markers: loadMarkers(place) };
 }
 
 /**
  * A visitor gone from a world kept here (their character as core/host.js leave hands it back, with
  * where and how they were): what the world knows of them remembered, by their own id, for the next
- * time they come. What they carry went with them. Returns whether it's kept.
+ * time they come, and where they'd pinned its map and their markers on it. What they carry went
+ * with them. Returns whether it's kept.
  */
 export function keepVisitor(id, character) {
     const place = visitorPlace(id, character?.hero);
@@ -655,7 +678,7 @@ export function keepVisitor(id, character) {
     }
 
     const marked = { created: place.created, seed: place.seed };
-    const { talks, explored, standing, followers, place: where, vitals } = character;
+    const { talks, explored, standing, followers, place: where, vitals, pin = null, markers = [] } = character;
     const kept = [
         write(keyOf(place, "talks"), { ...marked, memory: isObject(talks?.memory) ? talks.memory : {}, knowledge: Array.isArray(talks?.knowledge) ? talks.knowledge : [] }),
         write(keyOf(place, "explored"), { ...marked, ...(isObject(explored) ? explored : {}) }),
@@ -663,6 +686,8 @@ export function keepVisitor(id, character) {
         write(keyOf(place, "followers"), { ...marked, followers: Array.isArray(followers) ? followers : [] }),
         savePlace(place, where),
         saveVitals(place, vitals),
+        savePin(place, pin),
+        saveMarkers(place, markers),
     ];
 
     return kept.slice(0, 4).every(Boolean);
@@ -1041,6 +1066,7 @@ export function importCharacter(given) {
             followers: loadFollowers(save),
             wheels: loadWheels(save),
             pin: loadPin(save),
+            markers: loadMarkers(save),
             place: loadPlace(save),
             vitals: loadVitals(save),
             messages: loadMessages(save),

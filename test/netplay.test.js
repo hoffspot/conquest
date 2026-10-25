@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { newGuid } from "../client/js/core/guid.js";
-import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { HOST_PLAYER, Host, OWN } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
 import { MOTION } from "../client/js/core/motion.js";
 import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
@@ -650,6 +650,54 @@ describe("playing together (netplay.js)", () => {
             ["hold", bryn.peer, true, false],
         ]);
         assert.equal(bryn.joining.everyone, false);
+    });
+
+    it("keeps what a joined player's own game keeps of their hero (OWN: wheels and quick actions, pin, markers, messages, what they've been told once, settings) with them as they say it's changed, as it's shaped; tells it them again with the world, and no one else", () => {
+        const { host, hosting, join, post, deliver } = opened();
+        const bryn = join(guest("Bryn"));
+        const id = hosting.players.get(bryn.peer);
+        const own = {
+            wheels: { self: [{ 0: "heal" }, {}], enemy: [{}, {}], quick: ["heal", null, null, null, null, null] },
+            pin: [12, 30],
+            markers: [{ id: "marker-1", x: 5, z: 6, icon: "camp", words: "home", from: null }],
+            messages: [{ text: "You find 9 gold.", at: 1000, times: 1 }],
+            told: ["spoils"],
+            settings: { autoSnag: true, battleCam: false },
+        };
+        const kept = () => Object.fromEntries(OWN.keys.map((key) => [key, host.characterOf(host.players.get(id))[key]]));
+
+        bryn.joining.own({ wheels: own.wheels, pin: own.pin, markers: own.markers });
+        bryn.joining.own({ messages: own.messages, told: own.told, settings: own.settings });
+        deliver();
+        assert.deepEqual(kept(), own);
+
+        // (Nothing not shaped as it should be, nor too much of it)
+        bryn.joining.own({ pin: "here", told: [7], wheels: { huge: "x".repeat(OWN.most) }, messages: [{ text: 3 }], settings: ["autoSnag"] });
+        deliver();
+        assert.deepEqual(kept(), own);
+
+        // Another joining isn't told Bryn's
+        const cai = join(guest("Cai"));
+
+        assert.deepEqual(cai.joining.host.players.get(id).own, {});
+
+        // Bryn's link back: theirs said again (what was said meanwhile maybe lost), and the world
+        // they're sent again has theirs in it
+        bryn.joining.own({ pin: [13, 31] });
+        post.length = 0;
+        bryn.joining.resync();
+        deliver();
+        assert.deepEqual(host.players.get(id).own.pin, [13, 31]);
+        assert.deepEqual(bryn.joining.host.players.get(id).own.wheels, own.wheels);
+        assert.deepEqual(cai.joining.host.players.get(id).own, {});
+
+        // Kept with them as they leave (where a world server keeps its heroes)
+        const left = [];
+
+        hosting.onLeave = (_, __, character) => left.push(character);
+        hosting.gone(bryn.peer);
+        assert.deepEqual(left[0].wheels, own.wheels);
+        assert.deepEqual(left[0].pin, [13, 31]);
     });
 
     it("takes out of the world anyone who left while the host's link was down (the relay's word of who's still here)", () => {

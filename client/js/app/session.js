@@ -4,7 +4,7 @@
 
 import { Sound } from "../audio/sound.js";
 import { loadCharacterKit } from "../characters/kit.js";
-import { Host } from "../core/host.js";
+import { Host, OWN } from "../core/host.js";
 import { buildWorld } from "../core/overworld.js";
 import { readKtx2With } from "../world/art/engine/models.js";
 import { View } from "../world/view.js";
@@ -69,12 +69,32 @@ export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, e
  * made again from its seed, the host's copy of it restored, and played on as `joining` hears the
  * host play it. The rest as createGame (what's kept of the character, and who hears of it).
  */
-export function createJoinedGame({ view, kit, sound, hud, hero, welcome, joining, talks, onTalk, onWorldMap, onPing, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels, told = [], onTold = () => {} }) {
+export function createJoinedGame({ view, kit, sound, hud, hero, welcome, joining, talks, onTalk, onWorldMap, onPing, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels = () => {}, messages = [], onMessages = () => {}, told = [], onTold = () => {}, kept = false }) {
     const world = buildWorld({ seed: welcome.seed, race: welcome.race });
     const host = Host.restore(world, welcome.snapshot);
+    const own = host.players.get(welcome.id)?.own ?? {};
 
     joining.attach(host);
 
+    // What's their own of their hero, not the world's (core/host.js OWN), that the world keeps with
+    // them, as it last kept them, and told it as it changes: their pin and markers on its map; and
+    // if their hero's the world's (`kept`: a world server's that keeps its heroes), their wheels,
+    // quick actions, messages and what they've been told once too (never kept there yet: as this
+    // device had them). Else those are a character of this device's, as the device has them
+    const keeps = kept ? OWN.keys : ["pin", "markers"];
+    const mine = (key, device) => (keeps.includes(key) ? (own[key] ?? device) : device);
+    const tell = (key, then = () => {}) => (value) => {
+        if (keeps.includes(key)) {
+            joining.own({ [key]: value });
+        }
+
+        then(value);
+    };
+
+    if (kept && own.wheels === undefined && wheels) {
+        joining.own({ wheels });
+    }
+
     // (Their hero as the world has them: in a world server's world that keeps heroes, the world's, not the device's)
-    return new Game({ view, kit, sound, world, hero: host.players.get(welcome.id)?.hero ?? hero, hud, host, me: welcome.id, remote: joining, talks, onTalk, onWorldMap, onPing, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels, told, onTold });
+    return new Game({ view, kit, sound, world, hero: host.players.get(welcome.id)?.hero ?? hero, hud, host, me: welcome.id, remote: joining, talks, onTalk, onWorldMap, onPing, progress, onProgress, standing, onStanding, followers, onFollowers, wheels: mine("wheels", wheels), onWheels: tell("wheels", onWheels), pin: mine("pin", null), onPin: tell("pin"), markers: mine("markers", []), onMarkers: tell("markers"), messages: mine("messages", messages), onMessages: tell("messages", onMessages), told: mine("told", told), onTold: tell("told", onTold) });
 }

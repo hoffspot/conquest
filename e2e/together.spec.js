@@ -347,6 +347,15 @@ test("a visitor to a world on the host's device is remembered there by their own
 
     await expect.poll(async () => host.evaluate((id) => window.pellagos.game.battle.actor(id).square, await guestId()), { timeout: 60000 }).toEqual(onward);
 
+    // (They put a marker on the host's world map, the world's to remember with them; and set their
+    // quick actions, their device's to keep: core/host.js OWN)
+    const quick = ["stun", "burn", null, null, null, null];
+
+    await guest.evaluate((quick) => {
+        window.pellagos.game.setQuick(quick);
+        window.pellagos.game.addMarker([40, -12], { icon: "camp", words: "home" });
+    }, quick);
+
     // Gone: what the host's world knows of them kept with it, by their own id
     await guest.locator("#menubutton").click();
     await guest.locator("#quitbutton").click();
@@ -370,6 +379,10 @@ test("a visitor to a world on the host's device is remembered there by their own
     await guest.locator("#join").getByRole("button", { name: "Join" }).click();
     await playing(guest);
     await expect.poll(async () => host.evaluate((id) => id && window.pellagos.game.battle.actor(id)?.square, await guestId()), { timeout: 60000 }).toEqual(onward);
+
+    // (Their marker and quick actions as they left them)
+    expect(await guest.evaluate(() => window.pellagos.game.markerView().map(({ x, z, icon, words }) => ({ x, z, icon, words })))).toEqual([{ x: 40, z: -12, icon: "camp", words: "home" }]);
+    expect(await guest.evaluate(() => window.pellagos.game.wheels.quick)).toEqual(quick);
 
     await hostContext.close();
     await guestContext.close();
