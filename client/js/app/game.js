@@ -124,7 +124,9 @@ import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { missileTravel, SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
-import { BIG_FOE, detectQuality, QUALITY, ROOM_VIEW } from "../world/view.js";
+import { BIG_FOE, detectQuality, DISTANCE, DUNGEON_VIEW, dungeonPose, QUALITY, ROOM_VIEW } from "../world/view.js";
+import { cutRock, DUNGEON_CUT } from "../world/dungeons3d.js";
+import { showSilhouette, SILHOUETTE } from "../world/silhouette.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { TallGrass } from "../world/grass.js";
@@ -151,7 +153,7 @@ import { TREE_WIND } from "../world/art/kits/trees.js";
 import { VEIL } from "../world/veil.js";
 import { hitch } from "../world/art/kits/wagon.js";
 import { compassTurn, Minimap, treesOf } from "./minimap.js";
-import { CameraFollow } from "./camera.js";
+import { CameraFollow, PITCH } from "./camera.js";
 import { Doors } from "./doors.js";
 import { Readying } from "./readying.js";
 import { FatePanel, fateWords } from "./fate.js";
@@ -282,6 +284,24 @@ const SWIPE_MS = 600;
 // drag: a drag from them turns the camera only if it sets off more across than up
 const DRAG_TURN = Math.PI;
 const DRAG_TILT = 60;
+
+// Q and E turn the camera round the player, as a drag does, this fast (radians a second, times
+// how far a drag turns it: Game options); R swings it round behind them (recentre)
+const KEY_TURN = 2;
+
+// A dungeon's level's camera, its tilt and distance the space's (world/view.js DUNGEON_VIEW):
+// the player's own tilt or zoom kept on them as a nudge while it's as open or as tight as where
+// they set it (its share of the way from a tunnel's camera to an open cavern's within `space`),
+// eased away, at `ease` a second, once it's not
+const DUNGEON_NUDGE = Object.freeze({ space: 0.2, ease: 1.5 });
+
+// Finding the way through (Game options, Camera: #openWay): walking where the walls or rock
+// crowd the camera in by more than `crowded` of its distance for `after` seconds, it's turned the
+// least way round (in `step`s, looked for every `every` seconds) to where it has `room` of its
+// distance, looking from behind the way they're going rather than in front (each radian off
+// that counting `behind` radians more turning); or, nowhere so roomy, to where it has the most,
+// if that's `better` more of it than where it is
+const OPEN_WAY = Object.freeze({ crowded: 0.5, after: 0.5, room: 0.8, better: 0.25, step: Math.PI / 36, every: 0.15, behind: 0.5 });
 
 // A wyvern or dragon put out this near the player (metres) is seen coming down out of the sky
 const ARRIVE_WITHIN = 140;
@@ -1241,17 +1261,23 @@ export class Game {
 
         /**
          * How the camera's turned and shaken (Game options): whether it follows round behind the
-         * player as they walk (app/camera.js `follows`), whether the greater spells shake it,
-         * how far a drag turns and tilts it (times DRAG_TURN and DRAG_TILT), and whether dragging
-         * up tilts it down rather than up.
+         * player as they walk (app/camera.js `follows`), whether the battle cam frames a fight
+         * (`battle`), whether it finds the way through where walls crowd it (`openWay`: #openWay),
+         * whether the greater spells shake it, how far a drag turns it (times DRAG_TURN, and Q and E
+         * as fast) and tilts it (times DRAG_TILT), and whether dragging up tilts it down rather than
+         * up.
          */
-        this.cameraSettings = { follows: false, battle: true, shake: true, drag: 1, invert: false };
+        this.cameraSettings = { follows: false, battle: true, openWay: true, shake: true, drag: 1, tilt: 1, invert: false };
 
         // (Who the camera's kept in view in a fight, and till when after: #kept; who the battle
         // cam's taken the fight with over, and those it's let be, turned by hand: #battleFoe)
         this.fightView = null;
         this.battleCamOn = null;
         this.battleCamLeft = new Set();
+
+        // (The keys held turning the camera, Q and E, and whether they've taken hold of it)
+        this.turnKeys = new Set();
+        this.keyTurning = false;
 
         // What lies on the ground (battle.js hazards: by id, as told), and when each next shows
         this.grounds = new Map();
@@ -2581,6 +2607,14 @@ export class Game {
 
         this.listeners = [];
         this.#unaim();
+
+        // (Q or E held: let go of, as its key's let go of unheard)
+        this.turnKeys.clear();
+
+        if (this.keyTurning) {
+            this.keyTurning = false;
+            this.cameraFollow?.release();
+        }
 
         for (const pointer of this.pointers.values()) {
             clearTimeout(pointer.hold);
@@ -4893,6 +4927,8 @@ export class Game {
 
         this.cameraFollow.follows = this.cameraSettings.follows;
         this.cameraFollow.battle = this.cameraSettings.battle;
+        this.#keyTurn(dt);
+        this.#openWay(dt, player, foe);
 
         // (In a fight, whoever it is kept in view: within so much of the way from the middle of the
         // view to its side, as wide as the screen is; with the battle cam, them and the player
@@ -4900,19 +4936,24 @@ export class Game {
         const [ox, oz] = foe ? this.originOf(foe.map) : [0, 0];
         const lens = this.view.camera;
         const across = 2 * Math.atan(Math.tan((lens.fov * Math.PI) / 360) * lens.aspect);
-        const seen = foe && this.avatars.get(foe.id);
+        // (Who's kept in sight: the foe the camera frames; or, the camera taken by hand from the
+        // battle cam (#battleFoe), the one it framed still: the steering's the player's again, but
+        // not the view, so a hole's still cut through whatever hides them and a big one's still
+        // drawn back from)
+        const viewed = foe ?? (fighting && this.battleCamLeft.has(fighting.id) ? fighting : null);
+        const seen = viewed && this.avatars.get(viewed.id);
         const foeChest = seen ? seen.point(0.55, _foeChest) : null;
-        const { focus, yaw, pitch } = this.cameraFollow.update(dt, {
+        const { focus, yaw } = this.cameraFollow.update(dt, {
             player: { x: position.x, z: position.z, vx: player.follow.vx, vz: player.follow.vz },
             aim: { x: _focus.x, z: _focus.z },
             lowest: this.view.lowestPitch(),
             away,
             keep: foe ? { x: ox + foe.x, z: oz + foe.y } : null,
             half: (across / 2) * FIGHT_VIEW.margin,
-            blocked: foeChest ? (way) => this.view.hiddenFrom(way, [chest, foeChest]) : undefined,
+            blocked: foe && foeChest ? (way) => this.view.hiddenFrom(way, [chest, foeChest]) : undefined,
         });
 
-        this.view.setFoe(foeChest, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0, foe?.wild?.colossus ? BIG_FOE.colossal : undefined);
+        this.view.setFoe(foeChest, seen ? seen.point(1).y - seen.object.position.y : undefined, seen ? Math.hypot(seen.object.position.x - position.x, seen.object.position.z - position.z) : 0, viewed?.wild?.colossus ? BIG_FOE.colossal : undefined);
         this.#threats();
         this.#attackers();
         this.#clearOfFight(fighting);
@@ -4923,7 +4964,9 @@ export class Game {
         const eased = dt && this.focusHeight !== undefined ? this.focusHeight + (ground - this.focusHeight) * Math.min(1, dt * FOCUS_EASE) : ground;
 
         this.focusHeight = Math.max(eased, ground - FOCUS_LAG);
-        this.view.look(_focus.set(focus.x, this.focusHeight, focus.z), yaw, pitch, dt || Infinity);
+        this.view.look(_focus.set(focus.x, this.focusHeight, focus.z), yaw, this.#dungeonPose(dt), dt || Infinity);
+        this.#roofCut();
+        this.#silhouettes(player, chest, seen, foeChest);
         this.view.setFocus(chest);
 
         // (Seen too close, as near walls and buildings can push the camera, they're dithered away:
@@ -6391,7 +6434,8 @@ export class Game {
     // Who the player is fighting: who they were told to fight, or the nearest enemy after them
     // Those attacking the player out of view: an arrow at the screen's edge for each, pointing the
     // way to them across the ground (in front, up; behind, down), the nearest THREATS.most (the
-    // camera study, recommendation 6)
+    // camera study, recommendation 6); in its own colour for one that shoots or throws at them
+    // (`ranged`), flashing while a blow or shot at them is drawn back, not yet let go (`winding`)
     #threats() {
         const player = this.battle.actor(this.me);
         const arrows = [];
@@ -6421,7 +6465,9 @@ export class Game {
                 const [halfX, halfY] = [rect.width / 2 - THREATS.inset, rect.height / 2 - (uy > 0 ? THREATS.bottom : THREATS.inset)];
                 const reach = Math.min(Math.abs(ux) > 1e-6 ? halfX / Math.abs(ux) : Infinity, Math.abs(uy) > 1e-6 ? halfY / Math.abs(uy) : Infinity);
 
-                arrows.push({ x: rect.left + rect.width / 2 + ux * reach, y: rect.top + rect.height / 2 + uy * reach, angle });
+                const attack = actor.attack?.target === player.id ? actor.attack : null;
+
+                arrows.push({ x: rect.left + rect.width / 2 + ux * reach, y: rect.top + rect.height / 2 + uy * reach, angle, ranged: Boolean((attack?.attack ?? actor.arms?.[0])?.projectile), winding: Boolean(attack && !attack.struck) });
             }
         }
 
@@ -6455,7 +6501,8 @@ export class Game {
 
         const attacking = after.sort((a, b) => since.get(a.id) - since.get(b.id) || (a.id < b.id ? -1 : 1));
         const listed = new Set(attacking.map(({ id }) => id));
-        const rest = player && !player.dead ? this.#enemiesSeen(player).filter((id) => !listed.has(id)).map((id) => this.battle.actor(id)).filter(Boolean) : [];
+        // (Those who've died since they were looked for let go at once, not left till the next look)
+        const rest = player && !player.dead ? this.#enemiesSeen(player).filter((id) => !listed.has(id)).map((id) => this.battle.actor(id)).filter((actor) => actor && !actor.dead) : [];
         const ring = [...attacking, ...rest];
 
         this.enemyRing = ring.map(({ id }) => id);
@@ -6648,6 +6695,206 @@ export class Game {
      * the fight, it lets that foe be till the fight's over, rather than swinging back round to
      * frame it again a second after every drag.
      */
+    // Q and E held, turning the camera round the player (KEY_TURN), as a drag does: taken hold of
+    // as they're pressed, let go as the last is (unless a drag holds it still)
+    #keyTurn(dt) {
+        const way = (this.turnKeys.has("q") ? 1 : 0) - (this.turnKeys.has("e") ? 1 : 0);
+
+        if (way && !this.keyTurning) {
+            this.keyTurning = true;
+            this.cameraFollow.grab();
+        } else if (!way && this.keyTurning) {
+            this.keyTurning = false;
+
+            if (![...this.pointers.values()].some((pointer) => pointer.drag)) {
+                this.cameraFollow.release();
+            }
+        }
+
+        if (way && dt) {
+            this.cameraFollow.turn(way * KEY_TURN * this.cameraSettings.drag * dt, 0, this.view.lowestPitch());
+        }
+    }
+
+    // A dungeon's level's camera (DUNGEON_NUDGE): its tilt and distance by how much room there is
+    // round the player, eased from one to the next as they go; the player's own tilt and zoom kept
+    // on them as a nudge, and let go of once they've gone somewhere tighter or more open. Returns
+    // the pitch to look from (anywhere else, the camera's own)
+    #dungeonPose(dt) {
+        const follow = this.cameraFollow;
+        const space = this.view.space(dt || Infinity);
+
+        if (!space) {
+            this.dungeonCamera = null;
+
+            return follow.pitch;
+        }
+
+        const pose = dungeonPose(space.share, space.over);
+        const camera = (this.dungeonCamera ??= { pitch: pose.pitch, distance: pose.distance, nudge: 0, zoom: 1, share: space.share, set: null });
+        const at = dt ? 1 - Math.exp(-DUNGEON_VIEW.ease * dt) : 1;
+
+        camera.pitch += (pose.pitch - camera.pitch) * at;
+        camera.distance += (pose.distance - camera.distance) * at;
+
+        // (Tilted by hand, or zoomed: the nudge, where they are)
+        if (follow.held || this.keyTurning) {
+            camera.nudge = follow.pitch - camera.pitch;
+            camera.share = space.share;
+        }
+
+        if (camera.set !== null && Math.abs(this.view.distance - camera.set) > 1e-3) {
+            camera.zoom = this.view.distance / camera.distance;
+            camera.share = space.share;
+        }
+
+        if (dt && Math.abs(space.share - camera.share) > DUNGEON_NUDGE.space) {
+            const fade = Math.exp(-DUNGEON_NUDGE.ease * dt);
+
+            camera.nudge *= fade;
+            camera.zoom = 1 + (camera.zoom - 1) * fade;
+        }
+
+        follow.pitch = Math.max(PITCH.least, Math.min(PITCH.most, camera.pitch + camera.nudge));
+        this.view.distance = Math.max(DISTANCE.least, Math.min(DISTANCE.most, camera.distance * camera.zoom));
+        camera.set = this.view.distance;
+
+        return follow.pitch;
+    }
+
+    // A dungeon's level's rock cut away while the camera's over its roof (world/view.js roofCut):
+    // its heights told the shaders, and its rock drawn cut only while it's so (dungeons3d.js
+    // cutRock), the cut drawing got ready as the level's first come to (view.js prepare)
+    #roofCut() {
+        const cut = this.view.roofCut();
+        const interior = this.interiors.get(this.battle.actor(this.me)?.map) ?? null;
+
+        DUNGEON_CUT.low.value = cut ? cut.low : 1000;
+        DUNGEON_CUT.top.value = cut ? cut.top : -1000;
+
+        if (interior && interior !== this.rockCutIn && !interior.cutReady) {
+            const cuts = new Map();
+
+            interior.cutReady = true;
+            interior.object.traverse((node) => {
+                if (node.isMesh && node.name !== "floor" && node.material?.userData?.rock) {
+                    cuts.set(cutRock(node.material), node.geometry);
+                }
+            });
+
+            for (const [material, geometry] of cuts) {
+                this.view.prepare(new THREE.Mesh(geometry, material)).catch(() => {});
+            }
+        }
+
+        if (Boolean(cut) === this.rockCut && interior === this.rockCutIn) {
+            return;
+        }
+
+        this.rockCut = Boolean(cut);
+        this.rockCutIn = interior;
+        interior?.object.traverse((node) => {
+            if (node.isMesh && node.name !== "floor" && node.material?.userData?.rock) {
+                node.material = cutRock(node.material, this.rockCut);
+            }
+        });
+    }
+
+    // The player and whoever they're fighting (`foe`: their avatar, or null) seen through a
+    // dungeon's rock where it hides them and isn't cut away (world/silhouette.js); whoever was
+    // fought before let go of
+    #silhouettes(me, chest, foe, foeChest) {
+        showSilhouette(me.object, this.view.rockHides(chest), SILHOUETTE.player);
+
+        if (this.silhouetted && this.silhouetted !== foe) {
+            showSilhouette(this.silhouetted.object, false);
+        }
+
+        if (foe) {
+            showSilhouette(foe.object, this.view.rockHides(foeChest), SILHOUETTE.foe);
+        }
+
+        this.silhouetted = foe ?? null;
+    }
+
+    // Finding the way through (OPEN_WAY): the camera crowded in by the walls as the player walks,
+    // turned to where there's room, along the way through
+    #openWay(dt, avatar, foe) {
+        const follow = this.cameraFollow;
+        const { vx, vz } = avatar.follow;
+        const walking = Math.hypot(vx, vz) > 0.4;
+
+        if (!this.cameraSettings.openWay || foe || !walking || follow.held || follow.waiting > 0 || follow.recentring !== null || this.view.roomAt(follow.yaw) > 1 - OPEN_WAY.crowded) {
+            this.crowdedFor = 0;
+
+            return;
+        }
+
+        this.crowdedFor = (this.crowdedFor ?? 0) + dt;
+
+        if (this.crowdedFor < OPEN_WAY.after || (this.openWayAt ?? -Infinity) > this.clock) {
+            return;
+        }
+
+        this.openWayAt = this.clock + OPEN_WAY.every;
+
+        const behind = Math.atan2(-vx, -vz);
+        const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+        const here = this.view.roomAt(follow.yaw);
+        let best = null;
+        let roomiest = null;
+
+        // (Turned further than the best yet costs more than it, whatever the room: none looked at)
+        for (let k = 1; k * OPEN_WAY.step <= Math.PI && !(best && k * OPEN_WAY.step >= best.cost); k++) {
+            for (const way of [1, -1]) {
+                const yaw = follow.yaw + way * k * OPEN_WAY.step;
+                const cost = k * OPEN_WAY.step + OPEN_WAY.behind * Math.abs(wrap(yaw - behind));
+                const room = this.view.roomAt(yaw);
+
+                if ((!best || cost < best.cost) && room >= OPEN_WAY.room) {
+                    best = { yaw, cost };
+                }
+
+                // (Of those with about as much room as the most, the one it turns least to)
+                if (!roomiest || room > roomiest.room + 0.05 || (room > roomiest.room - 0.05 && cost < roomiest.cost)) {
+                    roomiest = { yaw, cost, room: Math.max(room, roomiest?.room ?? 0) };
+                }
+            }
+        }
+
+        const to = best ?? (roomiest && roomiest.room >= here + OPEN_WAY.better ? roomiest : null);
+
+        if (to) {
+            follow.recentre(to.yaw, { tilt: false });
+        }
+    }
+
+    /**
+     * Swing the camera round behind the player, the way they face (R, or the player's own mark on
+     * the minimap tapped), as if turned by hand: a fight the battle cam framed is let be, as after a
+     * drag (#battleFoe).
+     */
+    recentre() {
+        const me = this.avatars.get(this.me);
+
+        if (!me || !this.cameraFollow) {
+            return;
+        }
+
+        if (this.battleCamOn !== null) {
+            this.battleCamLeft.add(this.battleCamOn);
+            this.battleCamOn = null;
+        }
+
+        // (In a dungeon's level, the player's own tilt and zoom let go of: the space's again)
+        if (this.dungeonCamera) {
+            Object.assign(this.dungeonCamera, { nudge: 0, zoom: 1 });
+        }
+
+        // (The way they face, or are turning to face)
+        this.cameraFollow.recentre((this.battle.actor(this.me)?.facing ?? me.facing) + Math.PI);
+    }
+
     #battleFoe(foe, me) {
         if (!foe) {
             this.battleCamOn = null;
@@ -8029,6 +8276,11 @@ export class Game {
         const position = this.avatars.get(this.me).object.position;
         const indoors = this.interiors.has(actor.map);
         let pitch = this.cameraFollow?.pitch;
+
+        // (A zoom being eased in let go of: the distance's the room's, or the one kept for outside;
+        // a dungeon's level's camera as its space has it, afresh)
+        this.view.zoomTo = null;
+        this.dungeonCamera = null;
 
         if (indoors) {
             this.outdoorView ??= { distance: this.view.distance, pitch };
@@ -12845,9 +13097,9 @@ export class Game {
             if (pointer.drag && this.cameraFollow) {
                 const rect = canvas.getBoundingClientRect();
 
-                const { drag, invert } = this.cameraSettings;
+                const { drag, tilt, invert } = this.cameraSettings;
 
-                this.cameraFollow.turn((-(pointer.x - pointer.drag.x) / rect.width) * DRAG_TURN * drag, ((pointer.y - pointer.drag.y) / rect.height) * DRAG_TILT * drag * (invert ? -1 : 1), this.view.lowestPitch());
+                this.cameraFollow.turn((-(pointer.x - pointer.drag.x) / rect.width) * DRAG_TURN * drag, ((pointer.y - pointer.drag.y) / rect.height) * DRAG_TILT * tilt * (invert ? -1 : 1), this.view.lowestPitch());
                 pointer.drag.x = pointer.x;
                 pointer.drag.y = pointer.y;
             }
@@ -12993,8 +13245,18 @@ export class Game {
                 // Not the browser's: its focus taken off the game to the next button, for nothing)
                 event.preventDefault();
                 this.cycleTarget(event.shiftKey ? -1 : 1, "distance");
+            } else if (/^[qe]$/i.test(event.key) && !typing && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                // (The camera turned round the player while Q or E is held)
+                this.turnKeys.add(event.key.toLowerCase());
+            } else if ((event.key === "r" || event.key === "R") && plain) {
+                this.recentre();
             }
         }, { capture: true });
+        this.#on(document, "keyup", (event) => {
+            this.turnKeys.delete(event.key.toLowerCase());
+        });
+        // (Keys let go of unseen, the page or the window left: none held)
+        this.#on(window, "blur", () => this.turnKeys.clear());
 
         // Talking, the number keys say what's next to them, and Escape stops (not the menu)
         this.#on(document, "keydown", (event) => {
@@ -13012,7 +13274,7 @@ export class Game {
         }, { capture: true });
         this.#on(canvas, "wheel", (event) => {
             event.preventDefault();
-            this.view.zoom(Math.exp(event.deltaY * 0.0015));
+            this.view.zoomSmoothly(Math.exp(event.deltaY * 0.0015));
         }, { passive: false });
     }
 
@@ -14299,6 +14561,14 @@ export class Game {
         const enemies = this.battle.actors.filter((actor) => player && this.battle.hostile(actor, player) && !actor.dead && actor.map === player.map);
         const distance = (actor) => Math.hypot(actor.x - x, actor.y - z);
         const enemy = enemies.filter((actor) => distance(actor) <= reach).sort((a, b) => distance(a) - distance(b))[0] ?? null;
+
+        // (Their own mark tapped, as near as an enemy's would be picked, where going would take
+        // them nowhere: the camera swung round behind them instead)
+        if (!enemy && player && distance(player) <= reach) {
+            this.recentre();
+
+            return;
+        }
 
         this.#order({ enemy, ground: enemy ? null : [x, z] }, { clientX, clientY, run, time, from: "map" });
     }

@@ -446,9 +446,9 @@ describe("saving (save.js)", () => {
 
     it("reads the settings for how the player plays (a hero a world keeps keeps them: core/host.js OWN) as the game takes them, each the kind its default is, the rest left out", () => {
         assert.ok(PLAY_SETTINGS.every((key) => key in SETTINGS_DEFAULTS));
-        assert.ok(!PLAY_SETTINGS.some((key) => ["sound", "musicVolume", "stick", "quality", "fullscreen", "minimap"].includes(key)), "the screen, the sound and the stick, this device's");
-        assert.deepEqual(playSettingsOf({ autoSnag: true, battleCam: false, dragSpeed: 1.5, snagGrades: ["legendary"], snagKinds: null, sound: false, quality: "low" }), { autoSnag: true, battleCam: false, dragSpeed: 1.5, snagGrades: ["legendary"], snagKinds: null });
-        assert.deepEqual(playSettingsOf({ autoSnag: "yes", dragSpeed: Number.NaN, snagGrades: [3], shake: null, autoLock: 1 }), {});
+        assert.ok(!PLAY_SETTINGS.some((key) => ["sound", "musicVolume", "stick", "quality", "fullscreen", "minimap", "cameraFollows", "dragSpeed", "tiltSpeed"].includes(key)), "the screen, the sound, the stick, and the camera turned by hand and following, this device's");
+        assert.deepEqual(playSettingsOf({ autoSnag: true, battleCam: false, openWay: false, dragSpeed: 1.5, cameraFollows: true, snagGrades: ["legendary"], snagKinds: null, sound: false, quality: "low" }), { autoSnag: true, battleCam: false, openWay: false, snagGrades: ["legendary"], snagKinds: null });
+        assert.deepEqual(playSettingsOf({ autoSnag: "yes", openWay: Number.NaN, snagGrades: [3], shake: null, autoLock: 1 }), {});
         assert.deepEqual([playSettingsOf(null), playSettingsOf(["autoSnag"])], [{}, {}]);
         assert.deepEqual(Object.keys(playSettingsOf(SETTINGS_DEFAULTS)), [...PLAY_SETTINGS], "every one of them, as they start");
     });
@@ -494,6 +494,24 @@ describe("saving (save.js)", () => {
 
         saveSettings({ cameraFollows: true });
         assert.equal(loadSettings().cameraFollows, true);
+    });
+
+    it("on a touch screen, follows by default, following saved off when it was off for everyone forgotten once for it; with a mouse, what was saved kept", () => {
+        const items = useStorage();
+
+        assert.equal(loadSettings({ touch: true }).cameraFollows, true, "a phone's, new");
+        assert.equal(loadSettings({ touch: false }).cameraFollows, false, "a mouse's, new");
+
+        items.set("pellagos.settings", JSON.stringify({ minimap: false, cameraFollows: false, cameraDefaults: 2 }));
+        assert.deepEqual([loadSettings({ touch: true }).cameraFollows, loadSettings({ touch: true }).minimap], [true, false]);
+
+        items.set("pellagos.settings", JSON.stringify({ cameraFollows: true, cameraDefaults: 2 }));
+        assert.equal(loadSettings({ touch: false }).cameraFollows, true, "a mouse's own choice kept");
+
+        // (Once only: turned off again on the phone, it stays off)
+        items.set("pellagos.settings", JSON.stringify({ cameraFollows: false, cameraDefaults: 2 }));
+        items.set("pellagos.settings", JSON.stringify({ ...JSON.parse(items.get("pellagos.settings")), ...loadSettings({ touch: true }), cameraFollows: false }));
+        assert.equal(loadSettings({ touch: true }).cameraFollows, false);
     });
 
     it("keeps what a saved character's grown into: its schools, the spells it's learnt and how far they've grown; a save from before the elements' tomes knows every element's first spell", () => {

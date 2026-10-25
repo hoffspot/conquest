@@ -44,6 +44,10 @@ const TURN_SPEED = 4.2;
 // camera about
 const STEADY = 0.35;
 
+// Swung round behind the player when asked (recentre): its tilt eased back to PITCH.start at
+// `pitch` a second, and there once it's within `near` radians, turning slower than `still`
+const RECENTRE = Object.freeze({ pitch: 4, near: 0.02, still: 0.1 });
+
 // How hard it swings round behind them by how far it is from behind them (radians): all the way
 // within `full` (walking away from it or across it), none past `none` (walking at all towards it:
 // then only the leash turns it, as they go by); and, let go after a drag, how long they walk
@@ -97,12 +101,26 @@ export class CameraFollow {
 
         // (Let go after a drag: how long more they must walk before it swings round behind them)
         this.waiting = 0;
+
+        // (Asked to swing round behind the player: the way to look from, till it's there; or null)
+        this.recentring = null;
     }
 
     /** A drag has taken hold of the camera: it turns only as the drag turns it, till let go. */
     grab() {
         this.held = true;
         this.turning = 0;
+        this.recentring = null;
+    }
+
+    /**
+     * Swing round to look from `yaw` (radians: behind the player, the way they face), tilted as
+     * it starts (PITCH.start; or as it is, `tilt` false), turned by its spring whether it follows
+     * or not; then left there, as a drag leaves it (a drag takes over from it).
+     */
+    recentre(yaw, { tilt = true } = {}) {
+        this.recentring = wrap(yaw);
+        this.recentreTilts = tilt;
     }
 
     /**
@@ -165,6 +183,24 @@ export class CameraFollow {
         }
 
         if (this.held) {
+            return this;
+        }
+
+        if (this.recentring !== null) {
+            const off = wrap(this.recentring - this.yaw);
+
+            this.pitch += this.recentreTilts ? (PITCH.start - this.pitch) * ease(RECENTRE.pitch, dt) : 0;
+            this.turning += (SPRING * SPRING * off - 2 * SPRING * this.turning) * dt;
+            this.turning = Math.max(-TURN_SPEED, Math.min(TURN_SPEED, this.turning));
+            this.yaw = wrap(this.yaw + this.turning * dt);
+
+            if (Math.abs(off) < RECENTRE.near && Math.abs(this.turning) < RECENTRE.still) {
+                this.recentring = null;
+                this.turning = 0;
+                // (Swung round behind them as asked, as a drag leaves it; only turned, as it was)
+                this.waiting = this.recentreTilts ? BEHIND.after : this.waiting;
+            }
+
             return this;
         }
 

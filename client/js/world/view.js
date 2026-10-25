@@ -182,8 +182,10 @@ const PICK_REACH = 250;
 // at least (clear of its beams, the deepest 0.32 m: interiors3d.js CEILINGS, by more than the
 // camera's near plane), and no nearer than `least` metres to the player (as close as that, rather
 // than through a wall or the ceiling). A room open to the sky (a broken tower's top) has no ceiling
-// to keep under
-const ROOM = Object.freeze({ over: 0.25, under: 0.6, margin: 0.35, least: 1 });
+// to keep under. Gone over the ceiling, it's back under only once it's `band` metres lower than it
+// went over, and over again only `band` higher, so a slow drag or pinch there can't flicker it
+// from one to the other
+const ROOM = Object.freeze({ over: 0.25, under: 0.6, margin: 0.35, least: 1, band: 0.15 });
 
 /**
  * How the camera looks on coming into a room (and back out, how it looked before): from behind
@@ -191,6 +193,75 @@ const ROOM = Object.freeze({ over: 0.25, under: 0.6, margin: 0.35, least: 1 });
  * across the room to its far wall (core/interiors.js comeIn: far enough in for it).
  */
 export const ROOM_VIEW = Object.freeze({ distance: 5.6, pitch: 22 });
+
+/**
+ * A dungeon's level's camera, by how much room there is round the player (the user's ask: in the
+ * open more as a top-down game's, in its tunnels more as a third-person one's, feeling how tight
+ * they are). How open it is (`openness`): the ground seen from where the camera looks, `rays` ways
+ * round out to `reach` metres, against a clear circle that big; its share of the way from a
+ * tunnel's to an open cavern's going from nothing at `tight` to all at `open`, eased as the player
+ * goes at `settle` a second. Under its roof (`under`: looking `pitch` degrees down from `distance`
+ * metres off) at none, up to `roofed` at `overAt`; past that, over its roof, the rock cut away
+ * above `cut` metres over the floor while the camera's over it, from `over` up to `top` at all;
+ * back under once it's less than `underAt`. Eased from one to the next at `ease` a second.
+ */
+export const DUNGEON_VIEW = Object.freeze({
+    rays: 16,
+    reach: 6,
+    tight: 0.3,
+    open: 0.7,
+    settle: 1.2,
+    under: Object.freeze({ pitch: 22, distance: 5 }),
+    roofed: Object.freeze({ pitch: 30, distance: 5.6 }),
+    over: Object.freeze({ pitch: 45, distance: 8.5 }),
+    top: Object.freeze({ pitch: 58, distance: 11 }),
+    overAt: 0.55,
+    underAt: 0.4,
+    cut: 2.3,
+    ease: 2,
+});
+
+/**
+ * How open it is round a point (x, z: world metres) of a dungeon's level (`rock`: rockOf's): the
+ * ground seen from it, DUNGEON_VIEW.rays ways round out to DUNGEON_VIEW.reach metres, against a
+ * clear circle that big (0 to 1: a tunnel three metres wide about 0.3, an open cavern 1).
+ */
+export function openness(rock, x, z) {
+    const { rays, reach } = DUNGEON_VIEW;
+    let seen = 0;
+
+    for (let k = 0; k < rays; k++) {
+        const [dx, dz] = [Math.sin((k * 2 * Math.PI) / rays), Math.cos((k * 2 * Math.PI) / rays)];
+        let along = 0.25;
+
+        while (along < reach && !rock(x + dx * along, z + dz * along)) {
+            along += 0.25;
+        }
+
+        seen += Math.min(reach, along) ** 2;
+    }
+
+    return seen / (rays * reach * reach);
+}
+
+/** A dungeon's level's openness (0 to 1) as its share of the way from a tunnel's camera to an open cavern's (DUNGEON_VIEW). */
+export function spaceShare(open) {
+    const t = Math.max(0, Math.min(1, (open - DUNGEON_VIEW.tight) / (DUNGEON_VIEW.open - DUNGEON_VIEW.tight)));
+
+    return t * t * (3 - 2 * t);
+}
+
+/**
+ * The pitch (degrees) and distance (metres) a dungeon's level's camera takes `share` of the way
+ * from its tunnels' to its open caverns' (DUNGEON_VIEW), under its roof or `over` it.
+ */
+export function dungeonPose(share, over) {
+    const { under, roofed, top, overAt, underAt } = DUNGEON_VIEW;
+    const [from, to, t] = over ? [DUNGEON_VIEW.over, top, (share - underAt) / (1 - underAt)] : [under, roofed, share / overAt];
+    const at = Math.max(0, Math.min(1, t));
+
+    return { pitch: from.pitch + (to.pitch - from.pitch) * at, distance: from.distance + (to.distance - from.distance) * at };
+}
 
 // A dungeon's level's rock (core/dungeons: its plan's opaque squares), as whether a point (world
 // metres) is in it; null for any other inside, walled all round as its bounds are
@@ -202,6 +273,29 @@ function rockOf(map) {
     const [ox, oz] = map.origin;
 
     return (x, z) => Boolean(map.opaque[Math.floor(z - oz)]?.[Math.floor(x - ox)] ?? 1);
+}
+
+// A dungeon's level's roof, how high over a point (world metres) it closes (interiors3d.js roof:
+// worked out up through the rock, slowly), as the camera asks it: a square at a time, each worked
+// out once, the first time it's asked of (the level's own height where it's not a dungeon's rock)
+function roofGrid(roof, [ox, oz], width, height) {
+    const heights = new Float32Array(width * height).fill(Number.NaN);
+
+    return (x, z) => {
+        const [sx, sz] = [Math.floor(x - ox), Math.floor(z - oz)];
+
+        if (sx < 0 || sz < 0 || sx >= width || sz >= height) {
+            return null;
+        }
+
+        const k = sz * width + sx;
+
+        if (Number.isNaN(heights[k])) {
+            heights[k] = roof(ox + sx + 0.5, oz + sz + 0.5) ?? -1;
+        }
+
+        return heights[k] >= 0 ? heights[k] : null;
+    };
 }
 
 // How far from (x, z) the way (dx, dz) goes before it's in the rock (`rock`: rockOf's), short of it
@@ -216,16 +310,22 @@ function rockAlong(rock, x, z, dx, dz, distance) {
     return Infinity;
 }
 
-// Whether the camera's well over a room's ceiling (ROOM.over), looking `pitch` degrees down from
-// `distance` metres off a point `y` metres up (never in a dungeon's rock: it stays under the roof)
-const overCeiling = (room, y, pitch, distance) => !room.rock && pitch > 0 && y + LOOK_UP + Math.sin((pitch * Math.PI) / 180) * distance >= room.ceiling + ROOM.over;
+// Whether the camera's well over a room's ceiling (ROOM.over, by its band either way from where it
+// is now: ROOM.band), looking `pitch` degrees down from `distance` metres off a point `y` metres up
+// (never in a dungeon's rock: it stays under the roof)
+const overCeiling = (room, y, pitch, distance) => !room.rock && pitch > 0 && y + LOOK_UP + Math.sin((pitch * Math.PI) / 180) * distance >= room.ceiling + ROOM.over + (room.over === true ? -ROOM.band : room.over === false ? ROOM.band : 0);
 
 // Clear of a building in the way (the town's `buildings` heights): coming in closer than it,
-// staying `margin` metres clear of it (along the camera's line), or rising over it (up to
-// `highest` degrees), whichever leaves the camera furthest from the player, a degree higher
-// counting as `lift` metres nearer; never nearer than `least` metres. Coming in (and rising)
-// this quickly, going back out this slowly (per second)
-const PULL = Object.freeze({ least: 2.6, margin: 0.6, highest: 85, lift: 0.15, in: 12, out: 2.5 });
+// staying `margin` metres clear of it (along the camera's line, and `wide` metres either side of
+// it: the lens is wider than a line), or rising over it (up to `highest` degrees), whichever leaves
+// the camera furthest from the player, a degree higher counting as `lift` metres nearer; never
+// nearer than `least` metres. Turning, it looks as far round as it'll have turned in `ahead`
+// seconds (`most` radians at most), so it's in already as a wall comes round into the way. Coming
+// in (and rising) this quickly, going back out this slowly (per second), and only once it's been
+// clear for `hold` seconds, so a row of houses with gaps between doesn't pump it in and out; not
+// held while where it looks goes faster than `fast` metres a second (faster than anyone runs: the
+// player put somewhere else, the camera catching them up)
+const PULL = Object.freeze({ least: 2.6, margin: 0.6, wide: 0.25, highest: 85, lift: 0.15, ahead: 0.25, most: Math.PI / 12, in: 12, out: 2.5, hold: 0.4, fast: 10 });
 
 // The haze at the horizon: the fog's colour and the background's, which the sky pales to
 const SKY = SKY_COLOURS.horizon;
@@ -334,9 +434,18 @@ const EXPOSURE = 1.05;
 const CUT_SIZE = 1.25;
 const CUT_SPEED = 5;
 
+// A wheel's notch or a zoom button's press eased in (zoomSmoothly), half the way there in this
+// long (seconds), there once within `near` metres; a pinch follows the fingers as they go (zoom)
+const ZOOM_EASE = Object.freeze({ half: 0.035, near: 0.01 });
+
 // How far round something's middle it's taken to reach, times its height, when asking whether
 // it was in view (heightOnScreen): generous, for what it holds out and the camera's turning
 const REACH_ROUND = 1;
+
+// Indoors, a way to look at a fight from where the walls or the rock would crowd the camera in to
+// less than this much of its distance counts as one of those fighting hidden (hiddenFrom): the
+// battle cam looks from where there's room behind it
+const CRAMPED = 0.6;
 
 const _point = new THREE.Vector3();
 const _up = new THREE.Vector3();
@@ -433,6 +542,10 @@ export class View {
          */
         this.onLost = null;
         this.onRestored = null;
+
+        // (No menu of the browser's own over the world, "Save image as" and the like: a right
+        // click, or a long press of a pen or a finger, is the game's, a drag turning the camera)
+        canvas.addEventListener("contextmenu", (event) => event.preventDefault());
         canvas.addEventListener("webglcontextlost", () => {
             this.gpuMemory.reset();
             this.onLost?.();
@@ -508,6 +621,8 @@ export class View {
         this.frozen = null;
         this.focus = new THREE.Vector3();
         this.distance = DISTANCE.start;
+        // (A zoom being eased in: the distance it's going to, or null: zoomSmoothly)
+        this.zoomTo = null;
 
         // How far it's come to a phone held upright's framing (0 to 1: PORTRAIT), eased as it's
         // turned; and how much further back it draws for a big foe (BIG_FOE: asked, and eased to)
@@ -944,6 +1059,16 @@ export class View {
         this.focus.copy(point);
         this.yaw = yaw;
         this.pitch = pitch;
+
+        if (this.zoomTo !== null) {
+            this.distance += (this.zoomTo - this.distance) * (1 - 2 ** (-dt / ZOOM_EASE.half));
+
+            if (Math.abs(this.zoomTo - this.distance) < ZOOM_EASE.near) {
+                this.distance = this.zoomTo;
+                this.zoomTo = null;
+            }
+        }
+
         this.upright += ((this.camera.aspect < 1 ? 1 : 0) - this.upright) * (1 - Math.exp(-PORTRAIT.ease * dt));
         this.back += (this.drawBack - this.back) * (1 - Math.exp(-BIG_FOE.ease * dt));
         this.lowered += (this.lowerBy - this.lowered) * (1 - Math.exp(-BIG_FOE.ease * dt));
@@ -990,9 +1115,10 @@ export class View {
 
     /**
      * How far the camera can be from where it looks, along its line looking `pitch` degrees
-     * down, before a building's in the way (metres: Infinity if none is, out to `distance`).
+     * down (from `yaw`), before a building's in the way of it or of the lines PULL.wide either
+     * side of it (metres: Infinity if none is, out to `distance`).
      */
-    clearance(pitch = this.pitch, distance = this.distance) {
+    clearance(pitch = this.pitch, distance = this.distance, yaw = this.yaw) {
         const heights = this.buildings;
 
         if (!heights) {
@@ -1001,14 +1127,66 @@ export class View {
 
         const tilt = (pitch * Math.PI) / 180;
         const [across, up] = [Math.cos(tilt), Math.sin(tilt)];
-        const [dx, dz] = [Math.sin(this.yaw) * across, Math.cos(this.yaw) * across];
+        const [dx, dz] = [Math.sin(yaw) * across, Math.cos(yaw) * across];
         const [x0, y0, z0] = [this.focus.x, this.focus.y + LOOK_UP, this.focus.z];
+        let nearest = Infinity;
 
-        for (let along = 0.4; along < distance + PULL.margin; along += 0.2) {
-            const height = heights.at(x0 + dx * along, z0 + dz * along);
+        for (const side of [0, -PULL.wide, PULL.wide]) {
+            const [sx, sz] = [Math.cos(yaw) * side, -Math.sin(yaw) * side];
 
-            if (height > y0 + up * along - 0.3) {
-                return Math.max(0, along - PULL.margin);
+            for (let along = 0.4; along < Math.min(distance + PULL.margin, nearest + PULL.margin); along += 0.2) {
+                // (The sides from where the camera's lens spreads out: none at the player)
+                const spread = Math.min(1, along / 2);
+                const height = heights.at(x0 + dx * along + sx * spread, z0 + dz * along + sz * spread);
+
+                if (height > y0 + up * along - 0.3) {
+                    nearest = Math.max(0, along - PULL.margin);
+                    break;
+                }
+            }
+        }
+
+        return nearest;
+    }
+
+    /**
+     * Indoors, how far the camera can be from where it looks, looking `pitch` degrees down from
+     * `yaw` (metres, out to `distance`): as far as it likes if it's over the ceiling there; else no
+     * further than the room's walls, and under the ceiling, clear of its beams (ROOM).
+     */
+    roomReach(pitch = this.pitch, distance = this.distance, yaw = this.yaw) {
+        const { x0, z0, x1, z1, ceiling, open } = this.room;
+        const tilt = (Math.max(0, pitch) * Math.PI) / 180;
+
+        // (Over a dungeon's cut roof, or a room's ceiling: as far as it likes)
+        if (this.room.overRoof || overCeiling(this.room, this.focus.y, pitch, distance)) {
+            return distance;
+        }
+
+        // (Out along the way the camera's looking from, to the first wall, as far as that goes
+        // along the camera's line; and looking down, up along it to under the ceiling)
+        const [dx, dz] = [Math.sin(yaw), Math.cos(yaw)];
+        const [px, pz] = [this.focus.x, this.focus.z];
+        const toward = (from, way, least, most) => (way > 1e-6 ? (most - ROOM.margin - from) / way : way < -1e-6 ? (least + ROOM.margin - from) / way : Infinity);
+        const out = Math.max(0, Math.min(toward(px, dx, x0, x1), toward(pz, dz, z0, z1), this.room.rock ? rockAlong(this.room.rock, px, pz, dx, dz, distance) : Infinity));
+        const up = pitch > 0 && !open ? (this.room.roof ? this.#underRoof(dx, dz, tilt, Math.min(distance, out / Math.max(0.05, Math.cos(tilt)))) : Math.max(0, ceiling - ROOM.under - this.focus.y - LOOK_UP) / Math.sin(tilt)) : Infinity;
+
+        return Math.max(ROOM.least, Math.min(distance, up, out / Math.max(0.05, Math.cos(tilt))));
+    }
+
+    // In a dungeon's level, how far along its line (going (dx, dz) across the ground, rising at
+    // `tilt` radians) the camera can be, out to `most` metres, and stay ROOM.under the roof over
+    // each point of it (the rock's own height there: interiors3d.js roof), a quarter metre at a time
+    #underRoof(dx, dz, tilt, most) {
+        const { roof, ceiling } = this.room;
+        const [cos, sin] = [Math.cos(tilt), Math.sin(tilt)];
+        const from = this.focus.y + LOOK_UP;
+
+        for (let along = 0.25; along <= most; along += 0.25) {
+            const over = roof(this.focus.x + dx * cos * along, this.focus.z + dz * cos * along) ?? ceiling;
+
+            if (from + sin * along > over - ROOM.under) {
+                return Math.max(0, along - 0.25);
             }
         }
 
@@ -1016,36 +1194,87 @@ export class View {
     }
 
     /**
-     * Indoors, how far the camera can be from where it looks, looking `pitch` degrees down
-     * (metres, out to `distance`): as far as it likes if it's over the ceiling there; else no
-     * further than the room's walls, and under the ceiling, clear of its beams (ROOM).
+     * In a dungeon's level, how much room there is round where the camera looks (DUNGEON_VIEW):
+     * its openness's share of the way from a tunnel's camera to an open cavern's, eased as the
+     * player goes over `dt` seconds (at once, Infinity), and whether the camera's to be over its
+     * cut roof (`over`); null anywhere else.
      */
-    roomReach(pitch = this.pitch, distance = this.distance) {
-        const { x0, z0, x1, z1, ceiling, open } = this.room;
-        const tilt = (Math.max(0, pitch) * Math.PI) / 180;
+    space(dt = Infinity) {
+        const room = this.room;
 
-        if (overCeiling(this.room, this.focus.y, pitch, distance)) {
-            return distance;
+        if (!room?.rock) {
+            return null;
         }
 
-        // (Out along the way the camera's looking from, to the first wall, as far as that goes
-        // along the camera's line; and looking down, up along it to under the ceiling)
-        const [dx, dz] = [Math.sin(this.yaw), Math.cos(this.yaw)];
-        const [px, pz] = [this.focus.x, this.focus.z];
-        const toward = (from, way, least, most) => (way > 1e-6 ? (most - ROOM.margin - from) / way : way < -1e-6 ? (least + ROOM.margin - from) / way : Infinity);
-        const out = Math.max(0, Math.min(toward(px, dx, x0, x1), toward(pz, dz, z0, z1), this.room.rock ? rockAlong(this.room.rock, px, pz, dx, dz, distance) : Infinity));
-        const up = pitch > 0 && !open ? Math.max(0, ceiling - ROOM.under - this.focus.y - LOOK_UP) / Math.sin(tilt) : Infinity;
+        const share = spaceShare(openness(room.rock, this.focus.x, this.focus.z));
 
-        return Math.max(ROOM.least, Math.min(distance, up, out / Math.max(0.05, Math.cos(tilt))));
+        room.share = room.share === undefined || !Number.isFinite(dt) ? share : room.share + (share - room.share) * (1 - Math.exp(-DUNGEON_VIEW.settle * dt));
+        room.overRoof = room.overRoof ? room.share > DUNGEON_VIEW.underAt : room.share >= DUNGEON_VIEW.overAt;
+
+        return { share: room.share, over: room.overRoof };
+    }
+
+    /**
+     * In a dungeon's level, whether its rock stands between the camera and a point (world metres:
+     * someone's chest), as it's drawn: over its roof, only below where it's cut away.
+     */
+    rockHides(point) {
+        const room = this.room;
+
+        if (!room?.rock || !point) {
+            return false;
+        }
+
+        const eye = this.camera.position;
+        const low = room.overRoof ? this.focus.y + DUNGEON_VIEW.cut : Infinity;
+        const away = eye.distanceTo(point);
+
+        // (From a little out from them, a quarter metre at a time, to a little short of the camera)
+        for (let along = 0.4; along < away - 0.4; along += 0.25) {
+            const t = along / away;
+            const y = point.y + (eye.y - point.y) * t;
+
+            if (y < low && room.rock(point.x + (eye.x - point.x) * t, point.z + (eye.z - point.z) * t)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The dungeon's rock cut away (dungeons3d.js DUNGEON_CUT), as the camera's placed: from
+     * DUNGEON_VIEW.cut metres over the floor where the player stands up to just over the camera,
+     * while it's over the roof (or not yet back under it); else null.
+     */
+    roofCut() {
+        const room = this.room;
+
+        if (!room?.rock) {
+            return null;
+        }
+
+        const camera = this.camera.position;
+        const roof = room.roof?.(camera.x, camera.z) ?? room.ceiling;
+        const above = camera.y > roof - ROOM.under + 0.05;
+
+        return room.overRoof || above ? { low: this.focus.y + DUNGEON_VIEW.cut, top: camera.y + 0.3 } : null;
     }
 
     // Come in closer than a building in the way, or rise over it, whichever leaves the camera
     // further off (indoors, in closer than the walls, under the ceiling); or go back out once
-    // it's not in the way: quickly in, slowly out
+    // it's not been in the way a moment (PULL.hold): quickly in, slowly out
     #clear(dt) {
         const { pitch, distance } = this.#framed();
         let pulled = 0;
         let lifted = 0;
+
+        // (Turning: looking as far round as it'll have turned a moment on, too)
+        const turned = Number.isFinite(dt) && dt > 0 && this.clearedYaw !== undefined ? Math.atan2(Math.sin(this.yaw - this.clearedYaw), Math.cos(this.yaw - this.clearedYaw)) / dt : 0;
+        const ahead = Math.max(-PULL.most, Math.min(PULL.most, turned * PULL.ahead));
+        const clearance = (tilt) => Math.min(this.clearance(tilt, distance), Math.abs(ahead) > 0.02 ? this.clearance(tilt, distance, this.yaw + ahead) : Infinity);
+
+        this.clearedYaw = this.yaw;
 
         if (this.room) {
             pulled = distance - this.roomReach(pitch, distance);
@@ -1057,12 +1286,12 @@ export class View {
                 this.room.over = over;
                 this.pulled = pulled;
             }
-        } else if (this.buildings && this.clearance(Math.max(0, pitch), distance) < distance) {
+        } else if (this.buildings && clearance(Math.max(0, pitch)) < distance) {
             // (Looking up, the camera's no lower than level with the player: see #place)
             let best = -Infinity;
 
             for (let lift = 0; Math.max(0, pitch) + lift <= PULL.highest; lift += 5) {
-                const reach = Math.max(PULL.least, Math.min(distance, this.clearance(Math.max(0, pitch) + lift, distance)));
+                const reach = Math.max(PULL.least, Math.min(distance, clearance(Math.max(0, pitch) + lift)));
                 const score = reach - PULL.lift * lift;
 
                 if (score > best) {
@@ -1073,7 +1302,18 @@ export class View {
             }
         }
 
-        const toward = (from, to) => from + (to - from) * (1 - Math.exp(-(to > from ? PULL.in : PULL.out) * dt));
+        // (Going back out only once what it's to come clear of has been so a moment, since it last
+        // came clear of more: till then held where it is. Not while it's catching the player up)
+        const dropped = pulled < (this.pullTarget ?? pulled) - 0.01 || lifted < (this.liftTarget ?? lifted) - 0.01;
+        const rushing = this.clearedAt !== undefined && Number.isFinite(dt) && dt > 0 && Math.hypot(this.focus.x - this.clearedAt.x, this.focus.z - this.clearedAt.z) / dt > PULL.fast;
+
+        (this.clearedAt ??= new THREE.Vector3()).copy(this.focus);
+        this.clearFor = rushing ? Infinity : dropped ? 0 : (this.clearFor ?? Infinity) + dt;
+        this.pullTarget = pulled;
+        this.liftTarget = lifted;
+
+        const held = this.clearFor < PULL.hold;
+        const toward = (from, to) => (held && to < from ? from : from + (to - from) * (1 - Math.exp(-(to > from ? PULL.in : PULL.out) * dt)));
 
         this.pulled = toward(this.pulled, pulled);
         this.lifted = toward(this.lifted, lifted);
@@ -1102,10 +1342,16 @@ export class View {
         return this.renderer.getDrawingBufferSize(_size).y / (2 * Math.tan((this.camera.fov * Math.PI) / 360));
     }
 
-    /** Zoom in (factor < 1) or out. */
+    /** Zoom in (factor < 1) or out, at once (a pinch, as the fingers go). */
     zoom(factor) {
+        this.zoomTo = null;
         this.distance = Math.min(DISTANCE.most, Math.max(DISTANCE.least, this.distance * factor));
         this.#place();
+    }
+
+    /** Zoom in (factor < 1) or out, eased in over a moment as the camera's next placed (ZOOM_EASE: a wheel's notch, a zoom button). */
+    zoomSmoothly(factor) {
+        this.zoomTo = Math.min(DISTANCE.most, Math.max(DISTANCE.least, (this.zoomTo ?? this.distance) * factor));
     }
 
     #place() {
@@ -1218,7 +1464,7 @@ export class View {
 
             // (One with more flames than the list holds, a dungeon's level, lit by those nearest
             // the player: roomlight.js NEAR_FILL)
-            this.room = { x0: origin[0], z0: origin[1], x1: origin[0] + width, z1: origin[1] + height, ceiling: interior.ceiling ?? 3, open: Boolean(interior.open), over: null, lights: interior.lights, colours: interior.lights.map(({ colour }) => new THREE.Color(colour)), strengths: [], flares: [], lamps: [], near: interior.lights.length > ROOM_LIGHTS ? [] : null, rock: rockOf(interior.map), carried: interior.carried ? { ...interior.carried, colour: new THREE.Color(interior.carried.colour) } : null };
+            this.room = { x0: origin[0], z0: origin[1], x1: origin[0] + width, z1: origin[1] + height, ceiling: interior.ceiling ?? 3, open: Boolean(interior.open), over: null, roof: interior.map?.dungeon && interior.roof ? roofGrid(interior.roof, origin, width, height) : null, overRoof: false, lights: interior.lights, colours: interior.lights.map(({ colour }) => new THREE.Color(colour)), strengths: [], flares: [], lamps: [], near: interior.lights.length > ROOM_LIGHTS ? [] : null, rock: rockOf(interior.map), carried: interior.carried ? { ...interior.carried, colour: new THREE.Color(interior.carried.colour) } : null };
         } else {
             this.room = null;
         }
@@ -1926,11 +2172,30 @@ export class View {
     }
 
     /**
-     * How many of some points (Vector3s: those fighting's chests) anything on the height map would
-     * hide from the camera looking from `yaw` (radians, as `this.yaw`) at where it looks now, as
-     * far off and as far down as asked (0 indoors): what the battle cam keeps clear of (camera.js).
+     * How much of the distance it's asked to be from where it looks the camera could have, looking
+     * from `yaw` (radians, as `this.yaw`) as far down as it does now (0 to 1): indoors, as the
+     * room's walls, ceiling and rock let it (roomReach); in the town, before a building's in the
+     * way (clearance); anywhere else, all of it.
+     */
+    roomAt(yaw) {
+        const { pitch, distance } = this.#framed();
+        const reach = this.room ? this.roomReach(pitch, distance, yaw) : this.buildings ? Math.min(distance, this.clearance(Math.max(0, pitch), distance, yaw)) : distance;
+
+        return distance > 0 ? Math.min(1, reach / distance) : 1;
+    }
+
+    /**
+     * How many of some points (Vector3s: those fighting's chests) would be hidden from the camera
+     * looking from `yaw` (radians, as `this.yaw`) at where it looks now, as far off and as far down
+     * as asked: out of doors, by anything on the height map; indoors, by a dungeon's rock between,
+     * and as one more, where the walls or the rock would crowd the camera in to less than
+     * CRAMPED of its distance. What the battle cam keeps clear of (camera.js).
      */
     hiddenFrom(yaw, points) {
+        if (this.room) {
+            return this.#hiddenInside(yaw, points);
+        }
+
         if (!this.occluders) {
             return 0;
         }
@@ -1946,6 +2211,35 @@ export class View {
 
         // (Each seen at its knees as well as its chest: a prop hides the one, a building both)
         return points.filter((point) => this.hidden(point, _eye, heights) || this.hidden(_knee.copy(point).setY(point.y - 0.6), _eye, heights)).length;
+    }
+
+    // Indoors, hiddenFrom's: crowded in by the walls or the rock, and hidden by the rock between
+    #hiddenInside(yaw, points) {
+        const { pitch, distance } = this.#framed();
+        const reach = this.roomReach(pitch, distance, yaw);
+        // (Over a dungeon's roof, its rock's cut away: it hides no one)
+        const rock = this.room.overRoof ? null : this.room.rock;
+        let unseen = reach < distance * CRAMPED ? 1 : 0;
+
+        if (rock) {
+            const tilt = (Math.max(0, pitch) * Math.PI) / 180;
+            const across = Math.cos(tilt) * reach;
+            const [ex, ez] = [this.focus.x + Math.sin(yaw) * across, this.focus.z + Math.cos(yaw) * across];
+
+            for (const point of points) {
+                const away = Math.hypot(point.x - ex, point.z - ez);
+
+                // (Across the ground from the camera to them, a quarter metre at a time)
+                for (let along = 0.25; along < away - 0.25; along += 0.25) {
+                    if (rock(ex + ((point.x - ex) * along) / away, ez + ((point.z - ez) * along) / away)) {
+                        unseen++;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return unseen;
     }
 
     // Open a hole through whatever hides the player (or close it when nothing does)

@@ -118,16 +118,20 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     // falls or is 40 m off; off, only an enemy's icon held locks on: app/game.js `autoLock`)
     autoLock: true,
     // The camera (app/game.js cameraSettings): whether it follows round behind the player as they
-    // walk (off: it stays turned the way it's left); whether in a fight it frames it, three-
-    // quarters on and clear of what stands round (the battle cam); how far a drag turns and tilts
-    // it (1, as it's always been: half round across the screen, 60 degrees up or down it); whether
-    // dragging up looks down; whether the greater spells shake it. And which camera defaults they
-    // were saved under: following saved under the first (when it was on by default) is forgotten,
-    // for today's
+    // walk (off: it stays turned the way it's left; on a touch screen, on: loadSettings); whether
+    // in a fight it frames it, three-quarters on and clear of what stands round (the battle cam);
+    // whether it turns to look along the way through where walls crowd it (`openWay`); how far a
+    // drag turns it and tilts it (1, as it's always been: half round across the screen, 60 degrees
+    // up or down it); whether dragging up looks down; whether the greater spells shake it. And
+    // which camera defaults they were saved under: following saved under the first (when it was
+    // on for everyone) is forgotten, for today's, and under the second (off for everyone) on a
+    // touch screen
     cameraFollows: false,
     battleCam: true,
-    cameraDefaults: 2,
+    cameraDefaults: 3,
+    openWay: true,
     dragSpeed: 1,
+    tiltSpeed: 1,
     invertTilt: false,
     shake: true,
     // Full screen while playing (app/fullscreen.js): asked for whenever play starts or carries on
@@ -143,12 +147,14 @@ export const SETTINGS_DEFAULTS = Object.freeze({
 
 /**
  * The settings for how the player plays, not this device's: what auto-snag does, the target lock,
- * saying no to summons and invites, and the camera. A hero a world server keeps keeps them with
- * them (core/host.js OWN `settings`), so they're the player's on whatever device or browser they
- * come in from (main.js playingJoined); the rest (the screen, the sound, the stick) stay this
- * device's.
+ * saying no to summons and invites, the battle cam, finding the way through, tilt inverted and
+ * the greater spells' shaking. A hero a world server keeps keeps them with them (core/host.js OWN
+ * `settings`), so they're the player's on whatever device or browser they come in from (main.js
+ * playingJoined); the rest stay this device's: the screen, the sound, the stick, and how the
+ * camera's turned by hand and follows, which go by whether it's touched or pointed at with a
+ * mouse.
  */
-export const PLAY_SETTINGS = Object.freeze(["autoSnag", "snagGrades", "snagKinds", "autoLock", "resistSummons", "refuseInvites", "cameraFollows", "battleCam", "dragSpeed", "invertTilt", "shake"]);
+export const PLAY_SETTINGS = Object.freeze(["autoSnag", "snagGrades", "snagKinds", "autoLock", "resistSummons", "refuseInvites", "battleCam", "openWay", "invertTilt", "shake"]);
 
 /**
  * Of `given` (settings, or a hero's kept by a world), the play settings (PLAY_SETTINGS) as the
@@ -1164,8 +1170,20 @@ export function clearSave() {
     remove(WORLDS_KEY);
 }
 
-/** The settings (defaults for anything not set). */
-export function loadSettings() {
+// Whether this device's screen is touched rather than pointed at with a mouse (a phone, a tablet)
+function touchScreen() {
+    try {
+        return Boolean(globalThis.matchMedia?.("(pointer: coarse)").matches);
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * The settings (defaults for anything not set). On a touch screen (`touch`), Camera follows starts
+ * on: touched, the camera's turned by hand less readily than with a mouse.
+ */
+export function loadSettings({ touch = touchScreen() } = {}) {
     const saved = { ...read(SETTINGS_KEY) };
 
     if (saved.volumeScale !== SETTINGS_DEFAULTS.volumeScale) {
@@ -1175,7 +1193,11 @@ export function loadSettings() {
     }
 
     if (saved.cameraDefaults !== SETTINGS_DEFAULTS.cameraDefaults) {
-        delete saved.cameraFollows;
+        // (Kept only where it was off for everyone and is so still: pointed at with a mouse)
+        if (saved.cameraDefaults !== 2 || touch) {
+            delete saved.cameraFollows;
+        }
+
         delete saved.cameraDefaults;
     }
 
@@ -1184,7 +1206,7 @@ export function loadSettings() {
         delete saved.stickDefaults;
     }
 
-    return { ...SETTINGS_DEFAULTS, ...saved };
+    return { ...SETTINGS_DEFAULTS, cameraFollows: touch, ...saved };
 }
 
 /** Change some settings, keeping the rest. Returns them all. */

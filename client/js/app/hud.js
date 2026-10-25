@@ -651,8 +651,9 @@ export class Hud {
 
     /**
      * Arrows at the screen's edge for those attacking the player out of view, each pointing the
-     * way to them: [{ x, y (client pixels), angle (radians, clockwise from pointing up) }]; the
-     * rest hidden.
+     * way to them: [{ x, y (client pixels), angle (radians, clockwise from pointing up), ranged
+     * (one that shoots or throws: its own colour), winding (a blow or shot at the player drawn
+     * back: flashing) }]; the rest hidden.
      */
     threats(arrows) {
         this.arrows ??= [];
@@ -679,6 +680,8 @@ export class Hud {
 
             if (at) {
                 arrow.style.transform = `translate3d(${at.x.toFixed(1)}px, ${at.y.toFixed(1)}px, 0) translate(-50%, -50%) rotate(${at.angle.toFixed(3)}rad)`;
+                arrow.classList.toggle("ranged", Boolean(at.ranged));
+                arrow.classList.toggle("winding", Boolean(at.winding));
             }
         });
     }

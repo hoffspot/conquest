@@ -344,6 +344,8 @@ export class WorldMap {
         listen("pointerup", (event) => this.#up(event));
         listen("pointercancel", (event) => this.#up(event));
         listen("wheel", (event) => this.#wheel(event), { passive: false });
+        // (Nor the browser's own menu, "Save image as" and the like: a right click or a long press is the map's)
+        listen("contextmenu", (event) => event.preventDefault());
 
         // (Safari's own pinch, on a phone, kept off the map: it zooms the map, not the page)
         for (const type of ["gesturestart", "gesturechange", "gestureend"]) {

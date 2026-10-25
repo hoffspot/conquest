@@ -40,7 +40,7 @@ import { fireMaterials, FIRES, firesMesh } from "./fire.js";
 import { allAtOnce } from "../core/steps.js";
 import { VEIL, veilShader } from "./veil.js";
 import { CAVERNS, cavern, earthTone, layers, SHELLS, tiles } from "./caverns.js";
-import { Blocks, furnish, lifeMaterial, loadProp, ROCK_PICTURES, rockMaterial } from "./dungeons3d.js";
+import { Blocks, DUNGEON_CUT, furnish, lifeMaterial, loadProp, ROCK_PICTURES, rockMaterial } from "./dungeons3d.js";
 import { colonyAt, glowOf, threadsOn } from "./glowfungus.js";
 import { awayFromPools, brimstoneTone, embersOn, LAKES, LAVA, lakeGeometry, lakeLights, lakesOf, lavaGlowOn, lavaMaterial, poolGeometries, poolLight, poolShape } from "./lava.js";
 import { bloodGeometry, fleshTone, heartLight, heartMaterial, heartParts, ribGeometry, ribPaths, veinsOn } from "./flesh.js";
@@ -305,13 +305,18 @@ function cutShader(shader, cut) {
         cutWidth: INTERIOR_CUT.width,
         cutBounds: INTERIOR_CUT.bounds,
         cutCap: INTERIOR_CUT.cap,
+        dungeonCutLow: DUNGEON_CUT.low,
+        dungeonCutTop: DUNGEON_CUT.top,
     });
     shader.vertexShader = shader.vertexShader
         .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;")
         .replace("#include <project_vertex>", "#include <project_vertex>\nvCutWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;");
     shader.fragmentShader = shader.fragmentShader
-        .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec3 cutCamera;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutHead;\nuniform float cutOver;\nuniform float cutSquares;\nuniform float cutRun;\nuniform float cutCeiling;\nuniform float cutMargin;\nuniform float cutWidth;\nuniform vec4 cutBounds;\nuniform vec3 cutCap;")
+        .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nuniform vec3 cutPlayer;\nuniform vec3 cutCamera;\nuniform vec2 cutToCamera;\nuniform float cutHeight;\nuniform float cutHead;\nuniform float cutOver;\nuniform float cutSquares;\nuniform float cutRun;\nuniform float cutCeiling;\nuniform float cutMargin;\nuniform float cutWidth;\nuniform vec4 cutBounds;\nuniform vec3 cutCap;\nuniform float dungeonCutLow;\nuniform float dungeonCutTop;")
         .replace("#include <clipping_planes_fragment>", `#include <clipping_planes_fragment>
+// (A dungeon's level, the camera over its roof: what stands tall in it cut away as its rock is,
+// dungeons3d.js DUNGEON_CUT)
+if (vCutWorld.y > dungeonCutLow && vCutWorld.y < dungeonCutTop) discard;
 if (cutCeiling > 0.5) {
     if (vCutWorld.y < cutCamera.y) discard;
 } else {

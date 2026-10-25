@@ -672,6 +672,15 @@ test("making a character, the mouse dragged across the view walks round them, an
 
     expect(turned.target).toBeLessThan(start.target - 0.5);
 
+    // (Dragged with the right button too, and no menu of the browser's own over the view: "Save
+    // image as" and the like, as a player on a PC found turning the camera)
+    await page.evaluate(() => window.addEventListener("contextmenu", (event) => (window.menuShown = !event.defaultPrevented)));
+    await page.mouse.down({ button: "right" });
+    await page.mouse.move(x - 100, y, { steps: 10 });
+    await page.mouse.up({ button: "right" });
+    expect(await page.evaluate(() => window.pellagos.creator.orbit.target)).toBeGreaterThan(turned.target + 0.5);
+    expect(await page.evaluate(() => window.menuShown)).toBe(false);
+
     // The wheel turned towards them as far as it goes: nearer than the tab frames them from, and
     // no nearer than lets the camera keep out of them, all the way round
     for (let k = 0; k < 30; k++) {
@@ -1985,17 +1994,31 @@ test("in a fight, the battle cam turned off, the camera keeps the foe in view, t
         const spot = view.toScreen(game.avatars.get("orc").point(0.5));
         const rect = view.canvas.getBoundingClientRect();
 
-        return {
+        const shown = {
             seen: Boolean(spot) && spot.x > rect.left && spot.x < rect.right && spot.y > rect.top && spot.y < rect.bottom,
             arrows: arrows.length,
             // (Pointing down the screen, the way behind the camera; near its bottom edge)
             turned: Number(arrows[0]?.style.transform.match(/rotate\(([-\d.]+)rad\)/)?.[1]),
             low: arrows[0] ? arrows[0].getBoundingClientRect().top > rect.top + rect.height * 0.75 : false,
+            // (An orc's, not a shot: not violet)
+            still: arrows[0]?.className,
         };
+
+        // (A blow drawn back at the player: its arrow flashing)
+        orc.attack = { attack: orc.arms[0], target: "player", start: battle.time, struck: false };
+        game.advance(0.01, { render: false });
+
+        const winding = document.querySelector(".threat:not([hidden])")?.className;
+
+        orc.attack = null;
+
+        return { ...shown, winding };
     });
 
     expect(before.seen).toBe(false);
     expect(before.arrows).toBe(1);
+    expect(before.still).toBe("threat");
+    expect(before.winding).toBe("threat winding");
     expect(Math.abs(Math.abs(before.turned) - Math.PI)).toBeLessThan(0.6);
     expect(before.low).toBe(true);
 
@@ -3201,7 +3224,8 @@ test("the battle cam takes a fight over only once the player and their foe are b
         game.cameraFollow.release();
         game.advance(3);
 
-        return { away, inFull, ...framed, left: Math.abs(wrap(game.cameraFollow.yaw - behind)) };
+        // (But the foe's still kept in sight: a hole cut through whatever hides it, a big one drawn back from)
+        return { away, inFull, ...framed, left: Math.abs(wrap(game.cameraFollow.yaw - behind)), kept: view.foe ? Math.hypot(view.foe.x - it.object.position.x, view.foe.z - it.object.position.z) : null };
     });
 
     expect(fight.away).toEqual({ found: true, turned: 0, seen: false });
@@ -3210,6 +3234,60 @@ test("the battle cam takes a fight over only once the player and their foe are b
     expect(fight.round).toBeLessThan(Math.PI / 2 + 0.15);
     expect(fight.seen).toEqual([true, true]);
     expect(fight.left).toBeLessThan(0.01);
+    expect(fight.kept).not.toBeNull();
+    expect(fight.kept).toBeLessThan(0.1);
+});
+
+test("on a PC, Q and E turn the camera round the player while held, and R swings it round behind them; nothing else moves", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+    // (The game stepped on by hand, so the turn's as a phone's or a PC's frames would have it)
+    const advance = (seconds) => page.evaluate((seconds) => window.pellagos.game.advance(seconds), seconds);
+    const yaw = () => page.evaluate(() => window.pellagos.game.cameraFollow.yaw);
+    // (Each key held as the game goes on by hand, as a phone's or a PC's frames would step it: its
+    // own loop stopped, but still listening, so what's pressed is heard)
+    await page.evaluate(() => window.pellagos.game.view.renderer.setAnimationLoop(null));
+
+    const press = async (key, seconds) => {
+        await page.keyboard.down(key);
+
+        const from = await yaw();
+
+        await advance(seconds);
+        await page.keyboard.up(key);
+        await advance(1);
+
+        return wrap((await yaw()) - from);
+    };
+    const start = await page.evaluate(() => ({ square: [...window.pellagos.game.battle.actor("player").square] }));
+
+    // Q held half a second: turned one way (as a drag to the left), a radian; and left there after
+    const left = await press("q", 0.5);
+
+    expect(left).toBeGreaterThan(0.8);
+    expect(left).toBeLessThan(1.2);
+
+    const held = await yaw();
+
+    await advance(1);
+    expect(Math.abs(wrap((await yaw()) - held))).toBeLessThan(0.02);
+
+    // E held: back the other way
+    expect(await press("e", 0.5)).toBeLessThan(-0.8);
+
+    // R: swung round behind the player, the way they face
+    await press("r", 2.5);
+
+    const behind = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const off = game.cameraFollow.yaw - (game.battle.actor("player").facing + Math.PI);
+
+        return Math.abs(Math.atan2(Math.sin(off), Math.cos(off)));
+    });
+
+    expect(behind).toBeLessThan(0.05);
+    expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").square)).toEqual(start.square);
 });
 
 test("dragging turns the camera round the player and tilts it; it holds while they stand, and following, swings back behind them once they walk", async ({ page }) => {
@@ -3380,12 +3458,35 @@ test("in the town, the camera comes in closer than a building in the way, or ris
         const behind = well && [2, 2.5, 3, 3.5].map((d) => [Math.floor(ox + well.x), Math.floor(oz + well.y - d)]).find(([x, y]) => !squares.blocked(x, y));
         const byWell = behind && { ...look(behind), height: game.town.heights.at(ox + well.x, oz + well.y) };
 
-        return { walled: walled && look(walled), open: open && look(open), byWell };
+        const walledView = walled && look(walled);
+
+        // (Clear of the building, looking steeply down from close by: held where it was a moment,
+        // so gaps between houses don't pump it in and out; then going back out)
+        let clearing = null;
+
+        if (walled) {
+            const before = view.pulled + view.lifted;
+
+            view.zoom(0.2);
+            game.cameraFollow.pitch = 75;
+            game.advance(0.2);
+
+            const held = view.pulled + view.lifted;
+
+            game.advance(3);
+            clearing = { before, held, after: view.pulled + view.lifted };
+            view.zoom(5);
+            game.cameraFollow.pitch = 35;
+        }
+
+        return { walled: walledView, clearing, open: open && look(open), byWell };
     });
 
     expect(views.byWell).toMatchObject({ hidden: false, cut: 0, height: 0 });
     expect(views.walled).not.toBe(null);
     expect(views.walled.pulled + views.walled.lifted).toBeGreaterThan(1);
+    expect(views.clearing.held).toBeGreaterThan(views.clearing.before * 0.95);
+    expect(views.clearing.after).toBeLessThan(0.3);
     expect(views.walled.clearOfIt).toBe(true);
     expect(views.open).not.toBe(null);
     expect(views.open.pulled).toBeLessThan(0.05);
@@ -10968,6 +11069,9 @@ test("markers on the world map: one put down with its button, what it marks and 
     const box = await canvas.boundingBox();
     const dialog = page.locator("#marker");
 
+    // (No menu of the browser's own over it: "Save image as" and the like)
+    expect(await canvas.evaluate((map) => !map.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })))).toBe(true);
+
     // Its button, then a tap 30 pixels east of the player: what it marks and its words asked
     await page.locator("#worldmapmark").click();
     await expect(page.locator("#worldmapmark")).toHaveAttribute("aria-pressed", "true");
@@ -11656,6 +11760,217 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
     expect(delved.second).toMatchObject({ map: delved.maps[1], drawn: true });
     expect(delved.second.woken).toBeGreaterThan(0);
     expect(delved).toMatchObject({ out: "town", by: true, sees: 160 });
+});
+
+test("a dungeon's camera goes by the room round the player: over its cut roof, looking down, in an open cavern; under its roof, low behind them, in a tunnel; tilted by hand, kept so while it's as open, let go of in the tunnel; turned to find the way through it; framing a fight from where there's room; and anyone its rock hides seen through it", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    const seen = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { view } = session;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // (The nearest dungeon of caves to the start: gone into)
+        const { DUNGEON_CUT } = await import("/js/world/dungeons3d.js");
+        const { openness } = await import("/js/world/view.js");
+        const { squaresOf } = await import("/js/core/grid.js");
+        const site = game.world.plan.sites.filter(({ kind, theme }) => kind === "dungeon" && theme === "caves").sort((a, b) => Math.hypot(a.at[0] - player.x, a.at[1] - player.y) - Math.hypot(b.at[0] - player.x, b.at[1] - player.y))[0];
+        const until = async (done, steps = 300) => {
+            for (let k = 0; k < steps && !done(); k++) {
+                player.hp = player.maxHp;
+                game.advance(0.1);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+
+        // (Its land round it made first, its way in with it)
+        Object.assign(player, { x: site.at[0] + 25, y: site.at[1], path: [], order: null, progress: null });
+
+        for (let k = 0; k < 8; k++) {
+            game.advance(0.25, { render: false });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        const building = game.world.interiors.buildings.get(`site:${site.id}`);
+        const [ox, oy] = building.entrance.outside;
+
+        Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
+        game.host.command("player", { type: "enter", link: building.door.id });
+        await until(() => player.map !== "town");
+        await until(() => game.interiors.get(player.map)?.object.visible);
+
+        // (Its creatures put down: no fight to frame)
+        for (const actor of game.battle.actors) {
+            if (actor.map === player.map && actor.id !== "player") {
+                Object.assign(actor, { dead: true, respawnAt: Infinity });
+            }
+        }
+
+        // Its most open square and its tightest that can be stood on, away from its stairs
+        const map = game.world.maps[player.map];
+        const squares = squaresOf(map);
+        const [mx, mz] = game.originOf(player.map);
+        const rock = view.room.rock;
+        let [open, tight] = [null, null];
+
+        for (let y = 2; y < map.height - 2; y++) {
+            for (let x = 2; x < map.width - 2; x++) {
+                if (!squares.blocked(x, y) && [-1, 0, 1].every((d) => !squares.blocked(x + d, y) && !squares.blocked(x, y + d))) {
+                    const how = openness(rock, mx + x + 0.5, mz + y + 0.5);
+
+                    open = !open || how > open.how ? { x, y, how } : open;
+                    tight = !tight || how < tight.how ? { x, y, how } : tight;
+                }
+            }
+        }
+
+        const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+        const rockCut = () => {
+            const kinds = new Set();
+
+            game.interiors.get(player.map).object.traverse((node) => node.isMesh && node.name === "rock" && kinds.add(Boolean(node.material.userData.rock?.cut)));
+
+            return [...kinds];
+        };
+        const at = ({ x, y }, seconds) => {
+            Object.assign(player, { x: x + 0.5, y: y + 0.5, square: [x, y], path: [], order: null });
+            game.advance(seconds);
+
+            const camera = view.camera.position;
+
+            return { pitch: game.cameraFollow.pitch, over: view.room.overRoof, cut: DUNGEON_CUT.low.value < DUNGEON_CUT.top.value, rockCut: rockCut(), height: camera.y - view.focus.y, under: (view.room.roof(camera.x, camera.z) ?? view.room.ceiling) - camera.y };
+        };
+
+        const inOpen = at(open, 4);
+        const inTight = at(tight, 4);
+
+        // (Back in the open, tilted 15 degrees further down by hand: kept so there; then into the tunnel)
+        at(open, 4);
+        game.cameraFollow.grab();
+        game.advance(0.1);
+        game.cameraFollow.turn(0, 15);
+        game.advance(0.1);
+        game.cameraFollow.release();
+
+        const nudged = at(open, 2);
+        const base = inOpen.pitch;
+        const tunnel = at(tight, 6);
+
+        // Walking along the tunnel, the camera turned to look across it (crowded in by its rock):
+        // turned to find the way through (Game options); or, turned off, left so
+        const across = (finds) => {
+            const ways = Array.from({ length: 36 }, (_, k) => (k * Math.PI) / 18);
+            const room = (yaw) => view.roomAt(yaw);
+            const crowded = ways.reduce((a, b) => (room(b) < room(a) ? b : a));
+            const along = ways.reduce((a, b) => (room(b) > room(a) ? b : a));
+
+            game.cameraSettings = { ...game.cameraSettings, openWay: finds, follows: false };
+            Object.assign(player, { x: tight.x + 0.5, y: tight.y + 0.5, square: [tight.x, tight.y], path: [], order: null });
+            game.cameraFollow.yaw = crowded;
+            game.cameraFollow.waiting = 0;
+            game.advance(0.2);
+
+            // (Walking the way the camera would look from, back along the tunnel: away from it)
+            const [tx, ty] = [Math.round(tight.x - Math.sin(along) * 4), Math.round(tight.y - Math.cos(along) * 4)];
+
+            game.battle.command("player", { type: "move", to: [tx, ty] });
+
+            const before = room(game.cameraFollow.yaw);
+
+            game.advance(2.5);
+
+            return { before, after: room(game.cameraFollow.yaw), turned: Math.abs(wrap(game.cameraFollow.yaw - crowded)) };
+        };
+
+        // In a fight in the tunnel, a foe a few steps along it: the battle cam frames it from where
+        // the rock leaves the camera room, not crowded in against it
+        const fight = () => {
+            const foe = game.battle.actors.find((actor) => actor.map === player.map && actor.id !== "player" && actor.dead && actor.maxHp);
+            const ways = Array.from({ length: 36 }, (_, k) => (k * Math.PI) / 18);
+
+            // (Settled in the tunnel first: the camera as its space has it)
+            Object.assign(player, { x: tight.x + 0.5, y: tight.y + 0.5, square: [tight.x, tight.y], path: [], order: null });
+            game.advance(5);
+
+            const along = ways.reduce((a, b) => (view.roomAt(b) > view.roomAt(a) ? b : a));
+            const [fx, fy] = [3, 2, 4].map((d) => [Math.round(tight.x - Math.sin(along) * d), Math.round(tight.y - Math.cos(along) * d)]).find(([x, y]) => !squares.blocked(x, y));
+
+            Object.assign(foe, { dead: false, hp: foe.maxHp, respawnAt: undefined, x: fx + 0.5, y: fy + 0.5, square: [fx, fy], path: [], order: null, attack: null, target: "player", stunnedUntil: game.battle.time + 60000 });
+            game.cameraSettings = { ...game.cameraSettings, battle: true, openWay: true };
+            game.avatars.get(foe.id)?.place(fx + 0.5, fy + 0.5, 0);
+            game.previous.set(foe.id, { x: foe.x, y: foe.y });
+            // (The camera behind the player, looking along the tunnel at it: both in view)
+            game.cameraFollow.yaw = along;
+            game.cameraFollow.waiting = 0;
+            game.advance(4);
+
+            return { room: view.roomAt(game.cameraFollow.yaw), framing: game.battleCamOn === foe.id };
+        };
+
+        // Seen through the rock where it hides them: a point in the rock past the open cavern's
+        // edge hidden from the camera over it, the player in the open not; hidden, drawn again as a
+        // silhouette (after the world, before them), and not once they're seen
+        const silhouette = () => {
+            at(open, 3);
+
+            const me = game.avatars.get("player");
+            const [px, pz] = [mx + open.x + 0.5, mz + open.y + 0.5];
+            // (Away from the camera, past the cavern's edge, a metre and a half into the rock)
+            const [ax, az] = [-Math.sin(view.yaw), -Math.cos(view.yaw)];
+            let r = 1;
+
+            while (r < 20 && !rock(px + ax * r, pz + az * r)) {
+                r += 0.25;
+            }
+
+            const behind = { x: px + ax * (r + 1.5), y: view.focus.y + 1, z: pz + az * (r + 1.5) };
+
+            const rockHides = view.rockHides.bind(view);
+            const result = { behind: view.rockHides(behind), me: view.rockHides(me.point(0.55)) };
+
+            view.rockHides = () => true;
+            game.advance(0.2);
+
+            const copies = me.object.userData.silhouette?.copies ?? [];
+
+            Object.assign(result, { copies: copies.length, shown: copies.filter(({ visible }) => visible).length, order: [...new Set(copies.map(({ renderOrder }) => renderOrder))], over: [...new Set(copies.map(({ parent }) => parent.renderOrder))] });
+            view.rockHides = rockHides;
+            game.advance(0.2);
+            result.after = copies.filter(({ visible }) => visible).length;
+
+            return result;
+        };
+
+        return { open, tight, inOpen, inTight, nudged: nudged.pitch - base, tunnel: tunnel.pitch - inTight.pitch, finds: across(true), leaves: across(false), fight: fight(), silhouette: silhouette() };
+    });
+
+    expect(seen.open.how).toBeGreaterThan(0.75);
+    expect(seen.tight.how).toBeLessThan(0.4);
+    expect(seen.inOpen).toMatchObject({ over: true, cut: true, rockCut: [true] });
+    expect(seen.inOpen.pitch).toBeGreaterThan(44);
+    expect(seen.inOpen.height).toBeGreaterThan(6);
+    expect(seen.inTight).toMatchObject({ over: false, cut: false, rockCut: [false] });
+    expect(seen.inTight.pitch).toBeLessThan(32);
+    expect(seen.inTight.under).toBeGreaterThan(0.5);
+    expect(seen.nudged).toBeGreaterThan(10);
+    expect(Math.abs(seen.tunnel)).toBeLessThan(3);
+    expect(seen.finds.before).toBeLessThan(0.5);
+    expect(seen.finds.after).toBeGreaterThanOrEqual(0.8);
+    expect(seen.finds.turned).toBeGreaterThan(0.1);
+    expect(seen.leaves.turned).toBeLessThan(0.05);
+    expect(seen.fight.framing).toBe(true);
+    expect(seen.fight.room).toBeGreaterThanOrEqual(0.6);
+    expect(seen.silhouette).toMatchObject({ behind: true, me: false, order: [1], over: [2], after: 0 });
+    expect(seen.silhouette.copies).toBeGreaterThan(0);
+    expect(seen.silhouette.shown).toBeGreaterThan(0);
 });
 
 test("a dungeon whose creatures are drawn from models: theirs fetched, not read, as the player nears its way in; waited for at its door, the world stopped, a card saying how far they've got, Not now staying out and Go in now offered after a while; gone in once they're read; let go of a little after the player's left", async ({ page }) => {
@@ -12482,8 +12797,38 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
 
     await expect(minimap).toBeVisible();
 
-    // Ten metres south of the player, on the map (which shows the world round them)
+    // (Their own mark tapped: the camera, turned to look at them from in front, swung round
+    // behind them, the way they face; they go nowhere)
     const box = await minimap.boundingBox();
+    const mark = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const [x0, z0, across] = game.minimap.shown();
+
+        game.cameraFollow.yaw = player.facing;
+
+        return { x: player.x, z: player.y, x0, z0, across };
+    });
+
+    await page.mouse.click(box.x + ((mark.x - mark.x0) / mark.across) * box.width, box.y + ((mark.z - mark.z0) / mark.across) * box.height);
+
+    // (The game stepped on by hand to see it come round, as a phone's frames would turn it)
+    const recentred = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.advance(3);
+        game.start();
+
+        const off = game.cameraFollow.yaw - (game.battle.actor("player").facing + Math.PI);
+
+        return { off: Math.abs(Math.atan2(Math.sin(off), Math.cos(off))), order: game.battle.actor("player").order?.type ?? null };
+    });
+
+    expect(recentred.off).toBeLessThan(0.05);
+    expect(recentred.order).not.toBe("move");
+
+    // Ten metres south of the player, on the map (which shows the world round them)
     const spot = await page.evaluate(() => {
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
@@ -12769,7 +13114,7 @@ test("Game options: its groups at the top, each a page of its own, short enough 
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
 });
 
-test("Game options set the camera: following off at first, it keeps the way it's turned as the player walks; the battle cam on at first; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {
+test("Game options set the camera: following off at first, it keeps the way it's turned as the player walks; the battle cam and finding the way through on at first; a drag turns and tilts it as far as chosen, each its own, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {
     // (The game started twice: more than the usual time)
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
@@ -12782,21 +13127,30 @@ test("Game options set the camera: following off at first, it keeps the way it's
 
     const follows = page.getByRole("switch", { name: /Camera follows/ });
     const battleCam = page.getByRole("switch", { name: /Battle cam/ });
+    const openWay = page.getByRole("switch", { name: /Find the way through/ });
     const invert = page.getByRole("switch", { name: /Invert tilt/ });
     const shake = page.getByRole("switch", { name: /Screen shake/ });
 
     await expect(follows).not.toBeChecked();
     await expect(battleCam).toBeChecked();
+    await expect(openWay).toBeChecked();
     await expect(invert).not.toBeChecked();
     await expect(page.locator("#dragslider")).toHaveValue("100");
     await expect(page.locator("#dragname")).toHaveText("100%");
+    await expect(page.locator("#tiltslider")).toHaveValue("100");
+    await expect(page.locator("#tiltname")).toHaveText("100%");
 
-    // The battle cam off, tilt inverted, a drag turning it twice as far; and no shaking
+    // The battle cam and finding the way through off, tilt inverted, a drag turning it twice as
+    // far and tilting it half as far; and no shaking
     await page.locator("label:has(#battlecamswitch)").click();
+    await page.locator("label:has(#openwayswitch)").click();
     await page.locator("label:has(#invertswitch)").click();
     await page.locator("#dragslider").fill("200");
     await page.locator("#dragslider").dispatchEvent("change");
     await expect(page.locator("#dragname")).toHaveText("200%");
+    await page.locator("#tiltslider").fill("50");
+    await page.locator("#tiltslider").dispatchEvent("change");
+    await expect(page.locator("#tiltname")).toHaveText("50%");
     await page.getByRole("button", { name: "Back", exact: true }).click();
     await page.getByRole("button", { name: /^Graphics/ }).click();
     await expect(shake).toBeChecked();
@@ -12821,13 +13175,13 @@ test("Game options set the camera: following off at first, it keeps the way it's
         return { settings: game.cameraSettings, before, after: { yaw: game.cameraFollow.yaw, pitch: game.cameraFollow.pitch }, moved: player.square[0] - x, shaking: game.shaking };
     });
 
-    expect(walked.settings).toEqual({ follows: false, battle: false, shake: false, drag: 2, invert: true });
+    expect(walked.settings).toEqual({ follows: false, battle: false, openWay: false, shake: false, drag: 2, tilt: 0.5, invert: true });
     expect(walked.moved).toBeGreaterThan(0);
     expect(walked.after).toEqual(walked.before);
     expect(walked.shaking).toBe(0);
 
     // Dragged 150 pixels right and 60 down: turned twice as far as it used to be, and tilted up
-    // (down, inverted)
+    // (down, inverted) half as far
     await page.evaluate(() => window.pellagos.game.start());
 
     const box = await page.locator("#view").boundingBox();
@@ -12843,7 +13197,7 @@ test("Game options set the camera: following off at first, it keeps the way it's
     const turned = Math.atan2(Math.sin(after.yaw - before.yaw), Math.cos(after.yaw - before.yaw));
 
     expect(turned).toBeCloseTo((-150 / box.width) * Math.PI * 2, 2);
-    expect(after.pitch - before.pitch).toBeCloseTo((-60 / box.height) * 60 * 2, 1);
+    expect(after.pitch - before.pitch).toBeCloseTo((-60 / box.height) * 60 * 0.5, 1);
 
     // Following turned on; all remembered next time
     await page.locator("#menubutton").click();
@@ -12855,8 +13209,9 @@ test("Game options set the camera: following off at first, it keeps the way it's
     await page.getByRole("button", { name: "Back", exact: true }).click();
     await page.getByRole("button", { name: "Resume" }).click();
     await playing(page, "/?play&seed=1");
-    expect(await page.evaluate(() => window.pellagos.game.cameraSettings)).toEqual({ follows: true, battle: false, shake: false, drag: 2, invert: true });
+    expect(await page.evaluate(() => window.pellagos.game.cameraSettings)).toEqual({ follows: true, battle: false, openWay: false, shake: false, drag: 2, tilt: 0.5, invert: true });
     await expect(page.locator("#dragslider")).toHaveValue("200");
+    await expect(page.locator("#tiltslider")).toHaveValue("50");
 });
 
 test("holding on an enemy or the player opens the action wheel: flick left (W) to stun it, or up (N) to heal", async ({ page }) => {

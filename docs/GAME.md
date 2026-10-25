@@ -1615,8 +1615,8 @@ change) greyed the lamplit taproom and dulled the painted colours, and Khronos N
 taproom orange.
 
 **Following the player** (app/camera.js). From the player's first step, the camera keeps up
-with them, and with **Camera follows** turned on (Game options; off to start with, below) swings
-round behind them as follows. Turned off, it keeps the way it's turned and its tilt as they walk,
+with them, and with **Camera follows** turned on (Game options; on to start with on a touch
+screen, off with a mouse: save.js `loadSettings`, below) swings round behind them as follows. Turned off, it keeps the way it's turned and its tilt as they walk,
 only keeping up with them (and in a fight, framing it as below). Following, it keeps up with them, at the same height and zoom, on a leash: as they go it stays where it was, but for
 keeping them in view at its distance (the camera study's recommendation 2, as Cinemachine's lazy
 follow does). Walking across its view, it swings round after them; walking towards it, it backs
@@ -1629,6 +1629,28 @@ so a path's corners don't swing it about. Stood still, it stays where it's turne
 else (coming back to life), it catches them up without turning (its leash only on while they
 walk, and within 3 metres of them). The minimap stays north up; the wedge showing which way the
 camera looks turns on it.
+
+**Turned by hand.** A drag (a finger, or any mouse button) turns it round the player and tilts
+it, as far as Camera turning and Camera tilting say (Game options: each its own, half as far to
+twice as far), and the browser's own menu never opens over the world or the world map ("Save
+image as" and the like: a player on a PC found it opening as they turned the camera with the
+right button: view.js, worldmap.js). On a PC, **Q** and **E** turn it while held (2 radians a
+second, times Camera turning: game.js `KEY_TURN`, `#keyTurn`), as a drag does, and **R** swings
+it round behind the player, the way they face, tilted as it starts (35 degrees down), on its
+spring (camera.js `recentre`); on a phone, so does tapping the player's own mark on the minimap
+(within a tap's reach of them, where walking there would go nowhere: game.js `mapTap`). A fight
+the battle cam framed is let be after either, as after a drag. Held keys are let go of as the game
+stops listening (the menu opened), so a key let go of meanwhile can't leave it turning. The wheel
+and the zoom buttons zoom eased in (half the way there in 35 ms: view.js `zoomSmoothly`); a pinch
+follows the fingers.
+
+**Finding the way through** (Game options, Camera, on to start with: game.js `#openWay`,
+`OPEN_WAY`). Walking where the walls or a dungeon's rock leave the camera less than half of its
+distance for half a second (not in a fight, nor a second after a drag), it turns the least way
+round, 5 degrees at a time, to where it has four fifths of it, looking from behind the way the
+player's going rather than in front (each radian off that counting half a radian more turning);
+nowhere so roomy, to the roomiest, if that's a quarter more of it than where it is. It looks again
+every 0.15 s, so it follows a winding tunnel. Turned off, it stays turned the way it's left.
 
 **In a fight** (the camera study's recommendations 5 and 6: framing the fight by itself, as
 touch suits, not a lock the player turns on). Whoever the player's fighting (the one they're set
@@ -1651,11 +1673,16 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   `hiddenFrom`, town3d.js `props`) or out of the view (as below: a foe far off, a bow's shot away,
   brings it nearer behind them); of those as clear, the one it turns least to, each step off
   counting as 30 degrees more turning and the side it's on 45 less, so it keeps to its side as
-  the foe steps about rather than swapping round. It frames each foe once: turned by hand (a
-  drag) while it frames the fight, it lets that foe be till the fight's over (game.js
-  `battleCamLeft`), the camera left as the player turned it; it had swung back round to frame
-  the fight a second after every drag. Someone else the player then fights it frames once
-  they're wholly on the screen.
+  the foe steps about rather than swapping round. Indoors, where nothing's on a height map, a way
+  to look from that would crowd the camera in against the walls or a dungeon's rock to less than
+  60% of its distance counts as one of them hidden, and so does a dungeon's rock between (view.js
+  `#hiddenInside`, `CRAMPED`), so it frames a fight in a tunnel from along it, where there's room
+  behind it. It frames each foe once: turned by hand (a drag, Q or E, or R) while it frames the
+  fight, it lets that foe be till the fight's over (game.js `battleCamLeft`), the camera left as
+  the player turned it; it had swung back round to frame the fight a second after every drag. The
+  steering's the player's again, but not the view: the hole cut through whatever hides that foe,
+  and a big one's draw-back, stay (once, a drag lost both for the rest of the fight). Someone else
+  the player then fights it frames once they're wholly on the screen.
 - **With the battle cam off, it doesn't swing round behind the player** as they move about, but
   turns only as far as keeps both of them within 60% of the way from the middle of the view to
   its side (camera.js `keep`: the least turn, 5 degrees at a time, either way round; if none does,
@@ -1677,13 +1704,16 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
 - **Those attacking the player out of view** each have a red arrow at the screen's edge,
   pointing the way to them across the ground (in front of the camera, up; behind it, down), the
   nearest three, clear of the quick actions, gone once they're in view (game.js `#threats`, hud.js
-  `threats`).
+  `threats`): violet for one that shoots or throws at them (`--hostile-ranged`), and bigger and
+  flashing quickly while a blow or shot at them is drawn back, not yet let go, as God of War's
+  arrows say what's coming (still, asked for less motion).
 - **The foes about the player** each have an icon down the right side of the screen, the
   first six (game.js `#attackers`, `ATTACKERS`; hud.js `attackers`, its group "Enemies"):
   whoever the player's set on first; then those attacking them, in the order they came to it;
   then the rest they can see within 40 m (as far as the lock holds, `ENEMIES.reach`; seen as
   far in the dark as a player sees, *Seeing at night*: `#enemiesSeen`, looked for four times a
-  second, not every frame), the nearest first, their frame fainter and their name read "…, in
+  second, not every frame; one who dies let go at once, not left till the next look), the
+  nearest first, their frame fainter and their name read "…, in
   range" (`.attacker.idle`). Till 2026-10-25 only those attacking them, and whoever they were set
   on, were listed. Each icon: their likeness in a red frame (`--hostile`), a thin line of
   their health along its foot, whoever the player's set on glowing and pulsing (still, asked for
@@ -1808,12 +1838,19 @@ once (by its shader: the fragment's own depth, so no transparency, nothing drawn
 their shadows whole), as they're put on.
 
 **The camera's settings** (Game options; app/save.js, game.js `cameraSettings`): **Camera
-follows** (off): on, it swings round behind the player as they walk (above); off, it keeps the
-way it's turned and its tilt as they walk, only keeping up with them (following saved before it
-was off to start with is forgotten once, for the new default: save.js `cameraDefaults`);
-**Battle cam** (on): in a fight, once the player and their foe are both wholly on the screen, it frames it three-quarters on (above); **Camera turning** (50 to 200%, 100): how far a drag turns and tilts it;
-**Invert tilt** (off): dragging up looks down; **Screen shake** (on): off, the greater spells
-don't shake it.
+follows** (on a touch screen on, with a mouse off: touched, the camera's turned by hand less
+readily, and phone games ship it on): on, it swings round behind the player as they walk
+(above); off, it keeps the way it's turned and its tilt as they walk, only keeping up with them
+(following saved before it was off to start with is forgotten once, for the new default; and
+saved off when it was off for everyone, forgotten once on a touch screen: save.js
+`cameraDefaults`); **Battle cam** (on): in a fight, once the player and their foe are both wholly
+on the screen, it frames it three-quarters on (above); **Find the way through** (on): where walls
+crowd it as the player walks, it turns to look along the way through (above); **Camera turning**
+(50 to 200%, 100): how far a drag turns it, and how fast Q and E do; **Camera tilting** (50 to
+200%, 100): how far a drag tilts it; **Invert tilt** (off): dragging up looks down; **Screen
+shake** (on): off, the greater spells don't shake it. Following and how far a drag turns and
+tilts it go by the device (touched or pointed at); the rest go with a hero a world server keeps
+(save.js `PLAY_SETTINGS`).
 
 **Turning it by hand.** A drag (a finger, or the mouse held down) turns the camera round the
 player: across the screen's width, half round, the view turning the way the drag goes (dragged
@@ -1828,7 +1865,9 @@ looking down into the room, the ceiling's not drawn), but under it, it's kept in
 metres, by more than the camera's near plane), no nearer the player than a metre (view.js
 `roomReach`), coming in closer than a wall behind or the ceiling over it rather than going out
 through it, quickly in and slowly back out, as at a building outside; going over the ceiling or
-back under it, it's there at once, never passing through it. (A room open to the sky, a broken
+back under it, it's there at once, never passing through it, and back under only 0.15 metres
+lower than it went over (over again 0.15 higher: `ROOM.band`), so a slow drag or pinch there
+can't flicker it from one to the other. (A room open to the sky, a broken
 tower's top, has no ceiling to keep under.) Coming into a room (through a door, or up or down
 the stairs), the camera looks across it from behind the player, 22 degrees down, from as far
 back as the ceiling and the wall behind allow (5.6 metres at most: `ROOM_VIEW`; just under the
@@ -1922,7 +1961,11 @@ gatehouses and keeps, not props or trees) and, finding one in the way, comes in 
 (staying 0.6 metres clear of it), or rises over it (up to 85 degrees), whichever leaves the
 camera furthest from the player, a degree higher counting as 0.15 metres nearer, and never nearer
 than 2.6 metres: a building a little way behind brings it in, one right behind lifts it over.
-It comes in (and rises) quickly, and goes back out slowly once the way is clear.
+It looks along three lines, its own and one a quarter metre either side of it (the lens is wider
+than a line: view.js `PULL.wide`), and turning, as far round as it'll have turned in a quarter of
+a second too (15 degrees at most), so it's in already as a wall comes round into the way. It comes
+in (and rises) quickly, and goes back out slowly, once the way's been clear for 0.4 s (`hold`),
+so walking past a row of houses with gaps between doesn't pump it in and out.
 
 **The cutaway.** Whatever still hides the player (a tree, or a building too close to come in
 front of), the view finds by marching along the line from the player to the camera (as far as
@@ -5405,8 +5448,8 @@ it.
    - **Controls:** the thumb stick, and under it the stick under your thumb; the zoom buttons;
      the minimap (off, the compass in its place: above); and the Action wheels and Quick
      actions pages.
-   - **Camera:** Camera follows, the battle cam, Camera turning and Invert tilt (*The camera's
-     settings*, above).
+   - **Camera:** Camera follows, the battle cam, Find the way through, Camera turning, Camera
+     tilting and Invert tilt (*The camera's settings*, above).
    - **Gameplay:** the Auto-snag switch (off to start with) and under it, while it's on, what it
      takes (its own page: docs/WILDS.md *What they leave*); Auto target lock (on to start with:
      *Locked on*, under *Those attacking the player*); Resist all summons; Refuse party
@@ -5467,7 +5510,8 @@ whatever it's of was started and the world's seed, and is read only for that. `p
 own id, and their place in it too, so all that was kept stays where it was. Settings (the minimap and sound switches, the three volumes, the camera's, debug mode and its
 controls) are in `pellagos.settings`, the same whoever's played; those for how the player plays
 (`PLAY_SETTINGS`: auto-snag and what it takes, the target lock, saying no to summons and invites,
-and the camera's) are kept by a world server with a hero it keeps too, and taken up from it as
+the battle cam, finding the way through, tilt inverted and the greater spells' shaking; not how
+the camera follows or turns by hand, which go by the device) are kept by a world server with a hero it keeps too, and taken up from it as
 they come in (above), so they're theirs whichever device or browser they play on: each web
 address the game's opened from keeps its own (a home-screen app, a browser and a server's two
 addresses each their own).
