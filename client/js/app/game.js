@@ -168,7 +168,7 @@ import { PHASE, telemetry } from "./telemetry.js";
 import { InvasionBudget } from "./budget.js";
 import { Throng } from "./throng.js";
 import { Pacing } from "./pacing.js";
-import { PREDICT, Prediction } from "./predict.js";
+import { Forecast } from "./forecast.js";
 import { FIGHT_LINGERS, inFight } from "./fight.js";
 import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
@@ -433,17 +433,15 @@ const JOINED_FRAME = 1;
 // moment, as a phone's mobile network often is)
 const RUN_ON = 3;
 
-// How often a joined game times its link to the host (seconds); and how far ahead its hero's
-// drawn going when swiped straight ahead (m: app/predict.js stops it soon enough)
+// How often a joined game times its link to the host (seconds)
 const PING_EVERY = 1;
-const AHEAD = 50;
+
+// How far (m) a body's drawn closing up to where it is, the world sent again; further, it's put
+// there at once
+const CLOSE_UP = 3;
 
 // How often how the world's linked is looked at again, for the HUD (ms: #worldLink)
 const LINK_EVERY = 500;
-
-// The commands that set the player's hero going otherwise than where they're sent, or stop them:
-// not drawn ahead of the copy (app/predict.js)
-const STEERING = new Set(["engage", "approach", "enter", "stop", "unlock", "cancel", "summoned", "trade"]);
 
 // How long a joined game goes without a step from the host before its player's told it's waiting (ms)
 const WAITING_AFTER = 2000;
@@ -983,8 +981,20 @@ export class Game {
         this.remote = remote;
         this.pingedAt = 0;
 
-        /** A joined game's hero, drawn going where they're sent before the host's heard (app/predict.js). */
-        this.predict = remote ? new Prediction() : null;
+        /**
+         * A joined game's hero, drawn where the game's rules will have them as soon as what's sent
+         * now is done, ahead of the copy (app/forecast.js), from the host's word of them
+         * (Joining.self).
+         */
+        this.forecast = remote ? new Forecast() : null;
+
+        if (remote) {
+            remote.onSelf = (self) => this.forecast.heard(self);
+
+            if (remote.self) {
+                this.forecast.heard(remote.self);
+            }
+        }
 
         /**
          * How the link to the others is (app/together.js onLink): null, all's well; "lost", this
@@ -1124,6 +1134,9 @@ export class Game {
                 drawn: { calls: info.render.calls, triangles: info.render.triangles, geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs?.length ?? 0 },
                 frame: { fps: one(this.stats.fps), update: one(this.stats.update), render: one(this.stats.render) },
                 together: this.remote ? "joined" : this.hosting ? "hosting" : null,
+                // (Joined: how often its own hero, drawn ahead, has been put right, and by how much
+                // at most: app/forecast.js)
+                ...(this.forecast ? { forecast: { ...this.forecast.corrections, most: one(this.forecast.corrections.most) } } : {}),
                 memory: this.memoryNow(),
                 device: { agent: globalThis.navigator?.userAgent ?? "", ratio: globalThis.devicePixelRatio ?? 1, screen: `${globalThis.screen?.width ?? 0}x${globalThis.screen?.height ?? 0}`, buffer: `${view.renderer.domElement.width}x${view.renderer.domElement.height}`, cores: globalThis.navigator?.hardwareConcurrency ?? null, memoryGB: globalThis.navigator?.deviceMemory ?? null },
             };
@@ -3246,10 +3259,16 @@ export class Game {
 
             let x = previous.x + (actor.x - previous.x) * alpha;
             let z = previous.y + (actor.y - previous.y) * alpha;
+            let facing = actor.facing;
 
-            // (Joined: their own hero drawn going where they're sent before the host's heard)
-            if (actor === mine && this.predict) {
-                [x, z] = this.predict.at(actor, x, z, this.clock * 1000);
+            // (Joined: their own hero drawn where the rules will have them as soon as what's sent
+            // now is done, ahead of the copy, facing as they'll face: app/forecast.js)
+            if (actor === mine && this.forecast) {
+                const place = this.forecast.at(battle, this.me, this.remote.clock(), this.remote.lately ?? undefined);
+
+                if (place && place.map === actor.map) {
+                    [x, z, facing] = [place.x, place.y, place.facing];
+                }
             }
 
             // (A fortification, or a camp's stakes: only where it stands, on the ground there; and a
@@ -3300,7 +3319,7 @@ export class Game {
                 avatar.hang?.(this.#hanging(actor, avatar, ox + x, oz + z));
             }
 
-            avatar.update(dt, ox + x, oz + z, actor.facing, !actor.attack);
+            avatar.update(dt, ox + x, oz + z, facing, !actor.attack);
 
             if (!thronged) {
                 this.#counted(avatar, bodies);
@@ -9524,11 +9543,11 @@ export class Game {
 
             // (Drawn going there from where they were, as their bodies follow where they are
             // (world/avatar.js): unless that's further than it's drawn closing up to, when
-            // they're put straight there, as their hero is (app/predict.js))
+            // they're put straight there (CLOSE_UP))
             const [ox, oz] = this.originOf(actor.map);
             const { x, z } = avatar.object.position;
 
-            if (Math.hypot(x - ox - actor.x, z - oz - actor.y) > PREDICT.far) {
+            if (Math.hypot(x - ox - actor.x, z - oz - actor.y) > CLOSE_UP) {
                 this.#place(actor);
             } else {
                 this.previous.set(actor.id, { x: actor.x, y: actor.y });
@@ -14146,35 +14165,6 @@ export class Game {
         this.effects.markTarget(ox + goal[0] + 0.5, oz + goal[1] + 0.5);
     }
 
-    // Joined, the player's hero sent somewhere (or straight ahead): drawn going at once, and
-    // caught up with once it's done (`then` hearing what came of it as before)
-    #predicting(command, then) {
-        const player = this.battle.actor(this.me);
-
-        if (!this.predict || !player) {
-            return then;
-        }
-
-        if (command.type !== "move" && command.type !== "ahead") {
-            if (STEERING.has(command.type)) {
-                this.predict.other();
-            }
-
-            return then;
-        }
-
-        const ahead = Math.min(command.reach ?? AHEAD, AHEAD);
-        const to = command.type === "move" ? [command.to[0] + 0.5, command.to[1] + 0.5] : [player.x + Math.sin(command.facing) * ahead, player.y + Math.cos(command.facing) * ahead];
-
-        const way = command.type === "ahead" ? [Math.sin(command.facing), Math.cos(command.facing)] : null;
-        const order = this.predict.ordered(player, to, Boolean(command.run), this.clock * 1000, way);
-
-        return (result) => {
-            this.predict?.done(result, this.clock * 1000, order);
-            then?.(result);
-        };
-    }
-
     // What the player does, sent to the host (core/host.js command): { ok }, or { ok: false,
     // reason } if it can't be done
     // A command of the player's, to the host: `then` hears what came of it (at once, playing alone
@@ -14193,8 +14183,14 @@ export class Game {
         this.toSign = null;
         this.toShrine = null;
 
+        // (Joined: told to the forecast too, which has the hero do it as the host will, as soon as
+        // the host will: app/forecast.js)
         if (this.remote) {
-            return this.remote.command(command, this.#predicting(command, then));
+            const sent = this.remote.command(command, then);
+
+            this.forecast?.sending(sent.seq, command, this.remote.clock());
+
+            return sent;
         }
 
         const result = this.host.command(this.me, command);
