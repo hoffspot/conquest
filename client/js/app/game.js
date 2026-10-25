@@ -404,12 +404,14 @@ const TRICKLE_HEARD = 16;
 // how often (s) the doors of the settlements come to since are picked up
 const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
-// A building's folk (Wenches and Ale's too) dressed only once the player's making for its door, at
-// it (`near` metres from it, out in the world), or inside; and let go of again once they're `far`
-// off it (its floors kept while the host keeps it got ready): the folk of a town's buildings round
-// its square aren't all kept dressed, their skins on the page and the graphics card, for a player
-// standing in it or walking past
-const DOORSTEP = Object.freeze({ near: 6, far: 20 });
+// A building's folk (Wenches and Ale's too) dressed only once the player goes in: told to go
+// through one of its ways in, or inside; and let go of again once they're `far` metres off its
+// door (its floors kept while the host keeps it got ready). Not as they come near its door: the
+// folk of a town's buildings round its square aren't dressed, their skins on the page and the
+// graphics card, for a player standing in it or walking past (Wenches and Ale's 25 dressed in six
+// seconds as a player passed its door took an iPhone from 350 MB held to 490 MB, and Safari
+// closed the page)
+const DOORSTEP = Object.freeze({ far: 20 });
 
 // A building's floors, built as it's got ready, let go of again once the player's `far` metres
 // from its door (or, inside another building, that building's door is), though the host keeps it
@@ -10347,8 +10349,8 @@ export class Game {
         }
     }
 
-    // A building's folk wanted, the player making for its door, at it or inside (DOORSTEP), or let
-    // go of, the player well away from it out in the world
+    // A building's folk wanted, the player going in (told to go through one of its ways in, or
+    // inside: DOORSTEP), or let go of, the player well away from it out in the world
     #doorstep(visit) {
         const me = this.battle.actor(this.me);
 
@@ -10361,7 +10363,7 @@ export class Game {
         const away = me.map === "town" ? Math.hypot(visit.door.x - me.x, visit.door.z - me.y) : Infinity;
         const making = me.order?.type === "enter" && Boolean(this.battle.links?.find(({ id }) => id === me.order.link)?.ends.some(({ map }) => ours(map)));
 
-        if (!visit.welcomed && (inside || making || away < DOORSTEP.near)) {
+        if (!visit.welcomed && (inside || making)) {
             this.#welcome(visit);
         } else if (visit.welcomed && !inside && !making && away > DOORSTEP.far) {
             this.#farewell(visit);

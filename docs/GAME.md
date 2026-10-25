@@ -2685,15 +2685,18 @@ shaders.
 that can be gone into: one whose door is within 22 metres of the player (or whose door they're
 making for) is got ready: its plans made, then each floor built, one to a piece of work, for at
 most 6 ms a frame. Its folk are in the battle from then on, but each is dressed (their body,
-garments and skin: CHARACTERS.md, *Built a step at a time*) only once the player's making for
-its door (told to go through it), at it (6 metres from it: `DOORSTEP`, app/game.js `#doorstep`),
-or inside, a piece of work each after its floors; and let go of again (their characters thrown
+garments and skin: CHARACTERS.md, *Built a step at a time*) only once the player goes in: told
+to go through one of its ways in, or inside (`DOORSTEP`, app/game.js `#doorstep`), a piece of
+work each after its floors. Not as they come near its door, as they were till 2026-10-25: a
+player walking past Wenches and Ale's door had its 25 folk dressed in six seconds, taking an
+iPhone from 350 MB held to 490 MB, and Safari closed the page. They're let go of again (their characters thrown
 away, skins and all) once the player's 20 metres from it outside, though the building's still
 got ready, its floors kept: standing in the start town's square, its tavern's, smithy's,
-church's and hall's doors 11 to 16 metres off, all their folk were dressed and kept before, 25 of
-the 41 bodies about thirty seconds in, each holding its skin on the page and the graphics card; now
-16 are (headless Chromium, High, seed 1: the bodies' own copies 348 MB before and 110 MB after, the
-page's heap 748 MB and 464 MB, all told 988 MB and 715 MB). A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
+church's and hall's doors 11 to 16 metres off, all their folk were once dressed and kept, 25 of
+the 41 bodies about thirty seconds in, each holding its skin on the page and the graphics card;
+dressed only at their doors, 16 were (headless Chromium, High, seed 1: the bodies' own copies 348
+MB before and 110 MB after, the page's heap 748 MB and 464 MB, all told 988 MB and 715 MB); now
+none of theirs are, till the player goes in. A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
 furniture laid out, made into meshes, made ready to merge, merged). If the player's through the
 door before its folk are all dressed, its floors are built at once and the screen's kept dark
 while the folk are dressed, with 30 ms of each frame (`ENTERING`, `#entering`; their skins painted
