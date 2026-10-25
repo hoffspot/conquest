@@ -11044,6 +11044,21 @@ export class Game {
 
                     break;
                 }
+                case "unstruck":
+                    // (A quick action's blow, pressed while steering, that never came into reach:
+                    // nothing spent, its slot flashed red and why said, as a spell out of reach is)
+                    if (event.id === this.me && event.tag) {
+                        const slot = this.#quickKeys().keys.findIndex((key) => actionOf(key)?.ability === event.tag);
+
+                        if (slot >= 0) {
+                            this.quickBar?.mark(slot, "refused");
+                        }
+
+                        hud.message(CAST_FAILURES.range, 1.4);
+                        this.sound?.play("denied");
+                    }
+
+                    break;
                 case "exhausted":
                     if (event.id === this.me) {
                         hud.message("Out of breath", 1.5);

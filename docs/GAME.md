@@ -1063,7 +1063,8 @@ on them.
   after it for 10 seconds (`SHEATHE_AFTER_MS`), and not attacking, it puts the weapon away
   (`on`: false, taking `SHEATHE_MS`). Coming back to life, it's put away.
 - **Fighting on its own.** Standing still, the player attacks the nearest enemy within reach. Told
-  to walk somewhere, they go there (walking away calls off an attack that hasn't landed yet).
+  to walk somewhere, they go there (an attack that's begun lands first: neither walking away nor
+  the stick calls it off, as a quick action's blow is committed too; `NET_VERSION` 179).
   Told to fight someone, they walk until that enemy is within reach, then attack. A shot needs
   its target in sight, looked for as far as it reaches: a bow's 13.5 m (18 m till the user cut
   it by a quarter), past the 12 m anyone looks round for enemies, so an archer told to fight
@@ -1688,7 +1689,13 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   lit, their spells and blows in the quick actions aimed at it (game.js `#target`: who they're
   set on, or else locked on), and its icon kept down the right, attacking them or not. Once they
   stand again, it's struck if it's in reach, before whoever's nearer; out of reach, whoever is,
-  as ever (`#obey`); they don't go back after it of their own accord. Set on another, the lock
+  as ever (`#obey`); they don't go back after it of their own accord. A quick action's blow at
+  it (a power strike, an aimed shot, a shield bash: docs/WAR.md *Abilities*) is struck where
+  they are if it's in reach, wherever they're going kept, the swing holding them a moment.
+  Out of reach while they steer, it's waited on if it's within 3 m and struck as it comes into
+  reach (host.js `BLOW_WAIT`: 0.75 s at most, as a spell's queued); never coming into reach, or
+  further off, it's refused as a spell out of reach is ("Out of reach", its slot flashed red,
+  nothing spent), so the stick, not the blow, says where they go. Set on another, the lock
   goes with them (with Auto target lock off, set on another without it, the lock's let go and
   the other set on, not locked on). It's let go once it's fallen, once it's 40 metres off
   (`LOCK_REACH`) or somewhere else (through a door, unless the player's going after it), and

@@ -833,6 +833,13 @@ const isSquare = (value) => Array.isArray(value) && value.length === 2 && value.
 const refuse = (reason) => ({ ok: false, reason });
 const OK = Object.freeze({ ok: true });
 
+/**
+ * A quick action's blow pressed while the player's steering, its target out of reach: waited on
+ * if it's within `near` metres, for `ms` at most, and struck if it comes into reach meanwhile
+ * (#ability: as a spell queued, the stick still saying where they go); further off, refused.
+ */
+export const BLOW_WAIT = Object.freeze({ near: 3, ms: 750 });
+
 // The charms that count in someone's pack (progress.js charms), as a key to tell a change by:
 // each one's kind, make and what was rolled on it
 const charmsOf = (progress) =>
@@ -1896,6 +1903,10 @@ export class Host {
         // the wonders their spells work (Zombify, Summon, Teleport...)
         for (const event of events) {
             this.#learn(event);
+
+            if (event.type === "unstruck") {
+                this.#unstruck(event);
+            }
 
             if (event.type === "spell" && event.landed > 0) {
                 this.#wonder(event);
@@ -4122,6 +4133,17 @@ export class Host {
             return refuse(unshot);
         }
 
+        // (A blow at someone out of reach while the player's steering (held input: battle.js
+        // "ahead"), the stick saying where they go, not the blow: waited on a moment if they're
+        // near (BLOW_WAIT), struck if they come into reach meanwhile; further off, refused, and
+        // still ready, as a spell out of reach is; never struck, nothing spent: #unstruck)
+        const near = foe !== null && this.battle.reachable(actor.id, foe.id);
+        const steering = Boolean(actor.order?.held);
+
+        if (foe && !near && steering && (foe.map !== actor.map || hypot(foe.x - actor.x, foe.y - actor.y) > BLOW_WAIT.near)) {
+            return refuse("range");
+        }
+
         // (A shield bash: harder and longer, by as much, for a shield made for it)
         const bash = ability.stun ? (actor.power?.bash ?? 1) : 1;
 
@@ -4129,11 +4151,38 @@ export class Host {
         player.readyAt[id] = this.battle.time + ability.cooldown;
         this.#event("ability", { id: actor.id, ability: id });
 
+        // (At someone in reach, or near while steering: struck where they are, wherever they're
+        // going kept, the swing holding them a moment. Out of reach, not steering: after them at
+        // a run, struck once they're in reach, the lock on them kept: battle.js engage)
+        if (foe && (near || steering)) {
+            this.battle.strike(actor.id, foe.id, { until: near ? null : this.battle.time + BLOW_WAIT.ms, tag: id });
+
+            return OK;
+        }
+
         if (foe) {
-            return this.command(actor.id, { type: "engage", target: foe.id });
+            return this.command(actor.id, { type: "engage", target: foe.id, run: true });
         }
 
         return OK;
+    }
+
+    // A quick action's blow never struck (its target out of reach once its wait was up, or gone:
+    // battle.js strike): nothing spent, ready again at once and the next blow no stronger for it
+    #unstruck({ id, tag }) {
+        const player = this.players.get(id);
+        const ability = ABILITIES[tag];
+        const actor = this.battle.actor(id);
+
+        if (!player || !ability) {
+            return;
+        }
+
+        player.readyAt[tag] = 0;
+
+        if (actor?.empowered?.blow === ability.blow) {
+            actor.empowered = null;
+        }
     }
 
     // --- Who fights whom ---

@@ -755,7 +755,7 @@ describe("the battle (battle.js)", () => {
         // the wall
         battle.command("player", { type: "ahead", facing: Math.PI / 2, run: true });
         assert.equal(player.facing, Math.PI / 2);
-        assert.deepEqual(player.order, { type: "move", to: [25, 0], run: true });
+        assert.deepEqual(player.order, { type: "move", to: [25, 0], run: true, held: true });
         assert.equal(player.path.length, 1);
         assert.ok(player.path[0][0] > 25.5 && player.path[0][0] <= 25.7 && player.path[0][1] === 0.5, `to ${player.path[0]}`);
 
@@ -784,7 +784,7 @@ describe("the battle (battle.js)", () => {
         const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [1, 2] });
 
         battle.command("player", { type: "ahead", facing: Math.PI / 2, run: true, reach: 10 });
-        assert.deepEqual(player.order, { type: "move", to: [11, 2], run: true });
+        assert.deepEqual(player.order, { type: "move", to: [11, 2], run: true, held: true });
         assert.deepEqual(player.path, [[11.5, 2.5]]);
 
         // (None, or none to speak of: as far as the way is clear)

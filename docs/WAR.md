@@ -513,7 +513,14 @@ options, Action wheels: docs/GAME.md):
 - **Hold** (an enemy's wheel): a longer stun, from 9 squares.
 - **Power strike** and **aimed shot** (an enemy's wheel): the next blow (up close, or from
   afar) does twice the damage. Each is ready again 12 seconds after, its slice greyed till then.
-  A power strike walks up to the enemy to land it. An aimed shot at an enemy further off than
+  At an enemy in reach, either (or a shield bash) is struck where the player is, wherever they're
+  going kept, the swing holding them a moment (`Battle.strike`). A power strike at an enemy out of
+  reach while they're steering (held input) is waited on if the enemy's within 3 m, and struck if
+  it comes into reach within 0.75 s (`BLOW_WAIT`); further off, or never in reach, it's refused
+  ("Out of reach", as a spell out of reach is) and nothing's spent, ready again at once (the
+  `unstruck` event), the stick deciding where they go. Standing, or walking where a tap sent them,
+  they go after the enemy at a run, the lock on it kept, and land it once in reach (`NET_VERSION`
+  179: till then it turned a runner round to walk to it). An aimed shot at an enemy further off than
   what's in hand shoots (a bow's 13.5 m, a wand's 7), or out of sight, is refused ("Out of reach",
   "Can't see it"), as a spell out of reach is, and stays ready: nothing's spent
   (`Battle.shotAt`; `NET_VERSION` 46).
