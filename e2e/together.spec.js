@@ -440,6 +440,87 @@ test("the same character coming into a world on another device takes theirs over
     await Promise.all(contexts.map((context) => context.close()));
 });
 
+// A human who joins by the host's own town, its own id the same on two devices
+const ADA = {
+    version: 1,
+    seed: 779,
+    created: "2026-09-04T12:00:00.000Z",
+    hero: {
+        name: "Ada",
+        guid: "2e7d4c3b-5a6f-4b8c-9d0e-1f2a3b4c5d6e",
+        weapon: "sword",
+        race: "human",
+        parts: [],
+        shape: { macro: { gender: 0.2, muscle: 0.5, weight: 0.4, height: 0.5, bust: 0.5, african: 0.1, asian: 0.1, caucasian: 0.8 }, details: {} },
+        look: { skin: { tone: "#e0b896" }, eyes: { iris: "#6a4a2a" }, hair: { style: "bob", beard: "none", colour: "#3a2418" } },
+    },
+};
+
+test("a guest taken over upstairs in Wenches and Ale from another device starts there: the room drawn at once, the tavern's own folk dressed with it, and no one else's, the townsfolk out in the streets not till they come out", async ({ ownBrowser: browser }) => {
+    const contexts = await Promise.all([browser.newContext(), browser.newContext(), browser.newContext()]);
+    const [host, first, second] = await Promise.all(contexts.map((context) => context.newPage()));
+
+    await cheaply(host, first, second);
+
+    for (const page of [host, first, second]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await first.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), ADA);
+    await second.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), ADA);
+    await host.goto("/?play&seed=1");
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+
+    // Ada in on the first: into the tavern and up its stairs
+    await first.goto(`/?join=${code}`);
+    await first.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(first);
+
+    const map = (page) => page.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).map);
+
+    await first.evaluate(() => window.pellagos.game.remote.command({ type: "enter", link: "tavern-door" }));
+    await expect.poll(() => map(first), { timeout: 120000 }).toBe("taproom");
+    await first.evaluate(() => window.pellagos.game.remote.command({ type: "enter", link: "tavern-stairs" }));
+    await expect.poll(() => map(first), { timeout: 120000 }).toBe("upstairs");
+
+    // (Others' folk in the world: another building's, and those out in the streets)
+    expect(await host.evaluate(() => window.pellagos.game.battle.actors.filter(({ kind, map }) => kind === "folk" && map !== "taproom" && map !== "upstairs").length)).toBeGreaterThan(10);
+
+    // On the second: taken over, upstairs, the room shown; the tavern's twelve dressed as it loads,
+    // and a while later still no one else's folk
+    await second.goto(`/?join=${code}`);
+    await second.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(second);
+    await expect(second.locator("#banner")).toContainText("Your other session in this world was closed: you carry on here.", { timeout: 30000 });
+
+    const seen = () =>
+        second.evaluate(() => {
+            const { game } = window.pellagos;
+            const folk = game.battle.actors.filter(({ kind, id }) => kind === "folk" && game.avatars.has(id));
+
+            return { map: game.battle.actor(game.me).map, shown: game.mapId, room: game.interiors.get("upstairs")?.object.visible ?? false, town: game.town.object.visible, folk: folk.map(({ map }) => map).sort() };
+        });
+    const tavern = [...Array(7).fill("taproom"), ...Array(5).fill("upstairs")];
+
+    await expect.poll(seen, { timeout: 60000 }).toEqual({ map: "upstairs", shown: "upstairs", room: true, town: false, folk: tavern });
+    await second.waitForTimeout(10000);
+    expect((await seen()).folk).toEqual(tavern);
+
+    await Promise.all(contexts.map((context) => context.close()));
+});
+
 // A human who joins by the host's own town, carrying two wolf pelts
 const BRYN = {
     version: 1,
