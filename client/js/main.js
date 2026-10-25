@@ -844,6 +844,7 @@ $("#pointerswitch").checked = settings.swordPointer;
 $("#largepointerswitch").checked = settings.largePointer;
 showPlaySettings();
 $("#quicksixswitch").checked = settings.quickSix;
+$("#quickalwaysswitch").checked = settings.quickAlways;
 $("#fullscreenswitch").checked = settings.fullscreen;
 // (Where the browser won't have it, no switch: on an iPhone, a word on the Home Screen instead)
 $("#fullscreenoption").hidden = !fullScreen.available;
@@ -1107,6 +1108,7 @@ async function playing(save, { world, place, war }) {
     game.autoSnag = settings.autoSnag;
     game.snagFilter = snagChoiceOf();
     game.autoLock = settings.autoLock;
+    game.quickAlways = settings.quickAlways;
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -2700,6 +2702,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     game.autoSnag = settings.autoSnag;
     game.snagFilter = snagChoiceOf();
     game.autoLock = settings.autoLock;
+    game.quickAlways = settings.quickAlways;
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -4481,6 +4484,7 @@ $("#snagkinds").addEventListener("change", () => snagChanged());
 $("#followswitch").addEventListener("change", (event) => applySetting("cameraFollows", event.target.checked));
 $("#battlecamswitch").addEventListener("change", (event) => applySetting("battleCam", event.target.checked));
 $("#quicksixswitch").addEventListener("change", (event) => applySetting("quickSix", event.target.checked));
+$("#quickalwaysswitch").addEventListener("change", (event) => applySetting("quickAlways", event.target.checked));
 $("#invertswitch").addEventListener("change", (event) => applySetting("invertTilt", event.target.checked));
 $("#shakeswitch").addEventListener("change", (event) => applySetting("shake", event.target.checked));
 $("#fullscreenswitch").addEventListener("change", (event) => applySetting("fullscreen", event.target.checked));
@@ -4663,7 +4667,7 @@ function applySetting(key, value) {
     } else if (key === "quickSix") {
         state.game?.showQuick(quickShown());
         state.quickSetup?.showCount(quickShown());
-    } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock") {
+    } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock" || key === "quickAlways") {
         if (state.game) {
             state.game[key] = value;
         }

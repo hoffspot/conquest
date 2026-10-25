@@ -1043,6 +1043,9 @@ export class Game {
         /** Hears a quick action held on (its slot), to change what's in it (main.js: Quick actions). */
         this.onChooseQuick = () => {};
 
+        /** Whether the quick actions are kept up out of a fight too (Game options: Always show). */
+        this.quickAlways = false;
+
         /**
          * Asks whether one of the party's to be let go, for good ({ name, note, go }: `go` lets them
          * go; main.js: the dismiss dialog), or null to let them go unasked.
@@ -13880,8 +13883,8 @@ export class Game {
     }
 
     // The quick actions up in a fight (an enemy the player's set to fight, `target`, or anyone
-    // after them) and for a moment after it, each greyed while it can't be used and swept over
-    // while it cools down
+    // after them) and for a moment after it, or always (`quickAlways`), each greyed while it can't
+    // be used and swept over while it cools down
     #quickActions(target) {
         const player = this.battle.actor(this.me);
         const alive = Boolean(player) && !player.dead;
@@ -13890,7 +13893,7 @@ export class Game {
             this.fightUntil = this.clock + QUICK_LINGER;
         }
 
-        this.quickBar.raise(alive && this.clock < this.fightUntil);
+        this.quickBar.raise(alive && (this.quickAlways || this.clock < this.fightUntil));
 
         // (A Prismatic chain's next spell rolled in, up, where it's come in place of another)
         const { keys, chain } = this.#quickKeys();

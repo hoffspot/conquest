@@ -4862,6 +4862,11 @@ hostile on their map set to fight them or striking at them (`#underAttack`); the
 3 s after the last of it (`QUICK_LINGER`), so they don't come and go between blows, and go down
 at once if the player falls.
 
+**Always show** (Game options, Controls, Quick actions: the Always show switch under Six across,
+`quickAlways`, off to start with, kept on this device as Six across is): the slots stay up out of
+a fight too, so they (and their keys) can be used before one starts, for a buff, healing or Light
+at night (app/game.js `quickAlways`, `#quickActions`). They still go down if the player falls.
+
 **What's in them.** Each holds anything a wheel's slice can (a spell, a blow, a thing to use;
 not Fight): Vigor, Stun, Burn and a healing draught to start with (`QUICK`), shown with its icon
 and name, a count for a thing to use, and a line along its foot saying who it's used on (red,

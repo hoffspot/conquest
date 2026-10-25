@@ -13241,6 +13241,49 @@ test("a Prismatic chain: an element's spell cast from the quick actions rolls it
     await expect(sigil).toBeHidden();
 });
 
+test("Always show (Game options, Quick actions): the quick actions kept up along the bottom out of a fight, a key using one there, and remembered; switched off, down again with no fight", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const bar = page.locator(".quickbar");
+    const always = (on) =>
+        page.evaluate((on) => {
+            const switched = document.querySelector("#quickalwaysswitch");
+
+            switched.checked = on;
+            switched.dispatchEvent(new Event("change"));
+            window.pellagos.game.advance(0.1);
+        }, on);
+
+    // Down out of a fight, as ever (the lone orc out of the way)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.setQuick(["item:potion", null, null, null, null, null]);
+        game.advance(0.1);
+    });
+    await expect(bar).not.toHaveClass(/up/);
+    expect(await page.evaluate(() => document.querySelector("#quickalwaysswitch").checked)).toBe(false);
+
+    // Switched on: up, and still up a while on with no one about; remembered
+    await always(true);
+    await page.evaluate(() => window.pellagos.game.advance(10));
+    await expect(bar).toHaveClass(/up/);
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).quickAlways)).toBe(true);
+
+    // (Its 1 key used out of a fight: a draught, with none carried, refused. The game going again
+    // a moment, as keys are heard only then)
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press("1");
+    await expect(page.locator("#banner")).toHaveText("You've none left");
+    await page.evaluate(() => window.pellagos.game.stop());
+
+    // Off: down at once, there being no fight to linger after
+    await always(false);
+    await expect(bar).not.toHaveClass(/up/);
+});
+
 test("six quick actions across (Game options): only their icons on a phone held upright, their names on its side; a school's spell flicked down or up rolls to the last or next of its school the player knows, its name said over it, and is kept; at either end of its school, or anything else, it bounces", async ({ page }) => {
     test.setTimeout(180000);
     // (Not full screen, as a tap on the game asks to be, or the phone can't be turned on its side)
