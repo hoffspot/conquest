@@ -72,7 +72,7 @@ import { AFFLICTIONS, shareOf } from "./afflictions.js";
 import { RESEARCH } from "./bestiary.js";
 import { placeAt, placesOf } from "./formation.js";
 import { bonusOf, chainAfter, isWhole, lapsed, mighty, PRISMATIC, sigilSpell } from "./prismatic.js";
-import { nearestFree, squareKey, squaresOf } from "./grid.js";
+import { crosses, nearestFree, squareKey, squaresOf } from "./grid.js";
 import { routeBetween } from "./interiors.js";
 import { sightAt } from "./light.js";
 import { navigatorOf } from "./navigation.js";
@@ -1797,27 +1797,10 @@ export class Battle {
     }
 
     // Is any square `marked` (x, y) on the way between two squares (not counting them)? (Four
-    // points a metre along the line: most squares get more than one, asked about once)
-    #between(marked, [ax, ay], [bx, by], distance = distanceBetween([ax, ay], [bx, by])) {
-        const steps = Math.ceil(distance * 4);
-        let [lastX, lastY] = [ax, ay];
-
-        for (let k = 1; k < steps; k++) {
-            const x = Math.floor(ax + 0.5 + ((bx - ax) * k) / steps);
-            const y = Math.floor(ay + 0.5 + ((by - ay) * k) / steps);
-
-            if (x === lastX && y === lastY) {
-                continue;
-            }
-
-            [lastX, lastY] = [x, y];
-
-            if (marked(x, y) && !(x === bx && y === by)) {
-                return true;
-            }
-        }
-
-        return false;
+    // points a metre along the line: most squares get more than one, asked about once: grid.js
+    // crosses)
+    #between(marked, from, to, distance = distanceBetween(from, to)) {
+        return crosses(marked, from, to, distance);
     }
 
     /**

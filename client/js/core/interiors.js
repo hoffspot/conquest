@@ -22,6 +22,7 @@ export const PLAN_KEY = Object.freeze({
     D: { kind: "door" },
     "<": { kind: "stairs-foot" },
     ">": { kind: "stairs-top" },
+    // (The stairs: seen across on the floor they come up to, the stairwell there: readPlan)
     S: { kind: "stairs", blocks: true, opaque: true, joins: true },
     W: { kind: "wall", blocks: true, opaque: true, joins: true },
     H: { kind: "hearth", blocks: true, opaque: true, joins: true },
@@ -203,6 +204,15 @@ export function readPlan(id, name, rows, { ground = GROUND.courtyard } = {}) {
             (marks[char] ??= []).push([x, y]);
         });
     });
+
+    // (On the floor the stairs come up to, their squares are the stairwell: open, the stairs going
+    // down in it and a rail round it, waist high (world/interiors3d.js upstairs, towerTop). Not to
+    // be walked over, but seen across: someone on its far side, a tower's top's corner, isn't hidden)
+    if (marks[">"] && !marks["<"]) {
+        for (const [x, y] of marks.S ?? []) {
+            opaque[y][x] = 0;
+        }
+    }
 
     // Each run of joined squares of the same thing is one piece (a table, a bed, a wall)
     const pieces = [];
