@@ -15,7 +15,7 @@ import { newGuid } from "../client/js/core/guid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
 import { MOTION } from "../client/js/core/motion.js";
-import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
+import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, QUIET, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { selfOf } from "../client/js/core/selfstate.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -247,6 +247,48 @@ describe("playing together (netplay.js)", () => {
 
         play(1);
         assert.equal(back.joining.self.seq, 0);
+    });
+
+    it("stops a joined player's hero where they stand once their game's gone quiet (their link dropped), in every copy; one still talking isn't; heard from again, they go as they ask", () => {
+        const { host, join, play, deliver, catchUp } = opened();
+        const bryn = join(guest("Bryn"));
+        const cai = join(guest("Cai"));
+        const far = (who) => {
+            const me = host.battle.actor(who.joining.me);
+
+            return [me.square[0] + 30, me.square[1]];
+        };
+
+        play(1);
+        bryn.joining.command({ type: "move", to: far(bryn) });
+        cai.joining.command({ type: "move", to: far(cai) });
+        deliver();
+        play(1);
+
+        // (Cai's game asks how long a word takes now and then, as a game does; Bryn's has gone)
+        for (let k = 0; k < QUIET.ms / STEP_MS + 2; k++) {
+            if (k % 20 === 0) {
+                cai.joining.ping();
+            }
+
+            play(1);
+        }
+
+        catchUp(cai.joining);
+
+        for (const battle of [host.battle, cai.joining.host.battle]) {
+            assert.equal(battle.actor(bryn.joining.me).order, null, "(Bryn stopped)");
+            assert.deepEqual(battle.actor(bryn.joining.me).path, []);
+            assert.ok(battle.actor(cai.joining.me).order, "(Cai going on)");
+        }
+
+        assert.equal(cai.joining.host.checksum(), host.checksum());
+
+        // (Back: going where they're sent again, and not stopped again while they're heard from)
+        bryn.joining.command({ type: "move", to: far(bryn) });
+        deliver();
+        play(1);
+        assert.ok(host.battle.actor(bryn.joining.me).order);
     });
 
     it("drops a joined player's things on the ground in every copy, for another to pick up there", () => {

@@ -5122,6 +5122,9 @@ it.
      - **In:** once the world's come, the loading screen builds it as ever, and the same character
        carries on where they stood. On a world server, their place is kept five minutes, and the
        session left behind is taken over (docs/SERVER.md, *Coming in again while they're in*).
+       Meanwhile their hero stands where the link left them: once the host's heard nothing from
+       their game for 4 seconds, it stops them, whatever they were told (docs/WAR.md, *Gone
+       quiet*), so they're not run on by a stick no one's holding, into whatever's ahead.
      - **Their own world, opened again:** the broker keeps its listing two minutes once its host's
        page has gone without closing it to others (docs/SERVER.md, *Players' own worlds*). Taken
        back in that time, it's under the same code ("Your world's open to friends again, under its

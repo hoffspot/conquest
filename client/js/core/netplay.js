@@ -108,6 +108,15 @@ export const PACE = Object.freeze({ behind: 6, catchUp: 40, catchUpMs: 8, tooFar
 export const SELF = Object.freeze({ every: 2, again: 1000 });
 
 /**
+ * A joined player not heard from for `ms` of the world's time (their game asks how long a word
+ * takes every second, so a link that's well is never so quiet: theirs has dropped, their page has
+ * gone, or their phone's been put away) is stopped where they stand, whatever they were told, so
+ * their hero isn't carried on by a stick no one's holding or a tap they can't take back. Their
+ * place is kept as before, to come back to.
+ */
+export const QUIET = Object.freeze({ ms: 4000 });
+
+/**
  * How many of the host's steps a joined game keeps in hand (the delay), made for a phone's link
  * (a mobile network's, the least even): each sending of the host's is timed as it comes, how much
  * later its first step comes than the quickest of the last `window` ms (ms, `late` at most: the
@@ -268,6 +277,13 @@ export class Hosting {
         /** What each was last told of their hero (by peer: { seq, hero (as sent), time }: #selves). */
         this.toldSelf = new Map();
 
+        /**
+         * When each was last heard from (by peer: the world's time), and those stopped for being
+         * quiet since (#quiet).
+         */
+        this.heardAt = new Map();
+        this.quieted = new Set();
+
         /** What's been done since it was last sent, and whether it's time to say how the world stands. */
         this.ops = [];
         this.steps = 0;
@@ -376,6 +392,8 @@ export class Hosting {
      * stand, and where those near the players are (after what's been done: compared there).
      */
     flush() {
+        this.#quiet();
+
         if (this.checkDue) {
             this.ops.push(["k", this.host.checksum()]);
             this.checkDue = false;
@@ -399,6 +417,28 @@ export class Hosting {
         }
 
         this.#selves(step);
+    }
+
+    // Each who's joined not heard from for QUIET.ms stopped where they stand (once, till they're
+    // heard from again), if they were going anywhere or after anyone: as a command of theirs, so
+    // every copy stops them in the same step
+    #quiet() {
+        const now = this.host.battle.time;
+
+        for (const [peer, id] of this.players) {
+            const actor = this.host.battle.actor(id);
+
+            if (!this.heardAt.has(peer)) {
+                this.heardAt.set(peer, now);
+            }
+
+            if (this.quieted.has(peer) || now - this.heardAt.get(peer) < QUIET.ms || !actor || actor.dead || !actor.order) {
+                continue;
+            }
+
+            this.quieted.add(peer);
+            this.host.command(id, { type: "stop" });
+        }
     }
 
     // Each who's joined told where their own hero is now, as the host has them, and the last of
@@ -434,6 +474,10 @@ export class Hosting {
         } catch {
             return;
         }
+
+        // (Heard from: not quiet)
+        this.heardAt.set(peer, this.host.battle.time);
+        this.quieted.delete(peer);
 
         switch (message?.kind) {
             case "hello":
@@ -778,11 +822,13 @@ export class Hosting {
         this.#left(id, peer);
     }
 
-    // Nothing kept of what a peer was told of their hero, or of their commands done: one joining
-    // (again) counts its commands from the first
+    // Nothing kept of what a peer was told of their hero, of their commands done, or of when they
+    // were last heard from: one joining (again) counts its commands from the first
     #fresh(peer) {
         this.done.delete(peer);
         this.toldSelf.delete(peer);
+        this.heardAt.delete(peer);
+        this.quieted.delete(peer);
     }
 
     /** The slowest of the links to those who've joined, as they've said (ms), or null if none's said yet. */

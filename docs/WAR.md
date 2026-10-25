@@ -2998,6 +2998,14 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   it's been taking lately (`rtt`, once it's timed one: the middle of its latest five round trips,
   `Joining` `lately`, `LATELY`), so the host knows the slowest of its friends' links (`Hosting`
   `slowest`) for the HUD's scrying orb (docs/GAME.md *The world's link*; `NET_VERSION` 173).
+- **Gone quiet** (`QUIET`). A joined game the host hasn't heard from for 4 seconds of the
+  world's time (it asks how long a word takes every second, so a link that's well is never so
+  quiet: the link's dropped, the page has gone or reloaded, or the phone's been put away) has its
+  hero stopped where they stand, once, whatever they were told: a command of theirs, as any
+  other, so every copy stops them in the same step. Their place is kept as ever (30 seconds on
+  the relay, five minutes on a world server), and heard from again, they go as they ask. Before,
+  their hero went on with what they were last told the whole time: running on with the stick, or
+  after a foe, or to where they'd tapped.
 - **Debug.** The debug overlay's `Net` line shows, joined, that round trip, the steps in hand
   against those it means to keep (and how late they come, all but the latest tenth), the checks made and found astray, the
   resyncs, and what it's hearing a second; hosting, how many have joined and what's sent them a
