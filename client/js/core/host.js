@@ -5466,12 +5466,14 @@ export class Host {
         const band = BANDS[invasion.band];
         const { mix, hp, armor = 0, leash = {} } = band;
         const ids = [];
-        // (Each side's newcomers placed in its line behind its hindmost rank, as many abreast as
-        // five, its ranks then opening for them: battle.js #closeRanks)
-        const rear = (formation, k) => {
+        // (Each side's newcomers placed in its line behind its hindmost rank as it stood before
+        // they came, as many abreast as five, its ranks then opening for them: battle.js
+        // #closeRanks. Not behind each other newcomer too: each would be put a rank further back
+        // than the last, a large wave hundreds of metres off its line)
+        const rearOf = (formation) => {
             const back = Math.max(0, ...this.battle.actors.filter((actor) => !actor.dead && actor.formation?.id === formation).map(({ formation: { slot } }) => slot[1]));
 
-            return [((k % 5) - 2) * FORMATION.apart, back + FORMATION.rank * (1 + Math.floor(k / 5))];
+            return (k) => [((k % 5) - 2) * FORMATION.apart, back + FORMATION.rank * (1 + Math.floor(k / 5))];
         };
         const behind = (count, anchor, facing, to) => {
             const free = this.#spots("town", { to });
@@ -5488,6 +5490,7 @@ export class Host {
         // (The raiders', up the road)
         const more = Math.max(0, Math.ceil(invasion.size * share) - raiders);
         const raiderSquares = behind(more, invasion.from, invasion.facing, invasion.meet);
+        const raiderRear = rearOf(invasion.formations.invaders);
 
         rolesOf(more, mix).forEach((role, k) => {
             const square = raiderSquares[k];
@@ -5499,7 +5502,7 @@ export class Host {
             const one = `${invasion.id}/raider-r${invasion.raised++}`;
             const weapon = raiderArms(invasion.band, role, invasion.raised);
 
-            this.#enlist(one, { people: invasion.band, ...soldierOf(invasion.band, role), weapon, name: raiderName(invasion.band, role, weapon), record: { invasion: invasion.id, side: "invader", role, chief: false }, square, patrol: [square], facing: invasion.facing, ...this.#chargingWith(invasion, role, leash[role] ?? ROLES[role].leash), armed: true, formation: { id: invasion.formations.invaders, slot: rear(invasion.formations.invaders, k), role }, armor, hp: Math.round(KINDS.soldier.hp * hp), lone: true });
+            this.#enlist(one, { people: invasion.band, ...soldierOf(invasion.band, role), weapon, name: raiderName(invasion.band, role, weapon), record: { invasion: invasion.id, side: "invader", role, chief: false }, square, patrol: [square], facing: invasion.facing, ...this.#chargingWith(invasion, role, leash[role] ?? ROLES[role].leash), armed: true, formation: { id: invasion.formations.invaders, slot: raiderRear(k), role }, armor, hp: Math.round(KINDS.soldier.hp * hp), lone: true });
             invasion.invaders.push(one);
             invasion.came += 1;
             ids.push(one);
@@ -5509,6 +5512,7 @@ export class Host {
         const fewer = Math.max(0, Math.ceil(invasion.mustered * town) - defenders);
         const outward = invasion.facing + Math.PI;
         const townSquares = behind(fewer, invasion.rally, outward, invasion.meet);
+        const townRear = rearOf(invasion.formations.defenders);
         const counts = {};
 
         rolesOf(fewer, DOCTRINES[invasion.people] ?? DOCTRINES.human).forEach((role, k) => {
@@ -5521,7 +5525,7 @@ export class Host {
             const each = (counts[role] = (counts[role] ?? -1) + 1);
             const one = `${invasion.id}/defender-r${invasion.raised++}`;
 
-            this.#enlist(one, { people: invasion.people, ...soldierOf(invasion.people, role, each), name: "soldier", record: { invasion: invasion.id, side: "defender", role }, square, patrol: [square], facing: outward, ...this.#chargingWith(invasion, role, ROLES[role].leash), armed: true, formation: { id: invasion.formations.defenders, slot: rear(invasion.formations.defenders, k), role } });
+            this.#enlist(one, { people: invasion.people, ...soldierOf(invasion.people, role, each), name: "soldier", record: { invasion: invasion.id, side: "defender", role }, square, patrol: [square], facing: outward, ...this.#chargingWith(invasion, role, ROLES[role].leash), armed: true, formation: { id: invasion.formations.defenders, slot: townRear(k), role } });
             invasion.defenders.push(one);
             ids.push(one);
         });
