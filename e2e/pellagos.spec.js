@@ -4250,6 +4250,8 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
         return { night, day: lit() };
     })).toEqual({ night: { lit: true, drawn: true }, day: false });
 
+    // (The world's folk dressed before going in: the townsfolk come out round the player)
+    const outdoors = await page.evaluate(() => window.pellagos.game.battle.actors.filter(({ kind, map, id }) => kind === "folk" && map !== "taproom" && map !== "upstairs" && window.pellagos.game.avatars.has(id)).map(({ id }) => id));
     const inside = await through("town", "door", 5);
 
     expect(inside).toEqual({ order: "enter", glowing: true, map: "taproom", shown: "taproom", square: outside.inside, facing: Math.PI, minimap: "taproom", heard: "taproom" });
@@ -4326,6 +4328,28 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
 
         return { town: game.town.object.visible, taproom: game.interiors.get("taproom").object.visible, upstairs: game.interiors.get("upstairs").object.visible };
     })).toEqual({ town: false, taproom: true, upstairs: false });
+
+    // Gone in, its own folk dressed, the taproom's and upstairs', and no one else: not another
+    // building's folk, nor any more of the townsfolk out in the streets (all the world's folk once
+    // went in with them: 41 dressed in eight seconds, and Safari closed the page)
+    const dressed = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const visit = game.tavernFolk;
+
+        for (let k = 0; k < 300 && (visit.queue.length || visit.steps); k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        const folk = game.battle.actors.filter((actor) => actor.kind === "folk");
+        const ours = ({ map }) => map === "taproom" || map === "upstairs";
+
+        return { done: !visit.queue.length && !visit.steps, ours: folk.filter((one) => ours(one) && game.avatars.has(one.id)).map(({ map }) => map).sort(), others: folk.filter((one) => !ours(one) && game.avatars.has(one.id)).map(({ id }) => id), undressed: folk.filter((one) => !ours(one) && !game.avatars.has(one.id)).length };
+    });
+
+    expect(dressed.done).toBe(true);
+    expect(dressed.ours).toEqual([...Array(7).fill("taproom"), ...Array(5).fill("upstairs")]);
+    expect(dressed.others.filter((id) => !outdoors.includes(id))).toEqual([]);
+    expect(dressed.undressed).toBeGreaterThan(10);
 
     // The folk: seven in the taproom, seen, without name plates; the patrons rest (raising their
     // tankards, drinking, laughing); tapping one doesn't set the player on them
