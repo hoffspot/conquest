@@ -17,6 +17,32 @@ import { SETTLEMENTS } from "./worldplan/plan.js";
 export const NIGHT_SIGHT = Object.freeze({ dark: 0.35, moon: 0.55 });
 
 /**
+ * How far a player sees at night (their own sight: to cast, shoot or throw at someone; the wild's
+ * and everyone else's NIGHT_SIGHT), a share of what they'd see by day: on a moonless night, and
+ * under a full moon. Seen by everyone else at 35 to 55% of it, the players at that saw a foe drawn
+ * plainly on the screen 10 to 20 metres off, its bar over it, and couldn't cast at it ("Can't see
+ * it"), nothing in the way: within 5.6 to 8.8 metres, of a spell's 16.
+ */
+export const PLAYER_SIGHT = Object.freeze({ dark: 0.6, moon: 0.8 });
+
+/**
+ * A player's share of their sight by the light there is (`share`: sightAt's, a share of SIGHT):
+ * by day, as it is; a moonless night's and a full moon's lifted to PLAYER_SIGHT's, and in step
+ * between them and on to the day's.
+ */
+export function playerSight(share) {
+    if (share >= 1) {
+        return 1;
+    }
+
+    if (share >= NIGHT_SIGHT.moon) {
+        return PLAYER_SIGHT.moon + ((share - NIGHT_SIGHT.moon) / (1 - NIGHT_SIGHT.moon)) * (1 - PLAYER_SIGHT.moon);
+    }
+
+    return Math.max(PLAYER_SIGHT.dark, PLAYER_SIGHT.dark + ((share - NIGHT_SIGHT.dark) / (NIGHT_SIGHT.moon - NIGHT_SIGHT.dark)) * (PLAYER_SIGHT.moon - PLAYER_SIGHT.dark));
+}
+
+/**
  * How far round it each light lets one see as by day (metres): a carried torch, a war camp's fire,
  * a fire on the ground (a spell's: as far again as it burns), a settlement's streets, lit by its
  * windows and lamps and its guards' braziers, as far again past its edge, and the Light spell's

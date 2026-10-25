@@ -432,6 +432,7 @@ describe("saving (save.js)", () => {
         assert.deepEqual([SETTINGS_DEFAULTS.cameraFollows, SETTINGS_DEFAULTS.battleCam], [false, true], "not following round behind the player, but framing fights");
         assert.deepEqual([SETTINGS_DEFAULTS.stick, SETTINGS_DEFAULTS.stickFloats], [true, false], "the thumb stick there, waiting in its corner");
         assert.equal(SETTINGS_DEFAULTS.fullscreen, true, "full screen while playing");
+        assert.equal(SETTINGS_DEFAULTS.quickAlways, false, "the quick actions up only in a fight, as they always were");
         assert.deepEqual([SETTINGS_DEFAULTS.autoSnag, SETTINGS_DEFAULTS.snagGrades, SETTINGS_DEFAULTS.snagKinds], [false, null, null], "loot left for a tap, as it always was (auto-snag off, set to take everything)");
 
         saveSettings({ debug: true });

@@ -1474,6 +1474,23 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   the dark before they see who's there. The host works it out each step (`Host#light`) from what
   every copy of the world has (the clock, the plan, the camps, the fires, who has a torch), only
   near the players, so every copy sees alike. Indoors, and talking, as ever.
+  - **A player sees further** at night than the rest (light.js `PLAYER_SIGHT`, `playerSight`;
+    battle.js `#lightFor`): 60% of their sight on a moonless night and 80% under a full moon, in
+    step between and on to the day's, where the wild and everyone else see 35 to 55%. Their sight
+    is how far they can cast, shoot or throw at someone (as far as it reaches, scaled so: a 16 m
+    spell's 9.6 to 12.8 m, where it was 5.6 to 8.8), and how far bars over others are drawn. At
+    35 to 55%, a foe drawn plainly on the screen 10 to 20 m off, its bar over it, couldn't be cast
+    at, nothing in the way. How far the wild and everyone else see a player is as it was, so a
+    hero with Light or by a torch still sees an ambush before it sees them. `NET_VERSION` 183.
+  - **Why not** (battle.js `whyUnseen`; spells.js `CAST_FAILURES`): a spell, an aimed shot or a
+    bomb at someone the player can't see is refused saying why: "Out of range" (past its reach),
+    "Out of range in the dark" (in its reach, nothing between, but further than the light lets
+    them see), or "Something's in the way" (a wall, a house, a rock or a tree between). It once
+    said "Can't see it" for the last two alike, and "Out of reach" for the first.
+  - **Bars greyed** (hud.js `place`'s `dim`, `.plate.unseen`): a foe within the player's reach
+    (the furthest of their weapon's and the spells they know to cast at one: game.js `#reachOf`)
+    that they can't act on, too dark or something in the way, has its bar greyed, so it reads as
+    not reachable yet before it's tapped.
 - **The Light spell** (docs/MAGIC.md; world/globes.js): its tome at every adventurers' guild for
   10 gold; cast, a globe over the caster's shoulder lights the dark 12 m round them as by day for
   fifteen minutes (cast again to put it out).
@@ -1661,9 +1678,14 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   pointing the way to them across the ground (in front of the camera, up; behind it, down), the
   nearest three, clear of the quick actions, gone once they're in view (game.js `#threats`, hud.js
   `threats`).
-- **Those attacking the player** (and whoever they're set on) each have an icon down the right
-  side of the screen, the first six in the order they came to it (game.js `#attackers`,
-  `ATTACKERS`; hud.js `attackers`): their likeness in a red frame (`--hostile`), a thin line of
+- **The foes about the player** each have an icon down the right side of the screen, the
+  first six (game.js `#attackers`, `ATTACKERS`; hud.js `attackers`, its group "Enemies"):
+  whoever the player's set on first; then those attacking them, in the order they came to it;
+  then the rest they can see within 40 m (as far as the lock holds, `ENEMIES.reach`; seen as
+  far in the dark as a player sees, *Seeing at night*: `#enemiesSeen`, looked for four times a
+  second, not every frame), the nearest first, their frame fainter and their name read "…, in
+  range" (`.attacker.idle`). Till 2026-10-25 only those attacking them, and whoever they were set
+  on, were listed. Each icon: their likeness in a red frame (`--hostile`), a thin line of
   their health along its foot, whoever the player's set on glowing and pulsing (still, asked for
   less motion). The likeness is drawn once they've been drawn half a second (`LIKENESS_AFTER`:
   drawn the moment they're built it came out blank, and one that does is drawn again,
@@ -1682,6 +1704,16 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   what's in hand, locked on (game.js `#attackerPressed`). Pressed from the keyboard, an icon's a
   tap. With **Auto target lock** on (*Locked on*, below), each of those locks on too, and a tap
   on whoever they're locked on lets go instead.
+- **Stepping through them from the keyboard** (game.js `cycleTarget`, `#setOn`), each sets the
+  player on the foe as a tap on its icon does (where they stand, locked on with Auto target
+  lock): **X** the next in the enemies list's order and **Z** the last, round again at either
+  end (an order of its own: those after the player as they came, then the rest the nearest
+  first, the one set on where it falls among them, so a press steps on rather than swapping the
+  same two); **Tab** the nearest foe in sight, then each next one out, round again to the
+  nearest, and **Shift+Tab** back (the order kept as it was while the presses come within 4 s,
+  `ENEMIES.keep`, not taken afresh as everyone moves). Tab is the game's while it's played and
+  no panel's open (not the browser's, moving its focus off the game to the next button); with
+  no foe in sight, "No foe in sight".
 - **Locked on** (Game options, Gameplay: **Auto target lock**, on to start with; game.js
   `autoLock`): whoever the player sets on, by a tap or a double tap on them or their icon, or
   Attack on their wheel, is locked on (the `engage` order's `lock`; battle.js `lock`). It stays
@@ -1694,7 +1726,7 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   they are if it's in reach, wherever they're going kept, the swing holding them a moment.
   Out of reach while they steer, it's waited on if it's within 3 m and struck as it comes into
   reach (host.js `BLOW_WAIT`: 0.75 s at most, as a spell's queued); never coming into reach, or
-  further off, it's refused as a spell out of reach is ("Out of reach", its slot flashed red,
+  further off, it's refused as a spell out of reach is ("Out of range", its slot flashed red,
   nothing spent), so the stick, not the blow, says where they go. Set on another, the lock
   goes with them (with Auto target lock off, set on another without it, the lock's let go and
   the other set on, not locked on). It's let go once it's fallen, once it's 40 metres off
@@ -1736,8 +1768,12 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   or P; shown again four times a second while open, `PARTY_MENU_EVERY`) lists them all, each
   with their likeness (tapped, chosen to help), what they are ("Hired warrior", "Called wolf ·
   4:05 left": `memberKind`), their health, whether they follow or wait, and Follow or Wait and
-  Dismiss (asked twice: "Dismiss?" for three seconds, `DISMISS_SURE_MS`); with no one, how to
-  come by some. On a narrow screen a panel open hides the column, which would cover its edge.
+  Dismiss; with no one, how to come by some. Dismissing's for good (a hired adventurer goes their
+  own way, a creature's gone), so it's asked first, from the menu or the wheel alike: "Dismiss
+  Bryn?", Dismiss Bryn or Keep them (game.js `onAskDismiss`, main.js `askDismiss`: the
+  `#dismissask` dialog), where the menu once asked twice ("Dismiss?" for three seconds); and in
+  talk, "We part here" has them ask "For good?" first, "I'm sure" or "No. Stay with me" back to
+  their orders (dialogue.js `follower`'s `parting`). On a narrow screen a panel open hides the column, which would cover its edge.
   **Playing together** (docs/WAR.md *Parties*), the other players in the player's party head the
   column, the longest in it first (`host.fellows`), before the player's own: gold-framed (`.member
   .player`), the one leading it crowned (`.member.leader`: "leading your party"), their own units
@@ -4862,6 +4898,11 @@ hostile on their map set to fight them or striking at them (`#underAttack`); the
 3 s after the last of it (`QUICK_LINGER`), so they don't come and go between blows, and go down
 at once if the player falls.
 
+**Always show** (Game options, Controls, Quick actions: the Always show switch under Six across,
+`quickAlways`, off to start with, kept on this device as Six across is): the slots stay up out of
+a fight too, so they (and their keys) can be used before one starts, for a buff, healing or Light
+at night (app/game.js `quickAlways`, `#quickActions`). They still go down if the player falls.
+
 **What's in them.** Each holds anything a wheel's slice can (a spell, a blow, a thing to use;
 not Fight): Vigor, Stun, Burn and a healing draught to start with (`QUICK`), shown with its icon
 and name, a count for a thing to use, and a line along its foot saying who it's used on (red,
@@ -4958,7 +4999,7 @@ While a slice is cooling down (a spell's own cooldown, or a blow's own twelve se
 greyed over as much of it as the cooldown has left, the grey drawing back as it passes. A flick
 at a greyed slice, an empty one or one that can't be used flashes it red and is refused. One the
 game turns down once chosen (a spell or an aimed shot out of reach or out of sight: "Out of
-reach", "Can't see it") flashes red too, not lit as chosen, as does the quick action's slot, and
+range", "Out of range in the dark", "Something's in the way") flashes red too, not lit as chosen, as does the quick action's slot, and
 nothing starts cooling down. The game plays on while it's open; a second finger (a pinch) closes
 it.
 
@@ -5297,7 +5338,8 @@ it.
    over the rest), and the damage each blow does. A bar's full size within 12 m of the player's
    character, and beyond that smaller and fainter evenly with the distance, frame by frame as
    either moves, gone at the edge of sight: 60 m by day, less far in the dark, as far as the
-   player sees there (light.js `sightAt`, as the battle has it: 30 m where they see half as far;
+   player sees there (light.js `sightAt` and `playerSight`, as the battle has it: 36 to 48 m at
+   night;
    `PLATE_SIZE`, `plateScale`). So how big and how solid a bar is says how near its character is;
    the nearer the camera are drawn over the farther, and all of them under the buttons. Each bar
    is put where the camera that draws the frame sees its head: the camera's matrices made as it's

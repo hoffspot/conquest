@@ -519,12 +519,13 @@ options, Action wheels: docs/GAME.md):
   going kept, the swing holding them a moment (`Battle.strike`). A power strike at an enemy out of
   reach while they're steering (held input) is waited on if the enemy's within 3 m, and struck if
   it comes into reach within 0.75 s (`BLOW_WAIT`); further off, or never in reach, it's refused
-  ("Out of reach", as a spell out of reach is) and nothing's spent, ready again at once (the
+  ("Out of range", as a spell out of reach is) and nothing's spent, ready again at once (the
   `unstruck` event), the stick deciding where they go. Standing, or walking where a tap sent them,
   they go after the enemy at a run, the lock on it kept, and land it once in reach (`NET_VERSION`
   179: till then it turned a runner round to walk to it). An aimed shot at an enemy further off than
-  what's in hand shoots (a bow's 13.5 m, a wand's 7), or out of sight, is refused ("Out of reach",
-  "Can't see it"), as a spell out of reach is, and stays ready: nothing's spent
+  what's in hand shoots (a bow's 13.5 m, a wand's 7), or out of sight, is refused ("Out of range",
+  "Out of range in the dark", "Something's in the way": `Battle.whyUnseen`), as a spell out of
+  reach is, and stays ready: nothing's spent
   (`Battle.shotAt`; `NET_VERSION` 46).
 - **Shield bash** (an enemy's wheel; only with a shield in the other hand: "You need a shield in
   your other hand"): the next blow up close slams the shield into them too, stunning them for 2
@@ -3147,8 +3148,8 @@ say what they'd want and stay where they are.
 the party menu, the same for the creatures by magic at their side, host.js `#orderUnit`, an
 `order` command): wait here (they stand guard where they are), come on (they follow again), go for
 whoever their leader's set on (the `assist` order: after them till they're down, then following
-again; refused, "untargeted", with no one set on), or go their own way (dismissed). A follower
-who falls is gone.
+again; refused, "untargeted", with no one set on), or go their own way (dismissed: asked first,
+in talk or from the party alike, as it's for good). A follower who falls is gone.
 
 **Kept** with the character (`characterOf`'s `followers`: name, calling, looks, people;
 `save.js` `saveFollowers`), so they come along to any world; and in the host's snapshot. The
