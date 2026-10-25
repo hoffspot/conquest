@@ -1049,8 +1049,9 @@ test("a world joined in the thick of an invasion: the guest's game holds no more
     await guest.locator("#join").getByRole("button", { name: "Join" }).click();
     await playing(guest);
 
-    const held = () =>
-        guest.evaluate(() => {
+    // (`fell`: those fallen a while before, by id)
+    const held = (fell = []) =>
+        guest.evaluate((fell) => {
             const { game } = window.pellagos;
             const inFull = (id) => game.avatars.has(id) && !game.crowds?.members.has(game.avatars.get(id));
             const invasion = game.battle.actors.filter(({ id, kind }) => kind === "soldier" && id.startsWith("invasion-"));
@@ -1067,11 +1068,11 @@ test("a world joined in the thick of an invasion: the guest's game holds no more
                 // (A floor held of a building got ready, not built: its door far off)
                 stray: [...game.interiors.keys()].filter((id) => game.world.maps[id]?.building && game.visits.get(game.world.maps[id].building)?.bare !== false),
                 floors: [...game.interiors.keys()].filter((id) => !game.world.maps[id]?.building).sort(),
-                // (The fallen still in line to be dressed, or waiting on their figure: none, once
-                // the line's been looked at again; those drawn in full already seen to fall)
-                fallen: invasion.filter(({ id, dead }) => dead && (game.enlisting.includes(id) || game.crowdWaiting.has(id))).length,
+                // (Those fallen a while before still in line to be dressed, or waiting on their
+                // figure: none, the line looked at again since; those drawn in full seen to fall)
+                fallen: fell.filter((id) => game.enlisting.includes(id) || game.crowdWaiting.has(id)).length,
             };
-        });
+        }, fell);
 
     const joined = await held();
 
@@ -1087,10 +1088,12 @@ test("a world joined in the thick of an invasion: the guest's game holds no more
     await guest.waitForFunction(() => window.pellagos.game.crowds?.members.size > 0, null, { timeout: 180000, polling: 1000 });
     await guest.waitForFunction(() => window.pellagos.game.battle.actors.filter(({ id, kind, dead }) => kind === "soldier" && id.startsWith("invasion-") && dead).length >= 3, null, { timeout: 180000, polling: 1000 });
 
-    // (A frame or two since, for the line to be looked at again)
-    await guest.waitForTimeout(1000);
+    // (Those fallen by now; and a second and a half on, the line looked at again since)
+    const fell = await guest.evaluate(() => window.pellagos.game.battle.actors.filter(({ id, kind, dead }) => kind === "soldier" && id.startsWith("invasion-") && dead).map(({ id }) => id));
 
-    const later = await held();
+    await guest.waitForTimeout(1500);
+
+    const later = await held(fell);
 
     expect(later.crowded).toBeGreaterThan(0);
     expect(later.inFull, JSON.stringify(later)).toBeLessThanOrEqual(later.room + 3);
