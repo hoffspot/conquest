@@ -5313,8 +5313,14 @@ it.
   9 gold, healing draught."; the user: "Make the gold loot message from soldiers and the town orc
   rise up over the character as well").
 5. **The menu** (the menu button, or Escape) pauses the game (unless others are playing in the
-   world too): Resume, Invite others (the world opened to others: a code, and who's come),
-   Game options, or back to the title. **Game options** is a list of its groups, at the top,
+   world too: then it says "Others are playing: the world goes on.", and its host, or on a world
+   server one of its owners, has **Pause for everyone**, the world stopped for all till they
+   resume, each told who paused it; docs/WAR.md rule 6): Resume, Invite others (the world opened
+   to others: a code, and who's come), Game options, or back to the title. Joined to a world on
+   a server and alone in it, the menu stops it too (its `hold`), and so does the page hidden; with
+   anyone else in, neither does (the user: "if there are more than one player in the game in a
+   network game, the game cannot be paused except by an action taken in game options by the
+   host"). **Game options** is a list of its groups, at the top,
    each a page of its own, short enough to see whole on a phone without scrolling (the user:
    "Move the buttons for the game options menu to the top from the bottom. Organize the menu
    into submenus so the scrolling isn't as long"):

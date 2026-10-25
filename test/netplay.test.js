@@ -564,25 +564,92 @@ describe("playing together (netplay.js)", () => {
         assert.equal(bryn.joining.host.checksum(), host.checksum());
     });
 
-    it("tells everyone who's joined when the host's world is stopped and going again, and whoever joins meanwhile", () => {
+    it("tells everyone who's joined when the host's world is stopped, why, and going again; whoever joins meanwhile with their welcome, and whoever's sent the world again with it, so a lost word can't leave them thinking it's stopped", () => {
         const { hosting, join, post, deliver } = opened();
         const bryn = join(guest("Bryn"));
 
-        hosting.pause(true);
+        hosting.pause("away");
         deliver();
-        assert.equal(bryn.joining.paused, true);
+        assert.deepEqual(bryn.joining.paused, { why: "away", by: null });
 
-        // (Said once: saying it again sends nothing)
-        hosting.pause(true);
+        // (Said once: saying it again sends nothing; another why, or another who, is said)
+        hosting.pause("away");
         assert.equal(post.length, 0);
+        hosting.pause("host", "Ada");
+        deliver();
+        assert.deepEqual(bryn.joining.paused, { why: "host", by: "Ada" });
+
+        // (No more than a why it knows, and a name)
+        hosting.pause("bored", 7);
+        deliver();
+        assert.equal(bryn.joining.paused, null);
+        hosting.pause("host", "Ada");
+        deliver();
 
         const cai = join(guest("Cai"));
 
-        assert.equal(cai.joining.paused, true);
-        hosting.pause(false);
+        assert.deepEqual(cai.joining.paused, { why: "host", by: "Ada" }, "told with their welcome");
+
+        // Going again: Cai's word of it lost (their link down a moment), and the world asked for
+        // again as it comes back: going, it says
+        hosting.pause(null);
+        assert.ok(post.some(({ to }) => to === cai.peer));
+        post.splice(0, post.length, ...post.filter(({ to }) => to !== cai.peer));
         deliver();
-        assert.equal(bryn.joining.paused, false);
-        assert.equal(cai.joining.paused, false);
+        assert.equal(bryn.joining.paused, null);
+        assert.deepEqual(cai.joining.paused, { why: "host", by: "Ada" });
+        cai.joining.resync();
+        deliver();
+        assert.equal(cai.joining.paused, null);
+
+        // (And so the host's own link back: everyone sent the world, and whether it's stopped)
+        hosting.pause("away");
+        bryn.joining.paused = null;
+        hosting.resync();
+        deliver();
+        assert.deepEqual(bryn.joining.paused, { why: "away", by: null });
+    });
+
+    it("hears a joined player's page hidden or shown, and their menu opened or shut (and if it's for everyone), each said as it changes; and, back on their link, how they are said again, but for a pause for everyone, which ended with it", () => {
+        const { hosting, join, post, deliver } = opened();
+        const bryn = join(guest("Bryn"));
+        const heard = [];
+
+        hosting.onAway = (peer, hidden) => heard.push(["away", peer, hidden]);
+        hosting.onHold = (peer, held, everyone) => heard.push(["hold", peer, held, everyone]);
+
+        bryn.joining.away(true);
+        bryn.joining.hold(true);
+        bryn.joining.hold(true);
+        bryn.joining.hold(true, { everyone: true });
+        deliver();
+        assert.deepEqual(heard, [
+            ["away", bryn.peer, true],
+            ["hold", bryn.peer, true, false],
+            ["hold", bryn.peer, true, true],
+        ]);
+
+        // (Everyone, only while it's held; and only from one who's joined)
+        heard.length = 0;
+        hosting.hear(bryn.peer, encode({ kind: "hold", held: false, everyone: true }));
+        hosting.hear("nobody", encode({ kind: "hold", held: true, everyone: true }));
+        assert.deepEqual(heard, [["hold", bryn.peer, false, false]]);
+
+        // Back on its link (what it said meanwhile maybe lost): its page and its menu said again;
+        // its pause for everyone not asked for again
+        heard.length = 0;
+        bryn.joining.hold(true, { everyone: true });
+        deliver();
+        heard.length = 0;
+        bryn.joining.away(false);
+        post.length = 0;
+        bryn.joining.resync();
+        deliver();
+        assert.deepEqual(heard, [
+            ["away", bryn.peer, false],
+            ["hold", bryn.peer, true, false],
+        ]);
+        assert.equal(bryn.joining.everyone, false);
     });
 
     it("takes out of the world anyone who left while the host's link was down (the relay's word of who's still here)", () => {
@@ -884,7 +951,7 @@ describe("playing together (netplay.js)", () => {
         }
 
         assert.equal(joining.delay, PLAYOUT.least);
-        joining.hear(encode({ kind: "paused", paused: true }));
+        joining.hear(encode({ kind: "paused", paused: true, why: "away" }));
         now += 30000;
         joining.hear(encode({ kind: "paused", paused: false }));
         arrive(30000);

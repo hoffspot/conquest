@@ -47,6 +47,10 @@
 //                                                    the character copied in)
 //                    { kind: "ready" }                         (its copy of the world made: playing)
 //                    { kind: "away", hidden }                  (its page hidden, or shown again)
+//                    { kind: "hold", held, everyone }          (its player's menu open, or shut: on a
+//                                                    world server the world stopped for its one
+//                                                    player; everyone: Pause for everyone, an
+//                                                    owner's, the world stopped for all)
 //                    { kind: "command", seq, command }
 //                    { kind: "again" }                         (gone astray: the world again)
 //                    { kind: "ping", t, rtt }                  (t: the joiner's clock, ms; rtt: how long
@@ -54,14 +58,16 @@
 //                                                    ms, once it's timed one: Joining lately; the
 //                                                    host's, to show)
 //                    { kind: "chat", text }                    (a line to their party)
-//   host -> joiner   { kind: "welcome", version, id, seed, race, snapshot, took }
+//   host -> joiner   { kind: "welcome", version, id, seed, race, snapshot, took, paused }
 //                                                    (took: their character was in the world
-//                                                    already, on another link: theirs now)
+//                                                    already, on another link: theirs now;
+//                                                    paused: { why, by } if the world's stopped)
 //                    { kind: "ops", step, ops }                (what's been done, in order, up to step)
 //                    { kind: "motion", step, units }           (base64: core/motion.js)
 //                    { kind: "pong", t, step }
-//                    { kind: "state", snapshot }               (the world again)
-//                    { kind: "paused", paused }                (the host's world stopped, or going again)
+//                    { kind: "state", snapshot, paused }       (the world again, and whether it's stopped)
+//                    { kind: "paused", paused, why, by }       (the host's world stopped, why (PAUSES),
+//                                                    and by whom; or going again)
 //                    { kind: "refused", reason }
 //                    { kind: "chat", from, name, text }        (a line said in their party)
 //                    { kind: "unsaid", reason }                (one of theirs not said: CHAT_REFUSED)
@@ -81,7 +87,7 @@ import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 180;
+export const NET_VERSION = 181;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -115,6 +121,19 @@ export const SELF = Object.freeze({ every: 2, again: 1000 });
  * place is kept as before, to come back to.
  */
 export const QUIET = Object.freeze({ ms: 4000 });
+
+/**
+ * Why a world's stopped, as those in it are told (Hosting.pause). Its host stopped it for everyone
+ * ("host": Pause for everyone, from the menu; on a world server, one of its owners, `by` them,
+ * till they let it go or their link drops). The host's page is hidden, so its world, on that
+ * device, can't move on ("away"). A world server's one player has left it a while ("alone": their
+ * page hidden, or their menu open). Or no one's game in a world server's world is ready yet
+ * ("waiting"). Nothing else stops a world anyone else is in.
+ */
+export const PAUSES = Object.freeze(["host", "away", "alone", "waiting"]);
+
+// Why the host's world is stopped, as it said (`said`: { why, by }), or null if it isn't
+const pausedOf = (said) => (said ? { why: PAUSES.includes(said.why) ? said.why : null, by: typeof said.by === "string" ? said.by : null } : null);
 
 /**
  * How many of the host's steps a joined game keeps in hand (the delay), made for a phone's link
@@ -295,8 +314,8 @@ export class Hosting {
         /** What's been sent (characters of text, to everyone together), by kind. */
         this.sent = {};
 
-        /** Whether the host's world is stopped (its page hidden), as those who've joined have been told. */
-        this.paused = false;
+        /** Whether the host's world is stopped, and why ({ why: PAUSES, by }), as those who've joined have been told; or null. */
+        this.paused = null;
 
         /** Told when a player comes (id, peer) or goes (id, peer, their character as it's to be kept). */
         this.onJoin = () => {};
@@ -331,9 +350,14 @@ export class Hosting {
          */
         this.characterOf = (_peer, character) => characterFrom(character);
 
-        /** Told when one who's joined has made their copy of the world and is playing (peer); and when their page is hidden or shown again (peer, hidden). */
+        /**
+         * Told when one who's joined has made their copy of the world and is playing (peer); when
+         * their page is hidden or shown again (peer, hidden); and when their menu's opened or shut
+         * (peer, held, and everyone: Pause for everyone), as they say.
+         */
         this.onReady = () => {};
         this.onAway = () => {};
+        this.onHold = () => {};
 
         /**
          * The part each who joins plays in the world (peer: core/host.js PLAYER_ROLES): a player,
@@ -501,6 +525,12 @@ export class Hosting {
                 }
 
                 break;
+            case "hold":
+                if (this.players.has(peer)) {
+                    this.onHold(peer, message.held === true, message.held === true && message.everyone === true);
+                }
+
+                break;
             case "ping":
                 // (At once: how long a word takes to come and go, not how long till the next flush;
                 // and how long it's been taking them, as they say)
@@ -636,12 +666,7 @@ export class Hosting {
         this.flush();
         this.#fresh(peer);
         this.players.set(peer, id);
-        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot() }));
-
-        if (this.paused) {
-            this.#send(peer, "paused", encode({ kind: "paused", paused: true }));
-        }
-
+        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot(), paused: this.paused }));
         this.onJoin(id, peer);
     }
 
@@ -684,12 +709,7 @@ export class Hosting {
 
         this.#fresh(peer);
         this.players.set(peer, id);
-        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot(), took: true }));
-
-        if (this.paused) {
-            this.#send(peer, "paused", encode({ kind: "paused", paused: true }));
-        }
-
+        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot(), took: true, paused: this.paused }));
         this.onJoin(id, peer);
     }
 
@@ -736,20 +756,24 @@ export class Hosting {
         }
 
         this.flush();
-        this.#send(peer, "state", encode({ kind: "state", snapshot: this.host.snapshot() }));
+        this.#send(peer, "state", encode({ kind: "state", snapshot: this.host.snapshot(), paused: this.paused }));
     }
 
     /**
-     * The host's world stopped (`paused`: its page hidden, so it can't move on) or going again:
-     * everyone who's joined told, and anyone who joins meanwhile.
+     * The host's world stopped, and why (`why`: PAUSES; `by`, the name of whoever stopped it for
+     * everyone), or going again (null): everyone who's joined told, as it changes. Whoever joins
+     * meanwhile is told with their welcome, and whoever's sent the world again with it, so a word
+     * of its going again lost on a link that dropped can't leave them thinking it's stopped.
      */
-    pause(paused) {
-        if (paused === this.paused) {
+    pause(why = null, by = null) {
+        const paused = PAUSES.includes(why) ? { why, by: typeof by === "string" ? by : null } : null;
+
+        if (paused?.why === this.paused?.why && paused?.by === this.paused?.by) {
             return;
         }
 
         this.paused = paused;
-        this.#sendAll("paused", encode({ kind: "paused", paused }));
+        this.#sendAll("paused", encode({ kind: "paused", paused: Boolean(paused), ...paused }));
     }
 
     /**
@@ -763,14 +787,10 @@ export class Hosting {
             return;
         }
 
-        const text = encode({ kind: "state", snapshot: this.host.snapshot() });
+        const text = encode({ kind: "state", snapshot: this.host.snapshot(), paused: this.paused });
 
         for (const peer of this.players.keys()) {
             this.#send(peer, "state", text);
-
-            if (this.paused) {
-                this.#send(peer, "paused", encode({ kind: "paused", paused: true }));
-            }
         }
     }
 
@@ -941,8 +961,16 @@ export class Joining {
         /** What's been heard (characters of text), by kind. */
         this.received = {};
 
-        /** Whether the host's world is stopped (its page hidden), as the host's said. */
-        this.paused = false;
+        /** Whether the host's world is stopped, and why ({ why: PAUSES, by }), as the host's said; or null. */
+        this.paused = null;
+
+        /**
+         * As it's told the host: whether its page is hidden (away), and whether its player's
+         * holding the world (hold: their menu open), and for everyone.
+         */
+        this.hidden = false;
+        this.held = false;
+        this.everyone = false;
 
         /**
          * Told when the world's come (the welcome), come again (the state), or they're turned away
@@ -989,6 +1017,7 @@ export class Joining {
                 this.me = message.id;
                 // (Their character was in the world already, on another link: taken over, as it stood)
                 this.took = message.took === true;
+                this.paused = pausedOf(message.paused);
                 this.queue = [];
                 this.#waiting = 0;
                 this.#last = null;
@@ -1044,6 +1073,7 @@ export class Joining {
                 this.#waiting = 0;
                 this.#last = null;
                 this.host?.adopt(message.snapshot);
+                this.paused = pausedOf(message.paused);
                 this.astray = false;
                 this.farBehind = false;
                 this.resyncs++;
@@ -1057,7 +1087,7 @@ export class Joining {
                 break;
             case "paused":
                 // (Its steps stopped coming for a reason: no measure of how evenly they come)
-                this.paused = message.paused === true;
+                this.paused = pausedOf(message.paused === true ? message : null);
                 this.#last = null;
                 break;
             case "refused":
@@ -1110,6 +1140,13 @@ export class Joining {
     resync() {
         this.astray = true;
         this.send(encode({ kind: "again" }));
+
+        // (And how its player is, said again, as what it said meanwhile may have been lost too:
+        // its page shown again, their menu shut. Their pause for everyone ended with the link,
+        // server/world-worker.js: not asked for again)
+        this.everyone = false;
+        this.send(encode({ kind: "away", hidden: this.hidden }));
+        this.send(encode({ kind: "hold", held: this.held, everyone: false }));
     }
 
     /** Its copy of the world, made from the welcome (Host.restore): taking the host's ways. */
@@ -1128,9 +1165,28 @@ export class Joining {
         this.send(encode({ kind: "ready" }));
     }
 
-    /** Tell the host its page is hidden (`hidden`), or shown again (on the world server: the world stops while everyone's is). */
+    /** Tell the host its page is hidden (`hidden`), or shown again (on the world server: its world stops for its one player while theirs is). */
     away(hidden) {
-        this.send(encode({ kind: "away", hidden: Boolean(hidden) }));
+        this.hidden = Boolean(hidden);
+        this.send(encode({ kind: "away", hidden: this.hidden }));
+    }
+
+    /**
+     * Tell the host its player's holding the world (`held`: their menu open; on the world server,
+     * the world stops for its one player while they do), and if for `everyone` (Pause for
+     * everyone: an owner's, on the world server, the world stopped for all), or letting it go.
+     * Said only as it changes.
+     */
+    hold(held, { everyone = false } = {}) {
+        const all = Boolean(held && everyone);
+
+        if (Boolean(held) === this.held && all === this.everyone) {
+            return;
+        }
+
+        this.held = Boolean(held);
+        this.everyone = all;
+        this.send(encode({ kind: "hold", held: this.held, everyone: all }));
     }
 
     /**
