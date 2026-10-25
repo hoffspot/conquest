@@ -2918,7 +2918,9 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     it's further than 3 m (`PREDICT.far`, as for the player's own hero: through a door, by magic,
     or a long while behind), when they're put straight there. What happened meanwhile wasn't
     played, so wasn't seen: anyone who died is seen falling then, anyone who came back to life
-    gets up, and the player's taken to the map they're on if it's another.
+    gets up, and the player's taken to the map they're on if it's another. Those not drawn yet are
+    drawn as those who come later are (`#nextEnlistee`), but not a soldier waiting on its kind's
+    figure in the crowds (`#marshal`), nor anyone who fell unseen.
   - **Slow frames:** a joined copy plays as much of the host's time as has gone by since its last
     frame (up to a second), however slowly its frames come. Playing alone, a frame counts for no
     more than a tenth of a second, so a slow frame makes a slower world rather than a jump. A copy

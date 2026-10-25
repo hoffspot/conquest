@@ -2711,7 +2711,8 @@ the townsfolk out in the streets with them, 41 in eight seconds, an iPhone's mem
 after it, the game began upstairs with all 41 dressed as it loaded, and the world came up blank (a
 player's crash report). The townsfolk out in the streets, and a stranger by the road, are dressed
 as those who come out are, the nearest first, after everyone else (`#nextEnlistee`): as a joined
-game begins, those out already, and again as it's sent the world (`rehost`). And not while the
+game begins, those out already, and again as it's sent the world (`rehost`; with the soldiers and
+wagons, not those waiting on their kind's figure in the crowds, nor the fallen). And not while the
 player's inside anywhere (`#walledOff`, as for those a dungeon's walls stand between): only there
 to be seen about, they're dressed as the player comes out again. A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
 furniture laid out, made into meshes, made ready to merge, merged). If the player's through the
@@ -3601,7 +3602,10 @@ how many had room (`soldiers`):
 - **Made as they're wanted.** A kind's template is made a step at a time with half of each frame's
   time for building those drawn (`MARSHAL.share`), its skin painted and its detail lowered in their
   workers meanwhile: about a second each on a desktop. A soldier waiting on its kind's isn't drawn,
-  nor built in full; where a kind couldn't be made, its soldiers are built in full after all.
+  nor built in full; where a kind couldn't be made, its soldiers are built in full after all. One
+  that falls while it waits is forgotten, never seen, and one that goes out of reach waits on: not
+  built in full, as they were till 2026-10-25 (a joined game in the midst of an invasion had 38 of
+  its dead in line to be, far off).
 - **Let go of once they're not.** A kind's figure with nobody of its kind in the crowds for a
   minute (`CROWD_KEEP`, `Crowd.draw`) is let go of: its figure, its picture and its moves, off the
   graphics card (6 MB or so on Low), made again should one of its kind come. Kept for good, as
@@ -5180,8 +5184,17 @@ it.
    each piece of the town, the characters, compiling every shader before the first frame), then
    the game. Its count ("120 of 202") is of steps known before it starts: each chunk round the
    player (counted as it's drawn, however many goes it takes), each piece of the town and its
-   trees, each floor of the tavern, everyone dressed before the first frame (the orc, soldiers,
-   creatures, anyone else playing) and five more; it never passes its total, and ends on it. (The loading screen is drawn before the world starts to be built, so a tap on
+   trees, each floor of the tavern, everyone dressed before the first frame (the orc, anyone else
+   playing) and five more; it never passes its total, and ends on it. The soldiers, wagons and the
+   wild's creatures about already (a world kept, or joined, in the thick of things) aren't dressed
+   before the first frame but drawn as those who come later are, the nearest first, each in full
+   or in its kind's crowd as there's room (`#marshal`, `#rationing`, `#thronging`), and the fallen
+   among them not at all. Dressing them all first, an iPhone on Low joining a world as an
+   invasion's northmen fought in its town dressed 132 of them in full (582 MB) and let the game's
+   tab go before its first frame, again each time it was loaded; and a Mac's Safari, on High, held
+   1.35 GB. Nor are any floors built at the start but Wenches and Ale's: a world kept or joined
+   comes with the plans of every building the host's got ready, and the iPhone built all 59 of
+   them, 87 MB kept for good; each is built only once the player comes to its door, as below. (The loading screen is drawn before the world starts to be built, so a tap on
    Continue shows at once; if getting the world ready fails, it says so, with Back to the title
    and Load afresh.) The world's planned while the skin atlas may still be being worked out in the
    skins worker, and waited for only once the characters are built; the buildings' atlas is

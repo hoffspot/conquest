@@ -1,4 +1,5 @@
 import { STEP_MS } from "../client/js/core/battle.js";
+import { SIZE } from "../client/js/core/invasions.js";
 import { MOTION } from "../client/js/core/motion.js";
 import { expect, test } from "./fixtures.js";
 
@@ -1012,3 +1013,108 @@ test("two players walk about a while: the joined copy's checked against the host
     await hostContext.close();
     await guestContext.close();
 });
+
+test("a world joined in the thick of an invasion: the guest's game holds no more of its soldiers in full than there's room for, the rest drawn in their crowds as their figures are made, the fallen never dressed; and only Wenches and Ale's floors built, though the world comes with others' plans", async ({ ownBrowser: browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    // (Both on Low, as the iPhone that let the game's tab go joining such a world was: 132 of its
+    // soldiers dressed in full before the first frame, 582 MB, and 59 buildings' floors, 87 MB)
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), { ...ELF, hero: { ...ELF.hero, name: "Ada", race: "human" } });
+
+    // The host plays, the buildings round the start town's square got ready (their plans made),
+    // and northmen fall on the town, as small an invasion as comes
+    await host.goto("/?play&seed=2");
+    await playing(host);
+    await host.evaluate((least) => {
+        const { game } = window.pellagos;
+
+        game.host.command(game.me, { type: "budget", invasion: least });
+        game.invade("northmen");
+    }, SIZE.least);
+    await host.waitForFunction(() => window.pellagos.game.battle.actors.filter(({ id }) => id.startsWith("invasion-")).length >= 20, null, { timeout: 60000, polling: 500 });
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+
+    // Ada comes in, in the midst of it: the invasion's soldiers not dressed in full before the
+    // first frame, but as there's room for them; and none of the buildings' floors built but
+    // Wenches and Ale's (no other's door near her), though the world she's sent comes with their
+    // plans
+    await guest.goto(`/?join=${code}`);
+    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(guest);
+
+    // (`fell`: those fallen a while before, by id)
+    const held = (fell = []) =>
+        guest.evaluate((fell) => {
+            const { game } = window.pellagos;
+            const inFull = (id) => game.avatars.has(id) && !game.crowds?.members.has(game.avatars.get(id));
+            const invasion = game.battle.actors.filter(({ id, kind }) => kind === "soldier" && id.startsWith("invasion-"));
+            const planned = Object.values(game.world.maps).filter(({ building }) => building);
+
+            return {
+                soldiers: invasion.filter(({ dead }) => !dead).length,
+                inFull: invasion.filter(({ id }) => inFull(id)).length,
+                crowded: invasion.filter(({ id }) => game.crowds?.members.has(game.avatars.get(id))).length,
+                bodies: [...game.avatars.keys()].filter(inFull).length,
+                room: game.marshalled?.room ?? game.view.quality.soldiers.full,
+                budget: game.view.quality.bodies,
+                planned: planned.length,
+                // (A floor held of a building got ready, not built: its door far off)
+                stray: [...game.interiors.keys()].filter((id) => game.world.maps[id]?.building && game.visits.get(game.world.maps[id].building)?.bare !== false),
+                floors: [...game.interiors.keys()].filter((id) => !game.world.maps[id]?.building).sort(),
+                // (Those fallen a while before still in line to be dressed, or waiting on their
+                // figure: none, the line looked at again since; those drawn in full seen to fall)
+                fallen: fell.filter((id) => game.enlisting.includes(id) || game.crowdWaiting.has(id)).length,
+            };
+        }, fell);
+
+    const joined = await held();
+
+    expect(joined.soldiers).toBeGreaterThanOrEqual(20);
+    expect(joined.inFull, JSON.stringify(joined)).toBeLessThanOrEqual(joined.room + 3);
+    expect(joined.planned).toBeGreaterThan(0);
+    expect(joined.stray).toEqual([]);
+    expect(joined.floors).toEqual(["taproom", "upstairs"]);
+
+    // As it's played: no more of them in full than the marshal has room for (and a few let go of
+    // as it goes), nor of everyone than the quality's budget; the rest come into their crowds as
+    // their figures are made; and once some have fallen, none of those dressed
+    await guest.waitForFunction(() => window.pellagos.game.crowds?.members.size > 0, null, { timeout: 180000, polling: 1000 });
+    await guest.waitForFunction(() => window.pellagos.game.battle.actors.filter(({ id, kind, dead }) => kind === "soldier" && id.startsWith("invasion-") && dead).length >= 3, null, { timeout: 180000, polling: 1000 });
+
+    // (Those fallen by now; and a second and a half on, the line looked at again since)
+    const fell = await guest.evaluate(() => window.pellagos.game.battle.actors.filter(({ id, kind, dead }) => kind === "soldier" && id.startsWith("invasion-") && dead).map(({ id }) => id));
+
+    await guest.waitForTimeout(1500);
+
+    const later = await held(fell);
+
+    expect(later.crowded).toBeGreaterThan(0);
+    expect(later.inFull, JSON.stringify(later)).toBeLessThanOrEqual(later.room + 3);
+    expect(later.bodies, JSON.stringify(later)).toBeLessThanOrEqual(later.budget);
+    expect(later.fallen).toBe(0);
+    expect(later.stray).toEqual([]);
+
+    await hostContext.close();
+    await guestContext.close();
+});
+
