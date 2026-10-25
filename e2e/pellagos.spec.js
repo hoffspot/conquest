@@ -2637,6 +2637,127 @@ test("those attacking the player have an icon each down the right side, a likene
     expect(hurt.left).toEqual(["slime"]);
 });
 
+test("the enemies list holds every foe in range the player can see: whoever they're set on first, then those after them, then the rest, the nearest first, each marked in range; X and Z step the lock through it; Tab sets them on the nearest, each press the next one out, round again, Shift+Tab back, the game keeping the key; none in sight, said", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Three foes about the player in the open, each where they can see it, stunned where it
+    // stands: the orc 6 m off and a slime 9 m off after them (the orc first), another slime 12 m
+    // off not; and a third slime 50 m off, out of range
+    const placed = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const player = battle.actor("player");
+        const squares = game.world.maps.town.squares;
+        const [px, py] = player.square;
+        const taken = [];
+        const spot = (d) => {
+            for (let k = 0; k < 64; k++) {
+                const angle = (k / 64) * 2 * Math.PI;
+                const square = [px + Math.round(d * Math.cos(angle)), py + Math.round(d * Math.sin(angle))];
+
+                if (!squares.blocked(...square) && battle.canSee(player, { map: "town", square }, 40) && taken.every(([x, y]) => Math.hypot(x - square[0], y - square[1]) > 3)) {
+                    taken.push(square);
+
+                    return square;
+                }
+            }
+
+            return null;
+        };
+        const slime = (id, square, target) => {
+            battle.add({ id, kind: "beast", name: "Green slime", weapon: "slime", team: "wild", square, ai: null, hp: 30, wild: { creature: "slime", tier: 1, temper: "defensive", guard: 0, roam: 0, leash: 12, pack: id, leader: null, menace: false } });
+            Object.assign(battle.actor(id), { x: square[0] + 0.5, y: square[1] + 0.5, target, stunnedUntil: battle.time + 600000 });
+            game.enlisting.push(id);
+        };
+        const near = spot(6);
+        const orc = battle.actor("orc");
+
+        game.stop();
+        Object.assign(orc, { x: near[0] + 0.5, y: near[1] + 0.5, square: near, to: null, path: [], order: null, attack: null, target: "player", stunnedUntil: battle.time + 600000 });
+        game.avatars.get("orc").place(orc.x, orc.y, Math.PI);
+        game.previous.set("orc", { x: orc.x, y: orc.y });
+        game.advance(0.1);
+        slime("slime", spot(9), "player");
+        slime("idler", spot(12), null);
+        slime("far", [px + 50, py], null);
+
+        return [orc.square, battle.actor("slime").square, battle.actor("idler").square].map(([x, y]) => Math.round(Math.hypot(x - px, y - py)));
+    });
+
+    expect(placed).toEqual([6, 9, 12]);
+    expect(await playUntil(page, () => ["slime", "idler"].every((id) => window.pellagos.game.avatars.has(id)))).toBe(true);
+
+    // (Played on a moment, the game going: keys are heard only then. Who's listed, set on, locked)
+    const listed = () =>
+        page.evaluate(() => {
+            const { game } = window.pellagos;
+
+            game.advance(0.3);
+
+            return {
+                icons: [...document.querySelectorAll("#attackers .attacker")].map((icon) => icon.dataset.id),
+                target: document.querySelector("#attackers .attacker.target")?.dataset.id ?? null,
+                lock: game.battle.actor("player").lock,
+                idle: [...document.querySelectorAll("#attackers .attacker.idle")].map((icon) => icon.dataset.id),
+                label: document.querySelector('#attackers .attacker[data-id="idler"]')?.getAttribute("aria-label") ?? null,
+            };
+        });
+    const press = async (key) => {
+        await page.evaluate(() => window.pellagos.game.start());
+        await page.keyboard.press(key);
+        await page.evaluate(() => window.pellagos.game.stop());
+
+        return listed();
+    };
+
+    // Those after them, as they came, then the one in range that isn't, the far one not at all
+    const first = await listed();
+
+    expect(first.icons).toEqual(["orc", "slime", "idler"]);
+    expect(first.idle).toEqual(["idler"]);
+    expect(first.label).toBe("Green slime, in range");
+    expect(first.target).toBe(null);
+
+    // X: set on the first, locked on (Auto target lock), listed first; again, the next, round
+    expect(await press("x")).toMatchObject({ target: "orc", lock: "orc", icons: ["orc", "slime", "idler"] });
+    expect(await press("x")).toMatchObject({ target: "slime", lock: "slime", icons: ["slime", "orc", "idler"] });
+    expect(await press("x")).toMatchObject({ target: "idler", lock: "idler", icons: ["idler", "orc", "slime"] });
+    expect(await press("x")).toMatchObject({ target: "orc", lock: "orc" });
+
+    // Z: back the other way, round
+    expect(await press("z")).toMatchObject({ target: "idler", lock: "idler" });
+
+    // Let go; Tab: the nearest, then each next one out, round again to the nearest; Shift+Tab back.
+    // The key the game's, not the browser's: nothing else given the focus
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.host.command(game.me, { type: "unlock" });
+        game.advance(0.1);
+    });
+    expect((await listed()).target).toBe(null);
+    expect(await press("Tab")).toMatchObject({ target: "orc", lock: "orc" });
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
+    expect(await press("Tab")).toMatchObject({ target: "slime" });
+    expect(await press("Tab")).toMatchObject({ target: "idler" });
+    expect(await press("Tab")).toMatchObject({ target: "orc" });
+    expect(await press("Shift+Tab")).toMatchObject({ target: "idler" });
+
+    // None in sight: said
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        for (const id of ["orc", "slime", "idler", "far"]) {
+            Object.assign(game.battle.actor(id), { dead: true, respawnAt: Infinity });
+        }
+
+        game.host.command(game.me, { type: "unlock" });
+        game.advance(0.5);
+    });
+    await press("Tab");
+    await expect(page.locator("#banner")).toHaveText("No foe in sight");
+});
+
 test("Auto target lock (Game options, on to start with): an enemy tapped stays the player's target as they walk off from it, its icon kept down the right in the lock's sights; tapped on another, the lock goes with it; tapped on it, let go, set on no one; let go 40 m off", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
@@ -2743,7 +2864,7 @@ test("Auto target lock (Game options, on to start with): an enemy tapped stays t
     expect(swapped.order).toEqual({ type: "engage", target: "slime", run: false, stand: true });
     expect(swapped.lock).toBe("slime");
     expect(swapped.locked).toEqual(["slime"]);
-    expect(swapped.icons, "the orc, no longer after them nor locked on, gone").toEqual(["slime"]);
+    expect(swapped.icons, "the orc, no longer after them nor locked on, listed after it, in range").toEqual(["slime", "orc"]);
 
     // Tapped on the slime again: let go, set on no one, nothing marked
     await page.waitForTimeout(400);

@@ -1678,9 +1678,14 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   pointing the way to them across the ground (in front of the camera, up; behind it, down), the
   nearest three, clear of the quick actions, gone once they're in view (game.js `#threats`, hud.js
   `threats`).
-- **Those attacking the player** (and whoever they're set on) each have an icon down the right
-  side of the screen, the first six in the order they came to it (game.js `#attackers`,
-  `ATTACKERS`; hud.js `attackers`): their likeness in a red frame (`--hostile`), a thin line of
+- **The foes about the player** each have an icon down the right side of the screen, the
+  first six (game.js `#attackers`, `ATTACKERS`; hud.js `attackers`, its group "Enemies"):
+  whoever the player's set on first; then those attacking them, in the order they came to it;
+  then the rest they can see within 40 m (as far as the lock holds, `ENEMIES.reach`; seen as
+  far in the dark as a player sees, *Seeing at night*: `#enemiesSeen`, looked for four times a
+  second, not every frame), the nearest first, their frame fainter and their name read "…, in
+  range" (`.attacker.idle`). Till 2026-10-25 only those attacking them, and whoever they were set
+  on, were listed. Each icon: their likeness in a red frame (`--hostile`), a thin line of
   their health along its foot, whoever the player's set on glowing and pulsing (still, asked for
   less motion). The likeness is drawn once they've been drawn half a second (`LIKENESS_AFTER`:
   drawn the moment they're built it came out blank, and one that does is drawn again,
@@ -1699,6 +1704,16 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   what's in hand, locked on (game.js `#attackerPressed`). Pressed from the keyboard, an icon's a
   tap. With **Auto target lock** on (*Locked on*, below), each of those locks on too, and a tap
   on whoever they're locked on lets go instead.
+- **Stepping through them from the keyboard** (game.js `cycleTarget`, `#setOn`), each sets the
+  player on the foe as a tap on its icon does (where they stand, locked on with Auto target
+  lock): **X** the next in the enemies list's order and **Z** the last, round again at either
+  end (an order of its own: those after the player as they came, then the rest the nearest
+  first, the one set on where it falls among them, so a press steps on rather than swapping the
+  same two); **Tab** the nearest foe in sight, then each next one out, round again to the
+  nearest, and **Shift+Tab** back (the order kept as it was while the presses come within 4 s,
+  `ENEMIES.keep`, not taken afresh as everyone moves). Tab is the game's while it's played and
+  no panel's open (not the browser's, moving its focus off the game to the next button); with
+  no foe in sight, "No foe in sight".
 - **Locked on** (Game options, Gameplay: **Auto target lock**, on to start with; game.js
   `autoLock`): whoever the player sets on, by a tap or a double tap on them or their icon, or
   Attack on their wheel, is locked on (the `engage` order's `lock`; battle.js `lock`). It stays

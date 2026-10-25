@@ -2012,6 +2012,11 @@ lock's sights (app/hud.js attackers) */
     user-select: none;
 }
 
+/* A foe in range and seen, not after the player (yet): its frame fainter (hud.js attackers) */
+.attacker.idle {
+    border-color: rgba(212, 83, 59, 0.45);
+}
+
 .attacker-initial {
     position: absolute;
     inset: 0;

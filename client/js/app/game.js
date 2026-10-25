@@ -36,7 +36,7 @@ import { AFFLICTIONS } from "../core/afflictions.js";
 import { DAY, daylight, elapsedOf, HOUR, moonPhase, timeOfDay } from "../core/daytime.js";
 import { cheering, greetingOf, isEmote } from "../core/emotes.js";
 import { carriesTorch, playerSight, sightAt, torchesLit } from "../core/light.js";
-import { aloftShare, BOMBS, SIGHT, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
+import { aloftShare, BOMBS, LOCK_REACH, SIGHT, sitting, STEP_MS, TALK_REACH, WAIT_BEYOND } from "../core/battle.js";
 import { CACHE_BANDS } from "../core/caches.js";
 import { FINDS, foodFor, FRESH, HEALING_DRAUGHTS, OBSTACLES, STRANGERS } from "../core/director.js";
 import { compass } from "../core/ways.js";
@@ -335,6 +335,12 @@ const THREATS = Object.freeze({ most: 3, inset: 28, bottom: 96 });
 // The icons down the right side for those attacking the player (hud.js attackers): the first
 // `most` to set on them, in the order they did
 const ATTACKERS = Object.freeze({ most: 6 });
+
+// The foes in the enemies list besides those after the player (#attackers): those the player can
+// see within `reach` metres (as far as the target lock holds: battle.js LOCK_REACH), looked for
+// `every` so many seconds, not every frame; and Tab's order (#cycleTarget), kept as it was while
+// the presses come within `keep` seconds of each other, not taken afresh as everyone moves
+const ENEMIES = Object.freeze({ reach: LOCK_REACH, every: 0.25, keep: 4 });
 
 // How often the party menu, open, is shown again as those in it change (s); and how long someone's
 // drawn before their likeness is (s: game.js #likeness)
@@ -6399,10 +6405,13 @@ export class Game {
         this.hud.threats(arrows);
     }
 
-    // Those attacking the player, an icon each down the right side (hud.js attackers), and whoever
-    // the player's set on (#target), marked (and locked on, as such): the first ATTACKERS.most, in
-    // the order they came to it; each with their likeness, drawn once (view.js portrait) when
-    // they're drawn in full (not one of a crowd)
+    // The foes in the enemies list, an icon each down the right side (hud.js attackers): whoever the
+    // player's set on (#target) first, marked (and locked on, as such); then those attacking them,
+    // in the order they came to it; then the rest the player can see within ENEMIES.reach, the
+    // nearest first (#enemiesSeen): the first ATTACKERS.most; each with their likeness, drawn once
+    // (view.js portrait) when they're drawn in full (not one of a crowd). And the order Z and X
+    // step through (#cycleTarget: `enemyRing`), those after them and then the rest, the one set on
+    // where it falls among them, so a press doesn't swap the same two
     #attackers() {
         const player = this.battle.actor(this.me);
         const target = this.#target();
@@ -6421,7 +6430,15 @@ export class Game {
             }
         }
 
-        const shown = after.sort((a, b) => since.get(a.id) - since.get(b.id) || (a.id < b.id ? -1 : 1)).slice(0, ATTACKERS.most);
+        const attacking = after.sort((a, b) => since.get(a.id) - since.get(b.id) || (a.id < b.id ? -1 : 1));
+        const listed = new Set(attacking.map(({ id }) => id));
+        const rest = player && !player.dead ? this.#enemiesSeen(player).filter((id) => !listed.has(id)).map((id) => this.battle.actor(id)).filter(Boolean) : [];
+        const ring = [...attacking, ...rest];
+
+        this.enemyRing = ring.map(({ id }) => id);
+
+        const shown = [...(target ? [target] : []), ...ring.filter((actor) => actor !== target)].slice(0, ATTACKERS.most);
+        const fighting = new Set(attacking.filter((actor) => actor !== target || actor.target === player.id || actor.attack?.target === player.id).map(({ id }) => id));
 
         for (const id of this.likenesses.keys()) {
             if (!shown.some((actor) => actor.id === id)) {
@@ -6433,7 +6450,99 @@ export class Game {
             this.#likeness(this.likenesses, actor.id);
         }
 
-        this.hud.attackers(shown.map((actor) => ({ id: actor.id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, target: actor === target, locked: actor === target && player.lock === actor.id, picture: this.likenesses.get(actor.id) ?? null })));
+        this.hud.attackers(shown.map((actor) => ({ id: actor.id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, target: actor === target, locked: actor === target && player.lock === actor.id, attacking: fighting.has(actor.id), picture: this.likenesses.get(actor.id) ?? null })));
+    }
+
+    // The foes the player can see about them (ids, the nearest first): on their map, within
+    // ENEMIES.reach, seen (battle.js canSee, as far in the dark as a player sees: light.js
+    // playerSight), drawn (not waiting to be, nor a fort's walls or a camp's stakes); looked for
+    // every ENEMIES.every seconds, or at once (`now`)
+    #enemiesSeen(player, { now = false } = {}) {
+        if (!now && this.enemiesSeenAt && this.clock - this.enemiesSeenAt.clock < ENEMIES.every && this.enemiesSeenAt.map === player.map) {
+            return this.enemiesSeenAt.ids;
+        }
+
+        const near = [];
+
+        for (const actor of this.battle.actors) {
+            if (actor === player || actor.dead || actor.map !== player.map || actor.kind === "fort" || actor.kind === "stakes" || !this.avatars.has(actor.id) || !this.battle.hostile(actor, player)) {
+                continue;
+            }
+
+            const off = Math.hypot(actor.x - player.x, actor.y - player.y);
+
+            if (off <= ENEMIES.reach && this.battle.canSee(player, actor, ENEMIES.reach)) {
+                near.push([off, actor.id]);
+            }
+        }
+
+        const ids = near.sort((a, b) => a[0] - b[0]).map(([, id]) => id);
+
+        this.enemiesSeenAt = { clock: this.clock, map: player.map, ids };
+
+        return ids;
+    }
+
+    // A foe set on from a key (Z or X, Tab), as a tap on its icon sets them (#attackerPressed):
+    // where the player stands, locked on with Auto target lock (#locking)
+    #setOn(id) {
+        const player = this.battle.actor(this.me);
+
+        if (!player || player.dead || !this.battle.actor(id)) {
+            return;
+        }
+
+        this.#endTalk();
+        this.approaching = null;
+        this.#command({ type: "engage", target: id, stand: true, ...this.#locking() });
+        this.sound?.play("lock");
+    }
+
+    /**
+     * The next foe along (`step`: 1 on, -1 back) set on, as a tap on its icon sets them: through
+     * the enemies list's order (`by` "list": Z and X; those after the player, as they came, then
+     * the rest they can see within ENEMIES.reach, the nearest first), or by how far off they are
+     * (`by` "distance": Tab, the nearest first, each press the next one out, round again to the
+     * nearest; its order kept while the presses come, ENEMIES.keep). With no one set on, the first
+     * (or, going back, the last). Said so, if there's no one in sight.
+     */
+    cycleTarget(step, by = "list") {
+        const player = this.battle.actor(this.me);
+
+        if (!player || player.dead) {
+            return;
+        }
+
+        let ring;
+
+        if (by === "list") {
+            this.#attackers();
+            ring = this.enemyRing ?? [];
+        } else {
+            const alive = (id) => {
+                const actor = this.battle.actor(id);
+
+                return Boolean(actor) && !actor.dead && actor.map === player.map;
+            };
+            const kept = this.tabbed && this.clock < this.tabbed.until ? this.tabbed.ids.filter(alive) : [];
+
+            ring = kept.length ? kept : this.#enemiesSeen(player, { now: true });
+            this.tabbed = { ids: ring, until: this.clock + ENEMIES.keep };
+        }
+
+        if (!ring.length) {
+            this.hud.message("No foe in sight", 1.2);
+            this.sound?.play("denied");
+
+            return;
+        }
+
+        const at = ring.indexOf(this.#target()?.id ?? null);
+        const next = at < 0 ? (step > 0 ? 0 : ring.length - 1) : (at + step + ring.length) % ring.length;
+
+        if (next !== at) {
+            this.#setOn(ring[next]);
+        }
     }
 
     // An attacker's icon tapped or held (hud.js onAttacker; `time`: ms, as performance.now()): held,
@@ -12851,6 +12960,14 @@ export class Game {
                 this.toggleParty({ chat: true });
             } else if (/^[1-6]$/.test(event.key) && Number(event.key) <= this.quickShown && plain && this.quickBar?.up && !(event.target instanceof HTMLInputElement)) {
                 this.quick(Number(event.key) - 1);
+            } else if ((event.key === "x" || event.key === "X" || event.key === "z" || event.key === "Z") && plain) {
+                // (X and Z: the next foe in the enemies list set on, or the last)
+                this.cycleTarget(event.key.toLowerCase() === "x" ? 1 : -1, "list");
+            } else if (event.key === "Tab" && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && !typing && !(this.pack?.open || this.journal?.open || this.reader?.open || this.spellbook?.open || this.partyPanel?.open || this.fate?.open)) {
+                // (Tab: the nearest foe in sight set on, then each next one out; Shift+Tab back.
+                // Not the browser's: its focus taken off the game to the next button, for nothing)
+                event.preventDefault();
+                this.cycleTarget(event.shiftKey ? -1 : 1, "distance");
             }
         }, { capture: true });
 
