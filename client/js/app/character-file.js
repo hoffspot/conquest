@@ -310,12 +310,13 @@ export function exportOfKept(character, { seed, created = new Date().toISOString
         progress: isObject(character.progress) ? { ...of, format: PROGRESS_FORMAT, ...character.progress } : null,
         standing: kind(character.standing),
         followers: Array.isArray(character.followers) ? kind(character.followers, "followers") : null,
-        wheels: null,
-        pin: null,
+        wheels: kind(character.wheels, "wheels"),
+        pin: kind(character.pin, "pin"),
+        markers: Array.isArray(character.markers) ? kind(character.markers, "markers") : null,
         place: kind(character.place, "place"),
         vitals: kind(character.vitals, "vitals"),
-        messages: null,
-        told: null,
+        messages: Array.isArray(character.messages) ? kind(character.messages, "messages") : null,
+        told: Array.isArray(character.told) ? kind(character.told, "told") : null,
         world: war ? { ...of, war, ...(name ? { name } : {}) } : null,
     };
 }
@@ -323,8 +324,9 @@ export function exportOfKept(character, { seed, created = new Date().toISOString
 /**
  * A character's export (brought forward and salvaged: readCharacterFile's) as a world server keeps
  * a hero, read as the game reads what it keeps: { hero, talks, explored, progress, standing,
- * followers, place, vitals }; their hero with their own id (core/guid.js: given one, from a file
- * kept before characters had ids). Throws ExportError for one that doesn't read.
+ * followers, place, vitals }, and what their own game kept of them (core/host.js OWN: wheels, pin,
+ * markers, messages, told) where it has any; their hero with their own id (core/guid.js: given
+ * one, from a file kept before characters had ids). Throws ExportError for one that doesn't read.
  */
 export function keptOfExport(exported) {
     const read = importCharacter(exported);
@@ -334,8 +336,9 @@ export function keptOfExport(exported) {
     }
 
     const { hero, talks, explored, progress, standing, followers, place, vitals } = read;
+    const own = ["wheels", "pin", "markers", "messages", "told"].filter((key) => exported[key]).map((key) => [key, read[key]]);
 
-    return { hero: withGuid(hero), talks, explored, progress, standing, followers, ...(place ? { place } : {}), ...(vitals ? { vitals } : {}) };
+    return { hero: withGuid(hero), talks, explored, progress, standing, followers, ...(place ? { place } : {}), ...(vitals ? { vitals } : {}), ...Object.fromEntries(own) };
 }
 
 /**
@@ -344,6 +347,8 @@ export function keptOfExport(exported) {
  */
 export function salvageKept(character, { seed }) {
     const { exported, left } = salvage(exportOfKept(character, { seed }));
+    // (Their settings for how they play, as they were: no export has them, and the game reads them, app/save.js playSettingsOf)
+    const settings = isObject(character?.settings) ? { settings: character.settings } : {};
 
-    return { character: keptOfExport(exported), left };
+    return { character: { ...keptOfExport(exported), ...settings }, left };
 }

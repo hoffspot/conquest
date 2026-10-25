@@ -29,7 +29,7 @@ import { forgetInWorld, inWorldOf, keepInWorld, REJOIN, REJOIN_STAGES, rejoinWor
 import { telemetry } from "./app/telemetry.js";
 import { Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
-import { enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
+import { enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
 import { MARKER_ICONS, MARKER_NAMES, MARKERS } from "./core/markers.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
@@ -842,25 +842,39 @@ $("#floatswitch").checked = settings.stickFloats;
 $("#zoomswitch").checked = settings.zoom;
 $("#pointerswitch").checked = settings.swordPointer;
 $("#largepointerswitch").checked = settings.largePointer;
-$("#resistswitch").checked = settings.resistSummons;
-$("#refuseswitch").checked = settings.refuseInvites;
-$("#snagswitch").checked = settings.autoSnag;
-$("#lockswitch").checked = settings.autoLock;
-$("#snagbutton").hidden = !settings.autoSnag;
-$("#followswitch").checked = settings.cameraFollows;
-$("#battlecamswitch").checked = settings.battleCam;
+showPlaySettings();
 $("#quicksixswitch").checked = settings.quickSix;
-$("#invertswitch").checked = settings.invertTilt;
-$("#shakeswitch").checked = settings.shake;
 $("#fullscreenswitch").checked = settings.fullscreen;
 // (Where the browser won't have it, no switch: on an iPhone, a word on the Home Screen instead)
 $("#fullscreenoption").hidden = !fullScreen.available;
 $("#fullscreennote").hidden = fullScreen.available || !isIOS() || isInstalledApp();
-$("#dragslider").value = Math.round(settings.dragSpeed * 100);
-$("#dragname").textContent = `${Math.round(settings.dragSpeed * 100)}%`;
 $("#adaptiveswitch").checked = settings.adaptive;
 $("#soundswitch").checked = settings.sound;
 $("#debugswitch").addEventListener("change", (event) => applySetting("debug", event.target.checked));
+
+// The switches and slider of the settings for how the player plays (app/save.js PLAY_SETTINGS) as
+// they're set: as the game starts, and as a hero a world keeps brings theirs
+function showPlaySettings() {
+    $("#resistswitch").checked = settings.resistSummons;
+    $("#refuseswitch").checked = settings.refuseInvites;
+    $("#snagswitch").checked = settings.autoSnag;
+    $("#lockswitch").checked = settings.autoLock;
+    $("#snagbutton").hidden = !settings.autoSnag;
+    $("#followswitch").checked = settings.cameraFollows;
+    $("#battlecamswitch").checked = settings.battleCam;
+    $("#invertswitch").checked = settings.invertTilt;
+    $("#shakeswitch").checked = settings.shake;
+    $("#dragslider").value = Math.round(settings.dragSpeed * 100);
+    $("#dragname").textContent = `${Math.round(settings.dragSpeed * 100)}%`;
+}
+
+// The player's settings for how they play told the world that keeps their hero, as they change,
+// to keep with them (core/host.js OWN `settings`)
+function tellPlaySettings() {
+    if (state.onServer?.kept && state.game?.remote) {
+        state.together?.joining?.own({ settings: playSettingsOf(settings) });
+    }
+}
 
 // --- Making a character ---
 
@@ -1309,6 +1323,7 @@ async function snagChanged({ all = false } = {}) {
 
     Object.assign(settings, { snagGrades: everything ? null : grades, snagKinds: everything ? null : kinds });
     saveSettings({ snagGrades: settings.snagGrades, snagKinds: settings.snagKinds });
+    tellPlaySettings();
 
     if (state.game) {
         state.game.snagFilter = snagChoiceOf();
@@ -2611,12 +2626,19 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
         // (What they carry and grow into theirs, kept on this device as it changes, the one that's
         // brought next time: what the world knows of them is its own, kept there)
         onProgress: keep((progress) => saveProgress(save, progress)),
+        // (Their wheels and quick actions, their messages and what they've been told once: a
+        // character of this device's, kept on it as they're changed; a hero the world keeps, by
+        // the world, with them, and as this device had them only if the world has none yet:
+        // app/session.js createJoinedGame)
+        kept,
         wheels: save ? loadWheels(save) : null,
-        onWheels: save ? (wheels) => saveWheels(save, wheels) : () => {},
+        onWheels: keep((wheels) => saveWheels(save, wheels)),
+        messages: save ? loadMessages(save) : [],
+        onMessages: keep((messages) => saveMessages(save, messages)),
         onWorldMap: openWorldMap,
         onPing: pingShown,
         told: save ? loadTold(save) : [],
-        onTold: save ? (told) => saveTold(save, told) : () => {},
+        onTold: keep((told) => saveTold(save, told)),
     });
 
     state.worldMap?.dispose();
@@ -2636,6 +2658,21 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     floatStick(settings.stickFloats);
     showZoom(settings.zoom);
     game.cursor = pointer;
+
+    // (A hero the world keeps: their settings for how they play kept with them, theirs on this
+    // device too, as they last set them on any; never kept there yet, this device's told it)
+    if (kept) {
+        const theirs = playSettingsOf(game.host.players.get(game.me)?.own?.settings);
+
+        if (Object.keys(theirs).length) {
+            Object.assign(settings, theirs);
+            saveSettings(theirs);
+            showPlaySettings();
+        } else {
+            joining.own({ settings: playSettingsOf(settings) });
+        }
+    }
+
     game.resistSummons = settings.resistSummons;
     game.refuseInvites = settings.refuseInvites;
     game.autoSnag = settings.autoSnag;
@@ -4576,6 +4613,10 @@ document.addEventListener("visibilitychange", () => {
 function applySetting(key, value) {
     settings[key] = value;
     saveSettings({ [key]: value });
+
+    if (PLAY_SETTINGS.includes(key)) {
+        tellPlaySettings();
+    }
 
     if (key === "debug") {
         debug.show(value);

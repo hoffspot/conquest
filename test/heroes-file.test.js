@@ -213,4 +213,34 @@ describe("a kept hero and a character's export, each as the other", () => {
         assert.deepEqual(left, ["1 thing the game no longer has: old blade."]);
         assert.deepEqual(salvageKept(character, { seed: 9 }).left, [], "nothing more, the next time");
     });
+
+    it("keep what the hero's own game kept of them (core/host.js OWN): their wheels and quick actions, pin, markers, messages, what they've been told once and their settings, through the world keeping them and bringing them back (salvageKept), as through an export", () => {
+        const own = {
+            wheels: { self: [{ 0: "heal" }, {}], enemy: [{}, {}], quick: ["heal", "potion", null, null, null, null] },
+            pin: [120, -45],
+            markers: [{ id: "marker-1", x: 30, z: 40, icon: "camp", words: "home", from: null }],
+            messages: [{ text: "You find 9 gold.", at: 1760000000000, times: 1 }],
+            told: ["spoils"],
+        };
+        const settings = { autoSnag: true, snagGrades: ["legendary"], snagKinds: null, battleCam: false, dragSpeed: 1.5 };
+        const kept = { ...keptHero("Cara", 30), ...own, settings };
+
+        // (Once, a world brought a kept hero back without them: the hero's wheels and quick actions,
+        // set on a world server, gone the next time they came in)
+        const { character } = salvageKept(kept, { seed: 9 });
+
+        for (const [key, value] of Object.entries(own)) {
+            assert.deepEqual(character[key], value, key);
+            assert.deepEqual(keptOfExport(exportOfKept(kept, { seed: 9 }))[key], value, `${key}, through an export`);
+        }
+
+        // (Their settings for how they play too: not a character file's, as no export has them)
+        assert.deepEqual(character.settings, settings);
+        assert.equal(keptOfExport(exportOfKept(kept, { seed: 9 })).settings, undefined);
+
+        // (A hero kept before there were any: none)
+        const before = salvageKept(keptHero("Dan", 5), { seed: 9 }).character;
+
+        assert.ok(["wheels", "pin", "markers", "messages", "told", "settings"].every((key) => before[key] === undefined));
+    });
 });

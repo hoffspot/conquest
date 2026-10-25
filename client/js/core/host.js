@@ -45,7 +45,7 @@ import { compass } from "./ways.js";
 import { SETTLEMENT_KINDS } from "./setpieces/town.js";
 import { CAMP_FOLK, campFolk, clearOfSettlements, CREATURES, eliteName, eliteOf, eliteRound, ELITES, encounterAt, LAIRS, lairOf, memberOf, menaces, outByDay, packOf, RIFT, tierAt, TIERS, tierPower, traitsOf, WILD } from "./creatures.js";
 import { barracksPosts, clearOfWaysIn, dungeonTier, heldWithin, townOf } from "./insides.js";
-import { MARKER_ICONS, markerWords } from "./markers.js";
+import { MARKER_ICONS, markersOf, markerWords } from "./markers.js";
 import { bandFolk, bandOf, CHEST_GOLD, holderOf, PLACE_BANDS, placesOf } from "./places.js";
 import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./portals.js";
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
@@ -406,6 +406,55 @@ export const AFK = Object.freeze({ mark: 10 * 60000, out: 30 * 60000 });
  * its owner, trusted, or a player.
  */
 export const PLAYER_ROLES = Object.freeze(["owner", "trusted", "player"]);
+
+/**
+ * What a player's own game keeps of their hero that isn't the world's, its rules never reading it
+ * (`keys`): their action wheels and quick actions, where they've pinned the world map and their
+ * markers on it, the last messages they were told, what they've been told once, and their
+ * settings for how they play (app/save.js PLAY_SETTINGS, read there). Kept with them as the world
+ * keeps them (characterOf) and in its saves, told only to their own game (core/netplay.js
+ * Hosting), as their game said it (Host.own), each no more than `most` characters of it.
+ */
+export const OWN = Object.freeze({ keys: Object.freeze(["wheels", "pin", "markers", "messages", "told", "settings"]), most: 8192 });
+
+/** Of `given` (a character, or what a player's game said), what's theirs to keep (OWN), each as it's shaped: what isn't, left out. */
+export function ownOf(given) {
+    const own = {};
+    const plain = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+    const fits = (value) => JSON.stringify(value).length <= OWN.most;
+
+    if (!plain(given)) {
+        return own;
+    }
+
+    const { wheels, pin, markers, messages, told, settings } = given;
+
+    if (plain(wheels) && fits(wheels)) {
+        own.wheels = structuredClone(wheels);
+    }
+
+    if (plain(settings) && fits(settings)) {
+        own.settings = structuredClone(settings);
+    }
+
+    if (pin === null || (Array.isArray(pin) && pin.length === 2 && pin.every(Number.isFinite))) {
+        own.pin = pin && [...pin];
+    }
+
+    if (Array.isArray(markers)) {
+        own.markers = markersOf(markers);
+    }
+
+    if (Array.isArray(messages) && messages.every((one) => plain(one) && typeof one.text === "string" && Number.isFinite(one.at) && Number.isInteger(one.times)) && fits(messages)) {
+        own.messages = messages.map(({ text, at, times }) => ({ text, at, times }));
+    }
+
+    if (Array.isArray(told) && told.every((one) => typeof one === "string") && fits(told)) {
+        own.told = [...told];
+    }
+
+    return own;
+}
 
 // What a player does that gets them up from resting (waiting on the rest to rest too: RULES rest
 // "everyone"): going somewhere, fighting, casting, trading
@@ -1314,9 +1363,11 @@ export class Host {
      * square to it), in their `role` in it (PLAYER_ROLES: an owner, trusted, or a player). Or, if
      * they're coming back, where they were when they left (`place`: placeOf's), if it can be
      * stood on still (else the nearest square that can, near it), and as they were (`vitals`:
-     * vitalsOf's). Returns their record (players).
+     * vitalsOf's). What their own game keeps of them (OWN: their wheels, pin, markers, messages,
+     * what they've been told once and their settings), kept with them. Returns their record
+     * (players).
      */
-    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, standing = {}, followers = [], square = this.world.spawns?.player, map = "town", role = "player", place = null, vitals = null }) {
+    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, standing = {}, followers = [], square = this.world.spawns?.player, map = "town", role = "player", place = null, vitals = null, wheels, pin, markers, messages, told, settings }) {
         const plain = (value) => (typeof value?.toJSON === "function" ? value.toJSON() : structuredClone(value));
         const as = PLAYER_ROLES.includes(role) ? role : "player";
         let back = place && [place.x, place.y, place.facing].every(Number.isFinite) ? { x: place.x, y: place.y, facing: place.facing } : null;
@@ -1371,6 +1422,9 @@ export class Host {
             // How big an invasion their device can draw, as their game's told (core/invasions.js
             // sizeFor: the "budget" command), or null till it has
             budget: null,
+            // What their own game keeps of them (OWN), not the world's: never recorded, no copy
+            // of the world needing it
+            own: ownOf({ wheels, pin, markers, messages, told, settings }),
         };
         const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
         const at = taken.size ? nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), square, { taken }) : square;
@@ -1570,15 +1624,28 @@ export class Host {
         return character;
     }
 
-    /** A player's character, as it's kept (as join takes it). */
-    characterOf({ id, hero, talks, explored, progress, standing }) {
+    /** A player's character, as it's kept (as join takes it): with what their own game keeps of them (OWN). */
+    characterOf({ id, hero, talks, explored, progress, standing, own }) {
         const followers = this.#company(id).map((each) => {
             const { name, calling, sex, seed, people } = this.followers.get(each);
 
             return { name, calling, sex, seed, people };
         });
 
-        return { hero: { ...hero }, talks: { memory: structuredClone(talks.memory), knowledge: [...talks.knowledge] }, explored: explored.toJSON(), progress: progress.toJSON(), standing: standing.toJSON(), followers };
+        return { hero: { ...hero }, talks: { memory: structuredClone(talks.memory), knowledge: [...talks.knowledge] }, explored: explored.toJSON(), progress: progress.toJSON(), standing: standing.toJSON(), followers, ...structuredClone(own ?? {}) };
+    }
+
+    /**
+     * What a player's own game keeps of their hero (OWN: their wheels, pin, markers, messages,
+     * what they've been told once and their settings), as it says it's changed (`changes`: any of
+     * them): kept with them, as they're shaped; never recorded, no copy of the world needing it.
+     */
+    own(id, changes) {
+        const player = this.players.get(id);
+
+        if (player) {
+            Object.assign(player.own, ownOf(changes));
+        }
     }
 
     /** How many followers a player can lead: one, and more as their Command grows. */
@@ -2771,11 +2838,13 @@ export class Host {
             }
         }
 
-        for (const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, prayed, inRing, discarded, safety, role, lastCommand, away, out, resting, budget } of snapshot.players) {
+        for (const player of snapshot.players) {
+            const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, prayed, inRing, discarded, safety, role, lastCommand, away, out, resting, budget } = player;
             const kept = new Progress(progress, hero);
 
-            // (Outfitted as they were: their actor's carried on as it was, charms and all)
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, prayed: { ...(prayed ?? {}) }, inRing: inRing ?? null, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null });
+            // (Outfitted as they were: their actor's carried on as it was, charms and all; and what
+            // their own game keeps of them, as it was)
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, prayed: { ...(prayed ?? {}) }, inRing: inRing ?? null, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null, own: ownOf(player) });
         }
 
         host.random.state = snapshot.random ?? host.random.state;

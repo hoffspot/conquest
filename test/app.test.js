@@ -13,7 +13,7 @@ import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
 import { isGuid } from "../client/js/core/guid.js";
-import { clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, playedSave, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
+import { clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
 import { ago, KEPT_FROM, keepMessage, MESSAGES_KEPT } from "../client/js/app/journal.js";
 import { encode } from "../client/js/core/wire.js";
 import { Standing } from "../client/js/core/standing.js";
@@ -441,6 +441,15 @@ describe("saving (save.js)", () => {
         // Volumes are kept on today's scale...
         saveSettings({ musicVolume: 0.2 });
         assert.equal(loadSettings().musicVolume, 0.2);
+    });
+
+    it("reads the settings for how the player plays (a hero a world keeps keeps them: core/host.js OWN) as the game takes them, each the kind its default is, the rest left out", () => {
+        assert.ok(PLAY_SETTINGS.every((key) => key in SETTINGS_DEFAULTS));
+        assert.ok(!PLAY_SETTINGS.some((key) => ["sound", "musicVolume", "stick", "quality", "fullscreen", "minimap"].includes(key)), "the screen, the sound and the stick, this device's");
+        assert.deepEqual(playSettingsOf({ autoSnag: true, battleCam: false, dragSpeed: 1.5, snagGrades: ["legendary"], snagKinds: null, sound: false, quality: "low" }), { autoSnag: true, battleCam: false, dragSpeed: 1.5, snagGrades: ["legendary"], snagKinds: null });
+        assert.deepEqual(playSettingsOf({ autoSnag: "yes", dragSpeed: Number.NaN, snagGrades: [3], shake: null, autoLock: 1 }), {});
+        assert.deepEqual([playSettingsOf(null), playSettingsOf(["autoSnag"])], [{}, {}]);
+        assert.deepEqual(Object.keys(playSettingsOf(SETTINGS_DEFAULTS)), [...PLAY_SETTINGS], "every one of them, as they start");
     });
 
     it("forgets volumes saved on the old, louder scale, for the new defaults, keeping the rest", () => {

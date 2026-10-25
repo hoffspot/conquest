@@ -5051,8 +5051,15 @@ it.
    - **Going into someone else's world** (one opened to others, or a world on a server whose
      players bring their own), a character takes only who they are and what they carry: what
      they've grown into and carry is kept on this device as it changes there, and is what they
-     bring next time. What that world knows of them is its own, kept by it, by their own id:
-     theirs again the next time they come (docs/SERVER.md, "Visitors"). A world on this device
+     bring next time, and so are their action wheels and quick actions, their messages and what
+     they've been told once. What that world knows of them is its own, kept by it, by their own
+     id, with where they pinned its map and their markers on it: theirs again the next time they
+     come (docs/SERVER.md, "Visitors"). A hero a world on a server keeps (one made there, or
+     copied in) is the world's, all of them: their wheels, quick actions, pin, markers, messages
+     and what they've been told once too, told the world as they change (core/host.js `OWN`, the
+     `own` message: docs/WAR.md) and theirs again on any device; and so are their settings for
+     how they play (save.js `PLAY_SETTINGS`: below), the device or browser they come in on taking
+     them up (docs/SERVER.md, "What's the player's own of a hero"). A world on this device
      opened to others does the same for those who visit it: each visitor's place in it under
      their own id (`places[<their id>]`, with their name and when they were last seen), up to
      twelve (save.js `MOST_VISITORS`, the one gone longest forgotten), the list saying how many
@@ -5403,7 +5410,12 @@ followers, map pin, where they were (`place`) and how (`vitals`). Everything's m
 whatever it's of was started and the world's seed, and is read only for that. `pellagos.worlds` is
 `{ ids }`. A character kept before worlds were apart has their world made for them under their
 own id, and their place in it too, so all that was kept stays where it was. Settings (the minimap and sound switches, the three volumes, the camera's, debug mode and its
-controls) are in `pellagos.settings`, the same whoever's played.
+controls) are in `pellagos.settings`, the same whoever's played; those for how the player plays
+(`PLAY_SETTINGS`: auto-snag and what it takes, the target lock, saying no to summons and invites,
+and the camera's) are kept by a world server with a hero it keeps too, and taken up from it as
+they come in (above), so they're theirs whichever device or browser they play on: each web
+address the game's opened from keeps its own (a home-screen app, a browser and a server's two
+addresses each their own).
 
 Kept before there could be several (`SAVE_VERSION` 1), the one character had the keys to itself
 (`pellagos.save`, `pellagos.progress`...). It's moved under an id of its own the first time the
