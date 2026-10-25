@@ -11626,7 +11626,7 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
     expect(delved).toMatchObject({ out: "town", by: true, sees: 160 });
 });
 
-test("a dungeon's camera goes by the room round the player: over its cut roof, looking down, in an open cavern; under its roof, low behind them, in a tunnel; tilted by hand, kept so while it's as open, let go of in the tunnel", async ({ page }) => {
+test("a dungeon's camera goes by the room round the player: over its cut roof, looking down, in an open cavern; under its roof, low behind them, in a tunnel; tilted by hand, kept so while it's as open, let go of in the tunnel; turned to find the way through it; framing a fight from where there's room; and anyone its rock hides seen through it", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
 
@@ -11779,7 +11779,41 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
             return { room: view.roomAt(game.cameraFollow.yaw), framing: game.battleCamOn === foe.id };
         };
 
-        return { open, tight, inOpen, inTight, nudged: nudged.pitch - base, tunnel: tunnel.pitch - inTight.pitch, finds: across(true), leaves: across(false), fight: fight() };
+        // Seen through the rock where it hides them: a point in the rock past the open cavern's
+        // edge hidden from the camera over it, the player in the open not; hidden, drawn again as a
+        // silhouette (after the world, before them), and not once they're seen
+        const silhouette = () => {
+            at(open, 3);
+
+            const me = game.avatars.get("player");
+            const [px, pz] = [mx + open.x + 0.5, mz + open.y + 0.5];
+            // (Away from the camera, past the cavern's edge, a metre and a half into the rock)
+            const [ax, az] = [-Math.sin(view.yaw), -Math.cos(view.yaw)];
+            let r = 1;
+
+            while (r < 20 && !rock(px + ax * r, pz + az * r)) {
+                r += 0.25;
+            }
+
+            const behind = { x: px + ax * (r + 1.5), y: view.focus.y + 1, z: pz + az * (r + 1.5) };
+
+            const rockHides = view.rockHides.bind(view);
+            const result = { behind: view.rockHides(behind), me: view.rockHides(me.point(0.55)) };
+
+            view.rockHides = () => true;
+            game.advance(0.2);
+
+            const copies = me.object.userData.silhouette?.copies ?? [];
+
+            Object.assign(result, { copies: copies.length, shown: copies.filter(({ visible }) => visible).length, order: [...new Set(copies.map(({ renderOrder }) => renderOrder))], over: [...new Set(copies.map(({ parent }) => parent.renderOrder))] });
+            view.rockHides = rockHides;
+            game.advance(0.2);
+            result.after = copies.filter(({ visible }) => visible).length;
+
+            return result;
+        };
+
+        return { open, tight, inOpen, inTight, nudged: nudged.pitch - base, tunnel: tunnel.pitch - inTight.pitch, finds: across(true), leaves: across(false), fight: fight(), silhouette: silhouette() };
     });
 
     expect(seen.open.how).toBeGreaterThan(0.75);
@@ -11798,6 +11832,9 @@ test("a dungeon's camera goes by the room round the player: over its cut roof, l
     expect(seen.leaves.turned).toBeLessThan(0.05);
     expect(seen.fight.framing).toBe(true);
     expect(seen.fight.room).toBeGreaterThanOrEqual(0.6);
+    expect(seen.silhouette).toMatchObject({ behind: true, me: false, order: [1], over: [2], after: 0 });
+    expect(seen.silhouette.copies).toBeGreaterThan(0);
+    expect(seen.silhouette.shown).toBeGreaterThan(0);
 });
 
 test("a dungeon whose creatures are drawn from models: theirs fetched, not read, as the player nears its way in; waited for at its door, the world stopped, a card saying how far they've got, Not now staying out and Go in now offered after a while; gone in once they're read; let go of a little after the player's left", async ({ page }) => {

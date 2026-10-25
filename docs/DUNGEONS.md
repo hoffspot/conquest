@@ -687,8 +687,13 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
   map UASTC (sharper, the rock being seen close to), each with its mipmaps, read by three.js's
   `KTX2Loader` (`art/engine/models.js` `readKtx2`). A picture and its normal map take about
   0.5 MB of a phone's graphics memory, where as JPEGs, decoded, they took 2.8 MB.
-- **Never cut away**: the rock and the temple's walls stand whole however the camera looks,
-  since the camera's kept out of them (below), so nothing's ever seen from inside.
+- **Cut away only from over the roof**: the rock and the temple's walls stand whole while the
+  camera's under the roof, kept out of them (below), so nothing's seen from inside; over it, in
+  the open (*The camera*, below), what stands above 2.3 metres over the floor and under the camera
+  isn't drawn (dungeons3d.js `DUNGEON_CUT`: the rock, walls and timbers drawn cut, `cutRock`,
+  only while it's so, as what's thrown away costs the graphics card its quickest way of drawing;
+  what else stands tall, a stalagmite or the stairs up, cut as they are, interiors3d.js
+  `cutShader`), the cut rock as dark as the depths round it.
 - **What's in its rooms**, by plan character: rock, bones, rubble, camp fires, bedrolls, barrels,
   crates and sacks, tables, weapon racks, the chief's seat, statues, pillars, tombs, candle stands,
   altars, shrines and braziers; gold heaped either side of the hoard.
@@ -809,8 +814,25 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
     who'd begun to dig themselves a way out (pick and spade leant on the rock, the earth they'd
     dug heaped by them, their lantern out) or a last camp (a ring of stones round a cold fire, a
     sheepskin, a pack, two dead).
-- **The camera kept out of the rock**: it comes in closer rather than go into a level's rock, and
-  stays under its roof (never over it, as it can go over a building's ceiling).
+- **The camera, by how much room there is round the player** (world/view.js `DUNGEON_VIEW`; the
+  user: top-down where it's open, third person in its tunnels, feeling how tight they are). How
+  open it is (`openness`): the ground seen from where the camera looks, 16 ways round out to 6 m,
+  against a clear circle that big (a tunnel three metres wide about 0.3, an open cavern 1); its
+  share of the way from a tunnel's camera to an open cavern's going from nothing at 0.3 to all at
+  0.7 (`spaceShare`), eased as the player goes (over about a second). Under the roof, 22 degrees
+  down from 5 m off in a tunnel, up to 30 degrees from 5.6 m; past 0.55 of the way, over the roof,
+  the rock cut away (above), from 45 degrees and 8.5 m up to 58 degrees and 11 m over an open
+  cavern, looking down as a top-down game's does; back under below 0.4 (`dungeonPose`). Eased
+  from one to the next (game.js `#dungeonPose`). Under the roof it's kept out of the rock, coming
+  in closer rather than go into it, and 0.6 m under the roof over each point of its line (the
+  rock's own height there, worked out a square at a time as it's asked: `roofGrid`), not under
+  the level's lowest roof everywhere: so looking down in a low tunnel no longer brings it closer.
+  The player's own tilt or zoom is a nudge on the space's, kept while it's as open or as tight as
+  where they set it (within a fifth of the way) and let go of once they've gone somewhere tighter
+  or more open (`DUNGEON_NUDGE`); R lets it go at once. The player and whoever they're fighting
+  are seen through the rock where it hides them, drawn again in a flat colour, half its pixels let
+  through, over what stands in front of them (world/silhouette.js: the rock between them and the
+  camera, below where it's cut, view.js `rockHides`).
 - **Messages**: a slain boss ("… is slain, and the hoard it kept lies unlocked"), the hoard opened,
   and the dungeon cleared.
 - **Its creatures drawn from models got ready first**: their models fetched as the player comes

@@ -133,8 +133,9 @@ says which on each world's card and tells players plainly before they choose who
 - **What's the player's own of a hero** (client/js/core/host.js `OWN`): their action wheels and
   quick actions, where they've pinned the world map and their markers on it, the last messages
   they were told, what they've been told once, and their settings for how they play (auto-snag
-  and what it takes, the target lock, saying no to summons and invites, and the camera:
-  client/js/app/save.js `PLAY_SETTINGS`). A world that keeps its heroes (made there, or copied
+  and what it takes, the target lock, saying no to summons and invites, the battle cam, finding
+  the way through, tilt inverted and the greater spells' shaking: client/js/app/save.js
+  `PLAY_SETTINGS`). A world that keeps its heroes (made there, or copied
   in) keeps all of it with each, as their game says it's changed, in its saves and in the hero's
   file, and gives it back each time they come in, on any device or browser (the settings taken
   up by it, as they last set them); only their own game is told it. A hero kept before it did

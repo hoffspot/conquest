@@ -126,6 +126,7 @@ import { missileTravel, SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
 import { BIG_FOE, detectQuality, DISTANCE, DUNGEON_VIEW, dungeonPose, QUALITY, ROOM_VIEW } from "../world/view.js";
 import { cutRock, DUNGEON_CUT } from "../world/dungeons3d.js";
+import { showSilhouette, SILHOUETTE } from "../world/silhouette.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { TallGrass } from "../world/grass.js";
@@ -4905,6 +4906,7 @@ export class Game {
         this.focusHeight = Math.max(eased, ground - FOCUS_LAG);
         this.view.look(_focus.set(focus.x, this.focusHeight, focus.z), yaw, this.#dungeonPose(dt), dt || Infinity);
         this.#roofCut();
+        this.#silhouettes(player, chest, seen, foeChest);
         this.view.setFocus(chest);
 
         // (Seen too close, as near walls and buildings can push the camera, they're dithered away:
@@ -6632,6 +6634,23 @@ export class Game {
                 node.material = cutRock(node.material, this.rockCut);
             }
         });
+    }
+
+    // The player and whoever they're fighting (`foe`: their avatar, or null) seen through a
+    // dungeon's rock where it hides them and isn't cut away (world/silhouette.js); whoever was
+    // fought before let go of
+    #silhouettes(me, chest, foe, foeChest) {
+        showSilhouette(me.object, this.view.rockHides(chest), SILHOUETTE.player);
+
+        if (this.silhouetted && this.silhouetted !== foe) {
+            showSilhouette(this.silhouetted.object, false);
+        }
+
+        if (foe) {
+            showSilhouette(foe.object, this.view.rockHides(foeChest), SILHOUETTE.foe);
+        }
+
+        this.silhouetted = foe ?? null;
     }
 
     // Finding the way through (OPEN_WAY): the camera crowded in by the walls as the player walks,

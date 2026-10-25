@@ -32,7 +32,7 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=d8dbf74791",
+                    "./js/app/assets.js": "./js/app/assets.js?h=ac795b699d",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=75d04a21c9",
                     "./js/app/budget.js": "./js/app/budget.js?h=56125585f0",
@@ -49,7 +49,7 @@
                     "./js/app/fight.js": "./js/app/fight.js?h=7a1237aa07",
                     "./js/app/forecast.js": "./js/app/forecast.js?h=606fcc8c47",
                     "./js/app/fullscreen.js": "./js/app/fullscreen.js?h=34493b7fd9",
-                    "./js/app/game.js": "./js/app/game.js?h=4bce7760cc",
+                    "./js/app/game.js": "./js/app/game.js?h=fe02848a5d",
                     "./js/app/gearinfo.js": "./js/app/gearinfo.js?h=f9c5c12401",
                     "./js/app/governor.js": "./js/app/governor.js?h=0e63c16031",
                     "./js/app/hero-basics.js": "./js/app/hero-basics.js?h=2c87404887",
@@ -59,7 +59,7 @@
                     "./js/app/journal.js": "./js/app/journal.js?h=05a490ba29",
                     "./js/app/journey.js": "./js/app/journey.js?h=c089c49e7e",
                     "./js/app/loader.js": "./js/app/loader.js?h=9bf378d6ef",
-                    "./js/app/manifest.js": "./js/app/manifest.js?h=446c2b4747",
+                    "./js/app/manifest.js": "./js/app/manifest.js?h=ff7fd59ad4",
                     "./js/app/mapicons.js": "./js/app/mapicons.js?h=56f23c7e72",
                     "./js/app/minimap.js": "./js/app/minimap.js?h=c160136171",
                     "./js/app/pacing.js": "./js/app/pacing.js?h=5c58080d6e",
@@ -411,6 +411,7 @@
                     "./js/world/shadows.js": "./js/world/shadows.js?h=c22942700d",
                     "./js/world/siege3d.js": "./js/world/siege3d.js?h=0dfefc879c",
                     "./js/world/signs3d.js": "./js/world/signs3d.js?h=c155f79bcc",
+                    "./js/world/silhouette.js": "./js/world/silhouette.js?h=5d1ed55d07",
                     "./js/world/sky.js": "./js/world/sky.js?h=019933a7e1",
                     "./js/world/smoke.js": "./js/world/smoke.js?h=00fc993888",
                     "./js/world/spellfx.js": "./js/world/spellfx.js?h=79415c6362",
@@ -424,7 +425,7 @@
                     "./js/world/treasure3d.js": "./js/world/treasure3d.js?h=211774903e",
                     "./js/world/trickles.js": "./js/world/trickles.js?h=a6b891b721",
                     "./js/world/veil.js": "./js/world/veil.js?h=c988416ae5",
-                    "./js/world/view.js": "./js/world/view.js?h=96a2417902",
+                    "./js/world/view.js": "./js/world/view.js?h=c9c945c729",
                     "./js/world/water.js": "./js/world/water.js?h=b37211e223",
                     "./js/world/wind.js": "./js/world/wind.js?h=48d9358cdc",
                     "./js/world/windowpools.js": "./js/world/windowpools.js?h=58c487d41f",
@@ -1157,7 +1158,7 @@
                         <li><strong>Tap the ground</strong> to walk there; <strong>double-tap</strong> to run. The <strong>thumb stick</strong> in the bottom left steers you too.</li>
                         <li>Running uses <strong>stamina</strong> (the orange bar under your health); out of breath, you walk.</li>
                         <li><strong>Swipe up</strong> from your character to go straight ahead the way the camera looks.</li>
-                        <li><strong>Drag</strong> to turn the camera round you, <strong>pinch</strong> to zoom.</li>
+                        <li><strong>Drag</strong> to turn the camera round you, <strong>pinch</strong> to zoom. Tap your own arrow on the minimap to swing the camera round behind you.</li>
                         <li>The <strong>minimap</strong> (top left) shows what's round you; tap it to walk there. <strong>Hold</strong> it to open the <strong>world map</strong>: there, hold somewhere you've been to drop a pin, or tap twice to run there.</li>
                         <li><strong>Tap a door or stairs</strong> to go through; <strong>tap someone</strong> to talk to them.</li>
                         <li>Each adventurers' guild has a <strong>portal</strong> that takes you to any other guild you've been inside, for a fare.</li>
@@ -1240,6 +1241,8 @@
                     <table class="about-keys">
                         <tbody>
                             <tr><th scope="row">W A S D</th><td>Steer, running (hold Shift to walk)</td></tr>
+                            <tr><th scope="row">Q E</th><td>Turn the camera round you</td></tr>
+                            <tr><th scope="row">R</th><td>Swing the camera round behind you</td></tr>
                             <tr><th scope="row">1 to 4</th><td>Quick actions, in a fight (1 to 6 with six across, in Game options, Controls)</td></tr>
                             <tr><th scope="row">M</th><td>World map</td></tr>
                             <tr><th scope="row">I</th><td>Pack</td></tr>
@@ -1259,7 +1262,7 @@
                         <li><strong>Graphics:</strong> the visual quality, Adaptive (drawing less while the game can't keep up), full screen and screen shake.</li>
                         <li><strong>Sound:</strong> on or off, and how loud the effects, the world around you and the music are.</li>
                         <li><strong>Controls:</strong> the thumb stick, zoom buttons and minimap, and what's on your action wheels and quick actions.</li>
-                        <li><strong>Camera:</strong> whether it follows you, the battle cam, and how dragging turns and tilts it.</li>
+                        <li><strong>Camera:</strong> whether it follows you, the battle cam, whether it finds the way through tunnels and narrow streets, and how far dragging turns and tilts it.</li>
                         <li><strong>Gameplay:</strong> Auto-snag, and whether other players' summons and party invites are asked of you.</li>
                     </ul>
                     <p><strong>Debug mode</strong>, on the title, shows how the game's running; Game options' <strong>Debug log</strong> keeps the last times it slowed or failed, to copy and send.</p>

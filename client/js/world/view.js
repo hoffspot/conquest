@@ -1213,6 +1213,34 @@ export class View {
     }
 
     /**
+     * In a dungeon's level, whether its rock stands between the camera and a point (world metres:
+     * someone's chest), as it's drawn: over its roof, only below where it's cut away.
+     */
+    rockHides(point) {
+        const room = this.room;
+
+        if (!room?.rock || !point) {
+            return false;
+        }
+
+        const eye = this.camera.position;
+        const low = room.overRoof ? this.focus.y + DUNGEON_VIEW.cut : Infinity;
+        const away = eye.distanceTo(point);
+
+        // (From a little out from them, a quarter metre at a time, to a little short of the camera)
+        for (let along = 0.4; along < away - 0.4; along += 0.25) {
+            const t = along / away;
+            const y = point.y + (eye.y - point.y) * t;
+
+            if (y < low && room.rock(point.x + (eye.x - point.x) * t, point.z + (eye.z - point.z) * t)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * The dungeon's rock cut away (dungeons3d.js DUNGEON_CUT), as the camera's placed: from
      * DUNGEON_VIEW.cut metres over the floor where the player stands up to just over the camera,
      * while it's over the roof (or not yet back under it); else null.
