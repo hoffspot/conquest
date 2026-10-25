@@ -4453,7 +4453,7 @@ test("tapping the tavern's door lights its edge green, and the player walks in: 
     expect(await tapsRound()).toEqual(["move", "move", "move", "move"]);
 });
 
-test("every tavern can be gone into: got ready as the player comes near, its folk dressed at its door; its own room and folk inside; its folk let go of a little way off, its floors further, and it all far off; walked straight into, its folk dressed while the screen's dark", async ({ page }) => {
+test("every tavern can be gone into: got ready as the player comes near, its folk dressed only once they go in (told to go through its door), not at its door; its own room and folk inside; its folk let go of a little way off, its floors further, and it all far off; walked straight into, its folk dressed while the screen's dark", async ({ page }) => {
     // (Seed 2's town has a second tavern, the Stag's Head, an inn)
     await playing(page, "/?play&seed=2");
 
@@ -4471,7 +4471,7 @@ test("every tavern can be gone into: got ready as the player comes near, its fol
 
     await page.evaluate(helpers);
 
-    // Near its door, it's got ready a piece at a time: its floors, then its folk
+    // Near its door, it's got ready a piece at a time: its floors, and none of its folk dressed yet
     const started = await page.evaluate(() => {
         const { game } = window.pellagos;
 
@@ -4493,26 +4493,63 @@ test("every tavern can be gone into: got ready as the player comes near, its fol
         return { key: building.key, name: building.name, before, started: { maps: visit.maps.length, folk: visit.folk.length, left: visit.queue.length } };
     });
 
-    // (A few seconds' building: everyone in it built a step at a time, a few milliseconds a frame)
+    // (A few seconds' building: its floors built a step at a time, a few milliseconds a frame)
     expect(await playUntil(page, () => !window.visit.queue.length && !window.visit.steps)).toBe(true);
+
+    const atDoor = await page.evaluate((started) => {
+        const { game } = window.pellagos;
+        const { visit } = window;
+
+        // (Stood at its door a while longer: still none)
+        game.advance(1);
+
+        return { ...started, ready: { maps: visit.maps.length, folk: visit.folk.length, left: visit.queue.length }, drawn: [...game.avatars.keys()].filter((id) => id.startsWith(`${started.key}/`)).length, hidden: visit.maps.every((id) => !game.interiors.get(id).object.visible) };
+    }, started);
+
+    expect(atDoor.name).toBe("The Stag's Head");
+    expect(atDoor.before).toBe(false);
+    expect(atDoor.ready).toEqual({ maps: 2, folk: 0, left: 0 });
+    expect(atDoor.drawn).toBe(0);
+    expect(atDoor.hidden).toBe(true);
+
+    // Told to go through its door, from across the street: its folk dressed as the player makes
+    // for it, before they're there
+    const making = await page.evaluate((key) => {
+        const { game } = window.pellagos;
+        const building = game.world.interiors.buildings.get(key);
+        const { x, z } = building.entrance.door;
+        const [ax, ay] = building.door.ends[0].arrive;
+        const [dx, dy] = [ax + 0.5 - x, ay + 0.5 - z];
+        const length = Math.hypot(dx, dy) || 1;
+
+        window.put("player", [Math.floor(x + (dx / length) * 12), Math.floor(z + (dy / length) * 12)]);
+        game.battle.command("player", { type: "enter", link: `${key}/door` });
+
+        return { welcomed: window.visit.welcomed, map: game.battle.actor("player").map };
+    }, atDoor.key);
+
+    expect(making).toEqual({ welcomed: false, map: "town" });
+    expect(await playUntil(page, () => window.visit.folk.length >= 6 || window.pellagos.game.battle.actor("player").map !== "town")).toBe(true);
 
     const near = await page.evaluate((started) => {
         const { game } = window.pellagos;
         const { visit } = window;
+        const player = game.battle.actor("player");
 
-        return { ...started, ready: { maps: visit.maps.length, folk: visit.folk.length, left: visit.queue.length }, hidden: visit.maps.every((id) => !game.interiors.get(id).object.visible) };
-    }, started);
+        return { ...started, map: player.map, ready: { folk: visit.folk.length } };
+    }, atDoor);
 
-    expect(near.name).toBe("The Stag's Head");
-    expect(near.before).toBe(false);
-    expect(near.started.folk).toBeLessThan(near.ready.folk);
-    expect(near.ready).toEqual({ maps: 2, folk: expect.any(Number), left: 0 });
+    expect(near.map).toBe("town");
     expect(near.ready.folk).toBeGreaterThanOrEqual(6);
-    expect(near.hidden).toBe(true);
+
+    // (Stopped at its door, the rest of them dressed: once wanted, they're kept till the player's
+    // well away)
+    await page.evaluate((key) => window.put("player", window.pellagos.game.world.interiors.buildings.get(key).door.ends[0].arrive), near.key);
+    expect(await playUntil(page, () => !window.visit.queue.length && !window.visit.steps)).toBe(true);
 
     // Stepped away from its door, though it's still got ready: a little way off, its folk let go
     // of (bodies, skins and all), its floors kept; further off, its floors let go of too; back at
-    // its door, its floors built again, then its folk dressed again
+    // its door, its floors built again, its folk not dressed till they go in
     const away = await page.evaluate((key) => {
         const { game } = window.pellagos;
         const building = game.world.interiors.buildings.get(key);
@@ -4533,8 +4570,8 @@ test("every tavern can be gone into: got ready as the player comes near, its fol
 
     expect(away).toEqual({ off: { visited: true, floors: 2, dressed: 0, drawn: 0 }, far: { visited: true, floors: 0, dressed: 0, drawn: 0 } });
     await page.evaluate((key) => window.put("player", window.pellagos.game.world.interiors.buildings.get(key).door.ends[0].arrive), near.key);
-    expect(await playUntil(page, () => !window.visit.queue.length && !window.visit.steps && window.visit.folk.length > 0)).toBe(true);
-    expect(await page.evaluate((key) => ({ floors: window.pellagos.game.world.interiors.buildings.get(key).maps.filter((id) => window.pellagos.game.interiors.has(id)).length, folk: window.visit.folk.length }), near.key)).toEqual({ floors: 2, folk: near.ready.folk });
+    expect(await playUntil(page, () => !window.visit.queue.length && !window.visit.steps && window.visit.maps.length === 2)).toBe(true);
+    expect(await page.evaluate((key) => ({ floors: window.pellagos.game.world.interiors.buildings.get(key).maps.filter((id) => window.pellagos.game.interiors.has(id)).length, folk: window.visit.folk.length }), near.key)).toEqual({ floors: 2, folk: 0 });
 
     // Through its door: its own taproom, heard and mapped as one, with its own folk
     const inside = await page.evaluate((key) => {
