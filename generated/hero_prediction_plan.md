@@ -67,7 +67,8 @@ a far-off locked enemy turns the hero round to walk to it (`host.js #ability` â†
   the round trip), drawn between its steps. What it does is only drawn: no blow it strikes lands,
   nothing it says is heard twice. The host's now is reckoned from the quickest of its words of
   the last second (a held-up one doesn't put it back), and the round trip (the middle of the
-  latest five, a second at most) followed slowly (0.1 ms a ms).
+  latest five, a second at most) followed slowly (0.1 ms a ms); both at the host's pace (how fast
+  its time goes by against the phone's clock: a browser host drawing few frames plays slower).
 - **Ways found on the phone:** over the navigation tiles already made only (`bakedOnly`); off
   them, the stick's way goes straight on. Baking tiles round the hero on the phone was tried and
   measured: no better (the copy's own play has the tiles round the hero made), so it's left out.
