@@ -130,12 +130,25 @@ says which on each world's card and tells players plainly before they choose who
   what they carry (their look, their own id, what they've grown into, their gear and gold). What
   another world knew of them (what its folk know of them, where they stand and the requests they
   carry, their followers, where they were) stays in that world: each world has its own.
+- **What's the player's own of a hero** (client/js/core/host.js `OWN`): their action wheels and
+  quick actions, where they've pinned the world map and their markers on it, the last messages
+  they were told, what they've been told once, and their settings for how they play (auto-snag
+  and what it takes, the target lock, saying no to summons and invites, and the camera:
+  client/js/app/save.js `PLAY_SETTINGS`). A world that keeps its heroes (made there, or copied
+  in) keeps all of it with each, as their game says it's changed, in its saves and in the hero's
+  file, and gives it back each time they come in, on any device or browser (the settings taken
+  up by it, as they last set them); only their own game is told it. A hero kept before it did
+  comes in with the wheels and quick actions of the character their device last played, and the
+  device's settings, kept from then on. A visitor's wheels, quick actions, messages and
+  what they've been told once are their device's, going with them from world to world; the world
+  remembers their pin and markers on its map, with what else it knows of them (Visitors, below).
 
 **Visitors** (`storage/visitors.js`). A world whose players bring their own remembers what it knows
 of each who's visited it, for the player who brought them and by their character's own id: what
 its folk remember of them and what they learnt there, what they found of it, where they stand
-with its peoples and the requests they carry, their followers there, and where they were and how
-when they left (`visitors/<player>/<character id>.json`). The next time that player brings that
+with its peoples and the requests they carry, their followers there, where they were and how
+when they left, and where they'd pinned its map and their markers on it
+(`visitors/<player>/<character id>.json`). The next time that player brings that
 character, they come back to all of it, with what they carry as their device has it now; another
 player bringing a character with the same id gets none of it (others see a character's id as they
 play beside them). What they carry is never kept by the world: their game keeps it as it changes,

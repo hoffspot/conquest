@@ -2810,7 +2810,19 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   joined game back says again whether its page is hidden and its player's menu open (`away`,
   `hold`), as what it said meanwhile may have been lost too, so a world server isn't left stopped
   for a page that's shown again (the user, back in a world alone after a crash: "the game still
-  shows paused"). Its pause for everyone isn't asked for again: that ended with its link.
+  shows paused"). Its pause for everyone isn't asked for again: that ended with its link. It says
+  again what's its player's own of their hero (`own`, below), for the same reason.
+- **Theirs, kept with them.** What a player's own game keeps of their hero that isn't the world's
+  (core/host.js `OWN`: their action wheels and quick actions, their pin and markers on the world
+  map, the last messages they were told, what they've been told once, their settings for how
+  they play: app/save.js `PLAY_SETTINGS`) is told the host as it
+  changes (the `own` message, `Joining.own`), and kept with them (`Host.own`, `player.own`, each
+  as it's shaped, `ownOf`, no more than 8,192 characters of each): never recorded, as no copy of
+  the world needs it. It goes with the character the host hands over as they leave (`characterOf`),
+  where a world server keeps its heroes, and is in its saves; and it's told only to their own game,
+  in its welcome and the world sent again to it (`Hosting #snapshotFor`), the rest's left out
+  (the user: a server's hero didn't keep their action wheels or quick actions from one time to the
+  next). `NET_VERSION` 182.
 - **Shown.** While it isn't as it should be, the HUD says so, top left (`Game #together`): "Your
   connection dropped. Reconnecting…" (or, for a host, "Your world's link to the others dropped");
   "The host's connection dropped. Waiting for them…"; why the world's stopped (`Hosting.pause`,

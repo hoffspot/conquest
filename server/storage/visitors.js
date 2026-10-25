@@ -22,8 +22,13 @@ import { HERO_STEPS } from "./heroes.js";
 import { exists, readJSON, writeJSON } from "./files.js";
 import { forward, SERVER_VERSION } from "./versions.js";
 
-/** What a world remembers of a visitor: what's theirs in it, as core/host.js join takes it. */
-export const REMEMBERED = Object.freeze(["talks", "explored", "standing", "followers", "place", "vitals"]);
+/**
+ * What a world remembers of a visitor: what's theirs in it, as core/host.js join takes it; and where
+ * they'd pinned its map and their markers on it (of what their own game keeps of them, core/host.js
+ * OWN, all that's the world's: their wheels, messages and what they've been told once are their
+ * device's, as they go from world to world).
+ */
+export const REMEMBERED = Object.freeze(["talks", "explored", "standing", "followers", "place", "vitals", "pin", "markers"]);
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
@@ -52,7 +57,7 @@ export class Visitors {
 
     /**
      * What the world remembers of a player's visitor (by their character's id: { talks, explored,
-     * standing, followers, place, vitals }, each as it was when they last left), or null if they've
+     * standing, followers, place, vitals, pin, markers }, each as it was when they last left), or null if they've
      * never been, or it can't be read.
      */
     async get(player, guid) {

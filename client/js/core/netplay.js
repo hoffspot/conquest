@@ -58,10 +58,15 @@
 //                                                    ms, once it's timed one: Joining lately; the
 //                                                    host's, to show)
 //                    { kind: "chat", text }                    (a line to their party)
+//                    { kind: "own", own }                      (what its game keeps of its hero that
+//                                                    isn't the world's, as it's changed: any of
+//                                                    core/host.js OWN, kept with them)
 //   host -> joiner   { kind: "welcome", version, id, seed, race, snapshot, took, paused }
 //                                                    (took: their character was in the world
 //                                                    already, on another link: theirs now;
-//                                                    paused: { why, by } if the world's stopped)
+//                                                    paused: { why, by } if the world's stopped;
+//                                                    snapshot: with their own of their hero,
+//                                                    no one else's: core/host.js OWN)
 //                    { kind: "ops", step, ops }                (what's been done, in order, up to step)
 //                    { kind: "motion", step, units }           (base64: core/motion.js)
 //                    { kind: "pong", t, step }
@@ -79,7 +84,7 @@
 
 import { STEP_MS } from "./battle.js";
 import { isGuid } from "./guid.js";
-import { HIRES, HOST_PLAYER } from "./host.js";
+import { HIRES, HOST_PLAYER, OWN } from "./host.js";
 import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
 import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
@@ -87,7 +92,7 @@ import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 181;
+export const NET_VERSION = 182;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -543,6 +548,13 @@ export class Hosting {
                 }
 
                 break;
+            case "own":
+                // (What their game keeps of their hero, not the world's: kept with them)
+                if (this.players.has(peer)) {
+                    this.host.own(this.players.get(peer), message.own);
+                }
+
+                break;
             case "chat": {
                 const id = this.players.get(peer);
                 const said = id ? this.#say(id, message.text) : null;
@@ -666,7 +678,7 @@ export class Hosting {
         this.flush();
         this.#fresh(peer);
         this.players.set(peer, id);
-        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot(), paused: this.paused }));
+        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.#snapshotFor(id), paused: this.paused }));
         this.onJoin(id, peer);
     }
 
@@ -709,7 +721,7 @@ export class Hosting {
 
         this.#fresh(peer);
         this.players.set(peer, id);
-        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot(), took: true, paused: this.paused }));
+        this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.#snapshotFor(id), took: true, paused: this.paused }));
         this.onJoin(id, peer);
     }
 
@@ -756,7 +768,24 @@ export class Hosting {
         }
 
         this.flush();
-        this.#send(peer, "state", encode({ kind: "state", snapshot: this.host.snapshot(), paused: this.paused }));
+        this.#send(peer, "state", encode({ kind: "state", snapshot: this.#snapshotFor(this.players.get(peer)), paused: this.paused }));
+    }
+
+    // The world as it is, for one who's joined (by their id: their own of their hero in it, what
+    // their game keeps of them, core/host.js OWN), or for all of them at once (no one's): no one's
+    // own told anyone else
+    #snapshotFor(id = null) {
+        const snapshot = this.host.snapshot();
+
+        for (const player of snapshot.players) {
+            if (player.id !== id) {
+                for (const key of OWN.keys) {
+                    delete player[key];
+                }
+            }
+        }
+
+        return snapshot;
     }
 
     /**
@@ -787,7 +816,7 @@ export class Hosting {
             return;
         }
 
-        const text = encode({ kind: "state", snapshot: this.host.snapshot(), paused: this.paused });
+        const text = encode({ kind: "state", snapshot: this.#snapshotFor(), paused: this.paused });
 
         for (const peer of this.players.keys()) {
             this.#send(peer, "state", text);
@@ -972,6 +1001,9 @@ export class Joining {
         this.held = false;
         this.everyone = false;
 
+        /** What its game keeps of its hero that isn't the world's (core/host.js OWN), as it's told the host. */
+        this.mine = {};
+
         /**
          * Told when the world's come (the welcome), come again (the state), or they're turned away
          * (a reason); and when they're sent out of it (a reason: "afk").
@@ -1147,6 +1179,10 @@ export class Joining {
         this.everyone = false;
         this.send(encode({ kind: "away", hidden: this.hidden }));
         this.send(encode({ kind: "hold", held: this.held, everyone: false }));
+
+        if (Object.keys(this.mine).length) {
+            this.send(encode({ kind: "own", own: this.mine }));
+        }
     }
 
     /** Its copy of the world, made from the welcome (Host.restore): taking the host's ways. */
@@ -1169,6 +1205,16 @@ export class Joining {
     away(hidden) {
         this.hidden = Boolean(hidden);
         this.send(encode({ kind: "away", hidden: this.hidden }));
+    }
+
+    /**
+     * Tell the host what its game keeps of its hero that isn't the world's has changed (`changes`:
+     * any of core/host.js OWN: their wheels, pin, markers, messages, what they've been told once,
+     * their settings), for it to keep with them; said again as its link comes back (resync).
+     */
+    own(changes) {
+        Object.assign(this.mine, structuredClone(changes));
+        this.send(encode({ kind: "own", own: changes }));
     }
 
     /**
