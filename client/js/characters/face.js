@@ -7,8 +7,10 @@
 
 import { lerpTable, smoothstep } from "./noise.js";
 
-// The hairline's height, by the angle round the head from straight ahead (degrees)
-const HAIRLINE = [[0, 0.072], [25, 0.068], [45, 0.052], [62, 0.04], [74, 0.005], [80, -0.02], [92, 0.0], [115, -0.045], [150, -0.07], [180, -0.078]];
+// The hairline's height, by the angle round the head from straight ahead (degrees): across the
+// forehead, down the temple, a sideburn a centimetre or so wide in front of the ear coming down to
+// about its middle, over the ear (kept off it: hair.js EAR_GAP), down behind it to the nape
+const HAIRLINE = [[0, 0.072], [25, 0.068], [45, 0.052], [62, 0.04], [67, 0.02], [70, -0.018], [80, -0.028], [92, 0.0], [115, -0.045], [150, -0.07], [180, -0.078]];
 
 // The top of the beard, by the distance to the side from the middle of the face
 const BEARD_LINE = [[0, -0.049], [0.016, -0.05], [0.03, -0.046], [0.045, -0.038], [0.058, -0.026], [0.07, -0.006], [0.082, -0.01]];
@@ -93,6 +95,86 @@ export function beardAmount(x, y, z) {
     const top = lerpTable(BEARD_LINE, Math.abs(x));
 
     return smoothstep(top + 0.006, top - 0.006, y) * smoothstep(-0.16, -0.13, y) * smoothstep(-0.1, -0.06, z);
+}
+
+// How far a body's ear is moved by its "ears set high" shapes to count as ear (that shape lifts the
+// whole ear 2 cm; the skin round its root, less): for head-wear, the skin round its root too; for
+// the hair kept off it, the ear itself, from where it joins the head
+const EAR_MOVED = Object.freeze({ round: 0.012, ear: 0.016 });
+// (The ear itself is close-knit: those it moves as far that have fewer than `others` more of them
+// within `within` metres, on the base mesh, are the scalp's or the cheek's, a few round the ear)
+const EAR_ITSELF = Object.freeze({ within: 0.006, others: 3 });
+const ears = new WeakMap();
+
+/**
+ * The vertices of a body's ears (its "ears set high" shapes move them all together): with the skin
+ * round their roots (`itself` false: for head-wear), or the ears themselves (for the hair kept off
+ * them). A Set, empty if it hasn't those shapes.
+ */
+export function earVertices(human, { itself = false } = {}) {
+    if (!ears.has(human)) {
+        ears.set(human, new Map());
+    }
+
+    const kept = ears.get(human);
+
+    if (!kept.has(itself)) {
+        const moved = itself ? EAR_MOVED.ear : EAR_MOVED.round;
+        const found = [];
+
+        for (const name of ["ears/l-ear-trans-up", "ears/r-ear-trans-up"]) {
+            const target = human.details?.get(name);
+
+            for (let i = 0; target && i < target.vertices.length; i++) {
+                if (Math.hypot(target.deltas[i * 3], target.deltas[i * 3 + 1], target.deltas[i * 3 + 2]) * human.deltaUnit > moved) {
+                    found.push(target.vertices[i]);
+                }
+            }
+        }
+
+        const at = human.basePositions;
+        const near = (a, b) => Math.hypot(at[a * 3] - at[b * 3], at[a * 3 + 1] - at[b * 3 + 1], at[a * 3 + 2] - at[b * 3 + 2]) < EAR_ITSELF.within;
+
+        kept.set(itself, new Set(itself ? found.filter((v) => found.filter((w) => w !== v && near(v, w)).length >= EAR_ITSELF.others) : found));
+    }
+
+    return kept.get(itself);
+}
+
+/**
+ * How far a point is from the nearest of an ear's `points` (each [x, y, z], in face coordinates, as
+ * the point is), in metres, up to `most`: a function of the point (x, y, z), its `points` kept in
+ * cells `most` across, so that only those of the cells round it are looked at.
+ */
+export function earGapOf(points, most = 0.02) {
+    const cells = new Map();
+    const cellOf = (x, y, z) => ((Math.floor(x / most) + 512) * 1024 + (Math.floor(y / most) + 512)) * 1024 + (Math.floor(z / most) + 512);
+
+    for (const point of points) {
+        const key = cellOf(...point);
+
+        if (!cells.has(key)) {
+            cells.set(key, []);
+        }
+
+        cells.get(key).push(point);
+    }
+
+    return (x, y, z) => {
+        let best = most * most;
+
+        for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+                for (let k = -1; k <= 1; k++) {
+                    for (const [px, py, pz] of cells.get(cellOf(x + i * most, y + j * most, z + k * most)) ?? []) {
+                        best = Math.min(best, (px - x) ** 2 + (py - y) ** 2 + (pz - z) ** 2);
+                    }
+                }
+            }
+        }
+
+        return Math.sqrt(best);
+    };
 }
 
 /** How near a point (face coordinates) is to an ear, 0 far to 1 at its middle. */
