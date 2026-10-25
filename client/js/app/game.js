@@ -1655,7 +1655,11 @@ export class Game {
 
             return result;
         };
-        const floors = Object.values(world.maps ?? {}).filter(({ id }) => id !== "town");
+        // (Wenches and Ale's floors, built with the town: not those of the buildings the host's got
+        // ready, whose plans a world kept or joined comes with, each built only as the player comes
+        // to its door (#prepare): joining a world on a server, an iPhone built all 59 it came with,
+        // 87 MB kept for good)
+        const floors = Object.values(world.maps ?? {}).filter(({ id, building }) => id !== "town" && !building);
         const folk = world.folk ?? [];
         const outside = Boolean(world.maps?.town?.chunk);
         const chunks = outside ? (2 * REACH.drawn + 1) ** 2 : 0;
@@ -1664,9 +1668,12 @@ export class Game {
         // are as the player comes near, where there are other buildings: a little each frame)
         const later = Boolean(world.interiors) && floors.length > 0;
         const tavern = later ? world.interiors.of(floors[0].id)?.key : null;
-        // (Everyone dressed before the first frame but the player: the orc, the soldiers and the
-        // wild's creatures about, anyone else playing, and the tavern's folk unless they're later)
-        const dressed = this.battle.actors.filter((actor) => actor.id !== this.me && !(actor.kind === "folk" && tavern)).length;
+        // (Everyone dressed before the first frame but the player: the orc, anyone else playing, and
+        // the tavern's folk unless they're later. Not the soldiers, wagons and wild's creatures about
+        // already, a world kept or joined in the thick of things: drawn as those who come later are,
+        // the nearest first, each in full or in its kind's crowd as there's room for it)
+        const brought = (actor) => actor.kind === "soldier" || actor.kind === "wagon" || actor.kind === "beast";
+        const dressed = this.battle.actors.filter((actor) => actor.id !== this.me && !(actor.kind === "folk" && tavern) && !brought(actor)).length;
         // (The steps: the land's chunks, the town's pieces and trees, each floor, each one dressed;
         // and five more: the town begun, the player dressed, ready to draw, the map, ready)
         const steps = chunks + world.town.pieces.length + world.trees.length + floors.length + dressed + 5;
@@ -1837,6 +1844,20 @@ export class Game {
             // #nextEnlistee; a building's own, once the player goes in: #doorstep, #ready)
             if (actor.kind === "folk" && tavern) {
                 if (!world.interiors?.of(actor.map)) {
+                    this.enlisting.push(actor.id);
+                }
+
+                continue;
+            }
+
+            // (The soldiers, wagons and wild's creatures about already, drawn as those who come
+            // out later are, the nearest first, in full only as there's room (#marshal, #rationing,
+            // #thronging): not all dressed in full before the first frame, as when an iPhone on Low
+            // joined a world as an invasion's 120 soldiers fought in its town, dressed 132 (582
+            // MB) and let the game's tab go)
+            if (brought(actor)) {
+                // (Not those already fallen, before the player came: never seen)
+                if (!actor.dead) {
                     this.enlisting.push(actor.id);
                 }
 
@@ -4006,14 +4027,16 @@ export class Game {
             }
         }
 
-        // (Those waiting on a figure that couldn't be made, built in full after all; those gone,
-        // forgotten; those with room now, come nearer, built in full)
-        const waiting = (actor) => far.has(actor) || ranked.some(([, each], place) => each === actor && place >= room);
+        // (Those waiting on a figure that couldn't be made, built in full after all; those gone, or
+        // fallen meanwhile, forgotten, never seen; those out of reach, still waiting; those with
+        // room now, come nearer, built in full. Not the fallen and those out of reach built in
+        // full, as they were: 38 of an invasion's dead were, far off, waiting their turn)
+        const waiting = (actor) => !ids.has(actor.id) || far.has(actor) || ranked.some(([, each], place) => each === actor && place >= room);
 
         for (const id of this.crowdWaiting) {
             const actor = this.battle.actor(id);
 
-            if (!actor || this.avatars.has(id)) {
+            if (!actor || actor.dead || this.avatars.has(id)) {
                 this.crowdWaiting.delete(id);
             } else if (this.crowds.failed(this.#crowdKind(actor).key) || !waiting(actor)) {
                 this.crowdWaiting.delete(id);
@@ -9661,11 +9684,12 @@ export class Game {
         }
 
         // (The soldiers and wagons, and the folk out in the world, not a building's, not drawn:
-        // drawn now, nearest first)
+        // drawn now, nearest first; but not one waiting on its kind's figure in the crowds, to be
+        // drawn there (#marshal), not dressed in full meanwhile, nor one fallen unseen)
         for (const actor of this.battle.actors) {
-            const out = actor.kind === "soldier" || actor.kind === "wagon" || (actor.kind === "folk" && !this.world.interiors?.of(actor.map));
+            const out = !actor.dead && (actor.kind === "soldier" || actor.kind === "wagon" || (actor.kind === "folk" && !this.world.interiors?.of(actor.map)));
 
-            if (out && !this.avatars.has(actor.id) && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
+            if (out && !this.avatars.has(actor.id) && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id) && !this.crowdWaiting.has(actor.id)) {
                 this.enlisting.push(actor.id);
             }
         }
