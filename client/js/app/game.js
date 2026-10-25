@@ -8108,7 +8108,8 @@ export class Game {
             }
         }
 
-        this.enlisting = this.enlisting.filter((id) => this.battle.actor(id) && !this.#drawnInFull(id) && !this.enlistees.has(id));
+        // (Nor a soldier fallen while it waited its turn: never seen, not dressed only to lie there)
+        this.enlisting = this.enlisting.filter((id) => this.battle.actor(id) && !(this.battle.actor(id).kind === "soldier" && this.battle.actor(id).dead) && !this.#drawnInFull(id) && !this.enlistees.has(id));
 
         for (const { actor } of [...this.enlistees.values()]) {
             if (this.#walledOff(actor, me)) {
