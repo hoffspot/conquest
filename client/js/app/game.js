@@ -1042,6 +1042,7 @@ export class Game {
         this.pin = Array.isArray(pin) && pin.length === 2 && pin.every(Number.isFinite) ? [...pin] : null;
         this.onPin = onPin;
         this.pinWay = null;
+        this.pinNear = null;
         this.journey = null;
 
         /** The player's markers on the world map (core/markers.js), and who hears of them. */
@@ -5877,6 +5878,7 @@ export class Game {
         this.pin = [x, z];
         this.pinWay = null;
         this.pinLine = null;
+        this.pinNear = null;
         this.pinFrom = null;
         this.onPin([...this.pin]);
         this.sound?.play("pinSet");
@@ -5889,6 +5891,7 @@ export class Game {
         this.pin = null;
         this.pinWay = null;
         this.pinLine = null;
+        this.pinNear = null;
         this.pinShown = null;
         this.pinMarks?.setPin(null);
         this.onPin(null);
@@ -6081,6 +6084,10 @@ export class Game {
 
         if ((moved && since >= PIN_WAY.every) || (this.pinShort && since >= PIN_WAY.short)) {
             this.#wayToPin(at, { drawn: true });
+        } else if (this.pinNear && this.chunks && this.chunks.groundVersion !== this.pinGround) {
+            // (The ground drawn otherwise, a chunk's corners further apart or nearer: the line laid
+            // on it again)
+            this.pinMarks.setLine(this.#alongGround(this.pinNear));
         }
     }
 
@@ -6106,6 +6113,7 @@ export class Game {
 
         if (!this.pinWay) {
             this.pinLine = null;
+            this.pinNear = null;
             this.pinMarks?.setLine(null);
 
             return;
@@ -6132,20 +6140,29 @@ export class Game {
         this.pinLine = near ? [...near.way, ...wayFrom(rest, near.reach).slice(1)] : [[...at], ...rest];
 
         if (drawn) {
+            this.pinNear = near?.way ?? null;
             this.pinMarks?.setLine(near ? this.#alongGround(near.way) : null);
         }
     }
 
     // A way's points ([x, y] metres) along the ground, every WAY_LINE.step metres for as far as
-    // WAY_LINE.reach: [x, height, z]
+    // WAY_LINE.reach: [x, height, z]. On the ground as it's drawn (chunks3d.js groundDrawnAt: its
+    // corners further apart away from the player, cutting across the land's heights, so that laid
+    // on those the line went under it wherever the land dips); on a deck, the deck (a bridge's, a
+    // walkway's)
     #alongGround(way) {
         const ground = this.groundOf("town");
+        const bare = this.groundOf("town", { bare: true });
         const points = [];
+
+        this.pinGround = this.chunks?.groundVersion ?? null;
 
         for (let d = 0; d <= WAY_LINE.reach; d += WAY_LINE.step) {
             const [x, z] = pointAlong(way, d);
+            const on = ground ? ground(x, z) : 0;
+            const decked = bare && Math.abs(on - bare(x, z)) > 1e-6;
 
-            points.push([x, ground ? ground(x, z) : 0, z]);
+            points.push([x, decked ? on : (this.chunks?.groundDrawnAt(x, z) ?? on), z]);
 
             if (Math.hypot(x - way.at(-1)[0], z - way.at(-1)[1]) < WAY_LINE.step / 2) {
                 break;

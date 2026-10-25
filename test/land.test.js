@@ -11,7 +11,7 @@ globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContex
 
 const { blurred, distancesFrom } = await import("../client/js/world/fields.js");
 const { FIELD, fieldTexture, SHORE, shoreBytes, shoreDistances } = await import("../client/js/world/water.js");
-const { contactOf, groundGeometry, HOMES, landColour, landLayers } = await import("../client/js/world/ground.js");
+const { contactOf, drawnHeight, groundGeometry, HOMES, landColour, landLayers } = await import("../client/js/world/ground.js");
 const { CHUNK } = await import("../client/js/core/overworld.js");
 const { CONTACT, ContactShadows } = await import("../client/js/world/contacts.js");
 const THREE = await import("three");
@@ -155,6 +155,52 @@ describe("the ground where something stands on it (ground.js)", () => {
                 }
             }
         }
+    });
+
+    it("knows how high it's drawn anywhere, at any spacing: over its triangles, which coarser cut across the land's own heights (the line to the pin laid on them)", () => {
+        // (Rolling land: rises and dips a few metres across, both ways)
+        const corners = CHUNK + 1;
+        const heights = Float32Array.from({ length: corners * corners }, (_, k) => {
+            const [x, y] = [k % corners, Math.floor(k / corners)];
+
+            return 10 + Math.sin(x * 0.7) * 0.6 + Math.cos(y * 0.9 + x * 0.3) * 0.5 + Math.sin((x + y) * 0.23) * 1.5;
+        });
+        const ray = new THREE.Raycaster();
+        const down = new THREE.Vector3(0, -1, 0);
+        const between = (u, v) => {
+            const [i, j] = [Math.min(CHUNK - 1, Math.floor(u)), Math.min(CHUNK - 1, Math.floor(v))];
+            const [fx, fz] = [u - i, v - j];
+            const at = (di, dj) => heights[(j + dj) * corners + i + di];
+
+            return fz > fx ? at(0, 0) + (at(1, 1) - at(0, 1)) * fx + (at(0, 1) - at(0, 0)) * fz : at(0, 0) + (at(1, 0) - at(0, 0)) * fx + (at(1, 1) - at(1, 0)) * fz;
+        };
+        let under = 0;
+
+        for (const step of [1, 2, 4]) {
+            const mesh = new THREE.Mesh(groundGeometry(heights, step), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+
+            mesh.updateMatrixWorld();
+
+            for (let k = 0; k < 400; k++) {
+                const [u, v] = [((k * 37) % 997) / 997 * CHUNK * 0.98 + 0.3, ((k * 61) % 991) / 991 * CHUNK * 0.98 + 0.3];
+
+                ray.set(new THREE.Vector3(u, 100, v), down);
+
+                const hit = ray.intersectObject(mesh)[0];
+
+                assert.ok(Math.abs(drawnHeight(heights, step, u, v) - hit.point.y) < 1e-3, `${step} m apart, at ${u.toFixed(2)}, ${v.toFixed(2)}: ${drawnHeight(heights, step, u, v)} drawn ${hit.point.y}`);
+
+                // (A metre apart, as everything stands on it; coarser, the drawn ground over the
+                // land's heights here and there, by tens of centimetres)
+                if (step === 1) {
+                    assert.ok(Math.abs(drawnHeight(heights, step, u, v) - between(u, v)) < 1e-4);
+                } else if (hit.point.y - between(u, v) > 0.14) {
+                    under++;
+                }
+            }
+        }
+
+        assert.ok(under > 20, `${under} points where a line 0.14 m over the land's heights went under the coarser ground`);
     });
 
     it("barely darkens round a lone trunk", () => {

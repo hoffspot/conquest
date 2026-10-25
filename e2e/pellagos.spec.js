@@ -12020,17 +12020,34 @@ test("on the world map a pin's dropped where it's held: a column of light where 
     );
 
     const world = await page.evaluate(async () => {
-        const { game } = window.pellagos;
+        const { game, session } = window.pellagos;
+        const THREE = await import("three");
         const { navigatorOf } = await import("/js/core/navigation.js");
         const navigation = navigatorOf(game.world.maps.town);
         const marks = game.pinMarks;
         const ground = game.groundOf("town");
         const position = marks.line.geometry.attributes.position;
         const points = [];
+        const grounds = [];
+        const ray = new THREE.Raycaster();
+        const over = [];
 
-        // (Two corners a point, across the line; six indices a piece of it between two points)
+        session.view.scene.traverse((object) => object.isMesh && object.name === "ground" && grounds.push(object));
+
+        // (Two corners a point, across the line; six indices a piece of it between two points; and
+        // how high it is over the ground as it's drawn there, its corners further apart away from
+        // the player)
         for (let k = 0; k <= marks.line.geometry.drawRange.count / 6; k++) {
-            points.push([(position.getX(k * 2) + position.getX(k * 2 + 1)) / 2, (position.getZ(k * 2) + position.getZ(k * 2 + 1)) / 2]);
+            const [x, y, z] = [(position.getX(k * 2) + position.getX(k * 2 + 1)) / 2, (position.getY(k * 2) + position.getY(k * 2 + 1)) / 2, (position.getZ(k * 2) + position.getZ(k * 2 + 1)) / 2];
+
+            points.push([x, z]);
+            ray.set(new THREE.Vector3(x, y + 50, z), new THREE.Vector3(0, -1, 0));
+
+            const hit = ray.intersectObjects(grounds, false)[0];
+
+            if (hit) {
+                over.push(y - hit.point.y);
+            }
         }
 
         return {
@@ -12041,6 +12058,8 @@ test("on the world map a pin's dropped where it's held: a column of light where 
             long: marks.lineLength.value,
             points: points.length,
             astray: points.filter(([x, z]) => !navigation.nearestIn([x, z], 0.3)).map((point) => point.map(Math.round)),
+            over: { points: over.length, least: Math.min(...over), most: Math.max(...over) },
+            spacing: [...new Set(grounds.map((mesh) => mesh.userData.step))].sort(),
         };
     });
 
@@ -12051,6 +12070,12 @@ test("on the world map a pin's dropped where it's held: a column of light where 
     expect(world.long).toBeGreaterThan(80);
     expect(world.points).toBeGreaterThan(40);
     expect(world.astray).toEqual([]);
+    // (On the ground as it's drawn, all along it: 0.14 m over it, never under, wherever its
+    // corners are drawn further apart)
+    expect(world.over.points).toBeGreaterThan(40);
+    expect(world.over.least).toBeGreaterThan(0.139);
+    expect(world.over.most).toBeLessThan(0.141);
+    expect(world.spacing.length, `chunks drawn ${world.spacing.join(", ")} m apart`).toBeGreaterThan(1);
 
     // Held on the pin, it's taken away, its column and line with it
     await page.evaluate(() => window.pellagos.game.start());

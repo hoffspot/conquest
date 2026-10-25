@@ -4156,7 +4156,12 @@ same button holds the war's key.
   ground round its foot; and a thin, half-transparent, glowing blue line along the ground from the
   player's feet the way they'd walk (a strip 0.3 m wide just over the grass's roots, light running
   along it towards the pin), only along a way that can be walked (below), for up to 180 m (past
-  that the column shows the way). Four draws.
+  that the column shows the way). Four draws. It's laid on the ground as it's drawn, 0.14 m over
+  it: away from the player the chunks' ground is drawn with its corners 2 or 4 m apart (Low and
+  Medium; 2 further off on High), cutting across the land's own heights, so laid on those the line
+  went under the drawn ground wherever the land dipped, and floated over it on a rise (ground.js
+  `drawnHeight`, chunks3d.js `groundDrawnAt`; on a bridge's or a walkway's deck, the deck). It's
+  laid again whenever a chunk's ground is drawn otherwise (`groundVersion`).
 - **The way there** (core/journey.js `wayAcross`): found over the world plan's cells (32 m), not
   the navigation meshes (whose tiles are baked only round the players: kilometres of them would
   stall the game). Each cell's ground is worked out once a world, in about a tenth of a second
