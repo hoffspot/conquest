@@ -4845,6 +4845,17 @@ async function start() {
     // straight back in)
     const wasIn = inWorldOf(localStorage);
 
+    // (A join link's taken out of the page's address once it's read, as a server's invite is: the
+    // page loaded again, or kept to the Home Screen from there, comes to the title as any other,
+    // not to that world's Join a world again, every time)
+    if (params.has("join")) {
+        const rest = new URLSearchParams(location.search);
+
+        rest.delete("join");
+        rest.delete("at");
+        history.replaceState(null, "", `${location.pathname}${String(rest) ? `?${rest}` : ""}${location.hash}`);
+    }
+
     // (Its join link followed, back into that world; another's, that one's asked to join)
     if (wasIn && (!params.has("join") || params.get("join").toUpperCase() === wasIn.code)) {
         goBackIn(wasIn);

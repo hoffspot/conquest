@@ -2697,8 +2697,8 @@ to go through one of its ways in, or inside (`DOORSTEP`, app/game.js `#doorstep`
 work each after its floors. Not as they come near its door, as they were till 2026-10-25: a
 player walking past Wenches and Ale's door had its 25 folk dressed in six seconds, taking an
 iPhone from 350 MB held to 490 MB, and Safari closed the page. They're let go of again (their characters thrown
-away, skins and all) once the player's 20 metres from it outside, though the building's still
-got ready, its floors kept: standing in the start town's square, its tavern's, smithy's,
+away, skins and all) once the player's 12 metres from it outside, though the building's still
+got ready, its floors kept a little further (below): standing in the start town's square, its tavern's, smithy's,
 church's and hall's doors 11 to 16 metres off, all their folk were once dressed and kept, 25 of
 the 41 bodies about thirty seconds in, each holding its skin on the page and the graphics card;
 dressed only at their doors, 16 were (headless Chromium, High, seed 1: the bodies' own copies 348
@@ -2720,19 +2720,25 @@ while the folk are dressed, with 30 ms of each frame (`ENTERING`, `#entering`; t
 in the skins worker meanwhile; nothing drawn while it's dark, the frames' time theirs instead),
 for 3 seconds at most, the rest coming in as they're dressed
 after, then lit: not all of them in the one frame, as before (a guild's dozen, 3.9 s in one
-frame in headless Chromium). Its floors are thrown away sooner than the building's let go, once the
-player's 30 metres from its door (`FLOORS`, `#floorsWanted`; from the door of the building they're
-in, if they're in one), all of them built and nothing else of it being done; built again, a piece
-at a time, once they're back within 22 metres of it, or at once if they go straight in. And of the
-buildings further off than that, no more than 20 floors are kept all told (`FLOORS.most`,
-`#fewerFloors`): past it, the furthest buildings' let go of first, never one within 22 metres (it'd
-only be built again at once). A floor's put away till the player goes in, so it's never given to
+frame in headless Chromium). Its floors aren't built as it's got ready, 22 metres off, but only
+once the player's within 8 metres of its door or making for it (`FLOORS`, `#prepare`,
+`#floorsWanted`), a piece at a time, or at once if they go straight in. They're thrown away again
+once the player's 16 metres from its door (from the door of the building they're in, if they're in
+one), all of them built and nothing else of it being done, though the building's still got ready;
+built again once they're back within 8 metres. And of the buildings further off than 8 metres, no
+more than 12 floors are kept all told (`FLOORS.most`, `#fewerFloors`): past it, the furthest
+buildings' let go of first, never one within 8 metres (it'd only be built again at once). A floor's put away till the player goes in, so it's never given to
 the graphics card: it's held on the page alone, a few megabytes each (its building's own parts, 1
 to 3.6 MB in the start town; the wares in it are shared). An iPhone let the game's tab go holding 59
 of them in a crowded town, uncounted then: what they hold is in the debug log now (`interiorsMB`,
 below), and 40 metres became 30. Walking from door to door round the start town (headless
 Chromium, High, seed 1), the floors kept came to 3 to 14 MB at each stop, not 11 to 15 MB; back in
-the square, those within 40 metres of it were still kept (13.7 MB, from 14.6). Once the player is
+the square, those within 40 metres of it were still kept (13.7 MB, from 14.6). Then another let it
+go holding 56 (82 MB) standing in a big town's square, every building round it got ready, its floors
+built then and kept to 30 metres, 20 at most only of those further off than 22: so since
+2026-10-25 a building's floors are built only at its door, and kept to 16 metres, 12 at most. In
+the start town's square, the four buildings round it (their doors 12 to 16 metres off) are got
+ready, none of their floors built, where all four were. Once the player is
 90 metres away (and outside), it's let go: its
 folk out of the battle, their characters and any floors thrown away (built again if they come
 back); the plans are kept. Wenches and Ale's floors are built at the start and kept; its folk are
@@ -3596,6 +3602,10 @@ how many had room (`soldiers`):
   time for building those drawn (`MARSHAL.share`), its skin painted and its detail lowered in their
   workers meanwhile: about a second each on a desktop. A soldier waiting on its kind's isn't drawn,
   nor built in full; where a kind couldn't be made, its soldiers are built in full after all.
+- **Let go of once they're not.** A kind's figure with nobody of its kind in the crowds for a
+  minute (`CROWD_KEEP`, `Crowd.draw`) is let go of: its figure, its picture and its moves, off the
+  graphics card (6 MB or so on Low), made again should one of its kind come. Kept for good, as
+  they were till 2026-10-25, an iPhone that let the game's tab go held 18 kinds.
 
 Drawn so, a frame's work hardly grows with the crowd: in headless Chromium on "medium", out on open
 ground with every soldier in the crowds, a frame's update took 14 ms for 50 a side and 18 ms for
@@ -4745,9 +4755,18 @@ the start, the browser's sound isn't started at all (taps don't start it), so it
 working on silence, until it's turned on.
 
 **Kept decoded to a budget** (`sound.js` `DECODED_BUDGET`). A recording's played from the
-browser's decoded copy, 32-bit samples at its own rate (48 kHz on an iPhone), 25 to 30 times its
-MP3: all the recorded sounds decoded come to about 280 MB (their MP3s to about 10), a bed's 5 to
-7 MB, and an iPhone's debug log saw them climb from 63 to 120 MB before Safari closed the page.
+browser's decoded copy, 32-bit samples, 20 to 30 times its MP3: all the recorded sounds decoded
+come to about 236 MB (their MP3s to about 10), a bed's 3 to 5 MB, and an iPhone's debug log saw
+them climb from 63 to 120 MB before Safari closed the page. Each is decoded at the rate it was
+recorded at where that's below the browser's own (`#decodeData`, `mp3Rate`; through an
+`OfflineAudioContext` at that rate): the music's and the beds' at 32 kHz, the rest at the
+browser's (48 kHz on an iPhone). Decoded at 48 kHz, as they were till 2026-10-25, the 32 kHz ones
+held half as much again for nothing heard (everything's played at a rate of its own anyway: a
+note at its pitch, a sound with its lilt, as the made sounds' 48 kHz are where the browser's is
+44.1): all the recorded sounds 276 MB, a bed 4.5 to 7.3, the music started with 27 MB rather
+than 18. An iPhone's tab let go holding 103 MB of sound; in headless Chromium (44.1 kHz) the
+sound held at the start came from 100 MB to 90. Where it can't be (no `OfflineAudioContext`, or
+one that won't make or decode at that rate), it's decoded at the browser's rate, as before.
 So no more than 48 MB of them is kept decoded on a touch screen, 96 MB anywhere else. Past it,
 as each sound's decoded, those played least lately (or decoded, not played since) are let go of
 first (a bed by when its last copy was set going), never one sounding (a bed heard, or fading
@@ -4755,9 +4774,9 @@ out; a sound played and not done), one being decoded, or the one just decoded. T
 kept (and counted in what the sounds hold), so one let go of is decoded again from it the next
 time it's wanted, never downloaded again; meanwhile it plays as it did before it was first in:
 its made sound, what stands in for it, or nothing. What's sounding at once can come to more
-than the budget (a busy place's beds are 20 to 30 MB, the sounds downloaded at the start 22):
+than the budget (a busy place's beds are 14 to 20 MB, the sounds downloaded at the start 22):
 the rest are let go of once they're done. The music's recordings for the town's, the tavern's
-and a fight's (about 20 MB decoded) are kept as they are; another score's own are let go of once
+and a fight's (about 18 MB decoded) are kept as they are; another score's own are let go of once
 it's not been heard for a minute (`MUSIC_KEPT`), their MP3s kept, decoded again (never
 downloaded again) if it's wanted again; and the sound studio keeps everything decoded. Travelling through sixteen places in
 Chromium (the town by day and by night, the taproom, a smithy, the wilds' lands by day and by

@@ -79,6 +79,25 @@ const _view = new THREE.Matrix4();
 export const OFFSTAGE = 31;
 
 /**
+ * How long a kind's figure is kept with nobody of its kind in the crowds (ms): then let go of, its
+ * picture, its moves and its figure off the graphics card (6 MB or so on Low), and made again if
+ * one's wanted. Kept for good, an iPhone that let the game's tab go held 18 kinds of soldier.
+ */
+export const CROWD_KEEP = 60000;
+
+// A kind's figure let go of: its figure, its picture and its moves, and what draws it
+function letGoOf(kind) {
+    if (kind.template) {
+        kind.template.disposed = true;
+        kind.template.geometry.dispose();
+        kind.template.picture.dispose();
+        kind.template.moves.dispose();
+    }
+
+    kind.batch?.dispose();
+}
+
+/**
  * What's drawn of `object` (its meshes) kept from being seen, as each was kept in `hidden` (a Map,
  * made if it isn't given: what each one's layers were), those already kept left as they are; returns
  * `hidden`. (What's added to it since, a torch taken up, is kept from being seen the next time.)
@@ -918,9 +937,10 @@ export class Crowd {
     /**
      * Draw everyone in the crowds as they are now, those in view of `camera` (`pixels`: how many
      * pixels tall a metre is a metre from it, view.js pixelsPerMetre): each kind's in one go near,
-     * one far. Returns how many were drawn.
+     * one far; and the kinds nobody's been of for CROWD_KEEP let go of (`now`: ms, as
+     * performance.now()). Returns how many were drawn.
      */
-    draw(camera, pixels = 0) {
+    draw(camera, pixels = 0, now = performance.now()) {
         _view.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
         _frustum.setFromProjectionMatrix(_view);
 
@@ -930,6 +950,10 @@ export class Crowd {
 
         for (const avatar of this.members) {
             const kind = this.kinds.get(avatar.key);
+
+            if (kind) {
+                kind.used = now;
+            }
 
             if (!kind?.template || !avatar.object.visible) {
                 continue;
@@ -955,8 +979,13 @@ export class Crowd {
             drawn++;
         }
 
-        for (const kind of this.kinds.values()) {
-            kind.batch?.draw(each.get(kind) ?? []);
+        for (const [key, kind] of this.kinds) {
+            if (kind.template && now - (kind.used ??= now) > CROWD_KEEP) {
+                letGoOf(kind);
+                this.kinds.delete(key);
+            } else {
+                kind.batch?.draw(each.get(kind) ?? []);
+            }
         }
 
         return drawn;
@@ -964,14 +993,7 @@ export class Crowd {
 
     dispose() {
         for (const kind of this.kinds.values()) {
-            if (kind.template) {
-                kind.template.disposed = true;
-                kind.template.geometry.dispose();
-                kind.template.picture.dispose();
-                kind.template.moves.dispose();
-            }
-
-            kind.batch?.dispose();
+            letGoOf(kind);
         }
 
         this.kinds.clear();

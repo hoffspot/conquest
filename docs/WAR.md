@@ -2619,7 +2619,10 @@ the relay, with a four-letter code (`server/relay.js`), and shows the code, a li
 (`?join=CODE`), and who's come. **Close the world to others** puts them all out again.
 
 **Joining.** From the title, **Join a world**: the code, and the saved character (with none, one's
-made first).
+made first). Its link opens Join a world with the code in it, and is taken out of the page's
+address once read (main.js `start`), as a server's invite is: before 2026-10-25 it stayed there,
+so the page loaded again (or kept to the Home Screen from there) opened that world's Join a world
+every time.
 - **Their people:** they come as one of the people they play (`hero.race`, chosen in the character
   maker: human, elf, dark elf, cat folk, lizard folk or orc). So they're at peace or at war with the
   host's player as their peoples are.

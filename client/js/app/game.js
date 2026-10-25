@@ -65,7 +65,7 @@ import { brokenOf } from "../core/war/stockade.js";
 import { HELD_REACH, Steering } from "./steering.js";
 import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
-import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, RELEVANCE, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
+import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
 import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
@@ -406,20 +406,21 @@ const VISITS = Object.freeze({ every: 0.5, budget: 6 });
 
 // A building's folk (Wenches and Ale's too) dressed only once the player goes in: told to go
 // through one of its ways in, or inside; and let go of again once they're `far` metres off its
-// door (its floors kept while the host keeps it got ready). Not as they come near its door: the
+// door (before its floors: FLOORS). Not as they come near its door: the
 // folk of a town's buildings round its square aren't dressed, their skins on the page and the
 // graphics card, for a player standing in it or walking past (Wenches and Ale's 25 dressed in six
 // seconds as a player passed its door took an iPhone from 350 MB held to 490 MB, and Safari
 // closed the page)
-const DOORSTEP = Object.freeze({ far: 20 });
+const DOORSTEP = Object.freeze({ far: 12 });
 
-// A building's floors, built as it's got ready, let go of again once the player's `far` metres
-// from its door (or, inside another building, that building's door is), though the host keeps it
-// got ready to RELEVANCE.far; built again, a piece at a time, once they're `near` it again (as
-// near as the host gets it ready), or all at once if they go straight in. And no more than `most`
-// held of those further off than `near`, the furthest let go of first: each holds a few megabytes
-// on the page (#interiorsHeld), and an iPhone let the game's tab go holding 59 in a town
-const FLOORS = Object.freeze({ near: RELEVANCE.near, far: 30, most: 20 });
+// A building's floors, built only once the player's `near` metres from its door, or going in (not
+// as the host gets it ready, 22 metres off), a piece at a time; let go of again once they're `far`
+// metres from it (or, inside another building, that building's door is), though the host keeps it
+// got ready to RELEVANCE.far; or all at once if they go straight in. And no more than `most` held
+// of those further off than `near`, the furthest let go of first. Each holds a few megabytes on the
+// page (#interiorsHeld): built as each building was got ready and kept to 30 metres, an iPhone
+// held 56 floors (82 MB) standing in its town's square, and let the game's tab go
+const FLOORS = Object.freeze({ near: 8, far: 16, most: 12 });
 
 // Gone into a building before its folk are all dressed: the screen kept dark while they're
 // dressed, `budget` ms a frame (their skins painted elsewhere meanwhile), for `most` seconds at
@@ -10419,13 +10420,21 @@ export class Game {
         }
     }
 
-    // Start building a building the host's got ready: each floor, one to a piece of work, and the
-    // doors told of its insides; its folk once the player's at its door (#doorstep)
+    // Take on a building the host's got ready: its floors built, each one to a piece of work, and
+    // the doors told of its insides, once the player comes to its door (#floorsWanted); its folk
+    // once they go in (#doorstep)
     #prepare(building) {
-        const visit = { key: building.key, queue: [], maps: [], folk: [], door: building.entrance?.door ?? null, welcomed: false, bare: false, people: () => this.host.open.get(building.key) ?? [] };
+        const visit = { key: building.key, queue: [], maps: [], folk: [], door: building.entrance?.door ?? null, welcomed: false, bare: true, people: () => this.host.open.get(building.key) ?? [] };
 
-        visit.queue.push(...this.#floorsOf(visit, building));
         this.visits.set(building.key, visit);
+
+        // (Its floors built only as the player comes to its door, or goes in: #floorsWanted, at once
+        // if they're there already; one without a door of its own to come to, now)
+        if (visit.door) {
+            this.#floorsWanted(visit);
+        } else {
+            this.#furnish(visit);
+        }
 
         return visit;
     }
