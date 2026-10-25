@@ -322,8 +322,10 @@ const overCeiling = (room, y, pitch, distance) => !room.rock && pitch > 0 && y +
 // nearer than `least` metres. Turning, it looks as far round as it'll have turned in `ahead`
 // seconds (`most` radians at most), so it's in already as a wall comes round into the way. Coming
 // in (and rising) this quickly, going back out this slowly (per second), and only once it's been
-// clear for `hold` seconds, so a row of houses with gaps between doesn't pump it in and out
-const PULL = Object.freeze({ least: 2.6, margin: 0.6, wide: 0.25, highest: 85, lift: 0.15, ahead: 0.25, most: Math.PI / 12, in: 12, out: 2.5, hold: 0.4 });
+// clear for `hold` seconds, so a row of houses with gaps between doesn't pump it in and out; not
+// held while where it looks goes faster than `fast` metres a second (faster than anyone runs: the
+// player put somewhere else, the camera catching them up)
+const PULL = Object.freeze({ least: 2.6, margin: 0.6, wide: 0.25, highest: 85, lift: 0.15, ahead: 0.25, most: Math.PI / 12, in: 12, out: 2.5, hold: 0.4, fast: 10 });
 
 // The haze at the horizon: the fog's colour and the background's, which the sky pales to
 const SKY = SKY_COLOURS.horizon;
@@ -1301,10 +1303,12 @@ export class View {
         }
 
         // (Going back out only once what it's to come clear of has been so a moment, since it last
-        // came clear of more: till then held where it is)
+        // came clear of more: till then held where it is. Not while it's catching the player up)
         const dropped = pulled < (this.pullTarget ?? pulled) - 0.01 || lifted < (this.liftTarget ?? lifted) - 0.01;
+        const rushing = this.clearedAt !== undefined && Number.isFinite(dt) && dt > 0 && Math.hypot(this.focus.x - this.clearedAt.x, this.focus.z - this.clearedAt.z) / dt > PULL.fast;
 
-        this.clearFor = dropped ? 0 : (this.clearFor ?? Infinity) + dt;
+        (this.clearedAt ??= new THREE.Vector3()).copy(this.focus);
+        this.clearFor = rushing ? Infinity : dropped ? 0 : (this.clearFor ?? Infinity) + dt;
         this.pullTarget = pulled;
         this.liftTarget = lifted;
 

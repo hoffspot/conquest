@@ -409,7 +409,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/treasure3d.js", 4488, "211774903e"],
             ["js/world/trickles.js", 3946, "a6b891b721"],
             ["js/world/veil.js", 9461, "c988416ae5"],
-            ["js/world/view.js", 105330, "c9c945c729"],
+            ["js/world/view.js", 105814, "791f870d25"],
             ["js/world/water.js", 23384, "b37211e223"],
             ["js/world/wind.js", 4057, "48d9358cdc"],
             ["js/world/windowpools.js", 6382, "58c487d41f"],
