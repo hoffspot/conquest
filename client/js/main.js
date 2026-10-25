@@ -74,7 +74,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null, everyone: false };
+const state = { dismiss: null, loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null, everyone: false };
 
 window.pellagos = {
     get game() {
@@ -844,6 +844,7 @@ $("#pointerswitch").checked = settings.swordPointer;
 $("#largepointerswitch").checked = settings.largePointer;
 showPlaySettings();
 $("#quicksixswitch").checked = settings.quickSix;
+$("#quickalwaysswitch").checked = settings.quickAlways;
 $("#fullscreenswitch").checked = settings.fullscreen;
 // (Where the browser won't have it, no switch: on an iPhone, a word on the Home Screen instead)
 $("#fullscreenoption").hidden = !fullScreen.available;
@@ -1107,9 +1108,11 @@ async function playing(save, { world, place, war }) {
     game.autoSnag = settings.autoSnag;
     game.snagFilter = snagChoiceOf();
     game.autoLock = settings.autoLock;
+    game.quickAlways = settings.quickAlways;
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
+    game.onAskDismiss = askDismiss;
     game.showQuick(quickShown());
     debug.watch({ game });
     show("hud");
@@ -1879,6 +1882,27 @@ $("#portalback").addEventListener("click", () => {
     state.portal = null;
     $("#portal").close();
 });
+
+// One of the party to be let go (the party menu's Dismiss, or the wheel's), for good: asked first
+// (`go`: lets them go)
+function askDismiss({ name, note, go }) {
+    $("#dismisstitle").textContent = `Dismiss ${name}?`;
+    $("#dismissnote").textContent = note;
+    $("#dismissgo").textContent = `Dismiss ${name}`;
+    state.dismiss = go;
+    $("#dismissask").showModal();
+    $("#dismissback").focus();
+}
+
+$("#dismissgo").addEventListener("click", () => {
+    const go = state.dismiss;
+
+    state.dismiss = null;
+    $("#dismissask").close();
+    go?.();
+});
+$("#dismissback").addEventListener("click", () => $("#dismissask").close());
+$("#dismissask").addEventListener("close", () => (state.dismiss = null));
 
 // A plan tapped on the building screen: asked first, with what it guards and faces, what it costs
 // and takes to keep up, and whether the stores hold it now
@@ -2678,9 +2702,11 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     game.autoSnag = settings.autoSnag;
     game.snagFilter = snagChoiceOf();
     game.autoLock = settings.autoLock;
+    game.quickAlways = settings.quickAlways;
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
+    game.onAskDismiss = askDismiss;
     game.showQuick(quickShown());
     debug.watch({ game });
     show("hud");
@@ -4458,6 +4484,7 @@ $("#snagkinds").addEventListener("change", () => snagChanged());
 $("#followswitch").addEventListener("change", (event) => applySetting("cameraFollows", event.target.checked));
 $("#battlecamswitch").addEventListener("change", (event) => applySetting("battleCam", event.target.checked));
 $("#quicksixswitch").addEventListener("change", (event) => applySetting("quickSix", event.target.checked));
+$("#quickalwaysswitch").addEventListener("change", (event) => applySetting("quickAlways", event.target.checked));
 $("#invertswitch").addEventListener("change", (event) => applySetting("invertTilt", event.target.checked));
 $("#shakeswitch").addEventListener("change", (event) => applySetting("shake", event.target.checked));
 $("#fullscreenswitch").addEventListener("change", (event) => applySetting("fullscreen", event.target.checked));
@@ -4640,7 +4667,7 @@ function applySetting(key, value) {
     } else if (key === "quickSix") {
         state.game?.showQuick(quickShown());
         state.quickSetup?.showCount(quickShown());
-    } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock") {
+    } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock" || key === "quickAlways") {
         if (state.game) {
             state.game[key] = value;
         }

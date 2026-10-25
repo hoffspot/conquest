@@ -1949,6 +1949,12 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     background: linear-gradient(180deg, #f1995f, var(--health-low));
 }
 
+/* A foe in reach the player can't act on yet (too dark to see that far, or something in the way):
+   greyed, so it reads as not yet reachable (app/game.js, hud.js place's `dim`) */
+.plate.unseen {
+    filter: grayscale(0.9) brightness(0.75);
+}
+
 .bar .value {
     position: relative;
     display: block;
@@ -2004,6 +2010,11 @@ lock's sights (app/hud.js attackers) */
     touch-action: none;
     -webkit-touch-callout: none;
     user-select: none;
+}
+
+/* A foe in range and seen, not after the player (yet): its frame fainter (hud.js attackers) */
+.attacker.idle {
+    border-color: rgba(212, 83, 59, 0.45);
 }
 
 .attacker-initial {

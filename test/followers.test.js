@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { FOLLOW, keepingUp, SPRINT, STEP_MS } from "../client/js/core/battle.js";
+import { TREES } from "../client/js/core/dialogue.js";
 import { COMPANION, HIRES, HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { nearestFree, squareKey, squaresOf } from "../client/js/core/grid.js";
@@ -174,6 +175,21 @@ describe("followers (host.js, battle.js)", () => {
         assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { follower: "dismiss" } }).ok, true);
         events.push(...run(host, 500));
         assert.ok(!host.battle.actor(follower.id) && !host.followers.has(follower.id));
+    });
+
+    it("asks, in talk, before a follower's let go for good: parting's asked about first, and said no to, back to their orders", () => {
+        const { nodes } = TREES.follower;
+        const part = nodes.greet.choices.find(({ next }) => next === "parting");
+
+        assert.ok(part, "parting asked about");
+        assert.equal(part.do, undefined, "not let go yet");
+
+        const [sure, no] = nodes.parting.choices;
+
+        assert.deepEqual(sure.do, [{ follower: "dismiss" }]);
+        assert.equal(sure.next, "parted");
+        assert.equal(no.do, undefined);
+        assert.equal(no.next, "greet");
     });
 
     it("loses a follower who falls", () => {

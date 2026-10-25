@@ -913,8 +913,16 @@ export const TREES = Object.freeze({
                 choices: [
                     { if: { waiting: false }, say: "Wait here.", next: "waiting", do: [{ follower: "wait" }] },
                     { if: { waiting: true }, say: "Come on, with me.", next: "following", do: [{ follower: "follow" }] },
-                    { say: "We part here. Go your own way.", next: "parted", do: [{ follower: "dismiss" }] },
+                    { say: "We part here. Go your own way.", next: "parting" },
                     { say: "Nothing. Carry on.", next: null },
+                ],
+            },
+            // (Asked first: they go for good)
+            parting: {
+                say: ["For good? I'll not be coming back.", "You're sure? Once I'm gone, I'm gone."],
+                choices: [
+                    { say: "I'm sure. Go well.", next: "parted", do: [{ follower: "dismiss" }] },
+                    { say: "No. Stay with me.", next: "greet" },
                 ],
             },
             waiting: { say: ["I'll be here.", "Right. I'll hold here till you're back."], choices: [{ say: "Good.", next: null }] },
