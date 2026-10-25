@@ -372,7 +372,7 @@ describe("the debug log (telemetry.js)", () => {
 
     it("a crash keeps the minute before it: what was held at each of the notes, when the last were written, and the work begun lately, that begun after the last notes marked (likely under way as it fell)", () => {
         const at = logOn();
-        const held = (totalMB, avatars) => () => ({ map: "town", actors: 32, memory: { totalMB, heapMB: null, limitMB: null, gpu: { totalMB: totalMB - 100 }, soundMB: 100, bodiesMB: avatars * 5, held: { avatars } } });
+        const held = (totalMB, avatars) => () => ({ map: "town", actors: 32, memory: { totalMB, heapMB: null, limitMB: null, gpu: { totalMB: totalMB - 100 }, soundMB: 100, bodiesMB: avatars * 5, interiorsMB: avatars, held: { avatars } } });
 
         at.log.playing = true;
         at.log.job("dressing player player", 357);
@@ -395,7 +395,7 @@ describe("the debug log (telemetry.js)", () => {
         const crash = logOn(at.kept, { now: 300, clock: at.time.clock + 1500 }).log.recover("back_forward");
 
         assert.equal(crash.trend.length, TELEMETRY.trend, "a minute of the notes' readings");
-        assert.deepEqual(crash.trend.at(-1), { at: Math.round((at.time.now - 800) / 100) / 10, totalMB: 520, gpuMB: 420, soundMB: 100, bodiesMB: 200, heapMB: null, avatars: 40, actors: 32 });
+        assert.deepEqual(crash.trend.at(-1), { at: Math.round((at.time.now - 800) / 100) / 10, totalMB: 520, gpuMB: 420, soundMB: 100, bodiesMB: 200, interiorsMB: 40, heapMB: null, avatars: 40, actors: 32 });
         assert.ok(crash.trend[0].totalMB < crash.trend.at(-2).totalMB, "rising");
         assert.equal(crash.pageAt, at.time.now - 800);
         assert.deepEqual(
@@ -471,7 +471,7 @@ describe("the debug log (telemetry.js)", () => {
         assert.equal(crash.state.memory.totalMB, 1800);
     });
 
-    it("shows what's held in the debug overlay: all of it, the graphics card's, the sounds', the heap where it's told, and how much of the world's kept (the beasts' looks, the models read)", () => {
+    it("shows what's held in the debug overlay: all of it, the graphics card's, the sounds', the bodies' and the floors' own copies, the heap where it's told, and how much of the world's kept (the beasts' looks, the models read)", () => {
         const gpu = { totalMB: 540.2, buffersMB: 226.3, texturesMB: 301.9, targetsMB: 12, count: {} };
 
         assert.deepEqual(memoryLines({ totalMB: 1245.6, heapMB: 684.5, limitMB: 4096, gpu, soundMB: 20.9, held: { avatars: 64, chunks: 9, interiors: 2, crowds: 6 } }), [
@@ -482,6 +482,11 @@ describe("the debug log (telemetry.js)", () => {
         assert.match(
             memoryLines({ totalMB: 731, heapMB: null, limitMB: null, gpu, soundMB: 101.3, wasmMB: 16, bodiesMB: 154.5, held: { avatars: 30, chunks: 9, interiors: 0, crowds: 0 } })[0],
             /sound 101\.3 MB, way-finding 16 MB, bodies' own copies 154\.5 MB, JS heap not told by this browser$/,
+        );
+        // (And the buildings' floors held, put away till the player goes in: on the page alone)
+        assert.match(
+            memoryLines({ totalMB: 731, heapMB: null, limitMB: null, gpu, soundMB: 101.3, wasmMB: 16, bodiesMB: 154.5, interiorsMB: 62.4, held: { avatars: 30, chunks: 9, interiors: 21, crowds: 0 } })[0],
+            /bodies' own copies 154\.5 MB, floors' 62\.4 MB, JS heap not told by this browser$/,
         );
         assert.equal(
             memoryLines({ totalMB: 731, heapMB: null, limitMB: null, gpu, soundMB: 20, held: { avatars: 30, chunks: 9, interiors: 0, crowds: 2, beasts: { looks: 12, unheld: 3, MB: 9.4 } } })[1],
