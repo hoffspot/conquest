@@ -3287,14 +3287,25 @@ export class Game {
             let x = previous.x + (actor.x - previous.x) * alpha;
             let z = previous.y + (actor.y - previous.y) * alpha;
             let facing = actor.facing;
+            let acting = Boolean(actor.attack);
 
             // (Joined: their own hero drawn where the rules will have them as soon as what's sent
-            // now is done, ahead of the copy, facing as they'll face: app/forecast.js)
+            // now is done, ahead of the copy, facing as they'll face, swinging and casting as they
+            // begin to there: app/forecast.js)
             if (actor === mine && this.forecast) {
                 const place = this.forecast.at(battle, this.me, this.remote.clock(), this.remote.lately ?? undefined);
 
                 if (place && place.map === actor.map) {
-                    [x, z, facing] = [place.x, place.y, place.facing];
+                    [x, z, facing, acting] = [place.x, place.y, place.facing, place.acting];
+                }
+
+                // (Begun there, shown now, wherever they're drawn: the copy's of each not shown)
+                for (const event of place?.begun ?? []) {
+                    if (event.type === "attack") {
+                        this.#attackSeen(event, avatar);
+                    } else {
+                        this.#castSeen(event, avatar, true);
+                    }
                 }
             }
 
@@ -3346,7 +3357,7 @@ export class Game {
                 avatar.hang?.(this.#hanging(actor, avatar, ox + x, oz + z));
             }
 
-            avatar.update(dt, ox + x, oz + z, facing, !actor.attack);
+            avatar.update(dt, ox + x, oz + z, facing, !acting);
 
             if (!thronged) {
                 this.#counted(avatar, bodies);
@@ -10899,49 +10910,16 @@ export class Game {
             }
 
             switch (event.type) {
-                case "attack": {
-                    const actor = battle.actor(event.id);
-                    const target = battle.actor(event.target);
-
-                    // (Kicking with a weapon in hand, the hands stay on guard; and its weapon in
-                    // hand, whatever it looked like: once starting the attack has finished any
-                    // drawing or putting away. How far off its target is, for a creature that
-                    // reaches it: a frog's tongue)
-                    avatar.actions.startAttack(event.animation, {
-                        hitAt: event.hitAt / 1000,
-                        duration: event.duration / 1000,
-                        arms: event.animation !== "kick" || ["boots", "gauntlets"].includes(actor.weapon),
-                        reach: target ? Math.hypot(target.x - actor.x, target.y - actor.y) : null,
-                    });
-
-                    if (avatar.character.sheathed) {
-                        avatar.character.sheathe(false);
-                    }
-
-                    this.lastAttack.set(event.id, battle.time);
-                    this.sound?.attack(event.animation, avatar.object.position, event.hitAt / 1000);
-
-                    // (The Behemoth of the Rift drawing breath: its atomic breath heard as its clip
-                    // has it (beasts/sounds.js CLIP_SOUNDS): charging, loudest as it fires, and
-                    // fired, the beam's sound fitted to it)
-                    if (event.attack === "atomicBreath") {
-                        const at = avatar.object.position.clone();
-
-                        this.sound?.play("kaijuCharge", { at, far: ATOMIC_HEARD, peakAt: event.hitAt / 1000 });
-                        this.sound?.play("kaijuBreath", { at, far: ATOMIC_HEARD, delay: Math.max(0, event.hitAt / 1000 - ATOMIC_LEAD) });
-                    }
-
-                    // (One of the wild's creatures snarling, hissing or grunting with it, loudest as
-                    // it lands: a beast's every blow, a people-shaped one's now and then: CALLS)
-                    const creature = this.#voiced(actor, avatar);
-
-                    if (creature && this.clock >= (avatar.growled ?? 0) && (avatar instanceof BeastAvatar || Math.random() < CALLS.effort)) {
-                        this.sound?.voice(creature, "attack", avatar.object.position, { hitAt: event.hitAt / 1000 });
-                        avatar.growled = this.clock + CALLS.growl;
+                case "attack":
+                    // (Their own, joined: shown already, as the forecast began it (app/forecast.js),
+                    // not again)
+                    if (event.id === this.me && this.forecast?.claim(event)) {
+                        this.lastAttack.set(event.id, battle.time);
+                    } else {
+                        this.#attackSeen(event, avatar);
                     }
 
                     break;
-                }
                 case "call": {
                     // (One of the wild's calling its flock to it, as its call goes out: heard far
                     // off, and told to whoever it's after; its flock comes running, host.js #flock)
@@ -11021,37 +10999,13 @@ export class Game {
                 case "afflicted":
                     this.#afflicted(event, avatar);
                     break;
-                case "cast": {
-                    const spell = SPELLS[event.spell];
-                    const kind = SPELL_LOOKS[lookOf(event.spell)] ?? lookOf(event.spell);
-                    const look = this.#look(event.id, kind);
-
-                    // (Landing on whom it's cast on in the same look; and gathering in the hand,
-                    // for as long as they're casting it, a heal's or a stun's in its look too)
-                    this.landing.set(event.target, look);
-
-                    if (battle.actor(event.id)?.map === this.mapId) {
-                        const on = this.avatars.get(event.target);
-
-                        this.spellFx.cast(event.id, event.spell, {
-                            hand: () => avatar.hand("Left"),
-                            feet: () => avatar.object.position,
-                            target: () => on?.object.position ?? null,
-                            aim: () => on?.point(0.6) ?? null,
-                            still: () => battle.actor(event.id)?.casting?.spell === event.spell,
-                            castTime: event.castTime,
-                            glow: LOOKS[kind]?.[look]?.charge ?? null,
-                        });
+                case "cast":
+                    // (Their own, joined: shown already, as the forecast began it, not again)
+                    if (!(event.id === this.me && this.forecast?.claim(event))) {
+                        this.#castSeen(event, avatar);
                     }
 
-                    avatar.actions.startAttack(kind === "heal" ? "castHeal" : "castStun", { hitAt: spell.castTime / 1000, duration: (spell.castTime / 1000) * 1.7 });
-
-                    // (Its sound swelling to its release, its missile's flying the last of it)
-                    const heard = this.sound?.cast(event.spell, avatar.object.position, event.castTime / 1000, { travel: missileTravel(event.spell, event.castTime) });
-
-                    this.castSounds.set(event.id, { source: heard ?? null, spell: event.spell, until: battle.time + event.castTime });
                     break;
-                }
                 case "healed": {
                     const actor = battle.actor(event.id);
 
@@ -12129,15 +12083,98 @@ export class Game {
 
     // A spell lands (battle.js "spell"): drawn where it lands, each its own, with those it struck
     // (told as "hit" first), on the player's map
+    // Someone's swing begun (battle.js "attack"): shown and heard as it begins, as the copy has it,
+    // or, joined, their own as the forecast's begun it (app/forecast.js), ahead of the copy
+    #attackSeen(event, avatar) {
+        const battle = this.battle;
+        const actor = battle.actor(event.id);
+        const target = battle.actor(event.target);
+
+        // (Kicking with a weapon in hand, the hands stay on guard; and its weapon in hand, whatever
+        // it looked like: once starting the attack has finished any drawing or putting away. How
+        // far off its target is, for a creature that reaches it: a frog's tongue)
+        avatar.actions.startAttack(event.animation, {
+            hitAt: event.hitAt / 1000,
+            duration: event.duration / 1000,
+            arms: event.animation !== "kick" || ["boots", "gauntlets"].includes(actor.weapon),
+            reach: target ? Math.hypot(target.x - actor.x, target.y - actor.y) : null,
+        });
+
+        if (avatar.character.sheathed) {
+            avatar.character.sheathe(false);
+        }
+
+        this.lastAttack.set(event.id, battle.time);
+        this.sound?.attack(event.animation, avatar.object.position, event.hitAt / 1000);
+
+        // (The Behemoth of the Rift drawing breath: its atomic breath heard as its clip has it
+        // (beasts/sounds.js CLIP_SOUNDS): charging, loudest as it fires, and fired, the beam's
+        // sound fitted to it)
+        if (event.attack === "atomicBreath") {
+            const at = avatar.object.position.clone();
+
+            this.sound?.play("kaijuCharge", { at, far: ATOMIC_HEARD, peakAt: event.hitAt / 1000 });
+            this.sound?.play("kaijuBreath", { at, far: ATOMIC_HEARD, delay: Math.max(0, event.hitAt / 1000 - ATOMIC_LEAD) });
+        }
+
+        // (One of the wild's creatures snarling, hissing or grunting with it, loudest as it lands:
+        // a beast's every blow, a people-shaped one's now and then: CALLS)
+        const creature = this.#voiced(actor, avatar);
+
+        if (creature && this.clock >= (avatar.growled ?? 0) && (avatar instanceof BeastAvatar || Math.random() < CALLS.effort)) {
+            this.sound?.voice(creature, "attack", avatar.object.position, { hitAt: event.hitAt / 1000 });
+            avatar.growled = this.clock + CALLS.growl;
+        }
+    }
+
+    // Someone's cast begun (battle.js "cast"): shown and heard swelling to its release, as the
+    // copy has it, or, joined (`ahead`), their own as the forecast's begun it, ahead of the copy:
+    // then how long they're casting it, and whether it's broken off, the forecast's (#castsHeard)
+    #castSeen(event, avatar, ahead = false) {
+        const battle = this.battle;
+        const spell = SPELLS[event.spell];
+        const kind = SPELL_LOOKS[lookOf(event.spell)] ?? lookOf(event.spell);
+        const look = this.#look(event.id, kind);
+        const casting = () => (ahead ? this.forecast?.casting : battle.actor(event.id)?.casting?.spell) === event.spell;
+
+        // (Landing on whom it's cast on in the same look; and gathering in the hand, for as long
+        // as they're casting it, a heal's or a stun's in its look too)
+        this.landing.set(event.target, look);
+
+        if (battle.actor(event.id)?.map === this.mapId) {
+            const on = this.avatars.get(event.target);
+
+            this.spellFx.cast(event.id, event.spell, {
+                hand: () => avatar.hand("Left"),
+                feet: () => avatar.object.position,
+                target: () => on?.object.position ?? null,
+                aim: () => on?.point(0.6) ?? null,
+                still: casting,
+                castTime: event.castTime,
+                glow: LOOKS[kind]?.[look]?.charge ?? null,
+            });
+        }
+
+        avatar.actions.startAttack(kind === "heal" ? "castHeal" : "castStun", { hitAt: spell.castTime / 1000, duration: (spell.castTime / 1000) * 1.7 });
+
+        // (Its sound swelling to its release, its missile's flying the last of it)
+        const heard = this.sound?.cast(event.spell, avatar.object.position, event.castTime / 1000, { travel: missileTravel(event.spell, event.castTime) });
+
+        this.castSounds.set(event.id, { source: heard ?? null, spell: event.spell, until: (ahead ? event.time : battle.time) + event.castTime, ahead });
+    }
+
     // Casts heard as they swell: one broken off before it's let go (its caster stunned, knocked
     // down, struck dead) cut short, fizzling out if they're still standing
     #castsHeard() {
-        for (const [id, { source, spell, until }] of this.castSounds) {
+        for (const [id, { source, spell, until, ahead }] of this.castSounds) {
             const actor = this.battle.actor(id);
 
-            if (this.battle.time >= until) {
+            // (Their own, begun ahead of the copy: as the forecast has them, at its present)
+            const [now, casting] = ahead ? [this.forecast?.present ?? Infinity, this.forecast?.casting] : [this.battle.time, actor?.casting?.spell];
+
+            if (now >= until) {
                 this.castSounds.delete(id);
-            } else if (actor?.casting?.spell !== spell) {
+            } else if (casting !== spell) {
                 this.castSounds.delete(id);
                 this.sound?.cut(source);
 

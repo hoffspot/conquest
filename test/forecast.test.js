@@ -2,8 +2,10 @@
 // played over a phone's link (a 300 ms round trip, jitter, and now and then a 300 ms hold-up), it's
 // drawn smoothly, never moving further in a frame than a sprinter could (bar a little), near where
 // the host will have them, running, stopping and going, sent by a tap, striking a foe as they run
-// past it, casting as they run round one. Its battle is its own: the copy of the world never strays
-// from the host's. And put somewhere at once (a summons), it's drawn there at once.
+// past it, casting as they run round one, the swing and the cast shown as they begin there, not
+// as the copy has them, half a second later (a shot left to the copy). Its battle is its own: the
+// copy of the world never strays from the host's. And put somewhere at once (a summons), it's
+// drawn there at once.
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { FORECAST, Forecast } from "../client/js/app/forecast.js";
@@ -50,6 +52,15 @@ const ready = (ability) => ({ host, copyHost, me }) => {
 describe("your hero, drawn where the rules will have them (app/forecast.js)", () => {
     const worlds = () => [buildWorld({ seed: 2 }), buildWorld({ seed: 2 })];
     const LIMITS = Object.freeze({ biggest: 0.7, mean: 1.0 });
+    // (Their swings and casts all shown as the forecast began them, a good while before the copy
+    // has them, the copy's of each not shown again; and none begun the host didn't, but for one)
+    const shownAhead = (name, { shown }) => {
+        const ahead = shown.ahead.reduce((sum, ms) => sum + ms, 0) / Math.max(1, shown.ahead.length);
+
+        assert.equal(shown.late, 0, `${name}: ${JSON.stringify(shown)}`);
+        assert.ok(shown.claimed >= 2 && shown.begun - shown.claimed <= 1, `${name}: ${JSON.stringify(shown)}`);
+        assert.ok(ahead >= 300, `${name}: shown ${ahead.toFixed(0)} ms before the copy's`);
+    };
     const within = (name, played) => {
         const score = scoreJoined(played);
 
@@ -76,7 +87,7 @@ describe("your hero, drawn where the rules will have them (app/forecast.js)", ()
         }
     });
 
-    it("holds them as the host does for a power strike struck at a foe as they run past it, and for a burn cast as they run round one", () => {
+    it("holds them as the host does for a power strike struck at a foe as they run past it, and for a burn cast as they run round one, the swing and the cast shown as they begin there", () => {
         {
             const [world, copyWorld] = worlds();
             const way = openWay(world);
@@ -116,6 +127,7 @@ describe("your hero, drawn where the rules will have them (app/forecast.js)", ()
 
             assert.ok(played.answers.filter((answer) => answer === "ok").length >= 3, `struck (${played.answers})`);
             within("striking as they run past", played);
+            shownAhead("striking as they run past", played);
         }
 
         {
@@ -137,7 +149,22 @@ describe("your hero, drawn where the rules will have them (app/forecast.js)", ()
 
             assert.ok(played.answers.filter((answer) => answer === "ok").length >= 2, `cast (${played.answers})`);
             within("casting as they run round", played);
+            shownAhead("casting as they run round", played);
         }
+    });
+
+    it("leaves a shot to the copy: its arrow's the copy's, and the draw goes with it", () => {
+        const [world, copyWorld] = worlds();
+        const played = playJoined(world, copyWorld, {
+            character: { ...sword, hero: { ...sword.hero, weapon: "bow" } },
+            rtt: 300,
+            ms: 5000,
+            setup: foeAt([5, 0]),
+            actions: [{ at: 300, command: { type: "engage", target: "orc", stand: true, lock: true } }],
+        });
+
+        assert.ok(played.shown.late >= 2, JSON.stringify(played.shown));
+        assert.equal(played.shown.begun, 0);
     });
 
     it("looks ahead with those near them, in the town too (which the host's word leaves out): a blow at a foe beside them struck there", () => {

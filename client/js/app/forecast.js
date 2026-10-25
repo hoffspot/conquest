@@ -18,6 +18,11 @@
 // metres a second, over BLEND to LONGEST ms); only on another map, or further off than SNAP metres
 // (a teleport, a summons), are they put there at once.
 //
+// Their own swings and casts are shown as it begins them (`begun`), not as the copy does, half a
+// second and more later: the copy's own of each, when it comes, is known for the same one (claim)
+// and not shown again. Whether it lands, and what it does, still come from the copy. A shot or a
+// throw is left to the copy: its arrow or its spear is the copy's, and they go together.
+//
 // The copy is never touched (fork makes its own battle). Its ways are found over the navigation
 // tiles made already only (bakedOnly: the copy's play makes those round the hero), so a frame never
 // waits on one being made; off them, the stick's way goes straight on.
@@ -39,9 +44,10 @@ import { SPELLS } from "../core/spells.js";
  * ms when it's come down (the link's grown slower, or a host drawing few frames plays its steps
  * slower than time goes by); and how fast how far ahead they're drawn follows the round trip as
  * it's timed again (`slew`: ms a ms, so they're drawn going a little faster or slower a while,
- * never jumping).
+ * never jumping); a swing or cast of theirs the copy begins within `same` ms of one it began
+ * taken for the same one, and those it began kept `kept` ms to know them by.
  */
-export const FORECAST = Object.freeze({ near: 15, most: 24, ahead: 40, blend: 100, slide: 6, longest: 500, snap: 8, rtt: 200, slowest: 1000, window: 1000, settle: 500, slew: 0.1 });
+export const FORECAST = Object.freeze({ near: 15, most: 24, ahead: 40, blend: 100, slide: 6, longest: 500, snap: 8, rtt: 200, slowest: 1000, window: 1000, settle: 500, slew: 0.1, same: 300, kept: 5000 });
 
 // The commands that move or hold the hero, as the host gives them to its battle (Host.command)
 const ORDERS = {
@@ -92,6 +98,13 @@ export class Forecast {
          * at once) and by how much at most (m): for the debug log.
          */
         this.corrections = { small: 0, big: 0, snaps: 0, most: 0 };
+
+        // The swings and casts of theirs it's begun ({ type, what (the attack or the spell), time,
+        // claimed (the copy's of it come) }), kept FORECAST.kept ms; and, at the present they were
+        // last drawn in (the host's time), the spell they're casting there, or null
+        this.shown = [];
+        this.present = null;
+        this.casting = null;
     }
 
     /** The host's word of the hero (Joining.self). */
@@ -123,7 +136,9 @@ export class Forecast {
      * Where to draw the hero (`me`, of the copy's battle `copy`) at `now` (the link's clock, ms),
      * a word to the host and back taking `rtt` ms lately (Joining.lately: the middle of the latest
      * few, so one held up, as the first is while the world's built, doesn't count), and which way
-     * they face: { x, y, map, facing },
+     * they face, whether they're swinging or casting, and the swings and casts of theirs begun
+     * since last asked, each once (their battle's "attack" and "cast" events, but for a shot or
+     * a throw: shown now, the copy's not again, claim): { x, y, map, facing, acting, begun },
      * or null for where the copy has them (nothing heard from the host yet, or they're dead).
      */
     at(copy, me, now, rtt = FORECAST.rtt) {
@@ -131,6 +146,7 @@ export class Forecast {
 
         if (!self || self.hero.dead) {
             this.track = this.old = null;
+            this.present = this.casting = null;
 
             return null;
         }
@@ -147,6 +163,8 @@ export class Forecast {
             this.track = this.#made(copy, me, trip);
 
             if (!this.track) {
+                this.present = this.casting = null;
+
                 return null;
             }
 
@@ -159,7 +177,10 @@ export class Forecast {
         const place = this.#placeAt(this.track, present);
         const left = this.#left(now);
 
-        return { x: place.x + this.gap[0] * left, y: place.y + this.gap[1] * left, map: place.map, facing: place.facing };
+        this.present = present;
+        this.casting = place.casting;
+
+        return { x: place.x + this.gap[0] * left, y: place.y + this.gap[1] * left, map: place.map, facing: place.facing, acting: place.acting, begun: this.#begun(this.track, present) };
     }
 
     // A new look ahead set against the one before, at the same time (`present`): the difference
@@ -229,7 +250,7 @@ export class Forecast {
         // host's time had it then; those it may have by now, at once)
         const sent = this.sent.map((each) => ({ ...each, time: Math.max(self.time, each.at + this.ahead + trip) })).sort((a, b) => a.time - b.time || a.seq - b.seq);
 
-        return { battle, me, sent, next: 0, steps: [{ time: self.time, x, y, map, facing: mine.facing }] };
+        return { battle, me, sent, next: 0, events: [], steps: [{ time: self.time, x, y, map, ...this.#doing(mine) }] };
     }
 
     // How far the host's clock is ahead of the link's brought up to `now`: up to the quickest of
@@ -262,6 +283,12 @@ export class Forecast {
         return Math.max(0, 1 - (now - this.gapAt) / this.gapFor);
     }
 
+    // How a hero of a look ahead's stands: which way they face, whether they're swinging or casting,
+    // and what spell
+    #doing(hero) {
+        return { facing: hero.facing, acting: Boolean(hero.attack || hero.casting), casting: hero.casting?.spell ?? null };
+    }
+
     // A look ahead stepped on till it's past `present` (FORECAST.ahead steps at most): each command given
     // it as the host gives it, at once, as of its last step (one that comes between two steps is
     // done as of the first of them, not the next)
@@ -273,11 +300,17 @@ export class Forecast {
                 this.#give(battle, me, sent[track.next++].command);
             }
 
-            battle.advance(STEP_MS);
-
+            const events = battle.advance(STEP_MS);
             const hero = battle.actor(me);
 
-            track.steps.push({ time: battle.time, x: hero.x, y: hero.y, map: hero.map, facing: hero.facing });
+            // (Their own swings and casts begun: a shot's or a throw's left to the copy)
+            for (const event of events) {
+                if (event.id === me && (event.type === "cast" || (event.type === "attack" && hero.arms.find(({ id }) => id === event.attack)?.kind !== "ranged"))) {
+                    track.events.push(event);
+                }
+            }
+
+            track.steps.push({ time: battle.time, x: hero.x, y: hero.y, map: hero.map, ...this.#doing(hero) });
         }
     }
 
@@ -321,6 +354,41 @@ export class Forecast {
         }
     }
 
+    /**
+     * Whether a swing or cast of the hero's the copy's begun (its battle's "attack" or "cast"
+     * event) is one this has shown already (begun within FORECAST.same ms of it): if so, it's the
+     * copy's of that one, not to be shown again (and it's claimed: not the copy's of another).
+     */
+    claim(event) {
+        const what = event.attack ?? event.spell;
+        const one = this.shown.find((each) => !each.claimed && each.type === event.type && each.what === what && Math.abs(each.time - event.time) <= FORECAST.same);
+
+        if (one) {
+            one.claimed = true;
+        }
+
+        return Boolean(one);
+    }
+
+    // The swings and casts a look ahead has begun by `present` and not shown yet (one it began
+    // within FORECAST.same ms of one shown, looking ahead again, is that one)
+    #begun(track, present) {
+        this.shown = this.shown.filter(({ time }) => time > present - FORECAST.kept);
+
+        const begun = [];
+
+        for (const event of track.events) {
+            const what = event.attack ?? event.spell;
+
+            if (event.time <= present && !this.shown.some((each) => each.type === event.type && each.what === what && Math.abs(each.time - event.time) <= FORECAST.same)) {
+                this.shown.push({ type: event.type, what, time: event.time, claimed: false });
+                begun.push(event);
+            }
+        }
+
+        return begun;
+    }
+
     // Where a look ahead has the hero at `time` (between two of its steps)
     #placeAt(track, time) {
         const steps = track.steps;
@@ -334,11 +402,11 @@ export class Forecast {
         const before = steps[Math.max(0, k - 1)];
 
         if (before === after || before.map !== after.map || after.time <= before.time) {
-            return { x: after.x, y: after.y, map: after.map, facing: after.facing };
+            return { x: after.x, y: after.y, map: after.map, facing: after.facing, acting: after.acting, casting: after.casting };
         }
 
         const share = Math.max(0, Math.min(1, (time - before.time) / (after.time - before.time)));
 
-        return { x: before.x + (after.x - before.x) * share, y: before.y + (after.y - before.y) * share, map: after.map, facing: after.facing };
+        return { x: before.x + (after.x - before.x) * share, y: before.y + (after.y - before.y) * share, map: after.map, facing: after.facing, acting: after.acting, casting: after.casting };
     }
 }
