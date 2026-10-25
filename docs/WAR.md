@@ -519,12 +519,13 @@ options, Action wheels: docs/GAME.md):
   going kept, the swing holding them a moment (`Battle.strike`). A power strike at an enemy out of
   reach while they're steering (held input) is waited on if the enemy's within 3 m, and struck if
   it comes into reach within 0.75 s (`BLOW_WAIT`); further off, or never in reach, it's refused
-  ("Out of reach", as a spell out of reach is) and nothing's spent, ready again at once (the
+  ("Out of range", as a spell out of reach is) and nothing's spent, ready again at once (the
   `unstruck` event), the stick deciding where they go. Standing, or walking where a tap sent them,
   they go after the enemy at a run, the lock on it kept, and land it once in reach (`NET_VERSION`
   179: till then it turned a runner round to walk to it). An aimed shot at an enemy further off than
-  what's in hand shoots (a bow's 13.5 m, a wand's 7), or out of sight, is refused ("Out of reach",
-  "Can't see it"), as a spell out of reach is, and stays ready: nothing's spent
+  what's in hand shoots (a bow's 13.5 m, a wand's 7), or out of sight, is refused ("Out of range",
+  "Out of range in the dark", "Something's in the way": `Battle.whyUnseen`), as a spell out of
+  reach is, and stays ready: nothing's spent
   (`Battle.shotAt`; `NET_VERSION` 46).
 - **Shield bash** (an enemy's wheel; only with a shield in the other hand: "You need a shield in
   your other hand"): the next blow up close slams the shield into them too, stunning them for 2
@@ -2918,7 +2919,9 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     it's further than 3 m (`PREDICT.far`, as for the player's own hero: through a door, by magic,
     or a long while behind), when they're put straight there. What happened meanwhile wasn't
     played, so wasn't seen: anyone who died is seen falling then, anyone who came back to life
-    gets up, and the player's taken to the map they're on if it's another.
+    gets up, and the player's taken to the map they're on if it's another. Those not drawn yet are
+    drawn as those who come later are (`#nextEnlistee`), but not a soldier waiting on its kind's
+    figure in the crowds (`#marshal`), nor anyone who fell unseen.
   - **Slow frames:** a joined copy plays as much of the host's time as has gone by since its last
     frame (up to a second), however slowly its frames come. Playing alone, a frame counts for no
     more than a tenth of a second, so a slow frame makes a slower world rather than a jump. A copy
@@ -3145,8 +3148,8 @@ say what they'd want and stay where they are.
 the party menu, the same for the creatures by magic at their side, host.js `#orderUnit`, an
 `order` command): wait here (they stand guard where they are), come on (they follow again), go for
 whoever their leader's set on (the `assist` order: after them till they're down, then following
-again; refused, "untargeted", with no one set on), or go their own way (dismissed). A follower
-who falls is gone.
+again; refused, "untargeted", with no one set on), or go their own way (dismissed: asked first,
+in talk or from the party alike, as it's for good). A follower who falls is gone.
 
 **Kept** with the character (`characterOf`'s `followers`: name, calling, looks, people;
 `save.js` `saveFollowers`), so they come along to any world; and in the host's snapshot. The
