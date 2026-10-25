@@ -815,6 +815,20 @@ describe("hair (hair.js)", () => {
         }
     });
 
+    it("leaves no scalp bare under hair drawn up to a knot: its hairline where everyone's is, the scalp painted solid under it, its hair rooted down to the nape", () => {
+        // (But a crest's: a strip over the top, the sides shaved)
+        for (const style of styles.filter((one) => !HAIRSTYLES[one].strip)) {
+            assert.equal(HAIRSTYLES[style].raise ?? 0, 0, `${style}'s hairline raised`);
+            assert.equal(HAIRSTYLES[style].scalp, undefined, `${style}'s scalp painted only so much (${HAIRSTYLES[style].scalp})`);
+        }
+
+        // (The nape's hairline is 7.8 cm under the middle of the head: a topknot's drawn up from
+        // within a centimetre or so of it, not from 3 cm above it, a band of bare scalp under it)
+        const nape = grown(woman, "topknot").filter(([x, , z]) => z < -0.12 && Math.abs(x) < 0.04);
+
+        assert.ok(Math.min(...nape.map(([, y]) => y)) < -0.065, `a topknot's hair comes down to ${Math.min(...nape.map(([, y]) => y)).toFixed(3)} behind`);
+    });
+
     it("lies close to the head and hangs straight: nothing sticks out, nothing falls over the face, nothing grows inside the mouth", () => {
         for (const who of [woman, man]) {
             for (const style of styles) {

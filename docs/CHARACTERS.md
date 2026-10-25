@@ -557,11 +557,16 @@ groomed so it looks kept:
    a short fringe of bangs over the forehead.
 8. **Texture and scalp.** Strands are solid from the root (a card's root edge is at the scalp) and
    fade over their last few millimetres. The scalp under hair is painted solidly in its colour, a
-   shade darker, so nothing shows between the cards.
+   shade darker, so nothing shows between the cards: under every style but a crest (whose sides
+   are shaved), with its hairline where everyone's is. So a topknot's hair is drawn up from the
+   nape and temples over painted scalp, its cards' root edges on hair, not skin. (Once it was
+   painted only faintly, its hairline raised 3 cm and its strands fewer: a band of bare scalp
+   under it, skin between its cards, and their square root edges stepping along its nape.)
 
 Tests check that no hair sticks out from the head, falls over the face or down the throat; that
 cut hair ends at its hem, parted hair starts at its parting, the back of the head is covered as
-thickly down the middle as anywhere, and a ponytail is round, not flat. Growing a character's hair
+thickly down the middle as anywhere, no scalp is left bare under hair drawn up to a knot, and a
+ponytail is round, not flat. Growing a character's hair
 takes about a tenth of a second for the tavern's folk (at their level of detail), a quarter of a
 second at the most detailed.
 

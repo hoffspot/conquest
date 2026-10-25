@@ -43,7 +43,7 @@ export const HAIRSTYLES = Object.freeze({
     // (Twin tails: the hair drawn back either side to a tie high on each side of the back of the
     // head, a tail from each, and a short fringe of bangs over the forehead)
     twintails: { label: "Twin tails", strands: 1400, length: 0.3, lift: 0.02, gravity: 1, flow: "twin", width: 0.016, segments: 6, volume: 0.004, fringe: 0.035, bangs: 0.085, tails: { strands: 170, length: 0.4, width: 0.02, radius: 0.026 } },
-    topknot: { label: "Topknot", strands: 900, length: 0.3, lift: 0.02, gravity: 0, flow: "knot", width: 0.016, segments: 6, volume: 0.004, raise: 0.03, scalp: 0.4, knot: true },
+    topknot: { label: "Topknot", strands: 1500, length: 0.3, lift: 0.02, gravity: 0, flow: "knot", width: 0.016, segments: 6, volume: 0.004, knot: true },
 });
 
 /** Beards: `stubble` is painted on the skin under them (or is all there is). */
