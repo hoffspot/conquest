@@ -15,6 +15,7 @@ let BANDS;
 let BEHEMOTH;
 let BEHEMOTH_REWARD;
 let ENGINES;
+let FORMATION;
 let behemothReward;
 let behemothSides;
 let isBehemoth;
@@ -64,7 +65,7 @@ before(async () => {
     ({ ALARM, BANDS, BEHEMOTH, BEHEMOTH_REWARD, BOMBERS, ENGINES, INVASION, REWARD, SIZE, bandFor, behemothReward, behemothSides, bombersOf, clockOf, criesOf, dueAfter, isBehemoth, isDue, isSize, raiderArms, raiderName, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
     ({ RIFT } = await import("../client/js/core/creatures.js"));
     ({ DAY } = await import("../client/js/core/daytime.js"));
-    ({ ROLES } = await import("../client/js/core/formation.js"));
+    ({ FORMATION, ROLES } = await import("../client/js/core/formation.js"));
     ({ BUDGET, InvasionBudget } = await import("../client/js/app/budget.js"));
     ({ OPENINGS } = await import("../client/js/core/crying.js"));
     ({ BOMBS, FOE_MS, KINDS, STEP_MS } = await import("../client/js/core/battle.js"));
@@ -405,6 +406,46 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         assert.ok([...ids].every((id) => !host.battle.actor(id) && !host.soldiers.has(id)), "all of them let go of");
         assert.ok(!Object.keys(host.battle.formations).some((id) => id.startsWith(invasion.id)), "and their lines");
         assert.deepEqual(garrisons(), before, "no town's garrison lost to the war for it");
+    });
+
+    it("puts each side's reinforcements behind its hindmost rank as it stood, in ranks of five, not each newcomer a rank behind the last (a large wave hundreds of metres off its line): host.js #reinforceInvasion", () => {
+        const game = inTown({ invasion: { clock: INVASION.first } });
+        const { host } = game;
+
+        play(game, INVASION.settleFirst + 2000, () => host.invasions.length > 0);
+
+        const [invasion] = host.invasions;
+        const lines = [invasion.formations.invaders, invasion.formations.defenders];
+        const hindmost = (line) => Math.max(0, ...host.battle.actors.filter((actor) => !actor.dead && actor.formation?.id === line).map(({ formation: { slot } }) => slot[1]));
+        const waves = [];
+
+        for (let k = 0; k < (INVASION.reinforce.lasts + 60000) / STEP_MS && waves.length < 4 && host.invasions.length; k++) {
+            const backs = new Map(lines.map((line) => [line, hindmost(line)]));
+
+            for (const event of host.advance(STEP_MS)) {
+                if (event.type === "invasion" && event.change === "reinforced") {
+                    for (const line of lines) {
+                        const depths = event.ids.map((id) => host.battle.actor(id)).filter((actor) => actor?.formation?.id === line).map(({ formation: { slot } }) => slot[1]);
+
+                        if (depths.length) {
+                            waves.push({ line, back: backs.get(line), depths });
+                        }
+                    }
+                }
+            }
+        }
+
+        assert.ok(waves.some(({ depths }) => depths.length > 5), "a wave of more than five");
+
+        for (const { line, back, depths } of waves) {
+            const ranks = [...new Set(depths.map((depth) => depth.toFixed(3)))].map(Number).sort((a, b) => a - b);
+            const deepest = Math.max(...depths);
+            const what = `${depths.length} come to ${line}, its hindmost rank ${back.toFixed(1)} m back: ${ranks.join(", ")}`;
+
+            assert.equal(ranks.length, Math.ceil(depths.length / 5), `in ranks of five: ${what}`);
+            assert.ok(ranks.every((depth, k) => k === 0 || Math.abs(depth - ranks[k - 1] - FORMATION.rank) < 1e-6), `each a rank behind the one before: ${what}`);
+            assert.ok(deepest <= back + FORMATION.rank * Math.ceil(depths.length / 5) + 1e-6, `no further back than they need: ${what}`);
+        }
     });
 
     it("charges once its lines are near: both run at each other and meet between them, everyone of either side who fights up close going after the other, the archers shooting from their line; few standing in their ranks with an enemy near", () => {

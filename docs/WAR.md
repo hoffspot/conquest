@@ -2396,7 +2396,12 @@ Then the two lines meet and grind. **Reinforced** (`reinforce`,
 `#reinforceInvasion`): from the first blow, for three minutes, every 15 seconds each side's fallen
 are made good. The raiders are brought back up to 70% of the line that came, coming up the road
 from where it came out; the town's to 80% of its own, coming out from where its line formed. Each
-joins its side's line, its ranks opening for them. Neither side breaks meanwhile, so the town keeps
+joins its side's line, its ranks opening for them: given places behind its hindmost rank as it
+stood before they came, five abreast, so that a wave of 22 stands five ranks deep. (Till
+`NET_VERSION` 178 each newcomer was put a rank behind the one before, a wave strung out one to a
+rank: in a bandits' invasion of 360, the first wave of 95 was given places as far as 552 m back,
+and over two minutes its soldiers set off on 159 paths longer than 80 m, then turned back as the
+ranks closed. Now the deepest is 47 m, and none.) Neither side breaks meanwhile, so the town keeps
 the edge throughout, and a player has time to come to the fight, see how it stands and choose what
 to do. Then it's fought out with what's left. Once only so many of the raiders are left standing
 (their band's `rout`), or none of those who fight up close (`close`: their front and heavy lines,
