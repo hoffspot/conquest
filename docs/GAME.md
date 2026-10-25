@@ -2703,7 +2703,17 @@ church's and hall's doors 11 to 16 metres off, all their folk were once dressed 
 the 41 bodies about thirty seconds in, each holding its skin on the page and the graphics card;
 dressed only at their doors, 16 were (headless Chromium, High, seed 1: the bodies' own copies 348
 MB before and 110 MB after, the page's heap 748 MB and 464 MB, all told 988 MB and 715 MB); now
-none of theirs are, till the player goes in. A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
+none of theirs are, till the player goes in. A building's folk are those on its own floors:
+Wenches and Ale's twelve (seven in the taproom, five upstairs), not every one of the world's folk,
+as its were till 2026-10-25. Going in there dressed all the folk of every building got ready and
+the townsfolk out in the streets with them, 41 in eight seconds, an iPhone's memory from 457 MB to
+683 MB, and Safari closed the page as the player began to talk to the madam upstairs; back in
+after it, the game began upstairs with all 41 dressed as it loaded, and the world came up blank (a
+player's crash report). The townsfolk out in the streets, and a stranger by the road, are dressed
+as those who come out are, the nearest first, after everyone else (`#nextEnlistee`): as a joined
+game begins, those out already, and again as it's sent the world (`rehost`). And not while the
+player's inside anywhere (`#walledOff`, as for those a dungeon's walls stand between): only there
+to be seen about, they're dressed as the player comes out again. A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
 furniture laid out, made into meshes, made ready to merge, merged). If the player's through the
 door before its folk are all dressed, its floors are built at once and the screen's kept dark
 while the folk are dressed, with 30 ms of each frame (`ENTERING`, `#entering`; their skins painted

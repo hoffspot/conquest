@@ -1822,12 +1822,23 @@ export class Game {
         // (#ready): only seen inside, they needn't keep the player waiting to start
         let filled = 0;
 
+        // (Its folk those on its own floors: not the townsfolk out in the streets, nor another
+        // building's folk. All of those went in with them: 41 dressed in eight seconds as a
+        // player went into Wenches and Ale in a town whose buildings round its square were open,
+        // and Safari closed the page)
         if (tavern) {
-            this.tavernFolk = { key: tavern, queue: [], maps: [], folk: [], door: world.tavern?.door ?? null, welcomed: false, people: () => this.battle.actors.filter(({ kind }) => kind === "folk").map(({ id }) => id) };
+            this.tavernFolk = { key: tavern, queue: [], maps: [], folk: [], door: world.tavern?.door ?? null, welcomed: false, people: () => this.battle.actors.filter(({ kind, map }) => kind === "folk" && world.interiors?.of(map)?.key === tavern).map(({ id }) => id) };
         }
 
         for (const actor of [...this.battle.actors]) {
+            // (The folk out in the world already, the townsfolk in the streets and a stranger by
+            // the road, drawn as those who come out are, nearest first, after everyone else:
+            // #nextEnlistee; a building's own, once the player goes in: #doorstep, #ready)
             if (actor.kind === "folk" && tavern) {
+                if (!world.interiors?.of(actor.map)) {
+                    this.enlisting.push(actor.id);
+                }
+
                 continue;
             }
 
@@ -8117,7 +8128,9 @@ export class Game {
     // dressed till the player comes to them (#nextEnlistee), never seen meanwhile: a level's foes
     // are woken while the player's on the level above (core/host.js #dungeons), and the wild's
     // creatures round a dungeon's way in come and go while the player's below, each a body held
-    // (a level's at once, more than a phone had room for)
+    // (a level's at once, more than a phone had room for). And the folk out in the world, the
+    // townsfolk in the streets and a stranger by the road, while the player's inside anywhere:
+    // only there to be seen about, they're dressed as the player comes out again
     #walledOff(actor, me) {
         if (!me || actor.map === me.map) {
             return false;
@@ -8125,7 +8138,7 @@ export class Game {
 
         const interiors = this.world.interiors;
 
-        return interiors?.of(actor.map)?.kind === "dungeon" || interiors?.of(me.map)?.kind === "dungeon";
+        return interiors?.of(actor.map)?.kind === "dungeon" || interiors?.of(me.map)?.kind === "dungeon" || (actor.kind === "folk" && !interiors?.of(actor.map) && Boolean(interiors?.of(me.map)));
     }
 
     // Every frame, a little more of the buildings being got ready built (the host says which:
@@ -9646,8 +9659,12 @@ export class Game {
             this.#arrive(me);
         }
 
+        // (The soldiers and wagons, and the folk out in the world, not a building's, not drawn:
+        // drawn now, nearest first)
         for (const actor of this.battle.actors) {
-            if ((actor.kind === "soldier" || actor.kind === "wagon") && !this.avatars.has(actor.id) && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
+            const out = actor.kind === "soldier" || actor.kind === "wagon" || (actor.kind === "folk" && !this.world.interiors?.of(actor.map));
+
+            if (out && !this.avatars.has(actor.id) && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
                 this.enlisting.push(actor.id);
             }
         }
