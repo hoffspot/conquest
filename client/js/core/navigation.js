@@ -310,9 +310,52 @@ export class Navigation {
         return { x, y: z ?? this.heightAt(x, y), z: y };
     }
 
+    // Looking over the tiles made already only (madeOnly): none made here, whatever's asked
+    #unmade = false;
+
+    /**
+     * Whether every tile a box of the ground touches is made already (or the mesh is a room's,
+     * small, made as it's walked). Asked before a way's looked for that mustn't make any (a
+     * joined game's forecast of its own hero: core/battle.js fork).
+     */
+    made(x0, y0, x1, y1) {
+        if (this.measures === ROOMS) {
+            return true;
+        }
+
+        const [tx0, ty0] = this.tileOf(Math.min(x0, x1), Math.min(y0, y1));
+        const [tx1, ty1] = this.tileOf(Math.max(x0, x1), Math.max(y0, y1));
+
+        for (let ty = ty0; ty <= ty1; ty++) {
+            for (let tx = tx0; tx <= tx1; tx++) {
+                if (!this.tiles.has(key(tx, ty)) && this.#inside(tx, ty)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * What `look` finds (a path or a raycast of this mesh's) over the tiles made already only, none
+     * made for it, however far it'd look (a room's made as ever): never holding up the frame.
+     */
+    madeOnly(look) {
+        const was = this.#unmade;
+
+        this.#unmade = this.measures !== ROOMS;
+
+        try {
+            return look();
+        } finally {
+            this.#unmade = was;
+        }
+    }
+
     // Make sure of every tile a box of the ground touches (and `ring` tiles round it); or, to
     // `wait` for them (with somewhere to send them: later), send on those not in. Returns whether
-    // any were sent on
+    // any were sent on (or, looking over those made only, left out)
     #cover(x0, y0, x1, y1, ring = 0, wait = false) {
         const [tx0, ty0] = this.tileOf(Math.min(x0, x1), Math.min(y0, y1));
         const [tx1, ty1] = this.tileOf(Math.max(x0, x1), Math.max(y0, y1));
@@ -320,7 +363,9 @@ export class Navigation {
 
         for (let ty = ty0 - ring; ty <= ty1 + ring; ty++) {
             for (let tx = tx0 - ring; tx <= tx1 + ring; tx++) {
-                if (wait && this.later && !this.tiles.has(key(tx, ty)) && this.#inside(tx, ty)) {
+                if (this.#unmade && !this.tiles.has(key(tx, ty))) {
+                    sent = true;
+                } else if (wait && this.later && !this.tiles.has(key(tx, ty)) && this.#inside(tx, ty)) {
                     this.later(tx, ty);
                     sent = true;
                 } else {

@@ -48,36 +48,52 @@ a far-off locked enemy turns the hero round to walk to it (`host.js #ability` �
 - Tests (quick blows, abilities), docs (GAME.md *Fighting*, *Locked on*; WAR.md *Abilities*), the
   sound catalog (Refused's `plays`).
 - Measured (`netfeel`, below): blows struck running past an enemy, the biggest jump of the hero
-  drawn 6.6 m before, 3.1–3.4 m after; the rest is the swing's hold, unpredicted till stage 3.
+  drawn 6.6 m before, 3.1–3.4 m after; the rest is the swing's hold, unpredicted till stage 2.
 
 ## Stage 2: the hero predicted from the host's latest state (NET_VERSION)
 
-- **The host tells each joiner where their hero is**, with every flush (50 ms): the host's step
-  time, the last of their commands it's applied (`seq`), and what the rules move them by (place,
-  facing, pace, path and where it's going, order, run, swing, cast and their times, stagger and
-  stun, stamina, lock, map).
-- **The forecast** (`app/forecast.js`): a private `Battle` over the same world (maps, links, the
-  copy's relations), holding the hero, reset from the host's latest state, and the characters
-  within 15 m of them as they are on the copy, frozen (no minds of their own: in the way, and
-  someone to strike). The commands the host hasn't applied yet are given it as the host will get
-  them (each at its sending time plus half the round trip), and it's stepped on to the present the
-  player's commands act in (the host's now plus half the round trip), drawn between its steps.
-  What it does is only drawn: no blow it strikes lands, nothing it says is heard twice.
-- **Ways found on the phone:** a joined phone bakes the navigation tiles round its hero, off the
-  page's thread where it can (as a host does), for the forecast's ways and raycasts; a tile not in
-  yet, it goes the way the host last sent rather than bake one on the spot. Measured in Chromium
-  first (time and memory a minute's running about town and the wilds), and kept to the tiles near
-  the hero.
-- **Drawn:** the forecast's place, with the gap closed over 100 ms whenever a new state of the
-  host's moves it (snapped only onto another map, or more than 8 m). `app/predict.js` goes.
-- **A hold keeps the pace** the hero had (a swing, a cast, a stagger, a stun), only standing still
-  starting them again from a walk: moved here from stage 1, as with today's prediction (which
-  draws a set-off from a walk) it made casting while running jumpier (measured); with the
-  forecast running the same rule, it's judged again by the measurements.
-- **The debug log** counts the corrections (over 0.5 m, over 2 m, the biggest) for the field.
-- Tests: the forecast against a host and a joined copy in Node (held stick past a lamppost, a
-  quick blow and a spell while running, a stop, a stagger, a door), the browser test of playing
-  together; docs (WAR.md *Playing together*, GAME.md).
+- **The host tells each joiner where their hero is** (`core/selfstate.js`, the `self` message):
+  the host's step time, the last of their commands it's applied (`seq`), and what the rules move
+  them by (place, facing, pace, path and where it's going, order, run, swing, cast and their times,
+  stagger and stun, stamina, lock, striking, map). Ten times a second while it changes, at once
+  when a command's done, once a second all the same; what's as it always is left out (built:
+  about 3 KB a second, the joined game's 6.7 KB all told, under the browser test's 10).
+- **The forecast** (`app/forecast.js`): a private `Battle` made from the copy's (`fork`), holding
+  the hero, reset from the host's latest state, and the 24 nearest within 15 m of them as they are
+  on the copy, frozen (`still`: in the way, and someone to strike). The commands the host hasn't
+  applied yet are given it as the host will get them (each at its sending time plus half the round
+  trip), and it's stepped on to the present the player's commands act in (the host's now plus half
+  the round trip), drawn between its steps. What it does is only drawn: no blow it strikes lands,
+  nothing it says is heard twice. The host's now is reckoned from the quickest of its words of
+  the last second (a held-up one doesn't put it back), and the round trip (the middle of the
+  latest five, a second at most) followed slowly (0.1 ms a ms).
+- **Ways found on the phone:** over the navigation tiles already made only (`bakedOnly`); off
+  them, the stick's way goes straight on. Baking tiles round the hero on the phone was tried and
+  measured: no better (the copy's own play has the tiles round the hero made), so it's left out.
+- **Drawn:** the forecast's place, a new state's difference slid away at 6 m/s over 100–500 ms
+  (closed in 100 ms, a 2 m one looked like a jump; snapped only onto another map, or more than
+  8 m). `app/predict.js` goes.
+- **A hold keeping the pace** was judged again with the forecast: no better and no worse, so it's
+  left out (a hold stops them, as now).
+- **The debug log** counts the corrections (0.5–2 m, over 2 m, snaps, the biggest) for the field.
+- Tests: `test/forecast.test.js` (a host and a joined copy in Node, `test/joinedgame.js`: running,
+  stopping and going, a tap; power strikes running past a foe and burns cast running round one;
+  the copy never astray; a teleport drawn at once), the browser test of playing together; docs
+  (WAR.md *Playing together*).
+- Measured (the hero drawn jumping in all, on the mean of four links; the biggest single jump in
+  any), today's drawing against the forecast, at a 300 ms round trip: running 2.3 m/0.41 →
+  0.12/0.35; zig-zagging 18/5.8 → 0.67/0.31; stopping and going 16/4.4 → 0.10/0.35; running into
+  things 1.7/0.36 → 0.05/0.28; a tap 4.8/4.6 → 0.06/0.41; power strikes running past 24/7.9 →
+  2.2/0.36; burns running round 16/3.6 → 0.39/0.25. Snaps: 60 in the 28 runs before, none after.
+- Found by measuring, and fixed before it went in: the host leaves the town out of its word (as
+  what's always so), and the forecast read the map as none, so in the town its battle held the
+  hero alone (no foe to strike, no one in the way); and it did a command a step after the host
+  does (the host does one at once, as of its last step); and it reckoned the host's clock as
+  keeping time, which a browser host drawing few frames doesn't (the two-player browser test's,
+  at three frames a second, played at about a third of the clock's pace), so it drew the hero as
+  far ahead as it looks, 2 s, and put them right by over 8 m at once. Now from the quickest of
+  the host's words of the last second, come down to over half a second; and from the middle of
+  the latest five round trips, none over a second.
 
 ## Stage 3: the stick, ten times a second
 
@@ -109,7 +125,7 @@ power strikes while running past an enemy, burns cast while running round one. S
 where the host has the hero when what's sent now reaches it: the frames the hero's drawn moving
 further than anyone can run (jumps, and how far over), snaps (half a metre in a frame), and the
 error (mean, 95th percentile, most), at 150 and 300 ms round trips. Each stage no worse than the
-one before in any of them; stage 3 lands it as a test with limits (`test/netfeel.test.js`).
+one before in any of them; stage 2 lands it as a test with limits (`test/forecast.test.js`).
 
 ## Later, not in these
 

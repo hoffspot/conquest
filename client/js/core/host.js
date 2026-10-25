@@ -840,6 +840,31 @@ const OK = Object.freeze({ ok: true });
  */
 export const BLOW_WAIT = Object.freeze({ near: 3, ms: 750 });
 
+/**
+ * What a quick action's blow by `actor` at `foe` comes to, by the rules (a host's #ability, and a
+ * joined game's look ahead at its own hero: app/forecast.js): { strike: true, until } (struck where
+ * they are, in reach now, or waited on till `until`: battle.js strike), { engage: true } (after
+ * them at a run, the lock kept), or { refused } (out of reach while steering, too far to wait on).
+ * At someone in reach, or near while steering: struck where they are, wherever they're going kept,
+ * the swing holding them a moment; out of reach while steering, the stick saying where they go,
+ * not the blow: waited on if near (BLOW_WAIT), refused if further; out of reach otherwise, after
+ * them.
+ */
+export function blowAt(battle, actor, foe) {
+    const near = battle.reachable(actor.id, foe.id);
+    const steering = Boolean(actor.order?.held);
+
+    if (near) {
+        return { strike: true, until: null };
+    }
+
+    if (!steering) {
+        return { engage: true };
+    }
+
+    return foe.map === actor.map && hypot(foe.x - actor.x, foe.y - actor.y) <= BLOW_WAIT.near ? { strike: true, until: battle.time + BLOW_WAIT.ms } : { refused: "range" };
+}
+
 // The charms that count in someone's pack (progress.js charms), as a key to tell a change by:
 // each one's kind, make and what was rolled on it
 const charmsOf = (progress) =>
@@ -4133,15 +4158,12 @@ export class Host {
             return refuse(unshot);
         }
 
-        // (A blow at someone out of reach while the player's steering (held input: battle.js
-        // "ahead"), the stick saying where they go, not the blow: waited on a moment if they're
-        // near (BLOW_WAIT), struck if they come into reach meanwhile; further off, refused, and
-        // still ready, as a spell out of reach is; never struck, nothing spent: #unstruck)
-        const near = foe !== null && this.battle.reachable(actor.id, foe.id);
-        const steering = Boolean(actor.order?.held);
+        // (Out of reach while the player's steering, and not near enough to wait on: refused, and
+        // still ready, as a spell out of reach is: blowAt)
+        const blow = foe ? blowAt(this.battle, actor, foe) : null;
 
-        if (foe && !near && steering && (foe.map !== actor.map || hypot(foe.x - actor.x, foe.y - actor.y) > BLOW_WAIT.near)) {
-            return refuse("range");
+        if (blow?.refused) {
+            return refuse(blow.refused);
         }
 
         // (A shield bash: harder and longer, by as much, for a shield made for it)
@@ -4151,16 +4173,13 @@ export class Host {
         player.readyAt[id] = this.battle.time + ability.cooldown;
         this.#event("ability", { id: actor.id, ability: id });
 
-        // (At someone in reach, or near while steering: struck where they are, wherever they're
-        // going kept, the swing holding them a moment. Out of reach, not steering: after them at
-        // a run, struck once they're in reach, the lock on them kept: battle.js engage)
-        if (foe && (near || steering)) {
-            this.battle.strike(actor.id, foe.id, { until: near ? null : this.battle.time + BLOW_WAIT.ms, tag: id });
+        if (blow?.strike) {
+            this.battle.strike(actor.id, foe.id, { until: blow.until, tag: id });
 
             return OK;
         }
 
-        if (foe) {
+        if (blow?.engage) {
             return this.command(actor.id, { type: "engage", target: foe.id, run: true });
         }
 

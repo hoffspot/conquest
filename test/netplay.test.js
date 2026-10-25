@@ -15,8 +15,9 @@ import { newGuid } from "../client/js/core/guid.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
 import { MOTION } from "../client/js/core/motion.js";
-import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
+import { CHAT, chatLine, characterFrom, CHECK_EVERY, Hosting, Joining, LATELY, MOST_PLAYERS, NET_KICKS, NET_VERSION, PACE, PLAYOUT, SELF, spawnFor, versionShort, versionWords } from "../client/js/core/netplay.js";
 import { buildWorld } from "../client/js/core/overworld.js";
+import { selfOf } from "../client/js/core/selfstate.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { startFor } from "../client/js/core/worldplan/plan.js";
 
@@ -36,10 +37,9 @@ function opened({ seed = 2 } = {}) {
     const hosting = new Hosting(host, { send: (peer, text) => post.push({ to: peer, text }) });
     let next = 1;
 
-    // Someone joining (with a clock, if it's to time the link), their game making its copy of
-    // the world when it's welcomed
-    const join = (character, { clock } = {}) => {
-        const peer = `p${next++}`;
+    // Someone joining (with a clock, if it's to time the link; on a link of their own, unless
+    // it's one they had before), their game making its copy of the world when it's welcomed
+    const join = (character, { clock, peer = `p${next++}` } = {}) => {
         const joining = new Joining({ send: (text) => post.push({ from: peer, text }), clock });
 
         joining.onWelcome = ({ seed: worldSeed, race, snapshot }) => {
@@ -192,7 +192,7 @@ describe("playing together (netplay.js)", () => {
 
         const sent = joining.command({ type: "move", to }, (result) => heard.push(result));
 
-        assert.deepEqual(sent, { ok: true, pending: true });
+        assert.deepEqual(sent, { ok: true, pending: true, seq: 1 });
         deliver();
         assert.deepEqual(heard, [], "(not till it's been done)");
         play(1);
@@ -212,6 +212,41 @@ describe("playing together (netplay.js)", () => {
         assert.deepEqual(host.battle.actor("guest-1").square, to);
         assert.deepEqual(joining.host.battle.actor("guest-1").square, to);
         assert.equal(joining.host.checksum(), host.checksum());
+    });
+
+    it("tells each joined player alone where their own hero is as the host has them, and the last of their commands done: counted from the first again when they come back", () => {
+        const { host, hosting, join, play, deliver } = opened();
+        const bryn = join(guest("Bryn"));
+        const cai = join(guest("Cai"));
+
+        play(1);
+
+        for (const { joining } of [bryn, cai]) {
+            assert.deepEqual(joining.self.hero, selfOf(host.battle.actor(joining.me)));
+            assert.equal(joining.self.seq, 0);
+        }
+
+        // (Standing as they were, told again once a second all the same)
+        play(SELF.again / STEP_MS);
+        assert.equal(cai.joining.self.time, host.battle.time);
+
+        const me = host.battle.actor(bryn.joining.me);
+
+        bryn.joining.command({ type: "move", to: [me.square[0], me.square[1] + 5] });
+        deliver();
+        play(1);
+        assert.equal(bryn.joining.self.seq, 1, "(done)");
+        assert.equal(cai.joining.self.seq, 0, "(not theirs)");
+        assert.ok(bryn.joining.self.hero.order, "(going there)");
+
+        // Gone, and back on the same link: what they send counted from the first again
+        hosting.gone(bryn.peer);
+        deliver();
+
+        const back = join(guest("Bryn"), { peer: bryn.peer });
+
+        play(1);
+        assert.equal(back.joining.self.seq, 0);
     });
 
     it("drops a joined player's things on the ground in every copy, for another to pick up there", () => {
@@ -662,7 +697,7 @@ describe("playing together (netplay.js)", () => {
         };
 
         play(MOTION.every);
-        assert.deepEqual(heard.map(({ kind }) => kind), ["ops", "motion"]);
+        assert.deepEqual(heard.map(({ kind }) => kind), ["ops", "motion", "self"]);
         assert.ok(heard.every(({ step }) => step === host.battle.time / STEP_MS));
         assert.equal(joining.hostStep, host.battle.time / STEP_MS);
 

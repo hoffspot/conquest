@@ -822,21 +822,22 @@ test("two players walk about a while: the joined copy's checked against the host
 
             game.mapTap({ x: me.x + (round % 2 ? 5 : -5), z: me.y + (round % 3) - 1, reach: 0, run: round % 3 === 0 });
 
-            // (Sent, not yet done here: drawn setting off all the same)
-            return game.predict.pending !== null;
+            // (Sent, not yet done here: drawn setting off all the same, the forecast told of it)
+            return game.forecast.sent.length > 0;
         }, round);
 
         expect(drawn).toBe(true);
         await guest.waitForTimeout(3000);
 
         const net = await guest.evaluate(() => {
-            const { remote, predict } = window.pellagos.game;
+            const { remote, forecast } = window.pellagos.game;
 
-            return { desyncs: remote.desyncs, resyncs: remote.resyncs - remote.skips, pending: predict.pending, lag: predict.lag };
+            return { desyncs: remote.desyncs, resyncs: remote.resyncs - remote.skips, pending: forecast.sent.length, told: forecast.self !== null, snaps: forecast.corrections.snaps };
         });
 
-        expect(net).toMatchObject({ desyncs: 0, resyncs: 0, pending: null });
-        expect(net.lag).toBeLessThan(600);
+        // (Its hero as the host has them told it, all it sent heard of back, and never put
+        // somewhere at once: drawn going all the way)
+        expect(net).toMatchObject({ desyncs: 0, resyncs: 0, pending: 0, told: true, snaps: 0 });
 
         // (Its world gone on, and checked once each MOTION.every steps of it, a fifth of a second:
         // by its world's time, not the clock's, which two worlds drawn in software leave at a

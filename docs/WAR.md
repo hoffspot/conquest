@@ -2921,31 +2921,59 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     about 0.5 KB a second of what's done (about 1 KB now that each step's sent as it's done: some
     47 characters, twenty times a second rather than ten).
   - Games before it (`NET_VERSION` 11) can't join.
-- **Your hero, drawn ahead** (`app/predict.js`). A joined player's command goes to the host and
-  comes back done: a round trip and the steps kept in hand, a fifth of a second or more, half a
-  second and more over a mobile network. So the hero's drawn where the copy will have them once
-  the host's heard:
-  - **Before it's done:** standing, they're drawn setting off straight for where they were sent (or
-    straight ahead, swiped), at a walk, speeding up to a sprint as a runner does if they're to
-    run. Already going (the stick held, its order sent again every half second, or turned), they're
-    drawn going the new way at once, from where the copy will have them when the host hears, at
-    the pace they're going: no further ahead than ever, should it hear late. (Each order sent again
-    used to draw them from the copy afresh: a third of their pace for 150 ms, then twice it till
-    the host heard. With the stick held, 0 to 2 times their pace, frame by frame: what made a
-    joined hero's running go fast and slow.)
-  - **Once it's done:** drawn as far ahead along their way as their orders take to come back done
-    (the lead: a quarter of the way to each one's time, changing by no more than a tenth of the
-    time going by, so that they're drawn a little faster or slower a while, never lurching), the
-    copy catching up as they arrive. An order that comes back after the next's been sent is timed
-    as itself (it was taken for the next, and the next taken as done).
-  - **Set right:** whenever what's drawn and where they'd be drawn part (an order sent or come
-    back, or the host had them go another way, or not at all), the gap closes over 150 ms, from
-    where they'd have been drawn going on as they were. Gone far (through a door, or by magic),
-    they're drawn where they are at once.
-  - **What it does:** in the modelled run above, the player's own hero running with the stick held,
-    how much their drawn speed varies, before and now: Wi-Fi 9.7% → 0.9%, 4G 33% → 8.5%, a weak 4G
-    signal 48% → 9.5%, 3G 44% → 17% (and drawn stopped in 4.8% → 0.8% of frames on 4G).
-  - Only what's drawn changes: the copy of the world is never touched, so the rules never guess.
+- **Your hero, drawn ahead** (`app/forecast.js`, `core/selfstate.js`). A joined player's command
+  goes to the host and is done there half a round trip later, and the copy plays the host's steps
+  later still: a fifth of a second or more, half a second and more over a mobile network. So the
+  hero's drawn where the host will have them when what's sent now reaches it, worked out by the
+  battle's own rules, as Factorio's latency state is, not guessed:
+  - **The host's word** (`self`, `SELF`). The host tells each who's joined where their own hero is
+    now: where, which way they face and how fast, the corners of their way (8 at most), what they
+    were told, what holds them (a swing, a cast, a stagger, a stun, a weapon being drawn) and till
+    when, their breath, whom they're locked on or striking, and the last of their commands it's
+    done. It's said ten times a second while they change (and at once when a command's done, and
+    once a second all the same), to them alone, what's as it always is left out: about 3 KB a
+    second.
+  - **Looked ahead** (`Forecast`). A battle of the hero's own is made from the copy's (`fork`):
+    the hero as the host has them (`withSelf`), and the nearest 24 within 15 m as the copy has
+    them, still (`still`: in the way, someone to strike, but doing nothing of their own). The
+    commands sent since are put to it when the host will get them, as the host gives them its
+    own (a blow as `blowAt` has it), and it's stepped on to the present the hand acts in (40 steps
+    at most). So a swing, a cast or a stagger holds them there as it does on the host, the stick's
+    way slides round a lamppost there, and they stop where the host will stop them. It's made
+    again at each of the host's words, and each command sent. Its ways are found over the
+    navigation tiles made already only (`bakedOnly`); off them, the stick's way goes straight on.
+    What it does is only drawn: no blow it strikes lands, nothing it says is heard, and the copy
+    of the world is never touched, so the rules never guess.
+  - **When.** The host's time now is reckoned from the quickest of its words of the last second
+    (one held up less than that, a lost segment's, doesn't put it back), and come down to it over
+    about half a second when it's come down: the link's grown slower, or the host's a browser
+    drawing fewer than ten frames a second, which plays its steps slower than time goes by (at
+    most 0.1 s of them a frame). The round trip is the middle of the latest five (`Joining`
+    `lately`: the first, held up while the world's built, soon doesn't count), none taken as over
+    a second, and followed a tenth of a millisecond a millisecond, so they're drawn going a little
+    faster or slower a while, never jumping.
+  - **Set right.** When a new look ahead has them somewhere other than the last (struck, blocked
+    by someone the copy didn't have there), the difference slides away at 6 m/s, over a tenth to
+    half a second. On another map, or further off than 8 m (a summons, a teleport), they're
+    drawn there at once.
+  - **What it does:** a joined game played in Node over a modelled link (40 ms of jitter, now and
+    then everything held up 300 ms), against the drawing before it (`app/predict.js`), four runs
+    over four different links. How far the hero was drawn jumping (faster than anyone runs) in all,
+    on the mean, and the biggest single jump in any of them:
+
+    | At a 300 ms round trip | Before | Now |
+    |---|---|---|
+    | Running | 2.3 m; 0.41 m | 0.12 m; 0.35 m |
+    | Zig-zagging | 18 m; 5.8 m | 0.67 m; 0.31 m |
+    | Stopping and going | 16 m; 4.4 m | 0.10 m; 0.35 m |
+    | Running into things | 1.7 m; 0.36 m | 0.05 m; 0.28 m |
+    | Sent by a tap | 4.8 m; 4.6 m | 0.06 m; 0.41 m |
+    | Power strikes running past a foe | 24 m; 7.9 m | 2.2 m; 0.36 m |
+    | Burns cast running round one | 16 m; 3.6 m | 0.39 m; 0.25 m |
+
+    Before, put right by over half a metre in a frame 60 times in those 28 runs; now, never.
+    `test/forecast.test.js` keeps it so (at most 0.7 m in a frame, under a metre from the host on
+    the mean).
 - **Timing the link.** Once a second, a joined game asks the host how long a word takes to it and
   back (`ping`, `pong`: the host answers at once, not at its next sending). Each ping says how long
   it's been taking lately (`rtt`, once it's timed one: the middle of its latest five round trips,

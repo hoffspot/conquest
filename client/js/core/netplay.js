@@ -75,12 +75,13 @@ import { STEP_MS } from "./battle.js";
 import { isGuid } from "./guid.js";
 import { HIRES, HOST_PLAYER } from "./host.js";
 import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
+import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
 import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 179;
+export const NET_VERSION = 180;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -99,6 +100,12 @@ export const MOST_PLAYERS = 8;
  * desktop, 100 on a phone. So a phone 5 s behind would be fast-forwarding for 2 or 3 s more.)
  */
 export const PACE = Object.freeze({ behind: 6, catchUp: 40, catchUpMs: 8, tooFar: 100 });
+
+/**
+ * A joined player's own hero told them (Hosting #selves) every `every` flushes while they're not
+ * as they were (at once once a command of theirs is done), and every `again` ms anyway.
+ */
+export const SELF = Object.freeze({ every: 2, again: 1000 });
 
 /**
  * How many of the host's steps a joined game keeps in hand (the delay), made for a phone's link
@@ -255,6 +262,12 @@ export class Hosting {
         /** How long a word to each who's joined and back takes, as they've said (by peer: ms, their pings'). */
         this.rtts = new Map();
 
+        /** The last of each one's commands done (by peer: its seq), told them with their hero (#selves). */
+        this.done = new Map();
+
+        /** What each was last told of their hero (by peer: { seq, hero (as sent), time }: #selves). */
+        this.toldSelf = new Map();
+
         /** What's been done since it was last sent, and whether it's time to say how the world stands. */
         this.ops = [];
         this.steps = 0;
@@ -382,6 +395,32 @@ export class Hosting {
 
             if (this.players.size) {
                 this.#sendAll("motion", encode({ kind: "motion", step, units: toBase64(packMotion(this.host)) }));
+            }
+        }
+
+        this.#selves(step);
+    }
+
+    // Each who's joined told where their own hero is now, as the host has them, and the last of
+    // their commands done (core/selfstate.js): their game looks ahead from it (app/forecast.js).
+    // At once, a command of theirs having been done since; else every SELF.every flushes, if
+    // they're not as they were, or every SELF.again ms anyway
+    #selves(step) {
+        for (const [peer, id] of this.players) {
+            const actor = this.host.battle.actor(id);
+
+            if (!actor) {
+                continue;
+            }
+
+            const seq = this.done.get(peer) ?? 0;
+            const hero = encode(selfOf(actor));
+            const last = this.toldSelf.get(peer);
+            const due = !last || seq !== last.seq || this.host.battle.time - last.time >= SELF.again || (step % SELF.every === 0 && hero !== last.hero);
+
+            if (due) {
+                this.toldSelf.set(peer, { seq, hero, time: this.host.battle.time });
+                this.#send(peer, "self", `{"kind":"self","step":${step},"time":${encode(this.host.battle.time)},"seq":${seq},"hero":${hero}}`);
             }
         }
     }
@@ -551,6 +590,7 @@ export class Hosting {
         this.flush();
         this.host.join({ id, ...brought, ...spawnFor(world, brought.hero.race), role: this.roleOf(peer) });
         this.flush();
+        this.#fresh(peer);
         this.players.set(peer, id);
         this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot() }));
 
@@ -594,9 +634,11 @@ export class Hosting {
             this.#send(old, "kicked", encode({ kind: "kicked", reason: "elsewhere" }));
             this.players.delete(old);
             this.rtts.delete(old);
+            this.#fresh(old);
             this.onKick(old, "elsewhere");
         }
 
+        this.#fresh(peer);
         this.players.set(peer, id);
         this.#send(peer, "welcome", encode({ kind: "welcome", version: NET_VERSION, id, seed: world.seed, race: world.start?.race ?? "human", snapshot: this.host.snapshot(), took: true }));
 
@@ -639,6 +681,7 @@ export class Hosting {
             this.host.command(id, command);
         } finally {
             this.seq = null;
+            this.done.set(peer, seq);
         }
     }
 
@@ -731,7 +774,15 @@ export class Hosting {
 
         this.players.delete(peer);
         this.rtts.delete(peer);
+        this.#fresh(peer);
         this.#left(id, peer);
+    }
+
+    // Nothing kept of what a peer was told of their hero, or of their commands done: one joining
+    // (again) counts its commands from the first
+    #fresh(peer) {
+        this.done.delete(peer);
+        this.toldSelf.delete(peer);
     }
 
     /** The slowest of the links to those who've joined, as they've said (ms), or null if none's said yet. */
@@ -797,6 +848,14 @@ export class Joining {
         /** Its player's commands sent, waiting to hear what came of them (by seq). */
         this.pending = new Map();
         this.seq = 1;
+
+        /**
+         * Its own hero as the host last told it they were ({ time (the host's battle's), seq (the
+         * last of its commands done then), hero (core/selfstate.js), at (its clock's, when heard) }),
+         * or null; and who's told of it as it's heard (app/forecast.js).
+         */
+        this.self = null;
+        this.onSelf = null;
 
         /** Whether it's gone astray from the host's, and asked for the world again. */
         this.astray = false;
@@ -900,6 +959,14 @@ export class Joining {
 
                     this.#waiting += steps;
                     this.#arrived(message.step, steps);
+                }
+
+                break;
+            case "self":
+                // (Its own hero as the host has them now: looked ahead from, app/forecast.js)
+                if (message.hero && Number.isFinite(message.time) && Number.isInteger(message.seq)) {
+                    this.self = { time: message.time, seq: message.seq, hero: message.hero, at: this.clock() };
+                    this.onSelf?.(this.self);
                 }
 
                 break;
@@ -1226,6 +1293,6 @@ export class Joining {
 
         this.send(encode({ kind: "command", seq, command }));
 
-        return { ok: true, pending: true };
+        return { ok: true, pending: true, seq };
     }
 }

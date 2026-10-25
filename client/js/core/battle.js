@@ -709,6 +709,10 @@ export class Battle {
         // a host's game, the ways it found to take instead ([time, id, way], in order), or null
         this.onPath = null;
         this.replay = null;
+
+        // (A forecast's battle, fork: its ways found over the navigation tiles made already, none
+        // made for them)
+        this.bakedOnly = false;
     }
 
     /**
@@ -1162,6 +1166,35 @@ export class Battle {
         };
     }
 
+    /**
+     * A battle of some of this one's characters only (`ids`), as they are now, on the same world,
+     * its teams standing as they stand here: to look ahead at what they'd do, nothing of it
+     * touching this one (a joined game's forecast of its own hero: app/forecast.js). Its ways are
+     * found over the navigation tiles made already only (bakedOnly).
+     */
+    fork(ids) {
+        const wanted = new Set(ids);
+        const part = {
+            seed: this.seed,
+            time: this.time,
+            lag: 0,
+            random: this.random.state,
+            nextProjectile: this.nextProjectile,
+            actors: this.actors.filter(({ id }) => wanted.has(id)).map(({ chance, restVariety, ...actor }) => ({ ...actor, chance: chance.state, restVariety: restVariety.toJSON() })),
+            // (Nothing in the air, on the ground or lined up of its own)
+            projectiles: [],
+            hazards: [],
+            bombs: [],
+            breaths: [],
+            formations: {},
+        };
+        const forked = Battle.restore(this.world, part, { relations: this.relations, allied: this.allied, haven: this.haven });
+
+        forked.bakedOnly = true;
+
+        return forked;
+    }
+
     /** A battle on `world` carrying on from a snapshot (snapshot()), its teams standing as `relations` has them. */
     static restore(world, snapshot, { relations = null, allied = null, haven = null } = {}) {
         const battle = new Battle(world, { seed: snapshot.seed, relations, allied, haven });
@@ -1314,8 +1347,16 @@ export class Battle {
                 const way = this.#route(actor, () => {
                     const [x, y] = [actor.x, actor.y];
                     const navigator = navigatorOf(this.maps[actor.map]);
+
+                    // (A forecast's, the tiles round it not made yet: straight on that way, as far
+                    // as it was asked, for now)
+                    if (this.bakedOnly && !navigator.made(x - reach - 1, y - reach - 1, x + reach + 1, y + reach + 1)) {
+                        return [[x + sin(order.facing) * reach, y + cos(order.facing) * reach]];
+                    }
+
                     const along = (turn, far) => {
-                        const ray = navigator.raycast([x, y], [x + sin(order.facing + turn) * far, y + cos(order.facing + turn) * far]);
+                        const look = () => navigator.raycast([x, y], [x + sin(order.facing + turn) * far, y + cos(order.facing + turn) * far]);
+                        const ray = this.bakedOnly ? navigator.madeOnly(look) : look();
 
                         return ray ? { point: ray.point, on: hypot(ray.point[0] - x, ray.point[1] - y) * cos(turn) } : null;
                     };
@@ -2011,6 +2052,11 @@ export class Battle {
     // --- Deciding what to do ---
 
     #think(actor) {
+        // (Only standing there, a mind of its own none: one in a forecast's battle, fork)
+        if (actor.still) {
+            return;
+        }
+
         if (actor.lock) {
             this.#keepLock(actor);
         }
@@ -3921,6 +3967,14 @@ export class Battle {
         return null;
     }
 
+    // A forecast's way (fork): over the navigation tiles made already only, or, they not all being
+    // made, straight there, for now
+    #madeWay(actor, point) {
+        const way = navigatorOf(this.maps[actor.map]).wayIn([actor.x, actor.y], point);
+
+        return way.length ? way : [point];
+    }
+
     // Find the way to a square (to `point` on it: its middle, unless said), over the map's
     // navigation mesh; a wagon's through a town's gate along its middle (wagonWay). Anyone but a
     // player, or someone with a player near them and where they're going (WAIT_BEYOND), waits for
@@ -3935,7 +3989,7 @@ export class Battle {
         const near = ([x, y]) => this.#players.some((player) => player.map === actor.map && hypot(player.x - x, player.y - y) <= WAIT_BEYOND);
         const wait = actor.kind !== "player" && !(near([actor.x, actor.y]) && near(point));
 
-        actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point, { wait }) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point, { wait })));
+        actor.path = this.#route(actor, () => (actor.kind === "wagon" ? wagonWay(this.maps[actor.map], [actor.x, actor.y], point, { wait }) : this.bakedOnly ? this.#madeWay(actor, point) : navigatorOf(this.maps[actor.map]).path([actor.x, actor.y], point, { wait })));
         actor.pathGoal = [...goal];
         actor.lastPathAt = this.time;
         actor.blockedSince = null;
