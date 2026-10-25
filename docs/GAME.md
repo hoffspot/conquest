@@ -3971,7 +3971,13 @@ metres off (back as many as ever the next time, unless it's been cleared).
       (all gone, or out of sight a while), it pauses again the next time.
     - A creature put out alone at a post stands right on it (a pack round its square, as
       before).
-    - **Versions:** `NET_VERSION` 47.
+    - **Seen across the stairwell** (`interiors.js` `readPlan`): on the floor the stairs come up
+      to (a tower's top), their squares are the open stairwell with its waist-high rail. They
+      can't be walked over but are seen across, so a chief in the top's far corner, behind the
+      stairwell, sees whoever comes up and is seen by them. On the floor the stairs go up from,
+      they hide what's behind them, as before. (A player: "top level of towers the guy spawns
+      in the corner and isn't necessarily targetable till you get closer.")
+    - **Versions:** `NET_VERSION` 47; seen across the stairwell, 177.
   - **A ruined castle's wight lord** keeps within its keep's great hall by its hoard (`LAIRS`
     `within`), half of each kind of its dead with it (three skeletons, two ghosts and a wraith,
     each at a post of its own), the rest in the courtyard; slain, the hoard's opened as the

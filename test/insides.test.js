@@ -19,8 +19,12 @@ const { Battle, STEP_MS } = await import("../client/js/core/battle.js");
 const { treeFor, upstairsIs } = await import("../client/js/core/dialogue.js");
 const { clearOfWaysIn, ENTERABLE, ENTRANCES, entranceOf, FINISHES, guildFolkOf, guildRooms, heldWithin, LAYOUTS, openEntrances, shrinesOf, SITE_PATRONS, smithyFolkOf, smithyRooms, STRUCTURE_DOORS, taproomPlan, tavernFolkOf, tavernRooms, templeFolkOf, templeRooms, WAY_IN_CLEAR } = await import("../client/js/core/insides.js");
 const { GOD_IDS, GODS } = await import("../client/js/core/lore/gods.js");
-const { squaresOf } = await import("../client/js/core/grid.js");
+const { crosses, squaresOf } = await import("../client/js/core/grid.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
+const { PLACE_BANDS } = await import("../client/js/core/places.js");
+
+// (How near someone must come for those holding a place to go for them: places.js)
+const PLACE_GUARD = PLACE_BANDS.guard;
 const { CHUNK, buildWorld } = await import("../client/js/core/overworld.js");
 const { ROLES } = await import("../client/js/core/roles.js");
 const { PLOT } = await import("../client/js/core/setpieces/pieces.js");
@@ -764,6 +768,47 @@ describe("the places worth finding gone into (insides.js: a cave, the drake's la
         }
 
         assert.ok(floors >= 7, `(${floors} floors)`);
+    });
+
+    it("sees across the stairwell on the floor the stairs come up to (a watchtower's top, broken or kept), not on the floor they go up from: its chief seen by whoever comes up, and seeing them, within their guard, wherever on the top they stand", () => {
+        let tops = 0;
+
+        for (const seed of [1, 2, 3]) {
+            const world = buildWorld({ seed });
+
+            for (const site of world.plan.sites.filter((one) => one.kind === "watchtower" && one.race !== "orc").slice(0, 4)) {
+                world.maps.town.sites.heartOf(site);
+
+                const building = world.interiors.buildings.get(`site:${site.id}`);
+
+                if (!building) {
+                    continue;
+                }
+
+                world.interiors.make(building.key);
+
+                const top = building.maps.at(-1);
+                const map = world.maps[top];
+                const { opaque } = squaresOf(map);
+                const [arrive] = building.stairs.ends.filter((end) => end.map === top).map((end) => end.arrive);
+                const [chief] = clearOfWaysIn(map, [arrive], map.marks.l);
+
+                tops++;
+                assert.ok(!crosses(opaque, arrive, chief) && !crosses(opaque, chief, arrive), `${site.id}: ${chief} seen from ${arrive}, and seeing it`);
+                assert.ok(Math.hypot(chief[0] - arrive[0], chief[1] - arrive[1]) <= PLACE_GUARD, `${site.id}: ${chief} within their guard of ${arrive}`);
+
+                // (Its stairwell seen across, the corner beyond it too, where the chief may roam;
+                // still not walked over. Below, the stairs rising up the wall hide what's behind)
+                assert.ok(map.marks.S.every(([x, y]) => map.blocked[y][x] && !opaque(x, y)), `${site.id}: its stairwell open to the eye, not to the foot`);
+                assert.ok(!crosses(opaque, arrive, [0, 0]), `${site.id}: the corner past the stairwell seen from ${arrive}`);
+
+                const below = world.maps[building.maps[0]];
+
+                assert.ok(below.marks.S.every(([x, y]) => squaresOf(below).opaque(x, y)), `${site.id}: the stairs below not seen through`);
+            }
+        }
+
+        assert.ok(tops >= 6, `(${tops} tops)`);
     });
 
     it("each people's watchtower (but the orcs' open deck) and the elves' tree hall gone into by its door, the way clear: a watchtower kept, its two floors joined by stairs, its lookout and sentry where they can be got to; the tree hall a great hall of their own", () => {
