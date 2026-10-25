@@ -280,7 +280,7 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         assert.deepEqual(host.command(HOST_PLAYER, { type: "ability", ability: "aimedShot" }), { ok: false, reason: "unknown" });
         assert.deepEqual(host.command(HOST_PLAYER, { type: "ability", ability: "powerStrike", target: "orc" }), { ok: true });
         assert.deepEqual(player.empowered, { blow: "melee", factor: 2 });
-        assert.equal(player.order.target, "orc");
+        assert.equal(player.striking.target, "orc", "struck where they stand, in reach");
         assert.deepEqual(host.command(HOST_PLAYER, { type: "ability", ability: "powerStrike" }), { ok: false, reason: "cooldown" });
 
         // The strike lands twice as hard, once

@@ -839,6 +839,10 @@ export class Battle {
             // The enemy a player's locked on (an id: kept their target as they go, #keepLock), or
             // null
             lock: null,
+            // A quick action's blow to be struck at someone, as soon as they're in reach and it can
+            // be, wherever the striker's going ({ target, until (waited on till: ms, or null), tag
+            // (what it is: an ability's id) }: strike, #obey), or null
+            striking: null,
             attack: null,
             readyAt: 0,
             staggeredUntil: 0,
@@ -959,6 +963,27 @@ export class Battle {
      * power strike, an aimed shot: core/progress.js ABILITIES), and stun whoever it lands on for
      * `stun` ms if it's given (a shield bash: longer for a stronger stunner, `power.stun`).
      */
+    /** Whether one character can strike another from where they stand (in reach, and seen for a shot). */
+    reachable(id, targetId) {
+        const [actor, target] = [this.actor(id), this.actor(targetId)];
+
+        return Boolean(actor && target && !actor.dead && !target.dead && this.#reachable(actor, target));
+    }
+
+    /**
+     * A blow at someone (a quick action's, host.js #ability): struck as soon as they're in reach and
+     * it can be, wherever the striker's going kept, the swing holding them a moment; out of reach,
+     * waited on till `until` (ms, the battle's time; null: not at all); never struck, an
+     * "unstruck" event, with `tag` (#obey).
+     */
+    strike(id, targetId, { until = null, tag = null } = {}) {
+        const actor = this.actor(id);
+
+        if (actor && !actor.dead) {
+            actor.striking = { target: targetId, until, tag };
+        }
+    }
+
     empower(id, blow, factor, { stun = 0 } = {}) {
         const actor = this.actor(id);
 
@@ -1265,11 +1290,6 @@ export class Battle {
             return;
         }
 
-        // Walking away calls off an attack that hasn't landed yet
-        if (actor.attack && !actor.attack.struck && order.type === "move") {
-            actor.attack = null;
-        }
-
         switch (order.type) {
             case "move": {
                 const goal = this.#goalNear(actor, order.to);
@@ -1329,7 +1349,9 @@ export class Battle {
 
                 const goal = [Math.floor(end[0]), Math.floor(end[1])];
 
-                actor.order = { type: "move", to: goal, run: Boolean(order.run) };
+                // (Held input's: the player's steering, `held`, which a quick action's blow out of
+                // reach doesn't take over: host.js #ability)
+                actor.order = { type: "move", to: goal, run: Boolean(order.run), held: true };
                 Object.assign(actor, { path: way, pathGoal: goal, lastPathAt: this.time, blockedSince: null, offPath: false });
                 break;
             }
@@ -2373,6 +2395,30 @@ export class Battle {
         const order = actor.order;
 
         actor.walkPace = actor.speed;
+
+        // (A quick action's blow: struck as soon as its target's in reach and it can be, its weapon
+        // drawn and ready, wherever they're going kept, the swing holding them a moment; out of
+        // reach, waited on till `until`, if it's to be; given up once that's past, or they're out
+        // of reach of one not waited on, or it's fallen or no enemy of theirs, and told (unstruck):
+        // strike)
+        if (actor.striking) {
+            const { target: id, until, tag } = actor.striking;
+            const target = this.actor(id);
+            const gone = !target || target.dead || !this.hostile(actor, target);
+
+            if (!gone && this.#reachable(actor, target)) {
+                this.#attack(actor, target);
+
+                if (actor.attack) {
+                    actor.striking = null;
+
+                    return;
+                }
+            } else if (gone || until === null || this.time >= until) {
+                actor.striking = null;
+                this.#emit("unstruck", { id: actor.id, target: id, tag });
+            }
+        }
 
         if (order?.type === "enter") {
             const link = this.links.find(({ id }) => id === order.link);
