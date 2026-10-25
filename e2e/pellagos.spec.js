@@ -11626,6 +11626,180 @@ test("a dungeon's way in out in the wilds is gone into: its first level drawn an
     expect(delved).toMatchObject({ out: "town", by: true, sees: 160 });
 });
 
+test("a dungeon's camera goes by the room round the player: over its cut roof, looking down, in an open cavern; under its roof, low behind them, in a tunnel; tilted by hand, kept so while it's as open, let go of in the tunnel", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    const seen = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { view } = session;
+        const player = game.battle.actor("player");
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // (The nearest dungeon of caves to the start: gone into)
+        const { DUNGEON_CUT } = await import("/js/world/dungeons3d.js");
+        const { openness } = await import("/js/world/view.js");
+        const { squaresOf } = await import("/js/core/grid.js");
+        const site = game.world.plan.sites.filter(({ kind, theme }) => kind === "dungeon" && theme === "caves").sort((a, b) => Math.hypot(a.at[0] - player.x, a.at[1] - player.y) - Math.hypot(b.at[0] - player.x, b.at[1] - player.y))[0];
+        const until = async (done, steps = 300) => {
+            for (let k = 0; k < steps && !done(); k++) {
+                player.hp = player.maxHp;
+                game.advance(0.1);
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+
+        // (Its land round it made first, its way in with it)
+        Object.assign(player, { x: site.at[0] + 25, y: site.at[1], path: [], order: null, progress: null });
+
+        for (let k = 0; k < 8; k++) {
+            game.advance(0.25, { render: false });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+
+        const building = game.world.interiors.buildings.get(`site:${site.id}`);
+        const [ox, oy] = building.entrance.outside;
+
+        Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
+        game.host.command("player", { type: "enter", link: building.door.id });
+        await until(() => player.map !== "town");
+        await until(() => game.interiors.get(player.map)?.object.visible);
+
+        // (Its creatures put down: no fight to frame)
+        for (const actor of game.battle.actors) {
+            if (actor.map === player.map && actor.id !== "player") {
+                Object.assign(actor, { dead: true, respawnAt: Infinity });
+            }
+        }
+
+        // Its most open square and its tightest that can be stood on, away from its stairs
+        const map = game.world.maps[player.map];
+        const squares = squaresOf(map);
+        const [mx, mz] = game.originOf(player.map);
+        const rock = view.room.rock;
+        let [open, tight] = [null, null];
+
+        for (let y = 2; y < map.height - 2; y++) {
+            for (let x = 2; x < map.width - 2; x++) {
+                if (!squares.blocked(x, y) && [-1, 0, 1].every((d) => !squares.blocked(x + d, y) && !squares.blocked(x, y + d))) {
+                    const how = openness(rock, mx + x + 0.5, mz + y + 0.5);
+
+                    open = !open || how > open.how ? { x, y, how } : open;
+                    tight = !tight || how < tight.how ? { x, y, how } : tight;
+                }
+            }
+        }
+
+        const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+        const rockCut = () => {
+            const kinds = new Set();
+
+            game.interiors.get(player.map).object.traverse((node) => node.isMesh && node.name === "rock" && kinds.add(Boolean(node.material.userData.rock?.cut)));
+
+            return [...kinds];
+        };
+        const at = ({ x, y }, seconds) => {
+            Object.assign(player, { x: x + 0.5, y: y + 0.5, square: [x, y], path: [], order: null });
+            game.advance(seconds);
+
+            const camera = view.camera.position;
+
+            return { pitch: game.cameraFollow.pitch, over: view.room.overRoof, cut: DUNGEON_CUT.low.value < DUNGEON_CUT.top.value, rockCut: rockCut(), height: camera.y - view.focus.y, under: (view.room.roof(camera.x, camera.z) ?? view.room.ceiling) - camera.y };
+        };
+
+        const inOpen = at(open, 4);
+        const inTight = at(tight, 4);
+
+        // (Back in the open, tilted 15 degrees further down by hand: kept so there; then into the tunnel)
+        at(open, 4);
+        game.cameraFollow.grab();
+        game.advance(0.1);
+        game.cameraFollow.turn(0, 15);
+        game.advance(0.1);
+        game.cameraFollow.release();
+
+        const nudged = at(open, 2);
+        const base = inOpen.pitch;
+        const tunnel = at(tight, 6);
+
+        // Walking along the tunnel, the camera turned to look across it (crowded in by its rock):
+        // turned to find the way through (Game options); or, turned off, left so
+        const across = (finds) => {
+            const ways = Array.from({ length: 36 }, (_, k) => (k * Math.PI) / 18);
+            const room = (yaw) => view.roomAt(yaw);
+            const crowded = ways.reduce((a, b) => (room(b) < room(a) ? b : a));
+            const along = ways.reduce((a, b) => (room(b) > room(a) ? b : a));
+
+            game.cameraSettings = { ...game.cameraSettings, openWay: finds, follows: false };
+            Object.assign(player, { x: tight.x + 0.5, y: tight.y + 0.5, square: [tight.x, tight.y], path: [], order: null });
+            game.cameraFollow.yaw = crowded;
+            game.cameraFollow.waiting = 0;
+            game.advance(0.2);
+
+            // (Walking the way the camera would look from, back along the tunnel: away from it)
+            const [tx, ty] = [Math.round(tight.x - Math.sin(along) * 4), Math.round(tight.y - Math.cos(along) * 4)];
+
+            game.battle.command("player", { type: "move", to: [tx, ty] });
+
+            const before = room(game.cameraFollow.yaw);
+
+            game.advance(2.5);
+
+            return { before, after: room(game.cameraFollow.yaw), turned: Math.abs(wrap(game.cameraFollow.yaw - crowded)) };
+        };
+
+        // In a fight in the tunnel, a foe a few steps along it: the battle cam frames it from where
+        // the rock leaves the camera room, not crowded in against it
+        const fight = () => {
+            const foe = game.battle.actors.find((actor) => actor.map === player.map && actor.id !== "player" && actor.dead && actor.maxHp);
+            const ways = Array.from({ length: 36 }, (_, k) => (k * Math.PI) / 18);
+
+            // (Settled in the tunnel first: the camera as its space has it)
+            Object.assign(player, { x: tight.x + 0.5, y: tight.y + 0.5, square: [tight.x, tight.y], path: [], order: null });
+            game.advance(5);
+
+            const along = ways.reduce((a, b) => (view.roomAt(b) > view.roomAt(a) ? b : a));
+            const [fx, fy] = [3, 2, 4].map((d) => [Math.round(tight.x - Math.sin(along) * d), Math.round(tight.y - Math.cos(along) * d)]).find(([x, y]) => !squares.blocked(x, y));
+
+            Object.assign(foe, { dead: false, hp: foe.maxHp, respawnAt: undefined, x: fx + 0.5, y: fy + 0.5, square: [fx, fy], path: [], order: null, attack: null, target: "player", stunnedUntil: game.battle.time + 60000 });
+            game.cameraSettings = { ...game.cameraSettings, battle: true, openWay: true };
+            game.avatars.get(foe.id)?.place(fx + 0.5, fy + 0.5, 0);
+            game.previous.set(foe.id, { x: foe.x, y: foe.y });
+            // (The camera behind the player, looking along the tunnel at it: both in view)
+            game.cameraFollow.yaw = along;
+            game.cameraFollow.waiting = 0;
+            game.advance(4);
+
+            return { room: view.roomAt(game.cameraFollow.yaw), framing: game.battleCamOn === foe.id };
+        };
+
+        return { open, tight, inOpen, inTight, nudged: nudged.pitch - base, tunnel: tunnel.pitch - inTight.pitch, finds: across(true), leaves: across(false), fight: fight() };
+    });
+
+    expect(seen.open.how).toBeGreaterThan(0.75);
+    expect(seen.tight.how).toBeLessThan(0.4);
+    expect(seen.inOpen).toMatchObject({ over: true, cut: true, rockCut: [true] });
+    expect(seen.inOpen.pitch).toBeGreaterThan(44);
+    expect(seen.inOpen.height).toBeGreaterThan(6);
+    expect(seen.inTight).toMatchObject({ over: false, cut: false, rockCut: [false] });
+    expect(seen.inTight.pitch).toBeLessThan(32);
+    expect(seen.inTight.under).toBeGreaterThan(0.5);
+    expect(seen.nudged).toBeGreaterThan(10);
+    expect(Math.abs(seen.tunnel)).toBeLessThan(3);
+    expect(seen.finds.before).toBeLessThan(0.5);
+    expect(seen.finds.after).toBeGreaterThanOrEqual(0.8);
+    expect(seen.finds.turned).toBeGreaterThan(0.1);
+    expect(seen.leaves.turned).toBeLessThan(0.05);
+    expect(seen.fight.framing).toBe(true);
+    expect(seen.fight.room).toBeGreaterThanOrEqual(0.6);
+});
+
 test("a dungeon whose creatures are drawn from models: theirs fetched, not read, as the player nears its way in; waited for at its door, the world stopped, a card saying how far they've got, Not now staying out and Go in now offered after a while; gone in once they're read; let go of a little after the player's left", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     test.setTimeout(300000);

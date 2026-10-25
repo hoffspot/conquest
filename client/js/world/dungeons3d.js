@@ -77,6 +77,14 @@ export function rockPictures(name) {
 const rocks = new Map();
 
 /**
+ * A dungeon's level's rock cut away while the camera's over its roof (world/view.js roofCut): what's
+ * between `low` and `top` metres up isn't drawn, by its rock, walls and timbers drawn cut
+ * (rockMaterial's `cut`: cutRock) and whatever else stands tall in it (interiors3d.js cutShader).
+ * Nothing at first, nor anywhere else.
+ */
+export const DUNGEON_CUT = Object.freeze({ low: { value: 1000 }, top: { value: -1000 } });
+
+/**
  * What glows in the seams of a level's rock (rockMaterial's `seams`: as much as each point's
  * `seam` says, brighter in the picture's dark grooves), its colour (linear, as it's added to the
  * light on the rock) and how it pulses (GLSL, 0 to 1, by the veils' clock `veilTime` and where it
@@ -96,10 +104,12 @@ export const SEAMS = Object.freeze({
  * The material a level's rock is drawn with, with a picture (ROCK_PICTURES' name); `glow`, its
  * points glowing their own colours too (a `glow` attribute, linear r, g, b: glowfungus.js, and a
  * hell's lava, lava.js poolGlowOn); `seams`, what glows in its cracks (SEAMS' name: a `seam`
- * attribute, 0 to 1), or nothing; `wet`, glistening (flesh's: flesh.js).
+ * attribute, 0 to 1), or nothing; `wet`, glistening (flesh's: flesh.js); `cut`, cut away
+ * between DUNGEON_CUT's heights (cutRock: the same, drawn so while the camera's over the roof; not
+ * otherwise, as what's thrown away costs the graphics card its quickest way of drawing).
  */
-export function rockMaterial(name, { glow = false, seams = null, wet = false } = {}) {
-    const key = `${name}${glow ? "+glow" : ""}${seams ? `+${seams}` : ""}${wet ? "+wet" : ""}`;
+export function rockMaterial(name, { glow = false, seams = null, wet = false, cut = false } = {}) {
+    const key = `${name}${glow ? "+glow" : ""}${seams ? `+${seams}` : ""}${wet ? "+wet" : ""}${cut ? "+cut" : ""}`;
 
     if (rocks.has(key)) {
         return rocks.get(key);
@@ -117,8 +127,18 @@ export function rockMaterial(name, { glow = false, seams = null, wet = false } =
     };
 
     result.name = `rock-${name}`;
+    result.userData.rock = { name, glow, seams, wet, cut };
     result.onBeforeCompile = (shader) => {
         Object.assign(shader.uniforms, uniforms);
+
+        // (Cut away between DUNGEON_CUT's heights)
+        if (cut) {
+            Object.assign(shader.uniforms, { dungeonCutLow: DUNGEON_CUT.low, dungeonCutTop: DUNGEON_CUT.top });
+            shader.fragmentShader = shader.fragmentShader
+                .replace("#include <common>", "#include <common>\nuniform float dungeonCutLow;\nuniform float dungeonCutTop;")
+                .replace("#include <clipping_planes_fragment>", "#include <clipping_planes_fragment>\nif (vCutWorld.y > dungeonCutLow && vCutWorld.y < dungeonCutTop) discard;");
+        }
+
         shader.vertexShader = shader.vertexShader
             .replace("#include <common>", "#include <common>\nvarying vec3 vCutWorld;\nvarying vec3 vRockNormal;")
             .replace("#include <project_vertex>", "#include <project_vertex>\nvCutWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvRockNormal = normalize(mat3(modelMatrix) * objectNormal);");
@@ -198,10 +218,17 @@ if (rockBumps > 0.5) {
             );
         roomLit(shader);
     };
-    result.customProgramCacheKey = () => `rock-triplanar${glow ? "-glow" : ""}${seams ? `-${seams}` : ""}`;
+    result.customProgramCacheKey = () => `rock-triplanar${glow ? "-glow" : ""}${seams ? `-${seams}` : ""}${cut ? "-cut" : ""}`;
     rocks.set(key, result);
 
     return result;
+}
+
+/** The same rock's material (rockMaterial's) cut away between DUNGEON_CUT's heights, or not (`cut` false); anything else as it is. */
+export function cutRock(material, cut = true) {
+    const rock = material?.userData?.rock;
+
+    return rock && rock.cut !== cut ? rockMaterial(rock.name, { ...rock, cut }) : material;
 }
 
 // Each face of a box: its four corners (which of x0/x1, y0/y1, z0/z1: 0 or 1 each), counter-

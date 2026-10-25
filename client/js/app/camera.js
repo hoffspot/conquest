@@ -197,7 +197,8 @@ export class CameraFollow {
             if (Math.abs(off) < RECENTRE.near && Math.abs(this.turning) < RECENTRE.still) {
                 this.recentring = null;
                 this.turning = 0;
-                this.waiting = BEHIND.after;
+                // (Swung round behind them as asked, as a drag leaves it; only turned, as it was)
+                this.waiting = this.recentreTilts ? BEHIND.after : this.waiting;
             }
 
             return this;

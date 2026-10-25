@@ -124,7 +124,8 @@ import { Ailments3D } from "../world/ailments3d.js";
 import { Effects, LOOKS } from "../world/effects.js";
 import { missileTravel, SpellFx } from "../world/spellfx.js";
 import { Squares } from "../world/squares.js";
-import { BIG_FOE, detectQuality, QUALITY, ROOM_VIEW } from "../world/view.js";
+import { BIG_FOE, detectQuality, DISTANCE, DUNGEON_VIEW, dungeonPose, QUALITY, ROOM_VIEW } from "../world/view.js";
+import { cutRock, DUNGEON_CUT } from "../world/dungeons3d.js";
 import { KINDS, Wounds } from "../world/wounds.js";
 import { Chunks, DECK, LOAD_BUDGET, REACH } from "../world/chunks3d.js";
 import { TallGrass } from "../world/grass.js";
@@ -151,7 +152,7 @@ import { TREE_WIND } from "../world/art/kits/trees.js";
 import { VEIL } from "../world/veil.js";
 import { hitch } from "../world/art/kits/wagon.js";
 import { compassTurn, Minimap, treesOf } from "./minimap.js";
-import { CameraFollow } from "./camera.js";
+import { CameraFollow, PITCH } from "./camera.js";
 import { Doors } from "./doors.js";
 import { Readying } from "./readying.js";
 import { FatePanel, fateWords } from "./fate.js";
@@ -287,12 +288,19 @@ const DRAG_TILT = 60;
 // how far a drag turns it: Game options); R swings it round behind them (recentre)
 const KEY_TURN = 2;
 
+// A dungeon's level's camera, its tilt and distance the space's (world/view.js DUNGEON_VIEW):
+// the player's own tilt or zoom kept on them as a nudge while it's as open or as tight as where
+// they set it (its share of the way from a tunnel's camera to an open cavern's within `space`),
+// eased away, at `ease` a second, once it's not
+const DUNGEON_NUDGE = Object.freeze({ space: 0.2, ease: 1.5 });
+
 // Finding the way through (Game options, Camera: #openWay): walking where the walls or rock
 // crowd the camera in by more than `crowded` of its distance for `after` seconds, it's turned the
 // least way round (in `step`s, looked for every `every` seconds) to where it has `room` of its
 // distance, looking from behind the way they're going rather than in front (each radian off
-// that counting `behind` radians more turning)
-const OPEN_WAY = Object.freeze({ crowded: 0.5, after: 0.5, room: 0.8, step: Math.PI / 36, every: 0.15, behind: 0.5 });
+// that counting `behind` radians more turning); or, nowhere so roomy, to where it has the most,
+// if that's `better` more of it than where it is
+const OPEN_WAY = Object.freeze({ crowded: 0.5, after: 0.5, room: 0.8, better: 0.25, step: Math.PI / 36, every: 0.15, behind: 0.5 });
 
 // A wyvern or dragon put out this near the player (metres) is seen coming down out of the sky
 const ARRIVE_WITHIN = 140;
@@ -4874,7 +4882,7 @@ export class Game {
         const viewed = foe ?? (fighting && this.battleCamLeft.has(fighting.id) ? fighting : null);
         const seen = viewed && this.avatars.get(viewed.id);
         const foeChest = seen ? seen.point(0.55, _foeChest) : null;
-        const { focus, yaw, pitch } = this.cameraFollow.update(dt, {
+        const { focus, yaw } = this.cameraFollow.update(dt, {
             player: { x: position.x, z: position.z, vx: player.follow.vx, vz: player.follow.vz },
             aim: { x: _focus.x, z: _focus.z },
             lowest: this.view.lowestPitch(),
@@ -4895,7 +4903,8 @@ export class Game {
         const eased = dt && this.focusHeight !== undefined ? this.focusHeight + (ground - this.focusHeight) * Math.min(1, dt * FOCUS_EASE) : ground;
 
         this.focusHeight = Math.max(eased, ground - FOCUS_LAG);
-        this.view.look(_focus.set(focus.x, this.focusHeight, focus.z), yaw, pitch, dt || Infinity);
+        this.view.look(_focus.set(focus.x, this.focusHeight, focus.z), yaw, this.#dungeonPose(dt), dt || Infinity);
+        this.#roofCut();
         this.view.setFocus(chest);
 
         // (Seen too close, as near walls and buildings can push the camera, they're dithered away:
@@ -6541,6 +6550,90 @@ export class Game {
         }
     }
 
+    // A dungeon's level's camera (DUNGEON_NUDGE): its tilt and distance by how much room there is
+    // round the player, eased from one to the next as they go; the player's own tilt and zoom kept
+    // on them as a nudge, and let go of once they've gone somewhere tighter or more open. Returns
+    // the pitch to look from (anywhere else, the camera's own)
+    #dungeonPose(dt) {
+        const follow = this.cameraFollow;
+        const space = this.view.space(dt || Infinity);
+
+        if (!space) {
+            this.dungeonCamera = null;
+
+            return follow.pitch;
+        }
+
+        const pose = dungeonPose(space.share, space.over);
+        const camera = (this.dungeonCamera ??= { pitch: pose.pitch, distance: pose.distance, nudge: 0, zoom: 1, share: space.share, set: null });
+        const at = dt ? 1 - Math.exp(-DUNGEON_VIEW.ease * dt) : 1;
+
+        camera.pitch += (pose.pitch - camera.pitch) * at;
+        camera.distance += (pose.distance - camera.distance) * at;
+
+        // (Tilted by hand, or zoomed: the nudge, where they are)
+        if (follow.held || this.keyTurning) {
+            camera.nudge = follow.pitch - camera.pitch;
+            camera.share = space.share;
+        }
+
+        if (camera.set !== null && Math.abs(this.view.distance - camera.set) > 1e-3) {
+            camera.zoom = this.view.distance / camera.distance;
+            camera.share = space.share;
+        }
+
+        if (dt && Math.abs(space.share - camera.share) > DUNGEON_NUDGE.space) {
+            const fade = Math.exp(-DUNGEON_NUDGE.ease * dt);
+
+            camera.nudge *= fade;
+            camera.zoom = 1 + (camera.zoom - 1) * fade;
+        }
+
+        follow.pitch = Math.max(PITCH.least, Math.min(PITCH.most, camera.pitch + camera.nudge));
+        this.view.distance = Math.max(DISTANCE.least, Math.min(DISTANCE.most, camera.distance * camera.zoom));
+        camera.set = this.view.distance;
+
+        return follow.pitch;
+    }
+
+    // A dungeon's level's rock cut away while the camera's over its roof (world/view.js roofCut):
+    // its heights told the shaders, and its rock drawn cut only while it's so (dungeons3d.js
+    // cutRock), the cut drawing got ready as the level's first come to (view.js prepare)
+    #roofCut() {
+        const cut = this.view.roofCut();
+        const interior = this.interiors.get(this.battle.actor(this.me)?.map) ?? null;
+
+        DUNGEON_CUT.low.value = cut ? cut.low : 1000;
+        DUNGEON_CUT.top.value = cut ? cut.top : -1000;
+
+        if (interior && interior !== this.rockCutIn && !interior.cutReady) {
+            const cuts = new Map();
+
+            interior.cutReady = true;
+            interior.object.traverse((node) => {
+                if (node.isMesh && node.name !== "floor" && node.material?.userData?.rock) {
+                    cuts.set(cutRock(node.material), node.geometry);
+                }
+            });
+
+            for (const [material, geometry] of cuts) {
+                this.view.prepare(new THREE.Mesh(geometry, material)).catch(() => {});
+            }
+        }
+
+        if (Boolean(cut) === this.rockCut && interior === this.rockCutIn) {
+            return;
+        }
+
+        this.rockCut = Boolean(cut);
+        this.rockCutIn = interior;
+        interior?.object.traverse((node) => {
+            if (node.isMesh && node.name !== "floor" && node.material?.userData?.rock) {
+                node.material = cutRock(node.material, this.rockCut);
+            }
+        });
+    }
+
     // Finding the way through (OPEN_WAY): the camera crowded in by the walls as the player walks,
     // turned to where there's room, along the way through
     #openWay(dt, avatar, foe) {
@@ -6548,7 +6641,7 @@ export class Game {
         const { vx, vz } = avatar.follow;
         const walking = Math.hypot(vx, vz) > 0.4;
 
-        if (!this.cameraSettings.openWay || foe || !walking || follow.held || follow.waiting > 0 || follow.recentring !== null || this.view.crowded() < OPEN_WAY.crowded) {
+        if (!this.cameraSettings.openWay || foe || !walking || follow.held || follow.waiting > 0 || follow.recentring !== null || this.view.roomAt(follow.yaw) > 1 - OPEN_WAY.crowded) {
             this.crowdedFor = 0;
 
             return;
@@ -6564,22 +6657,32 @@ export class Game {
 
         const behind = Math.atan2(-vx, -vz);
         const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+        const here = this.view.roomAt(follow.yaw);
         let best = null;
+        let roomiest = null;
 
         // (Turned further than the best yet costs more than it, whatever the room: none looked at)
         for (let k = 1; k * OPEN_WAY.step <= Math.PI && !(best && k * OPEN_WAY.step >= best.cost); k++) {
             for (const way of [1, -1]) {
                 const yaw = follow.yaw + way * k * OPEN_WAY.step;
                 const cost = k * OPEN_WAY.step + OPEN_WAY.behind * Math.abs(wrap(yaw - behind));
+                const room = this.view.roomAt(yaw);
 
-                if ((!best || cost < best.cost) && this.view.roomAt(yaw) >= OPEN_WAY.room) {
+                if ((!best || cost < best.cost) && room >= OPEN_WAY.room) {
                     best = { yaw, cost };
+                }
+
+                // (Of those with about as much room as the most, the one it turns least to)
+                if (!roomiest || room > roomiest.room + 0.05 || (room > roomiest.room - 0.05 && cost < roomiest.cost)) {
+                    roomiest = { yaw, cost, room: Math.max(room, roomiest?.room ?? 0) };
                 }
             }
         }
 
-        if (best) {
-            follow.recentre(best.yaw, { tilt: false });
+        const to = best ?? (roomiest && roomiest.room >= here + OPEN_WAY.better ? roomiest : null);
+
+        if (to) {
+            follow.recentre(to.yaw, { tilt: false });
         }
     }
 
@@ -6598,6 +6701,11 @@ export class Game {
         if (this.battleCamOn !== null) {
             this.battleCamLeft.add(this.battleCamOn);
             this.battleCamOn = null;
+        }
+
+        // (In a dungeon's level, the player's own tilt and zoom let go of: the space's again)
+        if (this.dungeonCamera) {
+            Object.assign(this.dungeonCamera, { nudge: 0, zoom: 1 });
         }
 
         // (The way they face, or are turning to face)
@@ -7986,8 +8094,10 @@ export class Game {
         const indoors = this.interiors.has(actor.map);
         let pitch = this.cameraFollow?.pitch;
 
-        // (A zoom being eased in let go of: the distance's the room's, or the one kept for outside)
+        // (A zoom being eased in let go of: the distance's the room's, or the one kept for outside;
+        // a dungeon's level's camera as its space has it, afresh)
         this.view.zoomTo = null;
+        this.dungeonCamera = null;
 
         if (indoors) {
             this.outdoorView ??= { distance: this.view.distance, pitch };
