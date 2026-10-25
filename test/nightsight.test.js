@@ -11,7 +11,8 @@ import { Battle, SIGHT, STEP_MS } from "../client/js/core/battle.js";
 import { candidatesAt, CREATURES, NIGHT_WEIGHT, outByDay, WILD } from "../client/js/core/creatures.js";
 import { DAY, MOON_DAYS } from "../client/js/core/daytime.js";
 import { HOST_PLAYER, Host, WILDS } from "../client/js/core/host.js";
-import { carriesTorch, LIGHT_NEAR, LIGHT_REACH, lighting, NIGHT_SIGHT, sightAt, skyLight, torchesLit } from "../client/js/core/light.js";
+import { carriesTorch, LIGHT_NEAR, LIGHT_REACH, lighting, NIGHT_SIGHT, PLAYER_SIGHT, playerSight, sightAt, skyLight, torchesLit } from "../client/js/core/light.js";
+import { CAST_FAILURES, SPELLS } from "../client/js/core/spells.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { SETTLEMENTS } from "../client/js/core/worldplan/plan.js";
@@ -188,6 +189,61 @@ describe("the night's creatures (core/creatures.js, the host's wilds)", () => {
 
         assert.equal(outByDay("bats"), false);
         assert.equal(outByDay("wolf"), true);
+    });
+
+    it("has a player see further at night than the rest: 60% of their sight on a moonless night, 80% under a full moon, as far as ever by day", () => {
+        assert.deepEqual(PLAYER_SIGHT, { dark: 0.6, moon: 0.8 });
+        assert.equal(playerSight(NIGHT_SIGHT.dark), PLAYER_SIGHT.dark);
+        assert.equal(playerSight(NIGHT_SIGHT.moon), PLAYER_SIGHT.moon);
+        assert.equal(playerSight(1), 1);
+
+        // (In step between, never less than another's)
+        let last = 0;
+
+        for (let share = NIGHT_SIGHT.dark; share <= 1; share += 0.01) {
+            assert.ok(playerSight(share) >= last && playerSight(share) >= share, `${share}`);
+            last = playerSight(share);
+        }
+
+        // On a moonless night, 7 m off: the player sees the orc (7.2 m), the orc not them (4.2 m)
+        const rows = Array.from({ length: 12 }, () => ".".repeat(30));
+        const world = { blocked: rows.map((row) => Uint8Array.from([...row], () => 0)), opaque: rows.map((row) => Uint8Array.from([...row], () => 0)) };
+        const battle = new Battle(world, { seed: 3 });
+        const player = battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 5] });
+        const orc = battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square: [9, 5], ai: "patrol", patrol: [[9, 5], [9, 5]] });
+
+        battle.light = { sky: NIGHT_SIGHT.dark, lit: [] };
+        assert.equal(battle.canSee(player, orc), true);
+        assert.equal(battle.canSee(orc, player), false);
+    });
+
+    it("says why a player can't cast at someone at night: out of range, out of range in the dark, or something in the way", () => {
+        assert.equal(SPELLS.stun.reach, 18);
+        assert.deepEqual([CAST_FAILURES.range, CAST_FAILURES.dark, CAST_FAILURES.sight], ["Out of range", "Out of range in the dark", "Something's in the way"]);
+
+        // (A wall across the way to one of them)
+        const rows = Array.from({ length: 12 }, (_, y) => [...".".repeat(30)].map((cell, x) => (x === 6 && y >= 8 ? "#" : cell)).join(""));
+        const grid = (mark) => rows.map((row) => Uint8Array.from([...row], (cell) => (cell === mark ? 1 : 0)));
+        const cast = (square, sky) => {
+            const battle = new Battle({ blocked: grid("#"), opaque: grid("#") }, { seed: 3 });
+
+            battle.add({ id: "player", kind: "player", weapon: "sword", team: "hero", square: [2, 5] });
+            battle.add({ id: "orc", kind: "orc", weapon: "cleaver", team: "orcs", square, ai: "patrol", patrol: [square, square] }).stunnedUntil = Infinity;
+            battle.light = { sky, lit: [] };
+
+            return battle.cast("player", "stun", "orc").reason ?? "cast";
+        };
+
+        // A moonless night: within 10.8 m (60% of its 18), cast; further, though in its reach,
+        // out of range in the dark (where it was 6.3 m, 35%); past its reach, out of range
+        assert.equal(cast([12, 5], NIGHT_SIGHT.dark), "cast");
+        assert.equal(cast([15, 5], NIGHT_SIGHT.dark), "dark");
+        assert.equal(cast([25, 5], NIGHT_SIGHT.dark), "range");
+        assert.equal(cast([15, 5], 1), "cast", "as far as its reach by day");
+
+        // Behind the wall, near: something in the way, day or night
+        assert.equal(cast([9, 10], 1), "sight");
+        assert.equal(cast([9, 10], NIGHT_SIGHT.dark), "sight");
     });
 
     it("has those that see in the dark see as far as by day, out of the light", () => {

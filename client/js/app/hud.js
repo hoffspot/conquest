@@ -615,7 +615,7 @@ export class Hud {
      * nearer (`depth`: metres from the camera) over the farther, the one the player's set to fight
      * over them all.
      */
-    place(id, point, { scale = 1, depth = 0 } = {}) {
+    place(id, point, { scale = 1, depth = 0, dim = false } = {}) {
         const plate = this.tracked.get(id);
 
         if (!plate) {
@@ -626,6 +626,12 @@ export class Hud {
 
         if (!plate.hidden) {
             const faint = scale.toFixed(2);
+
+            // (A foe in reach the player can't act on yet, too dark or something in the way: greyed)
+            if (plate.dim !== dim) {
+                plate.dim = dim;
+                plate.classList.toggle("unseen", dim);
+            }
 
             plate.style.transform = `translate3d(${point.x.toFixed(1)}px, ${point.y.toFixed(1)}px, 0) translate(-50%, -100%) scale(${scale.toFixed(3)})`;
 
@@ -765,11 +771,12 @@ export class Hud {
     }
 
     /**
-     * The icons down the right side of the screen for those attacking the player, in order (none:
-     * gone): [{ id, name, hp, maxHp, target, locked, picture }] (`target`: whoever the player's set
-     * on, its frame glowing and pulsing; `locked`: the player locked on them, the lock's sights
-     * round it and a padlock at its corner; `picture`: an ImageData, their likeness, or null till
-     * it's drawn, their name's first letter shown till then).
+     * The icons down the right side of the screen for the foes about the player, in order (none:
+     * gone): [{ id, name, hp, maxHp, target, locked, attacking, picture }] (`target`: whoever the
+     * player's set on, its frame glowing and pulsing; `locked`: the player locked on them, the
+     * lock's sights round it and a padlock at its corner; `attacking`: after the player, its frame
+     * full red, else in range and seen, not after them (yet), its frame fainter; `picture`: an
+     * ImageData, their likeness, or null till it's drawn, their name's first letter shown till then).
      * Tapped, or held (HOLD_MS, not moving off it), each tells onAttacker.
      */
     attackers(list) {
@@ -777,7 +784,7 @@ export class Hud {
             this.attackerColumn = element("div", "");
             this.attackerColumn.id = "attackers";
             this.attackerColumn.setAttribute("role", "group");
-            this.attackerColumn.setAttribute("aria-label", "Attacking you");
+            this.attackerColumn.setAttribute("aria-label", "Enemies");
             this.root.append(this.attackerColumn);
             this.attackerIcons = new Map();
         }
@@ -791,7 +798,7 @@ export class Hud {
             }
         }
 
-        list.forEach(({ id, name, hp, maxHp, target, locked = false, picture }, k) => {
+        list.forEach(({ id, name, hp, maxHp, target, locked = false, attacking = true, picture }, k) => {
             const icon = this.attackerIcons.get(id) ?? this.#attackerIcon(id);
             const health = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
 
@@ -802,7 +809,8 @@ export class Hud {
             icon.initial.textContent = name.slice(0, 1).toUpperCase();
             icon.root.classList.toggle("target", Boolean(target));
             icon.root.classList.toggle("locked", Boolean(locked));
-            icon.root.setAttribute("aria-label", locked ? `${name}, locked on (tap to let go)` : target ? `${name}, set on` : name);
+            icon.root.classList.toggle("idle", !attacking && !target);
+            icon.root.setAttribute("aria-label", locked ? `${name}, locked on (tap to let go)` : target ? `${name}, set on` : attacking ? name : `${name}, in range`);
             icon.root.setAttribute("aria-pressed", String(Boolean(target)));
             icon.health.style.transform = `scaleX(${health.toFixed(3)})`;
 

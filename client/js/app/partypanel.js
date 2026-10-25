@@ -2,7 +2,8 @@
 // player (core/host.js partyOf): their hired adventurers, the creatures they've called and the dead
 // they've raised, in that order. Each with their likeness, what they are (and, a creature called
 // or raised, how long it has left), their health, and whether they follow or wait; and buttons to
-// tell them to follow, to wait where they are, or to go (asked twice: "Dismiss?"). With no one,
+// tell them to follow, to wait where they are, or to go (asked first: the game's dismiss dialog,
+// onAskDismiss). With no one,
 // how to come by some.
 //
 // Playing together, above them, the players in their party (core/host.js partyFor), its leader
@@ -22,7 +23,7 @@ import { CHAT } from "../core/netplay.js";
 
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
-/** How long a Dismiss button waits to be pressed again, to be sure (ms). */
+/** How long a button asked twice (Leave party, Remove) waits to be pressed again, to be sure (ms). */
 export const DISMISS_SURE_MS = 3000;
 
 /** What can be said to the party with a tap (the chat's quick phrases). */
@@ -148,7 +149,7 @@ export class PartyPanel {
         root.append(this.panel);
 
         // Each member's row, kept from one showing to the next (by id): { root, canvas, kind,
-        // fill, state, follow, wait, dismiss, painted, sure }
+        // fill, state, follow, wait, dismiss, painted }
         this.rows = new Map();
 
         /**
@@ -195,7 +196,6 @@ export class PartyPanel {
 
         for (const [id, row] of this.rows) {
             if (!ids.has(id)) {
-                clearTimeout(row.sure);
                 row.root.remove();
                 this.rows.delete(id);
             }
@@ -402,7 +402,7 @@ export class PartyPanel {
         const follow = element("button", "journal-button party-follow", "Follow");
         const wait = element("button", "journal-button party-wait", "Wait");
         const dismiss = element("button", "journal-button party-dismiss", "Dismiss");
-        const row = { root, canvas, initial, name, kind, fill, state, follow, wait, dismiss, face, painted: false, sure: null };
+        const row = { root, canvas, initial, name, kind, fill, state, follow, wait, dismiss, face, painted: false };
 
         root.dataset.id = id;
         face.type = "button";
@@ -418,25 +418,8 @@ export class PartyPanel {
 
         follow.addEventListener("click", () => this.onOrder(id, "follow"));
         wait.addEventListener("click", () => this.onOrder(id, "wait"));
-
-        // (Asked twice, to be sure: the first press turns it to "Dismiss?" for a moment)
-        dismiss.addEventListener("click", () => {
-            if (row.sure) {
-                clearTimeout(row.sure);
-                row.sure = null;
-                this.onOrder(id, "dismiss");
-
-                return;
-            }
-
-            dismiss.textContent = "Dismiss?";
-            dismiss.classList.add("sure");
-            row.sure = setTimeout(() => {
-                row.sure = null;
-                dismiss.textContent = "Dismiss";
-                dismiss.classList.remove("sure");
-            }, DISMISS_SURE_MS);
-        });
+        // (Asked first, by the game: its dismiss dialog)
+        dismiss.addEventListener("click", () => this.onOrder(id, "dismiss"));
 
         actions.append(follow, wait, dismiss);
         root.append(face, text, actions);
