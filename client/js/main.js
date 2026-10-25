@@ -864,8 +864,11 @@ function showPlaySettings() {
     $("#battlecamswitch").checked = settings.battleCam;
     $("#invertswitch").checked = settings.invertTilt;
     $("#shakeswitch").checked = settings.shake;
+    $("#openwayswitch").checked = settings.openWay;
     $("#dragslider").value = Math.round(settings.dragSpeed * 100);
     $("#dragname").textContent = `${Math.round(settings.dragSpeed * 100)}%`;
+    $("#tiltslider").value = Math.round(settings.tiltSpeed * 100);
+    $("#tiltname").textContent = `${Math.round(settings.tiltSpeed * 100)}%`;
 }
 
 // The player's settings for how they play told the world that keeps their hero, as they change,
@@ -4463,6 +4466,9 @@ $("#shakeswitch").addEventListener("change", (event) => applySetting("shake", ev
 $("#fullscreenswitch").addEventListener("change", (event) => applySetting("fullscreen", event.target.checked));
 $("#dragslider").addEventListener("input", (event) => ($("#dragname").textContent = `${event.target.value}%`));
 $("#dragslider").addEventListener("change", (event) => applySetting("dragSpeed", Number(event.target.value) / 100));
+$("#tiltslider").addEventListener("input", (event) => ($("#tiltname").textContent = `${event.target.value}%`));
+$("#tiltslider").addEventListener("change", (event) => applySetting("tiltSpeed", Number(event.target.value) / 100));
+$("#openwayswitch").addEventListener("change", (event) => applySetting("openWay", event.target.checked));
 
 // Visual quality, Low to High (world/view.js QUALITY): the level named as the slider moves, chosen
 // when it's let go; and Adaptive (app/governor.js)
@@ -4536,8 +4542,8 @@ $("#menu").addEventListener("cancel", (event) => {
     event.preventDefault();
     menuBack();
 });
-$("#zoomin").addEventListener("click", () => state.session?.view.zoom(0.8));
-$("#zoomout").addEventListener("click", () => state.session?.view.zoom(1.25));
+$("#zoomin").addEventListener("click", () => state.session?.view.zoomSmoothly(0.8));
+$("#zoomout").addEventListener("click", () => state.session?.view.zoomSmoothly(1.25));
 
 document.addEventListener("keydown", (event) => {
     if (document.body.dataset.screen !== "hud" || $("#menu").open) {
@@ -4661,11 +4667,11 @@ function applySetting(key, value) {
 }
 
 // The camera's settings (Game options), as the game takes them (app/game.js cameraSettings)
-const CAMERA_SETTINGS = ["cameraFollows", "battleCam", "dragSpeed", "invertTilt", "shake"];
+const CAMERA_SETTINGS = ["cameraFollows", "battleCam", "openWay", "dragSpeed", "tiltSpeed", "invertTilt", "shake"];
 
 function applyCamera() {
     if (state.game) {
-        state.game.cameraSettings = { follows: settings.cameraFollows, battle: settings.battleCam, shake: settings.shake, drag: settings.dragSpeed, invert: settings.invertTilt };
+        state.game.cameraSettings = { follows: settings.cameraFollows, battle: settings.battleCam, openWay: settings.openWay, shake: settings.shake, drag: settings.dragSpeed, tilt: settings.tiltSpeed, invert: settings.invertTilt };
     }
 }
 

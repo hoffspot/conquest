@@ -13,6 +13,8 @@
     --health: #86c35c;
     --health-low: #e2743c;
     --hostile: #d4533b;
+    /* (An arrow at the screen's edge for one shooting or throwing at the player out of view: app/hud.js threats) */
+    --hostile-ranged: #b07cff;
     --stamina: #ec8a1c;
 
     /* The player's party (app/hud.js party): their hired adventurers' (and anyone with them), the
@@ -2348,6 +2350,29 @@ body[data-minimap="off"] #party {
     display: none;
 }
 
+/* (One that shoots or throws: violet, as a spell's or an arrow's flight; a blow or shot at the
+   player drawn back, not yet let go: flashing quickly, bigger) */
+.threat.ranged {
+    border-bottom-color: var(--hostile-ranged);
+}
+
+.threat.winding {
+    border-left-width: 14px;
+    border-right-width: 14px;
+    border-bottom-width: 23px;
+    animation: threat-flash 0.18s steps(2, jump-none) infinite alternate;
+}
+
+@keyframes threat-flash {
+    from {
+        opacity: 0.35;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
 @keyframes threat-pulse {
     from {
         opacity: 0.6;
@@ -2359,7 +2384,8 @@ body[data-minimap="off"] #party {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .threat {
+    .threat,
+    .threat.winding {
         animation: none;
     }
 }

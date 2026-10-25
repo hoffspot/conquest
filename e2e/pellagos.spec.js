@@ -672,6 +672,15 @@ test("making a character, the mouse dragged across the view walks round them, an
 
     expect(turned.target).toBeLessThan(start.target - 0.5);
 
+    // (Dragged with the right button too, and no menu of the browser's own over the view: "Save
+    // image as" and the like, as a player on a PC found turning the camera)
+    await page.evaluate(() => window.addEventListener("contextmenu", (event) => (window.menuShown = !event.defaultPrevented)));
+    await page.mouse.down({ button: "right" });
+    await page.mouse.move(x - 100, y, { steps: 10 });
+    await page.mouse.up({ button: "right" });
+    expect(await page.evaluate(() => window.pellagos.creator.orbit.target)).toBeGreaterThan(turned.target + 0.5);
+    expect(await page.evaluate(() => window.menuShown)).toBe(false);
+
     // The wheel turned towards them as far as it goes: nearer than the tab frames them from, and
     // no nearer than lets the camera keep out of them, all the way round
     for (let k = 0; k < 30; k++) {
@@ -1985,17 +1994,31 @@ test("in a fight, the battle cam turned off, the camera keeps the foe in view, t
         const spot = view.toScreen(game.avatars.get("orc").point(0.5));
         const rect = view.canvas.getBoundingClientRect();
 
-        return {
+        const shown = {
             seen: Boolean(spot) && spot.x > rect.left && spot.x < rect.right && spot.y > rect.top && spot.y < rect.bottom,
             arrows: arrows.length,
             // (Pointing down the screen, the way behind the camera; near its bottom edge)
             turned: Number(arrows[0]?.style.transform.match(/rotate\(([-\d.]+)rad\)/)?.[1]),
             low: arrows[0] ? arrows[0].getBoundingClientRect().top > rect.top + rect.height * 0.75 : false,
+            // (An orc's, not a shot: not violet)
+            still: arrows[0]?.className,
         };
+
+        // (A blow drawn back at the player: its arrow flashing)
+        orc.attack = { attack: orc.arms[0], target: "player", start: battle.time, struck: false };
+        game.advance(0.01, { render: false });
+
+        const winding = document.querySelector(".threat:not([hidden])")?.className;
+
+        orc.attack = null;
+
+        return { ...shown, winding };
     });
 
     expect(before.seen).toBe(false);
     expect(before.arrows).toBe(1);
+    expect(before.still).toBe("threat");
+    expect(before.winding).toBe("threat winding");
     expect(Math.abs(Math.abs(before.turned) - Math.PI)).toBeLessThan(0.6);
     expect(before.low).toBe(true);
 
@@ -3065,7 +3088,8 @@ test("the battle cam takes a fight over only once the player and their foe are b
         game.cameraFollow.release();
         game.advance(3);
 
-        return { away, inFull, ...framed, left: Math.abs(wrap(game.cameraFollow.yaw - behind)) };
+        // (But the foe's still kept in sight: a hole cut through whatever hides it, a big one drawn back from)
+        return { away, inFull, ...framed, left: Math.abs(wrap(game.cameraFollow.yaw - behind)), kept: view.foe ? Math.hypot(view.foe.x - it.object.position.x, view.foe.z - it.object.position.z) : null };
     });
 
     expect(fight.away).toEqual({ found: true, turned: 0, seen: false });
@@ -3074,6 +3098,60 @@ test("the battle cam takes a fight over only once the player and their foe are b
     expect(fight.round).toBeLessThan(Math.PI / 2 + 0.15);
     expect(fight.seen).toEqual([true, true]);
     expect(fight.left).toBeLessThan(0.01);
+    expect(fight.kept).not.toBeNull();
+    expect(fight.kept).toBeLessThan(0.1);
+});
+
+test("on a PC, Q and E turn the camera round the player while held, and R swings it round behind them; nothing else moves", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const wrap = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
+    // (The game stepped on by hand, so the turn's as a phone's or a PC's frames would have it)
+    const advance = (seconds) => page.evaluate((seconds) => window.pellagos.game.advance(seconds), seconds);
+    const yaw = () => page.evaluate(() => window.pellagos.game.cameraFollow.yaw);
+    // (Each key held as the game goes on by hand, as a phone's or a PC's frames would step it: its
+    // own loop stopped, but still listening, so what's pressed is heard)
+    await page.evaluate(() => window.pellagos.game.view.renderer.setAnimationLoop(null));
+
+    const press = async (key, seconds) => {
+        await page.keyboard.down(key);
+
+        const from = await yaw();
+
+        await advance(seconds);
+        await page.keyboard.up(key);
+        await advance(1);
+
+        return wrap((await yaw()) - from);
+    };
+    const start = await page.evaluate(() => ({ square: [...window.pellagos.game.battle.actor("player").square] }));
+
+    // Q held half a second: turned one way (as a drag to the left), a radian; and left there after
+    const left = await press("q", 0.5);
+
+    expect(left).toBeGreaterThan(0.8);
+    expect(left).toBeLessThan(1.2);
+
+    const held = await yaw();
+
+    await advance(1);
+    expect(Math.abs(wrap((await yaw()) - held))).toBeLessThan(0.02);
+
+    // E held: back the other way
+    expect(await press("e", 0.5)).toBeLessThan(-0.8);
+
+    // R: swung round behind the player, the way they face
+    await press("r", 2.5);
+
+    const behind = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const off = game.cameraFollow.yaw - (game.battle.actor("player").facing + Math.PI);
+
+        return Math.abs(Math.atan2(Math.sin(off), Math.cos(off)));
+    });
+
+    expect(behind).toBeLessThan(0.05);
+    expect(await page.evaluate(() => window.pellagos.game.battle.actor("player").square)).toEqual(start.square);
 });
 
 test("dragging turns the camera round the player and tilts it; it holds while they stand, and following, swings back behind them once they walk", async ({ page }) => {
@@ -3244,12 +3322,35 @@ test("in the town, the camera comes in closer than a building in the way, or ris
         const behind = well && [2, 2.5, 3, 3.5].map((d) => [Math.floor(ox + well.x), Math.floor(oz + well.y - d)]).find(([x, y]) => !squares.blocked(x, y));
         const byWell = behind && { ...look(behind), height: game.town.heights.at(ox + well.x, oz + well.y) };
 
-        return { walled: walled && look(walled), open: open && look(open), byWell };
+        const walledView = walled && look(walled);
+
+        // (Clear of the building, looking steeply down from close by: held where it was a moment,
+        // so gaps between houses don't pump it in and out; then going back out)
+        let clearing = null;
+
+        if (walled) {
+            const before = view.pulled + view.lifted;
+
+            view.zoom(0.2);
+            game.cameraFollow.pitch = 75;
+            game.advance(0.2);
+
+            const held = view.pulled + view.lifted;
+
+            game.advance(3);
+            clearing = { before, held, after: view.pulled + view.lifted };
+            view.zoom(5);
+            game.cameraFollow.pitch = 35;
+        }
+
+        return { walled: walledView, clearing, open: open && look(open), byWell };
     });
 
     expect(views.byWell).toMatchObject({ hidden: false, cut: 0, height: 0 });
     expect(views.walled).not.toBe(null);
     expect(views.walled.pulled + views.walled.lifted).toBeGreaterThan(1);
+    expect(views.clearing.held).toBeGreaterThan(views.clearing.before * 0.95);
+    expect(views.clearing.after).toBeLessThan(0.3);
     expect(views.walled.clearOfIt).toBe(true);
     expect(views.open).not.toBe(null);
     expect(views.open.pulled).toBeLessThan(0.05);
@@ -10832,6 +10933,9 @@ test("markers on the world map: one put down with its button, what it marks and 
     const box = await canvas.boundingBox();
     const dialog = page.locator("#marker");
 
+    // (No menu of the browser's own over it: "Save image as" and the like)
+    expect(await canvas.evaluate((map) => !map.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })))).toBe(true);
+
     // Its button, then a tap 30 pixels east of the player: what it marks and its words asked
     await page.locator("#worldmapmark").click();
     await expect(page.locator("#worldmapmark")).toHaveAttribute("aria-pressed", "true");
@@ -12346,8 +12450,38 @@ test("the minimap walks the player where it's tapped, and Game options turn it a
 
     await expect(minimap).toBeVisible();
 
-    // Ten metres south of the player, on the map (which shows the world round them)
+    // (Their own mark tapped: the camera, turned to look at them from in front, swung round
+    // behind them, the way they face; they go nowhere)
     const box = await minimap.boundingBox();
+    const mark = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const [x0, z0, across] = game.minimap.shown();
+
+        game.cameraFollow.yaw = player.facing;
+
+        return { x: player.x, z: player.y, x0, z0, across };
+    });
+
+    await page.mouse.click(box.x + ((mark.x - mark.x0) / mark.across) * box.width, box.y + ((mark.z - mark.z0) / mark.across) * box.height);
+
+    // (The game stepped on by hand to see it come round, as a phone's frames would turn it)
+    const recentred = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        game.advance(3);
+        game.start();
+
+        const off = game.cameraFollow.yaw - (game.battle.actor("player").facing + Math.PI);
+
+        return { off: Math.abs(Math.atan2(Math.sin(off), Math.cos(off))), order: game.battle.actor("player").order?.type ?? null };
+    });
+
+    expect(recentred.off).toBeLessThan(0.05);
+    expect(recentred.order).not.toBe("move");
+
+    // Ten metres south of the player, on the map (which shows the world round them)
     const spot = await page.evaluate(() => {
         const { game } = window.pellagos;
         const player = game.battle.actor("player");
@@ -12633,7 +12767,7 @@ test("Game options: its groups at the top, each a page of its own, short enough 
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
 });
 
-test("Game options set the camera: following off at first, it keeps the way it's turned as the player walks; the battle cam on at first; a drag turns it as far as chosen, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {
+test("Game options set the camera: following off at first, it keeps the way it's turned as the player walks; the battle cam and finding the way through on at first; a drag turns and tilts it as far as chosen, each its own, its tilt inverted; the greatest spells don't shake it; remembered", async ({ page }) => {
     // (The game started twice: more than the usual time)
     test.setTimeout(180000);
     await playing(page, "/?play&seed=1");
@@ -12646,21 +12780,30 @@ test("Game options set the camera: following off at first, it keeps the way it's
 
     const follows = page.getByRole("switch", { name: /Camera follows/ });
     const battleCam = page.getByRole("switch", { name: /Battle cam/ });
+    const openWay = page.getByRole("switch", { name: /Find the way through/ });
     const invert = page.getByRole("switch", { name: /Invert tilt/ });
     const shake = page.getByRole("switch", { name: /Screen shake/ });
 
     await expect(follows).not.toBeChecked();
     await expect(battleCam).toBeChecked();
+    await expect(openWay).toBeChecked();
     await expect(invert).not.toBeChecked();
     await expect(page.locator("#dragslider")).toHaveValue("100");
     await expect(page.locator("#dragname")).toHaveText("100%");
+    await expect(page.locator("#tiltslider")).toHaveValue("100");
+    await expect(page.locator("#tiltname")).toHaveText("100%");
 
-    // The battle cam off, tilt inverted, a drag turning it twice as far; and no shaking
+    // The battle cam and finding the way through off, tilt inverted, a drag turning it twice as
+    // far and tilting it half as far; and no shaking
     await page.locator("label:has(#battlecamswitch)").click();
+    await page.locator("label:has(#openwayswitch)").click();
     await page.locator("label:has(#invertswitch)").click();
     await page.locator("#dragslider").fill("200");
     await page.locator("#dragslider").dispatchEvent("change");
     await expect(page.locator("#dragname")).toHaveText("200%");
+    await page.locator("#tiltslider").fill("50");
+    await page.locator("#tiltslider").dispatchEvent("change");
+    await expect(page.locator("#tiltname")).toHaveText("50%");
     await page.getByRole("button", { name: "Back", exact: true }).click();
     await page.getByRole("button", { name: /^Graphics/ }).click();
     await expect(shake).toBeChecked();
@@ -12685,13 +12828,13 @@ test("Game options set the camera: following off at first, it keeps the way it's
         return { settings: game.cameraSettings, before, after: { yaw: game.cameraFollow.yaw, pitch: game.cameraFollow.pitch }, moved: player.square[0] - x, shaking: game.shaking };
     });
 
-    expect(walked.settings).toEqual({ follows: false, battle: false, shake: false, drag: 2, invert: true });
+    expect(walked.settings).toEqual({ follows: false, battle: false, openWay: false, shake: false, drag: 2, tilt: 0.5, invert: true });
     expect(walked.moved).toBeGreaterThan(0);
     expect(walked.after).toEqual(walked.before);
     expect(walked.shaking).toBe(0);
 
     // Dragged 150 pixels right and 60 down: turned twice as far as it used to be, and tilted up
-    // (down, inverted)
+    // (down, inverted) half as far
     await page.evaluate(() => window.pellagos.game.start());
 
     const box = await page.locator("#view").boundingBox();
@@ -12707,7 +12850,7 @@ test("Game options set the camera: following off at first, it keeps the way it's
     const turned = Math.atan2(Math.sin(after.yaw - before.yaw), Math.cos(after.yaw - before.yaw));
 
     expect(turned).toBeCloseTo((-150 / box.width) * Math.PI * 2, 2);
-    expect(after.pitch - before.pitch).toBeCloseTo((-60 / box.height) * 60 * 2, 1);
+    expect(after.pitch - before.pitch).toBeCloseTo((-60 / box.height) * 60 * 0.5, 1);
 
     // Following turned on; all remembered next time
     await page.locator("#menubutton").click();
@@ -12719,8 +12862,9 @@ test("Game options set the camera: following off at first, it keeps the way it's
     await page.getByRole("button", { name: "Back", exact: true }).click();
     await page.getByRole("button", { name: "Resume" }).click();
     await playing(page, "/?play&seed=1");
-    expect(await page.evaluate(() => window.pellagos.game.cameraSettings)).toEqual({ follows: true, battle: false, shake: false, drag: 2, invert: true });
+    expect(await page.evaluate(() => window.pellagos.game.cameraSettings)).toEqual({ follows: true, battle: false, openWay: false, shake: false, drag: 2, tilt: 0.5, invert: true });
     await expect(page.locator("#dragslider")).toHaveValue("200");
+    await expect(page.locator("#tiltslider")).toHaveValue("50");
 });
 
 test("holding on an enemy or the player opens the action wheel: flick left (W) to stun it, or up (N) to heal", async ({ page }) => {

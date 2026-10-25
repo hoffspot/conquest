@@ -293,6 +293,51 @@ describe("the camera following the player (camera.js)", () => {
 
         assert.ok(Math.hypot(camera.focus.x - 7, camera.focus.z - 1) < 0.25);
     });
+
+    it("asked to, swings round behind the player, tilted as it starts, smoothly and whether it follows or not; a drag takes over from it", () => {
+        for (const follows of [false, true]) {
+            const camera = new CameraFollow({ x: 0, z: 0, yaw: 0.3, pitch: 70 });
+            let fastest = 0;
+
+            camera.follows = follows;
+            camera.recentre(Math.PI);
+
+            for (let t = 0; t < 2.5; t += FRAME) {
+                const before = camera.yaw;
+
+                camera.update(FRAME, { player: { x: 0, z: 0, vx: 0, vz: 0 } });
+                fastest = Math.max(fastest, Math.abs(wrap(camera.yaw - before)) / FRAME);
+            }
+
+            assert.ok(Math.abs(wrap(camera.yaw - Math.PI)) < 0.03, `yaw ${camera.yaw.toFixed(3)}`);
+            assert.ok(Math.abs(camera.pitch - PITCH.start) < 1, `pitch ${camera.pitch.toFixed(1)}`);
+            assert.ok(fastest <= 4.2 + 1e-6, `never snapping: ${fastest.toFixed(2)} rad/s`);
+            assert.equal(camera.recentring, null);
+        }
+
+        // (Turned only, its tilt let be: finding the way through a tunnel, game.js #openWay)
+        const along = new CameraFollow({ x: 0, z: 0, yaw: 0, pitch: 60 });
+
+        along.follows = false;
+        along.recentre(Math.PI / 2, { tilt: false });
+        stand(along, { x: 0, z: 0 }, 2.5);
+        assert.ok(Math.abs(wrap(along.yaw - Math.PI / 2)) < 0.03);
+        assert.equal(along.pitch, 60);
+
+        // (A drag taking hold midway: it stops where the drag has it)
+        const camera = new CameraFollow({ x: 0, z: 0, yaw: 0 });
+
+        camera.follows = false;
+        camera.recentre(Math.PI);
+        camera.update(0.1, { player: { x: 0, z: 0, vx: 0, vz: 0 } });
+        camera.grab();
+
+        const held = camera.yaw;
+
+        stand(camera, { x: 0, z: 0 }, 1);
+        assert.equal(camera.yaw, held);
+        assert.equal(camera.recentring, null);
+    });
 });
 
 describe("the camera in a fight (camera.js keep)", () => {
