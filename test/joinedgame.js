@@ -24,8 +24,9 @@ const STICK = Object.freeze({ turned: 0.12, again: 500, reach: 30 });
  * (`jitter` ms either way; a 300 ms hold-up in a hundredth of its tenths of a second, `stall` 0 for
  * none), for `ms` of the player's `stick` (t, { copy, host }) => { facing, run } or null, and their
  * `actions` ([{ at, command } or { when, every, command }]), after `setup` ({ host, me }). Returns
- * where the hero was drawn and where the host had them, frame by frame, the forecast, and what
- * came of their quick actions.
+ * where the hero was drawn and where the host had them, frame by frame, the forecast, what came
+ * of their quick actions, and how their swings and casts were shown (`shown`: begun by the
+ * forecast, the copy's of those claimed, and the copy's shown late, none begun by the forecast).
  */
 export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40, stall = 0.01, ms = 8000, stick = () => null, actions = [], setup = null, stickOptions = STICK }) {
     const host = new Host(world, { populate: false });
@@ -124,6 +125,30 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
         }
     };
 
+    // (Their own swings and casts: begun by the forecast and shown then; the copy's of each, when
+    // it comes, claimed for one shown (not shown again), or shown then, late, as game.js does)
+    const shown = { begun: 0, claimed: 0, late: 0, ahead: [] };
+    const begun = [];
+    const played = (events) => {
+        for (const event of events ?? []) {
+            if (event.id === me && (event.type === "attack" || event.type === "cast")) {
+                const claimed = forecast.claim(event);
+
+                shown[claimed ? "claimed" : "late"]++;
+
+                // (How long before the copy's it was shown, ms)
+                const one = claimed ? begun.find((each) => each.type === event.type && Math.abs(each.time - event.time) <= 300) : null;
+
+                if (one) {
+                    shown.ahead.push(now - one.at);
+                    begun.splice(begun.indexOf(one), 1);
+                }
+            }
+        }
+
+        return events;
+    };
+
     const previous = new Map();
     const start = now;
     const frames = [];
@@ -162,7 +187,7 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
                 }
             }
 
-            if (!joining.step()) {
+            if (!played(joining.step())) {
                 accumulator = Math.min(accumulator, STEP_MS * RUN_ON);
                 break;
             }
@@ -170,7 +195,7 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
             accumulator -= STEP_MS;
         }
 
-        for (let extra = 0; joining.behind > joining.delay + PACE.behind && extra < PACE.catchUp && joining.step(); extra++) {
+        for (let extra = 0; joining.behind > joining.delay + PACE.behind && extra < PACE.catchUp && played(joining.step()); extra++) {
             // (Caught up a little at a time)
         }
 
@@ -184,13 +209,16 @@ export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40
         const before = previous.get(me) ?? actor;
         const alpha = accumulator / STEP_MS;
         const place = forecast.at(joining.host.battle, me, now, joining.lately ?? undefined);
+
+        shown.begun += place?.begun.length ?? 0;
+        begun.push(...(place?.begun ?? []).map(({ type, time }) => ({ type, time, at: now })));
         const at = place && place.map === actor.map ? [place.x, place.y] : before.map === actor.map ? [before.x + (actor.x - before.x) * alpha, before.y + (actor.y - before.y) * alpha] : [actor.x, actor.y];
         const hero = truth();
 
         frames.push({ t, map: place?.map ?? actor.map, at, host: { x: hero.x, y: hero.y, map: hero.map } });
     }
 
-    return { frames, forecast, answers, host, copyHost: joining.host, joining, me, rtt };
+    return { frames, forecast, answers, shown, host, copyHost: joining.host, joining, me, rtt };
 }
 
 /**

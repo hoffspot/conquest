@@ -2952,6 +2952,15 @@ to its mobile network, or losing its signal a moment, needn't end the game:
     `lately`: the first, held up while the world's built, soon doesn't count), none taken as over
     a second, and followed a tenth of a millisecond a millisecond, so they're drawn going a little
     faster or slower a while, never jumping.
+  - **Their own swings and casts, at once.** Each swing or cast of theirs a look ahead begins (its
+    battle's `attack` and `cast`) is shown and heard as the present they're drawn in reaches it
+    (`begun`), with the hold it puts on them, not as the copy begins it, half a second and more
+    later; the copy's of each, begun within 300 ms of it, is that one (`claim`), not shown
+    again. A cast's glow in the hand and its sound go on as long as the forecast has them
+    casting. Whether it lands, and what it does, are still the copy's. A shot or a throw is left
+    to the copy: its arrow or its spear is the copy's, and the draw goes with it. Measured (as
+    below, at a 300 ms round trip): power strikes running past a foe and burns cast running
+    round one, every one shown as the forecast began it, 420 to 650 ms before the copy's.
   - **Set right.** When a new look ahead has them somewhere other than the last (struck, blocked
     by someone the copy didn't have there), the difference slides away at 6 m/s, over a tenth to
     half a second. On another map, or further off than 8 m (a summons, a teleport), they're

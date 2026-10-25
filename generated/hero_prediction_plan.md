@@ -29,8 +29,9 @@ a far-off locked enemy turns the hero round to walk to it (`host.js #ability` �
   stick still steering; never in reach, refused, nothing spent.
 - **Swings and casts keep rooting the hero**, for as long as they take, and are predicted.
 - **A swing that hasn't landed is committed:** neither the stick nor a tap calls it off.
-- **The stick is sent ten times a second**, and at once on a start, a release, a change between
-  running and walking or a turn past 7°; never more than once a host step (50 ms).
+- **The stick stays at twice a second**, and at once on a start, a release, a change between
+  running and walking or a turn past 7°: ten a second was decided, then measured worse with the
+  forecast (stage 3), so it's dropped.
 - **Switched over outright**, no toggle: the old prediction goes once the new one's in.
 
 ## Stage 1: the host's rules stop fighting the stick (NET_VERSION)
@@ -95,25 +96,40 @@ a far-off locked enemy turns the hero round to walk to it (`host.js #ability` �
   the host's words of the last second, come down to over half a second; and from the middle of
   the latest five round trips, none over a second.
 
-## Stage 3: the stick, ten times a second
+## Stage 3: the stick, ten times a second (dropped, measured)
 
-- `steering.js`: sent every 100 ms while held (`AGAIN_MS`), at once on a start, release, run or
-  walk, or a turn past `TURNED`; at most once in 50 ms. Each asks for 10 m ahead (`HELD_REACH`,
-  from 30): never braking between messages at a sprint (braking starts within about 4.3 m), and
-  stopping within about 1.3 s if they stop coming (a phone put away, a link gone quiet).
-- Latest wins: a held-input order not yet sent (the socket's `bufferedAmount` over nothing) is
-  replaced by the newer, not queued behind it.
-- After the forecast, not before (measured: sent ten times a second, today's prediction, which
-  starts again from the copy at every order, got far jumpier: zig-zagging at a 300 ms round trip,
-  9.2 m jumped and 2 snaps before, 31.8 m and 8 after; casting while running, 1 snap and 6). The
-  forecast replays every order the host hasn't had yet, so more of them is only truer to the hand.
-- Tests (steering with a fake clock, netplay's latest-wins), docs.
+- Planned: `steering.js` sending the stick every 100 ms while held (from 500), at once on a start,
+  a release, a run or a walk, or a turn past `TURNED`, at most once in 50 ms, each asking for 10 m
+  ahead (`HELD_REACH`, from 30); latest wins.
+- Measured with the forecast (four links each, a 300 ms round trip), against two a second:
+  zig-zagging jumped 0.67 m in all → 1.66 m; running into things, the mean distance from where the
+  host will have them 0.51 m → 1.15 m; running in the open 0.44 m → 0.57 m. Asking for 10 m alone
+  (two a second) changes nothing measurable; sending ten a second alone does all of it.
+- Why: over TCP an order sent again says nothing new, and each one the host takes sets the
+  hero's way again from where they are; the forecast takes each a step off now and then (as a
+  link's jitter has it), and the more there are, the more the two part (near a wall, or folk the
+  hero brushes past). Two a second, and at once on a turn, a start, a stop or a change of pace,
+  stays (a stick turned smoothly is sent up to sixteen times a second already, on its turns).
+- So the stick stays as it is. Reconsidered only with a link that loses what's sent
+  (WebTransport datagrams), where sending again is what gets it there.
 
 ## Stage 4: your own swings and casts at once
 
-- The hero's swing, cast and throw shown (and heard) when the forecast starts them, not when the
-  copy catches up; the copy's own for the same command not shown again (a ledger by command).
-  Whether a blow lands, damage and everyone else's answer still come from the copy.
+- The forecast keeps the `attack` and `cast` events its looks ahead begin for the hero (but a shot
+  or a throw), and gives each back once (`begun`) as the present they're drawn in reaches it:
+  shown and heard then (game.js `#attackSeen`, `#castSeen`), with the hold it puts on them. Begun
+  again in a later look ahead within 300 ms of one shown, it's that one.
+- The copy's of each (`claim`: the same kind, within 300 ms, not claimed already) isn't shown
+  again; one the forecast never began is shown as the copy begins it, as before.
+- A cast begun ahead: its glow in the hand, its sound, and its being broken off (cut short,
+  fizzling) go by the forecast's casting (`casting`, at `present`), not the copy's.
+- A shot or a throw is left to the copy: its arrow or spear is the copy's (a look ahead has none
+  of its own past the next word), and the draw goes with it.
+- The hero faces as an attacker does (not their way) while the forecast has them swinging or
+  casting (`acting`).
+- Measured (as below, a 300 ms round trip): power strikes running past a foe and burns cast
+  running round one, every one the host made begun by the forecast and claimed, 420–650 ms before
+  the copy's; none shown late; a cast the host refused (pressed in its cooldown) begun once.
 
 ## Measured at each stage
 
