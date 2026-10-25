@@ -74,7 +74,7 @@ const fetcher = new Fetcher();
 
 // What's been loaded and made: the loader, the game's modules, the view and character kit, the
 // heads-up display, and the game being played
-const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null };
+const state = { loader: null, modules: null, session: null, hud: null, game: null, save: null, stay: null, joinAs: null, goAs: null, into: null, creator: null, worldMap: null, picking: null, travel: null, portal: null, plans: null, planned: null, together: null, joinAfter: null, joinAt: null, pageServer: null, building: false, servers: null, serversLoading: null, onServer: null, worldsAfter: null, worldAsk: null, inWorld: null, inWorldEvery: null, goingBackIn: null, everyone: false };
 
 window.pellagos = {
     get game() {
@@ -1119,9 +1119,14 @@ function pause() {
         return;
     }
 
-    // (The world stops only with no one else in it: else it goes on under the menu. Joined to
-    // another's world, it isn't this game's to open to others)
+    // (The world stops only with no one else in it: else it goes on under the menu, unless its
+    // host, or on a world server one of its owners, pauses it for everyone. Joined to another's
+    // world, it isn't this game's to open to others)
+    state.everyone = false;
     state.game.pause();
+    $("#pauseallbutton").hidden = !mayPauseAll();
+    $("#menunote").textContent = "Others are playing: the world goes on.";
+    $("#menunote").hidden = state.game.host.pausable;
     $("#invitebutton").hidden = Boolean(state.game.remote);
     $("#worldbutton").hidden = !state.onServer;
     $("#invitebutton").textContent = state.together ? "Who's here" : "Invite others";
@@ -1132,7 +1137,57 @@ function pause() {
 function resume() {
     $("#menu").close();
     fullScreen.play();
+
+    // (A pause for everyone over: their world going again for all; a world server's let go of as
+    // the game starts again, Joining hold)
+    if (state.everyone) {
+        state.everyone = false;
+        state.together?.hosting?.pause(document.hidden ? "away" : null);
+    }
+
     state.game?.start();
+}
+
+// Whether the player may stop the world for everyone from the menu (Pause for everyone), with
+// anyone else in it to stop it for: the host of their own world open to others, with friends in
+// it; or one of the owners of a world on a server. (With no one else in it, the menu stops it)
+function mayPauseAll() {
+    const game = state.game;
+
+    if (!game) {
+        return false;
+    }
+
+    if (game.remote) {
+        return Boolean(state.onServer) && game.host.players.get(game.me)?.role === "owner" && game.host.players.size > 1;
+    }
+
+    return (state.together?.hosting?.players.size ?? 0) > 0;
+}
+
+// The world stopped for everyone (Pause for everyone), till Resume: their own, on this device,
+// those in it told why (core/netplay.js Hosting pause, "host"); a world server's, asked of it as
+// one of its owners (Joining hold), till they resume or their link drops
+function pauseAll() {
+    const game = state.game;
+
+    if (!$("#menu").open || !mayPauseAll()) {
+        return;
+    }
+
+    state.everyone = true;
+
+    if (game.remote) {
+        game.remote.hold(true, { everyone: true });
+    } else {
+        game.stop();
+        state.together.hosting.pause("host");
+    }
+
+    $("#pauseallbutton").hidden = true;
+    $("#menunote").textContent = "Paused for everyone, till you resume.";
+    $("#menunote").hidden = false;
+    $("#resumebutton").focus();
 }
 
 // The menu's pages: the main one; Game options, and a page for each group of them; and under
@@ -2155,7 +2210,8 @@ async function openToOthers(game, { reclaim = null } = {}) {
                 fetcher.hold("someone joining", { for: 5000 });
                 showInvite();
 
-                if (!state.game?.running) {
+                // (Unless its host has paused it for everyone: then whoever comes is told so)
+                if (!state.game?.running && !state.everyone) {
                     state.game?.start();
                 }
             },
@@ -4317,6 +4373,7 @@ $("#invite").addEventListener("cancel", (event) => {
 
 $("#menubutton").addEventListener("click", pause);
 $("#resumebutton").addEventListener("click", resume);
+$("#pauseallbutton").addEventListener("click", pauseAll);
 $("#quitbutton").addEventListener("click", quit);
 $("#optionsbutton").addEventListener("click", () => menuPage("options"));
 
@@ -4498,10 +4555,11 @@ window.addEventListener("pagehide", keepPlace);
 window.addEventListener("pagehide", () => telemetry.closed());
 
 // Pause when the page is hidden (switching apps on a phone), and silence it; a world open to
-// others can't move on while it's hidden, and those in it are told so
+// others can't move on while it's hidden, and those in it are told so (and, shown again, that it's
+// going again, unless its host has paused it for everyone)
 document.addEventListener("visibilitychange", () => {
     state.session?.sound.setHidden(document.hidden);
-    state.together?.hosting?.pause(document.hidden);
+    state.together?.hosting?.pause(document.hidden ? "away" : state.everyone ? "host" : null);
 
     if (state.onServer) {
         state.together?.joining?.away(document.hidden);

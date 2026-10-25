@@ -453,7 +453,8 @@ const TOGETHER = Object.freeze({
     lost: "Your connection dropped. Reconnecting…",
     hosting: "Your world's link to the others dropped. Reconnecting…",
     away: "The host's connection dropped. Waiting for them…",
-    paused: "The host has paused the game.",
+    // (Stopped, by why: core/netplay.js PAUSES; by someone named, "Bryn has paused the game.")
+    paused: { host: "The host has paused the game.", away: "The host's game is in the background: the world waits for them.", still: "The game's paused." },
     behind: "Catching up with the world…",
     waiting: "Waiting for the host…",
 });
@@ -2449,6 +2450,9 @@ export class Game {
             this.#command({ type: "stop" });
         }
 
+        // (Joined: the world held for no one now)
+        this.remote?.hold(false);
+
         if (this.running) {
             return;
         }
@@ -2495,9 +2499,21 @@ export class Game {
      * Pause (the menu open, or the world map): the world stops if it can (with no one else in it:
      * core/host.js pausable) and `world` isn't false (the war table's map, read as the war goes
      * on), else it goes on, and only the player's taps and clicks aren't listened to, until start()
-     * again. Returns whether it stopped.
+     * again. Joined, the world's the host's to stop: it's held (core/netplay.js Joining hold), and a
+     * world server stops it if they're the only one in it; this copy plays on as its steps come.
+     * Returns whether it stopped.
      */
     pause({ world = true } = {}) {
+        if (this.remote) {
+            if (world) {
+                this.remote.hold(true);
+            }
+
+            this.#deafen();
+
+            return false;
+        }
+
         if (world && this.host.pausable) {
             this.stop();
 
@@ -3172,7 +3188,9 @@ export class Game {
         } else if (remote && this.link === "away") {
             status = TOGETHER.away;
         } else if (remote?.paused) {
-            status = TOGETHER.paused;
+            const { why, by } = remote.paused;
+
+            status = why === "host" && by ? `${by} has paused the game.` : (TOGETHER.paused[why] ?? TOGETHER.paused.still);
         } else if (remote?.farBehind) {
             status = TOGETHER.behind;
         } else if (remote && now - this.steppedAt > WAITING_AFTER) {

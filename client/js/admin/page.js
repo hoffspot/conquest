@@ -1463,7 +1463,6 @@ function setUpNewWorld() {
                         mostPlayers: Number(field("mostPlayers").value),
                         listed: field("listed").checked,
                         pauseWhenHidden: field("pauseWhenHidden").checked,
-                        holdWhileJoining: field("holdWhileJoining").checked,
                         trustedMayInvite: field("trustedMayInvite").checked,
                         debugCommands: field("debugCommands").checked,
                     },

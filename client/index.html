@@ -32,7 +32,7 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=2bb8c9b351",
+                    "./js/app/assets.js": "./js/app/assets.js?h=800c6c6afd",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=75d04a21c9",
                     "./js/app/budget.js": "./js/app/budget.js?h=56125585f0",
@@ -49,7 +49,7 @@
                     "./js/app/fight.js": "./js/app/fight.js?h=7a1237aa07",
                     "./js/app/forecast.js": "./js/app/forecast.js?h=606fcc8c47",
                     "./js/app/fullscreen.js": "./js/app/fullscreen.js?h=34493b7fd9",
-                    "./js/app/game.js": "./js/app/game.js?h=cbc23665a2",
+                    "./js/app/game.js": "./js/app/game.js?h=34df8505aa",
                     "./js/app/gearinfo.js": "./js/app/gearinfo.js?h=f9c5c12401",
                     "./js/app/governor.js": "./js/app/governor.js?h=0e63c16031",
                     "./js/app/hero-basics.js": "./js/app/hero-basics.js?h=2c87404887",
@@ -59,7 +59,7 @@
                     "./js/app/journal.js": "./js/app/journal.js?h=05a490ba29",
                     "./js/app/journey.js": "./js/app/journey.js?h=c089c49e7e",
                     "./js/app/loader.js": "./js/app/loader.js?h=9bf378d6ef",
-                    "./js/app/manifest.js": "./js/app/manifest.js?h=c5d41ac0cc",
+                    "./js/app/manifest.js": "./js/app/manifest.js?h=ccb488a110",
                     "./js/app/mapicons.js": "./js/app/mapicons.js?h=56f23c7e72",
                     "./js/app/minimap.js": "./js/app/minimap.js?h=c160136171",
                     "./js/app/pacing.js": "./js/app/pacing.js?h=5c58080d6e",
@@ -222,7 +222,7 @@
                     "./js/core/navigation/settings.js": "./js/core/navigation/settings.js?h=47c4384a69",
                     "./js/core/navigation/squares.js": "./js/core/navigation/squares.js?h=e757cacef2",
                     "./js/core/navigation/tiles.js": "./js/core/navigation/tiles.js?h=f3d4f32ede",
-                    "./js/core/netplay.js": "./js/core/netplay.js?h=2a159c3750",
+                    "./js/core/netplay.js": "./js/core/netplay.js?h=db992c70c3",
                     "./js/core/noise.js": "./js/core/noise.js?h=bcaaa4faa1",
                     "./js/core/overworld.js": "./js/core/overworld.js?h=db13ab5547",
                     "./js/core/places.js": "./js/core/places.js?h=5a89b9f43c",
@@ -289,7 +289,7 @@
                     "./js/core/worldplan/settle.js": "./js/core/worldplan/settle.js?h=75f4607a0d",
                     "./js/core/worldplan/terrain.js": "./js/core/worldplan/terrain.js?h=d0b35d7867",
                     "./js/core/writings.js": "./js/core/writings.js?h=bc540994f2",
-                    "./js/main.js": "./js/main.js?h=7028f55833",
+                    "./js/main.js": "./js/main.js?h=3a3b014f18",
                     "./js/world/ailments3d.js": "./js/world/ailments3d.js?h=1d60de08f8",
                     "./js/world/art/engine/atlas.js": "./js/world/art/engine/atlas.js?h=ef27e19379",
                     "./js/world/art/engine/leafcards.js": "./js/world/art/engine/leafcards.js?h=1052ff62f1",
@@ -462,7 +462,7 @@
                 }, { once: true });
             }
         </script>
-        <script type="module" src="js/main.js?h=7028f55833"></script>
+        <script type="module" src="js/main.js?h=3a3b014f18"></script>
     </head>
     <body>
         <!-- The world, and the character being made, are drawn here, behind every screen -->
@@ -1279,8 +1279,10 @@
         <dialog id="menu" aria-labelledby="menutitle">
             <div class="menupage" id="menumain">
                 <h2 id="menutitle">Paused</h2>
+                <p class="note" id="menunote" role="status" hidden></p>
                 <div class="menu">
                     <button type="button" class="button primary" id="resumebutton">Resume</button>
+                    <button type="button" class="button" id="pauseallbutton" hidden>Pause for everyone</button>
                     <button type="button" class="button" id="invitebutton">Invite others</button>
                     <button type="button" class="button" id="worldbutton" hidden>World</button>
                     <button type="button" class="button" id="optionsbutton">Game options</button>

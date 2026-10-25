@@ -172,6 +172,84 @@ describe("a world in a thread of its own (server/world-worker.js, world-thread.j
         assert.match(journal, /\(empty\)/, "saved as it emptied");
     });
 
+    it("stops its clock for its one player (their menu open, or their page hidden), never by itself with anyone else in; for everyone only by one of its owners, till they let it go or their link drops; and a game back on its link says again how it is", async () => {
+        const store = new WorldStore(await scratch());
+        const stored = await store.create({ name: "Stillwater", seed: 3, race: "human" });
+        const states = [];
+        const world = thread(stored, { onSend: hear, onState: (state) => states.push(state) });
+        const runs = (yes, what) => until(() => states.at(-1)?.running === yes, what);
+        // (Nothing changes for a while: as it was)
+        const still = async (yes, what) => {
+            await wait(600);
+            assert.equal(states.at(-1).running, yes, what);
+        };
+
+        await world.opened;
+
+        const ada = await play(world, "p1", { character: { hero: { ...HERO, name: "Ada" } } });
+
+        await runs(true, "the clock to run");
+
+        // Alone: stopped while her page is hidden, and while her menu's open, and told why
+        ada.joining.away(true);
+        await runs(false, "stopped, her page hidden");
+        await until(() => ada.joining.paused?.why === "alone", "her told why");
+        ada.joining.away(false);
+        await runs(true, "going again, her page shown");
+        assert.equal(ada.joining.paused, null);
+        ada.joining.hold(true);
+        await runs(false, "stopped, her menu open");
+        ada.joining.hold(false);
+        await runs(true, "going again, her menu shut");
+
+        // With another in: neither a hidden page nor a menu stops it
+        const bea = await play(world, "p2", { player: "BEA0000001", role: "player", character: { hero: { ...HERO, name: "Bea" } } });
+
+        await runs(true, "going, with Bea in");
+        ada.joining.away(true);
+        bea.joining.hold(true);
+        await still(true, "not stopped by a page hidden or a menu, with anyone else in");
+
+        // Pause for everyone: a player's (not an owner's) stops nothing; an owner's stops it for
+        // everyone, saying who, and her link dropping ends it
+        bea.joining.hold(true, { everyone: true });
+        await still(true, "not stopped by a player's pause for everyone");
+        bea.joining.hold(false);
+        ada.joining.away(false);
+        ada.joining.hold(true, { everyone: true });
+        await runs(false, "stopped for everyone");
+        await until(() => bea.joining.paused?.why === "host", "Bea told why");
+        assert.deepEqual(bea.joining.paused, { why: "host", by: "Ada" });
+        world.drop("p1");
+        await runs(true, "going again for Bea, Ada's link dropped");
+        await until(() => bea.joining.paused === null, "Bea told it's going");
+
+        // Back, alone (Bea gone), her menu still open (and her page hidden meanwhile): her game
+        // says so again as its link comes back, and it stops for her, as her pause for everyone
+        // ended with her link; and her page shown again, and her menu shut, said while her link
+        // was down, lost, said again as it's back: going again
+        world.leave("p2");
+        ada.joining.away(true);
+        world.back("p1");
+        ada.joining.resync();
+        await runs(false, "stopped for her alone, as her game says");
+        assert.equal(ada.joining.everyone, false);
+        world.drop("p1");
+
+        const send = ada.joining.send;
+
+        ada.joining.send = () => {};
+        ada.joining.away(false);
+        ada.joining.hold(false);
+        ada.joining.send = send;
+        world.back("p1");
+        await still(false, "still stopped: her page hidden, as it last heard");
+        ada.joining.resync();
+        await runs(true, "going again, as she's said again how she is");
+        await until(() => ada.joining.paused === null, "her told it's going");
+        await world.stop();
+    });
+
     it("refuses to open a world a newer version kept, saying so, and ends its thread", async () => {
         const store = new WorldStore(await scratch());
         const stored = await store.create({ name: "Later", seed: 3, race: "human" });

@@ -171,9 +171,11 @@ The engine is built for this from the start. These are its rules:
    - their hero;
    - what the folk remember of them, and what they've learnt;
    - what they've found of the world.
-6. **Pause only when alone.** The menu and the world map stop the world only while there's no
-   one else in it (`host.pausable`). Otherwise the world goes on, and only that player's taps and
-   clicks stop.
+6. **Pause only when alone, or for everyone.** The menu and the world map stop the world only
+   while there's no one else in it (`host.pausable`). Otherwise the world goes on, and only that
+   player's taps and clicks stop, unless its host stops it for everyone, from the menu (**Pause
+   for everyone**; on a world server, one of its owners), till they resume it, or on a world
+   server till their link drops. Nothing else stops a world anyone else is in.
 7. **What's near any player comes to life.** The host decides what's real, looking at every
    player:
    - the buildings got ready to go into (`RELEVANCE`: those within 22 metres of any player, or
@@ -2800,11 +2802,19 @@ to its mobile network, or losing its signal a moment, needn't end the game:
 - **Set right.** Whatever was sent meanwhile was lost, so the world's sent again: a joined game back
   asks for it (`Joining.resync`); a host back sends it to everyone (`Hosting.resync`, one snapshot
   for all), and takes out of the world anyone who left meanwhile (`Hosting.still`, from the relay's
-  word of who's still here).
+  word of who's still here). The world sent again says whether it's stopped, and why, as a welcome
+  does, so a word of its going again lost meanwhile can't leave a game saying it's paused; and a
+  joined game back says again whether its page is hidden and its player's menu open (`away`,
+  `hold`), as what it said meanwhile may have been lost too, so a world server isn't left stopped
+  for a page that's shown again (the user, back in a world alone after a crash: "the game still
+  shows paused"). Its pause for everyone isn't asked for again: that ended with its link.
 - **Shown.** While it isn't as it should be, the HUD says so, top left (`Game #together`): "Your
   connection dropped. Reconnecting…" (or, for a host, "Your world's link to the others dropped");
-  "The host's connection dropped. Waiting for them…"; "The host has paused the game." (the host's
-  page hidden: its world can't move on, so it says so, `Hosting.pause`); or, with none of those
+  "The host's connection dropped. Waiting for them…"; why the world's stopped (`Hosting.pause`,
+  `PAUSES`): "The host has paused the game." (paused for everyone; on a world server, by one of
+  its owners, by name: "Ada has paused the game."), "The host's game is in the background: the
+  world waits for them." (the host's page hidden: its world, on that phone, can't move on) or
+  "The game's paused." (a world server's world stopped for its one player); or, with none of those
   but no step from the host for 2 seconds, "Waiting for the host…".
 
 **How it's kept the same** (`core/netplay.js`):
