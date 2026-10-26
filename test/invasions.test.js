@@ -1018,6 +1018,25 @@ describe("an invasion fought as a battle (core/engagement.js; core/host.js #raid
         assert.ok(me && !me.dead);
     });
 
+    it("brings a band's invasion kept before battles were fought in bodies forward, each of its lines one body (SNAPSHOT_STEPS 40); a Behemoth's as it was", () => {
+        const band = { id: "invasion-3", band: "corsairs", people: "human", size: 50, mustered: 70, charged: 1000, exit: [10, 20], rally: [30, 40], middle: [0, 0], formations: { invaders: "invasion-3-invaders", defenders: "invasion-3-defenders" } };
+        const beast = { id: "invasion-4", band: BEHEMOTH.id, beast: "rift-1", formations: { invaders: "invasion-4-invaders", defenders: "invasion-4-defenders" } };
+        const forward = SNAPSHOT_STEPS[40]({ version: 40, battle: { time: 5000 }, invasions: [band, beast] });
+        const [{ engagement }, kept] = forward.invasions;
+
+        assert.equal(forward.version, 41);
+        assert.deepEqual(forward.clashes, []);
+        assert.equal(kept, beast);
+        assert.equal(engagement.phase, "melee", "they'd charged");
+        assert.deepEqual(
+            engagement.sides.map(({ key, falters, exit, bodies }) => [key, falters, exit, bodies.map(({ part, formation, size, state, pair }) => [part, formation, size, state, pair])]),
+            [
+                ["invaders", false, [10, 20], [["centre", "invasion-3-invaders", 50, "charging", "centre"]]],
+                ["defenders", false, [30, 40], [["centre", "invasion-3-defenders", 70, "charging", "centre"]]],
+            ],
+        );
+    });
+
     it("rewards a player who held the body of the town's line they were bidden hold, by it as the raiders break", () => {
         const { host, player, invasion, engagement, town } = battleOf("corsairs");
 
