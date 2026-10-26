@@ -2435,7 +2435,14 @@ model viewer*: `?person=raider-northmen&weapon=throwingAxes`, `?person=chief-cul
   fighting while the rest stood in their ranks, out of reach. Measured on the first bandits
   in seed 2, 10 seconds from the first blow, 23 of the 29 raiders who fight up close were in the
   thick of it (within 3 m of an enemy; 13 of 22 before) and 21 of the town's 34 (19 of 31), and
-  at 30 seconds none of the town's stood in its ranks (16 of 17 before).
+  at 30 seconds none of the town's stood in its ranks (16 of 17 before). Since battles open with
+  the archers' volley (*Battles*), the first blow comes some seconds before the lines meet, and
+  10 seconds on the outnumbered line's being cut down; so the browser test looks from the lines'
+  meeting (a quarter of either's within 3 m of an enemy), two seconds on, half a second apart
+  for a second and a half: at least half of each in the thick of it at each look, and no more
+  than a fifth standing in their ranks with an enemy within 30 m all that while (not one only
+  between foes, its last just cut down: a line soldier looks for its next a moment after,
+  battle.js `RETHINK_MS`). Measured once, at 10 seconds, it failed on a slow runner.
 
 Then the two lines meet and grind. **Reinforced** (`reinforce`,
 `#reinforceInvasion`): from the first blow, for three minutes, every 15 seconds each side's fallen
