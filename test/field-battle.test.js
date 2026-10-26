@@ -169,12 +169,13 @@ describe("a field battle (host.js FIELD_BATTLE: the debug overlay's)", () => {
             assert.equal(generals[0].formation.id, side.find(({ formation }) => formation.id.endsWith(":vanguard")).formation.id, "at the head of their household");
         }
 
-        // (North of the player, the way they faced: theirs nearer, its rear `near` off, the others
-        // further, the fronts `apart`)
+        // (North of the player, the way they faced: theirs nearer, its line's rear `near` off, its
+        // reserve and household behind it, the others further, the fronts `apart`)
         const ahead = (actor) => me.y - actor.y;
+        const line = ours.filter(({ formation }) => !/:(reserve|vanguard)$/.test(formation.id));
         const front = Math.max(...ours.map(ahead));
 
-        assert.ok(Math.abs(Math.min(...ours.map(ahead)) - FIELD_BATTLE.near) < 2);
+        assert.ok(Math.abs(Math.min(...line.map(ahead)) - FIELD_BATTLE.near) < 2);
         assert.ok(Math.abs(Math.min(...theirs.map(ahead)) - front - FIELD_BATTLE.apart) < 2);
 
         // (The others everyone's enemies; theirs the player's friends)

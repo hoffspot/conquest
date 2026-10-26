@@ -2757,7 +2757,9 @@ standing.
   guard with four of their household before them at the keep's door, the ruler their commander;
   it holds to the last (`hold`).
 - **The debug overlay's field battle** (`#fieldBattle`, `FIELD_BATTLE`): two armies drawn up, each
-  with its general and household, their broken running 60 m behind where they formed.
+  with its general and household, the rear of the player's people's line 8 m ahead of them (its
+  reserve and household behind it, about the player), their broken running 60 m behind where they
+  formed.
 
 **As played** (headless, seed 2, an invasion of 120 in the start town, the player standing aside):
 every band beaten off, the town holding, in 204 to 228 seconds; the fighting spread 44 to 59 m

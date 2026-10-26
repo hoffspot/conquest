@@ -195,7 +195,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/gear.js", 20959, "da332efb03"],
             ["js/core/goods.js", 16227, "c5dff30c56"],
             ["js/core/grid.js", 3840, "6ec06c065e"],
-            ["js/core/host.js", 624101, "85d191241e"],
+            ["js/core/host.js", 624206, "b4eff51112"],
             ["js/core/insides.js", 86314, "3a89e2ca4d"],
             ["js/core/interiors.js", 21989, "2ae4083686"],
             ["js/core/journey.js", 11074, "d8f41679f6"],

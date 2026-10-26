@@ -569,7 +569,8 @@ export const UNDO_MS = 8000;
  * A field battle (Host #fieldBattle: the debug overlay's, to see how many a device draws and plays
  * smoothly): `most` a side at most, each an army drawn up for battle (core/engagement.js: its
  * line's three bodies, its reserve, its general and their household), the rear of the player's
- * people's `near` metres ahead of them and the two fronts `apart` metres apart, facing each other,
+ * people's line `near` metres ahead of them (its reserve and household behind it, about them) and
+ * the two fronts `apart` metres apart, facing each other,
  * marching to meet halfway at `march` metres a second, and fighting it out as a battle's fought;
  * a body that breaks running `run` m/s for `away` metres behind where its army formed. Once either
  * side's all fallen or broken, those left stand `linger` ms, then go as soon as they're not
@@ -5008,10 +5009,10 @@ export class Host {
         const foe = player.realm === "orc" ? "human" : "orc";
         const number = this.fielded;
         const armies = [player.realm, foe].map((people) => ({ people, bodies: bodiesOf(size, DOCTRINES[people], { tactic: "line" }) }));
-        // (How deep the player's people's army stands, its vanguard's rearmost rank behind its front)
-        const laid = armies[0].bodies.map((body) => ({ ...body, places: linePlaces(body.roles, layoutOf(body.part, "line")) }));
-        const offsets = offsetsOf(laid);
-        const front = FIELD_BATTLE.near + Math.max(0, ...laid.map(({ part, places }) => (offsets[part]?.[1] ?? 0) + Math.max(0, ...places.map(([, back]) => back))));
+        // (How deep the player's people's line stands, its rearmost rank behind its front: its
+        // reserve and its general's household behind it, about the player)
+        const laid = armies[0].bodies.filter(({ part }) => ["left", "centre", "right"].includes(part)).map((body) => ({ ...body, places: linePlaces(body.roles, layoutOf(body.part, "line")) }));
+        const front = FIELD_BATTLE.near + Math.max(0, ...laid.flatMap(({ places }) => places.map(([, back]) => back)));
         const meet = at(front + FIELD_BATTLE.apart / 2);
         const ids = [];
         const sides = [];
