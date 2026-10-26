@@ -2470,7 +2470,7 @@ export class Host {
         }
 
         if (chunks || entered.length || spotted.length || tracked.length || places.length) {
-            this.#event("explored", { id: player.id, by: fellow.id, name: fellow.hero.name, pooled: true, chunks, places });
+            this.#event("explored", { id: player.id, by: fellow.id, name: fellow.hero.name, pooled: true, chunks, ...(places.length ? { places } : {}) });
         }
     }
 
