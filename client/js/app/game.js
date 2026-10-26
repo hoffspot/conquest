@@ -510,6 +510,15 @@ const SENDING = Object.freeze({ every: 2, round: 3 });
 // of the frame's time for building those drawn (VISITS.budget), first
 const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 
+// The soldiers' figures sooner, seen in a fight from the first: a world kept or joined in the
+// thick of one has the figures of the kinds of those within `reach` metres of the player made
+// while it loads, the nearest first, for at most `most` seconds (#figuresFirst); and while any
+// soldier near waits unseen on its kind's, the figures are made with `budget` ms of each frame,
+// the kinds of those nearest the player first, not MARSHAL's share. Locally, a guest on Low
+// joining a world as 50 Northmen invaded its town saw none of the 126 soldiers about for 45
+// seconds, their 28 kinds' figures made 3 ms a frame (docs/GAME.md *Soldiers in their crowds*)
+const FIGURES = Object.freeze({ reach: 60, most: 10, budget: 10 });
+
 // How often (seconds) the beasts' bodies none of their look has been drawn on for a while
 // (beasts/sculpt.js LINGER) are let go of (forget)
 const FORGET_EVERY = 5;
@@ -1727,7 +1736,10 @@ export class Game {
         const dressed = this.battle.actors.filter((actor) => actor.id !== this.me && !(actor.kind === "folk" && tavern) && !brought(actor)).length;
         // (The steps: the land's chunks, the town's pieces and trees, each floor, each one dressed;
         // and five more: the town begun, the player dressed, ready to draw, the map, ready)
-        const steps = chunks + world.town.pieces.length + world.trees.length + floors.length + dressed + 5;
+        // (And the figures of the kinds of soldiers near the player, a world kept or joined in the
+        // thick of a fight: #figuresFirst)
+        const figures = this.#figuresAhead();
+        const steps = chunks + world.town.pieces.length + world.trees.length + floors.length + dressed + figures + 5;
         let done = 0;
         const report = (label) => {
             done = Math.min(done, steps);
@@ -1971,6 +1983,18 @@ export class Game {
         this.cameraFollow = new CameraFollow({ x: start.x, z: start.z });
         this.#follow(0);
 
+        // (A world kept or joined in the thick of a fight: the figures of the kinds of soldiers near
+        // the player made now, so that they're seen from the first frame, and their shaders
+        // compiled with the rest, below)
+        const mustered = done;
+        const muster = (made) => {
+            done = mustered + Math.min(made, figures);
+            report(figures ? `Mustering the soldiers (${Math.min(made, figures)} of ${figures})` : "Mustering the soldiers");
+        };
+
+        await time("figures", () => this.#figuresFirst(muster));
+        done = mustered + figures;
+
         // (The navigation tiles round the player baked off the page's thread from now on, and the
         // ways the world's first steps find waited for, not baked here as the game begins: they
         // were baked so in its first frame, before the first bake ahead, and held an iPhone up
@@ -2067,6 +2091,10 @@ export class Game {
             return view.settled();
         });
         await time("navigation", () => near);
+
+        // (The marshal's first look at the soldiers about in the first frame, not half a second
+        // on: any come while it loaded drawn at once)
+        this.marshalClock = 0;
         done = steps;
         report("Ready");
 
@@ -4039,8 +4067,7 @@ export class Game {
             return;
         }
 
-        const near = (actor) => actor.map === me.map && Math.abs(actor.x - me.x) <= DRAW_REACH && Math.abs(actor.y - me.y) <= DRAW_REACH;
-        const soldiers = this.battle.actors.filter((actor) => actor.kind === "soldier" && !actor.engine && !actor.dead && near(actor) && this.host.soldiers.has(actor.id));
+        const soldiers = this.#soldiersAbout(me);
         const ids = new Set(soldiers.map(({ id }) => id));
         // (How many of them can be drawn in full: in a battle the quality's own, else as many as
         // the bodies' budget has room for beside everyone else drawn in full, or to be)
@@ -4093,8 +4120,17 @@ export class Game {
             const crowded = avatar instanceof CrowdAvatar;
 
             if (place < room) {
-                // (In full: built, the crowd's in its place till it is)
-                if (crowded && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
+                // (In full: built, the crowd's in its place till it is; and one not drawn at all
+                // yet, its kind's figure made, drawn in its crowd meanwhile, not unseen till it's
+                // built: the nearest of a fight joined, still waiting on their kinds' figures as
+                // it began, went unseen once they were made)
+                const { key } = this.#crowdKind(actor);
+
+                if (!avatar && this.crowds.made(key)) {
+                    this.#toCrowd(actor, key);
+                }
+
+                if (this.avatars.get(actor.id) instanceof CrowdAvatar && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
                     this.enlisting.push(actor.id);
                 }
 
@@ -4131,6 +4167,95 @@ export class Game {
                 }
             }
         }
+
+        // (The kinds of those still waiting made the nearest the player first, whoever's fighting
+        // them before anyone: FIGURES)
+        const nearest = new Map();
+
+        for (const id of this.crowdWaiting) {
+            const actor = this.battle.actor(id);
+            const { key } = this.#crowdKind(actor);
+            const away = fighting(actor) ? 0 : actor.map === me.map ? Math.hypot(actor.x - me.x, actor.y - me.y) : Infinity;
+
+            nearest.set(key, Math.min(nearest.get(key) ?? Infinity, away));
+        }
+
+        this.crowds.first([...nearest].sort((a, b) => a[1] - b[1]).map(([key]) => key));
+    }
+
+    // The soldiers about the player (`me`) the marshal draws, in full or in their crowds: alive, on
+    // their map and within DRAW_REACH of them, not a siege engine's (of `among`, if not everyone)
+    #soldiersAbout(me, among = this.battle.actors) {
+        const near = (actor) => actor.map === me.map && Math.abs(actor.x - me.x) <= DRAW_REACH && Math.abs(actor.y - me.y) <= DRAW_REACH;
+
+        return among.filter((actor) => actor?.kind === "soldier" && !actor.engine && !actor.dead && near(actor) && this.host.soldiers.has(actor.id));
+    }
+
+    // How many kinds of soldiers' figures look to be made while the game loads (#figuresFirst): of
+    // those within FIGURES.reach of the player, where there's a battle's about them (more than
+    // MARSHAL.from, room in full for only a few). For the loading's steps
+    #figuresAhead() {
+        const me = this.battle.actor(this.me);
+        const soldiers = me ? this.#soldiersAbout(me) : [];
+
+        if (soldiers.length <= MARSHAL.from) {
+            return 0;
+        }
+
+        return new Set(soldiers.filter((actor) => Math.hypot(actor.x - me.x, actor.y - me.y) <= FIGURES.reach).map((actor) => this.#crowdKind(actor).key)).size;
+    }
+
+    // A world kept or joined in the thick of a fight, as it loads (#build): the soldiers about put
+    // in their crowds as the marshal has it, and the figures of the kinds of those within
+    // FIGURES.reach of the player made now, the nearest first, for at most FIGURES.most seconds
+    // (`onMade(made)` told how many are as it goes); then everyone about of a kind made drawn in
+    // their crowd from the first frame, those nearest built in full in their place as there's
+    // room. Not, as it was, each kind's figure a few milliseconds a frame once it's begun, the
+    // fight unseen meanwhile
+    async #figuresFirst(onMade = () => {}) {
+        this.#marshal(MARSHAL.every);
+
+        if (!this.crowdWaiting.size) {
+            return;
+        }
+
+        const me = this.battle.actor(this.me);
+        const away = (actor) => Math.hypot(actor.x - me.x, actor.y - me.y);
+        const soldiers = this.#soldiersAbout(me).sort((a, b) => away(a) - away(b));
+        const wanted = [];
+
+        for (const actor of soldiers.filter((actor) => away(actor) <= FIGURES.reach)) {
+            const { key, spec } = this.#crowdKind(actor);
+
+            // (Asked for, if the marshal hasn't: the kind of one with room in full too, drawn in
+            // its crowd till it's built so)
+            if (!wanted.includes(key) && !this.crowds.failed(key)) {
+                wanted.push(key);
+                this.crowds.template(key, spec);
+            }
+        }
+
+        this.crowds.first(wanted);
+
+        const until = performance.now() + FIGURES.most * 1000;
+        const made = () => wanted.filter((key) => this.crowds.made(key) || this.crowds.failed(key)).length;
+
+        while (made() < wanted.length && performance.now() < until) {
+            this.crowds.work(Math.min(until, performance.now() + LOAD_BUDGET), { wait: true });
+            onMade(made());
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        for (const actor of soldiers) {
+            const { key } = this.#crowdKind(actor);
+
+            if (!this.avatars.has(actor.id) && this.crowds.made(key)) {
+                this.#unenlist([actor.id]);
+                this.#toCrowd(actor, key);
+            }
+        }
+
+        this.#marshal(MARSHAL.every);
     }
 
     // A soldier's kind in the crowds: their people's, their sex's, carrying their weapon, and what
@@ -8587,7 +8712,7 @@ export class Game {
         // (Just come to another map, the screen still coming up from black: more of the frame
         // too, for those there, a level of a dungeon's foes, dressed only now, the nearest first)
         const arriving = performance.now() - this.arrivedAt < FADE_IN * 1000;
-        const until = performance.now() + (arriving ? ENTERING.budget : VISITS.budget);
+        let until = performance.now() + (arriving ? ENTERING.budget : VISITS.budget);
         let busy = false;
 
         for (const visit of this.visits.values()) {
@@ -8610,9 +8735,18 @@ export class Game {
             this.#work(this.tavernFolk, until);
         }
 
-        // The crowds' figures, each made a step at a time, with a share of the time first (world/crowd.js)
+        // The crowds' figures, each made a step at a time, with a share of the time first (world/crowd.js);
+        // while soldiers near wait unseen on theirs, more of it (FIGURES.budget: the kinds of those
+        // nearest first, #marshal), and those drawn below their own share after
         if (this.crowds?.busy) {
-            this.crowds.work(Math.min(until, performance.now() + VISITS.budget * MARSHAL.share), { wait: this.waits });
+            const me = this.battle.actor(this.me);
+            const unseen = Boolean(me) && [...this.crowdWaiting].some((id) => this.#soldiersAbout(me, [this.battle.actor(id)]).length > 0);
+
+            this.crowds.work(unseen ? performance.now() + FIGURES.budget : Math.min(until, performance.now() + VISITS.budget * MARSHAL.share), { wait: this.waits });
+
+            if (unseen) {
+                until = Math.max(until, performance.now() + VISITS.budget * (1 - MARSHAL.share));
+            }
         }
 
         // The soldiers brought out and the wild's creatures put out, each drawn a step at a time,

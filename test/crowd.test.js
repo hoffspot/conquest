@@ -36,7 +36,7 @@ const { HumanData } = await import("../client/js/characters/body.js");
 const { Character } = await import("../client/js/characters/character.js");
 const { SkinAtlas } = await import("../client/js/characters/skin.js");
 const { soldierLook } = await import("../client/js/characters/soldiers.js");
-const { allAtOnce } = await import("../client/js/core/steps.js");
+const { allAtOnce, WAITING } = await import("../client/js/core/steps.js");
 const { WEAPONS } = await import("../client/js/core/weapons.js");
 const { Avatar } = await import("../client/js/world/avatar.js");
 const { CROWD, CROWD_CASTS, CROWD_KEEP, Crowd, CrowdAvatar, figureOf, offstage, OFFSTAGE, onstage, recordingMoves } = await import("../client/js/world/crowd.js");
@@ -344,6 +344,40 @@ describe("a kind's figure let go of once nobody's of it (crowd.js Crowd)", () =>
         crowd.draw(camera, 0, CROWD_KEEP * 3 + 2);
         assert.equal(crowd.kinds.size, 0);
         assert.equal(CROWD_KEEP, 60000);
+    });
+});
+
+describe("the kinds' figures made in turn (crowd.js Crowd)", () => {
+    it("makes them in the order they're asked for, those it's told to make first before the rest, in that order; and says which are made", () => {
+        const crowd = new Crowd(new THREE.Scene(), kit);
+        // (Each kind's steps, taken as far as waiting on work done elsewhere, each time: by kind)
+        const taken = [];
+        const make = function* (kit, key) {
+            while (true) {
+                taken.push(key);
+                yield WAITING;
+            }
+        };
+
+        for (const key of ["human:m:sword", "human:f:spear", "northman:m:axe", "northman:f:bow"]) {
+            assert.equal(crowd.template(key, { make }), null);
+        }
+
+        crowd.work(performance.now() + 50);
+        assert.deepEqual(taken, ["human:m:sword", "human:f:spear", "northman:m:axe", "northman:f:bow"]);
+
+        // The northmen's axemen first, then the men with swords (those the player's nearest);
+        // one not asked for not made for it
+        crowd.first(["northman:m:axe", "elf:m:bow", "human:m:sword"]);
+        taken.length = 0;
+        crowd.work(performance.now() + 50);
+        assert.deepEqual(taken, ["northman:m:axe", "human:m:sword", "human:f:spear", "northman:f:bow"]);
+        assert.equal(crowd.kinds.has("elf:m:bow"), false);
+
+        assert.equal(crowd.made("northman:m:axe"), false);
+        crowd.kinds.set("northman:m:axe", { template: { key: "northman:m:axe" }, batch: { draw() {}, dispose() {} } });
+        assert.equal(crowd.made("northman:m:axe"), true);
+        assert.equal(crowd.made("elf:m:bow"), false);
     });
 });
 
