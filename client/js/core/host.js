@@ -52,7 +52,7 @@ import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./po
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, CHUNKS, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
-import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, Standing, TITHE_RATE } from "./standing.js";
+import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_CARRIED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, REQUESTS, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf } from "./war/muster.js";
 import { brokenOf, SIDES, STOCKADE, walkwayOf } from "./war/stockade.js";
 import { ARMY, CAMP as ARMY_CAMP } from "./war/armies.js";
@@ -856,6 +856,7 @@ export const REFUSALS = Object.freeze({
     counsel: "That counsel can't be taken.",
     unready: "Not yet: your people aren't ready to rise.",
     request: "No such request.",
+    alone: "You've no party to share it with.",
     count: "There aren't so many as that.",
     gone: "It isn't there any more.",
     undo: "Too late to take that back.",
@@ -1740,7 +1741,8 @@ export class Host {
      *  - { type: "ability", ability, target }: use an ability they've learnt (core/progress.js
      *    ABILITIES), on a target for a stronger blow (fighting it);
      *  - { type: "abandon", request }: give up a request they carry (by its id), for a little
-     *    standing lost;
+     *    standing lost; { type: "share", request }: share one with the others of their party
+     *    (#shareRequest);
      *  - { type: "trade", with }: ask another player near them to trade (by id), or say yes to
      *    their asking; { type: "offer", gold, items: [{ id, quality, count }] }: what they'll
      *    give (all of it, each time); { type: "agree" }: take the other's offer for theirs (once
@@ -1936,6 +1938,8 @@ export class Host {
                 return this.#ability(player, actor, command.ability, command.target ?? null);
             case "abandon":
                 return this.#abandon(player, command.request);
+            case "share":
+                return this.#shareRequest(player, command.request);
             case "talk":
                 return this.#talk(actor, command.with ?? null);
             case "order":
@@ -12953,6 +12957,69 @@ export class Host {
         this.#event("request", { id: player.id, change: "abandoned", request: structuredClone(request) });
 
         return OK;
+    }
+
+    // A request a player carries (by its id) shared with the others of their party (the players):
+    // given to each who could have been given it themselves and doesn't carry it (#unshared), as it
+    // stands, its progress so far and its time (Standing share), and told who shared it (the
+    // "request" event, "shared"). Who had it and who didn't, and why: { shared: [{ id, name }],
+    // skipped: [{ id, name, why }] }
+    #shareRequest(player, id) {
+        const request = player.standing.find(id);
+        const fellows = this.fellows(player.id).map((each) => this.players.get(each)).filter(Boolean);
+
+        if (!request) {
+            return refuse("request");
+        }
+
+        if (!fellows.length) {
+            return refuse("alone");
+        }
+
+        const [shared, skipped] = [[], []];
+
+        for (const fellow of fellows) {
+            const why = this.#unshared(player, fellow, request);
+            const given = why ? null : fellow.standing.share(request, player.hero.name);
+
+            if (!given) {
+                skipped.push({ id: fellow.id, name: fellow.hero.name, why: why ?? "has" });
+                continue;
+            }
+
+            shared.push({ id: fellow.id, name: fellow.hero.name });
+            this.#event("request", { id: fellow.id, change: "shared", request: structuredClone(given), by: player.hero.name });
+        }
+
+        return { ok: true, shared, skipped };
+    }
+
+    // Why another of a player's party (`fellow`) can't be shared a request the player carries, or
+    // null: they carry it already (asking the same: objectiveOf), or all they can (MOST_CARRIED);
+    // a guild's contract, they're not signed up at a guild, or not of the guild rank it's offered
+    // at (REQUESTS `rank`); a people's, they don't serve the same liege as the player, whose people
+    // asked it, or aren't of the rank it's offered at (the keep's, at least OPENS.keep)
+    #unshared(player, fellow, request) {
+        const { standing } = fellow;
+        const at = REQUESTS[request.kind]?.rank ?? 0;
+
+        if (standing.requests.some((each) => objectiveOf(each) === objectiveOf(request))) {
+            return "has";
+        }
+
+        if (standing.requests.length >= MOST_CARRIED) {
+            return "full";
+        }
+
+        if (request.from.post === "guild") {
+            return standing.guildRank() === null ? "unregistered" : standing.guildRank() < at ? "guildRank" : null;
+        }
+
+        if (!this.war || this.war.liege(fellow.realm) !== this.war.liege(player.realm)) {
+            return "stranger";
+        }
+
+        return standing.rank() < at || (request.from.post === "keep" && standing.rank() < OPENS.keep) ? "rank" : null;
     }
 
     // A foe a player's brought down, for the requests they carry: an enemy's soldier, or one of the

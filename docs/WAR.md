@@ -878,7 +878,8 @@ adventurers' guilds' work gives the guilds' merit instead (M8, *The guilds' rank
 | Lord | 800 | Orders for the army at the war table, and a say in war and peace. |
 | Councillor | 1500 | A seat on the council: your word weighs the most. |
 
-**Requests** are offered from how the war stands (`offerRequest`), at most three carried at once:
+**Requests** are offered from how the war stands (`offerRequest`), at most three carried at once
+(`MOST_REQUESTS`; more, shared by their party: *Parties*, *Requests shared*):
 
 | Request | Asked | Done when | Worth |
 | --- | --- | --- | --- |
@@ -919,8 +920,9 @@ for 20 turns or until it's acted on:
 - the player's rank, how far to the next, and what each opens;
 - their card from the adventurers' guilds (M8): its rank, how much more merit to the next, and
   what each gives; or that they've not registered, and where to;
-- each request they carry: who asked, what, how far it's come, which way and how far to go, and
-  how long's left (each can be given up);
+- each request they carry: who asked, what, how far it's come, which way and how far to go, how
+  long's left, and who of their party shared it with them (each can be given up; and, in a party
+  of players, shared with it: *Parties*, *Requests shared*);
 - their people: who rules them and from where, whom they're at war with and allied to, how many
   towns they hold;
 - what's lately done, failed or given up;
@@ -2945,9 +2947,23 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   away to keep the next"); the one who shared it's told it's on their maps. As with a ping, the
   host only tells the party (`party` events, `change: "mark"`, its words tidied: `markerWords`);
   refused out of a party, off the map, or for an icon there isn't.
+- **Requests shared** (`share`, with `request`: one they carry; the journal's **Share**, by each
+  request, in a party of players only; `#shareRequest`). Each other one of the party who could
+  have been given it themselves (`#unshared`) is given it as it stands, its count so far and its
+  time (`Standing.share`, kept with who shared it: `shared`), and told by whom ("Ada shared a
+  request with you: Thin their numbers. (J for your journal.)", with the quill); their journal
+  says so ("shared by Ada"). A people's request goes to those who serve the same liege as the one
+  sharing it, of the rank it's offered at (the keep's, a Retainer at least); a guild's contract
+  to those signed up at a guild, of the guild rank it's offered at; never to one who carries it
+  already (the same ask: `objectiveOf`). Shared, it may be a fourth or more, past the three
+  they'd take themselves, up to twelve (`MOST_CARRIED`). The one sharing it is told who had it and
+  who didn't, and why ("Shared with Bryn. Cal isn't of your people.", or "None of your party
+  could take it. Bryn has it already."). From then on each has their own: done, it's told of to
+  whoever asked by each for their own reward; failed or given up, by each alone. Refused out of a
+  party ("You've no party to share it with."), or for a request they don't carry.
 - **Kept.** Parties, and who's been asked, are carried in the world's snapshot (`SNAPSHOT_VERSION`
   24) and done by commands like anything else, so every copy has them alike; what two games share
-  changed (`NET_VERSION` 100; with shared finds and pings, 157; with markers shared, 161; with places seen from high ground, 162; with the moon roads, 167).
+  changed (`NET_VERSION` 100; with shared finds and pings, 157; with markers shared, 161; with places seen from high ground, 162; with the moon roads, 167; with requests shared, 186).
 - **Talk** (`core/netplay.js` `CHAT`, `Hosting.chat`; the party menu's Chat tab, docs/GAME.md).
   What's said in a party isn't done to the world, and isn't for everyone in it, so it isn't a
   command: a joined player's line goes to the host alone (`{ kind: "chat", text }`), and the host
@@ -3588,6 +3604,7 @@ a people is a little different, from a seed of their own:
 | `{ type: "use", index }` | Drink or eat something from their pack. |
 | `{ type: "ability", ability, target }` | Use an ability they've learnt. |
 | `{ type: "abandon", request }` | Give up a request they carry. |
+| `{ type: "share", request }` | Share a request they carry with the others of their party (*Parties*, *Requests shared*). |
 
 Any order can have `run: true`. A command that can't be done is refused, with a reason
 (`REFUSALS`, or a spell's own: `CAST_FAILURES`):
@@ -3599,7 +3616,8 @@ Any order can have `run: true`. A command that can't be done is refused, with a 
 - not enough gold, nothing like that for sale, a full pack;
 - an ability not learnt, or not ready yet;
 - not the one to ask, a stranger, not of the rank, nothing to offer or to tell of, enough carried
-  already, the armoury's gifts had, counsel that can't be taken.
+  already, the armoury's gifts had, counsel that can't be taken;
+- no party to share a request with.
 
 **Advancing.** `advance(ms)` runs the battle and returns its events, with the host's own:
 
@@ -3616,7 +3634,7 @@ Any order can have `run: true`. A command that can't be done is refused, with a 
 | `gear` | What a player wears and wields changed (what shows: `worn`, `[{ id, people }]`). |
 | `disguise` | A player passes for one of a people's soldiers (`on`), or no longer (`off`); was seen through (`seen`, by whom), or is known for what they are, having struck one of them (`known`). |
 | `ability` | A player used an ability. |
-| `request` | A player's request was taken, counted, done (to be told of), told of and rewarded, failed, given up or came to nothing. |
+| `request` | A player's request was taken, shared with them (`by`: who shared it), counted, done (to be told of), told of and rewarded, failed, given up or came to nothing. |
 | `standing` | A player reached a new rank in their people. |
 | `guild` | A player registered with the adventurers' guilds (`registered`), or reached a new rank in them (`rank`). |
 | `gift`, `counsel` | A player had the armoury's gift, or gave counsel. |

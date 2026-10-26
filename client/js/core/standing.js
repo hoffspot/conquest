@@ -39,8 +39,14 @@ export const OPENS = Object.freeze({ scout: 1, keep: 2, armoury: 2, defend: 2, r
 /** How much a player's counsel weighs with their rulers, by rank (0 below a Knight). */
 export const COUNSEL = Object.freeze([0, 0, 0, 0.4, 0.7, 1]);
 
-/** The most requests a player carries at once. */
+/** The most requests a player carries at once (taking more). */
 export const MOST_REQUESTS = 3;
+
+/**
+ * The most a player carries with those another of their party has shared with them (core/host.js
+ * #shareRequest): shared, they may go past MOST_REQUESTS, but no further than this.
+ */
+export const MOST_CARRIED = 12;
 
 /** How many done and failed requests are kept (the journal's last few). */
 const KEEP_DONE = 12;
@@ -1103,8 +1109,11 @@ export class Standing {
         /** The ranks whose armoury gift has been had. */
         this.claimed = claimed.filter((rank) => Number.isInteger(rank));
 
-        /** The requests carried (at most MOST_REQUESTS), and the last done or failed (newest first). */
-        this.requests = requests.filter((request) => REQUESTS[request?.kind]).slice(0, MOST_REQUESTS).map(inGold);
+        /**
+         * The requests carried (MOST_REQUESTS of their own taking, more shared with them: at most
+         * MOST_CARRIED), and the last done or failed (newest first).
+         */
+        this.requests = requests.filter((request) => REQUESTS[request?.kind]).slice(0, MOST_CARRIED).map(inGold);
         this.done = done.filter((request) => REQUESTS[request?.kind]).slice(0, KEEP_DONE).map(inGold);
         this.next = Number.isInteger(next) && next > 0 ? next : 1;
     }
@@ -1205,6 +1214,24 @@ export class Standing {
         this.requests.push(taken);
 
         return taken;
+    }
+
+    /**
+     * A request another of their party carries shared with them (core/host.js #shareRequest), as it
+     * stands: its progress so far and its time, theirs from now as any other they carry, by an id
+     * of their own, and who shared it (`shared`: their name). Past MOST_REQUESTS, but no further
+     * than MOST_CARRIED. Returns it, or null (carrying that many, or asked the same: objectiveOf).
+     */
+    share(request, by) {
+        if (this.requests.length >= MOST_CARRIED || this.requests.some((each) => objectiveOf(each) === objectiveOf(request))) {
+            return null;
+        }
+
+        const given = { ...structuredClone(request), id: `request-${this.next++}`, shared: by };
+
+        this.requests.push(given);
+
+        return given;
     }
 
     find(id) {

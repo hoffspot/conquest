@@ -16,6 +16,7 @@ import { buildWorld } from "../client/js/core/overworld.js";
 import { placesOf } from "../client/js/core/places.js";
 import { CHUNK } from "../client/js/core/worldplan/plan.js";
 import { SPELLS } from "../client/js/core/spells.js";
+import { Standing } from "../client/js/core/standing.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "grimoire", boots: false });
 
@@ -280,6 +281,72 @@ describe("parties of players (host.js PARTY, the party command)", () => {
             ],
         );
         assert.ok(events.find(({ id }) => id === HOST_PLAYER).places.includes(far.id));
+    });
+
+    it("shares a request one of them carries with each of the others who could take it, as it stands (its progress and its time), each told who shared it: not one of another people (a people's request), nor one unsigned at a guild (a guild's contract), nor one carrying it already; past the most they'd take themselves", () => {
+        const host = together(2);
+        const [ada, bea, cal, dee] = [HOST_PLAYER, "guest", "guest-2", "guest-3"].map((id) => host.players.get(id));
+        const town = host.war.towns.find(({ owner }) => owner === "human");
+
+        // (Not in a party: none to share with)
+        const bounty = ada.standing.take({ kind: "bounty", title: "Thin their numbers", from: { id: "reeve", name: "Ann", title: "Reeve", town: town.id, townName: town.name, post: "hall" }, given: 0, state: "open", count: 2, key: "orc", target: { realm: "orc", need: 4 }, text: "Bring down 4 of the orcs.", until: 30, reward: { standing: 28, gold: 16 } });
+
+        assert.equal(host.command(HOST_PLAYER, { type: "share", request: bounty.id }).reason, "alone");
+
+        for (const id of ["guest", "guest-2", "guest-3"]) {
+            assert.equal(party(host, HOST_PLAYER, "invite", id).ok, true);
+            assert.equal(party(host, id, "accept").ok, true);
+        }
+
+        assert.equal(host.command(HOST_PLAYER, { type: "share", request: "request-99" }).reason, "request");
+
+        // (Cal carries it already; Dee as many as they'd take themselves)
+        cal.standing.take({ ...bounty, count: 0 });
+
+        for (const key of ["a", "b", "c"]) {
+            dee.standing.take({ ...bounty, kind: "message", key, target: { town: key } });
+        }
+
+        const result = host.command(HOST_PLAYER, { type: "share", request: bounty.id });
+
+        assert.deepEqual(result, {
+            ok: true,
+            shared: [{ id: "guest-3", name: "Guest 3" }],
+            skipped: [
+                { id: "guest", name: "Bea", why: "stranger" },
+                { id: "guest-2", name: "Guest 2", why: "has" },
+            ],
+        });
+
+        const given = dee.standing.requests.at(-1);
+
+        assert.equal(dee.standing.requests.length, 4, "past the three they'd take");
+        assert.deepEqual([given.kind, given.count, given.until, given.state, given.shared], ["bounty", 2, 30, "open", "Ada"], "as it stands: its progress and its time");
+        assert.equal(new Standing(dee.standing.toJSON()).requests.length, 4, "kept so");
+        assert.equal(bea.standing.requests.length, 0);
+
+        const told = run(host, 100).filter(({ type, change }) => type === "request" && change === "shared");
+
+        assert.deepEqual(
+            told.map(({ id, by, request }) => [id, by, request.title]),
+            [["guest-3", "Ada", "Thin their numbers"]],
+        );
+
+        // (A guild's contract: anyone signed up at a guild, whatever their people; Dee, past the
+        // most they'd take, signed up too)
+        const contract = ada.standing.take({ kind: "beasts", title: "Beasts on the roads", from: { id: "clerk", name: "Ivo", title: "Receptionist", town: town.id, townName: town.name, post: "guild" }, given: 0, state: "open", count: 0, key: "beasts", target: { wild: true, need: 3 }, text: "Bring down 3 beasts.", until: 40, reward: { standing: 0, gold: 31, merit: 3 } });
+
+        bea.standing.register();
+        dee.standing.register();
+
+        const shared = host.command(HOST_PLAYER, { type: "share", request: contract.id });
+
+        assert.deepEqual(
+            shared.shared.map(({ name }) => name),
+            ["Bea", "Guest 3"],
+        );
+        assert.deepEqual(shared.skipped, [{ id: "guest-2", name: "Guest 2", why: "unregistered" }]);
+        assert.ok(bea.standing.requests.some(({ kind, shared: by }) => kind === "beasts" && by === "Ada"));
     });
 
     it("tells whoever asked when it's said no to, and when it lapses unanswered (ignored: the one asked not saying)", () => {

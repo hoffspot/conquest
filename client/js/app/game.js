@@ -834,6 +834,16 @@ const BELL = Object.freeze({ reach: 160, every: 180, volume: 1.6 });
 // that first; and the lord's thanks shown so long (seconds) for a good share of them felled
 const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, charge: 1.2, thanks: 14 });
 
+// Why another of the player's party wasn't given a request they shared (host.js #unshared), as told
+const SHARE_SKIPPED = Object.freeze({
+    has: "has it already",
+    full: "carries all they can",
+    unregistered: "isn't signed up at a guild",
+    guildRank: "isn't of the guild rank it's for",
+    stranger: "isn't of your people",
+    rank: "isn't of the rank it's for",
+});
+
 /**
  * A battle's turns (core/engagement.js) told to a player within `near` metres of where each comes
  * (#battleTurn), at most one every `every` seconds (but a commander falling, and their own job,
@@ -2058,6 +2068,9 @@ export class Game {
         this.journal = new JournalPanel(this.hud.root);
         this.journal.onAbandon = (id) => {
             this.#command({ type: "abandon", request: id }, () => this.journal.open && this.#showJournal());
+        };
+        this.journal.onShare = (id) => {
+            this.#command({ type: "share", request: id }, (result) => this.#requestShared(result));
         };
         this.journal.onRead = (id) => this.read(id);
         this.journal.onGiveUpTreasure = (id) => {
@@ -9276,6 +9289,7 @@ export class Game {
             const back = `Back to ${request.from.name} in ${request.from.townName}.`;
             const told = {
                 taken: `New request: ${request.title}. (J for your journal.)`,
+                shared: `${event.by} shared a request with you: ${request.title}. (J for your journal.)`,
                 count: `${request.title}: ${request.count} of ${request.target.need}.`,
                 ready: request.kind === "scout" || request.kind === "survey" ? `You've seen enough. ${back}` : `${request.title}: done. ${back}`,
                 there: {
@@ -9298,7 +9312,7 @@ export class Game {
             }
 
             // (Taken: written in the journal; done: the cue, and any gold paid)
-            const cue = { taken: "quill", done: "questDone", failed: "denied" }[change];
+            const cue = { taken: "quill", shared: "quill", done: "questDone", failed: "denied" }[change];
 
             if (cue) {
                 this.sound?.play(cue);
@@ -10415,8 +10429,11 @@ export class Game {
                     progress: progressOf(request),
                     where: where.at && at ? bearing(at, where.at) : "",
                     left: request.until === null || !war ? "" : `${Math.max(0, request.until - war.turn)} min left`,
+                    shared: request.shared ?? null,
                 };
             }),
+            // (In a party with other players: each request to share with them)
+            party: this.host.fellows(this.me).length > 0,
             people: realm
                 ? {
                       name: realm.name,
@@ -10456,6 +10473,30 @@ export class Game {
             bestiary: { ...bestiaryOf(this.progress.bestiary.kinds), portraitOf: (kind) => this.portraitOf(kind) },
             messages: this.messages,
         });
+    }
+
+    // A request shared with the player's party (the journal's Share: host.js #shareRequest): who
+    // had it, and who didn't and why (SHARE_SKIPPED), told; the journal shown again
+    #requestShared(result) {
+        if (!result?.ok) {
+            this.hud.message(REFUSALS[result?.reason] ?? "Can't do that.", 2);
+
+            return;
+        }
+
+        const names = (list) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : (list[0] ?? ""));
+        const given = result.shared.length ? `Shared with ${names(result.shared.map(({ name }) => name))}.` : "None of your party could take it.";
+        const not = result.skipped.map(({ name, why }) => `${name} ${SHARE_SKIPPED[why] ?? SHARE_SKIPPED.has}.`);
+
+        this.hud.message([given, ...not].join(" "), 4);
+
+        if (result.shared.length) {
+            this.sound?.play("quill");
+        }
+
+        if (this.journal.open) {
+            this.#showJournal();
+        }
     }
 
     // What the player's heard tell of (memory.heard: from the criers, core/rumours.js; of the
