@@ -1014,7 +1014,7 @@ test("two players walk about a while: the joined copy's checked against the host
     await guestContext.close();
 });
 
-test("a world joined in the thick of an invasion: the guest's game holds no more of its soldiers in full than there's room for, the rest drawn in their crowds as their figures are made, the fallen never dressed; and only Wenches and Ale's floors built, though the world comes with others' plans", async ({ ownBrowser: browser }) => {
+test("a world joined in the thick of an invasion: the guest's game holds no more of its soldiers in full than there's room for, the rest drawn in their crowds as their figures are made, the fallen never dressed; the figures of the kinds of those near her made while she loads, so they're seen from the first frame; and only Wenches and Ale's floors built, though the world comes with others' plans", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();
     const host = await hostContext.newPage();
@@ -1084,6 +1084,21 @@ test("a world joined in the thick of an invasion: the guest's game holds no more
                 // (Those fallen a while before still in line to be dressed, or waiting on their
                 // figure: none, the line looked at again since; those drawn in full seen to fall)
                 fallen: fell.filter((id) => game.enlisting.includes(id) || game.crowdWaiting.has(id)).length,
+                // (Those of it within 60 metres of her, FIGURES.reach: their kinds, and those of a
+                // kind whose figure's made not drawn at all)
+                near: (() => {
+                    const me = game.battle.actor(game.me);
+                    const them = invasion.filter(({ id, dead, map, x, y }) => !dead && map === me.map && Math.hypot(x - me.x, y - me.y) <= 60 && game.host.soldiers.has(id));
+                    const kindOf = ({ id, weapon }) => {
+                        const { people = "human", sex = "m", weapon: held = weapon } = game.host.soldiers.get(id);
+
+                        return `${people}:${sex}:${held}`;
+                    };
+                    const kinds = new Set(them.map(kindOf));
+
+                    return { soldiers: them.length, kinds: kinds.size, made: [...kinds].filter((key) => game.crowds?.made(key)).length, unseen: them.filter((actor) => game.crowds?.made(kindOf(actor)) && !game.avatars.has(actor.id)).length };
+                })(),
+                mustering: game.timings.figures ?? 0,
             };
         }, fell);
 
@@ -1091,6 +1106,15 @@ test("a world joined in the thick of an invasion: the guest's game holds no more
 
     expect(joined.soldiers).toBeGreaterThanOrEqual(20);
     expect(joined.inFull, JSON.stringify(joined)).toBeLessThanOrEqual(joined.room + 3);
+
+    // (Those near her seen from the first frame: their kinds' figures made while she loaded, the
+    // nearest first, for at most 10 seconds (FIGURES.most); and everyone of a kind made drawn in
+    // their crowd, not waiting on the marshal, those nearest built in full in their place)
+    expect(joined.near.soldiers, JSON.stringify(joined)).toBeGreaterThan(0);
+    expect(joined.near.made, JSON.stringify(joined)).toBeGreaterThan(0);
+    expect(joined.near.unseen, JSON.stringify(joined)).toBe(0);
+    expect(joined.crowded, JSON.stringify(joined)).toBeGreaterThan(0);
+    expect(joined.mustering).toBeLessThan(11000);
     expect(joined.planned).toBeGreaterThan(0);
     expect(joined.stray).toEqual([]);
     expect(joined.floors).toEqual(["taproom", "upstairs"]);

@@ -3685,6 +3685,19 @@ how many had room (`soldiers`):
   that falls while it waits is forgotten, never seen, and one that goes out of reach waits on: not
   built in full, as they were till 2026-10-25 (a joined game in the midst of an invasion had 38 of
   its dead in line to be, far off).
+- **Sooner while they're unseen** (`FIGURES`). While any soldier near waits so, unseen, the figures
+  are made with 10 ms of each frame (`FIGURES.budget`) rather than that share, the kinds of those
+  nearest the player first (whoever's fighting them before anyone: `Crowd.first`, `#marshal`),
+  those built in full given their own share after. And a world kept or joined in the thick of a
+  fight has the figures of the kinds of those within 60 metres of the player made while it loads,
+  the nearest first, for at most 10 seconds (`FIGURES.reach`, `FIGURES.most`, `#figuresFirst`;
+  "Mustering the soldiers"): everyone about of a kind made is drawn in their crowd from the first
+  frame, those nearest then built in full in their place as there's room. Locally, a guest on Low
+  joining a host's town as 50 Northmen invaded it (126 soldiers about, of 28 kinds) saw none of
+  them for 45 seconds, and 25 of 74 a minute and a half in, 4 kinds made. Now, its loading 10
+  seconds longer (the most), it sees 64 to 69 of the 126 from the first frame, 10 or 11 kinds made
+  while it loaded: 46 of the 53 within 60 metres, and all of them 6 seconds on; and 21 kinds are
+  made a minute and a half in.
 - **Let go of once they're not.** A kind's figure with nobody of its kind in the crowds for a
   minute (`CROWD_KEEP`, `Crowd.draw`) is let go of: its figure, its picture and its moves, off the
   graphics card (6 MB or so on Low), made again should one of its kind come. Kept for good, as
@@ -5269,11 +5282,13 @@ it.
    the game. Its count ("120 of 202") is of steps known before it starts: each chunk round the
    player (counted as it's drawn, however many goes it takes), each piece of the town and its
    trees, each floor of the tavern, everyone dressed before the first frame (the orc, anyone else
-   playing) and five more; it never passes its total, and ends on it. The soldiers, wagons and the
+   playing), each kind of soldier's figure made (below) and five more; it never passes its total, and ends on it. The soldiers, wagons and the
    wild's creatures about already (a world kept, or joined, in the thick of things) aren't dressed
    before the first frame but drawn as those who come later are, the nearest first, each in full
    or in its kind's crowd as there's room (`#marshal`, `#rationing`, `#thronging`), and the fallen
-   among them not at all. Dressing them all first, an iPhone on Low joining a world as an
+   among them not at all; in the thick of a fight, the figures of the kinds of soldiers near the
+   player are made first, for at most 10 seconds ("Mustering the soldiers", a step a kind: *Soldiers
+   in their crowds*, below), so that they're seen from the first frame. Dressing them all first, an iPhone on Low joining a world as an
    invasion's northmen fought in its town dressed 132 of them in full (582 MB) and let the game's
    tab go before its first frame, again each time it was loaded; and a Mac's Safari, on High, held
    1.35 GB. Nor are any floors built at the start but Wenches and Ale's: a world kept or joined
