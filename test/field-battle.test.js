@@ -137,7 +137,7 @@ describe("the battle among those near (battle.js #indexed)", () => {
 });
 
 describe("a field battle (host.js FIELD_BATTLE: the debug overlay's)", () => {
-    it("musters two armies before the player, theirs near and another people's further, making for each other", () => {
+    it("musters two armies before the player, theirs near and another people's further, each drawn up for battle, making for each other", () => {
         const { host, me } = outOfTown();
         const result = host.command(HOST_PLAYER, { type: "fieldBattle", size: 30, facing: Math.PI });
         const events = run(host, STEP_MS);
@@ -150,13 +150,24 @@ describe("a field battle (host.js FIELD_BATTLE: the debug overlay's)", () => {
         assert.equal(theirs.length, 30);
         assert.deepEqual(events.find(({ type }) => type === "fieldBattle").ids.sort(), fielded.map(({ id }) => id).sort());
 
-        // (The player's people, and the orcs; each soldier with what its people's carry in its role,
-        // in a line of battle of its own)
-        const armed = (actor, people) => actor.team === people && ROLE_ARMS[people][host.soldiers.get(actor.id).role].includes(actor.weapon);
+        // (The player's people, and the orcs; each soldier with what its people's carry in its role
+        // (their general, a two-hander's), in its side's bodies, core/engagement.js: its line's
+        // three, and its general's household behind them)
+        const armed = (actor, people) => actor.team === people && ROLE_ARMS[people][host.soldiers.get(actor.id).commander ? "heavy" : host.soldiers.get(actor.id).role].includes(actor.weapon);
+        const bodies = (side) => [...new Set(side.map(({ formation }) => formation.id))].sort();
 
-        assert.ok(ours.every((actor) => armed(actor, "human") && actor.formation.id === ours[0].formation.id));
-        assert.ok(theirs.every((actor) => armed(actor, "orc") && actor.formation.id === theirs[0].formation.id));
-        assert.notEqual(ours[0].formation.id, theirs[0].formation.id);
+        assert.ok(ours.every((actor) => armed(actor, "human")));
+        assert.ok(theirs.every((actor) => armed(actor, "orc")));
+        assert.deepEqual(bodies(ours), ["left", "centre", "right", "vanguard"].map((part) => (part === "centre" ? "field-friend-0" : `field-friend-0:${part}`)).sort());
+        assert.deepEqual(bodies(theirs), ["left", "centre", "right", "vanguard"].map((part) => (part === "centre" ? "field-foe-0" : `field-foe-0:${part}`)).sort());
+
+        for (const side of [ours, theirs]) {
+            const generals = side.filter(({ id }) => host.soldiers.get(id).commander);
+
+            assert.equal(generals.length, 1, "a general each");
+            assert.match(generals[0].name, /^General /);
+            assert.equal(generals[0].formation.id, side.find(({ formation }) => formation.id.endsWith(":vanguard")).formation.id, "at the head of their household");
+        }
 
         // (North of the player, the way they faced: theirs nearer, its rear `near` off, the others
         // further, the fronts `apart`)
@@ -216,7 +227,18 @@ describe("a field battle (host.js FIELD_BATTLE: the debug overlay's)", () => {
         const { fielded, foes, lines } = fieldOf(host);
 
         assert.equal(lines.length, 2);
-        assert.deepEqual(host.fields, [{ ids: fielded.map(({ id }) => id), formations: lines, at: host.battle.time, over: null }]);
+        assert.deepEqual(
+            host.fields.map(({ engagement, ...field }) => field),
+            [{ ids: fielded.map(({ id }) => id), formations: lines, at: host.battle.time, over: null }],
+        );
+        assert.deepEqual(
+            host.fields[0].engagement.sides.map(({ key, bodies }) => [key, bodies.map(({ formation }) => formation)]),
+            [
+                ["friend", [lines[0]]],
+                ["foe", [lines[1]]],
+            ],
+            "fought as a battle's fought, each side one body (core/engagement.js)",
+        );
 
         // (The others all fallen: it's over, and the victors stand a while)
         for (const foe of foes) {

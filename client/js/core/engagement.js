@@ -372,7 +372,6 @@ export function stepEngagement(engagement, ctx) {
 
             if (!here.length && body.state !== "gone") {
                 body.state = "gone";
-                battle.formation(body.formation, null);
             }
         }
     }
@@ -820,6 +819,24 @@ function melee(side, foe, { battle, now, ctx, members, formationOf, line }) {
             if (sent && !sent.to && them) {
                 body.flankers.stage = "rear";
                 Object.assign(sent, { to: placeAt(them, [0, FIELD.flank.rear + Math.max(FORMATION.rank, ...(members.get(target) ?? []).map(({ formation: { slot } }) => slot[1]))]), charge: true, advance: true });
+            }
+        }
+    }
+
+    // Its line all broken or down: its reserve and vanguard, as they stand, thrown at the nearest
+    // of the enemy's, the last throw (its commander fallen or not)
+    if (!line(side).length) {
+        for (const body of side.bodies.filter((one) => one.state === "held" && live(one) && formationOf(one))) {
+            const formation = formationOf(body);
+            const them = foe.bodies
+                .filter((one) => live(one) && formationOf(one))
+                .map(formationOf)
+                .sort((p, q) => apart(p.anchor, formation.anchor) - apart(q.anchor, formation.anchor))[0];
+
+            if (them) {
+                body.state = "committed";
+                Object.assign(formation, { to: placeAt(them, [0, -2]), speed: FIELD.commit.speed, charge: true, advance: true });
+                ctx.event("commit", { side: side.key, part: body.part, to: [...formation.to], at: "last", commander: body.part === "vanguard" ? side.commander : null });
             }
         }
     }

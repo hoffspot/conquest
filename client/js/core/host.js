@@ -33,7 +33,7 @@ import { MASTERED, payOf, RESEARCH } from "./bestiary.js";
 import { dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
-import { BODIES as BATTLE_BODIES, bodiesOf, COMMANDER, COMMANDERS, engagementOf, FIELD, layoutOf, offsetsOf, STANDARD, stepEngagement, tacticsOf, TROPHY } from "./engagement.js";
+import { BODIES as BATTLE_BODIES, bodiesOf, COMMANDER, COMMANDERS, engagementOf, FIELD, layoutOf, MORALE, offsetsOf, STANDARD, stepEngagement, tacticsOf, TROPHY } from "./engagement.js";
 import { createRandom } from "./random.js";
 import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
 import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
@@ -129,11 +129,12 @@ export const SKIRMISH_NEAR = Object.freeze({ from: 120, pace: 2.3, ahead: 16, cl
 /**
  * A seat's ruler and the captain of its guard in the world (docs/WAR.md *The armies near a
  * player*; war.js LEADERS): out at its keep's door once its garrison's put down there, each `hp`
- * strong (a soldier's are 40), `apart` metres either side of it; let go back in once every
- * player's `far` from them, or its garrison's made up again (the war doesn't, while they're out:
- * war.js #muster).
+ * strong (a soldier's are 40), `apart` metres either side of it, its last stand: `guards` of their
+ * household before them (core/engagement.js BODIES `vanguard`), the ruler their commander (Host
+ * #leadersOut); let go back in once every player's `far` from them, or its garrison's made up
+ * again (the war doesn't, while they're out: war.js #muster).
  */
-export const LEADERS_NEAR = Object.freeze({ hp: 120, apart: 1.5, far: 300 });
+export const LEADERS_NEAR = Object.freeze({ hp: 120, apart: 1.5, guards: 4, far: 300 });
 
 // How far either side of a supply depot's fire its stores are stacked (metres)
 const DEPOT_STORES = 2.6;
@@ -204,6 +205,16 @@ export const ARMY_NEAR = Object.freeze({ near: 300, far: 450, fight: 140, close:
  *   (war.js fleeing).
  */
 export const STORM = Object.freeze({ near: 60, calm: 20000, spread: 10, depth: 1.6, hold: 3, back: 7, loose: 2, muster: 14, reach: 40, party: 0.2, least: 2, most: 6, clear: 8, again: 45000, run: 3, stall: 60000 });
+
+/**
+ * Those storming a camp led (Host #stormCommand: core/engagement.js): each army's general and their
+ * household (as many as a side of its size has: BODIES `vanguard`) held back `behind` metres
+ * behind its archers at its muster till the storm's at a crisis (`crisis` of those it went in with
+ * fallen, or a breach hacked open), then sent in after the rest; its general fallen, those near
+ * them afraid a while (MORALE `commander`), its household not sent in, and it beaten off sooner,
+ * down to `shaken` more of what it went in with.
+ */
+export const STORM_COMMAND = Object.freeze({ behind: 6, crisis: 0.4, shaken: 0.25 });
 
 // The forces that fight out in the field (and storm camps): the armies and reserves
 const FIELDED = Object.freeze(["army", "reserve"]);
@@ -556,14 +567,16 @@ export const UNDO_MS = 8000;
 
 /**
  * A field battle (Host #fieldBattle: the debug overlay's, to see how many a device draws and plays
- * smoothly): `most` a side at most, each an army in a line of battle (core/formation.js: its mix
- * of roles, its places), the rear of the player's people's `near` metres ahead of them and the
- * two fronts `apart` metres apart, facing each other, marching to meet halfway at `march` metres
- * a second. Once either side's all fallen, those left stand `linger` ms, then go as soon as
- * they're not fighting; and `lasts` ms after it was mustered, everyone left in it goes (ms of
- * the battle's time): a world kept for weeks isn't left holding every field battle's victors.
+ * smoothly): `most` a side at most, each an army drawn up for battle (core/engagement.js: its
+ * line's three bodies, its reserve, its general and their household), the rear of the player's
+ * people's `near` metres ahead of them and the two fronts `apart` metres apart, facing each other,
+ * marching to meet halfway at `march` metres a second, and fighting it out as a battle's fought;
+ * a body that breaks running `run` m/s for `away` metres behind where its army formed. Once either
+ * side's all fallen or broken, those left stand `linger` ms, then go as soon as they're not
+ * fighting; and `lasts` ms after it was mustered, everyone left in it goes (ms of the battle's
+ * time): a world kept for weeks isn't left holding every field battle's victors.
  */
-export const FIELD_BATTLE = Object.freeze({ most: 200, near: 8, apart: 48, march: 1.1, linger: 20000, lasts: 300000 });
+export const FIELD_BATTLE = Object.freeze({ most: 200, near: 8, apart: 48, march: 1.1, run: 2.6, away: 60, linger: 20000, lasts: 300000 });
 
 /**
  * What each people's soldiers fight with in a line of battle, by their role (core/formation.js
@@ -634,7 +647,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 40;
+export const SNAPSHOT_VERSION = 41;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -709,7 +722,37 @@ export const SNAPSHOT_STEPS = Object.freeze({
     38: (snapshot) => ({ ...snapshot, version: 39, burnt: [] }),
     // 40: the enemy each player's locked on (battle.js `lock`: none yet)
     39: (snapshot) => ({ ...snapshot, version: 40, battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => ({ lock: null, ...actor })) } }),
+    // 41: battles fought in bodies (core/engagement.js): a band's invasion on fought on by its two
+    // lines as they stand, each one body (keptInvasion); and the battles between armies met
+    // (Host #clashes: none yet)
+    40: (snapshot) => ({
+        ...snapshot,
+        version: 41,
+        invasions: (snapshot.invasions ?? []).map((invasion) => (invasion.beast !== undefined || invasion.engagement ? invasion : { ...invasion, engagement: keptInvasion(invasion, snapshot.battle.time) })),
+        clashes: [],
+    }),
 });
+
+// A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
+// lines each one body of a battle (core/engagement.js), the centre, at it if they'd charged
+function keptInvasion(invasion, now) {
+    const charged = (invasion.charged ?? null) !== null;
+    const engagement = engagementOf({
+        id: invasion.id,
+        now,
+        phase: charged ? "melee" : "march",
+        sides: [
+            { key: "invaders", name: BANDS[invasion.band]?.label ?? invasion.band, band: invasion.band, tactic: tacticsOf(invasion.band), falters: (BANDS[invasion.band]?.rout ?? INVASION.rout) === 0, exit: [...invasion.exit], run: INVASION.run, bodies: [{ part: "centre", formation: invasion.formations.invaders, size: invasion.size, offset: [0, 0] }] },
+            { key: "defenders", name: "town", band: null, tactic: "line", exit: [...(invasion.rally ?? invasion.middle)], run: INVASION.run, bodies: [{ part: "centre", formation: invasion.formations.defenders, size: invasion.mustered, offset: [0, 0] }] },
+        ],
+    });
+
+    for (const body of charged ? engagement.sides.flatMap(({ bodies }) => bodies) : []) {
+        Object.assign(body, { state: "charging", pair: "centre" });
+    }
+
+    return engagement;
+}
 
 /**
  * Which shop each of the folk keeps (by their role): what they sell (core/progress.js SHOPS);
@@ -1086,6 +1129,13 @@ export class Host {
          * next (when the next may be: battle ms), posted (how its holders were last posted) }.
          */
         this.storms = new Map();
+
+        /**
+         * The battles between armies met near a player (#clashes), by id: { forces (the two met
+         * fighting it: ids), engagement (core/engagement.js: each its side, by its id) }. Each met
+         * fighting one has it as its `clash`.
+         */
+        this.clashes = new Map();
 
         /**
          * The envoys met on the road near a player (by the envoy's id): { people, to (whose seat
@@ -2602,6 +2652,7 @@ export class Host {
             camps: [...this.camps.entries()],
             armies: [...this.armies.entries()],
             storms: [...this.storms.entries()],
+            clashes: [...this.clashes.entries()],
             supplies: [...this.supplies.entries()],
             skirmishers: [...this.skirmishers.entries()],
             leaders: [...this.leaders.entries()],
@@ -2780,6 +2831,7 @@ export class Host {
         host.camps = new Map(structuredClone(snapshot.camps ?? []));
         host.armies = new Map(structuredClone(snapshot.armies ?? []));
         host.storms = new Map(structuredClone(snapshot.storms ?? []));
+        host.clashes = new Map(structuredClone(snapshot.clashes ?? []));
         host.supplies = new Map(structuredClone(snapshot.supplies ?? []));
         host.skirmishers = new Map(structuredClone(snapshot.skirmishers ?? []));
         host.leaders = new Map(structuredClone(snapshot.leaders ?? []));
@@ -4703,6 +4755,7 @@ export class Host {
         }
 
         this.#watchArmies();
+        this.#clashes();
         this.#storms();
 
         // The envoys near a player met on the road, and let go once they're far (or gone, and far)
@@ -4938,54 +4991,68 @@ export class Host {
         const ahead = [sin(facing), cos(facing)];
         const at = (forward) => [actor.x + ahead[0] * forward, actor.y + ahead[1] * forward];
         const foe = player.realm === "orc" ? "human" : "orc";
-        const lines = [player.realm, foe].map((people) => {
-            const roles = rolesOf(size, DOCTRINES[people]);
-
-            return { roles, places: linePlaces(roles) };
-        });
-        const front = FIELD_BATTLE.near + Math.max(0, ...lines[0].places.map(([, back]) => back));
+        const number = this.fielded;
+        const armies = [player.realm, foe].map((people) => ({ people, bodies: bodiesOf(size, DOCTRINES[people], { tactic: "line" }) }));
+        // (How deep the player's people's army stands, its vanguard's rearmost rank behind its front)
+        const laid = armies[0].bodies.map((body) => ({ ...body, places: linePlaces(body.roles, layoutOf(body.part, "line")) }));
+        const offsets = offsetsOf(laid);
+        const front = FIELD_BATTLE.near + Math.max(0, ...laid.map(({ part, places }) => (offsets[part]?.[1] ?? 0) + Math.max(0, ...places.map(([, back]) => back))));
         const meet = at(front + FIELD_BATTLE.apart / 2);
         const ids = [];
-        const formations = [];
+        const sides = [];
 
-        for (const [side, people, from, faces, { roles, places }] of [
-            ["friend", player.realm, front, facing, lines[0]],
-            ["foe", foe, front + FIELD_BATTLE.apart, facing + Math.PI, lines[1]],
+        for (const [side, { people, bodies }, from, faces, exit] of [
+            ["friend", armies[0], front, facing, at(front - FIELD_BATTLE.away)],
+            ["foe", armies[1], front + FIELD_BATTLE.apart, facing + Math.PI, at(front + FIELD_BATTLE.apart + FIELD_BATTLE.away)],
         ]) {
-            const formation = `field-${side}-${this.fielded}`;
-            const anchor = at(from);
             const counts = {};
+            const random = createRandom([...`field-${number}:${side}`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0);
+            let [commander, banner] = [null, null];
+            const formed = this.#formSide({
+                base: `field-${side}-${number}`,
+                bodies,
+                tactic: "line",
+                anchor: at(from),
+                facing: faces,
+                to: [meet[0] - sin(faces) * 1.5, meet[1] - cos(faces) * 1.5],
+                speed: FIELD_BATTLE.march,
+                free,
+                enlist: ({ role, part, k, square, formation }) => {
+                    const { leads, guard, bears, power, hp, armor } = this.#household(part, k, banner);
+                    const id = `field-${this.fielded++}`;
+                    const kit = soldierOf(people, leads ? "heavy" : role, leads ? 0 : (counts[role] = (counts[role] ?? -1) + 1));
 
-            formations.push(formation);
+                    this.#enlist(id, { people, ...kit, square, name: leads ? "general" : bears ? STANDARD : guard ? COMMANDERS.army.guard : "soldier", record: { field: side, role, ...(leads ? { commander: true, chief: true } : {}), ...(bears ? { banner: true } : {}), ...(power ? { power } : {}) }, patrol: [square], facing: faces, leash: ROLES[role].leash, armed: true, formation, ...(power ? { hp: Math.round(KINDS.soldier.hp * hp), armor, power: { melee: power } } : {}) });
+                    ids.push(id);
 
-            this.battle.formation(formation, { anchor, facing: faces, to: [meet[0] - sin(faces) * 1.5, meet[1] - cos(faces) * 1.5], speed: FIELD_BATTLE.march, advance: true });
+                    if (leads) {
+                        const not = this.battle.actor(sides[0]?.commander)?.name;
 
-            roles.forEach((role, k) => {
-                let square;
+                        commander = id;
+                        this.battle.actor(id).name = `${COMMANDERS.army.title} ${random.pick(COMMANDERS.army.names.filter((name) => `${COMMANDERS.army.title} ${name}` !== not))}`;
+                    }
 
-                try {
-                    square = free(placeAt({ anchor, facing: faces }, places[k]));
-                } catch {
-                    return;
-                }
+                    banner = bears ? id : banner;
 
-                const id = `field-${this.fielded++}`;
-                const kit = soldierOf(people, role, (counts[role] = (counts[role] ?? -1) + 1));
-
-                this.#enlist(id, { people, ...kit, square, name: "soldier", record: { field: side, role }, patrol: [square], facing: faces, leash: ROLES[role].leash, armed: true, formation: { id: formation, slot: places[k], role } });
-                ids.push(id);
+                    return id;
+                },
             });
+
+            sides.push({ key: side, name: people, band: null, tactic: "line", exit, run: FIELD_BATTLE.run, commander, banner, bodies: formed });
         }
 
-        this.fields.push({ ids, formations, at: this.battle.time, over: null });
+        const engagement = engagementOf({ id: `field-${number}`, now: this.battle.time, sides });
+
+        this.fields.push({ ids, formations: sides.flatMap(({ bodies }) => bodies.map(({ formation }) => formation)), at: this.battle.time, over: null, engagement });
         this.#event("fieldBattle", { ids, size });
 
         return { ok: true };
     }
 
-    // The field battles out let go when they're done (FIELD_BATTLE): once either side's all
-    // fallen, those left in it stand a while (`linger`), then each goes once it isn't fighting;
-    // and when it's gone on `lasts`, everyone left in it goes. Its lines go with the last of them
+    // The field battles out fought (core/engagement.js), and let go when they're done
+    // (FIELD_BATTLE): once either side's all fallen or broken, those left in it stand a while
+    // (`linger`), then each goes once it isn't fighting; and when it's gone on `lasts`, everyone
+    // left in it goes. Its lines go with the last of them
     #fieldsDone() {
         const now = this.battle.time;
 
@@ -4993,7 +5060,13 @@ export class Host {
             const left = field.ids.filter((id) => this.battle.actor(id));
             const standing = (side) => left.some((id) => this.soldiers.get(id)?.field === side && !this.battle.actor(id).dead);
 
-            if (field.over === null && !(standing("friend") && standing("foe"))) {
+            // (Fought as a battle's fought, core/engagement.js, till it's over)
+            if (field.engagement && field.over === null && now >= field.engagement.next) {
+                field.engagement.next = now + FIELD.every;
+                this.#fight(field.engagement);
+            }
+
+            if (field.over === null && (!(standing("friend") && standing("foe")) || field.engagement?.beaten.length)) {
                 field.over = now;
             }
 
@@ -5011,7 +5084,7 @@ export class Host {
             field.ids = left.filter((id) => !going.includes(id));
 
             if (!field.ids.length) {
-                for (const formation of field.formations) {
+                for (const formation of field.formations.flatMap((id) => [id, `${id}:probe`, `${id}:flank`])) {
                     this.battle.formation(formation, null);
                 }
 
@@ -6102,6 +6175,12 @@ export class Host {
                 this.#routed(id, force, met, foe);
             }
 
+            // (In a battle with an enemy's met: its lines steered by it, #clashes)
+            if (met.clash) {
+                this.#keepUpArmy(force, met);
+                continue;
+            }
+
             if (String(to) !== String(formation.to)) {
                 this.battle.formation(met.formation, { to: to ? [...to] : null });
 
@@ -6113,6 +6192,219 @@ export class Host {
 
             this.#keepUpArmy(force, met);
         }
+    }
+
+    // The battles between armies met near a player (docs/WAR.md *Battles*): two of enemy peoples
+    // within ARMY_NEAR.fight of each other, neither in another, storming or holding a camp, at its
+    // own camp, or beaten and getting away, each drawn up for battle where it stands (#drawUp) and
+    // the battle fought out as core/engagement.js has it (#fight), their lines steered by it, not
+    // #watchArmies. Over once either's beaten (the war told: #beatenBy), gone or getting away:
+    // each left formed in its one line again (#clashOver), and on its way
+    #clashes() {
+        const war = this.war;
+        const now = this.battle.time;
+
+        for (const [id, clash] of [...this.clashes]) {
+            const gone = clash.forces.some((each) => !this.armies.has(each) || !(war.force(each)?.size > 0) || war.fleeing(each));
+
+            if (!gone && now >= clash.engagement.next) {
+                clash.engagement.next = now + FIELD.every;
+                this.#fight(clash.engagement, { told: { clash: id } });
+            }
+
+            if (gone || clash.engagement.beaten.length) {
+                for (const k of gone ? [] : clash.engagement.beaten) {
+                    this.#beatenBy(clash.forces[k], clash.forces[1 - k]);
+                }
+
+                this.#clashOver(id);
+            }
+        }
+
+        const storming = new Set([...this.storms.values()].flatMap(({ attackers }) => attackers));
+        const holding = new Set([...this.storms.values()].map(({ army }) => army).filter(Boolean));
+        const free = (id) => {
+            const force = war.force(id);
+            const met = this.armies.get(id);
+
+            return Boolean(force && met && !met.clash && FIELDED.includes(force.kind) && force.size > 0 && !war.fleeing(id) && !storming.has(id) && !holding.has(id) && this.#heldBy(id) === null && this.battle.formations[met.formation]);
+        };
+
+        for (const [id, met] of this.armies) {
+            const foe = free(id)
+                ? [...this.armies]
+                      .filter(([other]) => other !== id && free(other) && war.hostile(war.force(other).realm, war.force(id).realm))
+                      .map(([other, theirs]) => ({ other, distance: hypot(theirs.at[0] - met.at[0], theirs.at[1] - met.at[1]) }))
+                      .filter(({ distance }) => distance <= ARMY_NEAR.fight)
+                      .sort((a, b) => a.distance - b.distance || (a.other < b.other ? -1 : 1))[0]
+                : null;
+
+            if (foe) {
+                this.#clash(id, foe.other);
+            }
+        }
+    }
+
+    // Two armies met (`a` and `b`, by id) to battle each other where they stand (#clashes), each
+    // drawn up facing the other
+    #clash(a, b) {
+        const id = `clash:${a}:${b}:${this.battle.time}`;
+        const [mine, theirs] = [a, b].map((each) => this.battle.formations[this.armies.get(each).formation].anchor);
+        const first = this.#drawUp(a, atan2(theirs[0] - mine[0], theirs[1] - mine[1]));
+        const sides = [first, this.#drawUp(b, atan2(mine[0] - theirs[0], mine[1] - theirs[1]), { not: this.battle.actor(first.commander)?.name })];
+
+        this.clashes.set(id, { forces: [a, b], engagement: engagementOf({ id, now: this.battle.time, sides }) });
+        this.armies.get(a).clash = id;
+        this.armies.get(b).clash = id;
+    }
+
+    // An army or reserve met (by id) drawn up for battle where its line stands, facing `facing`
+    // (core/engagement.js): its soldiers parted among its line's three bodies, its reserve and its
+    // general's household by their roles (as many of each as each wants, the rest wherever there's
+    // room), each body in a formation of its own (its centre's its line's, the others'
+    // `${line}:${part}`); its general (the one it had, or one of its shield line made one, not
+    // called `not`: #promote) at the head of their household. Its side, as an engagement has it
+    #drawUp(id, facing, { not = null } = {}) {
+        const force = this.war.force(id);
+        const met = this.armies.get(id);
+        const people = force.realm;
+        const { anchor } = this.battle.formations[met.formation];
+        const soldiers = met.ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead && actor.formation);
+        // (Its general: the one it had, else one of its shield line or two-handers not of their
+        // household already, made one: #promote)
+        const general = soldiers.find((actor) => actor.id === met.general) ?? soldiers.find((actor) => actor.formation.role === "front" && !this.soldiers.get(actor.id)?.power) ?? soldiers.find((actor) => actor.formation.role === "heavy" && !this.soldiers.get(actor.id)?.power) ?? null;
+        const pool = new Map();
+
+        for (const actor of soldiers.filter((each) => each !== general)) {
+            (pool.get(actor.formation.role) ?? pool.set(actor.formation.role, []).get(actor.formation.role)).push(actor);
+        }
+
+        // (Each body's places filled by those of its roles, then by any left over)
+        const bodies = bodiesOf(soldiers.length, DOCTRINES[people] ?? DOCTRINES.human, { tactic: "line" });
+        const filled = bodies.map(({ part, roles }) => roles.map((role, k) => (part === "vanguard" && k === 0 && general ? general : (pool.get(role)?.shift() ?? null))));
+        const over = [...pool.values()].flat();
+
+        for (const slots of filled) {
+            slots.forEach((actor, k) => (slots[k] = actor ?? over.shift() ?? null));
+        }
+
+        const laid = bodies
+            .map(({ part }, b) => {
+                const members = filled[b].filter(Boolean);
+                const layout = layoutOf(part, "line");
+
+                return { part, members, layout, places: linePlaces(members.map(({ formation }) => formation.role), layout) };
+            })
+            .filter(({ members }) => members.length);
+        const offsets = offsetsOf(laid);
+
+        const formed = laid.map(({ part, members, layout, places }) => {
+            const formation = part === "centre" ? met.formation : `${met.formation}:${part}`;
+            const offset = offsets[part] ?? [0, 0];
+
+            this.battle.formation(formation, { anchor: placeAt({ anchor, facing }, offset), facing, to: null, speed: ARMY_NEAR.pace, advance: false, charge: false, broken: false, layout });
+
+            members.forEach((actor, k) => (actor.formation = { id: formation, slot: places[k], role: actor.formation.role }));
+
+            if (part === "vanguard") {
+                this.#promote(id, members, { not });
+            }
+
+            return { part, formation, size: members.length, offset };
+        });
+
+        return { key: id, name: people, band: null, tactic: "line", exit: placeAt({ anchor, facing }, [0, ARMY_NEAR.fight]), run: STORM.run, commander: met.general ?? null, banner: met.banner ?? null, bodies: formed };
+    }
+
+    // An army's general and their household (core/engagement.js), `members` in order (actors), the
+    // first its general: each made so once (#household: harder to bring down and striking harder;
+    // the general named by COMMANDERS `army`, not `not`, the first of the rest its standard-bearer,
+    // the rest its household guards), kept as the army's (by its id: its met's `general`, `banner`)
+    #promote(id, members, { not = null } = {}) {
+        const met = this.armies.get(id);
+        const people = this.war.force(id)?.realm ?? met.people;
+        const random = createRandom([...`${id}:general`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0);
+        const adjective = ADJECTIVES[people] ?? people;
+        const titled = (name) => `${adjective[0].toUpperCase()}${adjective.slice(1)} ${name}`;
+        let banner = members.some(({ id: each }) => each === met.banner) ? met.banner : null;
+
+        members.forEach((actor, k) => {
+            const record = this.soldiers.get(actor.id);
+
+            if (record.power) {
+                return;
+            }
+
+            const { leads, bears, power, hp, armor } = this.#household("vanguard", k, banner);
+
+            actor.hp = Math.max(1, Math.round((actor.hp * KINDS.soldier.hp * hp) / Math.max(1, actor.maxHp)));
+            actor.maxHp = Math.round(KINDS.soldier.hp * hp);
+            actor.armor = (actor.armor ?? 0) + armor;
+            actor.power.melee = power;
+            record.power = power;
+            actor.name = leads ? `${COMMANDERS.army.title} ${random.pick(COMMANDERS.army.names.filter((name) => `${COMMANDERS.army.title} ${name}` !== not))}` : titled(bears ? STANDARD : COMMANDERS.army.guard);
+
+            if (leads) {
+                Object.assign(record, { commander: true, chief: true });
+                met.general = actor.id;
+            } else if (bears) {
+                record.banner = true;
+                met.banner = actor.id;
+                banner = actor.id;
+            }
+        });
+    }
+
+    // An army or reserve met beaten in a battle with another (#clashes): the war told, by whoever
+    // beat it, how many each lost since it began (#routed's reckoning)
+    #beatenBy(id, by) {
+        const war = this.war;
+        const force = war.force(id);
+        const victor = war.force(by);
+        const met = this.armies.get(id);
+
+        if (!force || !met || war.fleeing(id)) {
+            return;
+        }
+
+        war.routed(id, { by: victor?.realm ?? null, killed: Math.max(0, (met.went ?? force.size) - force.size), lost: Math.max(0, (this.armies.get(by)?.went ?? victor?.size ?? 0) - (victor?.size ?? 0)) });
+        met.went = null;
+    }
+
+    // A battle between armies met over (#clashes): each still met formed in its one line again
+    // where its centre stands, its soldiers' places in it as core/formation.js has them by their
+    // roles, each going after an enemy as far as its role does, striking as hard as they do (their
+    // general's near or not); its bodies' other formations gone; and on its way (#watchArmies)
+    #clashOver(id) {
+        const clash = this.clashes.get(id);
+
+        this.clashes.delete(id);
+
+        clash.engagement.sides.forEach((side, k) => {
+            const met = this.armies.get(clash.forces[k]);
+
+            if (met && met.clash === id) {
+                const soldiers = met.ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead && actor.formation);
+                const places = linePlaces(soldiers.map(({ formation }) => formation.role));
+
+                soldiers.forEach((actor, n) => {
+                    actor.formation = { id: met.formation, slot: places[n], role: actor.formation.role };
+                    actor.leash = ROLES[actor.formation.role]?.leash ?? actor.leash;
+                    actor.power.melee = this.soldiers.get(actor.id)?.power ?? 1;
+                    delete actor.formation.post;
+                    delete actor.sight;
+                });
+
+                this.battle.formation(met.formation, { to: null, charge: false, broken: false, layout: null, speed: ARMY_NEAR.pace });
+                delete met.clash;
+            }
+
+            for (const formation of side.bodies.flatMap((body) => [body.formation, `${body.formation}:probe`, `${body.formation}:flank`])) {
+                if (formation !== met?.formation && this.battle.formations[formation]) {
+                    this.battle.formation(formation, null);
+                }
+            }
+        });
     }
 
     // An army's own camp's parade ground ({ at, facing }: stockade.js), if `point` is its camp's
@@ -6283,7 +6575,7 @@ export class Host {
                 const [by, of] = [stormers(), holders()];
                 const fell = { killed: Math.max(0, storm.went.of - of), lost: Math.max(0, storm.went.by - by) };
 
-                if (by <= 0 || (storm.attackers.length && by <= ARMY.rout * storm.went.by && by < of)) {
+                if (by <= 0 || (storm.attackers.length && by <= (ARMY.rout + (storm.shaken ? STORM_COMMAND.shaken : 0)) * storm.went.by && by < of)) {
                     this.#stormEnded(camp.id, true, fell);
                     continue;
                 }
@@ -6323,11 +6615,62 @@ export class Host {
                 this.#holdStockade(camp, storm, toward);
             }
 
+            this.#stormCommand(camp, storm);
+
             for (const each of storm.attackers) {
                 this.#storming(camp, storm, each);
             }
 
             this.#hack(camp, storm);
+        }
+    }
+
+    // Those storming a camp led (STORM_COMMAND): each army's general and their household (made
+    // so once: #promote) held back at its muster till the storm's at a crisis, then sent in after
+    // the rest (#storming: `committed`); its general fallen, those near them afraid a while, its
+    // household not sent in, and the storm the sooner beaten off (`shaken`: #storms). Told to
+    // everyone as a battle's are (the "engagement" event: "commit", "commanderFell")
+    #stormCommand(camp, storm) {
+        const now = this.battle.time;
+        const by = storm.by.reduce((sum, each) => sum + (this.war.force(each)?.size ?? 0), 0);
+        const crisis = Boolean(storm.went) && (by <= storm.went.by * (1 - STORM_COMMAND.crisis) || storm.breaches > 0);
+        const told = { id: `storm:${camp.id}`, storm: camp.id };
+
+        for (const id of storm.attackers) {
+            const met = this.armies.get(id);
+            const soldiers = met.ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead && actor.formation);
+
+            // (Its general's household: as many as a side of its size has, its general foremost)
+            if (!met.household) {
+                const { from, share, least, most } = BATTLE_BODIES.vanguard;
+                const many = soldiers.length >= from ? Math.min(most, Math.max(least, Math.round(soldiers.length * share))) : 0;
+                const general = soldiers.find((actor) => actor.id === met.general) ?? soldiers.find((actor) => ["front", "heavy"].includes(actor.formation.role) && !this.soldiers.get(actor.id)?.power);
+                const guards = soldiers.filter((actor) => actor !== general && ["front", "heavy"].includes(actor.formation.role)).slice(0, Math.max(0, many - 1));
+                const members = many && general ? [general, ...guards] : [];
+
+                this.#promote(id, members);
+                met.household = members.map((actor) => actor.id);
+            }
+
+            const general = met.household.includes(met.general) ? this.battle.actor(met.general) : null;
+
+            if (met.household.includes(met.general) && !met.generalFell && (!general || general.dead)) {
+                met.generalFell = now;
+                storm.shaken = true;
+
+                for (const actor of general ? soldiers : []) {
+                    if (hypot(actor.x - general.x, actor.y - general.y) <= MORALE.commander.near) {
+                        this.battle.afflict(actor.id, "fear", { ms: MORALE.commander.fear });
+                    }
+                }
+
+                this.#event("engagement", { ...told, change: "commanderFell", side: id, name: general?.name ?? "" });
+            }
+
+            if (crisis && !met.committed && !met.generalFell && met.household.length) {
+                met.committed = now;
+                this.#event("engagement", { ...told, change: "commit", side: id, part: "vanguard", commander: met.general, to: [...this.war.stockade(camp.id).parade.at] });
+            }
         }
     }
 
@@ -6428,7 +6771,9 @@ export class Host {
         const formation = this.battle.formations[met.formation];
         const opening = nearestOf(this.#openings(camp), formation.anchor);
         const soldiers = met.ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead && actor.formation);
-        const posted = `${opening.key}|${soldiers.length}|${storm.section?.id ?? ""}`;
+        // (Its general's household, held back till they're sent in: #stormCommand)
+        const held = new Set(met.committed || met.generalFell ? [] : (met.household ?? []));
+        const posted = `${opening.key}|${soldiers.length}|${storm.section?.id ?? ""}|${held.size}`;
 
         if (met.storming === posted) {
             return;
@@ -6440,10 +6785,18 @@ export class Host {
         const muster = [at[0] + out[0] * STORM.muster, at[1] + out[1] * STORM.muster];
         const inward = atan2(-out[0], -out[1]);
         const parade = this.war.stockade(camp.id).parade.at;
-        const shooters = soldiers.filter((actor) => ["archer", "caster"].includes(actor.formation.role));
-        const rest = soldiers.filter((actor) => !shooters.includes(actor) && actor.siege !== storm.section?.id);
+        const shooters = soldiers.filter((actor) => ["archer", "caster"].includes(actor.formation.role) && !held.has(actor.id));
+        const rest = soldiers.filter((actor) => !shooters.includes(actor) && actor.siege !== storm.section?.id && !held.has(actor.id));
+        const household = soldiers.filter((actor) => held.has(actor.id));
 
         this.battle.formation(met.formation, { to: muster, advance: false });
+
+        household.forEach((actor, k) => {
+            const across = (k - (household.length - 1) / 2) * FORMATION.apart;
+
+            Object.assign(actor.formation, { post: [muster[0] + out[0] * STORM_COMMAND.behind + along[0] * across, muster[1] + out[1] * STORM_COMMAND.behind + along[1] * across], facing: inward });
+            actor.leash = ROLES.front.leash;
+        });
 
         shooters.forEach((actor, k) => {
             const across = (k - (shooters.length - 1) / 2) * 1.5;
@@ -6476,9 +6829,11 @@ export class Host {
         const met = this.armies.get(storm.attackers[0]);
         // (Of those outside it: from within, its wall's out of reach behind its walkway)
         const [x0, y0, x1, y1] = stockade.box;
+        // (Not its general's household while it's held back: #stormCommand)
+        const held = met.committed || met.generalFell ? [] : (met.household ?? []);
         const melee = met.ids
             .map((each) => this.battle.actor(each))
-            .filter((actor) => actor && !actor.dead && ["front", "heavy"].includes(actor.formation?.role) && (actor.siege || actor.square[0] < x0 || actor.square[1] < y0 || actor.square[0] > x1 || actor.square[1] > y1));
+            .filter((actor) => actor && !actor.dead && !held.includes(actor.id) && ["front", "heavy"].includes(actor.formation?.role) && (actor.siege || actor.square[0] < x0 || actor.square[1] < y0 || actor.square[0] > x1 || actor.square[1] > y1));
 
         if (section && !section.dead) {
             // (Those hacking at it all fallen: as many again of the rest outside it, unannounced)
@@ -6620,7 +6975,11 @@ export class Host {
                 continue;
             }
 
+            // (Its general's household held back again in the next: #stormCommand)
             met.storming = null;
+            met.committed = null;
+            met.generalFell = null;
+            met.household = null;
 
             for (const actor of met.ids.map((one) => this.battle.actor(one)).filter((actor) => actor?.formation)) {
                 delete actor.formation.post;
@@ -6750,6 +7109,10 @@ export class Host {
     // An army or reserve met let go: its soldiers gone from the world (with it, in the war), its line
     // with them
     #letArmyGo(id) {
+        if (this.armies.get(id).clash) {
+            this.#clashOver(this.armies.get(id).clash);
+        }
+
         const { ids, formation } = this.armies.get(id);
 
         this.armies.delete(id);
@@ -7064,14 +7427,31 @@ export class Host {
         const [guardArms] = SOLDIERS_ARMS[town.owner] ?? SOLDIERS_ARMS.human;
         const free = this.#spots();
         const ids = [];
+        const guards = [];
+        // (Their last stand: their household before them, facing the town, in a body of their own)
+        const at = [x + 0.5, y + 0.5];
+        const facing = atan2(town.at[0] - at[0], town.at[1] - at[1]);
+        const stand = `${id}/stand`;
+        const front = (k) => [(k - (LEADERS_NEAR.guards - 1) / 2) * FORMATION.apart, 0];
+
+        this.battle.formation(stand, { anchor: placeAt({ anchor: at, facing }, [0, -FORMATION.rank]), facing, to: null, advance: false, speed: ARMY_NEAR.pace });
 
         try {
             for (const [k, role] of ["ruler", "captain"].entries()) {
                 const square = free([x + (k ? LEADERS_NEAR.apart : -LEADERS_NEAR.apart), y]);
                 const one = `${id}/${role}-0`;
 
-                this.#enlist(one, { people: town.owner, weapon: guardArms, square, name: "captain of the guard", record: { leader: id, role }, patrol: [square], leash: LEASH, hp: LEADERS_NEAR.hp });
+                this.#enlist(one, { people: town.owner, weapon: guardArms, square, name: "captain of the guard", record: { leader: id, role, ...(k ? {} : { commander: true }) }, patrol: [square], leash: LEASH, hp: LEADERS_NEAR.hp, formation: { id: stand, slot: [(k ? 1 : -1) * LEADERS_NEAR.apart, FORMATION.rank], role: "front" } });
                 ids.push(one);
+            }
+
+            for (let k = 0; k < LEADERS_NEAR.guards; k++) {
+                const square = free(placeAt({ anchor: at, facing }, [front(k)[0], -FORMATION.rank]));
+                const one = `${id}/guard-${k}`;
+                const { power, hp, armor } = BATTLE_BODIES.vanguard;
+
+                this.#enlist(one, { people: town.owner, ...soldierOf(town.owner, k % 2 ? "heavy" : "front", k), square, name: COMMANDERS.town.guard, record: { leader: id, role: "guard", power }, patrol: [square], leash: LEASH, hp: Math.round(KINDS.soldier.hp * hp), armor, power: { melee: power }, armed: true, formation: { id: stand, slot: front(k), role: k % 2 ? "heavy" : "front" } });
+                guards.push(one);
             }
         } catch {
             // (No free ground there: those found are out, and no more)
@@ -7080,8 +7460,21 @@ export class Host {
         // (The ruler, by name: as the war has them; one of the mightiest, whom Prismatic Destruction
         // doesn't kill outright: core/prismatic.js mighty)
         Object.assign(this.battle.actor(ids[0]) ?? {}, { name: `${realm.leader.title} ${realm.leader.name}`, ...(ids[0]?.endsWith("/ruler-0") ? { ruler: true } : {}) });
-        this.leaders.set(id, { people: town.owner, ids, at: [x + 0.5, y + 0.5] });
-        this.#event("leaders", { town: id, people: town.owner, by, ruler: realm.leader.name, title: realm.leader.title, ids });
+
+        // (Fought as a battle's fought, core/engagement.js: the ruler their commander, those near
+        // them striking the harder, and fallen, their household shaken; it holds to the last)
+        const engagement = engagementOf({
+            id: stand,
+            now: this.battle.time,
+            phase: "melee",
+            sides: [
+                { key: "leaders", name: town.owner, band: null, tactic: "line", commander: ids[0]?.endsWith("/ruler-0") ? ids[0] : null, exit: at, bodies: [{ part: "vanguard", formation: stand, size: ids.length + guards.length, offset: [0, 0], state: "committed" }] },
+                { key: "attackers", name: by, band: null, tactic: "line", tactics: false, bodies: [] },
+            ],
+        });
+
+        this.leaders.set(id, { people: town.owner, ids, guards, at, engagement });
+        this.#event("leaders", { town: id, people: town.owner, by, ruler: realm.leader.name, title: realm.leader.title, ids, guards });
     }
 
     // One of a seat's leaders fallen: once both are, by a people who may take it, it's theirs
@@ -7110,6 +7503,11 @@ export class Host {
         for (const [id, out] of [...this.leaders]) {
             const town = this.war.town(id);
 
+            if (out.engagement && this.battle.time >= out.engagement.next) {
+                out.engagement.next = this.battle.time + FIELD.every;
+                this.#fight(out.engagement, { hold: true, told: { leaders: id } });
+            }
+
             if (!town || town.owner !== out.people || town.garrison > 0 || players.every((player) => hypot(player.x - out.at[0], player.y - out.at[1]) > LEADERS_NEAR.far)) {
                 this.#letLeadersGo(id);
             }
@@ -7118,9 +7516,14 @@ export class Host {
 
     // A seat's leaders let go: back in their keep, gone from the world
     #letLeadersGo(id) {
-        const { ids } = this.leaders.get(id);
+        const { ids: leaders, guards = [], engagement = null } = this.leaders.get(id);
+        const ids = [...leaders, ...guards];
 
         this.leaders.delete(id);
+
+        if (engagement) {
+            this.battle.formation(engagement.id, null);
+        }
 
         for (const each of ids) {
             this.battle.remove(each);

@@ -5710,17 +5710,17 @@ export class Game {
     // A seat's ruler and the captain of its guard out at its keep, its garrison put down: drawn; the
     // player told, if it's their people's seat, or their people's who put its garrison down (not in
     // its barracks: that's said there)
-    #lastStand({ town: id, people, by, ruler, title, ids }) {
+    #lastStand({ town: id, people, by, ruler, title, ids, guards = [] }) {
         const town = this.host?.war?.town(id);
         const me = this.battle.actor(this.me);
 
-        this.enlisting.push(...ids);
+        this.enlisting.push(...ids, ...guards);
 
         if (!town || ![people, by].includes(this.self?.realm) || this.host?.quartered.get(id)?.map === me?.map) {
             return;
         }
 
-        this.hud.message(people === this.self?.realm ? `${town.name}'s garrison is down! ${title} ${ruler} and the captain of the guard make their last stand at the keep.` : `${town.name}'s garrison is down. ${title} ${ruler} and the captain of the guard make their last stand at its keep: put them down, and it's ours.`, 5);
+        this.hud.message(people === this.self?.realm ? `${town.name}'s garrison is down! ${title} ${ruler} and the captain of the guard make their last stand at the keep, their household guard before them.` : `${town.name}'s garrison is down. ${title} ${ruler} and the captain of the guard make their last stand at its keep: put them down, and it's ours.`, 5);
         this.sound?.play("newsHeard");
     }
 
