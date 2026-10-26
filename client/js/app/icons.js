@@ -1133,6 +1133,20 @@ export const ITEM_ICONS = Object.freeze({
         <path d="M8,-8 L14,-2 M14,-8 L8,-2" stroke="#c8202a" stroke-width="2.4" stroke-linecap="round"/>
         <path d="${star(-11, -9, 3.6, 1.1, 4, 0)}" fill="#5a3a12"/>
         <circle cx="-11" cy="-9" r="1" fill="#e8d8a8"/>`,
+    // Bait for the wild's beasts (core/wary.js): raw scraps of meat tied in a bundle with twine; a
+    // small sack of feed, apples spilling from its neck
+    meatBait: `
+        <path d="M-14,6 C-18,-6 -8,-15 2,-13 C13,-11 17,0 10,8 C4,14 -10,15 -14,6 Z" fill="#b8483e" stroke="#5a1f1a" stroke-width="1.3"/>
+        <path d="M-6,-12 C-2,-4 -2,6 -6,13 M5,-12 C9,-4 9,5 6,11" fill="none" stroke="#d9c49a" stroke-width="1.8"/>
+        <path d="M-10,-2 C-5,-6 3,-7 9,-3" fill="none" stroke="#f3d6c4" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M-12,8 C-6,10 2,10 8,6" fill="none" stroke="#7a2a24" stroke-width="1.4"/>`,
+    feedBag: `
+        <path d="M-12,-6 C-15,4 -14,14 -6,17 L8,17 C15,14 16,4 12,-6 C8,-9 -8,-9 -12,-6 Z" fill="#b89a64" stroke="#5a4426" stroke-width="1.3"/>
+        <path d="M-9,-8 C-4,-12 4,-12 9,-8" fill="none" stroke="#7a5c30" stroke-width="2.2"/>
+        <circle cx="-4" cy="-12" r="4" fill="#c8402c" stroke="#6a1c12" stroke-width="1"/>
+        <circle cx="4" cy="-13" r="3.6" fill="#8ab83a" stroke="#3c5a16" stroke-width="1"/>
+        <path d="M-4,-16 L-3,-19 M4,-17 L5,-19" stroke="#5a3a1a" stroke-width="1.2"/>
+        <path d="M-8,6 C-4,8 4,8 8,6" fill="none" stroke="#8a6a3a" stroke-width="1.2"/>`,
     // A goblin's bomb: a round black pot, a band of rope round it, its wick lit and sparking
     goblinBomb: `
         <circle cx="-2" cy="5" r="14" fill="#2b2522" stroke="#0e0b09" stroke-width="1.4"/>

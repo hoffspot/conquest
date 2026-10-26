@@ -119,6 +119,9 @@ import { footAt, lookPrint, printOf, TAKES, Tracks } from "../world/tracks3d.js"
 import { TrailSigns } from "../world/signs3d.js";
 import { DEN_LOOK, DenProps } from "../world/dens3d.js";
 import { FIND_LOOK, FindProps } from "../world/finds3d.js";
+import { AmbushProps, BaitLook, EyeShine, WILD_LOOK } from "../world/wild3d.js";
+import { BAIT, WARY } from "../core/wary.js";
+import { STYLES as AMBUSH_STYLES } from "../core/ambush.js";
 import { OBSTACLE_LOOK, ObstacleProps } from "../world/obstacles3d.js";
 import { Flyers } from "../world/flyers3d.js";
 import { Drops } from "../world/drops3d.js";
@@ -217,6 +220,66 @@ const RINGING = new Set(["slash", "hack", "cleave", "chop"]);
 
 // How long after trading blows with the player a death's still theirs to be told of (s: #ours)
 const FOUGHT = 30;
+
+// The bait for the wild's beasts put on an enemy's wheel of itself the first time it's carried
+// (#placeBait, core/wary.js)
+const PLACED_OF_ITSELF = Object.freeze(["meatBait", "feedBag"]);
+
+// A wary beast's warning (core/wary.js WARY `display`): a blow at nothing (`attack`, its kind's,
+// as beasts/looks.js names them) or one of its ways of resting (`rest`), and what's heard with it
+// (`sound`: synth.js's; "call", its own call: sound.js voice)
+const WARNINGS = Object.freeze({
+    snarl: Object.freeze({ attack: "snap", sound: "beastGrowl" }),
+    snap: Object.freeze({ attack: "snap", sound: "beastGrowl" }),
+    scrape: Object.freeze({ rest: "root", sound: "beastSnort" }),
+    rear: Object.freeze({ attack: "maul", sound: "call" }),
+    hiss: Object.freeze({ attack: "swipe", sound: "beastHiss" }),
+    paw: Object.freeze({ attack: "stamp", sound: "beastSnort" }),
+    antlers: Object.freeze({ attack: "toss", sound: "beastSnort" }),
+    coil: Object.freeze({ rest: "coil", sound: "beastHiss" }),
+    bristle: Object.freeze({ attack: "bristle", sound: "quillRattle" }),
+    mob: Object.freeze({ rest: "scatter", sound: "call" }),
+});
+
+// How a wary beast's minded, said to a player who knows its kind (its page in their bestiary at
+// MINDS_KNOWN or past: core/bestiary.js), once for each pack and mood
+const MINDS = Object.freeze({
+    warn: (name) => `The ${name}'s hackles are up: it'll come at you if you come on, or stay. Back away.`,
+    stalk: (name) => `The ${name}'s watching you, keeping its distance: waiting for you to weaken.`,
+    watch: (name) => `The ${name} watches you warily, keeping off.`,
+    avoid: (name) => `The ${name} wants nothing to do with you.`,
+    curious: (name) => `The ${name}'s curious about you. Feed it, and it may follow you.`,
+});
+const MINDS_KNOWN = 2;
+
+// An ambush's tells (core/ambush.js STYLES `tell`): what's said to whoever's near it as it's told,
+// what's heard (synth.js), and what's seen there (effects.js BURSTS: at one of those lying in
+// wait, or over its heart in the trees, `over`)
+const TELLS = Object.freeze({
+    glint: Object.freeze({ said: "Steel glints in the brush ahead. Someone's waiting there.", sound: "steelGlint", burst: "sparks" }),
+    twig: Object.freeze({ said: "A twig snaps in the brush ahead. Something's waiting there.", sound: "twigSnap", burst: "leaves" }),
+    quiet: Object.freeze({ said: "The birds burst from the trees ahead, and go quiet.", sound: "birdsFlush", burst: "birds", over: true }),
+    earth: Object.freeze({ said: "The earth ahead's been turned, not long since, and a cold hush hangs over it.", sound: null, burst: null }),
+    webs: Object.freeze({ said: "Fresh webs strung across the way ahead, and nothing moving.", sound: null, burst: null }),
+    mark: Object.freeze({ said: "Their sleeve bears a mark you've seen on cultists' robes.", sound: null, burst: null }),
+});
+
+// An ambush sprung, as it's said (by its style), and caught out; how near it a player is told it
+// (metres)
+const SPRUNG = Object.freeze({
+    bandits: "Ambush! Outlaws, ahead and behind!",
+    goblins: "Ambush! Goblins in the brush!",
+    wolves: "Ambush! The pack comes in from the sides!",
+    dead: "The dead rise from the earth round you!",
+    spiders: "Spiders! All round you!",
+    cultists: "It's a trap! Cultists!",
+});
+const AMBUSH_TOLD = 60;
+
+// How long a goblins' snare's drawn tight round whoever stepped in it (s), and how near the player
+// an ambush's signs are drawn (metres: world/wild3d.js AmbushProps)
+const AMBUSH_SNARE_SECONDS = AMBUSH_STYLES.goblins.snare / 1000;
+const AMBUSH_SIGNS = 70;
 
 // How far up a fallen foe's height their fall's said from, rising off their body, if it has no
 // bones to find its hips by (#slain, #lying)
@@ -906,7 +969,7 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -930,6 +993,7 @@ const _looking = new THREE.Vector3();
 const _across = new THREE.Vector3();
 const _corner = new THREE.Vector3();
 const _head = new THREE.Vector3();
+const _eyes = new THREE.Vector3();
 const _hearth = new THREE.Vector3();
 const _lit = new THREE.Vector3();
 // (What the camera sees, and round someone, for whose pictures to send: #sending)
@@ -2022,6 +2086,13 @@ export class Game {
         this.moonGates = new MoonGates(view.scene);
         // (The wilds director's peaceful finds near the player: #findsNear)
         this.findProps = new FindProps(view.scene);
+        // (The wild's ways: eyes shining in the dark, bait thrown, an ambush's signs: world/wild3d.js)
+        this.eyeShine = new EyeShine(view.scene);
+        this.baitLook = new BaitLook(view.scene);
+        this.ambushProps = new AmbushProps(view.scene);
+        this.lyingDrawn = new Map();
+        this.moodsShown = new Map();
+        this.mindsTold = new Set();
         this.obstacleProps = new ObstacleProps(view.scene);
         this.ailments = new Ailments3D(this.effects.group);
         // (Its fire, flashes and fireballs lighting what's round them as the world's fires do, each
@@ -2837,6 +2908,9 @@ export class Game {
         this.denProps?.dispose();
         this.moonGates?.dispose();
         this.findProps?.dispose();
+        this.eyeShine?.dispose();
+        this.baitLook?.dispose();
+        this.ambushProps?.dispose();
         this.obstacleProps?.dispose();
         this.navBaker?.dispose();
         this.navigationView?.dispose();
@@ -3859,9 +3933,11 @@ export class Game {
                 const scale = own ? plateScale(Math.hypot(at.x - own.x, at.z - own.z), playerSight(sightAt(lit, actor.square))) : 1;
                 const dim = reach > 0 && !actor.dead && actor.map === mine.map && Math.hypot(actor.x - mine.x, actor.y - mine.y) <= reach && battle.hostile(actor, mine) && !battle.canSee(mine, actor, reach);
 
-                hud.place(actor.id, actor.dead || actor.map !== this.mapId ? null : view.toScreen(head), { scale, depth, dim });
+                hud.place(actor.id, actor.dead || actor.map !== this.mapId || actor.hidden ? null : view.toScreen(head), { scale, depth, dim });
             }
         }
+
+        this.#wildWays();
 
         // (What the criers are calling out, over their heads: #cryOut)
         for (const id of hud.said?.keys() ?? []) {
@@ -5270,7 +5346,7 @@ export class Game {
         minimap.draw({
             player: actor.dead ? null : { x: me.object.position.x - ox, z: me.object.position.z - oz, facing: me.facing },
             // (Not one lurking unseen overhead: battle.js #lurk; nor another of their party)
-            others: battle.actors.filter((other) => other !== actor && !other.dead && !other.lurking && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite && !CRIER.test(other.id) && !partied.has(other.id)).map((other) => {
+            others: battle.actors.filter((other) => other !== actor && !other.dead && !other.lurking && !other.hidden && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite && !CRIER.test(other.id) && !partied.has(other.id)).map((other) => {
                 const position = this.avatars.get(other.id).object.position;
 
                 return { x: position.x - ox, z: position.z - oz, hostile: this.battle.hostile(other, actor), targeted: other === target, ally: Boolean(this.allied?.has(other.id)) };
@@ -5359,6 +5435,13 @@ export class Game {
     #paced({ change, creature, at }) {
         if (change === "quiet") {
             this.hud.message("The wild grows quiet round you, for a while.", 3);
+
+            return;
+        }
+
+        // (An ambush laid ahead in a build-up's stead: the only tell, the quiet, core/ambush.js)
+        if (change === "silent") {
+            this.hud.message("The wild's gone quiet round you. Too quiet.", 3.5);
 
             return;
         }
@@ -9161,6 +9244,8 @@ export class Game {
             return;
         }
 
+        this.#placeBait();
+
         const actor = this.battle.actor(this.me);
 
         if (event.type === "rank") {
@@ -9239,6 +9324,9 @@ export class Game {
             // (Given to one of their own: core/host.js #handOver)
             this.hud.message(`You give ${this.battle.actor(event.on)?.name ?? "them"} ${itemLabel(event.item).toLowerCase()}.`, 1.6);
             this.sound?.play(useSound(event.item.id) ?? "tap");
+        } else if (event.type === "used" && event.thrown) {
+            // (Meat carved from a beast thrown to one, as bait: core/wary.js)
+            this.sound?.play("pickup");
         } else if (event.type === "used" && useSound(event.item.id)) {
             this.sound?.play(useSound(event.item.id));
         } else if (event.type === "dropped") {
@@ -10130,7 +10218,8 @@ export class Game {
             const lasts = called ? SPELLS[called.risen ? "zombify" : "summon"].lasts : 0;
             const ms = called ? Math.max(0, called.until - this.battle.time) : 0;
 
-            return [{ id, kind, actor, waiting: this.host.waiting(id), left: called ? { ms, share: lasts ? Math.min(1, ms / lasts) : 1 } : null, picture: this.partyLikenesses.get(id) ?? null }];
+            // (A beast tamed: theirs till it falls, no time left to tell)
+            return [{ id, kind, actor, waiting: this.host.waiting(id), left: called && !called.tamed ? { ms, share: lasts ? Math.min(1, ms / lasts) : 1 } : null, picture: this.partyLikenesses.get(id) ?? null }];
         });
     }
 
@@ -10963,7 +11052,7 @@ export class Game {
             const def = ITEMS[stack.id];
             const label = itemLabel(stack);
 
-            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb ? "Throw" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot || def.charm ? describe(stack, progress, { index, label, haggle }) : null };
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb || def.bait ? "Throw" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb || def.use?.bait), toss: Boolean(def.food), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot || def.charm ? describe(stack, progress, { index, label, haggle }) : null };
         });
         const me = this.battle.actor(this.me);
         const might = this.host.mightFor(this.me);
@@ -11059,6 +11148,242 @@ export class Game {
     // on one already), and kept
     // Something put on an action wheel (an ACTIONS key, or "item:" and a thing to use): the
     // player's own (`wheel`: "self"), or an enemy's; at the first empty slice
+    // A wary beast warning someone off (core/wary.js: its display, WARNINGS): a blow at nothing or
+    // one of its ways of resting, its warning heard; warning the player, the ground round it
+    // pulsing amber
+    #warned(event, avatar) {
+        const warning = WARNINGS[event.display] ?? WARNINGS.snarl;
+        const actor = this.battle.actor(event.id);
+        const at = avatar.object.position.clone();
+
+        if (warning.attack) {
+            avatar.actions.startAttack(warning.attack, { hitAt: 0.45, duration: 0.9, arms: true, reach: null });
+        } else {
+            avatar.rest?.(warning.rest, 1.6);
+        }
+
+        if (warning.sound === "call") {
+            this.sound?.voice(this.#voiced(actor, avatar), "call", at);
+        } else {
+            this.sound?.play(warning.sound, { at });
+        }
+
+        if (event.target === this.me) {
+            this.effects.pulse(at.x, at.z, 0xffa040);
+        }
+    }
+
+    // A wary beast minded about the player (core/wary.js): said how, if they know its kind well
+    // enough (MINDS_KNOWN), once for its pack and the mood
+    #minded({ id, pack, kind, by }) {
+        const actor = this.battle.actor(id);
+        const creature = actor?.wild?.creature;
+        const known = creature && (this.progress.bestiary?.levelOf(creature) ?? 0) >= MINDS_KNOWN;
+        const key = `${pack}:${kind}`;
+        const said = kind === "watch" && WARY[creature]?.predator ? MINDS.stalk : MINDS[kind];
+
+        if (by !== this.me || !known || !said || this.mindsTold.has(key)) {
+            return;
+        }
+
+        this.mindsTold.add(key);
+        this.hud.message(said(CREATURES[creature].name.toLowerCase()), 4);
+    }
+
+    // An ambush (core/ambush.js), for a player near it (AMBUSH_TOLD): its tell as they come on
+    // (TELLS: said, heard and seen); sprung (SPRUNG: its band out of cover, leaves kicked up where
+    // they were, the dead rising out of the earth, a snare drawn tight round whoever stepped in
+    // it), or caught out
+    #ambushed(event) {
+        const mine = this.battle.actor(this.me);
+
+        if (!event.at || !mine || mine.map !== "town" || Math.hypot(mine.x - event.at[0], mine.y - event.at[1]) > AMBUSH_TOLD) {
+            return;
+        }
+
+        const [ox, oz] = this.originOf("town");
+        const place = (x, y, up = 0) => new THREE.Vector3(ox + x, this.#groundOn("town", x, y) + up, oz + y);
+        const band = (event.ids ?? []).map((id) => this.battle.actor(id)).filter((actor) => actor && !actor.dead);
+
+        if (event.change === "told") {
+            const tell = TELLS[event.tell];
+            const one = band.find((actor) => actor.hidden) ?? band[0];
+            const at = tell.over || !one ? place(event.at[0], event.at[1], 6) : place(one.x, one.y, 1);
+
+            this.hud.message(tell.said, 4);
+
+            if (tell.sound) {
+                this.sound?.play(tell.sound, { at });
+            }
+
+            if (tell.burst) {
+                this.effects.burst(tell.burst, at);
+            }
+
+            return;
+        }
+
+        if (event.change !== "sprung" && event.change !== "caught") {
+            return;
+        }
+
+        this.hud.message(event.change === "caught" ? "You've caught them out! They're reeling." : SPRUNG[event.style], 3);
+        this.sound?.play("ambushSprung", { at: place(event.at[0], event.at[1]) });
+
+        for (const actor of band) {
+            const at = place(actor.x, actor.y);
+
+            if (event.style === "dead" && event.change === "sprung") {
+                this.ambushProps.hands(at.x, at.z, at.y, this.battle.time / 1000);
+                this.effects.burst("earth", at);
+                this.sound?.play("earthBreak", { at });
+            } else {
+                this.effects.burst(event.style === "spiders" ? "earth" : "leaves", at);
+            }
+        }
+
+        const snared = event.snared ? this.battle.actor(event.snared) : null;
+
+        if (snared && snared.map === "town") {
+            const at = place(snared.x, snared.y);
+
+            this.ambushProps.snare(at.x, at.z, at.y, this.battle.time / 1000, AMBUSH_SNARE_SECONDS);
+            this.sound?.play("snareSnap", { at });
+
+            if (snared.id === this.me) {
+                this.hud.damage(this.#screenAbove(snared.id), "Snared!", { kind: "stun" });
+            }
+        }
+    }
+
+    // The wild's ways, a frame (core/wary.js, core/ambush.js): those lying hidden in an ambush not
+    // drawn at all, those glimpsed in their cover drawn faintly (as one unseen is); a wary beast's
+    // mood marked on its plate; hunting beasts' eyes shining out in the dark, beyond the light;
+    // bait in the air and lying on the ground; an ambush's signs (the turned earth, the webs)
+    #wildWays() {
+        const battle = this.battle;
+        const mine = battle.actor(this.me);
+        const [ox, oz] = this.originOf(this.mapId);
+        const groundAt = (x, z) => this.#groundOn(this.mapId, x - ox, z - oz);
+
+        for (const actor of battle.actors) {
+            const avatar = this.avatars.get(actor.id);
+            const was = this.lyingDrawn.get(actor.id) ?? null;
+            const now = actor.hidden === true ? "hidden" : actor.hidden === "glimpsed" ? "glimpsed" : null;
+
+            if (avatar && now === "hidden") {
+                avatar.object.visible = false;
+            }
+
+            if (!avatar || now === was) {
+                continue;
+            }
+
+            if (was === "glimpsed") {
+                this.#unseen(avatar, false);
+            }
+
+            if (now === "glimpsed") {
+                this.#unseen(avatar, true);
+            }
+
+            if (now !== "hidden") {
+                avatar.object.visible = !avatar.compiling && avatar.sent !== false;
+            }
+
+            if (now) {
+                this.lyingDrawn.set(actor.id, now);
+            } else {
+                this.lyingDrawn.delete(actor.id);
+            }
+        }
+
+        // (One lying in wait gone, let go with its ambush: forgotten)
+        for (const id of this.lyingDrawn.keys()) {
+            if (!battle.actor(id)) {
+                this.lyingDrawn.delete(id);
+            }
+        }
+
+        // (A mood marked on the plate of each wary beast tracked: core/wary.js MOODS; one whose plate's
+        // gone, forgotten, to be marked afresh on a plate made for it again)
+        for (const id of this.moodsShown.keys()) {
+            if (!this.hud.tracked.has(id)) {
+                this.moodsShown.delete(id);
+            }
+        }
+
+        for (const id of this.hud.tracked.keys()) {
+            const actor = battle.actor(id);
+            const mood = actor?.wild?.reacts && !actor.dead ? (actor.mood?.kind ?? null) : null;
+
+            if ((this.moodsShown.get(id) ?? null) !== mood) {
+                this.moodsShown.set(id, mood);
+                this.hud.mood(id, mood, { hunts: Boolean(WARY[actor?.wild?.creature]?.predator) });
+            }
+        }
+
+        // (Eyes in the dark: a hunting beast's, out beyond the light, at night)
+        const light = daylight(timeOfDay(elapsedOf(this.host.war)));
+        const lit = this.mapId === battle.lightMap ? battle.light : null;
+        const eyes = [];
+
+        if (mine && this.mapId === "town" && light < WILD_LOOK.eyes.dark) {
+            for (const actor of battle.actors) {
+                const avatar = this.avatars.get(actor.id);
+
+                if (!avatar?.object.visible || actor.dead || actor.hidden || actor.map !== this.mapId || !WARY[actor.wild?.creature]?.predator || actor.wild.companion || Math.hypot(actor.x - mine.x, actor.y - mine.y) > WILD_LOOK.eyes.far || (lit && sightAt(lit, actor.square) > lit.sky + 0.02)) {
+                    continue;
+                }
+
+                const head = avatar.point(0.8, _eyes);
+                const reach = (avatar.gait?.size ?? 1) * 0.45;
+
+                eyes.push({ x: head.x + Math.sin(actor.facing) * reach, y: head.y, z: head.z + Math.cos(actor.facing) * reach, facing: actor.facing, glow: Math.min(1, (WILD_LOOK.eyes.dark - light) / WILD_LOOK.eyes.dark + 0.2) });
+            }
+        }
+
+        this.eyeShine.show(eyes);
+
+        // (Bait in the air and on the ground, on the map shown)
+        const baits = battle.baits.filter(({ map }) => map === this.mapId).map((bait) => ({ ...bait, x: ox + bait.x, y: oz + bait.y, from: bait.from ? [ox + bait.from[0], oz + bait.from[1]] : null }));
+
+        this.baitLook.set(baits, battle.time, groundAt);
+
+        // (An ambush's signs near the player, till it springs: the dead's turned earth, the spiders' webs)
+        const laid = mine && this.mapId === "town" ? [...(this.host.ambushes?.values() ?? [])].filter((one) => !one.sprung && (one.style === "dead" || one.style === "spiders") && Math.hypot(one.heart[0] - mine.x, one.heart[1] - mine.y) <= AMBUSH_SIGNS).map((one) => ({ id: one.id, style: one.style, x: ox + one.heart[0], z: oz + one.heart[1] })) : [];
+
+        this.ambushProps.set(laid, groundAt);
+        this.ambushProps.update(battle.time / 1000);
+    }
+
+    // Bait for the wild's beasts (core/wary.js) carried for the first time: put on the first free
+    // slice of an enemy's wheel of itself (unless it's on one, or the Action Bar, already), and told
+    // how to throw it; once for each kind, ever (the wheels' `placed`), so it can be moved, or taken
+    // off, in Game options and stay so
+    #placeBait() {
+        for (const id of PLACED_OF_ITSELF) {
+            if (this.wheels.placed.includes(id) || !this.progress.held(id)) {
+                continue;
+            }
+
+            const key = `item:${id}`;
+            const on = this.wheels.quick.includes(key) || this.wheels.enemy.some((side) => PLACES.some((place) => side[place] === key));
+            const side = on ? -1 : this.wheels.enemy.findIndex((slots) => PLACES.some((place) => !slots[place]));
+
+            this.wheels.placed = [...this.wheels.placed, id];
+
+            if (side >= 0) {
+                const place = PLACES.find((each) => !this.wheels.enemy[side][each]);
+
+                this.wheels.enemy[side][place] = key;
+                this.hud.message(`${itemLabel({ id })} is on an enemy's wheel ${side ? "two" : "one"}, at ${place.toUpperCase()}: hold on a beast and throw it to them.`, 4.5);
+            }
+
+            this.setWheels(this.wheels);
+        }
+    }
+
     #putOnWheel(key, wheel = "self") {
         // (A spell's scroll by its own name, not its spell's: "Scroll of Fireball")
         const action = actionOf(key);
@@ -12170,6 +12495,37 @@ export class Game {
                 case "unbuffed":
                     this.#buffed(event, avatar);
                     break;
+                case "warning":
+                    this.#warned(event, avatar);
+                    break;
+                case "charge":
+                    // (A wary beast coming at them at last: its cry)
+                    this.sound?.voice(this.#voiced(battle.actor(event.id), avatar), "attack", avatar.object.position);
+                    break;
+                case "curious":
+                    avatar.rest?.("sniff", 2);
+                    break;
+                case "fled":
+                    // (A wary beast's nerve gone: limping off, a cry of pain)
+                    hud.damage(this.#screenAbove(event.id), "Flees", { kind: "stun" });
+                    this.sound?.voice(this.#voiced(battle.actor(event.id), avatar), "hurt", avatar.object.position);
+                    break;
+                case "eat":
+                    // (Its head down to what was thrown it, a while, crunching)
+                    avatar.rest?.("root", BAIT.eat / 1000);
+                    this.sound?.play("beastEat", { at: avatar.object.position.clone() });
+                    break;
+                case "bait": {
+                    // (Thrown: heard landing, as it lands: drawn as it flies, world/wild3d.js BaitLook)
+                    const [ox, oz] = this.originOf(event.map);
+                    const at = new THREE.Vector3(ox + event.x, this.#groundOn(event.map, event.x, event.y), oz + event.y);
+
+                    this.#after(Math.max(0, (event.lands - battle.time) / 1000), () => this.sound?.play("baitLand", { at }));
+                    break;
+                }
+                case "mood":
+                    this.#minded(event);
+                    break;
                 case "dodged": {
                     const by = event.by ? this.avatars.get(event.by) : null;
 
@@ -12531,6 +12887,9 @@ export class Game {
                 break;
             case "obstacle":
                 this.#obstacleSaid(event);
+                break;
+            case "ambush":
+                this.#ambushed(event);
                 break;
             case "obstacles":
                 // (Something across the way come down or cleared: the ground under it drawn again,
@@ -13440,11 +13799,18 @@ export class Game {
         }
 
         const name = CREATURES[creature]?.name.toLowerCase() ?? "creature";
-        const said = { risen: `The ${name} rises from the dead to follow you!`, called: `A ${name} answers your call, at your side.`, over: `Your ${name} is gone, its time up.`, fallen: `Your ${name} has fallen.`, lost: `Your ${name} is left behind.`, dismissed: `You let your ${name} go.`, replaced: `Your ${name} goes, to make room for another.` }[change];
+        const said = { risen: `The ${name} rises from the dead to follow you!`, called: `A ${name} answers your call, at your side.`, over: `Your ${name} is gone, its time up.`, fallen: `Your ${name} has fallen.`, lost: `Your ${name} is left behind.`, dismissed: `You let your ${name} go.`, replaced: `Your ${name} goes, to make room for another.`, tamed: `The ${name} follows you now, fed and tamed: yours till it falls, or you let it go.` }[change];
 
         if (said) {
-            this.hud.message(said, 3);
+            this.hud.message(said, change === "tamed" ? 4 : 3);
         }
+
+        // (A beast tamed: heard, and kept with the character, as their followers are: core/wary.js)
+        if (change === "tamed") {
+            this.sound?.play("tamedChime");
+        }
+
+        this.onFollowers(this.host.characterOf(this.host.players.get(this.me)).followers);
     }
 
     // Summoned by another player (come, or resist: said no to at once, with Resist all summons

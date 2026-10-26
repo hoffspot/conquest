@@ -132,7 +132,18 @@ function pressable(root, onPress) {
 }
 
 // What each kind of the party's called, said with their name
-const PARTY_KINDS = { player: "in your party", adventurer: "hired adventurer", summon: "called to your side", risen: "raised from the dead", unit: "with you" };
+const PARTY_KINDS = { player: "in your party", adventurer: "hired adventurer", summon: "called to your side", risen: "raised from the dead", tamed: "tamed, at your side", unit: "with you" };
+
+// A wary beast's mood as its plate marks it (core/wary.js MOODS: hud.mood): its mark, and what
+// it's said to be (a hunter watching them, stalking)
+const MOOD_MARKS = Object.freeze({
+    warn: Object.freeze({ mark: "!", said: "Warning you off" }),
+    watch: Object.freeze({ mark: "◉", said: "Watching you", hunts: "Stalking you" }),
+    avoid: Object.freeze({ mark: "↩", said: "Keeping away" }),
+    curious: Object.freeze({ mark: "?", said: "Curious" }),
+    fed: Object.freeze({ mark: "✓", said: "Fed: leaving you be" }),
+    flee: Object.freeze({ mark: "↯", said: "Fleeing" }),
+});
 
 /**
  * How big a bar's drawn (a share of its full size, and as faint: 0, not at all) over a character
@@ -440,6 +451,41 @@ export class Hud {
         chip.textContent = String(power);
         chip.classList.toggle("pack", pack);
         chip.title = pack ? "Its power, with those of its pack fighting you" : "Its power";
+    }
+
+    /**
+     * A wary beast's mood on its plate (core/wary.js: "warn", "watch", "avoid", "curious", "fed" or
+     * "flee"; null or "attack", none): a mark by its name, coloured for it; a hunter (`hunts`)
+     * watching them, stalking them.
+     */
+    mood(id, kind, { hunts = false } = {}) {
+        const plate = this.tracked.get(id);
+
+        if (!plate) {
+            return;
+        }
+
+        const marked = MOOD_MARKS[kind] ?? null;
+        let chip = plate.querySelector(".mood");
+
+        for (const each of Object.keys(MOOD_MARKS)) {
+            plate.classList.toggle(`mood-${each}`, each === kind);
+        }
+
+        if (!marked) {
+            chip?.remove();
+
+            return;
+        }
+
+        if (!chip) {
+            chip = element("span", "mood");
+            plate.querySelector(".name").prepend(chip);
+        }
+
+        chip.textContent = marked.mark;
+        chip.title = (hunts && marked.hunts) || marked.said;
+        chip.setAttribute("aria-label", chip.title);
     }
 
     /** Take away the bar over a character (gone from the world). */

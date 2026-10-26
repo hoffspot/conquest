@@ -50,7 +50,7 @@ const ABOUT_GAP = 12;
 const ABOUT_SIDE = 220;
 
 // Where each thing that can be done with something goes on its wheel
-const PLACES = { use: "n", onWheel: "ne", split: "e", sell: "se", offer: "se", discard: "s", drop: "w" };
+const PLACES = { use: "n", onWheel: "ne", split: "e", sell: "se", offer: "se", discard: "s", drop: "w", toss: "nw" };
 
 // Where each slot is round the paperdoll: down its left, down its right, and along its foot
 const DOLL = Object.freeze({ left: ["head", "chest", "bracers", "legs", "mainHand"], right: ["amulet", "cloak", "gloves", "belt", "offHand"], foot: ["ring1", "boots", "ring2"] });
@@ -979,6 +979,11 @@ export class PackPanel {
             actions.push({ key: "use", label: stack.use ?? stack.equip });
         }
 
+        // (Meat carved from a beast: eaten, or thrown to a beast, as meat bait is: core/wary.js)
+        if (stack.toss && !trading) {
+            actions.push({ key: "toss", label: "Throw to a beast" });
+        }
+
         // (A tome's read, not put on a wheel; a spell's scroll can be, to read at an enemy)
         if (stack.use && (stack.use !== "Read" || stack.aimed) && !trading) {
             actions.push({ key: "onWheel", label: "Put on a wheel" });
@@ -1007,6 +1012,8 @@ export class PackPanel {
 
         if (key === "use") {
             this.onCommand(stack.equip ? { type: "equip", index } : { type: "use", index });
+        } else if (key === "toss") {
+            this.onCommand({ type: "use", index, toss: true });
         } else if (key === "onWheel") {
             this.onWheel(stack.id);
         } else if (key === "split") {

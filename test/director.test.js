@@ -23,6 +23,7 @@ import { TREASURE_MAP } from "../client/js/core/treasure.js";
 import { squaresOf } from "../client/js/core/grid.js";
 import { navigatorOf } from "../client/js/core/navigation.js";
 import { decode, encode } from "../client/js/core/wire.js";
+import { AMBUSH } from "../client/js/core/ambush.js";
 import { lookPrint } from "../client/js/world/tracks3d.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -346,6 +347,14 @@ describe("the wilds director's pacing (director.js PACING; host.js #pace)", () =
         assert.equal(host.travel.get(HOST_PLAYER).deck[0], "cache");
     });
 
+    // (A build-up heard, never an ambush laid in silence in its stead: core/ambush.js AMBUSH `silent`)
+    const heardNotLaid = (host) => {
+        const chance = host.random.chance.bind(host.random);
+
+        // (The dice still thrown, so the world's chance goes on as it would)
+        host.random.chance = (share) => chance(share) && share !== AMBUSH.silent;
+    };
+
     it("builds up after a long calm: the land's hunters heard ahead, then come for the player, running", () => {
         const context = outside();
         const { host, me } = context;
@@ -354,6 +363,7 @@ describe("the wilds director's pacing (director.js PACING; host.js #pace)", () =
 
         const pace = host.travel.get(HOST_PLAYER).pace;
 
+        heardNotLaid(host);
         Object.assign(pace, { lastFight: host.battle.time - PACING.calm - 1, calm: PACING.calmMetres + 10 });
 
         const heard = run(host, 1000).find(({ type, change }) => type === "pace" && change === "build");
@@ -378,6 +388,7 @@ describe("the wilds director's pacing (director.js PACING; host.js #pace)", () =
         const { host } = context;
 
         run(host, 600);
+        heardNotLaid(host);
         Object.assign(host.travel.get(HOST_PLAYER).pace, { lastFight: host.battle.time - PACING.calm - 1, calm: PACING.calmMetres + 10 });
         run(host, 1000);
         assert.ok(host.travel.get(HOST_PLAYER).pace.build);

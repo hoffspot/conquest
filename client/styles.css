@@ -22,6 +22,7 @@
     --ally: #58d26e;
     --summoned: #a98bff;
     --risen: #b2c9a4;
+    --tamed: #e0b060;
     /* (A direct message, to or from one player: app/partypanel.js, hud.js chatLine) */
     --whisper: #c7a6ff;
 
@@ -2310,6 +2311,12 @@ body[data-minimap="off"] #party {
     background: #1a1d18;
 }
 
+/* (A beast tamed by feeding it: core/wary.js) */
+.member.tamed {
+    border-color: var(--tamed);
+    background: #221b10;
+}
+
 .member-more {
     display: grid;
     place-items: center;
@@ -2339,6 +2346,10 @@ body[data-minimap="off"] #party {
 
 .member.risen .member-initial {
     color: var(--risen);
+}
+
+.member.tamed .member-initial {
+    color: var(--tamed);
 }
 
 .member-likeness {
@@ -7607,4 +7618,38 @@ dialog.you .you-qr {
 
 .together-players .hostile {
     color: var(--hostile);
+}
+
+/* A wary beast's mood on its plate (core/wary.js; hud.js mood): a mark by its name, coloured for
+   it: warning them off amber, watching or stalking pale gold, keeping away and fed green-grey,
+   curious soft blue, fleeing dim red */
+.plate .mood {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.15em;
+    height: 1.15em;
+    margin-right: 0.3em;
+    border-radius: 50%;
+    font: 700 0.85em/1 var(--font-ui);
+    color: #1a1208;
+    background: #d8c890;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+    vertical-align: 0.05em;
+}
+
+.plate.mood-warn .mood {
+    background: #ffa040;
+}
+
+.plate.mood-curious .mood {
+    background: #9cc8ff;
+}
+
+.plate.mood-avoid .mood,
+.plate.mood-fed .mood {
+    background: #a8c0a0;
+}
+
+.plate.mood-flee .mood {
+    background: #c86a5a;
 }

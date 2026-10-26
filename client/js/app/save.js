@@ -831,7 +831,8 @@ export function saveStanding(save, standing) {
 export function loadFollowers(save) {
     const kept = own(save, "followers");
 
-    return kept && Array.isArray(kept.followers) ? kept.followers.filter((one) => one && typeof one.name === "string" && typeof one.calling === "string") : [];
+    // (And a beast they've tamed: core/wary.js)
+    return kept && Array.isArray(kept.followers) ? kept.followers.filter((one) => one && ((typeof one.name === "string" && typeof one.calling === "string") || (one.tamed === true && typeof one.creature === "string"))) : [];
 }
 
 /** Keep the followers the character leads, in a saved game. */

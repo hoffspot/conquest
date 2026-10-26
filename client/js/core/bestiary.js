@@ -12,7 +12,8 @@ import { CREATURES } from "./creatures.js";
 
 /**
  * How a kind's research grows, and what it's worth: the points the first sight of one earns
- * (`seen`), a sign of one read (`sign`), one slain (`slain`), and one of the mightiest slain
+ * (`seen`), a sign of one read (`sign`), a wary beast left be, unfought (`spared`: core/wary.js),
+ * one slain (`slain`), and one of the mightiest slain
  * (`mighty`: a lair's master, a perilous one, an elite at the head of its kind, a dungeon's boss or
  * mini-boss); the points each level takes and its name; how much harder its kind's struck once
  * it's Mastered (`edge`); and how far off (m) one's seen, light allowing (battle.js canSee).
@@ -20,6 +21,7 @@ import { CREATURES } from "./creatures.js";
 export const RESEARCH = Object.freeze({
     seen: 1,
     sign: 2,
+    spared: 1,
     slain: 1,
     mighty: 5,
     levels: Object.freeze([
@@ -101,6 +103,11 @@ export class Bestiary {
     /** A sign of a kind read (on a trail: core/tracks.js). Returns its level gone up, or null. */
     read(kind) {
         return CREATURES[kind] ? this.#grow(kind, RESEARCH.sign, "sign", (entry) => entry.signs++) : null;
+    }
+
+    /** A wary beast of a kind left be, unfought (core/wary.js MOODS `spared`). Returns its level gone up, or null. */
+    spare(kind) {
+        return CREATURES[kind] ? this.#grow(kind, RESEARCH.spared, "spared", () => {}) : null;
     }
 
     /** One of a kind slain (`mighty`: one of the mightiest, RESEARCH). Returns its level gone up, or null. */

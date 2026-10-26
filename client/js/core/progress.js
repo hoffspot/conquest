@@ -143,6 +143,25 @@ export const ITEMS = Object.freeze({
         use: { bomb: "goblinBomb", damage: [14, 24], reach: 12 },
         price: 18,
     },
+    // Food for the wild's beasts (core/wary.js BAIT), thrown to the one the player's set on (or
+    // ahead of them) up to `reach` metres off (battle.js toss): a beast that eats it goes to it and
+    // eats, and leaves them be after, or one after them is drawn off them a moment; a curious one,
+    // fed enough, follows them. Meat for the hunters (any meat carved from a beast does as well),
+    // the feed bag for the grazers; sold at taverns, the adventurers' guild and by pedlars
+    meatBait: {
+        label: "Meat bait",
+        about: "Scraps of raw meat to throw to a hunting beast (wolves, bears, big cats). One that eats it leaves you be after; one already after you is drawn off a moment. A curious one fed enough follows you. Any meat you've carved from a beast does as well.",
+        bait: "meat",
+        use: { bait: "meat", reach: 12 },
+        price: 3,
+    },
+    feedBag: {
+        label: "Feed bag",
+        about: "A sack of apples and grain to throw to a grazing beast (boar, deer, bulls). One that eats it leaves you be after; one already after you is drawn off a moment. A curious one fed enough follows you.",
+        bait: "feed",
+        use: { bait: "feed", reach: 12 },
+        price: 2,
+    },
     // The cures for what lingers after some creatures' blows (afflictions.js): each ends one
     ...Object.fromEntries(Object.entries(CURES).map(([id, { label, cure, price }]) => [id, { label, use: { cure }, price }])),
     // The spells' tomes (spells.js TOMES): each read to learn its spell at once; found on creatures
@@ -186,7 +205,8 @@ const MASTER_SPECIAL = Object.freeze({ legendary: 1 });
  * The lines of things a shop buys (SHOPS `line`), by what each thing is: arms (a weapon but a
  * wand or a grimoire; a quiver), armour (shields, and what's worn but jewellery), the arcane (wands
  * and grimoires, a spellward, a wizard's hat, tomes, scrolls and charms), jewellery, draughts (all
- * that's drunk but ale, and cures; not a bomb) and provisions (ale and a hot meal). The
+ * that's drunk but ale, and cures; not a bomb) and provisions (ale, a hot meal and bait for the
+ * wild's beasts). The
  * adventurers' guild buys everything.
  */
 export const LINES = Object.freeze({
@@ -194,8 +214,8 @@ export const LINES = Object.freeze({
     armour: (def) => Boolean(def.slot) && def.slot !== "mainHand" && !def.quiver && !def.jewel,
     arcana: (def) => Boolean(def.magic || def.tome || def.scroll || def.charm || def.id === "spellward" || def.id === "wizardHat"),
     jewels: (def) => Boolean(def.jewel),
-    draughts: (def) => Boolean(def.use && !def.slot && !def.part && !def.food && !def.tome && !def.scroll && !def.bomb && def.id !== "meal" && def.id !== "ale"),
-    provisions: (def) => def.id === "meal" || def.id === "ale",
+    draughts: (def) => Boolean(def.use && !def.slot && !def.part && !def.food && !def.tome && !def.scroll && !def.bomb && !def.bait && def.id !== "meal" && def.id !== "ale"),
+    provisions: (def) => def.id === "meal" || def.id === "ale" || Boolean(def.bait),
 });
 
 /**
@@ -220,14 +240,15 @@ export const LINES = Object.freeze({
  *   arcanist (the arcane and draughts); an abbey's herbalist (draughts, holy jewels and books of
  *   prayer); a people's watchtower's quartermaster (their own shop, not their part's: host.js
  *   `#shopkeeper`: the garrison's plain arms and armour, up to fine); a tavern's ale and meals, a
- *   temple's healing draughts.
+ *   temple's healing draughts. Taverns, the guild and pedlars sell bait for the wild's beasts too
+ *   (meat bait and the feed bag: core/wary.js).
  * - **The adventurers' guild**: what a new adventurer needs (the elements' first tomes, the first
  *   spells' scrolls, draughts and cures, the Stamina Boost, the Scroll of Safety, a wand and the
  *   rest; a treasure map, only ever common: core/treasure.js), and it buys everything, the
  *   creatures' parts and the tomes too.
  * - **A pedlar** met out in the wilds (core/director.js STRANGERS): odds and ends, a healing
- *   draught and a few more draughts and cures each day, and some days a common treasure map or a
- *   charm, a little dearer than in town.
+ *   draught, meat bait and a feed bag (core/wary.js) and a few more draughts and cures each day, and
+ *   some days a common treasure map or a charm, a little dearer than in town.
  */
 export const SHOPS = Object.freeze({
     smith: { items: [...ARMS, ...ARMOUR, ...UNIFORM], best: "masterwork", tiered: true, line: ["arms", "armour"] },
@@ -242,10 +263,10 @@ export const SHOPS = Object.freeze({
     arcane: { items: ["wand", "grimoire", "staff", "spellward", "wizardHat", "amulet", "ring", "potion", ...Object.keys(CURES)], best: "masterwork", line: ["arcana", "jewels", "draughts"] },
     abbey: { items: ["potion", ...Object.keys(CURES), "amulet", "ring", "grimoire"], best: "masterwork", line: ["draughts", "jewels", "arcana"] },
     watch: { items: ["sword", "hammer", "greatsword", "axe", "bow", "quiver", "roundShield", "kiteShield", "cap", "nasalHelm", "jerkin", "gambeson", "mail", "bracers", "gloves", "greaves", "leatherBoots", "boots", ...UNIFORM], best: "fine", line: ["arms", "armour"] },
-    tavern: { items: ["ale", "meal"], best: "common", line: ["provisions"] },
+    tavern: { items: ["ale", "meal", "meatBait", "feedBag"], best: "common", line: ["provisions"] },
     temple: { items: ["potion"], best: "common", line: ["draughts"] },
-    pedlar: { items: ["potion", "glowcapDraught", ...Object.keys(CURES)], best: "common", line: ["draughts"], markup: 1.25, daily: { picks: 4, count: [1, 3], grades: { common: 1 }, special: { rare: 1 }, specials: ["treasureMap", ...Object.keys(CHARMS)], sometimes: 0.5, always: ["potion"] } },
-    guild: { items: ["wand", "grimoire", "spellward", "wizardHat", "amulet", "ring", "potion", "staminaBoost", "glowcapDraught", "scrollOfSafety", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf), ...STARTING_SCROLLS, "treasureMap"], best: "fine" },
+    pedlar: { items: ["potion", "glowcapDraught", ...Object.keys(CURES), "meatBait", "feedBag"], best: "common", line: ["draughts"], markup: 1.25, daily: { picks: 6, count: [1, 3], grades: { common: 1 }, special: { rare: 1 }, specials: ["treasureMap", ...Object.keys(CHARMS)], sometimes: 0.5, always: ["potion", "meatBait", "feedBag"] } },
+    guild: { items: ["wand", "grimoire", "spellward", "wizardHat", "amulet", "ring", "potion", "staminaBoost", "glowcapDraught", "scrollOfSafety", ...Object.keys(CURES), ...ELEMENT_TOMES.map(tomeOf), ...GUILD_TOMES.map(tomeOf), ...STARTING_SCROLLS, "treasureMap", "meatBait", "feedBag"], best: "fine" },
 });
 
 /**

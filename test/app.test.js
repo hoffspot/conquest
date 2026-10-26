@@ -653,7 +653,7 @@ describe("saving (save.js)", () => {
         assert.equal(loadWheels(save), null);
         assert.equal(saveWheels(save, wheels), true);
         assert.deepEqual(loadWheels(save), wheels);
-        assert.deepEqual(readWheels(loadWheels(save)), wheels);
+        assert.deepEqual(readWheels(loadWheels(save)), { ...wheels, placed: [] });
         assert.equal(loadWheels({ ...save, created: "2026-09-27T10:00:00.000Z" }), null);
         assert.equal(saveWheels({ seed: 1 }, wheels), false);
     });
@@ -1188,7 +1188,7 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         const unit = [{ n: "unit:assist", ne: "unit:ability", e: "unit:follow", w: "unit:wait", nw: "unit:guard", se: "unit:fallback", sw: "unit:dismiss" }, { n: "vigor", e: "unit:stance", w: "item:potion" }];
 
         assert.deepEqual(WHEELS, { self, enemy: [enemy, {}], unit, provoke: [{ n: "fight" }] });
-        assert.deepEqual(readWheels(null), { self, enemy: [enemy, {}], unit, quick: ["vigor", "stun", "burn", "item:potion", null, null], version: 2 });
+        assert.deepEqual(readWheels(null), { self, enemy: [enemy, {}], unit, quick: ["vigor", "stun", "burn", "item:potion", null, null], version: 2, placed: [] });
         assert.deepEqual(actionOf("attack"), { label: "Attack", order: "engage", on: "enemy" }, "walking up to an enemy and fighting them");
 
         for (const [id, action] of Object.entries(ACTIONS)) {
@@ -1287,8 +1287,11 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         const kept = { self: [{ n: "heal", ne: "item:potion", s: "heal", e: "stun", w: "nonsense" }, { nw: "greaterHeal" }, { n: "heal" }], enemy: "nonsense" };
 
         // (Heal and Greater heal, as kept before they were renamed: Vigor and Mend Wounds now)
-        assert.deepEqual(readWheels(kept), { self: [{ n: "vigor", ne: "item:potion" }, { nw: "mendWounds" }], enemy: [{ n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" }, {}], unit: WHEELS.unit, quick: [...QUICK], version: 2 });
-        assert.deepEqual(readWheels({ self: [], enemy: [{}, {}], unit: [{}, {}], quick: [], version: 2 }), { self: [{}, {}], enemy: [{}, {}], unit: [{}, {}], quick: [null, null, null, null, null, null], version: 2 });
+        assert.deepEqual(readWheels(kept), { self: [{ n: "vigor", ne: "item:potion" }, { nw: "mendWounds" }], enemy: [{ n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" }, {}], unit: WHEELS.unit, quick: [...QUICK], version: 2, placed: [] });
+        assert.deepEqual(readWheels({ self: [], enemy: [{}, {}], unit: [{}, {}], quick: [], version: 2 }), { self: [{}, {}], enemy: [{}, {}], unit: [{}, {}], quick: [null, null, null, null, null, null], version: 2, placed: [] });
+
+        // (Bait put on an enemy's wheel of itself the first time it was carried: kept so, never again; nothing else kept there)
+        assert.deepEqual(readWheels({ placed: ["meatBait", 3, null, "feedBag"] }).placed, ["meatBait", "feedBag"]);
 
         // (Their followers': only what goes on it; kept from before there was one, as it starts)
         assert.deepEqual(readWheels({ unit: [{ n: "unit:guard", e: "stun", w: "emote:wave", s: "unit:wait", nw: "item:ale", ne: "item:potion", se: "mendWounds" }, {}] }).unit, [{ n: "unit:guard", ne: "item:potion", se: "mendWounds" }, {}]);

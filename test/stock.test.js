@@ -105,13 +105,14 @@ describe("a shop's daily stock (stock.js)", () => {
         }
     });
 
-    it("has a pedlar's odds and ends: a healing draught and a few more draughts and cures, and some days a common treasure map or a charm, a little dearer than in town", () => {
+    it("has a pedlar's odds and ends: a healing draught, meat bait and a feed bag and a few more draughts and cures, and some days a common treasure map or a charm, a little dearer than in town", () => {
         const days = Array.from({ length: 200 }, (_, day) => dailyStock("pedlar", { seed: 3, key: "stranger-1", day }));
         const specials = days.map(({ special }) => special).filter(Boolean);
 
         for (const { wares: shelves } of days) {
-            assert.ok(shelves.some(({ id }) => id === "potion"));
-            assert.ok(shelves.every(({ id, quality }) => quality === "common" && (id === "potion" || id === "glowcapDraught" || id in CURES)), shelves.map(({ id }) => id).join());
+            assert.ok(["potion", "meatBait", "feedBag"].every((always) => shelves.some(({ id }) => id === always)));
+            assert.ok(shelves.every(({ id, quality }) => quality === "common" && (id === "potion" || id === "glowcapDraught" || id === "meatBait" || id === "feedBag" || id in CURES)), shelves.map(({ id }) => id).join());
+            assert.equal(shelves.filter(({ id }) => id !== "potion" && id !== "meatBait" && id !== "feedBag").length, 3);
         }
 
         assert.ok(Math.abs(specials.length / days.length - SHOPS.pedlar.daily.sometimes) < 0.1, `${specials.length} days of 200 with a special`);

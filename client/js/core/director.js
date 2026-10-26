@@ -27,8 +27,11 @@ import { CHEST_GOLD } from "./places.js";
 import { ITEMS, rollBoost } from "./progress.js";
 import { foundMap } from "./treasure.js";
 
-/** How often a card's dealt: one each `every` metres ([least, most]) a player crosses the wilds; and the cards in a deck. */
-export const DIRECTOR = Object.freeze({ every: [250, 450], cards: Object.freeze(["cache", "remains", "campsite", "tracks", "stranger", "obstacle"]) });
+/**
+ * How often a card's dealt: one each `every` metres ([least, most]) a player crosses the wilds; and
+ * the cards in a deck (an ambush's: core/ambush.js).
+ */
+export const DIRECTOR = Object.freeze({ every: [250, 450], cards: Object.freeze(["cache", "remains", "campsite", "tracks", "stranger", "obstacle", "ambush"]) });
 
 /**
  * Fresh tracks: the pack they lead to, one roaming within `reach` metres ([least, most]) of the
