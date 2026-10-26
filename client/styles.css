@@ -4750,6 +4750,13 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     min-height: 32px;
 }
 
+/* A request's buttons: in a party, Share before Give up */
+.journal-request-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
 /* The treasures hunted: as a request's, the map named in its make's colour */
 .journal-treasure {
     display: grid;

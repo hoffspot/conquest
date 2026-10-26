@@ -1532,3 +1532,100 @@ test("two players in a party on the maps: what each had found before is the othe
     await hostContext.close();
     await guestContext.close();
 });
+
+test("a request shared with the party from the journal: in a party, each request has its Share; shared, the other's given it as it stands and told who shared it, their journal saying so; shared again, they're said to have it", async ({ ownBrowser: browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), BRYN);
+    await host.goto("/?play&seed=2");
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(guest);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+
+    // A bounty the host carries (taken in both worlds alike), part done
+    const { name, home } = await host.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return { name: game.host.players.get("player").hero.name, home: { id: game.world.start.id, name: game.world.start.name } };
+    });
+
+    for (const page of [host, guest]) {
+        await page.evaluate(
+            (town) =>
+                window.pellagos.game.host.players
+                    .get("player")
+                    .standing.take({ kind: "bounty", title: "Thin their numbers", from: { id: "reeve", name: "Ann Hale", title: "Reeve", town: town.id, townName: town.name, post: "hall" }, given: 0, state: "open", count: 2, key: "orc", target: { realm: "orc", need: 4 }, text: "Bring down 4 of the orcs.", until: 999, reward: { standing: 28, gold: 16 } }),
+            home,
+        );
+    }
+
+    // Alone, the journal has no Share
+    const journal = host.getByRole("dialog", { name: "Journal" });
+    const share = journal.getByRole("button", { name: "Share Thin their numbers with your party" });
+
+    await host.keyboard.press("j");
+    await expect(journal.locator(".journal-request-title")).toHaveText(["Thin their numbers"]);
+    await expect(journal.getByRole("button", { name: "Give up Thin their numbers" })).toBeVisible();
+    await expect(share).toHaveCount(0);
+    await host.keyboard.press("j");
+    await expect(journal).toBeHidden();
+
+    // Asked and joined
+    const menu = host.getByRole("dialog", { name: "Party" });
+    const asked = guest.getByRole("dialog", { name: /asks you to join their party\./ });
+
+    await host.locator("#partybutton").click();
+    await menu.locator('.party-others .party-player[data-id="guest-1"] .party-invite').click();
+    await expect(asked).toBeVisible({ timeout: 30000 });
+    await asked.getByRole("button", { name: "Accept" }).click();
+    await expect(menu.locator('.party-players .party-player[data-id="guest-1"] .party-swatch')).toHaveAttribute("style", /background/, { timeout: 30000 });
+    await menu.getByRole("button", { name: "Close" }).click();
+
+    // Shared from the journal: Bryn given it as it stands (2 of 4 felled), and told by whom
+    await host.keyboard.press("j");
+    await share.click();
+    await expect(host.locator("#banner")).toContainText("Shared with Bryn.", { timeout: 30000 });
+    await expect(guest.locator("#banner")).toContainText(`${name} shared a request with you: Thin their numbers.`, { timeout: 30000 });
+
+    for (const page of [host, guest]) {
+        expect(await page.evaluate(() => window.pellagos.game.host.players.get("guest-1").standing.requests.map(({ kind, count, until, shared }) => ({ kind, count, until, shared })))).toEqual([{ kind: "bounty", count: 2, until: 999, shared: name }]);
+    }
+
+    const theirs = guest.getByRole("dialog", { name: "Journal" });
+
+    await guest.keyboard.press("j");
+    await expect(theirs.locator(".journal-request-title")).toHaveText(["Thin their numbers"]);
+    await expect(theirs.locator(".journal-request-progress")).toContainText(`shared by ${name}`);
+
+    // Shared again: Bryn has it
+    await share.click();
+    await expect(host.locator("#banner")).toContainText("None of your party could take it. Bryn has it already.", { timeout: 30000 });
+    expect(await guest.evaluate(() => window.pellagos.game.standing.requests.length)).toBe(1);
+
+    await hostContext.close();
+    await guestContext.close();
+});

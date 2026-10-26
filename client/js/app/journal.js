@@ -3,8 +3,9 @@
 // - their rank, how far to the next, and what each opens;
 // - their card from the adventurers' guilds (one, good at every branch): its rank, how much more
 //   merit to the next, and what each gives;
-// - the requests they carry: who asked, what, how far it's come, where to go and how long's left
-//   (each can be given up);
+// - the requests they carry: who asked, what, how far it's come, where to go and how long's left,
+//   and who of their party shared it with them (each can be given up; and, in a party, shared
+//   with the others of it: core/host.js #shareRequest);
 // - their people: who rules, whom they're at war with and allied to, how many towns and works
 //   they hold, what's in their stores and which of their works others hold (docs/WAR.md *The
 //   works*), and how the other peoples regard them (grudges and favours: docs/WAR.md M7);
@@ -195,6 +196,7 @@ export class JournalPanel {
 
         /** What the player asks (the game does it). */
         this.onAbandon = () => {};
+        this.onShare = () => {};
         this.onGiveUpTreasure = () => {};
         this.onRead = () => {};
         this.onClose = () => {};
@@ -207,7 +209,9 @@ export class JournalPanel {
     /**
      * Show (or show again) where the player stands: { standing: { title, points, from, to, opens,
      * next }, guild (their card from the adventurers' guilds: { title, merit, from, to, opens,
-     * next }, or null till they register), requests: [{ id, title, from, text, progress, where, left }], people: { name,
+     * next }, or null till they register), requests: [{ id, title, from, text, progress, where, left,
+     * shared (who of their party shared it with them, or null) }], party (whether they're in one, with
+     * others: each request to share with them), people: { name,
      * ruler, war: [names], allies: [names], towns, regard: [{ name, words, tone }], fate (a line, or
      * null: serving another, fallen, ruling the continent) }, done: [{
      * title, from, state }], heard: [{ words, from, where, found }] (what they've heard tell of:
@@ -223,7 +227,7 @@ export class JournalPanel {
      * messages: the last told, oldest first (keepMessage) }.
      */
     show(shown) {
-        const { standing, guild = null, requests, people, done, company = [], most = 1, heard = [], writings = [], treasures = [], trails = [], moonRoads = null, bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
+        const { standing, guild = null, requests, party = false, people, done, company = [], most = 1, heard = [], writings = [], treasures = [], trails = [], moonRoads = null, bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
 
         this.shown = shown;
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
@@ -288,18 +292,29 @@ export class JournalPanel {
         const list = element("ul", "journal-list requests");
 
         list.append(
-            ...requests.map(({ id, title, from, text, progress, where, left }) => {
+            ...requests.map(({ id, title, from, text, progress, where, left, shared = null }) => {
                 const row = element("li", "journal-request");
                 const head = element("div", "journal-request-head");
+                const actions = element("div", "journal-request-actions");
+                const button = (words, label, act) => {
+                    const each = element("button", "journal-button", words);
+
+                    each.type = "button";
+                    each.setAttribute("aria-label", label);
+                    each.addEventListener("click", act);
+
+                    return each;
+                };
 
                 head.append(element("span", "journal-request-title", title), element("span", "journal-request-from", from));
 
-                const give = element("button", "journal-button", "Give up");
+                // (In a party: shared with the others of it, each who could take it)
+                if (party) {
+                    actions.append(button("Share", `Share ${title} with your party`, () => this.onShare(id)));
+                }
 
-                give.type = "button";
-                give.setAttribute("aria-label", `Give up ${title}`);
-                give.addEventListener("click", () => this.onAbandon(id));
-                row.append(head, element("p", "journal-request-text", text), element("p", "journal-request-progress", [progress, where, left].filter(Boolean).join(" · ")), give);
+                actions.append(button("Give up", `Give up ${title}`, () => this.onAbandon(id)));
+                row.append(head, element("p", "journal-request-text", text), element("p", "journal-request-progress", [progress, where, left, shared ? `shared by ${shared}` : ""].filter(Boolean).join(" · ")), actions);
 
                 return row;
             }),
