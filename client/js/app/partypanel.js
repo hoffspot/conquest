@@ -11,10 +11,19 @@
 // twice), and anyone can leave it; and below, the other players in the world, each to be asked to
 // it ("Invite"), or said to be asked already.
 //
-// Playing together, it has two tabs: the party (all that, above) and its chat: what's been said
+// Playing together, it has three tabs: the party (all that, above); its chat: what's been said
 // in the party (core/netplay.js: sent to those in it alone), its newest at the foot, with the
 // party's comings and goings among it; quick phrases to say with a tap, and a line to type and
-// send. The Chat tab says how many lines haven't been seen (as the Party button does: hud.js).
+// send; and the players: everyone playing in the world, the player first, then their party, then
+// the rest by name, each with what they are (their standing and people), how they stand
+// (playerStatus: their party, asked to one, away, resting, fallen, at war with the player's
+// people) and where they are; to be asked to the player's party ("Invite"), or, its leader,
+// put out of it ("Dismiss", asked twice). The Chat tab says how many lines haven't been seen (as
+// the Party button does: hud.js).
+//
+// In a world on a server, playing together or not, its header has the World button: the world's
+// own panel (main.js openWorldPanel, as Paused › World opens it): who's here; for its owner,
+// invites and keys; leaving it.
 //
 // It only shows and asks: what's done is the host's (core/host.js "order" and "party" commands),
 // through the game.
@@ -32,6 +41,44 @@ export const QUICK_PHRASES = Object.freeze(["On my way!", "Wait for me.", "Follo
 /** How many lines haven't been seen, as a badge shows it: none, "1" to "9", or "9+". */
 export function unreadLabel(count) {
     return count > 9 ? "9+" : count > 0 ? String(count) : "";
+}
+
+/**
+ * How a player in the world stands, for the Players tab, as chips ([{ text, kind }], `kind` how
+ * each is coloured): their party ("party": the player's; "partied": another's; "free": none), or
+ * asked to one ("asked"); away (AFK: core/host.js AFK); fallen, or resting; their people at war
+ * with the player's ("war"). From { me (the player themselves), party ({ yours, leads (they lead
+ * it), leader (its leader's name) }, or null), asked (who's asked them to theirs: "you", a name,
+ * or null), away, resting, dead, hostile }.
+ */
+export function playerStatus({ me = false, party = null, asked = null, away = false, resting = false, dead = false, hostile = false }) {
+    const chips = [];
+
+    if (party?.yours) {
+        chips.push({ text: party.leads ? (me ? "You lead your party" : "Leads your party") : "In your party", kind: "party" });
+    } else if (party) {
+        chips.push({ text: party.leads ? "Leads a party" : `In ${party.leader}'s party`, kind: "partied" });
+    } else if (asked) {
+        chips.push({ text: asked === "you" ? "Asked to your party" : `Asked to ${asked}'s party`, kind: "asked" });
+    } else {
+        chips.push({ text: "In no party", kind: "free" });
+    }
+
+    if (away) {
+        chips.push({ text: "Away (AFK)", kind: "afk" });
+    }
+
+    if (dead) {
+        chips.push({ text: "Fallen", kind: "fallen" });
+    } else if (resting) {
+        chips.push({ text: "Resting", kind: "resting" });
+    }
+
+    if (hostile && !me) {
+        chips.push({ text: "At war with your people", kind: "war" });
+    }
+
+    return chips;
 }
 
 /** How long's left of something (ms), as minutes and seconds: "4:05". */
@@ -82,9 +129,14 @@ export class PartyPanel {
         this.close.title = "Close (Esc)";
         this.close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
         this.close.addEventListener("click", () => this.onClose());
-        header.append(this.title, this.count, this.close);
+        this.worldButton = element("button", "journal-button party-world", "World");
+        this.worldButton.type = "button";
+        this.worldButton.title = "Who's here; for its owner, invites and keys (as Paused › World)";
+        this.worldButton.hidden = true;
+        this.worldButton.addEventListener("click", () => this.onWorld());
+        header.append(this.title, this.count, this.worldButton, this.close);
 
-        // (Playing together: the party, or its chat)
+        // (Playing together: the party, its chat, or everyone playing in the world)
         this.tabs = element("div", "party-tabs");
         this.tabs.setAttribute("role", "tablist");
         this.tabs.hidden = true;
@@ -93,13 +145,14 @@ export class PartyPanel {
         this.chatBadge = element("span", "party-tab-badge");
         this.chatBadge.hidden = true;
         this.chatTab.append(this.chatBadge);
-        this.tabs.append(this.partyTab, this.chatTab);
+        this.playersTab = this.#tab("Players", "players");
+        this.tabs.append(this.partyTab, this.chatTab, this.playersTab);
         this.tab = "party";
 
         this.body = element("div", "journal-body");
 
         // (Playing together: the party's players, and the others to ask; each shown only then)
-        this.playersHeading = element("h3", "journal-heading", "Players");
+        this.playersHeading = element("h3", "journal-heading", "Your party");
         this.players = element("ul", "journal-list party-players");
         this.othersHeading = element("h3", "journal-heading", "Ask to your party");
         this.others = element("ul", "journal-list party-others");
@@ -145,7 +198,16 @@ export class PartyPanel {
         this.chatBody.append(this.chatLog, this.chatNote, this.quick, this.form);
         this.shownLine = null;
 
-        this.panel.append(header, this.tabs, this.body, this.chatBody);
+        // Everyone playing in the world, and what can be done about them here
+        this.everyoneBody = element("div", "journal-body party-everyone");
+        this.everyoneBody.hidden = true;
+        this.everyoneHeading = element("h3", "journal-heading", "In this world");
+        this.everyoneList = element("ul", "journal-list party-everyone-list");
+        this.everyoneNote = element("p", "journal-note party-everyone-note");
+        this.everyoneBody.append(this.everyoneHeading, this.everyoneList, this.everyoneNote);
+        this.everyoneShown = null;
+
+        this.panel.append(header, this.tabs, this.body, this.chatBody, this.everyoneBody);
         root.append(this.panel);
 
         // Each member's row, kept from one showing to the next (by id): { root, canvas, kind,
@@ -162,9 +224,12 @@ export class PartyPanel {
         this.onParty = () => {};
         this.onClose = () => {};
 
-        /** Something said to the party (a line typed, or a quick phrase), and a tab chosen ("party", "chat"). */
+        /** Something said to the party (a line typed, or a quick phrase), and a tab chosen ("party", "chat", "players"). */
         this.onSay = () => {};
         this.onTab = () => {};
+
+        /** The World button pressed (a world on a server): its panel. */
+        this.onWorld = () => {};
     }
 
     get open() {
@@ -178,13 +243,19 @@ export class PartyPanel {
      * adventurers they can lead); playing together, `players` (those in their party, they among
      * them, the longest in it first: [{ id, name, leader, me, away, with: [names] }]), `others`
      * (the other players in the world not in it: [{ id, name, asked }]), `leads` (whether they
-     * lead it) and `full` (whether it's as many as it can be); and its chat: { lines: [{ id, name,
+     * lead it) and `full` (whether it's as many as it can be); its chat: { lines: [{ id, name,
      * text, mine, system }] (the oldest first), unread (how many haven't been seen), canSay (in a
-     * party of players, so there's someone to hear) } }.
+     * party of players, so there's someone to hear) }; and `everyone` playing in the world, in
+     * the order shown: [{ id, name, me, title (their standing and people), where, party, asked,
+     * away, resting, dead, hostile (playerStatus), can ("invite", "asked", "full", "dismiss", or
+     * null: what can be done about them here) }], with `partied` (whether the player's in a party);
+     * and `world`, whether there's the World button (a world on a server).
      */
-    show({ members = [], most = 1, players = [], others = [], leads = false, full = false, together = false, chat = null } = {}) {
+    show({ members = [], most = 1, players = [], others = [], leads = false, full = false, together = false, chat = null, everyone = [], partied = false, world = false } = {}) {
         this.#together({ players, others, leads, full, together });
+        this.#everyone({ everyone, leads, full, partied });
         this.tabs.hidden = !together;
+        this.worldButton.hidden = !world;
 
         if (!together && this.tab !== "party") {
             this.showTab("party");
@@ -224,13 +295,15 @@ export class PartyPanel {
         this.panel.hidden = true;
     }
 
-    /** Show one of its tabs ("party", or "chat": its newest line in view, ready to type). */
+    /** Show one of its tabs ("party"; "chat", its newest line in view, ready to type; or "players"). */
     showTab(tab) {
-        this.tab = tab === "chat" ? "chat" : "party";
+        this.tab = tab === "chat" || tab === "players" ? tab : "party";
         this.body.hidden = this.tab !== "party";
         this.chatBody.hidden = this.tab !== "chat";
+        this.everyoneBody.hidden = this.tab !== "players";
         this.partyTab.setAttribute("aria-selected", String(this.tab === "party"));
         this.chatTab.setAttribute("aria-selected", String(this.tab === "chat"));
+        this.playersTab.setAttribute("aria-selected", String(this.tab === "players"));
 
         if (this.tab === "chat") {
             this.chatLog.scrollTop = this.chatLog.scrollHeight;
@@ -356,6 +429,61 @@ export class PartyPanel {
                   })
                 : [element("li", "journal-empty", full ? "Your party's full." : players.length ? "Everyone else playing here is in your party." : "No one else is playing in this world.")]),
         );
+    }
+
+    // Everyone playing in the world, made again only when what's shown of them changes (as the
+    // party's players are): each with what they are, how they stand, where they are, and the one
+    // thing that can be done about them here: asked to the player's party, or put out of it
+    #everyone({ everyone, leads, full, partied }) {
+        const shown = JSON.stringify({ everyone, leads, full, partied });
+
+        if (shown === this.everyoneShown) {
+            return;
+        }
+
+        this.everyoneShown = shown;
+        this.everyoneHeading.textContent = `In this world (${everyone.length})`;
+        this.everyoneList.replaceChildren(
+            ...everyone.map((player) => {
+                const { id, name, me, title = "", where = "", can = null } = player;
+                const leads = Boolean(player.party?.leads);
+                const row = element("li", `party-player everyone${leads ? " leader" : ""}${player.away ? " away" : ""}${me ? " me" : ""}`);
+                const text = element("div", "party-text");
+                const chips = element("div", "player-chips");
+                const actions = element("div", "party-actions");
+
+                row.dataset.id = id;
+
+                for (const chip of playerStatus(player)) {
+                    chips.append(element("span", `player-chip ${chip.kind}`, chip.text));
+                }
+
+                text.append(element("span", "party-name", `${leads ? "♛ " : ""}${me ? `${name} (you)` : name}`), element("span", "party-kind", title), chips, element("span", "party-where", where));
+
+                if (can === "invite" || can === "asked" || can === "full") {
+                    const invite = element("button", "journal-button party-invite", can === "asked" ? "Asked" : "Invite");
+
+                    invite.type = "button";
+                    invite.disabled = can !== "invite";
+                    invite.title = can === "full" ? "Your party's full" : "";
+                    invite.addEventListener("click", () => this.onParty("invite", id));
+                    actions.append(invite);
+                } else if (can === "dismiss") {
+                    actions.append(this.#sure("Dismiss", "Dismiss?", () => this.onParty("remove", id)));
+                }
+
+                row.append(text, actions);
+
+                return row;
+            }),
+        );
+        this.everyoneNote.textContent = full
+            ? "Your party's full: four play together in one at most."
+            : leads
+              ? "Invite anyone in no party to yours; Dismiss puts someone out of it."
+              : partied
+                ? "Only your party's leader can dismiss anyone from it."
+                : "Invite anyone in no party: you'll lead the party you make together, up to four in it.";
     }
 
     // A button pressed twice to be sure: the first press turns it to `sure` a moment
