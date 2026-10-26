@@ -2757,12 +2757,21 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   the rest of the party too, wherever they are, as if they'd been there: the fog lifts off it on
   their maps and the places round it are found (core/explored.js `sighted`), as are the buildings
   any of them goes into. A guild's portal still opens only to those who've been in its branch.
-  It's kept for good, after the party's gone, but nothing's shared from before they were in it or
-  after they've left. The places worth finding (core/places.js `placesOf`, the dungeons' ways
-  in, and the dens: docs/WILDS.md *Dens*) that another found for them first are kept with who found them (`Explored.found`, kept with
-  the character), and they're told: "Bryn found an abbey: it's on your map." (or how many). The
-  world map says so under each, close in: "found by Bryn". The places one of them sees from high
-  ground (docs/WILDS.md *Seen from high ground*) are found by the rest too, kept and told so.
+  It's kept for good, after the party's gone, but nothing's shared after they've left. The places
+  worth finding (core/places.js `placesOf`, the dungeons' ways in, and the dens: docs/WILDS.md
+  *Dens*) that another found for them first are kept with who found them (`Explored.found`, kept
+  with the character), and they're told: "Bryn found an abbey: it's on your map." (or how many).
+  The world map says so under each, close in: "found by Bryn". The places one of them sees from
+  high ground (docs/WILDS.md *Seen from high ground*) are found by the rest too, kept and told so,
+  and a camp's or lair's home one of them tracks by its trails' signs is tracked by the rest too
+  (not the signs: theirs who read them).
+- **Pooled as they join** (`#pool`, `Explored.merge`). Whoever joins a party, and each already in
+  it, find what the other had found before: the land they'd been over, the buildings they'd gone
+  into, the places they'd seen from high ground and the homes they'd tracked, each place worth
+  finding new to them kept as found by whoever had (or whoever had found it for them), and told:
+  "Bryn's map is yours too: 12 places and the land they've been over." Not the signs read, the
+  stone rings stood in nor the guild's portals: theirs to have done. Till 2026-10-26 nothing was
+  shared from before they were in it.
 - **Pings** (`ping`, with `at`: [x, y] metres, anywhere on the world's map; out of a party,
   refused). The world map's ping button (in a party only), then a tap, shows the whole party where
   for 30 seconds (app/mapicons.js `PING`; one each second and a half at most): a green dot with

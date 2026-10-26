@@ -14833,7 +14833,7 @@ export class Game {
         const fellow = member ? this.partyView().find(({ id }) => id === member) : null;
 
         if (fellow) {
-            const way = bearing(this.#whereAmI(), [fellow.x, fellow.z]);
+            const way = bearing(this.#whereAmI(), [fellow.x, fellow.z], 10);
 
             this.hud.message(`${fellow.name}${fellow.inside ? `, ${fellow.inside}` : ""}${way && way !== "here" ? `: ${way}` : ""}`, 3);
 
