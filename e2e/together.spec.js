@@ -1013,6 +1013,153 @@ test("the party menu's Players tab lists everyone playing in the world, the play
     await guestContext.close();
 });
 
+test("a direct message from the Players tab: To Bryn in the host's chat, From the host in Bryn's, a moment on Bryn's screen and gone; refused while Bryn takes no world messages, the host told; Bryn blocks the host: their messages and invites never reach Bryn, the host none the wiser; unblocked from Game options' Blocked players", async ({ ownBrowser: browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), BRYN);
+    await host.goto("/?play&seed=2");
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+    const ada = await host.evaluate(() => window.pellagos.game.host.players.get("player").hero.name);
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(guest);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+
+    // The host messages Bryn from the Players tab: the Chat, To Bryn, ready to type
+    const menu = host.getByRole("dialog", { name: "Party" });
+    const theirs = guest.getByRole("dialog", { name: "Party" });
+    const say = (dialog, to) => dialog.getByRole("textbox", { name: `Something to say to ${to}` });
+
+    await host.locator("#partybutton").click();
+    await menu.getByRole("tab", { name: "Players" }).click();
+    await menu.locator('.party-everyone-list .party-player[data-id="guest-1"] .party-message').click();
+    await expect(menu.getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
+    await expect(menu.getByRole("combobox", { name: "Who to say it to" })).toHaveValue("guest-1");
+    await expect(say(menu, "Bryn")).toBeFocused();
+    await say(menu, "Bryn").fill("Meet me at the well");
+    await say(menu, "Bryn").press("Enter");
+    await expect(menu.locator(".chat-line.dm.mine").last()).toHaveText("To Bryn: Meet me at the well", { timeout: 30000 });
+
+    // Bryn: a moment on screen, just above the quick actions, then gone; counted on the Party
+    // button, and in their chat, From the host
+    const feed = guest.locator("#hud .chatfeed-line");
+
+    await expect(feed.last()).toHaveText(`From ${ada}: Meet me at the well`, { timeout: 30000 });
+    await expect(feed.last()).toHaveClass(/\bdm\b/);
+    await expect(guest.locator("#partyunread")).toHaveText("1");
+    await expect(feed).toHaveCount(0, { timeout: 15000 });
+    await guest.locator("#partybutton").click();
+    await expect(theirs.getByRole("tab", { name: "Chat" })).toHaveAttribute("aria-selected", "true");
+    await expect(theirs.locator(".chat-line.dm").last()).toHaveText(`From ${ada}: Meet me at the well`);
+    await theirs.getByRole("button", { name: "Close" }).click();
+
+    // Bryn takes no world messages (Game options, Chat and players): the host's next isn't sent,
+    // and the host's told
+    const options = async (page, then) => {
+        await page.locator("#menubutton").click();
+        await page.locator("#optionsbutton").click();
+        await page.locator("#chatbutton").click();
+        await then();
+        await page.locator("#chatback").click();
+        await page.locator("#optionsback").click();
+        await page.locator("#resumebutton").click();
+    };
+
+    await options(guest, async () => {
+        await expect(guest.locator("#chatfeedswitch")).toBeChecked();
+        await guest.locator("label:has(#worlddmswitch)").click();
+        await expect(guest.locator("#worlddmswitch")).toBeChecked();
+    });
+    await say(menu, "Bryn").fill("Are you there?");
+    await say(menu, "Bryn").press("Enter");
+    await expect(host.locator("#banner")).toContainText("Bryn isn't taking direct messages.", { timeout: 30000 });
+    await expect(menu.locator(".chat-line.dm.mine")).toHaveCount(1);
+    await options(guest, async () => {
+        await guest.locator("label:has(#worlddmswitch)").click();
+        await expect(guest.locator("#worlddmswitch")).not.toBeChecked();
+    });
+
+    // Bryn blocks the host from the Players tab (pressed twice): Blocked there, no Message
+    const hostRow = theirs.locator('.party-everyone-list .party-player[data-id="player"]');
+
+    await guest.locator("#partybutton").click();
+    await theirs.getByRole("tab", { name: "Players" }).click();
+    await expect(hostRow.locator(".party-block")).toHaveText("Block");
+    expect(await hostRow.locator(".party-block").evaluate((button) => {
+        button.click();
+
+        const sure = button.textContent;
+
+        button.click();
+
+        return sure;
+    })).toBe("Block?");
+    await expect(hostRow.locator(".player-chip.blocked")).toHaveText("Blocked");
+    await expect(hostRow.locator(".party-unblock")).toHaveText("Unblock");
+    await expect(hostRow.locator(".party-message")).toHaveCount(0);
+    await theirs.getByRole("button", { name: "Close" }).click();
+
+    // The host's message looks sent, but never reaches Bryn; nor does their invite
+    const heard = () => guest.evaluate(() => window.pellagos.game.chatLines.length);
+    const before = await heard();
+
+    await say(menu, "Bryn").fill("Hello?");
+    await say(menu, "Bryn").press("Enter");
+    await expect(menu.locator(".chat-line.dm.mine").last()).toHaveText("To Bryn: Hello?", { timeout: 30000 });
+    await menu.getByRole("tab", { name: "Players" }).click();
+    await menu.locator('.party-everyone-list .party-player[data-id="guest-1"] .party-invite').click();
+    await expect(menu.locator('.party-everyone-list .party-player[data-id="guest-1"] .party-invite')).toHaveText("Asked", { timeout: 30000 });
+    await expect.poll(() => guest.evaluate(() => Boolean(window.pellagos.game.host.invitation("guest-1"))), { timeout: 30000 }).toBe(true);
+    await guest.waitForTimeout(1500);
+    expect(await heard()).toBe(before);
+    await expect(feed).toHaveCount(0);
+    await expect(guest.getByRole("dialog", { name: `${ada} asks you to join their party.` })).toHaveCount(0);
+
+    // Unblocked from Game options' Blocked players: the host there, in this world
+    await options(guest, async () => {
+        await expect(guest.locator("#blockedsummary")).toHaveText("1 blocked, 1 in this world");
+        await guest.locator("#blockedbutton").click();
+        await expect(guest.locator("#blockedlist li .name")).toHaveText([ada]);
+        await expect(guest.locator("#blockedlist li .about")).toContainText(["In this world"]);
+        await guest.locator("#blockedlist").getByRole("button", { name: `Unblock ${ada}` }).click();
+        await expect(guest.locator("#blockedlist li")).toHaveText(["No one's blocked."]);
+        await guest.locator("#blockedback").click();
+        await expect(guest.locator("#blockedsummary")).toHaveText("No one");
+    });
+    expect(await guest.evaluate(() => window.pellagos.game.isBlocked("player"))).toBe(false);
+
+    // Heard again
+    await menu.getByRole("tab", { name: "Chat" }).click();
+    await say(menu, "Bryn").fill("There you are");
+    await say(menu, "Bryn").press("Enter");
+    await expect(feed.last()).toHaveText(`From ${ada}: There you are`, { timeout: 30000 });
+
+    await hostContext.close();
+    await guestContext.close();
+});
+
 test("two players walk about a while: the joined copy's checked against the host's every fifth of a second and never drifts; the guest's hero drawn going at once; what's sent measured", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();

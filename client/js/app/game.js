@@ -56,7 +56,7 @@ import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
 import { useSound, wearSound } from "../audio/handling.js";
 import { CREATURE_VOICES, creatureSounds, ITEM_SOUNDS, spellSounds } from "../audio/sound.js";
-import { FORT_ICONS, PING, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
+import { FORT_ICONS, ICON_NAMES, PING, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
 import { buildingView } from "./building.js";
 import { battleMapView, heededText } from "./battlemap.js";
 import { PALISADE } from "../core/war/armies.js";
@@ -71,7 +71,8 @@ import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { TREASURE } from "../core/treasure.js";
 import { shopPrice } from "../core/stock.js";
-import { CHAT, PACE } from "../core/netplay.js";
+import { isGuid } from "../core/guid.js";
+import { CHAT, DMS_TAKEN, PACE } from "../core/netplay.js";
 import { WorldRunner } from "../core/runner.js";
 import { BOARD_SIZE, briefOf, COUNSEL, GUILD_RANKS, MOST_REQUESTS, objectiveOf, OPENS, progressOf, STANDINGS, whereTo } from "../core/standing.js";
 import { describeLeader } from "../core/war/peoples.js";
@@ -1264,9 +1265,26 @@ export class Game {
         this.chatUnread = 0;
         this.chatCount = 0;
 
+        /**
+         * Direct messages and blocks (Game options: Chat and players): which kinds the player takes
+         * (from their party, from anyone else in the world: core/netplay.js DMS_TAKEN, told to the
+         * host: takeDms); who the party menu's Chat says a line to (`chatTo`: null, their party; or
+         * a player's id, a direct message); whether what's said shows a moment on screen too
+         * (`chatOnScreen`: hud.js chatLine); and the players blocked (`blocked`, in every world, as
+         * save.js blocksOf keeps them: their direct messages and party invites let go of, unheard,
+         * they none the wiser), each in the world `worldKey` names, by who it knows them as (whoIs).
+         * Told as they change: onBlocked(blocked).
+         */
+        this.dmsTaken = { ...DMS_TAKEN };
+        this.chatTo = null;
+        this.chatOnScreen = true;
+        this.blocked = [];
+        this.worldKey = `world:${world.seed}`;
+        this.onBlocked = () => {};
+
         if (remote) {
             remote.onChat = (line) => this.chatHeard(line);
-            remote.onUnsaid = (reason) => this.#unsaid(reason);
+            remote.onUnsaid = (reason, said) => this.#unsaid(reason, said);
         }
 
         /**
@@ -2029,6 +2047,12 @@ export class Game {
             this.closeParty();
             this.onWorldPanel?.();
         };
+        this.partyPanel.onMessage = (id) => this.#messageTo(id);
+        this.partyPanel.onChatTo = (id) => {
+            this.chatTo = id;
+            this.#showParty();
+        };
+        this.partyPanel.onBlock = (id, on) => this.block(id, on);
         this.fate = new FatePanel(this.hud.root);
         this.talk.onChoose = (index) => this.#say(index);
         this.talk.onClose = () => this.#endTalk();
@@ -2287,6 +2311,24 @@ export class Game {
         character.object.visible = !avatar.compiling && avatar.sent !== false;
 
         return true;
+    }
+
+    // A follower hired from their drink (#adopted: their body as it was at the table, a tankard
+    // in the hand their weapon goes in): the drink put down and their arms taken up, the
+    // adventurer's own (folkLook's, as a follower's drawn anew), put away till there's a fight.
+    // Once they've gone out through a door or up or down the stairs ("cross"), or as they draw for
+    // a fight or swing before then
+    #takeUpArms(actor, avatar) {
+        const character = avatar?.character;
+
+        if (actor?.kind !== "follower" || !character?.equipment || ![...character.equipment.values()].includes("tankard")) {
+            return;
+        }
+
+        const { calling, sex, seed, people } = this.host.followers.get(actor.id) ?? { calling: "warrior" };
+
+        character.setEquipment(folkLook({ role: "adventurer", look: calling, sex, seed, people }).equipment);
+        character.sheathe(true);
     }
 
     // Someone gone from the battle, no longer drawn (their body kept, `keep`, for someone else)
@@ -2965,6 +3007,9 @@ export class Game {
         if (this.runner) {
             this.runner.hosting = hosting;
         }
+
+        // (Which direct messages the host's own player takes, told to it)
+        hosting?.takeDms(this.me, this.dmsTaken);
     }
 
     /**
@@ -5476,7 +5521,7 @@ export class Game {
             return [];
         }
 
-        return [...finds.values()].filter(({ id }) => this.findsSeen.has(id)).map(({ id, kind, at: [x, z], searched }) => ({ id, kind, x, z, rim: searched ? PLACE_RIMS.cleared : null }));
+        return [...finds.values()].filter(({ id }) => this.findsSeen.has(id)).map(({ id, kind, at: [x, z], searched }) => ({ id, kind, x, z, rim: searched ? PLACE_RIMS.cleared : null, about: searched ? `${ICON_NAMES[kind]}: searched` : ICON_NAMES[kind] }));
     }
 
     /**
@@ -5499,15 +5544,16 @@ export class Game {
             const [x, z] = sites?.set.get(works.id)?.heart ?? works.at;
             const stance = works.held ? "held" : mine && war.friendly(mine, works.owner) ? "own" : mine && war.hostile(mine, works.owner) ? "enemy" : "other";
 
-            return { id: works.id, kind: WORKS_ICONS[works.kind], x, z, rim: WORKS_RIMS[stance] };
+            return { id: works.id, kind: WORKS_ICONS[works.kind], x, z, rim: WORKS_RIMS[stance], about: `The ${works.name} ${works.kind}: ${stance === "held" ? "held by brigands" : this.#whose(works.owner, stance)}` };
         });
     }
 
     /**
      * Each people's fortifications standing (docs/WAR.md *Fortifications*), as icons for the maps:
      * [{ id, kind (guardTower or garrison: app/mapicons.js), x, z (metres), rim (by how its
-     * people stand with the player's: WORKS_RIMS), own (its people the player's or an ally's: known
-     * to them wherever it stands) }].
+     * people stand with the player's: WORKS_RIMS), own (its people the player's or an ally's) }].
+     * On the world map once seen, as anything is: their own side's too, wherever the war table
+     * read uncovered them (core/host.js #tableRead).
      */
     fortIcons() {
         const war = this.host?.war;
@@ -5521,8 +5567,18 @@ export class Game {
         return war.forts.map((fort) => {
             const stance = mine && war.friendly(mine, fort.realm) ? "own" : mine && war.hostile(mine, fort.realm) ? "enemy" : "other";
 
-            return { id: fort.id, kind: FORT_ICONS[fort.kind], x: fort.at[0], z: fort.at[1], rim: WORKS_RIMS[stance], own: stance === "own" };
+            return { id: fort.id, kind: FORT_ICONS[fort.kind], x: fort.at[0], z: fort.at[1], rim: WORKS_RIMS[stance], own: stance === "own", about: `${ICON_NAMES[FORT_ICONS[fort.kind]]}: ${this.#whose(fort.realm, stance)}` };
         });
+    }
+
+    // Whose a people's works or fortification is, in words, by how they stand with the player's
+    // (`stance`: WORKS_RIMS'): "your people's", "the Elves', your allies'", "the Orcs', at war with
+    // yours", or "the Cats'"
+    #whose(realm, stance) {
+        const people = peopleOf(realm);
+        const theirs = `the ${people}${people.endsWith("s") ? "'" : "'s"}`;
+
+        return realm === this.self?.realm ? "your people's" : stance === "own" ? `${theirs}, your allies'` : stance === "enemy" ? `${theirs}, at war with yours` : theirs;
     }
 
     // A works won near the player, or by their people (host.js #worksFell): said
@@ -5621,7 +5677,7 @@ export class Game {
             return [];
         }
 
-        return [...caches.values()].filter(({ id }) => this.cachesSeen.has(id)).map(({ id, at: [x, z], opened }) => ({ id, kind: "cache", x, z, rim: opened ? PLACE_RIMS.cleared : null }));
+        return [...caches.values()].filter(({ id }) => this.cachesSeen.has(id)).map(({ id, at: [x, z], opened }) => ({ id, kind: "cache", x, z, rim: opened ? PLACE_RIMS.cleared : null, about: opened ? `${ICON_NAMES.cache}: opened` : ICON_NAMES.cache }));
     }
 
     /**
@@ -5648,7 +5704,7 @@ export class Game {
         if (landmarks.version !== explored.version) {
             const buildings = this.world.interiors?.buildings;
 
-            landmarks.icons = [...explored.entered].map((key) => buildings?.get(key)).filter((building) => building?.at).map(({ kind, at }) => ({ kind, x: at[0], z: at[1] }));
+            landmarks.icons = [...explored.entered].map((key) => buildings?.get(key)).filter((building) => building?.at).map(({ kind, at, name }) => ({ kind, x: at[0], z: at[1], about: name && ICON_NAMES[kind] ? `${name} (${ICON_NAMES[kind].toLowerCase()})` : (name ?? null) }));
             landmarks.version = explored.version;
         }
 
@@ -5735,13 +5791,16 @@ export class Game {
             known.icons = plan.sites.filter(({ kind }) => kind === "dungeon").map((site) => {
                 const [x, z] = sites ? sites.placedAt(site) : site.at;
 
-                return { id: site.id, kind: "dungeon", x, z, rim: null };
+                return { id: site.id, kind: "dungeon", x, z, rim: null, about: site.name ? `${site.name} (dungeon)` : ICON_NAMES.dungeon };
             });
             known.placed = sites?.set.size ?? 0;
         }
 
         for (const icon of known.icons) {
-            icon.rim = this.host?.dungeons?.get(icon.id)?.cleared ? PLACE_RIMS.cleared : null;
+            const cleared = Boolean(this.host?.dungeons?.get(icon.id)?.cleared);
+
+            icon.rim = cleared ? PLACE_RIMS.cleared : null;
+            icon.about = `${icon.about.replace(/: cleared.*$/, "")}${cleared ? ": cleared, till something new stirs in it" : ""}`;
         }
 
         return known.icons;
@@ -5767,8 +5826,11 @@ export class Game {
                 // (Where it stands once it's set down, or pitched; its plan's spot till then)
                 const [x, z] = site && sites ? sites.placedAt(site) : camp && overworld?.campPlacedAt ? overworld.campPlacedAt(camp) : place.at;
                 const holder = holderOf(plan, place, war.places[place.id], war.turn);
+                const held = { friendly: place.race ? `held by the ${peopleOf(place.race)}` : "held by its people", bandits: "held by outlaws", dead: "held by the dead", beast: "a great beast's" }[holder];
+                // (Its name, and what it is if the name doesn't say: "Thornbury Abbey", "Gorthak (camp)")
+                const called = place.name ? (place.name.toLowerCase().includes(place.kind) ? place.name : `${place.name} (${place.kind})`) : `${place.kind[0].toUpperCase()}${place.kind.slice(1)}`;
 
-                return { id: place.id, kind: place.icon, x, z, holder, rim: holder ? PLACE_RIMS[holder] : null };
+                return { id: place.id, kind: place.icon, x, z, holder, rim: holder ? PLACE_RIMS[holder] : null, about: held ? `${called}: ${held}` : called };
             });
             known.key = key;
         }
@@ -5780,7 +5842,7 @@ export class Game {
      * What the world map shows (app/worldmap.js): where the player is ({ x, z, facing }, metres
      * and radians, on the world outside: inside, at the building's door) and the icons: the
      * buildings gone into, the places worth finding near where they've been (within a chunk), and
-     * the fortifications there, and their own people's and their allies' wherever they stand.
+     * the works and fortifications there (their own side's uncovered by the war table read).
      */
     worldMapView() {
         const actor = this.battle.actor(this.me);
@@ -5791,10 +5853,11 @@ export class Game {
         const finder = (icon) => (this.explored.finderOf(icon.id) ? { ...icon, finder: this.explored.finderOf(icon.id) } : icon);
 
         // (A place worth finding: been near, or seen from high ground, Explored knows; and the
-        // camps and lairs they've tracked home, found or not: core/tracks.js)
+        // camps and lairs they've tracked home, found or not: core/tracks.js. A fortification
+        // once seen, whosever it is: their own side's uncovered by reading the war table)
         const known = (icon) => this.explored.knows(icon.id, icon.x, icon.z) || this.explored.tracked.has(icon.id);
 
-        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.#trackedMarks(this.denIcons().filter(known)), ...this.worksIcons().filter(seen), ...this.fortIcons().filter((icon) => icon.own || seen(icon)), ...this.cacheIcons(), ...this.findIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
+        return { player: { x: outside[0], z: outside[1], facing }, icons: [...this.icons(), ...this.#trackedMarks(this.placeIcons().filter(known)).map(finder), ...this.#trackedMarks(this.dungeonIcons().filter(known)).map(finder), ...this.#trackedMarks(this.denIcons().filter(known)), ...this.worksIcons().filter(seen), ...this.fortIcons().filter(seen), ...this.cacheIcons(), ...this.findIcons()], marks: this.requestMarks(), heard: this.heardCircles(), searches: this.treasureCircles(), ...this.pinView() };
     }
 
     /**
@@ -9095,17 +9158,41 @@ export class Game {
             this.hud.partyUnread(0);
         }
 
-        return { lines: this.chatLines, unread: this.chatUnread, canSay: Boolean((this.hosting || this.remote) && this.host.partyFor(this.me)) };
+        // (Saying to someone who's gone, or blocked since: to the party again)
+        if (this.chatTo && (!this.host.players.has(this.chatTo) || this.isBlocked(this.chatTo))) {
+            this.chatTo = null;
+        }
+
+        const together = Boolean(this.hosting || this.remote);
+        const party = together ? this.host.partyFor(this.me) : null;
+        const others = together ? [...this.host.players.values()].filter(({ id }) => id !== this.me && !this.isBlocked(id)) : [];
+
+        return {
+            lines: this.chatLines,
+            unread: this.chatUnread,
+            canSay: Boolean(together && (this.chatTo || party)),
+            to: this.chatTo,
+            targets: others.map(({ id, hero }) => ({ id, name: hero.name, party: Boolean(party?.members.includes(id)) })).sort((a, b) => b.party - a.party || a.name.localeCompare(b.name)),
+        };
     }
 
     /**
      * A line said in the player's party (core/netplay.js: heard as it's sent on to those in it,
      * their own lines too): into the chat; another's with a chime, and counted unread till it's seen.
      */
-    chatHeard({ from, name, text }) {
+    chatHeard({ from, name, text, to = null, toName = "", dm = null }) {
         const mine = from === this.me;
 
-        this.#chatLine({ name: mine ? "You" : name, text, mine });
+        // (A direct message from someone the player's blocked: let go of, unheard; they're not told)
+        if (dm && !mine && this.isBlocked(from)) {
+            return;
+        }
+
+        // (A direct message by whom it's with: the one it's to, or from)
+        const line = dm ? { name: mine ? toName : name, text, mine, dm, with: mine ? to : from } : { name: mine ? "You" : name, text, mine };
+        const reading = this.partyPanel?.open && this.partyPanel.tab === "chat";
+
+        this.#chatLine(line);
 
         if (!mine) {
             this.sound?.play("chatHeard");
@@ -9113,6 +9200,72 @@ export class Game {
         }
 
         this.#chatShown();
+
+        // (And a moment on screen, just above the quick actions, unless the chat's open to read)
+        if (this.chatOnScreen && !reading) {
+            this.hud.chatLine({ who: dm ? `${mine ? "To" : "From"} ${line.name}` : line.name, text, mine, dm: Boolean(dm) });
+        }
+    }
+
+    /** Which direct messages the player takes (Game options: from their party, from anyone else in the world), told to the host. */
+    takeDms({ party = true, world = true } = {}) {
+        this.dmsTaken = { party, world };
+        this.hosting?.takeDms(this.me, this.dmsTaken);
+        this.remote?.takeDms(this.dmsTaken);
+    }
+
+    /**
+     * Who the world knows a player as, for a block (in this world alone): on a world server, the
+     * player its tickets know (their id but for which of their heroes it is: "K7Q2MXD4RT");
+     * elsewhere their hero's own id (core/guid.js), the same each time they come; else their id.
+     */
+    whoIs(id) {
+        if (this.linkAbout?.kind === "server") {
+            return /^([A-Za-z0-9_-]+)\.[1-9]$/.exec(id)?.[1] ?? id;
+        }
+
+        const guid = this.host.players.get(id)?.hero?.guid;
+
+        return isGuid(guid) ? guid : id;
+    }
+
+    /** Whether a player's blocked (in this world). */
+    isBlocked(id) {
+        const who = this.whoIs(id);
+
+        return this.blocked.some((one) => one.world === this.worldKey && one.who === who);
+    }
+
+    /**
+     * Block a player in this world (`on`), or unblock them: their direct messages and party
+     * invites let go of from now on, or heard again; kept (onBlocked), and the party menu shown
+     * again. (A line being said to them said to the party instead.)
+     */
+    block(id, on = true) {
+        const who = this.whoIs(id);
+        const rest = this.blocked.filter((one) => !(one.world === this.worldKey && one.who === who));
+
+        this.blocked = on ? [...rest, { world: this.worldKey, who, name: this.host.players.get(id)?.hero.name ?? "" }] : rest;
+
+        if (on && this.chatTo === id) {
+            this.chatTo = null;
+        }
+
+        this.onBlocked(this.blocked);
+        this.sound?.play("tap");
+
+        if (this.partyPanel?.open) {
+            this.#showParty();
+        }
+    }
+
+    // A direct message begun from the party menu (a player's Message, on the Party or Players
+    // tab): its Chat, saying to them, ready to type
+    #messageTo(id) {
+        this.chatTo = id;
+        this.partyPanel.showTab("chat");
+        this.#showParty();
+        this.partyPanel.input.focus();
     }
 
     // A line into the chat (the oldest let go past CHAT.kept)
@@ -9134,22 +9287,25 @@ export class Game {
         this.hud.partyUnread(this.chatUnread);
     }
 
-    // Something the player says to their party (typed, or a quick phrase): to the host, which sends
-    // it on to those in it (the host's own game: core/netplay.js Hosting.chat); said why not, if not
+    // Something the player says from the party menu's Chat (typed, or a quick phrase): to their
+    // party, or, `chatTo` a player, to them alone (a direct message); to the host, which sends it
+    // on (the host's own game: core/netplay.js Hosting.chat); said why not, if not
     #sayToParty(text) {
-        const said = !this.host.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text) : this.remote ? this.remote.chat(text) : { ok: false, reason: "unpartied" };
+        const to = this.chatTo;
+        const said = !to && !this.host.partyFor(this.me) ? { ok: false, reason: "unpartied" } : this.hosting ? this.hosting.chat(text, { to }) : this.remote ? this.remote.chat(text, { to }) : { ok: false, reason: "unpartied" };
 
         if (said.ok) {
             this.sound?.play("tap");
         } else {
-            this.#unsaid(said.reason);
+            this.#unsaid(said.reason, said);
         }
     }
 
-    // A line of the player's not said (core/netplay.js CHAT_REFUSED), and why (nothing to say: nothing)
-    #unsaid(reason) {
+    // A line of the player's not said (core/netplay.js CHAT_REFUSED), and why (nothing to say:
+    // nothing; to one not taking direct messages, whose they are: `name`)
+    #unsaid(reason, { name = "" } = {}) {
         if (reason !== "empty") {
-            this.hud.message(REFUSALS[reason] ?? "That wasn't said.", 1.6);
+            this.hud.message(reason === "closed" && name ? `${name} isn't taking direct messages.` : (REFUSALS[reason] ?? "That wasn't said."), 1.8);
             this.sound?.play("denied");
         }
     }
@@ -9182,9 +9338,9 @@ export class Game {
     // Everyone playing in the world, for the party menu's Players tab (partypanel.js show
     // `everyone`): the player first, then the rest of their party (the longest in it first), then
     // everyone else by name; each with their standing and people, how they stand (their party,
-    // asked to one, away, resting, fallen, their people at war with the player's), where they
-    // are, and what the player can do about them (ask them to their party, or, leading it, put
-    // them out of it)
+    // asked to one, away, resting, fallen, their people at war with the player's, blocked), where
+    // they are, and what the player can do about them (ask them to their party, or, leading it,
+    // put them out of it; message them; block them, or unblock them)
     #everyone() {
         const host = this.host;
         const mine = host.partyFor(this.me);
@@ -9215,6 +9371,7 @@ export class Game {
                     resting: Boolean(player.resting),
                     dead: Boolean(actor?.dead),
                     hostile: id !== this.me && Boolean(host.war?.hostile(this.self.realm, player.realm)),
+                    blocked: id !== this.me && this.isBlocked(id),
                     can,
                 };
             });
@@ -9531,7 +9688,8 @@ export class Game {
             this.#chatShown();
         }
 
-        if (event.change === "invited" && !this.refuseInvites) {
+        // (Asked by someone the player's blocked: let go unanswered, as with Refuse party invites)
+        if (event.change === "invited" && !this.refuseInvites && !this.isBlocked(event.from)) {
             this.sound?.play("wake");
             this.invitePrompt = this.hud.choose(
                 `${event.name} asks you to join their party.`,
@@ -11777,6 +11935,7 @@ export class Game {
                     const was = avatar.object.position.clone();
 
                     this.#place(actor);
+                    this.#takeUpArms(actor, avatar);
 
                     if (event.id === this.me) {
                         const building = this.world.interiors?.of(event.to);
@@ -12452,6 +12611,10 @@ export class Game {
         const actor = this.battle.actor(id);
         const guard = guardOf(actor.weapon);
 
+        if (on) {
+            this.#takeUpArms(actor, avatar);
+        }
+
         if (actor.map !== this.mapId || actor.dead || actor.kind === "beast") {
             avatar.actions.stopResting();
             avatar.character.sheathe(!on);
@@ -12658,6 +12821,8 @@ export class Game {
         const battle = this.battle;
         const actor = battle.actor(event.id);
         const target = battle.actor(event.target);
+
+        this.#takeUpArms(actor, avatar);
 
         // (Kicking with a weapon in hand, the hands stay on guard; and its weapon in hand, whatever
         // it looked like: once starting the attack has finished any drawing or putting away. How
@@ -13904,6 +14069,10 @@ export class Game {
 
         const refresh = () => battleMapView(this.host.war, this.self.realm, { explored: this.explored, rank: this.standing.rank() });
         const view = refresh();
+
+        // (Read: what its scouts see, and where their side's towns, works and forts stand,
+        // uncovered on the player's own maps from now on: core/host.js #tableRead)
+        this.#command({ type: "table", read: true });
 
         this.onWorldMap({ war: { view, refresh, realm: town.owner, act: (action, then) => this.atTable(action, then) } });
 

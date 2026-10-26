@@ -1163,4 +1163,83 @@ describe("playing together (netplay.js)", () => {
         assert.equal(bryn.joining.host.checksum(), host.checksum());
         assert.equal(cass.joining.host.checksum(), host.checksum());
     });
+
+    it("sends a direct message to one player and back to the sayer alone: a party one in their party, a world one to anyone else; one not taken never sent, the sayer told whose; to no one, refused; which are taken said again as the link comes back", () => {
+        const { host, hosting, join, deliver, play, catchUp, post } = opened();
+        const bryn = join(guest("Bryn"));
+        const cass = join(guest("Cass"));
+        const heard = { host: [], bryn: [], cass: [] };
+        const unsaid = { bryn: [], cass: [] };
+
+        hosting.onChat = (line) => heard.host.push(line);
+
+        for (const [who, { joining }] of [["bryn", bryn], ["cass", cass]]) {
+            joining.onChat = (line) => heard[who].push(line);
+            joining.onUnsaid = (reason, said) => unsaid[who].push({ reason, ...said });
+        }
+
+        // (The host and Bryn a party; Cass in none)
+        host.command(HOST_PLAYER, { type: "party", do: "invite", who: "guest-1" });
+        bryn.joining.command({ type: "party", do: "accept" });
+        deliver();
+        play(1);
+        catchUp(bryn.joining);
+        catchUp(cass.joining);
+
+        // Cass, in no party, messages Bryn: a world one, heard by Bryn and back by Cass, and by no
+        // one else
+        assert.deepEqual(cass.joining.chat("Spare a potion?", { to: "guest-1" }), { ok: true, pending: true });
+        deliver();
+
+        const toBryn = { from: "guest-2", name: "Cass", text: "Spare a potion?", to: "guest-1", toName: "Bryn", dm: "world" };
+
+        assert.deepEqual(heard.bryn, [toBryn]);
+        assert.deepEqual(heard.cass, [toBryn]);
+        assert.deepEqual(heard.host, []);
+
+        // The host messages Bryn, in their party: a party one; the host's own heard back here
+        assert.deepEqual(hosting.chat("Wait by the well", { to: "guest-1" }), { ok: true });
+        deliver();
+        assert.deepEqual(heard.bryn.at(-1), { from: HOST_PLAYER, name: "Ada", text: "Wait by the well", to: "guest-1", toName: "Bryn", dm: "party" });
+        assert.deepEqual(heard.host, [heard.bryn.at(-1)]);
+        assert.equal(heard.cass.length, 1);
+
+        // Bryn takes no world messages: Cass's next never sent, Cass told whose; the party's still taken
+        bryn.joining.takeDms({ party: true, world: false });
+        deliver();
+        cass.joining.chat("Hello?", { to: "guest-1" });
+        deliver();
+        assert.equal(heard.bryn.length, 2);
+        assert.deepEqual(unsaid.cass, [{ reason: "closed", name: "Bryn" }]);
+        assert.deepEqual(hosting.chat("Still there?", { to: "guest-1" }), { ok: true });
+        deliver();
+        assert.equal(heard.bryn.at(-1).text, "Still there?");
+
+        // The host takes no party messages: Bryn's refused, the host's own game told whose
+        hosting.takeDms(HOST_PLAYER, { party: false, world: true });
+        bryn.joining.chat("Coming", { to: HOST_PLAYER });
+        deliver();
+        assert.deepEqual(unsaid.bryn, [{ reason: "closed", name: "Ada" }]);
+        assert.deepEqual(hosting.chat("Psst", { to: "guest-2" }), { ok: true });
+        deliver();
+        assert.equal(heard.cass.at(-1).dm, "world");
+
+        // To no one in the world, or to themselves: refused
+        assert.deepEqual(hosting.chat("Anyone?", { to: "guest-9" }), { ok: false, reason: "nobody" });
+        cass.joining.chat("Me", { to: "guest-2" });
+        deliver();
+        assert.deepEqual(unsaid.cass.at(-1), { reason: "nobody", name: "" });
+
+        // Which are taken, said again as the link comes back (what was said meanwhile may be lost)
+        post.length = 0;
+        bryn.joining.resync();
+        assert.ok(post.some(({ text }) => decode(text).kind === "dms" && decode(text).world === false && decode(text).party === true));
+        deliver();
+
+        // (Not done to the world: every copy the same as ever)
+        catchUp(bryn.joining);
+        catchUp(cass.joining);
+        assert.equal(bryn.joining.host.checksum(), host.checksum());
+        assert.equal(cass.joining.host.checksum(), host.checksum());
+    });
 });

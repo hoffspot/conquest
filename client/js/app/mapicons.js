@@ -668,6 +668,55 @@ function pathsOf(kind) {
 export const ICON_KINDS = Object.freeze(Object.keys(LOOKS));
 
 /**
+ * What each icon is, in words: the map's key (main.js keyOf), and what's said by one on the world
+ * map with the mouse over it or a tap on it (app/worldmap.js), unless the game says more of it
+ * (its `about`).
+ */
+export const ICON_NAMES = Object.freeze({
+    tavern: "Tavern",
+    blacksmith: "Smithy",
+    church: "Temple",
+    guild: "Adventurers' guild",
+    hall: "Town hall",
+    keep: "Keep",
+    barracks: "Barracks",
+    swordsmith: "Swordsmith",
+    armorer: "Armorer",
+    scriptorium: "Occult scriptorium",
+    alchemist: "Alchemist",
+    masterSwordsmith: "Master Swordsmith",
+    masterArmorer: "Master Armorer",
+    emporium: "Mystic Emporium",
+    castle: "Castle",
+    manor: "Manor",
+    abbey: "Abbey",
+    windmill: "Windmill",
+    watchtower: "Watchtower",
+    greatHall: "Great hall",
+    spring: "Sacred spring",
+    rock: "Sacred rock",
+    totem: "Totem",
+    ruins: "Ruins",
+    ruinedCastle: "Ruined castle",
+    riftTower: "Rift tower",
+    cave: "Cave",
+    lair: "Beast's den",
+    shrine: "Shrine",
+    stones: "Standing stones",
+    graveyard: "Graveyard",
+    dungeon: "Dungeon",
+    cache: "Adventurer's cache",
+    remains: "Fallen adventurer's remains",
+    campsite: "Old campsite",
+    mill: "Lumber mill",
+    mine: "Mine",
+    quarry: "Quarry",
+    guardTower: "Guard tower",
+    garrison: "Garrison",
+    camp: "Camp",
+});
+
+/**
  * Draw the icon of a building of `kind` (tavern, blacksmith, church, guild, hall, keep), or of a
  * place (castle, cave and the rest), on a canvas's context, centred at x, y, `size` pixels across,
  * rimmed in its own colour or `rim`'s.

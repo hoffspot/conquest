@@ -13,7 +13,8 @@
 // In a party, the places another of it found for them are said to be theirs to find (from near
 // in), and its pings are shown as they come, rings swelling out from each (app/mapicons.js PING).
 // The player's markers (core/markers.js) are on it wherever they are, fog or no; tapped, one's
-// chosen.
+// chosen. What an icon is (a building's, a place's, a marker, a request's star) is said by it as
+// the mouse comes over it, or as a finger taps it (TIP).
 //
 // Opened from a guild's portal (core/portals.js), it's the travel map: the same land and fog, but
 // of the buildings only the guild's branches open to the player, each however far out it's
@@ -26,7 +27,8 @@
 
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
-import { drawBuildingIcon, drawMarker, drawPing, drawSearch, drawTracked, drawWarMark, FORT_ICONS, MARKER_COLOURS } from "./mapicons.js";
+import { MARKER_NAMES } from "../core/markers.js";
+import { drawBuildingIcon, drawMarker, drawPing, drawSearch, drawTracked, drawWarMark, FORT_ICONS, ICON_NAMES, MARKER_COLOURS } from "./mapicons.js";
 import { FORD_MARK, grassOf, paintPatch, WATER_COLOURS } from "./minimap.js";
 
 // The land's picture: pixels to a cell of the plan (32 metres)
@@ -103,6 +105,20 @@ const TAP_MOVE = 8;
 const DOUBLE_MS = 350;
 const DOUBLE_REACH = 18;
 const PIN_REACH = 22;
+
+// What an icon is, said by it (its words over it: the mouse over it, or tapped): how much further
+// out than the icon itself the mouse or a tap finds it (pixels), and how long a tapped one's said
+// (ms: or till the map's touched again)
+const TIP = Object.freeze({ reach: 4, tapped: 4000 });
+
+/**
+ * What an icon on the world map is, in words (TIP): what the game says of it (`about`), else what
+ * its kind is (mapicons.js ICON_NAMES); and who found it for the player (another of their party),
+ * and whether it was tracked home by its trails.
+ */
+export function iconAbout({ kind, about = null, finder = null, tracked = false }) {
+    return [about ?? ICON_NAMES[kind] ?? "", finder ? `found by ${finder}` : "", tracked ? "tracked home by its trails" : ""].filter(Boolean).join(" · ");
+}
 
 // The pin and the way to it: their colours (the column's blue in the world)
 const PIN = { colour: "#64b4ff", glow: "rgba(100, 180, 255, 0.9)", way: "rgba(130, 196, 255, 0.85)" };
@@ -315,6 +331,15 @@ export class WorldMap {
         /** What was drawn last (for tests): { chunks (shown in detail), fogged, names, icons }. */
         this.drawn = null;
 
+        // What's said of an icon (TIP): where each drawn last is, and what it is ({ x, y, r, about }:
+        // pixels, on the canvas); the words over the one said of, and which it is
+        this.spots = [];
+        this.tip = Object.assign(document.createElement("p"), { className: "worldmap-tip", hidden: true });
+        this.tip.setAttribute("role", "status");
+        canvas.parentElement?.append(this.tip);
+        this.tipped = null;
+        this.tipTimer = 0;
+
         /** The travel map's branches (core/portals.js branchesFrom), or null for the world map. */
         this.travel = null;
 
@@ -343,6 +368,11 @@ export class WorldMap {
         listen("pointermove", (event) => this.#move(event));
         listen("pointerup", (event) => this.#up(event));
         listen("pointercancel", (event) => this.#up(event));
+        listen("pointerleave", (event) => {
+            if (event.pointerType === "mouse") {
+                this.#say(null);
+            }
+        });
         listen("wheel", (event) => this.#wheel(event), { passive: false });
         // (Nor the browser's own menu, "Save image as" and the like: a right click or a long press is the map's)
         listen("contextmenu", (event) => event.preventDefault());
@@ -663,6 +693,7 @@ export class WorldMap {
         }
 
         // The buildings the player's gone into (and the camps and lairs they've tracked home)
+        const spots = [];
         const icons = [];
         const finders = [];
         const tracked = [];
@@ -674,6 +705,7 @@ export class WorldMap {
                 if (x > -ICON_SIZE && y > -ICON_SIZE && x < width + ICON_SIZE && y < height + ICON_SIZE) {
                     drawBuildingIcon(context, icon.kind, x, y, ICON_SIZE, icon.rim);
                     icons.push(icon.kind);
+                    spots.push({ x, y, r: ICON_SIZE / 2 + TIP.reach, about: iconAbout(icon) });
 
                     // (Found for them by another of their party: who, under it)
                     if (icon.finder && view.scale <= FINDERS_FROM) {
@@ -832,6 +864,7 @@ export class WorldMap {
             context.closePath();
             context.fillStyle = "#f0c96a";
             context.fill();
+            spots.push({ x, y, r: 9 + TIP.reach, about: mark.label ? `Your request: ${mark.label}` : "Where a request of yours takes you" });
         }
 
         // The way to the pin, and the pin: blue, glowing, fog or no
@@ -850,6 +883,7 @@ export class WorldMap {
             }
 
             drawMarker(context, x, y, marker.icon, { size: MARKER_SIZE });
+            spots.push({ x, y: y - MARKER_SIZE * 0.95, r: MARKER_REACH, about: [marker.words ? `${MARKER_NAMES[marker.icon] ?? "Marker"}: ${marker.words}` : `Your marker: ${MARKER_NAMES[marker.icon] ?? "a marker"}`, marker.from ? `from ${marker.from}` : ""].filter(Boolean).join(" · ") });
 
             const words = view.scale <= MARKER_WORDS_FROM ? (marker.words || (marker.from ? `${marker.from}'s` : "")) : "";
 
@@ -913,6 +947,9 @@ export class WorldMap {
             context.restore();
         }
 
+        // (The newest drawn over the rest: found first)
+        this.spots = spots.reverse();
+        this.#placeTip();
         this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, finders, tracked, pings: pings.length, markers: markers.length, marks: (this.marks ?? []).length, heard: (this.heard ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
     }
 
@@ -1185,6 +1222,7 @@ export class WorldMap {
         cancelAnimationFrame(this.frame);
         clearTimeout(this.fallback);
         clearTimeout(this.holding);
+        this.#say(null);
         this.frame = 0;
         this.layer = null;
         this.shroud = null;
@@ -1440,8 +1478,63 @@ export class WorldMap {
 
     // --- Dragging, pinching and scrolling ---
 
+    // --- What an icon is (TIP) ---
+
+    /** The icon at a point on the canvas (pixels from its top left corner), drawn last: { x, y, r, about }, or null. */
+    spotAt(sx, sy) {
+        return this.spots.find(({ x, y, r }) => Math.hypot(sx - x, sy - y) <= r) ?? null;
+    }
+
+    // Say what an icon is, over it (`spot`, or null: nothing said); a tapped one (`tapped`) for a
+    // few seconds, or till the map's touched again
+    #say(spot, { tapped = false } = {}) {
+        clearTimeout(this.tipTimer);
+        this.tipped = spot?.about ? { about: spot.about, x: spot.x, y: spot.y, r: spot.r } : null;
+        this.tip.textContent = this.tipped?.about ?? "";
+        this.tip.hidden = !this.tipped;
+        this.#placeTip();
+
+        if (tapped && this.tipped) {
+            this.tipTimer = setTimeout(() => this.#say(null), TIP.tapped);
+        }
+    }
+
+    // The words said of an icon over it, kept to the map (drawn again, as it was: its spot as it now is)
+    #placeTip() {
+        if (!this.tipped) {
+            return;
+        }
+
+        const spot = this.spots.find(({ about, x, y }) => about === this.tipped.about && Math.hypot(x - this.tipped.x, y - this.tipped.y) < 1) ?? this.tipped;
+        const box = this.canvas.getBoundingClientRect();
+        const holder = this.tip.offsetParent?.getBoundingClientRect() ?? { left: 0, top: 0 };
+
+        this.tip.style.left = `${box.left - holder.left + spot.x}px`;
+        this.tip.style.top = `${box.top - holder.top + spot.y - spot.r}px`;
+    }
+
+    // The mouse moving over the map, no button down: what's under it said
+    #hover(event) {
+        if (event.pointerType !== "mouse" || this.onPick) {
+            return;
+        }
+
+        const rect = this.canvas.getBoundingClientRect();
+        const spot = this.spotAt(event.clientX - rect.left, event.clientY - rect.top);
+
+        if (spot?.about !== this.tipped?.about || spot?.x !== this.tipped?.x || spot?.y !== this.tipped?.y) {
+            this.#say(spot);
+        }
+    }
+
     #down(event) {
         this.canvas.setPointerCapture?.(event.pointerId);
+
+        // (Touched again: what was said of an icon let go of, unless it's the mouse's, over it still)
+        if (event.pointerType !== "mouse") {
+            this.#say(null);
+        }
+
         this.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         this.pressed = this.pointers.size === 1 ? { x: event.clientX, y: event.clientY, moved: 0, held: false } : null;
 
@@ -1476,6 +1569,8 @@ export class WorldMap {
         const pointer = this.pointers.get(event.pointerId);
 
         if (!pointer) {
+            this.#hover(event);
+
             return;
         }
 
@@ -1526,6 +1621,7 @@ export class WorldMap {
         const tapped = this.pressed && this.pressed.moved < TAP_MOVE && !this.pressed.held && event.type === "pointerup";
         const rect = this.canvas.getBoundingClientRect();
         const [sx, sy] = [event.clientX - rect.left, event.clientY - rect.top];
+        const spot = tapped && !this.onPick && event.pointerType !== "mouse" ? this.spotAt(sx, sy) : null;
 
         // (Picking somewhere: a tap, not a drag)
         if (this.onPick && tapped) {
@@ -1534,6 +1630,11 @@ export class WorldMap {
             // (Something chosen with it: not the first of two)
             this.lastTap = null;
         } else if (this.onDoubleTap && tapped) {
+            // (On an icon: what it is said, the first tap of two still)
+            if (spot) {
+                this.#say(spot, { tapped: true });
+            }
+
             // (Twice, quickly, in the same place: run there)
             const last = this.lastTap;
             const now = event.timeStamp;

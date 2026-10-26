@@ -13,13 +13,17 @@
 //
 // Playing together, it has three tabs: the party (all that, above); its chat: what's been said
 // in the party (core/netplay.js: sent to those in it alone), its newest at the foot, with the
-// party's comings and goings among it; quick phrases to say with a tap, and a line to type and
-// send; and the players: everyone playing in the world, the player first, then their party, then
-// the rest by name, each with what they are (their standing and people), how they stand
-// (playerStatus: their party, asked to one, away, resting, fallen, at war with the player's
-// people) and where they are; to be asked to the player's party ("Invite"), or, its leader,
-// put out of it ("Dismiss", asked twice). The Chat tab says how many lines haven't been seen (as
-// the Party button does: hud.js).
+// party's comings and goings among it, and direct messages to and from the player ("To Cai",
+// "From Cai": to one player and back alone); whom a line goes to (To: the party, or one player),
+// quick phrases to say with a tap, and a line to type and send; and the players: everyone playing
+// in the world, the player first, then their party, then the rest by name, each with what they
+// are (their standing and people), how they stand (playerStatus: their party, asked to one, away,
+// resting, fallen, at war with the player's people, blocked) and where they are; to be asked to
+// the player's party ("Invite"), or, its leader, put out of it ("Dismiss", asked twice); sent a
+// direct message ("Message": the Chat, to them; on the Party tab too, for each in the party);
+// and blocked ("Block", asked twice: their direct messages and party invites let go of, unheard)
+// or unblocked. The Chat tab says how many lines haven't been seen (as the Party button does:
+// hud.js).
 //
 // In a world on a server, playing together or not, its header has the World button: the world's
 // own panel (main.js openWorldPanel, as Paused › World opens it): who's here; for its owner,
@@ -45,14 +49,18 @@ export function unreadLabel(count) {
 
 /**
  * How a player in the world stands, for the Players tab, as chips ([{ text, kind }], `kind` how
- * each is coloured): their party ("party": the player's; "partied": another's; "free": none), or
- * asked to one ("asked"); away (AFK: core/host.js AFK); fallen, or resting; their people at war
- * with the player's ("war"). From { me (the player themselves), party ({ yours, leads (they lead
- * it), leader (its leader's name) }, or null), asked (who's asked them to theirs: "you", a name,
- * or null), away, resting, dead, hostile }.
+ * each is coloured): blocked by the player, first; their party ("party": the player's; "partied":
+ * another's; "free": none), or asked to one ("asked"); away (AFK: core/host.js AFK); fallen, or
+ * resting; their people at war with the player's ("war"). From { me (the player themselves),
+ * party ({ yours, leads (they lead it), leader (its leader's name) }, or null), asked (who's
+ * asked them to theirs: "you", a name, or null), away, resting, dead, hostile, blocked }.
  */
-export function playerStatus({ me = false, party = null, asked = null, away = false, resting = false, dead = false, hostile = false }) {
+export function playerStatus({ me = false, party = null, asked = null, away = false, resting = false, dead = false, hostile = false, blocked = false }) {
     const chips = [];
+
+    if (blocked && !me) {
+        chips.push({ text: "Blocked", kind: "blocked" });
+    }
 
     if (party?.yours) {
         chips.push({ text: party.leads ? (me ? "You lead your party" : "Leads your party") : "In your party", kind: "party" });
@@ -180,13 +188,19 @@ export class PartyPanel {
         }
 
         this.form = element("form", "chat-form");
+
+        // (Whom a line goes to: the party, or one player, a direct message)
+        this.toPicker = element("select", "chat-to");
+        this.toPicker.setAttribute("aria-label", "Who to say it to");
+        this.toPicker.addEventListener("change", () => this.onChatTo(this.toPicker.value || null));
+        this.targetsShown = null;
         this.input = element("input", "chat-input");
         Object.assign(this.input, { type: "text", maxLength: CHAT.most, autocomplete: "off", placeholder: "Say something to your party" });
         this.input.setAttribute("enterkeyhint", "send");
         this.input.setAttribute("aria-label", "Something to say to your party");
         this.sendButton = element("button", "journal-button chat-send", "Send");
         this.sendButton.type = "submit";
-        this.form.append(this.input, this.sendButton);
+        this.form.append(this.toPicker, this.input, this.sendButton);
         this.form.addEventListener("submit", (event) => {
             event.preventDefault();
 
@@ -230,6 +244,14 @@ export class PartyPanel {
 
         /** The World button pressed (a world on a server): its panel. */
         this.onWorld = () => {};
+
+        /**
+         * A direct message begun to a player (Message: their id); whom the Chat's line goes to
+         * chosen (null, the party; or a player's id); and a player blocked or unblocked (id, on).
+         */
+        this.onMessage = () => {};
+        this.onChatTo = () => {};
+        this.onBlock = () => {};
     }
 
     get open() {
@@ -244,11 +266,14 @@ export class PartyPanel {
      * them, the longest in it first: [{ id, name, leader, me, away, with: [names] }]), `others`
      * (the other players in the world not in it: [{ id, name, asked }]), `leads` (whether they
      * lead it) and `full` (whether it's as many as it can be); its chat: { lines: [{ id, name,
-     * text, mine, system }] (the oldest first), unread (how many haven't been seen), canSay (in a
-     * party of players, so there's someone to hear) }; and `everyone` playing in the world, in
+     * text, mine, system, dm (a direct message: "party" or "world", `name` whom it's to or from) }]
+     * (the oldest first), unread (how many haven't been seen), canSay (someone to hear: a party of
+     * players, or a player chosen), to (whom a line goes to: null, the party; or a player's id),
+     * targets (the players a line can go to alone: [{ id, name, party }]) }; and `everyone` playing in the world, in
      * the order shown: [{ id, name, me, title (their standing and people), where, party, asked,
-     * away, resting, dead, hostile (playerStatus), can ("invite", "asked", "full", "dismiss", or
-     * null: what can be done about them here) }], with `partied` (whether the player's in a party);
+     * away, resting, dead, hostile, blocked (playerStatus), can ("invite", "asked", "full",
+     * "dismiss", or null: what of their party can be done about them here) }], with `partied`
+     * (whether the player's in a party);
      * and `world`, whether there's the World button (a world on a server).
      */
     show({ members = [], most = 1, players = [], others = [], leads = false, full = false, together = false, chat = null, everyone = [], partied = false, world = false } = {}) {
@@ -327,16 +352,33 @@ export class PartyPanel {
 
     // The chat as it is: its lines made again only when there's a new one (the newest kept in view,
     // if it was), how many haven't been seen on its tab, and whether there's anyone to say anything to
-    #chat({ lines, unread, canSay }) {
+    #chat({ lines, unread, canSay, to = null, targets = [] }) {
         const unseen = unreadLabel(unread);
+        const toName = targets.find(({ id }) => id === to)?.name ?? null;
 
         this.chatBadge.textContent = unseen;
         this.chatBadge.hidden = !unseen;
         this.chatTab.setAttribute("aria-label", unseen ? `Chat, ${unread} unread` : "Chat");
-        this.chatNote.textContent = canSay ? "" : "Ask another player to your party to talk with them here.";
+        this.chatNote.textContent = canSay ? "" : "Ask another player to your party to talk with them here, or choose one in To to message them.";
         this.chatNote.hidden = canSay;
         this.input.disabled = !canSay;
         this.sendButton.disabled = !canSay;
+        this.input.placeholder = toName ? `Say something to ${toName}` : "Say something to your party";
+        this.input.setAttribute("aria-label", toName ? `Something to say to ${toName}` : "Something to say to your party");
+
+        // (Whom to: the party, then each player, made again only as they change)
+        const shown = JSON.stringify(targets);
+
+        if (shown !== this.targetsShown) {
+            this.targetsShown = shown;
+            this.toPicker.replaceChildren(
+                Object.assign(document.createElement("option"), { value: "", textContent: "Party" }),
+                ...targets.map(({ id, name, party }) => Object.assign(document.createElement("option"), { value: id, textContent: party ? `${name} (party)` : name })),
+            );
+        }
+
+        this.toPicker.value = toName ? to : "";
+        this.toPicker.hidden = !targets.length;
 
         for (const button of this.quick.children) {
             button.disabled = !canSay;
@@ -354,11 +396,11 @@ export class PartyPanel {
         this.shownLine = newest;
         log.replaceChildren(
             ...(lines.length
-                ? lines.map(({ name, text, mine = false, system = false }) => {
-                      const line = element("li", `chat-line${mine ? " mine" : ""}${system ? " system" : ""}`);
+                ? lines.map(({ name, text, mine = false, system = false, dm = null }) => {
+                      const line = element("li", `chat-line${mine ? " mine" : ""}${system ? " system" : ""}${dm ? " dm" : ""}`);
 
                       if (!system) {
-                          line.append(element("span", "chat-name", name), ": ");
+                          line.append(element("span", "chat-name", dm ? `${mine ? "To" : "From"} ${name}` : name), ": ");
                       }
 
                       line.append(element("span", "chat-text", text));
@@ -396,6 +438,10 @@ export class PartyPanel {
 
                       row.dataset.id = id;
                       text.append(element("span", "party-name", `${leader ? "♛ " : ""}${me ? `${name} (you)` : name}`), element("span", "party-kind", [leader ? "Leads the party" : "In the party", away ? "Not here" : "", theirs.length ? `With them: ${theirs.join(", ")}` : ""].filter(Boolean).join(" · ")));
+
+                      if (!me) {
+                          actions.append(this.#messageButton(id));
+                      }
 
                       if (me) {
                           actions.append(this.#sure("Leave party", "Leave?", () => this.onParty("leave", id)));
@@ -472,6 +518,24 @@ export class PartyPanel {
                     actions.append(this.#sure("Dismiss", "Dismiss?", () => this.onParty("remove", id)));
                 }
 
+                // (Messaged, unless blocked; blocked, asked twice, or unblocked)
+                if (!me && !player.blocked) {
+                    actions.append(this.#messageButton(id));
+                }
+
+                if (!me && player.blocked) {
+                    const unblock = element("button", "journal-button party-unblock", "Unblock");
+
+                    unblock.type = "button";
+                    unblock.addEventListener("click", () => this.onBlock(id, false));
+                    actions.append(unblock);
+                } else if (!me) {
+                    const block = this.#sure("Block", "Block?", () => this.onBlock(id, true));
+
+                    block.classList.add("party-block");
+                    actions.append(block);
+                }
+
                 row.append(text, actions);
 
                 return row;
@@ -484,6 +548,16 @@ export class PartyPanel {
               : partied
                 ? "Only your party's leader can dismiss anyone from it."
                 : "Invite anyone in no party: you'll lead the party you make together, up to four in it.";
+    }
+
+    // A player's Message button: a direct message to them, from the Chat
+    #messageButton(id) {
+        const button = element("button", "journal-button party-message", "Message");
+
+        button.type = "button";
+        button.addEventListener("click", () => this.onMessage(id));
+
+        return button;
     }
 
     // A button pressed twice to be sure: the first press turns it to `sure` a moment
