@@ -1813,8 +1813,8 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   **Ask to your party** (Invite; "Asked" while they're asked; none while it's full), made again
   only when what it shows of them changes (`PartyPanel #together`). Asked, the player's shown the
   asker's name and **Accept**, **Decline** or **Ignore** (`hud.choose`, gone when it lapses,
-  `#partyEvent`), with the "wake" cue; or, with **Refuse party invites** in Game options
-  (`refuseInvites`, saved), nothing at all. What becomes of the party is said in the banner ("Bryn
+  `#partyEvent`), with the "wake" cue; or, with **Refuse party invites** in Game options' Chat and
+  players (`refuseInvites`, saved), or asked by someone they've blocked (below), nothing at all. What becomes of the party is said in the banner ("Bryn
   joins the party.", "You lead the party now.", "The party's no more: no one's left in it with
   you."). Playing together, the menu has three tabs (`PartyPanel showTab`): **Party** (all that),
   **Chat** (below) and **Players** (below). **Chat** is the party's own talk (core/netplay.js: sent to those in it alone; docs/WAR.md
@@ -1827,7 +1827,17 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   seen at once, counts on the Party button (hud.js `partyUnread`: a red badge, "1" to "9+") and on
   the Chat tab, till it's seen; the menu opened then opens on the chat. Enter, with nothing else
   to press, opens the chat ready to type. The last 50 lines are kept (`CHAT.kept`), with the game
-  only. **Players** is everyone playing in the world (`PartyPanel #everyone`, game.js
+  only. Above the line to type, **To** (`PartyPanel` `toPicker`): the party, or any other player
+  (those in the party first, "(party)"), a **direct message** to them alone (docs/WAR.md
+  *Parties*: a party one to someone in the party, a world one to anyone else). Each such line, the
+  player's and theirs alike, is in violet (`--whisper`): "To Cai: ...", "From Cai: ..."; one that
+  isn't taken says why in the banner ("Cai isn't taking direct messages."). **Message**, by each
+  of the party on the Party tab and by everyone on the Players tab, opens the Chat To them, ready
+  to type (game.js `#messageTo`). With **Party chat on screen** (Game options' Chat and players,
+  `chatOnScreen`, on to start with), each line said, the party's or a direct message, shows a
+  moment just above the quick actions too (where they rise in a fight), small, three at most,
+  the newest at the foot, faded after six seconds (hud.js `chatLine`, `CHAT_FEED`), unless the
+  Chat's open to read; all of it's still in the Chat. **Players** is everyone playing in the world (`PartyPanel #everyone`, game.js
   `#everyone`; "In this world (N)"), the player first, then the rest of their party (the longest
   in it first), then everyone else by name, each with what they are (their standing and people:
   "Knight of the Elves"), how they stand as chips (`playerStatus`: "In your party", "Leads your
@@ -1838,7 +1848,14 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   in the wilds"; with which way and how far from the player, journal.js `bearing`, or "Near
   you"). Anyone in no party is to be asked to the player's (**Invite**; "Asked" while they're
   asked; greyed while it's full); and, for its leader, anyone in it put out of it (**Dismiss**,
-  asked twice: the party's Remove); with a line at the foot on what can be done. In a world on a
+  asked twice: the party's Remove); each messaged (**Message**), and **Block**ed (asked twice;
+  "Blocked" among their chips, and **Unblock**): their direct messages and party invites never
+  reach the player, and they're none the wiser (game.js `block`, `isBlocked`; docs/WAR.md
+  *Parties*); with a line at the foot on what can be done. Game options' **Chat and players** has
+  Party chat on screen, **Refuse party DMs**, **Refuse world DMs** and Refuse party invites (each
+  kept with a hero a world server keeps but the first), and **Blocked players**: everyone blocked,
+  by name, in this world or another, and who that world knows them as, each to **Unblock**
+  (main.js `showBlocked`). In a world on a
   server, playing together or alone, the menu's header has **World** (game.js `onWorldPanel`,
   main.js `worldPanelFromParty`): the world's own panel, as the menu's World opens it (docs/
   SERVER.md *Owning a world*), the game paused under it as the menu pauses it.
@@ -4309,12 +4326,23 @@ same button holds the war's key.
 - **The fog** lies over every chunk the player hasn't set foot in: opaque, cloudy (a tiling
   tile of soft noise in the fog's colours, moving with the map as it's dragged), with the chunks'
   square edges. Nothing of the land shows through it; it lifts off a chunk the moment the player
-  walks into it.
+  walks into it, or another of their party does (docs/WAR.md *Parties*), and, as a Knight reads
+  their people's war table, off what its scouts see and where their side's towns, works and forts
+  stand (docs/WAR.md *The war table*). Nothing else lifts it.
 - **Over it**: the names of the settlements the player has been in (20 metres to a pixel or
   closer), the fords in the chunks they've been in, three pale stones straight across each (from
   20 metres to a pixel to where the chunks are shown square by square, which have them as the
   minimap does), the icons over the buildings they've gone into (6 metres to a pixel or closer),
   and the player, pointing the way they face (inside, at the building they're in).
+- **What an icon is** is said over it, small, as the mouse comes over it, or as a finger taps it
+  (for four seconds, or till the map's touched again; a second tap still runs there), app/
+  worldmap.js `TIP`, `iconAbout`: a building gone into by its name and kind ("Wenches & Ale
+  (tavern)"); a place by its name and who holds it ("Thornbury Abbey: held by outlaws");
+  a works or fortification by whose it is ("Guard tower: the Orcs', at war with yours"); a
+  dungeon, cache or remains, and whether it's cleared, opened or searched; who of the party found
+  it, and whether it was tracked home; a marker by its kind and words; a request's star by the
+  request (game.js `worldMapView`'s icons' `about`, else mapicons.js `ICON_NAMES`, the key's
+  names too).
 - **The pin** (the terrain plan's M7g): held still somewhere (550 ms, moving less than 8 pixels),
   a pin's dropped there if the player's been there (one pin: a new one moves it; under the fog
   the map says "You haven't been there: drop a pin somewhere you've been", and the game itself

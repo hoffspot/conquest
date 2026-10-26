@@ -904,6 +904,8 @@ export const REFUSALS = Object.freeze({
     uninvited: "No one's asked you to a party.",
     unpartied: "You're not in a party.",
     chatty: "Not so fast: give it a moment before saying more.",
+    nobody: "They're not in the world now.",
+    closed: "They aren't taking direct messages.",
     leader: "Only the party's leader can do that.",
     member: "They're not in your party.",
     invitee: "Not someone to ask.",
@@ -1493,12 +1495,10 @@ export class Host {
         this.battle.add({ id, kind: "player", name: hero.name, weapon: player.hero.weapon, boots: player.hero.boots, team: player.realm, square: at, map });
         this.#outfit(player);
 
-        // (Their followers, with them; and what their people's scouts see on their maps)
+        // (Their followers, with them)
         for (const one of followers) {
             this.#follow(player, one);
         }
-
-        this.#scoutsSee([player]);
 
         // (Just where they were, facing as they were, if that square was free; and as they were:
         // hurt, poisoned, blessed, a spell still on them)
@@ -2469,7 +2469,6 @@ export class Host {
         }
 
         if (this.war.turn !== turn) {
-            this.#scoutsSee();
             this.#event("turn", { turn: this.war.turn });
         }
     }
@@ -2600,33 +2599,39 @@ export class Host {
         return this.findable;
     }
 
-    // What the camps' scouts of each player's people and their friends see (war.js sight: as far
-    // as SIGHT.scout round each camp that's up) uncovered on the player's maps, every chunk whose
-    // middle they see, as where the player's been (docs/WAR.md *The war table*): at each turn of
-    // the war, and as a player comes in
-    #scoutsSee(players = this.players.values()) {
-        for (const player of players) {
-            if (!this.war?.realm(player.realm)) {
-                continue;
-            }
+    // The war table read (docs/WAR.md *The war table*): what the camps' scouts of the player's
+    // people and their friends see now (war.js sight: as far as SIGHT.scout round each camp that's
+    // up) uncovered on the player's own maps, every chunk whose middle they see, as where they've
+    // been; and where their people's and their friends' towns, works and fortifications stand,
+    // each one's chunk. Only so: out in the world, where the scouts are is the war table's to show
+    // (worldmap.js, live), not the player's maps
+    #tableRead(player) {
+        const war = this.war;
+        let uncovered = false;
 
-            let uncovered = false;
+        for (const { at: [x, y], reach } of war.sight(player.realm).filter(({ kind }) => kind === "scout")) {
+            for (let cy = Math.floor((y - reach) / CHUNK); cy <= Math.floor((y + reach) / CHUNK); cy++) {
+                for (let cx = Math.floor((x - reach) / CHUNK); cx <= Math.floor((x + reach) / CHUNK); cx++) {
+                    const [mx, my] = [(cx + 0.5) * CHUNK, (cy + 0.5) * CHUNK];
 
-            for (const { at: [x, y], reach } of this.war.sight(player.realm).filter(({ kind }) => kind === "scout")) {
-                for (let cy = Math.floor((y - reach) / CHUNK); cy <= Math.floor((y + reach) / CHUNK); cy++) {
-                    for (let cx = Math.floor((x - reach) / CHUNK); cx <= Math.floor((x + reach) / CHUNK); cx++) {
-                        const [mx, my] = [(cx + 0.5) * CHUNK, (cy + 0.5) * CHUNK];
-
-                        if (hypot(mx - x, my - y) <= reach && player.explored.visit(mx, my)) {
-                            uncovered = true;
-                        }
+                    if (hypot(mx - x, my - y) <= reach && player.explored.visit(mx, my)) {
+                        uncovered = true;
                     }
                 }
             }
+        }
 
-            if (uncovered) {
-                this.#event("explored", { id: player.id, scouted: true });
+        const ours = (realm) => war.friendly(player.realm, realm);
+        const standing = [...war.towns.filter(({ owner }) => ours(owner)), ...(war.works ?? []).filter(({ owner, held }) => !held && ours(owner)), ...(war.forts ?? []).filter(({ realm }) => ours(realm))];
+
+        for (const { at } of standing) {
+            if (at && player.explored.visit(at[0], at[1])) {
+                uncovered = true;
             }
+        }
+
+        if (uncovered) {
+            this.#event("explored", { id: player.id, scouted: true });
         }
     }
 
@@ -11940,8 +11945,10 @@ export class Host {
     // - `counsel` ({ march: an enemy town's id }), from a Knight: where their army marches next
     //   (war.js counsel), weighing as their rank has it (COUNSEL);
     // - `orders` (war.js order's), from a Lord: for their people's army, or for one of their
-    //   vassals' (`realm`), carried out before anything its rulers would have it do.
-    #atTable(player, actor, { orders = null, realm = null, counsel = null }) {
+    //   vassals' (`realm`), carried out before anything its rulers would have it do;
+    // - `read`, from a Knight as they read its map (serving another or not): what it shows of
+    //   their side uncovered on their own maps (#tableRead).
+    #atTable(player, actor, { orders = null, realm = null, counsel = null, read = false }) {
         const table = warTableOn(this.world.maps?.[actor.map]);
         const building = this.world.interiors?.of(actor.map);
         const town = building && this.war ? this.war.town(townOf(building, { plan: this.world.plan, war: this.war, start: this.world.start })) : null;
@@ -11951,10 +11958,17 @@ export class Host {
         }
 
         const rank = player.standing.rank();
-        const read = mayRead(this.war, player.realm, town.owner, rank);
+        const may = mayRead(this.war, player.realm, town.owner, rank);
 
-        if (read !== "ok") {
-            return refuse(read);
+        if (may !== "ok") {
+            return refuse(may);
+        }
+
+        // (Read: what it shows of the player's side uncovered on their own maps, #tableRead)
+        if (read) {
+            this.#tableRead(player);
+
+            return OK;
         }
 
         if (this.war.oppressor(player.realm)) {

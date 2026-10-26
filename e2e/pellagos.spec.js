@@ -1507,6 +1507,15 @@ test("swiping up from the player turns them the way the camera looks and sends t
         game.cameraFollow.yaw = Math.atan2(-Math.sin(clearest), -Math.cos(clearest));
         game.cameraFollow.turning = 0;
 
+        // (No one else about them to take the press: a townsman walking past just in front of
+        // them, or just behind, nearer the press on the screen, would be pressed instead, the
+        // flick a drag of the camera: game.js #whoIsAt)
+        for (const other of game.battle.actors) {
+            if (other !== player && other.map === player.map && Math.hypot(other.x - player.x, other.y - player.y) < 25) {
+                Object.assign(other, { dead: true, respawnAt: Infinity });
+            }
+        }
+
         // (Drawn once like that, so the player's where they look on the screen)
         await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
 
@@ -1583,6 +1592,15 @@ async function clearestWayAhead(page) {
         avatar.object.rotation.y = aside;
         game.cameraFollow.yaw = Math.atan2(-Math.sin(clearest), -Math.cos(clearest));
         game.cameraFollow.turning = 0;
+
+        // (No one else about them to take the press: a townsman walking past just in front of
+        // them, or just behind, nearer the press on the screen, would be pressed instead, the
+        // flick a drag of the camera: game.js #whoIsAt)
+        for (const other of game.battle.actors) {
+            if (other !== player && other.map === player.map && Math.hypot(other.x - player.x, other.y - player.y) < 25) {
+                Object.assign(other, { dead: true, respawnAt: Infinity });
+            }
+        }
 
         // (Drawn once like that, so the player's where they look on the screen)
         await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
@@ -7748,6 +7766,91 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
     expect(again[0].apart).toBeLessThan(6);
 });
 
+test("an adventurer hired from their drink at one of the guild's tables follows with the tankard still in hand, and out through the door puts it down and takes up their own arms, put away till there's a fight", async ({ page }) => {
+    await page.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), { ...SAVE, seed: 2 });
+    await title(page);
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+
+    // Into the guild with gold to spare, and up to one drinking at its tables
+    const guild = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild");
+        const player = game.battle.actor("player");
+        const [x, y] = building.door.ends[0].squares[0];
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.progress.gold = 200;
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const drinker = game.battle.actors.find((actor) => actor.map === player.map && game.host.folk.get(actor.id)?.role === "patron" && game.host.folk.get(actor.id)?.talk === "adventurer");
+
+        // (Drawn, as the guild's folk are once the player's in)
+        for (let k = 0; k < 600 && !game.avatars.get(drinker.id)?.character; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        game.approaching = drinker.id;
+        game.battle.command("player", { type: "approach", target: drinker.id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        game.start();
+
+        return { door: building.door.id, id: drinker.id, holds: [...game.avatars.get(drinker.id).character.equipment.values()] };
+    });
+
+    expect(guild.holds).toContain("tankard");
+
+    const talk = page.locator(".talk");
+
+    await expect(talk).toBeVisible();
+    await talk.getByRole("button", { name: /Would you ride with me\? \(\d+ gold\)$/ }).click();
+    await expect(page.locator("#banner")).toContainText("follows you now.");
+    await page.keyboard.press("Escape");
+    await expect(talk).toBeHidden();
+
+    // Hired: the same body, the tankard still in hand; out through the door, put down, and their
+    // own weapon taken up (the one their calling fights with), put away
+    const carried = await page.evaluate((door) => {
+        const { game } = window.pellagos;
+        const player = game.battle.actor("player");
+        const [id] = [...game.host.followers].find(([, { leader }]) => leader === "player");
+        const follower = game.battle.actor(id);
+        const holds = () => [...(game.avatars.get(id)?.character.equipment.values() ?? [])];
+
+        game.stop();
+
+        for (let k = 0; k < 600 && !game.avatars.has(id); k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        const inside = holds();
+
+        game.battle.command("player", { type: "enter", link: door });
+
+        for (let k = 0; k < 200 && (player.map !== "town" || follower.map !== "town"); k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        game.advance(0.3, { render: false });
+        game.start();
+
+        return { inside, outside: holds(), map: follower.map, weapon: follower.weapon, sheathed: game.avatars.get(id).character.sheathed };
+    }, guild.door);
+
+    expect(carried.inside).toContain("tankard");
+    expect(carried.map).toBe("town");
+    expect(carried.outside).not.toContain("tankard");
+    expect(carried.outside).toContain(carried.weapon);
+    expect(carried.sheathed).toBe(true);
+});
+
 test("the player's people brought under another: told, and served; stirred to rising, they rise; and their victory, told and honoured", async ({ page }) => {
     // (The war played on two minutes in all: more than the usual time)
     test.setTimeout(180000);
@@ -8942,6 +9045,28 @@ test("a building gone into is marked on the minimap; holding the minimap opens t
     await expect(key).toHaveAttribute("aria-expanded", "false");
     await expect(page.locator("#worldmapkey")).toBeHidden();
 
+    // The mouse over the tavern's icon: what it is, said over it; off it, gone
+    const tip = page.locator("#worldmap .worldmap-tip");
+    const tavern = await page.evaluate(() => {
+        const { worldMap } = window.pellagos;
+        const rect = worldMap.canvas.getBoundingClientRect();
+        const spot = worldMap.spots.find(({ about }) => /\(tavern\)$/.test(about));
+
+        return spot && { x: rect.left + spot.x, y: rect.top + spot.y, about: spot.about };
+    });
+
+    expect(tavern.about).toMatch(/^.+ \(tavern\)$/);
+    await expect(tip).toBeHidden();
+    await page.mouse.move(tavern.x, tavern.y);
+    await expect(tip).toBeVisible();
+    await expect(tip).toHaveText(tavern.about);
+
+    const said = await tip.boundingBox();
+
+    expect(said.y + said.height).toBeLessThanOrEqual(tavern.y);
+    await page.mouse.move(tavern.x + 120, tavern.y + 120);
+    await expect(tip).toBeHidden();
+
     // Zoomed right out, the whole world under its fog; Escape closes it and the game goes on
     await page.locator("#worldmapout").click();
     await page.locator("#worldmapout").click();
@@ -9726,20 +9851,22 @@ test("the war table in the keep: a Retainer's told it isn't theirs to read; a Kn
     await page.mouse.click(spot.x, spot.y);
     await expect(page.locator("#worldmapnote")).toHaveText("The Orcish army, 40 strong: falling back to its camp to be made up.");
 
-    // Left: the map closed, and the camp's scout's ground uncovered at the war's next turn
+    // Left: the map closed, and the camp's scout's ground uncovered on the player's own map, since
+    // they read the table (core/host.js #tableRead), and so it stays as the war goes on
     await page.locator("#worldmapcancel").click();
     await page.waitForFunction(() => !document.querySelector("#worldmap").open, null, { timeout: 10000 });
 
     const uncovered = await page.evaluate(([x, y]) => {
         const { game } = window.pellagos;
-        const before = game.explored.visitedAt(x, y);
+        const read = game.explored.visitedAt(x, y);
 
         game.host.war.clock = 60000 - 100;
         game.advance(0.5);
 
-        return { before, after: game.explored.visitedAt(x, y), cancel: document.querySelector("#worldmapcancel").textContent };
+        return { read, after: game.explored.visitedAt(x, y), cancel: document.querySelector("#worldmapcancel").textContent };
     }, set.camp);
 
+    expect(uncovered.read).toBe(true);
     expect(uncovered.after).toBe(true);
     expect(uncovered.cancel).toBe("Cancel");
 });
@@ -13051,7 +13178,7 @@ test("Game options: its groups at the top, each a page of its own, short enough 
     // The groups first, then the Debug log, then Back: nothing else on the page
     const options = page.locator("#menuoptions");
 
-    await expect(options.locator(".options > button .text")).toHaveText([/^Graphics/, /^Sound/, /^Controls/, /^Camera/, /^Gameplay/, /^Debug log/]);
+    await expect(options.locator(".options > button .text")).toHaveText([/^Graphics/, /^Sound/, /^Controls/, /^Camera/, /^Gameplay/, /^Chat and players/, /^Debug log/]);
     await expect(options.locator("input")).toHaveCount(0);
 
     const groups = {
@@ -13059,7 +13186,8 @@ test("Game options: its groups at the top, each a page of its own, short enough 
         sound: ["#soundswitch", "#effectsvolume", "#environmentvolume", "#musicvolume"],
         controls: ["#stickswitch", "#floatswitch", "#zoomswitch", "#minimapswitch", "#wheelsbutton", "#quickbutton"],
         camera: ["#followswitch", "#battlecamswitch", "#dragslider", "#invertswitch"],
-        gameplay: ["#snagswitch", "#snagbutton", "#lockswitch", "#resistswitch", "#refuseswitch"],
+        gameplay: ["#snagswitch", "#snagbutton", "#lockswitch", "#resistswitch"],
+        chat: ["#chatfeedswitch", "#partydmswitch", "#worlddmswitch", "#refuseswitch", "#blockedbutton"],
     };
     const back = { arrow: (group) => page.locator(`#menu${group} .menu-back`), button: (group) => page.locator(`#${group}back`) };
 
@@ -14692,6 +14820,49 @@ test.describe("on a phone", () => {
 
             expect(Math.min(...closest), tab).toBeLessThan(framed * 1.6 * 0.6);
         }
+    });
+
+    test("on the world map an icon tapped says what it is, over it, till the map's touched again", async ({ page }) => {
+        await playing(page, "/?play&seed=1");
+
+        // (Into Wenches and Ale and out again: its icon on the map)
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const player = game.battle.actor("player");
+
+            game.stop();
+            Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+            for (const map of ["taproom", "town"]) {
+                game.battle.command("player", { type: "enter", link: "tavern-door" });
+
+                for (let k = 0; k < 200 && player.map !== map; k++) {
+                    game.advance(0.25, { render: false });
+                }
+            }
+
+            game.start();
+        });
+        await page.keyboard.press("m");
+        await expect(page.locator("#worldmap")).toBeVisible();
+        await page.waitForFunction(() => window.pellagos.worldMap?.spots.some(({ about }) => /\(tavern\)$/.test(about)), null, { polling: 100 });
+
+        const tip = page.locator("#worldmap .worldmap-tip");
+        const tavern = await page.evaluate(() => {
+            const { worldMap } = window.pellagos;
+            const rect = worldMap.canvas.getBoundingClientRect();
+            const spot = worldMap.spots.find(({ about }) => /\(tavern\)$/.test(about));
+
+            return { x: rect.left + spot.x, y: rect.top + spot.y, about: spot.about };
+        });
+
+        await page.touchscreen.tap(tavern.x, tavern.y);
+        await expect(tip).toBeVisible();
+        await expect(tip).toHaveText(tavern.about);
+
+        // (Touched again, away from it: gone)
+        await page.touchscreen.tap(tavern.x + 100, tavern.y + 150);
+        await expect(tip).toBeHidden();
     });
 
     test("on the world map one finger drags it about, two spread apart zoom in and brought together zoom out, and two moved drag it, what's under them staying under them", async ({ page }) => {

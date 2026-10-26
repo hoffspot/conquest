@@ -108,6 +108,15 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     resistSummons: false,
     // (Asked to another player's party: let go unanswered, not asked)
     refuseInvites: false,
+    // (Direct messages from another player (core/netplay.js DMS_TAKEN): from the player's party,
+    // and from anyone else in the world, not taken, the one saying it told so)
+    refusePartyDms: false,
+    refuseWorldDms: false,
+    // (What's said in the party and to the player shown a few seconds just above the quick
+    // actions too, then faded: hud.js chatLine)
+    chatOnScreen: true,
+    // (The players blocked, in every world: blocksOf)
+    blocked: Object.freeze([]),
     // (Auto-snag: the player's spoils of a fight picked up as they come within reach of them, not
     // left for a tap; off to start with, as it always was. And what of them it takes: the
     // rarities and kinds ticked (host.js SNAG_GRADES, SNAG_KINDS), or null for everything)
@@ -154,7 +163,28 @@ export const SETTINGS_DEFAULTS = Object.freeze({
  * camera's turned by hand and follows, which go by whether it's touched or pointed at with a
  * mouse.
  */
-export const PLAY_SETTINGS = Object.freeze(["autoSnag", "snagGrades", "snagKinds", "autoLock", "resistSummons", "refuseInvites", "battleCam", "openWay", "invertTilt", "shake"]);
+export const PLAY_SETTINGS = Object.freeze(["autoSnag", "snagGrades", "snagKinds", "autoLock", "resistSummons", "refuseInvites", "refusePartyDms", "refuseWorldDms", "battleCam", "openWay", "invertTilt", "shake"]);
+
+/** How many blocked players are kept (in every world together), and the longest word of one kept (blocksOf). */
+export const BLOCKS = Object.freeze({ most: 200, length: 120 });
+
+/**
+ * Blocked players as they're kept (Game options' Blocked players; app/game.js block): each
+ * { world (the world they're blocked in: game.js worldKey), who (who that world knows them as:
+ * game.js whoIs), name }, each once (the last kept), the newest last, BLOCKS.most at most;
+ * anything else let go.
+ */
+export function blocksOf(given) {
+    const word = (value) => typeof value === "string" && value.length > 0 && value.length <= BLOCKS.length;
+    const list = (Array.isArray(given) ? given : []).filter((one) => one !== null && typeof one === "object" && word(one.world) && word(one.who) && typeof one.name === "string").map(({ world, who, name }) => ({ world, who, name: name.slice(0, BLOCKS.length) }));
+    const seen = new Set();
+
+    return list
+        .reverse()
+        .filter(({ world, who }) => !seen.has(`${world} ${who}`) && seen.add(`${world} ${who}`))
+        .reverse()
+        .slice(-BLOCKS.most);
+}
 
 /**
  * Of `given` (settings, or a hero's kept by a world), the play settings (PLAY_SETTINGS) as the
@@ -1206,7 +1236,7 @@ export function loadSettings({ touch = touchScreen() } = {}) {
         delete saved.stickDefaults;
     }
 
-    return { ...SETTINGS_DEFAULTS, cameraFollows: touch, ...saved };
+    return { ...SETTINGS_DEFAULTS, cameraFollows: touch, ...saved, blocked: blocksOf(saved.blocked) };
 }
 
 /** Change some settings, keeping the rest. Returns them all. */

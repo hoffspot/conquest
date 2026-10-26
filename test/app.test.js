@@ -13,7 +13,7 @@ import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
 import { isGuid } from "../client/js/core/guid.js";
-import { clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
+import { BLOCKS, blocksOf, clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
 import { ago, KEPT_FROM, keepMessage, MESSAGES_KEPT } from "../client/js/app/journal.js";
 import { encode } from "../client/js/core/wire.js";
 import { Standing } from "../client/js/core/standing.js";
@@ -25,7 +25,8 @@ import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
 import { aboutOf, guardOf, heroEquipment, HOST_EVENTS } from "../client/js/app/game.js";
 import { BOUGHT } from "../client/js/core/host.js";
-import { distanceLabel } from "../client/js/app/worldmap.js";
+import { distanceLabel, iconAbout } from "../client/js/app/worldmap.js";
+import { ICON_KINDS, ICON_NAMES } from "../client/js/app/mapicons.js";
 import { weaponNumbers } from "../client/js/app/creator.js";
 import { generateWorld } from "../client/js/core/world.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -451,6 +452,30 @@ describe("saving (save.js)", () => {
         assert.deepEqual(playSettingsOf({ autoSnag: "yes", openWay: Number.NaN, snagGrades: [3], shake: null, autoLock: 1 }), {});
         assert.deepEqual([playSettingsOf(null), playSettingsOf(["autoSnag"])], [{}, {}]);
         assert.deepEqual(Object.keys(playSettingsOf(SETTINGS_DEFAULTS)), [...PLAY_SETTINGS], "every one of them, as they start");
+        assert.ok(["refuseInvites", "refusePartyDms", "refuseWorldDms"].every((key) => PLAY_SETTINGS.includes(key)), "whose invites and direct messages they take, theirs");
+        assert.ok(!PLAY_SETTINGS.includes("chatOnScreen") && !PLAY_SETTINGS.includes("blocked"), "(the chat on screen this device's; whom they've blocked kept by world: main.js keptSettings)");
+    });
+
+    it("keeps the players blocked as words, each once (the last kept), in every world together, a most kept; starting with no one, every direct message taken, and the chat on screen", () => {
+        const items = useStorage();
+
+        assert.deepEqual([SETTINGS_DEFAULTS.blocked, SETTINGS_DEFAULTS.refusePartyDms, SETTINGS_DEFAULTS.refuseWorldDms, SETTINGS_DEFAULTS.chatOnScreen], [[], false, false, true]);
+
+        const cai = { world: "server:host:8480:w1", who: "K7Q2MXD4RT", name: "Cai" };
+        const bryn = { world: "world:2", who: "7c1d0d1e-5f3a-4c55-9a2e-11a2b3c4d5e6", name: "Bryn" };
+
+        assert.deepEqual(blocksOf([cai, bryn]), [cai, bryn]);
+        assert.deepEqual(blocksOf([{ ...cai, name: "Cai the Elder" }, bryn, cai]), [bryn, cai], "(once each: the last kept, the newest last)");
+        assert.deepEqual(blocksOf([null, 3, { world: "", who: "x", name: "" }, { world: "w", who: 7, name: "" }, { world: "w", who: "x" }, { world: "w", who: "x".repeat(BLOCKS.length + 1), name: "" }]), [], "(anything else let go)");
+        assert.deepEqual([blocksOf(null), blocksOf({ world: "w" })], [[], []]);
+        assert.equal(blocksOf(Array.from({ length: BLOCKS.most + 5 }, (_, k) => ({ world: "w", who: `p${k}`, name: "" }))).length, BLOCKS.most);
+        assert.equal(blocksOf([{ ...cai, name: "n".repeat(BLOCKS.length + 9) }])[0].name.length, BLOCKS.length);
+
+        // (Kept with the settings; whatever's saved there read as blocksOf reads it)
+        saveSettings({ blocked: [cai] });
+        assert.deepEqual(loadSettings().blocked, [cai]);
+        items.set("pellagos.settings", JSON.stringify({ blocked: "everyone" }));
+        assert.deepEqual(loadSettings().blocked, []);
     });
 
     it("forgets volumes saved on the old, louder scale, for the new defaults, keeping the rest", () => {
@@ -1202,6 +1227,15 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.equal(distanceLabel(12449), "12.4 km");
     });
 
+    it("says what an icon on the world map is (the mouse over it, or tapped): what the game says of it, else its kind's name; who found it, and whether it was tracked home", () => {
+        assert.ok(ICON_KINDS.every((kind) => typeof ICON_NAMES[kind] === "string" && ICON_NAMES[kind].length > 0), "a name for every icon");
+        assert.equal(iconAbout({ kind: "guardTower" }), "Guard tower");
+        assert.equal(iconAbout({ kind: "guardTower", about: "Guard tower: the Orcs', at war with yours" }), "Guard tower: the Orcs', at war with yours");
+        assert.equal(iconAbout({ kind: "abbey", about: "Abbey: held by outlaws", finder: "Bryn" }), "Abbey: held by outlaws · found by Bryn");
+        assert.equal(iconAbout({ kind: "lair", tracked: true }), "Beast's den · tracked home by its trails");
+        assert.equal(iconAbout({ kind: "nothing" }), "");
+    });
+
     it("has an icon for everything that does someone good, as their plate shows it: each spell that lasts, and each boon bought by talking", () => {
         for (const [id, spell] of Object.entries(SPELLS).filter(([, spell]) => spell.lasts)) {
             assert.match(ICONS[id], /<(path|circle|ellipse)/, `${spell.label} has an icon`);
@@ -1403,7 +1437,7 @@ describe("the bars over the others (hud.js)", () => {
         assert.equal(memberKind({ kind: "unit" }), "With you");
     });
 
-    it("says how each player in the world stands on the party menu's Players tab: their party, or asked to one; away; fallen, or resting; their people at war with the player's", () => {
+    it("says how each player in the world stands on the party menu's Players tab: blocked; their party, or asked to one; away; fallen, or resting; their people at war with the player's", () => {
         const said = (player) => playerStatus(player).map(({ text, kind }) => `${kind}: ${text}`);
 
         assert.deepEqual(said({}), ["free: In no party"]);
@@ -1418,6 +1452,8 @@ describe("the bars over the others (hud.js)", () => {
         assert.deepEqual(said({ away: true, resting: true, hostile: true }), ["free: In no party", "afk: Away (AFK)", "resting: Resting", "war: At war with your people"]);
         assert.deepEqual(said({ dead: true, resting: true }), ["free: In no party", "fallen: Fallen"], "(fallen, not resting)");
         assert.deepEqual(said({ me: true, hostile: true }), ["free: In no party"], "(never at war with themselves)");
+        assert.deepEqual(said({ blocked: true, party: { yours: false, leads: true, leader: "Cai" } }), ["blocked: Blocked", "partied: Leads a party"], "(blocked, first)");
+        assert.deepEqual(said({ me: true, blocked: true }), ["free: In no party"], "(never blocked by themselves)");
     });
 
     it("turns the compass (the minimap folded away) for its N to point north as the camera sees it, clockwise from 0 to a full turn", () => {

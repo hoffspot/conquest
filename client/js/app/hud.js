@@ -55,6 +55,12 @@ const HOLD_MOVE = 10;
 export const PARTY_ICON = Object.freeze({ most: 44, least: 30, gap: 6, margin: 16 });
 
 /**
+ * What's said in the party and to the player, on screen (chatLine): how long each line's shown
+ * (s, the last fifth of it fading), and how many at most at once (the oldest let go first).
+ */
+export const CHAT_FEED = Object.freeze({ seconds: 6, most: 3 });
+
+/**
  * How the party's icons fit `count` of them into `room` pixels down the side (PARTY_ICON): how
  * big each is, how many are shown, and how many are left for the "+N" chip (0: none).
  */
@@ -188,6 +194,12 @@ export class Hud {
         this.bannerClose.setAttribute("aria-label", "Dismiss");
         this.bannerClose.addEventListener("click", () => this.message(""));
         this.quick = root.querySelector(".quickbar");
+
+        // (What's said in the party and to the player, a moment on screen: chatLine. Read out from
+        // the party menu's chat, not from here twice)
+        this.chatFeed = element("ol", "chatfeed");
+        this.chatFeed.setAttribute("aria-hidden", "true");
+        root.append(this.chatFeed);
 
         // (Which of the places a message can go it's at in a fight, or null: where it goes as a rule)
         this.bannerAt = null;
@@ -704,6 +716,25 @@ export class Hud {
         number.style.setProperty("--drift", `${(Math.random() * 40 - 20).toFixed(0)}px`);
         number.addEventListener("animationend", () => number.remove());
         this.floaters.append(number);
+    }
+
+    /**
+     * A line said in the player's party, or a direct message to or from them, on screen just above
+     * the quick actions for CHAT_FEED.seconds, then faded (Game options: Party chat on screen):
+     * `who` said it ("Bryn", "You", "From Cai", "To Cai"), what, and whether it's theirs (`mine`)
+     * or a direct message (`dm`). The newest at the foot, CHAT_FEED.most at most.
+     */
+    chatLine({ who, text, mine = false, dm = false }) {
+        const line = element("li", `chatfeed-line${mine ? " mine" : ""}${dm ? " dm" : ""}`);
+
+        line.append(element("span", "chatfeed-name", who), `: ${text}`);
+        line.style.setProperty("--chatfeed-life", `${CHAT_FEED.seconds}s`);
+        line.addEventListener("animationend", () => line.remove());
+        this.chatFeed.append(line);
+
+        while (this.chatFeed.children.length > CHAT_FEED.most) {
+            this.chatFeed.firstElementChild.remove();
+        }
     }
 
     /**
