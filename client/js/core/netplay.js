@@ -34,7 +34,11 @@
 //
 // What's said in a party (party chat) isn't done to the world, and isn't for everyone in it: a
 // line goes to the host, which sends it on to those in the sayer's party alone (Hosting.chat),
-// so no one else's game ever has it.
+// so no one else's game ever has it. A direct message goes to one player and back to the sayer
+// alone: a party one to someone in the sayer's party, a world one to anyone else; each player says
+// which kinds they take (DMS_TAKEN, their "dms"), and one they don't is never sent, the sayer told
+// so. Whom a player's blocked is theirs alone: their game lets go of a blocked player's messages
+// as they come, and the host never knows.
 //
 // What's said, as text (core/wire.js), whichever way it goes (app/relay.js carries it):
 //
@@ -57,7 +61,10 @@
 //                                                    a word to the host and back's taken it lately,
 //                                                    ms, once it's timed one: Joining lately; the
 //                                                    host's, to show)
-//                    { kind: "chat", text }                    (a line to their party)
+//                    { kind: "chat", text, to }                (a line to their party; or, `to` a
+//                                                    player's id, a direct message to them)
+//                    { kind: "dms", party, world }             (which direct messages they take: from
+//                                                    their party, from anyone else in the world)
 //                    { kind: "own", own }                      (what its game keeps of its hero that
 //                                                    isn't the world's, as it's changed: any of
 //                                                    core/host.js OWN, kept with them)
@@ -74,8 +81,12 @@
 //                    { kind: "paused", paused, why, by }       (the host's world stopped, why (PAUSES),
 //                                                    and by whom; or going again)
 //                    { kind: "refused", reason }
-//                    { kind: "chat", from, name, text }        (a line said in their party)
-//                    { kind: "unsaid", reason }                (one of theirs not said: CHAT_REFUSED)
+//                    { kind: "chat", from, name, text, to, toName, dm }
+//                                                    (a line said in their party; or a direct
+//                                                    message, to them or theirs heard back: `dm`
+//                                                    "party" or "world", `to` whom it went to)
+//                    { kind: "unsaid", reason, name }          (one of theirs not said: CHAT_REFUSED;
+//                                                    `name`, whose direct messages are closed)
 //                    { kind: "kicked", reason }                (sent out of the world: "afk", away too long;
 //                                                    "elsewhere", their character taken over on
 //                                                    another link: Hosting #takeOver)
@@ -92,7 +103,7 @@ import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 183;
+export const NET_VERSION = 184;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -210,8 +221,14 @@ export const NET_KICKS = Object.freeze({
  */
 export const CHAT = Object.freeze({ most: 200, burst: 5, burstMs: 10000, kept: 50 });
 
-/** Why a line wasn't said (as host.js REFUSALS names them). */
-export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty"]);
+/**
+ * Why a line wasn't said (as host.js REFUSALS names them): nothing to say, in no party, too many too
+ * quickly; a direct message to no one in the world, or to one not taking that kind ("closed").
+ */
+export const CHAT_REFUSED = Object.freeze(["empty", "unpartied", "chatty", "nobody", "closed"]);
+
+/** Which direct messages a player takes till they say otherwise: from their party, and from anyone else in the world. */
+export const DMS_TAKEN = Object.freeze({ party: true, world: true });
 
 /**
  * A line as it's said: whatever's not to be seen (control characters) and runs of spaces made one
@@ -370,11 +387,17 @@ export class Hosting {
          */
         this.roleOf = () => "player";
 
-        /** Told each line said in the host's own player's party: { from, name, text }. */
+        /**
+         * Told each line said in the host's own player's party, and each direct message to them or
+         * theirs: { from, name, text, to, toName, dm }.
+         */
         this.onChat = () => {};
 
         // When each player's lines were said lately (the world's time), to hold back one who says too much
         this.said = new Map();
+
+        // Which direct messages each player takes, as they've said (DMS_TAKEN till they have)
+        this.dms = new Map();
 
         host.recorder = (op) => this.#record(op);
     }
@@ -557,39 +580,64 @@ export class Hosting {
                 break;
             case "chat": {
                 const id = this.players.get(peer);
-                const said = id ? this.#say(id, message.text) : null;
+                const said = id ? this.#say(id, message.text, typeof message.to === "string" ? message.to : null) : null;
 
                 if (said && !said.ok) {
-                    this.#send(peer, "unsaid", encode({ kind: "unsaid", reason: said.reason }));
+                    this.#send(peer, "unsaid", encode({ kind: "unsaid", reason: said.reason, ...(said.name ? { name: said.name } : {}) }));
                 }
 
                 break;
             }
+            case "dms":
+                if (this.players.has(peer)) {
+                    this.takeDms(this.players.get(peer), message);
+                }
+
+                break;
             default:
                 break;
         }
     }
 
     /**
-     * A line the host's own player says to their party, sent to those in it alone. Returns
-     * { ok: true }, or { ok: false, reason } (CHAT_REFUSED: nothing to say, in no party, or too
-     * many lines too quickly).
+     * A line the host's own player says to their party, sent to those in it alone; or, `to` a
+     * player's id, a direct message to them. Returns { ok: true }, or { ok: false, reason, name }
+     * (CHAT_REFUSED: nothing to say, in no party, too many lines too quickly, no such player, or
+     * one not taking that kind of message: `name`, theirs).
      */
-    chat(text) {
-        return this.#say(HOST_PLAYER, text);
+    chat(text, { to = null } = {}) {
+        return this.#say(HOST_PLAYER, text, to);
+    }
+
+    /** Which direct messages a player takes (`party`, `world`: DMS_TAKEN), as they say (the host's own player's, as the game says). */
+    takeDms(id, { party = true, world = true } = {}) {
+        this.dms.set(id, { party: party !== false, world: world !== false });
     }
 
     // A line said by a player to their party: to each in it (the host's own player told here, the
-    // others sent it, the sayer too), and to no one else
-    #say(id, said) {
+    // others sent it, the sayer too), and to no one else. Or a direct message (`to` a player's
+    // id): "party" to one in the sayer's party, "world" to anyone else, to them and back to the
+    // sayer alone, if they take that kind (#dms), else the sayer told whose aren't
+    #say(id, said, to = null) {
         const text = chatLine(said);
         const party = this.host.partyFor(id);
+        const other = to === null ? null : this.host.players.get(to);
 
         if (!text) {
             return { ok: false, reason: "empty" };
         }
 
-        if (!party) {
+        if (to !== null && (!other || to === id)) {
+            return { ok: false, reason: "nobody" };
+        }
+
+        const dm = to === null ? null : party && this.host.partyFor(to) === party ? "party" : "world";
+
+        if (dm && !(this.dms.get(to) ?? DMS_TAKEN)[dm]) {
+            return { ok: false, reason: "closed", name: other.hero.name };
+        }
+
+        if (!dm && !party) {
             return { ok: false, reason: "unpartied" };
         }
 
@@ -604,10 +652,10 @@ export class Hosting {
 
         this.said.set(id, [...lately, now]);
 
-        const line = { from: id, name: this.host.players.get(id)?.hero.name ?? "", text };
+        const line = { from: id, name: this.host.players.get(id)?.hero.name ?? "", text, ...(dm ? { to, toName: other.hero.name, dm } : {}) };
         const sent = encode({ kind: "chat", ...line });
 
-        for (const member of party.members) {
+        for (const member of dm ? [id, to] : party.members) {
             if (member === HOST_PLAYER) {
                 this.onChat(line);
             } else {
@@ -1004,6 +1052,9 @@ export class Joining {
         /** What its game keeps of its hero that isn't the world's (core/host.js OWN), as it's told the host. */
         this.mine = {};
 
+        /** Which direct messages its player takes (DMS_TAKEN), as it's told the host; null till it has. */
+        this.dms = null;
+
         /**
          * Told when the world's come (the welcome), come again (the state), or they're turned away
          * (a reason); and when they're sent out of it (a reason: "afk").
@@ -1016,7 +1067,11 @@ export class Joining {
         /** Told each round trip to the host as it's heard (ms, as it was: not smoothed as rtt is). */
         this.onPong = () => {};
 
-        /** Told each line said in its player's party ({ from, name, text }), and why one of theirs wasn't said (CHAT_REFUSED). */
+        /**
+         * Told each line said in its player's party, and each direct message to them or theirs
+         * ({ from, name, text, to, toName, dm }); and why one of theirs wasn't said (CHAT_REFUSED,
+         * and { name }: whose direct messages are closed).
+         */
         this.onChat = () => {};
         this.onUnsaid = () => {};
     }
@@ -1130,16 +1185,17 @@ export class Joining {
                 break;
             case "chat": {
                 const text = chatLine(message.text);
+                const dm = (message.dm === "party" || message.dm === "world") && typeof message.to === "string" ? { to: message.to, toName: typeof message.toName === "string" ? message.toName : "", dm: message.dm } : {};
 
                 if (text && typeof message.from === "string") {
-                    this.onChat({ from: message.from, name: typeof message.name === "string" ? message.name : "", text });
+                    this.onChat({ from: message.from, name: typeof message.name === "string" ? message.name : "", text, ...dm });
                 }
 
                 break;
             }
             case "unsaid":
                 if (CHAT_REFUSED.includes(message.reason)) {
-                    this.onUnsaid(message.reason);
+                    this.onUnsaid(message.reason, { name: typeof message.name === "string" ? message.name : "" });
                 }
 
                 break;
@@ -1150,19 +1206,26 @@ export class Joining {
 
     /**
      * A line its player says to their party: to the host, which sends it on to those in it (this
-     * game too, so it's heard back as everyone hears it). Returns { ok: true, pending: true }, or,
-     * with nothing to say, { ok: false, reason: "empty" }.
+     * game too, so it's heard back as everyone hears it); or, `to` a player's id, a direct message
+     * to them (heard back too). Returns { ok: true, pending: true }, or, with nothing to say,
+     * { ok: false, reason: "empty" }.
      */
-    chat(text) {
+    chat(text, { to = null } = {}) {
         const line = chatLine(text);
 
         if (!line) {
             return { ok: false, reason: "empty" };
         }
 
-        this.send(encode({ kind: "chat", text: line }));
+        this.send(encode({ kind: "chat", text: line, ...(typeof to === "string" ? { to } : {}) }));
 
         return { ok: true, pending: true };
+    }
+
+    /** Tell the host which direct messages its player takes (`party`, `world`: DMS_TAKEN); said again as its link comes back (resync). */
+    takeDms({ party = true, world = true } = {}) {
+        this.dms = { party: party !== false, world: world !== false };
+        this.send(encode({ kind: "dms", ...this.dms }));
     }
 
     /**
@@ -1182,6 +1245,10 @@ export class Joining {
 
         if (Object.keys(this.mine).length) {
             this.send(encode({ kind: "own", own: this.mine }));
+        }
+
+        if (this.dms) {
+            this.send(encode({ kind: "dms", ...this.dms }));
         }
     }
 

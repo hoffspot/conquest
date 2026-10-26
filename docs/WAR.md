@@ -222,7 +222,7 @@ The engine is built for this from the start. These are its rules:
 | **M18** | Built | Standing armies and defensive reserves in the war: made up from their towns in order, staged from forward camps with their scouts and skirmishers, taking a town only by putting its garrison to the sword; reinforcements banding on their way; a player's orders. |
 | **M19** | Built | Supply: wagons from the citadel to the army, losses in a row alerting, then thinning it, then disbanding it; supply depots in an enemy's lands, refilled from the nearest friendly citadel, raided or razed. |
 | **M20** | Built | The armies in the world near a player: armies, reserves and reinforcements met in their lines, drawn in their crowds, marching and fighting it out there, reinforcements joining their army's line; supply wagons on their way and depots pitched there, to be fought; a camp's scout on its round and its skirmishers out against what they're sent after; a seat's ruler and the captain of its guard making their last stand at its keep before it's taken. |
-| **M21** | Built | The war table in the keep: its map of the war as their people's council sees it, live, lit where their scouts, armies and holdings see, the scouts lifting the fog; a Lord's orders from it for their army or a vassal's (raised, sent to camp, against the enemy, home, supplied, disbanded; depots built), and a Knight's counsel on where it marches. |
+| **M21** | Built | The war table in the keep: its map of the war as their people's council sees it, live, lit where their scouts, armies and holdings see, read uncovering it on the reader's own maps; a Lord's orders from it for their army or a vassal's (raised, sent to camp, against the enemy, home, supplied, disbanded; depots built), and a Knight's counsel on where it marches. |
 | **M22** | Building | Pressing the advantage: palisaded camps, stormed, breached and mended from the stores; the rout; the reserve following a beaten army to its camp, and keeping its lands (towers, works, brigands); the camp's stockade, gates and walkway in the world, and the fighting at it. |
 
 ## What's built
@@ -1206,8 +1206,9 @@ costs and takes to keep up, and whether the stores hold it. **Counsel it** sends
 from the war alone (`buildingView`), so a player could one day build from it as well as counsel.
 
 **On the maps:** each fortification's icon, a battlemented tower or a wall between two turrets
-(`mapicons.js` `FORT_ICONS`), rimmed as a works' is. Their own people's and their allies' show on
-the world map wherever they stand; others' once the land round them is explored.
+(`mapicons.js` `FORT_ICONS`), rimmed as a works' is. Each shows on the world map once the land
+round it is explored, theirs and their allies' too: until 2026-10-26 those showed wherever they
+stood. Reading the war table uncovers where their own side's stand (*The war table*).
 
 **Said:** one razed near the player ("The orcish guard tower is razed!" by their people, "…has
 fallen!" by another). **The news** tells of fortifications raised, razed and given up, and of
@@ -1451,7 +1452,7 @@ ground). So:
   2 turns going up, 6 of the army staying to hold it, made up from the army while it's there. Once
   it's up, the army goes against what it was sent for.
 - **A scout** out from each, seeing 300 m round it (`SIGHT`; an army and a town see 150), for the
-  war table's map (M21, *The war table*), and lifting the fog round it for its people's players.
+  war table's map (M21, *The war table*), uncovered on a player's own maps as they read it.
 - **Skirmishers,** a pair every 3 turns, against the nearest of the enemy's within 600 m: a town's
   garrison (never its last, and its taxes lost for the turn), a works' guard, an army, a reserve,
   reinforcements, a convoy or a camp. Each brings one down half the time, and is lost a quarter of
@@ -1879,10 +1880,14 @@ stopped while it's read, and it's drawn again every half second as the war goes 
   - "Grimhold, the Orcish seat: 30 of 40 on guard";
   - "Talaemere, the Elven town. How strongly it's held, we can't see from here".
 
-**The scouts lift the fog** (`host.js` `#scoutsSee`). Each camp's scout of their people and their
-friends uncovers what it sees on the maps of their people's players, as where they've been: every
-chunk whose middle is within 300 m of its camp. This happens at each turn of the war, and as a
-player comes in.
+**Read, it's uncovered** (`host.js` `#tableRead`, the `table` command's `read`, sent as the map
+opens). What it shows of the reader's side is uncovered on their own maps from then on, as where
+they've been: what their people's and their friends' camps' scouts see now (every chunk whose
+middle is within 300 m of a camp that's up), and the chunk each of their side's towns, works and
+fortifications stands in. Nothing else: the scouts don't lift the fog on anyone's maps at the
+war's turns, nor as a player comes in (as they did from 2026-10-09 to 2026-10-26, uncovering
+far-off towns and finding the places round them for players who'd never read the table, nor been
+there). Land they uncovered then can't be told from land walked, so it stays.
 
 **Orders** (`actionsAt`; `host.js` `#atTable`, `war.order`: M18 *A player's orders*, M19). A Lord
 or a Councillor (`OPENS.orders`) whose people serve no one gives them, for their people's army or
@@ -1912,7 +1917,8 @@ Grimhold, next, as the council sees fit."
 
 **Kept.** Nothing new: what's uncovered is kept with where the player's been, and orders with the
 armies (M18). What two games share changed (`NET_VERSION` 83): the host uncovers what the scouts
-see and says so, and takes orders and counsel at the war table.
+see and says so, and takes orders and counsel at the war table; and again (`NET_VERSION` 184),
+uncovering it only as the table's read.
 
 ### The balance of the standing armies
 
@@ -2792,6 +2798,26 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   the world's time is held back ("Not so fast"); one in no party, or with nothing to say, isn't
   heard (`{ kind: "unsaid", reason }`). Nothing's kept with the world: each game keeps the last
   50 lines it's heard (`CHAT.kept`). What two games say to each other changed (`NET_VERSION` 101).
+- **Direct messages** (`Hosting.chat`'s `to`; the party menu's Chat, its To). A line to one
+  player (`{ kind: "chat", text, to }`) goes to the host, which sends it to them and back to the
+  sayer alone (`{ kind: "chat", from, name, text, to, toName, dm }`): a **party** one (`dm:
+  "party"`) to someone in the sayer's party, a **world** one to anyone else in the world. Each
+  player tells the host which kinds they take (`{ kind: "dms", party, world }`, said again as their
+  link comes back; `DMS_TAKEN`, both, till they do), as Game options' **Refuse party DMs** and
+  **Refuse world DMs** have it (`refusePartyDms`, `refuseWorldDms`: play settings, kept with a
+  hero a world server keeps). One they don't take is never sent; the sayer's told whose
+  (`{ kind: "unsaid", reason: "closed", name }`: "Bryn isn't taking direct messages."). To no one
+  in the world, or to themselves, it's refused (`nobody`). Held back with the party's lines (5 in
+  10 seconds, together). What two games say to each other changed (`NET_VERSION` 184).
+- **Blocked** (the party menu's Players tab; Game options, **Blocked players**). Whom a player's
+  blocked is theirs alone, never told the host or anyone: their game lets go of a blocked
+  player's direct messages as they come, and of their party invites (as **Refuse party invites**
+  does: never shown, lapsing as one unanswered), and the one blocked is none the wiser: their
+  messages look sent, their invite asked. A block holds in the world it was made in (app/game.js
+  `worldKey`: a world server's world, or a world of that seed), by who that world knows them as
+  (`whoIs`: on a world server the player its tickets know, whichever of their heroes; elsewhere
+  their hero's own id, core/guid.js), kept on the device (app/save.js `blocksOf`, 200 at most) and
+  with a hero a world server keeps (that world's alone: main.js `keptSettings`).
 
 **When the link falters** (`app/together.js` `RelayLink`, `LINK_TIMING`). A phone moving from Wi-Fi
 to its mobile network, or losing its signal a moment, needn't end the game:

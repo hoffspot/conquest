@@ -29,7 +29,7 @@ import { forgetInWorld, inWorldOf, keepInWorld, REJOIN, REJOIN_STAGES, rejoinWor
 import { telemetry } from "./app/telemetry.js";
 import { Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
-import { enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
+import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
 import { MARKER_ICONS, MARKER_NAMES, MARKERS } from "./core/markers.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
@@ -858,6 +858,9 @@ $("#debugswitch").addEventListener("change", (event) => applySetting("debug", ev
 function showPlaySettings() {
     $("#resistswitch").checked = settings.resistSummons;
     $("#refuseswitch").checked = settings.refuseInvites;
+    $("#partydmswitch").checked = settings.refusePartyDms;
+    $("#worlddmswitch").checked = settings.refuseWorldDms;
+    $("#chatfeedswitch").checked = settings.chatOnScreen;
     $("#snagswitch").checked = settings.autoSnag;
     $("#lockswitch").checked = settings.autoLock;
     $("#snagbutton").hidden = !settings.autoSnag;
@@ -876,8 +879,57 @@ function showPlaySettings() {
 // to keep with them (core/host.js OWN `settings`)
 function tellPlaySettings() {
     if (state.onServer?.kept && state.game?.remote) {
-        state.together?.joining?.own({ settings: playSettingsOf(settings) });
+        state.together?.joining?.own({ settings: keptSettings() });
     }
+}
+
+// A kept hero's own settings, as the world keeps them with them (core/host.js OWN `settings`): how
+// they play (PLAY_SETTINGS), and whom they've blocked in that world
+function keptSettings(game = state.game) {
+    return { ...playSettingsOf(settings), blocked: settings.blocked.filter(({ world }) => world === game?.worldKey) };
+}
+
+// Chat and players (Game options), as the game takes them: what's said shown on screen too, which
+// direct messages are taken (told to the host), and whom the player's blocked (kept as it changes)
+function applyChat(game = state.game) {
+    if (!game) {
+        return;
+    }
+
+    game.chatOnScreen = settings.chatOnScreen;
+    game.blocked = settings.blocked;
+    game.onBlocked = (blocked) => applySetting("blocked", blocksOf(blocked));
+    game.takeDms({ party: !settings.refusePartyDms, world: !settings.refuseWorldDms });
+}
+
+// The players blocked (Game options: Chat and players, Blocked players): each by name, where (this
+// world, or another), and who that world knows them as; each to unblock. And how many, under its
+// link
+function showBlocked() {
+    const here = state.game?.worldKey ?? null;
+    const count = settings.blocked.length;
+
+    $("#blockedsummary").textContent = count ? `${count} blocked${here ? `, ${settings.blocked.filter(({ world }) => world === here).length} in this world` : ""}` : "No one";
+    $("#blockedlist").replaceChildren(
+        ...(count
+            ? [...settings.blocked].reverse().map((one) => {
+                  const row = document.createElement("li");
+                  const about = Object.assign(document.createElement("div"), { className: "character" });
+                  const unblock = Object.assign(document.createElement("button"), { type: "button", className: "button quiet", textContent: "Unblock" });
+
+                  about.append(Object.assign(document.createElement("span"), { className: "name", textContent: one.name || "Someone" }), Object.assign(document.createElement("span"), { className: "about", textContent: `${one.world === here ? "In this world" : "In another world"} · ${one.who}` }));
+                  unblock.setAttribute("aria-label", `Unblock ${one.name || one.who}`);
+                  unblock.addEventListener("click", () => {
+                      applySetting("blocked", settings.blocked.filter((other) => other !== one));
+                      showBlocked();
+                      $("#blockedback").focus();
+                  });
+                  row.append(about, unblock);
+
+                  return row;
+              })
+            : [Object.assign(document.createElement("li"), { className: "note", textContent: "No one's blocked." })]),
+    );
 }
 
 // --- Making a character ---
@@ -1108,6 +1160,7 @@ async function playing(save, { world, place, war }) {
     game.cursor = pointer;
     game.resistSummons = settings.resistSummons;
     game.refuseInvites = settings.refuseInvites;
+    applyChat(game);
     game.autoSnag = settings.autoSnag;
     game.snagFilter = snagChoiceOf();
     game.autoLock = settings.autoLock;
@@ -1211,7 +1264,8 @@ function pauseAll() {
 }
 
 // The menu's pages: the main one; Game options, and a page for each group of them; and under
-// those, Auto-snag (Gameplay), Action wheels and Quick actions (Controls), and the Debug log. Each
+// those, Auto-snag (Gameplay), Blocked players (Chat and players), Action wheels and Quick
+// actions (Controls), and the Debug log. Each
 // with its title, what's focused on it, the page Back goes to (`up`), and the button there that
 // opened it (`from`), focused again on the way back
 const MENU_PAGES = {
@@ -1223,6 +1277,8 @@ const MENU_PAGES = {
     camera: { page: "#menucamera", title: "cameratitle", focus: "#followswitch", up: "options", from: "#camerabutton" },
     gameplay: { page: "#menugameplay", title: "gameplaytitle", focus: "#snagswitch", up: "options", from: "#gameplaybutton" },
     snag: { page: "#menusnag", title: "snagtitle", focus: "#snaggrades input", up: "gameplay", from: "#snagbutton" },
+    chat: { page: "#menuchat", title: "chattitle", focus: "#chatfeedswitch", up: "options", from: "#chatbutton" },
+    blocked: { page: "#menublocked", title: "blockedtitle", focus: "#blockedback", up: "chat", from: "#blockedbutton" },
     wheels: { page: "#menuwheels", title: "wheelstitle", focus: "#wheelsback", up: "controls", from: "#wheelsbutton" },
     quick: { page: "#menuquick", title: "quicktitle", focus: "#quickback", up: "controls", from: "#quickbutton" },
     log: { page: "#menulog", title: "logtitle", focus: "#logback", up: "options", from: "#logbutton" },
@@ -1241,9 +1297,11 @@ function menuPage(page, focus = MENU_PAGES[page].focus) {
     $("#menu").classList.toggle("wide", page === "wheels" || page === "quick" || page === "log");
     $(focus).focus();
 
-    // (What auto-snag takes, told under its switch)
+    // (What auto-snag takes, told under its switch; the players blocked, under theirs and on their page)
     if (page === "gameplay") {
         showSnag(settings.autoSnag);
+    } else if (page === "chat" || page === "blocked") {
+        showBlocked();
     }
 }
 
@@ -2030,12 +2088,13 @@ function toggleLegend() {
 
 // The map's key: each icon, and the fog
 async function keyOf() {
-    const { drawBuildingIcon, drawMarker, drawTracked } = await import("./app/mapicons.js");
+    const { drawBuildingIcon, drawMarker, drawTracked, ICON_NAMES } = await import("./app/mapicons.js");
     const list = $("#worldmapkey");
 
     list.replaceChildren();
 
-    for (const [kind, label] of [["tavern", "Tavern"], ["blacksmith", "Smithy"], ["church", "Temple"], ["guild", "Adventurers' guild"], ["hall", "Town hall"], ["keep", "Keep"], ["barracks", "Barracks"], ["swordsmith", "Swordsmith"], ["armorer", "Armorer"], ["scriptorium", "Occult scriptorium"], ["alchemist", "Alchemist"], ["masterSwordsmith", "Master Swordsmith"], ["masterArmorer", "Master Armorer"], ["emporium", "Mystic Emporium"]]) {
+    for (const kind of ["tavern", "blacksmith", "church", "guild", "hall", "keep", "barracks", "swordsmith", "armorer", "scriptorium", "alchemist", "masterSwordsmith", "masterArmorer", "emporium"]) {
+        const label = ICON_NAMES[kind];
         const item = document.createElement("li");
         const icon = Object.assign(document.createElement("canvas"), { width: 44, height: 44 });
 
@@ -2671,8 +2730,13 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     state.worldMap?.dispose();
     state.worldMap = null;
     state.game = game;
-    // (On a world server, its panel from the party menu too: its World button)
+    // (On a world server, its panel from the party menu too: its World button; and the world a
+    // block there holds in: that server's world, not just any of its seed)
     game.onWorldPanel = server ? worldPanelFromParty : null;
+
+    if (server && state.onServer) {
+        game.worldKey = `server:${state.onServer.client.record.key}:${state.onServer.entered.world}`;
+    }
     // (Who the world's with, and how, for the HUD's orb: app/worldlink.js; on a world server, its
     // world and the server, else a friend's, linked directly or through the server's broker)
     game.linkAbout = server
@@ -2691,19 +2755,27 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     // (A hero the world keeps: their settings for how they play kept with them, theirs on this
     // device too, as they last set them on any; never kept there yet, this device's told it)
     if (kept) {
-        const theirs = playSettingsOf(game.host.players.get(game.me)?.own?.settings);
+        const own = game.host.players.get(game.me)?.own?.settings;
+        const theirs = playSettingsOf(own);
+
+        // (Whom they've blocked in this world kept with them too: theirs, in place of this device's)
+        if (Array.isArray(own?.blocked)) {
+            settings.blocked = blocksOf([...settings.blocked.filter(({ world }) => world !== game.worldKey), ...blocksOf(own.blocked).filter(({ world }) => world === game.worldKey)]);
+            saveSettings({ blocked: settings.blocked });
+        }
 
         if (Object.keys(theirs).length) {
             Object.assign(settings, theirs);
             saveSettings(theirs);
             showPlaySettings();
         } else {
-            joining.own({ settings: playSettingsOf(settings) });
+            joining.own({ settings: keptSettings(game) });
         }
     }
 
     game.resistSummons = settings.resistSummons;
     game.refuseInvites = settings.refuseInvites;
+    applyChat(game);
     game.autoSnag = settings.autoSnag;
     game.snagFilter = snagChoiceOf();
     game.autoLock = settings.autoLock;
@@ -4489,6 +4561,10 @@ $("#pointerswitch").addEventListener("change", (event) => applySetting("swordPoi
 $("#largepointerswitch").addEventListener("change", (event) => applySetting("largePointer", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 $("#refuseswitch").addEventListener("change", (event) => applySetting("refuseInvites", event.target.checked));
+$("#partydmswitch").addEventListener("change", (event) => applySetting("refusePartyDms", event.target.checked));
+$("#worlddmswitch").addEventListener("change", (event) => applySetting("refuseWorldDms", event.target.checked));
+$("#chatfeedswitch").addEventListener("change", (event) => applySetting("chatOnScreen", event.target.checked));
+$("#blockedbutton").addEventListener("click", () => menuPage("blocked"));
 $("#snagswitch").addEventListener("change", (event) => applySetting("autoSnag", event.target.checked));
 $("#lockswitch").addEventListener("change", (event) => applySetting("autoLock", event.target.checked));
 $("#snagbutton").addEventListener("click", openSnag);
@@ -4684,6 +4760,13 @@ function applySetting(key, value) {
     } else if (key === "quickSix") {
         state.game?.showQuick(quickShown());
         state.quickSetup?.showCount(quickShown());
+    } else if (key === "chatOnScreen" || key === "refusePartyDms" || key === "refuseWorldDms" || key === "blocked") {
+        applyChat();
+
+        if (key === "blocked") {
+            tellPlaySettings();
+            showBlocked();
+        }
     } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock" || key === "quickAlways") {
         if (state.game) {
             state.game[key] = value;

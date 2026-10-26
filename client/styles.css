@@ -22,6 +22,8 @@
     --ally: #58d26e;
     --summoned: #a98bff;
     --risen: #b2c9a4;
+    /* (A direct message, to or from one player: app/partypanel.js, hud.js chatLine) */
+    --whisper: #c7a6ff;
 
     /* The adventurers' guilds' ranks, each its metal: light, middle and dark (core/standing.js GUILD_RANKS) */
     --copper: #f0b48c, #c27a4a, #7a4524;
@@ -5376,6 +5378,12 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     border-color: rgba(150, 180, 240, 0.5);
 }
 
+.player-chip.blocked {
+    color: var(--muted);
+    border-color: var(--muted);
+    border-style: dashed;
+}
+
 .player-chip.fallen,
 .player-chip.war {
     color: #ffd2c8;
@@ -5393,6 +5401,63 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 .party-everyone-note {
     margin-top: 10px;
+}
+
+/* What's said in the party and to the player, on screen a few seconds just above the quick actions
+   (where they rise in a fight), then faded (hud.js chatLine: Game options' Party chat on screen):
+   a few short lines, the newest at the foot, never in the way of a tap */
+#hud .chatfeed {
+    position: absolute;
+    left: 50%;
+    bottom: calc(var(--safe-bottom) + 12px + var(--quick-height) + 10px);
+    width: min(420px, calc(100% - var(--safe-left) - var(--safe-right) - 24px));
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.chatfeed-line {
+    max-width: 100%;
+    padding: 2px 9px;
+    border-radius: 8px;
+    background: rgba(12, 10, 8, 0.6);
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.35;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    animation: chatfeed-fade var(--chatfeed-life, 6s) linear forwards;
+}
+
+.chatfeed-name {
+    color: var(--gold-bright);
+    font-weight: 600;
+}
+
+.chatfeed-line.mine .chatfeed-name {
+    color: var(--ally);
+}
+
+.chatfeed-line.dm .chatfeed-name {
+    color: var(--whisper);
+}
+
+@keyframes chatfeed-fade {
+    0%,
+    80% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
 }
 
 /* The party menu's World button, in its header (a world on a server: main.js openWorldPanel) */
@@ -5493,6 +5558,30 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     color: var(--muted);
     font-style: italic;
     font-size: 13px;
+}
+
+/* A direct message, to or from one player (app/partypanel.js #chat): violet, theirs and the player's alike */
+.chat-line.dm .chat-name,
+.chat-line.dm.mine .chat-name {
+    color: var(--whisper);
+}
+
+.chat-line.dm .chat-text {
+    color: #e6dcff;
+}
+
+/* Whom the Chat's line goes to: the party, or one player */
+.chat-to {
+    flex: none;
+    max-width: 38%;
+    min-height: 40px;
+    padding: 0 8px;
+    border-radius: 9px;
+    border: 1px solid var(--field-border);
+    background: rgba(0, 0, 0, 0.25);
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
 }
 
 .chat-quick {
@@ -6148,6 +6237,28 @@ dialog#worldmap::backdrop {
 }
 
 .worldmap-note[hidden] {
+    display: none;
+}
+
+/* What an icon on the world map is, over it (app/worldmap.js TIP: the mouse over it, or tapped) */
+.worldmap-tip {
+    position: absolute;
+    z-index: 2;
+    margin: 0;
+    padding: 4px 10px;
+    max-width: min(280px, calc(100vw - 32px));
+    border-radius: 9px;
+    border: 1px solid var(--panel-border);
+    background: rgba(20, 14, 8, 0.92);
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.35;
+    text-align: center;
+    transform: translate(-50%, calc(-100% - 6px));
+    pointer-events: none;
+}
+
+.worldmap-tip[hidden] {
     display: none;
 }
 
@@ -7138,6 +7249,19 @@ dialog.characters {
 .character-list .character:hover {
     background: rgba(255, 244, 220, 0.12);
     border-color: rgba(220, 180, 106, 0.5);
+}
+
+/* (The players blocked: Game options, Chat and players. Each says who; only Unblock's pressed) */
+.blocked-list .character,
+.blocked-list .character:hover {
+    cursor: default;
+    background: var(--field);
+    border-color: var(--field-border);
+}
+
+.blocked-list .button {
+    flex: none;
+    align-self: center;
 }
 
 .character-list .name {

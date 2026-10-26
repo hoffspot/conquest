@@ -189,16 +189,13 @@ describe("the battle map (app/battlemap.js battleMapView)", () => {
     });
 });
 
-describe("the camps' scouts lifting the fog (host.js)", () => {
-    it("uncovers on their people's players' maps what each camp of theirs that's up sees, at each turn of the war; not what the enemy's camps see", () => {
+describe("the camps' scouts lifting the fog (host.js #tableRead)", () => {
+    it("leaves the player's own maps alone at each turn of the war and as a player comes in: where the scouts are is the war table's to show", () => {
         const { host, war } = hosted();
         const explored = host.players.get(HOST_PLAYER).explored;
         const seat = war.town(war.realm("orc").seat);
         const camp = camped(war, "human", off(seat.at, 0, 280));
-        const theirs = camped(war, "orc", off(seat.at, 0, -900));
         const seen = (at) => explored.visitedAt(at[0], at[1]);
-
-        assert.ok(!seen(camp.at) && !seen(off(camp.at, 200, 0)) && !seen(theirs.at), "not yet");
 
         war.clock = TURN_MS - 100;
 
@@ -208,20 +205,52 @@ describe("the camps' scouts lifting the fog (host.js)", () => {
             events.push(...host.advance(STEP_MS));
         }
 
-        assert.ok(seen(camp.at) && seen(off(camp.at, 200, 0)) && seen(off(camp.at, 0, -200)), "round the camp");
-        assert.ok(!seen(off(camp.at, 0, SIGHT.scout + 120)), "no further than its scout sees");
-        assert.ok(!seen(theirs.at), "not the enemy's");
-        assert.ok(events.some(({ type, id, scouted }) => type === "explored" && id === HOST_PLAYER && scouted));
+        assert.ok(events.some(({ type }) => type === "turn"), "(a turn of the war gone by)");
+        assert.ok(!seen(camp.at) && !seen(off(camp.at, 200, 0)));
+        assert.ok(!events.some(({ type, scouted }) => type === "explored" && scouted));
+
+        // (Nor as a player comes in)
+        const world = buildWorld({ seed: 2 });
+        const later = new Host(world, { populate: false });
+        const theirs = camped(later.war, "human", off(later.war.town(later.war.realm("orc").seat).at, 0, 280));
+        const player = later.join({ id: HOST_PLAYER, hero: HERO });
+
+        assert.ok(!player.explored.visitedAt(theirs.at[0], theirs.at[1]));
+        assert.ok(battleMapView(war, "human").sight.some(({ kind, x, z }) => kind === "scout" && x === camp.at[0] && z === camp.at[1]), "(the war table shows what they see still: battlemap.js)");
     });
 
-    it("uncovers it as a player comes in", () => {
-        const world = buildWorld({ seed: 2 });
-        const host = new Host(world, { populate: false });
-        const seat = host.war.town(host.war.realm("orc").seat);
-        const camp = camped(host.war, "human", off(seat.at, 0, 280));
-        const player = host.join({ id: HOST_PLAYER, hero: HERO });
+    it("uncovers on a Knight's own maps, as they read the war table, what its scouts see and where their side's towns and forts stand; not the enemy's, nor anything for one who may not read it", () => {
+        const { host, war } = atTheTable(OPENS.table);
+        const explored = host.players.get(HOST_PLAYER).explored;
+        const seen = (at) => explored.visitedAt(at[0], at[1]);
+        const orcs = war.town(war.realm("orc").seat);
+        const camp = camped(war, "elf", off(orcs.at, 0, 280));
+        const theirs = camped(war, "orc", off(orcs.at, 0, -900));
+        const elves = war.towns.filter(({ owner }) => owner === "elf");
+        const fort = { id: "fort-900", kind: "tower", realm: "elf", at: off(elves.at(-1).at, 300, 300), hp: 1 };
+        const enemyFort = { id: "fort-901", kind: "tower", realm: "orc", at: off(orcs.at, -400, 0), hp: 1 };
+        const read = () => host.command(HOST_PLAYER, { type: "table", read: true });
 
-        assert.ok(player.explored.visitedAt(camp.at[0], camp.at[1]));
+        war.forts.push(fort, enemyFort);
+        assert.ok(!seen(camp.at) && !seen(fort.at) && !seen(enemyFort.at), "not yet");
+
+        // (A Retainer may not read it: nothing uncovered)
+        host.players.get(HOST_PLAYER).standing.points = STANDINGS[OPENS.table - 1].points;
+        assert.equal(read().reason, "rank");
+        assert.ok(!seen(camp.at));
+
+        // A Knight reads it: round their camp, as far as its scout sees; their towns and fort; not the enemy's
+        host.players.get(HOST_PLAYER).standing.points = STANDINGS[OPENS.table].points;
+
+        const events = [];
+
+        assert.equal(read().ok, true);
+        events.push(...host.advance(STEP_MS));
+        assert.ok(seen(camp.at) && seen(off(camp.at, 200, 0)) && seen(off(camp.at, 0, -200)), "round the camp");
+        assert.ok(!seen(off(camp.at, 0, SIGHT.scout + 120)), "no further than its scout sees");
+        assert.ok(elves.every(({ at }) => seen(at)) && seen(fort.at), "their side's towns and forts");
+        assert.ok(!seen(theirs.at) && !seen(enemyFort.at), "not the enemy's");
+        assert.ok(events.some(({ type, id, scouted }) => type === "explored" && id === HOST_PLAYER && scouted));
     });
 });
 
