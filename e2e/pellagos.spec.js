@@ -141,6 +141,13 @@ async function playUntil(page, done, { seconds = 30, realTime = false } = {}) {
     return page.evaluate(done);
 }
 
+// The first message the player's been told lately that `pattern` matches, or null: read from those
+// kept for the journal (journal.js keepMessage), not the banner, which another told just after
+// takes over (as a battle's turns are told), so a look between the two would miss it
+async function toldOf(page, pattern) {
+    return page.evaluate(([source, flags]) => window.pellagos.game.messages.map(({ text }) => text).find((text) => new RegExp(source, flags).test(text)) ?? null, [pattern.source, pattern.flags]);
+}
+
 // Where a spot so many metres north of the player is on the screen
 async function spotNorth(page, metres) {
     return page.evaluate((metres) => {
@@ -16238,13 +16245,13 @@ test("the Behemoth of the Rift against the town: its roar heard twice where it c
         game.host.command(game.me, { type: "budget", invasion: least });
         game.invade("behemoth");
     }, SIZE.least);
-    expect(await playUntil(page, () => window.pellagos.game.host.invasions.length > 0 && /Behemoth/.test(document.querySelector("#banner").textContent))).toBe(true);
+    expect(await playUntil(page, () => window.pellagos.game.host.invasions.length > 0 && window.pellagos.game.messages.some(({ text }) => /Behemoth/.test(text)))).toBe(true);
 
     const coming = await page.evaluate(() => {
         const { game } = window.pellagos;
         const [invasion] = game.host.invasions;
 
-        return { band: invasion.band, defenders: invasion.defenders.length, invaders: invasion.invaders.length, roars: window.voices.filter(([creature, what]) => creature === "kaiju" && what === "call"), told: document.querySelector("#banner").textContent };
+        return { band: invasion.band, defenders: invasion.defenders.length, invaders: invasion.invaders.length, roars: window.voices.filter(([creature, what]) => creature === "kaiju" && what === "call"), told: game.messages.map(({ text }) => text).find((text) => / comes on the /.test(text)) ?? null };
     });
 
     // (Its soldiers, and its siege engines rolled out behind them)
@@ -16306,7 +16313,7 @@ test("the Behemoth of the Rift against the town: its roar heard twice where it c
     });
 
     expect(dealt).toBeGreaterThanOrEqual(30);
-    expect(await playUntil(page, () => /thanks you for the wounds you dealt the Behemoth, \d+% of its strength: \d+ gold/.test(document.querySelector("#banner").textContent))).toBe(true);
+    expect(await playUntil(page, () => window.pellagos.game.messages.some(({ text }) => /thanks you for the wounds you dealt the Behemoth, \d+% of its strength: \d+ gold/.test(text)))).toBe(true);
     await expect(page.locator("#bossbar")).toBeHidden();
 
     // (The townsfolk out of their doors again, the doors heard, about their business)
@@ -16353,8 +16360,8 @@ test("the houses the Behemoth of the Rift burns as a town falls: drawn burning, 
         }, at);
 
     expect(burnt.pieces).toHaveLength(3);
-    expect(await playUntil(page, () => /^Fire by the/.test(document.querySelector("#banner").textContent), { seconds: 2 })).toBe(true);
-    expect(await page.locator("#banner").textContent()).toMatch(/^Fire by the [a-z-]+ road! Three houses burning! Every hand to the buckets!/);
+    expect(await playUntil(page, () => window.pellagos.game.messages.some(({ text }) => /^Fire by the/.test(text)), { seconds: 2 })).toBe(true);
+    expect(await toldOf(page, /^Fire by the/)).toMatch(/^Fire by the [a-z-]+ road! Three houses burning! Every hand to the buckets!/);
 
     // Burning: its blocks built again, great fires in them lighting what's round them, and heard
     expect(await playUntil(page, () => window.pellagos.game.town.lights.filter(({ kind }) => kind === "blaze").length >= 3, { seconds: 20 })).toBe(true);
@@ -16382,8 +16389,8 @@ test("the houses the Behemoth of the Rift burns as a town falls: drawn burning, 
 
     // Whole again by the evening: let go of, the town told
     await goTo(ends.roofed + 1000);
-    expect(await playUntil(page, () => !window.pellagos.game.host.burnt.length && /stand whole again/.test(document.querySelector("#banner").textContent), { seconds: 5 })).toBe(true);
-    expect(await page.locator("#banner").textContent()).toMatch(/^The houses the Behemoth burnt in .+ stand whole again\./);
+    expect(await playUntil(page, () => !window.pellagos.game.host.burnt.length && window.pellagos.game.messages.some(({ text }) => /stand whole again/.test(text)), { seconds: 5 })).toBe(true);
+    expect(await toldOf(page, /stand whole again/)).toMatch(/^The houses the Behemoth burnt in .+ stand whole again\./);
     expect(await stageNow()).toEqual([]);
 });
 
@@ -16581,7 +16588,7 @@ test("an invasion's raiders felled by the player: thanked for them by the town a
     }, INVASION.reinforce.lasts);
 
     expect(felled).toBe(2);
-    expect(await playUntil(page, () => /thanks you for the 2 bandits you felled/.test(document.querySelector("#banner").textContent))).toBe(true);
+    expect(await playUntil(page, () => window.pellagos.game.messages.some(({ text }) => /thanks you for the 2 bandits you felled/.test(text)))).toBe(true);
     expect(await playUntil(page, () => window.pellagos.game.host.invasions.length === 0, { seconds: 120 })).toBe(true);
 });
 
@@ -16616,7 +16623,7 @@ test("an invasion: the raiders' war horn blown twice where they come out, the to
         const { game, session } = window.pellagos;
         const [invasion] = game.host.invasions;
 
-        return { band: invasion.band, size: invasion.size, spared: invasion.spared.includes(game.me), horns: window.horns, music: session.sound.battle, told: document.querySelector("#banner").textContent };
+        return { band: invasion.band, size: invasion.size, spared: invasion.spared.includes(game.me), horns: window.horns, music: session.sound.battle, told: game.messages.map(({ text }) => text).find((text) => /^Bandits on the /.test(text)) ?? null };
     });
 
     expect(coming).toMatchObject({ band: "bandits", spared: true, music: true });
@@ -16679,7 +16686,7 @@ test("an invasion: the raiders' war horn blown twice where they come out, the to
     await expect(thanks).toContainText("from the armoury");
     expect(await page.evaluate(() => window.horns)).toEqual([["townHorn", 0.4, false]]);
     expect(await page.evaluate(() => window.pellagos.game.progress.gold)).toBeGreaterThan(gold + REWARD.purse);
-    await expect(page.locator("#banner")).toContainText("The bandits are cut down to the last before");
+    await expect.poll(() => toldOf(page, /^The bandits are cut down to the last before /)).not.toBeNull();
 
     await thanks.getByRole("button", { name: "With thanks" }).click();
     await expect(thanks).toBeHidden();
@@ -16741,31 +16748,61 @@ test("an invasion's two lines charge each other once near: the raiders' horn fro
     ]);
     expect(charging.running).toBeGreaterThan(charging.fighters * 0.8);
 
-    // Ten seconds from the first blow: those who fight up close in the press, few standing in
-    // their ranks with an enemy near
-    expect(await playUntil(page, () => {
-        const [invasion] = window.pellagos.game.host.invasions;
+    // The lines met (a quarter of either's close fighters within 3 m of a foe: not a few sent on
+    // ahead to try them), and their press formed, two seconds on. (Not timed from the first blow: that's the archers' volley, some
+    // seconds before the lines meet, and the outnumbered line's soon cut down once they have)
+    await page.evaluate(([close]) => {
+        window.lineFighters = () => {
+            const { game } = window.pellagos;
+            const [invasion] = game.host.invasions;
+            const bodies = new Set(invasion.engagement.sides.flatMap(({ bodies: each }) => each.filter(({ part }) => ["left", "centre", "right"].includes(part)).map(({ formation }) => formation)));
+            const standing = (ids) => ids.map((id) => game.battle.actor(id)).filter((one) => one && !one.dead);
 
-        return invasion.fightAt !== null && window.pellagos.game.battle.time - invasion.fightAt >= 10000;
-    }, { seconds: 40 })).toBe(true);
+            return [
+                [invasion.invaders, invasion.defenders],
+                [invasion.defenders, invasion.invaders],
+            ].map(([ours, theirs]) => ({ fighters: standing(ours).filter((one) => close.includes(game.host.soldiers.get(one.id).role) && bodies.has(one.formation?.id)), foes: standing(theirs) }));
+        };
+    }, [INVASION.close]);
+    expect(
+        await playUntil(
+            page,
+            () => window.lineFighters().some(({ fighters, foes }) => fighters.filter((one) => foes.some((foe) => Math.hypot(foe.x - one.x, foe.y - one.y) <= 3)).length >= fighters.length / 4),
+            { seconds: 40 },
+        ),
+    ).toBe(true);
+    await playUntil(page, () => false, { seconds: 2 });
 
-    const press = await page.evaluate(([close, sight]) => {
-        const { game } = window.pellagos;
-        const [invasion] = game.host.invasions;
-        const bodies = new Set(invasion.engagement.sides.flatMap(({ bodies: each }) => each.filter(({ part }) => ["left", "centre", "right"].includes(part)).map(({ formation }) => formation)));
-        const standing = (ids) => ids.map((id) => game.battle.actor(id)).filter((one) => one && !one.dead);
-        const near = (one, foes, within) => foes.some((foe) => Math.hypot(foe.x - one.x, foe.y - one.y) <= within);
+    // A second and a half of it, a look each half second: those who fight up close in the press,
+    // and few standing in their ranks with an enemy near all that while (one between foes, its
+    // last just cut down, looks for the next a moment after: battle.js RETHINK_MS)
+    const looks = [];
 
-        return [[invasion.invaders, invasion.defenders], [invasion.defenders, invasion.invaders]].map(([ours, theirs]) => {
-            const fighters = standing(ours).filter((one) => close.includes(game.host.soldiers.get(one.id).role) && bodies.has(one.formation?.id));
-            const foes = standing(theirs);
+    for (let k = 0; k < 4; k++) {
+        if (k > 0) {
+            await playUntil(page, () => false, { seconds: 0.5 });
+        }
 
-            return { fighters: fighters.length, thick: fighters.filter((one) => near(one, foes, 3)).length, idle: fighters.filter((one) => one.target === null && near(one, foes, sight)).length };
-        });
-    }, [INVASION.close, INVASION.charge.sight]);
+        looks.push(
+            await page.evaluate(
+                (sight) =>
+                    window.lineFighters().map(({ fighters, foes }) => {
+                        const near = (one, within) => foes.some((foe) => Math.hypot(foe.x - one.x, foe.y - one.y) <= within);
 
-    for (const side of press) {
-        expect(side.thick).toBeGreaterThanOrEqual(side.fighters * 0.5);
-        expect(side.idle).toBeLessThanOrEqual(side.fighters * 0.2);
+                        return { fighters: fighters.length, thick: fighters.filter((one) => near(one, 3)).length, idle: fighters.filter((one) => one.target === null && near(one, sight)).map(({ id }) => id) };
+                    }),
+                INVASION.charge.sight,
+            ),
+        );
+    }
+
+    for (const side of [0, 1]) {
+        const standing = looks[0][side].idle.filter((id) => looks.every((look) => look[side].idle.includes(id)));
+
+        for (const look of looks) {
+            expect(look[side].thick, JSON.stringify(looks)).toBeGreaterThanOrEqual(look[side].fighters * 0.5);
+        }
+
+        expect(standing.length, JSON.stringify(looks)).toBeLessThanOrEqual(looks[0][side].fighters * 0.2);
     }
 });
