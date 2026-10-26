@@ -3960,11 +3960,32 @@ its far two-thirds: `LOOK`), where the player is going, the enemies (red dots, t
 player has gone into and each place worth finding round them (below), the party's pings out in
 the world (docs/WAR.md *Parties*: a green dot with rings swelling out from it; further than it
 shows, smaller, at its edge the way it is, as the wild's elites are), the player's markers in its
-view (*The world map*), and the player (an arrowhead pointing the way they face). A tap on it walks
+view (*The world map*), the other players in their party (*Each in their own colour*, below), and
+the player (an arrowhead pointing the way they face). A tap on it walks
 the player there, or fights an enemy within 12 pixels of the tap; a double tap runs; holding it
 (0.55 s, without moving) opens the world map. Inside, each floor is painted from its plan: the
 floor, walls, furniture in its colours, the stairs' treads, round barrels, the hearth's fire and
 the doorway; only those on the same floor as the player are shown.
+
+**Each in their own colour** (app/mapicons.js `PARTY_COLOURS`, `partyColour`; app/game.js
+`partyView`). The other players in a party (not followers, hired adventurers nor creatures called:
+those stay green) each have a colour of their own by their place in it, the order they joined, the
+same for each of them: violet, orange, pink and lime (none of them an ally's green, anyone else's
+light blue, an enemy's red or an elite's gold). On the minimap each is a dot in it, however far off
+(not only those drawn, within 160 metres); further than it shows, a badge with their initial at
+its edge the way they are, an arrow's point out of it (`drawPartyMember`, `PARTY_MARK`), and one
+inside a building or down in a dungeon where its door is. A tap on a badge says who it is, where
+and which way ("Bryn, in Wenches and Ale: 120 m north-east"), rather than walking there. Their
+icon in the party's column is framed in it, their initial in it (`--member-colour`), and the
+party menu shows it by their name.
+
+**Battles near** (app/game.js `battleView`; app/mapicons.js `drawBattleArrow`, `drawCommander`;
+docs/WAR.md *Battles*). Out in the world, over the dots: an arrow from each body of a battle that's
+charging, wheeling round a flank, sent in or sent to try the enemy's line, to where it's going, the
+red of the player's enemies or the green of the rest, rimmed dark; and at each commander standing,
+a crown of gold on a disc of the same (those drawn kept for tests: `battles`). A commander's bar
+over their head is edged and named in gold, as an elite's; a standard-bearer's name is under a
+gold pennant (app/hud.js `track` `rank`).
 
 **Folded into a compass.** A round button over the minimap's top left corner (`#minimapfold`, 30
 pixels) is a compass too: its needle (`#minimapneedle`, red to the north) turns with the camera as the
@@ -4383,7 +4404,10 @@ same button holds the war's key.
   first say who under their icons, 3 metres to a pixel or closer ("found by Bryn", in the party's
   pale green). The party's pings are drawn as they come, fog or no, each a green dot with two rings
   swelling out from it over and over (app/mapicons.js `drawPing`), who made it under it, kept
-  moving while there are any. Its ping button (rings round a dot, over the pin's: only in a
+  moving while there are any. The other players in the party are each a pin where they are, fog
+  or no, in their own colour (*The minimap*), their name under it in it, and one inside somewhere
+  at its door, where they are under that ("in Wenches and Ale"): `drawPartyPin`, drawn again
+  every 0.4 s while the map's open (`PARTY_REDRAW`). Its ping button (rings round a dot, over the pin's: only in a
   party) makes the next tap a ping (`pingMode`, the bar at the top saying so, ringed green till
   then; Cancel or the button again calls it off), said: "Pinged: your party sees it on their
   maps, and a column of green light there".

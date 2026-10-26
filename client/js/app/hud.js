@@ -340,11 +340,13 @@ export class Hud {
     /**
      * Show a bar over another character (hostile ones in red; a fortification's, `kind` "fort",
      * or a camp's stakes hacked at, "stakes", broader and heavier, as strong as it stands; one of
-     * the wild's elites', core/creatures.js ELITES, edged and named in gold).
+     * the wild's elites', core/creatures.js ELITES, or a battle's commander, core/engagement.js,
+     * `rank` "commander", edged and named in gold; a standard-bearer's, "standard", their name
+     * under a pennant).
      */
-    track(id, { name, hp, maxHp, stamina = maxHp, maxStamina = maxHp, hostile = true, wild = null, kind = null, ally = false }) {
+    track(id, { name, hp, maxHp, stamina = maxHp, maxStamina = maxHp, hostile = true, wild = null, kind = null, ally = false, rank = null }) {
         const level = wild?.tier ?? null;
-        const plate = element("div", `floater plate${hostile ? " hostile" : ""}${ally ? " ally" : ""}${kind === "fort" || kind === "stakes" ? " fort" : ""}${wild?.elite ? " elite" : ""}`);
+        const plate = element("div", `floater plate${hostile ? " hostile" : ""}${ally ? " ally" : ""}${kind === "fort" || kind === "stakes" ? " fort" : ""}${wild?.elite || rank === "commander" ? " elite" : ""}${rank === "standard" ? " standard" : ""}`);
         const bar = element("div", "bar");
         const breath = element("div", "bar stamina");
 
@@ -890,7 +892,8 @@ export class Hud {
      * The icons down the left side of the screen, under the minimap and the Party button (over the
      * thumb stick, if it's shown), for the player's party, in order (none: gone): [{ id, name, hp, maxHp, kind, ally,
      * waiting, away, left, picture, leader }] (`kind`: "player", "adventurer", "summon", "risen" or "unit";
-     * `leader`: a player leading the party, crowned;
+     * `leader`: a player leading the party, crowned; `colour`: a player's own in the party, their
+     * frame and initial in it (app/mapicons.js PARTY_COLOURS);
      * `ally`: the one the player's chosen to help, its frame glowing green; `waiting`: told to wait
      * where they are; `away`: not where the player is; `left`: a called creature's time, the share
      * of it left, or null; `picture` as attackers'). As many as fit (partyFit), shrunk to, then a
@@ -923,10 +926,10 @@ export class Hud {
             column.style.setProperty("--member-size", `${size}px`);
         }
 
-        showing.forEach(({ id, name, hp, maxHp, kind, ally = false, waiting = false, away = false, left = null, picture = null, leader = false }, k) => {
+        showing.forEach(({ id, name, hp, maxHp, kind, ally = false, waiting = false, away = false, left = null, picture = null, leader = false, colour = null }, k) => {
             const icon = this.partyIcons.get(id) ?? this.#memberIcon(id);
             const health = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
-            const look = `${kind}|${ally}|${waiting}|${away}|${name}|${leader}`;
+            const look = `${kind}|${ally}|${waiting}|${away}|${name}|${leader}|${colour}`;
 
             // (Under the Party button)
             if (column.children[k + 1] !== icon.root) {
@@ -938,6 +941,12 @@ export class Hud {
                 icon.look = look;
                 icon.root.className = `member ${kind}${ally ? " ally" : ""}${waiting ? " waiting" : ""}${away ? " away" : ""}${leader ? " leader" : ""}${icon.painted ? " painted" : ""}`;
                 icon.initial.textContent = name.slice(0, 1).toUpperCase();
+
+                if (colour) {
+                    icon.root.style.setProperty("--member-colour", colour);
+                } else {
+                    icon.root.style.removeProperty("--member-colour");
+                }
                 icon.root.setAttribute("aria-label", `${name}, ${leader ? "leading your party" : (PARTY_KINDS[kind] ?? PARTY_KINDS.unit)}${waiting ? ", waiting" : ""}${ally ? ", chosen to help" : ""}`);
                 icon.root.setAttribute("aria-pressed", String(ally));
             }

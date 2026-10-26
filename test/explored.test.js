@@ -52,6 +52,35 @@ describe("what the player's found (explored.js)", () => {
         assert.ok(explored.sighted(-10, -10) && explored.sighted(1, 1));
     });
 
+    it("takes in what another of the player's party found before they were in it: the land, the buildings, the places seen from high ground and the homes tracked; not the signs, rings or portals", () => {
+        const mine = new Explored();
+        const theirs = new Explored({ portals: ["guild-2"], signs: ["sign-1"], rings: ["ring-1"] });
+
+        mine.visit(CHUNK * 3 + 1, CHUNK * 4 + 1);
+        theirs.visit(CHUNK * 3 + 1, CHUNK * 4 + 1);
+        theirs.visit(CHUNK * 10 + 1, CHUNK * 12 + 1);
+        theirs.visit(CHUNK * 11 + 1, CHUNK * 12 + 1);
+        theirs.enter("home:tavern");
+        theirs.spot("castle-3");
+        theirs.track("camp-9");
+
+        const before = mine.version;
+
+        assert.deepEqual(mine.merge(theirs), { chunks: 2, entered: ["home:tavern"], spotted: ["castle-3"], tracked: ["camp-9"] });
+        assert.ok(mine.version > before);
+        assert.ok(mine.isVisited(10, 12) && mine.isVisited(11, 12) && mine.isVisited(3, 4));
+        assert.equal(mine.chunksVisited, 3);
+        assert.ok(mine.hasEntered("home:tavern") && mine.knows("castle-3", 0, 0) && mine.tracked.has("camp-9"));
+        assert.equal(mine.portals, null);
+        assert.equal(mine.signs.size + mine.rings.size, 0);
+
+        // (Again: nothing new)
+        const again = mine.version;
+
+        assert.deepEqual(mine.merge(theirs), { chunks: 0, entered: [], spotted: [], tracked: [] });
+        assert.equal(mine.version, again);
+    });
+
     it("is kept and read back just as it was", () => {
         const explored = new Explored();
 

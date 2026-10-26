@@ -1,4 +1,5 @@
 import { STEP_MS } from "../client/js/core/battle.js";
+import { PARTY_COLOURS } from "../client/js/app/mapicons.js";
 import { SIZE } from "../client/js/core/invasions.js";
 import { MOTION } from "../client/js/core/motion.js";
 import { expect, test } from "./fixtures.js";
@@ -796,7 +797,7 @@ test("two players make a party: one asks from the party menu, the other says no,
     await expect(menu.locator('.party-players .party-player[data-id="guest-1"]').getByRole("button", { name: "Make leader" })).toBeVisible();
     await menu.getByRole("button", { name: "Close" }).click();
 
-    // Each has the other's icon at the top of their party, gold-framed; the leader crowned
+    // Each has the other's icon at the top of their party, framed in their colour; the leader crowned
     await expect(host.locator("#party .member").first()).toHaveAttribute("data-id", "guest-1", { timeout: 30000 });
     await expect(host.locator('#party .member[data-id="guest-1"]')).toHaveClass(/\bplayer\b/);
     await expect(host.locator('#party .member[data-id="guest-1"]')).not.toHaveClass(/\bleader\b/);
@@ -1430,3 +1431,104 @@ test("a world joined in the thick of an invasion: the guest's game holds no more
     await guestContext.close();
 });
 
+test("two players in a party on the maps: what each had found before is the other's as they join, told; on the minimap the other's a dot in their own colour, as on their icon, and far off a badge at its edge with their initial and an arrow the way they are, tapped to say who and where; on the world map a pin with their name", async ({ ownBrowser: browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), BRYN);
+    await host.goto("/?play&seed=2");
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(guest);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+
+    // (Bryn had been somewhere Ada hasn't, far off: the same in both worlds)
+    const far = await host.evaluate(() => {
+        const me = window.pellagos.game.battle.actor("player");
+
+        return [me.x + 64 * 12 + 32, me.y + 32];
+    });
+
+    for (const page of [host, guest]) {
+        await page.evaluate(([x, y]) => window.pellagos.game.host.players.get("guest-1").explored.visit(x, y), far);
+    }
+
+    expect(await host.evaluate(([x, y]) => window.pellagos.game.explored.visitedAt(x, y), far)).toBe(false);
+
+    // Asked and joined: Bryn's map Ada's too, and told so
+    const menu = host.getByRole("dialog", { name: "Party" });
+    const asking = menu.locator('.party-others .party-player[data-id="guest-1"] .party-invite');
+    const asked = guest.getByRole("dialog", { name: /asks you to join their party\./ });
+
+    await host.locator("#partybutton").click();
+    await asking.click();
+    await expect(asked).toBeVisible({ timeout: 30000 });
+    await asked.getByRole("button", { name: "Accept" }).click();
+    await expect(menu.locator('.party-players .party-player[data-id="guest-1"] .party-swatch')).toHaveAttribute("style", /background/, { timeout: 30000 });
+    await menu.getByRole("button", { name: "Close" }).click();
+
+    for (const page of [host, guest]) {
+        await page.waitForFunction(([x, y]) => window.pellagos.game.host.players.get("player").explored.visitedAt(x, y), far, { timeout: 30000, polling: 250 });
+    }
+
+    expect(await host.evaluate(([x, y]) => window.pellagos.game.explored.visitedAt(x, y), far)).toBe(true);
+    await host.waitForFunction(() => window.pellagos.game.messages.some((message) => (message.text ?? String(message)).startsWith("Bryn's map is yours too: ")), null, { timeout: 30000, polling: 250 });
+
+    // On the minimap, each the other in their own colour (their place in the party: Ada first,
+    // Bryn second), as their icon's framed
+    await host.waitForFunction(() => window.pellagos.game.minimap.party?.length === 1, null, { timeout: 30000, polling: 250 });
+    expect(await host.evaluate(() => ({ drawn: window.pellagos.game.minimap.party.map(({ id, edge }) => ({ id, edge })), view: window.pellagos.game.partyView().map(({ id, name, colour }) => ({ id, name, colour })) }))).toEqual({ drawn: [{ id: "guest-1", edge: false }], view: [{ id: "guest-1", name: "Bryn", colour: PARTY_COLOURS[1] }] });
+    expect(await guest.evaluate(() => window.pellagos.game.partyView().map(({ id, colour }) => ({ id, colour })))).toEqual([{ id: "player", colour: PARTY_COLOURS[0] }]);
+    await expect(host.locator('#party .member[data-id="guest-1"]')).toHaveAttribute("style", new RegExp(`--member-colour: ${PARTY_COLOURS[1]}`), { timeout: 30000 });
+
+    // Bryn runs off west, past what the minimap shows: at its edge, the way Bryn is
+    await guest.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+
+        game.mapTap({ x: me.x - 110, z: me.y, run: true });
+    });
+    await host.waitForFunction(() => window.pellagos.game.minimap.party?.[0]?.edge === true, null, { timeout: 90000, polling: 250 });
+
+    // Tapped there: who it is, and which way
+    const badge = await host.evaluate(() => {
+        const { minimap } = window.pellagos.game;
+        const rect = minimap.canvas.getBoundingClientRect();
+        const [{ x, y }] = minimap.party;
+
+        return [rect.left + x, rect.top + y, x < rect.width / 2];
+    });
+
+    expect(badge[2], "(west: on the left)").toBe(true);
+    await host.mouse.click(badge[0], badge[1]);
+    await expect(host.locator("#banner")).toContainText(/Bryn: .*west/, { timeout: 10000 });
+
+    // On the world map: Bryn's pin, with Bryn's name
+    await host.keyboard.press("m");
+    await host.waitForFunction(() => document.querySelector("#worldmap").open && window.pellagos.worldMap?.drawn?.party?.includes("guest-1"), null, { timeout: 30000, polling: 250 });
+
+    await hostContext.close();
+    await guestContext.close();
+});

@@ -15,6 +15,10 @@ let BANDS;
 let BEHEMOTH;
 let BEHEMOTH_REWARD;
 let ENGINES;
+let COMMANDER;
+let JOB;
+let TROPHY;
+let FIELD;
 let FORMATION;
 let behemothReward;
 let behemothSides;
@@ -66,6 +70,7 @@ before(async () => {
     ({ RIFT } = await import("../client/js/core/creatures.js"));
     ({ DAY } = await import("../client/js/core/daytime.js"));
     ({ FORMATION, ROLES } = await import("../client/js/core/formation.js"));
+    ({ COMMANDER, FIELD, JOB, TROPHY } = await import("../client/js/core/engagement.js"));
     ({ BUDGET, InvasionBudget } = await import("../client/js/app/budget.js"));
     ({ OPENINGS } = await import("../client/js/core/crying.js"));
     ({ BOMBS, FOE_MS, KINDS, STEP_MS } = await import("../client/js/core/battle.js"));
@@ -101,7 +106,8 @@ const standing = (host, ids) => ids.filter((id) => !host.battle.actor(id)?.dead)
 
 // The player struck a raider: it set on, held beside them (it'd go back to its place in its line,
 // as it's no enemy of theirs yet) and played on till they've landed a blow on it (`fell`: it
-// falls to it)
+// falls to it). Whether they did: one felled by another first (the town's soldiers range about
+// the player as its bodies wheel and break: core/engagement.js), not
 function strike(game, id, { fell = false } = {}) {
     const { host, me } = game;
     const raider = host.battle.actor(id);
@@ -118,7 +124,11 @@ function strike(game, id, { fell = false } = {}) {
         game.events.push(...events.filter(({ type }) => type === "invasion"));
 
         if (events.some((event) => event.type === (fell ? "death" : "hit") && event.id === id && event.by === HOST_PLAYER)) {
-            return;
+            return true;
+        }
+
+        if (fell && events.some((event) => event.type === "death" && event.id === id)) {
+            return false;
         }
     }
 
@@ -448,28 +458,33 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         }
     });
 
-    it("charges once its lines are near: both run at each other and meet between them, everyone of either side who fights up close going after the other, the archers shooting from their line; few standing in their ranks with an enemy near", () => {
+    it("charges once its lines are near, the town's halting first while its archers loose: both run at each other and meet between them, everyone of either side who fights up close going after the other; few of their lines standing in their ranks with an enemy near", () => {
         const game = inTown({ invasion: { clock: INVASION.first } });
         const { host } = game;
 
         play(game, INVASION.settleFirst + 2000, () => host.invasions.length > 0);
 
         const [invasion] = host.invasions;
+        const { engagement } = invasion;
+        // (Their lines' centres: core/engagement.js)
         const [theirs, ours] = [host.battle.formations[invasion.formations.invaders], host.battle.formations[invasion.formations.defenders]];
         const apart = () => Math.hypot(theirs.anchor[0] - ours.anchor[0], theirs.anchor[1] - ours.anchor[1]);
         const charges = [];
         let before = null;
+        let halted = null;
 
-        // (Marching on each other, till they're near)
+        // (Marching on each other, till they're near; halting while the town's archers loose)
         for (let k = 0; k < 4000 && invasion.charged === null; k++) {
             before = { apart: apart(), speeds: [theirs.speed, ours.speed], raiders: [...theirs.anchor] };
             charges.push(...host.advance(STEP_MS).filter(({ type, change }) => type === "invasion" && change === "charge"));
+            halted ??= engagement.phase === "volley" ? { at: host.battle.time, apart: apart() } : null;
         }
 
         assert.ok(invasion.charged !== null, "they charged");
-        assert.ok(before.apart > INVASION.charge.at && apart() <= INVASION.charge.at, `${before.apart.toFixed(1)} m apart, then ${apart().toFixed(1)}`);
+        assert.ok(halted && halted.apart <= FIELD.volley.at + 1, `halted ${halted?.apart.toFixed(1)} m apart`);
+        assert.ok(invasion.charged - halted.at >= FIELD.volley.ms, "the archers loosing a while first");
         assert.deepEqual(before.speeds, [BANDS.bandits.march, INVASION.march], "marching till then");
-        assert.deepEqual([theirs.charge, ours.charge, theirs.speed, ours.speed], [true, true, INVASION.charge.speed, INVASION.charge.speed], "both charging, at a run");
+        assert.deepEqual([theirs.charge, ours.charge, theirs.speed, ours.speed], [true, true, FIELD.charge.speed, FIELD.charge.speed], "both charging, at a run");
         assert.equal(charges.length, 1, "the horns blown once");
         assert.deepEqual(charges[0].raiders, theirs.anchor);
         assert.deepEqual(charges[0].town, ours.anchor);
@@ -487,11 +502,12 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         assert.ok(Math.hypot(theirs.anchor[0] - before.raiders[0], theirs.anchor[1] - before.raiders[1]) > INVASION.charge.at / 4, "the raiders charged on");
         assert.ok(apart() <= INVASION.charge.gap + 0.5, `their fronts ${apart().toFixed(1)} m apart`);
 
-        // (From the first blow, those who fight up close in the thick of it, few of them standing
-        // in their ranks with an enemy near)
+        // (From the first blow, those of their lines who fight up close in the thick of it, few of
+        // them standing in their ranks with an enemy near; not those held back behind them)
         play(game, 30000, () => invasion.fightAt !== null && host.battle.time - invasion.fightAt >= 10000);
 
-        const standing = (ids) => ids.map((id) => host.battle.actor(id)).filter((one) => one && !one.dead && close(one.id));
+        const lines = new Set(engagement.sides.flatMap(({ bodies }) => bodies.filter(({ part }) => ["left", "centre", "right"].includes(part)).map(({ formation }) => formation)));
+        const standing = (ids) => ids.map((id) => host.battle.actor(id)).filter((one) => one && !one.dead && close(one.id) && lines.has(one.formation?.id));
         const [raiders, town] = [standing(invasion.invaders), standing(invasion.defenders)];
         const near = (one, foes, within) => foes.some((foe) => !foe.dead && Math.hypot(foe.x - one.x, foe.y - one.y) <= within);
         const enemies = (one) => (invasion.invaders.includes(one.id) ? invasion.defenders : invasion.invaders).map((id) => host.battle.actor(id)).filter(Boolean);
@@ -525,8 +541,7 @@ describe("an invasion in the world (core/host.js #invade)", () => {
                 [gold, points, merit] = [player.progress.gold, player.standing.points, player.standing.guild.merit];
             }
 
-            if (invasion.broke === null && raider && felled < Math.ceil(invasion.came * REWARD.big)) {
-                strike(game, raider, { fell: true });
+            if (invasion.broke === null && raider && felled < Math.ceil(invasion.came * REWARD.big) && strike(game, raider, { fell: true })) {
                 felled += 1;
             }
 
@@ -804,15 +819,20 @@ describe("the bands that invade (core/invasions.js BANDS, characters/soldiers.js
         assert.deepEqual([cultLine.charge, townLine.charge], [false, true]);
         assert.ok(Math.hypot(townLine.to[0] - cultLine.anchor[0], townLine.to[1] - cultLine.anchor[1]) <= INVASION.charge.gap + 1e-9, "on to its front");
 
+        // (Its jarl's household aside: core/engagement.js)
         const northmen = called("northmen");
-        const berserkers = northmen.invasion.invaders.map((id) => northmen.host.battle.actor(id)).filter((one) => northmen.host.soldiers.get(one.id).role === "heavy");
+        const household = (game, id) => game.host.soldiers.get(id).power !== undefined;
+        const berserkers = northmen.invasion.invaders.filter((id) => !household(northmen, id)).map((id) => northmen.host.battle.actor(id)).filter((one) => northmen.host.soldiers.get(one.id).role === "heavy");
 
         assert.ok(berserkers.length && berserkers.every((one) => one.leash === BANDS.northmen.leash.heavy && one.name === "Northern berserker"));
         assert.ok(northmen.invasion.invaders.some((id) => northmen.host.battle.actor(id).name === "Northern chieftain"));
+        assert.ok(northmen.invasion.invaders.some((id) => /^Jarl /.test(northmen.host.battle.actor(id).name)), "their jarl");
+        assert.ok(northmen.invasion.invaders.some((id) => northmen.host.battle.actor(id).name === "Northern huscarl"), "and huscarls");
 
         const sellswords = called("sellswords");
 
-        assert.ok(sellswords.invasion.invaders.every((id) => sellswords.host.battle.actor(id).armor === BANDS.sellswords.armor));
+        assert.ok(sellswords.invasion.invaders.filter((id) => !household(sellswords, id)).every((id) => sellswords.host.battle.actor(id).armor === BANDS.sellswords.armor));
+        assert.ok(sellswords.invasion.invaders.filter((id) => household(sellswords, id)).every((id) => sellswords.host.battle.actor(id).armor > BANDS.sellswords.armor), "their captain's household the better armoured");
         assert.equal(sellswords.host.command(HOST_PLAYER, { type: "invade", band: "pirates" }).ok, false, "only a band there is (and one at a time)");
     });
 
@@ -868,6 +888,199 @@ function clockTo(host, time) {
 
     Object.assign(host.war, { turn: Math.floor(elapsed / 60000), clock: elapsed % 60000 });
 }
+
+describe("an invasion fought as a battle (core/engagement.js; core/host.js #raiderSide, #townSide, #jobs, #trophy)", () => {
+    // A band's invasion called up in the start town, its battle and its sides
+    const battleOf = (band) => {
+        const game = inTown({ invasion: { seen: 1 } });
+
+        game.player.standing.register();
+        assert.deepEqual(game.host.command(HOST_PLAYER, { type: "invade", band }), { ok: true });
+
+        const [invasion] = game.host.invasions;
+
+        return { ...game, invasion, engagement: invasion.engagement, raiders: invasion.engagement.sides[0], town: invasion.engagement.sides[1] };
+    };
+    const line = ({ part }) => ["left", "centre", "right"].includes(part);
+
+    it("draws each side up in bodies across a wide front, its reserve and its commander's household behind; each commander foremost in their household, harder to bring down, a standard-bearer beside them; the town's bomb throwers behind its wings", () => {
+        const { host, invasion, raiders, town } = battleOf("northmen");
+        const members = (formation) => host.battle.actors.filter((actor) => !actor.dead && actor.formation?.id === formation);
+
+        assert.deepEqual(
+            raiders.bodies.map(({ part }) => part),
+            ["left", "centre", "right", "reserve", "vanguard"],
+        );
+        assert.deepEqual(
+            town.bodies.map(({ part }) => part),
+            ["left", "centre", "right", "reserve", "vanguard"],
+        );
+        assert.equal(
+            raiders.bodies.reduce((sum, { formation }) => sum + members(formation).length, 0),
+            invasion.invaders.length,
+        );
+        assert.equal(raiders.bodies.find(({ part }) => part === "centre").formation, invasion.formations.invaders, "its centre its line as it was");
+        assert.deepEqual(host.battle.formations[invasion.formations.invaders].layout, { wedge: true }, "the northmen's centre a wedge");
+
+        // (A front of more than forty metres: the town's line's three bodies abreast)
+        const middle = host.battle.formations[invasion.formations.defenders];
+        const across = town.bodies.filter(line).flatMap(({ formation }) => members(formation)).map((actor) => {
+            const [dx, dy] = [actor.x - middle.anchor[0], actor.y - middle.anchor[1]];
+
+            return dx * Math.cos(middle.facing) - dy * Math.sin(middle.facing);
+        });
+
+        assert.ok(Math.max(...across) - Math.min(...across) > 40, `${(Math.max(...across) - Math.min(...across)).toFixed(1)} m across`);
+
+        // (Their commanders and standard-bearers)
+        const [jarl, captain] = [raiders.commander, town.commander].map((id) => host.battle.actor(id));
+
+        assert.match(jarl.name, /^Jarl \w/);
+        assert.match(captain.name, /^Captain of the Guard \w/);
+
+        for (const [one, side] of [
+            [jarl, raiders],
+            [captain, town],
+        ]) {
+            assert.equal(one.maxHp, Math.round(KINDS.soldier.hp * COMMANDER.hp));
+            assert.equal(one.rank, "commander", "their plate in gold");
+            assert.ok(host.soldiers.get(one.id).commander);
+            assert.equal(one.formation.id, side.bodies.find(({ part }) => part === "vanguard").formation, "at the head of their household");
+            assert.equal(host.battle.actor(side.banner).rank, "standard");
+            assert.equal(host.battle.actor(side.banner).formation.id, one.formation.id);
+        }
+
+        assert.equal(host.battle.actor(raiders.banner).name, "Northern standard-bearer");
+
+        const bombers = invasion.defenders.filter((id) => host.battle.actor(id).weapon === BOMBERS.human.weapon);
+
+        assert.equal(bombers.length, 2 * sidesOf(INVASION.size).bombers);
+        assert.ok(bombers.every((id) => /:(left|right)$/.test(host.battle.actor(id).formation.id)), "behind its wings");
+    });
+
+    it("gives a player near the town's line a job as the lines charge, from the captain of its guard, and rewards it done; and a bounty and a trophy for felling the raiders' commander", () => {
+        const game = battleOf("sellswords");
+        const { host, me, player, invasion, engagement, raiders, town } = game;
+        const events = [];
+
+        // (By the town's line, as it charges)
+        for (let k = 0; k < 4000 && engagement.phase !== "melee"; k++) {
+            events.push(...host.advance(STEP_MS).filter(({ type }) => type === "engagement"));
+
+            const centre = host.battle.formations[invasion.formations.defenders];
+
+            if (k % 20 === 0 && centre) {
+                host.battle.place(HOST_PLAYER, "town", [Math.floor(centre.anchor[0]), Math.floor(centre.anchor[1])]);
+            }
+        }
+
+        for (let k = 0; k < 20; k++) {
+            events.push(...host.advance(STEP_MS).filter(({ type }) => type === "engagement"));
+        }
+
+        const job = engagement.jobs?.[HOST_PLAYER];
+        const given = events.find(({ change, player: who }) => change === "job" && who === HOST_PLAYER);
+
+        assert.ok(job && given, "given a job");
+        assert.equal(given.by, host.battle.actor(town.commander).name);
+        assert.equal(job.side, 1);
+        assert.ok(job.kind === "banner" ? job.target === raiders.banner : town.bodies.some(({ part }) => part === job.part));
+
+        // (Bidden bring down their standard-bearer, and done: away from the press, where none of
+        // the town's fell them first)
+        Object.assign(job, { kind: "banner", part: null, target: raiders.banner });
+        host.battle.place(HOST_PLAYER, "town", invasion.middle.map(Math.floor));
+
+        const [gold, merit] = [player.progress.gold, player.standing.guild.merit];
+
+        assert.ok(strike(game, raiders.banner, { fell: true }), "felled them");
+
+        const done = game.host.advance(STEP_MS).find(({ type, change }) => type === "engagement" && change === "jobDone") ?? null;
+
+        assert.ok(job.done !== null, "done");
+        assert.ok(player.progress.gold >= gold + JOB.gold);
+        assert.ok(player.standing.guild.merit >= merit + JOB.merit);
+        assert.equal(done, null, "told as it was done, not again");
+
+        // (Their commander felled: a bounty and a trophy, as fine as TROPHY says)
+        const before = player.progress.gold;
+
+        assert.ok(strike(game, raiders.commander, { fell: true }), "felled them");
+
+        // (A second on: the battle's looked at again since)
+        for (let t = 0; t < 1000; t += STEP_MS) {
+            host.advance(STEP_MS);
+        }
+
+        assert.ok(player.progress.gold >= before + TROPHY.bounty);
+        assert.ok(player.progress.pack.some((stack) => stack?.quality === TROPHY.quality), "the trophy in their pack");
+        assert.equal(engagement.sides[0].tactics, false, "the raiders without their tactics now");
+        assert.ok(me && !me.dead);
+    });
+
+    it("brings a band's invasion kept before battles were fought in bodies forward, each of its lines one body (SNAPSHOT_STEPS 40); a Behemoth's as it was", () => {
+        const band = { id: "invasion-3", band: "corsairs", people: "human", size: 50, mustered: 70, charged: 1000, exit: [10, 20], rally: [30, 40], middle: [0, 0], formations: { invaders: "invasion-3-invaders", defenders: "invasion-3-defenders" } };
+        const beast = { id: "invasion-4", band: BEHEMOTH.id, beast: "rift-1", formations: { invaders: "invasion-4-invaders", defenders: "invasion-4-defenders" } };
+        const forward = SNAPSHOT_STEPS[40]({ version: 40, battle: { time: 5000 }, invasions: [band, beast] });
+        const [{ engagement }, kept] = forward.invasions;
+
+        assert.equal(forward.version, 41);
+        assert.deepEqual(forward.clashes, []);
+        assert.equal(kept, beast);
+        assert.equal(engagement.phase, "melee", "they'd charged");
+        assert.deepEqual(
+            engagement.sides.map(({ key, falters, exit, bodies }) => [key, falters, exit, bodies.map(({ part, formation, size, state, pair }) => [part, formation, size, state, pair])]),
+            [
+                ["invaders", false, [10, 20], [["centre", "invasion-3-invaders", 50, "charging", "centre"]]],
+                ["defenders", false, [30, 40], [["centre", "invasion-3-defenders", 70, "charging", "centre"]]],
+            ],
+        );
+    });
+
+    it("rewards a player who held the body of the town's line they were bidden hold, by it as the raiders break", () => {
+        const { host, player, invasion, engagement, town } = battleOf("corsairs");
+
+        for (let k = 0; k < 4000 && engagement.phase !== "melee"; k++) {
+            host.advance(STEP_MS);
+
+            const centre = host.battle.formations[invasion.formations.defenders];
+
+            if (k % 20 === 0 && centre) {
+                host.battle.place(HOST_PLAYER, "town", [Math.floor(centre.anchor[0]), Math.floor(centre.anchor[1])]);
+            }
+        }
+
+        for (let k = 0; k < 4 && !engagement.jobs?.[HOST_PLAYER]; k++) {
+            host.advance(STEP_MS);
+        }
+
+        const job = engagement.jobs[HOST_PLAYER];
+
+        Object.assign(job, { kind: "hold", part: "centre", target: null });
+
+        // (Beside it, the raiders all down, their fallen made good no more: the town held)
+        const centre = host.battle.formations[town.bodies.find(({ part }) => part === "centre").formation];
+        const standing = player.standing.points;
+
+        host.battle.place(HOST_PLAYER, "town", [Math.floor(centre.anchor[0]), Math.floor(centre.anchor[1])]);
+        invasion.fightAt = -Infinity;
+
+        for (const id of invasion.invaders) {
+            Object.assign(host.battle.actor(id), { hp: 0, dead: true, respawnAt: Infinity });
+        }
+
+        const events = [];
+
+        for (let k = 0; k < 10 && invasion.broke === null; k++) {
+            events.push(...host.advance(STEP_MS));
+        }
+
+        assert.ok(invasion.held);
+        assert.ok(job.done !== null, "held as bidden");
+        assert.ok(events.some(({ type, change, player: who, kind }) => type === "engagement" && change === "jobDone" && who === HOST_PLAYER && kind === "hold"));
+        assert.ok(player.standing.points >= standing + JOB.thanks, "the town's thanks: the player's own people");
+    });
+});
 
 describe("the Behemoth of the Rift's invasion (core/invasions.js BEHEMOTH, core/host.js #invade)", () => {
     it("comes by night only, one time in three of the invasions due then, never in anyone's first; as strong as the town's who meet it", () => {

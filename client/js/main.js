@@ -1553,6 +1553,7 @@ async function openWorldMap({ pick = null, travel = null, build = null, war = nu
     }
 
     map.pingsOf = null;
+    map.partyOf = null;
     map.markersOf = null;
     map.onTap = null;
     $("#worldmappick").hidden = !pick && !travel && !build && !war;
@@ -1705,6 +1706,7 @@ async function openWorldMap({ pick = null, travel = null, build = null, war = nu
     $("#worldmapping").hidden = !game.host.partyFor(game.me);
     $("#worldmapmark").hidden = false;
     map.pingsOf = () => game.pingView();
+    map.partyOf = () => game.partyView();
     map.markersOf = () => game.markerView();
     map.onTap = (point) => {
         const marker = map.markerAt(point);
@@ -2051,6 +2053,7 @@ function closeWorldMap() {
     if (state.worldMap) {
         state.worldMap.onPick = null;
         state.worldMap.pingsOf = null;
+        state.worldMap.partyOf = null;
         state.worldMap.markersOf = null;
         state.worldMap.onTap = null;
         state.worldMap.travel = null;

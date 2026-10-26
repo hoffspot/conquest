@@ -36,8 +36,8 @@ const element = (tag, className, text = "") => Object.assign(document.createElem
 // "north-east", from a step [dx, dy] (y south)
 const COMPASS = ["east", "south-east", "south", "south-west", "west", "north-west", "north", "north-east"];
 
-/** Which way, and how far, somewhere is from a point: "1.2 km north-east", "here". */
-export function bearing(from, to) {
+/** Which way, and how far, somewhere is from a point: "1.2 km north-east"; "here", nearer than `near` metres. */
+export function bearing(from, to, near = 60) {
     if (!from || !to) {
         return "";
     }
@@ -45,7 +45,7 @@ export function bearing(from, to) {
     const [dx, dy] = [to[0] - from[0], to[1] - from[1]];
     const distance = Math.hypot(dx, dy);
 
-    if (distance < 60) {
+    if (distance < near) {
         return "here";
     }
 

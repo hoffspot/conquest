@@ -2331,14 +2331,16 @@ soldiers; the host's steps took 4 to 6.5 ms on the mean.
 - **The raiders**, two fifths of them, of a band (`BANDS`, below; `bandFor`): bandits in any
   character's first, else any of the five at random, the corsairs only to a town by the sea
   (within 12 of the world plan's cells of it, about 400 m: `COAST`). In no people's livery, each
-  band dressed as its own (characters/soldiers.js `raiderLook`); their chiefs in the shield line,
+  band dressed as its own (characters/soldiers.js `raiderLook`); their chiefs in the shield lines,
   one to every 25 to 40 of them, with a weapon of their own, harder to bring down. They come out
-  70 m beyond the town's edge on a road out of it (any way, with none), in a line of battle facing
-  it (core/formation.js), and march on it, to meet the town's soldiers 14 m beyond the edge.
-- **The town's people**, the rest (58%): soldiers of whoever holds the town, in their own people's
-  line (`DOCTRINES`, `ROLE_ARMS`), forming 6 m inside its edge and marching out to meet them; and
-  two squads of bomb throwers (`bombers`: a fortieth of them each, at least two), out on their
-  line's flanks, a sword up close and their people's own bombs lobbed from 11 m that toss the
+  70 m beyond the town's edge on a road out of it (any way, with none), drawn up for battle facing
+  it, their line in three bodies, their commander and their household behind (*Battles*, below:
+  the host's `#raiderSide`), and march on it.
+- **The town's people**, the rest (58%): soldiers of whoever holds the town, their roles their own
+  people's (`DOCTRINES`, `ROLE_ARMS`), drawn up for battle 6 m inside its edge, the captain of its
+  guard and their household behind (*Battles*: the host's `#townSide`), marching out to meet them;
+  and two squads of bomb throwers (`bombers`: a fortieth of them each, at least two), a squad
+  behind each of its wings, a sword up close and their people's own bombs lobbed from 11 m that toss the
   raiders they burst by off their feet (`BOMBERS`; core/weapons.js `bombardier` and its kin;
   battle.js `BOMBS`; drawn and heard: MAGIC.md *Bombs*). Each people's as strong as the rest
   (6–12 at its heart, half at its edge), each its own:
@@ -2393,9 +2395,11 @@ model viewer*: `?person=raider-northmen&weapon=throwingAxes`, `?person=chief-cul
 
 **How it goes** (`#invasionsOn`):
 
-- **The charge** (`INVASION.charge`, the host's `#charge`): once the two lines are 30 m apart, both
-  charge at a run (2.2 m/s), on till their fronts are 2 m apart midway between them; a band that
-  stands off (the Ashen Cult) stands, and the town's line charges on to its front. Both sides'
+- **The charge**, fought as a battle (*Battles*, below; the host's `#fight`, `#charged`): once the
+  two lines are 32 m apart, they halt while the archers loose from ahead of them (a band without
+  archers to loose, the bandits and the cult, waiting on the town's), then charge at a run (2.2
+  m/s), each body at the one opposite it, on till their fronts are 2 m apart midway between them; a
+  band that stands off (the Ashen Cult) stands, and the town's charges on to its front. Both sides'
   horns sound for it, the raiders' from their line and the town's 1.2 s after from its own (the
   "invasion" event's `charge`). From then on everyone of either side who fights up close (their
   shield lines and two-handers, the rear guards too, their chiefs, and any who come up after) goes
@@ -2412,14 +2416,17 @@ Then the two lines meet and grind. **Reinforced** (`reinforce`,
 `#reinforceInvasion`): from the first blow, for three minutes, every 15 seconds each side's fallen
 are made good. The raiders are brought back up to 70% of the line that came, coming up the road
 from where it came out; the town's to 80% of its own, coming out from where its line formed. Each
-joins its side's line, its ranks opening for them: given places behind its hindmost rank as it
-stood before they came, five abreast, so that a wave of 22 stands five ranks deep. (Till
+joins the weakest of its side's line's bodies still standing, its ranks opening for them: given
+places behind its hindmost rank as it stood before they came, five abreast, so that a wave of 22
+stands five ranks deep. (Till
 `NET_VERSION` 178 each newcomer was put a rank behind the one before, a wave strung out one to a
 rank: in a bandits' invasion of 360, the first wave of 95 was given places as far as 552 m back,
 and over two minutes its soldiers set off on 159 paths longer than 80 m, then turned back as the
-ranks closed. Now the deepest is 47 m, and none.) Neither side breaks meanwhile, so the town keeps
-the edge throughout, and a player has time to come to the fight, see how it stands and choose what
-to do. Then it's fought out with what's left. Once only so many of the raiders are left standing
+ranks closed. Now the deepest is 47 m, and none.) Neither side breaks meanwhile, none of its bodies'
+morale falling below 0.3 (*Battles*: `MORALE.hold`), so the town keeps the edge throughout, and a
+player has time to come to the fight, see how it stands and choose what to do. Then it's fought
+out with what's left: each body breaking as its morale goes, and every body of either side broken,
+that side's beaten. Once only so many of the raiders are left standing
 (their band's `rout`), or none of those who fight up close (`close`: their front and heavy lines,
 and their chiefs; archers, casters and healers can't hold the field alone, and would otherwise
 shoot down the town's line from beyond its reach), the town's held, however few of its own are
@@ -2619,6 +2626,150 @@ before. The houses the Behemoth's burnt, till they're whole again, are in the ho
 (`burnt`: each town's, its layout's pieces, and when it fell): `SNAPSHOT_VERSION` 39, none in a
 world kept before.
 
+### Battles
+
+Big fights fought as battles were (`core/engagement.js`; the host's `#fight`, run every half a
+second of the battle's time: an invasion's, the armies met near a player, an army storming a camp,
+a seat's last stand, and the debug overlay's field battle). Not each side one block on the road,
+its fighting all in a ring twenty metres across where the two met, but each side's line in three
+bodies across a wide front (as a medieval army's three battles), each closing with the body
+opposite it; a reserve and the side's commander with their household held back; each body's
+morale its own, so one can break alone, leaving its neighbour's flank bare; and each band its own
+way of fighting. The rules are pure data and arithmetic; the host keeps each battle as plain data
+(with its invasion, field battle, armies' clash or last stand, in its snapshot: `SNAPSHOT_VERSION`
+41) and steps it from the battle as it stands, as deterministic as it.
+
+**How a side stands** (`BODIES`, `bodiesOf`, `layoutOf`, `offsetsOf`; the host's `#formSide`):
+- **Its line**: three bodies, a left, a centre and a right, the centre two fifths of it and each
+  wing three tenths, each with the side's mix of roles; none smaller than 8 (fewer: the centre
+  alone). Each its own formation (the centre's the side's old line's id, the others'
+  `${line}:left` and so on), its shield line one rank up to 16 files (shallow and wide, as a
+  body of a wide front was; never narrower for one more: core/formation.js `placesOf` `deep`),
+  the three abreast 4 m apart. A town's 70 at an invasion of 120 stand 46 m across (its old line
+  22 m), the bandits' 50, 43 m.
+- **Its reserve**: 15% of what's left past its household, for a side 40 strong, standing 8 m behind
+  the rearmost rank of its line (more or less by its way of fighting: `TACTICS` `reserve`).
+- **Its commander's household** (its vanguard: `vanguard`): 6% of it (3 to 10), for a side 24
+  strong, 8 m behind its reserve. The first of it its commander (`COMMANDER`: six times as hard to
+  bring down as a soldier, striking 1.3 times as hard, their armour taking a fifth more off each
+  blow), named as who they lead have it (`COMMANDERS`: "Bandit King Mord", "Jarl Ulfgar", "Ash
+  Prophet Vael", "Captain Varro", "Corsair Captain Saltjaw"; a town's "Captain of the Guard
+  Maren"; an army's "General Severa"); the next their standard-bearer ("Northern
+  standard-bearer"), the rest their household guards ("Northern huscarl", "Bandit king's man",
+  "Human household guard"), each 1.8 times as hard to bring down, striking 1.2 times as hard, their
+  armour taking 15% more. A commander's plate is edged and named in gold, as an elite's; a
+  standard-bearer's name is under a pennant (app/hud.js `track` `rank`).
+
+**How it goes** (`stepEngagement`, `FIELD`):
+1. **The march**: each side's bodies march on the enemy's centre abreast, keeping their places in
+   the line, its reserve and household following.
+2. **The volley**: 32 m apart, the lines halt for 6 seconds while the archers and casters of a side
+   that looses (`TACTICS` `volley`) go out 17 m ahead of their line and shoot (their `post`s); and
+   a side that tries the enemy's line (`probe`) sends five of a wing's shield line and two-handers
+   at the enemy's weakest body (`FIELD.probe`), back after 7 seconds or once half of them are down.
+   Neither side looses (a side too few to stand in three bodies doesn't): straight to the charge.
+3. **The charge**: each body of the line at the one opposite it (our left at their right:
+   `pairOf`), at a run, on till their fronts are 2 m apart; everyone who fights up close goes
+   after an enemy as far as 30 m from their place, looking as far.
+4. **At it**: each body as its side fights. A body whose enemy before it is gone wheels in on the
+   nearest flank of the enemy's there is (`flank`); a wing's two-handers, once it's been at it 4
+   seconds, are sent wide round the end of the enemy's line, 10 m out, then in on its rear (`flankers`,
+   in a formation of their own: `${body}:flank`). Its reserve, then (no sooner than 10 seconds
+   after) its household, are sent in where a body of its line is giving way (its morale under
+   0.45), or through a gap where one of the enemy's has broken (`commit`); a side whose whole line
+   is broken throws in whatever it holds back, the last throw.
+
+**Each band's way** (`TACTICS`, `BAND_TACTICS`; a town's and an army's a `line`'s: loosing, trying
+the enemy's line, wheeling, flankers and a reserve):
+
+| Band | Its way | What it does |
+| --- | --- | --- |
+| **Bandits** | `swarm` | No volley, no reserve; its wings swing wide round both the enemy's flanks as they charge (`envelop`) |
+| **Northmen** | `wedge` | Its centre a wedge (ranks of one, three, five from its point, its berserkers foremost: core/formation.js `placesOf` `wedge`), charging first at the enemy's centre, its wings 3 seconds after (`FIELD.wedge`); a small reserve; no probe, no flankers |
+| **The Ashen Cult** | `standoff` | Stands where it is and lets them come, burning them as they do (`stand`); no volley, no flanking |
+| **Sellswords** | `steady` | A line's, and a reserve 1.6 times as deep |
+| **Corsairs** | `skirmish` | Its wings hit the ends of the enemy's line for 6 seconds, fall back 12 m, rest 4 and come again (`raid`); no flankers |
+
+**Morale** (`MORALE`, `moraleAfter`): each body's, from 1 (its household's 1.2), looked at every
+half a second. Down 1.3 times the share of it that's fallen since, the harder the more it's
+outnumbered by the enemy before it (its `odds`: times the square root of how many to each of it,
+from a half to two); up as much as fresh soldiers come up to it (an invasion's reinforcements);
+down 0.03 a second while it's beset on its flank or from behind (a body of the enemy's fighting
+within 8 m of its end, not facing it head on: the wheel, or flankers come round); else steadying,
+0.01 a second, to as high as its odds hold it (0.8 at even odds, 1 at three to two, 0.6 at one to
+two); up 0.012 a second while its commander's near it (within 14 m), its losses then counting
+half; and up 0.004 a second while it's giving more than it gets. Under 0.45 it's **giving way**
+(its side's reserve or household sent there); at 0.2 it **breaks**: its formation broken, running
+for its side's way out (the raiders' back up their road; the town's back into it; an army's 140 m
+behind it), the enemy body before it heartened (0.1). The **bandits never break**: a body of theirs
+**falters** instead, falling back 15 m for 8 seconds, then comes on again at 0.55. A side's
+standard falling shakes those near it (0.15). While an invasion's fallen are made good, none of its
+bodies falls below 0.3 (`hold`).
+
+**Its commander fallen** (any side's, the moment they're down): every body of it shaken (0.35), those
+of it within 14 m of where they fell afraid for 3 seconds (running blindly: core/afflictions.js
+`fear`), and the side has **no tactics** left: no probe, no wheel, no flankers, no wedge, no swarm,
+no raid, nothing more sent in (its bodies hold and fight what's before them; any waiting, raiding or
+resting charge). Those near a commander strike 1.1 times as hard while they stand (their
+`power.melee`). Felled by a player (or theirs): a bounty of 150 gold, the guilds' 6 merit, and the
+like of the weapon they fought with for a trophy, very rare (`TROPHY`; a ring for one not carried:
+the host's `#trophy`).
+
+**The player's job** (`JOB`, the host's `#jobs`): as the lines charge, the commander of the side a
+player fights for (the town, for one in it whose people aren't the town's enemies; in a field
+battle, their own people's; between armies met, the one of their people or at war only with the
+other) gives each player within 80 m of its line a job, while they stand: **"Bring down their
+standard-bearer!"** (one time in two, by the battle and the player, while one stands), done once
+they or theirs fell them; else **"Hold the left flank!"** (or the right, or the centre: the body
+nearest them), done if that body's still standing as the battle's won and they're within 40 m of
+it. Done: 40 gold, the guilds' 4 merit and 6 thanks (standing with that side's people, their own;
+else a favour of theirs to the player's people).
+
+**Signals** (app/game.js `#battleTurn`, `battleView`; app/minimap.js): each turn of a battle within
+160 m of the player is told in a message (no more than one every 2.5 seconds; a commander falling,
+and the player's own job, trophy and reward, always): "The northmen's left breaks and runs!",
+"Marleyworth's right wheels onto their flank!", "Jarl Ulfgar leads their household in!", "Jarl
+Ulfgar has fallen! The northmen's lines are leaderless!", "The northmen's standard has fallen!",
+"The bandits' left falls back!", "...comes on again!". The horns: the lines of a field battle or the
+armies met charging, the enemy's war horn from their line and the other's town horn 1.2 seconds
+after; a reserve or household sent in, its side's horn twice where it's going (the enemy's war
+horn, the other's the town's); an invasion's own horns as they were. On the minimap, out in the world: an arrow from each body
+charging, wheeling round a flank, sent in or sent to try the enemy's line to where it's going, red
+for the player's enemies and green for the rest, and a crown of gold on a disc at each commander
+standing.
+
+**Where it's fought**:
+- **An invasion** (`#invade`, `#invasionsOn`): the raiders' side and the town's as above; the side
+  that's beaten is routed or fell (as before, a band's `rout` and `close` too). The Behemoth's isn't
+  a battle of bodies: the town's one line meets it as it did.
+- **The armies met near a player** (`#clashes`, `#drawUp`, `#clashOver`): two of enemy peoples within
+  140 m of each other, neither storming or holding a camp, at its own camp or beaten and getting
+  away, each drawn up where it stands, its soldiers parted among its bodies by their roles; its
+  general one of its shield line made one (kept as the army's from then on: its met's `general`).
+  `#watchArmies` leaves their lines to the battle; beaten, the war's told it's routed, by whoever
+  beat it (war.js `routed`), and each left forms its one line again and goes on its way.
+- **An army storming a camp** (`#stormCommand`, `STORM_COMMAND`): its general and their household
+  (made so once) held back 6 m behind its archers at its muster till the storm's at a crisis (two
+  fifths of those it went in with fallen, or a breach hacked open), then sent in after the rest;
+  its general fallen, those near afraid, its household not sent in, and it's beaten off sooner (at
+  a quarter more of what it went in with).
+- **A seat's last stand** (`#leadersOut`, `LEADERS_NEAR.guards`): its ruler and the captain of its
+  guard with four of their household before them at the keep's door, the ruler their commander;
+  it holds to the last (`hold`).
+- **The debug overlay's field battle** (`#fieldBattle`, `FIELD_BATTLE`): two armies drawn up, each
+  with its general and household, the rear of the player's people's line 8 m ahead of them (its
+  reserve and household behind it, about the player), their broken running 60 m behind where they
+  formed.
+
+**As played** (headless, seed 2, an invasion of 120 in the start town, the player standing aside):
+every band beaten off, the town holding, in 204 to 228 seconds; the fighting spread 44 to 59 m
+across where the lines met (a ring of about 20 before), the town's wings wheeling onto the
+raiders' centre once a raider wing was gone, the reserve and household of each side sent in at
+the first body giving way, the corsairs' wings hitting and falling back, the bandits' bodies
+faltering and coming on again. A field battle of 60 a side was over in 93 seconds, each side
+breaking a wing in turn; two armies of 60 met in the field fought it out in 45 seconds of melee,
+the humans' line breaking, routed and running, the orcs forming up again and going on.
+
 ### Playing together (M11)
 
 **Opening a world.** In the menu, **Invite others** opens the world to others. It gets a room at
@@ -2763,12 +2914,21 @@ party*). Players play together as a party of up to four (`PARTY.most`):
   the rest of the party too, wherever they are, as if they'd been there: the fog lifts off it on
   their maps and the places round it are found (core/explored.js `sighted`), as are the buildings
   any of them goes into. A guild's portal still opens only to those who've been in its branch.
-  It's kept for good, after the party's gone, but nothing's shared from before they were in it or
-  after they've left. The places worth finding (core/places.js `placesOf`, the dungeons' ways
-  in, and the dens: docs/WILDS.md *Dens*) that another found for them first are kept with who found them (`Explored.found`, kept with
-  the character), and they're told: "Bryn found an abbey: it's on your map." (or how many). The
-  world map says so under each, close in: "found by Bryn". The places one of them sees from high
-  ground (docs/WILDS.md *Seen from high ground*) are found by the rest too, kept and told so.
+  It's kept for good, after the party's gone, but nothing's shared after they've left. The places
+  worth finding (core/places.js `placesOf`, the dungeons' ways in, and the dens: docs/WILDS.md
+  *Dens*) that another found for them first are kept with who found them (`Explored.found`, kept
+  with the character), and they're told: "Bryn found an abbey: it's on your map." (or how many).
+  The world map says so under each, close in: "found by Bryn". The places one of them sees from
+  high ground (docs/WILDS.md *Seen from high ground*) are found by the rest too, kept and told so,
+  and a camp's or lair's home one of them tracks by its trails' signs is tracked by the rest too
+  (not the signs: theirs who read them).
+- **Pooled as they join** (`#pool`, `Explored.merge`). Whoever joins a party, and each already in
+  it, find what the other had found before: the land they'd been over, the buildings they'd gone
+  into, the places they'd seen from high ground and the homes they'd tracked, each place worth
+  finding new to them kept as found by whoever had (or whoever had found it for them), and told:
+  "Bryn's map is yours too: 12 places and the land they've been over." Not the signs read, the
+  stone rings stood in nor the guild's portals: theirs to have done. Till 2026-10-26 nothing was
+  shared from before they were in it.
 - **Pings** (`ping`, with `at`: [x, y] metres, anywhere on the world's map; out of a party,
   refused). The world map's ping button (in a party only), then a tap, shows the whole party where
   for 30 seconds (app/mapicons.js `PING`; one each second and a half at most): a green dot with

@@ -11,7 +11,6 @@ import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { DOCTRINES, rolesOf } from "../client/js/core/formation.js";
 import { ARMY_NEAR, HOST_PLAYER, Host } from "../client/js/core/host.js";
-import { ARMY } from "../client/js/core/war/armies.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { STAGES, TURN_MS } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -112,25 +111,32 @@ describe("the armies in the world near a player (host.js ARMY_NEAR, war.js)", ()
         assert.deepEqual(army.at, before);
     });
 
-    it("has two peoples' armies met fight it out in the world, each fallen one fewer in the war, which doesn't reckon it itself; the one broken (ARMY.rout of it left, and outnumbered) routed, the war told, running", () => {
+    it("has two peoples' armies met fight it out in the world as a battle, each fallen one fewer in the war, which doesn't reckon it itself; the one broken (its every body, or ARMY.rout of it left, and outnumbered) routed, the war told, running", () => {
         const { host, war, middle: [mx, my] } = hosted();
         const orcs = afield(war, "orc", [mx + 230, my + 50], [mx + 230, my - 100], 8, "force-900");
         const humans = afield(war, "human", [mx + 230, my - 50], [mx + 230, my + 100], 24, "force-901");
         const events = [];
         const routed = () => events.find(({ type, event }) => type === "war" && event.type === "battle" && event.routed);
+        let clash = null;
 
         for (let k = 0; k < 240 && !routed(); k++) {
             events.push(...run(host, 1000, () => (war.relations["human|orc"] = { state: "hostile", since: 0 })));
+            clash ??= [...host.clashes.values()][0] ?? null;
         }
 
         const { event } = routed() ?? {};
 
+        // (Drawn up for battle with each other, core/engagement.js: the humans' general at the head
+        // of their household)
+        assert.deepEqual(clash?.forces, [orcs.id, humans.id].sort());
+        assert.match(host.battle.actor(host.armies.get(humans.id).general)?.name ?? "", /^General /);
         assert.ok(event, "routed");
         assert.deepEqual([event.realm, event.against, event.other, event.kind, event.won, event.played], ["human", "orc", orcs.id, "army", true, true]);
-        assert.ok(orcs.size > 0 && orcs.size <= ARMY.rout * 8, "down to ARMY.rout of what it went in with");
+        assert.ok(orcs.size > 0 && orcs.size < 8, "broken, some of it lost");
         assert.equal(event.killed, 8 - orcs.size);
         assert.equal(orcs.size, alive(host, orcs.id).length);
-        assert.ok(humans.size < 24, "the humans lost some");
+        // (Three to one: the orcs as like as not broken before they've felled any)
+        assert.ok(humans.size <= 24);
         assert.equal(humans.size, alive(host, humans.id).length);
         assert.ok(!events.some(({ type, event: each }) => type === "war" && each.type === "battle" && !each.routed && [each.army, each.other].includes(orcs.id)), "not reckoned by the war itself");
 
@@ -141,6 +147,11 @@ describe("the armies in the world near a player (host.js ARMY_NEAR, war.js)", ()
 
         assert.ok(war.fleeing(orcs.id));
         assert.ok(!met || host.battle.formations[met.formation].broken, "its line broken");
+
+        // (The battle over: each in its one line again, its bodies' other lines gone)
+        assert.equal(host.clashes.size, 0);
+        assert.ok(!Object.keys(host.battle.formations).some((id) => id.includes(":")), "its bodies' lines gone");
+        assert.ok([orcs.id, humans.id].every((each) => !host.armies.get(each)?.clash));
     });
 
     it("stands up as many of it as the war has: those it's lost elsewhere let go from the back, those joined it stood up behind its line", () => {

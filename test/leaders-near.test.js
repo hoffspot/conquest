@@ -99,6 +99,16 @@ describe("a seat's ruler and the captain of its guard in the world near a player
 
         assert.ok(Math.hypot(ruler.x - x, ruler.y - y) < 4 && Math.hypot(captain.x - x, captain.y - y) < 4, "at its keep's door");
 
+        // (Their household before them, the ruler their commander, a battle's: core/engagement.js)
+        const guards = told.guards.map((id) => host.battle.actor(id));
+        const out = host.leaders.get(seat.id);
+
+        assert.equal(guards.length, LEADERS_NEAR.guards);
+        assert.ok(guards.every((one) => one.name === "Orcish household guard" && one.team === "orc" && one.maxHp > LEADERS_NEAR.hp / 2 && one.formation.id === ruler.formation.id));
+        assert.equal(ruler.rank, "commander");
+        assert.equal(out.engagement.sides[0].commander, ruler.id);
+        assert.equal(out.engagement.phase, "melee");
+
         // (Not taken yet)
         assert.equal(seat.owner, "orc");
         assert.equal(war.realm("orc").overlord, null);

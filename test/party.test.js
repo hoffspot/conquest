@@ -13,6 +13,8 @@ import { decode, encode } from "../client/js/core/wire.js";
 import { HOST_PLAYER, Host, PARTY } from "../client/js/core/host.js";
 import { nearestFree, squareKey, squaresOf } from "../client/js/core/grid.js";
 import { buildWorld } from "../client/js/core/overworld.js";
+import { placesOf } from "../client/js/core/places.js";
+import { CHUNK } from "../client/js/core/worldplan/plan.js";
 import { SPELLS } from "../client/js/core/spells.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "grimoire", boots: false });
@@ -243,6 +245,41 @@ describe("parties of players (host.js PARTY, the party command)", () => {
         assert.equal(host.canFight(me, bea), false);
         assert.equal(party(host, HOST_PLAYER, "invite", "guest").reason, "member");
         assert.ok(told(run(host, 100), "guest").includes("joined"));
+    });
+
+    it("pools what each had found before as one joins the other's party: the land each had been over, the buildings, the places worth finding (found by whoever had) and the homes tracked, each told", () => {
+        const host = together();
+        const [mine, beas] = [host.players.get(HOST_PLAYER).explored, host.players.get("guest").explored];
+        // (A place worth finding neither's found, and one Bea alone had seen from high ground)
+        const places = placesOf(host.world.plan).filter(({ id, at }) => !mine.knows(id, ...at) && !beas.knows(id, ...at));
+        const [far, seen] = places;
+
+        beas.visit(...far.at);
+        beas.spot(seen.id);
+        beas.enter("home:tavern");
+        beas.track("camp-9");
+        mine.visit(far.at[0] + 4 * CHUNK, far.at[1]);
+        assert.ok(!mine.knows(far.id, ...far.at) && !mine.knows(seen.id, ...seen.at));
+        assert.equal(party(host, HOST_PLAYER, "invite", "guest").ok, true);
+        run(host, 100);
+        assert.equal(party(host, "guest", "accept").ok, true);
+
+        const events = run(host, 100).filter(({ type, pooled }) => type === "explored" && pooled);
+
+        // Each has the other's: Ada, Bea's land and finds, found by Bea; Bea, Ada's land
+        assert.ok(mine.knows(far.id, ...far.at) && mine.knows(seen.id, ...seen.at));
+        assert.equal(mine.finderOf(far.id), "Bea");
+        assert.equal(mine.finderOf(seen.id), "Bea");
+        assert.ok(mine.hasEntered("home:tavern") && mine.tracked.has("camp-9"));
+        assert.ok(beas.visitedAt(far.at[0] + 4 * CHUNK, far.at[1]));
+        assert.deepEqual(
+            events.map(({ id, by, name, chunks }) => ({ id, by, name, land: chunks > 0 })),
+            [
+                { id: "guest", by: HOST_PLAYER, name: HERO.name, land: true },
+                { id: HOST_PLAYER, by: "guest", name: "Bea", land: true },
+            ],
+        );
+        assert.ok(events.find(({ id }) => id === HOST_PLAYER).places.includes(far.id));
     });
 
     it("tells whoever asked when it's said no to, and when it lapses unanswered (ignored: the one asked not saying)", () => {

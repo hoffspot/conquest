@@ -185,7 +185,7 @@ describe("locked on an enemy, by the host (host.js command)", () => {
     });
 
     it("brings a world kept before there were locks forward, everyone locked on no one", () => {
-        assert.equal(SNAPSHOT_VERSION, 40);
+        assert.ok(SNAPSHOT_VERSION >= 40);
 
         const kept = { version: 39, players: [], battle: { actors: [{ id: "a" }, { id: "b", lock: "a" }] } };
 

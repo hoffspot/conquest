@@ -28,7 +28,7 @@
 import { WET } from "../core/overworld.js";
 import { BIOMES, CELL, CELLS, CHUNK, CHUNKS, WATER, WORLD_SIZE } from "../core/worldplan/plan.js";
 import { MARKER_NAMES } from "../core/markers.js";
-import { drawBuildingIcon, drawMarker, drawPing, drawSearch, drawTracked, drawWarMark, FORT_ICONS, ICON_NAMES, MARKER_COLOURS } from "./mapicons.js";
+import { drawBuildingIcon, drawMarker, drawPartyPin, drawPing, drawSearch, drawTracked, drawWarMark, FORT_ICONS, ICON_NAMES, MARKER_COLOURS } from "./mapicons.js";
 import { FORD_MARK, grassOf, paintPatch, WATER_COLOURS } from "./minimap.js";
 
 // The land's picture: pixels to a cell of the plan (32 metres)
@@ -66,6 +66,9 @@ const ICONS_FROM = 6;
 const ICON_SIZE = 24;
 const FINDERS_FROM = 3;
 const FINDER_COLOUR = "#bfeec8";
+
+// How often (ms) the party's pins are drawn again while the map's open, as they go
+const PARTY_REDRAW = 400;
 
 // The player's markers: their heads this big (pixels), their words under them from this near
 // (metres to a pixel, at most), and how near a marker's head a tap chooses it (pixels)
@@ -314,6 +317,12 @@ export class WorldMap {
          * }]: app/game.js markerView), or null (none shown).
          */
         this.markersOf = null;
+
+        /**
+         * Asked for the other players in their party, where each is now ([{ id, name, colour, x, z
+         * (metres), inside }]: app/game.js partyView), or null (none shown).
+         */
+        this.partyOf = null;
 
         /**
          * Heard with the point tapped once ([x, z], metres), before it's taken as the first of two:
@@ -926,6 +935,41 @@ export class WorldMap {
             this.redraw();
         }
 
+        // The other players in their party, wherever they are, fog or no: each a pin in their own
+        // colour with their name under it, and one inside somewhere, at its door, where they are;
+        // drawn again as they go (PARTY_REDRAW)
+        const party = this.partyOf?.() ?? [];
+
+        context.font = `600 12px Georgia, "Times New Roman", serif`;
+        context.textAlign = "center";
+        context.textBaseline = "top";
+        context.lineJoin = "round";
+
+        for (const member of party) {
+            const [x, y] = at(member.x, member.z);
+
+            if (x < -60 || y < -40 || x > width + 60 || y > height + 40) {
+                continue;
+            }
+
+            drawPartyPin(context, x, y, member.colour);
+
+            for (const [line, k, colour] of [[member.name, 0, member.colour], ...(member.inside ? [[member.inside, 1, FINDER_COLOUR]] : [])]) {
+                context.lineWidth = 3;
+                context.strokeStyle = "rgba(20, 14, 8, 0.85)";
+                context.strokeText(line, x, y + 3 + k * 14);
+                context.fillStyle = colour;
+                context.fillText(line, x, y + 3 + k * 14);
+            }
+        }
+
+        if (party.length && !this.partyTimer) {
+            this.partyTimer = setTimeout(() => {
+                this.partyTimer = 0;
+                this.redraw();
+            }, PARTY_REDRAW);
+        }
+
         // Where the player is, the way they face
         if (this.player) {
             const [x, y] = at(this.player.x, this.player.z);
@@ -950,7 +994,7 @@ export class WorldMap {
         // (The newest drawn over the rest: found first)
         this.spots = spots.reverse();
         this.#placeTip();
-        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, finders, tracked, pings: pings.length, markers: markers.length, marks: (this.marks ?? []).length, heard: (this.heard ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
+        this.drawn = { chunks, fogged: CHUNKS * CHUNKS - this.explored.chunksVisited, names, icons, finders, tracked, pings: pings.length, party: party.map(({ id }) => id), markers: markers.length, marks: (this.marks ?? []).length, heard: (this.heard ?? []).length, pin: Boolean(this.pin), way: this.pin && this.way ? this.way.length : 0, distance: this.pin ? this.pinDistance : null, scale: view.scale, branches: (this.travel ?? []).length, plans: (this.build?.plans ?? []).length, forts: (this.build?.forts ?? []).length, war };
     }
 
     // The war table's map: a shade over all but what its people see now (draw's)

@@ -56,7 +56,7 @@ import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
 import { useSound, wearSound } from "../audio/handling.js";
 import { CREATURE_VOICES, creatureSounds, ITEM_SOUNDS, spellSounds } from "../audio/sound.js";
-import { FORT_ICONS, ICON_NAMES, PING, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
+import { FORT_ICONS, ICON_NAMES, partyColour, PING, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
 import { buildingView } from "./building.js";
 import { battleMapView, heededText } from "./battlemap.js";
 import { PALISADE } from "../core/war/armies.js";
@@ -834,6 +834,13 @@ const BELL = Object.freeze({ reach: 160, every: 180, volume: 1.6 });
 // that first; and the lord's thanks shown so long (seconds) for a good share of them felled
 const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, charge: 1.2, thanks: 14 });
 
+/**
+ * A battle's turns (core/engagement.js) told to a player within `near` metres of where each comes
+ * (#battleTurn), at most one every `every` seconds (but a commander falling, and their own job,
+ * trophy and reward, always); what each of a side's bodies is called (its `parts`).
+ */
+const BATTLE_TOLD = Object.freeze({ near: 160, every: 2.5, parts: Object.freeze({ left: "left", centre: "centre", right: "right", reserve: "reserve", vanguard: "household" }) });
+
 // How far off the wild's hunters are heard in a build-up after a long calm (metres: core/director.js
 // PACING's `from`, and more)
 const PACE_HEARD = 160;
@@ -864,7 +871,7 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -5207,10 +5214,16 @@ export class Game {
             minimap.setMap(this.world.maps[this.mapId]);
         }
 
+        // (The other players in their party, each in their own colour, however far: partyView. Out
+        // in the world, one inside a building or down in a dungeon where its door is; inside, only
+        // those on the same floor)
+        const party = this.partyView().filter((member) => member.map === this.mapId || this.mapId === "town");
+        const partied = new Set(party.map(({ id }) => id));
+
         minimap.draw({
             player: actor.dead ? null : { x: me.object.position.x - ox, z: me.object.position.z - oz, facing: me.facing },
-            // (Not one lurking unseen overhead: battle.js #lurk)
-            others: battle.actors.filter((other) => other !== actor && !other.dead && !other.lurking && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite && !CRIER.test(other.id)).map((other) => {
+            // (Not one lurking unseen overhead: battle.js #lurk; nor another of their party)
+            others: battle.actors.filter((other) => other !== actor && !other.dead && !other.lurking && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite && !CRIER.test(other.id) && !partied.has(other.id)).map((other) => {
                 const position = this.avatars.get(other.id).object.position;
 
                 return { x: position.x - ox, z: position.z - oz, hostile: this.battle.hostile(other, actor), targeted: other === target, ally: Boolean(this.allied?.has(other.id)) };
@@ -5233,7 +5246,46 @@ export class Game {
             markers: this.mapId === "town" ? this.markers : [],
             // (The fresh tracks they've come upon, the way they lead: #freshTrails)
             trails: this.mapId === "town" ? this.#freshTrails() : [],
+            party: party.map(({ id, name, colour, x, z, map }) => (map === this.mapId ? { id, name, colour, x: this.battle.actor(id).x, z: this.battle.actor(id).y } : { id, name, colour, x, z })),
+            // (The battles near: battleView)
+            battles: this.mapId === "town" ? this.battleView() : { arrows: [], commanders: [] },
         });
+    }
+
+    /**
+     * The battles out in the world, for the minimap (core/engagement.js: an invasion's, a field
+     * battle's, the armies met, a seat's last stand): { arrows: [{ from, to, hostile }] (each body
+     * charging, wheeling round a flank, sent in, or sent to try the enemy's line: from where it is
+     * to where it's going), commanders: [{ id, x, z, hostile }] (each standing) }, each side's the
+     * player's enemies' or not (`hostile`).
+     */
+    battleView() {
+        const me = this.battle.actor(this.me);
+        const view = { arrows: [], commanders: [] };
+
+        for (const { sides } of me ? (this.host?.engagements?.() ?? []) : []) {
+            for (const side of sides) {
+                const ids = side.bodies.flatMap(({ formation }) => [formation, `${formation}:probe`, `${formation}:flank`]);
+                const commander = side.commander === null ? null : this.battle.actor(side.commander);
+                const one = commander && !commander.dead ? commander : this.battle.actors.find((actor) => !actor.dead && ids.includes(actor.formation?.id));
+
+                if (!one) {
+                    continue;
+                }
+
+                const hostile = this.battle.hostile(one, me);
+
+                for (const formation of ids.map((id) => this.battle.formations[id]).filter((each) => each?.to && each.charge && !each.broken)) {
+                    view.arrows.push({ from: [...formation.anchor], to: [...formation.to], hostile });
+                }
+
+                if (commander && !commander.dead && commander.map === "town") {
+                    view.commanders.push({ id: commander.id, x: commander.x, z: commander.y, hostile });
+                }
+            }
+        }
+
+        return view;
     }
 
     // An adventurers' cache come within sight of the player for the first time (CACHE_SEEN): said,
@@ -5759,17 +5811,17 @@ export class Game {
     // A seat's ruler and the captain of its guard out at its keep, its garrison put down: drawn; the
     // player told, if it's their people's seat, or their people's who put its garrison down (not in
     // its barracks: that's said there)
-    #lastStand({ town: id, people, by, ruler, title, ids }) {
+    #lastStand({ town: id, people, by, ruler, title, ids, guards = [] }) {
         const town = this.host?.war?.town(id);
         const me = this.battle.actor(this.me);
 
-        this.enlisting.push(...ids);
+        this.enlisting.push(...ids, ...guards);
 
         if (!town || ![people, by].includes(this.self?.realm) || this.host?.quartered.get(id)?.map === me?.map) {
             return;
         }
 
-        this.hud.message(people === this.self?.realm ? `${town.name}'s garrison is down! ${title} ${ruler} and the captain of the guard make their last stand at the keep.` : `${town.name}'s garrison is down. ${title} ${ruler} and the captain of the guard make their last stand at its keep: put them down, and it's ours.`, 5);
+        this.hud.message(people === this.self?.realm ? `${town.name}'s garrison is down! ${title} ${ruler} and the captain of the guard make their last stand at the keep, their household guard before them.` : `${town.name}'s garrison is down. ${title} ${ruler} and the captain of the guard make their last stand at its keep: put them down, and it's ours.`, 5);
         this.sound?.play("newsHeard");
     }
 
@@ -5998,6 +6050,30 @@ export class Game {
      * The party's pings as they are now (#pinged), for the maps: [{ id, x, z (metres), age
      * (seconds), name (who made it), own (the player's) }].
      */
+    /**
+     * The other players in the player's party, where each is, for the maps ([{ id, name, colour
+     * (core/mapicons.js PARTY_COLOURS: by their place in it, the same for each of them), x, z
+     * (metres, the world's: one inside a building or down in a dungeon where its door or way in
+     * is), map, inside (where they are then: "in Wenches and Ale"), dead }]), however far off.
+     * None, out of a party.
+     */
+    partyView() {
+        const party = this.host.partyFor(this.me);
+
+        return (party?.members ?? []).flatMap((id) => {
+            const actor = id === this.me ? null : this.battle.actor(id);
+
+            if (!actor) {
+                return [];
+            }
+
+            const [x, z] = this.#outside(actor);
+            const name = this.world.maps?.[actor.map]?.name ?? this.world.interiors?.of(actor.map)?.name ?? null;
+
+            return [{ id, name: this.host.players.get(id)?.hero.name ?? actor.name ?? "", colour: partyColour(party.members, id), x, z, map: actor.map, inside: actor.map === "town" ? null : name ? `in ${name.replace(/^The /, "the ")}` : "indoors", dead: Boolean(actor.dead) }];
+        });
+    }
+
     pingView() {
         return this.pings.filter(({ at }) => this.clock - at < PING.lasts).map(({ id, who, name, x, z, at }) => ({ id, x, z, age: this.clock - at, name, own: who === this.me }));
     }
@@ -6582,8 +6658,16 @@ export class Game {
 
     // Places another of the player's party found for them (core/host.js #share: `places`, plan
     // place ids, found by `name`), said: the one by its name, or what it is; or how many
-    #sharedFinds({ name, places }) {
+    #sharedFinds({ name, places = [], pooled = false }) {
         const what = places.length === 1 ? this.#placeCalled(places[0]) : null;
+
+        // (Coming into a party, what each had found before: the land they'd been over, and the
+        // places, on the map too: core/host.js #pool)
+        if (pooled) {
+            this.hud.message(`${name}'s map is yours too: ${places.length ? `${what ?? `${places.length} places`} and ` : ""}the land they've been over.`, 4);
+
+            return;
+        }
 
         this.hud.message(what ? `${name} found ${what}: it's on your map.` : `${name} found ${places.length} places: they're on your map.`, 3.5);
     }
@@ -7713,6 +7797,114 @@ export class Game {
         const [ox, oz] = this.originOf("town");
 
         this.sound?.play(name, { at: new THREE.Vector3(ox + x, 0, oz + y), delay, far: HORNS.far });
+    }
+
+    // A turn in a battle (core/engagement.js; the "engagement" event: host.js #fight, #jobs,
+    // #trophy). The player's own: their job from the commander of the side they fight for (to hold
+    // the body of its line nearest them, or bring down the enemy's standard-bearer), and their
+    // reward for it done; their bounty and trophy for felling a commander. Near them
+    // (BATTLE_TOLD): the lines of a field battle or the armies met charging, each side's horn blown
+    // from its line (an invasion's are its own: #invasion); a reserve or a commander's household
+    // sent in, its side's horn blown twice where it's going; a commander falling, a standard
+    // falling, a body breaking, wheeling onto a flank, falling back and coming on again
+    #battleTurn(event) {
+        const me = this.battle.actor(this.me);
+        const engagement = this.host?.engagements?.().find(({ id }) => id === event.id) ?? null;
+        const side = engagement?.sides.find(({ key }) => key === event.side) ?? null;
+        const say = (words, seconds = 4) => this.hud.message(words, seconds);
+
+        switch (event.change) {
+            case "job":
+                if (event.player === this.me) {
+                    const part = event.part === "centre" ? "the centre" : `the ${BATTLE_TOLD.parts[event.part] ?? event.part} flank`;
+
+                    say(`${event.by}: "${event.kind === "banner" ? "Bring down their standard-bearer!" : `Hold ${part}!`}"`, 6);
+                    this.sound?.play("newsHeard");
+                }
+
+                return;
+            case "jobDone":
+                if (event.player === this.me) {
+                    const got = [`${event.gold} gold`, ...(event.merit ? [`${event.merit} merit with the guilds`] : []), ...(event.thanks ? [`${event.thanks} standing`] : [])];
+
+                    say(`${event.kind === "banner" ? "Their standard-bearer is down" : "You held your ground"}, as you were bid: ${got.join(", ")}.`, 6);
+                    this.sound?.play("newsHeard");
+                }
+
+                return;
+            case "trophy":
+                if (event.player === this.me) {
+                    say(`You felled ${event.name}! A bounty of ${event.gold} gold${event.merit ? `, ${event.merit} merit with the guilds` : ""}, and a trophy: ${itemLabel(event.piece).toLowerCase()}.`, 7);
+                    this.sound?.play("newsHeard");
+                }
+
+                return;
+            default:
+                break;
+        }
+
+        // (Near the player, out in the world: where it came)
+        const where = event.at ?? event.to ?? event.anchors?.find(Boolean) ?? null;
+
+        if (!me || !where || me.map !== "town" || Math.hypot(me.x - where[0], me.y - where[1]) > BATTLE_TOLD.near) {
+            return;
+        }
+
+        // (Whose: the player's enemies' or not, and what they're called; a storm's, by the army's
+        // people: host.js #stormCommand)
+        const one = side ? [side.commander, ...side.bodies.map(({ formation }) => formation)].map((each) => this.battle.actor(each) ?? this.battle.actors.find((actor) => !actor.dead && actor.formation?.id === each)).find(Boolean) : null;
+        const people = side?.people ?? (event.storm ? (this.host?.war?.force(event.side)?.realm ?? null) : null);
+        const hostile = one ? this.battle.hostile(one, me) : people ? Boolean(this.host?.war?.hostile(people, this.self?.realm)) : true;
+        const invasion = event.invasion ? this.host.invasions.find(({ id }) => id === event.invasion) : null;
+        const whose = invasion && side ? (side.key === "invaders" ? `the ${bandOf(invasion.band).many}'` : `${invasion.name}'s`) : `the ${ADJECTIVES[people] ?? people ?? "enemy"}`;
+        const Whose = `${whose[0].toUpperCase()}${whose.slice(1)}`;
+        const part = BATTLE_TOLD.parts[event.part] ?? event.part;
+        const horn = hostile ? "warHorn" : "townHorn";
+        const now = this.clock;
+        const quiet = now < (this.battleTold ?? -Infinity);
+        const told = (words) => {
+            if (!quiet) {
+                this.battleTold = now + BATTLE_TOLD.every;
+                say(words);
+            }
+        };
+
+        switch (event.change) {
+            case "charge":
+                // (An invasion's horns its own: #invasion)
+                if (!event.invasion && event.anchors?.every(Boolean)) {
+                    event.anchors.forEach((at, k) => this.#invasionHorn(k ? "townHorn" : "warHorn", at, k ? HORNS.charge : 0));
+                    told("The lines charge!");
+                }
+
+                break;
+            case "commit":
+                this.#invasionHorn(horn, event.to);
+                this.#invasionHorn(horn, event.to, HORNS.again);
+                told(event.part === "vanguard" && event.commander ? `${this.battle.actor(event.commander)?.name ?? Whose} leads their household in!` : `${Whose} reserve goes in!`);
+                break;
+            case "commanderFell":
+                this.battleTold = now + BATTLE_TOLD.every;
+                say(`${event.name || "Their commander"} has fallen! ${Whose} lines are leaderless!`, 5);
+                break;
+            case "bannerFell":
+                told(`${Whose} standard has fallen!`);
+                break;
+            case "break":
+                told(`${Whose} ${part} breaks and runs!`);
+                break;
+            case "flank":
+                told(`${Whose} ${part} wheels onto their flank!`);
+                break;
+            case "falter":
+                told(`${Whose} ${part} falls back!`);
+                break;
+            case "rally":
+                told(`${Whose} ${part} comes on again!`);
+                break;
+            default:
+                break;
+        }
     }
 
     // Where on an invasion's road its lines are, so far out past the town's edge (`out` metres;
@@ -9459,6 +9651,7 @@ export class Game {
                 leader: party.leader === id,
                 me: id === this.me,
                 away: id !== this.me && this.battle.actor(id)?.map !== me?.map,
+                colour: partyColour(party.members, id),
                 with: id === this.me ? [] : this.host.partyOf(id).map((one) => this.battle.actor(one.id)?.name ?? this.host.followers.get(one.id)?.name ?? "").filter(Boolean),
             })),
             others: [...this.host.players.keys()].filter((id) => id !== this.me && !party?.members.includes(id)).map((id) => ({ id, name: nameOf(id), asked: Boolean(this.host.invitation(id)) })),
@@ -9933,7 +10126,7 @@ export class Game {
 
         this.hud.party(
             player && !player.dead
-                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture, leader: kind === "player" && this.host.partyFor(this.me)?.leader === id }))
+                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture, leader: kind === "player" && this.host.partyFor(this.me)?.leader === id, colour: kind === "player" ? partyColour(this.host.partyFor(this.me)?.members ?? [], id) : null }))
                 : [],
         );
 
@@ -12259,6 +12452,9 @@ export class Game {
             case "invasion":
                 this.#invasion(event);
                 break;
+            case "engagement":
+                this.#battleTurn(event);
+                break;
             case "burnt":
                 this.#burnt(event);
                 break;
@@ -12497,7 +12693,7 @@ export class Game {
                         this.hud.message("This branch of the guild is open to you now: step through to it from any other branch's portal.", 4);
                     }
 
-                    if (event.places?.length) {
+                    if (event.places?.length || event.pooled) {
                         this.#sharedFinds(event);
                     }
 
@@ -14955,8 +15151,19 @@ export class Game {
      * (clientX, clientY): fight an enemy within `reach` metres of it, or walk there. Twice in
      * quick succession, run.
      */
-    mapTap({ x, z, reach = 3, clientX = 0, clientY = 0, run = false, time = performance.now() }) {
+    mapTap({ x, z, reach = 3, clientX = 0, clientY = 0, run = false, time = performance.now(), member = null }) {
         this.#wake();
+
+        // (Another of their party marked at the edge, tapped: who it is and how far, which way)
+        const fellow = member ? this.partyView().find(({ id }) => id === member) : null;
+
+        if (fellow) {
+            const way = bearing(this.#whereAmI(), [fellow.x, fellow.z], 10);
+
+            this.hud.message(`${fellow.name}${fellow.inside ? `, ${fellow.inside}` : ""}${way && way !== "here" ? `: ${way}` : ""}`, 3);
+
+            return;
+        }
 
         const player = this.battle.actor(this.me);
         const enemies = this.battle.actors.filter((actor) => player && this.battle.hostile(actor, player) && !actor.dead && actor.map === player.map);

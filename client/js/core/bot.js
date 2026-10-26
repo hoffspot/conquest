@@ -54,6 +54,9 @@ export class Bot {
         this.fights = 0;
         this.engaged = 0;
 
+        /** The foe it last went for (an id), or null. */
+        this.foe = null;
+
         /** Anyone marked away, back, or sent out for it, as its copy saw it: { type, id, away, step }. */
         this.seen = [];
 
@@ -123,14 +126,18 @@ export class Bot {
 
         this.home ??= [...me.square];
 
-        const foe = me.order?.type === "engage" ? host.battle.actor(me.order.target) : null;
-        const fighting = Boolean(foe && !foe.dead);
+        // (The foe it's set on, as its copy of the world has it; or the one it last went for, while
+        // that one stands near and isn't running: its copy's order let go of a moment now and then)
+        const foe = host.battle.actor(me.order?.type === "engage" ? me.order.target : this.foe ?? null);
+        const [dx, dy] = foe ? [foe.x - me.x, foe.y - me.y] : [0, 0];
+        const fighting = Boolean(foe && !foe.dead && foe.map === me.map && dx * dx + dy * dy <= timing.foeNear * timing.foeNear && !host.battle.formations[foe.formation?.id]?.broken);
 
         if (!fighting) {
             const near = this.#foe(me);
 
             if (near) {
                 this.#ask({ type: "engage", target: near.id });
+                this.foe = near.id;
                 this.engaged++;
 
                 return;
@@ -161,14 +168,15 @@ export class Bot {
     }
 
     // The nearest foe within BOT.foeNear (one who'd fight it: not the townsfolk, nor its own
-    // people's guards), alive and on its map, or null
+    // people's guards), alive and on its map, not running from a battle (its body broken:
+    // core/engagement.js), or null
     #foe(me) {
         const { battle } = this.host;
         let best = null;
         let nearest = this.timing.foeNear * this.timing.foeNear;
 
         for (const actor of battle.actors) {
-            if (actor === me || actor.dead || actor.map !== me.map) {
+            if (actor === me || actor.dead || actor.map !== me.map || battle.formations[actor.formation?.id]?.broken) {
                 continue;
             }
 
