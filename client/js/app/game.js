@@ -7410,12 +7410,15 @@ export class Game {
             names.toll = String(stranger.toll);
         }
 
-        // (A shop with a daily stock: its special today, by name, and what it's asked for)
+        // (A shop with a daily stock: its special today, by name, and what it's asked for, brought to
+        // the player's might's level as the shop shows and sells it: core/host.js #buy)
         const stock = this.host.stockOf(npc.id);
 
         if (stock?.special) {
-            names.special = itemLabel(stock.special).toLowerCase();
-            names.specialPrice = String(shopPrice(stock.special, stock.shop, { haggle: this.progress.bonuses().haggle, special: true }));
+            const special = atLevel(stock.special, levelOf(this.host.mightFor(this.me)));
+
+            names.special = itemLabel(special).toLowerCase();
+            names.specialPrice = String(shopPrice(special, stock.shop, { haggle: this.progress.bonuses().haggle, special: true }));
         }
 
         // (They stop and face the player, if they can talk now: the host says)
