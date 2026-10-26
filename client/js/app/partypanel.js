@@ -515,7 +515,10 @@ export class PartyPanel {
                     invite.addEventListener("click", () => this.onParty("invite", id));
                     actions.append(invite);
                 } else if (can === "dismiss") {
-                    actions.append(this.#sure("Dismiss", "Dismiss?", () => this.onParty("remove", id)));
+                    const dismiss = this.#sure("Dismiss", "Dismiss?", () => this.onParty("remove", id));
+
+                    dismiss.classList.add("party-remove");
+                    actions.append(dismiss);
                 }
 
                 // (Messaged, unless blocked; blocked, asked twice, or unblocked)

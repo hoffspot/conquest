@@ -956,12 +956,13 @@ test("the party menu's Players tab lists everyone playing in the world, the play
 
     // In the party: the host crowned and leading it, Bryn in it, to be put out
     await expect(bryn.locator(".player-chip")).toHaveText(["In your party"], { timeout: 30000 });
-    await expect(bryn.locator(".party-sure")).toHaveText("Dismiss");
+    await expect(bryn.locator(".party-remove")).toHaveText("Dismiss");
     await expect(mine.locator(".party-name")).toHaveText(`♛ ${ada} (you)`);
     await expect(mine.locator(".player-chip")).toHaveText(["You lead your party"]);
     await expect(menu.locator(".party-everyone-note")).toHaveText("Invite anyone in no party to yours; Dismiss puts someone out of it.");
 
-    // Bryn's own: the host leading their party, and no one for Bryn to put out of it
+    // Bryn's own: the host leading their party, and no one for Bryn to put out of it (the host
+    // there to message, or block)
     const theirs = guest.getByRole("dialog", { name: "Party" });
     const theirRows = theirs.locator(".party-everyone-list .party-player");
 
@@ -972,7 +973,8 @@ test("the party menu's Players tab lists everyone playing in the world, the play
     await expect(theirRows.first().locator(".player-chip")).toHaveText(["In your party"]);
     await expect(theirRows.nth(1).locator(".party-name")).toHaveText(`♛ ${ada}`);
     await expect(theirRows.nth(1).locator(".player-chip")).toHaveText(["Leads your party"]);
-    await expect(theirs.locator(".party-everyone-list button")).toHaveCount(0);
+    await expect(theirs.locator(".party-everyone-list .party-remove")).toHaveCount(0);
+    await expect(theirRows.nth(1).locator("button")).toHaveText(["Message", "Block"]);
     await expect(theirs.locator(".party-everyone-note")).toHaveText("Only your party's leader can dismiss anyone from it.");
     await theirs.getByRole("button", { name: "Close" }).click();
 
@@ -991,7 +993,7 @@ test("the party menu's Players tab lists everyone playing in the world, the play
     await expect(bryn.locator(".player-chip")).toHaveText(["In your party"], { timeout: 30000 });
 
     // Put out of the party by the host (both presses at once, as Leave party is, in the party test)
-    expect(await bryn.locator(".party-sure").evaluate((button) => {
+    expect(await bryn.locator(".party-remove").evaluate((button) => {
         button.click();
 
         const sure = button.textContent;

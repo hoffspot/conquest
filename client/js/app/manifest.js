@@ -62,7 +62,7 @@ export const MANIFEST = Object.freeze([
             ["js/app/minimap.js", 48997, "c160136171"],
             ["js/app/pacing.js", 1893, "5c58080d6e"],
             ["js/app/pack.js", 61771, "200fbd11f9"],
-            ["js/app/partypanel.js", 30927, "bb944a21d7"],
+            ["js/app/partypanel.js", 31032, "8f7a9db6e9"],
             ["js/app/peer.js", 33675, "236595671e"],
             ["js/app/press.js", 6194, "463dd94ba0"],
             ["js/app/quickbar.js", 18926, "e89608c8ca"],
