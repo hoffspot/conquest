@@ -11,7 +11,6 @@ import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { DOCTRINES, rolesOf } from "../client/js/core/formation.js";
 import { ARMY_NEAR, HOST_PLAYER, Host } from "../client/js/core/host.js";
-import { ARMY } from "../client/js/core/war/armies.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { STAGES, TURN_MS } from "../client/js/core/war/war.js";
 import { decode, encode } from "../client/js/core/wire.js";

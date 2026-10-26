@@ -228,7 +228,7 @@ describe("a field battle (host.js FIELD_BATTLE: the debug overlay's)", () => {
 
         assert.equal(lines.length, 2);
         assert.deepEqual(
-            host.fields.map(({ engagement, ...field }) => field),
+            host.fields.map(({ engagement: _engagement, ...field }) => field),
             [{ ids: fielded.map(({ id }) => id), formations: lines, at: host.battle.time, over: null }],
         );
         assert.deepEqual(
