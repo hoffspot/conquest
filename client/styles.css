@@ -2167,8 +2167,9 @@ body[data-minimap="off"] #party {
     background: #1d1828;
 }
 
+/* (Another player: in their own colour in the party, as on the maps: app/mapicons.js PARTY_COLOURS) */
 .member.player {
-    border-color: var(--gold-bright);
+    border-color: var(--member-colour, var(--gold-bright));
     background: #221c12;
 }
 
@@ -2214,7 +2215,7 @@ body[data-minimap="off"] #party {
 }
 
 .member.player .member-initial {
-    color: var(--gold-bright);
+    color: var(--member-colour, var(--gold-bright));
 }
 
 .member.risen .member-initial {
@@ -5295,6 +5296,15 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     border-radius: 10px;
     background: var(--field);
     border: 1px solid var(--field-border);
+}
+
+/* (Each player's own colour in the party, as on the maps and their icon) */
+.party-swatch {
+    flex: none;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1.5px rgba(20, 8, 4, 0.9);
 }
 
 .party-player .party-name {

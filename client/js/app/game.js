@@ -56,7 +56,7 @@ import { ambienceOf, doorOf, TOLLS, tolled } from "../audio/ambience.js";
 import { footing } from "../audio/footing.js";
 import { useSound, wearSound } from "../audio/handling.js";
 import { CREATURE_VOICES, creatureSounds, ITEM_SOUNDS, spellSounds } from "../audio/sound.js";
-import { FORT_ICONS, PING, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
+import { FORT_ICONS, partyColour, PING, PLACE_RIMS, WORKS_ICONS, WORKS_RIMS } from "./mapicons.js";
 import { buildingView } from "./building.js";
 import { battleMapView, heededText } from "./battlemap.js";
 import { PALISADE } from "../core/war/armies.js";
@@ -5162,10 +5162,16 @@ export class Game {
             minimap.setMap(this.world.maps[this.mapId]);
         }
 
+        // (The other players in their party, each in their own colour, however far: partyView. Out
+        // in the world, one inside a building or down in a dungeon where its door is; inside, only
+        // those on the same floor)
+        const party = this.partyView().filter((member) => member.map === this.mapId || this.mapId === "town");
+        const partied = new Set(party.map(({ id }) => id));
+
         minimap.draw({
             player: actor.dead ? null : { x: me.object.position.x - ox, z: me.object.position.z - oz, facing: me.facing },
-            // (Not one lurking unseen overhead: battle.js #lurk)
-            others: battle.actors.filter((other) => other !== actor && !other.dead && !other.lurking && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite && !CRIER.test(other.id)).map((other) => {
+            // (Not one lurking unseen overhead: battle.js #lurk; nor another of their party)
+            others: battle.actors.filter((other) => other !== actor && !other.dead && !other.lurking && other.map === this.mapId && this.avatars.has(other.id) && !other.wild?.elite && !CRIER.test(other.id) && !partied.has(other.id)).map((other) => {
                 const position = this.avatars.get(other.id).object.position;
 
                 return { x: position.x - ox, z: position.z - oz, hostile: this.battle.hostile(other, actor), targeted: other === target, ally: Boolean(this.allied?.has(other.id)) };
@@ -5188,6 +5194,7 @@ export class Game {
             markers: this.mapId === "town" ? this.markers : [],
             // (The fresh tracks they've come upon, the way they lead: #freshTrails)
             trails: this.mapId === "town" ? this.#freshTrails() : [],
+            party: party.map(({ id, name, colour, x, z, map }) => (map === this.mapId ? { id, name, colour, x: this.battle.actor(id).x, z: this.battle.actor(id).y } : { id, name, colour, x, z })),
         });
     }
 
@@ -5935,6 +5942,30 @@ export class Game {
      * The party's pings as they are now (#pinged), for the maps: [{ id, x, z (metres), age
      * (seconds), name (who made it), own (the player's) }].
      */
+    /**
+     * The other players in the player's party, where each is, for the maps ([{ id, name, colour
+     * (core/mapicons.js PARTY_COLOURS: by their place in it, the same for each of them), x, z
+     * (metres, the world's: one inside a building or down in a dungeon where its door or way in
+     * is), map, inside (where they are then: "in Wenches and Ale"), dead }]), however far off.
+     * None, out of a party.
+     */
+    partyView() {
+        const party = this.host.partyFor(this.me);
+
+        return (party?.members ?? []).flatMap((id) => {
+            const actor = id === this.me ? null : this.battle.actor(id);
+
+            if (!actor) {
+                return [];
+            }
+
+            const [x, z] = this.#outside(actor);
+            const name = this.world.maps?.[actor.map]?.name ?? this.world.interiors?.of(actor.map)?.name ?? null;
+
+            return [{ id, name: this.host.players.get(id)?.hero.name ?? actor.name ?? "", colour: partyColour(party.members, id), x, z, map: actor.map, inside: actor.map === "town" ? null : name ? `in ${name.replace(/^The /, "the ")}` : "indoors", dead: Boolean(actor.dead) }];
+        });
+    }
+
     pingView() {
         return this.pings.filter(({ at }) => this.clock - at < PING.lasts).map(({ id, who, name, x, z, at }) => ({ id, x, z, age: this.clock - at, name, own: who === this.me }));
     }
@@ -6519,8 +6550,16 @@ export class Game {
 
     // Places another of the player's party found for them (core/host.js #share: `places`, plan
     // place ids, found by `name`), said: the one by its name, or what it is; or how many
-    #sharedFinds({ name, places }) {
+    #sharedFinds({ name, places = [], pooled = false }) {
         const what = places.length === 1 ? this.#placeCalled(places[0]) : null;
+
+        // (Coming into a party, what each had found before: the land they'd been over, and the
+        // places, on the map too: core/host.js #pool)
+        if (pooled) {
+            this.hud.message(`${name}'s map is yours too: ${places.length ? `${what ?? `${places.length} places`} and ` : ""}the land they've been over.`, 4);
+
+            return;
+        }
 
         this.hud.message(what ? `${name} found ${what}: it's on your map.` : `${name} found ${places.length} places: they're on your map.`, 3.5);
     }
@@ -9303,6 +9342,7 @@ export class Game {
                 leader: party.leader === id,
                 me: id === this.me,
                 away: id !== this.me && this.battle.actor(id)?.map !== me?.map,
+                colour: partyColour(party.members, id),
                 with: id === this.me ? [] : this.host.partyOf(id).map((one) => this.battle.actor(one.id)?.name ?? this.host.followers.get(one.id)?.name ?? "").filter(Boolean),
             })),
             others: [...this.host.players.keys()].filter((id) => id !== this.me && !party?.members.includes(id)).map((id) => ({ id, name: nameOf(id), asked: Boolean(this.host.invitation(id)) })),
@@ -9775,7 +9815,7 @@ export class Game {
 
         this.hud.party(
             player && !player.dead
-                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture, leader: kind === "player" && this.host.partyFor(this.me)?.leader === id }))
+                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture, leader: kind === "player" && this.host.partyFor(this.me)?.leader === id, colour: kind === "player" ? partyColour(this.host.partyFor(this.me)?.members ?? [], id) : null }))
                 : [],
         );
 
@@ -12338,7 +12378,7 @@ export class Game {
                         this.hud.message("This branch of the guild is open to you now: step through to it from any other branch's portal.", 4);
                     }
 
-                    if (event.places?.length) {
+                    if (event.places?.length || event.pooled) {
                         this.#sharedFinds(event);
                     }
 
@@ -14786,8 +14826,19 @@ export class Game {
      * (clientX, clientY): fight an enemy within `reach` metres of it, or walk there. Twice in
      * quick succession, run.
      */
-    mapTap({ x, z, reach = 3, clientX = 0, clientY = 0, run = false, time = performance.now() }) {
+    mapTap({ x, z, reach = 3, clientX = 0, clientY = 0, run = false, time = performance.now(), member = null }) {
         this.#wake();
+
+        // (Another of their party marked at the edge, tapped: who it is and how far, which way)
+        const fellow = member ? this.partyView().find(({ id }) => id === member) : null;
+
+        if (fellow) {
+            const way = bearing(this.#whereAmI(), [fellow.x, fellow.z]);
+
+            this.hud.message(`${fellow.name}${fellow.inside ? `, ${fellow.inside}` : ""}${way && way !== "here" ? `: ${way}` : ""}`, 3);
+
+            return;
+        }
 
         const player = this.battle.actor(this.me);
         const enemies = this.battle.actors.filter((actor) => player && this.battle.hostile(actor, player) && !actor.dead && actor.map === player.map);

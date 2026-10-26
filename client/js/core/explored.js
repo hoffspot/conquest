@@ -8,8 +8,9 @@
 // stood in (core/rings.js: by their sites' ids), each one's moon theirs to know; and the places
 // worth finding they've seen from high ground (core/sighting.js: by their ids), found without
 // going near (`spotted`). In a party, what each finds is found by the others too (Host #share),
-// and kept by them for good: the places worth finding one of them found first, by whom (`found`),
-// for the maps to say.
+// and what each had found before, by the others as they come into it (merge, Host #pool); kept by
+// them for good: the places worth finding one of them found first, by whom (`found`), for the
+// maps to say.
 //
 // Kept with the saved game (app/save.js): the buildings as their keys, the chunks as one bit each
 // (the world's 128 by 128 chunks in 2 KB), written as base64, the branches, the signs, the homes,
@@ -201,6 +202,38 @@ export class Explored {
         this.version++;
 
         return true;
+    }
+
+    /**
+     * What another of the player's party has found (`other`: their Explored) found by the player
+     * too, for good, as one of them joins the other's party: the chunks they've set foot in, the
+     * buildings they've gone into, the places they've seen from high ground and the homes they've
+     * tracked. Not the signs read, the rings stood in nor the guild's portals: theirs to have done.
+     * Returns what was new to the player: { chunks (how many), entered, spotted, tracked }.
+     */
+    merge(other) {
+        let chunks = 0;
+
+        for (let k = 0; k < this.visited.length; k++) {
+            const gained = other.visited[k] & ~this.visited[k];
+
+            for (let bits = gained; bits; bits &= bits - 1) {
+                chunks++;
+            }
+
+            this.visited[k] |= other.visited[k];
+        }
+
+        const gained = (mine, theirs) => [...theirs].filter((id) => !mine.has(id) && mine.add(id));
+        const entered = gained(this.entered, other.entered);
+        const spotted = gained(this.spotted, other.spotted);
+        const tracked = gained(this.tracked, other.tracked);
+
+        if (chunks || entered.length || spotted.length || tracked.length) {
+            this.version++;
+        }
+
+        return { chunks, entered, spotted, tracked };
     }
 
     /** How many chunks have been visited. */

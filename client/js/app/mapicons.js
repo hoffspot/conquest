@@ -528,6 +528,89 @@ export function drawPing(context, x, y, { size = 22, age = 0 } = {}) {
 }
 
 /**
+ * Each player in a party's own colour, on the maps and on their icon (core/host.js PARTY: four
+ * at most), by their place in it (its `members`, in the order they joined: the same for each of
+ * them): violet, orange, pink and lime. None of them the green of the player's allies, the light
+ * blue of everyone else, the red of their enemies or the gold of an elite's star.
+ */
+export const PARTY_COLOURS = Object.freeze(["#b48cff", "#ff9f43", "#ff79c6", "#d6f25a"]);
+
+/** One of a party's colour (PARTY_COLOURS) by their place in its `members` (ids). */
+export function partyColour(members, id) {
+    const k = members.indexOf(id);
+
+    return PARTY_COLOURS[Math.max(0, k) % PARTY_COLOURS.length];
+}
+
+/**
+ * Another of the player's party on the minimap (`x`, `y`, pixels), in their colour: a dot rimmed
+ * dark, a little bigger than anyone else's; or, further than shown, at the edge (`toward`: the
+ * way they are, radians, clockwise from the map's right), a badge with their initial on it and
+ * an arrow's point out of it the way they are.
+ */
+export function drawPartyMember(context, x, y, colour, { toward = null, initial = "" } = {}) {
+    context.save();
+    context.translate(x, y);
+    context.lineWidth = 1.3;
+    context.strokeStyle = "rgba(20, 8, 4, 0.9)";
+    context.fillStyle = colour;
+
+    if (toward !== null) {
+        context.save();
+        context.rotate(toward);
+        context.beginPath();
+        context.moveTo(12.5, 0);
+        context.lineTo(4.5, -5.5);
+        context.lineTo(4.5, 5.5);
+        context.closePath();
+        context.fill();
+        context.stroke();
+        context.restore();
+    }
+
+    context.beginPath();
+    context.arc(0, 0, toward === null ? 4.4 : 7, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+
+    if (toward !== null && initial) {
+        context.fillStyle = "#1a120a";
+        context.font = "700 9.5px system-ui, sans-serif";
+        context.textAlign = "center";
+        context.textBaseline = "middle";
+        context.fillText(initial, 0, 0.5);
+    }
+
+    context.restore();
+}
+
+/**
+ * Another of the player's party on the world map, where they are (`x`, `y`, pixels: its point): a
+ * pin in their colour, its head `size` pixels across, rimmed dark, a pale dot in it.
+ */
+export function drawPartyPin(context, x, y, colour, { size = 18 } = {}) {
+    const r = size / 2;
+
+    context.save();
+    context.beginPath();
+    context.moveTo(x, y);
+    context.bezierCurveTo(x - r * 0.35, y - r * 0.9, x - r, y - r * 1.25, x - r, y - r * 2);
+    context.arc(x, y - r * 2, r, Math.PI, 0);
+    context.bezierCurveTo(x + r, y - r * 1.25, x + r * 0.35, y - r * 0.9, x, y);
+    context.closePath();
+    context.fillStyle = colour;
+    context.fill();
+    context.lineWidth = 1.6;
+    context.strokeStyle = "rgba(20, 8, 4, 0.9)";
+    context.stroke();
+    context.beginPath();
+    context.arc(x, y - r * 2, r * 0.38, 0, Math.PI * 2);
+    context.fillStyle = "rgba(255, 248, 230, 0.95)";
+    context.fill();
+    context.restore();
+}
+
+/**
  * Each marker's colour (core/markers.js MARKER_ICONS): its rim and its sign. A flag red, a star
  * gold, danger a bone white, loot gold-brown, a camp's tent orange, something to see blue, herbs
  * green, a mystery violet.

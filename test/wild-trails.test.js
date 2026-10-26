@@ -168,6 +168,32 @@ describe("the trails out of the wild's camps and lairs (core/tracks.js)", () => 
         assert.equal(read(ours.signs[2]).told[0].tracked, false);
     });
 
+    it("tracks a home for the whole party: the third sign read by one of it, the others have it tracked too, found by them", () => {
+        const { host, me } = outside();
+
+        host.join({ id: "guest", hero: { ...HERO, name: "Bea" } });
+        assert.equal(host.command(HOST_PLAYER, { type: "party", do: "invite", who: "guest" }).ok, true);
+        assert.equal(host.command("guest", { type: "party", do: "accept" }).ok, true);
+        run(host, STEP_MS);
+
+        const bea = host.players.get("guest");
+        const ours = [...trails].sort((a, b) => Math.hypot(a.home.at[0] - me.x, a.home.at[1] - me.y) - Math.hypot(b.home.at[0] - me.x, b.home.at[1] - me.y))[0];
+        let events = [];
+
+        assert.ok(!bea.explored.tracked.has(ours.home.id));
+
+        for (const sign of ours.signs.slice(0, 3)) {
+            put(me, [Math.floor(sign.at[0]), Math.floor(sign.at[1])]);
+            assert.equal(host.command(HOST_PLAYER, { type: "read", sign: sign.id }).ok, true);
+            events = run(host, STEP_MS);
+        }
+
+        assert.ok(bea.explored.tracked.has(ours.home.id));
+        assert.equal(bea.explored.finderOf(ours.home.id), HERO.name);
+        assert.ok(events.some(({ type, id, by, places }) => type === "explored" && id === "guest" && by === HOST_PLAYER && places?.includes(ours.home.id)));
+        assert.equal(bea.explored.signs.size, 0, "(the signs theirs who read them)");
+    });
+
     it("keeps the signs read and the homes tracked with what's been found, and carries a world from before them on", () => {
         const explored = new Explored();
 

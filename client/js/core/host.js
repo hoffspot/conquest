@@ -2449,6 +2449,31 @@ export class Host {
         this.#event("explored", { id: fellow.id, by: player.id, ...(found.length ? { name: player.hero.name, places: found } : {}) });
     }
 
+    // What another of a player's party (`fellow`) had found before they were in it found by the
+    // player too, for good, as one of them joins the other's party (Explored merge): the land
+    // they've been over, the buildings they've gone into, the places they've seen from high ground
+    // and the homes they've tracked; the places worth finding (#findables) the player knows now
+    // and didn't kept as found by them first (or by whoever found them for them), to be told
+    #pool(player, fellow) {
+        const explored = player?.explored;
+
+        if (!explored || !fellow?.explored) {
+            return;
+        }
+
+        const unfound = this.#findables().filter(({ id, at }) => !explored.knows(id, ...at) && !explored.tracked.has(id));
+        const { chunks, entered, spotted, tracked } = explored.merge(fellow.explored);
+        const places = unfound.filter(({ id, at }) => explored.knows(id, ...at) || explored.tracked.has(id)).map(({ id }) => id);
+
+        for (const id of places) {
+            explored.foundBy(id, fellow.explored.finderOf(id) ?? fellow.hero.name);
+        }
+
+        if (chunks || entered.length || spotted.length || tracked.length || places.length) {
+            this.#event("explored", { id: player.id, by: fellow.id, name: fellow.hero.name, pooled: true, chunks, places });
+        }
+    }
+
     // What each player out in the world sees from high ground (core/sighting.js: on a rise well
     // above the land round them), looked for each time the host looks round: the places worth
     // finding they hadn't found (#findables) that the land between doesn't hide, kept as spotted
@@ -3402,6 +3427,16 @@ export class Host {
         const tracked = read >= TRAILS.tracked && player.explored.track(trail.home.id);
 
         this.#event("sign", { id: player.id, sign: sign.id, creature, home: trail.home.id, way: sign.way, read, again: !first, tracked });
+
+        // (A home tracked: tracked by their party too, as theirs, for good)
+        for (const id of tracked ? this.fellows(player.id) : []) {
+            const fellow = this.players.get(id);
+
+            if (fellow?.explored.track(trail.home.id)) {
+                fellow.explored.foundBy(trail.home.id, player.hero.name);
+                this.#event("explored", { id, by: player.id, name: player.hero.name, places: [trail.home.id] });
+            }
+        }
 
         if (first) {
             this.#researched(player, player.progress.bestiary.read(creature));
@@ -10599,6 +10634,14 @@ export class Host {
                 joined.members.push(player.id);
                 this.partyIds.set(player.id, joined.id);
                 this.#tellParty(joined, { change: "joined", who: player.id, name: player.hero.name });
+
+                // (What each had found before, found by the other too: #pool)
+                for (const id of joined.members.filter((one) => one !== player.id)) {
+                    const fellow = this.players.get(id);
+
+                    this.#pool(player, fellow);
+                    this.#pool(fellow, player);
+                }
 
                 return OK;
             }

@@ -20,7 +20,7 @@ import { allAtOnce, Steps } from "../core/steps.js";
 import { GROUND, HOUSE_STYLES, PLOT } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { LAND_COLOURS } from "../world/ground.js";
-import { drawBuildingIcon, drawMarker, drawPing, drawSearch, drawTracked } from "./mapicons.js";
+import { drawBuildingIcon, drawMarker, drawPartyMember, drawPing, drawSearch, drawTracked } from "./mapicons.js";
 
 // Colours (RGB) of the ground and of what stands on it
 const GROUND_COLOURS = {
@@ -109,6 +109,11 @@ const ELITE_MARK = Object.freeze({ size: 6.5, inset: 8 });
 // A place's crier marked (core/townsfolk.js crierOf): his bell's size (pixels from its middle to
 // its top), marked at the edge as an elite is when he's further than shown
 const CRIER_MARK = Object.freeze({ size: 6 });
+
+// Another of the player's party further than shown: how far in from the edge (pixels) their badge
+// is marked, its arrow's point out from it; and how near (pixels) a tap on it is, to be told who
+// it is and how far (app/game.js mapTap)
+const PARTY_MARK = Object.freeze({ inset: 15, tap: 16 });
 
 // A handbell of brass, edged dark, its handle up and its clapper below (a crier's mark), `size`
 // pixels from its middle to its top
@@ -345,7 +350,8 @@ export class Minimap {
      * @param {object} world - From buildWorld (core/overworld.js), or generateWorld (core/world.js).
      * @param {object} [options]
      * @param {(tap: object) => void} [options.onTap] - Hears taps on it: { x, z (metres), reach
-     *     (metres: how close to an enemy picks it), clientX, clientY, time }.
+     *     (metres: how close to an enemy picks it), clientX, clientY, time, member (another of
+     *     the party marked at the edge, if it was them tapped: their id, else null) }.
      * @param {() => void} [options.onHold] - Hears it held (a finger, or the mouse, kept down on it).
      */
     constructor(canvas, world, { onTap = () => {}, onHold = () => {} } = {}) {
@@ -408,7 +414,11 @@ export class Minimap {
             const [x0, z0, across] = this.shown();
             const metres = across / rect.width;
 
-            onTap({ x: x0 + (event.clientX - rect.left) * metres, z: z0 + (event.clientY - rect.top) * metres, reach: PICK * metres, clientX: event.clientX, clientY: event.clientY, time: event.timeStamp });
+            // (And another of the party marked at the edge, if it's them tapped: `member`, their id)
+            const [px, py] = [event.clientX - rect.left, event.clientY - rect.top];
+            const member = (this.party ?? []).find(({ x, y, edge }) => edge && Math.hypot(x - px, y - py) <= PARTY_MARK.tap)?.id ?? null;
+
+            onTap({ x: x0 + px * metres, z: z0 + py * metres, reach: PICK * metres, clientX: event.clientX, clientY: event.clientY, time: event.timeStamp, member });
         };
 
         const cancel = () => {
@@ -487,11 +497,13 @@ export class Minimap {
      * and the circles to search for the treasures the player's hunting (`searches`: [{ id, x, z,
      * radius, grade, own }]: app/game.js treasureCircles); the party's pings (`pings`: [{ x, z,
      * age (seconds) }]: app/game.js pingView); the player's markers (`markers`: [{ id, x, z,
-     * icon }]: app/game.js markerView); and the fresh tracks they've come upon (`trails`: [{ id,
+     * icon }]: app/game.js markerView); the fresh tracks they've come upon (`trails`: [{ id,
      * points: [[x, z]...] }]: app/game.js freshTrails), dotted from where they start to where
-     * they lead.
+     * they lead; and the other players in their party (`party`: [{ id, name, x, z, colour }]:
+     * app/game.js partyView), each a dot in their own colour, or further than shown, a badge with
+     * their initial at the edge, its arrow pointing the way they are.
      */
-    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], pings = [], markers = [], trails = [] }, now = performance.now()) {
+    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], pings = [], markers = [], trails = [], party = [] }, now = performance.now()) {
         const { canvas, context, map } = this;
 
         this.drawn = now;
@@ -714,6 +726,22 @@ export class Minimap {
 
             drawPing(context, x, y, { size: k < 1 ? 11 : 15, age: ping.age });
             this.pings.push({ x, y, edge: k < 1 });
+        }
+
+        // The other players in their party, each in their own colour: as they are, or further than
+        // shown, at the edge the way each is, an arrow with their initial (those drawn kept, for a
+        // tap on one to tell who it is, and for tests: `party`, and whether at the edge)
+        this.party = [];
+
+        for (const member of party) {
+            const [ex, ey] = at(member.x, member.z);
+            const [dx, dy] = [ex - cx, ey - cy];
+            const fits = (d, middle, size) => (d > 0 ? (size - PARTY_MARK.inset - middle) / d : d < 0 ? (PARTY_MARK.inset - middle) / d : Infinity);
+            const k = Math.min(1, fits(dx, cx, width), fits(dy, cy, height));
+            const [x, y] = k < 1 ? [cx + dx * k, cy + dy * k] : [ex, ey];
+
+            drawPartyMember(context, x, y, member.colour, k < 1 ? { toward: Math.atan2(dy, dx), initial: member.name.slice(0, 1).toUpperCase() } : {});
+            this.party.push({ id: member.id, x, y, edge: k < 1 });
         }
 
         // The player: an arrowhead pointing the way they face (0 is south, towards east positive)

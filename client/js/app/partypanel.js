@@ -389,12 +389,17 @@ export class PartyPanel {
         this.together = shown;
         this.players.replaceChildren(
             ...(players.length
-                ? players.map(({ id, name, leader, me, away, with: theirs = [] }) => {
+                ? players.map(({ id, name, leader, me, away, colour = null, with: theirs = [] }) => {
                       const row = element("li", `party-player${leader ? " leader" : ""}${away ? " away" : ""}`);
                       const text = element("div", "party-text");
                       const actions = element("div", "party-actions");
+                      // (Their own colour in the party, as on the maps and their icon)
+                      const swatch = element("span", "party-swatch");
 
+                      swatch.style.background = colour ?? "transparent";
+                      swatch.setAttribute("aria-hidden", "true");
                       row.dataset.id = id;
+                      row.append(swatch);
                       text.append(element("span", "party-name", `${leader ? "♛ " : ""}${me ? `${name} (you)` : name}`), element("span", "party-kind", [leader ? "Leads the party" : "In the party", away ? "Not here" : "", theirs.length ? `With them: ${theirs.join(", ")}` : ""].filter(Boolean).join(" · ")));
 
                       if (me) {
