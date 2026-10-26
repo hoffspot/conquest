@@ -894,6 +894,16 @@ export class Crowd {
         return this.waiting.length > 0;
     }
 
+    /** Whether a kind's figure is made. */
+    made(key) {
+        return Boolean(this.kinds.get(key)?.template);
+    }
+
+    /** The kinds of `keys` waiting made first, in their order; the rest after them, as they were. */
+    first(keys) {
+        this.waiting = [...new Set([...keys.filter((key) => this.waiting.includes(key)), ...this.waiting])];
+    }
+
     /**
      * Make what's waiting, a step at a time, till `until` (performance.now()'s), the first waiting
      * first; one waiting on work done elsewhere (its skin painted, its detail lowered) left till a
