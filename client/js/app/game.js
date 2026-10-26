@@ -833,6 +833,13 @@ const BELL = Object.freeze({ reach: 160, every: 180, volume: 1.6 });
 // that first; and the lord's thanks shown so long (seconds) for a good share of them felled
 const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, charge: 1.2, thanks: 14 });
 
+/**
+ * A battle's turns (core/engagement.js) told to a player within `near` metres of where each comes
+ * (#battleTurn), at most one every `every` seconds (but a commander falling, and their own job,
+ * trophy and reward, always); what each of a side's bodies is called (its `parts`).
+ */
+const BATTLE_TOLD = Object.freeze({ near: 160, every: 2.5, parts: Object.freeze({ left: "left", centre: "centre", right: "right", reserve: "reserve", vanguard: "household" }) });
+
 // How far off the wild's hunters are heard in a build-up after a long calm (metres: core/director.js
 // PACING's `from`, and more)
 const PACE_HEARD = 160;
@@ -863,7 +870,7 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -5195,7 +5202,45 @@ export class Game {
             // (The fresh tracks they've come upon, the way they lead: #freshTrails)
             trails: this.mapId === "town" ? this.#freshTrails() : [],
             party: party.map(({ id, name, colour, x, z, map }) => (map === this.mapId ? { id, name, colour, x: this.battle.actor(id).x, z: this.battle.actor(id).y } : { id, name, colour, x, z })),
+            // (The battles near: battleView)
+            battles: this.mapId === "town" ? this.battleView() : { arrows: [], commanders: [] },
         });
+    }
+
+    /**
+     * The battles out in the world, for the minimap (core/engagement.js: an invasion's, a field
+     * battle's, the armies met, a seat's last stand): { arrows: [{ from, to, hostile }] (each body
+     * charging, wheeling round a flank, sent in, or sent to try the enemy's line: from where it is
+     * to where it's going), commanders: [{ id, x, z, hostile }] (each standing) }, each side's the
+     * player's enemies' or not (`hostile`).
+     */
+    battleView() {
+        const me = this.battle.actor(this.me);
+        const view = { arrows: [], commanders: [] };
+
+        for (const { sides } of me ? (this.host?.engagements?.() ?? []) : []) {
+            for (const side of sides) {
+                const ids = side.bodies.flatMap(({ formation }) => [formation, `${formation}:probe`, `${formation}:flank`]);
+                const commander = side.commander === null ? null : this.battle.actor(side.commander);
+                const one = commander && !commander.dead ? commander : this.battle.actors.find((actor) => !actor.dead && ids.includes(actor.formation?.id));
+
+                if (!one) {
+                    continue;
+                }
+
+                const hostile = this.battle.hostile(one, me);
+
+                for (const formation of ids.map((id) => this.battle.formations[id]).filter((each) => each?.to && each.charge && !each.broken)) {
+                    view.arrows.push({ from: [...formation.anchor], to: [...formation.to], hostile });
+                }
+
+                if (commander && !commander.dead && commander.map === "town") {
+                    view.commanders.push({ id: commander.id, x: commander.x, z: commander.y, hostile });
+                }
+            }
+        }
+
+        return view;
     }
 
     // An adventurers' cache come within sight of the player for the first time (CACHE_SEEN): said,
@@ -7689,6 +7734,116 @@ export class Game {
         const [ox, oz] = this.originOf("town");
 
         this.sound?.play(name, { at: new THREE.Vector3(ox + x, 0, oz + y), delay, far: HORNS.far });
+    }
+
+    // A turn in a battle (core/engagement.js; the "engagement" event: host.js #fight, #jobs,
+    // #trophy). The player's own: their job from the commander of the side they fight for (to hold
+    // the body of its line nearest them, or bring down the enemy's standard-bearer), and their
+    // reward for it done; their bounty and trophy for felling a commander. Near them
+    // (BATTLE_TOLD): the lines of a field battle or the armies met charging, each side's horn blown
+    // from its line (an invasion's are its own: #invasion); a reserve or a commander's household
+    // sent in, its side's horn blown twice where it's going; a commander falling, the retreat
+    // sounded where they fell; a standard falling, a body breaking, wheeling onto a flank, falling
+    // back and coming on again
+    #battleTurn(event) {
+        const me = this.battle.actor(this.me);
+        const engagement = this.host?.engagements?.().find(({ id }) => id === event.id) ?? null;
+        const side = engagement?.sides.find(({ key }) => key === event.side) ?? null;
+        const say = (words, seconds = 4) => this.hud.message(words, seconds);
+
+        switch (event.change) {
+            case "job":
+                if (event.player === this.me) {
+                    const part = event.part === "centre" ? "the centre" : `the ${BATTLE_TOLD.parts[event.part] ?? event.part} flank`;
+
+                    say(`${event.by}: "${event.kind === "banner" ? "Bring down their standard-bearer!" : `Hold ${part}!`}"`, 6);
+                    this.sound?.play("newsHeard");
+                }
+
+                return;
+            case "jobDone":
+                if (event.player === this.me) {
+                    const got = [`${event.gold} gold`, ...(event.merit ? [`${event.merit} merit with the guilds`] : []), ...(event.thanks ? [`${event.thanks} standing`] : [])];
+
+                    say(`${event.kind === "banner" ? "Their standard-bearer is down" : "You held your ground"}, as you were bid: ${got.join(", ")}.`, 6);
+                    this.sound?.play("newsHeard");
+                }
+
+                return;
+            case "trophy":
+                if (event.player === this.me) {
+                    say(`You felled ${event.name}! A bounty of ${event.gold} gold${event.merit ? `, ${event.merit} merit with the guilds` : ""}, and a trophy: ${itemLabel(event.piece).toLowerCase()}.`, 7);
+                    this.sound?.play("newsHeard");
+                }
+
+                return;
+            default:
+                break;
+        }
+
+        // (Near the player, out in the world: where it came)
+        const where = event.at ?? event.to ?? event.anchors?.find(Boolean) ?? null;
+
+        if (!me || !where || me.map !== "town" || Math.hypot(me.x - where[0], me.y - where[1]) > BATTLE_TOLD.near) {
+            return;
+        }
+
+        // (Whose: the player's enemies' or not, and what they're called; a storm's, by the army's
+        // people: host.js #stormCommand)
+        const one = side ? [side.commander, ...side.bodies.map(({ formation }) => formation)].map((each) => this.battle.actor(each) ?? this.battle.actors.find((actor) => !actor.dead && actor.formation?.id === each)).find(Boolean) : null;
+        const people = side?.people ?? (event.storm ? (this.host?.war?.force(event.side)?.realm ?? null) : null);
+        const hostile = one ? this.battle.hostile(one, me) : people ? Boolean(this.host?.war?.hostile(people, this.self?.realm)) : true;
+        const invasion = event.invasion ? this.host.invasions.find(({ id }) => id === event.invasion) : null;
+        const whose = invasion && side ? (side.key === "invaders" ? `the ${bandOf(invasion.band).many}'` : `${invasion.name}'s`) : `the ${ADJECTIVES[people] ?? people ?? "enemy"}`;
+        const Whose = `${whose[0].toUpperCase()}${whose.slice(1)}`;
+        const part = BATTLE_TOLD.parts[event.part] ?? event.part;
+        const horn = hostile ? "warHorn" : "townHorn";
+        const now = this.clock;
+        const quiet = now < (this.battleTold ?? -Infinity);
+        const told = (words) => {
+            if (!quiet) {
+                this.battleTold = now + BATTLE_TOLD.every;
+                say(words);
+            }
+        };
+
+        switch (event.change) {
+            case "charge":
+                // (An invasion's horns its own: #invasion)
+                if (!event.invasion && event.anchors?.every(Boolean)) {
+                    event.anchors.forEach((at, k) => this.#invasionHorn(k ? "townHorn" : "warHorn", at, k ? HORNS.charge : 0));
+                    told("The lines charge!");
+                }
+
+                break;
+            case "commit":
+                this.#invasionHorn(horn, event.to);
+                this.#invasionHorn(horn, event.to, HORNS.again);
+                told(event.part === "vanguard" && event.commander ? `${this.battle.actor(event.commander)?.name ?? Whose} leads their household in!` : `${Whose} reserve goes in!`);
+                break;
+            case "commanderFell":
+                this.#invasionHorn("retreatHorn", where);
+                this.battleTold = now + BATTLE_TOLD.every;
+                say(`${event.name || "Their commander"} has fallen! ${Whose} lines are leaderless!`, 5);
+                break;
+            case "bannerFell":
+                told(`${Whose} standard has fallen!`);
+                break;
+            case "break":
+                told(`${Whose} ${part} breaks and runs!`);
+                break;
+            case "flank":
+                told(`${Whose} ${part} wheels onto their flank!`);
+                break;
+            case "falter":
+                told(`${Whose} ${part} falls back!`);
+                break;
+            case "rally":
+                told(`${Whose} ${part} comes on again!`);
+                break;
+            default:
+                break;
+        }
     }
 
     // Where on an invasion's road its lines are, so far out past the town's edge (`out` metres;
@@ -12139,6 +12294,9 @@ export class Game {
                 break;
             case "invasion":
                 this.#invasion(event);
+                break;
+            case "engagement":
+                this.#battleTurn(event);
                 break;
             case "burnt":
                 this.#burnt(event);

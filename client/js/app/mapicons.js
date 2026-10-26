@@ -585,6 +585,79 @@ export function drawPartyMember(context, x, y, colour, { toward = null, initial 
 }
 
 /**
+ * A body of a battle on the move on the minimap (core/engagement.js: charging, wheeling round a
+ * flank, sent in, sent to try the enemy's line): an arrow from where it is (`from`: [x, y],
+ * pixels) to where it's going (`to`), the red of the player's enemies or the green of their allies
+ * (`hostile`), rimmed dark; none for so short a way it'd hide what it's over.
+ */
+export function drawBattleArrow(context, [x0, y0], [x1, y1], { hostile = true } = {}) {
+    const length = Math.hypot(x1 - x0, y1 - y0);
+
+    if (length < 6) {
+        return;
+    }
+
+    const colour = hostile ? "#ff4a2e" : "#58d26e";
+
+    context.save();
+    context.translate(x0, y0);
+    context.rotate(Math.atan2(y1 - y0, x1 - x0));
+    context.lineCap = "round";
+    context.lineJoin = "round";
+
+    for (const [style, width] of [
+        ["rgba(20, 8, 4, 0.85)", 4.4],
+        [colour, 2.2],
+    ]) {
+        context.strokeStyle = style;
+        context.lineWidth = width;
+        context.beginPath();
+        context.moveTo(0, 0);
+        context.lineTo(length - 2, 0);
+        context.moveTo(length - 6.5, -4.5);
+        context.lineTo(length, 0);
+        context.lineTo(length - 6.5, 4.5);
+        context.stroke();
+    }
+
+    context.restore();
+}
+
+/**
+ * A battle's commander on the minimap (core/engagement.js: a band's, a town's captain of the
+ * guard, an army's general, a seat's ruler at their last stand), where they are (`x`, `y`,
+ * pixels): a crown of gold `size` pixels across on a disc of the red of the player's enemies or
+ * the green of their allies (`hostile`), rimmed dark.
+ */
+export function drawCommander(context, x, y, { hostile = true, size = 13 } = {}) {
+    const r = size / 2;
+
+    context.save();
+    context.translate(x, y);
+    context.lineWidth = 1.2;
+    context.strokeStyle = "rgba(20, 8, 4, 0.9)";
+    context.fillStyle = hostile ? "#ff4a2e" : "#58d26e";
+    context.beginPath();
+    context.arc(0, 0, r, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+    context.fillStyle = "#ffd76a";
+    context.beginPath();
+    context.moveTo(-r * 0.62, r * 0.38);
+    context.lineTo(-r * 0.62, -r * 0.42);
+    context.lineTo(-r * 0.3, -r * 0.06);
+    context.lineTo(0, -r * 0.55);
+    context.lineTo(r * 0.3, -r * 0.06);
+    context.lineTo(r * 0.62, -r * 0.42);
+    context.lineTo(r * 0.62, r * 0.38);
+    context.closePath();
+    context.fill();
+    context.lineWidth = 0.8;
+    context.stroke();
+    context.restore();
+}
+
+/**
  * Another of the player's party on the world map, where they are (`x`, `y`, pixels: its point): a
  * pin in their colour, its head `size` pixels across, rimmed dark, a pale dot in it.
  */

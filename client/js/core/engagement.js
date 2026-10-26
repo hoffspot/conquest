@@ -80,6 +80,16 @@ export const STANDARD = "standard-bearer";
 export const TROPHY = Object.freeze({ bounty: 150, merit: 6, quality: "veryRare" });
 
 /**
+ * A player's job in a battle, given them by the commander of the side they fight for as its lines
+ * charge, if they're within `near` metres of its line (core/host.js #jobs): to hold the body of its
+ * line nearest them (`hold`: that body still standing as the battle's won, and they within
+ * `within` metres of it), or to bring down the enemy's standard-bearer (`banner`: they or theirs
+ * fell them); done, `gold`, the guilds' `merit` and `thanks` (standing with that side's people,
+ * their own; else a favour of theirs to the player's people).
+ */
+export const JOB = Object.freeze({ near: 80, within: 40, gold: 40, merit: 4, thanks: 6 });
+
+/**
  * Each way of fighting: whether its archers go out ahead of the line before it closes (`volley`);
  * whether it sends a few to try the enemy's weakest body (`probe`); whether its bodies wheel in on
  * a flank once what's before them is gone (`flank`), and its wings' two-handers swing wide round
@@ -397,7 +407,7 @@ export function stepEngagement(engagement, ctx) {
                 }
             }
 
-            ctx.event("commanderFell", { side: side.key, id: side.commander, name: commander?.name ?? "" });
+            ctx.event("commanderFell", { side: side.key, fallen: side.commander, name: commander?.name ?? "", at: where });
         }
 
         // Its banner fallen: those near shaken
@@ -414,7 +424,7 @@ export function stepEngagement(engagement, ctx) {
                 }
             }
 
-            ctx.event("bannerFell", { side: side.key, id: side.banner });
+            ctx.event("bannerFell", { side: side.key, fallen: side.banner, at: banner ? [banner.x, banner.y] : null });
         }
 
         // Each body's morale: what it's lost, whether it's beset on a flank or from behind, its
@@ -702,7 +712,7 @@ function melee(side, foe, { battle, now, ctx, members, formationOf, line }) {
                 formation.to = placeAt(formation, [0, MORALE.falter.back]);
                 formation.charge = false;
                 formation.advance = false;
-                ctx.event("falter", { side: side.key, part: body.part });
+                ctx.event("falter", { side: side.key, part: body.part, at: [...formation.anchor] });
             } else {
                 body.state = "broken";
                 battle.formation(body.formation, { broken: true, to: side.exit ? [...side.exit] : placeAt(formation, [0, 60]), speed: side.run, advance: false, charge: false });
@@ -718,7 +728,7 @@ function melee(side, foe, { battle, now, ctx, members, formationOf, line }) {
                     theirs.morale = Math.min(MORALE.vanguard, theirs.morale + MORALE.gap);
                 }
 
-                ctx.event("break", { side: side.key, part: body.part });
+                ctx.event("break", { side: side.key, part: body.part, at: [...formation.anchor] });
             }
 
             continue;
@@ -731,7 +741,7 @@ function melee(side, foe, { battle, now, ctx, members, formationOf, line }) {
                 body.pair = pairOf(body.part === "reserve" || body.part === "vanguard" ? "centre" : body.part, foe.bodies.filter((one) => LINE.includes(one.part) && live(one)).map(({ part }) => part)) ?? body.pair;
                 formation.advance = true;
                 charging(body, side, foe, { formationOf, now });
-                ctx.event("rally", { side: side.key, part: body.part });
+                ctx.event("rally", { side: side.key, part: body.part, at: [...formation.anchor] });
             }
 
             continue;
@@ -739,7 +749,7 @@ function melee(side, foe, { battle, now, ctx, members, formationOf, line }) {
 
         if (body.morale < MORALE.waver && !body.wavered) {
             body.wavered = true;
-            ctx.event("waver", { side: side.key, part: body.part });
+            ctx.event("waver", { side: side.key, part: body.part, at: [...formation.anchor] });
         } else if (body.morale >= MORALE.waver + 0.1) {
             body.wavered = false;
         }

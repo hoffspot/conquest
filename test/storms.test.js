@@ -162,6 +162,43 @@ describe("the storms of the camps near a player (host.js STORM, war.js)", () => 
         assert.ok(met(host, army.id).every((actor) => !actor.formation.post && !actor.holds && !actor.siege), "stood down");
     });
 
+    it("holds back the general of those storming it and their household at its muster till it's at a crisis, then sends them in; its general fallen, it's shaken (STORM_COMMAND)", () => {
+        const { host, war, camp, reserve } = stormed({ reserve: 30 });
+        const started = until(host, 90000, () => host.storms.get(camp.id)?.attackers.includes(reserve.id));
+
+        assert.ok(started.hit, "stormed");
+        run(host, 3000);
+
+        const storm = host.storms.get(camp.id);
+        const storming = host.armies.get(reserve.id);
+        const household = storming.household.map((id) => host.battle.actor(id));
+        const [general] = household;
+        const box = within(war, camp);
+
+        assert.equal(household.length, 3);
+        assert.match(general.name, /^General \w/);
+        assert.equal(general.rank, "commander");
+        assert.ok(household.slice(1).every((actor) => ["Human household guard", "Human standard-bearer"].includes(actor.name)));
+        assert.ok(household.every((actor) => actor.formation.post && !inside(actor.formation.post, box)), "held back outside it");
+
+        // (At a crisis, its wall broken open: sent in, after the rest)
+        storm.breaches = 1;
+
+        const sent = until(host, 5000, (events) => events.find(({ type, change }) => type === "engagement" && change === "commit"));
+
+        assert.deepEqual([sent.hit?.storm, sent.hit?.side, sent.hit?.commander], [camp.id, reserve.id, general.id]);
+        run(host, 1000);
+        assert.ok(household.filter(({ dead }) => !dead).every((actor) => inside(actor.formation.post, box)), "in after the rest");
+
+        // (Its general fallen: told, and it's shaken, beaten off the sooner)
+        Object.assign(general, { hp: 0, dead: true, respawnAt: Infinity });
+
+        const fell = until(host, 5000, (events) => events.find(({ type, change }) => type === "engagement" && change === "commanderFell"));
+
+        assert.equal(fell.hit?.name, general.name);
+        assert.ok(!host.storms.has(camp.id) || host.storms.get(camp.id).shaken);
+    });
+
     it("keeps those hacking at its wall at it, though its archers up on the walkway over them shoot down at them", () => {
         const { host, war, camp, army } = stormed();
         const hacking = until(host, 120000, (events) => events.find(({ type }) => type === "hacking"));

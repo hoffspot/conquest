@@ -33,7 +33,7 @@ import { MASTERED, payOf, RESEARCH } from "./bestiary.js";
 import { dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
-import { BODIES as BATTLE_BODIES, bodiesOf, COMMANDER, COMMANDERS, engagementOf, FIELD, layoutOf, MORALE, offsetsOf, STANDARD, stepEngagement, tacticsOf, TROPHY } from "./engagement.js";
+import { BODIES as BATTLE_BODIES, bodiesOf, COMMANDER, COMMANDERS, engagementOf, FIELD, JOB, layoutOf, MORALE, offsetsOf, STANDARD, stepEngagement, tacticsOf, TROPHY } from "./engagement.js";
 import { createRandom } from "./random.js";
 import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
 import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
@@ -743,7 +743,7 @@ function keptInvasion(invasion, now) {
         phase: charged ? "melee" : "march",
         sides: [
             { key: "invaders", name: BANDS[invasion.band]?.label ?? invasion.band, band: invasion.band, tactic: tacticsOf(invasion.band), falters: (BANDS[invasion.band]?.rout ?? INVASION.rout) === 0, exit: [...invasion.exit], run: INVASION.run, bodies: [{ part: "centre", formation: invasion.formations.invaders, size: invasion.size, offset: [0, 0] }] },
-            { key: "defenders", name: "town", band: null, tactic: "line", exit: [...(invasion.rally ?? invasion.middle)], run: INVASION.run, bodies: [{ part: "centre", formation: invasion.formations.defenders, size: invasion.mustered, offset: [0, 0] }] },
+            { key: "defenders", name: "town", people: invasion.people, band: null, tactic: "line", exit: [...(invasion.rally ?? invasion.middle)], run: INVASION.run, bodies: [{ part: "centre", formation: invasion.formations.defenders, size: invasion.mustered, offset: [0, 0] }] },
         ],
     });
 
@@ -3134,9 +3134,14 @@ export class Host {
             invasion.felled[player.id] = (invasion.felled[player.id] ?? 0) + 1;
         }
 
-        // (A side's commander in a battle: their bounty, and their weapon for a trophy)
+        // (A side's commander in a battle: their bounty, and their weapon for a trophy; a
+        // standard-bearer, the job of one sent to bring them down)
         if (raider?.commander) {
             this.#trophy(player, fallen);
+        }
+
+        if (raider?.banner) {
+            this.#bannerFelled(player, fallen);
         }
 
         for (const id of this.fellows(player.id)) {
@@ -4971,6 +4976,11 @@ export class Host {
 
         this.soldiers.set(id, { ...record, people, weapon, sex, seed, captain });
         this.battle.add({ id, kind: "soldier", name: `${adjective[0].toUpperCase()}${adjective.slice(1)} ${name}`, weapon, team: people, square, ai: "patrol", role: "guard", shield: shieldOf(weapon, captain ? "captain" : "soldier"), ...orders });
+
+        // (A battle's commander, or a standard-bearer: core/engagement.js; their plates marked so)
+        if (record?.commander || record?.banner) {
+            this.battle.actor(id).rank = record.commander ? "commander" : "standard";
+        }
     }
 
     // A field battle, to see how many a device draws and plays smoothly (the debug overlay's: its
@@ -5038,7 +5048,7 @@ export class Host {
                 },
             });
 
-            sides.push({ key: side, name: people, band: null, tactic: "line", exit, run: FIELD_BATTLE.run, commander, banner, bodies: formed });
+            sides.push({ key: side, name: people, people, band: null, tactic: "line", exit, run: FIELD_BATTLE.run, commander, banner, bodies: formed });
         }
 
         const engagement = engagementOf({ id: `field-${number}`, now: this.battle.time, sides });
@@ -5064,10 +5074,17 @@ export class Host {
             if (field.engagement && field.over === null && now >= field.engagement.next) {
                 field.engagement.next = now + FIELD.every;
                 this.#fight(field.engagement);
+                this.#jobs(field.engagement, (player) => (player.realm === field.engagement.sides[0].people ? 0 : null));
             }
 
             if (field.over === null && (!(standing("friend") && standing("foe")) || field.engagement?.beaten.length)) {
+                const won = !standing("foe") || field.engagement?.beaten.includes(1) ? 0 : !standing("friend") || field.engagement?.beaten.includes(0) ? 1 : null;
+
                 field.over = now;
+
+                if (field.engagement && won !== null) {
+                    this.#jobsWon(field.engagement, won, (k) => field.engagement.sides[k].people);
+                }
             }
 
             const ended = now - field.at >= FIELD_BATTLE.lasts;
@@ -5531,7 +5548,7 @@ export class Host {
             },
         });
 
-        return { key: "invaders", name: BANDS[band].label, band, tactic, falters: rout === 0, run: INVASION.run, commander, banner, bodies: formed };
+        return { key: "invaders", name: BANDS[band].label, people: null, band, tactic, falters: rout === 0, run: INVASION.run, commander, banner, bodies: formed };
     }
 
     // A town's soldiers drawn up against an invasion's band (core/engagement.js), as a town's
@@ -5588,7 +5605,7 @@ export class Host {
             },
         });
 
-        return { key: "defenders", name: "town", band: null, tactic, falters: false, run: INVASION.run, commander, banner, bodies: formed };
+        return { key: "defenders", name: "town", people, band: null, tactic, falters: false, run: INVASION.run, commander, banner, bodies: formed };
     }
 
     // A blow struck at the Behemoth of an invasion (BEHEMOTH): what it dealt counted for whoever
@@ -5710,6 +5727,14 @@ export class Host {
         }
     }
 
+    /**
+     * The battles on (core/engagement.js), for the game to show: an invasion's, a field battle's,
+     * the armies met near a player's, a seat's last stand's.
+     */
+    engagements() {
+        return [...this.invasions, ...this.fields, ...this.clashes.values(), ...this.leaders.values()].map(({ engagement }) => engagement).filter(Boolean);
+    }
+
     /** Whether someone (by id) is one of an invasion's raiders, still on (the game's: to fight them, not talk to them). */
     invader(id) {
         return this.soldiers.get(id)?.side === "invader";
@@ -5759,6 +5784,10 @@ export class Host {
                 if ((invasion.charged ?? null) === null && engagement.phase === "melee") {
                     this.#charged(invasion);
                 }
+
+                // (Those in the town, its people not their enemies, given a job by the captain of
+                // its guard)
+                this.#jobs(engagement, (player) => (this.war?.hostile(invasion.people, player.realm) ? null : 1), { invasion: invasion.id, place: invasion.place });
             }
 
             const close = raiders.filter((id) => INVASION.close.includes(this.soldiers.get(id)?.role) || this.soldiers.get(id)?.chief);
@@ -5793,6 +5822,10 @@ export class Host {
                 }
                 this.#event("invasion", { change: invasion.held ? "repelled" : "fell", id: invasion.id, place: invasion.place, name: invasion.name, band: invasion.band, people: invasion.people });
                 this.#thank(invasion);
+
+                if (engagement && invasion.held) {
+                    this.#jobsWon(engagement, 1, () => invasion.people);
+                }
 
                 // (Turned back from by the Behemoth, the houses nearest it burning: #burn)
                 if (behemoth && !invasion.held) {
@@ -5855,6 +5888,105 @@ export class Host {
         return formations.filter((id) => this.battle.formations[id]);
     }
 
+    // The players' jobs in a battle (core/engagement.js JOB), once its lines have charged: each
+    // player within JOB `near` of the line of the side they fight for (`sideOf(player)`: its
+    // index, or null for neither) given one by its commander, while they stand: to bring down the
+    // enemy's standard-bearer while one stands, one time in two (by the battle and the player),
+    // else to hold the body of its line nearest them (the "engagement" event, "job", told: `told`)
+    #jobs(engagement, sideOf, told = {}) {
+        if (engagement.phase !== "melee") {
+            return;
+        }
+
+        engagement.jobs ??= {};
+
+        for (const player of this.players.values()) {
+            const actor = this.battle.actor(player.id);
+            const k = engagement.jobs[player.id] || !actor || actor.dead || actor.map !== "town" ? null : sideOf(player);
+            const side = k === null ? null : engagement.sides[k];
+            const commander = side?.commander ? this.battle.actor(side.commander) : null;
+
+            if (!commander || commander.dead) {
+                continue;
+            }
+
+            const nearest = side.bodies
+                .filter(({ part, alive, state, formation }) => ["left", "centre", "right"].includes(part) && alive > 0 && state !== "broken" && state !== "gone" && this.battle.formations[formation])
+                .map((body) => ({ body, far: hypot(this.battle.formations[body.formation].anchor[0] - actor.x, this.battle.formations[body.formation].anchor[1] - actor.y) }))
+                .sort((a, b) => a.far - b.far)[0];
+            const banner = engagement.sides[1 - k].banner ? this.battle.actor(engagement.sides[1 - k].banner) : null;
+
+            if (!nearest || nearest.far > JOB.near) {
+                continue;
+            }
+
+            const odd = [...`${engagement.id}:${player.id}`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 7) & 1;
+            const kind = banner && !banner.dead && odd ? "banner" : "hold";
+
+            engagement.jobs[player.id] = { kind, side: k, part: kind === "hold" ? nearest.body.part : null, target: kind === "banner" ? banner.id : null, done: null };
+            this.#event("engagement", { id: engagement.id, ...told, change: "job", player: player.id, kind, part: engagement.jobs[player.id].part, target: engagement.jobs[player.id].target, by: commander.name });
+        }
+    }
+
+    // A player's job in a battle done (#jobs): their gold, the guilds' merit, and the thanks of the
+    // people they fought for (`people`: their standing with them, their own people; else a favour of
+    // theirs to the player's). Told to them (the "engagement" event, "jobDone")
+    #jobDone(engagement, player, people) {
+        const job = engagement.jobs?.[player.id];
+
+        if (!job || job.done !== null) {
+            return;
+        }
+
+        const merit = player.standing.guild ? JOB.merit : 0;
+        const own = people === player.realm;
+
+        job.done = this.battle.time;
+        player.progress.gold += JOB.gold;
+
+        for (const up of player.standing.earn(merit)) {
+            this.#event("guild", { id: player.id, change: "rank", ...up });
+        }
+
+        if (own) {
+            for (const up of player.standing.gain(JOB.thanks)) {
+                this.#event("standing", { id: player.id, ...up });
+            }
+        } else if (people) {
+            this.war?.remember(people, player.realm, REWARD.favour);
+        }
+
+        this.#event("engagement", { id: engagement.id, change: "jobDone", player: player.id, kind: job.kind, part: job.part, gold: JOB.gold, merit, thanks: own ? JOB.thanks : 0 });
+    }
+
+    // A battle won by one side (`k`, its index): each player whose job was to hold a body of it
+    // (#jobs), that body still standing and they near it, has done it (#jobDone); `peopleOf(k)`:
+    // whose that side is
+    #jobsWon(engagement, k, peopleOf) {
+        for (const [id, job] of Object.entries(engagement.jobs ?? {})) {
+            const player = this.players.get(id);
+            const actor = this.battle.actor(id);
+            const body = engagement.sides[k].bodies.find(({ part }) => part === job.part);
+            const formation = body && this.battle.formations[body.formation];
+
+            if (player && actor && !actor.dead && job.kind === "hold" && job.side === k && job.done === null && formation && body.alive > 0 && body.state !== "broken" && body.state !== "gone" && hypot(formation.anchor[0] - actor.x, formation.anchor[1] - actor.y) <= JOB.within) {
+                this.#jobDone(engagement, player, peopleOf(k));
+            }
+        }
+    }
+
+    // A standard-bearer in a battle felled by a player (or one of theirs): their job, if it was
+    // (#jobs), done
+    #bannerFelled(player, fallen) {
+        for (const engagement of this.engagements()) {
+            const job = engagement.jobs?.[player.id];
+
+            if (job?.kind === "banner" && job.target === fallen.id) {
+                this.#jobDone(engagement, player, engagement.sides[job.side].people ?? null);
+            }
+        }
+    }
+
     // An engagement fought (core/engagement.js stepEngagement), its bodies holding whatever while
     // `hold`; what happens in it told to everyone (the "engagement" event: { id, change, ...told,
     // ... }). The sides beaten (their indexes)
@@ -5865,7 +5997,7 @@ export class Host {
             hold,
             record: (id) => this.soldiers.get(id),
             afflict: (id, kind, ms) => this.battle.afflict(id, kind, { ms }),
-            event: (change, data) => this.#event("engagement", { id: engagement.id, change, ...told, ...data }),
+            event: (change, data) => this.#event("engagement", { ...told, ...data, id: engagement.id, change }),
         });
     }
 
@@ -6210,6 +6342,14 @@ export class Host {
             if (!gone && now >= clash.engagement.next) {
                 clash.engagement.next = now + FIELD.every;
                 this.#fight(clash.engagement, { told: { clash: id } });
+
+                // (A player of either people, or at war with only one of them, given a job by the
+                // other's general)
+                this.#jobs(clash.engagement, (player) => [0, 1].find((k) => !war.hostile(clash.engagement.sides[k].people, player.realm) && war.hostile(clash.engagement.sides[1 - k].people, player.realm)) ?? null, { clash: id });
+            }
+
+            if (!gone && clash.engagement.beaten.length === 1) {
+                this.#jobsWon(clash.engagement, 1 - clash.engagement.beaten[0], (k) => clash.engagement.sides[k].people);
             }
 
             if (gone || clash.engagement.beaten.length) {
@@ -6313,7 +6453,7 @@ export class Host {
             return { part, formation, size: members.length, offset };
         });
 
-        return { key: id, name: people, band: null, tactic: "line", exit: placeAt({ anchor, facing }, [0, ARMY_NEAR.fight]), run: STORM.run, commander: met.general ?? null, banner: met.banner ?? null, bodies: formed };
+        return { key: id, name: people, people, band: null, tactic: "line", exit: placeAt({ anchor, facing }, [0, ARMY_NEAR.fight]), run: STORM.run, commander: met.general ?? null, banner: met.banner ?? null, bodies: formed };
     }
 
     // An army's general and their household (core/engagement.js), `members` in order (actors), the
@@ -6346,9 +6486,11 @@ export class Host {
 
             if (leads) {
                 Object.assign(record, { commander: true, chief: true });
+                actor.rank = "commander";
                 met.general = actor.id;
             } else if (bears) {
                 record.banner = true;
+                actor.rank = "standard";
                 met.banner = actor.id;
                 banner = actor.id;
             }
@@ -6664,7 +6806,7 @@ export class Host {
                     }
                 }
 
-                this.#event("engagement", { ...told, change: "commanderFell", side: id, name: general?.name ?? "" });
+                this.#event("engagement", { ...told, change: "commanderFell", side: id, name: general?.name ?? "", at: general ? [general.x, general.y] : null });
             }
 
             if (crisis && !met.committed && !met.generalFell && met.household.length) {
@@ -7447,7 +7589,7 @@ export class Host {
 
             for (let k = 0; k < LEADERS_NEAR.guards; k++) {
                 const square = free(placeAt({ anchor: at, facing }, [front(k)[0], -FORMATION.rank]));
-                const one = `${id}/guard-${k}`;
+                const one = `${id}/household-${k}`;
                 const { power, hp, armor } = BATTLE_BODIES.vanguard;
 
                 this.#enlist(one, { people: town.owner, ...soldierOf(town.owner, k % 2 ? "heavy" : "front", k), square, name: COMMANDERS.town.guard, record: { leader: id, role: "guard", power }, patrol: [square], leash: LEASH, hp: Math.round(KINDS.soldier.hp * hp), armor, power: { melee: power }, armed: true, formation: { id: stand, slot: front(k), role: k % 2 ? "heavy" : "front" } });
@@ -7468,7 +7610,7 @@ export class Host {
             now: this.battle.time,
             phase: "melee",
             sides: [
-                { key: "leaders", name: town.owner, band: null, tactic: "line", commander: ids[0]?.endsWith("/ruler-0") ? ids[0] : null, exit: at, bodies: [{ part: "vanguard", formation: stand, size: ids.length + guards.length, offset: [0, 0], state: "committed" }] },
+                { key: "leaders", name: town.owner, people: town.owner, band: null, tactic: "line", commander: ids[0]?.endsWith("/ruler-0") ? ids[0] : null, exit: at, bodies: [{ part: "vanguard", formation: stand, size: ids.length + guards.length, offset: [0, 0], state: "committed" }] },
                 { key: "attackers", name: by, band: null, tactic: "line", tactics: false, bodies: [] },
             ],
         });

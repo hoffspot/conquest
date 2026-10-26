@@ -20,7 +20,7 @@ import { allAtOnce, Steps } from "../core/steps.js";
 import { GROUND, HOUSE_STYLES, PLOT } from "../core/setpieces/pieces.js";
 import { footprint } from "../core/setpieces/town.js";
 import { LAND_COLOURS } from "../world/ground.js";
-import { drawBuildingIcon, drawMarker, drawPartyMember, drawPing, drawSearch, drawTracked } from "./mapicons.js";
+import { drawBattleArrow, drawBuildingIcon, drawCommander, drawMarker, drawPartyMember, drawPing, drawSearch, drawTracked } from "./mapicons.js";
 
 // Colours (RGB) of the ground and of what stands on it
 const GROUND_COLOURS = {
@@ -503,7 +503,7 @@ export class Minimap {
      * app/game.js partyView), each a dot in their own colour, or further than shown, a badge with
      * their initial at the edge, its arrow pointing the way they are.
      */
-    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], pings = [], markers = [], trails = [], party = [] }, now = performance.now()) {
+    draw({ player, others = [], destination = null, look = null, icons = [], elites = [], criers = [], searches = [], pings = [], markers = [], trails = [], party = [], battles = { arrows: [], commanders: [] } }, now = performance.now()) {
         const { canvas, context, map } = this;
 
         this.drawn = now;
@@ -658,6 +658,29 @@ export class Minimap {
             context.strokeStyle = "rgba(20, 8, 4, 0.9)";
             context.lineWidth = 1.2;
             context.stroke();
+        }
+
+        // The battles near (core/engagement.js): an arrow for each body charging, wheeling round a
+        // flank or sent in, and a crown at each commander (those drawn kept for tests: `battles`,
+        // { arrows, commanders: ids })
+        this.battles = { arrows: 0, commanders: [] };
+
+        for (const arrow of battles.arrows) {
+            const [from, to] = [at(arrow.from[0], arrow.from[1]), at(arrow.to[0], arrow.to[1])];
+
+            if ([from, to].some(([x, y]) => x > -8 && y > -8 && x < width + 8 && y < height + 8)) {
+                drawBattleArrow(context, from, to, { hostile: arrow.hostile });
+                this.battles.arrows += 1;
+            }
+        }
+
+        for (const commander of battles.commanders) {
+            const [x, y] = at(commander.x, commander.z);
+
+            if (x > -8 && y > -8 && x < width + 8 && y < height + 8) {
+                drawCommander(context, x, y, { hostile: commander.hostile });
+                this.battles.commanders.push(commander.id);
+            }
         }
 
         // The buildings the player has gone into: what each is (those shown, kept for tests)

@@ -2514,6 +2514,12 @@ body[data-minimap="off"] #party {
     height: 12px;
 }
 
+/* A battle's standard-bearer's (core/engagement.js): their name under a pennant of gold */
+.floater.standard .name::before {
+    content: "\2691\00a0";
+    color: #ffd76a;
+}
+
 /* A fortification's (a guard tower's, a forward garrison's): broader, its bar heavier, edged in
    stone */
 .floater.fort {
