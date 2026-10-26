@@ -84,10 +84,14 @@ export const FORMATION = Object.freeze({ apart: 1.6, rank: 1.8, width: Object.fr
  * Each soldier's place in a line of battle, in the order given (`roles`: each one's, ROLES'
  * keys): [right, back], metres to the right of the middle of its front rank and behind it,
  * facing the way it faces. Every place its own; whoever's foremost in the front rank (the shield
- * line, or, with none, the two-handers, or the archers and casters).
+ * line, or, with none, the two-handers, or the archers and casters). Laid out (`layout`) as a
+ * line is (FORMATION), its shield line in one rank up to `deep` files (shallower and wider, a
+ * body of a wide front's: core/engagement.js); or as a `wedge`, its two-handers at its point and
+ * its shield line behind them, each rank two wider than the one before (the northmen's), the rest
+ * behind it as a line's are.
  */
-export function placesOf(roles) {
-    const { apart, rank, width, deep, rear, block } = FORMATION;
+export function placesOf(roles, { deep = FORMATION.deep, wedge = false } = {}) {
+    const { apart, rank, width, rear, block } = FORMATION;
     const by = { front: [], heavy: [], archer: [], caster: [], healer: [] };
     const places = new Array(roles.length);
 
@@ -96,10 +100,16 @@ export function placesOf(roles) {
     // (A row of so many, `across` apart, centred, so far back)
     const row = (ids, back, across = apart, offset = 0) => ids.forEach((id, k) => (places[id] = [offset + (k - (ids.length - 1) / 2) * across, back]));
 
+    if (wedge) {
+        return wedgeOf(by, places, row);
+    }
+
     // The shield line: a rank, or two once it's strong; its rear guard put by
     const guards = by.front.length >= deep ? Math.round(by.front.length * rear) : 0;
     const line = by.front.slice(0, by.front.length - guards);
-    const files = Math.max(1, Math.min(width[1], Math.max(Math.min(width[0], line.length), line.length >= deep ? Math.ceil(line.length / 2) : line.length)));
+    // (A wide front's body, its shield line two ranks once it's `deep` strong, but never fewer than `deep` files: not narrower for one more)
+    const least = deep > FORMATION.deep ? deep : 0;
+    const files = Math.max(1, Math.min(width[1], Math.max(Math.min(width[0], line.length), line.length >= deep ? Math.max(least, Math.ceil(line.length / 2)) : line.length)));
     const lineRanks = Math.ceil(line.length / files);
 
     for (let r = 0; r < lineRanks; r++) {
@@ -158,6 +168,40 @@ export function placesOf(roles) {
     const front = places.reduce((least, [, back]) => Math.min(least, back), Infinity);
 
     return places.map(([right, back]) => [right, back - front]);
+}
+
+// A wedge (placesOf's `wedge`): its two-handers and shield line in ranks of one, three, five...
+// from its point back, the two-handers first, then the rest behind it as a line's are (its
+// archers either side of its casters, its healers, its rear guard none: the wedge's all point)
+function wedgeOf(by, places, row) {
+    const { apart, rank } = FORMATION;
+    const point = [...by.heavy, ...by.front];
+    let r = 0;
+    let k = 0;
+
+    for (const id of point) {
+        places[id] = [(k - r) * apart, r * rank];
+
+        if (++k > 2 * r) {
+            r++;
+            k = 0;
+        }
+    }
+
+    let back = (r + (k ? 1 : 0) + 0.5) * rank;
+    const behind = [...by.caster, ...by.archer];
+    const files = Math.max(4, 2 * r + 1);
+
+    for (let start = 0; start < behind.length; start += files) {
+        row(behind.slice(start, start + files), back);
+        back += rank;
+    }
+
+    row(by.healer, back + rank * 0.5, apart * 2);
+
+    const front = places.reduce((least, [, at]) => Math.min(least, at), Infinity);
+
+    return places.map(([right, at]) => [right, at - front]);
 }
 
 /**

@@ -927,8 +927,9 @@ export class Battle {
      * (whether, standing, it closes with the nearest enemy any of it sees), broken (whether it's
      * broken and running: none of it takes on anyone, each runs for its place, and it marches
      * whoever's fighting), charge (whether it's charging: it runs on to where it's going whoever
-     * of it's fighting, each of it running with it, and stops charging once it's there) }, each
-     * left as it is if not given. Those in it (add's `formation`) keep
+     * of it's fighting, each of it running with it, and stops charging once it's there), layout
+     * (how its ranks are laid out as they close: core/formation.js placesOf's, or null as a
+     * line's) }, each left as it is if not given. Those in it (add's `formation`) keep
      * to their places in it as it goes (or the `post`s they're given: [x, y] metres, facing its
      * `facing`, if they have one), and go after enemies as far from them as their role's leash;
      * it stops marching while any of them are fighting, and closes its ranks as they fall
@@ -941,11 +942,11 @@ export class Battle {
             return null;
         }
 
-        const formation = (this.formations[id] ??= { anchor: [0, 0], facing: 0, to: null, speed: 1, advance: false, broken: false, charge: false, engagedAt: -Infinity, member: null, sighted: null, lookAt: 0, strength: null, closeAt: 0 });
+        const formation = (this.formations[id] ??= { anchor: [0, 0], facing: 0, to: null, speed: 1, advance: false, broken: false, charge: false, layout: null, engagedAt: -Infinity, member: null, sighted: null, lookAt: 0, strength: null, closeAt: 0 });
 
-        for (const key of ["anchor", "facing", "to", "speed", "advance", "broken", "charge"]) {
+        for (const key of ["anchor", "facing", "to", "speed", "advance", "broken", "charge", "layout"]) {
             if (settings[key] !== undefined) {
-                formation[key] = Array.isArray(settings[key]) ? [...settings[key]] : settings[key];
+                formation[key] = Array.isArray(settings[key]) ? [...settings[key]] : settings[key] && typeof settings[key] === "object" ? { ...settings[key] } : settings[key];
             }
         }
 
@@ -3626,7 +3627,7 @@ export class Battle {
         formation.strength = members.length;
 
         const roles = members.map((member) => member.formation.role ?? "front");
-        const places = placesOf(roles);
+        const places = placesOf(roles, formation.layout ?? undefined);
         const byRole = new Map();
 
         roles.forEach((role, k) => {
