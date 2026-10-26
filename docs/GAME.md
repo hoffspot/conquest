@@ -3677,7 +3677,9 @@ how many had room (`soldiers`):
   recorded played as fast or slow as the battle's lasts), casting, flinching, falling and lying. What lands
   on it (an arrow) stays at its chest. It casts no shadow, as no soldier does, and shows no wounds
   or flush of red. Whoever comes into the nearest few is built in full meanwhile, drawn in the
-  crowd till it's ready, and goes back to the crowd when it's further off again.
+  crowd till it's ready, and goes back to the crowd when it's further off again; one of the
+  nearest few not drawn at all yet is drawn in its crowd till it's built too, once its kind's
+  figure's made, not unseen till it's built.
 - **Made as they're wanted.** A kind's template is made a step at a time with half of each frame's
   time for building those drawn (`MARSHAL.share`), its skin painted and its detail lowered in their
   workers meanwhile: about a second each on a desktop. A soldier waiting on its kind's isn't drawn,

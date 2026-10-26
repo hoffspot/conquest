@@ -1096,7 +1096,7 @@ test("a world joined in the thick of an invasion: the guest's game holds no more
                     };
                     const kinds = new Set(them.map(kindOf));
 
-                    return { soldiers: them.length, kinds: kinds.size, made: [...kinds].filter((key) => game.crowds?.made(key)).length, unseen: them.filter((actor) => game.crowds?.made(kindOf(actor)) && !game.avatars.has(actor.id)).length };
+                    return { soldiers: them.length, kinds: kinds.size, made: [...kinds].filter((key) => game.crowds?.made(key)).length, unseen: them.filter((actor) => game.crowds?.made(kindOf(actor)) && !game.avatars.has(actor.id)).map(({ id }) => id) };
                 })(),
                 mustering: game.timings.figures ?? 0,
             };
@@ -1109,12 +1109,19 @@ test("a world joined in the thick of an invasion: the guest's game holds no more
 
     // (Those near her seen from the first frame: their kinds' figures made while she loaded, the
     // nearest first, for at most 10 seconds (FIGURES.most); and everyone of a kind made drawn in
-    // their crowd, not waiting on the marshal, those nearest built in full in their place)
+    // their crowd, those nearest built in full in their place, drawn in it till they are. Any
+    // still not drawn, of a kind made, come since the marshal last looked (twice a second:
+    // MARSHAL.every), and drawn when it next does: a second and a half on, none)
     expect(joined.near.soldiers, JSON.stringify(joined)).toBeGreaterThan(0);
     expect(joined.near.made, JSON.stringify(joined)).toBeGreaterThan(0);
-    expect(joined.near.unseen, JSON.stringify(joined)).toBe(0);
     expect(joined.crowded, JSON.stringify(joined)).toBeGreaterThan(0);
     expect(joined.mustering).toBeLessThan(11000);
+
+    await guest.waitForTimeout(1500);
+    expect(
+        await guest.evaluate((ids) => ids.filter((id) => window.pellagos.game.battle.actor(id) && !window.pellagos.game.battle.actor(id).dead && !window.pellagos.game.avatars.has(id)), joined.near.unseen),
+        JSON.stringify(joined),
+    ).toEqual([]);
     expect(joined.planned).toBeGreaterThan(0);
     expect(joined.stray).toEqual([]);
     expect(joined.floors).toEqual(["taproom", "upstairs"]);

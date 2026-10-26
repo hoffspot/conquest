@@ -2077,6 +2077,10 @@ export class Game {
             return view.settled();
         });
         await time("navigation", () => near);
+
+        // (The marshal's first look at the soldiers about in the first frame, not half a second
+        // on: any come while it loaded drawn at once)
+        this.marshalClock = 0;
         done = steps;
         report("Ready");
 
@@ -4102,8 +4106,17 @@ export class Game {
             const crowded = avatar instanceof CrowdAvatar;
 
             if (place < room) {
-                // (In full: built, the crowd's in its place till it is)
-                if (crowded && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
+                // (In full: built, the crowd's in its place till it is; and one not drawn at all
+                // yet, its kind's figure made, drawn in its crowd meanwhile, not unseen till it's
+                // built: the nearest of a fight joined, still waiting on their kinds' figures as
+                // it began, went unseen once they were made)
+                const { key } = this.#crowdKind(actor);
+
+                if (!avatar && this.crowds.made(key)) {
+                    this.#toCrowd(actor, key);
+                }
+
+                if (this.avatars.get(actor.id) instanceof CrowdAvatar && !this.enlisting.includes(actor.id) && !this.enlistees.has(actor.id)) {
                     this.enlisting.push(actor.id);
                 }
 
