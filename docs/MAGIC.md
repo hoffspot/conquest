@@ -252,7 +252,9 @@ the Mystic Emporium has the Tome of Explosion in as its daily special, as if it 
 rarest (`SHOPS.emporium.daily.specials`: about one day in ten). (The elements' first spells'
 tomes, above, are the guild's to sell, never found or given.)
 
-- **Found**: on those with hands (bandits, goblins, skeletons, draugar, cultists, trolls, ogres,
+- **Found**: the Tome of Evaluate on any of the wild's creatures, of any tier, one time in forty
+  (spoils.js `EVALUATE_DROP`; the user: "Make the tome a drop and somewhat common"), as well as
+  among the common tomes below. The others on those with hands (bandits, goblins, skeletons, draugar, cultists, trolls, ogres,
   boggarts, the wight lord, the frost troll: creatures.js `hands`) who've been about the wilds a while:
   from tier 4, 3 in 100 of them, half a percent likelier each tier beyond; one of the perilous
   places' own, 1 in 5 (spoils.js `TOME_DROP`).
@@ -281,6 +283,7 @@ tomes, above, are the guild's to sell, never found or given.)
 | Explosion | rare | an enemy | 1400 ms | 20 s | a blast round them (*Explosion*, below): every foe within 4 m hurt, 20–32 at its heart and half that at its edge, and thrown |
 | Attraction | uncommon | oneself | 800 ms | 30 s | a puff of smoke, and out of it one of the creatures of these parts |
 | Inertial Barrier | uncommon | oneself or a friend | 700 ms | 20 s | a quarter less from blows and arrows, five minutes |
+| Evaluate | common (found only, one time in forty on any of the wild's: below) | oneself or a friend | 700 ms | 15 s | half an hour (`EVALUATING`): every foe's power shown by its name on its plate, 0 to 100 on the scale of the player's might ("Pw 31", crossed blades after it while it's with others of its pack that came at them: docs/WILDS.md *Might and power*), its plate coloured as it always is by how a fight with it would go |
 | Surge | uncommon | oneself | 500 ms | 60 s | blows and arrows 30% stronger, everything hurts 15% more, two minutes |
 | Pacify | uncommon | an enemy | 800 ms | 15 s | no longer hostile to you, till you strike it |
 | Vampirism | uncommon | an enemy | 700 ms | 6 s | draws their life into you: 6–10, growing to 24–34 |

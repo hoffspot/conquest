@@ -10,12 +10,18 @@
 //    caught on it rolled when it's made, more the better made (BLOCK_MOST, rollBlock);
 //  - each piece as well made as it was (progress.js QUALITIES), and, the better made, with more
 //    bonuses rolled on it (a keen sword, a helm of the bear), and named for them;
+//  - each piece of a level, 1 to 100, the might of whoever it was found or made for (core/might.js):
+//    its armour, its own bonus and those rolled on it the stronger the higher (levelFactor), and
+//    more bonuses likelier on it; and a legendary weapon with an effect of its own besides
+//    (core/legendary.js), the stronger the higher its level;
 //  - each people's soldiers' pieces (their uniform: `people`), whose sets bring bonuses of their
 //    own worn together, and whose helm, chest and cloak together pass for one of them.
 //
 // Pure data and arithmetic, no DOM: the host (core/host.js) and the pack (app/pack.js) use it.
 // How each piece looks on a character is characters/liveries.js's.
 
+import { pow } from "./exact.js";
+import { effectFor, EFFECTS } from "./legendary.js";
 import { ADJECTIVES } from "./war/peoples.js";
 
 /**
@@ -132,13 +138,18 @@ export const blockMost = (id, quality = "common") => Math.round((BLOCK_MOST[qual
 /**
  * How much of a blow a shield takes when it's caught on it, rolled as it's made (random.js
  * random): from half the most its make can (blockMost) to all of it, a whole percent, the higher
- * the rarer.
+ * the rarer; the higher its level, the less it can fall short (BLOCK_LEAST: from a half of the
+ * most at the first level to three quarters at the highest).
  */
-export function rollBlock(id, quality, random) {
+export function rollBlock(id, quality, random, level = 1) {
     const roll = random.next();
+    const least = BLOCK_LEAST[0] + ((BLOCK_LEAST[1] - BLOCK_LEAST[0]) * (levelOf(level) - 1)) / (LEVELS.most - 1);
 
-    return Math.round(blockMost(id, quality) * (0.5 + 0.5 * roll * roll) * 100) / 100;
+    return Math.round(blockMost(id, quality) * (least + (1 - least) * roll * roll) * 100) / 100;
 }
+
+// The least share of the most a shield can take one's rolled with: at the first level, and the highest
+const BLOCK_LEAST = Object.freeze([0.5, 0.75]);
 
 /** What each bonus is called, and how it's shown (`share`: a percentage). */
 export const STATS = Object.freeze({
@@ -154,7 +165,11 @@ export const STATS = Object.freeze({
     bash: { label: "Shield bash", share: true },
     haggle: { label: "Haggling", share: true },
     persuade: { label: "Persuasion", share: true },
-    // (Only a charm's: core/goods.js CHARMS)
+    dodge: { label: "Dodge", share: true },
+    haste: { label: "Blow speed", share: true },
+    leech: { label: "Life from blows", share: true },
+    bleed: { label: "Bleeding blows", share: true },
+    // (A charm's, and a piece's ward rolled on it: core/goods.js CHARMS)
     fortune: { label: "Gold found", share: true },
     endurance: { label: "Running's toll", share: true, less: true },
     wardFire: { label: "Fire's harm", share: true, less: true },
@@ -180,25 +195,78 @@ export const AFFIXES = Object.freeze({
     keen: { prefix: "Keen", stat: "melee", range: [0.04, 0.1], on: [...MELEE_WEAPONS, "gloves", "bracers", ...JEWELS] },
     trueShot: { prefix: "True", stat: "ranged", range: [0.04, 0.1], on: ["bow", "quiver", "gloves", "bracers", ...JEWELS] },
     arcane: { prefix: "Arcane", stat: "spell", range: [0.04, 0.1], on: [...MAGIC_WEAPONS, "spellward", "head", "cloak", ...JEWELS] },
-    tireless: { prefix: "Tireless", stat: "stamina", range: [5, 15], on: ["mainHand", "boots", "legs", "belt", "cloak", ...JEWELS] },
-    bear: { suffix: "of the Bear", stat: "hp", range: [5, 15], on: ["mainHand", "chest", "head", "belt", "legs", "offHand", ...JEWELS] },
-    mending: { suffix: "of Mending", stat: "heal", range: [0.05, 0.15], on: ["staff", "wand", "spellward", "head", "cloak", ...JEWELS] },
-    binding: { suffix: "of Binding", stat: "stun", range: [0.08, 0.2], on: [...MAGIC_WEAPONS, "spellward", "gloves", ...JEWELS] },
+    tireless: { prefix: "Tireless", stat: "stamina", range: [5, 15], on: ["mainHand", "quiver", "chest", "bracers", "boots", "legs", "belt", "cloak", ...JEWELS] },
+    bear: { suffix: "of the Bear", stat: "hp", range: [5, 15], on: ["mainHand", "chest", "head", "bracers", "gloves", "belt", "legs", "boots", "cloak", "offHand", ...JEWELS] },
+    mending: { suffix: "of Mending", stat: "heal", range: [0.05, 0.15], on: ["staff", "wand", "grimoire", "spellward", "head", "chest", "belt", "cloak", ...JEWELS] },
+    binding: { suffix: "of Binding", stat: "stun", range: [0.08, 0.2], on: [...MAGIC_WEAPONS, "spellward", "gloves", "head", ...JEWELS] },
     stalwart: { prefix: "Stalwart", stat: "block", range: [0.02, 0.05], on: SHIELDS },
     ram: { suffix: "of the Ram", stat: "bash", range: [0.15, 0.35], on: SHIELDS.filter((id) => !GEAR[id].spells) },
     fox: { suffix: "of the Fox", stat: "haggle", range: [0.02, 0.06], on: ["gloves", "belt", ...JEWELS] },
     eloquence: { suffix: "of Eloquence", stat: "persuade", range: [0.05, 0.12], on: ["head", "cloak", ...JEWELS] },
+    // (Slipping blows; blows coming sooner; health from the harm they do; and blows that leave
+    // their foe bleeding (core/afflictions.js bleed), as often as its share)
+    nimble: { prefix: "Nimble", stat: "dodge", range: [0.01, 0.025], on: ["chest", "legs", "boots", "belt", "cloak", ...JEWELS] },
+    swift: { prefix: "Swift", stat: "haste", range: [0.02, 0.05], on: ["mainHand", "gloves"] },
+    leeching: { suffix: "of Leeching", stat: "leech", range: [0.02, 0.05], on: ["mainHand", ...JEWELS] },
+    vicious: { prefix: "Vicious", stat: "bleed", range: [0.05, 0.12], on: [...MELEE_WEAPONS, "bow", "gloves", "bracers"] },
+    // (Less of an element's harm, or of every spell's: as a charm's wards, core/goods.js)
+    salamander: { suffix: "of the Salamander", stat: "wardFire", range: [0.02, 0.05], on: ["chest", "cloak", "boots", "offHand", "quiver", ...JEWELS] },
+    kelpie: { suffix: "of the Kelpie", stat: "wardWater", range: [0.02, 0.05], on: ["chest", "cloak", "legs", "head", ...JEWELS] },
+    wyvern: { suffix: "of the Wyvern", stat: "wardAir", range: [0.02, 0.05], on: ["head", "cloak", "gloves", "bracers", "quiver", ...JEWELS] },
+    mountain: { suffix: "of the Mountain", stat: "wardEarth", range: [0.02, 0.05], on: ["chest", "legs", "boots", "belt", "offHand", ...JEWELS] },
+    warding: { suffix: "of Warding", stat: "wardMagic", range: [0.02, 0.05], on: ["head", "cloak", "belt", "spellward", ...JEWELS] },
 });
 
-/** How many bonuses a piece of each make has rolled on it, and how much stronger each is. */
+/**
+ * How many bonuses a piece of each make has rolled on it (`count`: [least, most]), and how much
+ * stronger each is. How many, rolled (bonusCount): the fewer the likelier, the more a little
+ * likelier the higher its level.
+ */
 export const ROLLS = Object.freeze({
-    common: { count: 0, strength: 1 },
-    fine: { count: 1, strength: 1 },
-    masterwork: { count: 2, strength: 1.25 },
-    rare: { count: 3, strength: 1.3 },
-    veryRare: { count: 3, strength: 1.4 },
-    legendary: { count: 3, strength: 1.5 },
+    common: { count: [0, 0], strength: 1 },
+    fine: { count: [1, 2], strength: 1 },
+    masterwork: { count: [2, 3], strength: 1.25 },
+    rare: { count: [2, 4], strength: 1.3 },
+    veryRare: { count: [3, 4], strength: 1.4 },
+    legendary: { count: [3, 5], strength: 1.5 },
 });
+
+/**
+ * Levels (a piece's `level`: the might it was found or made for, core/might.js): from 1 to `most`;
+ * one of the highest `span` times as strong as one of the first (its armour, its own bonus, those
+ * rolled on it: levelFactor). How much likelier each bonus past a make's least is than the one
+ * before it (bonusCount): `fewer` at the first level, `more` at the highest.
+ */
+export const LEVELS = Object.freeze({ most: 100, span: 2, fewer: 0.5, more: 0.8 });
+
+/** A piece's level as kept: a whole number from 1 to LEVELS.most (one made before levels, 1). */
+export const levelOf = (level) => (Number.isFinite(level) ? Math.max(1, Math.min(LEVELS.most, Math.round(level))) : 1);
+
+/** How much stronger a piece of a level is than one of the first (1 to LEVELS.span). */
+export const levelFactor = (level) => 1 + ((LEVELS.span - 1) * (levelOf(level) - 1)) / (LEVELS.most - 1);
+
+/**
+ * How likely each number of bonuses is on a piece of a make and level ([{ count, chance }]): from
+ * the make's least to its most (ROLLS `count`), each as likely as the one before it times a share
+ * (LEVELS: `fewer` at the first level, up to `more` at the highest), so the fewest are always the
+ * likeliest.
+ */
+export function bonusCounts(quality, level = 1) {
+    const [least, most] = (ROLLS[quality] ?? ROLLS.common).count;
+    const step = LEVELS.fewer + ((LEVELS.more - LEVELS.fewer) * (levelOf(level) - 1)) / (LEVELS.most - 1);
+    const weights = Array.from({ length: most - least + 1 }, (each, k) => pow(step, k));
+    const total = weights.reduce((sum, weight) => sum + weight, 0);
+
+    return weights.map((weight, k) => ({ count: least + k, chance: weight / total }));
+}
+
+/** How many bonuses a piece of a make and level has rolled on it (random.js random), as bonusCounts has it. */
+export function bonusCount(quality, level, random) {
+    const counts = bonusCounts(quality, level);
+    let pick = random.next();
+
+    return (counts.find(({ chance }) => (pick -= chance) < 0) ?? counts.at(-1)).count;
+}
 
 // A legendary piece's name of its own: a first half, and a second by what it is
 const LEGEND = Object.freeze({
@@ -272,26 +340,33 @@ export function affixesFor(id) {
 const rounded = (stat, value) => (STATS[stat].share ? Math.round(value * 100) / 100 : Math.round(value));
 
 /**
- * A piece of gear as it's made (random.js random): { id, quality, people (a uniform's), bonuses
+ * A piece of gear as it's made (random.js random), of a `level` (1 to LEVELS.most: the might it's
+ * found or made for): { id, quality, level (past the first), people (a uniform's), bonuses
  * ({ stat: value }), affixes (AFFIXES keys, for its name), name (a legendary one's own), boost (a
- * shield's: how much of a blow it takes, rollBlock) }. As many
- * bonuses as its make has (ROLLS; jewellery at least one), each different, stronger the better
- * made; a masterwork one's a word before its name and one after.
+ * shield's: how much of a blow it takes, rollBlock), effect (a legendary weapon's:
+ * core/legendary.js) }. As many bonuses as its make and level roll (bonusCount; jewellery at least
+ * one), each different, stronger the better made and the higher its level; two, a word before its
+ * name and one after.
  */
-export function rollGear(id, quality = "common", random, { people = null } = {}) {
+export function rollGear(id, quality = "common", random, { people = null, level = 1 } = {}) {
     const def = GEAR[id];
     const item = { id, quality };
+    const at = levelOf(level);
 
     if (!def) {
         return item;
+    }
+
+    if (at > 1) {
+        item.level = at;
     }
 
     if (def.uniform) {
         item.people = UNIFORM_PEOPLES.includes(people) ? people : "human";
     }
 
-    const { count: made, strength } = ROLLS[quality] ?? ROLLS.common;
-    const count = Math.max(made, def.jewel ? 1 : 0);
+    const { strength } = ROLLS[quality] ?? ROLLS.common;
+    const count = Math.max(bonusCount(quality, at, random), def.jewel ? 1 : 0);
     const choices = affixesFor(id);
     const chosen = [];
 
@@ -314,14 +389,14 @@ export function rollGear(id, quality = "common", random, { people = null } = {})
         item.bonuses = Object.fromEntries(chosen.map((key) => {
             const { stat, range: [least, most] } = AFFIXES[key];
 
-            return [stat, rounded(stat, (least + random.next() * (most - least)) * strength)];
+            return [stat, rounded(stat, (least + random.next() * (most - least)) * strength * levelFactor(at))];
         }));
     }
 
     // (A shield: how much of a blow it takes, as `boost`, a wand's is how much it strengthens
     // spells)
     if (def.robust) {
-        item.boost = rollBlock(id, quality, random);
+        item.boost = rollBlock(id, quality, random, at);
     }
 
     if (quality === "legendary") {
@@ -330,7 +405,24 @@ export function rollGear(id, quality = "common", random, { people = null } = {})
         item.name = `${pick(random, LEGEND.first)}${pick(random, LEGEND[kind])}`;
     }
 
+    // (A legendary weapon: an effect of its own besides, core/legendary.js)
+    if (quality === "legendary" && def.slot === "mainHand") {
+        item.effect = pick(random, Object.keys(EFFECTS));
+    }
+
     return item;
+}
+
+/**
+ * The effect a legendary weapon has (core/legendary.js EFFECTS key), or null: its own; or, one
+ * made before they had them, one of them as `effectFor` has it (the same wherever it's asked).
+ */
+export function effectOf(item) {
+    if (item?.quality !== "legendary" || GEAR[item.id]?.slot !== "mainHand") {
+        return null;
+    }
+
+    return EFFECTS[item.effect] ? item.effect : effectFor(item);
 }
 
 /**
@@ -357,11 +449,13 @@ export function gearName({ id, people = null, affixes = [], name = null }) {
 }
 
 /**
- * What a piece does (as well made as it is: `power`, progress.js QUALITIES): { stat: value },
- * its armour, its own bonus, and those rolled on it.
+ * What a piece does (as well made as it is: `power`, progress.js QUALITIES; and as high its level:
+ * levelFactor): { stat: value }, its armour, its own bonus, and those rolled on it (rolled as
+ * strong as its level already).
  */
-export function statsOf({ id, bonuses = null }, power = 1) {
+export function statsOf({ id, bonuses = null, level = 1 }, made = 1) {
     const def = GEAR[id] ?? {};
+    const power = made * levelFactor(level);
     const stats = {};
     const add = (stat, value) => {
         stats[stat] = (stats[stat] ?? 0) + value;
@@ -421,9 +515,9 @@ export function disguiseOf(gear) {
     return peoples[0] && peoples.every((people) => people === peoples[0]) ? peoples[0] : null;
 }
 
-/** Whether two pieces are alike (the same, made alike, with the same bonuses): they stack. */
+/** Whether two pieces are alike (the same, made alike, as high a level, with the same bonuses and effect): they stack. */
 export function sameGear(a, b) {
     const bonuses = (item) => JSON.stringify(Object.entries(item.bonuses ?? {}).sort());
 
-    return (a.people ?? null) === (b.people ?? null) && (a.name ?? null) === (b.name ?? null) && bonuses(a) === bonuses(b) && JSON.stringify(a.affixes ?? []) === JSON.stringify(b.affixes ?? []);
+    return (a.people ?? null) === (b.people ?? null) && (a.name ?? null) === (b.name ?? null) && levelOf(a.level) === levelOf(b.level) && (a.effect ?? null) === (b.effect ?? null) && bonuses(a) === bonuses(b) && JSON.stringify(a.affixes ?? []) === JSON.stringify(b.affixes ?? []);
 }

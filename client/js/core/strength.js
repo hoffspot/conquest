@@ -21,7 +21,7 @@
 
 import { pow, sqrt } from "./exact.js";
 import { SPELL_COOLDOWN, SPELLS } from "./spells.js";
-import { armsOf } from "./weapons.js";
+import { armsOf, blowEvery } from "./weapons.js";
 
 /**
  * Who's counted on a side: those within `reach` metres of where foes are put out (or of any of
@@ -67,7 +67,8 @@ export function toughness(actor) {
 
 /**
  * How fast someone's weapon harms, in hit points a second: their best attack's blow on average
- * (as strong as their power for it), over the time from one to the next. Kicks mixed in with a
+ * (as strong as their power for it), over the time from one to the next (sooner, as much as their
+ * `haste` has it: battle.js #attack; never sooner than the blow takes). Kicks mixed in with a
  * weapon's blows (weapons.js armsOf `either`), the two on average.
  */
 export function weaponHarm(actor) {
@@ -76,7 +77,7 @@ export function weaponHarm(actor) {
     for (const attack of armsOf(actor.weapon, actor.boots)) {
         const each = attack.either ?? [attack];
         const power = actor.power?.[attack.kind === "ranged" ? "ranged" : "melee"] ?? 1;
-        const rate = each.reduce((sum, one) => sum + (meanOf(one.damage) * power * 1000) / one.interval, 0) / each.length;
+        const rate = each.reduce((sum, one) => sum + (meanOf(one.damage) * power * 1000) / blowEvery(one, actor.haste), 0) / each.length;
 
         best = Math.max(best, rate);
     }

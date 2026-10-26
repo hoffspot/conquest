@@ -67,10 +67,11 @@ import { Surroundings } from "./surroundings.js";
 import { Conversation, treeFor, upstairsIs } from "../core/dialogue.js";
 import { CAMP_HOURS, campFor, CONVOY_NEAR, HIRES, HOST_PLAYER, Host, OFFICIALS, PARTY, PICK_REACH, REFUSALS, SAFETY, SHOP_REACH, SHOPKEEPERS, snagChoice, snaggable, STORM, TRADE, UNDO_MS, WORKS_OUT } from "../core/host.js";
 import { dress } from "../characters/liveries.js";
-import { GEAR, GEAR_SLOTS, offHandFree } from "../core/gear.js";
+import { GEAR, GEAR_SLOTS, levelOf, offHandFree } from "../core/gear.js";
+import { fightLook, mightTier } from "../core/might.js";
 import { ABILITIES, buys, itemLabel, ITEMS, priceOf, Progress, shopOrder, TREES, WARE_KINDS, wareKind, wares } from "../core/progress.js";
 import { TREASURE } from "../core/treasure.js";
-import { shopPrice } from "../core/stock.js";
+import { atLevel, shopPrice } from "../core/stock.js";
 import { isGuid } from "../core/guid.js";
 import { CHAT, DMS_TAKEN, PACE } from "../core/netplay.js";
 import { WorldRunner } from "../core/runner.js";
@@ -177,6 +178,8 @@ import { charmWords, describe, gearWords, kindOf, totals } from "./gearinfo.js";
 import { TalkPanel } from "./talk.js";
 import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
 import { Sigil } from "./sigil.js";
+import { Charge } from "./charge.js";
+import { LegendaryLooks } from "../world/legendaries.js";
 import { worldLinkOf } from "./worldlink.js";
 import { abilityIcon, ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, forFriends, iconOf, offensive, PLACES, QUICK_SHOWN, readWheels, SETTABLE, SIDES, WHEELS } from "./wheel.js";
 
@@ -621,7 +624,7 @@ function thingsOf({ id, quality, count = 1 }) {
 const rewardOf = ({ gold, tome }) => [gold ? `${gold} gold` : null, tome ? `the Tome of ${SPELLS[tome].label}` : null].filter(Boolean).join(", and ") || "your name in the rolls";
 
 /** What a thing in the pack or a shop is, in words: what it does (and, gear, how well made it is). */
-export function aboutOf({ id, quality, bonuses }) {
+export function aboutOf({ id, quality, bonuses, level = 1 }) {
     const { use, slot, part = false, price, tome } = ITEMS[id];
     const worth = part ? ` The adventurers' guild pays ${price} gold for it.` : "";
 
@@ -657,7 +660,7 @@ export function aboutOf({ id, quality, bonuses }) {
 
     // (A charm: what it's for, and how much, as well made as it is, with what was rolled on it)
     if (ITEMS[id].charm) {
-        return `${ITEMS[id].about.replace(/\.$/, "")} (${charmWords({ id, quality, bonuses }).join(", ")}). Carried in the pack: the best made of each kind counts.`;
+        return `${ITEMS[id].about.replace(/\.$/, "")} (${charmWords({ id, quality, bonuses, level }).join(", ")}). Carried in the pack: the strongest of each kind counts.`;
     }
 
     // (Gear: what it does is told piece by piece, app/gearinfo.js; here, what it gives worn, or
@@ -666,7 +669,7 @@ export function aboutOf({ id, quality, bonuses }) {
         return "A weapon.";
     }
 
-    const gives = GEAR[id] ? gearWords({ id, quality, bonuses }) : [];
+    const gives = GEAR[id] ? gearWords({ id, quality, bonuses, level }) : [];
 
     return gives.length ? `${gives.join(", ")}.` : `${GEAR[id] ? kindOf(id) : "Worn"}.`;
 }
@@ -736,6 +739,22 @@ const BLAST_HEARD = Object.freeze({ far: 60, clear: 10, highs: 8000, late: 15, s
 // (seconds) the sound of its beam starts (as the model viewer plays it: beasts/sounds.js), and
 // within how far of it its bar's across the top of the screen (#bossBar)
 const ATOMIC_HEARD = 120;
+
+// How often foes' plates are sized up again (s: #sizeUp); how long after a blow begins a legendary
+// weapon's swing trails its look (ms: #wielding)
+const SIZE_UP = 0.5;
+const STRIKING_MS = 450;
+
+// What a legendary weapon's effect let loose sends flying (spellfx.js spray and scatter: a burst's
+// settings), and how each is heard (audio/synth.js): core/legendary.js, #unleashed
+const mote = (colours, { count = 12, size = [0.06, 0.12], speed = [0.6, 1.6], life = [0.4, 0.8], gravity = -1, spread = 1.6, glow = true, opacity } = {}) => ({ count, colours, size, speed, life, gravity, spread, glow, swirl: 0, grow: 0, drag: 2.5, late: false, ...(opacity === undefined ? {} : { opacity }) });
+const UNLEASHED_MOTES = Object.freeze({
+    frost: mote([0xffffff, 0xbfeaff], { count: 24, size: [0.04, 0.09], speed: [0.6, 2], life: [0.8, 1.4], gravity: 1, spread: 2, glow: false, opacity: 0.95 }),
+    fire: mote([0xffe08a, 0xff3a0a], { count: 16, size: [0.16, 0.32], speed: [0.8, 2.2], life: [0.35, 0.7], gravity: -3 }),
+    dust: mote([0xb8a78a, 0x8a7a62], { count: 10, size: [0.3, 0.6], speed: [0.6, 1.6], life: [0.6, 1.1], gravity: -0.3, glow: false, opacity: 0.55 }),
+    sparks: mote([0xffffff, 0x9ab8ff], { count: 18, size: [0.04, 0.09], speed: [2.5, 5], life: [0.15, 0.35], gravity: 6, spread: 1 }),
+});
+const UNLEASHED_SOUNDS = Object.freeze({ frostbind: "legendFrostbind", cinderburst: "legendCinderburst", earthsunder: "legendEarthsunder", stormlash: "legendStormlash", ruinblast: "legendRuinblast" });
 const ATOMIC_LEAD = 0.05;
 const BOSS_NEAR = 150;
 
@@ -753,6 +772,8 @@ const SMALL_BOMBS = new Set(Object.values(BOMBERS).flatMap(({ weapon }) => weapo
 // heard lying there (it bursts as it lands), bursting as a great blast
 const BURSTS = Object.freeze({
     firePot: { flying: "fireball", gathering: null, burst: "explosionLarge" },
+    // (A legendary weapon's Ruinblast: core/legendary.js)
+    ruinblast: { burst: "legendRuinblast" },
     embers: { gathering: "castFireLow", burst: "impactFireMid" },
     bile: { gathering: "castWaterLow", burst: "impactWaterHigh" },
     starfirePod: { gathering: "castHealingLow" },
@@ -2010,6 +2031,8 @@ export class Game {
         this.spellFx.onShake = (amount) => (this.shaking = this.cameraSettings.shake ? Math.max(this.shaking, amount) : 0);
         this.spellFx.onScreen = (colour, strength, seconds) => this.#wash(colour, strength, seconds);
         this.spellFx.warm();
+        // (A legendary weapon in hand: its effect's look about it, world/legendaries.js)
+        this.legendaries = new LegendaryLooks(this.effects);
         this.#setGround(this.groundOf(this.battle.actor(this.me).map));
 
         for (const actor of this.battle.actors.filter(({ id }) => this.avatars.has(id))) {
@@ -2055,6 +2078,8 @@ export class Game {
         this.quickBar.onFlick = (slot, way) => this.flickQuick(slot, way);
         this.quickBar.onStale = (slot, lost) => this.#pressLost(slot, lost);
         this.sigil = new Sigil(this.hud.plate);
+        // (A legendary weapon's charge, beside it: app/charge.js)
+        this.charge = new Charge(this.hud.plate);
         this.sigil.onCast = () => this.castPrismatic();
         this.talk = new TalkPanel(this.hud.root);
         this.pack = new PackPanel(this.hud.root);
@@ -2852,6 +2877,8 @@ export class Game {
         this.wheel?.element.remove();
         this.quickBar?.dispose();
         this.sigil?.dispose();
+        this.charge?.dispose();
+        this.legendaries?.dispose();
         this.talk?.panel.remove();
         this.pack?.dispose();
         this.drops?.dispose();
@@ -3686,6 +3713,9 @@ export class Game {
         this.#partyIcons();
         this.#quickActions(target);
         this.sigil.show(this.#prism(), this.battle.time);
+        this.charge.show(this.#charging(), this.battle.time);
+        this.#sizeUp(dt);
+        this.#wielding(dt);
         this.#bleed(dt);
         this.#ailing();
         this.#radiant();
@@ -7384,12 +7414,15 @@ export class Game {
             names.toll = String(stranger.toll);
         }
 
-        // (A shop with a daily stock: its special today, by name, and what it's asked for)
+        // (A shop with a daily stock: its special today, by name, and what it's asked for, brought to
+        // the player's might's level as the shop shows and sells it: core/host.js #buy)
         const stock = this.host.stockOf(npc.id);
 
         if (stock?.special) {
-            names.special = itemLabel(stock.special).toLowerCase();
-            names.specialPrice = String(shopPrice(stock.special, stock.shop, { haggle: this.progress.bonuses().haggle, special: true }));
+            const special = atLevel(stock.special, levelOf(this.host.mightFor(this.me)));
+
+            names.special = itemLabel(special).toLowerCase();
+            names.specialPrice = String(shopPrice(special, stock.shop, { haggle: this.progress.bonuses().haggle, special: true }));
         }
 
         // (They stop and face the player, if they can talk now: the host says)
@@ -10933,32 +10966,36 @@ export class Game {
             return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb ? "Throw" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot || def.charm ? describe(stack, progress, { index, label, haggle }) : null };
         });
         const me = this.battle.actor(this.me);
-        const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50 });
+        const might = this.host.mightFor(this.me);
+        const summed = totals(progress, { hp: me ? me.maxHp - progress.bonuses().hp : 50, stamina: me ? me.maxStamina - progress.bonuses().stamina : 50, might });
         // (A shop's wares by kind, the commoner made first: a blacksmith's as well made as the
         // player's mighty; a shop with a daily stock's, what it has in today, how many of each left,
         // and its daily special, as it is; what it won't buy, said; what one is, worked out as it's
         // looked at: a piece of gear's with what's rolled on it as it's bought)
         const stock = this.shopping && this.host.stockOf(this.shopping.keeper);
         const ask = (item, special = false) => shopPrice(item, this.shopping.shop, { haggle, special });
+        // (Made for their might as they're bought: core/host.js #buy)
+        const level = levelOf(might);
+        const special = stock?.special ? atLevel(stock.special, level) : null;
         const shop = this.shopping && {
             name: this.shopping.name,
-            wares: (stock ? stock.wares : wares(this.shopping.shop, this.shopping.people, { might: progress.might() }))
+            wares: (stock ? stock.wares : wares(this.shopping.shop, this.shopping.people, { tier: mightTier(might) }))
                 .sort(shopOrder)
                 .map((ware) => {
-                    const item = { id: ware.id, quality: ware.quality, ...(ware.people ? { people: ware.people } : {}) };
+                    const item = { id: ware.id, quality: ware.quality, ...(ware.people ? { people: ware.people } : {}), ...(level > 1 && (ITEMS[ware.id]?.slot || ITEMS[ware.id]?.charm) ? { level } : {}) };
                     const price = ask(item);
 
                     return { item, label: itemLabel(item), price, affordable: price <= progress.gold, kind: WARE_KINDS[wareKind(item.id)], left: ware.left ?? null };
                 }),
-            special: stock?.special
+            special: special
                 ? {
-                      item: stock.special,
-                      label: itemLabel(stock.special),
-                      price: ask(stock.special, true),
-                      affordable: ask(stock.special, true) <= progress.gold,
+                      item: special,
+                      label: itemLabel(special),
+                      price: ask(special, true),
+                      affordable: ask(special, true) <= progress.gold,
                       left: stock.specialLeft,
-                      about: aboutOf(stock.special),
-                      info: ITEMS[stock.special.id]?.slot || ITEMS[stock.special.id]?.charm ? describe(stock.special, progress, { label: itemLabel(stock.special), haggle }) : null,
+                      about: aboutOf(special),
+                      info: ITEMS[special.id]?.slot || ITEMS[special.id]?.charm ? describe(special, progress, { label: itemLabel(special), haggle }) : null,
                   }
                 : null,
             unwanted: this.shopping.shop === "guild" ? null : "They buy only their own line: the adventurers' guild buys everything.",
@@ -12194,8 +12231,23 @@ export class Game {
                     break;
                 case "stunned":
                     effects.stun(avatar.point(0.9), avatar.object, avatar.character.height * 1.08, (event.until - battle.time) / 1000, this.#landing(event.id, "stun"));
-                    hud.damage(this.#screenAbove(event.id), "Stunned", { kind: "stun" });
-                    this.sound?.play("stun", { at: avatar.object.position });
+                    hud.damage(this.#screenAbove(event.id), event.effect === "frost" ? "Frozen" : "Stunned", { kind: "stun" });
+
+                    // (Frozen by a legendary weapon: heard as its effect, #unleashed)
+                    if (event.effect !== "frost") {
+                        this.sound?.play("stun", { at: avatar.object.position });
+                    }
+
+                    break;
+                case "unleashed":
+                    this.#unleashed(event);
+                    break;
+                case "charged":
+                    // (The player's own legendary weapon's charge full: core/legendary.js)
+                    if (event.id === this.me) {
+                        this.sound?.play("legendCharged");
+                    }
+
                     break;
                 case "knockdown": {
                     // Knocked off their feet (away from whoever did it), and up again when the
@@ -15038,6 +15090,119 @@ export class Game {
     // The player's Prismatic chain, as the battle has it (core/prismatic.js), or null for none
     #prism() {
         return this.battle.actor(this.me)?.prism ?? null;
+    }
+
+    // The player's legendary weapon's charge, as the battle has it (core/legendary.js: app/
+    // charge.js), or null for none in hand
+    #charging() {
+        const actor = this.battle.actor(this.me);
+
+        return actor?.legendary ? { effect: actor.legendary.effect, charge: actor.charge ?? 0, of: actor.legendary.charge, foughtAt: actor.foughtAt ?? -Infinity } : null;
+    }
+
+    // How each foe with a plate over it looks to the player (core/might.js: Host fightFor), every
+    // SIZE_UP seconds: its plate coloured by how a fight with it would go for them, and, while
+    // Evaluate's on them (spells.js evaluate), its power by its name
+    #sizeUp(dt) {
+        this.sizingIn = (this.sizingIn ?? 0) - dt;
+
+        if (this.sizingIn > 0) {
+            return;
+        }
+
+        this.sizingIn = SIZE_UP;
+
+        const me = this.battle.actor(this.me);
+        const evaluating = Boolean(me && this.battle.buffOf(me, "evaluate"));
+        const might = me ? this.host.mightFor(this.me) : 0;
+
+        for (const id of this.hud.tracked.keys()) {
+            const foe = this.battle.actor(id);
+            const fight = me && foe && !foe.dead && foe.kind !== "fort" && foe.kind !== "stakes" && this.battle.hostile(foe, me) ? this.host.fightFor(this.me, id) : null;
+
+            this.hud.sizeUp(id, fight ? { look: fightLook(might - fight.power), power: evaluating ? fight.power : null, pack: fight.pack } : {});
+        }
+    }
+
+    // Each legendary weapon in hand drawn with its effect's look (world/legendaries.js), more of it
+    // trailing a blow being struck
+    #wielding(dt) {
+        const wielders = [];
+
+        for (const id of this.host.players.keys()) {
+            const actor = this.battle.actor(id);
+            const avatar = this.avatars.get(id);
+
+            if (actor?.legendary && !actor.dead && avatar && actor.map === this.mapId) {
+                wielders.push({ id, effect: actor.legendary.effect, avatar, striking: Boolean(actor.attack && !actor.attack.struck) || this.battle.time - (this.lastAttack.get(id) ?? -Infinity) < STRIKING_MS });
+            }
+        }
+
+        this.legendaries?.update(dt, wielders);
+    }
+
+    // A legendary weapon's effect let loose (battle.js "unleashed": core/legendary.js), where it
+    // was: ice bursting round the foe frozen in it, a ring of fire, stone spears from the ground,
+    // lightning leaping foe to foe, a white flash and a ring round a blast (the blast itself, and
+    // those it throws, as a blast's: #blast); heard, and, the player's own, their charge flaring
+    // as it empties
+    #unleashed(event) {
+        if (event.id === this.me) {
+            this.charge.flare();
+        }
+
+        if (event.map !== this.mapId) {
+            return;
+        }
+
+        const [ox, oz] = this.originOf(event.map);
+        const at = new THREE.Vector3(ox + event.x, 0, oz + event.y);
+        const point = this.avatars.get(event.target)?.point(0.6) ?? at.clone().setY(1);
+        const fx = this.spellFx;
+        const radius = event.radius ?? 1.5;
+
+        if (event.effect === "frostbind") {
+            fx.flash(point, { colour: 0xbfe8ff, intensity: 40, distance: 10, life: 0.35, size: 3 });
+            fx.spikes(at, { count: 16, radius: 0.45, height: 1.7, colour: 0xa8dcf8, life: 2.2, lean: 0.22, glow: true });
+            fx.shards(point, { count: 30, colour: 0xdff4ff, size: 0.08, speed: 3, up: 1.5, life: 0.8, glow: true });
+            fx.ring(at, { colour: 0x8fd8ff, from: 0.2, to: 2.2, life: 0.5 });
+            fx.spray(UNLEASHED_MOTES.frost, point);
+        } else if (event.effect === "cinderburst") {
+            fx.flash(point, { colour: 0xff7a2a, intensity: 45, distance: 12, life: 0.4, size: 3 });
+            fx.ring(at, { colour: 0xff4a0a, from: 0.3, to: radius, life: 0.45 });
+            fx.ring(at, { colour: 0xffc060, from: 0.2, to: radius * 0.8, life: 0.6 });
+            fx.decal(at, { texture: "scorch", colour: 0x1a0a04, radius, life: 6 });
+            fx.scatter(UNLEASHED_MOTES.fire, at, radius, 3, { seconds: 0.3 });
+        } else if (event.effect === "earthsunder") {
+            fx.spikes(at, { count: 8 + Math.round(radius * 6), radius, height: 1.3, colour: 0x8a7a66, life: 1.4, lean: 0.35, scatter: true, stagger: 0.15 });
+            fx.decal(at, { texture: "cracks", colour: 0x2a2218, radius: radius * 1.2, life: 5 });
+            fx.ring(at, { colour: 0xe8c880, from: 0.3, to: radius + 0.6, life: 0.5 });
+            fx.scatter(UNLEASHED_MOTES.dust, at, radius, 2, { seconds: 0.2 });
+            fx.shake(0.12);
+        } else if (event.effect === "stormlash") {
+            fx.lightning(point.clone().add(new THREE.Vector3(0.6, 6, 0.3)), point.clone(), { colour: 0x9ab8ff, width: 0.07, life: 0.35, jag: 0.8, branches: 2 });
+            fx.flash(point, { colour: 0xcfe0ff, intensity: 45, distance: 12, life: 0.3, size: 3 });
+
+            let from = point;
+
+            for (const id of event.struck.slice(1)) {
+                const to = this.avatars.get(id)?.point(0.6);
+
+                if (to) {
+                    fx.lightning(from.clone(), to.clone(), { colour: 0x9ab8ff, width: 0.05, life: 0.35, jag: 0.45, branches: 1 });
+                    fx.spray(UNLEASHED_MOTES.sparks, to);
+                    from = to;
+                }
+            }
+        } else if (event.effect === "ruinblast") {
+            fx.flash(point, { colour: 0xfff4c0, intensity: 60, distance: 14, life: 0.3, size: 4 });
+            fx.ring(at, { colour: 0xffd060, from: 0.3, to: radius * 1.4, life: 0.55 });
+        }
+
+        // (A blast heard as a blast: #blast)
+        if (event.effect !== "ruinblast") {
+            this.sound?.play(UNLEASHED_SOUNDS[event.effect], { at, far: BLAST_HEARD.far });
+        }
     }
 
     // What each of the Action Bar's actions shows, and is used for: what the player's put in it; but, while a

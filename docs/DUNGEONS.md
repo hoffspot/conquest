@@ -632,9 +632,11 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
   a share of their own (`COFFER`, `rollCoffer` at the level's tier): 6 to 18 gold, more each tier,
   a piece of gear 40% of the time, a healing draught 30% of the time.
 - **The boss's hoard**, locked (`REFUSALS.kept`) till the boss falls. Opened, every player in the
-  dungeon gets a share at their own power (`hoardTier`: their might plus one, or the bottom level's
-  tier, whichever's higher; `HOARD`, `rollHoard`): 80 to 150 gold, more each tier; three to five
-  pieces of gear made two tiers better than a cache's; one or two healing draughts.
+  dungeon gets a share at their own power (`hoardTier`: their might's tier plus one, one tier every
+  ten of it, core/might.js `mightTier`; or the bottom level's tier, whichever's higher; `HOARD`,
+  `rollHoard`): 80 to 150 gold, more each tier; three to five pieces of gear made two tiers better
+  than a cache's, of a level for their might (docs/WILDS.md *Might and power*); one or two healing
+  draughts.
 - **The fallen** in an ants' nest, set out with their level as its small chests are, each a coin
   glinting over the remains (`world/drops3d.js`). Searched (tapped, from beside them), each player
   near them gets a share of their own of what was left on them (`FALLEN`, `rollFallen` at the

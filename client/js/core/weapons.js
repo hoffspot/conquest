@@ -803,6 +803,9 @@ export function longestReach(arms) {
     return Math.max(0, ...listOf(arms).map((attack) => attack.reach));
 }
 
+/** How long from one blow of an attack to the next (ms), sooner by a `haste` (a share: core/gear.js Swift), never sooner than the blow itself takes. */
+export const blowEvery = (attack, haste = 0) => Math.max(attack.duration ?? 0, Math.round(attack.interval * (1 - (haste || 0))));
+
 /**
  * Roll an attack's damage: a whole number from its least to its most, each equally likely. (An
  * averaged range with halves: a number between them, rounded.)

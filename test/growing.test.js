@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { STEP_MS, UNMASKED_MS } from "../client/js/core/battle.js";
 import { BOUGHT, COMPANY, GROUND_MS, HOST_PLAYER, Host, SAFETY, UNDO_MS } from "../client/js/core/host.js";
+import { mightOf, mightTier } from "../client/js/core/might.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { PACK_SIZE, priceOf, RANKS, SHOPS, wareKind } from "../client/js/core/progress.js";
 import { decode, encode } from "../client/js/core/wire.js";
@@ -126,7 +127,8 @@ describe("growing stronger in play (host.js, progress.js)", () => {
         assert.equal(player.maxStamina, 50 + 30);
         assert.ok(Math.abs(player.armor - (0.14 + 0.08)) < 1e-9);
         assert.equal(host.players.get(HOST_PLAYER).hero.weapon, "hammer");
-        assert.equal(host.war.might, 3 + 1, "(the war as mighty as the mightiest player)");
+        assert.equal(host.war.might, mightTier(mightOf(host.players.get(HOST_PLAYER).progress)), "(the war as mighty as the mightiest player: their might's tier)");
+        assert.ok(host.war.might >= 2);
 
         // Ranking up further: told of, and stronger straight away
         const events = [];

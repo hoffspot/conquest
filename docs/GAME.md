@@ -1180,6 +1180,49 @@ Both sides have 50 hit points. In play-testing (test/combat.test.js simulates fi
 generated worlds), a sword fight with the orc lasts about 10 seconds and the player usually wins
 with a fair few hit points to spare.
 
+### Legendary weapons (core/legendary.js)
+
+Every legendary weapon has an effect of its own, apart from its bonuses, rolled on it as it's made
+(gear.js `rollGear`; one made before effects has one all the same, `effectFor`, the same in every
+game): Frostbind, Cinderburst, Earthsunder, Stormlash or Ruinblast (the user: "On legendary
+weapons, each weapon should have a separate slot for an "effect" ... visual and flashy").
+
+- **Its charge** (`CHARGE`, battle.js `#charge`): every blow struck with it (a swing, a shot, a
+  bolt, a kick) fills it a mark, full after as many blows as it strikes in eight seconds of steady
+  fighting (`chargeOf`: a sword's 7, a war hammer's 5, spiked gauntlets' 13; Swift's sooner blows
+  fill it sooner still); thirty seconds without striking or being struck, and it's lost. Full
+  ("charged", a chime, the player's own), the next blow that lands lets it loose on whoever it
+  struck (`#unleash`), and it's empty again. Shown over the player's card beside where the
+  Prismatic sigil shows (app/charge.js), not on the action bar: a ring of marks lit blow by blow
+  in the effect's colour, its sign in the middle, pulsing full, flaring as it's let loose, and
+  gone while it's empty (the user: "have something pop up like the sigil and go away/reset the
+  charge after 30 seconds of not being in combat").
+- **The effects** (`EFFECTS`), each as strong as the weapon's level (`effectAt`): its harm in
+  proportion to it (a level-10 weapon's a tenth of a level-100's: the user, "a legendary of power
+  10 has a weak effect versus a legendary of power 100"), times the wielder's power for their
+  blows; how long it holds them, how far it reaches and throws, from a little at the first level
+  to all of it at the highest. Warded against by their element (Ruinblast by none), never dodged,
+  caught only on a spellward.
+  - *Frostbind* (water): 10 to 16 harm, the foe frozen solid 0.5 to 2 seconds ("Frozen"), then
+    slowed in frost. Ice spears close round them, a white-blue flash, shards and snow.
+  - *Cinderburst* (fire): 12 to 18 harm, fire bursting 1.2 to 2.5 m round the foe, setting it
+    burning, those round it six tenths of the harm and half the time set burning. Two rings of
+    fire, flames, a scorch on the ground.
+  - *Earthsunder* (earth): 12 to 18 harm, stone spears from the ground 1 to 2 m round the foe,
+    throwing them down 0.4 to 1.2 seconds (those round it, six tenths of the harm). The ground
+    cracks, dust, the camera shaken a little.
+  - *Stormlash* (air): 14 to 20 harm, lightning leaping from the foe to 1 to 3 more within 6 m of
+    the last, three quarters as strong each leap, each stunned a moment. A bolt from above, forks
+    from foe to foe.
+  - *Ruinblast*: 16 to 24 harm, an explosion 1.5 to 3.5 m round the foe (the nearer, the worse),
+    hurling them back half to one and a half times as far as Explosion does. A white flash, a
+    ring, the blast's own look and a great boom (the user: "explosive knockback ... knockback and
+    some explosive damage").
+- **Its look** (world/legendaries.js): in hand, the weapon glows its effect's colour and motes come
+  off it all the time (frost misting, embers, grit sifting, sparks, a gold glow), many more trailing
+  a blow as it's struck; put away, nothing. Each let loose has its sound (audio/catalog.js,
+  *Legendary weapons*).
+
 ## Drawing the world
 
 ### The view (world/view.js)

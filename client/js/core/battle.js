@@ -81,7 +81,8 @@ import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, rollSpell, SCHOOLS, SPELL_COOLDOWN, SPELLS, WARD } from "./spells.js";
 import { Variety } from "./variety.js";
-import { armsOf, chooseAttack, distanceBetween, longestReach, MELEE_REACH, ringsApart, rollDamage, WEAPONS } from "./weapons.js";
+import { armsOf, blowEvery, chooseAttack, distanceBetween, longestReach, MELEE_REACH, ringsApart, rollDamage, WEAPONS } from "./weapons.js";
+import { CHARGE, effectAt, EFFECTS } from "./legendary.js";
 import { atan2, cos, hypot, pow, sin } from "./exact.js";
 
 /**
@@ -313,7 +314,11 @@ const elementOf = (attack) => attack.element ?? THROWN[attack.projectile?.kind] 
 const chainOf = (prism) => ({ element: prism?.element ?? null, step: prism?.step ?? 0, pieces: [...(prism?.pieces ?? [])], readyAt: prism?.readyAt ?? null });
 
 // Is a blow magic (a spell, or a wand's or grimoire's bolt, a curse, a wisp's)? (Not a blow of the body: Surge and Inertial Barrier have nothing to do with it)
-const magicOf = (attack, spell) => Boolean(spell) || THROWN[attack.projectile?.kind] === "magic" || attack.projectile?.kind === "fireball";
+// How each legendary weapon's effect strikes (its reaction: what's seen and heard of the blow), and
+// how much of its harm those near the foe it was let loose on take (core/legendary.js)
+const UNLEASHED = Object.freeze({ frostbind: "arcane", cinderburst: "fire", earthsunder: "crush", stormlash: "arcane", ruinblast: "crush", near: 0.6 });
+
+const magicOf = (attack, spell) => Boolean(spell) || attack.kind === "effect" || THROWN[attack.projectile?.kind] === "magic" || attack.projectile?.kind === "fireball";
 
 /**
  * How many times as fast as it walks a character sprints: as people do, walking at about 1.4
@@ -4549,7 +4554,8 @@ export class Battle {
         }
 
         actor.attack = { attack, target: target.id, start: this.time, struck: false };
-        actor.readyAt = this.time + attack.interval;
+        // (Sooner for a player's Swift gear: core/gear.js)
+        actor.readyAt = this.time + blowEvery(attack, actor.haste);
 
         // (Striking, they're seen)
         this.unbuff(actor.id, "invisibility");
@@ -4573,6 +4579,11 @@ export class Battle {
 
         if (!current.struck && elapsed >= attack.hitAt) {
             current.struck = true;
+
+            // (A blow with a legendary weapon: its charge the fuller, core/legendary.js)
+            if (actor.legendary && (attack.kind === "melee" || attack.kind === "ranged") && !attack.bomb && !attack.call) {
+                this.#charge(actor);
+            }
 
             // (Turned to them as it strikes: but the colossal, turning slowly, strikes the way it faces)
             if (target && !target.dead && !actor.wild?.colossus) {
@@ -4975,6 +4986,118 @@ export class Battle {
 
     // Stunned by a shield bash, for `ms`: whatever it was doing stops; a creature or a guard turns
     // on whoever did it
+    // A blow struck with a legendary weapon (core/legendary.js): its charge the fuller, up to full
+    // (CHARGE: as many blows as it strikes in eight seconds); begun again after CHARGE.idle out of a
+    // fight (`foughtAt`: when it was last in one, #arm). Told as "charged" once it's full
+    #charge(actor) {
+        if (this.time - (actor.foughtAt ?? -Infinity) > CHARGE.idle) {
+            actor.charge = 0;
+        }
+
+        const was = actor.charge ?? 0;
+
+        actor.charge = Math.min(actor.legendary.charge, was + 1);
+        actor.foughtAt = this.time;
+
+        if (was < actor.legendary.charge && actor.charge === actor.legendary.charge) {
+            this.#emit("charged", { id: actor.id, effect: actor.legendary.effect });
+        }
+    }
+
+    // A legendary weapon's effect let loose on whoever its blow landed on (`blow`: "melee" or
+    // "ranged", the wielder's power for it), its charge spent (core/legendary.js EFFECTS, as strong
+    // as the weapon's level: effectAt): the foe frozen solid, fire bursting from it, stone spears
+    // from the ground under and round it, lightning leaping on from it, or a blast throwing them all
+    // back. Told as "unleashed" ({ id, target, effect, level, map, x, y, radius, struck })
+    #unleash(actor, target, blow) {
+        const { effect, level } = actor.legendary;
+        const numbers = effectAt(effect, level);
+        const { element } = EFFECTS[effect];
+        const power = actor.power?.[blow] ?? 1;
+        const [map, x, y] = [target.map, target.x, target.y];
+        const roll = (share) => Math.max(1, Math.round((numbers.damage[0] + this.random.next() * (numbers.damage[1] - numbers.damage[0])) * power * share));
+        const struck = [];
+        const strike = (one, share, more = {}) => {
+            if (!one.dead) {
+                struck.push(one.id);
+                this.#hit(actor, one, { id: effect, kind: "effect", element, reaction: UNLEASHED[effect], stagger: 300, ...more }, null, { damage: roll(share) });
+            }
+        };
+
+        actor.charge = 0;
+
+        if (effect === "frostbind") {
+            strike(target, 1, { afflict: { kind: "slow", chance: 1, look: "frost" } });
+
+            if (!target.dead) {
+                this.#freeze(actor, target, numbers.freeze, "frost");
+            }
+        } else if (effect === "cinderburst" || effect === "earthsunder") {
+            for (const one of this.#foesNear(actor, map, x, y, numbers.radius, target)) {
+                const first = one === target;
+
+                strike(one, first ? 1 : UNLEASHED.near, effect === "cinderburst" ? { afflict: { kind: "burn", chance: first ? 1 : numbers.near } } : { knockdown: numbers.knockdown });
+            }
+        } else if (effect === "stormlash") {
+            const chain = [target];
+
+            for (let k = 0; k < numbers.leaps; k++) {
+                const last = chain.at(-1);
+                const next = this.#foesNear(actor, last.map, last.x, last.y, numbers.reach).find((one) => !chain.includes(one));
+
+                if (!next) {
+                    break;
+                }
+
+                chain.push(next);
+            }
+
+            chain.forEach((one, k) => {
+                strike(one, pow(numbers.falls, k));
+
+                if (!one.dead) {
+                    this.#freeze(actor, one, numbers.stun, "shock");
+                }
+            });
+        } else if (effect === "ruinblast") {
+            // (Those it throws told as the blast's: "blast", its `throws`)
+            this.#blast(actor, actor, map, x, y, { radius: numbers.radius, damage: numbers.damage.map((value) => value * power), toss: numbers.toss, kind: "ruinblast", heart: [actor.x, actor.y], element: null, reaction: "crush", stagger: 400 });
+        }
+
+        this.#emit("unleashed", { id: actor.id, target: target.id, effect, level, map, x, y, radius: numbers.radius ?? null, struck });
+    }
+
+    // Held fast by a legendary weapon's effect `ms` (frozen solid, or shocked: `look`): stunned as a
+    // spell stuns, less long warded against its element; never the colossal
+    #freeze(by, target, ms, look) {
+        if (target.wild?.colossus || target.engine || !(ms > 0)) {
+            return;
+        }
+
+        const warded = this.#warded(target, { element: look === "frost" ? "water" : "air" });
+        const held = Math.round(ms * (warded ? WARD : 1));
+
+        target.stunnedUntil = Math.max(target.stunnedUntil, this.time + held);
+        target.casting = null;
+
+        if (target.attack && !target.attack.struck) {
+            target.attack = null;
+        }
+
+        this.#turnOn(target, by, this.time + held);
+        this.#emit("stunned", { id: target.id, by: by.id, effect: look, until: target.stunnedUntil });
+    }
+
+    // The foes of `actor` within `radius` metres of (x, y) on `map`, the nearest first (`first`, if
+    // given, before them all)
+    #foesNear(actor, map, x, y, radius, first = null) {
+        const near = this.actors.filter((one) => !one.dead && one.map === map && one !== actor && hypot(one.x - x, one.y - y) <= radius && this.hostile(actor, one));
+
+        near.sort((a, b) => (a === first ? -1 : b === first ? 1 : hypot(a.x - x, a.y - y) - hypot(b.x - x, b.y - y)));
+
+        return first && !near.includes(first) && !first.dead ? [first, ...near] : near;
+    }
+
     #bashed(attacker, target, ms) {
         // (Nothing stuns the colossal)
         if (target.wild?.colossus) {
@@ -5469,12 +5592,37 @@ export class Battle {
             this.#emit("healed", { id: attacker.id, by: attacker.id, spell: null, attack: attack.id, amount: attacker.hp - before, hp: attacker.hp, maxHp: attacker.maxHp, cured: [], from: target.id });
         }
 
+        // A player's weapon (core/gear.js): health drawn back from the harm it did (Leeching), and
+        // its foe left bleeding now and then (Vicious)
+        const weaponBlow = !spell && !ground && !attack.reflected && (attack.kind === "melee" || attack.kind === "ranged") && attacker && attacker !== target;
+
+        if (weaponBlow && attacker.leech > 0 && !attacker.dead && attacker.hp < attacker.maxHp) {
+            const drawn = Math.round(damage * attacker.leech);
+
+            if (drawn > 0) {
+                const before = attacker.hp;
+
+                attacker.hp = Math.min(attacker.maxHp, attacker.hp + drawn);
+                this.#emit("healed", { id: attacker.id, by: attacker.id, spell: null, attack: "leech", amount: attacker.hp - before, hp: attacker.hp, maxHp: attacker.maxHp, cured: [], from: target.id });
+            }
+        }
+
+        if (weaponBlow && attacker.bleed > 0 && target.hp > 0 && this.random.chance(attacker.bleed)) {
+            this.afflict(target.id, "bleed", { by: attacker.id, power: attacker.power?.[blow] ?? 1 });
+        }
+
         if (attacker) {
             this.#provoke(attacker, target);
         }
 
         if (target.hp === 0) {
             this.#die(target, attacker);
+        }
+
+        // A legendary weapon's blow landing with its charge full: its effect let loose on whoever
+        // it struck (#unleash)
+        if (weaponBlow && attacker.legendary && (attacker.charge ?? 0) >= attacker.legendary.charge && !attacker.dead) {
+            this.#unleash(attacker, target, blow);
         }
 
         // (Some of it turned back on whoever dealt it: Reflect. Never what's itself turned back)

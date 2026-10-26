@@ -272,6 +272,9 @@ export const SPOILS = Object.freeze({
  */
 export const TOME_DROP = Object.freeze({ tier: 4, chance: 0.03, perTier: 0.005, perilous: 0.2 });
 
+/** How likely any foe of the wild's, of any tier, is to leave a Tome of Evaluate (spells.js evaluate): about one in forty. */
+export const EVALUATE_DROP = 0.025;
+
 /**
  * What an elite (creatures.js ELITES; docs/WILDS.md *Elites*) leaves each player near it when it
  * falls, beyond what one of its kind would: its kind's gold `gold` times over (and a `purse`
@@ -318,6 +321,11 @@ export function rollSpoils(creature, tier, random, least = tier, { elite = false
 
     if (hands && (tier >= TOME_DROP.tier || elite) && random.chance(perilous ? TOME_DROP.perilous : (TOME_DROP.chance + Math.max(0, tier - TOME_DROP.tier) * TOME_DROP.perTier) * (elite ? ELITE_SPOILS.tome : 1))) {
         items.push({ id: tomeOf(rollTome(random)), quality: "common", count: 1 });
+    }
+
+    // (On any of them, now and then: a Tome of Evaluate, EVALUATE_DROP)
+    if (random.chance(EVALUATE_DROP)) {
+        items.push({ id: tomeOf("evaluate"), quality: "common", count: 1 });
     }
 
     // (One more than there'd have been against a player alone: its gold and its parts, no more;

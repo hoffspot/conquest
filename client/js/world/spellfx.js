@@ -4244,6 +4244,15 @@ const RECIPES = {
     attraction: {
         palette: { glow: [0xd8d0e0, 0x6a6070], deep: 0x8a7a9a, bright: 0xffffff },
     },
+    // (Sizing up foes: a gold ring sweeping out from them and motes rising, core/might.js)
+    evaluate: {
+        palette: { glow: [0xfff4c0, 0xffb020], deep: 0xffb020, bright: 0xfff4c0 },
+        land: (fx, { at, point }) => {
+            fx.ring(at, { colour: 0xffd060, from: 0.3, to: 2.4, life: 0.7 });
+            fx.ring(at, { colour: 0xfff4c0, from: 0.2, to: 1.4, life: 0.5 });
+            fx.spray(p([0xfff4c0, 0xffb020], { count: 26, size: [0.05, 0.1], speed: [0.4, 1.2], life: [0.6, 1.1], gravity: -1.4, spread: 2, swirl: 4 }), point);
+        },
+    },
     inertialBarrier: {
         palette: { glow: [0xffffff, 0x3a8ae0], deep: 0x3a8ae0, bright: 0xbfe8ff },
         land: (fx, { target, at }) => {

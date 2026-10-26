@@ -429,6 +429,73 @@ as strong as its finders, and the more of a pack leaving only their gold and par
 rules every game plays by (`NET_VERSION` 107), and what a snapshot holds (`SNAPSHOT_VERSION` 26:
 the packs kept, each dungeon's tier).
 
+## Might and power
+
+What a player finds is made for how mighty they are, and an easy kill finds the exceptional less
+often (core/might.js; the user: "Propose a design similar to the game borderlands where the players'
+power/strength is taken into consideration when rolling the number of attributes and attribute
+ranges of an item drop ... If a player can easily smash an enemy by virtue of the differences in
+power between the player and enemy, the probability of receiving exceptional loot from that enemy
+should be reduced").
+
+- **One scale for both, 0 to 100** (`MIGHT`, `scaleOf`): a fighting value (*A side's strength*,
+  above: √(toughness × harm)) a step up each time it's so many times as much, a fresh hero with a
+  sword 0 (a fighting value of 20.6), a hero of the highest ranks in legendary gear of the highest
+  level about 100 (eighteen times that). A tier of a creature's (×1.18) is about six steps; ten
+  steps is about ×1.34.
+- **A player's might** (`mightOf`, `heroValue`) is what's lasting about them, and nothing else:
+  their gear (its make and level, what's rolled on it, a legendary weapon's effect, let loose as
+  often as its charge fills), their skills and abilities (a Power strike's or an Aimed shot's
+  doubled blow now and then), the spells they know that harm faster than their blows do (as *A
+  side's strength* has them: a mighty weapon's wielder doesn't leave off it for a weak spell), their
+  healing (their best healing spell's and Vampirism's, as if cast a fifth of a 30-second fight,
+  and what Leeching draws back: as hit points more), their stuns beyond what anyone's Stun does
+  (as harm not done to them, at most 30%), and their charms. Not their followers, nor the creatures
+  they've called or raised, nor a boon, a draught or a spell that lasts a while (the user: "hired
+  followers, summons, or zombies should not be taken into consideration for power"). A fresh hero
+  is 0; a hero at rank 1 in a fine kit with fire's second spell about 26; at rank 3 in masterwork
+  with fire's fourth about 58; at rank 5 in a legendary sword and tower shield and every school's
+  seventh spell about 86 (93 in gear of level 50, 99 in gear of level 100). Shown in the pack's
+  totals. What a player finds is made for the highest might they've had in the last ten minutes
+  (`LOOT_MIGHT`, Host `mightFor`, kept as they're outfitted: `mightPeak`), so their gear taken off
+  just before a kill makes nothing of an easy one.
+- **A foe's power** (`powerOf`) is its own, as it is: its tier, an elite's or a champion's strength,
+  its armour (a rat near home 0, a bear of the fifth tier about 16, a troll of the ninth 57, the
+  Dreadthorn 84, a dungeon's boss Demon Lord 99; the Behemoth and the kaiju 100). People (soldiers,
+  orcs, raiders) each their own. A pack of the wild's counts together only for those of it that came
+  at a player (`#fights`: each one that's set on them, struck at them, kept by pack and player, the
+  fallen too, till the last of the pack's gone), as one (`packPower`: √(their toughness together ×
+  their harm together)): three wolves of the third tier that fought a player together are about 17,
+  where each alone is 0; a wolf that never reached them is its own (the user: "Monster's power
+  should be calculated on an individual basis, not in packs unless the pack acts together to attack
+  the player").
+- **A piece's level** (`levelFor`, `LOOT_LEVEL`) for a player's share of a kill: the fight's power,
+  kept to no more than 10 below their might and no more than 5 above it, and a little luck (3
+  either way), 1 to 100. A fair fight finds pieces of their own might's level; a harder one up to
+  5 more; an easy one never more than 10 less; a strong friend can't lift a weak one more than 5.
+  In a party, each player's own might counts for their own share. What a level does: docs/WAR.md
+  *Levels*.
+- **An easy kill** (`falloff`): a player more than 10 mightier than the fight's power finds a
+  rare, very rare or legendary piece half as likely for each 10 more, never less than a tenth as
+  likely, what's taken given to the common, fine and masterwork, each as much more as it was
+  likely (progress.js `fallenOff`); 2 less mighty, as it's reckoned, against a kind they've Mastered
+  in their bestiary (`MASTERED_STEPS`). Only the makes rolled: never a relic, moonsilver, a map's
+  prize, an invasion's thanks or the armoury's gift; nor gold, parts, draughts or tomes.
+- **Where nothing was fought** (`tierPowerOf`): what's found stands for its land's tier, ten steps
+  a tier past the first: an adventurers' cache's band, a place's chest, a lair's hoard (its
+  master's tier), a dungeon's chests and fallen (its level's tier) and hoard (the hoard's tier), a
+  treasure, a fallen adventurer's remains. A shop's wares, the armoury's gifts and an invasion's
+  thanks are made at the player's might's level, as it is.
+- **The tiers of old** (`mightTier`): what came with a player's might of 0 to 8 before comes with
+  one for every ten of it, 0 to 10: the war's ages (docs/WAR.md), the smith's makes, an adventurers'
+  cache's, a treasure's, a dungeon's and a hoard's tier.
+- **Seen** (app/hud.js `sizeUp`, game.js `#sizeUp`): each foe's plate coloured by how a fight with
+  it goes for the player (`fightLook`): grey and dimmed, what it leaves less likely exceptional
+  (more than 10 weaker than them); as it is, a fair fight; amber, harder (more than 10 stronger);
+  red, far harder (more than 25); an elite's name stays gold, its level by it coloured instead
+  (styles.css `.look-easy`, `.look-hard`, `.look-deadly`). The Evaluate spell (docs/MAGIC.md) shows its power by its name
+  too ("Pw 31"), crossed blades after it while it's with others of its pack that came at them.
+
 ## Elites
 
 Now and then, out past the land nearest home, a pack's led by an elite of its kind: an "Elite
@@ -478,7 +545,9 @@ stronger members, `docs/DUNGEONS.md`, which are only a tier up.)
   - on one with hands, a tome four times as likely, at any tier;
   - and always a prize: a piece of gear any cache might hold, or (three times in ten) a charm,
     made as a cache's two tiers further out would be. Never common; mostly fine to rare, now and
-    then very rare or legendary, and better the further out.
+    then very rare or legendary, and better the further out; of a level for the player's might and
+    the elite's power, the exceptional less likely for one it came too easily to (*Might and
+    power*).
 
 ## The wilds director
 
@@ -620,7 +689,8 @@ band of the land's brigands has found it and keeps it (`core/caches.js`, the hos
 
   Where more than one band's found, it's any of them.
 - **How strong.** As strong as its land (`tierAt`), or as the mightiest player within 120 m of it
-  (their might, 0 to 8, a tier above it: `cacheTier`), whichever's the more. So it's never weaker
+  (their might's tier, one every ten of it, a tier above it: `cacheTier`, core/might.js
+  `mightTier`), whichever's the more. So it's never weaker
   than what lives there, and a strong player meets a band to match them anywhere. Three keep it
   near home, up to four from the third tier and up to five from the fifth (`cacheCount`, their
   leader too), their leader two tiers above the rest (`CACHES.lead`). Hard to beat alone. Against
@@ -716,7 +786,7 @@ to search on its reader's maps, and their party's; whoever buried it left a band
   - **Who they are:** a band of the land there (`CACHE_BANDS`, as a cache's: outlaws, goblin raiders,
     goblins under a troll, the restless dead, cultists), as many as its make has (`treasureCount`).
   - **How strong:** as a cache there would be, its make's tiers more (`treasureTier`: the land's
-    tier or the reader's might when it was read, whichever's the more), up to the tenth.
+    tier or the reader's might's tier when it was read, whichever's the more), up to the tenth.
   - **How they keep it:** as a cache's band keeps it (#putBand, shared with the caches), against
     the side of the group the hunter's in.
   - **Its leader:** a very rare or legendary map's is an elite (*Elites*: three times the hit
@@ -1098,8 +1168,9 @@ the user only wants to pick up legendary weapons with auto-snag, that configurat
 possible"). Nothing's
 certain: each thing has its chance, a little better for each tier the creature's above its least,
 and gold's as much more as the creature's stronger. One of a pack more than a player alone would
-meet leaves only its gold and its parts (*What the more leave*, above). The only way to share
-what's found is to trade it (below).
+meet leaves only its gold and its parts (*What the more leave*, above). Any of them, of any tier,
+leaves a Tome of Evaluate one time in forty (spoils.js `EVALUATE_DROP`; docs/MAGIC.md). The only way
+to share what's found is to trade it (below).
 
 The parts are worth what the adventurers' guild pays for them (only the guild buys them; other
 shops have no use for them): a couple of gold for a rat's tail near home, a few for a wolf's pelt,
@@ -1127,7 +1198,9 @@ face to face (`core/host.js`: `trade`, `offer`, `agree`, `cancel`; `TRADE`):
   gold to offer and buttons to agree or call it off, then what they carry. Tapping (or holding)
   something carried offers it, as many as they like of all they have of it (its stacks lit gold);
   anything offered can be taken back. Each change is the whole offer again, and whoever changes
-  theirs undoes both players' agreeing: what's agreed to is what's there.
+  theirs undoes both players' agreeing: what's agreed to is what's there. What's offered is that
+  very thing, whole: its make, level, boost, bonuses, name, people and effect (progress.js
+  `heldAlike`, `removeAlike`; before levels, a trade passed on only a thing's kind and make).
 - **Agreeing.** Once both have agreed, everything offered changes hands at once: all of it, or
   (if either hasn't all they offered any more, or hasn't room in their pack for what they're
   given) none of it, and neither's agreed any more, with why said.

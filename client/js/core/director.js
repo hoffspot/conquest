@@ -143,7 +143,7 @@ export const WELL_RESTED = Object.freeze({ id: "rested", label: "Well rested", r
  * A player's share of a fallen adventurer's remains, out where the land's of a tier (random.js
  * random; `people`: the maker of any people's piece): { gold, items }, FINDS remains'.
  */
-export function rollRemains(tier, random, { people = "human" } = {}) {
+export function rollRemains(tier, random, { people = "human", level = 1, falloff = 1 } = {}) {
     const rules = FINDS.remains;
     const at = Math.max(1, Math.min(TIERS, tier));
     const gold = Math.round(random.int(...rules.gold) * (1 + CHEST_GOLD * (at - 1)));
@@ -151,9 +151,9 @@ export function rollRemains(tier, random, { people = "human" } = {}) {
 
     if (random.chance(rules.gear)) {
         const id = CACHE_GEAR[Math.floor(random.next() * CACHE_GEAR.length) % CACHE_GEAR.length];
-        const made = rollGear(id, cacheMake(at, random), random, { people });
+        const made = rollGear(id, cacheMake(at, random, { falloff }), random, { people, level });
 
-        items.push(ITEMS[id].magic ? { ...made, boost: rollBoost(random) } : made);
+        items.push(ITEMS[id].magic ? { ...made, boost: rollBoost(random, level) } : made);
     }
 
     if (random.chance(rules.potion)) {

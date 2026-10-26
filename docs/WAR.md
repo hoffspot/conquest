@@ -261,15 +261,15 @@ turn rather than 0.1, so that a people can keep its army and reserve as well as 
 **The ages of the war** (`STAGES`) say what can be taken, and how strong each people's army and
 reserve can be (of the most, 80: *Standing armies*). No army's raised in the uneasy peace:
 
-| Age | Comes with might | What can be taken | Army and reserve |
+| Age | Comes with might's tier (might) | What can be taken | Army and reserve |
 | --- | --- | --- | --- |
-| An uneasy peace | 0 | Nothing | 20 (the reserve only) |
-| Border wars | 2 | Villages | 40 |
-| War | 4 | Villages, towns and cities | 60 |
-| Conquest | 6 | Capitals too | 80 |
+| An uneasy peace | 0 (0) | Nothing | 20 (the reserve only) |
+| Border wars | 2 (20) | Villages | 40 |
+| War | 4 (40) | Villages, towns and cities | 60 |
+| Conquest | 6 (60) | Capitals too | 80 |
 
-The next age comes with the strongest player's **might** (`war.setMight`, 0 to 8: from their
-skills, gear and followers, from M3), or after 180 turns each (three hours of play) whatever
+The next age comes with the strongest player's **might**'s tier (`war.setMight`, 0 to 10: one for
+every ten of their might, core/might.js `mightTier`; below), or after 180 turns each (three hours of play) whatever
 (`TURNS_PER_STAGE`, M16). It never goes back. So a player has three hours before a village can be
 taken, and far longer before a capital can.
 
@@ -564,30 +564,48 @@ both hands.
   wizard's hat +5% spell power. Rings and an amulet only have bonuses.
 - **Makes.** Each piece is of a make, which counts in its price and in what it does:
 
-| Make | Blows / protection | Price | Might | Bonuses rolled on it |
-| --- | --- | --- | --- | --- |
-| Common | ×1 | ×1 | +0 | none (jewellery one) |
-| Fine | ×1.15 | ×3 | +0.5 | one |
-| Masterwork | ×1.3 | ×8 | +1 | two, a quarter stronger |
-| Rare | ×1.38 | ×14 | +1.2 | three, 30% stronger |
-| Very rare | ×1.44 | ×21 | +1.35 | three, 40% stronger |
-| Legendary | ×1.5 | ×30 | +1.5 | three, half as strong again, and a name of its own |
+| Make | Blows / protection | Price | Bonuses rolled on it (the fewer, the likelier) |
+| --- | --- | --- | --- |
+| Common | ×1 | ×1 | none (jewellery one) |
+| Fine | ×1.15 | ×3 | one or two |
+| Masterwork | ×1.3 | ×8 | two or three, a quarter stronger |
+| Rare | ×1.38 | ×14 | two to four, 30% stronger |
+| Very rare | ×1.44 | ×21 | three or four, 40% stronger |
+| Legendary | ×1.5 | ×30 | three to five, half as strong again, a name of its own, and (a weapon) an effect |
 
   Found, given or bought, most things are common (70%), then fine (22%), masterwork (6%), rare
   (1.2%), very rare (0.5%) and legendary (0.3%) (`MAKES`, `rollMake`); a cache's makes go by how
-  strong its band was (`CACHE_MAKES`, docs/WILDS.md). A charm (below) comes in every make too. A
-  draught, a scroll or a tome is only ever as it was made (its `rarity`: `gradeOf`), and shown in
-  that make's colour.
+  strong its band was (`CACHE_MAKES`, docs/WILDS.md). For one who killed what left it too easily,
+  the rare, very rare and legendary are less likely (docs/WILDS.md *Might and power*). A charm
+  (below) comes in every make too. A draught, a scroll or a tome is only ever as it was made (its
+  `rarity`: `gradeOf`), and shown in that make's colour.
+- **Levels** (core/gear.js `LEVELS`, `levelFactor`). Every piece and charm is of a level, 1 to 100:
+  the might of whoever it was found or made for (docs/WILDS.md *Might and power*). The higher, the
+  stronger: a level-100 piece twice what a level-1 of its make is, its blows (a weapon), its
+  armour and own bonus, what's rolled on it (rolled at its level), a wand's boost (at most 100%), a
+  shield's least share of a blow (half its most at level 1, three quarters at 100), and its price.
+  The number of bonuses its make rolls (above) is likelier the more, the higher it is, the fewest
+  always likeliest (`bonusCounts`: each more as likely as the one before times a half at level 1,
+  four fifths at 100). Level 1 is what everything was before levels: anything made before them has
+  no level kept, and is level 1, as it was. Shown "Level 47" with it; only pieces of a level stack.
 
 - **Rolled bonuses** (`rollGear`, `AFFIXES`) are rolled as a piece is made (bought, found,
   given), each adding to something different that fits the piece: armour (Sturdy), melee
   damage (Keen), ranged damage (True), spell power (Arcane), stamina (Tireless), hit points (of
   the Bear), healing (of Mending), stun length (of Binding), haggling (of the Fox: a better price
-  from shops), persuasion (of Eloquence) and, on a shield, how often it blocks (Stalwart) and how
-  hard it bashes (of the Ram; a spellward instead the spells' Arcane, of Mending and of Binding).
-  A piece is named for them ("Keen sword of the Bear");
-  a legendary one has its own name ("Stormward"). Only pieces alike (the same make, people and
-  bonuses) stack.
+  from shops), persuasion (of Eloquence), slipping blows (Nimble), blows coming sooner (Swift: at
+  most 30% sooner, never sooner than the blow takes), health drawn back from the harm a blow does
+  (of Leeching: at most a quarter of it), a blow leaving its foe bleeding (Vicious: at most half
+  of them), less of fire's, water's, air's, earth's or every spell's harm (of the Salamander, the
+  Kelpie, the Wyvern, the Mountain, Warding: as a charm's wards) and, on a shield, how often it
+  blocks (Stalwart) and how hard it bashes (of the Ram; a spellward instead the spells' Arcane,
+  of Mending and of Binding). Every piece can have at least five kinds (a legendary's most), most
+  of them more. A piece is named for them ("Keen sword of the Bear"); a legendary one has its own
+  name ("Stormward"). Only pieces alike (the same make, level, people, bonuses and effect) stack.
+- **A legendary weapon's effect** (core/legendary.js, docs/GAME.md *Legendary weapons*): every
+  legendary weapon has one of five, apart from its bonuses, as strong as its level: Frostbind,
+  Cinderburst, Earthsunder, Stormlash and Ruinblast. Legendary weapons made before effects have
+  one all the same (`effectFor`: the same in every game), of the first level.
 - **Each people's uniform.** Each people's soldiers wear their own (`UNIFORM`: a helm, a hauberk,
   vambraces, gauntlets, a war belt, leg guards, war boots, a cloak and a shield), made in their
   colours and metal (docs/CHARACTERS.md, "Uniforms and livery"). Worn together, a people's pieces are
@@ -624,8 +642,11 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     healing);
   - the smith and the apprentice: every weapon, piece of armour and shield, and the pieces of
     their people's uniform, as well made as the player buying is mighty (`tiered`,
-    `SMITH_MAKES`): common and fine to begin with (might 0 to 2), fine and masterwork as they grow
-    (3 to 5), masterwork alone for the mightiest (6 to 8). Better than that is the specialists';
+    `SMITH_MAKES`, by their might's tier, one every ten: core/might.js `mightTier`): common and
+    fine to begin with (might 0 to 29), fine and masterwork as they grow (30 to 59), masterwork
+    alone for the mightiest (60 and more). Better than that is the specialists'. Whatever a shop
+    sells is made at the buyer's might's level as it's bought (a day's special, made already,
+    brought to it: core/stock.js `atLevel`), and priced at it;
   - the priest: healing draughts;
   - the guild's receptionist ("I'd like to buy or sell something", or "What does the guild
     buy?", which she answers: everything, the spoils of the wild that no one else takes too):
@@ -839,9 +860,11 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     What another player offers is said as it was made, and compared as if it were carried.
   - **The Skills tab** shows each skill's rank and how far to the next.
 
-**Might** is how dangerous a player is: their best fighting rank (or their command of others),
-plus their gear's make, up to 8. The mightiest player's might sets how fast the war comes on
-(`war.setMight`).
+**Might** is how dangerous a player is, 0 to 100 (core/might.js; docs/WILDS.md *Might and power*):
+how long they'd last and how fast they harm, from everything lasting about them, their gear,
+skills, spells and charms (not their followers, nor what they've called or raised, nor anything
+that passes). It's in the pack's totals ("Might 47 of 100"). The mightiest player's might's tier
+(one every ten) sets how fast the war comes on (`war.setMight`).
 
 ### The player's people (M4)
 

@@ -169,20 +169,22 @@ export function nearTreasure(treasure, [x, y]) {
  * fine map on, a prize as well made as the map; a healing draught; and now and then (TREASURE.map)
  * another map, as well made or the next better.
  */
-export function rollTreasure(tier, grade, random, { people = "human" } = {}) {
+export function rollTreasure(tier, grade, random, { people = "human", level = 1, falloff = 1 } = {}) {
     const make = gradeOfMap(grade);
     const spec = TREASURES[make];
     const gold = Math.round(random.int(...TREASURE.gold) * spec.gold * (1 + CHEST_GOLD * (Math.max(1, tier) - 1)));
     const items = [];
     const piece = (quality) => {
         const id = CACHE_GEAR[Math.floor(random.next() * CACHE_GEAR.length) % CACHE_GEAR.length];
-        const made = rollGear(id, quality, random, { people });
+        const made = rollGear(id, quality, random, { people, level });
 
-        return ITEMS[id].magic ? { ...made, boost: rollBoost(random) } : made;
+        return ITEMS[id].magic ? { ...made, boost: rollBoost(random, level) } : made;
     };
 
+    // (The map's prize as well made as the map, whatever: its other pieces, less likely
+    // exceptional for one it came too easily to: caches.js cacheMake)
     for (let k = random.int(...spec.gear); k > 0; k--) {
-        items.push(piece(cacheMake(tier, random)));
+        items.push(piece(cacheMake(tier, random, { falloff })));
     }
 
     if (spec.prize) {

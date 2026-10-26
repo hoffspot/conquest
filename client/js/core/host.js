@@ -27,11 +27,12 @@ import { namePeople } from "./names.js";
 import { rumouredBy, rumouredOf, rumoursNear } from "./rumours.js";
 import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
-import { offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
+import { levelOf, offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
+import { falloff, fighterOf, levelFor, MASTERED_STEPS, mightOf, mightTier, packPower, partsOf, powerOf, tierPowerOf } from "./might.js";
 import { carriesTorch, lighting, skyLight, torchesLit } from "./light.js";
 import { ABILITIES, alike, ARMOR_CAP, buys, gradeOf, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
 import { MASTERED, payOf, RESEARCH } from "./bestiary.js";
-import { dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
+import { atLevel, dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
 import { BODIES as BATTLE_BODIES, bodiesOf, COMMANDER, COMMANDERS, engagementOf, FIELD, JOB, layoutOf, MORALE, offsetsOf, STANDARD, stepEngagement, tacticsOf, TROPHY } from "./engagement.js";
@@ -506,6 +507,12 @@ export const SPOILS_REACH = 30;
 
 /** How long something dropped lies on the ground before it's gone (ms), and how near (m) it's picked up from. */
 export const GROUND_MS = 5 * 60 * 1000;
+
+/**
+ * How long a player's might is remembered for what they find (core/might.js; Host mightFor): the
+ * highest they've had in the last ten minutes counts, not only what they're wearing as a foe falls.
+ */
+export const LOOT_MIGHT = Object.freeze({ ms: 10 * 60 * 1000 });
 export const PICK_REACH = 1.6;
 
 // (Spoils of a fight that aren't a creature's: a supply wagon's or a convoy's gold)
@@ -649,7 +656,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 42;
+export const SNAPSHOT_VERSION = 43;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -741,6 +748,9 @@ export const SNAPSHOT_STEPS = Object.freeze({
 
         return { ...snapshot, version: 42, battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => (ways.has(actor.id) ? { ...actor, ...ways.get(actor.id) } : actor)) } };
     },
+    // 43: who each pack came at (Host #fights: none yet), and each player's might as their loot
+    // has it (none remembered: their might now, #rememberMight)
+    42: (snapshot) => ({ ...snapshot, version: 43, fights: [], players: snapshot.players.map((player) => ({ mightPeak: null, ...player })) }),
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -1210,6 +1220,10 @@ export class Host {
         // (what each is of: its cache; an elite's escort) }: more of them come mid-fight should
         // the side grow (#reinforce)
         this.packs = new Map();
+        // Who each pack of the wild's came at, by pack id: { [player id]: { ids (those of it that
+        // did), parts (each one's toughness and harm: core/might.js partsOf) } }: what it leaves a
+        // player is made for those of it that fought them together (#fightPower)
+        this.fights = new Map();
         this.wildCamps = new Map();
         // The roaming beasts' dens out about the players (core/dens.js; #dens), by id: { ids }
         this.dens = new Map();
@@ -2163,6 +2177,11 @@ export class Host {
                 }
             }
 
+            // (One of a pack of the wild's setting on a player: one of those that came at them, #fought)
+            if (event.type === "attack" && this.players.has(event.target)) {
+                this.#fought(event.id, event.target);
+            }
+
             // (One of a cache's guards struck or felled: whoever did it, a player or one of theirs,
             // has a share of it once it's opened, wherever they are by then: #cacheFell)
             if ((event.type === "hit" || event.type === "death") && event.by) {
@@ -2689,6 +2708,7 @@ export class Host {
             hired: [...this.hired],
             wild: [...this.wild.entries()],
             packs: structuredClone([...this.packs.entries()]),
+            fights: structuredClone([...this.fights.entries()]),
             cleared: structuredClone(this.cleared),
             eliteRest: [...this.eliteRest.entries()],
             nextWild: this.nextWild,
@@ -2724,7 +2744,7 @@ export class Host {
             invasions: structuredClone(this.invasions),
             burnt: structuredClone(this.burnt),
             fallen: structuredClone(this.fallen),
-            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, inRing: player.inRing ?? null, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), budget: player.budget ?? null, ...this.characterOf(player), followers: undefined })),
+            players: [...this.players.values()].map((player) => ({ id: player.id, realm: player.realm, boons: structuredClone(player.boons), readyAt: { ...player.readyAt }, prayed: { ...player.prayed }, inRing: player.inRing ?? null, discarded: structuredClone(player.discarded ?? null), safety: structuredClone(player.safety ?? null), role: player.role, lastCommand: player.lastCommand, away: player.away, out: player.out, resting: structuredClone(player.resting), budget: player.budget ?? null, mightPeak: structuredClone(player.mightPeak ?? null), ...this.characterOf(player), followers: undefined })),
             done: structuredClone(this.done),
         };
     }
@@ -2869,6 +2889,7 @@ export class Host {
         host.hired = new Set(snapshot.hired ?? []);
         host.wild = new Map(structuredClone(snapshot.wild ?? []));
         host.packs = new Map(structuredClone(snapshot.packs ?? []));
+        host.fights = new Map(structuredClone(snapshot.fights ?? []));
         host.cleared = structuredClone(snapshot.cleared ?? []);
         host.eliteRest = new Map(snapshot.eliteRest ?? []);
         host.nextWild = snapshot.nextWild ?? 1;
@@ -2936,12 +2957,12 @@ export class Host {
         }
 
         for (const player of snapshot.players) {
-            const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, prayed, inRing, discarded, safety, role, lastCommand, away, out, resting, budget } = player;
+            const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, prayed, inRing, discarded, safety, role, lastCommand, away, out, resting, budget, mightPeak } = player;
             const kept = new Progress(progress, hero);
 
             // (Outfitted as they were: their actor's carried on as it was, charms and all; and what
             // their own game keeps of them, as it was)
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, prayed: { ...(prayed ?? {}) }, inRing: inRing ?? null, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null, own: ownOf(player) });
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, prayed: { ...(prayed ?? {}) }, inRing: inRing ?? null, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null, mightPeak: structuredClone(mightPeak ?? null), own: ownOf(player) });
         }
 
         host.random.state = snapshot.random ?? host.random.state;
@@ -3185,7 +3206,7 @@ export class Host {
     #trophy(player, fallen) {
         const random = createRandom([...`${fallen.id}:${player.id}:trophy`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0);
         const weapon = this.soldiers.get(fallen.id)?.weapon;
-        const piece = rollGear(ITEMS[weapon]?.slot ? weapon : "ring", TROPHY.quality, random, { people: this.soldiers.get(fallen.id)?.people });
+        const piece = rollGear(ITEMS[weapon]?.slot ? weapon : "ring", TROPHY.quality, random, { people: this.soldiers.get(fallen.id)?.people, level: levelFor(powerOf(fallen), this.mightFor(player.id), random) });
         const merit = player.standing.guild ? TROPHY.merit : 0;
 
         player.progress.gold += TROPHY.bounty;
@@ -3551,7 +3572,7 @@ export class Host {
     #loot(player, fallen) {
         // (An invasion's raiders: as their band's are, no uniforms of a people's)
         const band = this.soldiers.get(fallen.id)?.side === "invader" ? BANDS[fallen.team] : null;
-        const { gold, items } = rollLoot(band?.loot ?? fallen.kind, this.random, fallen.kind === "soldier" && !band ? { people: fallen.team } : {});
+        const { gold, items } = rollLoot(band?.loot ?? fallen.kind, this.random, { ...(fallen.kind === "soldier" && !band ? { people: fallen.team } : {}), ...this.#making(player, powerOf(fallen)) });
         const kept = items.filter((item) => player.progress.stow(item));
 
         if (!gold && !kept.length) {
@@ -3618,6 +3639,20 @@ export class Host {
         player.charms = charmsOf(player.progress);
         actor.dodge = bonus.dodge;
         actor.shield = player.progress.guard(bonus);
+
+        // (Blows sooner, health drawn from them, foes left bleeding: core/gear.js; and a legendary
+        // weapon's effect, its charge begun again with another: core/legendary.js)
+        const fighter = fighterOf(player.progress, bonus);
+
+        actor.haste = fighter.haste;
+        actor.leech = fighter.leech;
+        actor.bleed = fighter.bleed;
+
+        if (JSON.stringify(actor.legendary ?? null) !== JSON.stringify(fighter.legendary)) {
+            actor.legendary = fighter.legendary;
+            actor.charge = 0;
+        }
+
         // (The kinds of creature they know where to strike: Mastered in their bestiary)
         actor.mastered = player.progress.bestiary.mastered();
         // (Seeing in the dark as the night's creatures do: Lunara's gift, core/shrines.js)
@@ -3640,7 +3675,99 @@ export class Host {
             actor.maxStamina = stamina;
         }
 
-        this.war?.setMight(Math.max(0, ...[...this.players.values()].map((each) => each.progress.might())));
+        // (Their might, remembered for what they find; the war comes on with the mightiest's)
+        this.#rememberMight(player);
+        this.war?.setMight(Math.max(0, ...[...this.players.values()].map((each) => mightTier(mightOf(each.progress)))));
+    }
+
+    // A player's might as what they find has it (mightFor): the highest they've had in the last
+    // LOOT_MIGHT.ms, kept each time they're outfitted (their gear changed, or their skills)
+    #rememberMight(player) {
+        const now = mightOf(player.progress);
+        const peak = player.mightPeak;
+
+        if (!peak || now >= peak.might || this.battle.time > peak.until) {
+            player.mightPeak = { might: now, until: this.battle.time + LOOT_MIGHT.ms };
+        }
+    }
+
+    /**
+     * A player's might for what they find (core/might.js mightOf, 0 to 100): their might now, or
+     * the highest they've had in the last LOOT_MIGHT.ms, whichever's more (so their gear taken off
+     * just before a kill makes nothing of an easy one).
+     */
+    mightFor(id) {
+        const player = this.players.get(id);
+
+        if (!player) {
+            return 0;
+        }
+
+        const now = mightOf(player.progress);
+        const peak = player.mightPeak;
+
+        return peak && this.battle.time <= peak.until ? Math.max(now, peak.might) : now;
+    }
+
+    /**
+     * How strong a foe is to a player (core/might.js): its power for what it leaves them (with
+     * those of its pack that came at them together, `pack`; or its own, powerOf), and its own.
+     * { power, own, pack }, or null for none (the player's might: mightFor).
+     */
+    fightFor(playerId, foeId) {
+        const player = this.players.get(playerId);
+        const foe = this.battle.actor(foeId);
+
+        if (!player || !foe) {
+            return null;
+        }
+
+        const beast = this.wild.get(foeId);
+        const theirs = beast?.pack ? this.fights.get(beast.pack)?.[playerId] : null;
+        const pack = Boolean(theirs && theirs.ids.length > 1 && theirs.ids.includes(foeId));
+
+        return { power: this.#fightPower(player, foe, beast), own: powerOf(foe), pack };
+    }
+
+    // One of a pack of the wild's came at a player (`playerId`): it's one of those of the pack that
+    // fought them (#fights)
+    #fought(id, playerId) {
+        const beast = this.wild.get(id);
+        const actor = this.battle.actor(id);
+
+        if (!beast?.pack || !actor) {
+            return;
+        }
+
+        const fight = this.fights.get(beast.pack) ?? {};
+        const theirs = fight[playerId] ?? { ids: [], parts: [] };
+
+        if (!theirs.ids.includes(id)) {
+            theirs.ids.push(id);
+            theirs.parts.push(partsOf(actor));
+        }
+
+        fight[playerId] = theirs;
+        this.fights.set(beast.pack, fight);
+    }
+
+    // How strong what a player fought was, for what it leaves them (core/might.js): one of a pack
+    // of the wild's that came at them with others of it, those of it that did, together
+    // (packPower); anyone else, itself alone (powerOf)
+    #fightPower(player, fallen, beast = null) {
+        const theirs = beast?.pack ? this.fights.get(beast.pack)?.[player.id] : null;
+
+        return theirs && theirs.ids.length > 1 && theirs.ids.includes(fallen.id) ? packPower(theirs.parts) : powerOf(fallen);
+    }
+
+    // What a player finds is made as (core/might.js): of a level for their might (mightFor) from a
+    // fight of a `power`, the exceptional as much less likely as it came easily to them (as much
+    // more easily against a `kind` they've Mastered in their bestiary). { level, falloff }
+    #making(player, power, kind = null) {
+        const might = this.mightFor(player.id);
+        const mastered = kind && player.progress.bestiary.mastered().includes(kind) ? MASTERED_STEPS : 0;
+
+        return { level: levelFor(power, might, this.random), falloff: falloff(might + mastered - power) };
     }
 
     // The shopkeeper a player's trading with (an id): one of the folk who keeps a shop, near them
@@ -3681,10 +3808,10 @@ export class Host {
         }
     }
 
-    // A piece of gear as it's made for a player (bought, given): with what's rolled on it (core/
-    // gear.js), and a wand's or grimoire's boost
-    #made(ware) {
-        return madeOf(ware, this.random);
+    // A piece of gear as it's made for a player (bought, given): of their might's level (mightFor),
+    // with what's rolled on it (core/gear.js), and a wand's or grimoire's boost
+    #made(ware, player) {
+        return madeOf(ware, this.random, { level: this.mightFor(player.id) });
     }
 
     /**
@@ -3736,7 +3863,7 @@ export class Host {
 
         const stock = this.stockOf(trading.keeper.id);
         const same = (ware) => ware.id === item?.id && ware.quality === (item?.quality ?? "common");
-        const ware = special ? stock?.special : stock ? stock.wares.find(same) : wares(trading.shop, trading.people, { might: player.progress.might() }).find(same);
+        const ware = special ? stock?.special : stock ? stock.wares.find(same) : wares(trading.shop, trading.people, { tier: mightTier(this.mightFor(player.id)) }).find(same);
 
         if (!ware) {
             return refuse("shop");
@@ -3746,7 +3873,9 @@ export class Host {
             return refuse("soldOut");
         }
 
-        const price = shopPrice(special ? ware : { id: ware.id, quality: ware.quality }, trading.shop, { haggle: player.progress.bonuses().haggle, special });
+        // (Made at their might's level, and as dear: the special, made already, brought to it)
+        const level = levelOf(this.mightFor(player.id));
+        const price = shopPrice(special ? atLevel(ware, level) : { id: ware.id, quality: ware.quality, level }, trading.shop, { haggle: player.progress.bonuses().haggle, special });
 
         if (price > player.progress.gold) {
             return refuse("gold");
@@ -3754,7 +3883,7 @@ export class Host {
 
         // (The special as it is, its rolls on it already; anything else's rolled as it's bought: a
         // wand's or grimoire's boost, rarely high; better made gear's bonuses)
-        const bought = special ? structuredClone(ware) : this.#made(ware);
+        const bought = special ? atLevel(structuredClone(ware), level) : this.#made(ware, player);
 
         if (!player.progress.stow(bought)) {
             return refuse("full");
@@ -4041,17 +4170,18 @@ export class Host {
                 return refuse("item");
             }
 
-            // (A wand or a grimoire: that very one, by its boost)
-            const same = offered.find((item) => item.id === id && item.quality === quality && (item.boost ?? null) === boost);
+            // (That very thing, whole: its make, level, boost, what's rolled on it, its name)
+            const thing = Progress.thing(each);
+            const same = offered.find((item) => alike(item, thing));
 
             if (same) {
                 same.count += count;
             } else {
-                offered.push({ id, quality, count, ...(boost === null ? {} : { boost }) });
+                offered.push({ ...thing, count });
             }
         }
 
-        if (offered.some(({ id, quality, count, boost = null }) => player.progress.held(id, quality, boost) < count)) {
+        if (offered.some((item) => player.progress.heldAlike(item) < item.count)) {
             return refuse("count");
         }
 
@@ -4115,7 +4245,7 @@ export class Host {
         for (const { id, progress } of both) {
             const { gold, items } = trade.offers[id] ?? { gold: 0, items: [] };
 
-            if (progress.gold < gold || !items.every((item) => progress.remove(item.id, item.count, item.quality, item.boost ?? null))) {
+            if (progress.gold < gold || !items.every((item) => progress.removeAlike(item, item.count))) {
                 return undo("changed", id);
             }
 
@@ -4178,7 +4308,7 @@ export class Host {
             const bundle = rollSpoils(beast.creature, beast.tier, this.random, least, { elite, extra: Boolean(beast.extra) });
 
             if (elite) {
-                bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human" }));
+                bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human", ...this.#making(player, this.#fightPower(player, fallen, beast), beast.creature) }));
             }
 
             if (!bundle.gold && !bundle.items.length) {
@@ -6214,7 +6344,7 @@ export class Host {
                 const random = createRandom([...`${invasion.id}:${id}:thanks`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0);
                 const weapon = weaponOf(player.progress);
 
-                piece = rollGear(random.pick([ITEMS[weapon]?.slot ? weapon : "sword", "ring", "amulet"]), REWARD.quality, random, { people: invasion.people });
+                piece = rollGear(random.pick([ITEMS[weapon]?.slot ? weapon : "sword", "ring", "amulet"]), REWARD.quality, random, { people: invasion.people, level: levelOf(this.mightFor(player.id)) });
                 this.#give(player, structuredClone(piece));
             }
 
@@ -9101,6 +9231,11 @@ export class Host {
 
         this.wild.delete(id);
 
+        // (The last of its pack gone: who it came at, forgotten)
+        if (one.pack && ![...this.wild.values()].some((each) => each.pack === one.pack)) {
+            this.fights.delete(one.pack);
+        }
+
         for (const held of [one.camp && this.wildCamps.get(one.camp), one.den && this.dens.get(one.den), one.trial && this.trials.get(one.trial), one.lair && this.lairs.get(one.lair), one.place && this.held.get(one.place), one.cache && this.caches.get(one.cache), one.works && this.worksOut.get(one.works)]) {
             if (held) {
                 held.ids = held.ids.filter((each) => each !== id);
@@ -9534,7 +9669,9 @@ export class Host {
                 continue;
             }
 
-            const bundle = kind === "cache" ? rollCache(tier, this.random, { people }) : rollLoot(kind, this.random, { people, relic });
+            // (Made for the land's power where it is, or a lair's master's: core/might.js)
+            const made = this.#making(player, tierPowerOf(mapTier));
+            const bundle = kind === "cache" ? rollCache(tier, this.random, { people, ...made }) : rollLoot(kind, this.random, { people, relic, ...made });
 
             if (kind !== "cache") {
                 bundle.gold = Math.round(bundle.gold * (1 + CHEST_GOLD * (tier - 1)));
@@ -9940,7 +10077,7 @@ export class Host {
                 continue;
             }
 
-            const bundle = rollRemains(find.tier, this.random, { people: player.realm });
+            const bundle = rollRemains(find.tier, this.random, { people: player.realm, ...this.#making(player, tierPowerOf(find.tier)) });
             const note = plan && this.random.chance(FINDS.remains.note) ? noteOf(rumouredOf(plan), find.at, (id, x, y) => player.explored.knows(id, x, y)) : null;
             const ground = `ground-${this.nextGround++}`;
 
@@ -10531,7 +10668,7 @@ export class Host {
             const each = this.battle.actor(player.id);
 
             return each && each.map === "town" && hypot(each.x - heart[0], each.y - heart[1]) <= CACHES.near;
-        }).map((player) => player.progress.might()));
+        }).map((player) => mightTier(this.mightFor(player.id))));
         const tier = cacheTier(tierAt(heart, homes.map(({ home }) => home), landAt(plan, ...heart).biome), might);
         const band = cacheBand(landAt(plan, ...heart).biome, this.random);
 
@@ -10640,7 +10777,7 @@ export class Host {
 
         const homes = [...this.players.values()].map((each) => this.#homeOf(each)).filter(Boolean);
         const land = landAt(plan, ...found.at);
-        const tier = treasureTier(homes.length ? tierAt(found.at, homes, land.biome) : 1, player.progress.might(), grade);
+        const tier = treasureTier(homes.length ? tierAt(found.at, homes, land.biome) : 1, mightTier(this.mightFor(player.id)), grade);
         const item = player.progress.take(index, 1);
         const id = `treasure-${this.nextTreasure++}`;
 
@@ -10758,7 +10895,7 @@ export class Host {
                 continue;
             }
 
-            const bundle = rollTreasure(treasure.tier, treasure.grade, this.random, { people: treasure.people });
+            const bundle = rollTreasure(treasure.tier, treasure.grade, this.random, { people: treasure.people, ...this.#making(player, tierPowerOf(treasure.tier)) });
             const ground = `ground-${this.nextGround++}`;
 
             this.ground.set(ground, { id: ground, bundle, for: player.id, from: "chest", map: "town", square: [...cache.chest], until: this.battle.time + GROUND_MS });
@@ -10881,7 +11018,7 @@ export class Host {
             return actor && !actor.dead && (building.maps.includes(actor.map) || (actor.map === "town" && hypot(actor.x - site.at[0], actor.y - site.at[1]) < DELVES.near));
         });
 
-        delve.tier = cacheTier(dungeonTier(this.world.plan, site), Math.max(0, ...finders.map((player) => player.progress.might())));
+        delve.tier = cacheTier(dungeonTier(this.world.plan, site), Math.max(0, ...finders.map((player) => mightTier(this.mightFor(player.id)))));
         this.world.interiors.setTier(building.key, delve.tier);
     }
 
@@ -11021,7 +11158,9 @@ export class Host {
                 continue;
             }
 
-            const bundle = dropped.hoard ? rollHoard(hoardTier(level.tier, player.progress.might()), this.random) : dropped.remains ? rollFallen(level.tier, this.random) : rollCoffer(level.tier, this.random);
+            const hoard = dropped.hoard ? hoardTier(level.tier, mightTier(this.mightFor(player.id))) : null;
+            const made = this.#making(player, tierPowerOf(hoard ?? level.tier));
+            const bundle = dropped.hoard ? rollHoard(hoard, this.random, made) : dropped.remains ? rollFallen(level.tier, this.random, made) : rollCoffer(level.tier, this.random, made);
 
             // (A treasure map in a chest or the hoard now and then: core/treasure.js MAP_FINDS)
             if (!dropped.remains) {
@@ -12981,7 +13120,7 @@ export class Host {
             const weapon = weaponOf(player.progress);
             const held = ITEMS[weapon]?.slot === "mainHand" ? weapon : "sword";
             const given = armouryGift(due, held, offHandFits(held, "shield") === null, player.realm);
-            const gift = this.#made(given);
+            const gift = this.#made(given, player);
 
             if (!player.progress.stow(gift)) {
                 return refuse("full");

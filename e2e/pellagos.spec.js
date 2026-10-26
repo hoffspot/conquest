@@ -8133,6 +8133,97 @@ test("the pack's paperdoll: the player drawn among their gear; tapped, a piece s
     await expect(cell("helm")).toHaveCount(1);
 });
 
+test("item levels and a legendary weapon: a piece's level and a legendary weapon's effect said; might in the totals; the charge over the card filling blow by blow on a wolf, let loose; Evaluate's power on its plate, coloured", async ({ page }) => {
+    test.setTimeout(180000);
+
+    // A saved game whose hero carries a legendary sword of level 60 (Cinderburst), one made before
+    // effects (of the first level), and a rare ring of level 40
+    await page.addInitScript((save) => {
+        localStorage.setItem("pellagos.save", JSON.stringify(save));
+
+        if (!localStorage.getItem("pellagos.progress")) {
+            const pack = [
+                { id: "sword", quality: "legendary", level: 60, name: "Emberfang", effect: "cinderburst", bonuses: { melee: 0.2 }, affixes: ["keen"] },
+                { id: "sword", quality: "legendary", name: "Oathbane" },
+                { id: "ring", quality: "rare", level: 40, bonuses: { hp: 18 }, affixes: ["bear"] },
+            ];
+
+            localStorage.setItem("pellagos.progress", JSON.stringify({ created: save.created, seed: save.seed, skills: {}, gold: 10, pack, gear: null }));
+        }
+    }, { ...SAVE, seed: 1 });
+    await title(page);
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+    await page.keyboard.press("i");
+
+    const pack = page.locator(".pack");
+    const about = pack.locator(".pack-about");
+    const swords = pack.locator(`.carried .pack-cell[data-item="sword"]`);
+    const hold = async (locator) => {
+        const box = await locator.boundingBox();
+
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.down();
+        await page.waitForTimeout(700);
+        await page.mouse.up();
+    };
+
+    // Tapped, the legendary sword says its level and its effect, at it; the old one, of the first
+    // level, has an effect all the same
+    await swords.nth(0).click();
+    await expect(about.locator(".pack-name")).toHaveText("Emberfang");
+    await expect(about).toContainText("Level 60");
+    await expect(about.locator(".tone-effect")).toContainText("Cinderburst: every 7 blows");
+    await swords.nth(1).click();
+    await expect(about.locator(".pack-name")).toHaveText("Oathbane");
+    await expect(about).toContainText("Level 1");
+    await expect(about.locator(".tone-effect")).toContainText(/^(Frostbind|Cinderburst|Earthsunder|Stormlash|Ruinblast): every 7 blows/);
+
+    // Might in the totals, out of 100
+    await expect(pack.locator(".doll-stats")).toContainText(/Might\s*\d+ of 100/);
+
+    // Emberfang in hand (its card put away first), the pack shut
+    await page.keyboard.press("Escape");
+    await expect(about).toBeHidden();
+    await hold(swords.nth(0));
+    await expect(pack.locator('.doll-slot[data-slot="mainHand"]')).toHaveAttribute("aria-label", "Main hand: Emberfang");
+    await page.keyboard.press("i");
+    await expect(pack).toBeHidden();
+    expect(await page.evaluate(() => window.pellagos.game.battle.actor(window.pellagos.game.me).legendary)).toEqual({ effect: "cinderburst", level: 60, charge: 7 });
+
+    // No charge till it's struck with; out of town, a wolf by the player, struck at
+    await expect(page.locator("#hud .charge")).toBeHidden();
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const { host, battle, world } = game;
+        const [mx, my] = world.stamp.middle;
+        const at = [Math.floor(mx - 140), Math.floor(my - 20)];
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        host.battle.place(game.me, "town", at, { facing: Math.PI / 2 });
+        host.wild.set("test-wolf", { creature: "wolf", tier: 2, pack: "test-wolf", camp: null, lair: null, master: false });
+        battle.add({ id: "test-wolf", kind: "beast", name: "Wolf", weapon: "wolf", team: "beasts", square: [at[0] + 1, at[1]], ai: "wild", hp: 1e6, speed: 0.01, chase: 0.01, wild: { creature: "wolf", tier: 2, temper: "defensive", guard: 0, roam: 0, leash: 2, pack: "test-wolf", leader: null, menace: false } });
+        host.battle.place("test-wolf", "town", [battle.actor(game.me).square[0] + 1, battle.actor(game.me).square[1]]);
+        host.command(game.me, { type: "engage", target: "test-wolf" });
+    });
+
+    // Its marks lit blow by blow over the card, full, then let loose on the wolf (flaring)
+    const charge = page.locator("#hud .charge");
+
+    expect(await playUntil(page, () => document.querySelector("#hud .charge")?.hidden === false && document.querySelectorAll("#hud .charge .charge-mark.lit").length > 0, { seconds: 10 })).toBe(true);
+    await expect(charge.locator(".charge-mark")).toHaveCount(7);
+    await expect(charge).toHaveAttribute("data-effect", "cinderburst");
+    expect(await playUntil(page, () => document.querySelector("#hud .charge")?.classList.contains("flare"), { seconds: 20 })).toBe(true);
+
+    // Evaluate on the player: the wolf's power by its name on its plate, the plate coloured by how
+    // a fight with it goes for them
+    await page.evaluate(() => window.pellagos.game.battle.buff(window.pellagos.game.me, "evaluate", { ms: 60000 }));
+    expect(await playUntil(page, () => Boolean(document.querySelector('.floater[data-id="test-wolf"] .power')), { seconds: 5 })).toBe(true);
+    await expect(page.locator('.floater[data-id="test-wolf"] .power')).toHaveText(/^\d+$/);
+    await expect(page.locator('.floater[data-id="test-wolf"]')).toHaveClass(/look-(easy|fair|hard|deadly)/);
+});
+
 test("the pack shows what's grown and carried; a skill ranks up with use; trading with the barkeep, the gold changes hands; all kept for the next time", async ({ page }) => {
     // (A long walk through, and then a dozen clicks in the taproom, each waiting on a few frames
     // drawn in software, over half a second each with the room lit by its flames: more than the

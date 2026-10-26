@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { UNIFORM } from "../client/js/core/gear.js";
 import { ABILITIES, alike, ARMOR_CAP, buys, itemLabel, ITEMS, LOOT, PACK_PAGE, PACK_SIZE, priceOf, Progress, QUALITIES, RANKS, rollLoot, SELL_SHARE, SHOPS, shopOrder, startingGear, TREES, WARE_KINDS, wareKind, wares, weaponOf } from "../client/js/core/progress.js";
+import { mightOf } from "../client/js/core/might.js";
 import { createRandom } from "../client/js/core/random.js";
 import { SPELLS } from "../client/js/core/spells.js";
 import { STARTING_WEAPONS, WEAPONS } from "../client/js/core/weapons.js";
@@ -36,7 +37,7 @@ describe("growing stronger (progress.js)", () => {
         assert.equal(new Progress({}, { weapon: "sword", boots: true }).kicks(), true);
         assert.equal(new Progress({}, { weapon: "boots" }).gear.mainHand, null);
         assert.equal(weaponOf(new Progress({}, { weapon: "boots" })), "boots");
-        assert.equal(progress.might(), 0);
+        assert.equal(mightOf(progress), 0);
         assert.deepEqual(progress.abilities(), []);
     });
 
@@ -109,13 +110,14 @@ describe("growing stronger (progress.js)", () => {
         assert.equal(piled.bonuses().armor, ARMOR_CAP);
     });
 
-    it("is as mighty as its best fighting skill (or its command of others) and its gear, up to 8", () => {
-        assert.equal(new Progress({ skills: { blade: 300 } }).might(), 2);
-        assert.equal(new Progress({ skills: { healing: 99999, trade: 99999, talk: 99999, endurance: 99999 } }).might(), 0, "(healing and trade aren't might)");
-        assert.equal(new Progress({ skills: { healing: 99999, command: 2000 } }).might(), 4, "(but leading others is)");
-        assert.equal(new Progress({ skills: { marksman: 800 }, gear: { mainHand: { id: "bow", quality: "masterwork" }, chest: { id: "mail", quality: "common" } } }).might(), 4);
-        assert.equal(new Progress({ skills: { marksman: 800 }, gear: { mainHand: { id: "bow", quality: "masterwork" }, chest: { id: "plate", quality: "common" }, head: { id: "nasalHelm" }, ring1: { id: "ring", bonuses: { ranged: 0.05 }, affixes: ["trueShot"] } } }).might(), 5);
-        assert.equal(new Progress({ skills: { blade: 99999 }, gear: { mainHand: { id: "sword", quality: "legendary" }, chest: { id: "mail", quality: "legendary" }, offHand: { id: "kiteShield", quality: "legendary" } } }).might(), 8);
+    it("is as mighty as what's lasting about it (core/might.js mightOf, 0 to 100): its fighting skills and its gear, not its trade, talk or command of followers", () => {
+        const bow = (chest, more = {}) => new Progress({ skills: { marksman: 800 }, gear: { mainHand: { id: "bow", quality: "masterwork" }, chest: { id: chest, quality: "common" }, ...more } });
+
+        assert.ok(mightOf(new Progress({ skills: { blade: 300 } })) > 0);
+        assert.equal(mightOf(new Progress({ skills: { trade: 99999, talk: 99999 } })), 0, "(trade and talk aren't might)");
+        assert.equal(mightOf(new Progress({ skills: { command: 99999 } })), 0, "(nor leading followers: docs/WILDS.md Might and power)");
+        assert.ok(mightOf(bow("plate", { head: { id: "nasalHelm" }, ring1: { id: "ring", bonuses: { ranged: 0.05 }, affixes: ["trueShot"] } })) > mightOf(bow("mail")));
+        assert.ok(mightOf(new Progress({ skills: { blade: 99999 }, gear: { mainHand: { id: "sword", quality: "legendary" }, chest: { id: "mail", quality: "legendary" }, offHand: { id: "kiteShield", quality: "legendary" } } })) > mightOf(new Progress({ skills: { blade: 99999 } })));
     });
 
     it("prices things by their make, with haggling off what's bought and on what's sold", () => {

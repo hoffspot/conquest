@@ -32,6 +32,13 @@ const PARTICLES = 3000;
 const BURSTS = {
     sparks: { count: 22, colours: [0xfff1c4, 0xff8a1a], size: [0.05, 0.1], speed: [2.5, 5], life: [0.18, 0.4], gravity: 9, spread: 0.9, glow: true },
     dust: { count: 16, colours: [0xb8a78a, 0x8a7a62], size: [0.25, 0.5], speed: [0.5, 1.4], life: [0.5, 0.9], gravity: -0.4, spread: 1.6, glow: false, grow: 2.2 },
+    // (A legendary weapon's look, in its effect's colours (world/legendaries.js): frost misting off
+    // it, embers, grit sifting, sparks crackling, a gold glow drifting)
+    legendFrost: { count: 2, colours: [0xffffff, 0x8fd8ff], size: [0.03, 0.06], speed: [0.1, 0.4], life: [0.4, 0.8], gravity: 0.6, spread: 0.6, glow: true },
+    legendFire: { count: 2, colours: [0xffd070, 0xff3a0a], size: [0.04, 0.08], speed: [0.2, 0.6], life: [0.3, 0.6], gravity: -2, spread: 0.6, glow: true },
+    legendEarth: { count: 2, colours: [0xd8c090, 0x6a5030], size: [0.03, 0.06], speed: [0.1, 0.4], life: [0.5, 0.9], gravity: 2, spread: 0.6, glow: false, opacity: 0.85 },
+    legendStorm: { count: 2, colours: [0xffffff, 0x9ab8ff], size: [0.02, 0.05], speed: [0.8, 2], life: [0.08, 0.2], gravity: 0, spread: 1.6, glow: true },
+    legendRuin: { count: 2, colours: [0xfff4c0, 0xff8a1a], size: [0.03, 0.07], speed: [0.2, 0.6], life: [0.3, 0.6], gravity: -1, spread: 0.8, glow: true },
     impact: { count: 14, colours: [0xffffff, 0xffd27a], size: [0.08, 0.18], speed: [1.5, 3.5], life: [0.12, 0.3], gravity: 4, spread: 1.4, glow: true },
     arcane: { count: 30, colours: [0xd9c4ff, 0x6a4dff], size: [0.06, 0.16], speed: [1, 3], life: [0.3, 0.6], gravity: -1.5, spread: 2, glow: true, swirl: 6 },
     fire: { count: 34, colours: [0xffe08a, 0xff3a0a], size: [0.18, 0.36], speed: [0.8, 2.4], life: [0.35, 0.75], gravity: -3, spread: 1.8, glow: true, grow: 0.4 },

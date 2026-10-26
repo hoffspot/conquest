@@ -28,10 +28,14 @@
 // It only shows and asks: what's done is the host's (core/host.js commands), through the game.
 
 import { GEAR_SLOTS } from "../core/gear.js";
-import { gradeOf, PACK_PAGE, PACK_SIZE } from "../core/progress.js";
+import { alike, gradeOf, PACK_PAGE, PACK_SIZE } from "../core/progress.js";
 import { MAKES } from "./gearinfo.js";
 import { ICONS, iconOf, ITEM_ICONS, useDefs } from "./icons.js";
 import { ActionWheel, directionOf } from "./wheel.js";
+
+// A thing offered in a trade, whole (core/host.js #offer): what it is, not how the pack shows it
+const THING_KEYS = ["id", "quality", "boost", "level", "people", "bonuses", "affixes", "name", "effect"];
+const thingOf = (item) => Object.fromEntries(THING_KEYS.filter((key) => item[key] !== undefined && item[key] !== null).map((key) => [key, item[key]]));
 
 // Holding this long (ms) on a thing puts it on or takes it off (or opens its wheel); a finger this
 // far (px) from where it went down is dragging it (or, with the wheel open, has flicked)
@@ -678,8 +682,16 @@ export class PackPanel {
         const box = element("div", "doll-totals");
         const list = element("dl", "doll-stats");
 
-        for (const { label, value } of rows) {
-            list.append(element("dt", "", label), element("dd", "", value));
+        for (const { label, value, about = null } of rows) {
+            const [term, said] = [element("dt", "", label), element("dd", "", value)];
+
+            // (What a total is, said where it's not plain: Might's)
+            if (about) {
+                term.title = about;
+                said.title = about;
+            }
+
+            list.append(term, said);
         }
 
         box.append(list);
@@ -771,9 +783,10 @@ export class PackPanel {
         return cell;
     }
 
-    // How many of a kind of thing (as the stack is) the player offers, trading (or none)
-    #offeredOf({ id, quality }) {
-        return this.view.trade?.mine.items.find((item) => item.id === id && item.quality === quality)?.count ?? 0;
+    // How many of a thing exactly as the stack is (its make, level, what's rolled on it) the
+    // player offers, trading (or none)
+    #offeredOf(stack) {
+        return this.view.trade?.mine.items.find((item) => alike(item, stack))?.count ?? 0;
     }
 
     // What one side of a trade offers: its things and its gold (and, the player's, each to take back)
@@ -787,7 +800,7 @@ export class PackPanel {
                 label: `${label}${count > 1 ? ` ×${count}` : ""}`,
                 peek: `${mine ? "mine" : "theirs"}:${id}:${quality ?? "common"}`,
                 about: () => card(item, { named: false }),
-                after: mine ? [button("Take back", () => this.#reoffer({ item: { id, quality }, count: 0 }), { label: `Take back ${label}` })] : [],
+                after: mine ? [button("Take back", () => this.#reoffer({ item, count: 0 }), { label: `Take back ${label}` })] : [],
             });
         });
 
@@ -834,10 +847,10 @@ export class PackPanel {
     // or the gold; the rest as it was
     #reoffer({ item = null, count = 0, gold = null }) {
         const { mine } = this.view.trade;
-        const items = mine.items.filter(({ id, quality }) => !(item && id === item.id && quality === item.quality)).map(({ id, quality, count: each }) => ({ id, quality, count: each }));
+        const items = mine.items.filter((each) => !(item && alike(each, item))).map((each) => ({ ...thingOf(each), count: each.count }));
 
         if (item && count > 0) {
-            items.push({ id: item.id, quality: item.quality, count });
+            items.push({ ...thingOf(item), count });
         }
 
         this.onCommand({ type: "offer", gold: gold ?? mine.gold, items });
@@ -1012,8 +1025,8 @@ export class PackPanel {
         } else if (key === "discard") {
             this.onCommand({ type: "discard", index });
         } else if (key === "offer" && this.view.trade) {
-            // (As many as they carry of it, of its make, in whichever stacks)
-            const most = this.view.pack.reduce((sum, each) => sum + (each?.id === stack.id && each.quality === stack.quality ? each.count : 0), 0);
+            // (As many as they carry of it, exactly as it is, in whichever stacks)
+            const most = this.view.pack.reduce((sum, each) => sum + (each && alike(each, stack) ? each.count : 0), 0);
             const count = most > 1 ? await this.#howMany({ title: `Offer ${stack.label}`, verb: "Offer", most, value: this.#offeredOf(stack) || most }) : 1;
 
             if (count) {

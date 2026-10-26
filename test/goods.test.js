@@ -63,7 +63,7 @@ describe("the six makes (progress.js QUALITIES)", () => {
             if (k) {
                 const [was, now] = [QUALITIES[makes[k - 1]], QUALITIES[make]];
 
-                assert.ok(now.power > was.power && now.price > was.price && now.might > was.might, make);
+                assert.ok(now.power > was.power && now.price > was.price, make);
                 assert.ok(MAKES[make] < MAKES[makes[k - 1]], `${make} rarer`);
             }
         }
@@ -201,7 +201,9 @@ describe("the spell scrolls (goods.js SCROLLS)", () => {
     it("has a scroll of every school's spell, the Hexes', and the tomes' cast on someone; the greater the spell, the rarer and dearer", () => {
         const schools = Object.values(SCHOOLS).flatMap(({ tiers }) => tiers);
 
-        assert.equal(SCROLL_SPELLS.length, 48);
+        // (Evaluate's among them: spells.js evaluate)
+        assert.equal(SCROLL_SPELLS.length, 49);
+        assert.ok(SCROLL_SPELLS.includes("evaluate"));
         assert.ok(schools.every((spell) => SCROLL_SPELLS.includes(spell)));
         assert.ok(SCROLL_SPELLS.includes("stun") && SCROLL_SPELLS.includes("hold"));
         assert.ok(!SCROLL_SPELLS.filter((spell) => !schools.includes(spell)).some((spell) => SPELLS[spell].ward || SPELLS[spell].cures || SPELLS[spell].needs), "no tome's ward, cure or wand's spell");
@@ -298,7 +300,7 @@ describe("the charms (goods.js CHARMS)", () => {
         assert.equal(carrying.bonuses().wardFire, 0.16);
     });
 
-    it("rolls more goods on a fine charm or better as it's made: as many as gear of its make has, each different and not its own, in its make's span, most often those that suit it", () => {
+    it("rolls more goods on a fine charm or better as it's made: as many as gear of its make has (within its make's span), each different and not its own, in its make's span, most often those that suit it", () => {
         const random = createRandom(7);
         const tally = { kin: 0, all: 0 };
 
@@ -308,13 +310,16 @@ describe("the charms (goods.js CHARMS)", () => {
             assert.deepEqual(rollCharm(id, "common", random), { id, quality: "common" }, "a common one has none");
 
             for (const quality of ["fine", "masterwork", "rare", "veryRare", "legendary"]) {
-                const { count, strength } = ROLLS[quality];
+                const {
+                    count: [fewest, most],
+                    strength,
+                } = ROLLS[quality];
 
                 for (let k = 0; k < 30; k++) {
                     const made = rollCharm(id, quality, random);
                     const stats = Object.keys(made.bonuses);
 
-                    assert.equal(stats.length, count, `${id}, ${quality}`);
+                    assert.ok(stats.length >= fewest && stats.length <= most, `${id}, ${quality}: ${stats.length}`);
 
                     for (const stat of stats) {
                         const [least, most] = CHARM_ROLLS[stat];
@@ -336,13 +341,13 @@ describe("the charms (goods.js CHARMS)", () => {
         assert.deepEqual(rollCharm("stormGlass", "rare", createRandom(3)), rollCharm("stormGlass", "rare", createRandom(3)), "the same for the same roll");
 
         // (Made as it's bought, and as an elite's prize)
-        assert.equal(Object.keys(madeOf({ id: "stormGlass", quality: "veryRare" }, createRandom(4)).bonuses).length, 3);
+        assert.ok([3, 4].includes(Object.keys(madeOf({ id: "stormGlass", quality: "veryRare" }, createRandom(4)).bonuses).length));
         assert.deepEqual(madeOf({ id: "stormGlass" }, createRandom(4)), { id: "stormGlass", quality: "common" });
 
         const prizes = Array.from({ length: 400 }, () => elitePrize(3, random)).filter(({ id }) => CHARMS[id]);
 
         assert.ok(prizes.length > 50);
-        assert.ok(prizes.every(({ quality, bonuses = {} }) => Object.keys(bonuses).length === ROLLS[quality].count), JSON.stringify(prizes.slice(0, 3)));
+        assert.ok(prizes.every(({ quality, bonuses = {} }) => Object.keys(bonuses).length >= ROLLS[quality].count[0] && Object.keys(bonuses).length <= ROLLS[quality].count[1]), JSON.stringify(prizes.slice(0, 3)));
     });
 
     it("counts what was rolled on a charm carried, its own good too; keeps it in the pack and a save (but what no charm can have); and of two as well made, the first counts", () => {
@@ -392,11 +397,12 @@ describe("the charms (goods.js CHARMS)", () => {
         assert.deepEqual(
             carried.lines.map(({ text, tone }) => [tone, text]),
             [
+                ["note", "Level 1"],
                 ["note", "Wind and lightning hurt you a little less"],
                 ["base", "−16% air's harm"],
                 ["bonus", "−10% water's harm"],
                 ["bonus", "+9 stamina"],
-                ["note", "Carried in the pack: of each kind, the best made counts (of two as well made, the first)"],
+                ["note", "Carried in the pack: of each kind, the strongest counts (its make and level; of two as strong, the first)"],
             ],
         );
         assert.equal(carried.rolls, null);
@@ -406,8 +412,8 @@ describe("the charms (goods.js CHARMS)", () => {
 
         assert.deepEqual(ware.rolls, charmRolledOf({ id: "stormGlass", quality: "veryRare" }));
         assert.deepEqual(ware.rolls, {
-            count: 3,
-            title: "Comes with 3 more goods, each different, rolled as it's bought:",
+            count: 4,
+            title: "Comes with 3 to 4 more goods, each different (the fewer, the likelier), rolled as it's bought:",
             choices: [
                 { name: "Likely", text: "−6–11% water's harm" },
                 { name: "Likely", text: "−8–17% running's toll" },
@@ -415,7 +421,7 @@ describe("the charms (goods.js CHARMS)", () => {
                 { name: "Now and then", text: "any other a charm can give" },
             ],
         });
-        assert.equal(charmRolledOf({ id: "luckyCoin", quality: "fine" }).title, "Comes with one more good, rolled as it's bought:");
+        assert.equal(charmRolledOf({ id: "luckyCoin", quality: "fine" }).title, "Comes with 1 to 2 more goods, each different (the fewer, the likelier), rolled as it's bought:");
         assert.equal(charmRolledOf({ id: "luckyCoin", quality: "common" }), null);
     });
 
