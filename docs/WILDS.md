@@ -200,7 +200,7 @@ that carries a tome seldom has this one. On the caves' throne it's harder still:
 
 A bomber leaves 1 to 3 **Goblin Bombs** three times in four, a raider one now and then (spoils.js).
 A Goblin Bomb (progress.js `ITEMS.goblinBomb`; never sold) is thrown from the pack ("Throw") or
-from an enemy's action wheel or a quick action at the foe the player's named or set on, or the
+from an enemy's action wheel or the Action Bar at the foe the player's named or set on, or the
 nearest they can see within 12 metres (host.js `#use`, battle.js `lob`): thrown as a bomber
 throws (an underarm lob, an overarm one or a sidearm hurl), it does 14–24 at its blast's heart,
 and throws their enemies, never the player or their friends and allies. Refused, and kept, with

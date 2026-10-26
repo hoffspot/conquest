@@ -260,8 +260,9 @@ export class PartyPanel {
 
     /**
      * Show (or show again, as things change) those with the player: { members: [{ id, name, kind
-     * ("adventurer", "summon", "risen"), calling, creature, hp, maxHp, waiting, away, left (ms, or
-     * null), ally (the one chosen to help), picture (an ImageData, or null) }], most (how many
+     * ("adventurer", "summon", "risen"), calling, creature, hp, maxHp, waiting, guarding,
+     * holdFire (as they were told: core/host.js stance), away, left (ms, or null), ally (the one
+     * chosen to help), picture (an ImageData, or null) }], most (how many
      * adventurers they can lead); playing together, `players` (those in their party, they among
      * them, the longest in it first: [{ id, name, leader, me, away, with: [names] }]), `others`
      * (the other players in the world not in it: [{ id, name, asked }]), `leads` (whether they
@@ -639,7 +640,7 @@ export class PartyPanel {
     }
 
     // A member's row as they are now
-    #fill(row, { name, kind, calling = null, creature = null, hp, maxHp, waiting = false, away = false, left = null, ally = false, picture = null }) {
+    #fill(row, { name, kind, calling = null, creature = null, hp, maxHp, waiting = false, guarding = false, holdFire = false, away = false, left = null, ally = false, picture = null }) {
         const health = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
 
         row.root.className = `party-row ${kind}${ally ? " ally" : ""}${away ? " away" : ""}`;
@@ -647,7 +648,7 @@ export class PartyPanel {
         row.name.textContent = name;
         row.kind.textContent = memberKind({ kind, calling, creature, left });
         row.fill.style.width = `${Math.round(health * 100)}%`;
-        row.state.textContent = `${hp} / ${maxHp}${waiting ? " · Waiting" : " · Following"}${away ? " · Not here" : ""}${ally ? " · Chosen to help" : ""}`;
+        row.state.textContent = `${hp} / ${maxHp}${waiting ? " · Waiting" : guarding ? " · Guarding you" : " · Following"}${holdFire ? " · Holding fire" : ""}${away ? " · Not here" : ""}${ally ? " · Chosen to help" : ""}`;
         row.follow.hidden = !waiting;
         row.wait.hidden = waiting;
         row.face.setAttribute("aria-label", `Help ${name}`);

@@ -192,7 +192,7 @@ second after you let go it frames the fight again. With the battle cam off, it k
 foe both in view by itself, turning no more than it must. Either way it draws back for a drake or
 a foe far off, and cuts through trees or walls in the way of either of you; anyone attacking you
 from out of view has a red arrow at the screen's edge pointing to them. Messages told in a fight
-move up under the buttons, down over the quick actions, or off to the side rather than cover
+move up under the buttons, down over the Action Bar, or off to the side rather than cover
 anyone fighting, and taps go through them. **Down the right side** of the screen everyone
 attacking you has an icon: their likeness in a red frame with a thin line of their health along
 its foot, the one you're set on glowing and pulsing. Tap one to set on them where you stand (tap
@@ -365,15 +365,15 @@ cooldown: while it runs, its slice is greyed over, and the grey sweeps back as i
 at a greyed slice, or at an empty one, is refused, and a spell that can't be cast (out of reach,
 out of sight, already at full health) says why.
 
-**Quick actions.** In a fight (an enemy you've set on, or anyone after you), four slots rise from
+**The Action Bar.** In a fight (an enemy you've set on, or anyone after you), four slots rise from
 the bottom of the screen, your name and the zoom buttons lifted above them. Tap one to use what's
 in it at once: an attack, a hex or a blow on the enemy you're fighting, and anything else (Vigor,
 a ward, a draught) on yourself. Attacks are greyed while no enemy's set on, and each is greyed
 over while it cools down, as on the wheels. You start with Vigor, Stun, Burn and a healing
-draught; hold a slot (or go to **Game options, Controls, Quick actions**) to choose what's in it. Flick a
+draught; hold a slot (or go to **Game options, Action Wheel and Bar, Action Bar**) to choose what's in it. Flick a
 spell up or down to turn it to the next or last spell of its school that you know (Mend Wounds
 down to Vigor, up to Detraumatize); it rolls round like a slot machine's reel, and bounces at
-either end. **Six across**, in Quick actions, shows six slots instead of four, with smaller
+either end. **Six across**, in the Action Bar options, shows six slots instead of four, with smaller
 names, or only their icons on a phone held upright. On a keyboard, 1 to 4 (or 6) tap them.
 
 **Magic.** Each school grows with its spells that land, bringing its next spell at each tier:
@@ -406,7 +406,7 @@ the left side, under the minimap (and over the thumb stick), in that order, with
 in a green frame (violet for a creature called, bone for one raised), their health along its foot
 and a creature's time left along its head; they shrink to fit, and past that a "+N" chip opens
 the party menu. Their names over them are green, as are their dots on the minimap. Tap one to
-help them: ringed in green, your heals and wards from the quick actions go to them (tap again,
+help them: ringed in green, your heals and wards from the Action Bar go to them (tap again,
 and they're yours again); double-tap to run to them; hold, and a wheel opens there to tell them
 to go for whoever you're set on, to follow, to wait where they are, or to go (flick down for your
 healing and wards to cast on them). The **party menu** (the Party button heading the icons, or P)
@@ -454,8 +454,9 @@ waits for them); the music's recordings (about 1.1 megabytes) are downloaded mea
 the town are heard from where you stand: quieter further away, and to the left or right.
 
 **Game options**, in the menu, is a list of groups at the top, each a short page of its own:
-**Graphics** (visual quality, Adaptive, full screen, screen shake), **Sound**, **Controls** (the
-thumb stick, zoom buttons and minimap, and the Action wheels and Quick actions pages), **Camera**
+**Action Wheel and Bar** (the Action wheels page, yours, a foe's and your followers', and the
+Action Bar page), **Graphics** (visual quality, Adaptive, full screen, screen shake), **Sound**,
+**Controls** (the thumb stick, zoom buttons and minimap), **Camera**
 and **Gameplay** (Auto-snag, other players' summons and party invites), then the **Debug log**.
 The arrow in each page's heading, or Back at its foot, goes back a page. Under Sound, turn all the
 sound on or off, and set how loud the effects (50% to start with), the environment (40%) and the
@@ -470,7 +471,7 @@ up. They're all remembered.
 | Fight | Tap an enemy to set on them where you stand (striking once they're in reach); double-tap to run at them; hold on them and flick up (Attack) to walk up to them | Click an enemy (double-click to run at them; hold and flick up to walk up to them) |
 | Stop | Tap whoever you're going after, or yourself | Click them, or yourself |
 | Fight from the icons down the right | Tap an attacker's icon to set on them where you stand (the glowing one: stop going after them); double-tap to run at them; hold to walk up to them | Click (double-click to run at them; hold to walk up to them) |
-| Your party, from the icons down the left | Tap one's icon to choose them to help (ringed in green: your heals and wards from the quick actions go to them; tap again for yourself); double-tap to run to them; hold, then flick: Attack my target, Follow me, Wait here, Dismiss, or flick down for your heals and wards on them | The same with the mouse |
+| Your party, from the icons down the left | Tap one's icon to choose them to help (ringed in green: your heals and wards from the Action Bar go to them; tap again for yourself); double-tap to run to them; hold, then flick: their followers' wheel (Attack my target, their own ability, Follow me, Wait here, Guard me, Fall back, Dismiss; flicked down, your heals, Hold fire and a draught to give them), set as you like in Game options, Action Wheel and Bar | The same with the mouse |
 | Party menu | The Party button (top of the icons down the left) | The Party button, or P |
 | Go through a door, up or down stairs | Tap the door or stairs | Click the door or stairs |
 | Talk to someone | Tap them, then tap a reply | Click them, then click a reply or press its number; Escape to stop |
@@ -478,7 +479,7 @@ up. They're all remembered.
 | Walk or fight on the map | Tap the minimap (double-tap to run) | Click the minimap (double-click to run) |
 | Fold the minimap into a compass, and back | Tap the compass button on its top left corner; tap the compass to open it again | Click them |
 | Cast a spell | Hold on yourself or an enemy, then flick to a slice | Hold the button down on them, then flick the mouse |
-| Quick action (in a fight) | Tap one of the four (or six) along the bottom; hold one to change it; flick a spell up or down for the next or last of its school | Click one, or press 1 to 4 (or 6); drag a spell up or down |
+| Action Bar (in a fight) | Tap one of the four (or six) along the bottom; hold one to change it; flick a spell up or down for the next or last of its school | Click one, or press 1 to 4 (or 6); drag a spell up or down |
 | Pause, Game options | The menu button | The menu button or Escape |
 
 **Playing together.** There are two ways.
@@ -714,7 +715,7 @@ client/                 The game (static files served to the browser)
     hud.js              Health, stamina, names, damage numbers and messages over the game
     wheel.js            The action wheels: hold, flick, two sides, cooldowns; icons.js draws
                         their icons, and every item's; wheelsetup.js sets what's on them
-    quickbar.js         The quick actions: four slots up from the bottom in a fight, tapped to
+    quickbar.js         The Action Bar: four slots up from the bottom in a fight, tapped to
                         use on the foe or the player; quicksetup.js sets what's in them
     minimap.js          The minimap: the map the player is on from above (out in the world, the
                         patch round them), with everyone on it, and how far round to turn the

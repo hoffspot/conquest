@@ -131,7 +131,7 @@ says which on each world's card and tells players plainly before they choose who
   another world knew of them (what its folk know of them, where they stand and the requests they
   carry, their followers, where they were) stays in that world: each world has its own.
 - **What's the player's own of a hero** (client/js/core/host.js `OWN`): their action wheels and
-  quick actions, where they've pinned the world map and their markers on it, the last messages
+  Action Bar, where they've pinned the world map and their markers on it, the last messages
   they were told, what they've been told once, and their settings for how they play (auto-snag
   and what it takes, the target lock, saying no to summons and invites, the battle cam, finding
   the way through, tilt inverted and the greater spells' shaking: client/js/app/save.js
@@ -139,8 +139,8 @@ says which on each world's card and tells players plainly before they choose who
   in) keeps all of it with each, as their game says it's changed, in its saves and in the hero's
   file, and gives it back each time they come in, on any device or browser (the settings taken
   up by it, as they last set them); only their own game is told it. A hero kept before it did
-  comes in with the wheels and quick actions of the character their device last played, and the
-  device's settings, kept from then on. A visitor's wheels, quick actions, messages and
+  comes in with the wheels and Action Bar of the character their device last played, and the
+  device's settings, kept from then on. A visitor's wheels, Action Bar, messages and
   what they've been told once are their device's, going with them from world to world; the world
   remembers their pin and markers on its map, with what else it knows of them (Visitors, below).
 

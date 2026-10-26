@@ -214,7 +214,7 @@ describe("a kept hero and a character's export, each as the other", () => {
         assert.deepEqual(salvageKept(character, { seed: 9 }).left, [], "nothing more, the next time");
     });
 
-    it("keep what the hero's own game kept of them (core/host.js OWN): their wheels and quick actions, pin, markers, messages, what they've been told once and their settings, through the world keeping them and bringing them back (salvageKept), as through an export", () => {
+    it("keep what the hero's own game kept of them (core/host.js OWN): their wheels and Action Bar, pin, markers, messages, what they've been told once and their settings, through the world keeping them and bringing them back (salvageKept), as through an export", () => {
         const own = {
             wheels: { self: [{ 0: "heal" }, {}], enemy: [{}, {}], quick: ["heal", "potion", null, null, null, null] },
             pin: [120, -45],
@@ -225,7 +225,7 @@ describe("a kept hero and a character's export, each as the other", () => {
         const settings = { autoSnag: true, snagGrades: ["legendary"], snagKinds: null, battleCam: false, dragSpeed: 1.5 };
         const kept = { ...keptHero("Cara", 30), ...own, settings };
 
-        // (Once, a world brought a kept hero back without them: the hero's wheels and quick actions,
+        // (Once, a world brought a kept hero back without them: the hero's wheels and Action Bar,
         // set on a world server, gone the next time they came in)
         const { character } = salvageKept(kept, { seed: 9 });
 

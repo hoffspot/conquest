@@ -178,7 +178,7 @@ import { TalkPanel } from "./talk.js";
 import { QuickBar, QUICK_LINGER, QUICK_REFUSALS } from "./quickbar.js";
 import { Sigil } from "./sigil.js";
 import { worldLinkOf } from "./worldlink.js";
-import { ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, forFriends, offensive, PLACES, QUICK_SHOWN, readWheels, SIDES, WHEELS } from "./wheel.js";
+import { abilityIcon, ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, forFriends, iconOf, offensive, PLACES, QUICK_SHOWN, readWheels, SETTABLE, SIDES, WHEELS } from "./wheel.js";
 
 /** What every character wears under their gear: a tunic, and trousers if nothing's on their legs. */
 export const BASE_OUTFIT = Object.freeze(["tunic", "trousers"]);
@@ -350,7 +350,7 @@ const FULL_VIEW = Object.freeze({ wide: 0.2, edge: 0.02 });
 // their head for their name and bar, and `under` under their feet
 const MESSAGE_CLEAR = Object.freeze({ wide: 0.35, least: 40, over: 34, under: 6 });
 // Arrows at the screen's edge for those attacking the player out of view: the nearest `most`, so
-// far in from its sides and top (pixels), and from its bottom, clear of the quick actions risen in
+// far in from its sides and top (pixels), and from its bottom, clear of the Action Bar risen in
 // a fight
 const THREATS = Object.freeze({ most: 3, inset: 28, bottom: 96 });
 // The icons down the right side for those attacking the player (hud.js attackers): the first
@@ -834,6 +834,10 @@ const BELL = Object.freeze({ reach: 160, every: 180, volume: 1.6 });
 // that first; and the lord's thanks shown so long (seconds) for a good share of them felled
 const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, charge: 1.2, thanks: 14 });
 
+// What one of the player's own's said to do as they're told (core/host.js #orderUnit); their
+// ability, as it's used (the "unitAbility" event)
+const UNIT_TOLD = Object.freeze({ follow: "follows you.", wait: "waits here.", assist: "goes for your target.", guard: "guards you.", fallback: "falls back to you.", hold: "holds fire.", free: "fights at will." });
+
 // Why another of the player's party wasn't given a request they shared (host.js #unshared), as told
 const SHARE_SKIPPED = Object.freeze({
     has: "has it already",
@@ -881,7 +885,7 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1092,15 +1096,15 @@ export class Game {
         this.onFollowers = onFollowers;
 
         /**
-         * What's on the player's action wheels: their own and an enemy's, each two sides; and their
-         * quick actions, six (four shown, or all six: app/wheel.js).
+         * What's on the player's action wheels: their own, an enemy's and their followers', each two
+         * sides; and their Action Bar, six (four shown, or all six: app/wheel.js).
          */
         this.wheels = readWheels(wheels);
 
-        /** Hears a quick action held on (its slot), to change what's in it (main.js: Quick actions). */
+        /** Hears one of the Action Bar's actions held on (its slot), to change what's in it (main.js: Action Bar). */
         this.onChooseQuick = () => {};
 
-        /** Whether the quick actions are kept up out of a fight too (Game options: Always show). */
+        /** Whether the Action Bar is kept up out of a fight too (Game options: Always show). */
         this.quickAlways = false;
 
         /**
@@ -1115,10 +1119,10 @@ export class Game {
          */
         this.onWorldPanel = null;
 
-        /** How many quick actions are shown: four, or six across (QUICK_SHOWN; Game options: showQuick). */
+        /** How many of the Action Bar's actions are shown: four, or six across (QUICK_SHOWN; Game options: showQuick). */
         this.quickShown = QUICK_SHOWN.four;
 
-        /** Till when (the clock) the quick actions stay up: a moment after the last of a fight. */
+        /** Till when (the clock) the Action Bar stays up: a moment after the last of a fight. */
         this.fightUntil = -Infinity;
         this.onWheels = onWheels;
         this.onProgress = onProgress;
@@ -8537,7 +8541,7 @@ export class Game {
 
     // --- Emotes (core/emotes.js) ---
 
-    // Someone showing an emote (host.js "emote": a player's, from their wheel or a quick action):
+    // Someone showing an emote (host.js "emote": a player's, from their wheel or the Action Bar):
     // seen only on the player's map
     #emote({ id, emote }) {
         const actor = this.battle.actor(id);
@@ -9127,7 +9131,7 @@ export class Game {
         const actor = this.battle.actor(this.me);
 
         if (event.type === "rank") {
-            const ability = event.ability ? ` You can use ${ABILITIES[event.ability].label.toLowerCase()} now: put it on an action wheel (Game options, Controls).` : "";
+            const ability = event.ability ? ` You can use ${ABILITIES[event.ability].label.toLowerCase()} now: put it on an action wheel (Game options, Action Wheel and Bar).` : "";
 
             this.hud.message(`${TREES[event.tree].name}: ${event.title}!${ability}`, ability ? 5 : 3);
             this.sound?.play("levelUp");
@@ -9198,6 +9202,10 @@ export class Game {
             this.sound?.play("drop");
         } else if (event.type === "bought" || event.type === "sold") {
             this.sound?.play("coins");
+        } else if (event.type === "used" && event.on) {
+            // (Given to one of their own: core/host.js #handOver)
+            this.hud.message(`You give ${this.battle.actor(event.on)?.name ?? "them"} ${itemLabel(event.item).toLowerCase()}.`, 1.6);
+            this.sound?.play(useSound(event.item.id) ?? "tap");
         } else if (event.type === "used" && useSound(event.item.id)) {
             this.sound?.play(useSound(event.item.id));
         } else if (event.type === "dropped") {
@@ -9482,7 +9490,9 @@ export class Game {
                 const follower = this.host.followers.get(id);
                 const called = this.host.companions.get(id);
 
-                return { id, name: actor.name ?? follower?.name ?? "", kind, calling: follower?.calling ?? null, creature: CREATURES[called?.creature]?.name.toLowerCase() ?? null, hp: actor.hp, maxHp: actor.maxHp, waiting, away: actor.map !== this.battle.actor(this.me)?.map, left: left?.ms ?? null, ally: id === this.allyTarget, picture };
+                const { guarding, holdFire } = this.host.stance(id);
+
+                return { id, name: actor.name ?? follower?.name ?? "", kind, calling: follower?.calling ?? null, creature: CREATURES[called?.creature]?.name.toLowerCase() ?? null, hp: actor.hp, maxHp: actor.maxHp, waiting, guarding, holdFire, away: actor.map !== this.battle.actor(this.me)?.map, left: left?.ms ?? null, ally: id === this.allyTarget, picture };
             }),
             most: this.host.mostFollowers(this.me),
             ...this.#partyPlayers(),
@@ -9541,7 +9551,7 @@ export class Game {
 
         this.#chatShown();
 
-        // (And a moment on screen, just above the quick actions, unless the chat's open to read)
+        // (And a moment on screen, just above the Action Bar, unless the chat's open to read)
         if (this.chatOnScreen && !reading) {
             this.hud.chatLine({ who: dm ? `${mine ? "To" : "From"} ${line.name}` : line.name, text, mine, dm: Boolean(dm) });
         }
@@ -10283,7 +10293,7 @@ export class Game {
         return ally && !ally.dead && player && !player.dead && ally.map === player.map ? ally : null;
     }
 
-    // Choose one of the party to help (their heals and wards from the quick actions go to them,
+    // Choose one of the party to help (their heals and wards from the Action Bar go to them,
     // ringed in green), or no one (null): theirs again
     #chooseAlly(id) {
         const was = this.allyTarget;
@@ -10318,8 +10328,8 @@ export class Game {
             if (!result.ok) {
                 this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 1.4);
                 this.sound?.play("denied");
-            } else if (order !== "dismiss") {
-                this.hud.message(`${this.battle.actor(id)?.name ?? "They"} ${{ follow: "follows you.", wait: "waits here.", assist: "goes for your target." }[order]}`, 1.4);
+            } else if (UNIT_TOLD[order]) {
+                this.hud.message(`${this.battle.actor(id)?.name ?? "They"} ${UNIT_TOLD[order]}`, 1.4);
             }
 
             if (this.partyPanel?.open) {
@@ -11042,7 +11052,7 @@ export class Game {
             }
         }
 
-        this.hud.message(`${wheel === "self" ? "Your own" : "An enemy's"} wheels are full: change them in Game options, Controls, Action wheels.`, 3.5);
+        this.hud.message(`${wheel === "self" ? "Your own" : "An enemy's"} wheels are full: change them in Game options, Action Wheel and Bar, Action wheels.`, 3.5);
     }
 
     // Go and pick up something dropped on the ground: at once if the player's near it, or once
@@ -12204,7 +12214,7 @@ export class Game {
                     break;
                 }
                 case "unstruck":
-                    // (A quick action's blow, pressed while steering, that never came into reach:
+                    // (An Action Bar blow, pressed while steering, that never came into reach:
                     // nothing spent, its slot flashed red and why said, as a spell out of reach is)
                     if (event.id === this.me && event.tag) {
                         const slot = this.#quickKeys().keys.findIndex((key) => actionOf(key)?.ability === event.tag);
@@ -12768,6 +12778,13 @@ export class Game {
             case "disguise":
                 if (event.id === this.me) {
                     this.hud.message(DISGUISES[event.change]?.(ADJECTIVES[event.people] ?? event.people) ?? "", 3.5);
+                }
+
+                break;
+            case "unitAbility":
+                // (One of the player's own using their ability, told to: core/host.js #unitAbility)
+                if (event.id === this.me) {
+                    this.hud.message(`${this.battle.actor(event.unit)?.name ?? "They"}: ${event.label}!`, 1.4);
                 }
 
                 break;
@@ -14618,9 +14635,10 @@ export class Game {
             return this.#chooseCamp();
         }
 
-        // (What one of the party's told: core/host.js #orderUnit)
+        // (What one of the player's own's told: core/host.js #orderUnit; holding fire, or at will
+        // again if they are)
         if (unit) {
-            this.#orderUnit(target, unit);
+            this.#orderUnit(target, unit === "stance" ? (this.host.stance(target).holdFire ? "free" : "hold") : unit);
 
             return { ok: true };
         }
@@ -14808,13 +14826,16 @@ export class Game {
     // A wheel open (or turned over) at a point on the screen: its side's slices, how many of each
     // thing to use there are, which can't be used as things are, and what's cooling down
     #showWheel(open, x, y) {
-        // (One of the party's: what to tell them, then, turned over, the player's own first side,
-        // their healing and wards, to cast on them)
-        const commands = open.kind === "unit" && open.side === 0;
-        const friendly = open.kind === "ally" || (open.kind === "unit" && !commands);
-        const slots = open.kind === "provoke" ? WHEELS.provoke[0] : commands ? WHEELS.unit[0] : (this.wheels[friendly ? "self" : open.kind]?.[open.kind === "unit" ? 0 : open.side] ?? {});
+        // (One of the player's own: their followers' wheel, what to tell them and what to cast on
+        // them or give them, their ability by its own name and holding fire or fighting at will
+        // as they are; anyone else not an enemy: the player's own, only what can be cast on them)
+        const commands = open.kind === "unit";
+        const friendly = open.kind === "ally";
+        const slots = open.kind === "provoke" ? WHEELS.provoke[0] : (this.wheels[friendly ? "self" : open.kind]?.[open.side] ?? {});
         const unit = commands ? this.battle.actor(open.target) : null;
         const waiting = commands && this.host.waiting(open.target);
+        const stance = commands ? this.host.stance(open.target) : null;
+        const ability = commands ? this.host.unitAbility(open.target) : null;
         const counts = {};
         const off = [];
         const learnt = [...this.progress.known(), ...this.progress.abilities()];
@@ -14829,31 +14850,48 @@ export class Game {
             }
 
             // (A thing all used up; an ability not learnt; a blow for another kind of weapon; held
-            // on someone else who isn't an enemy, anything but a spell that can be cast on them)
-            const notForThem = friendly && (action?.spell ? !forFriends(action.spell) : Boolean(action));
-            // (Told to do what they're doing already: following, or waiting)
-            const already = commands && ((action?.unit === "wait" && waiting) || (action?.unit === "follow" && !waiting && !unit?.assist));
+            // on someone else who isn't an enemy, anything but a spell that can be cast on them,
+            // and on one of their own, a thing to give them besides)
+            const notForThem = (friendly || commands) && (action?.spell ? !forFriends(action.spell) : action?.item ? !(commands && action.give) : action?.unit ? !commands : Boolean(action));
+            // (Told to do what they're doing already: following, waiting or guarding; or to use an
+            // ability they haven't)
+            const already = commands && ((action?.unit === "wait" && waiting) || (action?.unit === "follow" && !waiting && !unit?.assist && !stance.guarding) || (action?.unit === "guard" && !waiting && stance.guarding) || (action?.unit === "ability" && !ability));
 
             if (notForThem || already || (action?.item && !counts[action.item]) || (action?.learnt && !learnt.includes(action.learnt)) || (blow && !weapon?.attacks.some(({ kind }) => (kind === "ranged" ? "ranged" : "melee") === blow))) {
                 off.push(direction);
             }
         }
 
-        this.wheel.show(x, y, open.target, slots, { side: open.side, flip: open.kind !== "provoke", counts, off });
-        this.wheel.setCooldown(this.#cooldowns(slots));
+        const looks = commands ? this.#unitLooks(stance, ability) : null;
+
+        this.wheel.show(x, y, open.target, slots, { side: open.side, flip: open.kind !== "provoke", counts, off, looks });
+        this.wheel.setCooldown(this.#cooldowns(slots, commands ? open.target : null));
+    }
+
+    // How the followers' wheel's own slices look held on one of them: their ability by its name and
+    // icon (core/followers.js UNIT_ABILITIES); Hold fire, or At will if they're holding fire
+    #unitLooks(stance, ability) {
+        return {
+            ...(ability ? { "unit:ability": { label: ability.label, icon: abilityIcon(ability) } } : {}),
+            ...(stance?.holdFire ? { "unit:stance": { label: "At will", icon: iconOf("unit:free") } } : {}),
+        };
     }
 
     // How much of each slice's cooldown is left (0 to 1, by direction): each spell's (its own, or
-    // the one all share, whichever's longer), and each blow's own
-    #cooldowns(slots) {
+    // the one all share, whichever's longer), and each blow's own; on one of the player's own's
+    // wheel (`unit`: their id), their ability's
+    #cooldowns(slots, unit = null) {
         const shares = {};
         const readyAt = this.host.players.get(this.me)?.readyAt ?? {};
+        const theirs = unit ? this.host.unitAbility(unit) : null;
 
         for (const [direction, key] of Object.entries(slots ?? {})) {
             const action = actionOf(key);
             const cooldown = ABILITIES[action?.ability]?.cooldown;
 
-            if (action?.spell) {
+            if (action?.unit === "ability" && theirs) {
+                shares[direction] = Math.max(0, Math.min(1, (theirs.readyAt - this.battle.time) / theirs.cooldown));
+            } else if (action?.spell) {
                 shares[direction] = this.battle.cooldown(this.me, action.spell);
             } else if (cooldown) {
                 shares[direction] = Math.max(0, Math.min(1, ((readyAt[action.ability] ?? 0) - this.battle.time) / cooldown));
@@ -14894,7 +14932,7 @@ export class Game {
         }
 
         const action = this.wheel.actionAt(direction);
-        const cooling = (this.#cooldowns({ [direction]: action })[direction] ?? 0) > 0;
+        const cooling = (this.#cooldowns({ [direction]: action }, open.kind === "unit" ? open.target : null)[direction] ?? 0) > 0;
 
         if (!action || cooling || this.wheel.offAt(direction)) {
             if (open.refused !== direction) {
@@ -14914,9 +14952,9 @@ export class Game {
     }
 
     /**
-     * What's on the player's action wheels (their own and an enemy's, two sides each), what can
-     * be put on each (app/wheel.js assignable), and how many of each thing they carry: for the
-     * Action wheels options.
+     * What's on the player's action wheels (their own, an enemy's and their followers', two sides
+     * each), what can be put on each (app/wheel.js assignable), and how many of each thing they
+     * carry: for the Action wheels options.
      */
     wheelSetup() {
         const learnt = [...this.progress.known(), ...this.progress.abilities()];
@@ -14924,7 +14962,7 @@ export class Game {
 
         const counts = Object.fromEntries(Object.keys(ITEMS).map((id) => [id, this.progress.count(id)]));
 
-        return { wheels: structuredClone(this.wheels), choices: { self: assignable("self", { learnt, carries }), enemy: assignable("enemy", { learnt, carries }) }, counts };
+        return { wheels: structuredClone(this.wheels), choices: Object.fromEntries(SETTABLE.map((wheel) => [wheel, assignable(wheel, { learnt, carries })])), counts };
     }
 
     /** Put things on the player's action wheels (as the Action wheels options have them), and keep them. */
@@ -14939,14 +14977,14 @@ export class Game {
         }
     }
 
-    // --- The quick actions (app/quickbar.js) ---
+    // --- The Action Bar (app/quickbar.js) ---
 
     // Is anyone after the player: an enemy on their map set to fight them, or striking at them?
     #underAttack(player) {
         return this.battle.actors.some((other) => (other.target === player.id || other.attack?.target === player.id) && !other.dead && other.map === player.map && this.battle.hostile(other, player));
     }
 
-    // The quick actions up in a fight (an enemy the player's set to fight, `target`, or anyone
+    // The Action Bar up in a fight (an enemy the player's set to fight, `target`, or anyone
     // after them) and for a moment after it, or always (`quickAlways`), each greyed while it can't
     // be used and swept over while it cools down
     #quickActions(target) {
@@ -15002,7 +15040,7 @@ export class Game {
         return this.battle.actor(this.me)?.prism ?? null;
     }
 
-    // What each quick action shows, and is used for: what the player's put in it; but, while a
+    // What each of the Action Bar's actions shows, and is used for: what the player's put in it; but, while a
     // Prismatic chain of theirs is live, one holding a spell of an element it goes on with (the
     // element being cast up through, or, between chains, any whose piece isn't held) the chain's
     // next spell of it (core/prismatic.js nextOf), if they know it, ringed (`chain`: its element,
@@ -15026,7 +15064,7 @@ export class Game {
         return { keys, chain };
     }
 
-    // Why a quick action can't be used as things are, but for cooling down (or null): nothing in
+    // Why an Action Bar action can't be used as things are, but for cooling down (or null): nothing in
     // it ("empty"); not learnt (an element's first spell's tome not read); none of it left; a blow
     // for another kind of weapon, or a spell needing a wand or grimoire in hand; or an attack, a
     // hex or a blow with no enemy set on (`target`) to use it on
@@ -15063,16 +15101,16 @@ export class Game {
         return offensive(key) && !target ? "untargeted" : null;
     }
 
-    /** Show four quick actions (with their names) or six across (`count`: QUICK_SHOWN; Game options). */
+    /** Show four of the Action Bar's actions (with their names) or six across (`count`: QUICK_SHOWN; Game options). */
     showQuick(count) {
         this.quickShown = count === QUICK_SHOWN.six ? QUICK_SHOWN.six : QUICK_SHOWN.four;
         this.quickBar?.show(this.quickShown);
     }
 
     /**
-     * A quick action flicked `way` ("up" or "down"): a school's spell in it turned to the next of
+     * An Action Bar action flicked `way` ("up" or "down"): a school's spell in it turned to the next of
      * its school's spells the player knows, or the last (app/wheel.js flicked), rolled in, and kept
-     * as if it had been put there in the Quick actions options; at either end of its school, or
+     * as if it had been put there in the Action Bar options; at either end of its school, or
      * not a school's spell, it bounces. Returns what's in it now, and whether it turned.
      */
     flickQuick(slot, way) {
@@ -15095,13 +15133,13 @@ export class Game {
         return { key: next, turned: true };
     }
 
-    // A quick action's press lost, or the thumb stick's (`slot`: "stick"; app/press.js,
+    // An Action Bar press lost, or the thumb stick's (`slot`: "stick"; app/press.js,
     // app/steering.js: its lift never heard, as a phone's Safari can lose it, and dropped as the
     // next began or once no finger was on the screen), kept in the debug log: which slot, what was
     // in it, how long it was held, how it was found and whether the bar was up
     #pressLost(slot, { ms, how, last = null }) {
         const found = how === "bare" ? "let go of once no finger was on the screen" : "taken over by the next";
-        const what = slot === "stick" ? "The thumb stick's touch" : `Quick action ${slot + 1}'s press`;
+        const what = slot === "stick" ? "The thumb stick's touch" : `Action Bar slot ${slot + 1}'s press`;
 
         telemetry.keep("press", {
             summary: `${what} was lost, its lift never heard: ${found}, ${(ms / 1000).toFixed(1)} s after it began`,
@@ -15116,7 +15154,7 @@ export class Game {
     }
 
     /**
-     * Use a quick action (its slot, 0 to 5, from the left): an attack, a hex or a blow on the enemy
+     * Use one of the Action Bar's actions (its slot, 0 to 5, from the left): an attack, a hex or a blow on the enemy
      * the player's set to fight, anything else on themselves; refused (and said why) if it can't
      * be, as things are, or is cooling down. An empty slot's to be filled (onChooseQuick).
      */
@@ -15171,8 +15209,8 @@ export class Game {
     }
 
     /**
-     * What's in the player's quick actions, what can be put in them (app/wheel.js assignable), and
-     * how many of each thing they carry: for the Quick actions options.
+     * What's on the player's Action Bar, what can be put on it (app/wheel.js assignable), and
+     * how many of each thing they carry: for the Action Bar options.
      */
     quickSetup() {
         const learnt = [...this.progress.known(), ...this.progress.abilities()];
@@ -15181,7 +15219,7 @@ export class Game {
         return { quick: [...this.wheels.quick], choices: assignable("quick", { learnt, carries: this.progress.carried() }), counts };
     }
 
-    /** Put things in the player's quick actions (as the Quick actions options have them), and keep them. */
+    /** Put things on the player's Action Bar (as the Action Bar options have them), and keep them. */
     setQuick(quick) {
         this.wheels = readWheels({ ...this.wheels, quick });
         this.onWheels(structuredClone(this.wheels));

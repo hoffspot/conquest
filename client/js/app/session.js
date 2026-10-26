@@ -79,7 +79,7 @@ export function createJoinedGame({ view, kit, sound, hud, hero, welcome, joining
     // What's their own of their hero, not the world's (core/host.js OWN), that the world keeps with
     // them, as it last kept them, and told it as it changes: their pin and markers on its map; and
     // if their hero's the world's (`kept`: a world server's that keeps its heroes), their wheels,
-    // quick actions, messages and what they've been told once too (never kept there yet: as this
+    // Action Bar, messages and what they've been told once too (never kept there yet: as this
     // device had them). Else those are a character of this device's, as the device has them
     const keeps = kept ? OWN.keys : ["pin", "markers"];
     const mine = (key, device) => (keeps.includes(key) ? (own[key] ?? device) : device);

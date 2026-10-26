@@ -972,7 +972,7 @@ function motionTab() {
                 element("button", { type: "button", class: "button", onclick: rest }, "Rest"),
                 element("button", { type: "button", class: "button", onclick: () => actions.setSeated(false) }, "Stand up"))),
         group("Emotes",
-            element("p", { class: "note" }, "What a player can show of themselves (their own wheel, or a quick action), and the folk do on their own: a greeting as they're talked to, a nod at what's said, a cheer as a foe falls near them."),
+            element("p", { class: "note" }, "What a player can show of themselves (their own wheel, or the Action Bar), and the folk do on their own: a greeting as they're talked to, a nod at what's said, a cheer as a foe falls near them."),
             select("Emote", Object.entries(EMOTES).map(([id, { label }]) => [id, label]), { get: () => fight.emote, set: (value) => (fight.emote = value) }),
             element("div", { class: "buttons" }, element("button", { type: "button", class: "button", onclick: () => actions.emote(fight.emote) }, "Show"))),
         group("View",

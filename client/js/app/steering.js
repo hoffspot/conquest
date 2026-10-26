@@ -18,7 +18,7 @@
 // lands in the bottom left of the screen, as Apple's guidelines and the camera study's
 // recommendation 7 have it: fewer glances down to find it, less drift off it.
 //
-// A thumb on the stick is never waited on for its lift alone, as a quick action's press isn't
+// A thumb on the stick is never waited on for its lift alone, as an Action Bar press isn't
 // (app/press.js): a phone's Safari doesn't always say a finger's lifted, and a stick left held
 // would run the player on with nothing touching it. A thumb down on it while another's held takes
 // over from the one lost; it's let go of as the stick no longer keeps the pointer

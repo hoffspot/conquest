@@ -1,4 +1,4 @@
-// A quick action's blow at an enemy, and the stick (host.js #ability, battle.js strike, #obey,
+// An Action Bar blow at an enemy, and the stick (host.js #ability, battle.js strike, #obey,
 // #move): in reach, struck where the player is, wherever they're going kept, the swing holding
 // them a moment; out of reach while they steer, refused as a spell out of reach is, nothing spent;
 // out of reach otherwise, after them at a run, the lock kept. A swing that's begun isn't called
@@ -54,7 +54,7 @@ function fight({ apart = 6, across = false } = {}) {
 
 const lockOn = (host) => host.command(HOST_PLAYER, { type: "engage", target: "orc", stand: true, lock: true });
 
-describe("a quick action's blow, and the stick (host.js #ability, battle.js strike)", () => {
+describe("an Action Bar blow, and the stick (host.js #ability, battle.js strike)", () => {
     it(`refuses a blow at a locked enemy further than ${BLOW_WAIT.near} m off while the player's steering, as a spell out of reach: nothing spent, nothing cooling down, still running the way they're steered`, () => {
         const { host, player, way, progress } = fight({ apart: 8 });
 

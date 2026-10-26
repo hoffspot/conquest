@@ -25,7 +25,7 @@ const STICK = Object.freeze({ turned: 0.12, again: 500, reach: 30 });
  * none), for `ms` of the player's `stick` (t, { copy, host }) => { facing, run } or null, and their
  * `actions` ([{ at, command } or { when, every, command }]), after `setup` ({ host, me }). Returns
  * where the hero was drawn and where the host had them, frame by frame, the forecast, what came
- * of their quick actions, and how their swings and casts were shown (`shown`: begun by the
+ * of their Action Bar, and how their swings and casts were shown (`shown`: begun by the
  * forecast, the copy's of those claimed, and the copy's shown late, none begun by the forecast).
  */
 export function playJoined(world, copyWorld, { character, rtt = 200, jitter = 40, stall = 0.01, ms = 8000, stick = () => null, actions = [], setup = null, stickOptions = STICK }) {
