@@ -1,7 +1,7 @@
 // The game's heads-up display, drawn with the page (not in 3D): the player's name and health, a
 // name and health bar over every other character, numbers for the damage each blow does, and
 // messages across the middle of the screen (in a fight, moved up under the buttons or down over the
-// quick actions where they'd cover those fighting). Down the right side, an icon for each of those
+// Action Bar where it'd cover those fighting). Down the right side, an icon for each of those
 // attacking the player: a likeness of them in a red frame, a thin line of their health along its
 // foot, whoever the player's set on glowing and pulsing, and locked on, in the lock's sights;
 // tapped or held, the game's told. Under a
@@ -22,8 +22,8 @@ import { unreadLabel } from "./partypanel.js";
 // How a fight can look on a plate (core/might.js fightLook)
 const FIGHT_LOOKS = Object.freeze(["easy", "fair", "hard", "deadly"]);
 
-// How far a message is kept from the buttons along the top and the quick actions (pixels); and
-// with no quick actions up, how far from the bottom it can come
+// How far a message is kept from the buttons along the top and the Action Bar (pixels); and
+// with no Action Bar up, how far from the bottom it can come
 const MESSAGE_GAP = 10;
 const MESSAGE_LOW = 150;
 
@@ -710,7 +710,7 @@ export class Hud {
     threats(arrows) {
         this.arrows ??= [];
 
-        // (Their own layer, over the buttons and the quick actions: styles.css #threats)
+        // (Their own layer, over the buttons and the Action Bar: styles.css #threats)
         if (!this.threatLayer) {
             this.threatLayer = element("div", "");
             this.threatLayer.id = "threats";
@@ -758,7 +758,7 @@ export class Hud {
 
     /**
      * A line said in the player's party, or a direct message to or from them, on screen just above
-     * the quick actions for CHAT_FEED.seconds, then faded (Game options: Party chat on screen):
+     * the Action Bar for CHAT_FEED.seconds, then faded (Game options: Party chat on screen):
      * `who` said it ("Bryn", "You", "From Cai", "To Cai"), what, and whether it's theirs (`mine`)
      * or a direct message (`dm`). The newest at the foot, CHAT_FEED.most at most.
      */
@@ -798,7 +798,7 @@ export class Hud {
      * Keep a message clear of those fighting (`rects`: where each is on the page, { left, top,
      * right, bottom }, pixels, their name and bar over them too): where it goes as a rule (28% of
      * the way down) if that's clear of them, else just under the buttons along the top (and the
-     * minimap, on a screen so narrow it would reach under it), else just over the quick actions
+     * minimap, on a screen so narrow it would reach under it), else just over the Action Bar
      * (or the bottom), else at the left of the screen or its right (left of the attackers' icons),
      * a little up from half way; the one over least of them if none is, never over the icons where
      * it can help it. None fighting, back where it goes as a rule.
@@ -1013,9 +1013,9 @@ export class Hud {
     }
 
     // How the party's icons fit (partyFit) between where they start, under the minimap, and the
-    // thumb stick (if it's shown), the quick actions (if they're up, under them) or the bottom:
+    // thumb stick (if it's shown), the Action Bar (if it's up, under it) or the bottom:
     // measured again only when what decides it changes (how many, the screen, the stick, the
-    // minimap, the quick actions), and for a moment after, while things slide into place
+    // minimap, the Action Bar), and for a moment after, while things slide into place
     #partyFit(count) {
         const body = document.body.dataset;
         const quickUp = this.root.classList.contains("quick-up");

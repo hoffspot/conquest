@@ -652,7 +652,7 @@ describe("playing together (netplay.js)", () => {
         assert.equal(bryn.joining.everyone, false);
     });
 
-    it("keeps what a joined player's own game keeps of their hero (OWN: wheels and quick actions, pin, markers, messages, what they've been told once, settings) with them as they say it's changed, as it's shaped; tells it them again with the world, and no one else", () => {
+    it("keeps what a joined player's own game keeps of their hero (OWN: wheels and Action Bar, pin, markers, messages, what they've been told once, settings) with them as they say it's changed, as it's shaped; tells it them again with the world, and no one else", () => {
         const { host, hosting, join, post, deliver } = opened();
         const bryn = join(guest("Bryn"));
         const id = hosting.players.get(bryn.peer);

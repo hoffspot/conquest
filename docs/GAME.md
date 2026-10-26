@@ -1064,7 +1064,7 @@ on them.
   (`on`: false, taking `SHEATHE_MS`). Coming back to life, it's put away.
 - **Fighting on its own.** Standing still, the player attacks the nearest enemy within reach. Told
   to walk somewhere, they go there (an attack that's begun lands first: neither walking away nor
-  the stick calls it off, as a quick action's blow is committed too; `NET_VERSION` 179).
+  the stick calls it off, as an Action Bar blow is committed too; `NET_VERSION` 179).
   Told to fight someone, they walk until that enemy is within reach, then attack. A shot needs
   its target in sight, looked for as far as it reaches: a bow's 13.5 m (18 m till the user cut
   it by a quarter), past the 12 m anyone looks round for enemies, so an archer told to fight
@@ -1545,7 +1545,7 @@ a look of its own (`LOOKS`), which the world takes on round the player:
 - **Passing the time** (core/host.js `REST`, `#camp`, `#sleep`; daytime.js `untilWaking`; the
   terrain plan's M7e-3): a room taken at an inn (the innkeeper's, 8 gold, or the madam's, 10) is
   slept in; or out in the world, **Make camp** (an action for a wheel, at the top of the player's
-  own wheel's other side to start with, or a quick action) pitches their people's tent behind
+  own wheel's other side to start with, or the Action Bar) pitches their people's tent behind
   them and builds a fire a step in front, and they sleep by it. Not in a settlement ("find an
   inn"), indoors, in a fight, or with anything hostile within 40 m (said at once, before
   anything's asked: host.js `campRefusal`). Making camp asks how long (hud.js `chooseCamp`):
@@ -1746,7 +1746,7 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   world's woods (chunks3d.js: the woodland's bark and leaves cut as the town's are).
 - **Those attacking the player out of view** each have a red arrow at the screen's edge,
   pointing the way to them across the ground (in front of the camera, up; behind it, down), the
-  nearest three, clear of the quick actions, gone once they're in view (game.js `#threats`, hud.js
+  nearest three, clear of the Action Bar, gone once they're in view (game.js `#threats`, hud.js
   `threats`): violet for one that shoots or throws at them (`--hostile-ranged`), and bigger and
   flashing quickly while a blow or shot at them is drawn back, not yet let go, as God of War's
   arrows say what's coming (still, asked for less motion).
@@ -1791,10 +1791,10 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   `autoLock`): whoever the player sets on, by a tap or a double tap on them or their icon, or
   Attack on their wheel, is locked on (the `engage` order's `lock`; battle.js `lock`). It stays
   their target wherever they go: walking or running off from it, it's still ringed, its bar
-  lit, their spells and blows in the quick actions aimed at it (game.js `#target`: who they're
+  lit, their spells and blows in the Action Bar aimed at it (game.js `#target`: who they're
   set on, or else locked on), and its icon kept down the right, attacking them or not. Once they
   stand again, it's struck if it's in reach, before whoever's nearer; out of reach, whoever is,
-  as ever (`#obey`); they don't go back after it of their own accord. A quick action's blow at
+  as ever (`#obey`); they don't go back after it of their own accord. An Action Bar blow at
   it (a power strike, an aimed shot, a shield bash: docs/WAR.md *Abilities*) is struck where
   they are if it's in reach, wherever they're going kept, the swing holding them a moment.
   Out of reach while they steer, it's waited on if it's within 3 m and struck as it comes into
@@ -1821,26 +1821,27 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   bone, `--risen`, for one raised), a thin line of their health along its foot, a called
   creature's time left along its head, two bars in its corner while they're told to wait, faded
   while they're elsewhere (another floor). The icons are 44 pixels while they fit between the
-  Party button and the stick (or the quick actions, up, under them; or the bottom), shrunk to
+  Party button and the stick (or the Action Bar, up, under them; or the bottom), shrunk to
   fit down to 30, and past that as many as fit with a "+N" chip under them opening the party
   menu (`PARTY_ICON`, `partyFit`: measured only when what decides it changes, `#partyFit`). Their
   names over them are green (`.floater.ally`), as are their dots on the minimap. **Tapped**, an
   icon chooses them to help (`allyTarget`, `#chooseAlly`): ringed in green on the ground
   (effects.js `setAlly`: the target ring's band in green, without its arrowheads), their icon
-  glowing, and the heals and wards in the quick actions cast on them (a spell that can be cast on
+  glowing, and the heals and wards in the Action Bar cast on them (a spell that can be cast on
   a friend, `forFriends`; anything else on the player as ever); tapped again, the player's own
   again; gone (fallen, dismissed, their time up), let go. **Tapped twice** in quick succession,
-  the player runs to them (an `approach` order with `run`). **Held**, the unit wheel opens right
-  under where the finger went down, steered by it from wherever it's lifted (`#openMemberWheel`: the page's own
-  pointer events for that pointer), as held on one of the party in the world does: Attack my
-  target (N), Follow me (E), Wait here (W), Dismiss (SW), what they're doing already greyed
-  (`WHEELS.unit`, the `unit:` actions: core/host.js `order` commands, `#orderUnit`, `NET_VERSION`
-  99), and turned
-  over (S) the player's own wheel's first side, its heals and wards cast on them, anything else
-  greyed. The **party menu** (app/partypanel.js `PartyPanel`: the Party button, the "+N" chip,
+  the player runs to them (an `approach` order with `run`). **Held**, their followers' wheel
+  opens right under where the finger went down, steered by it from wherever it's lifted
+  (`#openMemberWheel`: the page's own pointer events for that pointer), as held on one of the
+  party in the world does (*The action wheel*: the `unit:` actions are core/host.js `order`
+  commands, `#orderUnit`; `NET_VERSION` 99, and with Guard me, Fall back, Hold fire, their own
+  ability and things given to them, 187). Told, each says so ("Bram guards you.", "Bram holds
+  fire."), their ability as it's used ("Bram: Shield bash!"), and a thing given ("You give Bram a
+  healing draught."). The **party menu** (app/partypanel.js `PartyPanel`: the Party button, the "+N" chip,
   or P; shown again four times a second while open, `PARTY_MENU_EVERY`) lists them all, each
   with their likeness (tapped, chosen to help), what they are ("Hired warrior", "Called wolf ·
-  4:05 left": `memberKind`), their health, whether they follow or wait, and Follow or Wait and
+  4:05 left": `memberKind`), their health, whether they follow, wait or guard the player, and
+  whether they're holding fire ("· Holding fire": core/host.js `stance`), and Follow or Wait and
   Dismiss; with no one, how to come by some. Dismissing's for good (a hired adventurer goes their
   own way, a creature's gone), so it's asked first, from the menu or the wheel alike: "Dismiss
   Bryn?", Dismiss Bryn or Keep them (game.js `onAskDismiss`, main.js `askDismiss`: the
@@ -1878,7 +1879,7 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   of the party on the Party tab and by everyone on the Players tab, opens the Chat To them, ready
   to type (game.js `#messageTo`). With **Party chat on screen** (Game options' Chat and players,
   `chatOnScreen`, on to start with), each line said, the party's or a direct message, shows a
-  moment just above the quick actions too (where they rise in a fight), small, three at most,
+  moment just above the Action Bar too (where it rises in a fight), small, three at most,
   the newest at the foot, faded after six seconds (hud.js `chatLine`, `CHAT_FEED`), unless the
   Chat's open to read; all of it's still in the Chat. **Players** is everyone playing in the world (`PartyPanel #everyone`, game.js
   `#everyone`; "In this world (N)"), the player first, then the rest of their party (the longest
@@ -3675,7 +3676,7 @@ their height up). The dead don't look at anything.
 **Emotes** (core/emotes.js; the animations' ways in
 [CHARACTERS.md](CHARACTERS.md#emotes)). Eight: wave, bow, nod, shake the head, cheer, fist
 pump, puzzled and beckon.
-- **The player's**, from their own wheel or a quick action (each `emote:` and its name: a new
+- **The player's**, from their own wheel or the Action Bar (each `emote:` and its name: a new
   character has a wave, a bow, a nod and a cheer on wheel two). It's a command to the host
   (`{ type: "emote", emote }`), so everyone they play with sees it (the host's `emote` event:
   `{ id, emote }`, played on whoever's on the player's map). They stop where they were going to
@@ -4693,7 +4694,7 @@ soft as a light hand on it ("audible, but barely and not distracting"): the inte
   world map unfolded. A cleared place's chest: its lock turned and its lid lifted, shut once its
   share's all taken. A request taken, and signing up at a guild, written with a quill.
 - **The interface**: the action wheel's soft wooden tok opening and turning, a fuller tick as an
-  action's chosen on it; a quick action's quick rattle; a card slid over felt as a talk begins, a
+  action's chosen on it; an Action Bar action's quick rattle; a card slid over felt as a talk begins, a
   tiny tick for each reply; two dull knocks for anything refused, a key's click for a target.
 - **Cues**: two chimes on D for a foe slain (one the player or a follower felled, or one the
   player fought in the last 30 s; not the folk and soldiers' own fights), three falling for the
@@ -5024,7 +5025,7 @@ screen's edge it goes past it, the slices past the edge flicked into all the sam
 and from there back to wheel one) opens again under the finger, to flick from there. Its hub
 says which side it is. The other seven slices (`PLACES`) hold what the player's put there.
 
-**What's on them.** The player has two wheels to set, each with two sides (`SETTABLE`):
+**What's on them.** The player has three wheels to set, each with two sides (`SETTABLE`):
 - **Their own** (held on themselves): the heals and the spells cast on oneself or a friend
   (docs/MAGIC.md), things from the pack to use (a healing draught, a hot meal, an ale: `item:potion`...), each showing how many
   there are, and greyed out once none are left, and the emotes (`emote:wave`...: *Emotes*,
@@ -5036,27 +5037,41 @@ says which side it is. The other seven slices (`PLACES`) hold what the player's 
   than the one in hand is greyed out). Wheels kept from before Attack was have it put at the top
   of their first side once (`WHEELS_VERSION`, `version`), what was there moved to the first empty
   slice.
+- **Their followers'** (`unit`: held on one of their own, an adventurer they've hired, a creature
+  they've called or the dead they've raised, or on their icon down the left: *The party*; the
+  user: "Introduce a configurable follower wheel that allows full configuration of commands,
+  spells, and other actions that are unique to followers"): what to tell them (core/host.js
+  `#orderUnit`, docs/WAR.md *Followers*), Attack my target (`unit:assist`, "My target" on its
+  slice, to fit), Follow me, Wait here,
+  Guard me, Fall back, Hold fire (`unit:stance`: At will instead, with its own icon, while
+  they're holding fire), their own ability (`unit:ability`: by its own name and icon on each,
+  "Shield bash", "Burstflame", "Heal me"..., swept over while it cools down) and Dismiss; the
+  heals, cures and wards to cast on them (a spell that can be cast on a friend, `forFriends`);
+  and the draughts, meals and cures to give them (`give`: core/followers.js `givable`), each
+  showing how many there are. What they're doing already is greyed (Follow me while following,
+  Wait here while waiting, Guard me while guarding), and their ability for one with none. Wheels
+  kept from before there was one start with it as a new character's does (`readWheels`).
 
 A soldier of a people not friendly to the player's has a wheel of its own, with just Fight
-(picking a fight with them), and no other side. One of the player's party has one too (held on
-them, or on their icon down the left: *The party*), not set by the player: Attack my target,
-Follow me, Wait here and Dismiss, and on its other side the player's own heals and wards to cast
-on them. Anyone else who isn't an enemy, held on, opens the player's own wheel, only what can be
-cast on a friend lit.
+(picking a fight with them), and no other side. Anyone else who isn't an enemy, held on, opens
+the player's own wheel, only what can be cast on a friend lit.
 
 A new character's wheels have Vigor at N on their own, Make camp at N on its other side with a
 wave (NW), a bow (NE), a nod (W) and a cheer (E) round it, and Burn (N), Hurt (NE), Rumble (NW),
 Blister (E) and Stun (W) on an enemy's (`WHEELS`: the elements' greyed until their tomes are
-read, docs/MAGIC.md, and a flick at one says where the tome's sold); everything else starts
-empty, until the player puts something there in **Game
-options, Action wheels** (app/wheelsetup.js). There, tabs choose whose wheel and which side;
+read, docs/MAGIC.md, and a flick at one says where the tome's sold); on their followers', Attack
+my target (N), their ability (NE), Follow me (E), Fall back (SE), Dismiss (SW), Wait here (W)
+and Guard me (NW), and on its other side Vigor (N), Hold fire (E) and a healing draught (W);
+everything else starts empty, until the player puts something there in **Game options, Action
+Wheel and Bar, Action wheels** (app/wheelsetup.js). There, tabs choose whose wheel (Yourself, A
+foe, Your followers) and which side;
 the wheel's drawn as it opens in play, and tapping a slice lists what can go in it
 (`assignable`): "Nothing", and what's been learnt and is carried. Tapping S turns it over, as
 flicking it does. What's on the wheels is kept with the character (save.js `pellagos.<id>.wheels`),
 and read back safely (`readWheels`: only what goes on each wheel, in its seven slices). A skill
 ranking up with an ability says to put it on a wheel.
 
-### The quick actions (app/quickbar.js)
+### The Action Bar (app/quickbar.js)
 
 In a fight, four slots (or six: below) rise from the bottom of the screen side by side
 (`QuickBar`), sliding up in 0.28 s, and the player's name and the zoom buttons go up with them, 10 pixels above (the
@@ -5065,7 +5080,7 @@ hostile on their map set to fight them or striking at them (`#underAttack`); the
 3 s after the last of it (`QUICK_LINGER`), so they don't come and go between blows, and go down
 at once if the player falls.
 
-**Always show** (Game options, Controls, Quick actions: the Always show switch under Six across,
+**Always show** (Game options, Action Wheel and Bar, Action Bar: the Always show switch under Six across,
 `quickAlways`, off to start with, kept on this device as Six across is): the slots stay up out of
 a fight too, so they (and their keys) can be used before one starts, for a buff, healing or Light
 at night (app/game.js `quickAlways`, `#quickActions`). They still go down if the player falls.
@@ -5077,7 +5092,7 @@ the foe; green, the player). They're kept with the wheels (`pellagos.<id>.wheels
 back safely by `readWheels`: six, each something that can be one, or empty; a save from when there
 were four has the last two empty).
 
-**Six across** (Game options, Controls, Quick actions: the Six across switch, `quickSix`, off to start
+**Six across** (Game options, Action Wheel and Bar, Action Bar: the Six across switch, `quickSix`, off to start
 with; `QUICK_SHOWN`): six slots instead of four, a little closer together, on a bar up to 640
 pixels wide. Each slot is a size container (styles.css), so what's shown goes by how wide each
 slot is, not by the device: up to 75 pixels wide, its name is 9 pixels high; up to 57 (a phone
@@ -5103,7 +5118,7 @@ while it can't be used, it flashes red and says why ("Tap a foe first: that's us
 once, without waiting to be lifted), a school's spell turns to the next of its school (up) or
 the last (down) that the player knows (`flicked`: Healing's Vigor, Mend Wounds, Detraumatize,
 Renewal and Astral Heal, or an element's seven, `SCHOOLS`' tiers; a tier not yet known is
-passed over). It's kept, as if chosen in Quick actions. The old spell rolls out the way it was
+passed over). It's kept, as if chosen in the Action Bar options. The old spell rolls out the way it was
 flicked and the new one in after it, like a slot machine's reel (`roll`: 0.16 s out, 0.2 s in,
 overshooting a little and settling; blurred as they move), with the wheel's chosen sound. At
 either end of its school, or for anything else (a hex, a blow, a thing to use, an empty slot),
@@ -5123,13 +5138,13 @@ it's whole. Asked for less motion, the ring's still there, dashed and glowing, b
 marches or pulses.
 
 **Changed** by holding a slot (0.5 s, `QUICK_HOLD_MS`; sliding off it does neither): the game
-pauses (when no one else is playing in the world) at **Game options, Controls, Quick actions**
-(app/quicksetup.js) with that slot chosen, and Back to the game carries on. Quick actions in Game
+pauses (when no one else is playing in the world) at **Game options, Action Wheel and Bar, Action Bar**
+(app/quicksetup.js) with that slot chosen, and Back to the game carries on. The Action Bar in Game
 options shows the four slots (or six) as they rise; tap one, then what goes in it: "Nothing", or anything
 learnt and carried that can go on either wheel (`assignable("quick")`), each saying who it's
 used on ("On your foe", "On yourself"). The click a browser fires as the finger's lifted lands on
-whatever's under it by then: after a hold (Quick actions opened over the finger still down) or an
-empty slot's tap, that's Quick actions, its **Back to the game** lying over the slot at the foot of
+whatever's under it by then: after a hold (the Action Bar options opened over the finger still down) or an
+empty slot's tap, that's the Action Bar options, its **Back to the game** lying over the slot at the foot of
 a phone's screen, and it closed again at once. A click within 0.7 s of a finger's lift from a slot
 (`TAP_CLICK_MS`) that lands anywhere but the bar is swallowed; after a tap, the click lands on the
 slot itself, and goes as it did.
@@ -5166,7 +5181,7 @@ While a slice is cooling down (a spell's own cooldown, or a blow's own twelve se
 greyed over as much of it as the cooldown has left, the grey drawing back as it passes. A flick
 at a greyed slice, an empty one or one that can't be used flashes it red and is refused. One the
 game turns down once chosen (a spell or an aimed shot out of reach or out of sight: "Out of
-range", "Out of range in the dark", "Something's in the way") flashes red too, not lit as chosen, as does the quick action's slot, and
+range", "Out of range in the dark", "Something's in the way") flashes red too, not lit as chosen, as does the Action Bar slot, and
 nothing starts cooling down. The game plays on while it's open; a second finger (a pinch) closes
 it.
 
@@ -5263,11 +5278,11 @@ it.
    - **Going into someone else's world** (one opened to others, or a world on a server whose
      players bring their own), a character takes only who they are and what they carry: what
      they've grown into and carry is kept on this device as it changes there, and is what they
-     bring next time, and so are their action wheels and quick actions, their messages and what
+     bring next time, and so are their action wheels and Action Bar, their messages and what
      they've been told once. What that world knows of them is its own, kept by it, by their own
      id, with where they pinned its map and their markers on it: theirs again the next time they
      come (docs/SERVER.md, "Visitors"). A hero a world on a server keeps (one made there, or
-     copied in) is the world's, all of them: their wheels, quick actions, pin, markers, messages
+     copied in) is the world's, all of them: their wheels, Action Bar, pin, markers, messages
      and what they've been told once too, told the world as they change (core/host.js `OWN`, the
      `own` message: docs/WAR.md) and theirs again on any device; and so are their settings for
      how they play (save.js `PLAY_SETTINGS`: below), the device or browser they come in on taking
@@ -5467,7 +5482,7 @@ it.
    `stickDefaults`); turned off, it goes, and tapping alone walks. The keys steer whether it's
    shown or not, nothing is said of the stick in the opening hint while it's off, and a pause
    lets go of whatever was held. A thumb on the stick isn't waited on for its lift alone, as a
-   quick action's press isn't (*The quick actions*): a phone's Safari doesn't always say a finger's
+   Action Bar press isn't (*The Action Bar*): a phone's Safari doesn't always say a finger's
    lifted, and a stick left held ran the player on with nothing touching it, the next thumb on it
    ignored. A thumb down on it while another's held takes over from the one lost; it's let go of,
    the player stopped, as the stick no longer keeps the pointer (`lostpointercapture`), as the
@@ -5499,7 +5514,7 @@ it.
    they've registered with the adventurers' guilds, their rank there by their name: a chip of
    its metal, Copper to Mithril, docs/WAR.md M8; the thumb stick,
    unless it's turned off, in the bottom left; the zoom buttons, which Game options also leaves off, take that
-   right corner and send the card up above them; all of them go up over the quick actions in a
+   right corner and send the card up above them; all of them go up over the Action Bar in a
    fight, above), with an orange
    stamina bar under the health bar while stamina isn't full, "Out of breath" when a run
    ends for want of it, the minimap (in the top left corner; the spellbook, journal, pack and
@@ -5528,7 +5543,7 @@ it.
   fighting, the player, who they're fighting and whoever's after them, each where they are on
   the screen with their name and bar over them (game.js `#clearOfFight`, `MESSAGE_CLEAR`): where
   a message would cover one of them, it's moved up under the buttons along the top (and the
-  minimap, on a screen so narrow it would reach under it), or else down over the quick actions,
+  minimap, on a screen so narrow it would reach under it), or else down over the Action Bar,
   or else to the left of the screen or its right, a little up from half way (the player and
   their foe one over the other down the middle; left of the attackers' icons), whichever is
   clear of them and the icons (or covers least of them), staying there while that's clear, eased there (moved as it is, its width kept), and back once
@@ -5565,6 +5580,10 @@ it.
    each a page of its own, short enough to see whole on a phone without scrolling (the user:
    "Move the buttons for the game options menu to the top from the bottom. Organize the menu
    into submenus so the scrolling isn't as long"):
+   - **Action Wheel and Bar** (first, the user: "make the menus that support editing the action
+     bar more accessible. Under Game Options, make them the first category called "Action Wheel
+     and Bar""): the Action wheels page (the player's own, a foe's and their followers': *The
+     action wheel*) and the Action Bar page (*The Action Bar*).
    - **Graphics:** the Visual quality slider (Low, Medium, High) and the Adaptive switch
      (Keeping up, above), full screen while playing (below), screen shake, and with a mouse the
      sword pointer and under it, while it's on, the large pointer (*The mouse pointer*, above).
@@ -5572,8 +5591,7 @@ it.
      bus: sound effects, environment and music (a sound plays as the first two are moved, to
      hear how loud).
    - **Controls:** the thumb stick, and under it the stick under your thumb; the zoom buttons;
-     the minimap (off, the compass in its place: above); and the Action wheels and Quick
-     actions pages.
+     and the minimap (off, the compass in its place: above).
    - **Camera:** Camera follows, the battle cam, Find the way through, Camera turning, Camera
      tilting and Invert tilt (*The camera's settings*, above).
    - **Gameplay:** the Auto-snag switch (off to start with) and under it, while it's on, what it
@@ -5584,8 +5602,8 @@ it.
 
    Each page under the main one has an arrow back (‹) at the left of its heading and Back at its
    foot; both, and Escape, go back a page (main.js `menuBack`, `MENU_PAGES`), to the group's
-   button, focused (Action wheels and Quick actions back to Controls, what auto-snag takes to
-   Gameplay; the Quick actions opened from a fight back to the game), and from the main page to
+   button, focused (Action wheels and the Action Bar back to Action Wheel and Bar, what auto-snag
+   takes to Gameplay; the Action Bar opened from a fight back to the game), and from the main page to
    the game. Escape pressed again and again with nothing else done between, the browser closes
    the menu itself after a couple, whatever the page asks (Chrome's close watchers): the game's
    resumed then, as Resume does, never left stopped with no menu up.
@@ -6362,16 +6380,16 @@ screen: that's the cheaper poses), and 2.3 and 5.9 to 1.4 and 2.4 walking out of
   on its corner, remembered), the
   action wheel (stunning the orc, a flick refused while cooling down, then a heal), the action
   wheels set in Game options (a draught put on wheel two, drunk by flicking down then NE), the
-  quick actions on a phone's screen (the minimap in the top left corner, level with the buttons
+  Action Bar on a phone's screen (the minimap in the top left corner, level with the buttons
   in the top right; up in a fight with the name and zoom buttons over them; Stun tapped on the orc and Vigor
   on the player, each swept over while cooling and refused; attacks greyed with no foe set on;
-  put away 3 s after the fight; held, Quick actions opened at that slot, Rumble put in it), six
+  put away 3 s after the fight; held, the Action Bar options opened at that slot, Rumble put in it), six
   across (only icons on a phone held upright and names on its side; Mend Wounds flicked down to
   Vigor and up to Detraumatize with its name said, bouncing at either end and on Stun; the 5 key),
   a press whose lift is lost (swallowed before the page hears it: let go of as the slot lets go of
   the pointer, or once no finger's on the screen, or taken over by the next touch and kept in the
   debug log; let go of as the bar's put away or the page loses the player; a hold and Back
-  leaving the next tap heard), Quick actions opened by a hold or an empty slot's tap staying open
+  leaving the next tap heard), the Action Bar options opened by a hold or an empty slot's tap staying open
   as the finger's lifted, its Back to the game under it,
   and a
   phone screen. Drawing without a GPU is slow, so fights are played on with

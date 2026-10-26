@@ -1,5 +1,5 @@
-// Emotes: what a character shows of itself, the player as they choose (on their own wheel or as a
-// quick action: app/wheel.js ACTIONS), seen by everyone they play with (host.js "emote"), and the
+// Emotes: what a character shows of itself, the player as they choose (on their own wheel or the
+// Action Bar: app/wheel.js ACTIONS), seen by everyone they play with (host.js "emote"), and the
 // folk on their own: a greeting as they're talked to, a nod at what's said to them, a cheer as a
 // foe falls near them (app/game.js). Each is its animation's timing (s: its key moment and how
 // long it all is, as a rest's: characters/actions.js EMOTE_WAYS, the animators' clips' own

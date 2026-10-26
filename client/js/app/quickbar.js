@@ -1,7 +1,7 @@
-// The quick actions: in a fight (an enemy the player's set to fight, or anyone after them), four
+// The Action Bar: in a fight (an enemy the player's set to fight, or anyone after them), four
 // slots (or six: Game options) rise from the bottom of the screen side by side, lifting the
 // player's name and the zoom buttons above them. Each holds what the player's put in it (Game
-// options, Quick actions; or held on: app/quicksetup.js): a spell, a blow or a thing to use, as a
+// options, Action Wheel and Bar, Action Bar; or held on: app/quicksetup.js): a spell, a blow or a thing to use, as a
 // wheel's slice can (app/wheel.js QUICK). Tapped, it's used: an attack, a hex or a blow on the
 // enemy the player's set to fight; anything else (healing, a ward, a draught) on themselves. While
 // it can't be used (an attack with no enemy set on, not learnt, none left, the wrong weapon) it's
@@ -31,10 +31,10 @@ import { actionOf, iconOf, offensive, QUICK, QUICK_SHOWN } from "./wheel.js";
 
 export { QUICK_HOLD_MS } from "./press.js";
 
-/** How long the quick actions stay up once the fight's over (seconds), so they don't flicker. */
+/** How long the Action Bar stays up once the fight's over (seconds), so it doesn't flicker. */
 export const QUICK_LINGER = 3;
 
-/** Why a quick action can't be used, said when it's tapped (beside core/host.js REFUSALS). */
+/** Why an Action Bar action can't be used, said when it's tapped (beside core/host.js REFUSALS). */
 export const QUICK_REFUSALS = Object.freeze({
     untargeted: "Tap a foe first: that's used on them",
     none: "You've none left",
@@ -63,9 +63,9 @@ export const keyboard = (event) => event.detail === 0 && !event.pointerType;
 const empty = '<circle r="15" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="4 4" opacity="0.6"/>';
 
 /**
- * Fill a quick action's slot (a button made by quickSlot) with what's in it (`key`: an ACTIONS
+ * Fill an Action Bar slot (a button made by quickSlot) with what's in it (`key`: an ACTIONS
  * key, or "item:" and a thing to use; null for nothing), and how many of it there are (`count`, a
- * thing to use). (Also drawn by the Quick actions options: app/quicksetup.js.)
+ * thing to use). (Also drawn by the Action Bar options: app/quicksetup.js.)
  */
 export function fillSlot(slot, key, count = 0) {
     const action = actionOf(key);
@@ -95,7 +95,7 @@ export function fillSlot(slot, key, count = 0) {
     }
 }
 
-/** A quick action's slot (the `index`th, from the left): a button, filled by fillSlot. */
+/** An Action Bar slot (the `index`th, from the left): a button, filled by fillSlot. */
 export function quickSlot(index) {
     const slot = document.createElement("button");
 
@@ -115,7 +115,7 @@ export class QuickBar {
         this.element = document.createElement("div");
         this.element.className = "quickbar";
         this.element.setAttribute("role", "toolbar");
-        this.element.setAttribute("aria-label", "Quick actions");
+        this.element.setAttribute("aria-label", "Action Bar");
         this.element.inert = true;
 
         /** Each slot's press (app/press.js), by index. */
@@ -171,7 +171,7 @@ export class QuickBar {
         }
 
         // (The click a browser fires after a finger's lifted from a slot lands on whatever's under
-        // it by then: the slot, after a tap; but Quick actions, after a hold (opened over the finger
+        // it by then: the slot, after a tap; but the Action Bar options, after a hold (opened over the finger
         // still down) or an empty slot's tap, where "Back to the game" lies over the slot at the
         // foot of a phone's screen and would close it again at once. One that comes within
         // TAP_CLICK_MS of the lift, anywhere but the bar, is swallowed)

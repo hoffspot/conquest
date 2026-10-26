@@ -105,7 +105,7 @@ describe("a world in a thread of its own (server/world-worker.js, world-thread.j
         assert.equal(ada.welcome.id, "ADA0000001.1");
         await until(() => states.at(-1)?.running, "the clock to run");
 
-        // (Their action wheels and quick actions set, the world map pinned and auto-snag on, in their
+        // (Their action wheels and Action Bar set, the world map pinned and auto-snag on, in their
         // game: the world's to keep with the hero, core/host.js OWN)
         const own = { wheels: { self: [{ 0: "heal" }, {}], enemy: [{}, {}], quick: ["heal", "potion", null, null, null, null] }, pin: [40, -12], settings: { autoSnag: true, battleCam: false } };
 
@@ -132,7 +132,7 @@ describe("a world in a thread of its own (server/world-worker.js, world-thread.j
         assert.equal(kept.hero.name, "Ada");
         assert.equal(kept.progress.gold, 20, "a new hero's gold, not what was sent");
         assert.ok(Number.isFinite(kept.place.x) && kept.vitals);
-        assert.deepEqual([kept.wheels, kept.pin, kept.settings], [own.wheels, own.pin, own.settings], "their wheels and quick actions, their pin and their settings");
+        assert.deepEqual([kept.wheels, kept.pin, kept.settings], [own.wheels, own.pin, own.settings], "their wheels and Action Bar, their pin and their settings");
         assert.deepEqual(await stored.heroes.slotsOf("ADA0000001"), [1, 2]);
 
         // Set aside (its thread ended), a while later (the wall's time, not the world's), and in again
@@ -155,7 +155,7 @@ describe("a world in a thread of its own (server/world-worker.js, world-thread.j
         assert.deepEqual([actor.x, actor.y], [kept.place.x, kept.place.y], "where they left");
         assert.equal(actor.hp, kept.vitals.hp ?? actor.maxHp);
 
-        // (Their wheels, quick actions, pin and settings told their game again, as they set them)
+        // (Their wheels, Action Bar, pin and settings told their game again, as they set them)
         const theirs = (welcome) => welcome.snapshot.players.find((player) => player.id === "ADA0000001.1");
 
         assert.deepEqual([theirs(back.welcome).wheels, theirs(back.welcome).pin, theirs(back.welcome).settings], [own.wheels, own.pin, own.settings]);

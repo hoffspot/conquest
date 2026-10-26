@@ -22,6 +22,7 @@ import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
+import { abilityLabel, abilityOf, FALL_BACK, GIVE_REACH, givable, UNIT_ABILITIES, wayOf } from "./followers.js";
 import { namePeople } from "./names.js";
 import { rumouredBy, rumouredOf, rumoursNear } from "./rumours.js";
 import { sightedFrom, SIGHTING } from "./sighting.js";
@@ -422,7 +423,7 @@ export const PLAYER_ROLES = Object.freeze(["owner", "trusted", "player"]);
 
 /**
  * What a player's own game keeps of their hero that isn't the world's, its rules never reading it
- * (`keys`): their action wheels and quick actions, where they've pinned the world map and their
+ * (`keys`): their action wheels and Action Bar, where they've pinned the world map and their
  * markers on it, the last messages they were told, what they've been told once, and their
  * settings for how they play (app/save.js PLAY_SETTINGS, read there). Kept with them as the world
  * keeps them (characterOf) and in its saves, told only to their own game (core/netplay.js
@@ -655,7 +656,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 42;
+export const SNAPSHOT_VERSION = 43;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -739,9 +740,17 @@ export const SNAPSHOT_STEPS = Object.freeze({
         invasions: (snapshot.invasions ?? []).map((invasion) => (invasion.beast !== undefined || invasion.engagement ? invasion : { ...invasion, engagement: keptInvasion(invasion, snapshot.battle.time) })),
         clashes: [],
     }),
-    // 42: who each pack came at (Host #fights: none yet), and each player's might as their loot
+    // 42: each hired follower fighting its calling's way (core/followers.js wayOf: a mage's
+    // spells, a cleric's healing, a warrior's guarding, a rogue's flanking, a ranger's keeping
+    // off), and how it was told to fight (#orderUnit: following as it was)
+    41: (snapshot) => {
+        const ways = new Map((snapshot.followers ?? []).map(([id, one]) => [id, wayOf(one.calling, PEOPLE_SCHOOL[one.people] ?? "fire")]));
+
+        return { ...snapshot, version: 42, battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => (ways.has(actor.id) ? { ...actor, ...ways.get(actor.id) } : actor)) } };
+    },
+    // 43: who each pack came at (Host #fights: none yet), and each player's might as their loot
     // has it (none remembered: their might now, #rememberMight)
-    41: (snapshot) => ({ ...snapshot, version: 42, fights: [], players: snapshot.players.map((player) => ({ mightPeak: null, ...player })) }),
+    42: (snapshot) => ({ ...snapshot, version: 43, fights: [], players: snapshot.players.map((player) => ({ mightPeak: null, ...player })) }),
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -941,14 +950,14 @@ const refuse = (reason) => ({ ok: false, reason });
 const OK = Object.freeze({ ok: true });
 
 /**
- * A quick action's blow pressed while the player's steering, its target out of reach: waited on
+ * An Action Bar blow pressed while the player's steering, its target out of reach: waited on
  * if it's within `near` metres, for `ms` at most, and struck if it comes into reach meanwhile
  * (#ability: as a spell queued, the stick still saying where they go); further off, refused.
  */
 export const BLOW_WAIT = Object.freeze({ near: 3, ms: 750 });
 
 /**
- * What a quick action's blow by `actor` at `foe` comes to, by the rules (a host's #ability, and a
+ * What an Action Bar blow by `actor` at `foe` comes to, by the rules (a host's #ability, and a
  * joined game's look ahead at its own hero: app/forecast.js): { strike: true, until } (struck where
  * they are, in reach now, or waited on till `until`: battle.js strike), { engage: true } (after
  * them at a run, the lock kept), or { refused } (out of reach while steering, too far to wait on).
@@ -4339,6 +4348,14 @@ export class Host {
             return refuse("dead");
         }
 
+        // (A draught, a meal or a cure given to one of their own: a follower, or a creature at
+        // their side)
+        const own = target === null ? null : this.#ownUnit(player, target);
+
+        if (own && givable(use)) {
+            return this.#handOver(player, actor, index, own);
+        }
+
         // (A tome: its spell learnt at once, and the tome gone; unless it's known already)
         if (use.learn) {
             if (player.progress.knows(use.learn)) {
@@ -4440,6 +4457,44 @@ export class Host {
         return OK;
     }
 
+    // One of a player's own (a follower, or a creature at their side: by id), or null
+    #ownUnit(player, id) {
+        const one = this.followers.get(id) ?? this.companions.get(id);
+
+        return one?.leader === player.id ? this.battle.actor(id) : null;
+    }
+
+    // A draught, a meal or a cure (core/followers.js givable) from a player's pack (its `index`th)
+    // given to one of their own near them (GIVE_REACH): healing them, and curing what's on them
+    // that it cures; not if there's nothing for it to do
+    #handOver(player, actor, index, unit) {
+        const use = ITEMS[player.progress.pack[index].id].use;
+        const cures = use.cure ? curedWith(use.cure) : [];
+
+        if (unit.dead || unit.map !== actor.map || hypot(unit.x - actor.x, unit.y - actor.y) > GIVE_REACH) {
+            return refuse("far");
+        }
+
+        if (use.cure && !unit.afflictions.some(({ kind }) => cures.includes(kind))) {
+            return refuse("unafflicted");
+        }
+
+        if (!use.cure && unit.hp >= unit.maxHp) {
+            return refuse("healthy");
+        }
+
+        const item = player.progress.take(index, 1);
+
+        for (const kind of cures) {
+            this.battle.cure(unit.id, kind);
+        }
+
+        this.battle.mend(unit.id, { hp: use.heal ?? 0 });
+        this.#event("used", { id: player.id, item, on: unit.id });
+
+        return OK;
+    }
+
     // An ability learnt: a greater spell cast, or the next blow made stronger (and a target
     // fought, if one's given); each blow's ability ready again only after a while
     #ability(player, actor, id, target) {
@@ -4513,7 +4568,7 @@ export class Host {
         return OK;
     }
 
-    // A quick action's blow never struck (its target out of reach once its wait was up, or gone:
+    // An Action Bar blow never struck (its target out of reach once its wait was up, or gone:
     // battle.js strike): nothing spent, ready again at once and the next blow no stronger for it
     #unstruck({ id, tag }) {
         const player = this.players.get(id);
@@ -11350,7 +11405,8 @@ export class Host {
     }
 
     // A follower of a player's, into the world by them (or where `at` says): { name, calling,
-    // sex, seed, people }. Returns their id
+    // sex, seed, people }, fighting their calling's way (core/followers.js wayOf: a mage's spells
+    // their people's school's). Returns their id
     #follow(player, one, at = null) {
         const leader = this.battle.actor(player.id);
         const map = at?.map ?? leader.map;
@@ -11360,7 +11416,7 @@ export class Host {
         const { weapon } = HIRES[one.calling] ?? HIRES.warrior;
 
         this.followers.set(id, { leader: player.id, name: one.name, calling: one.calling, sex: one.sex ?? "m", seed: one.seed ?? 1, people: one.people ?? "human", from: one.from ?? null, waiting: false });
-        this.battle.add({ id, kind: "follower", name: one.name, weapon, team: player.realm, square, map, ai: "follow", leader: player.id, role: "guard", shield: (HIRES[one.calling] ?? HIRES.warrior).shield ? NPC_SHIELDS.follower : null });
+        this.battle.add({ id, kind: "follower", name: one.name, weapon, team: player.realm, square, map, ai: "follow", leader: player.id, role: "guard", shield: (HIRES[one.calling] ?? HIRES.warrior).shield ? NPC_SHIELDS.follower : null, ...wayOf(one.calling, PEOPLE_SCHOOL[one.people] ?? "fire") });
         this.#event("follower", { id: player.id, follower: id, name: one.name, change: "joined" });
 
         return id;
@@ -11420,6 +11476,16 @@ export class Host {
     /** Whether one with a player (a follower, or a companion) was told to wait where they stood. */
     waiting(id) {
         return Boolean((this.followers.get(id) ?? this.companions.get(id))?.waiting);
+    }
+
+    /**
+     * How one with a player (a follower, or a companion) was told to fight (#orderUnit): guarding
+     * them (`guarding`), holding fire (`holdFire`), falling back to them (`fallingBack`).
+     */
+    stance(id) {
+        const unit = this.battle.actor(id);
+
+        return { guarding: Boolean(unit?.guarding), holdFire: Boolean(unit?.holdFire), fallingBack: (unit?.fallBackUntil ?? 0) > this.battle.time };
     }
 
     // --- Parties of players (PARTY) ---
@@ -11646,18 +11712,33 @@ export class Host {
             return refuse("follower");
         }
 
+        // (Back on their way of following, whatever they were told before: not waiting)
+        const following = { ai: "follow", patrol: null, leash: null };
+
         if (order === "wait") {
             one.waiting = true;
-            Object.assign(unit, { ai: "patrol", patrol: [[...unit.square]], patrolIndex: 0, leash: LEASH, post: unit.facing, spawnMap: unit.map, assist: null });
+            Object.assign(unit, { ai: "patrol", patrol: [[...unit.square]], patrolIndex: 0, leash: LEASH, post: unit.facing, spawnMap: unit.map, assist: null, guarding: false, fallBackUntil: 0 });
         } else if (order === "follow") {
             one.waiting = false;
-            Object.assign(unit, { ai: "follow", patrol: null, leash: null });
+            Object.assign(unit, { ...following, guarding: false });
+        } else if (order === "guard") {
+            one.waiting = false;
+            Object.assign(unit, { ...following, guarding: true, assist: null });
+        } else if (order === "fallback") {
+            one.waiting = false;
+            Object.assign(unit, { ...following, assist: null, target: null, path: [], pathGoal: null, fallBackUntil: this.battle.time + FALL_BACK.ms });
+        } else if (order === "hold" || order === "free") {
+            unit.holdFire = order === "hold";
+
+            // (Holding fire: whoever they were after let be, unless they're after them)
+            if (unit.holdFire) {
+                Object.assign(unit, { target: null, assist: null, path: [], pathGoal: null });
+            }
         } else if (order === "assist") {
             const leader = this.battle.actor(player.id);
-            const engaged = leader?.order?.type === "engage" ? leader.order.target : leader?.target;
-            const target = engaged ? this.battle.actor(engaged) : null;
+            const target = this.#setOn(leader);
 
-            if (!target || target.dead || target.map !== unit.map || target === unit || !this.canFight(leader, target)) {
+            if (!target || target.map !== unit.map || target === unit || !this.canFight(leader, target)) {
                 return refuse("untargeted");
             }
 
@@ -11667,7 +11748,9 @@ export class Host {
             }
 
             one.waiting = false;
-            Object.assign(unit, { ai: "follow", patrol: null, leash: null, assist: target.id });
+            Object.assign(unit, { ...following, assist: target.id, fallBackUntil: 0 });
+        } else if (order === "ability") {
+            return this.#unitAbility(player, one, unit);
         } else if (order === "dismiss") {
             if (this.companions.has(id)) {
                 this.#letGo(id, "dismissed");
@@ -11680,6 +11763,104 @@ export class Host {
         } else {
             return refuse("command");
         }
+
+        return OK;
+    }
+
+    // Whom a player's set on, for their own to fight (or null): whom they're going after, or
+    // fighting, or have locked on (battle.js `lock`), standing
+    #setOn(leader) {
+        const engaged = leader?.order?.type === "engage" ? leader.order.target : (leader?.target ?? leader?.lock ?? null);
+        const target = engaged === null || engaged === undefined ? null : this.battle.actor(engaged);
+
+        return target && !target.dead ? target : null;
+    }
+
+    /**
+     * The ability one of a player's own (`id`: a follower, or a creature at their side) can be
+     * told to use (core/followers.js UNIT_ABILITIES): { id, label (a mage's greater spell by its
+     * name), about, cooldown, readyAt (battle time) }, or null for none (or no such one).
+     */
+    unitAbility(id) {
+        const hired = this.followers.get(id);
+        const called = this.companions.get(id);
+        const unit = this.battle.actor(id);
+        const ability = unit ? abilityOf(hired ? { kind: "adventurer", calling: hired.calling } : { kind: called?.risen ? "risen" : called ? "summon" : null }) : null;
+
+        if (!ability) {
+            return null;
+        }
+
+        const school = hired?.calling === "mage" ? (PEOPLE_SCHOOL[hired.people] ?? "fire") : null;
+        const { about, cooldown } = UNIT_ABILITIES[ability];
+
+        return { id: ability, label: abilityLabel(ability, school), about, cooldown, readyAt: unit.abilityReadyAt ?? 0, school };
+    }
+
+    // One of a player's own told to use their ability (unitAbility, once each its cooldown): a
+    // heal on the player at once; a greater spell at whom the player's set on, at once; or a blow
+    // at them made stronger (battle.js empower), going after them as told to (the "assist"
+    // order). Each, whatever spell they cast last (their own pace aside)
+    #unitAbility(player, one, unit) {
+        const ability = this.unitAbility(unit.id);
+        const def = ability && UNIT_ABILITIES[ability.id];
+
+        if (!def) {
+            return refuse("command");
+        }
+
+        if (ability.readyAt > this.battle.time) {
+            return refuse("cooldown");
+        }
+
+        const leader = this.battle.actor(player.id);
+        const ready = (spell) => Object.assign(unit, { spellReadyAt: 0, spellsReadyAt: { ...unit.spellsReadyAt, [spell]: 0 } });
+
+        if (def.heal) {
+            ready(def.heal);
+
+            const cast = this.battle.cast(unit.id, def.heal, player.id);
+
+            if (!cast.ok) {
+                return cast;
+            }
+        } else {
+            const foe = this.#setOn(leader);
+
+            if (!foe || foe.map !== unit.map || foe === unit || !this.canFight(leader, foe)) {
+                return refuse("untargeted");
+            }
+
+            if (!this.battle.hostile(unit, foe)) {
+                unit.foes[foe.id] = this.battle.time + FOE_MS;
+            }
+
+            if (def.spell !== undefined) {
+                const spell = SCHOOLS[ability.school ?? "fire"].tiers[def.spell];
+
+                ready(spell);
+
+                const cast = this.battle.cast(unit.id, spell, foe.id);
+
+                if (!cast.ok) {
+                    return cast;
+                }
+            } else {
+                const kinds = unit.arms.map(({ kind }) => (kind === "ranged" ? "ranged" : "melee"));
+                const blow = def.blow === "any" ? (kinds.includes("melee") ? "melee" : "ranged") : def.blow;
+
+                if (!kinds.includes(blow)) {
+                    return refuse("item");
+                }
+
+                this.battle.empower(unit.id, blow, def.factor, { stun: def.stun ?? 0 });
+                one.waiting = false;
+                Object.assign(unit, { ai: "follow", patrol: null, leash: null, assist: foe.id, fallBackUntil: 0 });
+            }
+        }
+
+        unit.abilityReadyAt = this.battle.time + def.cooldown;
+        this.#event("unitAbility", { id: player.id, unit: unit.id, ability: ability.id, label: ability.label });
 
         return OK;
     }

@@ -70,6 +70,7 @@
 
 import { AFFLICTIONS, shareOf } from "./afflictions.js";
 import { RESEARCH } from "./bestiary.js";
+import { FALL_BACK, GUARD_REACH } from "./followers.js";
 import { placeAt, placesOf } from "./formation.js";
 import { bonusOf, chainAfter, isWhole, lapsed, mighty, PRISMATIC, sigilSpell } from "./prismatic.js";
 import { crosses, nearestFree, squareKey, squaresOf } from "./grid.js";
@@ -735,9 +736,10 @@ export class Battle {
      * own fights: its own don't take up its grudges, nor do those it leaves be take up grudges
      * against it for others of their own it strikes (#provoke: an invasion's raiders). One with a
      * `sight` (squares) looks for enemies as far as that, not SIGHT (#nearestSeen: an invasion's
-     * close fighters once its lines have charged).
+     * close fighters once its lines have charged). A follower fights its calling's way
+     * (core/followers.js wayOf): `casts`, `heals`, `tactic` and `keep` (#follow).
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, lone = false, engine = null, sight = null }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, tactic = null, keep = null, lone = false, engine = null, sight = null }) {
         const kindOf = KINDS[kind];
         const type = { ...kindOf, hp: hp ?? kindOf.hp, speed: speed ?? kindOf.speed, chase: chase ?? speed ?? kindOf.chase };
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
@@ -848,7 +850,7 @@ export class Battle {
             // The enemy a player's locked on (an id: kept their target as they go, #keepLock), or
             // null
             lock: null,
-            // A quick action's blow to be struck at someone, as soon as they're in reach and it can
+            // An Action Bar blow to be struck at someone, as soon as they're in reach and it can
             // be, wherever the striker's going ({ target, until (waited on till: ms, or null), tag
             // (what it is: an ability's id) }: strike, #obey), or null
             striking: null,
@@ -915,6 +917,10 @@ export class Battle {
             // own with, weakest first: SPELLS ids)
             casts: casts ? [...casts] : null,
             heals: heals ? [...heals] : null,
+            // (A follower's way of fighting, by its calling (core/followers.js wayOf): whom it goes
+            // for first, and how near it lets a foe come before backing off, metres)
+            ...(tactic ? { tactic } : {}),
+            ...(keep ? { keep } : {}),
             ...(lone ? { lone: true } : {}),
             ...(sight ? { sight } : {}),
         };
@@ -981,7 +987,7 @@ export class Battle {
     }
 
     /**
-     * A blow at someone (a quick action's, host.js #ability): struck as soon as they're in reach and
+     * A blow at someone (an Action Bar blow, host.js #ability): struck as soon as they're in reach and
      * it can be, wherever the striker's going kept, the swing holding them a moment; out of reach,
      * waited on till `until` (ms, the battle's time; null: not at all); never struck, an
      * "unstruck" event, with `tag` (#obey).
@@ -1396,7 +1402,7 @@ export class Battle {
 
                 const goal = [Math.floor(end[0]), Math.floor(end[1])];
 
-                // (Held input's: the player's steering, `held`, which a quick action's blow out of
+                // (Held input's: the player's steering, `held`, which an Action Bar blow out of
                 // reach doesn't take over: host.js #ability)
                 actor.order = { type: "move", to: goal, run: Boolean(order.run), held: true };
                 Object.assign(actor, { path: way, pathGoal: goal, lastPathAt: this.time, blockedSince: null, offPath: false });
@@ -2483,7 +2489,7 @@ export class Battle {
 
         actor.walkPace = actor.speed;
 
-        // (A quick action's blow: struck as soon as its target's in reach and it can be, its weapon
+        // (An Action Bar blow: struck as soon as its target's in reach and it can be, its weapon
         // drawn and ready, wherever they're going kept, the swing holding them a moment; out of
         // reach, waited on till `until`, if it's to be; given up once that's past, or they're out
         // of reach of one not waited on, or it's fallen or no enemy of theirs, and told (unstruck):
@@ -2633,8 +2639,9 @@ export class Battle {
     // alarm raised: #alarmed), through doors and up stairs if they went through just after it saw
     // them; attack what it catches
     #patrol(actor) {
-        // (A healer: whoever of its own's the most hurt in reach healed first)
-        if (actor.heals && this.#mend(actor)) {
+        // (A healer: whoever of its own's the most hurt in reach healed first; a follower waiting
+        // where it was told, its leader before anyone)
+        if (actor.heals && this.#mend(actor, actor.leader ? this.actor(actor.leader) : null)) {
             return;
         }
 
@@ -2666,7 +2673,10 @@ export class Battle {
             seen = kept && !kept.dead && kept.map === actor.map ? kept : null;
         }
 
-        if (!broken && !seen && (thinking || actor.target !== null)) {
+        // (A follower waiting, holding fire: only those after it: core/host.js #orderUnit "hold")
+        if (!broken && !seen && actor.holdFire) {
+            seen = this.#nearestSeen(actor, (enemy) => enemy.target === actor.id || enemy.attack?.target === actor.id);
+        } else if (!broken && !seen && (thinking || actor.target !== null)) {
             seen = this.#drawnTo(actor) ?? this.#nearestSeen(actor, (enemy) => this.#leashed(actor, enemy) && this.#roomOn(actor, enemy)) ?? this.#alarmed(actor);
 
             if (actor.formation) {
@@ -3155,7 +3165,13 @@ export class Battle {
     }
 
     // A follower (M9): after an enemy of its leader's it can see near them (or one that's after
-    // it), else keeping within a few steps of them, at their pace
+    // it), else keeping within a few steps of them, at their pace. Each its calling's way
+    // (core/followers.js wayOf): a healer heals its leader first, then the most hurt of its own; a
+    // caster casts at whom it's after; one that protects goes for those after its leader first,
+    // one that flanks for whom its leader's fighting. As it's told (core/host.js #orderUnit):
+    // falling back (`fallBackUntil`), it runs back to its leader, after no one; guarding them
+    // (`guarding`), it takes on only those after it, or after them near them (GUARD_REACH);
+    // holding fire (`holdFire`), only those after it
     #follow(actor) {
         const leader = this.actor(actor.leader);
 
@@ -3173,28 +3189,50 @@ export class Battle {
             return;
         }
 
+        // (Falling back: after no one, running back to its leader till it's by them)
+        if (actor.fallBackUntil > this.time) {
+            if (distanceBetween(actor.square, leader.square) > FOLLOW.near) {
+                Object.assign(actor, { target: null, assist: null });
+                actor.walkPace = Math.max(actor.chaseSpeed, leader.pace) * FALL_BACK.pace;
+
+                if (!actor.path.length || (!same(actor.pathGoal, leader.square) && this.time - actor.lastPathAt >= REPATH_MS)) {
+                    this.#pathTo(actor, leader.square, [leader.x, leader.y]);
+                }
+
+                return;
+            }
+
+            actor.fallBackUntil = 0;
+        }
+
+        // (A healer: its leader first, if they're hurt; else whoever of its own's the most hurt)
+        if (actor.heals && this.#mend(actor, leader)) {
+            return;
+        }
+
         // (Told to fight whoever its leader was set on: after them till they're down or gone)
         const assisted = actor.assist ? this.actor(actor.assist) : null;
 
         if (assisted && !assisted.dead && assisted.map === actor.map && this.hostile(actor, assisted)) {
-            actor.target = assisted.id;
-            actor.lastSeen = this.time;
-            actor.walkPace = actor.chaseSpeed;
-            this.#pursue(actor, assisted);
+            this.#fightFor(actor, assisted);
 
             return;
         }
 
         actor.assist = null;
 
-        // (Anyone after it, too, wherever they are)
-        const seen = this.#nearestSeen(actor, (enemy) => distanceBetween(leader.square, enemy.square) <= FOLLOW.guard || enemy.target === actor.id || enemy.attack?.target === actor.id);
+        // (Anyone after it, too, wherever they are; guarding, those after its leader near them;
+        // holding fire, only those after it)
+        const after = (enemy, one) => enemy.target === one.id || enemy.attack?.target === one.id;
+        const test = actor.holdFire
+            ? (enemy) => after(enemy, actor)
+            : actor.guarding
+              ? (enemy) => after(enemy, actor) || (after(enemy, leader) && distanceBetween(leader.square, enemy.square) <= GUARD_REACH)
+              : (enemy) => distanceBetween(leader.square, enemy.square) <= FOLLOW.guard || after(enemy, actor);
+        const seen = (actor.holdFire || actor.guarding ? null : this.#firstFor(actor, leader, test)) ?? this.#nearestSeen(actor, test);
 
         if (seen) {
-            actor.target = seen.id;
-            actor.lastSeen = this.time;
-            actor.walkPace = actor.chaseSpeed;
-            this.#pursue(actor, seen);
+            this.#fightFor(actor, seen);
 
             return;
         }
@@ -3217,13 +3255,45 @@ export class Battle {
         }
     }
 
+    // Whom a follower goes for first, by its way of fighting (`tactic`), of those it would
+    // (`test`): one that protects, the nearest after its leader; one that flanks, whom its leader's
+    // fighting, if it can see them. Null for none
+    #firstFor(actor, leader, test) {
+        if (actor.tactic === "protect") {
+            return this.#nearestSeen(actor, (enemy) => test(enemy) && (enemy.target === leader.id || enemy.attack?.target === leader.id));
+        }
+
+        if (actor.tactic === "flank") {
+            const engaged = leader.order?.type === "engage" ? leader.order.target : leader.target;
+            const foe = engaged === null || engaged === undefined ? null : this.actor(engaged);
+
+            return foe && !foe.dead && foe.map === actor.map && this.hostile(actor, foe) && test(foe) && this.canSee(actor, foe) ? foe : null;
+        }
+
+        return null;
+    }
+
+    // A follower after someone: a spell at them, if it casts and one's ready and they're in its
+    // reach; else after them
+    #fightFor(actor, target) {
+        actor.target = target.id;
+        actor.lastSeen = this.time;
+        actor.walkPace = actor.chaseSpeed;
+
+        if (actor.casts && this.#castAt(actor, target)) {
+            return;
+        }
+
+        this.#pursue(actor, target);
+    }
+
     // Go after a target: attack it if it's within reach, otherwise walk towards it (a creature
     // with a ranged attack not ready yet closing in to strike up close, if it can)
     #pursue(actor, target) {
-        // (One that keeps its distance, backing off from one come too near: a goblin bomber; one
-        // with bombs besides, lobbing one now and then at whoever keeps off: the Goblin King; one
+        // (One that keeps its distance, backing off from one come too near: a goblin bomber, a
+        // ranger following a player; one with bombs besides, lobbing one now and then at whoever keeps off: the Goblin King; one
         // that calls its flock to it now and then: the Ant Monster)
-        if ((actor.wild?.keep && this.#backOff(actor, target)) || (actor.wild?.bomb && this.#lobs(actor, target)) || (actor.wild?.call && this.#calls(actor, target))) {
+        if (((actor.wild?.keep ?? actor.keep) && this.#backOff(actor, target)) || (actor.wild?.bomb && this.#lobs(actor, target)) || (actor.wild?.call && this.#calls(actor, target))) {
             return;
         }
 
@@ -3248,11 +3318,11 @@ export class Battle {
         }
     }
 
-    // Come nearer than it keeps (`wild.keep` metres), backing off that far again, away from them
-    // (KEEP), if it hasn't lately and there's somewhere to go: whether it is. Backing off, it
-    // keeps on till it's there
+    // Come nearer than it keeps (`wild.keep` metres, or a follower's `keep`: a ranger's), backing
+    // off that far again, away from them (KEEP), if it hasn't lately and there's somewhere to go:
+    // whether it is. Backing off, it keeps on till it's there
     #backOff(actor, target) {
-        const keep = actor.wild.keep;
+        const keep = actor.wild?.keep ?? actor.keep;
 
         if (actor.backing && actor.path.length) {
             return true;
@@ -3786,18 +3856,21 @@ export class Battle {
 
     // A healer's spell on whoever of its own in its reach (one of the folk aside), seen, is the most
     // hurt, under HEALING.below of their health (of two as hurt, the first): its weakest that's
-    // ready, or, under HEALING.mend, its strongest. Whether it's casting
-    #mend(actor) {
+    // ready, or, under HEALING.mend, its strongest. One it heals first (`first`: a follower's
+    // leader), if they're that hurt, before anyone. Whether it's casting
+    #mend(actor, first = null) {
         if (this.time < actor.spellReadyAt) {
             return false;
         }
 
         const reach = SPELLS[actor.heals[0]]?.reach ?? 0;
-        let best = null;
-        let worst = HEALING.below;
+        const seen = (other) => distanceBetween(actor.square, other.square) <= reach && (other === actor || this.canSee(actor, other, reach));
+        const firstShare = first && !first.dead && first.map === actor.map && first.maxHp > 0 ? first.hp / first.maxHp : 1;
+        let best = firstShare < HEALING.below && seen(first) ? first : null;
+        let worst = best ? firstShare : HEALING.below;
         let bestK = Infinity;
 
-        for (const k of this.#nearSquare(actor, reach)) {
+        for (const k of best ? [] : this.#nearSquare(actor, reach)) {
             const other = this.actors[k];
 
             if (other.dead || other.neutral || other.map !== actor.map || other.maxHp <= 0 || (other !== actor && this.hostile(other, actor))) {
@@ -3806,7 +3879,7 @@ export class Battle {
 
             const share = other.hp / other.maxHp;
 
-            if ((share < worst || (share === worst && k < bestK)) && distanceBetween(actor.square, other.square) <= reach && (other === actor || this.canSee(actor, other, reach))) {
+            if ((share < worst || (share === worst && k < bestK)) && seen(other)) {
                 [best, worst, bestK] = [other, share, k];
             }
         }

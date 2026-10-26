@@ -185,7 +185,7 @@ A reason to practise all four elements (core/prismatic.js, kept on the player's 
   own, a seat's ruler, a player), who lose **three quarters of their whole health** (and die, if that's all they had);
   all of them are thrown down. Cast, the sigil's spent: every stack and piece with it.
 
-On screen (app/game.js; app/sigil.js): while a chain's live, a quick action holding a spell of an
+On screen (app/game.js; app/sigil.js): while a chain's live, an Action Bar slot holding a spell of an
 element it goes on with (the element being cast up through; between chains, any whose piece isn't
 held) shows the chain's next spell of it instead, if the player knows it, rolled in like a flick,
 ringed in the element's colour with a dashed border marching round it, pulsing; what the player's
@@ -391,7 +391,10 @@ same for everyone playing (docs/GAME.md: hosting and joining):
   a sprint as they sprint, faster the further behind), and one left more than 20 metres behind
   (stuck, or on another floor) is brought quietly to a few squares behind them (`FOLLOW.lost`,
   `COMPANION.behind`), out of a fight its player isn't in. They're lost when their player's
-  carried off by magic. What a companion brings down counts for its player, as a follower's does:
+  carried off by magic. It takes the orders a follower does, from the followers' wheel or the
+  party menu (docs/WAR.md *Followers*: guard me, fall back, hold fire...), and has an ability of
+  its own told to use: a called creature's Savage blow (its next blow twice as hard), a risen
+  one's Grave grip (its next blow holding its foe 2.5 s). What a companion brings down counts for its player, as a follower's does:
   the loot is theirs, and it counts towards their requests and contracts (host.js `#learn`). It's
   one of their party (docs/GAME.md *The party*): told to wait, to follow, to go for whoever its
   player's set on, or to go, from its icon, its wheel or the party menu.

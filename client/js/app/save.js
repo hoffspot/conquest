@@ -98,10 +98,10 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     largePointer: false,
     // The zoom buttons in the bottom right corner: off, since pinching and the wheel zoom anyway
     zoom: false,
-    // Six quick actions across the bottom in a fight, not four with their names (app/quickbar.js):
+    // Six actions on the Action Bar across the bottom in a fight, not four with their names (app/quickbar.js):
     // on a narrow screen their names smaller, or only their icons
     quickSix: false,
-    // The quick actions kept up along the bottom out of a fight too, not only in one and a moment
+    // The Action Bar kept up along the bottom out of a fight too, not only in one and a moment
     // after (app/game.js `quickAlways`): off to start with, as they always were
     quickAlways: false,
     // (Summoned by another player: said no to at once, not asked)

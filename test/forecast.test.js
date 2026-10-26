@@ -43,7 +43,7 @@ const foeAt = (offset) => ({ host, copyHost, me }) => {
     }
 };
 
-// (A quick action's cooldown let go of, on both, to press it often)
+// (An Action Bar blow's cooldown let go of, on both, to press it often)
 const ready = (ability) => ({ host, copyHost, me }) => {
     host.players.get(me).readyAt[ability] = 0;
     copyHost.players.get(me).readyAt[ability] = 0;

@@ -3039,7 +3039,7 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   shows paused"). Its pause for everyone isn't asked for again: that ended with its link. It says
   again what's its player's own of their hero (`own`, below), for the same reason.
 - **Theirs, kept with them.** What a player's own game keeps of their hero that isn't the world's
-  (core/host.js `OWN`: their action wheels and quick actions, their pin and markers on the world
+  (core/host.js `OWN`: their action wheels and Action Bar, their pin and markers on the world
   map, the last messages they were told, what they've been told once, their settings for how
   they play: app/save.js `PLAY_SETTINGS`) is told the host as it
   changes (the `own` message, `Joining.own`), and kept with them (`Host.own`, `player.own`, each
@@ -3047,7 +3047,7 @@ to its mobile network, or losing its signal a moment, needn't end the game:
   the world needs it. It goes with the character the host hands over as they leave (`characterOf`),
   where a world server keeps its heroes, and is in its saves; and it's told only to their own game,
   in its welcome and the world sent again to it (`Hosting #snapshotFor`), the rest's left out
-  (the user: a server's hero didn't keep their action wheels or quick actions from one time to the
+  (the user: a server's hero didn't keep their action wheels or Action Bar from one time to the
   next). `NET_VERSION` 182.
 - **Shown.** While it isn't as it should be, the HUD says so, top left (`Game #together`): "Your
   connection dropped. Reconnecting…" (or, for a host, "Your world's link to the others dropped");
@@ -3369,12 +3369,64 @@ say what they'd want and stay where they are.
 - what they bring down counts for their leader: its loot is theirs, and it counts towards their
   requests.
 
-**Orders** (talking to them; or from the party, docs/GAME.md *The party*: their icon's wheel, or
-the party menu, the same for the creatures by magic at their side, host.js `#orderUnit`, an
-`order` command): wait here (they stand guard where they are), come on (they follow again), go for
-whoever their leader's set on (the `assist` order: after them till they're down, then following
-again; refused, "untargeted", with no one set on), or go their own way (dismissed: asked first,
-in talk or from the party alike, as it's for good). A follower who falls is gone.
+**Their ways of fighting** (core/followers.js `wayOf`, by calling, given them as they're hired
+or brought along: `SNAPSHOT_VERSION` 42 gives them to those in a world kept from before; the user:
+"if they are a mage or cleric, they should be casting at their target if they are an offensive
+spellcaster or healing you if they are a healer when you are damaged. Enhance the mercenaries and
+others to do expected behaviors automatically"):
+- a **mage** casts at whom they fight, their people's school's first two spells (as their
+  soldiers' casters do: `PEOPLE_SCHOOL`, fire for humans), the stronger first, whenever one's
+  ready and they're in its reach; else they fight with their staff;
+- a **cleric** heals (Vigor, and Mend Wounds for the badly hurt, as the peoples' healers do,
+  battle.js `#mend`): their leader first, once they're under 80% of their health, then whoever
+  of their own about them's the most hurt;
+- a **warrior** goes first for whoever's after their leader (`tactic` "protect"), a **rogue** for
+  whom their leader's fighting ("flank"), and a **ranger** keeps a foe off, backing away from one
+  come within 4 m (`keep`, `KEEP_OFF`) before shooting again.
+
+The creatures at a player's side (docs/MAGIC.md) fight as they ever did.
+
+**Orders** (talking to them; or from the party, docs/GAME.md *The party*: their followers' wheel,
+held on them or their icon, or the party menu, the same for the creatures by magic at their side,
+host.js `#orderUnit`, an `order` command; core/followers.js `UNIT_ORDERS`):
+- **wait here** (they stand guard where they are), **come on** (they follow again);
+- **go for whoever their leader's set on** (the `assist` order: whom they're going after, fighting
+  or locked on; after them till they're down, then following again; refused, "untargeted", with
+  no one set on);
+- **guard me** (`guard`: at their side, taking on only those after them, or after their leader
+  within 6 m of them, `GUARD_REACH`);
+- **fall back** (`fallback`: whoever they were after let be, running back to their leader a
+  quarter again as fast as they chase, after no one, till they're by them or 8 s have passed,
+  `FALL_BACK`; then as they were told before);
+- **hold fire** (`hold`: they start no fights, taking on only those after them, following or
+  waiting alike) or **at will** (`free`: after any enemy they see again);
+- **their own ability** (`ability`, below);
+- or **go their own way** (dismissed: asked first, in talk or from the party alike, as it's for
+  good).
+
+A follower who falls is gone. How they were told to fight is kept with them in the battle
+(`guarding`, `holdFire`, `fallBackUntil`: host.js `stance`), not with the character.
+
+**Their own abilities** (core/followers.js `UNIT_ABILITIES`, `abilityOf`; host.js `unitAbility`,
+`#unitAbility`), each once a while (`abilityReadyAt`), told as it's used (a `unitAbility` event):
+
+| Who | Ability | What it does | Ready again |
+| --- | --- | --- | --- |
+| Warrior | Shield bash | goes for whom the player's set on, the next blow stunning them 2 s | 15 s |
+| Ranger | Aimed shot | the next shot at them two and a half times as hard | 12 s |
+| Rogue | Backstab | goes for them, the next blow three times as hard | 15 s |
+| Mage | their school's third spell (Burstflame, Shatterstone, Shockbolt, Steamblast) | cast at them at once | 20 s |
+| Cleric | Heal me | Detraumatize on the player at once (refused at full health) | 15 s |
+| A creature called | Savage blow | goes for them, the next blow twice as hard | 12 s |
+| The risen | Grave grip | goes for them, the next blow holding them 2.5 s | 15 s |
+
+Those at whom the player's set on are refused, "untargeted", with no one set on; a spell or a heal
+is cast whatever they cast last (their own pace aside).
+
+**Given things** (host.js `#handOver`: a `use` command whose `target` is one of their own): a
+healing draught, a hot meal or a cure (core/followers.js `givable`) given to one of the player's
+own within 16 m (`GIVE_REACH`) heals them, or cures what's on them it cures; refused at full
+health ("healthy"), with nothing for a cure to cure, or too far off.
 
 **Kept** with the character (`characterOf`'s `followers`: name, calling, looks, people;
 `save.js` `saveFollowers`), so they come along to any world; and in the host's snapshot. The
@@ -3627,6 +3679,7 @@ a people is a little different, from a seed of their own:
 | `{ type: "use", index }` | Drink or eat something from their pack. |
 | `{ type: "ability", ability, target }` | Use an ability they've learnt. |
 | `{ type: "abandon", request }` | Give up a request they carry. |
+| `{ type: "order", unit, order }` | Tell one of their own (a follower, or a creature at their side) what to do (*Followers*: `UNIT_ORDERS`). |
 | `{ type: "share", request }` | Share a request they carry with the others of their party (*Parties*, *Requests shared*). |
 
 Any order can have `run: true`. A command that can't be done is refused, with a reason
@@ -3657,6 +3710,7 @@ Any order can have `run: true`. A command that can't be done is refused, with a 
 | `gear` | What a player wears and wields changed (what shows: `worn`, `[{ id, people }]`). |
 | `disguise` | A player passes for one of a people's soldiers (`on`), or no longer (`off`); was seen through (`seen`, by whom), or is known for what they are, having struck one of them (`known`). |
 | `ability` | A player used an ability. |
+| `unitAbility` | One of a player's own used their ability, told to (`unit`, `ability`, `label`). |
 | `request` | A player's request was taken, shared with them (`by`: who shared it), counted, done (to be told of), told of and rewarded, failed, given up or came to nothing. |
 | `standing` | A player reached a new rank in their people. |
 | `guild` | A player registered with the adventurers' guilds (`registered`), or reached a new rank in them (`rank`). |
