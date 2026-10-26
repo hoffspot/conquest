@@ -223,7 +223,7 @@ says so.
 
 ### Owning a world
 
-In the game, in the world: the menu's **World**.
+In the game, in the world: the menu's **World**, or **World** at the top of the party menu.
 
 - **Invite link**: the world's link, copied at once, with its code to scan, **Share…** on a phone,
   and **Replace the link**. It's the same link the management page gives.

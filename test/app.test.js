@@ -6,7 +6,7 @@ import { LOOKS } from "../client/js/characters/peoples.js";
 import { formatBytes, Loader } from "../client/js/app/loader.js";
 import { ICONS, ITEM_ICONS } from "../client/js/app/icons.js";
 import { messagePlace, PARTY_ICON, partyFit, PLATE_SIZE, plateScale } from "../client/js/app/hud.js";
-import { memberKind, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
+import { memberKind, playerStatus, QUICK_PHRASES, timeLeft, unreadLabel } from "../client/js/app/partypanel.js";
 import { buildingsOf, compassTurn, interiorColours, mapColours, Minimap, paintPatch, paintingPatch, treesOf } from "../client/js/app/minimap.js";
 import { ACTIONS, actionOf, assignable, DIRECTIONS, directionOf, drawWheel, flicked, FLIP, iconOf, offensive, PLACES, QUICK, QUICK_SHOWN, readWheels, sectorPath, WHEELS } from "../client/js/app/wheel.js";
 import { SPELLS } from "../client/js/core/spells.js";
@@ -1401,6 +1401,23 @@ describe("the bars over the others (hud.js)", () => {
         assert.equal(memberKind({ kind: "summon", creature: "wolf", left: 61000 }), "Called wolf · 1:01 left");
         assert.equal(memberKind({ kind: "risen", creature: "orc", left: 5000 }), "Risen orc · 0:05 left");
         assert.equal(memberKind({ kind: "unit" }), "With you");
+    });
+
+    it("says how each player in the world stands on the party menu's Players tab: their party, or asked to one; away; fallen, or resting; their people at war with the player's", () => {
+        const said = (player) => playerStatus(player).map(({ text, kind }) => `${kind}: ${text}`);
+
+        assert.deepEqual(said({}), ["free: In no party"]);
+        assert.deepEqual(said({ me: true, party: { yours: true, leads: true, leader: "Ada" } }), ["party: You lead your party"]);
+        assert.deepEqual(said({ party: { yours: true, leads: true, leader: "Ada" } }), ["party: Leads your party"]);
+        assert.deepEqual(said({ party: { yours: true, leads: false, leader: "Ada" } }), ["party: In your party"]);
+        assert.deepEqual(said({ party: { yours: false, leads: true, leader: "Cai" } }), ["partied: Leads a party"]);
+        assert.deepEqual(said({ party: { yours: false, leads: false, leader: "Cai" } }), ["partied: In Cai's party"]);
+        assert.deepEqual(said({ asked: "you" }), ["asked: Asked to your party"]);
+        assert.deepEqual(said({ asked: "Cai" }), ["asked: Asked to Cai's party"]);
+        assert.deepEqual(said({ party: { yours: false, leads: false, leader: "Cai" }, asked: "you" }), ["partied: In Cai's party"], "(in a party: what they were asked to no longer matters)");
+        assert.deepEqual(said({ away: true, resting: true, hostile: true }), ["free: In no party", "afk: Away (AFK)", "resting: Resting", "war: At war with your people"]);
+        assert.deepEqual(said({ dead: true, resting: true }), ["free: In no party", "fallen: Fallen"], "(fallen, not resting)");
+        assert.deepEqual(said({ me: true, hostile: true }), ["free: In no party"], "(never at war with themselves)");
     });
 
     it("turns the compass (the minimap folded away) for its N to point north as the camera sees it, clockwise from 0 to a full turn", () => {

@@ -2671,6 +2671,8 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     state.worldMap?.dispose();
     state.worldMap = null;
     state.game = game;
+    // (On a world server, its panel from the party menu too: its World button)
+    game.onWorldPanel = server ? worldPanelFromParty : null;
     // (Who the world's with, and how, for the HUD's orb: app/worldlink.js; on a world server, its
     // world and the server, else a friend's, linked directly or through the server's broker)
     game.linkAbout = server
@@ -4128,6 +4130,15 @@ async function openWorldPanel() {
 
     if (owner) {
         showWorldKeys();
+    }
+}
+
+// The world's panel from the party menu's World button: the game paused under it, as the menu
+// pauses it (and Back to the game starts it again)
+function worldPanelFromParty() {
+    if (state.onServer && state.game) {
+        state.game.pause();
+        openWorldPanel();
     }
 }
 

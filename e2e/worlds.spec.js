@@ -124,12 +124,26 @@ test("a world made on a server and shared by an invite link: both play in it, le
     // The server's pinned: the owner's game knows its id
     expect(await owner.evaluate(() => JSON.parse(localStorage.getItem("pellagos.servers")).servers[0].id)).toBe(server.identity.id);
 
+    // The World panel from the party menu too, playing alone (its World button), and back to the
+    // game from it; the world held for no one while it's open
+    const party = owner.getByRole("dialog", { name: "Party" });
+    const panel = owner.locator("#worldpanel");
+
+    await owner.locator("#partybutton").click();
+    await expect(party).toBeVisible();
+    await expect(party.getByRole("tab", { name: "Players" })).toBeHidden();
+    await party.getByRole("button", { name: "World" }).click();
+    await expect(panel).toBeVisible();
+    await expect(party).toBeHidden();
+    await expect(panel.locator("#worldpaneltitle")).toHaveText("Thornwick");
+    await expect(panel.locator("#worldpanelpeople li")).toHaveText(["Brand(you)"]);
+    await panel.getByRole("button", { name: "Back to the game" }).click();
+    await expect(panel).toBeHidden();
+    expect(await owner.evaluate(() => window.pellagos.game.running)).toBe(true);
+
     // An invite link from the World panel
     await owner.locator("#menubutton").click();
     await owner.locator("#worldbutton").click();
-
-    const panel = owner.locator("#worldpanel");
-
     await expect(panel.locator("#worldpaneltitle")).toHaveText("Thornwick");
     await panel.getByRole("button", { name: "Invite link" }).click();
     await expect(panel.locator("#worldpanelinvitelink")).toBeVisible({ timeout: 30000 });
