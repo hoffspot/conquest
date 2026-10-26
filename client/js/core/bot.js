@@ -129,7 +129,8 @@ export class Bot {
         // (The foe it's set on, as its copy of the world has it; or the one it last went for, while
         // that one stands near and isn't running: its copy's order let go of a moment now and then)
         const foe = host.battle.actor(me.order?.type === "engage" ? me.order.target : this.foe ?? null);
-        const fighting = Boolean(foe && !foe.dead && foe.map === me.map && (foe.x - me.x) ** 2 + (foe.y - me.y) ** 2 <= timing.foeNear ** 2 && !host.battle.formations[foe.formation?.id]?.broken);
+        const [dx, dy] = foe ? [foe.x - me.x, foe.y - me.y] : [0, 0];
+        const fighting = Boolean(foe && !foe.dead && foe.map === me.map && dx * dx + dy * dy <= timing.foeNear * timing.foeNear && !host.battle.formations[foe.formation?.id]?.broken);
 
         if (!fighting) {
             const near = this.#foe(me);
