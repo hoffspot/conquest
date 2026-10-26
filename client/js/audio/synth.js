@@ -650,6 +650,37 @@ export const SOUNDS = {
                 0.25,
             ),
     },
+    // A legendary weapon's effect (core/legendary.js): its charge full, a chime rising; and each
+    // effect let loose, its own: ice cracking and shattering, fire bursting out with a roar, stone
+    // breaking up out of the ground, lightning cracking, and a great blast
+    legendCharged: { variants: 1, volume: 0.35, make: () => notes([[880, 0], [1319, 0.05], [1760, 0.1]], { decay: 0.5, harmonics: GLASS, length: 1 }) },
+    legendFrostbind: {
+        variants: 2,
+        volume: 0.7,
+        make: (random) => add(add(burst(random, 0.25, "highpass", 4800, 0.8, 0.001, 0.06), notes([[2093, 0.02], [2637, 0.05], [3136, 0.09]], { decay: 0.4, harmonics: GLASS, length: 1 }), 0.5), grains(random, 0.9, 26, 3000, 9000, { decay: 0.004 }), 0.35, 0.08),
+    },
+    legendCinderburst: {
+        variants: 2,
+        volume: 0.75,
+        make: (random) => add(add(whoosh(random, { length: 0.7, from: 200, top: 900, to: 300, body: 0.5 }), burst(random, 0.8, "lowpass", 700, 0.7, 0.01, 0.35), 0.8), grains(random, 0.8, 30, 1500, 5000, { decay: 0.003 }), 0.3, 0.1),
+    },
+    legendEarthsunder: {
+        variants: 2,
+        volume: 0.8,
+        make: (random) => add(add(thud(160, 40, 0.8, 0.25), burst(random, 0.6, "lowpass", 400, 0.8, 0.004, 0.2), 0.6), grains(random, 0.7, 40, 300, 2200, { decay: 0.006 }), 0.6, 0.05),
+    },
+    legendStormlash: {
+        variants: 2,
+        volume: 0.7,
+        make: (random) => {
+            const crack = burst(random, 0.6, "highpass", 2500, 0.7, 0.001, 0.12);
+            const zap = shape(tone(0.4, (t) => 180 + 1600 * Math.exp(-t / 0.04), { fm: [2.01, 2] }), hit(0.001, 0.12));
+            const rumble = shape(filter(noise(random, 1.2), "lowpass", 160, 0.7), swell(1.2, 0.15));
+
+            return add(add(crack, zap, 0.6), rumble, 0.5, 0.05);
+        },
+    },
+    legendRuinblast: { variants: 3, volume: 1, make: (random) => add(blast(random, 1.6 + random.next() * 0.2), notes([[1568, 0]], { decay: 0.3, harmonics: GLASS, length: 0.6 }), 0.2) },
     chainBroken: { variants: 1, volume: 0.35, make: (random) => add(notes([[1175, 0], [880, 0.08], [622, 0.16]], { decay: 0.3, harmonics: GLASS, length: 0.9 }), burst(random, 0.15, "highpass", 3000, 0.7, 0.002, 0.05), 0.3) },
     wake: { variants: 1, volume: 0.35, make: () => notes([[880, 0], [1320, 0.12]], { decay: 0.7, harmonics: [[1, 1], [2.76, 0.2], [5.4, 0.06]], length: 1.6 }) },
     breath: {

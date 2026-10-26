@@ -1097,7 +1097,8 @@ describe("the wild's elites (creatures.js ELITES, battle.js, spoils.js ELITE_SPO
 
                 counts.gold += gold / n;
                 counts.nothing += gold || items.length ? 0 : 1 / n;
-                counts.tomes += items.filter(({ id }) => ITEMS[id].use?.learn).length / n;
+                // (A Tome of Evaluate aside: on any of them, spoils.js EVALUATE_DROP)
+                counts.tomes += items.filter(({ id }) => ITEMS[id].use?.learn && ITEMS[id].use.learn !== "evaluate").length / n;
 
                 for (const { id } of items) {
                     counts.items[id] = (counts.items[id] ?? 0) + 1 / n;

@@ -49,17 +49,17 @@ describe("gear (gear.js)", () => {
         assert.deepEqual(["sword", "bow", "hammer", null].map(offHandFree), [true, false, false, true]);
     });
 
-    it("rolls as many bonuses as a piece's make has, each on something different and fitting the piece, stronger the better made", () => {
+    it("rolls as many bonuses as a piece's make has (within its make's span), each on something different and fitting the piece, stronger the better made", () => {
         const random = createRandom(4);
 
         for (const [id, piece] of Object.entries(GEAR)) {
-            for (const [quality, { count }] of Object.entries(ROLLS)) {
+            for (const [quality, { count: [least, most] }] of Object.entries(ROLLS)) {
                 const made = rollGear(id, quality, random, { people: "elf" });
                 const bonuses = Object.keys(made.bonuses ?? {});
 
                 assert.equal(made.id, id);
                 assert.equal(made.quality, quality);
-                assert.equal(bonuses.length, Math.min(Math.max(count, piece.jewel ? 1 : 0), new Set(affixesFor(id).map((key) => AFFIXES[key].stat)).size), `${quality} ${id}`);
+                assert.ok(bonuses.length >= Math.max(least, piece.jewel ? 1 : 0) && bonuses.length <= Math.max(most, piece.jewel ? 1 : 0), `${quality} ${id}: ${bonuses.length}`);
                 assert.ok(bonuses.every((stat) => STATS[stat]));
                 assert.ok((made.affixes ?? []).every((key) => affixesFor(id).includes(key)), `${id}'s bonuses fit it`);
                 assert.equal(made.people, piece.uniform ? "elf" : undefined);
@@ -67,8 +67,8 @@ describe("gear (gear.js)", () => {
             }
         }
 
-        // (A masterwork's two: a word before its name, and one after)
-        const sword = rollGear("sword", "masterwork", random);
+        // (A masterwork's two, as most are: a word before its name, and one after)
+        const sword = Array.from({ length: 50 }, () => rollGear("sword", "masterwork", random)).find(({ affixes }) => affixes.length === 2);
 
         assert.ok(AFFIXES[sword.affixes[0]].prefix && AFFIXES[sword.affixes[1]].suffix);
 

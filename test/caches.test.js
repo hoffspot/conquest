@@ -14,6 +14,7 @@ import { hypot } from "../client/js/core/exact.js";
 import { GEAR } from "../client/js/core/gear.js";
 import { DIRECTOR } from "../client/js/core/director.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { mightTier } from "../client/js/core/might.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { CHEST_GOLD, placesOf } from "../client/js/core/places.js";
 import { createRandom } from "../client/js/core/random.js";
@@ -329,15 +330,16 @@ describe("the adventurers' caches in play (host.js #caches)", () => {
         const { host, me } = context;
         const player = host.players.get(HOST_PLAYER);
 
-        player.progress.skills.blade = 6000;
+        // (Mighty with their skills: a tier of might every ten of it, core/might.js mightTier)
+        Object.assign(player.progress.skills, { blade: 6000, endurance: 6000, evasion: 6000, shield: 6000 });
 
-        const might = player.progress.might();
+        const might = mightTier(host.mightFor(HOST_PLAYER));
 
         walk(context);
 
         const [cache] = host.caches.values();
 
-        assert.ok(might >= 5);
+        assert.ok(might >= 2);
         assert.equal(cache.tier, Math.min(TIERS, 1 + might));
         assert.equal(host.battle.actor(cache.ids[0]).wild.tier, Math.min(TIERS, cache.tier + CACHES.lead));
 

@@ -9,6 +9,7 @@ import { CURES } from "../client/js/core/afflictions.js";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { dayOf, elapsedOf } from "../client/js/core/daytime.js";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
+import { mightTier } from "../client/js/core/might.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { buys, gradeOf, HAGGLE_CAP, ITEMS, priceOf, Progress, QUALITIES, SELL_SHARE, SHOPS, SMITH_MAKES, wares } from "../client/js/core/progress.js";
 import { dailyStock, SPECIAL_MARKUP, shopPrice, stockKey } from "../client/js/core/stock.js";
@@ -204,20 +205,21 @@ describe("haggling, as far as it goes (progress.js HAGGLE_CAP)", () => {
 });
 
 describe("a blacksmith, by the player's might (progress.js SMITH_MAKES)", () => {
-    it("sells every weapon and piece of armour, common and fine to begin with, fine and masterwork later, masterwork for the mightiest", () => {
-        const of = (might) => [...new Set(wares("smith", "human", { might }).map(({ quality }) => quality))];
+    it("sells every weapon and piece of armour, common and fine to begin with, fine and masterwork later, masterwork for the mightiest (by their might's tier: core/might.js mightTier)", () => {
+        const of = (might) => [...new Set(wares("smith", "human", { tier: might === null ? null : mightTier(might) }).map(({ quality }) => quality))];
 
         assert.deepEqual(of(0), ["common", "fine"]);
-        assert.deepEqual(of(4), ["fine", "masterwork"]);
-        assert.deepEqual(of(8), ["masterwork"]);
+        assert.deepEqual(of(45), ["fine", "masterwork"]);
+        assert.deepEqual(of(80), ["masterwork"]);
+        assert.deepEqual(of(100), ["masterwork"]);
         assert.deepEqual(of(null), ["common", "fine", "masterwork"], "not told: all it has");
-        assert.ok(wares("smith", "human", { might: 0 }).some(({ id }) => id === "sword") && wares("smith", "human", { might: 0 }).some(({ id }) => id === "plate"));
+        assert.ok(wares("smith", "human", { tier: 0 }).some(({ id }) => id === "sword") && wares("smith", "human", { tier: 0 }).some(({ id }) => id === "plate"));
     });
 
     it("won't sell a new adventurer a masterwork sword", () => {
         const { host, keeper } = atShop("smith");
 
-        assert.equal(host.players.get(HOST_PLAYER).progress.might(), 0);
+        assert.equal(host.mightFor(HOST_PLAYER), 0);
         assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: { id: "sword", quality: "masterwork" }, from: keeper.id }), { ok: false, reason: "shop" });
         assert.deepEqual(host.command(HOST_PLAYER, { type: "buy", item: { id: "sword", quality: "fine" }, from: keeper.id }), { ok: true });
     });

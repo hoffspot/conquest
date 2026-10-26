@@ -1495,6 +1495,123 @@ body[data-zoom="on"] #hud.quick-up #playerplate {
     }
 }
 
+/* A legendary weapon's charge (app/charge.js): over the player's card, beside where the sigil
+   shows, a ring of marks lit blow by blow in the colour of its effect (--effect), its sign in the
+   middle; full, glowing and pulsing for the next blow to land; let loose, a ring bursting out */
+#hud .charge {
+    position: absolute;
+    right: 72px;
+    bottom: calc(100% + 10px);
+    width: 52px;
+    height: 52px;
+    pointer-events: none;
+}
+
+/* (A phone on its side: beside the card, past the sigil) */
+@media (max-height: 500px) {
+    #hud .charge {
+        right: calc(100% + 82px);
+        bottom: 4px;
+    }
+}
+
+#hud .charge[hidden] {
+    display: none;
+}
+
+.charge-ring {
+    width: 52px;
+    height: 52px;
+    overflow: visible;
+}
+
+.charge-back {
+    fill: rgba(12, 14, 20, 0.72);
+    stroke: color-mix(in srgb, var(--effect) 35%, transparent);
+    stroke-width: 1.5;
+}
+
+.charge-mark {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.16);
+    stroke-width: 5;
+    stroke-linecap: round;
+    transition: stroke 0.15s ease-out;
+}
+
+.charge-mark.lit {
+    stroke: var(--effect);
+    filter: drop-shadow(0 0 3px var(--effect));
+}
+
+.charge-sign {
+    fill: color-mix(in srgb, var(--effect) 55%, transparent);
+    stroke: var(--effect);
+    stroke-width: 1.4;
+    stroke-linejoin: round;
+}
+
+.charge[data-effect="frostbind"] .charge-sign {
+    fill: none;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+}
+
+.charge.full .charge-ring {
+    animation: charge-full 0.9s ease-in-out infinite;
+}
+
+.charge.full .charge-sign {
+    fill: var(--effect);
+}
+
+.charge-burst {
+    fill: none;
+    stroke: var(--effect);
+    stroke-width: 3;
+    opacity: 0;
+}
+
+.charge.flare .charge-burst {
+    animation: charge-flare 0.6s ease-out;
+}
+
+@keyframes charge-full {
+    0%,
+    100% {
+        filter: drop-shadow(0 0 4px var(--effect));
+        transform: scale(1);
+    }
+
+    50% {
+        filter: drop-shadow(0 0 12px var(--effect));
+        transform: scale(1.07);
+    }
+}
+
+@keyframes charge-flare {
+    from {
+        opacity: 1;
+        transform: scale(0.8);
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(1.9);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .charge.full .charge-ring {
+        animation: none;
+        filter: drop-shadow(0 0 10px var(--effect));
+    }
+
+    .charge.flare .charge-burst {
+        animation: none;
+    }
+}
+
 /* The Prismatic sigil (app/sigil.js): over the player's card while a chain is live (rising with
    it, over the quick actions in a fight), a petal for each element, a ring running down its time;
    a piece just earned, pulsing in its element's colour, and whole, pulsing white, to be tapped;
@@ -2453,6 +2570,50 @@ body[data-minimap="off"] #party {
 
 .floater.hostile .name {
     color: #f0a08c;
+}
+
+/* (How a fight with it looks to the player, core/might.js fightLook: greyed, easy, what it leaves
+   less likely exceptional; amber, harder than them; red, far harder. An elite's name stays gold:
+   its level by it says it instead) */
+.floater.hostile:not(.elite).look-easy .name,
+.floater.hostile.look-easy .level {
+    color: #9a9a9a;
+}
+
+.floater.hostile.look-easy .bar {
+    opacity: 0.7;
+}
+
+.floater.hostile:not(.elite).look-hard .name,
+.floater.hostile.look-hard .level {
+    color: #ffb347;
+}
+
+.floater.hostile:not(.elite).look-deadly .name,
+.floater.hostile.look-deadly .level {
+    color: #ff4a3a;
+    text-shadow: 0 0 4px rgba(255, 60, 40, 0.6);
+}
+
+/* (Its power, while Evaluate's on the player: "Pw 31"; with others of its pack that came at
+   them, a pair of crossed blades after it) */
+.floater .power {
+    display: inline;
+    margin-left: 6px;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: #ffe08a;
+}
+
+.floater .power::before {
+    content: "Pw ";
+    font-size: 9px;
+    letter-spacing: 0.04em;
+}
+
+.floater .power.pack::after {
+    content: " \2694";
+    font-size: 9px;
 }
 
 /* (By the name, "Lv 3": not laid out as the options' volume rows are, .level below) */
@@ -4321,6 +4482,12 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 .tone-bonus {
     color: #8fb8ff;
+}
+
+/* (A legendary weapon's effect: core/legendary.js) */
+.tone-effect {
+    color: #f0a050;
+    text-shadow: 0 0 6px rgba(240, 138, 58, 0.45);
 }
 
 /* (What a thing that isn't gear does; what's rolled on a shop's piece as it's bought, which of

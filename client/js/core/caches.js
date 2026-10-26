@@ -17,7 +17,7 @@ import { cos, hypot, sin } from "./exact.js";
 import { GEAR, rollGear } from "./gear.js";
 import { CHARMS, rollCharm } from "./goods.js";
 import { CHEST_GOLD, placesOf } from "./places.js";
-import { ITEMS, rollBoost } from "./progress.js";
+import { fallenOff, ITEMS, rollBoost } from "./progress.js";
 import { ELITE_SPOILS } from "./spoils.js";
 import { landAt } from "./worldplan/plan.js";
 
@@ -171,8 +171,10 @@ export function openAround([x, y], blocked) {
 }
 
 /** A make for a cache's piece of gear at its band's tier (CACHE_MAKES), as `random` has it. */
-export function cacheMake(tier, random) {
-    const [, makes] = CACHE_MAKES.find(([from]) => tier >= from) ?? CACHE_MAKES.at(-1);
+export function cacheMake(tier, random, { falloff = 1 } = {}) {
+    const [, band] = CACHE_MAKES.find(([from]) => tier >= from) ?? CACHE_MAKES.at(-1);
+    // (Each exceptional make less likely for one it came too easily to: progress.js fallenOff)
+    const makes = fallenOff(band, falloff);
     let pick = random.next();
 
     return Object.keys(makes).find((quality) => (pick -= makes[quality]) < 0) ?? Object.keys(makes).at(-1);
@@ -184,19 +186,27 @@ export function cacheMake(tier, random) {
  * might hold, or (`charm` of the time) a charm (what's rolled on it rolled: goods.js rollCharm),
  * made as a cache's `up` tiers further out would be.
  */
-export function elitePrize(tier, random, { people = "human" } = {}) {
-    const quality = cacheMake(Math.min(TIERS, tier + ELITE_SPOILS.up), random);
+export function elitePrize(tier, random, { people = "human", level = 1, falloff = 1 } = {}) {
+    const quality = cacheMake(Math.min(TIERS, tier + ELITE_SPOILS.up), random, { falloff });
 
     if (random.chance(ELITE_SPOILS.charm)) {
         const charms = Object.keys(CHARMS);
 
-        return rollCharm(charms[Math.floor(random.next() * charms.length) % charms.length], quality, random);
+        return rollCharm(charms[Math.floor(random.next() * charms.length) % charms.length], quality, random, { level });
     }
 
-    const id = CACHE_GEAR[Math.floor(random.next() * CACHE_GEAR.length) % CACHE_GEAR.length];
-    const made = rollGear(id, quality, random, { people });
+    return cachePiece(quality, random, { people, level });
+}
 
-    return ITEMS[id].magic ? { ...made, boost: rollBoost(random) } : made;
+/**
+ * A piece of gear any cache might hold (CACHE_GEAR) of a make, made (random.js random) of a `level`
+ * (gear.js rollGear; `people`: the maker of a people's piece), a wand's or grimoire's boost rolled.
+ */
+export function cachePiece(quality, random, { people = "human", level = 1 } = {}) {
+    const id = CACHE_GEAR[Math.floor(random.next() * CACHE_GEAR.length) % CACHE_GEAR.length];
+    const made = rollGear(id, quality, random, { people, level });
+
+    return ITEMS[id].magic ? { ...made, boost: rollBoost(random, level) } : made;
 }
 
 /**
@@ -204,16 +214,16 @@ export function elitePrize(tier, random, { people = "human" } = {}) {
  * any people's piece in it): { gold, items }, CACHE_LOOT's; its gear made as any's is (gear.js
  * rollGear: its bonuses rolled), a wand's or grimoire's boost to spells rolled as a shop's is.
  */
-export function rollCache(tier, random, { people = "human" } = {}) {
+export function rollCache(tier, random, { people = "human", level = 1, falloff = 1 } = {}) {
     const gold = Math.round(random.int(...CACHE_LOOT.gold) * (1 + CHEST_GOLD * (Math.max(1, tier) - 1)));
     const pieces = random.int(...CACHE_LOOT.gear);
     const items = [];
 
     for (let k = 0; k < pieces; k++) {
         const id = CACHE_GEAR[Math.floor(random.next() * CACHE_GEAR.length) % CACHE_GEAR.length];
-        const made = rollGear(id, cacheMake(tier, random), random, { people });
+        const made = rollGear(id, cacheMake(tier, random, { falloff }), random, { people, level });
 
-        items.push(ITEMS[id].magic ? { ...made, boost: rollBoost(random) } : made);
+        items.push(ITEMS[id].magic ? { ...made, boost: rollBoost(random, level) } : made);
     }
 
     if (random.chance(CACHE_LOOT.potion)) {

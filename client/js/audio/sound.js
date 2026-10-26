@@ -668,6 +668,7 @@ const LANDINGS = {
     resistDisease: "ward",
     reflect: "ward",
     inertialBarrier: "ward",
+    evaluate: "buff",
     curePoison: "cure",
     cureSickness: "cure",
     liftCurse: "cure",

@@ -416,8 +416,10 @@ describe("a dungeon against a stronger side (host.js #dungeons, #wakeLevel; stre
             Object.assign(one, { hp: 1e6, maxHp: 1e6 });
         }
 
-        // (Mighty: their might as a seasoned adventurer's)
-        host.players.get(HOST_PLAYER).progress.might = () => 6;
+        // (Mighty: their might as a seasoned adventurer's, 60: its tier 6, core/might.js mightTier)
+        const mightFor = host.mightFor.bind(host);
+
+        host.mightFor = (id) => (id === HOST_PLAYER ? 60 : mightFor(id));
 
         const [sx, sy] = world.start.at;
         const site = world.plan.sites.filter(({ kind }) => kind === "dungeon").sort((a, b) => hypot(a.at[0] - sx, a.at[1] - sy) - hypot(b.at[0] - sx, b.at[1] - sy))[0];

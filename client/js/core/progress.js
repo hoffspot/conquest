@@ -20,8 +20,8 @@
 // the character (app/save.js), and the host's to change (core/host.js). Pure JavaScript, no DOM.
 
 import { CURES } from "./afflictions.js";
-import { BREWS, CHARM_ROLLS, CHARMS, charmStats, SCROLLS, STARTING_SCROLLS } from "./goods.js";
-import { blockMost, disguiseOf, GEAR, GEAR_SLOTS, gearName, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
+import { BREWS, CHARM_ROLLS, charmPower, CHARMS, charmStats, SCROLLS, STARTING_SCROLLS } from "./goods.js";
+import { blockMost, disguiseOf, effectOf, GEAR, GEAR_SLOTS, gearName, levelFactor, levelOf, offHandFits, rollGear, sameGear, setBonuses, SLOT_IDS, STATS, statsOf, UNIFORM, UNIFORM_PEOPLES } from "./gear.js";
 import { Bestiary } from "./bestiary.js";
 import { clockOf } from "./invasions.js";
 import { ELEMENT_TOME_PRICE, ELEMENT_TOMES, growthAt, GUILD_TOMES, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tierAt, tomeOf } from "./spells.js";
@@ -82,12 +82,12 @@ export const ABILITIES = Object.freeze({
  * between a masterwork and a legendary piece, which they took nothing from.
  */
 export const QUALITIES = Object.freeze({
-    common: { label: "", power: 1, price: 1, might: 0 },
-    fine: { label: "Fine", power: 1.15, price: 3, might: 0.5 },
-    masterwork: { label: "Masterwork", power: 1.3, price: 8, might: 1 },
-    rare: { label: "Rare", power: 1.38, price: 14, might: 1.2 },
-    veryRare: { label: "Very rare", power: 1.44, price: 21, might: 1.35 },
-    legendary: { label: "Legendary", power: 1.5, price: 30, might: 1.5 },
+    common: { label: "", power: 1, price: 1 },
+    fine: { label: "Fine", power: 1.15, price: 3 },
+    masterwork: { label: "Masterwork", power: 1.3, price: 8 },
+    rare: { label: "Rare", power: 1.38, price: 14 },
+    veryRare: { label: "Very rare", power: 1.44, price: 21 },
+    legendary: { label: "Legendary", power: 1.5, price: 30 },
 });
 
 // How rare a tome is, as a make (QUALITIES: the colour it's shown in, and the shops that keep it),
@@ -342,20 +342,20 @@ export const RELICS = Object.freeze({
  */
 export const MOONSILVER = Object.freeze({ amulet: ["Torc", "Locket", "Pendant"], ring: ["Band", "Seal"], of: "of the Silver Lady" });
 
-/** A relic of moonsilver (MOONSILVER), made (random.js random). */
-export function rollMoonsilver(random) {
+/** A relic of moonsilver (MOONSILVER), made (random.js random) of a `level` (gear.js rollGear). */
+export function rollMoonsilver(random, { level = 1 } = {}) {
     const id = random.chance(0.5) ? "amulet" : "ring";
-    const relic = rollGear(id, "legendary", random);
+    const relic = rollGear(id, "legendary", random, { level });
 
     relic.name = `Moonsilver ${MOONSILVER[id][Math.floor(random.next() * MOONSILVER[id].length) % MOONSILVER[id].length]} ${MOONSILVER.of}`;
 
     return relic;
 }
 
-/** One of the dead's relics (RELICS), made (random.js random): a legendary amulet or ring, with its own name. */
-export function rollRelic(random) {
+/** One of the dead's relics (RELICS), made (random.js random) of a `level`: a legendary amulet or ring, with its own name. */
+export function rollRelic(random, { level = 1 } = {}) {
     const id = random.chance(0.5) ? "amulet" : "ring";
-    const relic = rollGear(id, "legendary", random);
+    const relic = rollGear(id, "legendary", random, { level });
     const pick = (list) => list[Math.floor(random.next() * list.length) % list.length];
 
     relic.name = `${pick(RELICS[id])} of ${pick(RELICS.of)}`;
@@ -365,6 +365,32 @@ export function rollRelic(random) {
 
 /** How likely a piece of gear found on a foe is to be of each make. */
 export const MAKES = Object.freeze({ common: 0.7, fine: 0.22, masterwork: 0.06, rare: 0.012, veryRare: 0.005, legendary: 0.003 });
+
+/** The makes that are exceptional: those an easy kill finds less often (core/might.js falloff). */
+export const EXCEPTIONAL = Object.freeze(["rare", "veryRare", "legendary"]);
+
+/**
+ * How likely each make is (`odds`: { make: chance }) found by one for whom it came too easily
+ * (`falloff`: core/might.js, 1 for a fair fight, down to a tenth): each exceptional make
+ * (EXCEPTIONAL) that much less likely, what's taken from them given to the others, each as much
+ * more as it was likely already.
+ */
+export function fallenOff(odds, falloff = 1) {
+    if (!(falloff < 1)) {
+        return odds;
+    }
+
+    const kept = Math.max(0, falloff);
+    const taken = EXCEPTIONAL.reduce((sum, make) => sum + (odds[make] ?? 0) * (1 - kept), 0);
+    const plain = Object.keys(odds).filter((make) => !EXCEPTIONAL.includes(make));
+    const rest = plain.reduce((sum, make) => sum + odds[make], 0);
+
+    if (!rest) {
+        return odds;
+    }
+
+    return Object.fromEntries(Object.entries(odds).map(([make, chance]) => [make, EXCEPTIONAL.includes(make) ? chance * kept : chance + (taken * chance) / rest]));
+}
 
 /**
  * How many slots a pack has, and how many are shown at a time (a page's). Each holds a stack of
@@ -391,13 +417,16 @@ export const BOOSTS = Object.freeze([
 /** The boost a wand or grimoire a new character starts with has (a common one). */
 export const STARTING_BOOST = 0.12;
 
-/** A wand's or grimoire's boost to spells, rolled (random.js random): a whole percent, 10 to 100. */
-export function rollBoost(random) {
+/**
+ * A wand's or grimoire's boost to spells, rolled (random.js random) for one of a `level` (gear.js
+ * levelFactor: the higher, the stronger): a whole percent, 10 to 100.
+ */
+export function rollBoost(random, level = 1) {
     const total = BOOSTS.reduce((sum, { weight }) => sum + weight, 0);
     let pick = random.next() * total;
     const { band } = BOOSTS.find(({ weight }) => (pick -= weight) < 0) ?? BOOSTS[0];
 
-    return Math.round((band[0] + random.next() * (band[1] - band[0])) * 100) / 100;
+    return Math.min(1, Math.round((band[0] + random.next() * (band[1] - band[0])) * levelFactor(level) * 100) / 100);
 }
 
 /** How rare a boost is (BOOSTS: "common" to "very rare"). */
@@ -409,12 +438,17 @@ export const rarityOf = (boost) => (BOOSTS.find(({ band }) => boost < band[1]) ?
  */
 export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ?? "common") === (b.quality ?? "common") && (a.boost ?? null) === (b.boost ?? null) && sameGear(a, b);
 
-// A thing as it's kept: its kind, its make, (a wand or grimoire) its boost, (gear) whose make it
-// is, what was rolled on it and its own name, and (a charm) what was rolled on it
+// A thing as it's kept: its kind, its make, (a wand or grimoire) its boost, (gear and charms) its
+// level past the first, (gear) whose make it is, what was rolled on it and its own name, (a
+// legendary weapon) its effect, and (a charm) what was rolled on it
 function thingOf(item) {
     const def = ITEMS[item.id];
     const quality = QUALITIES[item.quality] ? item.quality : "common";
     const thing = { id: item.id, quality, ...(def?.magic ? { boost: boostOf(item) } : def?.robust ? { boost: blockOf(item.id, quality, item.boost) } : {}) };
+
+    if ((def?.slot || def?.charm) && levelOf(item.level) > 1) {
+        thing.level = levelOf(item.level);
+    }
 
     if (def?.uniform) {
         thing.people = UNIFORM_PEOPLES.includes(item.people) ? item.people : "human";
@@ -434,6 +468,13 @@ function thingOf(item) {
 
     if (def?.slot && typeof item.name === "string" && item.name) {
         thing.name = item.name.slice(0, 40);
+    }
+
+    // (A legendary weapon's effect: its own, or, one made before they had them, one all the same)
+    const effect = def?.slot ? effectOf(item) : null;
+
+    if (effect) {
+        thing.effect = effect;
     }
 
     return thing;
@@ -509,9 +550,13 @@ export function itemLabel(item) {
 // grimoire the more it boosts spells, a shield the more of a blow it takes of the most it could
 const rolledWorth = ({ id, quality, boost }) => (!boost ? 1 : ITEMS[id]?.magic ? 1 + 4 * (boost - 0.1) : ITEMS[id]?.robust ? 1 + 2 * Math.max(0, boost / (blockMost(id, quality) || 1) - 0.5) : 1);
 
-/** What something costs (gold): its price by its make, less the haggling (or, sold, a share of it and more for haggling). */
-export function priceOf({ id, quality = "common", boost = null }, { haggle = 0, selling = false } = {}) {
-    const base = (ITEMS[id]?.price ?? 0) * (QUALITIES[quality]?.price ?? 1) * rolledWorth({ id, quality, boost });
+// How much more a piece or a charm is worth for its level (gear.js levelFactor): but a wand's or
+// a grimoire's, worth what its boost is (rolled the stronger the higher its level: rollBoost)
+const levelWorth = ({ id, level }) => (ITEMS[id]?.magic ? 1 : levelFactor(level));
+
+/** What something costs (gold): its price by its make and level, less the haggling (or, sold, a share of it and more for haggling). */
+export function priceOf({ id, quality = "common", boost = null, level = 1 }, { haggle = 0, selling = false } = {}) {
+    const base = (ITEMS[id]?.price ?? 0) * (QUALITIES[quality]?.price ?? 1) * rolledWorth({ id, quality, boost }) * levelWorth({ id, level });
 
     // (A creature's part sells for what it's worth: its price is what the guild pays)
     const share = ITEMS[id]?.part ? 1 : SELL_SHARE;
@@ -524,28 +569,31 @@ export function priceOf({ id, quality = "common", boost = null }, { haggle = 0, 
  * made as far as it goes; a uniform's pieces, its own people's (`people`: whose shop it is).
  * (What's rolled on a better made one is rolled as it's bought, as a wand's boost is.)
  */
-export function wares(shop, people = "human", { might = null } = {}) {
+export function wares(shop, people = "human", { tier = null } = {}) {
     const { items, best, tiered } = SHOPS[shop] ?? { items: [], best: "common" };
-    const makes = tiered && might !== null ? SMITH_MAKES[Math.max(0, Math.min(SMITH_MAKES.length - 1, Math.floor(might)))] : Object.keys(QUALITIES).slice(0, Object.keys(QUALITIES).indexOf(best) + 1);
+    const makes = tiered && tier !== null ? SMITH_MAKES[Math.max(0, Math.min(SMITH_MAKES.length - 1, Math.floor(tier)))] : Object.keys(QUALITIES).slice(0, Object.keys(QUALITIES).indexOf(best) + 1);
     const maker = UNIFORM_PEOPLES.includes(people) ? people : "human";
 
     return items.flatMap((id) => (comesInMakes(id) ? makes.map((quality) => ({ id, quality, ...(ITEMS[id].uniform ? { people: maker } : {}) })) : [{ id, quality: "common" }]));
 }
 
-/** A make, as likely as MAKES has it (random.js random). */
-export function rollMake(random) {
+/** A make, as likely as MAKES has it (random.js random), each exceptional one less likely for an easy kill (`falloff`: fallenOff). */
+export function rollMake(random, { falloff = 1 } = {}) {
+    const odds = fallenOff(MAKES, falloff);
     let pick = random.next();
 
-    return Object.keys(MAKES).find((quality) => (pick -= MAKES[quality]) < 0) ?? "common";
+    return Object.keys(odds).find((quality) => (pick -= odds[quality]) < 0) ?? "common";
 }
 
 /**
  * What a fallen foe of a kind has on them (random.js random; `people`: theirs, for their
  * uniform's pieces), or what's in a place's chest: { gold, items }. Gear comes with its bonuses
- * rolled; and, the dead's (`relic`), one of their relics (rollRelic); or, Lunara's guardian's
- * (`relic` "moonsilver"), a relic of moonsilver (rollMoonsilver).
+ * rolled, of a `level` (gear.js rollGear), a uniform's piece's make as likely as MAKES has it, less
+ * likely exceptional for an easy kill (`falloff`: rollMake); and, the dead's (`relic`), one of their
+ * relics (rollRelic); or, Lunara's guardian's (`relic` "moonsilver"), a relic of moonsilver
+ * (rollMoonsilver).
  */
-export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "human", relic = false } = {}) {
+export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "human", relic = false, level = 1, falloff = 1 } = {}) {
     const table = LOOT[kind];
 
     if (!table) {
@@ -557,13 +605,13 @@ export function rollLoot(kind, random, { people = kind === "orc" ? "orc" : "huma
         items: table.items.filter(({ chance }) => random.chance(chance)).map(({ id, quality, uniform }) => {
             const kindOf = uniform ? UNIFORM[Math.floor(random.next() * UNIFORM.length) % UNIFORM.length] : id;
 
-            return ITEMS[kindOf].slot ? rollGear(kindOf, quality ?? (uniform ? rollMake(random) : "common"), random, { people }) : { id: kindOf, quality: quality ?? "common" };
+            return ITEMS[kindOf].slot ? rollGear(kindOf, quality ?? (uniform ? rollMake(random, { falloff }) : "common"), random, { people, level }) : { id: kindOf, quality: quality ?? "common" };
         }),
     };
 
     // (What the restless dead guarded: one of their relics too, `relic`)
     if (relic) {
-        bundle.items.push(relic === "moonsilver" ? rollMoonsilver(random) : rollRelic(random));
+        bundle.items.push(relic === "moonsilver" ? rollMoonsilver(random, { level }) : rollRelic(random, { level }));
     }
 
     return bundle;
@@ -582,23 +630,18 @@ export const HAGGLE_CAP = 0.35;
 /** The most chance of catching a blow on a shield there is (the Shield skill's half, and a shield's own bonus). */
 export const BLOCK_CAP = 0.6;
 
-/** The most might gear gives (with a fighting rank's: might()). */
-export const GEAR_MIGHT = 4;
+/**
+ * The most of each blow and shot slipped (Evasion's and gear's: the Dodge spell's on top), the
+ * most sooner each blow comes (Swift), of the harm done by them got back (Leeching), and the most
+ * likely a blow is to leave its foe bleeding (Vicious): core/gear.js AFFIXES.
+ */
+export const DODGE_CAP = 0.5;
+export const HASTE_CAP = 0.3;
+export const LEECH_CAP = 0.25;
+export const BLEED_CAP = 0.5;
 
 // The ring slots
 const RINGS = ["ring1", "ring2"];
-
-// How mighty a piece of gear makes its wearer: a weapon by its make; armour by how much it takes
-// off each blow (as well made as it is); and a quarter for each bonus rolled on it
-function mightOf(piece, slot) {
-    if (!piece) {
-        return 0;
-    }
-
-    const made = slot === "mainHand" ? (QUALITIES[piece.quality]?.might ?? 0) : (ITEMS[piece.id]?.armor ?? 0) * 7 * (QUALITIES[piece.quality]?.power ?? 1);
-
-    return made + 0.25 * Object.keys(piece.bonuses ?? {}).length;
-}
 
 /** The shield a new character starts with in the other hand, by the weapon they chose: a sword's a round shield, a wand's a spellward. */
 export const STARTING_SHIELDS = Object.freeze({ sword: "roundShield", wand: "spellward" });
@@ -826,9 +869,9 @@ export class Progress {
         return ups;
     }
 
-    /** Everything the trees and gear give: { melee, ranged, heal, stun, hp, stamina, armor, dodge, haggle, persuade, followers }. */
+    /** Everything the trees and gear give: { melee, ranged, heal, stun, hp, stamina, armor, dodge, haste, leech, bleed, haggle, persuade, followers, ... }. */
     bonuses() {
-        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, spell: 0, hp: 0, stamina: 0, armor: 0, dodge: 0, block: 0, bash: 0, haggle: 0, persuade: 0, followers: 0, fortune: 0, endurance: 0, wardFire: 0, wardWater: 0, wardAir: 0, wardEarth: 0, wardMagic: 0 };
+        const totals = { melee: 0, ranged: 0, heal: 0, stun: 0, spell: 0, hp: 0, stamina: 0, armor: 0, dodge: 0, haste: 0, leech: 0, bleed: 0, block: 0, bash: 0, haggle: 0, persuade: 0, followers: 0, fortune: 0, endurance: 0, wardFire: 0, wardWater: 0, wardAir: 0, wardEarth: 0, wardMagic: 0 };
 
         for (const [tree, { bonus }] of Object.entries(TREES)) {
             const rank = this.rank(tree);
@@ -838,9 +881,9 @@ export class Progress {
             }
         }
 
-        // The gear's: a weapon's make, in the blows it makes (up close, from afar)
+        // The gear's: a weapon's make and level, in the blows it makes (up close, from afar)
         const weapon = this.gear.mainHand;
-        const made = QUALITIES[weapon?.quality]?.power ?? 1;
+        const made = (QUALITIES[weapon?.quality]?.power ?? 1) * levelFactor(weapon?.level);
         const kinds = new Set((WEAPONS[weapon?.id]?.attacks ?? []).map(({ kind }) => kind));
 
         if (kinds.has("melee")) {
@@ -884,24 +927,28 @@ export class Progress {
         totals.spell = (1 + totals.spell) * (ITEMS[weapon?.id]?.spellTimes ?? 1) - 1;
         totals.armor = Math.min(ARMOR_CAP, totals.armor);
         totals.haggle = Math.min(HAGGLE_CAP, totals.haggle);
+        totals.dodge = Math.min(DODGE_CAP, totals.dodge);
+        totals.haste = Math.min(HASTE_CAP, totals.haste);
+        totals.leech = Math.min(LEECH_CAP, totals.leech);
+        totals.bleed = Math.min(BLEED_CAP, totals.bleed);
 
         return totals;
     }
 
     /**
-     * The charms carried that count (goods.js CHARMS): each kind's best made, the first in the
-     * pack of those as well made ({ id: { id, quality, bonuses } }, `bonuses` what was rolled on
-     * it, if anything).
+     * The charms carried that count (goods.js CHARMS): each kind's strongest (its own good, as
+     * well made and as high its level: charmPower), the first in the pack of those as strong
+     * ({ id: { id, quality, level, bonuses } }, `level` past the first, `bonuses` what was rolled
+     * on it, if anything).
      */
     charms() {
-        const makes = Object.keys(QUALITIES);
         const best = {};
 
         for (const stack of this.pack) {
             const quality = QUALITIES[stack?.quality] ? stack.quality : "common";
 
-            if (stack && ITEMS[stack.id]?.charm && makes.indexOf(quality) > makes.indexOf(best[stack.id]?.quality ?? null)) {
-                best[stack.id] = { id: stack.id, quality, ...(stack.bonuses ? { bonuses: { ...stack.bonuses } } : {}) };
+            if (stack && ITEMS[stack.id]?.charm && (!best[stack.id] || charmPower({ quality, level: stack.level }) > charmPower(best[stack.id]))) {
+                best[stack.id] = { id: stack.id, quality, ...(levelOf(stack.level) > 1 ? { level: levelOf(stack.level) } : {}), ...(stack.bonuses ? { bonuses: { ...stack.bonuses } } : {}) };
             }
         }
 
@@ -911,19 +958,6 @@ export class Progress {
     /** The abilities the trees have brought. */
     abilities() {
         return Object.entries(TREES).flatMap(([tree, { abilities }]) => Object.entries(abilities).filter(([rank]) => this.rank(tree) >= Number(rank)).map(([, ability]) => ability));
-    }
-
-    /**
-     * How mighty they are (0 to 8), for the war to come on with: their best fighting rank (or
-     * their command of others, as good), and their gear.
-     */
-    might() {
-        const casting = ["fire", "earth", "air", "water"].map((school) => Math.floor(((this.tierOf(school) - 1) * 5) / 6));
-        const fighting = Math.max(...Object.entries(TREES).filter(([, { fighting }]) => fighting).map(([tree]) => this.rank(tree)), ...casting);
-        const command = this.rank("command");
-        const gear = SLOT_IDS.reduce((sum, slot) => sum + mightOf(this.gear[slot], slot), 0);
-
-        return Math.min(8, Math.floor(Math.max(fighting, command) + Math.min(GEAR_MIGHT, gear)));
     }
 
     /**
@@ -1003,6 +1037,40 @@ export class Progress {
      */
     held(id, quality = null, boost = null) {
         return this.pack.reduce((sum, stack) => sum + (matches(stack, id, quality, boost) ? stack.count : 0), 0);
+    }
+
+    /** How many of a thing exactly as it is (alike: its make, level, what's rolled on it) are in the pack. */
+    heldAlike(item) {
+        const thing = thingOf(item);
+
+        return this.pack.reduce((sum, stack) => sum + (alike(stack, thing) ? stack.count : 0), 0);
+    }
+
+    /** Take `count` of a thing exactly as it is (alike) out of the pack: true, or false (and nothing taken) if there aren't so many. */
+    removeAlike(item, count) {
+        const thing = thingOf(item);
+
+        if (!isCount(count) || this.heldAlike(thing) < count) {
+            return false;
+        }
+
+        let left = count;
+
+        for (let slot = 0; slot < this.pack.length && left > 0; slot++) {
+            if (alike(this.pack[slot], thing)) {
+                const taken = Math.min(left, this.pack[slot].count);
+
+                this.take(slot, taken);
+                left -= taken;
+            }
+        }
+
+        return true;
+    }
+
+    /** A thing as the pack keeps it (its kind, make, level, what's rolled on it, and the rest: thingOf), for a trade to carry whole. */
+    static thing(item) {
+        return thingOf(item);
     }
 
     /**

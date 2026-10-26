@@ -374,7 +374,7 @@ describe("the restless dead's relics (M7.5c-3: progress.js rollRelic)", () => {
 
             assert.ok(["amulet", "ring"].includes(relic.id) && relic.quality === "legendary", relic.name);
             assert.ok(RELICS[relic.id].includes(what) && RELICS.of.includes(whose), relic.name);
-            assert.ok(relic.name.length <= 40 && Object.keys(relic.bonuses).length === 3, relic.name);
+            assert.ok(relic.name.length <= 40 && Object.keys(relic.bonuses).length >= 3 && Object.keys(relic.bonuses).length <= 5, relic.name);
         }
 
         assert.deepEqual(new Set(relics.map(({ id }) => id)), new Set(["amulet", "ring"]));

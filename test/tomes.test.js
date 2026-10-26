@@ -12,7 +12,7 @@ import { buildWorld } from "../client/js/core/overworld.js";
 import { ITEMS, PACK_SIZE, priceOf, Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { rollTome, SCHOOLS, SPELLS, TOME_RARITY, TOMES, tomeOf } from "../client/js/core/spells.js";
-import { PARTS, rollSpoils, TOME_DROP } from "../client/js/core/spoils.js";
+import { EVALUATE_DROP, PARTS, rollSpoils, TOME_DROP } from "../client/js/core/spoils.js";
 import { GUILD_TOMES, offerContract, REQUESTS } from "../client/js/core/standing.js";
 import { War } from "../client/js/core/war/war.js";
 import { planWorld } from "../client/js/core/worldplan/plan.js";
@@ -30,12 +30,14 @@ function run(host, ms) {
 }
 
 // How often a creature at a tier carries a tome, over many
-function tomesOn(creature, tier, times = 20000) {
+// How many tomes a creature of a tier carries, on average (but the Tome of Evaluate, on any of
+// them: `evaluate`, only those)
+function tomesOn(creature, tier, times = 20000, { evaluate = false } = {}) {
     const random = createRandom(7);
     let found = 0;
 
     for (let k = 0; k < times; k++) {
-        found += rollSpoils(creature, tier, random, CREATURES[creature].tiers[0]).items.filter(({ id }) => ITEMS[id].tome).length;
+        found += rollSpoils(creature, tier, random, CREATURES[creature].tiers[0]).items.filter(({ id }) => ITEMS[id].tome && (id === tomeOf("evaluate")) === evaluate).length;
     }
 
     return found / times;
@@ -102,6 +104,14 @@ describe("spell tomes (spells.js, progress.js, spoils.js, standing.js, host.js)"
         for (const beast of ["wolf", "bear", "dragon", "wyvern", "caveSpider", "treant"]) {
             assert.equal(tomesOn(beast, 9, 3000), 0, beast);
         }
+    });
+
+    it("has a Tome of Evaluate left now and then by any of the wild's, beast or not, of any tier", () => {
+        for (const [creature, tier] of [["rat", 1], ["wolf", 3], ["bandit", 2], ["dragon", 10]]) {
+            assert.ok(Math.abs(tomesOn(creature, tier, 20000, { evaluate: true }) - EVALUATE_DROP) < 0.006, creature);
+        }
+
+        assert.equal(SPELLS.evaluate.tome, "common");
     });
 
     it("teaches a tome's spell at once when it's read, the tome gone; a spell known already, the tome kept", () => {

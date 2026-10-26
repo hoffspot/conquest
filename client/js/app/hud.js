@@ -19,6 +19,9 @@
 import { ICONS, useDefs } from "./icons.js";
 import { unreadLabel } from "./partypanel.js";
 
+// How a fight can look on a plate (core/might.js fightLook)
+const FIGHT_LOOKS = Object.freeze(["easy", "fair", "hard", "deadly"]);
+
 // How far a message is kept from the buttons along the top and the quick actions (pixels); and
 // with no quick actions up, how far from the bottom it can come
 const MESSAGE_GAP = 10;
@@ -402,6 +405,41 @@ export class Hud {
         if (coins) {
             coins.textContent = `${gold} gold`;
         }
+    }
+
+    /**
+     * How a fight with a character looks to the player, on its plate (core/might.js fightLook):
+     * `look` "easy" (greyed: what it leaves less likely exceptional), "fair", "hard" or "deadly"
+     * (none: as it is); and, while Evaluate's on them, its `power` (0 to 100; `pack`, with others of
+     * its pack that came at them), else none.
+     */
+    sizeUp(id, { look = null, power = null, pack = false } = {}) {
+        const plate = this.tracked.get(id);
+
+        if (!plate) {
+            return;
+        }
+
+        for (const each of FIGHT_LOOKS) {
+            plate.classList.toggle(`look-${each}`, each === look);
+        }
+
+        let chip = plate.querySelector(".power");
+
+        if (power === null) {
+            chip?.remove();
+
+            return;
+        }
+
+        if (!chip) {
+            chip = element("span", "power");
+            plate.querySelector(".name").append(chip);
+        }
+
+        chip.textContent = String(power);
+        chip.classList.toggle("pack", pack);
+        chip.title = pack ? "Its power, with those of its pack fighting you" : "Its power";
     }
 
     /** Take away the bar over a character (gone from the world). */

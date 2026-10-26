@@ -51,6 +51,9 @@ export const LASTING = 300000;
 /** How long a ward lasts (ms): an hour (it was five minutes, as LASTING). */
 export const WARDING = 3600000;
 
+/** How long Evaluate lasts (ms): half an hour. */
+export const EVALUATING = 30 * 60000;
+
 /**
  * How long a creature called to a player's side (Summon) or raised from the dead (Zombify) stays
  * with them (ms): an hour (it was five minutes, as LASTING).
@@ -206,6 +209,8 @@ export const SPELLS = Object.freeze({
     polymorph: tome("Polymorph", "rare", { about: "Turns a creature into another of the world's creatures, any at all. The mighty may resist; the unique can't be changed.", target: "enemy", castTime: 900, cooldown: 20000 }),
     attraction: tome("Attraction", "uncommon", { about: "A puff of smoke, and out of it one of the creatures of these parts.", target: "self", castTime: 800, cooldown: 30000 }),
     inertialBarrier: tome("Inertial Barrier", "uncommon", { about: "A barrier against blows and arrows: a quarter less from them, five minutes. No help against spells.", target: "friend", castTime: 700, cooldown: 20000, lasts: LASTING, physical: 0.75 }),
+    // (How strong each foe seen is, over its head: core/might.js powerOf, app/hud.js)
+    evaluate: tome("Evaluate", "common", { about: "Sizes up your foes, half an hour: over each one's head, its power (0 to 100, on the scale of your might), coloured by how a fight with it would go for you.", target: "friend", castTime: 700, cooldown: 15000, lasts: EVALUATING }),
     surge: tome("Surge", "uncommon", { about: "Fighting fury: blows and arrows 30% stronger, but everything hurts you 15% more, two minutes.", target: "self", castTime: 500, cooldown: 60000, lasts: 120000, might: 1.3, exposed: 1.15 }),
     pacify: tome("Pacify", "uncommon", { about: "Calms an enemy: it's no longer hostile to you (till you strike it). The mighty may resist; the unique can't be calmed.", target: "enemy", castTime: 800, cooldown: 15000 }),
     vampirism: tome("Vampirism", "uncommon", { about: "Draws the life out of an enemy into you: the more you use it, the more it draws.", target: "enemy", castTime: 700, cooldown: 6000, grows: true, drain: [[6, 10], [9, 14], [13, 19], [18, 26], [24, 34]] }),

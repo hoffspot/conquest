@@ -8,7 +8,7 @@
 //
 // Pure data and arithmetic, no DOM.
 
-import { rollGear, UNIFORM_PEOPLES } from "./gear.js";
+import { levelFactor, levelOf, rollGear, UNIFORM_PEOPLES } from "./gear.js";
 import { rollCharm } from "./goods.js";
 import { comesInMakes, gradeOf, ITEMS, priceOf, rollBoost, SHOPS } from "./progress.js";
 import { createRandom } from "./random.js";
@@ -45,10 +45,32 @@ function mix(seed, key, day) {
  * a uniform's piece; a wand or a grimoire with its boost; a charm with what's rolled on it
  * (core/goods.js rollCharm); anything else as it is.
  */
-export function madeOf({ id, quality = "common", people = null }, random) {
-    const made = ITEMS[id]?.slot ? rollGear(id, quality, random, { people }) : ITEMS[id]?.charm ? rollCharm(id, quality, random) : { id, quality };
+export function madeOf({ id, quality = "common", people = null }, random, { level = 1 } = {}) {
+    const made = ITEMS[id]?.slot ? rollGear(id, quality, random, { people, level }) : ITEMS[id]?.charm ? rollCharm(id, quality, random, { level }) : { id, quality };
 
-    return ITEMS[id]?.magic ? { ...made, boost: rollBoost(random) } : made;
+    return ITEMS[id]?.magic ? { ...made, boost: rollBoost(random, level) } : made;
+}
+
+/**
+ * A thing made already (a shop's special: dailyStock) brought to a `level` (core/gear.js levelOf):
+ * what was rolled on it as much stronger as the level is than the one it was made at (gear.js
+ * levelFactor), a wand's or grimoire's boost too; gear and charms only, anything else as it is.
+ */
+export function atLevel(item, level = 1) {
+    const def = ITEMS[item?.id];
+    const to = levelOf(level);
+
+    if (!def || (!def.slot && !def.charm)) {
+        return item;
+    }
+
+    const times = levelFactor(to) / levelFactor(item.level);
+    const bonuses = item.bonuses ? Object.fromEntries(Object.entries(item.bonuses).map(([stat, value]) => [stat, Number.isInteger(value) ? Math.round(value * times) : Math.round(value * times * 100) / 100])) : null;
+    const rest = { ...item };
+
+    delete rest.level;
+
+    return { ...rest, ...(to > 1 ? { level: to } : {}), ...(bonuses ? { bonuses } : {}), ...(def.magic && Number.isFinite(item.boost) ? { boost: Math.min(1, Math.round(item.boost * times * 100) / 100) } : {}) };
 }
 
 // What a shop could have in, by the makes (or how rare they are) it weighs: [{ id, quality, weight }]

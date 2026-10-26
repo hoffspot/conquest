@@ -29,11 +29,13 @@ describe("a shop's wares, looked at (gearinfo.js describe, rolledOf)", () => {
             const most = blockMost("kiteShield", quality);
             const { lines } = ware(progress, { id: "kiteShield", quality });
 
-            assert.equal(lines[0].text, `Blocks ${Math.round(most * 50)}–${Math.round(most * 100)}% of a blow caught on it, rolled as it's bought (the more, the rarer)`);
+            // (After its level: the first, a shop's for a fresh hero)
+            assert.equal(lines[0].text, "Level 1");
+            assert.equal(lines[1].text, `Blocks ${Math.round(most * 50)}–${Math.round(most * 100)}% of a blow caught on it, rolled as it's bought (the more, the rarer)`);
         }
     });
 
-    it("says which bonuses a piece comes with as it's bought (as many as its make has, any jewel one at least), and how much each could be, stronger the better made", () => {
+    it("says which bonuses a piece comes with as it's bought (as many as its make has, the fewer the likelier, any jewel one at least), and how much each could be, stronger the better made", () => {
         assert.equal(rolledOf({ id: "sword", quality: "common" }), null);
         assert.equal(rolledOf({ id: "potion" }), null);
 
@@ -41,16 +43,16 @@ describe("a shop's wares, looked at (gearinfo.js describe, rolledOf)", () => {
         const legendary = rolledOf({ id: "sword", quality: "legendary" });
         const ring = rolledOf({ id: "ring", quality: "common" });
 
-        assert.equal(fine.count, ROLLS.fine.count);
-        assert.equal(fine.title, "Comes with one of these bonuses, rolled as it's bought:");
+        assert.equal(fine.count, ROLLS.fine.count[1]);
+        assert.equal(fine.title, "Comes with 1 to 2 of these bonuses (the fewer, the likelier), each different, rolled as it's bought:");
         assert.deepEqual(fine.choices.map(({ name }) => name), affixesFor("sword").map((key) => AFFIXES[key].prefix ?? AFFIXES[key].suffix));
         assert.equal(fine.choices.find(({ name }) => name === "Keen").text, "+4–10% melee damage");
-        assert.equal(legendary.title, "Comes with all 3 of these bonuses, rolled as it's bought, and a name of its own:");
+        assert.equal(legendary.title, "Comes with 3 to 5 of these bonuses (the fewer, the likelier), each different, rolled as it's bought, and a name of its own:");
         assert.equal(legendary.choices.find(({ name }) => name === "Keen").text, "+6–15% melee damage");
         assert.equal(legendary.choices.find(({ name }) => name === "of the Bear").text, "+8–23 hit points");
         assert.equal(ring.count, 1);
         assert.equal(ring.choices.length, affixesFor("ring").length);
-        assert.equal(rolledOf({ id: "kiteShield", quality: "masterwork" }).title, "Comes with 2 of these bonuses, each different, rolled as it's bought:");
+        assert.equal(rolledOf({ id: "kiteShield", quality: "masterwork" }).title, "Comes with 2 to 3 of these bonuses (the fewer, the likelier), each different, rolled as it's bought:");
         assert.equal(rolledOf({ id: "kiteShield", quality: "masterwork" }).choices.find(({ name }) => name === "Sturdy").text, "Armour: takes 1–3% more off each blow");
     });
 

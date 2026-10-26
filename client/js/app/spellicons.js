@@ -779,6 +779,15 @@ export const SPELL_ICONS = Object.freeze({
         <path d="M-4,2 L-4,4 M5,2 L5,4" stroke="#1a1208" stroke-width="1"/>
         <g fill="none" stroke="#cfc8d8" stroke-width="1.4" stroke-linecap="round"><path d="M-17,-10 C-19,-13 -16,-16 -18,-19"/><path d="M16,-12 C18,-15 15,-17 17,-20"/></g>`,
 
+    // An eye in a ring of marks, sizing up: how strong a foe is (Evaluate)
+    evaluate: `
+        <circle r="20" fill="#2a2008" stroke="#ffd060" stroke-width="1.4"/>
+        <g stroke="#ffd060" stroke-width="1.6" stroke-linecap="round">${Array.from({ length: 12 }, (each, k) => `<path d="M0,-19 L0,${k % 3 ? -16 : -13}" transform="rotate(${k * 30})"/>`).join("")}</g>
+        <path d="M-12,0 C-6,-8 6,-8 12,0 C6,8 -6,8 -12,0 Z" fill="#fff4c0" stroke="#6a4a08" stroke-width="1.2"/>
+        <circle r="4.6" fill="#3a8ae0" stroke="#1a2a48" stroke-width="1"/>
+        <circle r="2" fill="#0a0a12"/>
+        <circle cx="1.6" cy="-1.6" r="1" fill="#ffffff"/>`,
+
     // A bubble round someone, a sword glancing off it
     inertialBarrier: `
         <circle r="20" fill="url(#spell-bubble)" stroke="#bfe8ff" stroke-width="1.6"/>

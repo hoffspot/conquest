@@ -3,12 +3,15 @@
 // it does (a weapon's blows, armour, its own bonus and those rolled on it, a draught's use), the
 // set it's part of and how far that set's worn, and, for gear in the pack (or a shop's, or
 // another's), what putting it on would change (better or worse), and what it's worth. A shop's
-// ware has what's rolled on it as it's bought said as what it could be. Pure: from the player's
+// ware has what's rolled on it as it's bought said as what it could be. Each piece's level (core/
+// gear.js levelOf), and a legendary weapon's effect (core/legendary.js). Pure: from the player's
 // progress (core/progress.js), no DOM.
 
-import { AFFIXES, affixesFor, blockMost, disguiseOf, GEAR, GEAR_SLOTS, handsOf, offHandFits, ROLLS, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
+import { AFFIXES, affixesFor, blockMost, bonusCounts, disguiseOf, effectOf, GEAR, GEAR_SLOTS, handsOf, levelFactor, levelOf, offHandFits, ROLLS, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { CHARM_ROLLS, CHARMS, charmOf } from "../core/goods.js";
+import { chargeOf, EFFECTS, effectAt } from "../core/legendary.js";
+import { mightOf } from "../core/might.js";
 import { BOOSTS, ITEMS, priceOf, QUALITIES } from "../core/progress.js";
 import { WEAPONS } from "../core/weapons.js";
 
@@ -28,8 +31,8 @@ function worded(stat, value) {
  * What a piece of gear (core/gear.js) does worn, as well made as it is, in words: its own bonuses
  * (armour as what it takes off a blow) and those rolled on it (`bonuses`): ["+5% spell power"].
  */
-export function gearWords({ id, quality = "common", bonuses = {} }) {
-    const own = Object.entries(statsOf({ id }, QUALITIES[quality]?.power ?? 1)).map(([stat, value]) => (stat === "armor" ? `Armour: takes ${Math.round(value * 100)}% off each blow` : worded(stat, value)));
+export function gearWords({ id, quality = "common", bonuses = {}, level = 1 }) {
+    const own = Object.entries(statsOf({ id, level }, QUALITIES[quality]?.power ?? 1)).map(([stat, value]) => (stat === "armor" ? `Armour: takes ${Math.round(value * 100)}% off each blow` : worded(stat, value)));
 
     return [...own, ...Object.entries(bonuses ?? {}).filter(([stat]) => STATS[stat]).map(([stat, value]) => worded(stat, value))];
 }
@@ -38,10 +41,38 @@ export function gearWords({ id, quality = "common", bonuses = {} }) {
  * What a charm (core/goods.js) does carried, as well made as it is, in words: its own good, then
  * what was rolled on it (`bonuses`): ["−16% air's harm", "+6 stamina"].
  */
-export function charmWords({ id, quality = "common", bonuses = null }) {
+export function charmWords({ id, quality = "common", bonuses = null, level = 1 }) {
     const rolled = Object.entries(bonuses ?? {}).filter(([stat, value]) => CHARM_ROLLS[stat] && Number.isFinite(value));
 
-    return [...Object.entries(charmOf(id, quality)), ...rolled].map(([stat, value]) => worded(stat, value));
+    return [...Object.entries(charmOf(id, quality, level)), ...rolled].map(([stat, value]) => worded(stat, value));
+}
+
+/**
+ * A legendary weapon's effect (core/legendary.js), in words, at its level (`level`) on a weapon
+ * (`weapon`, a WEAPONS key: how many blows fill its charge): "Frostbind: every 7 blows, ...", or
+ * null for none.
+ */
+export function effectWords(effect, level = 1, weapon = null) {
+    const def = EFFECTS[effect];
+
+    if (!def) {
+        return null;
+    }
+
+    const numbers = effectAt(effect, level);
+    const [least, most] = numbers.damage.map((value) => Math.max(1, Math.round(value)));
+    const harm = least === most ? `${least}` : `${least}–${most}`;
+    const blows = weapon ? `every ${chargeOf(weapon)} blows` : "every few blows";
+    const seconds = (ms) => `${Math.round(ms / 100) / 10} s`;
+    const what = {
+        frostbind: `the foe struck frozen solid ${seconds(numbers.freeze)}, then slowed`,
+        cinderburst: `fire bursting ${numbers.radius} m round the foe struck, setting it burning`,
+        earthsunder: `stone spears from the ground ${numbers.radius} m round the foe struck, throwing them down ${seconds(numbers.knockdown)}`,
+        stormlash: `lightning leaping from the foe struck to ${numbers.leaps === 1 ? "one more" : `${numbers.leaps} more`} near it`,
+        ruinblast: `an explosion ${numbers.radius} m round the foe struck, hurling them back`,
+    }[effect];
+
+    return `${def.label}: ${blows}, ${what} (${harm} damage, times your power)`;
 }
 
 // A bonus that could be anywhere from `least` to `most`, as shown: "+5–13% melee damage" (what's
@@ -73,7 +104,7 @@ export function kindOf(id) {
     return def.slot === "ring" ? "Ring" : (GEAR_SLOTS.find(({ takes }) => takes === def.slot)?.label ?? def.slot);
 }
 
-// A weapon's blows, in words: damage (as well made as it is) and reach
+// A weapon's blows, in words: damage (as well made and as high a level as it is) and reach
 function blowsOf(id, power) {
     return (WEAPONS[id]?.attacks ?? []).map(({ damage: [least, most], reach, kind }) => `${kind === "ranged" ? `Shoots from ${reach} m` : "Up close"}: ${Math.round(least * power)}–${Math.round(most * power)} damage`);
 }
@@ -94,11 +125,12 @@ export function describe(item, progress, { index = null, label = item.id, haggle
     // (A charm, core/goods.js: what it's for; what it does carried, as well made as it is, and
     // what was rolled on it; or, a shop's, what could be as it's bought)
     if (!def && ITEMS[item.id]?.charm) {
-        const own = Object.keys(charmOf(item.id, quality)).length;
+        const own = Object.keys(charmOf(item.id, quality, item.level)).length;
 
+        lines.push({ text: `Level ${levelOf(item.level)}`, tone: "note" });
         lines.push({ text: ITEMS[item.id].about.replace(/\.$/, ""), tone: "note" });
         charmWords(item).forEach((text, k) => lines.push({ text, tone: k < own ? "base" : "bonus" }));
-        lines.push({ text: "Carried in the pack: of each kind, the best made counts (of two as well made, the first)", tone: "note" });
+        lines.push({ text: "Carried in the pack: of each kind, the strongest counts (its make and level; of two as strong, the first)", tone: "note" });
 
         return { label, rarity: quality, kind: "Charm", lines, rolls: ware ? charmRolledOf(item) : null, compare: [], price: priceOf(item, { haggle, selling: true }) };
     }
@@ -109,10 +141,22 @@ export function describe(item, progress, { index = null, label = item.id, haggle
 
     const power = QUALITIES[quality]?.power ?? 1;
 
+    // Its level (the might it was found or made for: core/might.js)
+    lines.push({ text: `Level ${levelOf(item.level)}`, tone: "note" });
+
     // What it does
     if (def.slot === "mainHand") {
-        for (const text of blowsOf(item.id, power)) {
+        for (const text of blowsOf(item.id, power * levelFactor(item.level))) {
             lines.push({ text, tone: "base" });
+        }
+
+        // (A legendary weapon's effect, rolled on it as it's made: a ware's, one of them)
+        const effect = effectOf(item);
+
+        if (effect && !ware) {
+            lines.push({ text: effectWords(effect, item.level, item.id), tone: "effect" });
+        } else if (ware && quality === "legendary") {
+            lines.push({ text: `An effect of its own, one of ${Object.values(EFFECTS).map(({ label }) => label).join(", ")}: rolled as it's bought`, tone: "effect" });
         }
     }
 
@@ -130,8 +174,9 @@ export function describe(item, progress, { index = null, label = item.id, haggle
     // spellward's spells)
     if (def.robust && ware) {
         const most = blockMost(item.id, quality);
+        const least = 0.5 + (0.25 * (levelOf(item.level) - 1)) / 99;
 
-        lines.push({ text: `Blocks ${Math.round(most * 50)}–${Math.round(most * 100)}% of a blow caught on it, rolled as it's bought (the more, the rarer)`, tone: "base" });
+        lines.push({ text: `Blocks ${Math.round(most * least * 100)}–${Math.round(most * 100)}% of a blow caught on it, rolled as it's bought (the more, the rarer)`, tone: "base" });
     } else if (def.robust) {
         lines.push({ text: `Blocks ${Math.round((item.boost ?? 0) * 100)}% of a blow caught on it (up to ${Math.round(blockMost(item.id, quality) * 100)}% for its make)`, tone: "base" });
 
@@ -144,7 +189,7 @@ export function describe(item, progress, { index = null, label = item.id, haggle
         lines.push({ text: "Kicks as well as fighting with what's in hand", tone: "base" });
     }
 
-    const own = statsOf({ id: item.id }, power);
+    const own = statsOf({ id: item.id, level: item.level }, power);
 
     for (const [stat, value] of Object.entries(own)) {
         lines.push({ text: stat === "armor" ? `Armour: takes ${Math.round(value * 100)}% off each blow` : worded(stat, value), tone: "base" });
@@ -196,25 +241,28 @@ function boostsWorded() {
  * for nothing: { count (how many bonuses, each a different one), title (that, in words), choices:
  * [{ name (the word it puts in the piece's name), text (how much it could add) }] }.
  */
-export function rolledOf({ id, quality = "common" }) {
+export function rolledOf({ id, quality = "common", level = 1 }) {
     const def = GEAR[id];
-    const { count: made, strength } = ROLLS[quality] ?? ROLLS.common;
+    const { strength } = ROLLS[quality] ?? ROLLS.common;
     const choices = affixesFor(id);
-    const count = Math.min(Math.max(made, def?.jewel ? 1 : 0), choices.length);
+    const counts = bonusCounts(quality, level).map(({ count }) => Math.min(Math.max(count, def?.jewel ? 1 : 0), choices.length));
+    const [fewest, most] = [Math.min(...counts), Math.max(...counts)];
+    const scaled = strength * levelFactor(level);
 
-    if (!def || !count) {
+    if (!def || !most) {
         return null;
     }
 
-    const which = count === choices.length ? (count === 1 ? "this bonus" : `all ${count} of these bonuses`) : count === 1 ? "one of these bonuses" : `${count} of these bonuses, each different`;
+    const many = fewest === most ? (most === 1 ? "one" : `${most}`) : `${fewest} to ${most}`;
+    const which = most === 1 ? `${many} of these bonuses` : `${many} of these bonuses${fewest === most ? "" : " (the fewer, the likelier)"}, each different`;
 
     return {
-        count,
+        count: most,
         title: `Comes with ${which}, rolled as it's bought${quality === "legendary" ? ", and a name of its own" : ""}:`,
         choices: choices.map((key) => {
-            const { prefix, suffix, stat, range: [least, most] } = AFFIXES[key];
+            const { prefix, suffix, stat, range: [least, top] } = AFFIXES[key];
 
-            return { name: prefix ?? suffix, text: spanned(stat, least * strength, most * strength) };
+            return { name: prefix ?? suffix, text: spanned(stat, least * scaled, top * scaled) };
         }),
     };
 }
@@ -224,16 +272,19 @@ export function rolledOf({ id, quality = "common" }) {
  * null for nothing: as rolledOf has it, the goods that suit it named "Likely", and any other
  * charm's good "Now and then".
  */
-export function charmRolledOf({ id, quality = "common" }) {
-    const { count, strength } = ROLLS[quality] ?? ROLLS.common;
+export function charmRolledOf({ id, quality = "common", level = 1 }) {
+    const { strength } = ROLLS[quality] ?? ROLLS.common;
+    const counts = bonusCounts(quality, level).map(({ count }) => count);
+    const [fewest, count] = [Math.min(...counts), Math.max(...counts)];
     const def = CHARMS[id];
+    const scaled = strength * levelFactor(level);
 
     if (!def || !count) {
         return null;
     }
 
-    const span = (stat) => spanned(stat, CHARM_ROLLS[stat][0] * strength, CHARM_ROLLS[stat][1] * strength);
-    const which = count === 1 ? "one more good" : `${count} more goods, each different`;
+    const span = (stat) => spanned(stat, CHARM_ROLLS[stat][0] * scaled, CHARM_ROLLS[stat][1] * scaled);
+    const which = fewest === count ? (count === 1 ? "one more good" : `${count} more goods, each different`) : `${fewest} to ${count} more goods, each different (the fewer, the likelier)`;
 
     return {
         count,
@@ -298,7 +349,7 @@ export const REASONS = Object.freeze({
  * The totals of everything worn and grown into, as the pack shows them beside the paperdoll:
  * [{ label, value }], and the sets worn ([{ name, people, count, of, next }]) and who they pass for.
  */
-export function totals(progress, { hp = 50, stamina = 50 } = {}) {
+export function totals(progress, { hp = 50, stamina = 50, might = mightOf(progress) } = {}) {
     const bonus = progress.bonuses();
     const shield = progress.guard(bonus);
     const pct = (value) => `${Math.round(value * 100)}%`;
@@ -313,9 +364,12 @@ export function totals(progress, { hp = 50, stamina = 50 } = {}) {
         { label: "Spells", value: `+${pct(bonus.spell)}` },
         { label: "Healing", value: `+${pct(bonus.heal)}` },
         { label: "Stuns", value: `+${pct(bonus.stun)}` },
+        { label: "Blow speed", value: `+${pct(bonus.haste)}` },
+        { label: "Life from blows", value: pct(bonus.leech) },
+        { label: "Bleeding blows", value: `${pct(bonus.bleed)} of blows` },
         { label: "Haggling", value: pct(bonus.haggle) },
         { label: "Persuasion", value: pct(bonus.persuade) },
-        { label: "Might", value: String(progress.might()) },
+        { label: "Might", value: `${might} of 100`, about: "How mighty you are: your gear, skills, spells and charms (not your followers, nor anything that passes). What you find is made for it." },
     ];
     const sets = Object.entries(setCounts(progress.gear)).map(([people, count]) => {
         const next = Object.keys(SETS[people].bonus).map(Number).find((at) => at > count) ?? null;

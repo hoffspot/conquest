@@ -9,7 +9,7 @@
 //
 // Pure, no DOM.
 
-import { ROLLS } from "./gear.js";
+import { bonusCount, levelFactor, levelOf, ROLLS } from "./gear.js";
 import { SCHOOLS, SPELLS } from "./spells.js";
 
 // A boon in a bottle (host.js #use: on the drinker a while, one of each at a time)
@@ -84,6 +84,9 @@ export const CHARMS = Object.freeze({
 /** How much stronger a charm is for each make (progress.js QUALITIES), than a common one. */
 export const CHARM_GRADE = Object.freeze({ common: 1, fine: 1.25, masterwork: 1.5, rare: 1.75, veryRare: 2, legendary: 2.5 });
 
+/** How strong a charm's own good is, for its make and its level (gear.js levelFactor): the strongest of a kind carried is the one that counts. */
+export const charmPower = ({ quality = "common", level = 1 }) => (CHARM_GRADE[quality] ?? 1) * levelFactor(level);
+
 /**
  * The goods that can be rolled on a charm besides its own (rollCharm), each as much as [least,
  * most] on a fine one, more on a better made one (gear.js ROLLS `strength`): from half of what a
@@ -110,26 +113,29 @@ export const CHARM_ROLLS = Object.freeze({
 export const CHARM_KIN = 0.75;
 
 /**
- * A charm's good (its CHARMS `charm`, as strong as its make: CHARM_GRADE): { stat: value }, each
- * share to a whole percent's tenth, each number whole.
+ * A charm's good (its CHARMS `charm`, as strong as its make and level: charmPower): { stat: value },
+ * each share to a whole percent's tenth, each number whole.
  */
-export function charmOf(id, quality = "common") {
-    const grade = CHARM_GRADE[quality] ?? 1;
+export function charmOf(id, quality = "common", level = 1) {
+    const grade = charmPower({ quality, level });
 
     return Object.fromEntries(Object.entries(CHARMS[id]?.charm ?? {}).map(([stat, value]) => [stat, Number.isInteger(value) ? Math.round(value * grade) : Math.round(value * grade * 1000) / 1000]));
 }
 
 /**
- * A charm as it's made (random.js random): { id, quality, bonuses ({ stat: value }) }. A fine one
- * or better has as many goods rolled on it besides its own as a piece of gear of its make has
- * (gear.js ROLLS: one, two, three), each a different one, and stronger the better made: most
- * likely one that suits it (its `kin`, CHARM_KIN of the time), else any (CHARM_ROLLS). Each share
- * to a whole percent, each number whole.
+ * A charm as it's made (random.js random), of a `level` (gear.js levelOf): { id, quality, level
+ * (past the first), bonuses ({ stat: value }) }. A fine one or better has as many goods rolled on
+ * it besides its own as a piece of gear of its make and level has (gear.js bonusCount), each a
+ * different one, and stronger the better made and the higher its level: most likely one that
+ * suits it (its `kin`, CHARM_KIN of the time), else any (CHARM_ROLLS). Each share to a whole
+ * percent, each number whole.
  */
-export function rollCharm(id, quality = "common", random) {
+export function rollCharm(id, quality = "common", random, { level = 1 } = {}) {
     const def = CHARMS[id];
-    const item = { id, quality };
-    const { count, strength } = ROLLS[quality] ?? ROLLS.common;
+    const at = levelOf(level);
+    const item = { id, quality, ...(at > 1 ? { level: at } : {}) };
+    const { strength } = ROLLS[quality] ?? ROLLS.common;
+    const count = def ? bonusCount(quality, at, random) : 0;
 
     if (!def || !count) {
         return item;
@@ -143,7 +149,7 @@ export function rollCharm(id, quality = "common", random) {
         const from = random.next() < CHARM_KIN && kin.length ? kin : open;
         const stat = from[Math.floor(random.next() * from.length) % from.length];
         const [least, most] = CHARM_ROLLS[stat];
-        const value = (least + random.next() * (most - least)) * strength;
+        const value = (least + random.next() * (most - least)) * strength * levelFactor(at);
 
         bonuses[stat] = Number.isInteger(least) ? Math.round(value) : Math.max(0.01, Math.round(value * 100) / 100);
     }
@@ -155,8 +161,8 @@ export function rollCharm(id, quality = "common", random) {
  * All a charm does carried (`bonuses`: what was rolled on it, rollCharm): its own good, as strong
  * as its make (charmOf), and what was rolled on it. { stat: value }.
  */
-export function charmStats({ id, quality = "common", bonuses = null }) {
-    const stats = charmOf(id, quality);
+export function charmStats({ id, quality = "common", level = 1, bonuses = null }) {
+    const stats = charmOf(id, quality, level);
 
     for (const [stat, value] of Object.entries(bonuses ?? {})) {
         if (CHARM_ROLLS[stat] && Number.isFinite(value)) {
