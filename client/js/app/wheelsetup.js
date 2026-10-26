@@ -1,8 +1,9 @@
-// The Action wheels options (Game options, Action wheels): what's on the player's action wheels
-// (app/wheel.js), their own and a foe's, each with its two sides, drawn as the wheel is. A slice
-// tapped (or chosen with the keyboard) lists what can go in it: the healing, stuns and blows
-// they've learnt, and the things to use they carry. The one chosen goes in (or it's emptied).
-// Tapping S shows the wheel's other side, as flicking it does in play.
+// The Action wheels options (Game options, Action Wheel and Bar, Action wheels): what's on the
+// player's action wheels (app/wheel.js), their own, a foe's and their followers', each with its
+// two sides, drawn as the wheel is. A slice tapped (or chosen with the keyboard) lists what can go
+// in it: the healing, stuns and blows they've learnt, the things to use they carry, and on their
+// followers' what to tell them (their own ability among it). The one chosen goes in (or it's
+// emptied). Tapping S shows the wheel's other side, as flicking it does in play.
 //
 // It only shows and asks: the game keeps what's chosen (game.js setWheels).
 
@@ -10,7 +11,7 @@ import { useDefs } from "./icons.js";
 import { actionOf, drawWheel, FLIP, iconOf, SETTABLE, SIDES } from "./wheel.js";
 
 /** Each wheel's name, and each side's. */
-const WHOSE = { self: "Yourself", enemy: "A foe" };
+const WHOSE = { self: "Yourself", enemy: "A foe", unit: "Your followers" };
 const SIDE_NAMES = ["Wheel one", "Wheel two"];
 
 /** Each direction's name, as a compass has it. */
@@ -39,7 +40,7 @@ export class WheelSetup {
         this.side = 0;
         this.place = "n";
         this.wheels = null;
-        this.choices = { self: [], enemy: [] };
+        this.choices = { self: [], enemy: [], unit: [] };
         this.counts = {};
 
         /** Hears the wheels whenever something's put on (or taken off) one. */
@@ -77,8 +78,8 @@ export class WheelSetup {
 
     /**
      * Show (or show again) the wheels, what can be put on each, and how many of each thing to use
-     * there are: { wheels: { self, enemy: [side, side] }, choices: { self: [key], enemy: [key] },
-     * counts: { item: count } } (game.js wheelSetup).
+     * there are: { wheels: { self, enemy, unit: [side, side] }, choices: { self, enemy, unit:
+     * [key] }, counts: { item: count } } (game.js wheelSetup).
      */
     show({ wheels, choices, counts = {} }) {
         this.wheels = structuredClone(wheels);
@@ -151,7 +152,7 @@ export class WheelSetup {
         this.heading.textContent = `${WHOSE[this.wheel]}, ${SIDE_NAMES[this.side].toLowerCase()}, ${COMPASS[this.place]}`;
         this.list.replaceChildren(
             ...keys.map((key) => {
-                const label = key ? actionOf(key).label : "Nothing";
+                const label = key ? (actionOf(key).listed ?? actionOf(key).label) : "Nothing";
                 const choice = button("wheels-choice", "", () => this.#put(key));
 
                 choice.setAttribute("role", "option");

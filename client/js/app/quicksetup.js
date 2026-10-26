@@ -1,5 +1,5 @@
-// The Quick actions options (Game options, Quick actions; or a quick action held on in a fight):
-// the quick actions (app/quickbar.js), four or six as they're shown, drawn as they rise in a
+// The Action Bar options (Game options, Action Wheel and Bar, Action Bar; or one of its actions
+// held on in a fight): the Action Bar (app/quickbar.js), four or six as they're shown, drawn as they rise in a
 // fight. A slot tapped (or
 // chosen with the keyboard) lists what can go in it: the spells, blows and things to use that can
 // go on either action wheel, each saying who it's used on. The one chosen goes in (or it's
@@ -14,7 +14,7 @@ import { actionOf, iconOf, offensive, QUICK, QUICK_SHOWN } from "./wheel.js";
 const element = (tag, className, text = "") => Object.assign(document.createElement(tag), { className, textContent: text });
 
 export class QuickSetup {
-    /** @param {HTMLElement} root - Where to draw it (the menu's Quick actions page). */
+    /** @param {HTMLElement} root - Where to draw it (the menu's Action Bar page). */
     constructor(root) {
         this.root = root;
         this.slot = 0;
@@ -22,12 +22,12 @@ export class QuickSetup {
         this.choices = [];
         this.counts = {};
 
-        /** Hears the quick actions whenever something's put in (or taken out of) one. */
+        /** Hears the Action Bar whenever something's put in (or taken out of) one of its slots. */
         this.onChange = () => {};
 
         this.row = element("div", "quick-row");
         this.row.setAttribute("role", "tablist");
-        this.row.setAttribute("aria-label", "Which quick action");
+        this.row.setAttribute("aria-label", "Which slot of the Action Bar");
         this.slots = QUICK.map((_, index) => {
             const slot = quickSlot(index);
 
@@ -45,7 +45,7 @@ export class QuickSetup {
     }
 
     /**
-     * Show (or show again) the quick actions, what can be put in them, and how many of each thing
+     * Show (or show again) the Action Bar, what can be put in its slots, and how many of each thing
      * to use there are: { quick: [key], choices: [key], counts: { item: count } } (game.js
      * quickSetup), with the `slot`th chosen.
      */
@@ -56,7 +56,7 @@ export class QuickSetup {
         this.#pick(slot);
     }
 
-    /** Show four of them or six (`count`: QUICK_SHOWN), as the quick actions are. */
+    /** Show four of them or six (`count`: QUICK_SHOWN), as the Action Bar is. */
     showCount(count) {
         this.shown = count === QUICK_SHOWN.six ? QUICK_SHOWN.six : QUICK_SHOWN.four;
         this.row.classList.toggle("six", this.shown === QUICK_SHOWN.six);
@@ -93,7 +93,7 @@ export class QuickSetup {
         const now = this.quick[this.slot] ?? null;
         const keys = [null, ...this.choices];
 
-        this.heading.textContent = `Quick action ${this.slot + 1}`;
+        this.heading.textContent = `Action Bar slot ${this.slot + 1}`;
         this.list.replaceChildren(
             ...keys.map((key) => {
                 const choice = element("button", "wheels-choice");

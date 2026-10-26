@@ -1,4 +1,4 @@
-// A quick action's press (client/js/app/press.js): tapped, held or flicked, and never left waiting
+// An Action Bar press (client/js/app/press.js): tapped, held or flicked, and never left waiting
 // on a lift that doesn't come, as a phone's Safari can lose one. A press begun over one lost takes
 // over (used once); a cancel, or the pointer no longer kept to the slot, ends it; held or flicked,
 // it's over, nothing on the lift; a tap that fails leaves the next working; let go of, nothing; once
@@ -56,7 +56,7 @@ function pressed({ live = () => true } = {}) {
 
 const at = (pointer, x = 100, y = 700, more = {}) => ({ pointer, x, y, kind: "touch", ...more });
 
-describe("a quick action's press", () => {
+describe("an Action Bar press", () => {
     it("tapped, it's used as it's lifted; held, changed; a mouse's other buttons aren't heard", () => {
         const { press, said, pass } = pressed();
 

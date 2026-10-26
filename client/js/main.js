@@ -1263,14 +1263,15 @@ function pauseAll() {
     $("#resumebutton").focus();
 }
 
-// The menu's pages: the main one; Game options, and a page for each group of them; and under
-// those, Auto-snag (Gameplay), Blocked players (Chat and players), Action wheels and Quick
-// actions (Controls), and the Debug log. Each
+// The menu's pages: the main one; Game options, and a page for each group of them (Action Wheel
+// and Bar the first); and under those, Action wheels and the Action Bar (Action Wheel and Bar),
+// Auto-snag (Gameplay), Blocked players (Chat and players), and the Debug log. Each
 // with its title, what's focused on it, the page Back goes to (`up`), and the button there that
 // opened it (`from`), focused again on the way back
 const MENU_PAGES = {
     main: { page: "#menumain", title: "menutitle", focus: "#resumebutton", up: null },
-    options: { page: "#menuoptions", title: "optionstitle", focus: "#graphicsbutton", up: "main", from: "#optionsbutton" },
+    options: { page: "#menuoptions", title: "optionstitle", focus: "#actionsbutton", up: "main", from: "#optionsbutton" },
+    actions: { page: "#menuactions", title: "actionstitle", focus: "#wheelsbutton", up: "options", from: "#actionsbutton" },
     graphics: { page: "#menugraphics", title: "graphicstitle", focus: "#qualityslider", up: "options", from: "#graphicsbutton" },
     sound: { page: "#menusound", title: "soundtitle", focus: "#soundswitch", up: "options", from: "#soundbutton" },
     controls: { page: "#menucontrols", title: "controlstitle", focus: "#stickswitch", up: "options", from: "#controlsbutton" },
@@ -1279,8 +1280,8 @@ const MENU_PAGES = {
     snag: { page: "#menusnag", title: "snagtitle", focus: "#snaggrades input", up: "gameplay", from: "#snagbutton" },
     chat: { page: "#menuchat", title: "chattitle", focus: "#chatfeedswitch", up: "options", from: "#chatbutton" },
     blocked: { page: "#menublocked", title: "blockedtitle", focus: "#blockedback", up: "chat", from: "#blockedbutton" },
-    wheels: { page: "#menuwheels", title: "wheelstitle", focus: "#wheelsback", up: "controls", from: "#wheelsbutton" },
-    quick: { page: "#menuquick", title: "quicktitle", focus: "#quickback", up: "controls", from: "#quickbutton" },
+    wheels: { page: "#menuwheels", title: "wheelstitle", focus: "#wheelsback", up: "actions", from: "#wheelsbutton" },
+    quick: { page: "#menuquick", title: "quicktitle", focus: "#quickback", up: "actions", from: "#quickbutton" },
     log: { page: "#menulog", title: "logtitle", focus: "#logback", up: "options", from: "#logbutton" },
 };
 
@@ -1306,8 +1307,8 @@ function menuPage(page, focus = MENU_PAGES[page].focus) {
 }
 
 // Back a page (the arrow in a page's heading, the Back at its foot, or Escape): to the page above
-// it, the button that opened this one focused again. From the main page, or the Quick actions
-// opened from a fight, back to the game
+// it, the button that opened this one focused again. From the main page, or the Action Bar
+// options opened from a fight, back to the game
 function menuBack() {
     const { up, from } = MENU_PAGES[menuShown];
 
@@ -1466,9 +1467,9 @@ async function openWheels() {
     menuPage("wheels");
 }
 
-// What's in the player's quick actions, to change (app/quicksetup.js: loaded the first time), with
-// the `slot`th chosen. Opened from Game options (Controls), Back goes back there; from a quick
-// action held on in a fight (`fromFight`), back to the game.
+// What's on the player's Action Bar, to change (app/quicksetup.js: loaded the first time), with
+// the `slot`th chosen. Opened from Game options (Action Wheel and Bar), Back goes back there; from
+// one of its actions held on in a fight (`fromFight`), back to the game.
 async function openQuick(slot = 0, { fromFight = false } = {}) {
     const game = state.game;
 
@@ -1484,19 +1485,19 @@ async function openQuick(slot = 0, { fromFight = false } = {}) {
 
     state.quickFromFight = fromFight;
     $("#quickback").textContent = fromFight ? "Back to the game" : "Back";
-    $("#menuquick .menu-back").setAttribute("aria-label", fromFight ? "Back to the game" : "Back to Controls");
+    $("#menuquick .menu-back").setAttribute("aria-label", fromFight ? "Back to the game" : "Back to Action Wheel and Bar");
     state.quickSetup.onChange = (quick) => state.game?.setQuick(quick);
     state.quickSetup.showCount(quickShown());
     state.quickSetup.show(game.quickSetup(), slot);
     menuPage("quick");
 }
 
-// How many quick actions are shown: four (with their names), or six across (Game options, Quick actions)
+// How many of the Action Bar's actions are shown: four (with their names), or six across (Game options, Action Bar)
 function quickShown() {
     return settings.quickSix ? 6 : 4;
 }
 
-// A quick action held on in a fight (or an empty one tapped): paused, its slot chosen to change
+// One of the Action Bar's actions held on in a fight (or an empty slot tapped): paused, its slot chosen to change
 function chooseQuick(slot) {
     pause();
 
@@ -2715,7 +2716,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
         // (What they carry and grow into theirs, kept on this device as it changes, the one that's
         // brought next time: what the world knows of them is its own, kept there)
         onProgress: keep((progress) => saveProgress(save, progress)),
-        // (Their wheels and quick actions, their messages and what they've been told once: a
+        // (Their wheels and Action Bar, their messages and what they've been told once: a
         // character of this device's, kept on it as they're changed; a hero the world keeps, by
         // the world, with them, and as this device had them only if the world has none yet:
         // app/session.js createJoinedGame)

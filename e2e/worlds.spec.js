@@ -173,7 +173,7 @@ test("a world made on a server and shared by an invite link: both play in it, le
     await expect.poll(() => owner.evaluate(() => window.pellagos.game.others().map(({ name }) => name)), { timeout: 60000 }).toEqual(["Syl"]);
     await expect.poll(() => lifeOf(world).state?.running, { timeout: 60000 }).toBe(true);
 
-    // (The guest sets their quick actions, puts a marker on the map, turns auto-snag on and the
+    // (The guest sets their Action Bar, puts a marker on the map, turns auto-snag on and the
     // battle cam off: their own, kept with their hero by the world, core/host.js OWN)
     const quick = ["stun", "burn", null, null, null, null];
     const flip = (page, switches) =>
@@ -226,7 +226,7 @@ test("a world made on a server and shared by an invite link: both play in it, le
     await playing(guest);
     expect(await guest.evaluate(() => window.pellagos.game.me)).toBe(guestId);
 
-    // (Their quick actions, marker and settings as they left them: the settings this device's again)
+    // (Their Action Bar, marker and settings as they left them: the settings this device's again)
     expect(await guest.evaluate(() => window.pellagos.game.wheels.quick)).toEqual(quick);
     expect(await guest.evaluate(() => [window.pellagos.game.autoSnag, window.pellagos.game.cameraSettings.battle])).toEqual([true, false]);
     await expect(guest.locator("#snagswitch")).toBeChecked();

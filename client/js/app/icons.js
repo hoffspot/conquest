@@ -497,9 +497,11 @@ export const ICONS = Object.freeze({
         <path d="M-12,14 C-12,-2 -4,-10 8,-10" fill="none" stroke="#f2e6cf" stroke-width="3.4" stroke-linecap="round"/>
         <path d="M5,-17 L15,-10 L5,-3 Z" fill="#f2e6cf"/>`,
 
-    // What one of the player's party is told (core/host.js #orderUnit): go for whoever the player's
+    // What one of the player's own is told (core/host.js #orderUnit): go for whoever the player's
     // set on, a sword pointed at a red target mark; follow, footsteps after an arrow; wait here, a
-    // raised hand; go, an arrow out of the circle
+    // raised hand; guard them, a kite shield over a figure; fall back, an arrow turning back to a
+    // figure; hold fire, a sword sheathed downwards under a bar; fight at will, a sword raised in a
+    // green glow; their own ability, a gold star burst; go, an arrow out of the circle
     "unit:assist": `
         <circle r="20" fill="#7a1a14" opacity="0.45"/>
         <g fill="none" stroke="#ff5a3c" stroke-width="2.4">
@@ -517,6 +519,29 @@ export const ICONS = Object.freeze({
     "unit:wait": `
         <circle r="20" fill="#1c3a5a" opacity="0.5"/>
         <g transform="translate(0 2) scale(0.92)">${OPEN_HAND}</g>`,
+    "unit:guard": `
+        <circle r="20" fill="#1c3a5a" opacity="0.5"/>
+        <path d="M0,-17 L13,-12 L13,-1 C13,8 7,14 0,18 C-7,14 -13,8 -13,-1 L-13,-12 Z" fill="#8d949b" stroke="#2f363d" stroke-width="1.6"/>
+        <path d="M0,-13 L9,-9.5 L9,-1 C9,6 5,10.5 0,13.5 C-5,10.5 -9,6 -9,-1 L-9,-9.5 Z" fill="#2d5a8a"/>
+        <circle cy="-3" r="3.2" fill="#f2e6cf"/>
+        <path d="M-5,9 C-5,3 5,3 5,9 Z" fill="#f2e6cf"/>`,
+    "unit:fallback": `
+        <circle r="20" fill="#1f5a2c" opacity="0.45"/>
+        <path d="M14,-12 C-2,-14 -10,-8 -10,4" fill="none" stroke="#f2e6cf" stroke-width="2.6" stroke-linecap="round"/>
+        <path d="M-16,1 L-10,11 L-4,1 Z" fill="#f2e6cf"/>
+        <circle cx="10" cy="5" r="3.2" fill="#f2e6cf"/>
+        <path d="M5,17 C5,10 15,10 15,17 Z" fill="#f2e6cf"/>`,
+    "unit:stance": `
+        <circle r="20" fill="#3a3530" opacity="0.5"/>
+        <g transform="translate(0 3) rotate(180) scale(0.82)">${SWORD}</g>
+        <path d="M-15,-9 h30" stroke="#ff5a3c" stroke-width="3.2" stroke-linecap="round"/>`,
+    "unit:free": `
+        <circle r="20" fill="#1f5a2c" opacity="0.55"/>
+        <g transform="scale(0.86)">${SWORD}</g>
+        <path d="M-15,12 l5,-4 M15,12 l-5,-4 M-17,-2 h6 M17,-2 h-6" stroke="#9cf2a8" stroke-width="2" stroke-linecap="round"/>`,
+    "unit:ability": `
+        <path d="${star(0, 0, 20, 8, 8)}" fill="#ffcc4d" stroke="#a86b00" stroke-width="1.2"/>
+        <path d="${star(0, 0, 10, 4, 8, Math.PI / 8)}" fill="#fff3c4"/>`,
     "unit:dismiss": `
         <circle r="20" fill="#3a3530" opacity="0.5"/>
         <path d="M2,-13 A13,13 0 1 0 2,13" fill="none" stroke="#f2e6cf" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="4 3"/>

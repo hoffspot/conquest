@@ -2943,7 +2943,7 @@ test("Auto target lock (Game options, on to start with): an enemy tapped stays t
     expect(far.lock).toBe(null);
 });
 
-test("the player's party: a creature called to their side has an icon down the left under the Party button, a likeness in a violet frame with its health and time; tapped, chosen to help (ringed green, the quick action's Vigor cast on it); held and flicked W, told to wait; held and flicked SW, Dismiss asks first, and it's kept; the party menu (P) lists it, Follow sets it following, and Dismiss, asked first, sends it off", async ({ page }) => {
+test("the player's party: a creature called to their side has an icon down the left under the Party button, a likeness in a violet frame with its health and time; tapped, chosen to help (ringed green, the Action Bar's Vigor cast on it); held and flicked W, told to wait; held and flicked SW, Dismiss asks first, and it's kept; the party menu (P) lists it, Follow sets it following, and Dismiss, asked first, sends it off", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     // Summon learnt and cast where the player stands
@@ -2996,7 +2996,7 @@ test("the player's party: a creature called to their side has an icon down the l
     expect(icon.rect.top).toBeGreaterThanOrEqual(icon.button.bottom);
     expect(icon.rect.left).toBeLessThan(40);
 
-    // Tapped: chosen to help, ringed green; Vigor from the quick actions cast on it, not the player
+    // Tapped: chosen to help, ringed green; Vigor from the Action Bar cast on it, not the player
     const member = page.locator(`#party .member[data-id="${icon.id}"]`);
 
     await member.click();
@@ -3054,7 +3054,7 @@ test("the player's party: a creature called to their side has an icon down the l
     }, icon.id);
 
     expect(opened.open).toBe(true);
-    expect(opened.slots).toEqual({ n: "unit:assist", e: "unit:follow", w: "unit:wait", sw: "unit:dismiss" });
+    expect(opened.slots).toEqual({ n: "unit:assist", ne: "unit:ability", e: "unit:follow", w: "unit:wait", nw: "unit:guard", se: "unit:fallback", sw: "unit:dismiss" });
     expect(waiting).toEqual({ waiting: true, marked: true });
 
     // Held again and Dismiss chosen on its wheel: asked first (it's for good); kept
@@ -13178,13 +13178,14 @@ test("Game options: its groups at the top, each a page of its own, short enough 
     // The groups first, then the Debug log, then Back: nothing else on the page
     const options = page.locator("#menuoptions");
 
-    await expect(options.locator(".options > button .text")).toHaveText([/^Graphics/, /^Sound/, /^Controls/, /^Camera/, /^Gameplay/, /^Chat and players/, /^Debug log/]);
+    await expect(options.locator(".options > button .text")).toHaveText([/^Action Wheel and Bar/, /^Graphics/, /^Sound/, /^Controls/, /^Camera/, /^Gameplay/, /^Chat and players/, /^Debug log/]);
     await expect(options.locator("input")).toHaveCount(0);
 
     const groups = {
+        actions: ["#wheelsbutton", "#quickbutton"],
         graphics: ["#qualityslider", "#adaptiveswitch", "#fullscreenswitch", "#shakeswitch", "#pointerswitch", "#largepointerswitch"],
         sound: ["#soundswitch", "#effectsvolume", "#environmentvolume", "#musicvolume"],
-        controls: ["#stickswitch", "#floatswitch", "#zoomswitch", "#minimapswitch", "#wheelsbutton", "#quickbutton"],
+        controls: ["#stickswitch", "#floatswitch", "#zoomswitch", "#minimapswitch"],
         camera: ["#followswitch", "#battlecamswitch", "#dragslider", "#invertswitch"],
         gameplay: ["#snagswitch", "#snagbutton", "#lockswitch", "#resistswitch"],
         chat: ["#chatfeedswitch", "#partydmswitch", "#worlddmswitch", "#refuseswitch", "#blockedbutton"],
@@ -13230,7 +13231,7 @@ test("Game options: its groups at the top, each a page of its own, short enough 
     // on, never left stopped with no menu up
     await page.locator("#menubutton").click();
     await page.locator("#optionsbutton").click();
-    await page.locator("#controlsbutton").click();
+    await page.locator("#actionsbutton").click();
     await page.locator("#wheelsbutton").click();
     await expect(page.locator("#menuwheels")).toBeVisible();
 
@@ -13452,7 +13453,7 @@ test("holding on an enemy or the player opens the action wheel: flick left (W) t
     expect(hp).toBeLessThanOrEqual(32);
 });
 
-test("in a fight four quick actions rise from the bottom, lifting the name and zoom buttons: Stun tapped on the foe set on, Vigor on the player, swept over while cooling; attacks greyed with no foe set on; held, changed in Quick actions; the minimap in the top left corner, the buttons top right, its wedge the way the camera looks the same size however it's zoomed", async ({ page }) => {
+test("in a fight the Action Bar's four actions rise from the bottom, lifting the name and zoom buttons: Stun tapped on the foe set on, Vigor on the player, swept over while cooling; attacks greyed with no foe set on; held, changed in the Action Bar options; the minimap in the top left corner, the buttons top right, its wedge the way the camera looks the same size however it's zoomed", async ({ page }) => {
     // (Played on between taps, and held once: more than the usual time, with others running beside it)
     test.setTimeout(180000);
     await page.setViewportSize({ width: 402, height: 874 });
@@ -13620,7 +13621,7 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     await expect(bar).not.toHaveClass(/up/);
     await expect.poll(async () => (await box("#playerplate")).y).toBeCloseTo(calm.y, 0);
 
-    // Held in a fight: paused at Quick actions, that slot chosen; Rumble (its tome read) put in
+    // Held in a fight: paused at the Action Bar options, that slot chosen; Rumble (its tome read) put in
     // it, and back to the game
     await page.evaluate(() => {
         const { game } = window.pellagos;
@@ -13644,7 +13645,7 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     await expect(page.locator("#menuquick")).toBeVisible();
     await page.mouse.up();
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(false);
-    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Quick action 3");
+    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar slot 3");
     await expect(page.locator('#quicksetup .quick-slot[data-slot="2"]')).toHaveAttribute("aria-selected", "true");
     await expect(page.locator('#quicksetup .wheels-choice[data-action="rumble"] small')).toHaveText("On your foe");
     await expect(page.locator('#quicksetup .wheels-choice[data-action="vigor"] small')).toHaveText("On yourself");
@@ -13656,17 +13657,17 @@ test("in a fight four quick actions rise from the bottom, lifting the name and z
     expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
     await expect(slot(2).locator(".quick-label")).toHaveText("Rumble");
 
-    // And from Game options (Controls), Back going back there
+    // And from Game options (Action Wheel and Bar), Back going back there
     await page.locator("#menubutton").click();
     await page.locator("#optionsbutton").click();
-    await page.locator("#controlsbutton").click();
+    await page.locator("#actionsbutton").click();
     await page.locator("#quickbutton").click();
-    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Quick action 1");
+    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar slot 1");
     await page.locator("#quickback").click();
-    await expect(page.locator("#menucontrols")).toBeVisible();
+    await expect(page.locator("#menuactions")).toBeVisible();
 });
 
-test("a Prismatic chain: an element's spell cast from the quick actions rolls its slot on to the next, ringed and pulsing, every attack spell 5% stronger a spell; at the last, its piece of the sigil, flaring, the other elements ringed, the sigil pulsing in its colour till the next element's begun; let lapse, all lost, the sigil shown broken; a piece just earned, the sigil tapped casts its element's Prismatic spell on the foe; whole, left to fade, shown fading; whole, Prismatic Destruction; none of it told in a message", async ({ page }) => {
+test("a Prismatic chain: an element's spell cast from the Action Bar rolls its slot on to the next, ringed and pulsing, every attack spell 5% stronger a spell; at the last, its piece of the sigil, flaring, the other elements ringed, the sigil pulsing in its colour till the next element's begun; let lapse, all lost, the sigil shown broken; a piece just earned, the sigil tapped casts its element's Prismatic spell on the foe; whole, left to fade, shown fading; whole, Prismatic Destruction; none of it told in a message", async ({ page }) => {
     test.setTimeout(120000);
     await page.setViewportSize({ width: 402, height: 874 });
     await playing(page, "/?play&seed=1");
@@ -13693,7 +13694,7 @@ test("a Prismatic chain: an element's spell cast from the quick actions rolls it
             game.advance(Math.max(0, left) / 1000 + 0.15);
         });
 
-    // Fire's spells and Rumble learnt, Burn and Rumble in the quick actions; a hardy orc brought
+    // Fire's spells and Rumble learnt, Burn and Rumble on the Action Bar; a hardy orc brought
     // near, and set on (stunned, so it doesn't stagger the player as they cast)
     await page.evaluate(() => {
         const { game } = window.pellagos;
@@ -13845,7 +13846,7 @@ test("a Prismatic chain: an element's spell cast from the quick actions rolls it
     await expect(sigil).toBeHidden();
 });
 
-test("Always show (Game options, Quick actions): the quick actions kept up along the bottom out of a fight, a key using one there, and remembered; switched off, down again with no fight", async ({ page }) => {
+test("Always show (Game options, Action Bar): the Action Bar kept up along the bottom out of a fight, a key using one of its actions there, and remembered; switched off, down again with no fight", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const bar = page.locator(".quickbar");
@@ -13888,7 +13889,7 @@ test("Always show (Game options, Quick actions): the quick actions kept up along
     await expect(bar).not.toHaveClass(/up/);
 });
 
-test("six quick actions across (Game options): only their icons on a phone held upright, their names on its side; a school's spell flicked down or up rolls to the last or next of its school the player knows, its name said over it, and is kept; at either end of its school, or anything else, it bounces", async ({ page }) => {
+test("six actions across the Action Bar (Game options): only their icons on a phone held upright, their names on its side; a school's spell flicked down or up rolls to the last or next of its school the player knows, its name said over it, and is kept; at either end of its school, or anything else, it bounces", async ({ page }) => {
     test.setTimeout(180000);
     // (Not full screen, as a tap on the game asks to be, or the phone can't be turned on its side)
     await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ fullscreen: false })));
@@ -13915,7 +13916,7 @@ test("six quick actions across (Game options): only their icons on a phone held 
         await page.mouse.up();
     };
 
-    // Four, as ever, till Six across is switched on in Game options (Quick actions)
+    // Four, as ever, till Six across is switched on in Game options (Action Bar)
     await expect.poll(shown).toBe(4);
     await page.evaluate(() => {
         const switched = document.querySelector("#quicksixswitch");
@@ -13989,7 +13990,7 @@ test("six quick actions across (Game options): only their icons on a phone held 
     await flick(1, "up");
     expect((await quick())[1]).toBe("stun");
 
-    // Kept as if chosen in Quick actions: there, six, Detraumatize in the first
+    // Kept as if chosen in the Action Bar options: there, six, Detraumatize in the first
     await page.evaluate(() => window.pellagos.game.advance(0.1));
     expect(await page.evaluate(() => window.pellagos.game.quickSetup().quick)).toEqual(["detraumatize", "stun", "burn", "item:potion", null, null]);
 
@@ -14013,7 +14014,7 @@ test("six quick actions across (Game options): only their icons on a phone held 
     await page.evaluate(() => window.pellagos.game.start());
     await page.keyboard.press("5");
     await expect(page.locator("#menuquick")).toBeVisible();
-    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Quick action 5");
+    await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar slot 5");
     expect(await page.evaluate(() => [...document.querySelectorAll("#quicksetup .quick-slot")].filter((each) => !each.hidden).length)).toBe(6);
 });
 
@@ -14061,7 +14062,132 @@ test("a spell tapped on a foe out of reach says so, flashes its slot red and sta
     await expect(slot(0)).not.toHaveClass(/cooling/);
 });
 
-test("the action wheels: flicked down, the other side; what's on each chosen in Game options, from what's learnt and carried; a draught drunk from wheel two", async ({ page }) => {
+test("their followers' wheel, held on one of the player's own (a creature called, by its icon): a draught put on its other side in Game options; its ability by its own name (Savage blow), used on the foe the player's locked on; turned over, Hold fire, and held fire, At will in its place; the draught given to them, healing them", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // Summon learnt and cast; two draughts in the pack; a wolf after no one, 10 m west
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const [x, y] = me.square;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        game.progress.learn("summon");
+        game.progress.stow({ id: "potion" });
+        game.progress.stow({ id: "potion" });
+        game.host.wild.set("test-wolf", { creature: "wolf", tier: 1, pack: "test-wolf", camp: null, lair: null, master: false });
+        game.battle.add({ id: "test-wolf", kind: "beast", name: "Wolf", weapon: "wolf", team: "beasts", square: [x - 10, y], map: me.map, ai: null, hp: 400, wild: { creature: "wolf", tier: 1, temper: "aggressive", guard: 0, roam: 0, leash: 30, pack: "test-wolf", leader: null, menace: true, unique: false } });
+        Object.assign(me, { spellReadyAt: 0, spellsReadyAt: {} });
+        game.host.command(game.me, { type: "cast", spell: "summon" });
+    });
+    expect(await playUntil(page, () => window.pellagos.game.host.companions.size === 1 && document.querySelector("#party .member.summon"), { seconds: 60 })).toBe(true);
+
+    const id = await page.evaluate(() => [...window.pellagos.game.host.companions.keys()][0]);
+
+    // Game options, Action Wheel and Bar, Action wheels, Your followers: wheel two, a draught at NE
+    const setup = page.locator("#wheelsetup");
+
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.locator("#menubutton").click();
+    await page.locator("#optionsbutton").click();
+    await page.locator("#actionsbutton").click();
+    await page.locator("#wheelsbutton").click();
+    await setup.getByRole("tab", { name: "Your followers" }).click();
+    await setup.locator('.slice[data-direction="s"]').click();
+    await expect(setup.locator('.slice[data-direction="e"] .label')).toHaveText("Hold fire");
+    await setup.locator('.slice[data-direction="ne"]').click();
+    await expect(setup.locator(".wheels-heading")).toHaveText("Your followers, wheel two, NE");
+    await setup.locator('.wheels-choice[data-action="item:potion"]').click();
+    expect(await page.evaluate(() => window.pellagos.game.wheels.unit[1])).toEqual({ n: "vigor", ne: "item:potion", e: "unit:stance", w: "item:potion" });
+    await page.locator("#wheelsback").click();
+    await page.locator("#actionsback").click();
+    await page.locator("#optionsback").click();
+    await page.locator("#resumebutton").click();
+    await page.evaluate(() => window.pellagos.game.stop());
+
+    // Held by its icon, the wheel opens under the finger; flicked from there (`flick`: dx, dy)
+    const wheel = page.locator(".action-wheel");
+    const member = page.locator(`#party .member[data-id="${id}"]`);
+    const box = await member.boundingBox();
+    const [cx, cy] = [box.x + box.width / 2, box.y + box.height / 2];
+    const hold = async () => {
+        await page.mouse.move(cx, cy);
+        await page.mouse.down();
+        await page.waitForTimeout(700);
+        await expect(wheel).toBeVisible();
+    };
+    const flick = async (from, [dx, dy]) => {
+        await page.mouse.move(from[0] + dx / 2, from[1] + dy / 2, { steps: 2 });
+        await page.mouse.move(from[0] + dx, from[1] + dy, { steps: 2 });
+    };
+    const turnOver = async () => {
+        await flick([cx, cy], [0, 55]);
+        await expect(wheel).toHaveAttribute("data-side", "2");
+
+        return [cx, cy + 55];
+    };
+    const settle = () => page.evaluate(() => window.pellagos.game.advance(0.05));
+
+    // Its ability at NE by its own name; flicked there with the player locked on the wolf, its
+    // next blow twice as hard, after it
+    await hold();
+    await expect(wheel.locator('.slice[data-direction="ne"] .label')).toHaveText("Savage blow");
+    await expect(wheel.locator('.slice[data-direction="n"] .label')).toHaveText("My target");
+    await page.evaluate(() => (window.pellagos.game.battle.actor(window.pellagos.game.me).lock = "test-wolf"));
+    await flick([cx, cy], [28, -28]);
+    await page.mouse.up();
+    await settle();
+    await expect(page.locator("#banner")).toContainText(": Savage blow!");
+    expect(await page.evaluate((called) => ({ empowered: window.pellagos.game.battle.actor(called).empowered?.factor, assist: window.pellagos.game.battle.actor(called).assist }), id)).toEqual({ empowered: 2, assist: "test-wolf" });
+
+    // (The wolf gone)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        Object.assign(game.battle.actor("test-wolf"), { dead: true, respawnAt: Infinity });
+        game.battle.actor(game.me).lock = null;
+        game.advance(0.05);
+    });
+
+    // Turned over: Hold fire at E, the draught at NE; flicked E, holding fire
+    await hold();
+
+    let from = await turnOver();
+
+    await expect(wheel.locator('.slice[data-direction="e"] .label')).toHaveText("Hold fire");
+    await expect(wheel.locator('.slice[data-direction="ne"] .label')).toHaveText("Draught");
+    await expect(wheel.locator('.slice[data-direction="ne"] .count')).toHaveText("2");
+    await flick(from, [34, 0]);
+    await page.mouse.up();
+    await settle();
+    await expect(page.locator("#banner")).toContainText("holds fire.");
+    expect(await page.evaluate((called) => window.pellagos.game.host.stance(called).holdFire, id)).toBe(true);
+
+    // Again: At will in its place; the draught flicked to them, hurt, and they're healed by it
+    const hurt = await page.evaluate((called) => {
+        const actor = window.pellagos.game.battle.actor(called);
+
+        actor.hp = Math.round(actor.maxHp / 3);
+
+        return actor.hp;
+    }, id);
+
+    await hold();
+    from = await turnOver();
+    await expect(wheel.locator('.slice[data-direction="e"] .label')).toHaveText("At will");
+    await flick(from, [28, -28]);
+    await page.mouse.up();
+    await settle();
+    await expect(page.locator("#banner")).toContainText("You give ");
+
+    const given = await page.evaluate((called) => ({ hp: window.pellagos.game.battle.actor(called).hp, maxHp: window.pellagos.game.battle.actor(called).maxHp, draughts: window.pellagos.game.progress.count("potion") }), id);
+
+    expect(given.draughts).toBe(1);
+    expect(given.hp).toBe(Math.min(given.maxHp, hurt + 25));
+});
+
+test("the action wheels: flicked down, the other side; what's on each chosen in Game options (the player's own, a foe's and their followers'), from what's learnt and carried; a draught drunk from wheel two", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
     const wheel = page.locator(".action-wheel");
@@ -14081,10 +14207,10 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
         game.battle.actor(game.me).hp = 20;
     });
 
-    // Game options, Controls, Action wheels: the player's own, wheel one, with Vigor at N
+    // Game options, Action Wheel and Bar, Action wheels: the player's own, wheel one, with Vigor at N
     await page.locator("#menubutton").click();
     await page.locator("#optionsbutton").click();
-    await page.locator("#controlsbutton").click();
+    await page.locator("#actionsbutton").click();
     await page.locator("#wheelsbutton").click();
     await expect(menu.locator("#wheelstitle")).toBeVisible();
     await expect(setup.locator('.wheels-tab[aria-selected="true"]')).toHaveText(["Yourself", "Wheel one"]);
@@ -14096,6 +14222,12 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Make camp", "Wave", "Bow", "Nod", "Shake head", "Cheer", "Fist pump", "Puzzled", "Beckon", "Draught"]);
     await setup.getByRole("tab", { name: "A foe" }).click();
     await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Burn", "Stun", "Attack"]);
+
+    // Their followers': the healing to cast on them, what to tell them (their own ability among
+    // it) and the draughts to give them; Attack my target at the top
+    await setup.getByRole("tab", { name: "Your followers" }).click();
+    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Attack my target", "Follow me", "Wait here", "Guard me", "Fall back", "Hold fire / At will", "Their own ability", "Dismiss", "Draught"]);
+    await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("My target");
     await setup.getByRole("tab", { name: "Yourself" }).click();
 
     // A draught at NE of wheel two, for the bow there (tapping S turns it over, as flicking it does)
@@ -14108,10 +14240,10 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     await expect(setup.locator('.slice[data-direction="ne"] .count')).toHaveText("2");
     expect(await page.evaluate(() => window.pellagos.game.wheels.self)).toEqual([{ n: "vigor" }, { n: "camp", nw: "emote:wave", ne: "item:potion", w: "emote:nod", e: "emote:cheer" }]);
 
-    // Escape goes back a page, and again (to Controls, then Game options); Back to the main page;
-    // then the game
+    // Escape goes back a page, and again (to Action Wheel and Bar, then Game options); Back to the
+    // main page; then the game
     await page.keyboard.press("Escape");
-    await expect(menu.locator("#controlstitle")).toBeVisible();
+    await expect(menu.locator("#actionstitle")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(menu.locator("#optionstitle")).toBeVisible();
     await page.locator("#optionsback").click();
@@ -14315,7 +14447,7 @@ test.describe("on a phone", () => {
         await drawnTrue("done turning, untold");
     });
 
-    test("a quick action tapped is used once: a draught tapped drinks one, Vigor tapped heals without being refused as cooling down", async ({ page }) => {
+    test("an Action Bar action tapped is used once: a draught tapped drinks one, Vigor tapped heals without being refused as cooling down", async ({ page }) => {
         await page.goto("/?play&seed=1");
         await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
 
@@ -14363,7 +14495,7 @@ test.describe("on a phone", () => {
         expect((await state()).hp).toBeGreaterThan(10);
     });
 
-    test("a quick action's press whose lift is lost, as a phone's Safari loses it, never leaves its slot deaf: let go of as the slot's let go of, or once no finger's on the screen, or taken over by the next touch (kept in the debug log); let go of as the bar's put away or the page loses the player; a hold and Back leave the next tap heard", async ({ page }) => {
+    test("an Action Bar press whose lift is lost, as a phone's Safari loses it, never leaves its slot deaf: let go of as the slot's let go of, or once no finger's on the screen, or taken over by the next touch (kept in the debug log); let go of as the bar's put away or the page loses the player; a hold and Back leave the next tap heard", async ({ page }) => {
         test.setTimeout(180000);
         await page.goto("/?play&seed=1");
         await page.waitForFunction(() => window.pellagos?.playing, null, { timeout: 90000 });
@@ -14519,7 +14651,7 @@ test.describe("on a phone", () => {
         await slot(0).tap();
         await expect.poll(heard).toEqual(["use 0"]);
 
-        // Held: changed in Quick actions, the finger still down as it opens; Back, and the next tap
+        // Held: changed in the Action Bar options, the finger still down as it opens; Back, and the next tap
         // used. (Played on: a game that's stopped has no menu to pause at)
         await forget();
         await page.evaluate(() => window.pellagos.game.start());
@@ -14533,7 +14665,7 @@ test.describe("on a phone", () => {
         await expect.poll(heard).toEqual(["choose 1", "use 1"]);
     });
 
-    test("a quick action held, or an empty one tapped, opens Quick actions, and the finger's lift isn't taken for a tap on what's under it there (Back to the game, over the slot at the foot of the screen): it stays open till Back's tapped", async ({ page }) => {
+    test("an Action Bar action held, or an empty slot tapped, opens the Action Bar options, and the finger's lift isn't taken for a tap on what's under it there (Back to the game, over the slot at the foot of the screen): it stays open till Back's tapped", async ({ page }) => {
         test.setTimeout(180000);
         await playing(page, "/?play&seed=1");
 
@@ -14570,13 +14702,13 @@ test.describe("on a phone", () => {
         await expect(page.locator(".quickbar")).toHaveClass(/up/);
         await expect(slot(3)).toHaveClass(/empty/);
 
-        // Held: Quick actions opens over the finger still down; lifted, it stays open
+        // Held: the Action Bar options open over the finger still down; lifted, it stays open
         await touch("touchStart", 1);
         await expect(page.locator("#menuquick")).toBeVisible();
         await touch("touchEnd");
         await longer();
         await expect(menu).toBeVisible();
-        await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Quick action 2");
+        await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar slot 2");
         await page.locator("#quickback").tap();
         await expect(menu).not.toBeVisible();
         expect(await page.evaluate(() => window.pellagos.game.running)).toBe(true);
@@ -14587,7 +14719,7 @@ test.describe("on a phone", () => {
         await expect(page.locator("#menuquick")).toBeVisible();
         await longer();
         await expect(menu).toBeVisible();
-        await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Quick action 4");
+        await expect(page.locator("#quicksetup .wheels-heading")).toHaveText("Action Bar slot 4");
         await page.locator("#quickback").tap();
         await expect(menu).not.toBeVisible();
 

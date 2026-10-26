@@ -1,4 +1,4 @@
-// A quick action's press (app/quickbar.js): a finger or the mouse down on its slot, becoming a tap
+// An Action Bar press (app/quickbar.js): a finger or the mouse down on its slot, becoming a tap
 // (lifted where it went down: used), a hold (QUICK_HOLD_MS still: changed), a flick (STRAY up or
 // down: its spell turned), or nothing (slid off, or lost). It's told of each pointer's down, move
 // and lift as plain numbers, not the page's events, so it's tested without a page
