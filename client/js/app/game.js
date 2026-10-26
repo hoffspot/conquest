@@ -367,6 +367,10 @@ const ENEMIES = Object.freeze({ reach: LOCK_REACH, every: 0.25, keep: 4 });
 const PARTY_MENU_EVERY = 0.25;
 const LIKENESS_AFTER = 0.5;
 
+// The party menu's Players tab (#everyone): how near a town or a named place someone out in the
+// world must be to be said to be at it (m)
+const PLAYERS_TAB = Object.freeze({ near: 250 });
+
 // A kind of creature's portrait in the bestiary (portraitOf): how big (pixels square), how much
 // brighter than the screen it's toned, how much of the picture it fills (view.js portrait `fit`),
 // how long after it's built it's drawn (ms: drawn at once, it comes out blank, as a likeness does)
@@ -1077,6 +1081,12 @@ export class Game {
          * go; main.js: the dismiss dialog), or null to let them go unasked.
          */
         this.onAskDismiss = null;
+
+        /**
+         * In a world on a server, its own panel opened (main.js: who's here; for its owner, invites
+         * and keys; leaving it), from the party menu's World button; null elsewhere (no button).
+         */
+        this.onWorldPanel = null;
 
         /** How many quick actions are shown: four, or six across (QUICK_SHOWN; Game options: showQuick). */
         this.quickShown = QUICK_SHOWN.four;
@@ -2015,6 +2025,10 @@ export class Game {
         this.partyPanel.onSay = (text) => this.#sayToParty(text);
         this.partyPanel.onTab = () => this.#showParty();
         this.partyPanel.onClose = () => this.closeParty();
+        this.partyPanel.onWorld = () => {
+            this.closeParty();
+            this.onWorldPanel?.();
+        };
         this.fate = new FatePanel(this.hud.root);
         this.talk.onChoose = (index) => this.#say(index);
         this.talk.onClose = () => this.#endTalk();
@@ -9070,6 +9084,7 @@ export class Game {
             most: this.host.mostFollowers(this.me),
             ...this.#partyPlayers(),
             chat: this.#chat(),
+            world: Boolean(this.onWorldPanel),
         });
     }
 
@@ -9159,7 +9174,90 @@ export class Game {
             others: [...this.host.players.keys()].filter((id) => id !== this.me && !party?.members.includes(id)).map((id) => ({ id, name: nameOf(id), asked: Boolean(this.host.invitation(id)) })),
             leads: party?.leader === this.me,
             full: (party?.members.length ?? 1) >= PARTY.most,
+            partied: Boolean(party),
+            everyone: this.#everyone(),
         };
+    }
+
+    // Everyone playing in the world, for the party menu's Players tab (partypanel.js show
+    // `everyone`): the player first, then the rest of their party (the longest in it first), then
+    // everyone else by name; each with their standing and people, how they stand (their party,
+    // asked to one, away, resting, fallen, their people at war with the player's), where they
+    // are, and what the player can do about them (ask them to their party, or, leading it, put
+    // them out of it)
+    #everyone() {
+        const host = this.host;
+        const mine = host.partyFor(this.me);
+        const me = this.battle.actor(this.me);
+        const nameOf = (id) => host.players.get(id)?.hero.name ?? "";
+        const full = (mine?.members.length ?? 1) >= PARTY.most;
+        const order = (id) => (id === this.me ? -1 : mine?.members.includes(id) ? mine.members.indexOf(id) : PARTY.most);
+
+        return [...host.players.values()]
+            .sort((a, b) => order(a.id) - order(b.id) || a.hero.name.localeCompare(b.hero.name) || (a.id < b.id ? -1 : 1))
+            .map((player) => {
+                const { id } = player;
+                const actor = this.battle.actor(id);
+                const party = host.partyFor(id);
+                const asked = host.invitation(id);
+                const yours = Boolean(party && party === mine);
+                const can = id === this.me ? null : yours ? (mine.leader === this.me ? "dismiss" : null) : party ? null : asked ? "asked" : full ? "full" : "invite";
+
+                return {
+                    id,
+                    name: player.hero.name,
+                    me: id === this.me,
+                    title: `${player.standing?.title?.() ?? STANDINGS[0].title}${player.realm ? ` of the ${peopleOf(player.realm)}` : ""}`,
+                    where: this.#whereWords(actor, me),
+                    party: party ? { yours, leads: party.leader === id, leader: nameOf(party.leader) } : null,
+                    asked: asked ? (asked.from === this.me ? "you" : nameOf(asked.from)) : null,
+                    away: Boolean(player.away),
+                    resting: Boolean(player.resting),
+                    dead: Boolean(actor?.dead),
+                    hostile: id !== this.me && Boolean(host.war?.hostile(this.self.realm, player.realm)),
+                    can,
+                };
+            });
+    }
+
+    // Where someone is, in words (the party menu's Players tab): inside, the floor they're on (or
+    // its building); out in the world, the town or named place they're at (within
+    // PLAYERS_TAB.near), or the wilds; and, someone else, which way that is from the player and
+    // how far (journal.js bearing), unless they're near
+    #whereWords(actor, me) {
+        if (!actor) {
+            return "";
+        }
+
+        let place;
+
+        if (actor.map === "town") {
+            const named = [...(this.host.war?.towns ?? []), ...(this.world.plan ? placesOf(this.world.plan).filter(({ name }) => name) : [])];
+            let nearest = null;
+            let best = PLAYERS_TAB.near;
+
+            for (const one of named) {
+                const off = Math.hypot(one.at[0] - actor.x, one.at[1] - actor.y);
+
+                if (off <= best) {
+                    [nearest, best] = [one, off];
+                }
+            }
+
+            place = nearest ? `At ${nearest.name}` : "Out in the wilds";
+        } else {
+            const name = this.world.maps?.[actor.map]?.name ?? this.world.interiors?.of(actor.map)?.name ?? null;
+
+            place = name ? `In ${name.replace(/^The /, "the ")}` : "Indoors";
+        }
+
+        if (!me || actor === me) {
+            return place;
+        }
+
+        const way = bearing(this.#outside(me), this.#outside(actor));
+
+        return way === "here" ? (actor.map === me.map ? `${place} · Near you` : place) : `${place} · ${way}`;
     }
 
     // What the player does about their party of players, from the party menu (a "party" command:

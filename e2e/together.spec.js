@@ -881,6 +881,138 @@ test("two players make a party: one asks from the party menu, the other says no,
     await guestContext.close();
 });
 
+test("the party menu's Players tab lists everyone playing in the world, the player first: each with their standing and people, how they stand and where they are; one in no party asked to the player's from there, and, in it, put out by its leader (pressed twice); away said", async ({ ownBrowser: browser }) => {
+    const hostContext = await browser.newContext();
+    const guestContext = await browser.newContext();
+    const host = await hostContext.newPage();
+    const guest = await guestContext.newPage();
+
+    await cheaply(host, guest);
+
+    for (const page of [host, guest]) {
+        page.on("pageerror", (error) => {
+            throw error;
+        });
+    }
+
+    await guest.addInitScript((save) => localStorage.setItem("pellagos.save", JSON.stringify(save)), BRYN);
+    await host.goto("/?play&seed=2");
+    await playing(host);
+    await host.locator("#menubutton").click();
+    await host.locator("#invitebutton").click();
+
+    const invite = host.locator("#invite");
+
+    await expect(invite.locator("#invitecode")).toHaveText(/^[A-Z]{4}$/, { timeout: 15000 });
+
+    const code = await invite.locator("#invitecode").textContent();
+    const ada = await host.evaluate(() => window.pellagos.game.host.players.get("player").hero.name);
+
+    await invite.getByRole("button", { name: "Back to the game" }).click();
+    await guest.goto(`/?join=${code}`);
+    await expect(guest.locator("#join")).toBeVisible({ timeout: 60000 });
+    await guest.locator("#join").getByRole("button", { name: "Join" }).click();
+    await playing(guest);
+    await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
+
+    // The host's Players tab: themselves first, then Bryn; each a Commoner of their people, in no
+    // party, somewhere; Bryn to be asked
+    const menu = host.getByRole("dialog", { name: "Party" });
+    const rows = menu.locator(".party-everyone-list .party-player");
+    const bryn = menu.locator('.party-everyone-list .party-player[data-id="guest-1"]');
+    const mine = menu.locator('.party-everyone-list .party-player[data-id="player"]');
+
+    await host.locator("#partybutton").click();
+    await menu.getByRole("tab", { name: "Players" }).click();
+    await expect(menu.getByRole("tab", { name: "Players" })).toHaveAttribute("aria-selected", "true");
+    await expect(menu.locator(".party-everyone .journal-heading")).toHaveText("In this world (2)");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.first()).toHaveAttribute("data-id", "player");
+    await expect(mine.locator(".party-name")).toHaveText(`${ada} (you)`);
+    await expect(mine.locator(".party-kind")).toHaveText("Commoner of the Humans");
+    await expect(mine.locator(".player-chip")).toHaveText(["In no party"]);
+    await expect(mine.locator(".party-where")).toHaveText(/^(At |In |Out in the wilds)/);
+    await expect(mine.locator("button")).toHaveCount(0);
+    await expect(bryn.locator(".party-name")).toHaveText("Bryn");
+    await expect(bryn.locator(".party-kind")).toHaveText("Commoner of the Humans");
+    await expect(bryn.locator(".player-chip")).toHaveText(["In no party"]);
+    await expect(bryn.locator(".party-where")).toHaveText(/^(At |In |Out in the wilds)/);
+    await expect(bryn.locator(".party-invite")).toHaveText("Invite");
+    await expect(menu.locator(".party-everyone-note")).toHaveText("Invite anyone in no party: you'll lead the party you make together, up to four in it.");
+
+    // (A world on a device, not a server: no World button, the server's World panel)
+    await expect(menu.getByRole("button", { name: "World" })).toBeHidden();
+
+    // Asked from there: said so on both Players tabs, and Bryn says yes
+    const asked = guest.getByRole("dialog", { name: `${ada} asks you to join their party.` });
+
+    await bryn.locator(".party-invite").click();
+    await expect(bryn.locator(".party-invite")).toHaveText("Asked", { timeout: 30000 });
+    await expect(bryn.locator(".party-invite")).toBeDisabled();
+    await expect(bryn.locator(".player-chip")).toHaveText(["Asked to your party"]);
+    await expect(asked).toBeVisible({ timeout: 30000 });
+    await asked.getByRole("button", { name: "Accept" }).click();
+    await expect(host.locator("#banner")).toContainText("Bryn joins the party.", { timeout: 30000 });
+
+    // In the party: the host crowned and leading it, Bryn in it, to be put out
+    await expect(bryn.locator(".player-chip")).toHaveText(["In your party"], { timeout: 30000 });
+    await expect(bryn.locator(".party-sure")).toHaveText("Dismiss");
+    await expect(mine.locator(".party-name")).toHaveText(`♛ ${ada} (you)`);
+    await expect(mine.locator(".player-chip")).toHaveText(["You lead your party"]);
+    await expect(menu.locator(".party-everyone-note")).toHaveText("Invite anyone in no party to yours; Dismiss puts someone out of it.");
+
+    // Bryn's own: the host leading their party, and no one for Bryn to put out of it
+    const theirs = guest.getByRole("dialog", { name: "Party" });
+    const theirRows = theirs.locator(".party-everyone-list .party-player");
+
+    await guest.locator("#partybutton").click();
+    await theirs.getByRole("tab", { name: "Players" }).click();
+    await expect(theirRows).toHaveCount(2);
+    await expect(theirRows.first()).toHaveAttribute("data-id", "guest-1");
+    await expect(theirRows.first().locator(".player-chip")).toHaveText(["In your party"]);
+    await expect(theirRows.nth(1).locator(".party-name")).toHaveText(`♛ ${ada}`);
+    await expect(theirRows.nth(1).locator(".player-chip")).toHaveText(["Leads your party"]);
+    await expect(theirs.locator(".party-everyone-list button")).toHaveCount(0);
+    await expect(theirs.locator(".party-everyone-note")).toHaveText("Only your party's leader can dismiss anyone from it.");
+    await theirs.getByRole("button", { name: "Close" }).click();
+
+    // Bryn marked away (AFK: core/host.js AFK) in both worlds alike: said on the host's tab
+    for (const page of [host, guest]) {
+        await page.evaluate(() => (window.pellagos.game.host.players.get("guest-1").away = true));
+    }
+
+    await expect(bryn.locator(".player-chip")).toHaveText(["In your party", "Away (AFK)"], { timeout: 30000 });
+    await expect(bryn).toHaveClass(/\baway\b/);
+
+    for (const page of [host, guest]) {
+        await page.evaluate(() => (window.pellagos.game.host.players.get("guest-1").away = false));
+    }
+
+    await expect(bryn.locator(".player-chip")).toHaveText(["In your party"], { timeout: 30000 });
+
+    // Put out of the party by the host (both presses at once, as Leave party is, in the party test)
+    expect(await bryn.locator(".party-sure").evaluate((button) => {
+        button.click();
+
+        const sure = button.textContent;
+
+        button.click();
+
+        return sure;
+    })).toBe("Dismiss?");
+    await expect(guest.locator("#banner")).toContainText("You're put out of the party.", { timeout: 30000 });
+    await expect(bryn.locator(".player-chip")).toHaveText(["In no party"], { timeout: 30000 });
+    await expect(bryn.locator(".party-invite")).toHaveText("Invite");
+    await expect(mine.locator(".party-name")).toHaveText(`${ada} (you)`);
+
+    for (const page of [host, guest]) {
+        expect(await page.evaluate(() => window.pellagos.game.host.partyFor("guest-1"))).toBe(null);
+    }
+
+    await hostContext.close();
+    await guestContext.close();
+});
+
 test("two players walk about a while: the joined copy's checked against the host's every fifth of a second and never drifts; the guest's hero drawn going at once; what's sent measured", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();

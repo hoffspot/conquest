@@ -5326,6 +5326,82 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     margin-top: 10px;
 }
 
+/* The party menu's Players tab (app/partypanel.js #everyone): everyone playing in the world, the
+   player's own row framed; how each stands as chips (their party, asked to one, away, resting,
+   fallen, at war with the player's people); and where they are */
+.party-player.everyone.me {
+    border-color: var(--panel-border);
+}
+
+.player-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.player-chip {
+    padding: 0 7px;
+    border-radius: 9px;
+    border: 1px solid var(--field-border);
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 17px;
+    white-space: nowrap;
+}
+
+.player-chip.party {
+    color: var(--ally);
+    border-color: rgba(88, 210, 110, 0.55);
+    background: rgba(88, 210, 110, 0.1);
+}
+
+.player-chip.partied {
+    color: var(--gold-bright);
+    border-color: var(--panel-border);
+}
+
+.player-chip.asked {
+    color: var(--ink);
+    border-style: dashed;
+}
+
+.player-chip.afk {
+    color: #ffd27a;
+    border-color: rgba(255, 196, 90, 0.55);
+    background: rgba(255, 196, 90, 0.12);
+}
+
+.player-chip.resting {
+    color: #b6cdfa;
+    border-color: rgba(150, 180, 240, 0.5);
+}
+
+.player-chip.fallen,
+.player-chip.war {
+    color: #ffd2c8;
+    border-color: var(--hostile);
+    background: rgba(212, 83, 59, 0.2);
+}
+
+.party-where {
+    font-size: 12px;
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.party-everyone-note {
+    margin-top: 10px;
+}
+
+/* The party menu's World button, in its header (a world on a server: main.js openWorldPanel) */
+.party-world {
+    min-width: 0;
+    min-height: 30px;
+    padding: 0 12px;
+}
+
 /* Party chat (app/partypanel.js): how many lines haven't been seen, on the Party button and on the
    menu's Chat tab; the tabs; what's been said, the newest at the foot; the quick phrases; a line to send */
 .party-badge,

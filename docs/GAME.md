@@ -1807,8 +1807,8 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   **Playing together** (docs/WAR.md *Parties*), the other players in the player's party head the
   column, the longest in it first (`host.fellows`), before the player's own: gold-framed (`.member
   .player`), the one leading it crowned (`.member.leader`: "leading your party"), their own units
-  not shown there but named in the menu ("With them: ..."). The menu then has the party's
-  **Players** (the leader crowned: "♛"; Leave party for the player, asked twice; and, for its
+  not shown there but named in the menu ("With them: ..."). The menu then has **Your party**
+  (its players, the leader crowned: "♛"; Leave party for the player, asked twice; and, for its
   leader, Make leader and Remove, asked twice, for each other), and the others in the world to
   **Ask to your party** (Invite; "Asked" while they're asked; none while it's full), made again
   only when what it shows of them changes (`PartyPanel #together`). Asked, the player's shown the
@@ -1816,8 +1816,8 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   `#partyEvent`), with the "wake" cue; or, with **Refuse party invites** in Game options
   (`refuseInvites`, saved), nothing at all. What becomes of the party is said in the banner ("Bryn
   joins the party.", "You lead the party now.", "The party's no more: no one's left in it with
-  you."). Playing together, the menu has two tabs (`PartyPanel showTab`): **Party** (all that) and
-  **Chat**, the party's own talk (core/netplay.js: sent to those in it alone; docs/WAR.md
+  you."). Playing together, the menu has three tabs (`PartyPanel showTab`): **Party** (all that),
+  **Chat** (below) and **Players** (below). **Chat** is the party's own talk (core/netplay.js: sent to those in it alone; docs/WAR.md
   *Parties*): what's been said, the newest at the foot, the player's own lines as "You" in green,
   others' by name in gold, and the party's comings and goings among them in grey; eight quick
   phrases (`QUICK_PHRASES`: "On my way!", "Wait for me.", "Follow me!", "Help!", "Ready.",
@@ -1827,7 +1827,21 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   seen at once, counts on the Party button (hud.js `partyUnread`: a red badge, "1" to "9+") and on
   the Chat tab, till it's seen; the menu opened then opens on the chat. Enter, with nothing else
   to press, opens the chat ready to type. The last 50 lines are kept (`CHAT.kept`), with the game
-  only.
+  only. **Players** is everyone playing in the world (`PartyPanel #everyone`, game.js
+  `#everyone`; "In this world (N)"), the player first, then the rest of their party (the longest
+  in it first), then everyone else by name, each with what they are (their standing and people:
+  "Knight of the Elves"), how they stand as chips (`playerStatus`: "In your party", "Leads your
+  party", "In Bryn's party", "Leads a party", "In no party", or "Asked to your party"; "Away
+  (AFK)" once marked away, core/host.js `AFK`, its row fainter; "Fallen", or "Resting"; and "At
+  war with your people"), and where they are (game.js `#whereWords`: the floor or building
+  they're in, or the town or named place they're at within 250 m, `PLAYERS_TAB.near`, else "Out
+  in the wilds"; with which way and how far from the player, journal.js `bearing`, or "Near
+  you"). Anyone in no party is to be asked to the player's (**Invite**; "Asked" while they're
+  asked; greyed while it's full); and, for its leader, anyone in it put out of it (**Dismiss**,
+  asked twice: the party's Remove); with a line at the foot on what can be done. In a world on a
+  server, playing together or alone, the menu's header has **World** (game.js `onWorldPanel`,
+  main.js `worldPanelFromParty`): the world's own panel, as the menu's World opens it (docs/
+  SERVER.md *Owning a world*), the game paused under it as the menu pauses it.
 
 **Seen too close** (world/nearfade.js): pushed right up to the player (indoors a metre off, by a
 wall behind; out of doors 2.6 metres, by a building), the camera's near plane would cut through
