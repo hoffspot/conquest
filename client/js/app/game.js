@@ -7742,9 +7742,8 @@ export class Game {
     // reward for it done; their bounty and trophy for felling a commander. Near them
     // (BATTLE_TOLD): the lines of a field battle or the armies met charging, each side's horn blown
     // from its line (an invasion's are its own: #invasion); a reserve or a commander's household
-    // sent in, its side's horn blown twice where it's going; a commander falling, the retreat
-    // sounded where they fell; a standard falling, a body breaking, wheeling onto a flank, falling
-    // back and coming on again
+    // sent in, its side's horn blown twice where it's going; a commander falling, a standard
+    // falling, a body breaking, wheeling onto a flank, falling back and coming on again
     #battleTurn(event) {
         const me = this.battle.actor(this.me);
         const engagement = this.host?.engagements?.().find(({ id }) => id === event.id) ?? null;
@@ -7822,7 +7821,6 @@ export class Game {
                 told(event.part === "vanguard" && event.commander ? `${this.battle.actor(event.commander)?.name ?? Whose} leads their household in!` : `${Whose} reserve goes in!`);
                 break;
             case "commanderFell":
-                this.#invasionHorn("retreatHorn", where);
                 this.battleTold = now + BATTLE_TOLD.every;
                 say(`${event.name || "Their commander"} has fallen! ${Whose} lines are leaderless!`, 5);
                 break;

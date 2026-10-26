@@ -14821,13 +14821,15 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
     expect(ground).not.toBeNull();
     await playUntil(page, () => false, { seconds: 4 });
 
-    // Mustered from the debug overlay, the way the camera looks, each army in its line of battle:
-    // the lines held where they stand till they're all drawn
+    // Mustered from the debug overlay, the way the camera looks, each army drawn up for battle:
+    // the lines held where they stand till they're all drawn (the battle too: docs/WAR.md
+    // *Battles*)
     await page.evaluate(() => {
         const { game } = window.pellagos;
 
         game.fieldBattle(40);
         window.held = {};
+        game.host.fields[0].engagement.next = Infinity;
 
         for (const [id, { to, advance }] of Object.entries(game.battle.formations)) {
             window.held[id] = { to, advance };
@@ -14892,7 +14894,8 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
     expect(seen.instances).toBeGreaterThan(20);
     expect(seen.instances).toBeLessThanOrEqual(seen.crowded);
 
-    // (Each soldier of a line at its place in it, its role's arms in its hands: casters, healers and all)
+    // (Each soldier of a body at its place in it, its role's arms in its hands: casters, healers and
+    // all; each army's line's three bodies, its reserve and its general's household)
     const lines = await page.evaluate(() => {
         const { game } = window.pellagos;
         const fielded = game.battle.actors.filter(({ id }) => id.startsWith("field-"));
@@ -14900,7 +14903,7 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
         return { lines: Object.keys(window.held).length, roles: [...new Set(fielded.map(({ formation }) => formation?.role))].sort(), casters: fielded.filter(({ casts }) => casts?.length).length, healers: fielded.filter(({ heals }) => heals?.length).length };
     });
 
-    expect(lines).toEqual({ lines: 2, roles: ["archer", "caster", "front", "healer", "heavy"], casters: expect.any(Number), healers: expect.any(Number) });
+    expect(lines).toEqual({ lines: 10, roles: ["archer", "caster", "front", "healer", "heavy"], casters: expect.any(Number), healers: expect.any(Number) });
     expect(lines.casters).toBeGreaterThan(4);
     expect(lines.healers).toBeGreaterThan(4);
 
@@ -14911,6 +14914,8 @@ test("the debug overlay's field battle, out on open ground: two armies of 40 mus
         for (const [id, { to, advance }] of Object.entries(window.held)) {
             game.battle.formation(id, { to, advance });
         }
+
+        game.host.fields[0].engagement.next = 0;
     });
 
     const fallen = () => {
@@ -16286,7 +16291,7 @@ test("an invasion: the raiders' war horn blown twice where they come out, the to
     await expect(thanks).toBeHidden();
 });
 
-test("an invasion's two lines charge each other once near: the raiders' horn from their line and the town's answering from its own, both running, and those who fight up close in one press, not standing in their ranks", async ({ page }) => {
+test("an invasion's two lines charge each other once near: the raiders' horn from their line and the town's answering from its own, both running, and those of their lines who fight up close in one press, not standing in their ranks", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=2");
 
@@ -16315,11 +16320,14 @@ test("an invasion's two lines charge each other once near: the raiders' horn fro
     expect(await playUntil(page, () => (window.pellagos.game.host.invasions[0]?.charged ?? null) !== null, { seconds: 60 })).toBe(true);
     await playUntil(page, () => false, { seconds: 1 });
 
+    // (Those of their lines' bodies: not the reserve nor the commander's household held back
+    // behind them, docs/WAR.md *Battles*)
     const charging = await page.evaluate((close) => {
         const { game } = window.pellagos;
         const [invasion] = game.host.invasions;
         const lines = [invasion.formations.invaders, invasion.formations.defenders].map((id) => game.battle.formations[id]);
-        const fighters = [...invasion.invaders, ...invasion.defenders].map((id) => game.battle.actor(id)).filter((one) => one && !one.dead && close.includes(game.host.soldiers.get(one.id).role));
+        const bodies = new Set(invasion.engagement.sides.flatMap(({ bodies: each }) => each.filter(({ part }) => ["left", "centre", "right"].includes(part)).map(({ formation }) => formation)));
+        const fighters = [...invasion.invaders, ...invasion.defenders].map((id) => game.battle.actor(id)).filter((one) => one && !one.dead && close.includes(game.host.soldiers.get(one.id).role) && bodies.has(one.formation?.id));
 
         return {
             horns: window.horns.slice(3),
@@ -16350,11 +16358,12 @@ test("an invasion's two lines charge each other once near: the raiders' horn fro
     const press = await page.evaluate(([close, sight]) => {
         const { game } = window.pellagos;
         const [invasion] = game.host.invasions;
+        const bodies = new Set(invasion.engagement.sides.flatMap(({ bodies: each }) => each.filter(({ part }) => ["left", "centre", "right"].includes(part)).map(({ formation }) => formation)));
         const standing = (ids) => ids.map((id) => game.battle.actor(id)).filter((one) => one && !one.dead);
         const near = (one, foes, within) => foes.some((foe) => Math.hypot(foe.x - one.x, foe.y - one.y) <= within);
 
         return [[invasion.invaders, invasion.defenders], [invasion.defenders, invasion.invaders]].map(([ours, theirs]) => {
-            const fighters = standing(ours).filter((one) => close.includes(game.host.soldiers.get(one.id).role));
+            const fighters = standing(ours).filter((one) => close.includes(game.host.soldiers.get(one.id).role) && bodies.has(one.formation?.id));
             const foes = standing(theirs);
 
             return { fighters: fighters.length, thick: fighters.filter((one) => near(one, foes, 3)).length, idle: fighters.filter((one) => one.target === null && near(one, foes, sight)).length };

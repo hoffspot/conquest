@@ -3962,6 +3962,14 @@ and which way ("Bryn, in Wenches and Ale: 120 m north-east"), rather than walkin
 icon in the party's column is framed in it, their initial in it (`--member-colour`), and the
 party menu shows it by their name.
 
+**Battles near** (app/game.js `battleView`; app/mapicons.js `drawBattleArrow`, `drawCommander`;
+docs/WAR.md *Battles*). Out in the world, over the dots: an arrow from each body of a battle that's
+charging, wheeling round a flank, sent in or sent to try the enemy's line, to where it's going, the
+red of the player's enemies or the green of the rest, rimmed dark; and at each commander standing,
+a crown of gold on a disc of the same (those drawn kept for tests: `battles`). A commander's bar
+over their head is edged and named in gold, as an elite's; a standard-bearer's name is under a
+gold pennant (app/hud.js `track` `rank`).
+
 **Folded into a compass.** A round button over the minimap's top left corner (`#minimapfold`, 30
 pixels) is a compass too: its needle (`#minimapneedle`, red to the north) turns with the camera as the
 folded compass's rose does (below), so its red end points the way north lies on the screen, whereas

@@ -482,7 +482,8 @@ export function stepEngagement(engagement, ctx) {
         }
 
         if (nearest <= FIELD.volley.at) {
-            const volleying = engagement.sides.filter((side) => side.tactics && TACTICS[side.tactic]?.volley);
+            // (Only a side standing in a line of three bodies: a few skirmishing go straight in)
+            const volleying = engagement.sides.filter((side) => side.tactics && TACTICS[side.tactic]?.volley && line(side).length >= LINE.length);
 
             if (volleying.length) {
                 engagement.phase = "volley";
