@@ -3549,6 +3549,13 @@ export class Game {
         this.clock += dt;
         TREE_WIND.time.value = this.clock;
 
+        // (On another map than the one shown, with no crossing seen taking them there: shown the one
+        // they're on. A joined game begun inside, its player taken over upstairs in Wenches and Ale
+        // from another device, was shown the town till the host happened to send the world again)
+        if (mine && mine.map !== this.mapId && this.avatars.has(this.me)) {
+            this.#arrive(mine);
+        }
+
         // (The prints on the ground fading by the clock, seen only out in the world)
         if (this.tracks) {
             this.tracks.update(this.clock);
