@@ -577,6 +577,14 @@ const SENDING = Object.freeze({ every: 2, round: 3 });
 // of the frame's time for building those drawn (VISITS.budget), first
 const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 
+// Shut in: while the player's inside (a building, or down in a dungeon), those out in the world
+// they can't see from there (#walledOff, #onlySeenAbout) held in full only for `after` seconds of
+// it, then let go (#shutIn): the soldiers to their crowds, the folk and the wild's people-shaped
+// creatures undressed, each dressed again as the player comes out, the nearest first. An iPhone on
+// Low let the game's tab go with 49 bodies held in a city's smithy, 3 of them in it (a player's
+// crash report, 2026-10-27)
+const SHUT_IN = Object.freeze({ after: 3 });
+
 // The soldiers' figures sooner, seen in a fight from the first: a world kept or joined in the
 // thick of one has the figures of the kinds of those within `reach` metres of the player made
 // while it loads, the nearest first, for at most `most` seconds (#figuresFirst); and while any
@@ -1294,6 +1302,9 @@ export class Game {
                 // (The wild's people-shaped creatures about, and how many the bodies' budget left
                 // room for in full: #rationing)
                 creatures: this.rationed ?? null,
+                // (The folk out in the world, and how many the bodies' budget left room for in
+                // full: #folkRoom)
+                folk: this.folkRationed ?? null,
                 bodies: { ...this.stats.bodies },
                 actors: this.battle.actors.length,
                 avatars: this.avatars.size,
@@ -1508,12 +1519,16 @@ export class Game {
         // (#rationing)
         this.rationWaiting = new Set();
 
+        // The folk out in the world past the bodies' budget, not drawn till there's room for them
+        // (#folkRoom)
+        this.folkWaiting = new Set();
+
         // Those of them begun, being drawn a step at a time (the nearest the player first: one
         // further off put by for one nearer, and taken up again after): id -> { actor, steps }
         this.enlistees = new Map();
 
-        // Those put aside, a dungeon's walls between them and the player, till the player comes to
-        // them (#walledOff): their ids
+        // Those put aside, a dungeon's walls between them and the player, or out in the world while
+        // the player's inside, till the player comes to them (#walledOff, #shutIn): their ids
         this.aside = new Set();
 
         // (Whether what's built a step at a time can wait on work done elsewhere, a worker's: not
@@ -3565,6 +3580,8 @@ export class Game {
         this.#bossBar(dt);
         this.#allying();
         this.#rationing(dt);
+        this.#shutIn(dt);
+        this.#folkRoom(dt);
         this.#thronging(dt);
         this.#crowding();
         this.#forgetting(dt);
@@ -4577,6 +4594,138 @@ export class Game {
                 }
             }
         }
+    }
+
+    // Those out in the world the player can't see while they're inside (#walledOff: in a building,
+    // or down in a dungeon) let go of once they've been in SHUT_IN.after seconds, a step in and out
+    // again letting go of no one: the soldiers to their crowds (where their kind's figure's made;
+    // else undressed), the folk and the wild's people-shaped creatures undressed; each put aside
+    // (#nextEnlistee) to be dressed again as the player comes out, the nearest first, the soldiers
+    // and creatures as there's room (#marshal, #rationing). Not the wild's beasts built in code
+    // (their bodies shared, each one small), nor anyone's own (#onlySeenAbout). A couple of times
+    // a second
+    #shutIn(dt) {
+        if ((this.shutClock = (this.shutClock ?? 0) - dt) > 0) {
+            return;
+        }
+
+        this.shutClock = MARSHAL.every;
+
+        const me = this.battle.actor(this.me);
+
+        if (!me) {
+            return;
+        }
+
+        if (this.shut?.map !== me.map) {
+            this.shut = { map: me.map, since: this.clock };
+        }
+
+        if (this.clock - this.shut.since < SHUT_IN.after) {
+            return;
+        }
+
+        for (const [id, avatar] of [...this.avatars]) {
+            const actor = this.battle.actor(id);
+
+            if (!actor || avatar instanceof CrowdAvatar || avatar instanceof BeastAvatar || !this.#onlySeenAbout(actor) || !this.#walledOff(actor, me)) {
+                continue;
+            }
+
+            this.#unenlist([id]);
+
+            const kind = actor.kind === "soldier" ? this.#crowdKind(actor).key : null;
+
+            if (kind && this.crowds?.made(kind)) {
+                this.#toCrowd(actor, kind);
+            } else {
+                this.#undress(id);
+                this.aside.add(id);
+            }
+        }
+    }
+
+    // Is someone only there to be seen about out in the world, let go of while the player's
+    // inside (#walledOff, #shutIn): the folk (the townsfolk in the streets, a stranger by the
+    // road), the soldiers and the wild's creatures, but anyone's own (a follower, a tamed or
+    // called beast) and the colossal and a town's engines (seen from far off, slow to make again)
+    #onlySeenAbout(actor) {
+        return (actor.kind === "folk" || actor.kind === "soldier" || actor.kind === "beast") && !actor.leader && !actor.wild?.colossus && !actor.engine;
+    }
+
+    // Is someone one of the folk out in the world (the townsfolk in the streets, a crier in his
+    // square, a stranger by the road), drawn in full only as the bodies' budget has room
+    // (#folkRoom)
+    #streetFolk(actor) {
+        return actor.kind === "folk" && !actor.leader && !this.world.interiors?.of(actor.map);
+    }
+
+    // The folk out in the world held in full no more than the bodies' budget has room for beside
+    // everyone else held in full (QUALITY bodies, as the soldiers and the wild's people-shaped
+    // creatures are: #marshal, #rationing): whoever the player's talking or trading with first,
+    // then the nearest the camera (those on another map last). Those past it are undressed (one
+    // only just past it, MARSHAL.margin, left as it is) or not dressed at all, the furthest first,
+    // and dressed once there's room for them again. Only there to be seen about, they've no crowd
+    // to stand in: past the room, they're not drawn. A couple of times a second
+    #folkRoom(dt) {
+        if ((this.folkClock = (this.folkClock ?? 0) - dt) > 0) {
+            return;
+        }
+
+        this.folkClock = MARSHAL.every;
+
+        const me = this.battle.actor(this.me);
+        const budget = this.view.quality.bodies ?? Infinity;
+
+        if (!me || budget === Infinity) {
+            return;
+        }
+
+        const folk = this.battle.actors.filter((actor) => this.#streetFolk(actor));
+        const ids = new Set(folk.map(({ id }) => id));
+        // (Room beside everyone else held in full, but the wild's beasts built in code: their
+        // bodies shared, each one small)
+        const room = Math.max(0, budget - this.#heldInFull((id) => !ids.has(id) && !(this.avatars.get(id) instanceof BeastAvatar)));
+
+        for (const id of this.folkWaiting) {
+            if (!ids.has(id)) {
+                this.folkWaiting.delete(id);
+            }
+        }
+
+        this.folkRationed = { folk: folk.length, room };
+
+        if (folk.length <= room && !this.folkWaiting.size) {
+            return;
+        }
+
+        const kept = (actor) => actor.id === this.talking?.id || actor.id === this.shopping?.keeper;
+        const ranked = folk.map((actor) => [kept(actor) ? -Infinity : actor.map === me.map ? this.#awayFromCamera(actor) : Infinity, actor]).sort((a, b) => a[0] - b[0]);
+        const queued = (id) => this.enlisting.includes(id) || this.enlistees.has(id) || this.aside.has(id);
+
+        ranked.forEach(([, actor], place) => {
+            const { id } = actor;
+
+            // (With room: dressed again if it was waiting, unless it's out of the player's sight)
+            if (place < room) {
+                if (this.folkWaiting.delete(id) && !this.avatars.has(id) && !queued(id)) {
+                    (this.#walledOff(actor, me) ? this.aside.add(id) : this.enlisting.push(id));
+                }
+
+                return;
+            }
+
+            if (this.folkWaiting.has(id) || (this.avatars.has(id) && place < room + MARSHAL.margin) || (!this.avatars.has(id) && !queued(id))) {
+                return;
+            }
+
+            if (this.avatars.has(id)) {
+                this.#undress(id);
+            }
+
+            this.#unenlist([id]);
+            this.folkWaiting.add(id);
+        });
     }
 
     // The great lairs, and the kind each one's master is (a drake, a Dreadthorn), slain or not
@@ -9072,9 +9221,10 @@ export class Game {
     // dressed till the player comes to them (#nextEnlistee), never seen meanwhile: a level's foes
     // are woken while the player's on the level above (core/host.js #dungeons), and the wild's
     // creatures round a dungeon's way in come and go while the player's below, each a body held
-    // (a level's at once, more than a phone had room for). And the folk out in the world, the
-    // townsfolk in the streets and a stranger by the road, while the player's inside anywhere:
-    // only there to be seen about, they're dressed as the player comes out again
+    // (a level's at once, more than a phone had room for). And those out in the world only there
+    // to be seen about (#onlySeenAbout: the townsfolk in the streets and a stranger by the road,
+    // the soldiers, the wild's creatures), while the player's inside anywhere: they're dressed as
+    // the player comes out again (and any held in full let go of meanwhile: #shutIn)
     #walledOff(actor, me) {
         if (!me || actor.map === me.map) {
             return false;
@@ -9082,7 +9232,7 @@ export class Game {
 
         const interiors = this.world.interiors;
 
-        return interiors?.of(actor.map)?.kind === "dungeon" || interiors?.of(me.map)?.kind === "dungeon" || (actor.kind === "folk" && !interiors?.of(actor.map) && Boolean(interiors?.of(me.map)));
+        return interiors?.of(actor.map)?.kind === "dungeon" || interiors?.of(me.map)?.kind === "dungeon" || (this.#onlySeenAbout(actor) && !interiors?.of(actor.map) && Boolean(interiors?.of(me.map)));
     }
 
     // Every frame, a little more of the buildings being got ready built (the host says which:

@@ -591,7 +591,9 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
 - **Drawn only once a player's among them** (app/game.js `#walledOff`, GAME.md): a level's foes
   aren't dressed while the player's on the level above, nor the first level's while the player's
   outside, nor the world outside's while the player's down in it; coming to a level, its foes are
-  dressed the nearest first.
+  dressed the nearest first. And those held in full on another level, or outside, are let go of
+  once the player's been 3 seconds where they are (`#shutIn`, GAME.md *Getting buildings ready*:
+  not the beasts built in code, nor anyone's own), and dressed again as the player comes to them.
 - **The boss and the mini-bosses stand out** (`CHAMPIONS`): the boss with four times its kind's
   hit points and blows 1.3 times as hard, a mini-boss twice the hit points and 1.12 times as hard,
   each named by its title (the Troll King, a Tomb champion).
