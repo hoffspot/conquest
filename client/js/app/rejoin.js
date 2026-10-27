@@ -97,6 +97,19 @@ export function inWorldOf(storage, now = Date.now()) {
     return null;
 }
 
+/**
+ * Where the player last was, in another's world (or their own open to friends), however long ago,
+ * and nothing forgotten; else null: for a crash to know which world it was in (app/crash-reports.js
+ * crashedIn), before inWorldOf's asked whether to go back in.
+ */
+export function lastInWorld(storage) {
+    try {
+        return valid(JSON.parse(storage?.getItem(REJOIN.key) ?? "null"));
+    } catch {
+        return null;
+    }
+}
+
 /** Let go of where the player was: they've left it as they meant to. */
 export function forgetInWorld(storage) {
     try {

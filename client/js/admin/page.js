@@ -7,7 +7,7 @@
 // - Overview: where players reach it (each address with a QR code), the admin key (on the computer
 //   itself), the internet, about, power, how many worlds it may run, stopping it.
 // - Worlds: a card each, most recently played first, its state in words; Play, Start or Set aside,
-//   Keys, Players, Backups, Settings, Export, Delete (its name typed).
+//   Keys, Players, Backups, Crash reports, Settings, Export, Delete (its name typed).
 // - New world: its basics, heroes and rules; then its owner's and players' keys, as links and QR codes.
 // - Settings: the server's, each with what it's for; creator keys.
 // - Activity: the server's journal and every world's. Health: how each world's keeping up.
@@ -864,6 +864,7 @@ function worldCard(world) {
             button("Keys", () => openWorld(world.id, "keys")),
             button("Players", () => openWorld(world.id, "players")),
             button("Backups", () => openWorld(world.id, "backups")),
+            button("Crash reports", () => openWorld(world.id, "crashes")),
             button("Settings", () => openWorld(world.id, "settings")),
             button("Export", () => doing(() => download(`/worlds/${world.id}/export`), { done: `${world.name} exported: it's in your downloads.` })),
             button("Delete", () => deleteWorld(world), "danger"),
@@ -961,7 +962,7 @@ async function deleteWorld(world) {
     }
 }
 
-// ---- A world's own dialog: settings, keys, players, backups
+// ---- A world's own dialog: settings, keys, players, backups, crash reports
 
 async function openWorld(id, tab = "settings") {
     state.world = id;
@@ -1437,7 +1438,87 @@ async function worldBackups(world) {
     );
 }
 
-const WORLD_TABS = { settings: worldSettings, keys: worldKeys, players: worldPlayers, backups: worldBackups };
+// The crash reports its players' games sent as they came back into it after falling over in it
+// (server/storage/crashes.js: the last five, newest first), each the game's debug log as it stood
+// then: copied all together or one at a time, to send to whoever's looking into them (where the
+// browser won't copy, the text shown selected, to copy by hand); and cleared
+async function worldCrashes(world) {
+    const { crashes } = await call("GET", `/server/worlds/${world.id}/crashes`);
+    const status = h("p", { class: "warning", role: "status" });
+    const out = h("div", {});
+    const copy = async (text, done) => {
+        out.replaceChildren();
+
+        try {
+            await navigator.clipboard.writeText(text);
+            status.textContent = done;
+        } catch {
+            const area = h("textarea", { class: "copy-out", readOnly: true, rows: 12 });
+
+            area.value = text;
+            out.replaceChildren(area);
+            area.select();
+            status.textContent = "Copying wasn't allowed here: it's selected below to copy yourself.";
+        }
+    };
+    const of = (report) => ({ world: { id: world.id, name: world.name }, ...report });
+
+    return h(
+        "div",
+        {},
+        h("p", { class: "muted small" }, "When a player's game falls over in this world and they come back into it, their game sends what it kept of the crash (its debug log), unless they've turned that off in Game options. The last five are kept with the world."),
+        h(
+            "div",
+            { class: "row" },
+            h("button", { type: "button", class: "primary", disabled: !crashes.length, onClick: () => copy(JSON.stringify({ world: { id: world.id, name: world.name }, reports: crashes }, null, 2), crashes.length === 1 ? "Copied the report." : `Copied all ${crashes.length}.`) }, "Copy all"),
+            h(
+                "button",
+                {
+                    type: "button",
+                    class: "danger",
+                    disabled: !crashes.length,
+                    onClick: async () => {
+                        if (await confirmIt({ title: `Clear ${world.name}'s crash reports`, note: "They're gone from the server for good: copy them first if they're wanted.", go: "Clear them" })) {
+                            if (await doing(() => call("DELETE", `/server/worlds/${world.id}/crashes`), { status, done: "Cleared." })) {
+                                await renderWorld();
+                            }
+                        }
+                    },
+                },
+                "Clear",
+            ),
+        ),
+        crashes.length ? null : h("p", { class: "muted" }, "None: no game has fallen over in it and sent one."),
+        h(
+            "div",
+            { class: "table", hidden: !crashes.length },
+            h(
+                "table",
+                {},
+                h("thead", {}, h("tr", {}, ["Crashed", "Who", "What", "Code", ""].map((head) => h("th", {}, head)))),
+                h(
+                    "tbody",
+                    {},
+                    crashes.map((report) =>
+                        h(
+                            "tr",
+                            { dataset: { crash: report.id } },
+                            h("td", {}, when(report.crashed ?? report.received), h("div", { class: "muted small" }, `sent ${when(report.received)}`)),
+                            h("td", {}, report.name ?? report.player ?? "—", report.from === "internet" ? h("div", { class: "muted small" }, "from the internet") : null),
+                            h("td", {}, report.events?.find((event) => event.kind === "crash")?.summary ?? "A crash", h("div", { class: "muted small" }, `${report.events?.length ?? 0} event${report.events?.length === 1 ? "" : "s"} in its log`)),
+                            h("td", {}, h("code", {}, report.code ?? "—")),
+                            h("td", { class: "actions" }, button("Copy", () => copy(JSON.stringify(of(report), null, 2), "Copied."))),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        out,
+        status,
+    );
+}
+
+const WORLD_TABS = { settings: worldSettings, keys: worldKeys, players: worldPlayers, backups: worldBackups, crashes: worldCrashes };
 
 // ---- A new world
 

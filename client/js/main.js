@@ -25,8 +25,9 @@ import { FullScreen } from "./app/fullscreen.js";
 import { formatBytes, Loader } from "./app/loader.js";
 import { MANIFEST } from "./app/manifest.js";
 import { Pointer } from "./app/pointer.js";
-import { forgetInWorld, inWorldOf, keepInWorld, REJOIN, REJOIN_STAGES, rejoinWords } from "./app/rejoin.js";
+import { forgetInWorld, inWorldOf, keepInWorld, lastInWorld, REJOIN, REJOIN_STAGES, rejoinWords } from "./app/rejoin.js";
 import { telemetry } from "./app/telemetry.js";
+import { crashedIn, crashesFor, forgetCrashes, keepCrash, letGoCrash, REFUSED_FOR_GOOD } from "./app/crash-reports.js";
 import { Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
 import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
@@ -842,6 +843,7 @@ $("#floatswitch").checked = settings.stickFloats;
 $("#zoomswitch").checked = settings.zoom;
 $("#pointerswitch").checked = settings.swordPointer;
 $("#largepointerswitch").checked = settings.largePointer;
+$("#crashswitch").checked = settings.sendCrashes;
 showPlaySettings();
 $("#quicksixswitch").checked = settings.quickSix;
 $("#quickalwaysswitch").checked = settings.quickAlways;
@@ -4141,6 +4143,7 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
                 character: !kept && save ? (save.id ?? null) : null,
             },
         });
+        sendCrashes(client, entered);
     };
     joined.joining.onState = () => {
         fetcher.hold("the world again", { for: 5000 });
@@ -4153,6 +4156,36 @@ async function playServerWorld(client, entered, { save = null, hero = undefined,
         fetcher.measure(rtt, { strained: joined.joining.delay > delay });
         delay = joined.joining.delay;
     };
+}
+
+// The crash reports waiting for this world (app/crash-reports.js: the game fell over in it), sent to
+// its server now the player's back in, if they send them (Game options, Debug log), one at a time:
+// each let go of once it's taken or refused for good; if the server can't be reached, or is busy,
+// they wait for the next time. (Welcomed again meanwhile, those already going aren't sent twice)
+let sendingCrashes = false;
+
+async function sendCrashes(client, entered) {
+    if (!settings.sendCrashes || sendingCrashes) {
+        return;
+    }
+
+    sendingCrashes = true;
+
+    try {
+        for (const waiting of crashesFor(localStorage, client.record.key, entered.world)) {
+            try {
+                await client.reportCrash({ world: entered.world, session: entered.session, report: waiting.report });
+            } catch (error) {
+                if (!REFUSED_FOR_GOOD.includes(error.error)) {
+                    return;
+                }
+            }
+
+            letGoCrash(localStorage, waiting.id);
+        }
+    } finally {
+        sendingCrashes = false;
+    }
 }
 
 // How going into a world on a server goes, told on the Worlds screen as ever: a line of words, the
@@ -4563,6 +4596,7 @@ $("#floatswitch").addEventListener("change", (event) => applySetting("stickFloat
 $("#zoomswitch").addEventListener("change", (event) => applySetting("zoom", event.target.checked));
 $("#pointerswitch").addEventListener("change", (event) => applySetting("swordPointer", event.target.checked));
 $("#largepointerswitch").addEventListener("change", (event) => applySetting("largePointer", event.target.checked));
+$("#crashswitch").addEventListener("change", (event) => applySetting("sendCrashes", event.target.checked));
 $("#resistswitch").addEventListener("change", (event) => applySetting("resistSummons", event.target.checked));
 $("#refuseswitch").addEventListener("change", (event) => applySetting("refuseInvites", event.target.checked));
 $("#partydmswitch").addEventListener("change", (event) => applySetting("refusePartyDms", event.target.checked));
@@ -4783,6 +4817,11 @@ function applySetting(key, value) {
         applyCamera();
     } else if (key === "fullscreen") {
         fullScreen.wanted = value;
+    } else if (key === "sendCrashes") {
+        // (Off: those waiting to be sent let go of too)
+        if (!value) {
+            forgetCrashes(localStorage);
+        }
     } else if (key === "sound") {
         state.session?.sound.setEnabled(value);
         showVolumes(value);
@@ -4957,7 +4996,14 @@ async function start() {
     telemetry.build = String(release?.release ?? "");
     telemetry.code = codeVersion();
     telemetry.built = builtAt();
-    telemetry.recover(globalThis.performance?.getEntriesByType?.("navigation")?.[0]?.type ?? "");
+    const crash = telemetry.recover(globalThis.performance?.getEntriesByType?.("navigation")?.[0]?.type ?? "");
+
+    // (Fallen over in a world on a world server: the log as it now stands kept to send there as the
+    // player comes back in, if they send crash reports: app/crash-reports.js)
+    if (crash && settings.sendCrashes) {
+        keepCrash(localStorage, crashedIn(lastInWorld(localStorage), crash), telemetry.log());
+    }
+
     telemetry.observe();
     Steps.slow = (label, ms) => telemetry.job(label, ms);
     Steps.begun = (label) => telemetry.began(label);

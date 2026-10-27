@@ -32,7 +32,7 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=709a7874be",
+                    "./js/app/assets.js": "./js/app/assets.js?h=26f31cdb74",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=75d04a21c9",
                     "./js/app/budget.js": "./js/app/budget.js?h=56125585f0",
@@ -41,6 +41,7 @@
                     "./js/app/catalog.js": "./js/app/catalog.js?h=e7d7150a22",
                     "./js/app/character-file.js": "./js/app/character-file.js?h=d6b9008dda",
                     "./js/app/charge.js": "./js/app/charge.js?h=c8f09bc0a5",
+                    "./js/app/crash-reports.js": "./js/app/crash-reports.js?h=54b2e6e4ad",
                     "./js/app/creator.js": "./js/app/creator.js?h=7fd3466b50",
                     "./js/app/debug.js": "./js/app/debug.js?h=e1cae3d332",
                     "./js/app/device.js": "./js/app/device.js?h=d3701a0855",
@@ -72,8 +73,8 @@
                     "./js/app/quickbar.js": "./js/app/quickbar.js?h=6c0a265d7d",
                     "./js/app/reader.js": "./js/app/reader.js?h=f578240396",
                     "./js/app/readying.js": "./js/app/readying.js?h=4efb30e81a",
-                    "./js/app/rejoin.js": "./js/app/rejoin.js?h=6ffc4b92f8",
-                    "./js/app/save.js": "./js/app/save.js?h=7109c2dfec",
+                    "./js/app/rejoin.js": "./js/app/rejoin.js?h=61dff23565",
+                    "./js/app/save.js": "./js/app/save.js?h=4f2c302261",
                     "./js/app/scramble.js": "./js/app/scramble.js?h=aa35e44833",
                     "./js/app/session.js": "./js/app/session.js?h=9d688f4340",
                     "./js/app/sigil.js": "./js/app/sigil.js?h=a028905f7e",
@@ -82,7 +83,7 @@
                     "./js/app/steering.js": "./js/app/steering.js?h=d29eca38b5",
                     "./js/app/surroundings.js": "./js/app/surroundings.js?h=32c7226c5a",
                     "./js/app/talk.js": "./js/app/talk.js?h=2078b5bbab",
-                    "./js/app/telemetry.js": "./js/app/telemetry.js?h=9b2276cd88",
+                    "./js/app/telemetry.js": "./js/app/telemetry.js?h=151638a065",
                     "./js/app/throng.js": "./js/app/throng.js?h=a99cd2abe2",
                     "./js/app/together.js": "./js/app/together.js?h=91b5fbc29d",
                     "./js/app/updater.js": "./js/app/updater.js?h=78825da8b2",
@@ -296,7 +297,7 @@
                     "./js/core/worldplan/settle.js": "./js/core/worldplan/settle.js?h=75f4607a0d",
                     "./js/core/worldplan/terrain.js": "./js/core/worldplan/terrain.js?h=d0b35d7867",
                     "./js/core/writings.js": "./js/core/writings.js?h=bc540994f2",
-                    "./js/main.js": "./js/main.js?h=c00acafbb4",
+                    "./js/main.js": "./js/main.js?h=367206429b",
                     "./js/world/ailments3d.js": "./js/world/ailments3d.js?h=1d60de08f8",
                     "./js/world/art/engine/atlas.js": "./js/world/art/engine/atlas.js?h=ef27e19379",
                     "./js/world/art/engine/leafcards.js": "./js/world/art/engine/leafcards.js?h=1052ff62f1",
@@ -472,7 +473,7 @@
                 }, { once: true });
             }
         </script>
-        <script type="module" src="js/main.js?h=c00acafbb4"></script>
+        <script type="module" src="js/main.js?h=367206429b"></script>
     </head>
     <body>
         <!-- The world, and the character being made, are drawn here, behind every screen -->
@@ -1350,7 +1351,7 @@
                         <span class="chevron" aria-hidden="true">›</span>
                     </button>
                     <button type="button" class="option-link group" id="logbutton">
-                        <span class="text">Debug log<small>The last times the game slowed or failed, to copy and send</small></span>
+                        <span class="text">Debug log<small>The last times the game slowed or failed, to copy and send; crash reports to world servers</small></span>
                         <span class="chevron" aria-hidden="true">›</span>
                     </button>
                 </div>
@@ -1607,6 +1608,13 @@
                     <h2 id="logtitle">Debug log</h2>
                 </div>
                 <p class="wheels-note">The last five times the game froze, slowed, hit an error or crashed, the newest first, with what was going on then. Copy it to send to whoever's looking into it.</p>
+                <div class="options">
+                    <label class="switch option">
+                        <span class="text">Send crash reports<small>If the game falls over in a world on a world server, the log is sent to that server when you're back in the world, for its admin to look into</small></span>
+                        <input type="checkbox" id="crashswitch" role="switch">
+                        <span class="track" aria-hidden="true"></span>
+                    </label>
+                </div>
                 <p class="wheels-note" id="logversion"></p>
                 <div id="logentries" class="log" aria-live="polite"></div>
                 <p class="log-status" id="logstatus" role="status"></p>

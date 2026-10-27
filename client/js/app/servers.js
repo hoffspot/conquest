@@ -631,6 +631,14 @@ export class ServerClient {
         return this.#call("POST", `/worlds/${world}/heroes/${slot}/home`, { session });
     }
 
+    /**
+     * A crash report sent to a world, by the player's session in it (app/crash-reports.js: the
+     * debug log as it stood when the game fell over there): { id, received }. Throws ServerRefusal.
+     */
+    async reportCrash({ world, session, report }) {
+        return this.#call("POST", `/worlds/${world}/crashes`, { session, body: { report } });
+    }
+
     /** A short code traded for its world and key, then into it, as enter(). Proves the server first. */
     // The player's own identity's proof, for the server it's proved (made fresh each time: a server takes each once)
     #shown() {
