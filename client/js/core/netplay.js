@@ -101,9 +101,11 @@ import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
 import { decode, encode, fromBase64, toBase64 } from "./wire.js";
 import { RACE, startFor } from "./worldplan/plan.js";
+import { CREATURES, TIERS } from "./creatures.js";
+import { WARY } from "./wary.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 188;
+export const NET_VERSION = 189;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -259,7 +261,13 @@ export function characterFrom(character) {
 
     const race = RACE[hero.race] ? hero.race : "human";
     const talks = isObject(character.talks) ? character.talks : {};
-    const followers = Array.isArray(character.followers) ? character.followers.filter((one) => isObject(one) && typeof one.name === "string" && HIRES[one.calling]).slice(0, 8) : [];
+    const brought = Array.isArray(character.followers) ? character.followers.filter(isObject) : [];
+    // (Their hired followers, and a beast they've tamed, one: core/wary.js)
+    const tamed = brought.find((one) => one.tamed === true && WARY[one.creature]?.tames && Number.isInteger(one.tier) && one.tier >= 1 && one.tier <= TIERS);
+    const followers = [
+        ...brought.filter((one) => typeof one.name === "string" && HIRES[one.calling]).slice(0, 8),
+        ...(tamed ? [{ tamed: true, creature: tamed.creature, tier: tamed.tier, name: typeof tamed.name === "string" && tamed.name.trim() ? tamed.name.trim().slice(0, 20) : CREATURES[tamed.creature].name }] : []),
+    ];
 
     const kept = { ...structuredClone(hero), name: hero.name.trim().slice(0, 20).trim(), race, parts: Array.isArray(hero.parts) ? hero.parts.filter((part) => typeof part === "string").slice(0, 4) : [] };
 

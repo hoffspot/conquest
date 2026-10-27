@@ -182,7 +182,7 @@ describe("growing stronger (progress.js)", () => {
         assert.ok(wares("smith", "lizard").some(({ id, people }) => id === "cloak" && people === "lizard"));
         assert.ok(wares("guild").some(({ id }) => id === "ring"));
         assert.ok(!smith.some(({ quality }) => quality === "legendary"));
-        assert.deepEqual(wares("tavern"), [{ id: "ale", quality: "common" }, { id: "meal", quality: "common" }]);
+        assert.deepEqual(wares("tavern"), [{ id: "ale", quality: "common" }, { id: "meal", quality: "common" }, { id: "meatBait", quality: "common" }, { id: "feedBag", quality: "common" }]);
         assert.deepEqual(wares("nowhere"), []);
 
         for (const [shop, { items }] of Object.entries(SHOPS)) {

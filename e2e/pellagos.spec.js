@@ -5,6 +5,7 @@ import { behemothSides, BOMBERS, ENGINES, INVASION, REWARD, SIZE } from "../clie
 import { stagesOf } from "../client/js/core/burnt.js";
 import { branchesFound, fareOf } from "../client/js/core/portals.js";
 import { NATURAL } from "../client/js/core/weapons.js";
+import { AMBUSH } from "../client/js/core/ambush.js";
 import { guilds, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
 
 // Pellagos in a real browser. The page exposes itself as window.pellagos ({ game, session,
@@ -8342,7 +8343,7 @@ test("the pack shows what's grown and carried; a skill ranks up with use; tradin
     await expect(modes.getByRole("tab")).toHaveText(["Buy", "Sell"]);
     await expect(modes.getByRole("tab", { name: "Buy" })).toHaveAttribute("aria-selected", "true");
     await expect(pack.locator(".pack-heading")).toHaveText(["Food, drink and draughts"]);
-    await expect(pack.locator(".wares .pack-row")).toHaveText(["Hot meal5 goldBuy", "Tankard of ale2 goldBuy"]);
+    await expect(pack.locator(".wares .pack-row")).toHaveText(["Feed bag2 goldBuy", "Hot meal5 goldBuy", "Meat bait3 goldBuy", "Tankard of ale2 goldBuy"]);
 
     // Tapped, a ware opens to say what it is (one at a time); tapped again, it closes
     const ware = (name) => pack.locator(".wares .pack-row", { hasText: name });
@@ -10646,7 +10647,7 @@ test("the wilds director deals a fallen adventurer's remains ahead of a player c
 test("the wilds director's pacing: after a long calm, the land's hunters heard ahead of the player, told which way; a while later they come for them, said; and after a hard fight, a quiet spell, said", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
-    const heard = await page.evaluate(async () => {
+    const heard = await page.evaluate(async (silent) => {
         const { game } = window.pellagos;
         const { host } = game;
         const player = game.battle.actor("player");
@@ -10682,6 +10683,11 @@ test("the wilds director's pacing: after a long calm, the land's hunters heard a
         Object.assign(player, { x: sx, y: sy - 600, square: [Math.floor(sx), Math.floor(sy - 600)], path: [], order: null, target: null });
         host.travel.set("player", { at: [player.x, player.y], walked: 0, next: 1e9, heading: [0, -1], deck: ["cache"] });
         settle(1);
+
+        // (Heard, never an ambush laid in silence in its stead: core/ambush.js AMBUSH `silent`)
+        const chance = host.random.chance.bind(host.random);
+
+        host.random.chance = (share) => chance(share) && share !== silent;
         Object.assign(host.travel.get("player").pace, { lastFight: game.battle.time - 300000, calm: 500 });
         settle(1.5);
 
@@ -10702,7 +10708,7 @@ test("the wilds director's pacing: after a long calm, the land's hunters heard a
         await new Promise((resolve) => setTimeout(resolve, 0));
 
         return { build: Boolean(build), told: told.filter(Boolean), played };
-    });
+    }, AMBUSH.silent);
 
     expect(heard.build).toBe(true);
     expect(heard.told.some((text) => /^(Drums, somewhere off to the [a-z-]+\. They're coming this way\.|An? .+ calls, somewhere off to the [a-z-]+, and others answer\.)$/.test(text)), JSON.stringify(heard.told)).toBe(true);
@@ -10914,6 +10920,262 @@ test("the wilds director puts strangers on the way: a pedlar selling odds and en
     expect(after.told.some((text) => text.startsWith("Someone's down ahead, hurt")), JSON.stringify(after.told)).toBe(true);
     expect(after.told.some((text) => new RegExp(`^${hunter.name.split(" ")[0]} tells you of .+ near .+\\. It's in your journal, and on your map\\.$`).test(text)), JSON.stringify(after.told)).toBe(true);
     expect(after.told.some((text) => text.startsWith("Bandits bar your way, hungry")), JSON.stringify(after.told)).toBe(true);
+});
+
+// The wild's wary beasts, by hand (core/wary.js; run in the page): out in the wilds 600 m north of
+// the start town, the orc gone and the player hard to kill, every word on the banner kept; a wolf
+// of the wild's put out `metres` north of them as the host puts the wary beasts out roaming
+// (core/host.js #rouse: reacting, one of a pack of one), its dice thrown 2 and swayed by `nerve`
+// (battle.js `nerve`), the camera turned to it. The game stopped, and played on by hand, drawn as
+// it goes (window.wild: { settle, goTo, told })
+const WARY_WILDS = async ({ metres, nerve }) => {
+    const { game } = window.pellagos;
+    const { host, battle } = game;
+    const player = battle.actor("player");
+    const told = [];
+
+    game.stop();
+    Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+    Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+    new MutationObserver((records) => told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+
+    const settle = async (steps, render = true) => {
+        for (let k = 0; k < steps; k++) {
+            game.advance(0.25, { render });
+
+            while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        }
+    };
+    const goTo = (x, y) => Object.assign(player, { x, y, square: [Math.floor(x), Math.floor(y)], path: [], order: null, progress: null, target: null });
+
+    goTo(player.x, player.y - 600);
+    await settle(2);
+
+    const square = [player.square[0], player.square[1] - metres];
+
+    host.wild.set("wary-wolf", { creature: "wolf", tier: 2, pack: "wary-wolf", camp: null, lair: null, master: false });
+    battle.add({ id: "wary-wolf", kind: "beast", name: "Wolf", weapon: "wolf", team: "beasts", square, ai: "wild", hp: 400, speed: 1.4, chase: 3.2, wild: { creature: "wolf", tier: 2, temper: "aggressive", guard: 0, roam: 0, leash: 40, pack: "wary-wolf", leader: null, menace: true, reacts: true, packSize: 1 } });
+    battle.place("wary-wolf", "town", square);
+    battle.actor("wary-wolf").chance = { next: () => 0, int: (low) => low, state: 0 };
+    battle.nerve = () => nerve;
+    game.cameraFollow.yaw = Math.atan2(player.x - battle.actor("wary-wolf").x, player.y - battle.actor("wary-wolf").y);
+    game.cameraFollow.turning = 0;
+
+    // (Told of as the host tells of those it puts out, and played on till it's drawn: its kind's
+    // model fetched and made, a step at a time), not minded till then
+    host.events.push({ type: "roused", time: battle.time, ids: ["wary-wolf"], creature: "wolf" });
+    battle.actor("wary-wolf").ai = null;
+
+    for (let k = 0; k < 900 && !game.avatars.has("wary-wolf"); k++) {
+        game.advance(1 / 30, { render: false, wait: true });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    battle.actor("wary-wolf").ai = "wild";
+    window.wild = { settle, goTo, told };
+};
+
+test("a wary wolf out in the wilds is minded by a reaction roll: warning the player off, its mark on its bar, and told them once they know wolves well; charging once they come on", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    // A wolf 10 m off, its dice thrown 2 and swayed +2 (4: core/wary.js REACTION): it warns them
+    // off, standing its ground, its display made
+    await page.evaluate(WARY_WILDS, { metres: 10, nerve: 2 });
+
+    const met = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const { settle, goTo, told } = window.wild;
+
+        // (Wolves known well: their page in the bestiary at Known, core/bestiary.js)
+        game.progress.bestiary.kinds.wolf = { points: 8, seen: true, signs: 0, slain: 0 };
+
+        const wolf = battle.actor("wary-wolf");
+        const player = battle.actor("player");
+        const mark = () => {
+            const chip = game.hud.tracked.get("wary-wolf")?.querySelector(".mood") ?? null;
+
+            return chip && { text: chip.textContent, title: chip.title };
+        };
+
+        await settle(8);
+
+        const warning = { mood: wolf.mood?.kind ?? null, mark: mark(), warned: wolf.warnedAt > 0, after: wolf.target, far: Math.hypot(wolf.x - player.x, wolf.y - player.y) };
+
+        // Come on, within 5 m: it charges
+        goTo(wolf.x, wolf.y + 4);
+        await settle(2);
+
+        return { warning, charged: { mood: wolf.mood?.kind ?? null, after: wolf.target, mark: mark() }, told };
+    });
+
+    expect(met.warning).toMatchObject({ mood: "warn", mark: { text: "!", title: "Warning you off" }, warned: true, after: null });
+    expect(met.warning.far).toBeGreaterThan(8);
+    expect(met.told).toContain("The wolf's hackles are up: it'll come at you if you come on, or stay. Back away.");
+    expect(met.charged).toEqual({ mood: "attack", after: "player", mark: null });
+});
+
+test("meat bait the player carries goes on an enemy's wheel of itself the first time; thrown from it to a curious wolf, it arcs to its feet and is eaten; fed enough, the wolf follows them, tamed, down the party's side", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    const wheel = page.locator(".action-wheel");
+
+    // A wolf 7 m off, its dice thrown 2 and swayed +10 (12: core/wary.js REACTION): curious, it
+    // comes up to them; four meat baits in the pack, one dropped (anything done with what they
+    // carry, and the bait's put on a wheel)
+    await page.evaluate(WARY_WILDS, { metres: 7, nerve: 10 });
+
+    const placed = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { settle, told } = window.wild;
+
+        game.progress.stow({ id: "meatBait" }, 4);
+        game.host.command(game.me, { type: "drop", index: game.progress.slotOf("meatBait"), count: 1 });
+        await settle(8);
+
+        const wolf = game.battle.actor("wary-wolf");
+        const place = Object.entries(game.wheels.enemy[0]).find(([, key]) => key === "item:meatBait")?.[0] ?? null;
+
+        return { place, mood: wolf.mood?.kind ?? null, mark: game.hud.tracked.get("wary-wolf")?.querySelector(".mood")?.textContent ?? null, told: [...told], at: session.view.toScreen(game.avatars.get("wary-wolf").point(0.5)), carried: game.progress.held("meatBait") };
+    });
+
+    expect(placed.place).not.toBeNull();
+    expect(placed.told).toContain(`Meat bait is on an enemy's wheel one, at ${placed.place.toUpperCase()}: hold on a beast and throw it to them.`);
+    expect(placed).toMatchObject({ mood: "curious", mark: "?", carried: 3 });
+
+    // Held on the wolf: the bait on its slice ("Meat"); flicked into it, thrown
+    const { x, y } = placed.at;
+    const way = { n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], sw: [-1, 1], w: [-1, 0], nw: [-1, -1] }[placed.place];
+
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await expect(wheel).toBeVisible();
+    await expect(wheel.locator(`.slice[data-direction="${placed.place}"] .label`)).toHaveText("Meat");
+    await page.mouse.move(x + way[0] * 20, y + way[1] * 20, { steps: 2 });
+    await page.mouse.move(x + way[0] * 50, y + way[1] * 50, { steps: 2 });
+    await page.mouse.up();
+
+    const fed = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { battle } = game;
+        const wolf = battle.actor("wary-wolf");
+        const thrown = [];
+
+        game.stop();
+
+        // (The bait in the air, then on the ground at its feet; the wolf eating it, and curious of
+        // them the more for it)
+        for (let k = 0; k < 40 && !battle.baits.length; k++) {
+            game.advance(0.05);
+        }
+
+        thrown.push(...battle.baits.map(({ by, kind, x, y }) => ({ by, kind, near: Math.hypot(x - wolf.x, y - wolf.y) < 1.5 })));
+
+        for (let k = 0; k < 60 && battle.baits.length; k++) {
+            game.advance(0.25, { render: k % 8 === 0 });
+        }
+
+        const first = { thrown, eaten: !battle.baits.length, feedings: wolf.mood?.feedings ?? 0, mood: wolf.mood?.kind ?? null };
+
+        // Twice more, from the Action Bar's way of doing it (game.act): tamed
+        for (let throws = 0; throws < 2 && battle.actor("wary-wolf"); throws++) {
+            game.act("item:meatBait", "wary-wolf");
+
+            for (let k = 0; k < 60 && battle.actor("wary-wolf") && (battle.baits.length || battle.actor("wary-wolf").mood?.feedings === throws + 1); k++) {
+                game.advance(0.25, { render: false });
+            }
+        }
+
+        for (let k = 0; k < 8; k++) {
+            game.advance(0.25);
+        }
+
+        const tamed = [...game.host.companions.entries()].find(([, one]) => one.tamed) ?? null;
+
+        return { first, tamed: tamed && { creature: tamed[1].creature, leader: tamed[1].leader, until: tamed[1].until }, wild: battle.actor("wary-wolf")?.dead === false, carried: game.progress.held("meatBait"), told: window.wild.told };
+    });
+
+    expect(fed.first).toEqual({ thrown: [{ by: "player", kind: "meat", near: true }], eaten: true, feedings: 1, mood: "curious" });
+    expect(fed.tamed).toEqual({ creature: "wolf", leader: "player", until: null });
+    expect(fed.wild).toBe(false);
+    expect(fed.carried).toBe(0);
+    expect(fed.told).toContain("The wolf follows you now, fed and tamed: yours till it falls, or you let it go.");
+    await expect(page.locator("#party .member.tamed")).toHaveCount(1);
+    await expect(page.locator("#party .member.tamed")).toHaveAttribute("aria-label", "Wolf, tamed, at your side");
+});
+
+test("the wilds director lays an ambush ahead of a player crossing the wilds: its band hidden in cover, no bars over them; told as they come near, then sprung on them, said, and after them", async ({ page }) => {
+    await playing(page, "/?play&seed=1");
+
+    const laid = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const { host, battle } = game;
+        const player = battle.actor("player");
+        const told = [];
+
+        game.stop();
+        Object.assign(battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+        new MutationObserver((records) => told.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(document.querySelector("#banner"), { childList: true });
+
+        const settle = async (steps, render = true) => {
+            for (let k = 0; k < steps; k++) {
+                player.hp = player.maxHp;
+                game.advance(0.25, { render });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+        const goTo = (x, y) => Object.assign(player, { x, y, square: [Math.floor(x), Math.floor(y)], path: [], order: null, progress: null, target: null });
+
+        // Out in the wilds 600 m north of the start town, going north, owed the ambush card
+        goTo(player.x, player.y - 600);
+        await settle(2);
+        host.travel.set("player", { at: [player.x, player.y], walked: 600, next: 600, heading: [0, -1], deck: ["ambush"] });
+        await settle(4);
+
+        const [ambush] = host.ambushes.values();
+
+        if (!ambush) {
+            return null;
+        }
+
+        const band = () => ambush.ids.map((id) => battle.actor(id)).filter(Boolean);
+        const hidden = band().filter((one) => one.hidden === true).map(({ id }) => id);
+        const unseen = hidden.every((id) => !game.hud.tracked.has(id) && game.avatars.get(id)?.object.visible !== true);
+
+        // Coming up the way they were going, 20 m short of its heart: told
+        const [hx, hy] = ambush.heart;
+        const [ax, ay] = ambush.axis;
+
+        goTo(hx - ax * 20, hy - ay * 20);
+        await settle(3);
+
+        const tell = { told: ambush.toldAt !== null, sprung: ambush.sprung };
+
+        // Walked into it: sprung, its band out of cover and after them
+        goTo(hx, hy);
+        await settle(6);
+
+        return { style: ambush.style, count: ambush.ids.length, hidden: hidden.length, unseen, tell, sprung: ambush.sprung, after: band().filter((one) => !one.dead && one.target === "player").length, shown: band().filter((one) => !one.hidden).length, told };
+    });
+
+    expect(laid).not.toBeNull();
+    expect(laid.count).toBeGreaterThanOrEqual(3);
+    expect(laid.hidden).toBeGreaterThan(0);
+    expect(laid.unseen).toBe(true);
+    expect(laid.tell).toEqual({ told: true, sprung: false });
+    expect(laid.told.some((text) => /^(Steel glints in the brush ahead|A twig snaps in the brush ahead|The birds burst from the trees ahead|The earth ahead's been turned|Fresh webs strung across the way ahead|Their sleeve bears a mark)/.test(text)), JSON.stringify(laid.told)).toBe(true);
+    expect(laid.sprung).toBe(true);
+    expect(laid.told.some((text) => /^(Ambush! |The dead rise from the earth round you!|Spiders! All round you!|It's a trap! Cultists!)/.test(text)), JSON.stringify(laid.told)).toBe(true);
+    expect(laid.after).toBeGreaterThan(0);
+    expect(laid.shown).toBe(laid.count);
 });
 
 test("the wilds director lays a fallen tree across the way: drawn over its squares, said, the way round it; held on, the player walks up to it and clears it, swinging at it, and it's gone for everyone", async ({ page }) => {

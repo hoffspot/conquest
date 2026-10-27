@@ -83,6 +83,7 @@ import { rollHeal, rollSpell, SCHOOLS, SPELL_COOLDOWN, SPELLS, WARD } from "./sp
 import { Variety } from "./variety.js";
 import { armsOf, blowEvery, chooseAttack, distanceBetween, longestReach, MELEE_REACH, ringsApart, rollDamage, WEAPONS } from "./weapons.js";
 import { CHARGE, effectAt, EFFECTS } from "./legendary.js";
+import { BAIT, eats, MOODS, MORALE, moodFor, NERVE, twoDice, WARY } from "./wary.js";
 import { atan2, cos, hypot, pow, sin } from "./exact.js";
 
 /**
@@ -230,6 +231,13 @@ export const BOMBS = Object.freeze({
     bile: { radius: 2.4, toss: 0.4, fuse: 1000, speed: 9, soonest: 0, look: "bile", element: "earth", afflict: { kind: "poison", chance: 0.8 } },
     firePot: { radius: 3.5, toss: 1.1, fuse: 100, speed: 16, soonest: 900, afflict: { kind: "burn", chance: 0.8 } },
 });
+
+// Food thrown to beasts (core/wary.js BAIT, toss): how fast it flies (metres a second) and how
+// soon it lands at the soonest (ms); how far short of whoever it's thrown to it lands, and how
+// near it a beast eats it (metres)
+const BAIT_FLIGHT = Object.freeze({ speed: 9, soonest: 400 });
+const BAIT_SHORT = 0.8;
+const BAIT_EAT_FROM = 1.3;
 
 /**
  * How far up one that's taken to the air is (battle.js #hover: its `aloft`, { from, down,
@@ -662,11 +670,13 @@ export class Battle {
      * @param {Function} [options.haven] - Whether someone's in a sanctuary (the host's: a shrine's,
      *     core/shrines.js), the wild's creatures never going after them there.
      */
-    constructor(world, { seed = 1, relations = null, allied = null, haven = null } = {}) {
+    constructor(world, { seed = 1, relations = null, allied = null, haven = null, nerve = null } = {}) {
         this.world = world;
         this.relations = relations;
         this.allied = allied;
         this.haven = haven;
+        // (What sways a wary beast meeting a player, beyond its temper: the host's, core/wary.js nerveOf)
+        this.nerve = nerve;
 
         // The maps (the world itself if it has only the one) and the links between them
         this.maps = world.maps ?? { town: world };
@@ -691,6 +701,12 @@ export class Battle {
         // damage, power, by, team, caster }
         this.bombs = [];
         this.nextBomb = 1;
+
+        // Food thrown to the wild's beasts (core/wary.js BAIT, toss): { id, kind ("meat" or
+        // "feed"), map, x, y, from (where it was thrown from: [x, y]), thrown, lands, until, by,
+        // taken (the pack eating it, or null) }
+        this.baits = [];
+        this.nextBait = 1;
 
         // The colossal's breaths being raked over the ground (#colossal, #rake): { by, map, x, y
         // (where it stood), way ([x, y]: the way it faced), start, end (ms), next (its next blast,
@@ -1105,8 +1121,9 @@ export class Battle {
      * otherwise as their teams stand (`relations`: the peoples' war), or always, without that.
      */
     hostile(a, b) {
-        // (Nor one lurking unseen overhead, till it drops: #lurk)
-        return !a.lurking && !b.lurking && this.#hostile(a, b);
+        // (Nor one lurking unseen overhead, till it drops: #lurk; nor one hidden in cover, waiting
+        // to spring an ambush, till it's glimpsed or springs: core/ambush.js)
+        return !a.lurking && !b.lurking && a.hidden !== true && b.hidden !== true && this.#hostile(a, b);
     }
 
     #hostile(a, b) {
@@ -1173,6 +1190,8 @@ export class Battle {
             nextHazard: this.nextHazard,
             bombs: structuredClone(this.bombs),
             nextBomb: this.nextBomb,
+            baits: structuredClone(this.baits),
+            nextBait: this.nextBait,
             breaths: structuredClone(this.breaths),
             formations: structuredClone(this.formations),
         };
@@ -1197,10 +1216,11 @@ export class Battle {
             projectiles: [],
             hazards: [],
             bombs: [],
+            baits: [],
             breaths: [],
             formations: {},
         };
-        const forked = Battle.restore(this.world, part, { relations: this.relations, allied: this.allied, haven: this.haven });
+        const forked = Battle.restore(this.world, part, { relations: this.relations, allied: this.allied, haven: this.haven, nerve: this.nerve });
 
         forked.bakedOnly = true;
 
@@ -1208,10 +1228,10 @@ export class Battle {
     }
 
     /** A battle on `world` carrying on from a snapshot (snapshot()), its teams standing as `relations` has them. */
-    static restore(world, snapshot, { relations = null, allied = null, haven = null } = {}) {
-        const battle = new Battle(world, { seed: snapshot.seed, relations, allied, haven });
+    static restore(world, snapshot, { relations = null, allied = null, haven = null, nerve = null } = {}) {
+        const battle = new Battle(world, { seed: snapshot.seed, relations, allied, haven, nerve });
 
-        Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1, bombs: structuredClone(snapshot.bombs ?? []), nextBomb: snapshot.nextBomb ?? 1, breaths: structuredClone(snapshot.breaths ?? []), formations: structuredClone(snapshot.formations ?? {}) });
+        Object.assign(battle, { time: snapshot.time, lag: snapshot.lag, nextProjectile: snapshot.nextProjectile, projectiles: structuredClone(snapshot.projectiles), hazards: structuredClone(snapshot.hazards ?? []), nextHazard: snapshot.nextHazard ?? 1, bombs: structuredClone(snapshot.bombs ?? []), nextBomb: snapshot.nextBomb ?? 1, baits: structuredClone(snapshot.baits ?? []), nextBait: snapshot.nextBait ?? 1, breaths: structuredClone(snapshot.breaths ?? []), formations: structuredClone(snapshot.formations ?? {}) });
         battle.random.state = snapshot.random;
         battle.actors = snapshot.actors.map(({ chance: state, restVariety, to, steering, ...kept }) => {
             const actor = structuredClone(kept);
@@ -2014,6 +2034,7 @@ export class Battle {
 
         this.#fly();
         this.#burst();
+        this.#spoil();
         this.#rake();
         this.#ground();
         this.#ail();
@@ -2119,6 +2140,21 @@ export class Battle {
         // (Lurking overhead: only watching for whoever comes beneath it)
         if (actor.lurking) {
             this.#lurk(actor);
+
+            return;
+        }
+
+        // (Hidden in cover, or glimpsed there, or lying in wait in plain sight (an ambush's bait,
+        // its lure), waiting to spring an ambush: only keeping still till it does, the one in
+        // sight watching whoever's coming, core/ambush.js, the host's #ambushesAbout)
+        if (actor.hidden || actor.lying) {
+            actor.path = [];
+
+            const coming = actor.lying ? this.#nearestEnemy(actor, () => true, SIGHT * 2) : null;
+
+            if (coming) {
+                actor.facing = atan2(coming.x - actor.x, coming.y - actor.y);
+            }
 
             return;
         }
@@ -2792,7 +2828,16 @@ export class Battle {
         // those chasing give up at its edge, `haven`)
         const struck = (other) => (actor.struckBy?.[other.id] ?? -Infinity) > this.time;
         const leashed = (other) => struck(other) || (distanceBetween(home, other.square) <= wild.leash && !this.haven?.(other));
-        const rouses = (enemy) => provoked(enemy) || wild.temper === "aggressive" || (wild.temper === "territorial" && distanceBetween(actor.square, enemy.square) <= wild.guard);
+
+        // (A wary beast, minded as it is: #wary; set on someone only once struck, or minded to
+        // come for them)
+        if (wild.reacts && this.#wary(actor, leashed)) {
+            return;
+        }
+
+        const rouses = wild.reacts
+            ? (enemy) => provoked(enemy) || (actor.mood?.kind === "attack" && actor.mood.by === enemy.id)
+            : (enemy) => provoked(enemy) || wild.temper === "aggressive" || (wild.temper === "territorial" && distanceBetween(actor.square, enemy.square) <= wild.guard);
         const seen = this.#nearestSeen(actor, (enemy) => leashed(enemy) && rouses(enemy));
 
         if (seen) {
@@ -2874,6 +2919,550 @@ export class Battle {
             } catch {
                 // (Nowhere to stand there: another time)
             }
+        }
+    }
+
+    // --- Wary beasts (core/wary.js) ---
+
+    // A wary beast's own mind (true: it's done what it does this moment; false: on as any of the
+    // wild, after whoever it's set on, or wandering): its nerve gone, limping off (#limpOff); food
+    // thrown it, going to it and eating (#forage); minded on first seeing a player by a reaction
+    // roll (twoDice, and what sways it: the host's `nerve`, or its temper alone), and as minded,
+    // coming for them, warning them off (#warnOff), watching or stalking them (#watch, #stalk),
+    // keeping away (#keepAway), coming up curious (#nose), or, fed, leaving them be
+    #wary(actor, leashed) {
+        const wild = actor.wild;
+
+        if (actor.mood?.kind === "flee") {
+            return this.#limpOff(actor);
+        }
+
+        // (Badly hurt: its nerve gone; not one standing its ground at its den)
+        if (actor.hp <= actor.maxHp * MORALE.below && !wild.stands) {
+            this.#unnerve([actor]);
+
+            return this.#limpOff(actor);
+        }
+
+        if (this.#forage(actor)) {
+            return true;
+        }
+
+        // (Set on someone, struck or minded to: as any of the wild, after them)
+        if (actor.target !== null) {
+            if (actor.mood?.kind !== "attack") {
+                this.#mind(actor, "attack", actor.target);
+            }
+
+            return false;
+        }
+
+        // (Fed and the while over, or minded about someone gone, or far from its home: minded
+        // afresh, the next it sees)
+        let mood = actor.mood ?? null;
+        const by = mood ? this.actor(mood.by) : null;
+
+        if (mood && ((mood.until !== null && this.time >= mood.until) || !by || by.dead || by.map !== actor.map || distanceBetween(actor.spawn, by.square) > wild.leash + MOODS.watch.follow)) {
+            actor.mood = mood = null;
+        }
+
+        if (!mood) {
+            const seen = this.#nearestSeen(actor, (other) => other.kind === "player" && leashed(other));
+
+            if (!seen) {
+                return false;
+            }
+
+            mood = this.#mind(actor, moodFor(wild.creature, twoDice(actor.chance) + (this.nerve?.(actor, seen) ?? NERVE.tempers[wild.temper] ?? 0)), seen.id);
+        }
+
+        const player = this.actor(mood.by);
+        const far = hypot(player.x - actor.x, player.y - actor.y);
+
+        // (Left behind unfought: spared, and the player the wiser for it, core/bestiary.js)
+        if (mood.kind !== "attack" && !mood.spared && far > MOODS.spared) {
+            for (const other of this.#packOf(actor)) {
+                other.mood.spared = true;
+            }
+
+            this.#emit("spared", { id: actor.id, by: mood.by, creature: wild.creature });
+        }
+
+        switch (mood.kind) {
+            case "warn":
+                return this.#warnOff(actor, player, far);
+            case "watch":
+                return WARY[wild.creature]?.predator ? this.#stalk(actor, player, far) : this.#watch(actor, player, far);
+            case "avoid":
+                return this.#keepAway(actor, player, far);
+            case "curious":
+                return this.#nose(actor, player, far);
+            default:
+                // (Minded to come for them: after them as any of the wild; fed: leaving them be,
+                // wandering as it would)
+                return false;
+        }
+    }
+
+    // A wary beast minded (`kind`: core/wary.js moodFor) about a player (`by`), and the rest of its
+    // pack with it, as one (`until`: when it's to be minded afresh, or null); told ("mood"). How
+    // often it's been fed by them, curious, kept
+    #mind(actor, kind, by, { until = null } = {}) {
+        for (const other of this.#packOf(actor)) {
+            other.mood = { kind, by, at: this.time, until, spared: other.mood?.spared ?? false, feedings: other.mood?.feedings ?? 0 };
+            other.lingering = null;
+            other.warnedAt = 0;
+        }
+
+        this.#emit("mood", { id: actor.id, pack: actor.wild.pack, kind, by });
+
+        return actor.mood;
+    }
+
+    // A wary beast's pack, alive and on its map: itself among them (itself alone, none)
+    #packOf(actor) {
+        const pack = actor.wild?.pack;
+
+        return pack ? this.actors.filter((other) => other.wild?.pack === pack && other.wild.reacts && !other.dead && other.map === actor.map) : [actor];
+    }
+
+    // Warning them off (MOODS.warn): standing its ground turned to them, its display (WARY
+    // `display`) made every so often while they're within `within` ("warning"); charging one who
+    // comes on (within `near`, or its guard) or stays (past `linger`); settled once they're off
+    // past `settle`
+    #warnOff(actor, player, far) {
+        const warn = MOODS.warn;
+
+        if (far > warn.settle) {
+            actor.lingering = null;
+
+            return false;
+        }
+
+        actor.path = [];
+        actor.pathGoal = null;
+        actor.facing = atan2(player.x - actor.x, player.y - actor.y);
+        actor.lingering = far <= warn.within ? (actor.lingering ?? this.time) : null;
+
+        const near = Math.max(warn.near, actor.wild.temper === "territorial" ? (actor.wild.guard ?? 0) : 0);
+
+        if (far <= near || (actor.lingering !== null && this.time - actor.lingering >= warn.linger)) {
+            this.#comeOn(actor, player);
+
+            return false;
+        }
+
+        if (far <= warn.within && this.time >= (actor.warnedAt ?? 0)) {
+            actor.warnedAt = this.time + warn.every;
+            this.#emit("warning", { id: actor.id, target: player.id, display: WARY[actor.wild.creature].display });
+        }
+
+        return true;
+    }
+
+    // Coming for them at last, its pack with it, all at once ("charge")
+    #comeOn(actor, player) {
+        this.#mind(actor, "attack", player.id);
+
+        for (const other of this.#packOf(actor)) {
+            Object.assign(other, { target: player.id, lastSeen: this.time, waryUntil: 0, eating: null });
+        }
+
+        this.#emit("charge", { id: actor.id, target: player.id });
+    }
+
+    /**
+     * One lying in wait sprung (core/ambush.js: the host's #spring): out of its cover, after
+     * `targetId` at once, set on them as if struck by them (FOE_MS), and held `ms` first (rising
+     * from the earth, or caught out).
+     */
+    spring(id, targetId, { ms = 0 } = {}) {
+        const actor = this.actor(id);
+
+        if (!actor || actor.dead) {
+            return;
+        }
+
+        Object.assign(actor, { hidden: null, lying: false, waryUntil: 0 });
+
+        if (ms > 0) {
+            actor.stunnedUntil = Math.max(actor.stunnedUntil, this.time + ms);
+        }
+
+        const target = targetId === null ? null : this.actor(targetId);
+
+        if (target && !target.dead) {
+            actor.foes[target.id] = this.time + FOE_MS;
+            this.#struckBy(actor, target);
+            Object.assign(actor, { target: target.id, lastSeen: this.time });
+        }
+    }
+
+    /**
+     * A wary beast (`id`) coming for a player (`targetId`) at last, its pack with it: one stalking
+     * them when they make camp near it (core/host.js #camp).
+     */
+    rouseWary(id, targetId) {
+        const actor = this.actor(id);
+        const target = this.actor(targetId);
+
+        if (actor?.wild?.reacts && !actor.dead && target && !target.dead && actor.mood?.kind !== "flee") {
+            this.#comeOn(actor, target);
+        }
+    }
+
+    // Stalking them (a predator unsure of them: MOODS.watch): keeping between `stalk` metres off,
+    // after them as far as `follow` past its leash; striking once they're under `strikeBelow` of
+    // their health, or fighting something else
+    #stalk(actor, player, far) {
+        const watch = MOODS.watch;
+
+        if (distanceBetween(actor.spawn, player.square) > actor.wild.leash + watch.follow) {
+            return false;
+        }
+
+        if (player.hp < player.maxHp * watch.strikeBelow || this.#fightingElse(player, actor)) {
+            this.#comeOn(actor, player);
+
+            return false;
+        }
+
+        // (Closing in again at a run, fallen behind; else at a walk. Its way found again as they
+        // move, REPATH_MS)
+        actor.walkPace = far > watch.stalk[1] ? (actor.chaseSpeed ?? actor.speed) : actor.speed;
+
+        if (actor.path.length && this.time - (actor.lastPathAt ?? 0) < REPATH_MS * 3) {
+            return true;
+        }
+
+        if (far < watch.stalk[0]) {
+            this.#off(actor, player, watch.stalk[0] + 3);
+        } else if (far > watch.stalk[1]) {
+            this.#off(actor, player, (watch.stalk[0] + watch.stalk[1]) / 2);
+        } else {
+            Object.assign(actor, { path: [], pathGoal: null, facing: atan2(player.x - actor.x, player.y - actor.y) });
+        }
+
+        return true;
+    }
+
+    // Is a player fighting something else than a beast's pack (set on one, or one set on them)?
+    #fightingElse(player, beast) {
+        const pack = beast.wild.pack;
+        const other = (one) => one && !one.dead && one.wild?.pack !== pack;
+
+        return (player.target !== null && other(this.actor(player.target))) || this.actors.some((one) => one.target === player.id && other(one) && this.hostile(one, player));
+    }
+
+    // Watching them (one unsure of them that doesn't hunt: MOODS.watch): turned to them, keeping
+    // `keep` off; left be once they're off past MOODS.spared
+    #watch(actor, player, far) {
+        if (far > MOODS.spared) {
+            return false;
+        }
+
+        if (!actor.path.length) {
+            if (far < MOODS.watch.keep) {
+                this.#off(actor, player, MOODS.watch.keep + 3);
+            } else {
+                actor.facing = atan2(player.x - actor.x, player.y - actor.y);
+            }
+        }
+
+        return true;
+    }
+
+    // Keeping away from them (MOODS.avoid): off to `away` from them, and again if they come within `again`
+    #keepAway(actor, player, far) {
+        if (far >= MOODS.avoid.away) {
+            return false;
+        }
+
+        if (!actor.path.length && (far <= MOODS.avoid.again || !actor.mood.moved)) {
+            actor.mood.moved = true;
+            this.#off(actor, player, MOODS.avoid.away + 2);
+        }
+
+        return true;
+    }
+
+    // Curious (MOODS.curious): coming up to `near` of them, keeping within `follow`, sniffing at
+    // them ("curious", now and then), for `lasts`; only watching them after that
+    #nose(actor, player, far) {
+        const curious = MOODS.curious;
+
+        if (this.time - actor.mood.at > curious.lasts) {
+            this.#mind(actor, "watch", player.id);
+
+            return true;
+        }
+
+        if (far > curious.follow) {
+            if (!actor.path.length || this.time - (actor.lastPathAt ?? 0) >= REPATH_MS * 3) {
+                this.#off(actor, player, curious.near);
+            }
+
+            return true;
+        }
+
+        actor.path = [];
+        actor.pathGoal = null;
+        actor.facing = atan2(player.x - actor.x, player.y - actor.y);
+
+        if (this.time >= (actor.warnedAt ?? 0)) {
+            actor.warnedAt = this.time + MOODS.warn.every * 2;
+            this.#emit("curious", { id: actor.id, target: player.id });
+        }
+
+        return true;
+    }
+
+    // Going to stand `distance` metres off someone, on its own side of them (further off, or
+    // nearer), where there's ground to stand on (nowhere: staying put)
+    #off(actor, from, distance) {
+        const angle = atan2(actor.y - from.y, actor.x - from.x);
+        const goal = [Math.floor(from.x + cos(angle) * distance), Math.floor(from.y + sin(angle) * distance)];
+
+        try {
+            this.#pathTo(actor, nearestFree(this.#squares(actor.map), goal, { within: 3 }));
+
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    // Its nerve gone (MORALE): limping off from the nearest of its enemies, set on no one; cornered
+    // (nowhere to go and one within `cornered`), turning on them
+    #limpOff(actor) {
+        actor.target = null;
+        actor.walkPace = actor.speed * MORALE.pace;
+
+        if (actor.path.length) {
+            return true;
+        }
+
+        const from = this.#nearestEnemy(actor, () => true, SIGHT * 2);
+
+        if (!from) {
+            return true;
+        }
+
+        const angle = atan2(actor.y - from.y, actor.x - from.x) + (actor.chance.next() - 0.5) * 1.2;
+        const goal = [Math.floor(actor.x + cos(angle) * 6), Math.floor(actor.y + sin(angle) * 6)];
+
+        try {
+            this.#pathTo(actor, nearestFree(this.#squares(actor.map), goal, { within: 3 }));
+        } catch {
+            if (hypot(from.x - actor.x, from.y - actor.y) <= MORALE.cornered) {
+                actor.target = from.id;
+                actor.lastSeen = this.time;
+
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // Their nerve gone (MORALE): each limping off, set on no one, what it was eating left ("fled")
+    #unnerve(actors) {
+        for (const actor of actors) {
+            if (actor.dead || actor.mood?.kind === "flee") {
+                continue;
+            }
+
+            actor.mood = { kind: "flee", by: actor.mood?.by ?? null, at: this.time, until: null, spared: true, feedings: 0 };
+            Object.assign(actor, { target: null, path: [], pathGoal: null, eating: null });
+            this.#emit("fled", { id: actor.id });
+        }
+    }
+
+    // One of a wary pack fallen: the rest's nerve gone, once its leader's down or half of it
+    // (MORALE `half`, of as many as it was put out: `packSize`); but for those standing their
+    // ground at their den (`stands`)
+    #falter(dead) {
+        const pack = dead.wild.pack;
+
+        if (!pack) {
+            return;
+        }
+
+        const all = this.actors.filter((other) => other.wild?.pack === pack && other.map === dead.map);
+        const alive = all.filter((other) => !other.dead && other.wild.reacts && !other.wild.stands);
+
+        if (alive.length && (dead.wild.leader === null || alive.length <= (dead.wild.packSize ?? all.length) * MORALE.half)) {
+            this.#unnerve(alive);
+        }
+    }
+
+    // Food thrown it (BAIT): going to the nearest it eats lying within `smell` (none's at it, or
+    // its own pack's), and eating it; one set on someone drawn off them only a moment (`distract`),
+    // once for each bait (`distracted`)
+    #forage(actor) {
+        const eating = actor.eating ?? null;
+
+        if (eating) {
+            const bait = this.baits.find(({ id }) => id === eating.bait) ?? null;
+
+            // (Gone: eaten by another of its pack, or spoilt)
+            if (!bait) {
+                return this.#fed(actor, eating, null);
+            }
+
+            if (eating.until !== null) {
+                if (this.time >= eating.until) {
+                    return this.#fed(actor, eating, bait);
+                }
+
+                actor.path = [];
+                actor.facing = atan2(bait.x - actor.x, bait.y - actor.y);
+
+                return true;
+            }
+
+            if (hypot(bait.x - actor.x, bait.y - actor.y) <= BAIT_EAT_FROM) {
+                eating.until = this.time + (eating.distracted ? BAIT.distract : BAIT.eat);
+                actor.path = [];
+                actor.pathGoal = null;
+                actor.facing = atan2(bait.x - actor.x, bait.y - actor.y);
+                this.#emit("eat", { id: actor.id, bait: bait.id });
+            } else if (!actor.path.length) {
+                try {
+                    this.#pathTo(actor, nearestFree(this.#squares(actor.map), [Math.floor(bait.x), Math.floor(bait.y)], { within: 2 }));
+                } catch {
+                    actor.eating = null;
+
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        const bait = this.baits.find((one) => one.map === actor.map && this.time >= one.lands && (one.taken === null || one.taken === actor.wild.pack) && eats(actor.wild.creature, one.kind) && !(actor.distracted ?? []).includes(one.id) && hypot(one.x - actor.x, one.y - actor.y) <= BAIT.smell);
+
+        if (!bait) {
+            return false;
+        }
+
+        const distracted = actor.target !== null;
+
+        bait.taken = actor.wild.pack;
+        actor.eating = { bait: bait.id, until: null, distracted, after: actor.target };
+
+        if (distracted) {
+            actor.distracted = [...(actor.distracted ?? []), bait.id];
+        }
+
+        Object.assign(actor, { target: null, path: [], pathGoal: null, walkPace: actor.speed });
+
+        return true;
+    }
+
+    // Done eating ("ate"): drawn off only, back after whoever it was after; else fed (MOODS.fed),
+    // or, curious of whoever threw it, the more taken with them, and following them once fed by
+    // them `tame` times ("tamed": the host's to make it theirs, core/host.js)
+    #fed(actor, eating, bait) {
+        actor.eating = null;
+
+        if (bait) {
+            this.baits.splice(this.baits.indexOf(bait), 1);
+            this.#emit("ate", { id: actor.id, bait: bait.id, by: bait.by });
+        }
+
+        if (eating.distracted) {
+            const after = eating.after === null ? null : this.actor(eating.after);
+
+            if (after && !after.dead && after.map === actor.map) {
+                actor.target = after.id;
+                actor.lastSeen = this.time;
+            }
+
+            return false;
+        }
+
+        if (!bait) {
+            return false;
+        }
+
+        const thrower = this.actor(bait.by);
+
+        if (actor.mood?.kind === "curious" && thrower?.kind === "player" && actor.mood.by === thrower.id) {
+            const feedings = (actor.mood.feedings ?? 0) + 1;
+
+            if (feedings >= BAIT.tame && WARY[actor.wild.creature]?.tames) {
+                this.#emit("tamed", { id: actor.id, by: thrower.id });
+
+                return true;
+            }
+
+            this.#mind(actor, "curious", thrower.id);
+
+            for (const other of this.#packOf(actor)) {
+                other.mood.feedings = feedings;
+            }
+
+            return true;
+        }
+
+        this.#mind(actor, "fed", bait.by, { until: this.time + MOODS.fed.lasts });
+
+        return false;
+    }
+
+    /**
+     * Throw food (`kind`: "meat" or "feed", core/wary.js BAIT) to whoever `targetId` is, landing at
+     * their feet, or, none, `ahead` metres before the thrower: an attack's throw, let go as its
+     * blow would land (#layBait). { ok } or why not ({ ok: false, reason }: "midst", in the middle of
+     * a blow or a spell, staggered or stunned; "target", gone or elsewhere; "range", past `reach`).
+     */
+    toss(id, targetId, { kind, reach = BAIT.reach }) {
+        const actor = this.actor(id);
+        const target = targetId === null ? null : this.actor(targetId);
+
+        if (!actor || actor.dead || this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.casting || (actor.attack && !actor.attack.struck)) {
+            return { ok: false, reason: "midst" };
+        }
+
+        if (target && (target.dead || target.map !== actor.map)) {
+            return { ok: false, reason: "target" };
+        }
+
+        if (target && hypot(target.x - actor.x, target.y - actor.y) > reach) {
+            return { ok: false, reason: "range" };
+        }
+
+        const at = target ? [target.x, target.y] : [actor.x + sin(actor.facing) * BAIT.ahead, actor.y + cos(actor.facing) * BAIT.ahead];
+        const attack = { id: "bait", kind: "ranged", reach, hitAt: 400, duration: 800, interval: 800, animation: "throw", bait: kind };
+
+        actor.path = [];
+        actor.facing = atan2(at[0] - actor.x, at[1] - actor.y);
+        actor.attack = { attack, target: target?.id ?? null, at, start: this.time, struck: false };
+        actor.readyAt = Math.max(actor.readyAt, this.time + attack.interval);
+        this.#emit("attack", { id: actor.id, target: target?.id ?? null, weapon: actor.weapon, attack: attack.id, animation: attack.animation, duration: attack.duration, hitAt: attack.hitAt });
+
+        return { ok: true };
+    }
+
+    // Food let go (an attack's `bait`): landing a stride short of whoever it's thrown to (where
+    // they stand now), or where it was aimed; told ("bait": where it's from and to, and when it lands)
+    #layBait(actor, target, current) {
+        const [tx, ty] = target && !target.dead && target.map === actor.map ? [target.x, target.y] : current.at;
+        const off = hypot(tx - actor.x, ty - actor.y);
+        const short = off > 1 ? Math.min(BAIT_SHORT, off / 2) / off : 0;
+        const [x, y] = [tx - (tx - actor.x) * short, ty - (ty - actor.y) * short];
+        const lands = this.time + Math.max(BAIT_FLIGHT.soonest, Math.round((hypot(x - actor.x, y - actor.y) / BAIT_FLIGHT.speed) * 1000));
+        const bait = { id: this.nextBait++, kind: current.attack.bait, map: actor.map, x, y, from: [actor.x, actor.y], thrown: this.time, lands, until: lands + BAIT.lasts, by: actor.id, taken: null };
+
+        this.baits.push(bait);
+        this.#emit("bait", { bait: bait.id, kind: bait.kind, id: actor.id, map: actor.map, from: [actor.x, actor.y], x, y, lands });
+    }
+
+    // Food lying uneaten past its while (BAIT `lasts`), or long past it however it's been taken: gone
+    #spoil() {
+        if (this.baits.length) {
+            this.baits = this.baits.filter((bait) => this.time < bait.until || (bait.taken !== null && this.time < bait.until + BAIT.eat * 2));
         }
     }
 
@@ -4208,7 +4797,8 @@ export class Battle {
 
         actor.pace = want > actor.pace ? Math.min(want, actor.pace + ACCELERATION * seconds) : Math.max(want, actor.pace - BRAKING * seconds);
 
-        const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting || this.#rising(actor) || actor.lurking;
+        // (Nor while caught in a snare: an ambush's, core/ambush.js)
+        const held = this.time < actor.staggeredUntil || this.time < actor.stunnedUntil || actor.attack || actor.casting || this.#rising(actor) || actor.lurking || actor.hidden || actor.lying || this.time < (actor.snaredUntil ?? 0);
         const travelled = held ? 0 : this.#travel(actor, actor.pace * seconds * shareOf(actor, "speed"));
 
         // Getting nowhere, jostling: squeezing past (#bumps)
@@ -4581,7 +5171,7 @@ export class Battle {
             current.struck = true;
 
             // (A blow with a legendary weapon: its charge the fuller, core/legendary.js)
-            if (actor.legendary && (attack.kind === "melee" || attack.kind === "ranged") && !attack.bomb && !attack.call) {
+            if (actor.legendary && (attack.kind === "melee" || attack.kind === "ranged") && !attack.bomb && !attack.call && !attack.bait) {
                 this.#charge(actor);
             }
 
@@ -4598,6 +5188,8 @@ export class Battle {
                 this.#emit("call", { id: actor.id, target: current.target, kind, count: [...count], most, map: actor.map, x: actor.x, y: actor.y });
             } else if (attack.bomb) {
                 this.#lob(actor, target, attack);
+            } else if (attack.bait) {
+                this.#layBait(actor, target, current);
             } else if (attack.kind === "ranged") {
                 this.#launch(actor, target, attack);
             } else if (target && !target.dead && this.#reachable(actor, target) && !(attack.kind === "melee" && (actor.aloft || target.aloft))) {
@@ -5664,6 +6256,12 @@ export class Battle {
         // (Struck while it waited, holding a place: it fights back at once)
         target.waryUntil = 0;
 
+        // (Struck glimpsed in cover, before its ambush springs: the ambush caught out; or the one
+        // lying in wait in sight, its bait: sprung. The host's to spring it so, core/ambush.js)
+        if (target.hidden || target.lying) {
+            this.#emit("caught", { id: target.id, by: attacker.id, shown: Boolean(target.lying) });
+        }
+
         // (After whoever did it, beyond its leash if need be, a while)
         if (attacker !== target) {
             this.#struckBy(target, attacker);
@@ -5761,6 +6359,11 @@ export class Battle {
         }
 
         this.#emit("death", { id: actor.id, by: killer?.id ?? null, respawnAt: actor.respawnAt });
+
+        // (One of a wary pack: the rest's nerve gone, once its leader's down or half of it)
+        if (actor.wild?.reacts) {
+            this.#falter(actor);
+        }
 
         // (One that bursts as it dies: what it leaves where it fell, BOMBS, as strong as its blows)
         if (actor.wild?.burst) {

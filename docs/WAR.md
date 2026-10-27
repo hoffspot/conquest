@@ -639,7 +639,8 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
 - **Shops.** The folk who keep a shop sell from it, from their talk's "What have you got for
   sale?" (`SHOPS`):
   - the barkeep, the serving wenches and the innkeeper: ale (stamina) and hot meals (a little
-    healing);
+    healing), and food for the wild's beasts, meat bait (3 gold) and a feed bag (2 gold)
+    (docs/WILDS.md *Bait*);
   - the smith and the apprentice: every weapon, piece of armour and shield, and the pieces of
     their people's uniform, as well made as the player buying is mighty (`tiered`,
     `SMITH_MAKES`, by their might's tier, one every ten: core/might.js `mightTier`): common and
@@ -652,7 +653,7 @@ at a time (`PACK_SIZE`, `PACK_PAGE`). (The money was coppers once: requests carr
     buy?", which she answers: everything, the spoils of the wild that no one else takes too):
     what a new adventurer needs, up to fine: wands, grimoires, spellwards, wizards' hats,
     jewellery, draughts and cures, a glowcap draught, the Stamina Boost potion and the Scroll of
-    Safety (below), the scrolls of each school's first spell and Stun's (`STARTING_SCROLLS`), the
+    Safety (below), meat bait and a feed bag (docs/WILDS.md *Bait*), the scrolls of each school's first spell and Stun's (`STARTING_SCROLLS`), the
     tomes that open the elements' schools, and Light's, and a treasure map, only ever common
     (docs/WILDS.md *Treasure maps*);
   - the specialists, in every town, city and capital, by its market (docs/GAME.md *Its shops*,

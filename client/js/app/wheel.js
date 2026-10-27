@@ -89,7 +89,7 @@ const goesOn = (action, wheel) => action?.on === wheel || (action?.on === "any" 
 export const forFriends = (spell) => ["any", "friend"].includes(SPELLS[spell]?.target);
 
 /** The things to use a wheel shows by a shorter name than their own (core/progress.js ITEMS). */
-const SHORT = { potion: "Draught", meal: "Meal", ale: "Ale", scrollOfSafety: "Safety", goblinBomb: "Bomb" };
+const SHORT = { potion: "Draught", meal: "Meal", ale: "Ale", scrollOfSafety: "Safety", goblinBomb: "Bomb", meatBait: "Meat", feedBag: "Feed" };
 
 /**
  * What's in a slice (an ACTIONS key, or "item:" and a thing to use): { label, spell, ability,
@@ -111,11 +111,11 @@ export function actionOf(key) {
         return null;
     }
 
-    // (A spell's scroll: on whichever wheel its spell goes on, by the spell's name; a bomb, on an
-    // enemy's)
+    // (A spell's scroll: on whichever wheel its spell goes on, by the spell's name; a bomb, or bait
+    // for the wild's beasts (core/wary.js), on an enemy's: thrown at them)
     const cast = def.use.cast && SPELLS[def.use.cast];
 
-    return cast ? { label: cast.label, item, on: ON[cast.target] ?? "self" } : { label: SHORT[item] ?? def.label, item, on: def.use.bomb ? "enemy" : "self", ...(givable(def.use) ? { give: true } : {}) };
+    return cast ? { label: cast.label, item, on: ON[cast.target] ?? "self" } : { label: SHORT[item] ?? def.label, item, on: def.use.bomb || def.use.bait ? "enemy" : "self", ...(givable(def.use) ? { give: true } : {}) };
 }
 
 /** A slice's icon (SVG), for what's in it. */
@@ -233,8 +233,10 @@ export const offensive = (key) => actionOf(key)?.on === "enemy";
  * The player's wheels as kept (or nothing kept: the WHEELS they start with), made safe: each of
  * their own, an enemy's and their followers' (kept from before there was one: as it starts), two
  * sides, each slice holding something that goes on that wheel; their
- * Action Bar (`quick`: QUICK's six slots, each something that can be one, or null); and which
- * wheels they are (`version`: WHEELS_VERSION, kept from before brought up to it).
+ * Action Bar (`quick`: QUICK's six slots, each something that can be one, or null); which wheels
+ * they are (`version`: WHEELS_VERSION, kept from before brought up to it); and the things put on a
+ * wheel of themselves the first time they were carried (`placed`: ITEMS ids, bait for the wild's
+ * beasts, core/wary.js; app/game.js #placeBait), never again.
  */
 export function readWheels(kept) {
     const wheels = {};
@@ -258,6 +260,7 @@ export function readWheels(kept) {
     }
 
     wheels.version = WHEELS_VERSION;
+    wheels.placed = Array.isArray(kept?.placed) ? kept.placed.filter((id) => typeof id === "string") : [];
 
     return wheels;
 }

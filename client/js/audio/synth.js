@@ -681,6 +681,86 @@ export const SOUNDS = {
         },
     },
     legendRuinblast: { variants: 3, volume: 1, make: (random) => add(blast(random, 1.6 + random.next() * 0.2), notes([[1568, 0]], { decay: 0.3, harmonics: GLASS, length: 0.6 }), 0.2) },
+
+    // The wild's ways (core/wary.js, core/ambush.js). An ambush's tells: a twig snapping underfoot
+    // in the brush (two sharp dry cracks); a glint of steel (a faint high shing, a blade eased in
+    // its scabbard); birds flushed from the trees (a flurry of wings, a few cries); the earth
+    // breaking as the dead rise (clods crumbling over a low thump); a snare snapped tight (a rope's
+    // whip, a thwack); and the ambush sprung (a sharp low hit under a rush of air, the moment they
+    // break cover)
+    twigSnap: {
+        variants: 3,
+        volume: 0.55,
+        make: (random) => softened(add(burst(random, 0.12, "bandpass", 2200 + random.next() * 800, 1.6, 0.0004, 0.02), burst(random, 0.08, "bandpass", 3200 + random.next() * 600, 1.8, 0.0004, 0.014), 0.7, 0.035 + random.next() * 0.03), 3),
+    },
+    steelGlint: {
+        variants: 2,
+        volume: 0.22,
+        make: (random) => add(ring([[3100 + random.next() * 300, 0.5, 0.22], [5300, 0.3, 0.14], [7600, 0.15, 0.08]], 0.7), whoosh(random, { length: 0.35, from: 3000, top: 6500, to: 4000, peak: 0.4, q: 3 }), 0.4),
+    },
+    birdsFlush: {
+        variants: 3,
+        volume: 0.45,
+        make: (random) => {
+            const length = 1.4;
+            const wings = grains(random, length, 34, 300, 1100, { decay: 0.012, bunch: 1.8, q: 1.2 });
+            const cries = notes(Array.from({ length: 3 }, (_, k) => [1700 + random.next() * 900, 0.1 + k * 0.22 + random.next() * 0.1]), { decay: 0.08, harmonics: [[1, 1], [2, 0.3]], length });
+
+            return add(softened(wings, 1.6), cries, 0.25);
+        },
+    },
+    earthBreak: {
+        variants: 3,
+        volume: 0.55,
+        make: (random) => add(thud(90, 40, 0.5, 0.14), filter(grains(random, 0.9, 40, 120, 700, { decay: 0.02, bunch: 1.6, q: 1 }), "lowpass", 1400, 0.7), 0.8),
+    },
+    snareSnap: {
+        variants: 2,
+        volume: 0.55,
+        make: (random) => add(whoosh(random, { length: 0.18, from: 600, top: 2600, to: 900, peak: 0.7, q: 1.6 }), burst(random, 0.1, "bandpass", 700, 1.2, 0.0006, 0.03), 0.9, 0.15),
+    },
+    ambushSprung: {
+        variants: 2,
+        volume: 0.6,
+        make: (random) => add(thud(150, 55, 0.6, 0.2), whoosh(random, { length: 0.55, from: 300, top: 1800, to: 500, peak: 0.25, q: 0.9, body: 0.4 }), 0.6),
+    },
+
+    // Wary beasts' warnings (a beast's display: app/game.js WARNINGS): a low growl rumbling in the
+    // throat; a snort, breath forced through the nose (a boar, a bull); a hiss, long and dry (a
+    // snake, a big cat); a porcupine's quills rattled up
+    beastGrowl: {
+        variants: 3,
+        volume: 0.55,
+        make: (random) => {
+            const length = 1.1 + random.next() * 0.4;
+            const pitch = 0.85 + random.next() * 0.3;
+            const throat = tone(length, (t) => pitch * (82 + 14 * Math.sin(t * 23) + 7 * Math.sin(t * 61)), { harmonics: [[1, 1], [2, 0.6], [3, 0.45], [4, 0.3], [6, 0.12]] });
+            const grit = filter(noise(random, length), "bandpass", 320 * pitch, 1.4);
+
+            return shape(add(throat, grit, 0.6), (t) => swell(length, 0.3)(t) * (0.7 + 0.3 * Math.abs(Math.sin(t * 17))));
+        },
+    },
+    beastSnort: {
+        variants: 3,
+        volume: 0.45,
+        make: (random) => add(burst(random, 0.32, "bandpass", 850 + random.next() * 250, 0.9, 0.01, 0.1), burst(random, 0.22, "bandpass", 700, 0.9, 0.01, 0.07), 0.7, 0.28),
+    },
+    beastHiss: {
+        variants: 2,
+        volume: 0.35,
+        make: (random) => {
+            const length = 1 + random.next() * 0.3;
+
+            return shape(filter(noise(random, length), "highpass", (t) => 3000 + 1200 * (t / length), 0.8), swell(length, 0.2));
+        },
+    },
+    quillRattle: { variants: 2, volume: 0.35, make: (random) => softened(grains(random, 0.7, 46, 2200, 5200, { decay: 0.004, bunch: 1, q: 2.5 }), 2) },
+
+    // Bait thrown to a beast: landing (a soft wet thud); eaten (crunching and tearing, a while); and
+    // a curious beast fed enough to follow (a warm rising chime)
+    baitLand: { variants: 2, volume: 0.4, make: () => thump(190, 70, 0.2, 0.06) },
+    beastEat: { variants: 3, volume: 0.42, make: (random) => softened(add(grains(random, 1.6, 14, 450, 1300, { decay: 0.025, bunch: 1, q: 1.4 }), grains(random, 1.6, 10, 180, 420, { decay: 0.04, bunch: 1, q: 1 }), 0.7), 1.8) },
+    tamedChime: { variants: 1, volume: 0.45, make: () => notes([[392, 0], [494, 0.12], [587, 0.24], [784, 0.4]], { decay: 0.6, harmonics: GLASS, length: 1.6 }) },
     chainBroken: { variants: 1, volume: 0.35, make: (random) => add(notes([[1175, 0], [880, 0.08], [622, 0.16]], { decay: 0.3, harmonics: GLASS, length: 0.9 }), burst(random, 0.15, "highpass", 3000, 0.7, 0.002, 0.05), 0.3) },
     wake: { variants: 1, volume: 0.35, make: () => notes([[880, 0], [1320, 0.12]], { decay: 0.7, harmonics: [[1, 1], [2.76, 0.2], [5.4, 0.06]], length: 1.6 }) },
     breath: {

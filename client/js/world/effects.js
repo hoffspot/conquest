@@ -60,6 +60,10 @@ const BURSTS = {
     boneChips: { count: 12, colours: [0xf2ead0, 0xb8a888], size: [0.02, 0.045], speed: [1.6, 3.6], life: [0.35, 0.6], gravity: 9.8, spread: 1.2, glow: false, opacity: 1, late: true, drag: 0.5 },
     stoneChips: { count: 14, colours: [0x9a8a78, 0x4a4038], size: [0.025, 0.05], speed: [1.8, 3.8], life: [0.35, 0.6], gravity: 9.8, spread: 1.2, glow: false, opacity: 1, late: true, drag: 0.5 },
     straw: { count: 14, colours: [0xf0d070, 0x9a7a30], size: [0.02, 0.05], speed: [1.2, 3], life: [0.5, 0.9], gravity: 4, spread: 1.4, glow: false, opacity: 1, late: true, drag: 1.2 },
+    // The wild's ways (core/ambush.js): birds flushed from the trees, dark specks flying up and off
+    // as one; leaves and grass kicked up as those lying in wait break cover
+    birds: { count: 16, colours: [0x2a2420, 0x4a4038], size: [0.06, 0.11], speed: [3, 6], life: [1.2, 1.9], gravity: -2.4, spread: 1.3, glow: false, opacity: 1, late: true, swirl: 3, drag: 0.3 },
+    leaves: { count: 18, colours: [0x7a9a3a, 0x3a5a1a], size: [0.04, 0.08], speed: [1.5, 3.2], life: [0.6, 1.1], gravity: 3, spread: 1.6, glow: false, opacity: 1, late: true, drag: 1 },
     // Splinters off a camp's stakes hacked at (pale fresh wood and dark bark)
     woodChips: { count: 16, colours: [0xe2c48a, 0x5a3e22], size: [0.025, 0.06], speed: [1.6, 3.6], life: [0.4, 0.7], gravity: 9.8, spread: 1.3, glow: false, opacity: 1, late: true, drag: 0.5 },
     // Where the wild's creatures' own land: venom splashing, lava spattering, a web bursting,

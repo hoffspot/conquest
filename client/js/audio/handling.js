@@ -60,7 +60,8 @@ export function useSound(id) {
         return "scroll";
     }
 
-    if (def.bomb) {
+    // (A bomb, or bait for the wild's beasts, lifted to throw)
+    if (def.bomb || def.bait) {
         return "pickup";
     }
 

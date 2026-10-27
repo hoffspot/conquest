@@ -558,7 +558,8 @@ dice did, so that crossing them is more than one guarded chest after another.
   cache's is (*Adventurers' caches*, below): on foot, out of the settlements, afresh for everyone
   together once one's dealt to any of them.
 - **The deck** (`DIRECTOR.cards`, `shuffled`): an adventurer's cache, a fallen adventurer's
-  remains, an old campsite, fresh tracks, a stranger, something across the way. Each comes once a deck, in an order of its own, the deck shuffled
+  remains, an old campsite, fresh tracks, a stranger, something across the way, an ambush
+  (*Ambushes*, below). Each comes once a deck, in an order of its own, the deck shuffled
   again once it's all been dealt, never with the card just dealt first again (Left 4 Dead's
   director dealt its bosses so: no two of the same running). Each player has their own, kept in
   the world's snapshot (`travel`). A card with nowhere to go ahead waits for the next look.
@@ -602,8 +603,8 @@ dice did, so that crossing them is more than one guarded chest after another.
   - *A pedlar*, resting by the way, their pannier on their back and a walking staff in hand (one of
     the folk, `pedlar`, characters/folk.js). Said within 40 m ("A pedlar, resting by the way with
     their pack: they'll have odds and ends to sell."). Talked to, they sell out of their own stock
-    for the day (`SHOPS.pedlar`, core/stock.js): a healing draught always, and three more of the
-    common draughts and cures, one to three of each. Half the days there's a special too, a common
+    for the day (`SHOPS.pedlar`, core/stock.js): a healing draught, meat bait and a feed bag always
+    (*Bait*), and three more of the common draughts and cures, one to three of each. Half the days there's a special too, a common
     treasure map or a common charm (`sometimes`). All a quarter dearer than in town (`markup`).
   - *A wounded hunter*, in greens with their bow and quiver slung, down to 30% of their health
     (`hunter`). Said within 40 m ("Someone's down ahead, hurt…"). Healed, with a healing draught
@@ -647,8 +648,12 @@ dice did, so that crossing them is more than one guarded chest after another.
     (`rollSpilled`: 8 to 20 gold, 35% more for each tier past the first, and half the time a hot
     meal, an ale, a healing draught, a bandage or a glowcap draught); otherwise only the way clear.
   - Let go once every player's 200 m away and no one's clearing it.
+- **An ambush** (`core/ambush.js`, the host's `#putAmbush`): a band of the land lying in wait
+  ahead, at a bridge, a ford or a road through the trees if there's one (*Ambushes*, below). Set
+  aside for later in the deck, the next card dealt in its stead, in a quiet spell after a hard
+  fight, and at night half the time when no one there has light about them (`AMBUSH.dark`).
 - **Let go** once every player's 220 m away (`FINDS.far`); another comes later. Nothing's kept in
-  a snapshot till one's been dealt (`finds`, `fresh`, `strangers`, `obstacles`).
+  a snapshot till one's been dealt (`finds`, `fresh`, `strangers`, `obstacles`, `ambushes`).
 - **The pacing** (`PACING`, the host's `#pace`; Left 4 Dead's director: "Algorithm adjusts pacing,
   not difficulty"), kept for each player with their deck:
   - *A quiet spell after a hard fight*: a fight a player fell below half their health in (or
@@ -663,7 +668,83 @@ dice did, so that crossing them is more than one guarded chest after another.
     answering (their own call; drums for one that has none), heard up to 160 m off, and said which
     way ("A wolf calls, somewhere off to the north-east, and others answer."). 12 to 20 seconds
     later they're put out there and come for the player, running (`#hunt`: "They're on you!", or,
-    folk, "Here they come!").
+    folk, "Here they come!"). Those sent so aren't minded as wary beasts are (*Wary beasts*):
+    they're coming for the player. A third of the time and more (`AMBUSH.silent`, 35%) there's
+    no build-up heard: an ambush is laid ahead of them instead, in silence (*Ambushes*), the only
+    tell the wild gone still ("The wild's gone quiet round you. Too quiet.").
+
+## Ambushes
+
+One of the wilds director's cards (*The wilds director*, above; `core/ambush.js`, the host's
+`#putAmbush`, `#ambushesAbout`, `#spring`): a band of the land lying hidden in wait ahead of a
+player, told by something off as they come near, and sprung as they walk into it or wait about
+near it. Springing it catches them by surprise: it acts first, from where it lay, and is no harder
+for it. Seen through and struck first, before it springs, it's caught out.
+- **Where** (`#ambushSite`, `AMBUSH.ahead`, `spread`): 45 to 80 m ahead of the player it's laid
+  for, within a third of a turn of the way they're going (any way, none), where a cache may be
+  (`cacheClear`: off the settlements and the places worth finding, clear of every other cache,
+  find and ambush; the roads no matter), on dry land with room about its heart (two in three of
+  the squares within 6 m free: `#openFor`). Of a dozen such places, the one most made for it
+  (`#chokepoint`): by a bridge's end or on the way over a ford, then on a road, then in the woods
+  (woods, dark woods, elf woods, jungle), then anywhere.
+- **Who for**: at night, the one of the party with light about them (the Light over them, or
+  standing in a lit place: a torch-bearer's an easy mark), and the card's set aside half the time
+  when no one has (*The wilds director*). Its band's as strong as the land there or the mightiest
+  player near, as a cache's guards are (`cacheTier`, `cacheCount`; its leader a tier up), and
+  tougher against a party, as anything is (strength.js `SCALING`). All of them one pack, so a
+  player who fights any of them fights all of them (their power pooled: *Might and power*).
+- **Its band, and its way** (`STYLES`, `ambushBand`, `ambushStyle`: one of those of the land there,
+  `stylesFor`; the restless dead twice as likely at night):
+  - *Bandits* (where there are outlaws, or where there's nothing else): a pincer, their chief and
+    two ahead of its heart, one of them a bowman on a rise (`arms` "bow"), and two behind it, who
+    go for the hindmost of the party once it's sprung. Told by a glint of steel in the brush
+    ("Steel glints in the brush ahead. Someone's waiting there."); sprung within 3 m of its heart.
+  - *Goblins* (raiders under an ogre, or goblins under a troll in the trolls' lands): a snare laid
+    at its heart that roots whoever steps in it two seconds (`snare`, drawn as a rope noose
+    pulled tight round their feet), and two bombers lobbing from the brush. Told by a twig
+    snapping ("A twig snaps in the brush ahead. Something's waiting there."); sprung within
+    1.5 m.
+  - *Wolves* (the land's pack hunters, `huntersOf`: wolves, dire wolves in the cold and the
+    heights, hyenas in the catfolk's lands, hounds of Annwn in the elves'): one shown ahead as
+    bait, lying in the open, the rest in the cover on either flank, two of them behind. Told by
+    the birds bursting from the trees and going quiet ("The birds burst from the trees ahead,
+    and go quiet."); sprung within 3 m of its heart, or 8 m of the one in sight
+    (`AMBUSH_SHOWN`), or once it's struck.
+  - *The dead* (the restless dead, more often by night): four or five under the earth in a ring
+    4.5 m round its heart, rising (1.2 s, `rise`) as their hands break through it, clods flung up.
+    Told by the earth turned ("The earth ahead's been turned, not long since, and a cold hush
+    hangs over it.", mounds of fresh earth drawn there); never glimpsed; sprung within 3.5 m.
+  - *Spiders* (the dark elves' wilds): cave spiders and a giant centipede in a ring 5 m round its
+    heart, in their holes and overhead. Told by fresh webs strung across the way ("Fresh webs
+    strung across the way ahead, and nothing moving."); never glimpsed; sprung within 4 m.
+  - *Cultists*: one lying hurt by the way, a "Wounded traveller" (`lure`: no one's enemy till it's
+    sprung, at 40% of their health), the rest in the brush 9 m about them. Told only nearer, within
+    15 m, by the mark on the lure's sleeve ("Their sleeve bears a mark you've seen on cultists'
+    robes."). Sprung on whoever talks to the lure or comes within 3 m of it, or waits about within
+    18 m for eight seconds (`linger`).
+- **Told** (`AMBUSH.tell`): to the first to come within 24 m of its heart (the cultists', 15 m),
+  said, heard (synth.js `steelGlint`, `twigSnap`, `birdsFlush`) and seen (sparks off steel, leaves
+  shaken from the brush, birds bursting from the trees: effects.js `birds`, `leaves`). Those of
+  its band that can be (`glimpsed`: not the dead nor the spiders) are glimpsed from then on, drawn
+  faintly through their cover as anyone hidden is, and can be struck; till then they're hidden
+  (`hidden`: not drawn, no bar, not on the minimap, no one's foe nor anyone's to fight).
+- **Sprung** (`#spring`): on whoever comes within its style's `spring` of its heart, or once a
+  player's waited about within 18 m of it (`near`) seven seconds after its tell (`waits`): its band
+  out of cover and after them at once, as if struck by them, those ahead of its heart and its
+  leader at whoever walked into it, those behind at the hindmost of the players near (furthest
+  back the way they came), the goblins' snare round whoever stepped in it. Said ("Ambush!
+  Outlaws, ahead and behind!", "Ambush! Goblins in the brush!", "Ambush! The pack comes in from
+  the sides!", "The dead rise from the earth round you!", "Spiders! All round you!", "It's a
+  trap! Cultists!") and heard (`ambushSprung`, a goblins' `snareSnap`, the dead's `earthBreak`),
+  leaves kicked up where each was lying.
+- **Caught out** (battle.js "caught"; the host's `#caughtOut`): one of its band struck while
+  hidden or glimpsed, before it springs, and the tables are turned: all of them stunned a moment
+  (`AMBUSH.caught`, a second) as they're sprung, and their leader's stash theirs once he falls
+  (`stash`: 20 to 45 gold more, and a prize as an elite's: caches.js `elitePrize`). Said: "You've
+  caught them out! They're reeling." Striking the one shown (the wolves' bait) springs it as
+  walking into it would.
+- **Let go** once every player's 220 m from it (`AMBUSH.far`) and none of its band's fighting, or
+  once they've all fallen; kept in the world's snapshot (`ambushes`, `SNAPSHOT_VERSION` 44).
 
 ## Adventurers' caches
 
@@ -871,7 +952,8 @@ hours (`night` in `CREATURES`; the terrain plan's M7e-3):
 
 - **Temper.** An aggressive creature comes for anyone it sees; a territorial one for anyone who
   comes within its `guard` squares; a defensive one (the porcupine, the green slime) fights only
-  whoever strikes it or its pack.
+  whoever strikes it or its pack. The wary beasts roaming the wilds are minded by a reaction roll
+  instead (*Wary beasts*, below), their temper swaying it.
 - **Packs.** A pack keeps together, following its leader, and turns as one on whoever strikes any
   of them (who sees it).
 - **Wandering.** Standing a while, then wandering off a little (within `roam` metres of where it
@@ -882,6 +964,118 @@ hours (`night` in `CREATURES`; the terrain plan's M7e-3):
   the rock tusker's charge, 1.5 s; a Cape buffalo's, 1.2 s) stuns them for that long. They fall (quicker than a death), lie
   a moment, sit up with their feet drawn under them and rise; until they're up they can't move,
   fight, cast, use anything or talk (the host refuses: "You're down: get up first").
+
+## Wary beasts
+
+The wild's natural beasts roaming out in the world (`core/wary.js` `WARY`: rats, porcupines,
+wolves, dire wolves, boars, snakes, bears, pumas, badgers, wild bulls, rook flocks, harts, hyenas,
+jackals, Cape buffalo, jaguars, crocodiles, boas, spitting cobras, Gila monsters, rock tuskers)
+don't all simply come for a player on sight: each pack is minded one way or another the first time
+it sees one, by a reaction roll as the old tabletop games had it (battle.js `#wary`, `#mind`). The
+rest of the wild (the night's own, the fae, the dead, monsters, swarms of vermin, dungeon things)
+fights as it always has, and so do the wary beasts that keep a camp, a cache, a lair or a place,
+an elite and its escort, and those sent after a player (a build-up's, an ambush's: `reacts`
+false). A den's are minded too, the readier to fight for being near it.
+- **The roll** (`twoDice`, `moodFor`, `REACTION`): two dice, and what sways it added (`NERVE`, the
+  host's `#nerve`, `nerveOf`), the lower the worse for the player: 2 or less, it comes for them;
+  3 to 5, it warns them off; 6 to 8, it watches them (a hunter stalks them); 9 to 11, it keeps
+  away; 12 or more, it's curious (one that can't be tamed watches instead). One mood for its
+  whole pack, rolled against the first player it sees, and rolled again once that player's gone,
+  fallen, elsewhere or far off (60 m past its leash), or its while fed is over.
+- **What sways it** (`NERVE`): its temper (aggressive −3, territorial −1, defensive +2); how a
+  fight with it would go for the player, their might against its power (core/might.js
+  `fightLook`: an easy kill +3, fair 0, hard −1, deadly −2); a pack of three or more −1; a night
+  hunter after dark −1 (*By night*); near its den −2; light about the player (the Light over them,
+  or standing in a lit place) +2 to one shy of fire (`fireShy`: the hunting beasts); a player
+  under half their health −2 to a hunter (`predator`); one carrying meat (meat bait, or meat
+  carved from a beast) −1 to a hunter.
+- **Warning them off** (`MOODS.warn`, `#warnOff`): it stands its ground turned to them and makes
+  its display every 2.6 s while they're within 12 m ("warning", `display`: a wolf snarls and
+  snaps, a boar scrapes the ground, a bear rears, a big cat hisses and swipes, a bull or buffalo
+  paws and stamps, a hart lowers its antlers, a snake coils, a porcupine bristles and rattles its
+  quills, a rook flock scatters up and calls: app/game.js `WARNINGS`, audio `beastGrowl`,
+  `beastSnort`, `beastHiss`, `quillRattle`). It charges, its pack with it ("charge"), one who comes
+  within 5 m (or its guard, territorial) or stays within 12 m six seconds; it settles once they're
+  past 16 m.
+- **Watching** (`MOODS.watch`): a grazer keeps 12 m off, turned to them (`#watch`); a hunter stalks
+  them (`#stalk`), keeping 16 to 22 m off and following them as far as 60 m past its leash,
+  closing in again at a run when it falls behind, and strikes once they're under half their
+  health, fighting something else, or making camp near it (below). Its eyes shine in the dark at
+  night, out beyond the light (world/wild3d.js `EyeShine`: two pale points, up to 42 m off, once
+  the day's light is under 35%), as any hunting beast's do.
+- **Keeping away** (`MOODS.avoid`, `#keepAway`): off to 20 m from them, and off again if they come
+  within 12 m.
+- **Curious** (`MOODS.curious`, `#nose`): it comes up to 6 m of them, keeps within 8 m, sniffing
+  at them now and then, for a minute; only watching them after that. Fed while curious, it may
+  follow them (*Tamed beasts*).
+- **Fed** (`MOODS.fed`): food thrown it and eaten (*Bait*), it leaves them be three minutes,
+  wandering as it would, unless it's struck.
+- **Struck**, any of them, the pack's minded to come for whoever struck it, as ever.
+- **Its nerve** (`MORALE`, `#limpOff`, `#unnerve`, `#falter`): at a quarter of its health or under,
+  it limps off from the nearest of its foes at 0.9 of its walking pace, slower than a player, so
+  one who goes after it catches it ("fled"); and so does the
+  rest of its pack once its leader falls or half of it's down (of as many as were put out:
+  `packSize`). Cornered, nowhere to go and someone within 2 m, it turns and fights. Once it's 40 m
+  from every player, it's gone (let go, its spoils with it). A den's own (*Dens*) stand their
+  ground there: minded as the rest, but their nerve never goes (`stands`).
+- **Spared** ("spared"; core/bestiary.js `spare`, `RESEARCH.spared`): a pack warned, watching,
+  keeping away, curious or fed, and left behind unfought 30 m off: the player knows its kind the
+  better for it, a point of research to its page.
+- **Shown** (hud.js `mood`, `MOOD_MARKS`): a mark on its bar, coloured: "!" warning you off, "◉"
+  watching you (stalking you, a hunter's), "↩" keeping away, "?" curious, "✓" fed, "↯" fleeing;
+  its words its title (shown with the mouse over it) and its label. A player who knows its kind well (its bestiary page
+  at 2 or more: game.js `MINDS_KNOWN`) is told how it's minded, once a pack and mood ("The wolf's
+  hackles are up: it'll come at you if you come on, or stay. Back away.", "The wolf's watching
+  you, keeping its distance: waiting for you to weaken.", "The boar watches you warily, keeping
+  off.", "The hart wants nothing to do with you.", "The wolf's curious about you. Feed it, and it
+  may follow you.").
+- **Making camp** (core/host.js `#camp`, `campRefusal`): a wary beast that means no harm just now
+  (keeping away, fed, curious, its nerve gone, or a grazer only watching) doesn't keep a player
+  from making camp, as one hostile near would. A hunter stalking them does: they're refused, and
+  it strikes.
+
+## Bait
+
+Food thrown to the wild's beasts (`core/wary.js` `BAIT`, battle.js `toss`, `#forage`; core/host.js
+`#use`): meat for the hunters, feed for the grazers (`WARY` `eats`: the boars, bears, badgers and
+rats take either).
+- **Meat bait** (`meatBait`, 3 gold: "Scraps of raw meat to throw to a hunting beast…") and a
+  **feed bag** (`feedBag`, 2 gold: "A sack of apples and grain…"), sold at the taverns (the
+  barkeep, the serving wenches, the innkeeper), the adventurers' guild and always by a pedlar on
+  the road (*A stranger*: a healing draught, the meat bait and the feed bag always, and three
+  more). Any meat carved from a beast (its `food` part: *What they leave*) does as meat bait.
+- **Thrown** at the beast the player's named, set on or locked on, or the nearest they can see
+  within 12 m that eats it (`#eaterNear`), landing a stride short of its feet; none, 5 m ahead of
+  them. It's a throw like a blow, let go 0.4 s in (refused "Out of range" past 12 m, or in the
+  middle of a blow or a spell); seen arcing through the air and lying on the ground where it lands
+  (world/wild3d.js `BaitLook`: a bundle of raw meat, or a tied sack of feed with apples at its
+  neck), heard landing (`baitLand`). From the pack ("Throw", or "Throw to a beast" for meat carved from one),
+  from an enemy's wheel, or from the Action Bar (docs/GAME.md *The action wheel*). Lying uneaten,
+  it's gone after a minute.
+- **Eaten**: a wary beast that eats it, within 10 m of where it lands, goes to it and eats eight
+  seconds (`eat`, heard: `beastEat`), its pack's to share (one bait feeds a pack); then it's fed
+  (*Wary beasts*), leaving them be three minutes. One already coming for a player is drawn off
+  them only a moment (`distract`, four seconds), and back after them, once for each bait thrown.
+
+## Tamed beasts
+
+A curious wary beast that can be tamed (`WARY` `tames`: the wolves, dire wolves, boars, bears,
+pumas, badgers, wild bulls, harts, hyenas, jackals, Cape buffalo, jaguars, rock tuskers and the
+porcupine) fed three times (`BAIT.tame`) by the player it's curious of, within its minute of
+curiosity (each feeding starting it afresh), follows them ("tamed": core/host.js `#tame`; "The
+wolf follows you now, fed and tamed: yours till it falls, or you let it go.", heard: synth.js
+`tamedChime`).
+- **Theirs** as a creature called by a spell is (a companion: `#companion`, `tamed`), fighting
+  beside them, as hurt as it was, but for no while: till it falls or they let it go (Dismiss, in
+  the party menu). One at a time: another tamed, the one before goes back to the wild. Never part
+  of their might (core/might.js: companions never are).
+- **Shown** down the party's side with a tawny rim (hud.js `PARTY_KINDS` `tamed`, styles.css
+  `--tamed`), no time left under it.
+- **Kept** with their character (characterOf's `followers`: `{ tamed, creature, tier, name }`;
+  netplay.js `characterFrom`, one, of a kind that tames; app/save.js `loadFollowers`), and brought
+  back with them when they join a world. Carried off by magic (Teleport, Word of Recall, Wizard's
+  Walk, a summons, or to safety after they fall), where a creature called by a spell is lost, it
+  finds them again as a companion left behind does (`#keepUp`).
 
 ## What lingers
 

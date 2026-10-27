@@ -29,7 +29,9 @@ import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { levelOf, offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
 import { falloff, fighterOf, levelFor, MASTERED_STEPS, mightOf, mightTier, packPower, partsOf, powerOf, tierPowerOf } from "./might.js";
-import { carriesTorch, lighting, skyLight, torchesLit } from "./light.js";
+import { BAIT, MORALE as NERVE_GONE, NERVE, nerveOf, wary, WARY } from "./wary.js";
+import { AMBUSH, ambushBand, ambushStyle, placeOf, STYLES as AMBUSHES } from "./ambush.js";
+import { carriesTorch, lighting, sightAt, skyLight, torchesLit } from "./light.js";
 import { ABILITIES, alike, ARMOR_CAP, buys, gradeOf, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
 import { MASTERED, payOf, RESEARCH } from "./bestiary.js";
 import { atLevel, dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
@@ -505,6 +507,15 @@ export function campFor(elapsed, until) {
  */
 export const SPOILS_REACH = 30;
 
+// Where an ambush is laid (core/ambush.js, #ambushSite): free ground looked for within AMBUSH_ROOM
+// metres of its heart; a bridge's end within AMBUSH_BRIDGE metres of it, made for one; the lands
+// whose trees give cover (AMBUSH_COVER). How near the one lying in wait in sight (the wolves' bait)
+// a player walks into it (AMBUSH_SHOWN, metres)
+const AMBUSH_ROOM = 6;
+const AMBUSH_BRIDGE = 10;
+const AMBUSH_COVER = Object.freeze(["woods", "darkwood", "elfwood", "jungle"]);
+const AMBUSH_SHOWN = 8;
+
 /** How long something dropped lies on the ground before it's gone (ms), and how near (m) it's picked up from. */
 export const GROUND_MS = 5 * 60 * 1000;
 
@@ -656,7 +667,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 43;
+export const SNAPSHOT_VERSION = 44;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -751,6 +762,9 @@ export const SNAPSHOT_STEPS = Object.freeze({
     // 43: who each pack came at (Host #fights: none yet), and each player's might as their loot
     // has it (none remembered: their might now, #rememberMight)
     42: (snapshot) => ({ ...snapshot, version: 43, fights: [], players: snapshot.players.map((player) => ({ mightPeak: null, ...player })) }),
+    // 44: the ambushes the wilds director's laid (core/ambush.js: none yet), and the food thrown to
+    // the wild's beasts (battle.js baits, core/wary.js: none)
+    43: (snapshot) => ({ ...snapshot, version: 44, ambushes: [], battle: { ...snapshot.battle, baits: [] } }),
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -1049,7 +1063,7 @@ export class Host {
         this.stockaded = null;
         this.#fortsChanged();
         this.#stockadesChanged({ tell: false });
-        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b), allied: (a, b) => this.#allied(a, b), haven: (actor) => this.#haven(actor) });
+        this.battle = new Battle(world, { seed, relations: (a, b) => this.#against(a, b), allied: (a, b) => this.#allied(a, b), haven: (actor) => this.#haven(actor), nerve: (actor, player) => this.#nerve(actor, player) });
         this.#wire();
 
         /**
@@ -1301,6 +1315,16 @@ export class Host {
          */
         this.obstacles = new Map();
         this.nextObstacle = 1;
+
+        /**
+         * The ambushes the wilds director's laid (core/ambush.js), by id: { id, style, heart ([x, y]),
+         * axis ([x, y]: the way the player it was laid for was coming, a unit), tier, ids (those lying
+         * in wait), roles (each one's, by id: ambushBand), laidFor (whose it is), toldAt (when it was
+         * told, or null), sprung, caught (struck first: its leader's stash theirs), silent (laid in
+         * a build-up's stead) }. Those lying in wait are the wild's, each `ambush`'s.
+         */
+        this.ambushes = new Map();
+        this.nextAmbush = 1;
         this.#obstaclesChanged({ tell: false });
 
         /**
@@ -1520,9 +1544,13 @@ export class Host {
         this.battle.add({ id, kind: "player", name: hero.name, weapon: player.hero.weapon, boots: player.hero.boots, team: player.realm, square: at, map });
         this.#outfit(player);
 
-        // (Their followers, with them)
+        // (Their followers, with them; and a beast they've tamed, core/wary.js)
         for (const one of followers) {
-            this.#follow(player, one);
+            if (one.tamed) {
+                this.#companion(player, one.creature, one.tier, { map, square: at }, { tamed: true });
+            } else {
+                this.#follow(player, one);
+            }
         }
 
         // (Just where they were, facing as they were, if that square was free; and as they were:
@@ -1707,6 +1735,13 @@ export class Host {
 
             return { name, calling, sex, seed, people };
         });
+
+        // (A beast they've tamed kept with their followers, core/wary.js: { tamed, creature, tier, name })
+        for (const [each, one] of this.companions) {
+            if (one.leader === id && one.tamed) {
+                followers.push({ tamed: true, creature: one.creature, tier: one.tier, name: this.battle.actor(each)?.name ?? CREATURES[one.creature].name });
+            }
+        }
 
         return { hero: { ...hero }, talks: { memory: structuredClone(talks.memory), knowledge: [...talks.knowledge] }, explored: explored.toJSON(), progress: progress.toJSON(), standing: standing.toJSON(), followers, ...structuredClone(own ?? {}) };
     }
@@ -1942,7 +1977,7 @@ export class Host {
             case "unequip":
                 return this.#gear(player, player.progress.unequip(command.slot, Number.isInteger(command.to) ? command.to : null));
             case "use":
-                return this.#use(player, actor, Number.isInteger(command.index) ? command.index : player.progress.slotOf(command.item), typeof command.target === "string" ? command.target : null);
+                return this.#use(player, actor, Number.isInteger(command.index) ? command.index : player.progress.slotOf(command.item), typeof command.target === "string" ? command.target : null, { toss: command.toss === true });
             case "arrange":
                 return this.#packed(player.progress.move(command.from, command.to));
             case "sort":
@@ -2180,6 +2215,17 @@ export class Host {
             // (One of a pack of the wild's setting on a player: one of those that came at them, #fought)
             if (event.type === "attack" && this.players.has(event.target)) {
                 this.#fought(event.id, event.target);
+            }
+
+            // (A wary beast fed by a player till it follows them: theirs, #tame; one they left be,
+            // spared: they know its kind the better, #spared, core/wary.js)
+            if (event.type === "tamed") {
+                this.#tame(event.id, event.by);
+            } else if (event.type === "spared") {
+                this.#spared(event.by, event.creature);
+            } else if (event.type === "caught") {
+                // (One of an ambush's band struck before it sprang: core/ambush.js, #caughtOut)
+                this.#caughtOut(event.id, event.by, event.shown);
             }
 
             // (One of a cache's guards struck or felled: whoever did it, a player or one of theirs,
@@ -2728,6 +2774,7 @@ export class Host {
             ...(this.nextFresh > 1 ? { fresh: structuredClone([...this.fresh.entries()]), nextFresh: this.nextFresh } : {}),
             ...(this.nextStranger > 1 ? { strangers: structuredClone([...this.strangers.entries()]), nextStranger: this.nextStranger } : {}),
             ...(this.nextObstacle > 1 ? { obstacles: structuredClone([...this.obstacles.entries()]), nextObstacle: this.nextObstacle } : {}),
+            ...(this.nextAmbush > 1 ? { ambushes: structuredClone([...this.ambushes.entries()]), nextAmbush: this.nextAmbush } : {}),
             ground: structuredClone([...this.ground.values()]),
             campfires: structuredClone(this.campfires),
             nextGround: this.nextGround,
@@ -2852,7 +2899,7 @@ export class Host {
             }
         }
 
-        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor) });
+        host.battle = Battle.restore(world, snapshot.battle, { relations: (a, b) => host.#against(a, b), allied: (a, b) => host.#allied(a, b), haven: (actor) => host.#haven(actor), nerve: (actor, player) => host.#nerve(actor, player) });
         host.#wire();
         host.rules = rulesOf(snapshot.rules);
         host.lookAt = snapshot.lookAt;
@@ -2923,6 +2970,8 @@ export class Host {
         host.obstacles = new Map(structuredClone(snapshot.obstacles ?? []));
         host.nextObstacle = snapshot.nextObstacle ?? 1;
         host.#obstaclesChanged({ tell: false });
+        host.ambushes = new Map(structuredClone(snapshot.ambushes ?? []));
+        host.nextAmbush = snapshot.nextAmbush ?? 1;
         host.ground = new Map((snapshot.ground ?? []).map((dropped) => [dropped.id, structuredClone(dropped)]));
         host.nextGround = snapshot.nextGround ?? 1;
         host.campfires = structuredClone(snapshot.campfires ?? []);
@@ -3483,6 +3532,26 @@ export class Host {
                 // (No room by them: they'll catch up another time)
             }
         }
+    }
+
+    // What sways a wary beast (`actor`) meeting a player, beyond the dice (battle.js `nerve`,
+    // core/wary.js nerveOf): its temper; how a fight with it would go for them (their might
+    // against its power: core/might.js); its pack; a night hunter after dark; its den; their
+    // light (the Light about them, or a lit place); their hurt; the meat they carry
+    #nerve(actor, player) {
+        const wild = actor.wild;
+        const progress = this.players.get(player.id)?.progress ?? null;
+
+        return nerveOf(wild.creature, {
+            temper: wild.temper,
+            gap: this.mightFor(player.id) - powerOf(actor),
+            pack: this.battle.actors.filter((other) => other.wild?.pack === wild.pack && !other.dead).length,
+            night: CREATURES[wild.creature]?.night === "more" && this.#dark(),
+            den: Boolean(this.wild.get(actor.id)?.den),
+            lit: this.#lit(player),
+            hurt: player.hp < player.maxHp * NERVE.hurtBelow,
+            meat: Boolean(progress?.carried().some((id) => ITEMS[id]?.food || ITEMS[id]?.bait === "meat")),
+        });
     }
 
     // Whether someone's in a shrine's sanctuary out in the world (core/shrines.js sanctuaryAt): the
@@ -4311,6 +4380,12 @@ export class Host {
                 bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human", ...this.#making(player, this.#fightPower(player, fallen, beast), beast.creature) }));
             }
 
+            // (The leader of an ambush caught out: its stash, core/ambush.js AMBUSH `stash`)
+            if (beast.ambush && beast.master && this.ambushes.get(beast.ambush)?.caught) {
+                bundle.gold += this.random.int(...AMBUSH.stash);
+                bundle.items.push(elitePrize(beast.tier, this.random, { people: (fallen.map === "town" && landAt(this.world.plan, fallen.x, fallen.y).race) || "human", ...this.#making(player, this.#fightPower(player, fallen, beast), beast.creature) }));
+            }
+
             if (!bundle.gold && !bundle.items.length) {
                 continue;
             }
@@ -4336,9 +4411,11 @@ export class Host {
 
     // Something from the pack used (drunk, eaten; a tome or a scroll read, on `target` if it's
     // a spell's): one off its stack
-    #use(player, actor, index, target = null) {
+    #use(player, actor, index, target = null, { toss = false } = {}) {
         const stack = player.progress.pack[index];
-        const use = stack && ITEMS[stack.id].use;
+        const def = stack && ITEMS[stack.id];
+        // (Meat carved from a beast thrown to one, as meat bait is: core/wary.js)
+        const use = def && toss && def.food ? { bait: "meat", reach: BAIT.reach } : def?.use;
 
         if (!use) {
             return refuse("item");
@@ -4415,6 +4492,24 @@ export class Host {
             const item = player.progress.take(index, 1);
 
             this.#event("used", { id: player.id, item });
+
+            return thrown;
+        }
+
+        // (Bait: thrown to the beast they've named, set on or locked on, or the nearest within its
+        // reach that eats it, landing at its feet; none, a few strides ahead of them (refused,
+        // it's kept: too far, or they can't throw just now). core/wary.js BAIT)
+        if (use.bait) {
+            const to = target ?? actor.order?.target ?? actor.lock ?? actor.target ?? this.#eaterNear(actor, use.bait, use.reach)?.id ?? null;
+            const thrown = this.battle.toss(actor.id, to, { kind: use.bait, reach: use.reach });
+
+            if (!thrown.ok) {
+                return thrown;
+            }
+
+            const item = player.progress.take(index, 1);
+
+            this.#event("used", { id: player.id, item, ...(toss ? { thrown: true } : {}) });
 
             return thrown;
         }
@@ -8721,11 +8816,15 @@ export class Host {
 
         for (const [id, one] of [...this.wild]) {
             const actor = this.battle.actor(id);
-            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon && !one.works && !one.rift && actor.target === null;
+            const roaming = actor && !actor.dead && !one.camp && !one.den && !one.trial && !one.lair && !one.place && !one.cache && !one.stranger && !one.dungeon && !one.works && !one.rift && !one.ambush && actor.target === null;
 
             if (!actor) {
                 this.#unwild(id);
             } else if (roaming && (distanceTo(actor) > (one.elite ? ELITES.far : WILDS.far) || (!dark && !outByDay(one.creature) && distanceTo(actor) > WILDS.from))) {
+                this.#release(id);
+            } else if (!actor.dead && actor.mood?.kind === "flee" && distanceTo(actor) > NERVE_GONE.gone) {
+                // (A wary beast whose nerve went, limped off well away from everyone: gone, its
+                // spoils with it, core/wary.js MORALE)
                 this.#release(id);
             }
         }
@@ -9109,7 +9208,7 @@ export class Host {
                 // now and then one of its pack one of those it goes about with: a goblin bomber)
                 const kind = elite && k === 0 ? eliteOf(creature) : CREATURES[creature].band && k > 0 ? memberOf(creature, k, this.random.next()) : creature;
 
-                this.#rouse(id, kind, tier, free(at), { pack, leader: ids[0] ?? null, master: master && k === 0, map, health: k === 0 ? leading : health, ...(k >= least ? { extra: true } : {}), ...more, ...(elite ? { elite: k === 0 ? "lead" : "escort" } : {}) });
+                this.#rouse(id, kind, tier, free(at), { pack, leader: ids[0] ?? null, master: master && k === 0, map, health: k === 0 ? leading : health, packSize: count, ...(k >= least ? { extra: true } : {}), ...more, ...(elite ? { elite: k === 0 ? "lead" : "escort" } : {}) });
                 ids.push(id);
             }
         } catch {
@@ -9127,9 +9226,14 @@ export class Host {
     // elite (`elite` "lead") a tier up, stronger still, walking its round about where it's put
     // out, its kind with it (`elite` "escort"), and neither going far from there (ELITES); its hit
     // points × `health` against a stronger side (strength.js SCALING); one more than there'd have
-    // been against a player alone, `extra` (leaving its gold and its parts only: spoils.js)
-    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, trial = null, lair = null, place = null, cache = null, stranger = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null }) {
+    // been against a player alone, `extra` (leaving its gold and its parts only: spoils.js). One
+    // of the wary beasts (core/wary.js) roaming out in the world, its own (`reacts`: not keeping
+    // anything, an elite, called, nor sent after someone), minded on first seeing a player, one
+    // of a pack of `packSize`; one of a den's, standing its ground there, its nerve never gone
+    // (`stands`)
+    #rouse(id, creature, tier, square, { pack, leader, master = false, map = "town", camp = null, den = null, trial = null, lair = null, place = null, cache = null, stranger = null, works = null, roam = null, temper = null, guard = null, round = null, dungeon = null, foe = null, champion = null, title = null, regalia = null, elite = null, health = 1, extra = false, called = null, reacts = true, packSize = 1, ambush = null, arms = null }) {
         const spec = CREATURES[creature];
+        const reacting = reacts && wary(creature) && map === "town" && !elite && !camp && !lair && !cache && !stranger && !trial && !place && !works && !dungeon && !called && !champion && !ambush;
         const lead = elite === "lead";
         // (A dungeon's boss or mini-boss: more of it and harder, CHAMPIONS, by its title; an elite,
         // ELITES)
@@ -9138,12 +9242,13 @@ export class Host {
         const power = tierPower(at) * stands.power;
         const walks = lead ? { stops: eliteRound(square), at: 0 } : round;
 
-        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(trial ? { trial } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(stranger ? { stranger } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}) });
+        this.wild.set(id, { creature, tier: at, pack, camp, lair, master, ...(den ? { den } : {}), ...(trial ? { trial } : {}), ...(place ? { place } : {}), ...(cache ? { cache } : {}), ...(stranger ? { stranger } : {}), ...(works ? { works } : {}), ...(dungeon ? { dungeon, foe, champion } : {}), ...(elite ? { elite } : {}), ...(extra ? { extra } : {}), ...(called ? { called } : {}), ...(ambush ? { ambush } : {}) });
         this.battle.add({
             id,
             kind: "beast",
             name: title ?? (lead ? eliteName(creature) : spec.name),
-            weapon: spec.weapon,
+            // (One with a weapon of its own: an ambush's bowman, core/ambush.js)
+            weapon: arms ?? spec.weapon,
             team: WILD,
             square,
             map,
@@ -9158,7 +9263,7 @@ export class Host {
             // in, battle.js WARY_MS; a dungeon's boss or mini-boss, its rank and its id in its theme,
             // `champion` and `regalia`: how it's drawn, beasts/champions.js; an elite, `elite`, seeing
             // further, `sight`, and drawn as a champion "elite")
-            wild: { creature, tier: at, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: elite ? ELITES.loop + ELITES.leash : spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town", ...traitsOf(creature, { boss: champion === "boss" }), ...(walks ? { round: walks.stops, stop: walks.at } : {}), ...(champion ? { champion, regalia } : {}), ...(lead ? { elite: true, sight: ELITES.sight, champion: "elite", regalia: null } : {}) },
+            wild: { creature, tier: at, temper: temper ?? spec.temper, guard: guard ?? spec.guard ?? 0, roam: roam ?? spec.roam, leash: elite ? ELITES.loop + ELITES.leash : spec.leash + (roam ?? 0), pack, leader, menace: menaces(creature), unique: Boolean(spec.perilous), darkSight: Boolean(spec.darkSight), wary: map !== "town", ...traitsOf(creature, { boss: champion === "boss" }), ...(walks ? { round: walks.stops, stop: walks.at } : {}), ...(champion ? { champion, regalia } : {}), ...(lead ? { elite: true, sight: ELITES.sight, champion: "elite", regalia: null } : {}), ...(reacting ? { reacts: true, packSize, ...(den ? { stands: true } : {}) } : {}) },
         });
     }
 
@@ -9730,6 +9835,7 @@ export class Host {
 
         this.#strangersAbout(homes);
         this.#obstaclesAbout(homes);
+        this.#ambushesAbout();
 
         // (Fresh tracks old, left far behind, or their pack all gone: let go)
         for (const [id, tracks] of [...this.fresh]) {
@@ -9854,8 +9960,16 @@ export class Host {
             return;
         }
 
-        // (A long calm, out in the wilds: a build-up)
+        // (A long calm, out in the wilds: a build-up; or, now and then, an ambush laid ahead of them
+        // in silence instead, the wild gone quiet the only tell, core/ambush.js AMBUSH `silent`)
         if (!pace.build && !pace.fight && now >= pace.quietUntil && now - pace.lastFight >= PACING.calm && pace.calm >= PACING.calmMetres) {
+            if (this.random.chance(AMBUSH.silent) && this.#putAmbush(actor, was.heading, homes, null, { silent: true })) {
+                Object.assign(pace, { lastFight: now, calm: 0 });
+                this.#event("pace", { id: player.id, change: "silent" });
+
+                return;
+            }
+
             pace.build = this.#buildUp(player, actor, was.heading, homes);
 
             if (pace.build) {
@@ -9896,7 +10010,8 @@ export class Host {
     // A build-up's hunters (`build`: #buildUp's) put out where they were heard, and sent at the
     // player (`actor`), running
     #hunt(actor, build) {
-        const ids = this.#pack({ creature: build.creature, tier: build.tier, count: build.count }, build.at, {});
+        // (Sent after them: coming for them, not minded otherwise, core/wary.js)
+        const ids = this.#pack({ creature: build.creature, tier: build.tier, count: build.count }, build.at, { reacts: false });
 
         for (const id of ids) {
             this.battle.command(id, { type: "engage", target: actor.id, run: true });
@@ -9919,6 +10034,15 @@ export class Host {
     #deal(actor, was, homes, group = null) {
         was.deck ??= shuffled(this.random);
 
+        // (An ambush set aside, to come later in the deck, and the next card dealt in its stead:
+        // in a quiet spell after a hard fight; and at night, half the time, for those with no light
+        // about them to mark them out, core/ambush.js AMBUSH `dark`)
+        const lit = (group?.actors ?? [actor]).some((one) => this.#lit(one));
+
+        if (was.deck[0] === "ambush" && was.deck.length > 1 && (this.#quiet(actor.id) || (this.#dark() && !lit && this.random.chance(AMBUSH.dark)))) {
+            was.deck.push(was.deck.shift());
+        }
+
         const card = was.deck[0];
 
         const dealt =
@@ -9930,7 +10054,9 @@ export class Host {
                     ? this.#putStranger(actor, was, homes)
                     : card === "obstacle"
                       ? this.#putObstacle(actor, was.heading, homes)
-                      : this.#putFind(card, actor, was.heading, homes);
+                      : card === "ambush"
+                        ? !this.#quiet(actor.id) && this.#putAmbush(actor, was.heading, homes, group)
+                        : this.#putFind(card, actor, was.heading, homes);
 
         if (!dealt) {
             return false;
@@ -10646,6 +10772,252 @@ export class Host {
 
         if (changed) {
             this.#obstaclesChanged();
+        }
+    }
+
+    // An ambush laid ahead of a player (`actor`, going the way of `heading`, or any way: core/
+    // ambush.js), at a place made for it (#ambushSite); laid for the one of their `group` with
+    // light about them by night, an easy mark (#lit); its band the land's (its style, AMBUSH:
+    // ambushStyle, ambushBand), as strong as the land or the mightiest player near it (as a
+    // cache's), each tougher against the side of their group (strength.js SCALING); hidden in their
+    // cover, but the one shown lying in wait (the wolves' bait, the cultists' lure: no one's enemy
+    // till it springs, `neutral`). All of them one pack (`ambush`'s id), so a player's fight with
+    // them is with all of them (#fought). `silent`: laid in a build-up's stead (#pace). Whether it
+    // could be
+    #putAmbush(actor, heading, homes, group = null, { silent = false } = {}) {
+        const plan = this.world.plan;
+        const dark = this.#dark();
+        const marked = dark ? ((group?.actors ?? [actor]).find((one) => this.#lit(one)) ?? actor) : actor;
+        const site = this.#ambushSite(marked, marked === actor ? heading : (this.travel.get(marked.id)?.heading ?? heading));
+
+        if (!site) {
+            return false;
+        }
+
+        const { heart, axis } = site;
+        const land = landAt(plan, ...heart);
+        const might = Math.max(0, ...[...this.players.values()].filter((player) => {
+            const each = this.battle.actor(player.id);
+
+            return each && each.map === "town" && hypot(each.x - heart[0], each.y - heart[1]) <= CACHES.near;
+        }).map((player) => mightTier(this.mightFor(player.id))));
+        const tier = cacheTier(tierAt(heart, homes.map(({ home }) => home), land.biome), might);
+        const style = ambushStyle(land.biome, land.race, this.random, { dark });
+        const members = ambushBand(style, land.biome, land.race, cacheCount(tier, this.random), this.random);
+        const side = group ? this.#side(group) : null;
+        const scale = side ? scalingOf(side.opposition) : null;
+        const id = `ambush-${this.nextAmbush++}`;
+        const ids = [];
+        const roles = {};
+
+        for (const member of members) {
+            const lead = member.role === "lead";
+            const [one] = this.#pack({ creature: member.creature, tier: lead ? Math.min(TIERS, tier + CACHES.lead) : tier, count: 1 }, placeOf(member.at, heart, axis), { pack: id, ambush: id, master: lead, roam: 0, reacts: false, health: (lead ? scale?.leader : scale?.health) ?? 1, ...(member.arms ? { arms: member.arms } : {}) });
+
+            if (!one) {
+                continue;
+            }
+
+            const lying = this.battle.actor(one);
+
+            // (Hidden in cover; the bait and the lure in sight, waiting, the lure hurt by the way,
+            // no one's enemy, a traveller to look at)
+            Object.assign(lying, member.role === "bait" || member.role === "lure" ? { lying: true } : { hidden: true });
+
+            if (member.role === "lure") {
+                Object.assign(lying, { neutral: true, name: "Wounded traveller", hp: Math.max(1, Math.round(lying.maxHp * 0.4)) });
+            }
+
+            ids.push(one);
+            roles[one] = member.role;
+        }
+
+        if (!ids.length) {
+            return false;
+        }
+
+        this.ambushes.set(id, { id, style, heart, axis, tier, ids, roles, laidFor: marked.id, toldAt: null, sprung: false, caught: false, silent });
+        this.#event("ambush", { ambush: id, change: "laid", style, at: heart, ids });
+
+        return true;
+    }
+
+    // Does one have light about them (the Light spell's globe over them, or standing in a lit place:
+    // core/light.js)? So marked out at night (core/ambush.js AMBUSH `dark`)
+    #lit(actor) {
+        const light = this.battle.light;
+
+        return Boolean(this.battle.buffOf(actor, "light")) || (light !== null && actor.map === this.battle.lightMap && sightAt(light, actor.square) > light.sky);
+    }
+
+    // Where an ambush is laid ahead of a player (`actor`, going the way of `heading`, or any way):
+    // AMBUSH `ahead` metres before them, within `spread` of the way they're going, where it may be
+    // (as a cache: off the settlements, the places worth finding and every other cache, find and
+    // ambush, caches.js cacheClear; the roads no matter), on dry ground open enough for its band
+    // (#openFor); of a dozen such, the place most made for it (#chokepoint). { heart, axis (the
+    // way they're coming, a unit) } or null
+    #ambushSite(actor, heading) {
+        const plan = this.world.plan;
+        const overworld = this.world.maps.town;
+        const squares = squaresOf(overworld);
+        const others = [...[...this.caches.values(), ...this.finds.values()].map(({ at }) => at), ...[...this.ambushes.values()].map(({ heart }) => heart)];
+        const [hx, hy] = heading ?? [0, 1];
+        let best = null;
+
+        for (let tries = 0; tries < 12; tries++) {
+            const turn = (this.random.next() * 2 - 1) * (heading ? AMBUSH.spread : Math.PI);
+            const reach = AMBUSH.ahead[0] + this.random.next() * (AMBUSH.ahead[1] - AMBUSH.ahead[0]);
+            const [c, s] = [cos(turn), sin(turn)];
+            const axis = [hx * c - hy * s, hx * s + hy * c];
+            const square = [Math.floor(actor.x + axis[0] * reach), Math.floor(actor.y + axis[1] * reach)];
+            const heart = [square[0] + 0.5, square[1] + 0.5];
+
+            if (squares.blocked(...square) || landAt(plan, ...heart).water || !cacheClear(plan, heart, { others }) || !this.#openFor(heart, squares)) {
+                continue;
+            }
+
+            const score = this.#chokepoint(heart, overworld, plan);
+
+            if (!best || score > best.score) {
+                best = { heart, axis, score };
+            }
+        }
+
+        return best && { heart: best.heart, axis: best.axis };
+    }
+
+    // Is there ground enough to lie in wait on about an ambush's heart (two in three of the squares
+    // within AMBUSH_ROOM metres of it free)?
+    #openFor([x, y], squares) {
+        let free = 0;
+        let all = 0;
+
+        for (let dy = -AMBUSH_ROOM; dy <= AMBUSH_ROOM; dy += 2) {
+            for (let dx = -AMBUSH_ROOM; dx <= AMBUSH_ROOM; dx += 2) {
+                all++;
+                free += squares.blocked(Math.floor(x + dx), Math.floor(y + dy)) ? 0 : 1;
+            }
+        }
+
+        return free * 3 >= all * 2;
+    }
+
+    // How made for an ambush a place is: by a bridge's end or on the way over a ford (3), on a road
+    // (2), in the woods (1), or none of those (0)
+    #chokepoint([x, y], overworld, plan) {
+        const bridged = (overworld.bridgesNear?.(Math.floor(x / CHUNK), Math.floor(y / CHUNK)) ?? []).some(({ a, b }) => Math.min(hypot(a[0] - x, a[1] - y), hypot(b[0] - x, b[1] - y)) <= AMBUSH_BRIDGE);
+        const forded = [-4, 0, 4].some((dy) => [-4, 0, 4].some((dx) => overworld.onFordWay?.(Math.floor(x + dx), Math.floor(y + dy))));
+
+        if (bridged || forded) {
+            return 3;
+        }
+
+        if ((overworld.roadEdgeAt?.(x, y, 3) ?? Infinity) <= 1) {
+            return 2;
+        }
+
+        return AMBUSH_COVER.includes(landAt(plan, x, y).biome) ? 1 : 0;
+    }
+
+    // The ambushes laid (core/ambush.js): told to the first to come near (its tell; its band
+    // glimpsed in its cover, those that can be); sprung on whoever walks into it (within its
+    // `spring` of its heart, or AMBUSH_SHOWN of the one lying in wait in sight), or lingers near it
+    // after its tell (#spring); let go once every player's AMBUSH `far` off, none fighting it, or
+    // once its band's all fallen or gone
+    #ambushesAbout() {
+        const players = [...this.players.keys()].map((id) => this.battle.actor(id)).filter((actor) => actor && !actor.dead && actor.map === "town");
+
+        for (const [id, ambush] of [...this.ambushes]) {
+            const band = ambush.ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead);
+            const off = (actor) => hypot(actor.x - ambush.heart[0], actor.y - ambush.heart[1]);
+            const away = players.every((player) => off(player) > AMBUSH.far) && band.every((one) => one.target === null);
+
+            if (!band.length || away) {
+                for (const one of band) {
+                    this.#release(one.id);
+                }
+
+                this.ambushes.delete(id);
+                this.#event("ambush", { ambush: id, change: "gone" });
+                continue;
+            }
+
+            if (ambush.sprung || !players.length) {
+                continue;
+            }
+
+            const style = AMBUSHES[ambush.style];
+            const nearest = players.reduce((best, player) => (off(player) < off(best) ? player : best));
+
+            if (ambush.toldAt === null && off(nearest) <= (style.tellAt ?? AMBUSH.tell)) {
+                ambush.toldAt = this.battle.time;
+
+                if (style.glimpsed) {
+                    for (const one of band) {
+                        if (one.hidden === true) {
+                            one.hidden = "glimpsed";
+                        }
+                    }
+                }
+
+                this.#event("ambush", { ambush: id, change: "told", style: ambush.style, tell: style.tell, at: ambush.heart, by: nearest.id, ids: ambush.ids });
+            }
+
+            const into = players.find((player) => off(player) <= style.spring || band.some((one) => one.lying && !one.neutral && hypot(one.x - player.x, one.y - player.y) <= AMBUSH_SHOWN));
+            const lingered = ambush.toldAt !== null && this.battle.time - ambush.toldAt >= (style.linger ?? AMBUSH.waits) && players.some((player) => off(player) <= AMBUSH.near);
+
+            if (into || lingered) {
+                this.#spring(ambush, { by: (into ?? nearest).id });
+            }
+        }
+    }
+
+    // An ambush sprung (core/ambush.js): its band out of cover and after them at once, by surprise
+    // (nothing harder for it): those ahead of its heart and its leader at whoever walked into it
+    // (`by`), those behind at the hindmost of the players near (furthest back the way they came);
+    // the lure no one's friend any more; the dead rising (their style's `rise`); the goblins' snare
+    // rooting whoever stepped in it (`snare`). Caught out (struck first, `caught`): all of them
+    // stunned a moment (AMBUSH `caught`), and their leader's stash theirs once it falls (#spoils)
+    #spring(ambush, { by = null, caught = false } = {}) {
+        if (ambush.sprung) {
+            return;
+        }
+
+        const style = AMBUSHES[ambush.style];
+        const band = ambush.ids.map((each) => this.battle.actor(each)).filter((actor) => actor && !actor.dead);
+        const players = [...this.players.keys()].map((id) => this.battle.actor(id)).filter((actor) => actor && !actor.dead && actor.map === "town" && hypot(actor.x - ambush.heart[0], actor.y - ambush.heart[1]) <= AMBUSH.near * 2);
+        const along = (actor) => (actor.x - ambush.heart[0]) * ambush.axis[0] + (actor.y - ambush.heart[1]) * ambush.axis[1];
+        const lead = this.battle.actor(by) ?? players[0] ?? null;
+        const hind = players.reduce((last, player) => (!last || along(player) < along(last) ? player : last), null) ?? lead;
+        let snared = null;
+
+        Object.assign(ambush, { sprung: true, caught });
+
+        if (style.snare && !caught && lead && hypot(lead.x - ambush.heart[0], lead.y - ambush.heart[1]) <= style.spring + 0.5) {
+            snared = lead.id;
+            lead.snaredUntil = this.battle.time + style.snare;
+        }
+
+        for (const one of band) {
+            if (one.neutral) {
+                Object.assign(one, { neutral: false, name: CREATURES[this.wild.get(one.id)?.creature]?.name ?? one.name });
+            }
+
+            const target = ambush.roles[one.id] === "rear" ? hind : lead;
+
+            this.battle.spring(one.id, target?.id ?? null, { ms: caught ? AMBUSH.caught : (style.rise ?? 0) });
+        }
+
+        this.#event("ambush", { ambush: ambush.id, change: caught ? "caught" : "sprung", style: ambush.style, at: ambush.heart, ids: ambush.ids, by, ...(snared ? { snared } : {}) });
+    }
+
+    // One of an ambush's band struck before it sprang (battle.js "caught"): glimpsed in its cover,
+    // the ambush caught out; the one in sight (its bait), sprung as it would be
+    #caughtOut(id, by, shown) {
+        const ambush = this.ambushes.get(this.wild.get(id)?.ambush);
+
+        if (ambush && !ambush.sprung) {
+            this.#spring(ambush, { by, caught: !shown });
         }
     }
 
@@ -11468,7 +11840,8 @@ export class Host {
 
         return [
             ...this.#company(playerId).map((id) => ({ id, kind: "adventurer" })),
-            ...companions.filter(([, one]) => !one.risen).map(([id]) => ({ id, kind: "summon" })),
+            ...companions.filter(([, one]) => one.tamed).map(([id]) => ({ id, kind: "tamed" })),
+            ...companions.filter(([, one]) => !one.risen && !one.tamed).map(([id]) => ({ id, kind: "summon" })),
             ...companions.filter(([, one]) => one.risen).map(([id]) => ({ id, kind: "risen" })),
         ];
     }
@@ -12013,7 +12386,7 @@ export class Host {
     // fighting whoever's their enemy: risen from the dead (Zombify), or called (Summon). As many of
     // each at once as the spell's `level` allows (SPELLS company: one at level 1, five at 5); with
     // that many already, the oldest of them let go to make room. Its id
-    #companion(player, creature, tier, { map, square }, { risen = false, level = 1 } = {}) {
+    #companion(player, creature, tier, { map, square }, { risen = false, level = 1, tamed = false } = {}) {
         const spec = CREATURES[creature];
         const power = tierPower(tier);
         const id = `companion-${this.nextCompanion++}`;
@@ -12027,10 +12400,11 @@ export class Host {
         }
 
         const spell = SPELLS[risen ? "zombify" : "summon"];
-        const most = spell.company[Math.min(Math.max(1, level), spell.company.length) - 1];
-        const already = [...this.companions].filter(([, one]) => one.leader === player.id && Boolean(one.risen) === risen);
+        const most = tamed ? 1 : spell.company[Math.min(Math.max(1, level), spell.company.length) - 1];
+        const already = [...this.companions].filter(([, one]) => one.leader === player.id && Boolean(one.risen) === risen && Boolean(one.tamed) === tamed);
 
-        // (The oldest first: the companions are kept in the order they came)
+        // (The oldest first: the companions are kept in the order they came; a beast tamed, one at
+        // a time, the one before going back to the wild)
         for (const [old] of already.slice(0, Math.max(0, already.length - most + 1))) {
             this.#letGo(old, "replaced");
         }
@@ -12043,7 +12417,9 @@ export class Host {
             this.#letGo(oldest[0], "replaced");
         }
 
-        this.companions.set(id, { leader: player.id, creature, tier, until: this.battle.time + spell.lasts, risen });
+        // (A beast tamed: theirs till it falls or they let it go, core/wary.js; one called or raised,
+        // for its spell's while)
+        this.companions.set(id, { leader: player.id, creature, tier, until: tamed ? null : this.battle.time + spell.lasts, risen, ...(tamed ? { tamed: true } : {}) });
         this.battle.add({
             id,
             kind: "beast",
@@ -12060,10 +12436,10 @@ export class Host {
             power: { melee: power, ranged: power },
             armor: spec.armor ?? 0,
             wards: spec.wards ?? null,
-            wild: { creature, tier, temper: "aggressive", guard: 0, roam: 0, leash: 0, pack: id, leader: null, menace: false, unique: false, ...traitsOf(creature), companion: risen ? "risen" : "called" },
+            wild: { creature, tier, temper: "aggressive", guard: 0, roam: 0, leash: 0, pack: id, leader: null, menace: false, unique: false, ...traitsOf(creature), companion: tamed ? "tamed" : risen ? "risen" : "called" },
         });
         this.#event("roused", { ids: [id], creature });
-        this.#event("companion", { id: player.id, companion: id, creature, change: risen ? "risen" : "called" });
+        this.#event("companion", { id: player.id, companion: id, creature, change: tamed ? "tamed" : risen ? "risen" : "called" });
 
         return id;
     }
@@ -12075,7 +12451,7 @@ export class Host {
             const actor = this.battle.actor(id);
             const leader = this.battle.actor(one.leader);
 
-            if (!actor || !leader || !this.players.has(one.leader) || this.battle.time >= one.until) {
+            if (!actor || !leader || !this.players.has(one.leader) || (one.until !== null && this.battle.time >= one.until)) {
                 this.#letGo(id, "over");
                 continue;
             }
@@ -12120,6 +12496,58 @@ export class Host {
         actor.spawnMap = leader.map;
 
         return true;
+    }
+
+    // A wary beast fed by a player till it follows them (battle.js "tamed": core/wary.js BAIT
+    // `tame`): out of the wild, and at their side where it stood, as hurt as it was, theirs till it
+    // falls or they let it go (a companion: never counted in their might), one at a time, and kept
+    // with their character (characterOf's followers)
+    #tame(id, by) {
+        const one = this.wild.get(id);
+        const beast = this.battle.actor(id);
+        const player = this.players.get(by);
+
+        if (!one || !beast || beast.dead || !player) {
+            return;
+        }
+
+        const share = beast.hp / beast.maxHp;
+        const at = { map: beast.map, square: [...beast.square] };
+
+        this.#release(id);
+
+        const tamed = this.#companion(player, one.creature, one.tier, at, { tamed: true });
+        const actor = tamed && this.battle.actor(tamed);
+
+        if (actor) {
+            actor.hp = Math.max(1, Math.round(actor.maxHp * share));
+        }
+    }
+
+    // The nearest wary beast to a player that eats bait of a `kind`, within `reach` metres, that
+    // they can see (core/wary.js eats): or null
+    #eaterNear(actor, kind, reach) {
+        let best = null;
+
+        for (const other of this.battle.actors) {
+            const far = hypot(other.x - actor.x, other.y - actor.y);
+
+            if (!other.dead && other.wild?.reacts && other.map === actor.map && far <= reach && WARY[other.wild.creature]?.eats.includes(kind) && this.battle.canSee(actor, other, reach) && (!best || far < best.far)) {
+                best = { id: other.id, far };
+            }
+        }
+
+        return best;
+    }
+
+    // A wary beast left be by a player (battle.js "spared": warned, watching, keeping away, curious
+    // or fed, and left behind unfought): they know its kind the better (core/bestiary.js spare)
+    #spared(id, creature) {
+        const player = this.players.get(id);
+
+        if (player) {
+            this.#researched(player, player.progress.bestiary.spare(creature));
+        }
     }
 
     // A companion gone (its time up; lost when its player was carried off): crumbled, or vanished
@@ -12484,7 +12912,8 @@ export class Host {
     }
 
     // Those with a player, lost when they're carried off by magic: their followers gone back to
-    // where they were hired (the next time it's open), their companions by magic vanished
+    // where they were hired (the next time it's open), their companions by magic vanished (a beast
+    // they've tamed finds them again: #keepUp)
     #loseRetinue(player) {
         for (const id of this.#company(player.id)) {
             const one = this.followers.get(id);
@@ -12501,7 +12930,7 @@ export class Host {
         }
 
         for (const [id, one] of [...this.companions]) {
-            if (one.leader === player.id) {
+            if (one.leader === player.id && !one.tamed) {
                 this.#letGo(id, "lost");
             }
         }
@@ -12611,6 +13040,15 @@ export class Host {
 
         if (npc.map !== actor.map || distanceBetween(actor.square, npc.square) > TALK_REACH.across + 1) {
             return refuse("far");
+        }
+
+        // (An ambush's lure, gone up to: sprung, core/ambush.js)
+        const lured = this.ambushes.get(this.wild.get(npc.id)?.ambush);
+
+        if (lured && !lured.sprung) {
+            this.#spring(lured, { by: actor.id });
+
+            return OK;
         }
 
         this.battle.talk(npc.id, actor.id);
@@ -12756,11 +13194,21 @@ export class Host {
         // shrine's sanctuary, whatever's about: core/shrines.js)
         const clear = this.#campsiteAt(actor) ? FINDS.campsite.safe : REST.clear;
 
-        if (!(plan && sanctuaryAt(plan, [actor.x, actor.y])) && this.battle.actors.some((other) => !other.dead && other.map === actor.map && this.battle.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) < clear)) {
+        // (Nor for a wary beast that means them no harm: keeping away, fed, curious, its nerve gone,
+        // or one that doesn't hunt only watching them, core/wary.js; one stalking them does)
+        if (!(plan && sanctuaryAt(plan, [actor.x, actor.y])) && this.battle.actors.some((other) => !other.dead && other.map === actor.map && this.battle.hostile(other, actor) && hypot(other.x - actor.x, other.y - actor.y) < clear && !this.#harmless(other))) {
             return "hostiles";
         }
 
         return null;
+    }
+
+    // Is one of the wild a wary beast that means no harm just now (core/wary.js: keeping away, fed,
+    // curious, its nerve gone, or one that doesn't hunt, only watching)?
+    #harmless(other) {
+        const kind = other.wild?.reacts ? other.mood?.kind : null;
+
+        return kind === "avoid" || kind === "fed" || kind === "curious" || kind === "flee" || (kind === "watch" && !WARY[other.wild.creature]?.predator);
     }
 
     // The old campsite (core/director.js FINDS campsite) a player's at, within its `near`, or null
@@ -12776,6 +13224,15 @@ export class Host {
         const why = this.campRefusal(actor.id);
 
         if (why) {
+            // (Making camp with a beast stalking them near: it strikes, core/wary.js MOODS watch)
+            if (why === "hostiles") {
+                for (const other of this.battle.actors) {
+                    if (!other.dead && other.wild?.reacts && other.mood?.kind === "watch" && other.mood.by === actor.id && WARY[other.wild.creature]?.predator && other.map === actor.map && hypot(other.x - actor.x, other.y - actor.y) < REST.clear) {
+                        this.battle.rouseWary(other.id, actor.id);
+                    }
+                }
+            }
+
             return refuse(why);
         }
 

@@ -5034,9 +5034,15 @@ says which side it is. The other seven slices (`PLACES`) hold what the player's 
   what's in hand, and fighting them, as a tap on them did before a tap set on them where the
   player stands: *Tapping*), the elements' spells, Stun, and once learnt Hold and the tomes'
   spells cast at enemies, a power strike and an aimed shot (a blow for another kind of weapon
-  than the one in hand is greyed out). Wheels kept from before Attack was have it put at the top
-  of their first side once (`WHEELS_VERSION`, `version`), what was there moved to the first empty
-  slice.
+  than the one in hand is greyed out), and what's thrown at them from the pack: a goblin bomb,
+  and food for the wild's beasts, meat bait and a feed bag (`actionOf`: thrown to the one held
+  on, docs/WILDS.md *Bait*). Wheels kept from before Attack was have it put at the top of their
+  first side once (`WHEELS_VERSION`, `version`), what was there moved to the first empty slice.
+  The first time a player carries meat bait or a feed bag it's put on the first empty slice of an
+  enemy's wheel of itself, and they're told where ("Meat bait is on an enemy's wheel one, at NE:
+  hold on a beast and throw it to them."), unless it's on a wheel or the Action Bar already; only
+  once for each (game.js `PLACED_OF_ITSELF`, kept with the wheels as `placed`), so one taken off
+  stays off.
 - **Their followers'** (`unit`: held on one of their own, an adventurer they've hired, a creature
   they've called or the dead they've raised, or on their icon down the left: *The party*; the
   user: "Introduce a configurable follower wheel that allows full configuration of commands,
