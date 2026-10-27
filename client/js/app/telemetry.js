@@ -40,8 +40,9 @@
 // the log; one that wouldn't be is never worked out (#due), so a patch where every frame's a
 // freeze costs those frames nothing more. It costs a frame a few clock readings and a little
 // arithmetic; the rest is only done when something's kept, and the notes (every TELEMETRY.notes
-// ms) after a frame, not in it (aliveSoon). Kept in the browser's storage (localStorage), never
-// sent anywhere.
+// ms) after a frame, not in it (aliveSoon). Kept in the browser's storage (localStorage), and sent
+// nowhere but this: a crash in a world on a world server, the log as it stood then sent to that
+// server as the player comes back in, unless they've turned that off (app/crash-reports.js).
 
 /**
  * - `kept`: how many events are kept (the newest).
@@ -673,9 +674,14 @@ export class Telemetry {
         this.onChange?.(this.events);
     }
 
+    /** The log as it's copied and sent (app/crash-reports.js): which code this is, and the events, the newest first. */
+    log() {
+        return { build: this.build, code: this.code, built: this.built, events: this.events };
+    }
+
     /** The log as text to copy (JSON, the newest first). */
     text() {
-        return JSON.stringify({ build: this.build, code: this.code, built: this.built, events: this.events }, null, 2);
+        return JSON.stringify(this.log(), null, 2);
     }
 
     #read(key) {

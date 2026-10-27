@@ -429,6 +429,14 @@ td.actions button {
     margin: 0 4px 4px 0;
 }
 
+/* (A crash report to copy by hand, where the browser won't copy it) */
+textarea.copy-out {
+    width: 100%;
+    margin-top: 10px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 12px;
+}
+
 tr.gone td {
     color: var(--faint);
 }

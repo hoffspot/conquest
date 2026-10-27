@@ -1,7 +1,8 @@
 // The worlds the world server keeps (generated/world_server_plan.md §5): a world made and kept,
 // saved as it's played (each war turn, and when asked), five saves before the latest kept, a
 // spoilt latest passed over for the newest that reads, the heroes it keeps for its players (six
-// each at most); and a world saved by one process carried on by another, exactly as it was
+// each at most), the last five crash reports its players' games sent; and a world saved by one
+// process carried on by another, exactly as it was
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -12,6 +13,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { MOST_CHARACTERS, SAVE_VERSION } from "../client/js/app/save.js";
 import { isGuid } from "../client/js/core/guid.js";
+import { CRASHES, CRASHES_FILE, reportOf } from "../server/storage/crashes.js";
 import { readGzip, readJSON, writeGzip, writeJSON } from "../server/storage/files.js";
 import { DataFolder } from "../server/storage/folder.js";
 import { MOST_HEROES } from "../server/storage/heroes.js";
@@ -218,6 +220,54 @@ describe("the heroes a world keeps (server/storage/heroes.js)", () => {
 
         await writeJSON(file, { ...(await readJSON(file)), saveVersion: SAVE_VERSION + 1, writtenBy: "2.9.0" });
         await assert.rejects(world.heroes.get("p-ada", 1), (error) => error instanceof NewerDataError && error.needs === "2.9.0");
+    });
+});
+
+describe("the crash reports a world keeps (server/storage/crashes.js)", () => {
+    // A debug log as the game copies it (client/js/app/telemetry.js text()), its crash `n` minutes past the hour
+    const log = (n, extra = []) => ({ build: "b1", code: "abc1234567", built: "2026-10-27T10:00:00.000Z", events: [{ kind: "crash", summary: `Crash ${n}`, at: `2026-10-27T11:${String(n).padStart(2, "0")}:00.000Z` }, ...extra] });
+
+    it("takes a debug log with a crash among its events, and nothing else", () => {
+        assert.deepEqual(reportOf(log(4, [{ kind: "freeze", summary: "A freeze" }])), { crashed: "2026-10-27T11:04:00.000Z", build: "b1", code: "abc1234567", built: "2026-10-27T10:00:00.000Z", events: log(4, [{ kind: "freeze", summary: "A freeze" }]).events });
+        assert.equal(reportOf({ events: [{ kind: "freeze" }] }), null, "no crash");
+        assert.equal(reportOf({ events: [] }), null);
+        assert.equal(reportOf({ events: ["crash"] }), null);
+        assert.equal(reportOf({ events: Array.from({ length: CRASHES.events + 1 }, () => ({ kind: "crash" })) }), null, "too many events");
+        assert.equal(reportOf(null), null);
+        assert.equal(reportOf({ build: 7, events: [{ kind: "crash", at: "never" }] }).crashed, null, "a crash whose time doesn't read, kept without one");
+        assert.equal(reportOf({ code: "x".repeat(200), events: [{ kind: "crash" }] }).code.length, 64);
+    });
+
+    it("keeps the last five, newest first, in the world's folder; two sent at once both kept; cleared, none", async () => {
+        const { world } = await kept();
+
+        assert.deepEqual(await world.crashes.list(), []);
+
+        const first = await world.crashes.add(reportOf(log(1)), { player: "P1", name: "Ada", from: "home", when: new Date("2026-10-27T12:00:00Z") });
+
+        assert.match(first.id, /^[0-9a-f]{12}$/);
+        assert.deepEqual({ ...first, id: null }, { id: null, received: "2026-10-27T12:00:00.000Z", crashed: "2026-10-27T11:01:00.000Z", player: "P1", name: "Ada", from: "home", build: "b1", code: "abc1234567", built: "2026-10-27T10:00:00.000Z", events: log(1).events });
+
+        await Promise.all([2, 3, 4, 5, 6, 7].map((n) => world.crashes.add(reportOf(log(n)), { player: `P${n}` })));
+
+        const reports = await world.crashes.list();
+
+        assert.equal(reports.length, CRASHES.kept);
+        assert.deepEqual(reports.map(({ player }) => player), ["P7", "P6", "P5", "P4", "P3"], "the newest first, the oldest let go");
+        assert.deepEqual((await readJSON(path.join(world.folder, CRASHES_FILE))).reports, reports, "kept in the world's folder");
+
+        assert.equal(await world.crashes.clear(), CRASHES.kept);
+        assert.deepEqual(await world.crashes.list(), []);
+        assert.equal(await world.crashes.clear(), 0);
+    });
+
+    it("starts again from none if what's kept can't be read", async () => {
+        const { world } = await kept();
+
+        await writeFile(path.join(world.folder, CRASHES_FILE), "{ spoilt");
+        assert.deepEqual(await world.crashes.list(), []);
+        await world.crashes.add(reportOf(log(9)), { player: "P9" });
+        assert.deepEqual((await world.crashes.list()).map(({ player }) => player), ["P9"]);
     });
 });
 

@@ -42,7 +42,7 @@ answered from the internet. Its tabs:
 - **Worlds.** Each world, how it is ("Running: 3 players, day 4, 14:00", "Set aside: saved",
   "Offline"), and what can be done with it: start it, set it aside (everyone in it is sent out and
   it's saved), **take it offline** and **bring it online** (below), save it now, its settings,
-  keys, players and backups, export it, delete it (its name typed).
+  keys, players, backups and **crash reports** (below), export it, delete it (its name typed).
 - **New world.** Its name, seed and home people, what it does with its players' characters
   (below), its rules, and **Or bring a world in** (below).
 - **Settings.** The server's settings, **Updates** (below), and creator keys: whoever holds one
@@ -457,7 +457,8 @@ identity.key             the server's identity (the key it proves its id with)
 certificates/            its certificates, and the DNS host's token where there's no Keychain
 journal.log              what's happened to the server
 worlds/<id>/             each world: world.json, state/ (its save and autosaves), heroes/,
-                         access.json (its keys' hashes, players, bans), journal.log
+                         access.json (its keys' hashes, players, bans), journal.log,
+                         crashes.json (its last crash reports)
 backups/<id>/            each world's backups; backups/server/ the server's own
 versions/                versions installed by updates (current.json, last.json)
 ```
@@ -483,6 +484,30 @@ they've stayed). On a 4-core Linux machine, with 8 players each in their own peo
 each starting a field battle every four minutes, the world took 136 MB an hour in and 130 MB at
 the end, its steps 4.4 ms on the mean and 30.4 ms at the worst minute's 99th percentile, its
 thread a fifth of a core.
+
+## Crash reports
+
+When a player's game falls over in a world here (a phone running out of memory, say) and they come
+back into it, their game sends what its debug log kept of the crash, unless they've turned **Send
+crash reports** off in its Game options (docs/GAME.md, *Crash reports*). Each world keeps the last
+five it's been sent, with the world (`crashes.json` in its folder: backed up and archived with it,
+left as it is by a restore, gone when it's deleted; server/storage/crashes.js), newest first.
+
+- **Seeing them:** the management page alone, never a world's owner or players: a world's
+  **Crash reports** (on its card, or its dialog's tab) lists each, when the game fell over and
+  when the report came, who sent it (the name they go by here, or their player id), the crash's
+  summary, how many events its log has, and the code it was.
+- **Copy all** copies them all as one piece of JSON (the world, and each report: who, when, the
+  code it was, and the log's events, the crash first); each one's **Copy** copies it alone, in
+  the shape the game's own **Copy the log** gives, with who sent it and when. Where the browser
+  won't copy (the page from another device on the Wi-Fi, over plain http), it's shown selected, to
+  copy by hand.
+- **Clear** (asked first) lets them all go. The world's journal says when one came in, and when
+  they were cleared.
+- **Sending one:** `POST /api/v1/worlds/:id/crashes {report}` with a player's session in that
+  world (from `/enter`): the debug log as the game copies it, a crash among its events (no more
+  than 10 events, and 256 KB); six a minute from one address at most. The admin's are `GET` and
+  `DELETE /api/v1/server/worlds/:id/crashes` (server/api.js).
 
 ## When something's wrong
 

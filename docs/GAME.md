@@ -5815,8 +5815,9 @@ houses*), on the same terms.
 
 Game options' **Debug log** (app/telemetry.js) keeps the last five times the game froze, slowed,
 hit an error or crashed, the newest first, each with what was going on then, to be copied and sent
-to whoever's looking into it. Nothing's sent anywhere: it's kept in the browser's storage
-(`pellagos.debuglog`), and across loads, till it's cleared.
+to whoever's looking into it. It's kept in the browser's storage (`pellagos.debuglog`), and
+across loads, till it's cleared. It's sent nowhere but to a world server whose world the game fell
+over in, unless that's turned off (*Crash reports*, below).
 
 Each event says which copy of the game it came from: its code (`code`, the commit's first 10
 digits, and `built`, when it was put together; app/version.js, written in as the site's put
@@ -5958,6 +5959,32 @@ before any's drawn rather than 69, and none once the camera's turned all the way
 130 metres west, likewise, 5 MB of the undergrowth's copies were held rather than 40 (4 tiles
 built, not yet in sight, rather than 15), and the graphics card's buffers were 99 MB rather than
 128. The picture's the same, but for a pixel here and there on an edge.
+
+### Crash reports
+
+When the game falls over while the player's in a world on a world server, the debug log goes to
+that server the next time they come into the world, for its admin to look into (app/crash-
+reports.js; docs/SERVER.md, *Crash reports*). It's on to start with: Game options' Debug log page
+has **Send crash reports**, which turns it off.
+
+- **Which world:** loading again, the game finds the crash (above), and where the player was
+  (`pellagos.inworld`, *Back into a world*: `rejoin.js lastInWorld`, read before going back in's
+  asked, however long ago it was written). If that's a world on a world server, written within 30
+  seconds of the crash's notes (`CRASH_REPORTS.near`: it's written every 10 seconds while they're
+  in it), the crash was in that world. A friend's world, their own open to friends, one they'd
+  left, or none: there's no server of theirs to send it to, and nothing's kept for sending.
+- **What:** the debug log as it stood once the crash was kept (`telemetry.log()`: the crash first,
+  then whatever was kept before it, and which code this is), the same as **Copy the log** gives.
+  Past 240 KB (`CRASH_REPORTS.bytes`), the oldest events besides the crash are left out.
+- **Waiting:** it waits on the device (`pellagos.crashreports`), for that world on that server
+  alone; the newest five (`CRASH_REPORTS.kept`), each for a week at most (`CRASH_REPORTS.within`).
+- **Sent:** once the player's welcomed into that world (going straight back in, or coming in any
+  other way later: main.js `sendCrashes`, from `playServerWorld`), each waiting for it, the oldest
+  first, by their session there (`ServerClient.reportCrash`, `POST /worlds/:id/crashes`). Taken,
+  it's let go of; refused for good (not one, too big, no such world: `REFUSED_FOR_GOOD`), let go
+  of too; if the server can't be reached or is busy, it waits for the next time.
+- **Turned off:** nothing more's kept for sending, and any waiting are let go of. The debug log
+  itself keeps the crash as ever.
 
 ## Performance
 

@@ -4,7 +4,8 @@
 // a session, never taken from the internet, and never answered to other sites; and a world's owner
 // changes it (its heroes mode only while it's set aside), starts it, sets it aside, sends its
 // players out, bans them, gives them new tickets, backs it up, restores it, exports it and deletes
-// it (its name typed); and the server's settings, creator keys, journal and health.
+// it (its name typed); its players' games send it crash reports, for the admin alone to see and
+// clear; and the server's settings, creator keys, journal and health.
 import assert from "node:assert/strict";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import http from "node:http";
@@ -16,8 +17,10 @@ import { NET_VERSION } from "../client/js/core/netplay.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { ADMIN_COOKIE, ADMIN_HEADER, ADMIN_VALUE } from "../server/admin.js";
 import { guard, Refusal } from "../server/guards.js";
+import { CRASHES_PER_MINUTE } from "../server/api.js";
 import { clockOf, EXPORT_FORMAT, IMPORT_LIMIT } from "../server/manage.js";
 import { PLAY_PROTOCOL } from "../server/play.js";
+import { CRASHES, CRASHES_FILE } from "../server/storage/crashes.js";
 import { SERVER_VERSION } from "../server/storage/versions.js";
 import { LADDER } from "../server/storage/worlds.js";
 import { WorldServer } from "../server/world-server.js";
@@ -499,6 +502,80 @@ describe("a world's management (server/manage.js)", () => {
         assert.ok((await readdir(path.join(server.root, "backups", world.world))).some((name) => name.endsWith("before-delete")), "a last backup kept");
         assert.equal((await wifi(server, "POST", "/enter", { body: { world: world.world, key: world.playerKey } })).json.error, "no-world");
         assert.match((await admin.call("GET", "/server/journal")).json.activity[0].text, /"Thornwick Vale" .* was deleted by the admin, on the server's computer/);
+    });
+});
+
+describe("a world's crash reports (server/api.js, manage.js, storage/crashes.js)", () => {
+    let server;
+    let admin;
+    let world;
+
+    before(async () => {
+        server = await serve();
+        admin = await mac(server);
+        world = (await admin.call("POST", "/worlds", { name: "Thornwick", race: "human", seed: 3 })).json;
+    });
+
+    // The debug log as the game sends it (client/js/app/telemetry.js text()), the crash first
+    const log = (summary) => ({ build: "b1", code: "abc1234567", built: null, events: [{ kind: "crash", summary, at: "2026-10-27T11:00:00.000Z", state: { quality: "low" } }, { kind: "freeze", summary: "A freeze", at: "2026-10-27T10:58:00.000Z" }] });
+
+    it("takes them from a player in the world alone, keeps them with it, and shows and clears them for the server's admin alone", async () => {
+        const entered = (await wifi(server, "POST", "/enter", { body: { world: world.world, key: world.playerKey, net: NET_VERSION } })).json;
+        const player = `Bearer ${entered.session}`;
+        const route = `/worlds/${world.world}/crashes`;
+
+        // (Nobody's, and another world's: refused; what isn't one, refused)
+        assert.equal((await wifi(server, "POST", route, { body: { report: log("Crash 1") } })).status, 401);
+        assert.equal((await wifi(server, "POST", "/worlds/nosuchwrld/crashes", { auth: player, body: { report: log("Crash 1") } })).json.error, "no-world");
+
+        const notOne = await wifi(server, "POST", route, { auth: player, body: { report: { events: [{ kind: "freeze" }] } } });
+
+        assert.equal(notOne.status, 400);
+        assert.match(notOne.json.message, /a crash among its events/);
+
+        // (Too big: refused before it's read through)
+        const big = { report: { ...log("Crash 1"), events: [{ ...log("Crash 1").events[0], padding: "x".repeat(CRASHES.bytes) }] } };
+
+        assert.equal((await upload(server.port, route, Buffer.from(JSON.stringify(big)), { Host: `127.0.0.1:${server.port}`, "Content-Type": "application/json", Authorization: player })).status, 413);
+
+        // (A player's: kept, said in the world's journal)
+        const sent = await wifi(server, "POST", route, { auth: player, body: { report: log("Crash 1") } });
+
+        assert.equal(sent.status, 200);
+        assert.match(sent.json.id, /^[0-9a-f]{12}$/);
+        assert.equal((await wifi(server, "POST", route, { auth: player, body: { report: log("Crash 2") } })).status, 200);
+        assert.match(await readFile(path.join(server.root, "worlds", world.world, "journal.log"), "utf8"), new RegExp(`A crash report came in from a player \\(${entered.player}\\)'s game\\.`));
+
+        // (Too often from one place: refused for a moment)
+        const statuses = [];
+
+        for (let n = 0; n < CRASHES_PER_MINUTE; n++) {
+            statuses.push((await wifi(server, "POST", route, { auth: player, body: { report: log("Crash again") } })).status);
+        }
+
+        assert.equal(statuses.at(-1), 429);
+
+        // (The admin's: the newest first, who sent each, and the log as it was sent)
+        const shown = await admin.call("GET", `/server${route}`);
+
+        assert.equal(shown.status, 200);
+        assert.ok(shown.json.crashes.length <= CRASHES.kept);
+        assert.deepEqual(shown.json.crashes.filter(({ events }) => events[0].summary !== "Crash again").map(({ events }) => events[0].summary), ["Crash 2", "Crash 1"]);
+        assert.deepEqual({ ...shown.json.crashes.at(-1), id: null, received: null }, { id: null, received: null, crashed: "2026-10-27T11:00:00.000Z", player: entered.player, name: null, from: "home", build: "b1", code: "abc1234567", built: null, events: log("Crash 1").events });
+        assert.deepEqual((JSON.parse(await readFile(path.join(server.root, "worlds", world.world, CRASHES_FILE), "utf8"))).reports, shown.json.crashes, "kept in the world's folder");
+
+        // (Never the player's to see or clear, nor the game's on GitHub Pages)
+        assert.equal((await wifi(server, "GET", `/server${route}`, { auth: player, headers: { "x-pellagos": "manage" } })).status, 403);
+        assert.equal((await wifi(server, "DELETE", `/server${route}`, { auth: player, headers: { "x-pellagos": "manage" } })).status, 403);
+        assert.equal((await wifi(server, "GET", route, { auth: player })).status, 404, "nothing to read them by on the game's side");
+        assert.equal((await raw(server.port, { route: `/api/v1/server${route}`, host: `127.0.0.1:${server.port}`, headers: { Authorization: `Key ${server.adminKey}`, Origin: "https://hoffspot.github.io", "x-pellagos": "manage" } })).status, 403);
+
+        // (Cleared by the admin: none, said in the journal)
+        const cleared = await admin.call("DELETE", `/server${route}`);
+
+        assert.deepEqual(cleared.json, { cleared: shown.json.crashes.length });
+        assert.deepEqual((await admin.call("GET", `/server${route}`)).json.crashes, []);
+        assert.match(await readFile(path.join(server.root, "worlds", world.world, "journal.log"), "utf8"), /Its crash reports \(\d\) were cleared by the admin, on the server's computer\./);
     });
 });
 

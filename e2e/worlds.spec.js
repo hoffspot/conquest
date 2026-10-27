@@ -13,6 +13,7 @@ import { expect, test } from "./fixtures.js";
 // proves to be another than the one pinned is sent no key. And getting people in (docs/SERVER.md):
 // a newcomer with no character follows a world's invite link, makes one for it, and goes straight
 // in; the server's own address shows its worlds on the title, one open to anyone joined with a tap.
+// And a crash in a world on the server: its debug log sent there as the player comes back in.
 
 // (Two worlds drawn at once, without a GPU: more than the usual time; these tests one after the
 // other, never side by side)
@@ -583,6 +584,87 @@ test("back into a world on a server after the game's reloaded: straight back in,
     await page.reload();
     await expect(page.locator("#titleserver")).toBeVisible({ timeout: 30000 });
     await expect(rejoin).toBeHidden();
+});
+
+test("a crash in a world on a server: the debug log sent to the server as the player comes straight back in, once, and kept there; with Send crash reports turned off, nothing sent", async ({ page }) => {
+    // (As ready() has it, but the settings laid down only the first time, kept from load to load as
+    // a device keeps them; and the next load, once it's asked for, finding the last game's notes
+    // never closed, as a page that fell over leaves them)
+    await page.addInitScript(
+        ({ settings, character }) => {
+            const notes = JSON.parse(localStorage.getItem("pellagos.alive") ?? "null");
+
+            if (!localStorage.getItem("pellagos.settings")) {
+                localStorage.setItem("pellagos.settings", JSON.stringify(settings));
+            }
+
+            if (!localStorage.getItem("pellagos.characters")) {
+                localStorage.setItem("pellagos.save", JSON.stringify(character));
+            }
+
+            if (sessionStorage.getItem("crash") === "next" && notes) {
+                sessionStorage.removeItem("crash");
+                localStorage.setItem("pellagos.alive", JSON.stringify({ ...notes, closed: false }));
+            }
+        },
+        { settings: { quality: "low", renderScale: 0.5, shadows: false }, character: save("Bryony", "human", "sword") },
+    );
+    page.on("pageerror", (error) => {
+        throw error;
+    });
+
+    const made = await server.createWorld({ name: "Fernhollow", seed: 51, race: "human", heroes: "brought", settings: { open: true } });
+    const rejoin = page.locator("#rejoin");
+    const sent = () => server.worlds.get(made.world).crashes.list();
+    const waiting = () => page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.crashreports") ?? "[]"));
+    const crashes = () => page.evaluate(() => window.pellagos.telemetry.events.filter(({ kind }) => kind === "crash").length);
+    const fallOver = async () => {
+        await page.evaluate(() => sessionStorage.setItem("crash", "next"));
+        await page.reload();
+    };
+
+    // In, as Bryony, by the world's open door
+    await page.goto(`${base}/`);
+    await page.locator(`#titleserver li[data-world="${made.world}"]`).getByRole("button").click({ timeout: 30000 });
+    await page.locator("#worldask").getByRole("button", { name: /^Bryony/ }).click({ timeout: 60000 });
+    await playing(page);
+    expect(await sent()).toEqual([]);
+
+    // Fallen over: straight back in, and the log as it stood sent as she comes in (the crash first),
+    // let go of here once it's taken
+    await fallOver();
+    await expect(rejoin).toBeVisible({ timeout: 60000 });
+    expect(await crashes()).toBe(1);
+    await playing(page);
+    await expect.poll(async () => (await sent()).length, { timeout: 30000 }).toBe(1);
+
+    const [report] = await sent();
+
+    expect(report.events[0]).toMatchObject({ kind: "crash", summary: "The game stopped while playing and loaded again (reload)" });
+    expect(report).toMatchObject({ code: "dev", from: "home", player: server.access.world(made.world).players()[0].id });
+    expect(Date.now() - Date.parse(report.crashed)).toBeLessThan(120000);
+    expect(await waiting()).toEqual([]);
+
+    // Game options, Debug log: Send crash reports, on to start with, turned off
+    await page.locator("#menubutton").click();
+    await page.locator("#optionsbutton").click();
+    await page.locator("#logbutton").click();
+    await expect(page.locator("#crashswitch")).toBeChecked();
+    await page.locator("#menulog label.switch", { hasText: "Send crash reports" }).click();
+    await expect(page.locator("#crashswitch")).not.toBeChecked();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("pellagos.settings")).sendCrashes)).toBe(false);
+
+    // Fallen over again: the debug log keeps it, but nothing waits to be sent (her way back in held
+    // up, and cancelled), and the server has only the first
+    await page.route("**/api/v1/enter", () => {});
+    await fallOver();
+    await expect(rejoin.locator('li[data-stage="enter"]')).toHaveAttribute("data-state", "now", { timeout: 60000 });
+    expect(await crashes()).toBe(2);
+    expect(await waiting()).toEqual([]);
+    await rejoin.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.locator("#title")).toBeVisible();
+    await page.unroute("**/api/v1/enter");
+    expect(await sent()).toHaveLength(1);
 });
 
 test("You: the player's own name and id, the same on every server; their code carries them to a new device, where the world knows them as the same player, ticket or none", async ({ browser }) => {

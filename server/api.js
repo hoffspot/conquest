@@ -28,6 +28,9 @@
 //   POST   /worlds/:id/invite {replace?}    its invite link (players' key, to the server's own page: its
 //                                           internet address if it has one): { link, key, page,
 //                                           everywhere, open }; replaced, the old one letting nobody else in
+//   POST   /worlds/:id/crashes {report}     a crash report: the game's debug log as it fell over in the
+//                                           world, sent by a player in it (their session) as they come
+//                                           back in (manage.js addCrash; up to CRASHES.bytes): { id, received }
 //
 // A world's owner's (or the admin's) management of it (manage.js), the management page's:
 //
@@ -55,6 +58,7 @@
 //   GET    /server                          its overview, settings (and what each is), the worlds' rules and peoples
 //   PATCH  /server {settings}               settings changed
 //   GET    /server/worlds                   every world, as GET /worlds/:id
+//   GET, DELETE /server/worlds/:id/crashes   the crash reports a world keeps (its last CRASHES.kept), and cleared
 //   GET    /server/journal, /server/health  what's happened; how it's keeping up
 //   GET, POST {label}, DELETE /server/creators[/:id]                  creator keys
 //   PUT    /server/certificate {key, cert}  a certificate of the owner's own (PEM) put in; DELETE takes it out
@@ -86,6 +90,7 @@ import { BROKER_PATH, BROKER_PROTOCOL } from "./broker.js";
 import { answer, bodyOf, bytesOf, connectionOf, guard, Refusal, urlOf } from "./guards.js";
 import { ARCHIVE_LIMIT, BRING_LIMIT, IMPORT_LIMIT, Refused } from "./manage.js";
 import { PLAY_PATH, PLAY_PROTOCOL } from "./play.js";
+import { CRASHES } from "./storage/crashes.js";
 import { SETTINGS } from "./storage/settings.js";
 import { SERVER_VERSION } from "./storage/versions.js";
 import { isOffline, ruleOf, WORLD_SETTINGS } from "./storage/worlds.js";
@@ -93,9 +98,10 @@ import { isOffline, ruleOf, WORLD_SETTINGS } from "./storage/worlds.js";
 /** Where on the server the API is. */
 export const API_PATH = "/api/v1";
 
-/** How many times a minute one address may ask for the server's card, and report how reaching it went. */
+/** How many times a minute one address may ask for the server's card, report how reaching it went, and send crash reports. */
 export const STATUS_PER_MINUTE = 60;
 export const REPORTS_PER_MINUTE = 6;
+export const CRASHES_PER_MINUTE = 6;
 
 /** The header every server-management call carries, and what it says (admin.js: a page on another site can't send it unasked). */
 export const MANAGE_HEADER = "x-pellagos";
@@ -137,6 +143,7 @@ export function apiHandler(server, { mac = false } = {}) {
     const { policy } = access;
     const status = new Rate(STATUS_PER_MINUTE);
     const reports = new Rate(REPORTS_PER_MINUTE);
+    const crashes = new Rate(CRASHES_PER_MINUTE);
 
     // A player's own identity, from the proof they showed coming into a world ({ id, name }:
     // client/js/core/player.js playerOfProof), if it proves it: signed for this server, fresh, and
@@ -463,6 +470,24 @@ export function apiHandler(server, { mac = false } = {}) {
 
             return doing(() => manage.invite(world, { replace: body.replace === true, by: byOf(principal) }));
         }],
+        // (A crash report, from a player's game come back into the world it fell over in: up to CRASHES.bytes)
+        ["POST", new RegExp(`^/worlds/${WORLD}/crashes$`), { game: true, body: CRASHES.bytes }, async (request, body, [, world]) => {
+            if (!server.metaOf(world)) {
+                throw refuse("no-world");
+            }
+
+            if (!crashes.allow(request.address)) {
+                throw refuse("wait", { message: "Reported too often: wait a moment." });
+            }
+
+            const principal = principalOf(request, { world });
+
+            if (principal.kind !== "player" || principal.world !== world || !principal.player) {
+                throw refuse(principal.why ?? "key");
+            }
+
+            return doing(() => manage.addCrash(world, body.report, { player: principal.player.id, name: principal.player.playerName ?? null, from: request.from }));
+        }],
         ["POST", /^\/worlds\/([a-z0-9]{10})\/codes$/, async (request, body, [, world]) => {
             const principal = managing(request, world, "key.issue", { role: access.world(world)?.key(body.key)?.role });
             const made = await access.makeCode(world, { key: body.key, minutes: body.minutes, uses: body.uses }, { by: principal.player?.id ?? "the admin" });
@@ -617,6 +642,16 @@ export function apiHandler(server, { mac = false } = {}) {
             admin(request);
 
             return { worlds: await manage.worlds() };
+        }],
+        ["GET", new RegExp(`^/server/worlds/${WORLD}/crashes$`), { server: true }, async (request, body, [, world]) => {
+            admin(request);
+
+            return { crashes: await doing(() => manage.crashes(world)) };
+        }],
+        ["DELETE", new RegExp(`^/server/worlds/${WORLD}/crashes$`), { server: true }, async (request, body, [, world]) => {
+            const principal = admin(request);
+
+            return doing(() => manage.clearCrashes(world, { by: byOf(principal) }));
         }],
         ["GET", /^\/server\/journal$/, { server: true }, async (request) => {
             admin(request);
@@ -799,7 +834,7 @@ export function apiHandler(server, { mac = false } = {}) {
                     }
                 }
 
-                const body = method === "GET" ? {} : flags.raw ? await bytesOf(request, flags.raw) : await bodyOf(request);
+                const body = method === "GET" ? {} : flags.raw ? await bytesOf(request, flags.raw) : await bodyOf(request, flags.body);
                 const answered = await handle(request, body, matched);
 
                 if (answered instanceof Download) {
