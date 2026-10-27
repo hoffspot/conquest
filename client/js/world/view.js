@@ -37,8 +37,8 @@ import { WATER_DETAIL } from "./water.js";
 
 /**
  * How much each quality level draws (`undergrowth`: how thick the grass and flowers grow; `grass`:
- * how far the tall grass reaches, its inner band (thicker, round the player), its near band and
- * its far, metres, or null for none: grass.js;
+ * how far the tall grass reaches, its inner band (thicker, round the player), its near band, its
+ * far and its distant (sparser, out to where the grass ends), metres, or null for none: grass.js;
  * `motes`: how many motes drift in the air round the player, motes.js; `smoke`: how many of each
  * chimney's puffs of smoke are drawn, smoke.js; `ground`: how far apart the ground's corners are drawn, metres, in the chunk the player's in,
  * the ring round it, and further off: chunks3d.js SPACING; `water`: 1 for the water's finer
@@ -59,8 +59,8 @@ import { WATER_DETAIL } from "./water.js";
  */
 export const QUALITY = Object.freeze({
     low: { label: "Low", pixelRatio: 1, shadows: 1024, lampShadows: { lamps: 0, size: 0, every: 0 }, antialias: false, hair: 0.2, skin: 512, undergrowth: 0.5, grass: null, motes: 0, smoke: 0.5, ground: [1, 2, 4], water: 0, fields: 0, far: FAR_LEVELS.low, farTrees: 0, cliffs: 0, crowd: 2, soldiers: { full: 4, picture: 256 }, bodies: 32, frameRate: 60 },
-    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 4 }, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, grass: { inner: 6, near: 12, far: 28 }, motes: 150, smoke: 0.75, ground: [1, 2, 4], water: 1, fields: 1, far: FAR_LEVELS.medium, farTrees: 700, cliffs: 1, crowd: 4, soldiers: { full: 6, picture: 256 }, bodies: 32, frameRate: 60 },
-    high: { label: "High", pixelRatio: 2, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 2 }, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { inner: 9, near: 18, far: 40 }, motes: 300, smoke: 1, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, cliffs: 1, crowd: 6, soldiers: { full: 10, picture: 512 }, bodies: 24, frameRate: 60 },
+    medium: { label: "Medium", pixelRatio: 1.5, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 4 }, antialias: true, hair: 0.3, skin: 512, undergrowth: 0.75, grass: { inner: 6, near: 12, far: 28, distant: 44 }, motes: 150, smoke: 0.75, ground: [1, 2, 4], water: 1, fields: 1, far: FAR_LEVELS.medium, farTrees: 700, cliffs: 1, crowd: 4, soldiers: { full: 6, picture: 256 }, bodies: 32, frameRate: 60 },
+    high: { label: "High", pixelRatio: 2, shadows: 2048, lampShadows: { lamps: 1, size: 256, every: 2 }, antialias: true, hair: 0.45, skin: 1024, undergrowth: 1, grass: { inner: 9, near: 18, far: 40, distant: 62 }, motes: 300, smoke: 1, ground: [1, 1, 2], water: 1, fields: 1, far: FAR_LEVELS.high, farTrees: 1200, cliffs: 1, crowd: 6, soldiers: { full: 10, picture: 512 }, bodies: 24, frameRate: 60 },
 });
 
 /** A quality level for this device: low for small or older phones, medium for phones, high otherwise. */

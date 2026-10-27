@@ -3,16 +3,18 @@
 // tall and how dry), stirring in the breeze; and the crops in the fields, upright and all of a
 // height: drawn on the GPU, so there can be tens of thousands of blades for a few draws and next to
 // no work each frame.
-// - Each band (inner, near and far) is one mesh: one clump of blades, drawn once for each cell of a
-//   lattice round the player. A clump's cell is its own spot on the land, the lattice wrapping round
-//   as the player goes (a clump that falls behind comes round in front, at a new spot), so nothing
-//   moves or pops but at the bands' edges; where in its cell it grows, which way its blades lean,
-//   how tall each is, all from a hash of its cell, the same every time.
+// - Each band (inner, near, far and distant) is one mesh: one clump of blades, drawn once for each
+//   cell of a lattice round the player. A clump's cell is its own spot on the land, the lattice
+//   wrapping round as the player goes (a clump that falls behind comes round in front, at a new
+//   spot), so nothing moves or pops but at the bands' edges; where in its cell it grows, which way
+//   its blades lean, how tall each is, all from a hash of its cell, the same every time.
 // - The near band's blades are bent in two; the far band's a single triangle each, twice as wide,
-//   its clumps a quarter as many; one fades into the other over the near band's last fifth, and
-//   the far band sinks into the ground at its own edge. The inner band's clumps grow among the near
-//   band's, closer together, so the grass round the player is thicker still, thinning out to the
-//   near band's alone towards its edge. No alpha: Apple's GPUs draw what's behind none of them.
+//   its clumps a quarter as many; the distant band's twice as wide again, its clumps further apart
+//   still. Each fades into the next over the last fifth of the one before, and the last thins out
+//   and grows shorter to its edge, the blades taking the ground's colour further off (GRASS_END),
+//   so no line shows where the grass ends. The inner band's clumps grow among the near band's,
+//   closer together, so the grass round the player is thicker still, thinning out to the near
+//   band's alone towards its edge. No alpha: Apple's GPUs draw what's behind none of them.
 // - The wind (wind.js): the blades lean the way it blows, and where a gust's passing they're
 //   pressed down, lean further and stir harder, paler as they bend, so a wave runs through the
 //   grass and the crops.
@@ -21,7 +23,7 @@
 //   on the ground as it's drawn, its squares split from north-west to south-east.
 // - Each quality's (world/view.js QUALITY.grass): how far each band reaches, how far apart its
 //   clumps are and how many blades each has; none on low (the undergrowth's tufts alone), no inner
-//   band where it has none.
+//   or distant band where it has none.
 
 import * as THREE from "three";
 import { CHUNK } from "../core/overworld.js";
@@ -54,7 +56,23 @@ export const GRASS_BANDS = Object.freeze({
     inner: { cell: 0.35, blades: 8, triangles: 3, width: 0.07, salt: 1 },
     near: { cell: 0.5, blades: 10, triangles: 3, width: 0.08, salt: 0 },
     far: { cell: 1, blades: 8, triangles: 1, width: 0.16, salt: 0 },
+    distant: { cell: 1.5, blades: 8, triangles: 1, width: 0.3, salt: 2 },
 });
+
+/**
+ * How the grass ends. Seen from low, as the player sees it, the tips of each row stand against the
+ * ground and the grass further off, so grass that ended at its full height, or sank only over its
+ * last few metres, ended in a line along its last tall row: bright tips and dark gaps against the
+ * smooth ground past it.
+ * - The last band (the distant, or the far where there's none) thins out over the stretch from
+ *   where it's all there to its edge, a clump at a time (a hash of each says where it goes), and
+ *   grows shorter, to `shortest` of its height.
+ * - Every band's blades take the ground's colour further off (`colour` of their tips', as the
+ *   ground's grass look past them is: ground.js GRASS_AFAR), from `from` of the far band's reach
+ *   to `by` of the way through the last band's end: so far off, a blade's a pixel or two, and the
+ *   grass is seen as its colour in the mass, not a flicker of bright tips and dark gaps.
+ */
+export const GRASS_END = Object.freeze({ shortest: 0.15, from: 0.6, by: 0.6, colour: 0.38 });
 
 /**
  * How the grass takes a gust (wind.js windGust, 0 to 1, at its clump): how much further it leans
@@ -95,6 +113,7 @@ uniform vec4 grassLattice;
 uniform vec4 grassBand;
 uniform vec3 grassShape;
 uniform vec2 grassFocus;
+uniform vec2 grassPlain;
 uniform float grassTime;
 varying vec3 vGrassColour;
 
@@ -130,12 +149,19 @@ vec2 centre = (cellAt + 0.5 + (vec2(grassHash(cell, 0), grassHash(cell, 1)) - 0.
 vec4 grass = texelFetch(grassMap, ivec2(floor(centre)) & ${TEXELS - 1}, 0);
 float away = distance(centre, grassFocus);
 
-// (Whether it grows here: as thick as the map says, and as its band has it there)
+// (Whether it grows here: as thick as the map says, and as its band has it there; the last band
+// thinning out and growing shorter to its edge, GRASS_END)
 float fadeIn = grassBand.x < 0.0 ? 1.0 : smoothstep(grassBand.x, grassBand.y, away);
 float fadeOut = 1.0 - smoothstep(grassBand.z, grassBand.w, away);
-float present = grassShape.z > 0.5 ? fadeIn : fadeIn * fadeOut;
-float shrink = grassShape.z > 0.5 ? fadeOut : 1.0;
+float present = fadeIn * fadeOut;
+float shrink = grassShape.z > 0.5 ? mix(${GRASS_END.shortest.toFixed(3)}, 1.0, fadeOut) : 1.0;
 bool grows = grassHash(cell, 2) < grass.r * 1.3 && grassHash(cell, 3) < present;
+vec3 transformed = vec3(centre.x, -1000.0, centre.y);
+vGrassColour = vec3(0.0);
+
+// (None of the rest worked out for a clump that doesn't grow: most of a band's lattice, its
+// middle and its corners, and wherever the map has no grass)
+if (grows) {
 
 // (Each blade: somewhere in its clump, facing its own way, its own height, leaning out from the
 // clump's middle and with the breeze; a crop's, sown, all much of a height and upright)
@@ -154,9 +180,9 @@ vec2 lean = (outward * mix(0.3, 0.06, sown) + windWay * (0.12 + 0.16 * flutter +
 float up = position.y;
 float width = grassShape.x * (1.0 - 0.8 * up) * (0.7 + 0.6 * grassHash(cell, 11));
 vec2 at = foot + across * position.x * width * 0.5 + lean * up * up;
-vec3 transformed = grows && tall > 0.02
-    ? vec3(at.x, grassGround(foot) - 0.05 + tall * up * (1.0 - 0.18 * up * up) * (1.0 - ${GRASS_GUSTS.pressed.toFixed(3)} * gust), at.y)
-    : vec3(centre.x, -1000.0, centre.y);
+if (tall > 0.02) {
+    transformed = vec3(at.x, grassGround(foot) - 0.05 + tall * up * (1.0 - 0.18 * up * up) * (1.0 - ${GRASS_GUSTS.pressed.toFixed(3)} * gust), at.y);
+}
 
 // (Its colour: its tips' as the map has them, darker down to its foot; each clump a little greener
 // or drier than the next, each blade a little lighter or darker)
@@ -165,6 +191,9 @@ tip = pow(tip, vec3(2.2));
 float turn = grassHash(cell, 12) - 0.5;
 tip = mix(tip, turn > 0.0 ? vec3(0.62, 0.45, 0.12) : tip * vec3(0.7, 0.95, 0.6), abs(turn) * mix(0.5, 0.12, sown));
 vGrassColour = mix(tip * vec3(0.32, 0.36, 0.26), tip, smoothstep(0.0, 1.0, up)) * (0.8 + 0.4 * grassHash(cell, 13 + blade * 4)) * (1.0 + ${GRASS_GUSTS.paler.toFixed(3)} * gust * up);
+// (Further off, the colour the ground's grass look is past it: GRASS_END)
+vGrassColour = mix(vGrassColour, tip * ${GRASS_END.colour.toFixed(3)}, smoothstep(grassPlain.x, grassPlain.y, away));
+}
 `;
 
 /**
@@ -209,13 +238,17 @@ export class TallGrass {
         this.blocks = new Array(BLOCKS * BLOCKS).fill(null);
         this.working = null;
         this.focus = new THREE.Vector2();
+        this.plain = new THREE.Vector2();
         this.bands = [];
         this.quality = undefined;
     }
 
-    /** How the bands are drawn (QUALITY's `grass`: { inner, near, far } metres, or null for none). */
+    /**
+     * How the bands are drawn (QUALITY's `grass`: { inner, near, far, distant } metres, the inner
+     * and distant bands only where they're given; or null for none).
+     */
     setQuality(reach) {
-        const key = reach ? `${reach.inner ?? 0} ${reach.near} ${reach.far}` : "none";
+        const key = reach ? `${reach.inner ?? 0} ${reach.near} ${reach.far} ${reach.distant ?? 0}` : "none";
 
         if (key === this.quality) {
             return;
@@ -229,12 +262,20 @@ export class TallGrass {
             band.mesh.material.dispose();
         }
 
-        GRASS_UNDER.reach.value = reach ? reach.far : 0;
+        // (Each band taking over from the one before over its last fifth; the last band ending over
+        // the stretch from where it's all there, GRASS_END)
+        const last = reach ? (reach.distant ?? reach.far) : 0;
+
+        GRASS_UNDER.reach.value = last;
+        this.plain.set(reach ? reach.far * GRASS_END.from : 0, reach ? reach.far + (last - reach.far) * GRASS_END.by : 0);
         this.bands = reach
             ? [
                   ...(reach.inner ? [this.#band(GRASS_BANDS.inner, reach.inner, [-1, 0, reach.inner * 0.5, reach.inner], false)] : []),
                   this.#band(GRASS_BANDS.near, reach.near, [-1, 0, reach.near * 0.8, reach.near], false),
-                  this.#band(GRASS_BANDS.far, reach.far, [reach.near * 0.8, reach.near, reach.far * 0.78, reach.far], true),
+                  reach.distant
+                      ? this.#band(GRASS_BANDS.far, reach.far, [reach.near * 0.8, reach.near, reach.far * 0.8, reach.far], false)
+                      : this.#band(GRASS_BANDS.far, reach.far, [reach.near * 0.8, reach.near, reach.near, reach.far], true),
+                  ...(reach.distant ? [this.#band(GRASS_BANDS.distant, reach.distant, [reach.far * 0.8, reach.far, reach.far, reach.distant], true)] : []),
               ]
             : [];
 
@@ -262,6 +303,7 @@ export class TallGrass {
             grassBand: { value: new THREE.Vector4(...fades) },
             grassShape: { value: new THREE.Vector3(shape.width, shape.salt, shrinks ? 1 : 0) },
             grassFocus: { value: this.focus },
+            grassPlain: { value: this.plain },
             grassTime: TREE_WIND.time,
         };
         const material = new THREE.MeshLambertMaterial({ side: THREE.DoubleSide });
