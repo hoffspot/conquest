@@ -6220,16 +6220,39 @@ test.describe("drawn at the screen's own pixels", () => {
 
         expect(tapped).toEqual({ order: "approach", talking: "player" });
 
+        // (Another of them drawn in full besides the guard, the nearest: each body's built a step at
+        // a time, and on a slower machine it may not be yet)
+        expect(await playUntil(page, () => {
+            const { game } = window.pellagos;
+
+            return game.battle.actors.some(({ id, kind }) => kind === "soldier" && !id.endsWith("/guard-0") && game.avatars.get(id)?.object.visible && game.avatars.get(id).constructor.name !== "CrowdAvatar");
+        }, { seconds: 10 })).toBe(true);
+
         // Posed as often as each is seen (Avatar.every): the player, and the guard they're talking to,
         // near (the camera in close), every frame; those drawn in full out of view seldom; and so
         // some less often than every frame (those in their crowd, past the reach from the camera,
-        // posed on the graphics card)
+        // posed on the graphics card). One drawn in full is put out of view for it, the nearest but
+        // the guard, a few steps behind the camera, and back where they were after: which of the
+        // rest are out of view is where the patrol's round has got to, and on a slower machine,
+        // played a little longer before it's stopped, it can be none of them
         const posing = await page.evaluate(async (id) => {
             const { game, session } = window.pellagos;
             const { POSING } = await import("/js/world/avatar.js");
 
             session.view.zoom(0.1);
             game.advance(0.25);
+
+            const me = game.battle.actor("player");
+            const inFull = (one) => one.kind === "soldier" && game.avatars.get(one.id)?.object.visible && game.avatars.get(one.id).constructor.name !== "CrowdAvatar";
+            const aside = game.battle.actors.filter((one) => inFull(one) && one.id !== id).sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0];
+            const was = { x: aside.x, y: aside.y, square: [...aside.square], facing: aside.facing, path: [...(aside.path ?? [])], to: aside.to, order: aside.order };
+            const { camera } = session.view;
+            const look = camera.getWorldDirection(camera.position.clone()).setY(0).normalize();
+            const [bx, by] = [camera.position.x - look.x * 3, camera.position.z - look.z * 3];
+
+            Object.assign(aside, { x: bx, y: by, square: [Math.floor(bx), Math.floor(by)], path: [], to: null, order: null });
+            game.avatars.get(aside.id).place(bx, by, aside.facing);
+            game.previous.set(aside.id, { x: bx, y: by });
 
             const shown = game.battle.actors
                 .filter((one) => one.kind === "soldier" && game.avatars.get(one.id)?.object.visible && game.avatars.get(one.id).constructor.name !== "CrowdAvatar")
@@ -6245,12 +6268,18 @@ test.describe("drawn at the screen's own pixels", () => {
             game.advance(1 / 60, { render: false });
 
             const posed = unseen.filter(({ every }) => every !== null);
+            const result = { player: game.avatars.get("player").every, guard: game.avatars.get(id).every, aside: game.avatars.get(aside.id).every, unseen: posed.map(({ every }) => every), seldom: POSING.unseen, fewer: shown.filter(({ every }) => every > 1).length };
 
-            return { player: game.avatars.get("player").every, guard: game.avatars.get(id).every, unseen: posed.map(({ every }) => every), seldom: POSING.unseen, fewer: shown.filter(({ every }) => every > 1).length };
+            Object.assign(aside, was);
+            game.avatars.get(aside.id).place(was.x, was.y, was.facing);
+            game.previous.set(aside.id, { x: was.x, y: was.y });
+
+            return result;
         }, guard.id);
 
         expect(posing.player).toBe(1);
         expect(posing.guard).toBe(1);
+        expect(posing.aside).toBe(posing.seldom);
         expect(posing.fewer).toBeGreaterThan(0);
         expect(posing.unseen.every((every) => every === posing.seldom)).toBe(true);
 
