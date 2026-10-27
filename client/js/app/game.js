@@ -582,8 +582,9 @@ const MARSHAL = Object.freeze({ every: 0.5, from: 24, margin: 3, share: 0.5 });
 // it, then let go (#shutIn): the soldiers to their crowds, the folk and the wild's people-shaped
 // creatures undressed, each dressed again as the player comes out, the nearest first. An iPhone on
 // Low let the game's tab go with 49 bodies held in a city's smithy, 3 of them in it (a player's
-// crash report, 2026-10-27)
-const SHUT_IN = Object.freeze({ after: 3 });
+// crash report, 2026-10-27). No more than `each` let go of at a look, so as not to hold a frame up
+// letting a town's go
+const SHUT_IN = Object.freeze({ after: 3, each: 8 });
 
 // The soldiers' figures sooner, seen in a fight from the first: a world kept or joined in the
 // thick of one has the figures of the kinds of those within `reach` metres of the player made
@@ -4597,13 +4598,13 @@ export class Game {
     }
 
     // Those out in the world the player can't see while they're inside (#walledOff: in a building,
-    // or down in a dungeon) let go of once they've been in SHUT_IN.after seconds, a step in and out
-    // again letting go of no one: the soldiers to their crowds (where their kind's figure's made;
-    // else undressed), the folk and the wild's people-shaped creatures undressed; each put aside
-    // (#nextEnlistee) to be dressed again as the player comes out, the nearest first, the soldiers
-    // and creatures as there's room (#marshal, #rationing). Not the wild's beasts built in code
-    // (their bodies shared, each one small), nor anyone's own (#onlySeenAbout). A couple of times
-    // a second
+    // or down in a dungeon) let go of once they've been in SHUT_IN.after seconds (a step in and out
+    // again letting go of no one), SHUT_IN.each at a look: the soldiers to their crowds (where
+    // their kind's figure's made; else undressed), the folk and the wild's people-shaped creatures
+    // undressed; each put aside (#nextEnlistee) to be dressed again as the player comes out, the
+    // nearest first, the soldiers and creatures as there's room (#marshal, #rationing). Not the
+    // wild's beasts built in code (their bodies shared, each one small), nor anyone's own
+    // (#onlySeenAbout). A couple of times a second
     #shutIn(dt) {
         if ((this.shutClock = (this.shutClock ?? 0) - dt) > 0) {
             return;
@@ -4625,11 +4626,17 @@ export class Game {
             return;
         }
 
+        let left = SHUT_IN.each;
+
         for (const [id, avatar] of [...this.avatars]) {
             const actor = this.battle.actor(id);
 
             if (!actor || avatar instanceof CrowdAvatar || avatar instanceof BeastAvatar || !this.#onlySeenAbout(actor) || !this.#walledOff(actor, me)) {
                 continue;
+            }
+
+            if (left-- <= 0) {
+                break;
             }
 
             this.#unenlist([id]);

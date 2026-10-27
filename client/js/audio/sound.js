@@ -2561,6 +2561,8 @@ export class Sound {
         this.context?.close?.();
         this.context = null;
         this.decoders.clear();
+        this.maker?.terminate();
+        this.maker = null;
     }
 
     #fade(to) {

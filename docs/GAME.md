@@ -2893,7 +2893,8 @@ to be seen about, they're dressed as the player comes out again. Nor the soldier
 creatures out in the world (`#onlySeenAbout`: not anyone's own, a follower or a tamed or called
 beast, nor the colossal and a town's engines). And those held in full already are let go of once
 the player's been inside 3 seconds (`SHUT_IN`, `#shutIn`; a step in and out again lets go of no
-one): the soldiers to their crowds (where their kind's figure's made; else undressed), the folk
+one), 8 at a look, twice a second (so as not to hold a frame up letting a town's go): the
+soldiers to their crowds (where their kind's figure's made; else undressed), the folk
 and the wild's people-shaped creatures undressed (not the beasts built in code: their bodies
 shared, each one small), each dressed again as the player comes out, the nearest first, the
 townsfolk after everyone else. An iPhone on Low let the game's tab go asking a city's smith what
