@@ -1,17 +1,18 @@
 // The tall grass (world/grassmap.js says where it grows, how tall and how dry; world/grass.js draws
 // it round the player): the same every time, only on open grass, as thick and as tall as its land
 // grows it and varied across it, gathered round what stands, trodden beside the ways, drier on the
-// sunny side; drawn in two bands round the player as far as each quality asks, none on low; past
-// where it's drawn (and on low) the ground takes its look, and the fields are seen from afar
+// sunny side; drawn in bands round the player as far as each quality asks, none on low, thinning
+// out to its edge; past where it's drawn (and on low) the ground takes its look, and the fields are
+// seen from afar
 import assert from "node:assert/strict";
 import { before, describe, it } from "node:test";
 import { ALONG, CROP_ODDS, FIELDS, NARROWEST } from "../client/js/core/fields.js";
 import { buildWorld, CHUNK, WET } from "../client/js/core/overworld.js";
 import { GROUND } from "../client/js/core/setpieces/pieces.js";
 import { BIOMES, CELLS } from "../client/js/core/worldplan/plan.js";
-import { GRASS_BANDS, TallGrass } from "../client/js/world/grass.js";
+import { GRASS_BANDS, GRASS_END, TallGrass } from "../client/js/world/grass.js";
 import { CROP_STANDS, GRASS_LANDS, GRASS_PATHS, GRASS_RINGS, grassLooks, grassMap } from "../client/js/world/grassmap.js";
-import { FIELDS_GLSL, landColours, STRAW } from "../client/js/world/ground.js";
+import { FIELDS_GLSL, GRASS_UNDER, landColours, STRAW } from "../client/js/world/ground.js";
 import { facingSun, SUN_FROM } from "../client/js/world/sun.js";
 import { QUALITY } from "../client/js/world/view.js";
 
@@ -234,15 +235,19 @@ describe("the tall grass drawn (world/grass.js)", () => {
         overworld = buildWorld({ seed: 1 }).maps.town;
     });
 
-    it("draws none on low; three bands on medium and high, the inner thicker than the near, reaching further on high", () => {
+    it("draws none on low; four bands on medium and high, the inner thicker than the near, the distant sparser and wider than the far, reaching further on high", () => {
         assert.equal(QUALITY.low.grass, null);
 
         for (const { grass } of [QUALITY.medium, QUALITY.high]) {
-            assert.ok(grass.inner < grass.near && grass.near < grass.far);
+            assert.ok(grass.inner < grass.near && grass.near < grass.far && grass.far < grass.distant);
+            // (Never further than the map round the player reaches: the nine chunks round them, at
+            // least a chunk's width from them every way)
+            assert.ok(grass.distant < CHUNK);
         }
 
-        assert.ok(QUALITY.high.grass.inner > QUALITY.medium.grass.inner && QUALITY.high.grass.near > QUALITY.medium.grass.near && QUALITY.high.grass.far > QUALITY.medium.grass.far);
+        assert.ok(QUALITY.high.grass.inner > QUALITY.medium.grass.inner && QUALITY.high.grass.near > QUALITY.medium.grass.near && QUALITY.high.grass.far > QUALITY.medium.grass.far && QUALITY.high.grass.distant > QUALITY.medium.grass.distant);
         assert.ok(GRASS_BANDS.inner.cell < GRASS_BANDS.near.cell && GRASS_BANDS.inner.salt !== GRASS_BANDS.near.salt);
+        assert.ok(GRASS_BANDS.distant.cell > GRASS_BANDS.far.cell && GRASS_BANDS.distant.width > GRASS_BANDS.far.width);
 
         const grass = new TallGrass(overworld);
 
@@ -250,28 +255,71 @@ describe("the tall grass drawn (world/grass.js)", () => {
         assert.equal(grass.object.children.length, 0);
 
         grass.setQuality(QUALITY.medium.grass);
-        assert.equal(grass.object.children.length, 3);
+        assert.equal(grass.object.children.length, 4);
 
         // (Each band's clump drawn once for each cell of a lattice as wide as the band's reach)
-        const [inner, near, far] = grass.object.children;
+        const [inner, near, far, distant] = grass.object.children;
         const cells = (reach, { cell }) => (Math.ceil((2 * reach) / cell) + 1) ** 2;
 
         assert.equal(inner.geometry.instanceCount, cells(QUALITY.medium.grass.inner, GRASS_BANDS.inner));
         assert.equal(near.geometry.instanceCount, cells(QUALITY.medium.grass.near, GRASS_BANDS.near));
         assert.equal(far.geometry.instanceCount, cells(QUALITY.medium.grass.far, GRASS_BANDS.far));
-        // (A near blade's five corners make three triangles; a far blade's three, one)
+        assert.equal(distant.geometry.instanceCount, cells(QUALITY.medium.grass.distant, GRASS_BANDS.distant));
+        // (A near blade's five corners make three triangles; a far or distant blade's three, one)
         assert.equal(inner.geometry.attributes.position.count, GRASS_BANDS.inner.blades * 5);
         assert.equal(near.geometry.attributes.position.count, GRASS_BANDS.near.blades * 5);
         assert.equal(near.geometry.index.count, GRASS_BANDS.near.blades * 9);
         assert.equal(far.geometry.attributes.position.count, GRASS_BANDS.far.blades * 3);
         assert.equal(far.geometry.index.count, GRASS_BANDS.far.blades * 3);
+        assert.equal(distant.geometry.attributes.position.count, GRASS_BANDS.distant.blades * 3);
 
-        // (No inner band where the quality has none)
+        // (No inner or distant band where the quality has none)
         grass.setQuality({ near: 12, far: 28 });
         assert.equal(grass.object.children.length, 2);
 
         grass.setQuality(null);
         assert.equal(grass.object.children.length, 0);
+        grass.dispose();
+    });
+
+    it("hands each band over to the next over its last fifth, and ends thinning out and growing shorter, the blades the ground's colour further off", () => {
+        const grass = new TallGrass(overworld);
+        const { near, far, distant } = QUALITY.high.grass;
+        // (Each band's material's uniforms, as its shader's given them)
+        const uniforms = (mesh) => {
+            const shader = { uniforms: {}, vertexShader: "#include <common>\n#include <beginnormal_vertex>\n#include <begin_vertex>", fragmentShader: "" };
+
+            mesh.material.onBeforeCompile(shader);
+
+            return shader.uniforms;
+        };
+
+        grass.setQuality(QUALITY.high.grass);
+
+        const [, , farBand, distantBand] = grass.object.children.map(uniforms);
+
+        // (The far band: in as the near goes, out as the distant comes in; the distant band from
+        // there, thinning out and growing shorter from where it's all there to its edge)
+        assert.deepEqual(farBand.grassBand.value.toArray(), [near * 0.8, near, far * 0.8, far]);
+        assert.equal(farBand.grassShape.value.z, 0);
+        assert.deepEqual(distantBand.grassBand.value.toArray(), [far * 0.8, far, far, distant]);
+        assert.equal(distantBand.grassShape.value.z, 1);
+        assert.ok(GRASS_END.shortest > 0 && GRASS_END.shortest < 0.5);
+
+        // (The ground under it, and its look past it, to the distant band's edge; the blades the
+        // ground's colour from partway through the far band to partway through the distant's end)
+        assert.equal(GRASS_UNDER.reach.value, distant);
+        assert.deepEqual(farBand.grassPlain.value.toArray(), [far * GRASS_END.from, far + (distant - far) * GRASS_END.by]);
+        assert.ok(farBand.grassPlain.value.x > near && farBand.grassPlain.value.y < distant);
+
+        // (Where there's no distant band, the far band ends the grass as the distant does)
+        grass.setQuality({ near: 12, far: 28 });
+
+        const [, farOnly] = grass.object.children.map(uniforms);
+
+        assert.deepEqual(farOnly.grassBand.value.toArray(), [12 * 0.8, 12, 12, 28]);
+        assert.equal(farOnly.grassShape.value.z, 1);
+        assert.equal(GRASS_UNDER.reach.value, 28);
         grass.dispose();
     });
 

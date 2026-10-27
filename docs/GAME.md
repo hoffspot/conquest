@@ -1981,8 +1981,8 @@ high); debug mode can change it too. The game aims at 60 frames a second at ever
 | Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar | Cliffs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no | none (painted on the ground) |
-| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m | 300 | three-quarters | 2 km | to 700 m | yes | yes |
-| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m | 600 | all of it | 4 km | to 1.2 km | yes | yes |
+| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m, thinning out to 44 m | 300 | three-quarters | 2 km | to 700 m | yes | yes |
+| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m, thinning out to 62 m | 600 | all of it | 4 km | to 1.2 km | yes | yes |
 
 **How often it's drawn** (`app/pacing.js`). The browser asks for a frame each time the screen
 refreshes: 60 times a second on most screens, 90, 120 or 144 on many phones and monitors. Drawn
@@ -2732,15 +2732,16 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     fields' strips (*Fields*, below), their crops (`CROP_STANDS`): wheat waist high and golden,
     barley a little shorter and paler, greens low and leafy, sown thick, all of a height and
     upright (the map's alpha says it's sown; none on ploughed strips).
-  - **Drawn on the GPU**, three draws: each band one clump of blades (eight, each bent in two,
-    inner; ten, near; eight single wider blades, far) drawn once for each cell of a lattice round
-    the player. A
+  - **Drawn on the GPU**, four draws: each band one clump of blades (eight, each bent in two,
+    inner; ten, near; eight single wider blades, far; eight single blades wider still, distant)
+    drawn once for each cell of a lattice round the player. A
     clump's cell is its own spot on the land, the lattice wrapping round as the player goes, so
     nothing moves but at the bands' edges; where in its cell it grows, which way its blades lean,
     how tall each is and how green, from a hash of its cell. The blades stand on the ground as
     it's drawn (its heights round the player in a texture, read in the vertex shader), lean out
     from their clump's middle and with the breeze, darker at their feet. The far band takes over
-    from the near over the near band's last fifth and sinks into the ground at its own edge. The
+    from the near over the near band's last fifth, and the distant band from the far over the far
+    band's last fifth (*Where it ends*, below). The
     inner band (terrain plan M7j-2; medium and high only, 6 and 9 metres round the player) grows
     its clumps among the near band's, closer together (0.35 m apart to the near's 0.5), so the
     grass round the player, where the camera looks closest, is about two and a half times as
@@ -2760,15 +2761,31 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     harder and lean downwind (`kits/trees.js TREE_GUSTS`). Every gust's worked out in the vertex
     shaders from where it is and the breeze's time, so nothing's sent each frame; the hash it's
     made from is in whole numbers, so the GPU's gusts are just the ones `windGust` gives.
+  - **Where it ends** (`GRASS_END`; the distant band on medium and high, 44 and 62 metres round
+    the player, its clumps 1.5 m apart and their blades 0.3 m wide). From as low as the player
+    looks, each row's tips stand against the ground and the grass further off, so grass that
+    ended at its full height (as the far band did, at 28 m on medium and 40 m on high, sinking only
+    over its last few metres) ended in a line along its last tall row: bright tips and dark gaps
+    against the smooth ground past it. Now:
+    - The last band thins out over the stretch from where it's all there to its edge, a clump at a
+      time, and grows shorter, to 15% of its height.
+    - Every band's blades take the colour of the ground's grass look past them (38% of their tips'
+      colour) further off, from 60% of the far band's reach to 60% of the way through the distant
+      band's end: from there a blade's a pixel or two, and the grass is seen as its colour in the
+      mass, not a flicker of bright tips and dark gaps. The grass fades into the ground and no line
+      shows.
+    - It's never drawn further than its map reaches: a chunk's width every way from the player
+      (*Its map*, below).
   - **The ground under it** is darker and the grass's own colour as thick as it grows, so the
-    gaps between the blades read as more grass (`ground.js GRASS_UNDER`).
+    gaps between the blades read as more grass (`ground.js GRASS_UNDER`), out to the distant
+    band's edge.
   - **Past where it's drawn, and on low** (terrain plan M7b-2c; `ground.js GRASS_AFAR`), where no
     blades are, the ground takes the tall grass's look so the land doesn't turn to lawn: each
     land's grass (`grassLooks`, a texel a cell of the plan: its tips' colour, dried as the land
     is, and how thick it grows) as dark as the grass drawn is in the mass (its blades' bases and
     the shadows among them), in clumps, golden in the dry patches, none where it's worn bare or
     up in the rock, and lighter and darker as the grass's picture is, more so, so it isn't a flat
-    colour. It fades in over the far band's last stretch as the blades fade out, and the far land
+    colour. It fades in over the distant band's last stretch as the blades fade out, and the far land
     carries it to the horizon. One more texture read a pixel.
   - **Its map** is worked out for the nine chunks round the player as they and the chunks round
     them are drawn, a few rows at a time in 2 ms a frame (a chunk's about 10–20 ms in all), into
@@ -2777,6 +2794,10 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     100,000 triangles more on medium (330,000 to 430,000) and 210,000 on high, two draws; none on
     low. The inner band about 31,000 triangles more on medium and 67,000 on high, one draw; the
     gusts a little more work for each blade's corners and the ground's, and a multiply a pixel.
+    The distant band about 29,000 triangles more on medium and 56,000 on high, one draw, most of
+    them folded away where no clump grows (about 4% longer a frame on high); and a clump that
+    doesn't grow (most of each band's lattice: its middle, its corners, wherever the map has no
+    grass) skips the rest of the vertex shader's work.
 
 - **Motes** (terrain plan M7b; `world/motes.js`) drift in the air round the player, each land's
   own (`MOTES_OF`): pollen over the meadows, fields and heath, dust over the dry lands, the woods
