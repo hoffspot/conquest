@@ -11,7 +11,7 @@ import { sampleFiles, scoreFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { useSound, wearSound } from "../client/js/audio/handling.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
-import { ARMOUR, BATTLE_OUT, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, mp3Rate, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { ARMOUR, BATTLE_OUT, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, MADE_AHEAD, mp3Rate, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { CLIP_SOUNDS } from "../client/js/beasts/sounds.js";
 import { BEDS, LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
@@ -298,9 +298,9 @@ const noting = (fetched) => (url) => {
 // The music's recordings of the scores `names` (sound.js FIRST's: those downloaded at the start)
 const musicFiles = (names = FIRST) => [...new Map(names.flatMap((name) => scoreFiles(SCORES[name]))).entries()];
 
-// The sounds, made once (without a worker, as in Node), and the music's recordings, downloaded
-// once, handed to each Sound tested
-const made = new Sound({ fetch: fromDisk });
+// The sounds, made once (every one, without a worker, as in Node), and the music's recordings,
+// downloaded once, handed to each Sound tested
+const made = new Sound({ fetch: fromDisk, ahead: () => true });
 const making = made.prepare();
 
 async function started(options) {
@@ -571,6 +571,65 @@ describe("playing sounds (sound.js)", () => {
         sound.play("clash");
         assert.equal(sound.play("hitMail"), null);
         assert.ok(sound.buffers.get("block").includes(played[0].source.buffer));
+        sound.close();
+    });
+
+    it("makes only the sounds heard all the time as it starts, each other the first time it's wanted, played as soon as it's made if that's soon", async () => {
+        const played = fakeAudio();
+        const sound = new Sound({ fetch: fromDisk });
+        const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+        const bytes = (names) => names.reduce((sum, name) => sum + sound.samples.get(name).reduce((each, samples) => each + samples.byteLength, 0), 0);
+
+        await sound.prepare();
+
+        // (The footsteps, the swings and the blows, and the wind: a few megabytes, not all 33)
+        const ahead = Object.keys(SOUNDS).filter((name) => MADE_AHEAD.test(name));
+
+        assert.ok(ahead.includes("stepGrass") && ahead.includes("swingSword") && ahead.includes("slash"));
+        assert.deepEqual([...sound.samples.keys()].sort(), [...ahead, "wind"].sort());
+        assert.ok(bytes([...ahead, "wind"]) < 8 * 1024 * 1024);
+
+        sound.unlock();
+        await tick();
+
+        // Wanted before it's made: nothing at once; made (here on the page, with no worker), then
+        // played; and at once from then on
+        played.length = 0;
+        assert.equal(sound.play("warHorn", { volume: 0.8 }), null);
+        assert.equal(played.length, 0);
+
+        for (let k = 0; k < 50 && !played.length; k++) {
+            await tick();
+        }
+
+        assert.equal(sound.buffers.get("warHorn")?.length, SOUNDS.warHorn.variants);
+        assert.equal(played.length, 1);
+        assert.ok(sound.buffers.get("warHorn").includes(played[0].source.buffer));
+        assert.ok(sound.play("warHorn"));
+        assert.equal(played.length, 2);
+
+        // (A recorded-only sound's stand-in made for it the same way)
+        played.length = 0;
+        sound.recorded.delete("clash");
+        assert.equal(sound.play("clash"), null);
+
+        for (let k = 0; k < 50 && !played.length; k++) {
+            await tick();
+        }
+
+        assert.ok(sound.buffers.get("block").includes(played[0]?.source.buffer));
+
+        // Made too long after it was wanted: not played then
+        played.length = 0;
+        assert.equal(sound.play("beastGrowl"), null);
+        sound.context.currentTime += 1;
+
+        for (let k = 0; k < 50 && !sound.buffers.has("beastGrowl"); k++) {
+            await tick();
+        }
+
+        await tick();
+        assert.equal(played.length, 0);
         sound.close();
     });
 

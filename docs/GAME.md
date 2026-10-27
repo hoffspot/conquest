@@ -2889,7 +2889,20 @@ as those who come out are, the nearest first, after everyone else (`#nextEnliste
 game begins, those out already, and again as it's sent the world (`rehost`; with the soldiers and
 wagons, not those waiting on their kind's figure in the crowds, nor the fallen). And not while the
 player's inside anywhere (`#walledOff`, as for those a dungeon's walls stand between): only there
-to be seen about, they're dressed as the player comes out again. A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
+to be seen about, they're dressed as the player comes out again. Nor the soldiers and the wild's
+creatures out in the world (`#onlySeenAbout`: not anyone's own, a follower or a tamed or called
+beast, nor the colossal and a town's engines). And those held in full already are let go of once
+the player's been inside 3 seconds (`SHUT_IN`, `#shutIn`; a step in and out again lets go of no
+one), 8 at a look, twice a second (so as not to hold a frame up letting a town's go): the
+soldiers to their crowds (where their kind's figure's made; else undressed), the folk
+and the wild's people-shaped creatures undressed (not the beasts built in code: their bodies
+shared, each one small), each dressed again as the player comes out, the nearest first, the
+townsfolk after everyone else. An iPhone on Low let the game's tab go asking a city's smith what
+he had for sale: 49 bodies held, 3 of them in the smithy, the rest out in its streets (the
+townsfolk, the crier, guards and barracks soldiers drawn in full as the player walked to his
+door), 537 MB in all (a player's crash report, 2026-10-27). In seed 2's start town on Low, its
+smithy held 10 rather than 19 (the bodies' own copies 24 MB, not 65), and five seconds out again
+the townsfolk were all but all dressed. A floor is built a step at a time too (interiors3d.js `buildingInterior`: its rooms and
 furniture laid out, made into meshes, made ready to merge, merged). If the player's through the
 door before its folk are all dressed, its floors are built at once and the screen's kept dark
 while the folk are dressed, with 30 ms of each frame (`ENTERING`, `#entering`; their skins painted
@@ -3745,7 +3758,15 @@ steady at 40), so the soldiers about are drawn in full only as far as the qualit
 room beside everyone else drawn in full or about to be (`QUALITY.bodies`: 32 on Low and Medium,
 24 on High, its skins four times the pixels; never fewer than `soldiers.full`), the rest in
 their crowds, their bodies in full let go. The debug log says how many soldiers were about and
-how many had room (`soldiers`):
+how many had room (`soldiers`). The folk out in the world (the townsfolk in the streets, a
+crier in his square, a stranger by the road) are held in full only as far as the budget leaves
+room too (`#folkRoom`, twice a second): whoever the player's talking or trading with first, then
+the nearest the camera, those on another map last. With no crowd to stand in, those past the
+room aren't drawn: undressed, the furthest first (one held only just past it, `MARSHAL.margin`,
+left as it is), or not dressed at all, and dressed once there's room for them again. The debug
+log says how many there were and how many had room (`folk`); in seed 2's start town on Low, its
+nine had room for 29, and under a budget of 8 the furthest of them, 40 metres off, went undrawn
+till there was room again:
 
 - **One figure for each kind.** A soldier of each people, sex and weapon (`human:m:sword`) is
   built once, as a template: a character as any soldier is (`soldierLook`), its weapon drawn. Its
@@ -4965,8 +4986,17 @@ seconds ahead (checked every 0.2 s), each instrument panned in its place in the 
 a hall's reverb, and carries straight on round from the end to the beginning, so it loops
 without a seam. It plays on every screen.
 
-`worker.js` makes the sounds in a worker, the most needed first, so the page never waits
-(without module workers they're made on the page, a few at a time). Meanwhile the recordings of
+`worker.js` makes the sounds in a worker, so the page never waits (without module workers
+they're made on the page, a few at a time): as the game starts, only those heard all the time,
+the footsteps, the swings and the blows (`MADE_AHEAD`: about 5 MB, and the wind's 2), the most
+needed first; each other one the first time it's wanted (`#make`), and played as soon as it's
+made if that's within a quarter of a second of when it was wanted (`MADE_LATE`; in the worker,
+a few hundredths), not at all if later. All of them, 98 sounds in 247 variants at the browser's
+48 kHz, were made at the start till 2026-10-27, 33 MB held from then on, an explosion's or a war
+horn's as much as a footstep's; an iPhone's tab was let go holding 105 MB of sound (a player's
+crash report). In headless Chromium on a phone's screen, standing in seed 2's start town, the
+sound held 76 MB rather than 103. The sound studio makes every one at the start, to play any
+asked for at once. Meanwhile the recordings of
 the town's, the tavern's and a fight's music (`FIRST`) are downloaded, six at a time, in the
 background (not on the loading screen: the game doesn't wait for them), kept by the service
 worker, and decoded once sound starts; the music begins when the score it starts with has all of

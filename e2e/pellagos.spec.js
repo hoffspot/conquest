@@ -5162,6 +5162,111 @@ test("the smithy: the smith heats, hammers and quenches the work, the apprentice
     expect(smithy.place).toBe("smithy");
 });
 
+test("the folk out in the streets held in full only as the bodies' budget has room, the furthest let go first; and indoors, those out in the world let go of a few seconds in, the soldiers to their crowds, and dressed again coming out", async ({ page }) => {
+    // (Seed 2's town on Low: its townsfolk, its crier and its guards about the start, its smithy a
+    // few steps off)
+    await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ sound: false, quality: "low" })));
+    await playing(page, "/?play&seed=2");
+
+    const held = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+        const play = async (steps) => {
+            for (let k = 0; k < steps; k++) {
+                game.advance(0.1, { render: k % 5 === 0 });
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+        const inFull = (id) => game.avatars.has(id) && game.avatars.get(id).constructor.name !== "CrowdAvatar";
+        const out = (kind) => game.battle.actors.filter((actor) => actor.kind === kind && actor.map === "town");
+        const street = () => out("folk").map((actor) => ({ id: actor.id, held: inFull(actor.id), away: Math.hypot(actor.x - player.x, actor.y - player.y) }));
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // A while about the square: its folk dressed as they come out
+        await play(200);
+
+        const about = { folk: street().filter(({ held }) => held).length, soldiers: out("soldier").filter(({ id }) => inFull(id)).length };
+
+        // Under a budget with room for fewer of them: the furthest let go (all but those only just
+        // past the room), then all dressed again once there's room
+        const quality = session.view.quality;
+
+        const others = [...game.avatars.keys()].filter((id) => inFull(id) && !out("folk").some((actor) => actor.id === id)).length;
+
+        session.view.quality = { ...quality, bodies: others + 2 };
+        await play(10);
+
+        const tight = { ...game.folkRationed, folk: street() };
+
+        session.view.quality = quality;
+        await play(80);
+
+        const loose = street().filter(({ held }) => held).length;
+
+        // Into the smithy: held a moment, then let go of
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "blacksmith");
+        const [x, y] = building.door.ends[0].squares[0];
+
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        for (let k = 0, visit = game.visits.get(building.key); k < 600 && (visit.queue.length || visit.steps); k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        await play(10);
+
+        const moment = { map: player.map, folk: out("folk").filter(({ id }) => inFull(id)).length };
+
+        await play(40);
+
+        const inside = {
+            folk: out("folk").filter(({ id }) => inFull(id)).length,
+            soldiers: out("soldier").filter(({ id }) => inFull(id)).length,
+            crowds: out("soldier").filter(({ id }) => game.avatars.get(id)?.constructor.name === "CrowdAvatar").length,
+            aside: out("folk").filter(({ id }) => game.aside.has(id)).length,
+            own: [`${building.key}/smith`, `${building.key}/apprentice`].every(inFull),
+        };
+
+        // Out again: dressed again, the nearest first
+        game.battle.command("player", { type: "enter", link: building.door.id });
+
+        for (let k = 0; k < 100 && player.map !== "town"; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        await play(80);
+
+        return { about, tight, loose, moment, inside, back: street().filter(({ held }) => held).length };
+    });
+
+    expect(held.about.folk, JSON.stringify(held)).toBeGreaterThanOrEqual(5);
+
+    // (Room for 2 of them: those past it and the margin let go, each further than all those held)
+    const kept = held.tight.folk.filter(({ held }) => held);
+    const gone = held.tight.folk.filter(({ held }) => !held);
+
+    expect(held.tight.room).toBe(2);
+    expect(kept.length, JSON.stringify(held.tight)).toBeLessThanOrEqual(2 + 3);
+    expect(gone.length, JSON.stringify(held.tight)).toBeGreaterThan(0);
+    expect(Math.min(...gone.map(({ away }) => away))).toBeGreaterThanOrEqual(Math.max(...kept.map(({ away }) => away)) - 1);
+    expect(held.loose).toBe(held.about.folk);
+
+    // Inside: those out in the streets held a moment, then let go of, the soldiers to their crowds;
+    // the smithy's own drawn
+    expect(held.moment.map).toMatch(/blacksmith-\d+\/forge$/);
+    expect(held.moment.folk).toBeGreaterThan(0);
+    expect(held.inside).toEqual({ folk: 0, soldiers: 0, crowds: expect.any(Number), aside: expect.any(Number), own: true });
+    expect(held.inside.aside).toBeGreaterThanOrEqual(held.about.folk);
+    expect(held.inside.crowds).toBeGreaterThanOrEqual(held.about.soldiers);
+
+    // Out again: the townsfolk dressed again
+    expect(held.back).toBeGreaterThanOrEqual(held.about.folk - 1);
+});
+
 test("the temple: the priest in white blesses the pews and lights the shrines' candles, worshippers pray, and the priest tells of the temple's patron", async ({ page }) => {
     // (Seed 2's town's temple, to Aurelia, a few steps from the start)
     await playing(page, "/?play&seed=2");

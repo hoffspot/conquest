@@ -31,7 +31,7 @@ const WALK = { steps: 4, apart: 0.5, speed: 1.5 };
 
 // (Every recording kept decoded, so whichever's asked for is heard as it is, never its made one
 // while it's decoded again: the game keeps to sound.js DECODED_BUDGET)
-const sound = new Sound({ volumes: VOLUMES, budget: Infinity });
+const sound = new Sound({ volumes: VOLUMES, budget: Infinity, ahead: () => true });
 
 // The ambience's beds playing (name → how loud: as the game plays them at their loudest), and how
 // fast any's played (name → its rate: as in one of the places it's heard)

@@ -27,7 +27,9 @@
 //    hell's realms, as loud and clear indoors as out; once it's done, it fades out slowly and
 //    what was heard there back, where it left off. A score fading out plays on till it's silent.
 //
-// synth.js's sounds are made in a worker (worker.js), so nothing waits for them; the music's
+// synth.js's sounds are made in a worker (worker.js), so nothing waits for them: those heard all
+// the time as the game starts (MADE_AHEAD: the footsteps, the swings and the blows), each other
+// one the first time it's wanted, played then, a moment late (MADE_LATE); the music's
 // recordings (client/music) and the recorded sounds (client/sounds) are downloaded meanwhile, but
 // for the spells' and the creatures', each downloaded only once it's wanted (want: the spells the
 // player can cast, as they come to know them; a creature's as it's drawn; anyone else's the first
@@ -182,6 +184,18 @@ const BED_KEPT = 60;
  * to these, about 90 recordings were decoded again on a phone's, under 30 on a computer's.)
  */
 export const DECODED_BUDGET = Object.freeze({ touch: 48 * 1024 * 1024, other: 96 * 1024 * 1024 });
+
+/**
+ * The made sounds (synth.js SOUNDS) made as the game starts: those heard all the time, the
+ * footsteps, the swings and the blows (about 5 MB, and the wind's 2). Every other one's made only
+ * the first time it's wanted (#make), in the worker: all 98 of them, 247 variants at the browser's
+ * 48 kHz, held 33 MB from the start, an explosion's or a war horn's as much as a footstep's, and an
+ * iPhone's tab was let go holding 105 MB of sound (a player's crash report, 2026-10-27). A sound
+ * made the first time it's wanted is played as soon as it's made, if that's within MADE_LATE
+ * seconds of when it was wanted (a few hundredths, in the worker); later than that, not at all.
+ */
+export const MADE_AHEAD = /^(step|swing)|^(slash|hack|cleave|chop|strike|crush|pierce|punch|arcane|fire|arrow|bolt|fireball)$/;
+const MADE_LATE = 0.25;
 
 // What a sound's copy holds (bytes): an MP3's, or its samples' (32-bit, each channel's)
 const bytesOf = (copy) => copy.byteLength ?? (copy.length ?? 0) * (copy.numberOfChannels ?? 1) * 4;
@@ -762,8 +776,10 @@ export class Sound {
      * @param {Function} [options.fetch] - How to download the music's recordings.
      * @param {number} [options.budget] - How much of the recorded sounds to keep decoded at most
      *     (bytes: DECODED_BUDGET's, for a touch screen or not).
+     * @param {Function} [options.ahead] - Which made sounds to make as it starts (by name: those
+     *     MADE_AHEAD names; the sound studio's, every one), the rest once each is first wanted.
      */
-    constructor({ enabled = true, volumes = VOLUME_DEFAULTS, fetch = globalThis.fetch?.bind(globalThis), budget = DECODED_BUDGET[globalThis.matchMedia?.("(pointer: coarse)").matches ? "touch" : "other"] } = {}) {
+    constructor({ enabled = true, volumes = VOLUME_DEFAULTS, fetch = globalThis.fetch?.bind(globalThis), budget = DECODED_BUDGET[globalThis.matchMedia?.("(pointer: coarse)").matches ? "touch" : "other"], ahead = (name) => MADE_AHEAD.test(name) } = {}) {
         this.enabled = enabled;
         this.volumes = { ...VOLUME_DEFAULTS, ...volumes };
         this.paused = true;
@@ -796,6 +812,17 @@ export class Sound {
         /** The browser's copies: sounds' (name → [variant]) and instruments' ("instrument key"). */
         this.buffers = new Map();
         this.instruments = new Map();
+
+        /**
+         * Which made sounds are made as it starts (`ahead`: by name); those asked to be made so
+         * far (names); what makes them (a worker, or null to make them on the page); and the last
+         * of each wanted before it was made, to play once it is (name → { name, options, at: the
+         * browser's time }: MADE_LATE).
+         */
+        this.ahead = ahead;
+        this.making = new Set();
+        this.maker = null;
+        this.late = new Map();
 
         /**
          * Sounds' recordings (recorded.js) as the browser decodes them (name → [buffer], in
@@ -886,8 +913,9 @@ export class Sound {
     }
 
     /**
-     * Start making the sounds (once), in a worker, and downloading the music's recordings.
-     * Resolves when the sounds are made (`downloading` when the recordings are downloaded).
+     * Start making the sounds (once), in a worker: those made ahead (MADE_AHEAD), the rest as each
+     * is first wanted (#make); and downloading the music's recordings. Resolves when those made
+     * ahead are made (`downloading` when the recordings are downloaded).
      */
     prepare() {
         const first = this.#musicFiles(FIRST);
@@ -895,14 +923,15 @@ export class Sound {
         this.downloading ??= this.#download([...first, ...recordedFiles()]);
         this.#wantScore(this.#wanted().score);
         this.ready ??= new Promise((resolve) => {
-            let worker = null;
+            const ahead = Object.keys(SOUNDS).filter((name) => this.ahead(name));
             const here = async () => {
-                worker?.terminate();
+                this.maker?.terminate();
+                this.maker = null;
 
-                for (const [name, sound] of Object.entries(SOUNDS)) {
-                    for (let variant = 0; variant < sound.variants; variant++) {
-                        this.#receive({ name, variant, samples: render(name, variant) });
-                        await new Promise((next) => setTimeout(next, 0));
+                // (Those asked of the worker meanwhile, too)
+                for (const name of [...new Set([...ahead, ...this.making])]) {
+                    if (!this.#made(name)) {
+                        await this.#makeHere(name);
                     }
                 }
 
@@ -910,21 +939,24 @@ export class Sound {
                 resolve();
             };
 
+            ahead.forEach((name) => this.making.add(name));
+
             try {
-                worker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
-                worker.addEventListener("message", ({ data }) => {
+                this.maker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
+                this.maker.addEventListener("message", ({ data }) => {
                     if (data.done) {
-                        worker.terminate();
                         resolve();
+                    } else if (data.made) {
+                        this.#playLate(data.made);
                     } else {
                         this.#receive(data);
                     }
                 });
-                worker.addEventListener("error", (event) => {
+                this.maker.addEventListener("error", (event) => {
                     event.preventDefault();
                     here();
                 });
-                worker.postMessage("make");
+                this.maker.postMessage({ ahead });
             } catch {
                 // (No module workers here: make them on the page, a little at a time)
                 here();
@@ -932,6 +964,48 @@ export class Sound {
         });
 
         return this.ready;
+    }
+
+    // A made sound wanted that isn't made yet (MADE_AHEAD): made now, once, in the worker; or on
+    // the page, a little at a time, where there's none
+    #make(name) {
+        if (this.making.has(name) || !SOUNDS[name]) {
+            return;
+        }
+
+        this.making.add(name);
+
+        if (this.maker) {
+            this.maker.postMessage({ make: name });
+        } else {
+            this.#makeHere(name);
+        }
+    }
+
+    // A made sound made on the page, a variant at a time; then played, if it was wanted just now
+    async #makeHere(name) {
+        for (let variant = 0; variant < SOUNDS[name].variants; variant++) {
+            this.#receive({ name, variant, samples: render(name, variant) });
+            await new Promise((next) => setTimeout(next, 0));
+        }
+
+        this.#playLate(name);
+    }
+
+    // Whether a made sound's made (its samples, or the browser's copies of them)
+    #made(name) {
+        return this.buffers.has(name) || this.samples.has(name);
+    }
+
+    // A made sound just made, all of it: played, if it was wanted no more than MADE_LATE ago
+    #playLate(name) {
+        const late = this.late.get(name);
+
+        this.late.delete(name);
+
+        if (late && this.context && this.context.currentTime - late.at <= MADE_LATE) {
+            this.play(late.name, late.options);
+        }
     }
 
     /**
@@ -1495,6 +1569,17 @@ export class Sound {
         // (Counting the sounds still playing by when they end, not by the browser saying they
         // have: a stuck browser never does)
         this.sounding = this.sounding.filter((end) => end > context?.currentTime);
+
+        // (Its made sound not made yet, and nothing else to play: made now, and played as soon as
+        // it is, if that's soon enough: MADE_LATE)
+        const stand = SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead;
+
+        if (this.playing && !buffers?.length && SOUNDS[stand] && !this.#made(stand)) {
+            this.late.set(stand, { name, options: { at, volume, delay, peakAt, rate, far, variant, made, muffle }, at: context.currentTime });
+            this.#make(stand);
+
+            return null;
+        }
 
         if (!this.playing || !buffers?.length || this.sounding.length >= VOICES) {
             return null;
@@ -2476,6 +2561,8 @@ export class Sound {
         this.context?.close?.();
         this.context = null;
         this.decoders.clear();
+        this.maker?.terminate();
+        this.maker = null;
     }
 
     #fade(to) {
