@@ -15929,18 +15929,29 @@ test("a guard in its crowd stands at ease as one in full does, its sword at its 
     expect(drawn).toMatchObject({ move: "ready", armed: true });
     expect(atEase.gold, `the crown on its back at ease (${atEase.gold} gold pixels), not once it's drawn (${drawn.gold})`).toBeGreaterThan(drawn.gold * 2 + 20);
 
-    // Built in full in its place: its weapon in hand as it was; its crowd's figure seen as it was
-    // till the one in full's shown, then fading from sight, then gone
-    await page.evaluate(() => {
-        window.pellagos.session.view.quality = window.quality;
-    });
+    // Built in full in its place (the player 7 m back from it the way the camera looks, so it's
+    // in view: one in full's pictures are sent, and it's shown, only once it's about to be seen):
+    // its weapon in hand as it was; its crowd's figure seen as it was till the one in full's
+    // shown, then fading from sight, then gone
+    await page.evaluate((id) => {
+        const { game, session } = window.pellagos;
+
+        // (The camera where the game has it again, not where it was put to look at the guard)
+        game.advance(1 / 30, { render: false });
+
+        const ahead = session.view.camera.getWorldDirection(session.view.camera.position.clone()).setY(0).normalize();
+        const guard = game.battle.actor(id);
+
+        game.host.battle.place(game.me, guard.map, [Math.round(guard.x - ahead.x * 7), Math.round(guard.y - ahead.z * 7)], { facing: Math.atan2(ahead.x, ahead.z) });
+        session.view.quality = window.quality;
+    }, id);
 
     const handing = await page.evaluate(async (id) => {
         const { game } = window.pellagos;
         const seen = [];
 
-        for (let k = 0; k < 900 && seen.at(-1)?.fading !== false; k++) {
-            game.advance(1 / 30, { render: true, wait: true });
+        for (let k = 0; k < 300 && seen.at(-1)?.fading !== false; k++) {
+            game.advance(1 / 30, { render: false, wait: true });
 
             const avatar = game.avatars.get(id);
             const fading = game.fadingOut.find((one) => one.id === id);
@@ -15949,7 +15960,7 @@ test("a guard in its crowd stands at ease as one in full does, its sword at its 
                 seen.push({ shown: avatar.object.visible, sheathed: avatar.character.sheathed, fading: fading ? fading.crowd.shown : false });
             }
 
-            await new Promise((resolve) => setTimeout(resolve, 0));
+            await new Promise((resolve) => setTimeout(resolve, 15));
         }
 
         return seen;
