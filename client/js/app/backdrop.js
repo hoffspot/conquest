@@ -14,8 +14,11 @@ export const BACKDROP_FOLDER = "images/backdrops";
 /** The scenes, the first shown first, and which ways each is painted (`tall`, `wide`). */
 export const BACKDROPS = Object.freeze([
     Object.freeze({ scene: "town-dusk", tall: true, wide: true }),
+    Object.freeze({ scene: "elf-grove", tall: true, wide: true }),
+    Object.freeze({ scene: "cat-folk-city", tall: true, wide: true }),
     Object.freeze({ scene: "raid-night", tall: true, wide: false }),
     Object.freeze({ scene: "six-peoples", tall: false, wide: true }),
+    Object.freeze({ scene: "lizard-lagoon", tall: false, wide: true }),
 ]);
 
 /**
