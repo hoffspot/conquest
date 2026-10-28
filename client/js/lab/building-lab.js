@@ -10,7 +10,8 @@
 // own), or show=place&site=mine (or any kind of the people's sites: lumber mill, quarry, their own
 // places) for the first of it, or
 // show=wilds-meadow (or any land: wilds-woods, wilds-badlands...) for the land itself, well away
-// from any settlement or road (&undergrowth=0.5 to thin it, 0 for none), or show=home for the
+// from any settlement or road (&undergrowth=0.5 to thin it, 0 for none; &rocks=low|medium|high to
+// draw its rocks as that quality does), or show=home for the
 // middle of the people's homeland. &burnt=burning|burnt|framed|roofed shows a street's or a
 // town's houses as the Behemoth of the Rift leaves them and as they're built again (core/burnt.js,
 // world/art/kits/burnt.js). window.buildingLab is there for tests.
@@ -321,7 +322,7 @@ async function build() {
     if (state.show.startsWith("wilds-") || state.show === "home") {
         const world = buildWorld({ seed: state.seed });
         const [x, z] = wildsOf(world.plan, state.show === "home" ? { people: state.people } : state.show.slice(6));
-        const chunks = new Chunks(world, { undergrowth: Number(params.get("undergrowth") ?? 1) });
+        const chunks = new Chunks(world, { undergrowth: Number(params.get("undergrowth") ?? 1), rocks: ["low", "medium", "high"].includes(params.get("rocks")) ? params.get("rocks") : "medium" });
 
         chunks.fill(x, z, 1);
 

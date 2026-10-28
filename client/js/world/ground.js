@@ -1344,20 +1344,23 @@ function noContact() {
 }
 
 /**
- * How much of the sky's hidden near what stands on the ground (the squares `opaque(x, y)` says
- * can't be seen through), round the squares from (x0, y0), `size` a side: a blur of where it
- * stands, a byte a square, as a texture, and the squares it covers ({ texture, area }); or null
- * if nothing stands there.
+ * How much of the sky's hidden near what stands on the ground (how much each square's stood on,
+ * `standing(x, y)`: 1 or true where it can't be seen through, less for what's lower, a rock
+ * (rocksStanding), 0 or false for nothing), round the squares from (x0, y0), `size` a side: a blur
+ * of where it stands, a byte a square, as a texture, and the squares it covers ({ texture, area
+ * }); or null if nothing stands there.
  */
-export function contactOf(opaque, [x0, y0, size]) {
+export function contactOf(standing, [x0, y0, size]) {
     const across = size + 2 * CONTACT_MARGIN;
-    const standing = new Uint8Array(across * across);
+    const stood = new Float32Array(across * across);
     let any = false;
 
     for (let j = 0; j < across; j++) {
         for (let i = 0; i < across; i++) {
-            if (opaque(x0 - CONTACT_MARGIN + i, y0 - CONTACT_MARGIN + j)) {
-                standing[j * across + i] = 1;
+            const amount = Number(standing(x0 - CONTACT_MARGIN + i, y0 - CONTACT_MARGIN + j));
+
+            if (amount > 0) {
+                stood[j * across + i] = amount;
                 any = true;
             }
         }
@@ -1367,7 +1370,7 @@ export function contactOf(opaque, [x0, y0, size]) {
         return null;
     }
 
-    const round = blurred(standing, across, across, CONTACT.reach);
+    const round = blurred(stood, across, across, CONTACT.reach);
     const data = new Uint8Array(across * across);
 
     for (let k = 0; k < data.length; k++) {
@@ -1382,6 +1385,49 @@ export function contactOf(opaque, [x0, y0, size]) {
     texture.needsUpdate = true;
 
     return { texture, area: [x0 - CONTACT_MARGIN, y0 - CONTACT_MARGIN, across, across] };
+}
+
+/**
+ * The rocks lower than eyes darken the ground round them too (rocksStanding): how much each
+ * square under one's stood on, as tall as it is over `tall` metres (at most 1, as what can't be
+ * seen through is), a stone of a boulder's cluster `stone` as much.
+ */
+export const ROCK_CONTACT = Object.freeze({ kinds: ["boulder", "stone", "outcrop", "cairn", "menhir", "kopje", "moonstone"], tall: 2.2, stone: 0.7 });
+
+// How much each square under a rock is stood on (ROCK_CONTACT), round the squares from (x0, y0),
+// `size` a side: by square (y * 65536 + x), the most of any rock's on it
+function rocksStanding(overworld, [x0, y0, size]) {
+    const stood = new Map();
+
+    if (!overworld.chunkAt) {
+        return stood;
+    }
+
+    const seen = new Set();
+
+    for (let y = Math.floor(y0 / CHUNK) * CHUNK; y < y0 + size; y += CHUNK) {
+        for (let x = Math.floor(x0 / CHUNK) * CHUNK; x < x0 + size; x += CHUNK) {
+            const chunk = x >= 0 && y >= 0 && x < WORLD_SIZE && y < WORLD_SIZE ? overworld.chunkAt(x, y) : null;
+
+            if (!chunk || seen.has(chunk)) {
+                continue;
+            }
+
+            seen.add(chunk);
+
+            for (const { kind, height, squares } of chunk.features ?? []) {
+                if (ROCK_CONTACT.kinds.includes(kind)) {
+                    const amount = Math.min(1, height / ROCK_CONTACT.tall) * (kind === "stone" ? ROCK_CONTACT.stone : 1);
+
+                    for (const [sx, sy] of squares) {
+                        stood.set(sy * 65536 + sx, Math.max(stood.get(sy * 65536 + sx) ?? 0, amount));
+                    }
+                }
+            }
+        }
+    }
+
+    return stood;
 }
 
 /**
@@ -1660,7 +1706,8 @@ export function* layingGround(overworld, chunk, land, step = 1, water = null) {
     };
     const byRoad = overworld.fieldByRoad ? { fieldAt, edgeAt: (px, py, reach) => overworld.roadEdgeAt(px, py, reach) } : null;
     const splat = yield* splatting((x, y) => bedOf(overworld, x, y), [x0 - 1, y0 - 1, size + 2, size + 2], SPLAT_RESOLUTION, byRoad);
-    const contact = contactOf(overworld.squares.opaque, [x0, y0, size]);
+    const rocks = rocksStanding(overworld, [x0 - CONTACT_MARGIN, y0 - CONTACT_MARGIN, size + 2 * CONTACT_MARGIN]);
+    const contact = contactOf((x, y) => (overworld.squares.opaque(x, y) ? 1 : (rocks.get(y * 65536 + x) ?? 0)), [x0, y0, size]);
     let material;
 
     yield;

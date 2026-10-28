@@ -401,6 +401,114 @@ export function cliffMaterial() {
     return material;
 }
 
+let rocky = null;
+
+/**
+ * How rockMaterial paints rocks on High: its lichen's colonies, how many cells to a metre they're
+ * scattered in (one at most to a cell, `cells`; as many cells have one as the rock has lichen there,
+ * times `share`), how big round each is (of a cell), how dark their rims are; finer relief near, from its picture read again `fine` times smaller, gone by
+ * `far` metres off (from `near`), as strong as `relief` (in its hollows, more); and its worn edges
+ * picked out, as much as `wear`. The lichens' colours are kits/rocks.js LICHEN_KINDS' (its
+ * `kinds`, as multipliers of the stone's picture).
+ */
+export const ROCKS_HIGH = Object.freeze({ cells: 6, colony: [0.26, 0.5], rim: 0.24, share: 0.65, fine: 3.7, near: 6, far: 16, relief: 0.45, wear: 0.14, kinds: [[0.92, 1.02, 0.84], [1.08, 1.14, 0.6], [1.34, 0.9, 0.42], [1.2, 1.2, 1.12]] });
+
+/**
+ * The rocks' material on High (kits/rocks.js StoneMesher, its `rock` attribute: how worn each
+ * corner's edge is, how hollow it is, how much lichen it has, and which): the cliffs' material
+ * (cliffMaterial), and more. Its lichen's painted pixel by pixel in colonies, round and ragged,
+ * each with a dark rim, more of them where the rock has more; it's in finer relief near; and its
+ * worn edges catch the light. A program of its own, made while the game loads (chunks3d.js
+ * primer) when the quality's High.
+ */
+export function rockMaterial() {
+    if (rocky) {
+        return rocky;
+    }
+
+    const { uniforms } = atlasMaterial().userData;
+    const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+    const f = (v) => v.toFixed(3);
+
+    material.name = "rocks";
+    material.shadowSide = THREE.DoubleSide;
+    material.userData.atlas = uniforms.atlasMap.value;
+    material.userData.uniforms = uniforms;
+    material.onBeforeCompile = (shader) => {
+        fromAtlas(shader, uniforms);
+        shader.vertexShader = shader.vertexShader
+            .replace("#include <common>", "#include <common>\nattribute vec4 rock;\nvarying vec4 vRock;\nvarying vec3 vRockAt;\nvarying vec3 vRockFacing;\nvarying float vRockScale;")
+            .replace("#include <project_vertex>", "#include <project_vertex>\nvRockAt = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvRockFacing = objectNormal;\nvRockScale = uv.x;\nvRock = rock;");
+        shader.fragmentShader = shader.fragmentShader
+            .replace("#include <common>", "#include <common>\nvarying vec4 vRock;\nvarying vec3 vRockAt;\nvarying vec3 vRockFacing;\nvarying float vRockScale;")
+            .replace("void main() {", `${ROCK_READ_GLSL}\n${LICHEN_GLSL(f)}\nvoid main() {`)
+            .replace("vec4 atlasTexel = texture(atlasMap, vec3(vAtlasUv, vLayer));", `${ROCK_GLSL}\n${ROCK_FINE_GLSL(f)}`)
+            .replace("diffuseColor.rgb *= atlasTexel.rgb;", `diffuseColor.rgb *= atlasTexel.rgb;\n${ROCK_PAINT_GLSL(f)}`);
+        fireLit(shader);
+    };
+    material.customProgramCacheKey = () => "rocks";
+    rocky = material;
+
+    return material;
+}
+
+// A rock's lichen on High (rockMaterial): colonies in the cells of a grid laid on the side the rock
+// faces most, one at most to a cell (as many cells have one as its corners say: `coverage`), each
+// round, ragged at its edge, a dark rim round it; how much of a pixel's lichen (x) and rim (y)
+const LICHEN_GLSL = (f) => `
+vec2 lichenHash(vec2 p) {
+    return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453);
+}
+
+vec2 lichenAt(vec2 at, float coverage) {
+    vec2 cell = floor(at);
+    vec2 inside = fract(at);
+    float nearest = 9.0;
+
+    for (int j = -1; j <= 1; j++) {
+        for (int i = -1; i <= 1; i++) {
+            vec2 other = vec2(float(i), float(j));
+            vec2 h = lichenHash(cell + other);
+
+            if (h.x < coverage * ${f(ROCKS_HIGH.share)}) {
+                vec2 off = other + 0.2 + 0.6 * h - inside;
+                float size = ${f(ROCKS_HIGH.colony[0])} + ${f(ROCKS_HIGH.colony[1] - ROCKS_HIGH.colony[0])} * h.y;
+                float ragged = 1.0 + 0.24 * sin(off.x * 13.0 + h.y * 6.0) * sin(off.y * 11.0 - h.x * 5.0) + 0.1 * sin(off.x * 31.0 - off.y * 27.0);
+
+                nearest = min(nearest, length(off) / (size * ragged));
+            }
+        }
+    }
+
+    return vec2(1.0 - smoothstep(0.82, 1.0, nearest), smoothstep(0.78, 0.96, nearest) * (1.0 - smoothstep(1.0, 1.14, nearest)));
+}
+
+vec3 lichenColour(float which) {
+    float k = floor(which * 3.0 + 0.5);
+
+    return k < 0.5 ? vec3(${ROCKS_HIGH.kinds[0].map(f)}) : k < 1.5 ? vec3(${ROCKS_HIGH.kinds[1].map(f)}) : k < 2.5 ? vec3(${ROCKS_HIGH.kinds[2].map(f)}) : vec3(${ROCKS_HIGH.kinds[3].map(f)});
+}`;
+
+// Finer relief near (rockMaterial): its picture's height read again, smaller, from the side it
+// faces most, mixed into the height its relief's lit from, more in its hollows, gone far off
+const ROCK_FINE_GLSL = (f) => `
+vec3 rockFineAt = rockAt * ${f(ROCKS_HIGH.fine)};
+vec2 rockFineUv = rockSides.x > rockSides.y && rockSides.x > rockSides.z ? rockFineAt.zy : rockSides.y > rockSides.z ? rockFineAt.xz : rockFineAt.xy;
+float rockFine = textureGrad(atlasMap, vec3(rockFineUv + 0.37, vLayer), dFdx(rockFineUv), dFdy(rockFineUv)).a;
+float rockNear = 1.0 - smoothstep(${f(ROCKS_HIGH.near)}, ${f(ROCKS_HIGH.far)}, length(vViewPosition));
+atlasTexel.a = mix(atlasTexel.a, atlasTexel.a * 0.55 + rockFine * 0.45, rockNear * ${f(ROCKS_HIGH.relief)} * (1.0 + vRock.y));`;
+
+// A rock's worn edges catching the light, and its lichen (rockMaterial)
+const ROCK_PAINT_GLSL = (f) => `
+diffuseColor.rgb *= 1.0 + vRock.x * ${f(ROCKS_HIGH.wear)} * (atlasTexel.a - 0.35);
+if (vRock.z > 0.004) {
+    vec3 lichenWorld = vRockAt * ${f(ROCKS_HIGH.cells)};
+    vec2 lichenUv = rockSides.x > rockSides.y && rockSides.x > rockSides.z ? lichenWorld.zy : rockSides.y > rockSides.z ? lichenWorld.xz : lichenWorld.xy;
+    vec2 lichen = lichenAt(lichenUv, vRock.z);
+
+    diffuseColor.rgb *= mix(vec3(1.0), lichenColour(vRock.w), lichen.x) * (1.0 - lichen.y * ${f(ROCKS_HIGH.rim)});
+}`;
+
 // The rock's picture read at a place on it (cliffMaterial), as its patch of rock reads it: from
 // one of eight places (`which`: its whole part, and how far to the next, its fraction), the two
 // it's between blended where one patch gives way to the next (Inigo Quilez's "texture

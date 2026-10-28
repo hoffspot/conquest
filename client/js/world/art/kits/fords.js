@@ -12,15 +12,15 @@ import * as THREE from "three";
 import { hashOf } from "../../../core/noise.js";
 import { LAYERS, atlasMaterial } from "../engine/atlas.js";
 import { MATERIALS } from "../engine/painters.js";
-import { LOOKS, Mesher } from "./wilds.js";
+import { randomOf, rockLook } from "./rocks.js";
+import { LOOKS, Mesher, place, stonePart } from "./wilds.js";
 
 /**
  * The stepping stones (metres): how far apart along the way over, how big round (the least and
- * the most), how far their tops stand over the water (or the ground, on a bank), how many sides
- * each has, how far past the water onto each bank the row goes, how far each wanders off the line,
- * and how deep each is sunk.
+ * the most), how far their tops stand over the water (or the ground, on a bank), how far past the
+ * water onto each bank the row goes, how far each wanders off the line, and how deep each is sunk.
  */
-export const FORD_STONES = Object.freeze({ apart: 0.85, radius: [0.22, 0.32], clear: 0.09, sides: 7, beyond: 0.5, wander: 0.15, sink: 0.25 });
+export const FORD_STONES = Object.freeze({ apart: 0.85, radius: [0.22, 0.32], clear: 0.09, beyond: 0.5, wander: 0.15, sink: 0.25 });
 
 /** How much bigger the stones are in the rocky lands: boulders to step on. */
 export const ROCKY = Object.freeze({ mountain: 1.5, badlands: 1.4, volcanic: 1.4, snow: 1.3 });
@@ -266,7 +266,7 @@ export function fordsMesh({ stones, trunks }, [x0, y0]) {
         return null;
     }
 
-    const mesher = new Mesher(stones.length * FORD_STONES.sides * 9 + trunks.length * FORD_TRUNK.sides * FORD_TRUNK.rings * 12);
+    const mesher = new Mesher(stones.length * 240 + trunks.length * FORD_TRUNK.sides * FORD_TRUNK.rings * 12);
 
     for (const stone of stones) {
         stoneOf(mesher, stone, [x0, y0]);
@@ -288,32 +288,31 @@ export function fordsMesh({ stones, trunks }, [x0, y0]) {
     return mesh;
 }
 
-// A stepping stone: a low, rough prism, its top a little narrower than its foot and worn paler,
-// its corners each their own way out
+// A stepping stone: a cobble the water's worn smooth (kits/rocks.js), one of a few looks for its
+// rock, its top where the stone's top is, its foot in the bed, turned its own way
 function stoneOf(mesher, { x, y, radius, top, bottom, rock, seed }, [x0, y0]) {
-    const [layer, uvScale] = [LAYER[rock] ?? LAYER.rock, METRES[rock] ?? METRES.rock];
-    const sides = FORD_STONES.sides;
-    const turn = seed * Math.PI * 2;
-    const tone = 0.9 + seed * 0.2;
-    const [lit, worn, dark] = [[tone, tone, tone], [tone * 1.1, tone * 1.1, tone * 1.08], [tone * 0.55, tone * 0.55, tone * 0.55]];
-    const ring = (h, share) =>
-        Array.from({ length: sides }, (_, k) => {
-            const angle = turn + (k / sides) * Math.PI * 2;
-            const r = radius * share * (0.82 + 0.3 * hashOf(Math.floor(seed * 1e6), k, 3323));
+    const { part, low, high } = steppingLook(rock, Math.floor(seed * STEPPING) % STEPPING);
+    const tall = (top - bottom) / Math.max(0.01, high - low);
 
-            return [x - x0 + Math.cos(angle) * r, h, y - y0 + Math.sin(angle) * r];
-        });
-    const [upper, lower] = [ring(top, 0.85), ring(bottom, 1.1)];
-    const middle = [x - x0, top + radius * 0.06, y - y0];
+    place(mesher, part, { at: [x - x0, bottom - low * tall, y - y0], turn: seed * Math.PI * 2, scale: [radius * 2.1, tall, radius * 1.9], tint: [0.9 + seed * 0.2, 0.9 + seed * 0.2, 0.9 + seed * 0.2] });
+}
 
-    for (let k = 0; k < sides; k++) {
-        const next = (k + 1) % sides;
-        const outward = [(upper[k][0] + upper[next][0]) / 2 - middle[0], 0, (upper[k][2] + upper[next][2]) / 2 - middle[2]];
+// The stepping stones' looks: a few for each rock, made once each ({ part, low, high: its foot's
+// and its top's height in it })
+const STEPPING = 6;
+const steppings = new Map();
 
-        // (Its top, rising a little to its middle; its sides, darker towards their feet)
-        face(mesher, [middle, upper[k], upper[next]], [worn, worn, worn], [0, 1, 0], { layer, uvScale });
-        face(mesher, [lower[k], lower[next], upper[next], upper[k]], [dark, dark, lit, lit], outward, { layer, uvScale });
+function steppingLook(rock, k) {
+    const key = `${rock}:${k}`;
+
+    if (!steppings.has(key)) {
+        const look = rockLook(randomOf(8467 * k + rock.length * 31 + 5), { family: "cobble", detail: 1, layer: MATERIALS[rock] ? rock : "rock", squash: 0.5, core: [1, 0.62, 0.9] });
+        const heights = look.position.filter((_, i) => i % 3 === 1);
+
+        steppings.set(key, { part: stonePart(look, { lichen: 0.15 }), low: Math.min(...heights), high: Math.max(...heights) });
     }
+
+    return steppings.get(key);
 }
 
 // A face of three or four corners, wound to face `out` (the Mesher's faces are seen from the side

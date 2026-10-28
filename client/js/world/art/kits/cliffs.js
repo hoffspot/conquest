@@ -26,7 +26,8 @@ import { SLOPE } from "../../../core/terrain/height.js";
 import { ALPINE } from "../../ground.js";
 import { cliffMaterial, LAYERS } from "../engine/atlas.js";
 import { MATERIALS } from "../engine/painters.js";
-import { LOOKS } from "./wilds.js";
+import { randomOf, rockLook } from "./rocks.js";
+import { groundTint, LOOKS, place, stonePart } from "./wilds.js";
 
 /**
  * How the cliffs are made: the lattice (metres), how far each of its points is moved off it (of a
@@ -449,46 +450,36 @@ function scree(mesher, chunk, ground, points, corners, { layer, uvs, look }) {
     }
 }
 
-/** A chip of rock (an octahedron, jittered and flattened), `r` metres across, at a point ([x, up, y] about the mesher's corner). */
+/**
+ * A chip of rock, `r` metres across, at a point ([x, up, y] about the mesher's corner): freshly
+ * broken (kits/rocks.js talus, one of CHIP_LOOKS for its stone), turned its own way, for the cliffs'
+ * material (`uvs`: its picture's copies to a metre), greener in a mossy land (`look`'s).
+ */
 export function chip(mesher, [x, y, z], r, seed, { layer, uvs, look }) {
-    const turn = seed * Math.PI * 2;
-    const [c, s] = [Math.cos(turn), Math.sin(turn)];
-    const jitter = (k) => 0.7 + 0.6 * hashOf(Math.floor(seed * 1e6), k, 941);
-    const corners = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]].map(([px, py, pz], k) => {
-        const [u, v, w] = [px * r * jitter(k), py * r * 0.6 * jitter(k + 6), pz * r * jitter(k + 12)];
-
-        return [x + u * c - w * s, y + v, z + u * s + w * c];
-    });
-    const faces = [[0, 2, 4], [4, 2, 1], [1, 2, 5], [5, 2, 0], [4, 3, 0], [1, 3, 4], [5, 3, 1], [0, 3, 5]];
+    const part = chipPart(typeof layer === "number" ? LAYERS[layer] : layer, uvs[0], look.moss > 0.5, Math.floor(seed * CHIP_LOOKS) % CHIP_LOOKS);
+    const jitter = (k) => 0.75 + 0.5 * hashOf(Math.floor(seed * 1e6), k, 941);
     const shade = 0.75 + 0.3 * hashOf(Math.floor(seed * 1e5), 3, 947);
-    const tint = [shade, shade * 0.98, shade * 0.95];
 
-    for (const [a, b, d] of faces) {
-        mesher.tri(corners[a], corners[b], corners[d], { layer, colours: look.moss > 0.5 ? mix(tint, [0.3, 0.38, 0.2], 0.15) : tint, uvs });
+    place(mesher, part, { at: [x, y - r * 0.15, z], turn: seed * Math.PI * 2, scale: [r * 2 * jitter(0), r * 1.3 * jitter(1), r * 2 * jitter(2)], tint: [shade, shade * 0.98, shade * 0.95] });
+}
+
+// The chips' looks: a few for each stone, made once each
+const CHIP_LOOKS = 6;
+const chipParts = new Map();
+
+function chipPart(stone, uv, mossy, k) {
+    const key = `${stone}:${uv.join()}:${mossy}:${k}`;
+
+    if (!chipParts.has(key)) {
+        const look = rockLook(randomOf(6151 * k + stone.length * 37 + 3), { family: "talus", detail: 0, layer: stone });
+
+        chipParts.set(key, stonePart(look, { moss: mossy ? 0.5 : 0, lichen: 0.4 }, { uv }));
     }
+
+    return chipParts.get(key);
 }
 
 const mix = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
-
-// The ground's colour beside a cliff where it comes out of it (as a tint of the rock's picture):
-// its land's grass, and the rock the ground's painted with on a slope so steep (GROUND_ROCK of it)
-const tints = new Map();
-
-function groundTint(look) {
-    if (!tints.has(look)) {
-        const stone = new THREE.Color(MATERIALS[look.stone]?.base ?? MATERIALS.rock.base);
-        const [dark, light] = look.grass.map((hex) => new THREE.Color(hex));
-        const grass = dark.clone().lerp(light, 0.5).lerp(new THREE.Color(MATERIALS.rock.base), GROUND_ROCK);
-
-        tints.set(look, [grass.r / stone.r, grass.g / stone.g, grass.b / stone.b]);
-    }
-
-    return tints.get(look);
-}
-
-// How much of the ground beside a cliff, where it comes out of it, is painted rock (world/ground.js
-// ROCK_FROM: at 36°, about a third)
-const GROUND_ROCK = 0.35;
 
 /** The steepness (rise over run) past which the ground's a cliff, as the rules have it. */
 export const CLIFF_STEEP = SLOPE.cliff;
