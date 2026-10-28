@@ -665,16 +665,17 @@ describe("playing sounds (sound.js)", () => {
         );
 
         // Judged by when each was to start, not when it was wanted: made a second after they were
-        // wanted, one wanted 2 s on is played, a second on; one wanted at once isn't
+        // wanted, one wanted 2 s on is played, a second on; one wanted at once isn't. (Two made
+        // only, with no recordings to play in their place: a recording downloaded meanwhile is)
         played.length = 0;
-        sound.play("denied", { delay: 2 });
-        sound.play("coins");
+        sound.play("twigSnap", { delay: 2 });
+        sound.play("snareSnap");
         sound.context.currentTime += 1;
-        await until(() => sound.took.has("denied") && sound.took.has("coins"));
+        await until(() => sound.took.has("twigSnap") && sound.took.has("snareSnap"));
         await tick();
-        assert.equal(of("denied").length, 1);
-        assert.equal(of("coins").length, 0);
-        assert.equal(Math.round((of("denied")[0].when - sound.context.currentTime) * 10) / 10, 1);
+        assert.equal(of("twigSnap").length, 1);
+        assert.equal(of("snareSnap").length, 0);
+        assert.equal(Math.round((of("twigSnap")[0].when - sound.context.currentTime) * 10) / 10, 1);
         sound.close();
     });
 
@@ -706,35 +707,36 @@ describe("playing sounds (sound.js)", () => {
         assert.equal(played.length, 2);
 
         // Made as it was wanted (and played then), then not played for MADE_KEPT: let go of (but
-        // those made at the start, and those kept); wanted again, made again and played
+        // those made at the start, and those kept); wanted again, made again and played. (One
+        // made only, with no recordings to play in its place)
         played.length = 0;
-        sound.play("denied");
+        sound.play("twigSnap");
 
-        for (let k = 0; k < 100 && !(heard("denied") && sound.took.has("denied")); k++) {
+        for (let k = 0; k < 100 && !(heard("twigSnap") && sound.took.has("twigSnap")); k++) {
             await tick();
         }
 
         now += MADE_KEPT * 1000 + 1;
         sound.update(60);
-        assert.ok(!sound.buffers.has("denied"), "let go of");
+        assert.ok(!sound.buffers.has("twigSnap"), "let go of");
         assert.ok(!sound.buffers.has("townHorn"), "let go of");
         assert.ok(sound.buffers.has("castPrismatic") && sound.buffers.has("prismaticBlast"), "kept");
         assert.ok(sound.buffers.has("stepGrass") && sound.buffers.has("slash"), "made at the start: kept");
 
         played.length = 0;
-        assert.equal(sound.play("denied"), null);
+        assert.equal(sound.play("twigSnap"), null);
 
-        for (let k = 0; k < 100 && !heard("denied"); k++) {
+        for (let k = 0; k < 100 && !heard("twigSnap"); k++) {
             await tick();
         }
 
-        assert.ok(heard("denied"));
+        assert.ok(heard("twigSnap"));
 
         // (One slow to make again: kept however long it's gone unplayed)
-        sound.took.set("denied", MADE_QUICK * 2);
+        sound.took.set("twigSnap", MADE_QUICK * 2);
         now += MADE_KEPT * 1000 + 1;
         sound.update(60);
-        assert.ok(sound.buffers.has("denied"));
+        assert.ok(sound.buffers.has("twigSnap"));
         sound.close();
     });
 
