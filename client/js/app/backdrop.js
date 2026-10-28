@@ -18,8 +18,24 @@ export const BACKDROPS = Object.freeze([
     Object.freeze({ scene: "six-peoples", tall: false, wide: true }),
 ]);
 
-/** How long each is shown (s), and how long one fades into the next (s: styles.css #backdrop). */
-export const BACKDROP = Object.freeze({ every: 20, fade: 2 });
+/**
+ * How long each is shown (s), how long one fades into the next (s: styles.css #backdrop), and the
+ * longest side each's made at (px: scripts/build-backdrops.js; a master at 2K is made smaller).
+ */
+export const BACKDROP = Object.freeze({ every: 20, fade: 2, most: 2560 });
+
+/**
+ * How each drifts while it's shown, one after another: from and to [how big, how far across, how
+ * far down] (a share of the screen, as it's grown): in towards the town at its foot, out again,
+ * across one way and back the other. Never further than how big it is leaves room for, so it
+ * always covers the page; eased in and out over its turn and the fades either side.
+ */
+export const DRIFTS = Object.freeze([
+    Object.freeze({ from: [1, 0, 0], to: [1.1, 0, -0.04] }),
+    Object.freeze({ from: [1.1, 0.03, -0.02], to: [1, 0, 0] }),
+    Object.freeze({ from: [1.08, -0.03, 0], to: [1.08, 0.03, -0.01] }),
+    Object.freeze({ from: [1.08, 0.03, -0.02], to: [1.08, -0.03, 0.01] }),
+]);
 
 // The screens they're behind (main.js show)
 const BEHIND = new Set(["loading", "title"]);
@@ -72,10 +88,11 @@ export class Backdrop {
         this.upright = view.matchMedia?.(UPRIGHT) ?? null;
         this.still = view.matchMedia?.("(prefers-reduced-motion: reduce)") ?? null;
 
-        /** Whether it's shown (behind the loading screen or the title), which scene's shown, and the next one's turn. */
+        /** Whether it's shown (behind the loading screen or the title), which scene's shown, the next one's turn, and how many have drifted (DRIFTS). */
         this.on = true;
         this.at = 0;
         this.timer = null;
+        this.drifted = 0;
 
         // (Turned the other way: a scene painted only the other way gives way to the next)
         this.upright?.addEventListener?.("change", () => {
@@ -165,6 +182,7 @@ export class Backdrop {
             }
 
             img.classList.add("shown");
+            this.#drift(img);
             this.window.setTimeout(() => under.forEach((each) => this.#forget(each)), BACKDROP.fade * 1000);
         };
 
@@ -187,6 +205,20 @@ export class Backdrop {
         } else {
             img.addEventListener("load", () => img.decode().catch(() => {}).then(shown), { once: true });
         }
+    }
+
+    // A picture drifting slowly as it's shown (the next of DRIFTS), from as it fades in to as it's
+    // faded out, on the graphics card (an animation of its transform, as the browser plays it: the
+    // page's thread, busy loading, is left alone); not while it's to keep still
+    #drift(img) {
+        if (this.still?.matches || !img.animate) {
+            return;
+        }
+
+        const { from, to } = DRIFTS[this.drifted++ % DRIFTS.length];
+        const transform = ([scale, x, y]) => `scale(${scale}) translate(${x * 100}%, ${y * 100}%)`;
+
+        img.animate([{ transform: transform(from) }, { transform: transform(to) }], { duration: (BACKDROP.every + BACKDROP.fade * 2) * 1000, easing: "ease-in-out", fill: "forwards" });
     }
 
     // A picture let go of: out of the page, its image with it

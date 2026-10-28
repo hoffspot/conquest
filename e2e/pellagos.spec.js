@@ -198,7 +198,7 @@ test("loads everything, listing what it downloads, then shows the title", async 
     expect(loaded.groups).toEqual([true, true, true, true, true, true]);
 });
 
-test("behind the loading screen and the title, the town at dusk, then each scene in turn, faded one into the next, the way the screen's held (tall upright, wide on its side), an AVIF that won't show as WebP; none behind making a character, and the first again back at the title", async ({ page }) => {
+test("behind the loading screen and the title, the town at dusk, then each scene in turn, faded one into the next and drifting slowly, the way the screen's held (tall upright, wide on its side), an AVIF that won't show as WebP; none behind making a character, the first again back at the title, and none drifting with less motion asked for", async ({ page }) => {
     // (What's drawn behind: each picture in #backdrop, which scene, as what, faded in or not, and how big)
     const behind = () => page.evaluate(() => [...document.querySelectorAll("#backdrop img")].map((img) => ({ scene: img.dataset.scene, file: img.currentSrc.split("/").pop(), shown: img.classList.contains("shown"), width: img.naturalWidth })));
     const next = () => page.evaluate(() => window.pellagos.backdrop.next());
@@ -206,6 +206,17 @@ test("behind the loading screen and the title, the town at dusk, then each scene
     await page.setViewportSize({ width: 1280, height: 800 });
     await title(page);
     await expect.poll(behind, { timeout: 10000 }).toEqual([{ scene: "town-dusk", file: "town-dusk-wide.avif", shown: true, width: 1376 }]);
+
+    // (Drifting as it's shown, slowly: grown and moved a little, a second on, on the graphics card)
+    const drift = () => page.evaluate(() => [...document.querySelectorAll("#backdrop img")].map((img) => ({ drifting: img.getAnimations().length, transform: getComputedStyle(img).transform })));
+    const [first] = await drift();
+
+    await page.waitForTimeout(1000);
+
+    const [later] = await drift();
+
+    expect(first.drifting).toBe(1);
+    expect(later.transform).not.toBe(first.transform);
 
     // The next, on a computer: the six peoples (the raid by night painted only tall), the one
     // under it let go of once it's faded out
@@ -230,6 +241,13 @@ test("behind the loading screen and the title, the town at dusk, then each scene
     await page.locator("#createback").click();
     await expect(page.locator("#title")).toBeVisible();
     await expect.poll(behind, { timeout: 10000 }).toEqual([{ scene: "town-dusk", file: "town-dusk-tall.avif", shown: true, width: 768 }]);
+
+    // With less motion asked for, the next one still: no drift (the raid by night's as WebP still,
+    // the service worker keeping what it was given for its AVIF)
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await next();
+    await expect.poll(async () => (await behind()).map(({ scene, shown }) => ({ scene, shown })), { timeout: 10000 }).toEqual([{ scene: "raid-night", shown: true }]);
+    expect(await drift()).toEqual([{ drifting: 0, transform: "none" }]);
 });
 
 test("loaded again, the game asks the server for none of its code, engine, WebAssembly, body or fonts: the service worker keeps each by the hash of its bytes, and gives what its workers ask for by name from the same copies; a file it hasn't, it fetches, that one alone", async ({ page }) => {

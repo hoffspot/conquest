@@ -5326,17 +5326,23 @@ it.
    the valley (on one on its side, or a computer's). Each is shown the way the screen's held, the
    tall ones upright and the wide ones else, a scene painted only one way shown only so; it covers
    the page (the town kept in sight at the foot of a tall one cut down to a wider screen), under a
-   darker wash so the screens' words stand out. Each is an AVIF (16 to 76 KB), or a WebP where a
+   darker wash so the screens' words stand out, and drifts slowly while it's shown (`DRIFTS`, each
+   in turn): in towards the town at its foot, out again, across one way and back the other. It
+   grows by no more than a tenth and moves no further than that leaves room for, so it always
+   covers the page, eased in and out over its turn and the fades either side; an animation of its
+   transform, which the browser plays on the graphics card, so a phone busy loading the game isn't
+   slowed. Each is an AVIF (16 to 76 KB), or a WebP where a
    browser can't show that (26 to 106 KB, and one an AVIF that won't show falls back to): a phone
    downloads the tall ones, 46 KB the two, and a computer the wide, 108 KB, where their masters'
-   JPEGs (`scripts/backdrops/`, as the owner made them with Google's Gemini: `npm run
-   build:backdrops`) are 727 KB. The first is in the page itself (`index.html`), so it's fetched as
+   JPEGs (`scripts/backdrops/`, as the owner made them with Google's Gemini, at its 1K: `npm run
+   build:backdrops`) are 727 KB. A master made at 2K (2752 by 1536) is made no more than 2560 pixels
+   its longest side (`BACKDROP.most`): as big as a computer's screen, or a phone's as it drifts. The first is in the page itself (`index.html`), so it's fetched as
    the page is read, before the code; the others only as each one's due, and the service worker
    keeps them as it does its other pictures (from its copy first). None is behind making a
    character (its 3D view) or the game: they're let go of as either begins, so neither the page
    nor the graphics card holds them while it's played (about 4 MB each, decoded), and the first's
    made again back at the title. With less motion asked for (`prefers-reduced-motion`), the first
-   stays.
+   stays, still.
 2. **The title.** **Continue as** the character played last, in the world they're in; make a
    **New character**; choose another of those kept (**Characters on this device**, up to six), or
    a world (**Worlds on this device**, up to eight) and who goes in; join a world someone else has
