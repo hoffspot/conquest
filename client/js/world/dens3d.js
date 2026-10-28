@@ -9,6 +9,7 @@
 // Drawn for as many as are near at once (DEN_LOOK.seen); their shapes and stuff made once, shared.
 
 import * as THREE from "three";
+import { randomOf, rockLook } from "./art/kits/rocks.js";
 
 /**
  * How they look: how near the player one's drawn (`seen`, metres), and the colours of their
@@ -32,24 +33,24 @@ function dice(seed) {
     };
 }
 
-// A boulder: a ball, its surface pushed in and out a little, smooth (not faceted)
+// A boulder: a granite corestone (kits/rocks.js), its joints worn round, smooth-lit, about a metre
+// round its middle (as a ball of radius 1 is), its corners shared
 function boulderGeometry() {
-    const geometry = new THREE.SphereGeometry(1, 16, 12);
-    const position = geometry.attributes.position;
-    const next = dice(7);
-    const bumps = Array.from({ length: 6 }, () => [next() * 2 - 1, next() * 2 - 1, next() * 2 - 1, 0.08 + next() * 0.1]);
-    const point = new THREE.Vector3();
+    const look = rockLook(randomOf(7), { family: "corestone", detail: 2, layer: "rock" });
+    const geometry = new THREE.BufferGeometry();
+    const position = new Float32Array(look.count * 3);
+    const middle = (look.top + Math.min(...look.position.filter((_, i) => i % 3 === 1))) / 2;
 
-    for (let k = 0; k < position.count; k++) {
-        point.fromBufferAttribute(position, k);
-
-        const push = bumps.reduce((sum, [x, y, z, by]) => sum + by * Math.max(0, point.x * x + point.y * y + point.z * z), 0);
-
-        point.multiplyScalar(1 + push - 0.1);
-        position.setXYZ(k, point.x, point.y, point.z);
+    for (let i = 0; i < look.count; i++) {
+        position[i * 3] = look.position[i * 3] * 2;
+        position[i * 3 + 1] = (look.position[i * 3 + 1] - middle) * 2;
+        position[i * 3 + 2] = look.position[i * 3 + 2] * 2;
     }
 
-    geometry.computeVertexNormals();
+    geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
+    geometry.setAttribute("normal", new THREE.BufferAttribute(Float32Array.from(look.normal), 3));
+    geometry.setIndex(new THREE.BufferAttribute(look.index, 1));
+    geometry.computeBoundingSphere();
 
     return geometry;
 }

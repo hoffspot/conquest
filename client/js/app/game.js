@@ -1910,7 +1910,7 @@ export class Game {
             // more as they go)
             const [x, y] = this.battle.actor(this.me)?.map === "town" ? this.battle.actor(this.me).square : world.spawns.player;
 
-            this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth, cliffs: view.quality.cliffs });
+            this.chunks = new Chunks(world, { undergrowth: view.quality.undergrowth, cliffs: view.quality.cliffs, rocks: view.quality.rocks });
             // (The settlements' houses the Behemoth of the Rift has burnt, as they are now: #syncBurnt)
             this.chunks.burntOf = (place, index) => this.#burntStage(place, index);
             this.chunks.setSpacing(view.quality.ground);
@@ -3889,10 +3889,11 @@ export class Game {
             const { x, z } = this.avatars.get(this.me).object.position;
 
             // (The undergrowth as thick as the quality asks, grown again if that's changed; the
-            // ground as finely drawn; the cliffs, if it draws them)
+            // ground as finely drawn; the cliffs, if it draws them; the rocks as it draws them)
             this.chunks.setUndergrowth(this.view.quality.undergrowth);
             this.chunks.setSpacing(this.view.quality.ground);
             this.chunks.setCliffs(this.view.quality.cliffs);
+            this.chunks.setRocks(this.view.quality.rocks);
 
             if (this.chunks.update(x, z)) {
                 this.#hearTrees();

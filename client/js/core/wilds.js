@@ -17,8 +17,9 @@
 // drawing's alone (world/art/kits/wilds.js): they're in no one's way. Pure data, no DOM.
 
 import { fractal } from "./noise.js";
-import { cos, hypot, sin, TAU } from "./exact.js";
+import { cos, exp, hypot, log, sin, TAU } from "./exact.js";
 import { createRandom } from "./random.js";
+import { SLOPE_CLASS, slopeClass } from "./terrain/height.js";
 
 /** Features are tried every this many metres (a random way in). */
 export const FEATURE_GRID = 8;
@@ -80,6 +81,92 @@ export const HOMELANDS = Object.freeze({
     elf: { count: 3, kinds: { moonstone: 2, leaflamp: 3 } },
     darkElf: { count: 5, kinds: { webstump: 3, cocoon: 2, crystals: 3 } },
 });
+
+/**
+ * How rock lies (the research report behind the rocks' looks): rocks' sizes fall off as an
+ * exponential does, many small for each big one (`fall`: how fast, across a kind's range); below
+ * a cliff its rockfall's talus fans out (out to `talus` squares from where the cliff's foot is, and
+ * lower than it), rockier there (as rocky as `rockier` at the cliff's foot), its blocks smaller
+ * near the cliff and bigger further out, as they roll (`sorted`: how much smaller at its foot);
+ * and steep ground's rockier (`steep`).
+ */
+export const ROCKFALL = Object.freeze({ fall: 2.2, talus: 14, rockier: 0.85, sorted: 0.5, steep: 0.3 });
+
+/**
+ * How far each of an area's squares (`size` a side, from x0, y0) is out from the foot of a cliff
+ * above it (squares, a step each way at a time: featuresOf's `cliffOff`, row by row), from the
+ * land's height at each corner (`heightAt(x, y)`: NaN where there's none, never a cliff), the
+ * cliffs out to ROCKFALL's talus round it counted too: Infinity where none's within the talus, or
+ * where it isn't a metre lower than the cliff. Null if no cliff's near at all.
+ */
+export function cliffsOff({ x0, y0, size, heightAt }) {
+    const reach = ROCKFALL.talus;
+    const across = size + 2 * reach;
+    const corners = new Float32Array((across + 1) * (across + 1));
+    const off = new Float32Array(across * across).fill(Infinity);
+    const top = new Float32Array(across * across);
+    const land = new Float32Array(across * across);
+    const queue = [];
+
+    for (let j = 0; j <= across; j++) {
+        for (let i = 0; i <= across; i++) {
+            corners[j * (across + 1) + i] = heightAt(x0 - reach + i, y0 - reach + j);
+        }
+    }
+
+    for (let j = 0; j < across; j++) {
+        for (let i = 0; i < across; i++) {
+            const c = j * (across + 1) + i;
+            const [nw, ne, sw, se] = [corners[c], corners[c + 1], corners[c + across + 1], corners[c + across + 2]];
+            const k = j * across + i;
+
+            land[k] = (nw + ne + sw + se) / 4;
+
+            if (slopeClass(nw, ne, sw, se) === SLOPE_CLASS.cliff) {
+                off[k] = 0;
+                top[k] = land[k];
+                queue.push(k);
+            }
+        }
+    }
+
+    if (!queue.length) {
+        return null;
+    }
+
+    // (Out from every cliff's squares at once, a step at a time, each square the nearest's)
+    for (let q = 0; q < queue.length; q++) {
+        const k = queue[q];
+        const [i, j] = [k % across, Math.floor(k / across)];
+
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const [ni, nj] = [i + di, j + dj];
+            const n = nj * across + ni;
+
+            if (ni >= 0 && nj >= 0 && ni < across && nj < across && off[n] === Infinity && off[k] + 1 <= reach) {
+                off[n] = off[k] + 1;
+                top[n] = top[k];
+                queue.push(n);
+            }
+        }
+    }
+
+    const below = new Float32Array(size * size).fill(Infinity);
+
+    for (let k = 0; k < size * size; k++) {
+        const g = (Math.floor(k / size) + reach) * across + (k % size) + reach;
+
+        if (off[g] > 0 && land[g] < top[g] - 1) {
+            below[k] = off[g];
+        }
+    }
+
+    return below;
+}
+
+// A random number from 0 to 1 (`u`) as one of an exponential falling off `fall` fast across 0 to
+// 1: most of them small
+const fallen = (u, fall) => -log(1 - u * (1 - exp(-fall))) / fall;
 
 /** The kinds a rocky stretch has more of, and those land let go has more of. */
 export const ROCKY = Object.freeze(["boulder", "outcrop", "cairn", "menhir"]);
@@ -183,9 +270,11 @@ export function strikeAt(x, y, seed) {
  * `homeAt(x, y)` whose homeland it is (a people's id, or null: HOMELANDS' mixed in), and
  * `free(x, y, fields)` whether a square (the chunk's or not) can have a feature on it and near it:
  * grass (or ploughed, if `fields`), in no field's strips (but if `fields`), not blocked, not a road,
- * bridge or water, in no settlement or clearing.
+ * bridge or water, in no settlement or clearing. `cliffOff(x, y)` is how many squares a square is
+ * out from the foot of a cliff above it (Infinity if none's near: ROCKFALL's talus), and
+ * `steepAt(x, y)` whether its ground's steep.
  */
-export function featuresOf({ x0, y0, size, seed, random, landAt, homeAt = () => null, free }) {
+export function featuresOf({ x0, y0, size, seed, random, landAt, homeAt = () => null, free, cliffOff = () => Infinity, steepAt = () => false }) {
     const features = [];
     const taken = new Set();
     const steps = size / FEATURE_GRID;
@@ -203,7 +292,10 @@ export function featuresOf({ x0, y0, size, seed, random, landAt, homeAt = () => 
                 continue;
             }
 
-            const [rocky, dead] = [rockiness(x, y, seed), neglect(x, y, seed)];
+            // (Rockier in a cliff's talus, and on steep ground)
+            const talus = Math.max(0, 1 - cliffOff(Math.floor(x), Math.floor(y)) / ROCKFALL.talus);
+            const rocky = Math.min(1, Math.max(rockiness(x, y, seed), talus * ROCKFALL.rockier) + (steepAt(Math.floor(x), Math.floor(y)) ? ROCKFALL.steep : 0));
+            const dead = neglect(x, y, seed);
             const odds = (land.count / (steps * steps)) * (0.35 + 0.8 * Math.max(rocky, dead) + 0.25 * (rocky + dead));
 
             if (chance >= odds) {
@@ -216,7 +308,9 @@ export function featuresOf({ x0, y0, size, seed, random, landAt, homeAt = () => 
                 kind,
                 x,
                 y,
-                size: spec.size[0] + (spec.size[1] - spec.size[0]) * grow * (ROCKY.includes(kind) ? 0.6 + 0.4 * rocky : 1),
+                // (A rocky kind's size most often small, bigger where it's rocky, and in a talus
+                // bigger the further it's rolled)
+                size: ROCKY.includes(kind) ? spec.size[0] + (spec.size[1] - spec.size[0]) * fallen(grow, ROCKFALL.fall) * (0.6 + 0.4 * rocky) * (1 - ROCKFALL.sorted * talus) : spec.size[0] + (spec.size[1] - spec.size[0]) * grow,
                 turn: turn * Math.PI * 2,
                 variant,
             };
@@ -281,7 +375,7 @@ export function clusterOf(boulder, rocky, seed) {
             kind: "stone",
             x: boulder.x + ax * along - ay * across,
             y: boulder.y + ay * along + ax * across,
-            size: boulder.size * (CLUSTER.size[0] + (CLUSTER.size[1] - CLUSTER.size[0]) * grow),
+            size: boulder.size * (CLUSTER.size[0] + (CLUSTER.size[1] - CLUSTER.size[0]) * fallen(grow, ROCKFALL.fall)),
             turn: boulder.turn + (turn - 0.5) * 2 * CLUSTER.turn,
             variant,
         };

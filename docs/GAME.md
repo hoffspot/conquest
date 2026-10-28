@@ -1978,11 +1978,11 @@ the 3D view drawn at the screen's pixels again if they change (`matchMedia` on t
 to High (suggested for the device until it's moved: older phones low, phones medium, computers
 high); debug mode can change it too. The game aims at 60 frames a second at every level:
 
-| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar | Cliffs |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no | none (painted on the ground) |
-| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m, thinning out to 44 m | 300 | three-quarters | 2 km | to 700 m | yes | yes |
-| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m, thinning out to 62 m | 600 | all of it | 4 km | to 1.2 km | yes | yes |
+| Level | Pixels | Shadow map | Antialiasing | Hair | Skin textures | Undergrowth | Tall grass | Motes | Chimney smoke | Far land | Far trees | Fields afar | Cliffs | Rocks |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Low (older phones) | 1× | 1024 | no | a fifth of the strands | 512 | half | none (its look on the ground) | none | half its puffs | 1 km | none | no | none (painted on the ground) | coarse, with the rest of the land's features |
+| Medium (phones) | up to 1.5× | 2048 | yes | 30% | 512 | three-quarters | to 12 m, thinner to 28 m, thinning out to 44 m | 300 | three-quarters | 2 km | to 700 m | yes | yes | as stone (the cliffs' material), fine in the player's chunk and those round it |
+| High (computers) | up to 2× | 2048 | yes | 45% | 1024 | all of it | to 18 m, thinner to 40 m, thinning out to 62 m | 600 | all of it | 4 km | to 1.2 km | yes | yes | fine everywhere, their lichen pixel by pixel |
 
 **How often it's drawn** (`app/pacing.js`). The browser asks for a frame each time the screen
 refreshes: 60 times a second on most screens, 90, 120 or 144 on many phones and monitors. Drawn
@@ -2355,7 +2355,7 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     ground no line of rock shows. Scree lies at the cliffs' feet: chips of the same rock where the
     ground eases off below a cliff.
   - **Its picture,** the land's rock (pale, red or dark where the land's is), three times the
-    size it is on a boulder, laid on from three sides by where each pixel is in the world, each
+    size it is on a boulder (the rocks are drawn with the same material: *Rocks*), laid on from three sides by where each pixel is in the world, each
     side's as much as the rock faces that way (`cliffMaterial`): a skin bent every way can't have
     a picture laid flat on it without seams or smears. Each patch of rock (about 9 m) reads it
     from a place of its own, two blended where patches meet (Inigo Quilez's "texture
@@ -2637,13 +2637,14 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   humans' castle a hill citadel, each part drawn by the chunk it stands in: *Hill citadels*; their
   abbey, windmill and manor as their landmarks).
 - **The land's own features** (core/wilds.js places them: see WORLD.md, *The world in chunks*;
-  kits/wilds.js draws them), one mesh a chunk with the atlas, casting shadows:
-  - boulders (granite, pale limestone, red sandstone, black basalt; mossy in the woods and
-    marsh, snow on their tops in the snow and the mountains, flecked with lichen), each longer
-    than it's broad, lying along the way the rock runs there, sunk a fifth of its height into
-    the ground as the earth's built up round it over the years, among a few smaller stones
-    strung out along the same way (terrain plan M7b: core/wilds.js `CLUSTER`), rocky
-    outcrops, basalt columns in the volcanic lands, cairns and standing stones;
+  kits/wilds.js draws them), one mesh a chunk with the atlas, casting shadows, and the rocks
+  among them in a mesh of their own (*Rocks*, below):
+  - boulders (weathered granite in the green lands, fresh jointed granite in the mountains,
+    sandstone slabs on the savannah and the badlands, pale limestone on the heath, cobbles on the
+    shore, black basalt in the volcanic lands), each longer than it's broad, lying along the way
+    the rock runs there, sunk into the ground as the earth's built up round it over the years,
+    among a few smaller stones strung out along the same way (terrain plan M7b: core/wilds.js
+    `CLUSTER`), rocky outcrops, basalt columns in the volcanic lands, cairns and standing stones;
   - trees long fallen and gone silver (their trunks bending and tapering, broken branches, the
     root plate torn up with earth still in it), old stumps (sawn or broken, roots flaring,
     shelf fungus), dead trees still standing, piles of logs;
@@ -2660,6 +2661,66 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
     carved with glyphs under a serpent's head, the elves' moonstones (a crescent cut in each that
     holds the light) and bud lamps hanging from curling verdigris posts, the dark elves' stumps
     shrouded in web, silk cocoons and clusters of black crystal with violet hearts.
+- **Rocks** (`world/art/kits/rocks.js`; the research report behind them, *Realistic procedural
+  rock generation*): not balls pushed in and out by noise and cut flat, lit facet by facet, but a
+  few big fracture planes joined by edges worn round, quiet noise on top, and dirt, wear, moss and
+  lichen where they'd be.
+  - **Their shapes** (`shapeOf`): a radius for every way out from the rock's middle, its stone's
+    joint sets (two or three roughly square to each other, each a plane either side, some missing:
+    `ROCK_FAMILIES`), a bedding pair for sandstone, many breaks for basalt or scree, none for a
+    water-worn cobble (its axes as Zingg's classes have them), over a squashed, lumpy core; the
+    planes and the core joined by an exponential smooth minimum, its width how long the rock's
+    weathered: a fresh block's edges sharp, a granite corestone's worn round, a corner where three
+    planes meet rounder than an edge where two do. A chip or two knocked off its edges, pits worn
+    in limestone, grooves along a sandstone's beds, and noise of a few hundredths of its size.
+    Each land's rocks are its stone's (`LAND_ROCKS`); a standing stone, a moonstone and a carved
+    glyph stone have flat sides (`standing`); a cairn's stones are slabs.
+  - **Their triangles:** that radius read at the corners of a ball of triangles divided a few
+    times (an icosahedron's, made once for each detail and welded: `sphereOf`), its normals its
+    faces' smoothed where they turn less than its family's crease and kept apart where they turn
+    more: a worn rock lit as one soft mass, a fresh one keeping its edges. A boulder or a standing
+    stone 320 triangles near (`ROCK_DETAIL`) and 80 far; a boulder's lesser stones 180 and 20; the
+    far rock's corners among the near one's (the ball's divided in halves and quarters), so it's
+    the same rock either way, as tall, set the same.
+  - **Their colour,** baked into their corners: darker where the sky's hidden (their own hollows,
+    where a pile's rocks touch, and the ground at their foot), lighter on their worn edges and
+    darker and dirtier in their hollows (how the surface bends round each corner), lighter and
+    darker in broad patches, banded along a sandstone's beds. Where each is placed (`stoneColour`,
+    as it's turned and tilted): moss on what faces up and to the north (and damp creeping up their
+    feet in the wet lands), snow on their tops filling their hollows first (as white as snow is,
+    however dark the stone), lichen in colonies, round patches of it on what's open to the weather,
+    most on their tops and to the west (its kinds `LICHEN_KINDS`: a grey-green crust, the
+    yellow-green of map lichen, orange, a pale crust, as their stone takes them), and their foot
+    the ground's colour (its land's grass, as a cliff's is).
+  - **On the ground:** a boulder or a stone sunk as deep as its family is (a corestone a third of
+    its height, a slab an eighth); those that lie (a boulder, a stone, an outcrop, a kopje)
+    leaning half as far as the ground slopes under them, standing stones upright; chips strewn
+    round a bigger boulder (`CHIPS`: 3 to 9, broken off it over the years); and the ground darker
+    round every rock as tall as it stands, not only round what's taller than eyes
+    (world/ground.js `ROCK_CONTACT`).
+  - **Drawn** (`ROCK_TIERS`, by Visual quality): on Low with the rest of the chunk's features,
+    coarsely; on Medium in a mesh of their own a chunk (`stoneMesh`, one more draw and its shadows)
+    with the cliffs' material, their picture laid on from three sides by where they are in the
+    world (no seams, no stretching, its patches the cliffs'), finely divided in the chunk the player's
+    in and those round it, the rest coarsely, each chunk's drawn again as the player comes and goes
+    (chunks3d.js `#rocksNear`, their looks made a step at a time); on High finely everywhere, with
+    `rockMaterial` (engine/atlas.js `ROCKS_HIGH`): the cliffs' material, and the lichen's colonies
+    painted pixel by pixel, round and ragged, each with a dark rim, more of them where the rock has
+    more; finer relief near (its picture read again, smaller, gone by 16 m); its worn edges catching
+    the light. A program of its own, made while the game loads (chunks3d.js `primer`) on High.
+  - **Cost:** a near rock's look 3 or 4 ms to make on a desktop, a far one 1 ms (a pile a step a
+    rock); a chunk's rocks placed in a few milliseconds. Their corners shared between triangles
+    (`StoneMesher`) and packed (normals in bytes; colours, texture coordinates and layers in half
+    floats: 30 bytes a corner, not 48 a triangle's corner), let go of by the page once they're on
+    the graphics card. About 100,000 rock triangles round the player in the worst mountains on
+    Medium, twice that on High.
+  - **The rest that's stony** drawn as rock: the scree at the cliffs' feet and round the arches
+    (kits/cliffs.js `chip`: freshly broken chips), the fords' stepping stones (cobbles the water's
+    worn smooth), a rockslide's heap (`obstacles3d.js`: freshly broken rock with the cliffs'
+    material, a mesh to each) and the dens' boulders (a corestone's shape). Skulls and a cactus's
+    ball keep the old lump (kits/wilds.js `lump`).
+  - **Where they lie** is the world's (core/wilds.js `ROCKFALL`, WORLD.md): many more small than
+    big, rockfall's talus fanned out below a cliff (bigger blocks further out), more on steep ground.
 - **Undergrowth**, near the player only (every chunk whose nearest edge is within 64 metres,
   let go past 84), built a few things at a time in the same 6 ms a frame and drawn in tiles 32
   metres square, each built only once it's within 64 metres of the player (8 more than where it's
@@ -2691,8 +2752,9 @@ WORLD.md), so coming near a town doesn't stall a frame laying it out. Each chunk
   water; thinner, and only the tidier kinds, in the towns. The same every time.
 
   **How it's drawn cheaply.** Every look is made once, the first time it's wanted, eight of each
-  kind for each land, from a seed: rocks are balls pushed in and out by noise and cut flat by a
-  few planes (their facets); trunks and branches tapered, bent tubes; stumps, mounds, haystacks
+  kind for each land, from a seed (24 MB of them kept at most, `LOOKS_KEPT`: those least lately
+  wanted let go of, and made again the same if they're wanted again): rocks as rocks.js makes
+  them (*Rocks*, below); trunks and branches tapered, bent tubes; stumps, mounds, haystacks
   and mushrooms turned on a lathe. Blades of grass and petals are real triangles, not pictures
   with holes in (a blade is one triangle, a flower's head five), so nothing is drawn twice over
   the same pixel and the GPU keeps its early depth test. Each thing is placed turned its own way,

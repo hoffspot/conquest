@@ -39,7 +39,7 @@ import { Sites } from "./sites.js";
 import { Trails, TRAILS } from "./trails.js";
 import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
-import { featuresOf } from "./wilds.js";
+import { cliffsOff, featuresOf } from "./wilds.js";
 import { archesOf, archSquares, roomOf } from "./arches.js";
 import { AQUEDUCTS, aqueductsOf, pierSquares } from "./aqueducts.js";
 import { CORNERS, GRADE, Ground, PAD_EASE, ROAD } from "./terrain/ground.js";
@@ -2372,7 +2372,23 @@ export class Overworld {
 
             return !(settlement && this.settlements.squareAt(settlement, x, y)) && !clearings.some(({ at, radius }) => hypot(at[0] - x, at[1] - y) < radius);
         };
-        const features = featuresOf({ x0, y0, size: CHUNK, seed: plan.seed, random, landAt: (x, y) => this.biomeAt(x, y), homeAt: (x, y) => this.homeAt(x, y), free });
+        // (Rock falls from the land's own cliffs, as it lies before anything's built: asking for
+        // them sets nothing down in the chunks round it, as their ground would)
+        const below = cliffsOff({ x0, y0, size: CHUNK, heightAt: (x, y) => (x >= 0 && y >= 0 && x <= WORLD_SIZE && y <= WORLD_SIZE ? this.ground.landAt(x, y) : NaN) });
+        const at = (x, y) => (y - y0) * CHUNK + (x - x0);
+        const inChunk = (x, y) => x >= x0 && y >= y0 && x < x0 + CHUNK && y < y0 + CHUNK;
+        const features = featuresOf({
+            x0,
+            y0,
+            size: CHUNK,
+            seed: plan.seed,
+            random,
+            landAt: (x, y) => this.biomeAt(x, y),
+            homeAt: (x, y) => this.homeAt(x, y),
+            free,
+            cliffOff: (x, y) => (below && inChunk(x, y) ? below[at(x, y)] : Infinity),
+            steepAt: (x, y) => inChunk(x, y) && chunk.slopes?.[at(x, y)] === SLOPE_CLASS.steep,
+        });
 
         // (An arch of rock standing in it, its legs on its squares: unless any of them is a road's,
         // water, a bridge or built on, when it isn't there at all)

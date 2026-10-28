@@ -13,7 +13,7 @@
     "building-lab.spec.js › builds the taverns with their names and signs, the guild, the churches of every grade, the smithy, a town hall, a keep, barracks and a guardhouse, and the shops": 6.2,
     "building-lab.spec.js › draws a people's homeland: its own ground, its own trees, and its own things lying about": 10.9,
     "building-lab.spec.js › draws a village out in the world in its chunks, with its tavern, church, smithy and guild": 13.8,
-    "building-lab.spec.js › draws the land itself: its features, and the undergrowth near, swaying, in a few draw calls": 10.8,
+    "building-lab.spec.js › draws the land itself: its features, its rocks in a mesh of their own (as stone, finely near), and the undergrowth near, swaying, in a few draw calls": 40.7,
     "building-lab.spec.js › pitches every people's war camp, each of its own tents round a fire": 4.8,
     "building-lab.spec.js › shows a street's houses as the Behemoth of the Rift leaves them, burning, then burnt out, then framed and roofed again, each in a few draw calls; and a village's, drawn in its chunks": 43.1,
     "building-lab.spec.js › stands a fingerpost among a people's own places: a board for each town, lettered on both faces": 4.9,

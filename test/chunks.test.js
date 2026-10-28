@@ -23,7 +23,7 @@ const context = () =>
 
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: context }) };
 
-const { buildWorld, CHUNK } = await import("../client/js/core/overworld.js");
+const { buildWorld, CHUNK, CHUNKS } = await import("../client/js/core/overworld.js");
 const { Chunks, DETAIL_NEAR, REACH, UNDERGROWTH } = await import("../client/js/world/chunks3d.js");
 const { BUILDERS, merge, PIXEL, placed } = await import("../client/js/world/town3d.js");
 const { builderFor } = await import("../client/js/world/art/peoples/index.js");
@@ -164,6 +164,63 @@ describe("the world outside, drawn round the player (chunks3d.js)", () => {
 
         assert.ok(!wilds || wilds.geometry.getAttribute("position").count < 200000);
         chunks.dispose();
+    });
+
+    it("draws the rocks finely near the player and coarsely further off on Medium, each chunk's drawn again a step at a time as they walk; finely everywhere on High, with the rest on Low", () => {
+        const overworld = world.maps.town;
+        const [sx, sy] = world.spawns.player.map((v) => Math.floor(v / CHUNK));
+        let rocky = null;
+
+        // (A chunk with rocks in it, not far from where the player starts)
+        for (let r = 2; r < 40 && !rocky; r++) {
+            for (let k = 0; k < 8 * r && !rocky; k++) {
+                const [cx, cy] = [sx + Math.round(r * Math.cos((k / (8 * r)) * Math.PI * 2)), sy + Math.round(r * Math.sin((k / (8 * r)) * Math.PI * 2))];
+                const stony = overworld.chunk(cx, cy).features.filter(({ kind }) => ["boulder", "outcrop", "cairn", "menhir"].includes(kind)).length;
+
+                rocky = stony >= 2 ? [cx, cy] : null;
+            }
+        }
+
+        assert.ok(rocky, "a rocky chunk");
+
+        const [x, z] = [(rocky[0] + 0.5) * CHUNK, (rocky[1] + 0.5) * CHUNK];
+        const chunks = new Chunks(world, { undergrowth: 0, rocks: "medium" });
+        const rocksOf = (cx, cy) => chunks.drawn.get(cy * CHUNKS + cx)?.stones ?? null;
+        const triangles = (mesh) => mesh.geometry.index.count / 3;
+        const settle = (px, pz) => {
+            for (let k = 0; k < 400 && (k < 2 || chunks.busy); k++) {
+                chunks.update(px, pz, { budget: 50 });
+            }
+        };
+
+        chunks.fill(x, z, 1);
+        settle(x, z);
+
+        // (Near: finely, with the cliffs' material, in a mesh of its own)
+        const near = rocksOf(...rocky);
+
+        assert.equal(near.material.name, "cliffs");
+        assert.equal(chunks.drawn.get(rocky[1] * CHUNKS + rocky[0]).rocks.near, true);
+
+        // (Walked three chunks off: drawn again, coarsely)
+        settle(x + CHUNK * 3, z);
+
+        const far = rocksOf(...rocky);
+
+        assert.ok(far && far !== near, "drawn again");
+        assert.equal(chunks.drawn.get(rocky[1] * CHUNKS + rocky[0]).rocks.near, false);
+        assert.ok(triangles(far) * 2 < triangles(near), `${triangles(far)} far, ${triangles(near)} near`);
+
+        // (High: finely everywhere, High's material; Low: with the rest of the features)
+        chunks.setRocks("high");
+        settle(x + CHUNK * 3, z);
+        assert.equal(rocksOf(...rocky).material.name, "rocks");
+        assert.ok(chunks.primer.getObjectByName("rocks"), "High's program made ready");
+        chunks.setRocks("low");
+        settle(x + CHUNK * 3, z);
+        assert.equal(rocksOf(...rocky), null);
+        chunks.dispose();
+        assert.deepEqual([QUALITY.low.rocks, QUALITY.medium.rocks, QUALITY.high.rocks], ["low", "medium", "high"]);
     });
 
     it("builds a settlement's buildings a piece at a time, each made ready to merge in a step of its own, on the ground, merged the same as all at once", async () => {

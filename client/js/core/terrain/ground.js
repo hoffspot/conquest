@@ -125,6 +125,18 @@ export class Ground {
         }
     }
 
+    /**
+     * The land's own height at a corner (height.js heightAt, as a chunk's start from: nothing
+     * built levelled in, so asking sets nothing down), from its chunk's if they're kept, else
+     * worked out for it alone (as they're kept, to a Float32's: the same either way).
+     */
+    landAt(x, y) {
+        const [cx, cy] = [Math.floor(x / CHUNK), Math.floor(y / CHUNK)];
+        const kept = this.natural.get(cy * 1024 + cx);
+
+        return kept ? kept[(y - cy * CHUNK) * CORNERS + (x - cx * CHUNK)] : Math.fround(heightAt(this.plan, x, y));
+    }
+
     // The land's own heights at a chunk's corners (given, or worked out now)
     #natural(cx, cy) {
         const key = cy * 1024 + cx;

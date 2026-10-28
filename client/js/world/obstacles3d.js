@@ -2,18 +2,23 @@
 // player's near (app/game.js #obstaclesNear), over the squares it lies on:
 // - a fallen tree: its trunk on the ground the length of them, its roots torn up out of the earth
 //   at one end in a plate of soil, broken branches and a little dead leaf at the other;
-// - a rockslide: boulders heaped over them, the biggest in the middle, stones scattered round.
+// - a rockslide: boulders heaped over them, the biggest in the middle, stones scattered round,
+//   freshly broken rock (kits/rocks.js talus: smooth-lit, its edges sharp) drawn as the rocks are,
+//   with the cliffs' material, a mesh to each.
 // Drawn for as many as are near at once (OBSTACLE_LOOK.seen); their shapes and stuff made once,
-// shared.
+// shared (a rockslide's rocks its own, let go of with it).
 
 import * as THREE from "three";
+import { cliffMaterial } from "./art/engine/atlas.js";
+import { MATERIALS } from "./art/engine/painters.js";
+import { randomOf, rockLook, StoneMesher } from "./art/kits/rocks.js";
 
 /**
  * How they look: how near the player one's drawn (`seen`, metres), how much further than it a tap
- * on it is (`tap`, metres), and the colours of bark, the trunk's broken wood, soil, dead leaves and
- * rock.
+ * on it is (`tap`, metres), and the colours of bark, the trunk's broken wood, soil and dead leaves
+ * (a rockslide's rock is the rock's own: kits/rocks.js).
  */
-export const OBSTACLE_LOOK = Object.freeze({ seen: 140, tap: 0.3, bark: 0x4e3b2a, wood: 0x9c7c55, soil: 0x4a3a2a, leaves: 0x5d5a2e, rock: 0x7a746c, stone: 0x66615b });
+export const OBSTACLE_LOOK = Object.freeze({ seen: 140, tap: 0.3, bark: 0x4e3b2a, wood: 0x9c7c55, soil: 0x4a3a2a, leaves: 0x5d5a2e });
 
 // A number from 0 up to 1, the same for a seed and a step (an obstacle's own dice)
 function dice(seed) {
@@ -33,6 +38,16 @@ function dice(seed) {
 
 // An obstacle's seed, from its id
 const seedOf = (id) => [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 11) >>> 0;
+
+// A rockslide's rocks: freshly broken (kits/rocks.js talus), a few of them, made once each
+const slides = [];
+const SLIDES = 6;
+
+function slideLook(k) {
+    slides[k % SLIDES] ??= rockLook(randomOf(7919 * (k % SLIDES) + 13), { family: "talus", detail: 2, layer: "rock" });
+
+    return slides[k % SLIDES];
+}
 
 export class ObstacleProps {
     /** @param {THREE.Scene} scene - The near pass's (view.js scene). */
@@ -74,6 +89,7 @@ export class ObstacleProps {
         for (const [id, group] of [...this.shown]) {
             if (!wanted.has(id)) {
                 this.scene.remove(group);
+                group.getObjectByName("rocks")?.geometry.dispose();
                 this.shown.delete(id);
                 this.boxes.delete(id);
             }
@@ -94,6 +110,7 @@ export class ObstacleProps {
     dispose() {
         for (const group of this.shown.values()) {
             this.scene.remove(group);
+            group.getObjectByName("rocks")?.geometry.dispose();
         }
 
         this.shown.clear();
@@ -109,7 +126,6 @@ export class ObstacleProps {
         this.geometries ??= {
             trunk: new THREE.CylinderGeometry(1, 1, 1, 10).rotateZ(Math.PI / 2),
             disc: new THREE.CylinderGeometry(1, 1, 1, 14),
-            stone: new THREE.DodecahedronGeometry(1, 0),
             leaf: new THREE.IcosahedronGeometry(1, 0),
         };
         this.materials ??= {
@@ -117,8 +133,6 @@ export class ObstacleProps {
             wood: new THREE.MeshStandardMaterial({ color: OBSTACLE_LOOK.wood, roughness: 0.85 }),
             soil: new THREE.MeshStandardMaterial({ color: OBSTACLE_LOOK.soil, roughness: 1 }),
             leaves: new THREE.MeshStandardMaterial({ color: OBSTACLE_LOOK.leaves, roughness: 1 }),
-            rock: new THREE.MeshStandardMaterial({ color: OBSTACLE_LOOK.rock, roughness: 0.95, flatShading: true }),
-            stone: new THREE.MeshStandardMaterial({ color: OBSTACLE_LOOK.stone, roughness: 0.95, flatShading: true }),
         };
 
         const group = new THREE.Group();
@@ -171,20 +185,36 @@ export class ObstacleProps {
 
             put(g.disc, m.wood, [long / 2 + 0.02, 0], { up: thick * 0.95, scale: [thick * 0.8, 0.02, thick * 0.8], roll: Math.PI / 2 });
         } else {
+            const stones = new StoneMesher(19 * 200);
+            const perMetre = () => 5 / MATERIALS.rock.world;
+            // (A rock at [along, across] metres from its middle, its foot a little into the ground)
+            const heap = (look, [along, across], size, { spin, tilt = [0, 0], tint }) => {
+                const [dx, dz] = [along * Math.cos(turn) + across * Math.sin(turn), -along * Math.sin(turn) + across * Math.cos(turn)];
+
+                stones.place(look, { at: [dx, groundAt(x + dx, z + dz) - base - size[1] * 0.12, dz], turn: turn + spin, tilt, scale: size, tint, growth: { lichen: 0.25 }, perMetre });
+            };
+
             // (Boulders heaped over it, the biggest in its middle, smaller ones round them)
             for (let k = 0; k < 9; k++) {
                 const [along, across] = [(next() - 0.5) * (long - 0.8), (next() - 0.5) * (deep - 0.6)];
                 const big = (0.45 + next() * 0.4) * (1 - (Math.abs(along) / long) * 0.6);
 
-                put(g.stone, m.rock, [along, across], { up: big * 0.55, scale: [big * (1 + next() * 0.3), big * 0.8, big * (1 + next() * 0.3)], spin: next() * 6, tilt: (next() - 0.5) * 0.6 });
+                heap(slideLook(k), [along, across], [big * 2 * (1 + next() * 0.3), big * 1.8, big * 2 * (1 + next() * 0.3)], { spin: next() * 6, tilt: [(next() - 0.5) * 0.6, 0], tint: [1, 1, 1] });
             }
 
             for (let k = 0; k < 10; k++) {
                 const [along, across] = [(next() - 0.5) * (long + 1.2), (next() - 0.5) * (deep + 1)];
                 const small = 0.1 + next() * 0.12;
 
-                put(g.stone, m.stone, [along, across], { up: small * 0.5, scale: [small, small * 0.8, small], spin: next() * 6 });
+                heap(slideLook(k + 9), [along, across], [small * 2, small * 1.6, small * 2], { spin: next() * 6, tint: [0.85, 0.84, 0.82] });
             }
+
+            const mesh = new THREE.Mesh(stones.geometry(), cliffMaterial());
+
+            mesh.name = "rocks";
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
         }
 
         group.name = `obstacle ${id}`;
