@@ -198,6 +198,40 @@ test("loads everything, listing what it downloads, then shows the title", async 
     expect(loaded.groups).toEqual([true, true, true, true, true, true]);
 });
 
+test("behind the loading screen and the title, the town at dusk, then each scene in turn, faded one into the next, the way the screen's held (tall upright, wide on its side), an AVIF that won't show as WebP; none behind making a character, and the first again back at the title", async ({ page }) => {
+    // (What's drawn behind: each picture in #backdrop, which scene, as what, faded in or not, and how big)
+    const behind = () => page.evaluate(() => [...document.querySelectorAll("#backdrop img")].map((img) => ({ scene: img.dataset.scene, file: img.currentSrc.split("/").pop(), shown: img.classList.contains("shown"), width: img.naturalWidth })));
+    const next = () => page.evaluate(() => window.pellagos.backdrop.next());
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await title(page);
+    await expect.poll(behind, { timeout: 10000 }).toEqual([{ scene: "town-dusk", file: "town-dusk-wide.avif", shown: true, width: 1376 }]);
+
+    // The next, on a computer: the six peoples (the raid by night painted only tall), the one
+    // under it let go of once it's faded out
+    await next();
+    await expect.poll(behind, { timeout: 10000 }).toEqual([{ scene: "six-peoples", file: "six-peoples-wide.avif", shown: true, width: 1584 }]);
+
+    // Held upright, the six peoples give way to the town's tall one; then the raid by night, as
+    // WebP when its AVIF won't show
+    // (The context's route, which sees what the service worker fetches too)
+    await page.context().route("**/images/backdrops/raid-night-tall.avif", (route) => route.fulfill({ status: 200, contentType: "image/avif", body: "not a picture" }));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(behind, { timeout: 10000 }).toEqual([{ scene: "town-dusk", file: "town-dusk-tall.avif", shown: true, width: 768 }]);
+    await next();
+    await expect.poll(behind, { timeout: 10000 }).toEqual([{ scene: "raid-night", file: "raid-night-tall.webp", shown: true, width: 768 }]);
+    await expect(page.locator("#backdrop")).toBeVisible();
+
+    // Making a character: none behind its 3D view, nor held; back at the title, the first again
+    await page.locator("#newbutton").click();
+    await expect(page.locator("#create")).toBeVisible();
+    await expect(page.locator("#backdrop")).toBeHidden();
+    expect(await behind()).toEqual([]);
+    await page.locator("#createback").click();
+    await expect(page.locator("#title")).toBeVisible();
+    await expect.poll(behind, { timeout: 10000 }).toEqual([{ scene: "town-dusk", file: "town-dusk-tall.avif", shown: true, width: 768 }]);
+});
+
 test("loaded again, the game asks the server for none of its code, engine, WebAssembly, body or fonts: the service worker keeps each by the hash of its bytes, and gives what its workers ask for by name from the same copies; a file it hasn't, it fetches, that one alone", async ({ page }) => {
     // (Played twice over, and a third time: more than the usual time)
     test.setTimeout(300000);

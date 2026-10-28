@@ -83,7 +83,7 @@ const OLD_PREFIXES = ["last-colony-"];
 const HASH = /^[0-9a-f]{10}$/;
 
 // Images and models, and the music's recordings (named by what's in them)
-const MEDIA = /\.(png|gif|jpg|webp|gltf|glb|mp3)$|\/models\/.+\.bin$/;
+const MEDIA = /\.(png|gif|jpg|webp|avif|gltf|glb|mp3)$|\/models\/.+\.bin$/;
 const RECORDING = /\.[0-9a-f]{8}\.mp3$/;
 
 // How long a file checked with the server is taken as checked for the page that asked (ms), and

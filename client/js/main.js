@@ -17,6 +17,7 @@
 // ?quality=). ?join=CODE opens the title's Join a world with the code in it.
 
 import { ASSETS } from "./app/assets.js";
+import { Backdrop } from "./app/backdrop.js";
 import { mappedOf, releaseOf } from "./app/catalog.js";
 import { isInstalledApp, isIOS, keepDownloads, keepLoaded, lockLandscape, looked, registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
@@ -42,6 +43,10 @@ const $ = (selector) => document.querySelector(selector);
 
 const settings = loadSettings();
 const debug = new Debug($("#debug"), { settings, onChange: applySetting });
+
+// The paintings behind the loading screen and the title, each in turn (app/backdrop.js); let go of
+// once a character's being made or the game's begun
+const backdrop = new Backdrop($("#backdrop"));
 
 // The mouse pointer, a sword over the whole page (Game options: app/pointer.js), told by the game
 // what's under it
@@ -109,6 +114,7 @@ window.pellagos = {
         return state.inWorld;
     },
     debug,
+    backdrop,
     fetcher,
     fullScreen,
     playing: false,
@@ -123,6 +129,7 @@ function show(id) {
     }
 
     document.body.dataset.screen = id;
+    backdrop.screen(id);
 }
 
 // --- Loading ---
