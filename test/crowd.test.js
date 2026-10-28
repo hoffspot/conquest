@@ -140,9 +140,10 @@ function posedFigure(character, geometry) {
     return points;
 }
 
-// How far each of `points` is from the nearest of `among` (both xyz in turn), at most
-function furthestFrom(points, among) {
-    const cell = 0.01;
+// How far each of `points` is from the nearest of `among` (both xyz in turn), at most; Infinity
+// for one further than `within` (metres) from all of them, as far as it looks
+function furthestFrom(points, among, within = 0.01) {
+    const cell = within;
     const grid = new Map();
     const key = (x, y, z) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
 
@@ -268,8 +269,9 @@ describe("a kind's figure carrying its weapon in hand and put away (crowd.js fig
         assert.ok(furthestFrom(pointsOf(posed, [...of(CROWD_SETS.always), ...of(CROWD_SETS.weaponAway)]), corners) < 0.002, "put away");
 
         // (The shield slung where it's slung, but for the centimetre or so a body keeps what it
-        // carries clear of itself by as it moves, which a figure's can't: as far as it's moved)
-        const slung = furthestFrom(pointsOf(posed, of(CROWD_SETS.shieldAway)), corners);
+        // carries clear of itself by as it moves, which a figure's can't: as far as it's moved,
+        // looked for as far off as that may be, not the centimetre the rest are looked for within)
+        const slung = furthestFrom(pointsOf(posed, of(CROWD_SETS.shieldAway)), corners, 0.03);
 
         assert.ok(slung < 0.03, `the shield ${(slung * 100).toFixed(1)} cm out`);
 
