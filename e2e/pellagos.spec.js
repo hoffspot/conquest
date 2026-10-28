@@ -380,31 +380,163 @@ test("an update's downloaded in the background: the page finds a release newer t
     await expect(page.locator("#titleupdate")).toBeHidden();
 });
 
-test("the title's wordmark fits its card, every letter painted: on a computer, with a scrollbar's room taken from the card, and on a phone", async ({ page }) => {
-    // Its letters' first and last, against its own box, which its gradient's painted in (its
-    // letters as far from either side, the space after its last letter not counted)
+test("the title's name on its crest's ribbon, every letter painted, in the ribbon's middle, the title's card under the crest: on a computer, on a phone held upright, a small one, and one on its side", async ({ page }) => {
+    // Each letter against its own box, which its gradient's painted in; the name against the
+    // ribbon (crest.js CREST.ribbon), and the card against the crest
     const fits = () =>
-        page.evaluate(() => {
-            const name = document.querySelector("#titlename");
-            const range = document.createRange();
+        page.evaluate(async () => {
+            const { CREST } = await import("/js/app/crest.js");
+            const box = document.querySelector("#crest").getBoundingClientRect();
+            const name = document.createRange();
 
-            range.selectNodeContents(name);
+            name.selectNodeContents(document.querySelector("#titlename"));
 
-            const [text, box] = [range.getBoundingClientRect(), name.getBoundingClientRect()];
-            const after = parseFloat(getComputedStyle(name).letterSpacing);
+            const text = name.getBoundingClientRect();
+            const card = document.querySelector("#title .card").getBoundingClientRect();
+            const { left, right, top, bottom } = CREST.ribbon;
+            const ribbon = { left: box.left + left * box.width, right: box.left + right * box.width, top: box.top + top * box.height, bottom: box.top + bottom * box.height };
+            const painted = [...document.querySelectorAll("#titlename .letter")].every((letter) => {
+                const range = document.createRange();
 
-            return { inside: text.left >= box.left - 0.5 && text.right <= box.right + 0.5, centred: Math.abs(text.left - box.left - (box.right - text.right + after)) < 4 };
+                range.selectNodeContents(letter);
+
+                const [glyph, own] = [range.getBoundingClientRect(), letter.getBoundingClientRect()];
+
+                return glyph.left >= own.left - 0.5 && glyph.right <= own.right + 0.5;
+            });
+
+            return {
+                painted,
+                inRibbon: text.left >= ribbon.left && text.right <= ribbon.right && text.top >= ribbon.top - 2 && text.bottom <= ribbon.bottom + 2,
+                centred: Math.abs((text.left + text.right) / 2 - (ribbon.left + ribbon.right) / 2) < box.width * 0.02,
+                onScreen: box.left >= 0 && box.right <= innerWidth,
+                under: card.top >= box.bottom - 1,
+            };
         });
+    const all = { painted: true, inRibbon: true, centred: true, onScreen: true, under: true };
 
     await title(page);
-    expect(await fits()).toEqual({ inside: true, centred: true });
+    expect(await fits()).toEqual(all);
 
-    // (A scrollbar's room taken from the card, as Chrome takes it when its menu's long)
-    await page.addStyleTag({ content: "#title .card { padding-right: 47px !important; }" });
-    expect(await fits()).toEqual({ inside: true, centred: true });
+    for (const [width, height] of [
+        [393, 852],
+        [320, 640],
+        [844, 390],
+    ]) {
+        await page.setViewportSize({ width, height });
+        expect(await fits(), `${width} by ${height}`).toEqual(all);
+    }
+});
 
-    await page.setViewportSize({ width: 320, height: 640 });
-    expect(await fits()).toEqual({ inside: true, centred: true });
+test("the crest over the loading screen and the title: PELLAGOS on its ribbon, forged a letter at a time as the page opens, glinting, embers rising off it, the eyes under the town blinking; the same crest over the title, not forged again; none of it moving with less motion asked for, nor seen in the game", async ({ page }) => {
+    await page.goto("/");
+
+    const crest = page.locator("#crest");
+    const letters = page.locator("#titlename .letter");
+
+    // (Over the loading screen as the page opens, the name on its ribbon a letter at a time, read as
+    // the name it is; forged, then forged for good)
+    await expect(crest).toBeVisible();
+    await expect(letters).toHaveCount(8);
+    await expect(page.locator("#titlename")).toHaveAttribute("aria-label", "Pellagos");
+    await expect(page.locator("#loading")).toHaveAttribute("aria-labelledby", "titlename");
+
+    const forging = await page.evaluate(() => document.querySelector("#crest").classList.contains("forging") || document.querySelector("#crest").dataset.forged === "true");
+
+    expect(forging).toBe(true);
+    await expect(crest).not.toHaveClass(/forging/, { timeout: 10000 });
+    await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
+
+    // Over the title: its letters struck and cooled (each all there, none still hot), its picture
+    // the AVIF, see-through about it and solid in its middle (where it's placed: the test before this)
+    const placed = await page.evaluate(() => {
+        const img = document.querySelector("#crest .crest-art");
+        const canvas = Object.assign(document.createElement("canvas"), { width: img.naturalWidth, height: img.naturalHeight });
+        const context = canvas.getContext("2d");
+        const alpha = (x, y) => context.getImageData(Math.round(x * canvas.width), Math.round(y * canvas.height), 1, 1).data[3];
+
+        context.drawImage(img, 0, 0);
+
+        return {
+            letters: [...document.querySelectorAll("#titlename .letter")].map((letter) => ({ shown: Number(getComputedStyle(letter).opacity), hot: Number(getComputedStyle(letter, "::after").opacity) })),
+            picture: img.currentSrc.split("/").pop(),
+            about: [alpha(0.005, 0.01), alpha(0.995, 0.01), alpha(0.005, 0.99), alpha(0.995, 0.99), alpha(0.5, 0.005)],
+            middle: alpha(0.5, 0.5),
+        };
+    });
+
+    expect(placed.letters.every(({ shown, hot }) => shown === 1 && hot === 0), JSON.stringify(placed.letters)).toBe(true);
+    expect(placed.picture).toBe("crest.avif");
+    // (Nearly nothing of it about it, nearly all in its middle: an AVIF's see-through, kept as small
+    // as it is, a little out)
+    expect(placed.about.every((alpha) => alpha <= 4), JSON.stringify(placed.about)).toBe(true);
+    expect(placed.middle).toBeGreaterThanOrEqual(250);
+
+    // Embers rising off it (its canvas drawn on), the torch's glint and flicker playing, and its
+    // eyes blinking now and then (told to now: each lid closed over its eye a moment, then open)
+    await expect.poll(() => page.evaluate(() => {
+        const canvas = document.querySelector("#crest .crest-embers");
+        const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+        let lit = 0;
+
+        for (let k = 3; k < pixels.length; k += 4) {
+            lit += pixels[k] > 0 ? 1 : 0;
+        }
+
+        return lit;
+    }), { timeout: 10000 }).toBeGreaterThan(20);
+
+    const moving = await page.evaluate(() => ({
+        glint: document.querySelector("#crest .crest-sheen").getAnimations().length,
+        flicker: document.querySelector("#crest .crest-glow").getAnimations().length,
+    }));
+
+    expect(moving).toEqual({ glint: 1, flicker: 1 });
+
+    const blink = await page.evaluate(async () => {
+        const lid = document.querySelector("#crest .crest-lid.left");
+        const shut = () => new DOMMatrix(getComputedStyle(lid).transform).d;
+        const before = shut();
+
+        window.pellagos.crest.blink();
+
+        let most = before;
+
+        for (let k = 0; k < 30; k++) {
+            await new Promise((resolve) => requestAnimationFrame(resolve));
+            most = Math.max(most, shut());
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 400));
+
+        return { before, most, after: shut() };
+    });
+
+    expect(blink.before).toBe(0);
+    expect(blink.most).toBeGreaterThan(0.9);
+    expect(blink.after).toBe(0);
+
+    // In the game (making a character): not seen, nothing of it moving
+    await page.locator("#newbutton").click();
+    await expect(page.locator("#create")).toBeVisible();
+    await expect(crest).toBeHidden();
+    expect(await page.evaluate(() => window.pellagos.crest.on)).toBe(false);
+
+    // With less motion asked for: forged already as the page opens, no embers, no glint
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    await expect(crest).toBeVisible();
+    expect(await page.evaluate(() => document.querySelector("#crest").classList.contains("forging"))).toBe(false);
+    await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
+
+    const still = await page.evaluate(() => ({
+        frame: window.pellagos.crest.frame,
+        glint: document.querySelector("#crest .crest-sheen").getAnimations().length,
+        flicker: document.querySelector("#crest .crest-glow").getAnimations().length,
+        shown: [...document.querySelectorAll("#titlename .letter")].every((letter) => Number(getComputedStyle(letter).opacity) === 1),
+    }));
+
+    expect(still).toEqual({ frame: null, glint: 0, flicker: 0, shown: true });
 });
 
 test("debug mode shows how the game runs, and is remembered", async ({ page }) => {

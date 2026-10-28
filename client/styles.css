@@ -160,6 +160,291 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #backdrop 
     }
 }
 
+/* --- The crest (app/crest.js) --- */
+
+/* Over the loading screen and the title, at the top of the screen, as wide as it allows: no more
+   than 620 pixels, nor a quarter of its height tall (on a computer, room under it for the title's
+   card); each's card under it (its name sized by its width: cqi). Not seen anywhere else */
+:root {
+    --crest-width: min(calc(100vw - 32px - var(--safe-left) - var(--safe-right)), 620px, calc(25svh * 1376 / 768));
+    --crest-height: calc(var(--crest-width) * 768 / 1376);
+}
+
+#crest {
+    position: fixed;
+    z-index: 2;
+    top: calc(var(--safe-top) + 10px);
+    left: 50%;
+    translate: -50% 0;
+    width: var(--crest-width);
+    aspect-ratio: 1376 / 768;
+    container-type: inline-size;
+    pointer-events: none;
+}
+
+body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #crest {
+    display: none;
+}
+
+#loading.screen,
+#title.screen {
+    align-items: flex-start;
+    padding-top: calc(var(--safe-top) + 10px + var(--crest-height) + 4px);
+}
+
+.crest picture,
+.crest-art {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.crest-art {
+    filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.55));
+}
+
+/* Its name on its ribbon (crest.js CREST.ribbon) */
+.crest-name {
+    position: absolute;
+    left: 12.7%;
+    right: 12.8%;
+    top: 41.4%;
+    bottom: 42.1%;
+    display: grid;
+    place-items: center;
+}
+
+.crest-name > * {
+    grid-area: 1 / 1;
+}
+
+.crest .wordmark {
+    font-size: 8.6cqi;
+    line-height: 1;
+    letter-spacing: 0.15em;
+    padding-left: 0.15em;
+    background: none;
+    color: transparent;
+    filter: drop-shadow(0 0.04em 0 rgba(0, 0, 0, 0.75));
+}
+
+/* Each letter gold, as the name was (each its own, to be struck and cooled) */
+.crest .letter {
+    position: relative;
+    display: inline-block;
+    background: linear-gradient(180deg, #fff1c8 0%, var(--gold) 55%, var(--gold-deep) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+/* White-hot over it as it's struck, cooling */
+.crest .letter::after {
+    content: attr(data-letter);
+    position: absolute;
+    inset: 0;
+    color: #fff6dc;
+    -webkit-text-fill-color: #fff6dc;
+    text-shadow: 0 0 0.12em #ffd27a, 0 0 0.35em #ff8a1e, 0 0 0.7em #ff4f00;
+    opacity: 0;
+}
+
+/* Torchlight glinting along it now and then (the same name over it, its light only) */
+.crest .crest-sheen {
+    background: linear-gradient(100deg, transparent 40%, rgba(255, 248, 226, 0.95) 48%, transparent 56%) no-repeat;
+    background-size: 300% 100%;
+    background-position: 100% 0;
+    -webkit-background-clip: text;
+    background-clip: text;
+    filter: none;
+    animation: crest-glint 7s ease-in-out 3.4s infinite;
+}
+
+/* And flickering on the leather behind it */
+.crest-glow {
+    position: absolute;
+    left: 22%;
+    right: 22%;
+    top: 36%;
+    bottom: 37%;
+    background: radial-gradient(ellipse at 50% 50%, rgba(255, 168, 70, 0.34), rgba(255, 140, 40, 0) 70%);
+    mix-blend-mode: screen;
+    animation: crest-flicker 4.3s linear infinite;
+}
+
+/* The eyes under the town: their glow, and their lids (crest.js CREST.eyes: blink) */
+.crest-eye,
+.crest-lid {
+    position: absolute;
+    top: 63.8%;
+    translate: -50% -50%;
+}
+
+.crest-eye {
+    width: 2.6%;
+    height: 2.6%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 176, 60, 0.75), rgba(255, 120, 20, 0) 70%);
+    mix-blend-mode: screen;
+    animation: crest-watch 3.1s ease-in-out infinite alternate;
+}
+
+.crest-lid {
+    width: 3.4%;
+    height: 3.8%;
+    background: radial-gradient(ellipse at 50% 55%, #1d140d 52%, rgba(29, 20, 13, 0.85) 62%, rgba(29, 20, 13, 0) 74%);
+    transform-origin: 50% 0;
+    transform: scaleY(0);
+}
+
+.crest-eye.left,
+.crest-lid.left {
+    left: 46.9%;
+}
+
+.crest-eye.right,
+.crest-lid.right {
+    left: 53.1%;
+}
+
+/* Its embers, rising off the name and a little above it */
+.crest-embers {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    top: -25%;
+    height: 85%;
+}
+
+/* As it's first shown (crest.js forge): the crest, then each letter in turn struck white-hot and
+   cooled to gold */
+.crest.forging .crest-art {
+    animation: crest-rise 0.6s ease-out both;
+}
+
+.crest.forging .letter {
+    animation: crest-strike 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+    animation-delay: calc(0.4s + var(--i) * 0.12s);
+}
+
+.crest.forging .letter::after {
+    animation: crest-heat 1.4s ease-out both;
+    animation-delay: calc(0.4s + var(--i) * 0.12s);
+}
+
+.crest.forging .crest-sheen {
+    visibility: hidden;
+}
+
+@keyframes crest-rise {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+}
+
+@keyframes crest-strike {
+    0% {
+        opacity: 0;
+        transform: scale(1.35) translateY(-0.12em);
+    }
+
+    55% {
+        opacity: 1;
+        transform: scale(0.96);
+    }
+
+    100% {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes crest-heat {
+    0% {
+        opacity: 0;
+    }
+
+    8%,
+    25% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0;
+    }
+}
+
+@keyframes crest-glint {
+    0% {
+        background-position: 100% 0;
+    }
+
+    16%,
+    100% {
+        background-position: 0% 0;
+    }
+}
+
+@keyframes crest-flicker {
+    0%,
+    100% {
+        opacity: 0.7;
+    }
+
+    9% {
+        opacity: 0.85;
+    }
+
+    17% {
+        opacity: 0.6;
+    }
+
+    31% {
+        opacity: 0.9;
+    }
+
+    44% {
+        opacity: 0.66;
+    }
+
+    58% {
+        opacity: 0.82;
+    }
+
+    71% {
+        opacity: 0.58;
+    }
+
+    86% {
+        opacity: 0.88;
+    }
+}
+
+@keyframes crest-watch {
+    from {
+        opacity: 0.45;
+    }
+
+    to {
+        opacity: 0.9;
+    }
+}
+
+/* Nothing of it moving with less motion asked for */
+@media (prefers-reduced-motion: reduce) {
+    .crest-glow,
+    .crest-eye,
+    .crest .crest-sheen {
+        animation: none;
+    }
+
+    .crest .crest-sheen {
+        visibility: hidden;
+    }
+}
+
 /* The sword pointer (app/pointer.js), with a mouse: everywhere on the page, over the view showing
    what a click there would do (--pointer-view), and shaken lit; where you type, the text cursor.
    Over everything else's own (a button's hand, a drag's grab), so it's the one pointer to look for */
@@ -202,32 +487,13 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #backdrop 
     overflow: auto;
 }
 
-/* (The cards the wordmark's in: its size taken from theirs, below) */
-.card.title,
-.card.loader {
-    container-type: inline-size;
-}
-
+/* The name, on the crest's ribbon (below) */
 .wordmark {
     margin: 0;
     font-family: var(--font-display);
     font-weight: 600;
-    font-size: clamp(40px, 9vw, 64px);
-    /* (Never wider than its card, whatever the font and however much of the card a scrollbar
-       takes: PELLAGOS is about six and a half times its height across, so at most a seventh of
-       the card's width, 64 pixels at most. Painted by its letters cutting through its gradient,
-       a letter past its edge wasn't painted at all: Chrome showed half an S) */
-    font-size: clamp(28px, 14.5cqi, 64px);
-    letter-spacing: 0.12em;
-    /* (The space after its last letter matched before its first, so it's in the middle) */
-    padding-left: 0.12em;
     text-align: center;
     text-transform: uppercase;
-    background: linear-gradient(180deg, #fff1c8 0%, var(--gold) 55%, var(--gold-deep) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.6));
 }
 
 h2 {
