@@ -2765,12 +2765,15 @@ export class Game {
         this.#wantItems();
     }
 
-    // The sounds of the spells the player can cast downloaded now (audio/sound.js want), so
-    // they're in before they're first cast; and a spell breaking off's, and a Scroll of Safety's
+    // The sounds of the spells the player can cast downloaded now (audio/sound.js want), and the
+    // made ones made and kept (makeAhead), so they're in before they're first cast; and a spell
+    // breaking off's, and a Scroll of Safety's
     #wantSpells() {
         const known = Object.keys(SPELLS).filter((id) => this.progress.knows?.(id));
+        const sounds = ["fizzle", "spellCircle", "teleportOut", "teleportIn", "breath", ...known.flatMap((id) => Object.values(spellSounds(id)).filter(Boolean))];
 
-        this.sound?.want(["fizzle", "spellCircle", "teleportOut", "teleportIn", "breath", ...known.flatMap((id) => Object.values(spellSounds(id)).filter(Boolean))]);
+        this.sound?.want(sounds);
+        this.sound?.makeAhead(sounds, { keep: true });
     }
 
     // The sounds of the player's things in their hands downloaded now (audio/sound.js want), after
@@ -7979,6 +7982,10 @@ export class Game {
                 break;
             case "coming":
                 this.enlisting.push(...event.ids);
+
+                // (Its horns made now, the first time a raid's heard: the raiders' blown at once,
+                // the town's answering, and the retreat when it's beaten off: audio/sound.js makeAhead)
+                this.sound?.makeAhead(["warHorn", "townHorn", "retreatHorn"]);
 
                 // (The Behemoth's: its roar heard from afar where it comes out of the rift, twice,
                 // in place of the raiders' horn; its voice wanted now, to be heard)
