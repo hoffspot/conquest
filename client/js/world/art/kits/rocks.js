@@ -64,7 +64,7 @@ export const ROCK_FAMILIES = Object.freeze({
     // (Granite gone round in the ground and laid bare: a corestone)
     corestone: { sets: 3, jitter: 0.3, at: [0.5, 0.96], gaps: 0.25, extra: [0, 2], round: [0.16, 0.28], squash: [0.6, 0.86], noise: 0.08, fine: 0.014, chips: [0, 1], pits: [0, 0], crease: 75, sunk: 0.3, lichen: 0.55 },
     // (Granite freshly broken: angular, jointed, chipped)
-    talus: { sets: 3, jitter: 0.32, at: [0.5, 0.92], gaps: 0.15, extra: [2, 5], round: [0.025, 0.05], squash: [0.55, 0.92], noise: 0.025, fine: 0.01, chips: [1, 3], pits: [0, 0], crease: 36, sunk: 0.18, lichen: 0.35 },
+    talus: { sets: 3, jitter: 0.32, at: [0.5, 0.92], gaps: 0.15, extra: [2, 5], round: [0.05, 0.09], squash: [0.55, 0.92], noise: 0.035, fine: 0.022, chips: [1, 3], pits: [0, 0], crease: 48, sunk: 0.18, lichen: 0.35 },
     // (Sandstone: a slab along its bedding, cross-jointed, its beds in grooves)
     slab: { sets: 3, bedding: true, bed: [0.32, 0.48], jitter: 0.22, at: [0.55, 0.96], gaps: 0.2, extra: [0, 2], round: [0.05, 0.09], squash: [0.8, 1], noise: 0.03, fine: 0.012, chips: [1, 2], pits: [0, 0], grooves: { every: 0.13, depth: 0.045 }, crease: 40, sunk: 0.12, lichen: 0.3 },
     // (Limestone: blocky, its faces pitted)
@@ -74,7 +74,7 @@ export const ROCK_FAMILIES = Object.freeze({
     // (A standing stone: tall, its sides near flat, dressed long ago and worn since)
     standing: { sets: 2, upright: true, jitter: 0.08, at: [0.8, 0.94], extra: [0, 1], round: [0.08, 0.14], squash: [1, 1], noise: 0.03, fine: 0.01, chips: [0, 2], pits: [0, 2], crease: 50, sunk: 0.15, lichen: 0.9 },
     // (Basalt: dense, dark, broken every way)
-    basalt: { sets: 0, at: [0.62, 0.86], extra: [7, 11], round: [0.02, 0.04], squash: [0.55, 0.9], noise: 0.02, fine: 0.008, chips: [1, 2], pits: [0, 0], crease: 34, sunk: 0.15, lichen: 0.1 },
+    basalt: { sets: 0, at: [0.62, 0.86], extra: [7, 11], round: [0.04, 0.07], squash: [0.55, 0.9], noise: 0.025, fine: 0.02, chips: [1, 2], pits: [0, 0], crease: 46, sunk: 0.15, lichen: 0.1 },
 });
 
 /** Each land's family of rock (ROCK_FAMILIES), as its stone is (wilds.js LOOKS' `stone`). */

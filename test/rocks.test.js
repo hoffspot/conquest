@@ -294,7 +294,7 @@ describe("the wilds' rocks (kits/wilds.js)", () => {
     });
 
     it("lie on the ground as rock does: sunk as deep as their family, leaning with the slope, a bigger boulder with chips strewn round it", () => {
-        const slope = (x, z) => x * 0.3;
+        const slope = (x) => x * 0.3;
         const boulder = { kind: "boulder", x: 20, y: 20, size: 1.2, height: 1.2, turn: 0, variant: 0.1, squares: [[20, 20]] };
         const land = landAt(20, 20);
         const level = stoneMesh([boulder], () => land, [0, 0], () => 0, { rocks: ROCK_TIERS.near });

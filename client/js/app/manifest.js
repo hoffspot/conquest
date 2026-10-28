@@ -311,7 +311,7 @@ export const MANIFEST = Object.freeze([
             ["js/world/art/kits/leftovers.js", 9284, "c2ac933a91"],
             ["js/world/art/kits/neutral.js", 98541, "29cb205333"],
             ["js/world/art/kits/props.js", 16907, "a7ed3f6d5e"],
-            ["js/world/art/kits/rocks.js", 47189, "389e8ffbbe"],
+            ["js/world/art/kits/rocks.js", 47189, "54b3e4828a"],
             ["js/world/art/kits/roofs.js", 12043, "3ea324bb93"],
             ["js/world/art/kits/shopfront.js", 16359, "a65aff5882"],
             ["js/world/art/kits/signs.js", 21669, "1209623344"],
