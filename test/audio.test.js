@@ -579,6 +579,8 @@ describe("playing sounds (sound.js)", () => {
         const sound = new Sound({ fetch: fromDisk });
         const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
         const bytes = (names) => names.reduce((sum, name) => sum + sound.samples.get(name).reduce((each, samples) => each + samples.byteLength, 0), 0);
+        // (A made sound's own plays: the music may play meanwhile, a note before one's made)
+        const of = (name) => played.filter(({ source }) => sound.buffers.get(name)?.includes(source.buffer));
 
         await sound.prepare();
 
@@ -598,26 +600,25 @@ describe("playing sounds (sound.js)", () => {
         assert.equal(sound.play("warHorn", { volume: 0.8 }), null);
         assert.equal(played.length, 0);
 
-        for (let k = 0; k < 50 && !played.length; k++) {
+        for (let k = 0; k < 50 && !of("warHorn").length; k++) {
             await tick();
         }
 
         assert.equal(sound.buffers.get("warHorn")?.length, SOUNDS.warHorn.variants);
-        assert.equal(played.length, 1);
-        assert.ok(sound.buffers.get("warHorn").includes(played[0].source.buffer));
+        assert.equal(of("warHorn").length, 1);
         assert.ok(sound.play("warHorn"));
-        assert.equal(played.length, 2);
+        assert.equal(of("warHorn").length, 2);
 
         // (A recorded-only sound's stand-in made for it the same way)
         played.length = 0;
         sound.recorded.delete("clash");
         assert.equal(sound.play("clash"), null);
 
-        for (let k = 0; k < 50 && !played.length; k++) {
+        for (let k = 0; k < 50 && !of("block").length; k++) {
             await tick();
         }
 
-        assert.ok(sound.buffers.get("block").includes(played[0]?.source.buffer));
+        assert.equal(of("block").length, 1);
 
         // Made too long after it was wanted: not played then
         played.length = 0;
@@ -629,7 +630,7 @@ describe("playing sounds (sound.js)", () => {
         }
 
         await tick();
-        assert.equal(played.length, 0);
+        assert.equal(of("beastGrowl").length, 0);
         sound.close();
     });
 
