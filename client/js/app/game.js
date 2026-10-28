@@ -24,7 +24,7 @@
 import * as THREE from "three";
 import { DRAWS, FALL_LANDS, REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
-import { folkLook } from "../characters/folk.js";
+import { folkLook, followerLook } from "../characters/folk.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressCreature, dressingCreature, sizeOf } from "../beasts/beast.js";
@@ -185,6 +185,7 @@ import { Charge } from "./charge.js";
 import { LegendaryLooks } from "../world/legendaries.js";
 import { worldLinkOf } from "./worldlink.js";
 import { abilityIcon, ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, forFriends, iconOf, offensive, PLACES, QUICK_SHOWN, readWheels, SETTABLE, SIDES, WHEELS } from "./wheel.js";
+import { BARKS, bynameOf, GIFTS as VETERAN_GIFTS, hirePrice, LEVEL_XP, MASTERY, MERCENARY, recallPrice, RENOWN, TRUST_PICKS, trustOf, wearable } from "../core/followers.js";
 
 /** What every character wears under their gear: a tunic, and trousers if nothing's on their legs. */
 export const BASE_OUTFIT = Object.freeze(["tunic", "trousers"]);
@@ -929,6 +930,19 @@ const HORNS = Object.freeze({ far: 450, again: 2.2, answer: 4.6, charge: 1.2, th
 
 // What one of the player's own's said to do as they're told (core/host.js #orderUnit); their
 // ability, as it's used (the "unitAbility" event)
+// One of the hired adventurers as they're called: by the player's name for them or their own,
+// with their byname (core/followers.js bynameOf), as core/host.js #calledBy has it
+const calledBy = (one) => {
+    const byname = bynameOf(one.record ?? {});
+
+    return `${one.called ?? one.name}${byname ? `, ${byname}` : ""}`;
+};
+
+// How seldom a hired adventurer says each kind of word over their head (#bark: game s), and how
+// seldom any of them says anything
+const BARK_EVERY = 45;
+const BARK_GAP = 6;
+
 const UNIT_TOLD = Object.freeze({ follow: "follows you.", wait: "waits here.", assist: "goes for your target.", guard: "guards you.", fallback: "falls back to you.", hold: "holds fire.", free: "fights at will." });
 
 // Why another of the player's party wasn't given a request they shared (host.js #unshared), as told
@@ -978,7 +992,7 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "share", "rules"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -1079,7 +1093,7 @@ export class Game {
      *     (save.js loadTold: `#once`).
      * @param {Function} [options.onTold] - Hears them whenever there's another (to keep them).
      */
-    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, onPing = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, markers = [], onMarkers = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
+    constructor({ view, kit, world, hero, hud, sound = null, talks = { memory: {}, knowledge: [] }, onTalk = () => {}, explored = {}, onExplore = () => {}, onWorldMap = () => {}, onPing = () => {}, host = null, me = HOST_PLAYER, war = null, onWar = () => {}, progress = {}, onProgress = () => {}, standing = {}, onStanding = () => {}, followers = [], roll = [], onFollowers = () => {}, wheels = null, onWheels = () => {}, remote = null, pin = null, onPin = () => {}, markers = [], onMarkers = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
         this.view = view;
         this.kit = kit;
         this.sound = sound;
@@ -1177,7 +1191,7 @@ export class Game {
 
         if (!remote) {
             // (Where they were when it last stopped, and as they were: core/host.js join)
-            this.host.join({ id: me, hero, talks, explored, progress, standing, followers, place, vitals });
+            this.host.join({ id: me, hero, talks, explored, progress, standing, followers, roll, place, vitals });
 
             const actor = place ? this.host.battle.actor(me) : null;
 
@@ -1200,6 +1214,10 @@ export class Game {
 
         /** Whether the Action Bar is kept up out of a fight too (Game options: Always show). */
         this.quickAlways = false;
+        // (Hired adventurers saying a word now and then over their heads: Game options; and when
+        // each last did, by follower and what it was, game time s: #bark)
+        this.chatter = true;
+        this.barked = new Map();
 
         /**
          * Asks whether one of the party's to be let go, for good ({ name, note, go }: `go` lets them
@@ -2201,6 +2219,9 @@ export class Game {
         this.reader.onClose = () => this.closeReader();
         this.partyPanel = new PartyPanel(this.hud.root);
         this.partyPanel.onOrder = (id, order) => this.#orderUnit(id, order);
+        this.partyPanel.onPick = (id, pick) => this.#mercCommand({ type: "pick", follower: id, pick });
+        this.partyPanel.onTakeBack = (id, slot) => this.#mercCommand({ type: "unoutfit", follower: id, slot });
+        this.partyPanel.onRename = (id, name) => this.#mercCommand({ type: "rename", follower: id, name });
         this.partyPanel.onChoose = (id) => this.#chooseAlly(this.allyTarget === id ? null : id);
         this.partyPanel.onParty = (what, who) => this.#partyOrder(what, who);
         this.partyPanel.onSay = (text) => this.#sayToParty(text);
@@ -2318,10 +2339,10 @@ export class Game {
             return this.#addAvatar(actor.id, character, { walk: look.walk, guard: guardOf(actor.weapon) });
         }
 
-        // A follower: as the adventurer they were, their weapon put away till there's a fight
+        // A follower: as the adventurer they were, in the armour they were given, their weapon put
+        // away till there's a fight
         if (actor.kind === "follower") {
-            const { calling, sex, seed, people } = this.host.followers.get(actor.id) ?? { calling: "warrior" };
-            const look = folkLook({ role: "adventurer", look: calling, sex, seed, people });
+            const look = this.#followerLook(actor.id);
             const character = yield* this.#built(actor, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: Math.min(hairDetail, FOLK_HAIR), merge: true });
 
             if (!character) {
@@ -2492,10 +2513,31 @@ export class Game {
             return;
         }
 
-        const { calling, sex, seed, people } = this.host.followers.get(actor.id) ?? { calling: "warrior" };
-
-        character.setEquipment(folkLook({ role: "adventurer", look: calling, sex, seed, people }).equipment);
+        character.setEquipment(this.#followerLook(actor.id).equipment);
         character.sheathe(true);
+    }
+
+    // How one of the hired adventurers looks: as the adventurer they were, in the body armour
+    // their leader gave them (characters/folk.js followerLook)
+    #followerLook(id) {
+        const { calling = "warrior", sex = "m", seed = 1, people = "human", gear } = this.host.followers.get(id) ?? {};
+
+        return followerLook({ calling, sex, seed, people, body: gear?.body ?? null });
+    }
+
+    // One of the hired adventurers given body armour, or theirs taken back (core/host.js "follower"
+    // events, "outfitted"): drawn in what they wear now, by anyone who sees them; out of their
+    // crowd for now, its figure of them as they were (#throngKind) theirs no longer. Their weapon
+    // in hand or put away as it was
+    #redress(id) {
+        const avatar = this.avatars.get(id);
+
+        if (!(avatar instanceof Avatar) || !avatar.character?.equipment || [...avatar.character.equipment.values()].includes("tankard")) {
+            return;
+        }
+
+        this.#unthrong(id);
+        avatar.character.setEquipment(this.#followerLook(id).equipment);
     }
 
     // Someone gone from the battle, no longer drawn (their body kept, `keep`, for someone else)
@@ -5091,9 +5133,10 @@ export class Game {
 
         // (One of the players' own, named and on the party's icons: drawn as they look, a figure of their own)
         if (actor.kind === "follower") {
-            const { calling = "warrior", sex = "m", seed = 1, people = "human" } = this.host.followers.get(actor.id) ?? {};
+            const { calling = "warrior", sex = "m", seed = 1, people = "human", gear } = this.host.followers.get(actor.id) ?? {};
+            const body = gear?.body ? `${gear.body.id}.${gear.body.people ?? ""}` : "";
 
-            return { key: `follower:${people}:${sex}:${calling}:${seed}:${weapon}`, size: 1, spec: { ...fights, look: folkLook({ role: "adventurer", look: calling, sex, seed, people }) } };
+            return { key: `follower:${people}:${sex}:${calling}:${seed}:${weapon}:${body}`, size: 1, spec: { ...fights, look: this.#followerLook(actor.id) } };
         }
 
         const creature = actor.wild.creature;
@@ -7734,14 +7777,30 @@ export class Game {
 
         Object.assign(names, soldier?.names, official?.words, this.#rumours(heardAt), this.#cultWords(heardAt, npc), this.#guildWords());
 
-        // (An adventurer who could be hired, and for how much; a follower waiting or following)
+        // (An adventurer who could be hired, how strong and for how much (core/host.js hireOffer);
+        // a follower waiting or following, and how they're holding up; one of the player's mending
+        // at the guild, to send for at a guild's desk: recallOffer)
         const one = folk.find(({ id }) => id === npc.id);
-        const hire = one && (one.role === "adventurer" || one.talk === "adventurer") ? HIRES[one.look] : null;
+        const hire = one && (one.role === "adventurer" || one.talk === "adventurer") ? this.host.hireOffer(this.me, npc.id) : null;
         const following = npc.kind === "follower" ? this.host.followers.get(npc.id) : null;
-        const company = [...this.host.followers.values()].filter(({ leader }) => leader === this.me).length;
+        const company = [...this.host.followers.values()].filter(({ leader }) => leader === this.me).length + this.host.mendingOf(this.me).length;
+        const recall = one?.role === "receptionist" ? this.host.recallOffer(this.me) : null;
 
         if (hire) {
             names.hirePrice = String(hire.price);
+            names.hireLevel = String(hire.level);
+            names.renown = RENOWN.traits[hire.renowned]?.label ?? "";
+        }
+
+        if (following) {
+            const trust = trustOf(following.record.together);
+
+            Object.assign(names, { level: String(following.level), kills: String(following.record.kills), wounds: String(following.wounds), trustWords: ["You keep paying, I keep swinging.", "You're all right, you know.", "I'd follow you a long way.", "I'd follow you anywhere."][trust] });
+        }
+
+        if (recall) {
+            names.mending = recall.name;
+            names.recallPrice = String(recall.price);
         }
 
         // (Hungry bandits: the gold they want)
@@ -7786,6 +7845,14 @@ export class Game {
                             ? Boolean(hire && company < this.host.mostFollowers(this.me)) === condition.hire
                             : "purse" in condition
                               ? (this.progress.gold >= (hire?.price ?? 0)) === condition.purse
+                              : "renowned" in condition
+                                ? Boolean(hire?.renowned) === condition.renowned
+                              : "mending" in condition
+                                ? Boolean(recall) === condition.mending
+                              : "recallPurse" in condition
+                                ? (this.progress.gold >= (recall?.price ?? 0)) === condition.recallPurse
+                              : "wounded" in condition
+                                ? Boolean(following?.wounds) === condition.wounded
                               : "waiting" in condition
                                 ? Boolean(following?.waiting) === condition.waiting
                                 : "member" in condition
@@ -9870,7 +9937,12 @@ export class Game {
 
                 const { guarding, holdFire } = this.host.stance(id);
 
-                return { id, name: actor.name ?? follower?.name ?? "", kind, calling: follower?.calling ?? null, creature: CREATURES[called?.creature]?.name.toLowerCase() ?? null, hp: actor.hp, maxHp: actor.maxHp, waiting, guarding, holdFire, away: actor.map !== this.battle.actor(this.me)?.map, left: left?.ms ?? null, ally: id === this.allyTarget, picture };
+                return { id, name: actor.name ?? follower?.name ?? "", kind, calling: follower?.calling ?? null, creature: CREATURES[called?.creature]?.name.toLowerCase() ?? null, hp: actor.hp, maxHp: actor.maxHp, waiting, guarding, holdFire, away: actor.map !== this.battle.actor(this.me)?.map, left: left?.ms ?? null, ally: id === this.allyTarget, picture, merc: follower ? this.#mercView(id, follower) : null };
+            }),
+            mending: this.host.mendingOf(this.me).map((id) => {
+                const one = this.host.mending.get(id);
+
+                return { name: one.called ?? one.name, calling: one.calling, level: one.level, price: recallPrice(hirePrice(HIRES[one.calling]?.price ?? 40, one.level, Boolean(one.renowned))) };
             }),
             most: this.host.mostFollowers(this.me),
             ...this.#partyPlayers(),
@@ -10451,8 +10523,9 @@ export class Game {
         }
     }
 
-    // Those with the player still standing, in order: the other players in their party (core/
-    // host.js fellows, the longest in it first), then their own (partyOf): { id, kind, actor,
+    // Those with the player still standing (or a hired adventurer knocked down, to be got up:
+    // battle.js `downed`), in order: the other players in their party (core/host.js fellows, the
+    // longest in it first), then their own (partyOf): { id, kind, actor,
     // waiting, left: a called creature's time left ({ ms, share }) or null, picture: their
     // likeness (an ImageData), or null till it's drawn }
     #party() {
@@ -10468,7 +10541,7 @@ export class Game {
             const actor = this.battle.actor(id);
             const called = this.host.companions.get(id);
 
-            if (!actor || actor.dead) {
+            if (!actor || (actor.dead && !actor.downed)) {
                 return [];
             }
 
@@ -10717,6 +10790,156 @@ export class Game {
         });
     }
 
+    // What one of the player's hired adventurers has grown into, as the party menu's More shows it
+    // (app/partypanel.js #grown): their level and experience (held at the most the player can lead
+    // now: core/host.js capFor), wounds, whether they're down, their trust and its ways to grow,
+    // what they wear, what they've done, a veteran's gift and mastery, their renown
+    #mercView(id, one) {
+        const actor = this.battle.actor(id);
+        const next = one.level >= MERCENARY.most ? null : LEVEL_XP[one.level + 1];
+        const trust = trustOf(one.record.together);
+        const picks = TRUST_PICKS.slice(0, trust).map((pair, rank) => ({ rank, picks: pair.map(({ id: pick, label, about }) => ({ id: pick, label, about, chosen: one.picks.includes(pick) })) }));
+        const piece = (item) => (item ? `${itemLabel(item)}${(item.level ?? 1) > 1 ? ` (level ${item.level})` : ""}` : null);
+        const { kills, falls, rises, best, earned } = one.record;
+        const gift = VETERAN_GIFTS[one.calling];
+        const mastery = MASTERY[one.calling];
+        const renown = RENOWN.traits[one.renowned];
+
+        return {
+            name: one.name,
+            called: one.called,
+            level: one.level,
+            xp: one.xp,
+            next,
+            held: next !== null && one.level >= this.host.capFor(this.me) && one.xp >= next,
+            wounds: one.wounds,
+            down: Boolean(actor?.dead && actor.downed),
+            trust,
+            together: one.record.together,
+            picks,
+            choose: picks.some((rank) => !rank.picks.some(({ chosen }) => chosen)),
+            gear: [
+                { slot: "mainHand", label: "Weapon", piece: piece(one.gear.mainHand) },
+                { slot: "body", label: "Armour", piece: piece(one.gear.body) },
+            ],
+            record: `Brought down ${kills} foe${kills === 1 ? "" : "s"}${best ? `, the mightiest a ${best.name.toLowerCase()}` : ""}; knocked down ${falls} time${falls === 1 ? "" : "s"}, up again ${rises}; earned ${earned} gold.`,
+            gift: gift ? (one.level >= MERCENARY.gift ? `${gift.label}: ${gift.about}` : `At level ${MERCENARY.gift}, ${gift.label.toLowerCase()} for you: ${gift.about}`) : null,
+            mastery: mastery && one.level >= MERCENARY.mastery ? `${mastery.label}: ${mastery.about}` : null,
+            renowned: renown ? `Renowned: ${renown.label}. ${renown.about}` : null,
+            renownedName: renown ? "Renowned" : null,
+        };
+    }
+
+    // A command about one of the player's hired adventurers (their gear, name, trust's ways),
+    // refused with why, and the party menu shown again as it is
+    #mercCommand(command) {
+        this.#command(command, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 2);
+                this.sound?.play("denied");
+            }
+
+            if (this.partyPanel?.open) {
+                this.#showParty();
+            }
+        });
+    }
+
+    /** Whether the player may change this world's rules (core/host.js "rule": its host's player, or an owner). */
+    mayRule() {
+        return this.me === HOST_PLAYER || this.host.players.get(this.me)?.role === "owner";
+    }
+
+    /** Whether this world's mercenaries can die (core/host.js RULES mortal), as the world's host says. */
+    setMortal(on) {
+        this.#command({ type: "rule", rule: "mortal", value: Boolean(on) }, (result) => {
+            if (!result.ok) {
+                this.hud.message(REFUSALS[result.reason] ?? "Can't do that.", 2);
+            }
+        });
+    }
+
+    // The player's followers kept with their character, and their roll (core/host.js characterOf)
+    #keepFollowers() {
+        const character = this.host.characterOf(this.host.players.get(this.me));
+
+        this.onFollowers(character.followers, character.roll);
+    }
+
+    // A word from one of the player's hired adventurers over their head (core/followers.js BARKS:
+    // `kind`'s), with chatter on (Game options), each kind of word from each of them at most once
+    // a BARK_EVERY, and from any of them once a BARK_GAP
+    #bark(id, kind, names = {}) {
+        const lines = BARKS[kind];
+        const now = this.clock;
+        const key = `${id}:${kind}`;
+
+        if (!this.chatter || !lines || !this.battle.actor(id) || now - (this.barked.get(key) ?? -Infinity) < BARK_EVERY || now - (this.barked.get("any") ?? -Infinity) < BARK_GAP) {
+            return;
+        }
+
+        const words = lines[Math.floor(Math.random() * lines.length)].replace(/\{(\w+)\}/g, (all, name) => names[name] ?? all);
+
+        this.barked.set(key, now);
+        this.barked.set("any", now);
+        this.hud.say(id, words, 1 + bubbleSeconds(words));
+    }
+
+    // What's come of one of the player's hired adventurers, told (core/host.js "follower" events):
+    // in a line, a sound for some, a word from them for some (#bark); drawn as they are, and kept
+    // with the character
+    #followerNews(event) {
+        const name = event.name;
+        const plain = name.split(",")[0];
+        const wounds = `${event.wounds} wound${event.wounds === 1 ? "" : "s"}`;
+        const leader = { leader: this.hero.name, byname: event.byname ?? "" };
+        const words = {
+            joined: event.back ? null : `${name} follows you now${event.level > 1 ? `, at level ${event.level}` : ""}.`,
+            fallen: `${name} has fallen, for good.`,
+            dismissed: `${name} goes their own way.`,
+            levelled: `${name} is level ${event.level} now.${event.level === MERCENARY.gift && event.gift ? ` A veteran: ${event.gift.toLowerCase()} for you while they're on their feet.` : ""}`,
+            byname: `They're calling ${plain} ${event.byname} now.`,
+            trusted: `${name} trusts you more: choose how they grow (party menu, More).`,
+            down: `${name} is down (${wounds})! Stand by them, heal them, or give them a draught.`,
+            up: `${name} is back on their feet.`,
+            home: event.why === "lost" ? `${name} is left behind: they'll wait for you at the guild.` : `${name} can't go on, and goes home to mend. Send for them at any guild's desk.`,
+            recalled: `${name} is back at your side, mended (${event.price} gold).`,
+            outfitted: event.item ? `${name} wears what you gave them.` : `You take back what ${name} wore.`,
+            renamed: `You call them ${name} now.`,
+            picked: `${name} will grow as you chose.`,
+            mended: `One of ${name}'s wounds is mended (${wounds} left).`,
+        }[event.change];
+
+        if (words) {
+            this.hud.message(words, event.change === "down" || event.change === "home" ? 4 : 3);
+        }
+
+        this.hud.setGold(this.progress.gold);
+
+        // (Hired or sent for, paid in gold; fallen, mourned as the player would be; grown, as the
+        // player's skills grow)
+        const sound = { joined: event.back ? null : "coins", recalled: "coins", fallen: "fallen", levelled: "levelUp", byname: "levelUp", trusted: "levelUp" }[event.change];
+
+        if (sound) {
+            this.sound?.play(sound);
+        }
+
+        const bark = { down: "down", up: "up", levelled: "level", byname: "byname", trusted: "trust" }[event.change];
+
+        if (bark) {
+            this.#bark(event.follower, bark, leader);
+        }
+
+        this.#mirror();
+
+        // (Kept with the character)
+        this.#keepFollowers();
+
+        if (this.partyPanel?.open) {
+            this.#showParty();
+        }
+    }
+
     // One of the party's icons tapped or held (hud.js onPartyMember; `time`: ms, as
     // performance.now()): held, the wheel opened at it (what to tell them, then, turned over, the
     // player's healing and wards for them), steered by the finger still down; tapped twice in
@@ -10847,11 +11070,18 @@ export class Game {
             done: standing.done.slice(0, 6).map(({ title, from: giver, state }) => ({ title, from: giver.townName, state })),
             company: [...this.host.followers]
                 .filter(([, { leader }]) => leader === this.me)
-                .map(([id, { name, calling, waiting }]) => {
+                .map(([id, one]) => {
                     const actor = this.battle.actor(id);
 
-                    return { name, calling, hp: actor?.hp ?? 0, maxHp: actor?.maxHp ?? 1, waiting };
+                    return { name: calledBy(one), calling: one.calling, level: one.level ?? 1, hp: actor?.hp ?? 0, maxHp: actor?.maxHp ?? 1, waiting: one.waiting, down: Boolean(actor?.dead && actor.downed) };
                 }),
+            // (Those mending at the guilds, and the roll of those who've left them: core/host.js)
+            mending: this.host.mendingOf(this.me).map((id) => {
+                const one = this.host.mending.get(id);
+
+                return { name: calledBy(one), calling: one.calling, level: one.level ?? 1 };
+            }),
+            roll: this.host.players.get(this.me)?.roll ?? [],
             most: this.host.mostFollowers(this.me),
             heard: this.#heardTell(at),
             trails: this.#trailNotes(at),
@@ -11309,7 +11539,7 @@ export class Game {
             const def = ITEMS[stack.id];
             const label = itemLabel(stack);
 
-            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb || def.bait ? "Throw" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb || def.use?.bait), toss: Boolean(def.food), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot || def.charm ? describe(stack, progress, { index, label, haggle }) : null };
+            return { ...stack, label, about: aboutOf(stack), use: def.use ? (def.tome || def.scroll || def.map ? "Read" : def.oil ? "Apply" : def.bomb || def.bait ? "Throw" : stack.id === "meal" || def.food ? "Eat" : "Drink") : null, aimed: Boolean(def.use?.cast || def.use?.bomb || def.use?.bait), toss: Boolean(def.food), equip: def.slot ? (def.slot === "mainHand" ? "Wield" : "Wear") : null, takes: def.slot ?? null, price: priceOf(stack, { haggle, selling: true }), wanted: !this.shopping || buys(this.shopping.shop, stack.id), info: def.slot || def.charm ? describe(stack, progress, { index, label, haggle }) : null, giveTo: this.#wearers(stack) };
         });
         const me = this.battle.actor(this.me);
         const might = this.host.mightFor(this.me);
@@ -11370,9 +11600,18 @@ export class Game {
     // Something asked of the pack: done by the host, or why not said (with whoever's being traded
     // with, buying or selling). Something thrown away can be taken back a moment after. A piece
     // put on or taken off is heard by what it's made of (the piece known before the pack changes).
+    // The player's hired adventurers who could wear a piece of gear from their pack (core/followers.js
+    // wearable: a weapon of their calling's, or body armour, made for no mightier than them), on
+    // their feet: [{ id, name }] (the pack's Give to: the "outfit" command)
+    #wearers(stack) {
+        return [...this.host.followers]
+            .filter(([id, one]) => one.leader === this.me && !this.battle.actor(id)?.dead && !wearable(stack, { weapon: HIRES[one.calling]?.weapon, level: one.level }))
+            .map(([id]) => ({ id, name: this.battle.actor(id)?.name ?? "them" }));
+    }
+
     #packCommand(asked) {
         const command = asked.type === "buy" ? { ...asked, from: this.shopping?.keeper } : asked.type === "sell" ? { ...asked, to: this.shopping?.keeper } : asked;
-        const worn = asked.type === "equip" ? this.progress.pack[asked.index] : asked.type === "unequip" ? this.progress.gear[asked.slot] : null;
+        const worn = asked.type === "equip" || asked.type === "outfit" ? this.progress.pack[asked.index] : asked.type === "unequip" ? this.progress.gear[asked.slot] : null;
 
         return this.#command(command, (result) => {
             if (!result.ok) {
@@ -13322,20 +13561,26 @@ export class Game {
 
                 break;
             case "follower":
-                if (event.id === this.me) {
-                    this.hud.message({ joined: `${event.name} follows you now.`, fallen: `${event.name} has fallen!`, dismissed: `${event.name} goes their own way.`, lost: `${event.name} is left behind: back where you hired them, when you're next there.` }[event.change], 3);
-                    this.hud.setGold(this.progress.gold);
-
-                    // (Hired, paid in gold; fallen, mourned as the player would be)
-                    if (event.change === "joined" || event.change === "fallen") {
-                        this.sound?.play(event.change === "joined" ? "coins" : "fallen");
-                    }
-                    this.#mirror();
-
-                    // (Kept with the character)
-                    this.onFollowers(this.host.characterOf(this.host.players.get(this.me)).followers);
+                if (event.change === "outfitted" && event.slot === "body") {
+                    this.#redress(event.follower);
                 }
 
+                if (event.id === this.me) {
+                    this.#followerNews(event);
+                }
+
+                break;
+            case "share":
+                // (What the player's hired adventurers took of gold won with them: core/host.js #won)
+                if (event.id === this.me) {
+                    this.hud.message(event.taken.length === 1 ? `${event.taken[0].name} takes their share: ${event.gold} gold.` : `Your company takes its share: ${event.gold} gold.`, 2);
+                    this.hud.setGold(this.progress.gold);
+                }
+
+                break;
+            case "rules":
+                // (Whether mercenaries can die here, changed by the world's host: core/host.js #setRule)
+                this.hud.message(event.rules.mortal ? "In this world, mercenaries can die now: a third fall is their last." : "In this world, mercenaries no longer die: a third fall sends them home to mend.", 4);
                 break;
             case "fate":
                 if (event.id === this.me) {
@@ -13433,6 +13678,7 @@ export class Game {
                 // in towns, for the invasions to come: core/invasions.js clockOf)
                 this.onWar(this.host.war);
                 this.onProgress(this.progress);
+                this.#keepFollowers();
 
                 if (this.journal?.open) {
                     this.#showJournal();
@@ -13711,6 +13957,15 @@ export class Game {
         const actor = battle.actor(event.id);
 
         victim.actions.react(event.reaction, { from });
+
+        // (One of the player's hired adventurers striking the kind of foe that last knocked them
+        // down: a word about it, now and then, #bark)
+        const striker = event.by ? this.host.followers.get(event.by) : null;
+        const nemesis = striker?.leader === this.me ? striker.record?.nemesis : null;
+
+        if (nemesis && actor?.kind === "beast" && actor.wild?.creature === nemesis) {
+            this.#bark(event.by, "again", { foe: CREATURES[nemesis]?.name.toLowerCase() ?? "" });
+        }
 
         // (One of the wild's creatures crying out, now and then; struck dead, it's its death
         // that's heard: CALLS)
@@ -14067,7 +14322,7 @@ export class Game {
             this.sound?.play("tamedChime");
         }
 
-        this.onFollowers(this.host.characterOf(this.host.players.get(this.me)).followers);
+        this.#keepFollowers();
     }
 
     // Summoned by another player (come, or resist: said no to at once, with Resist all summons

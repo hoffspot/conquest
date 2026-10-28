@@ -3344,7 +3344,8 @@ that they've fallen; that they rule the continent, or who does.
 ### Followers (M9)
 
 **Hiring.** The adventurers at a guild (reading its board, or drinking at its tables) can be
-hired, for gold by their calling (`HIRES`):
+hired, for gold by their calling (`HIRES`: a fresh one's; one of a higher level dearer, as
+*Mercenaries that grow* has it):
 
 | Calling | Fights with | Price |
 | --- | --- | --- |
@@ -3412,8 +3413,9 @@ host.js `#orderUnit`, an `order` command; core/followers.js `UNIT_ORDERS`):
 - or **go their own way** (dismissed: asked first, in talk or from the party alike, as it's for
   good).
 
-A follower who falls is gone. How they were told to fight is kept with them in the battle
-(`guarding`, `holdFire`, `fallBackUntil`: host.js `stance`), not with the character.
+A follower who falls is knocked down, up again a while after (*Mercenaries that grow*). How
+they were told to fight is kept with them in the battle (`guarding`, `holdFire`,
+`fallBackUntil`: host.js `stance`), not with the character.
 
 **Their own abilities** (core/followers.js `UNIT_ABILITIES`, `abilityOf`; host.js `unitAbility`,
 `#unitAbility`), each once a while (`abilityReadyAt`), told as it's used (a `unitAbility` event):
@@ -3436,9 +3438,98 @@ healing draught, a hot meal or a cure (core/followers.js `givable`) given to one
 own within 16 m (`GIVE_REACH`) heals them, or cures what's on them it cures; refused at full
 health ("healthy"), with nothing for a cure to cure, or too far off.
 
-**Kept** with the character (`characterOf`'s `followers`: name, calling, looks, people;
-`save.js` `saveFollowers`), so they come along to any world; and in the host's snapshot. The
-journal shows the player's company: each follower, how they are, and how many they can lead.
+#### Mercenaries that grow
+
+The user: "They don't have any way to get stronger and easily get killed soon after the player
+starts fighting more difficult content... A player getting some attachment and investment into a
+mercenary would be interesting." So a hired adventurer grows with their leader, falls without
+being lost, takes a share, wears what they're given and is remembered (the five stages of the
+proposal, all at once; `SNAPSHOT_VERSION` 45 makes those in a world kept from before fresh ones
+of the first level, `NET_VERSION` 191).
+
+**Levels** (core/followers.js `MERCENARY`, `LEVEL_XP`, `levelOfXp`, `levelPower`; host.js
+`#train`, `#levelUp`):
+- 1 to 10, 50·L·(L+1) experience from one to the next (100, 300, 600... 4,500: 16,500 in all
+  to the tenth), each level 1.18 times as strong as the one before in health, blows, shots,
+  spells and healing (exact.js `pow`): a tenth-level one about 4.4 times a fresh one;
+- they learn from the hit points they take off a foe, and half those their leader takes off one
+  while they're standing within 60 m of them (`#standingBy`); three times as fast two levels or
+  more under the most they can be, twice one under, so one hired late catches up;
+- the most they can be (`capOf`; host.js `capFor`) is the tier of the land their leader's might
+  is fit for (core/might.js `mightTier`) and one, and half their **Command** rank more (rounded
+  up), so a healer or a talker hires the might they don't have. What's learnt past it is kept,
+  and counted once the most grows (`#upTo`, each time the leader's outfitted);
+- at level 4 their ability's ready a quarter sooner; at level 7, a **veteran**, they give their
+  leader a gift while they're on their feet with them (`GIFTS`: a warrior's shield wall, a
+  twentieth more armour; a ranger's hunter's eye, shots a tenth harder; a rogue's dirty tricks,
+  one blow in ten bleeding; a mage's counsel, spells a tenth stronger; a cleric's blessing,
+  healing a seventh stronger), added as the leader's outfitted (host.js `#outfit`), never to their
+  might; at level 10, **mastery** (`MASTERY`: a warrior's shield as a captain's, a ranger's dodging
+  one blow in seven, a rogue's one in five, a mage's stronger spells, a cleric's Detraumatize).
+
+**Offered at the guilds** (host.js `hireOffer`, asked in talk: "Would you ride with me? (level 4,
+320 gold)"): each adventurer a level under the most the player can lead (the first at least), for
+their calling's price times their level to the power 1.5, to the nearest 5 (`hirePrice`: a
+tenth-level warrior's 1,265 gold, about thirty times a fresh one's). About one in six is
+**renowned** (`RENOWN`, by their seed: `renownOf`), offered at the most, half as dear again, with
+a trait (tireless, deadly, lucky or quick), and says so.
+
+**Falling and getting up** (battle.js `DOWNED`, `rises`, `rise`; host.js `#knockedDown`):
+- one who falls is knocked down, not lost (a `death` event with `downed`): up again where they
+  fell 20 s after (5 s with their leader standing by them; each half as long with the Stalwart way),
+  with 30% of their health (a `respawn` event with `rose`); a heal cast on them, or a healing
+  draught given them, gets them up at once;
+- each fall leaves a **wound** (`MENDING`): a tenth less health till it's mended (a healing
+  draught given them mends one);
+- the third fall, they can't go on, and go **home to mend** (`#sendHome`; one carried off by
+  magic and left behind too): still the player's, counted in their company, and kept with the
+  character (`away`); sent for at any guild's receptionist for a quarter of their price
+  (`recallPrice`, `recallOffer`, `#sendFor`: back at their side, mended), or let go there, asked
+  first (`#letMendingGo`);
+- where the world's rule has it (`RULES` `mortal`: off to begin with; set by the world's host's
+  player or an owner, Game options *Mercenaries can die*, a `rule` command, told to everyone as a
+  `rules` event), the third fall is their last (`#fallForGood`).
+
+**The share** (`SHARE`, `sharesOf`; host.js `#won`): each follower standing within 60 m of their
+leader takes 5 in a hundred of the gold they win (loot, a bundle, a reward, a bounty), a point
+less each rank of their trust, and all of them together never more than 20 in a hundred; counted
+in ten-thousandths of a gold piece, what's over carried with them (`owed`), so a little at a time
+adds up, the same in every browser; told in a line (a `share` event). No wages, no debt.
+
+**What they wear** (`MERC_GEAR`, `wearable`, `mercSlotOf`; host.js `#outfitFollower`,
+`#unoutfit`: the `outfit` and `unoutfit` commands, from the pack's *Give to* or the party menu's
+*More*): a weapon of their calling's kind (`HIRES`) and body armour, neither of a level more than
+ten times theirs; the weapon's make, level and what's rolled on it in all they do, the armour's in
+their armour, which takes no more than 40% of a blow (as the player's: progress.js `ARMOR_CAP`).
+What they wore's given back as they part. They're drawn wearing it (characters/folk.js
+`followerLook`, for everyone who sees them).
+
+**Trust** (`TRUST`, `TRUST_PICKS`, `pickOf`; host.js `#together`, `#pick`: the `pick` command):
+a rank at 30, 120 and 300 foes brought down with their leader (by either of them, while standing
+by them), each a choice of two ways to grow, chosen by the player (more health or harder blows;
+their ability sooner or dodging; up sooner when knocked down or more armour), chosen again only
+in a guild hall.
+
+**Remembered** (`freshRecord`, `bynameOf`, `BYNAMES`, `BANES`, `BARKS`; host.js `#noted`,
+`#rename`, `#rollCall`):
+- what they've done: the foes they've brought down and the mightiest of them, the harm they've
+  done, their falls and risings, the foes brought down with their leader, the gold they've
+  earned; and the kind that last knocked them down (their nemesis);
+- a **byname** for it after their name (the Dauntless, the Grim, the Unbroken, Wolfsbane and the
+  like, the Bloodied);
+- a name of the player's for them (the `rename` command: 20 letters at most; none, their own again);
+- a word over their head now and then (Game options *Mercenaries' chatter*, on to start with):
+  knocked down, up again, a level gained, a byname earned, trust grown, and striking their
+  nemesis's kind again;
+- the **roll** (`ROLL_MOST`: 20, the latest first): those who've fallen for good or gone their
+  own way, with their level, byname and the foes they brought down, in the journal.
+
+**Kept** with the character in the world they were hired in (`characterOf`'s `followers`: who
+they are and what they've grown into, those mending too, and the `roll`; `save.js`
+`saveFollowers`, a saved game's; a server's world keeps a visitor's with its memory of them,
+server/storage/visitors.js `REMEMBERED`), brought in safe (netplay.js `followerFrom`, `rollFrom`:
+no more than one could be); and in the host's snapshot. The journal shows the player's company:
+each follower, their level, how they are, those mending, how many they can lead, and the roll.
 
 ### News and rumours, and the guild's board (M8)
 

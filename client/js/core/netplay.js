@@ -95,7 +95,10 @@
 
 import { STEP_MS } from "./battle.js";
 import { isGuid } from "./guid.js";
-import { HIRES, HOST_PLAYER, OWN } from "./host.js";
+import { HIRES, HOST_PLAYER, OWN, ROLL_MOST } from "./host.js";
+import { BANES, MENDING, MERCENARY, pickOf, RENOWN, wearable } from "./followers.js";
+import { levelOf } from "./gear.js";
+import { QUALITIES, thingOf } from "./progress.js";
 import { compareMotion, MOTION, packMotion, unpackMotion } from "./motion.js";
 import { selfOf } from "./selfstate.js";
 import { STARTING_WEAPONS } from "./weapons.js";
@@ -105,7 +108,7 @@ import { CREATURES, TIERS } from "./creatures.js";
 import { WARY } from "./wary.js";
 
 /** Bumped whenever what's said changes: a game of another version can't join. */
-export const NET_VERSION = 190;
+export const NET_VERSION = 191;
 
 /** How many steps the host plays between telling how the world should stand. */
 export const CHECK_EVERY = 100;
@@ -247,6 +250,68 @@ export function chatLine(text) {
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 
+// A whole number from 0 to `most` (anything else, 0)
+const whole = (value, most) => (Number.isInteger(value) && value >= 0 ? Math.min(value, most) : 0);
+
+/**
+ * A hired adventurer as a character brings them (core/host.js characterOf's followers: who they
+ * are, and what they've grown into: docs/WAR.md *Mercenaries that grow*), made safe to bring in:
+ * their level, experience, wounds and record kept only as they could be (core/followers.js), what
+ * they wear only if they could wear it (wearable), what's wrong left off. One whose calling the
+ * game hasn't (host.js HIRES), or with no name, null.
+ */
+export function followerFrom(one) {
+    if (!isObject(one) || typeof one.name !== "string" || !one.name.trim() || !HIRES[one.calling]) {
+        return null;
+    }
+
+    const level = Number.isInteger(one.level) ? Math.max(1, Math.min(MERCENARY.most, one.level)) : 1;
+    const record = isObject(one.record) ? one.record : {};
+    const piece = (item, slot) => (isObject(item) && typeof item.id === "string" && (item.quality === undefined || QUALITIES[item.quality]) && !wearable({ ...item, level: levelOf(item.level) }, { weapon: HIRES[one.calling].weapon, level }) && (slot === "mainHand") === (item.id === HIRES[one.calling].weapon) ? thingOf(item) : null);
+    const best = isObject(record.best) && typeof record.best.name === "string" && Number.isFinite(record.best.power) ? { name: record.best.name.slice(0, 40), power: Math.max(0, Math.min(100, Math.round(record.best.power))) } : null;
+    const banes = new Set(Object.values(BANES));
+
+    return {
+        name: one.name.trim().slice(0, 40),
+        calling: one.calling,
+        sex: one.sex === "f" ? "f" : "m",
+        seed: Number.isInteger(one.seed) ? one.seed : 1,
+        people: RACE[one.people] ? one.people : "human",
+        from: typeof one.from === "string" ? one.from.slice(0, 120) : null,
+        level,
+        xp: whole(one.xp, 10_000_000),
+        wounds: whole(one.wounds, MENDING.most - 1),
+        owed: whole(one.owed, 9999),
+        gear: { mainHand: piece(one.gear?.mainHand, "mainHand"), body: piece(one.gear?.body, "body") },
+        record: {
+            kills: whole(record.kills, 10_000_000),
+            damage: whole(record.damage, 1_000_000_000),
+            falls: whole(record.falls, 10_000_000),
+            rises: whole(record.rises, 10_000_000),
+            together: whole(record.together, 10_000_000),
+            earned: whole(record.earned, 1_000_000_000),
+            best,
+            slain: Object.fromEntries(Object.entries(isObject(record.slain) ? record.slain : {}).filter(([bane, count]) => banes.has(bane) && Number.isInteger(count) && count > 0).map(([bane, count]) => [bane, Math.min(count, 10_000_000)])),
+            nemesis: CREATURES[record.nemesis] ? record.nemesis : null,
+        },
+        called: typeof one.called === "string" && one.called.trim() ? one.called.trim().slice(0, 20) : null,
+        picks: Array.isArray(one.picks) ? [...new Set(one.picks.filter((pick) => typeof pick === "string" && pickOf(pick)))].slice(0, 3) : [],
+        renowned: typeof one.renowned === "string" && RENOWN.traits[one.renowned] ? one.renowned : null,
+        ...(one.away === true ? { away: true } : {}),
+    };
+}
+
+/**
+ * A character's roll of the hired adventurers who've parted from them (core/host.js #rollCall),
+ * made safe to bring in: [{ name, calling, level, byname, gone, kills, day }], ROLL_MOST at most.
+ */
+export function rollFrom(roll) {
+    return (Array.isArray(roll) ? roll : [])
+        .filter((one) => isObject(one) && typeof one.name === "string" && HIRES[one.calling] && ["fallen", "dismissed"].includes(one.gone))
+        .slice(0, ROLL_MOST)
+        .map((one) => ({ name: one.name.slice(0, 40), calling: one.calling, level: Number.isInteger(one.level) ? Math.max(1, Math.min(MERCENARY.most, one.level)) : 1, byname: typeof one.byname === "string" ? one.byname.slice(0, 40) : null, gone: one.gone, kills: whole(one.kills, 10_000_000), day: whole(one.day, 1_000_000) }));
+}
+
 /**
  * A character as one who's joining brings it (as Host.join takes it: { hero, talks, explored,
  * progress, standing, followers }), made safe to bring in: or null if it isn't one. Their hero's
@@ -265,7 +330,7 @@ export function characterFrom(character) {
     // (Their hired followers, and a beast they've tamed, one: core/wary.js)
     const tamed = brought.find((one) => one.tamed === true && WARY[one.creature]?.tames && Number.isInteger(one.tier) && one.tier >= 1 && one.tier <= TIERS);
     const followers = [
-        ...brought.filter((one) => typeof one.name === "string" && HIRES[one.calling]).slice(0, 8),
+        ...brought.map(followerFrom).filter(Boolean).slice(0, 8),
         ...(tamed ? [{ tamed: true, creature: tamed.creature, tier: tamed.tier, name: typeof tamed.name === "string" && tamed.name.trim() ? tamed.name.trim().slice(0, 20) : CREATURES[tamed.creature].name }] : []),
     ];
 
@@ -285,6 +350,7 @@ export function characterFrom(character) {
         progress: isObject(character.progress) ? structuredClone(character.progress) : {},
         standing: isObject(character.standing) ? structuredClone(character.standing) : {},
         followers: structuredClone(followers),
+        roll: rollFrom(character.roll),
     };
 }
 

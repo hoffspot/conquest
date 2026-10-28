@@ -3,8 +3,11 @@
 // they've raised, in that order. Each with their likeness, what they are (and, a creature called
 // or raised, how long it has left), their health, and whether they follow or wait; and buttons to
 // tell them to follow, to wait where they are, or to go (asked first: the game's dismiss dialog,
-// onAskDismiss). With no one,
-// how to come by some.
+// onAskDismiss). A hired adventurer's level and wounds besides, and (More) what they've grown
+// into (docs/WAR.md *Mercenaries that grow*): how far to their next level, the trust they've come
+// to and the ways it's let them grow (to choose, onPick), what they wear (to take back,
+// onTakeBack), what they've done, a veteran's gift, and a name of the player's for them
+// (onRename). Below them, those mending at the guild. With no one, how to come by some.
 //
 // Playing together, above them, the players in their party (core/host.js partyFor), its leader
 // crowned, each with who's with them; its leader can make another leader or put them out (asked
@@ -100,11 +103,11 @@ export function timeLeft(ms) {
  * What one of the party is, in words: a hired adventurer by their calling ("Hired warrior"), a
  * creature called or raised by its name and how long it has left ("Called wolf · 4:05 left").
  */
-export function memberKind({ kind, calling = null, creature = null, left = null }) {
+export function memberKind({ kind, calling = null, creature = null, left = null, level = null, renowned = null }) {
     const time = left === null ? "" : ` · ${timeLeft(left)} left`;
 
     if (kind === "adventurer") {
-        return `Hired ${calling ?? "adventurer"}`;
+        return `${renowned ? `${renowned} hired` : "Hired"} ${calling ?? "adventurer"}${level ? ` · level ${level}` : ""}`;
     }
 
     if (kind === "summon") {
@@ -167,7 +170,10 @@ export class PartyPanel {
         this.unitsHeading = element("h3", "journal-heading", "With you");
         this.list = element("ul", "journal-list party-list");
         this.empty = element("p", "journal-note party-empty");
-        this.body.append(this.playersHeading, this.players, this.othersHeading, this.others, this.unitsHeading, this.list, this.empty);
+        // (Those mending at the guild: core/host.js mendingOf)
+        this.mendingHeading = element("h3", "journal-heading", "Mending at the guild");
+        this.mendingList = element("ul", "journal-list party-mending");
+        this.body.append(this.playersHeading, this.players, this.othersHeading, this.others, this.unitsHeading, this.list, this.empty, this.mendingHeading, this.mendingList);
         this.together = null;
 
         // The chat: what's been said, the quick phrases, and a line to send
@@ -238,6 +244,18 @@ export class PartyPanel {
         this.onParty = () => {};
         this.onClose = () => {};
 
+        /**
+         * Of a hired adventurer (by id): a way they've grown chosen (a TRUST_PICKS id), what they
+         * wear in a slot taken back ("mainHand", "body"), and a name of the player's for them (none:
+         * their own again).
+         */
+        this.onPick = () => {};
+        this.onTakeBack = () => {};
+        this.onRename = () => {};
+
+        // Whose More is open (their id), kept as the menu's shown again
+        this.more = null;
+
         /** Something said to the party (a line typed, or a quick phrase), and a tab chosen ("party", "chat", "players"). */
         this.onSay = () => {};
         this.onTab = () => {};
@@ -277,7 +295,7 @@ export class PartyPanel {
      * (whether the player's in a party);
      * and `world`, whether there's the World button (a world on a server).
      */
-    show({ members = [], most = 1, players = [], others = [], leads = false, full = false, together = false, chat = null, everyone = [], partied = false, world = false } = {}) {
+    show({ members = [], most = 1, players = [], others = [], leads = false, full = false, together = false, chat = null, everyone = [], partied = false, world = false, mending = [] } = {}) {
         this.#together({ players, others, leads, full, together });
         this.#everyone({ everyone, leads, full, partied });
         this.tabs.hidden = !together;
@@ -305,10 +323,22 @@ export class PartyPanel {
                 this.list.insertBefore(row.root, this.list.children[k] ?? null);
             }
 
-            this.#fill(row, member);
+            this.#fill(row, { ...member, id: member.id });
         });
 
-        const hired = members.filter(({ kind }) => kind === "adventurer").length;
+        const hired = members.filter(({ kind }) => kind === "adventurer").length + mending.length;
+
+        // (Those mending at the guild: each by name, and what it costs to send for them)
+        this.mendingHeading.hidden = this.mendingList.hidden = !mending.length;
+        this.mendingList.replaceChildren(
+            ...mending.map(({ name, calling, level, price }) => {
+                const row = element("li", "party-mending-row");
+
+                row.append(element("span", "party-name", name), element("span", "party-kind", `${memberKind({ kind: "adventurer", calling, level })} · Send for them at any guild's desk (${price} gold)`));
+
+                return row;
+            }),
+        );
 
         this.count.textContent = members.length + Math.max(0, players.length - 1) ? `${members.length + Math.max(0, players.length - 1)} with you` : "";
         this.empty.textContent = members.length
@@ -613,7 +643,10 @@ export class PartyPanel {
         const follow = element("button", "journal-button party-follow", "Follow");
         const wait = element("button", "journal-button party-wait", "Wait");
         const dismiss = element("button", "journal-button party-dismiss", "Dismiss");
-        const row = { root, canvas, initial, name, kind, fill, state, follow, wait, dismiss, face, painted: false };
+        // (A hired adventurer's: what they've grown into, shown beneath them on More)
+        const moreButton = element("button", "journal-button party-more-button", "More");
+        const more = element("div", "party-more");
+        const row = { root, canvas, initial, name, kind, fill, state, follow, wait, dismiss, face, moreButton, more, painted: false, shown: null };
 
         root.dataset.id = id;
         face.type = "button";
@@ -623,32 +656,128 @@ export class PartyPanel {
         bar.append(fill);
         text.append(name, kind, bar, state);
 
-        for (const button of [follow, wait, dismiss]) {
+        for (const button of [follow, wait, dismiss, moreButton]) {
             button.type = "button";
         }
+
+        more.hidden = true;
+        moreButton.addEventListener("click", () => {
+            this.more = this.more === id ? null : id;
+            more.hidden = this.more !== id;
+            moreButton.textContent = more.hidden ? "More" : "Less";
+        });
 
         follow.addEventListener("click", () => this.onOrder(id, "follow"));
         wait.addEventListener("click", () => this.onOrder(id, "wait"));
         // (Asked first, by the game: its dismiss dialog)
         dismiss.addEventListener("click", () => this.onOrder(id, "dismiss"));
 
-        actions.append(follow, wait, dismiss);
-        root.append(face, text, actions);
+        actions.append(moreButton, follow, wait, dismiss);
+        root.append(face, text, actions, more);
         this.rows.set(id, row);
 
         return row;
     }
 
+    // What a hired adventurer's grown into, beneath them (More: the member's `merc`, as the game
+    // tells it): their level and how far to the next, their trust and the ways it's let them grow
+    // (each rank's two, the one chosen pressed; to choose), what they wear (to take back), what
+    // they've done, their gift and mastery; and a name of the player's for them. Made again only
+    // when it's changed
+    #grown(row, id, merc) {
+        const key = JSON.stringify(merc);
+
+        if (row.shown === key) {
+            return;
+        }
+
+        row.shown = key;
+
+        const line = (text) => element("p", "party-more-line", text);
+        const button = (label, done, { pressed = null, title = "" } = {}) => {
+            const each = element("button", "journal-button party-more-pick", label);
+
+            each.type = "button";
+            each.title = title;
+            each.addEventListener("click", done);
+
+            if (pressed !== null) {
+                each.setAttribute("aria-pressed", String(pressed));
+            }
+
+            return each;
+        };
+        const parts = [];
+
+        parts.push(line(merc.next === null ? `Level ${merc.level}: as far as they go.` : merc.held ? `Level ${merc.level}: as far as you can lead them now. They'll grow as you do (${merc.xp} experience).` : `Level ${merc.level}: ${merc.xp} of ${merc.next} experience to the next.`));
+
+        if (merc.wounds) {
+            parts.push(line(`${merc.wounds} wound${merc.wounds === 1 ? "" : "s"}: a healing draught given them mends one. Another ${3 - merc.wounds === 1 ? "fall" : `${3 - merc.wounds} falls`} and they'll go home to mend.`));
+        }
+
+        parts.push(line(merc.trust ? `They trust you (${merc.trust} of 3: ${merc.together} foes brought down together).` : `Bring down foes together for them to trust you (${merc.together} so far).`));
+
+        for (const { rank, picks } of merc.picks) {
+            const pair = element("div", "party-more-picks");
+
+            pair.append(...picks.map(({ id: pick, label, about, chosen }) => button(label, () => this.onPick(id, pick), { pressed: chosen, title: about })));
+            parts.push(line(`Trust, rank ${rank + 1}: ${picks.find(({ chosen }) => chosen)?.about ?? "choose how they grow."}`), pair);
+        }
+
+        for (const { slot, label, piece } of merc.gear) {
+            const worn = element("div", "party-more-gear");
+
+            worn.append(element("span", "party-more-line", `${label}: ${piece ?? "nothing of yours (give them gear from your pack)"}`));
+
+            if (piece) {
+                worn.append(button("Take back", () => this.onTakeBack(id, slot)));
+            }
+
+            parts.push(worn);
+        }
+
+        parts.push(line(merc.record));
+
+        for (const each of [merc.gift, merc.mastery, merc.renowned].filter(Boolean)) {
+            parts.push(line(each));
+        }
+
+        // (A name of the player's for them)
+        const form = element("form", "party-more-rename");
+        const input = element("input", "chat-input");
+
+        input.value = merc.called ?? "";
+        input.placeholder = merc.name;
+        input.maxLength = 20;
+        input.setAttribute("aria-label", "Their name");
+        form.append(input, button("Rename", () => {}));
+        form.lastChild.type = "submit";
+        form.addEventListener("submit", (event) => {
+            event.preventDefault();
+            this.onRename(id, input.value.trim() || null);
+        });
+        parts.push(form);
+        row.more.replaceChildren(...parts);
+    }
+
     // A member's row as they are now
-    #fill(row, { name, kind, calling = null, creature = null, hp, maxHp, waiting = false, guarding = false, holdFire = false, away = false, left = null, ally = false, picture = null }) {
+    #fill(row, { id, name, kind, calling = null, creature = null, hp, maxHp, waiting = false, guarding = false, holdFire = false, away = false, left = null, ally = false, picture = null, merc = null }) {
         const health = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
 
         row.root.className = `party-row ${kind}${ally ? " ally" : ""}${away ? " away" : ""}`;
         row.initial.textContent = name.slice(0, 1).toUpperCase();
         row.name.textContent = name;
-        row.kind.textContent = memberKind({ kind, calling, creature, left });
+        row.kind.textContent = memberKind({ kind, calling, creature, left, level: merc?.level ?? null, renowned: merc?.renownedName ?? null });
         row.fill.style.width = `${Math.round(health * 100)}%`;
-        row.state.textContent = `${hp} / ${maxHp}${waiting ? " · Waiting" : guarding ? " · Guarding you" : " · Following"}${holdFire ? " · Holding fire" : ""}${away ? " · Not here" : ""}${ally ? " · Chosen to help" : ""}`;
+        row.state.textContent = `${merc?.down ? "Down" : `${hp} / ${maxHp}`}${merc?.wounds ? ` · ${merc.wounds} wound${merc.wounds === 1 ? "" : "s"}` : ""}${waiting ? " · Waiting" : guarding ? " · Guarding you" : " · Following"}${holdFire ? " · Holding fire" : ""}${away ? " · Not here" : ""}${ally ? " · Chosen to help" : ""}${merc?.choose ? " · Trusts you more: choose how they grow (More)" : ""}`;
+        row.moreButton.hidden = !merc;
+
+        if (merc) {
+            this.#grown(row, id, merc);
+        }
+
+        row.more.hidden = !merc || this.more !== id;
+        row.moreButton.textContent = row.more.hidden ? "More" : "Less";
         row.follow.hidden = !waiting;
         row.wait.hidden = waiting;
         row.face.setAttribute("aria-label", `Help ${name}`);

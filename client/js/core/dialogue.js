@@ -803,8 +803,32 @@ export const TREES = Object.freeze({
                     { say: "Are there other branches?", next: "branches" },
                     { say: "What's that archway by the hearth?", next: "portal" },
                     { if: { hell: true }, say: "Anything odd being reported out in the wilds?", next: "cult", do: [{ heard: "hell" }] },
+                    // (One of theirs gone home to mend, sent for: core/host.js #sendFor, any guild)
+                    { if: { mending: true, recallPurse: true }, say: "Send for {mending}, please. ({recallPrice} gold)", next: "sentFor", do: [{ recall: true }] },
+                    { if: { mending: true, recallPurse: false }, say: "Could you send for {mending}? ({recallPrice} gold)", next: "sendShort" },
+                    { if: { mending: true }, say: "I won't be needing {mending} any more.", next: "release" },
                     FAREWELL,
                 ],
+            },
+            sentFor: {
+                say: ["Of course! A runner's gone for {mending}. Patched up and paid for, they'll be at your side before you're out the door.", "{mending}? Mended nicely, I hear. I'll send word; they'll be with you straight away!"],
+                choices: [{ say: "Thank you.", next: "more" }],
+            },
+            sendShort: {
+                say: "The healers want {recallPrice} gold for {mending}'s keep, I'm afraid. Come back when you have it!",
+                choices: [{ say: "I'll be back.", next: "more" }],
+            },
+            // (Asked first: let go, they're on the roll, what they wore sent back: core/host.js #letMendingGo)
+            release: {
+                say: "Let {mending} go? They'll find other work once they're mended, but they won't be yours to send for again.",
+                choices: [
+                    { say: "Yes, let them go.", next: "released", do: [{ release: true }] },
+                    { say: "No, I'll keep them on.", next: "more" },
+                ],
+            },
+            released: {
+                say: "Done. Their things are sent on to you, and the guild will look after them. It always does.",
+                choices: [{ say: "Thank you.", next: "more" }],
             },
             // (The nearest hell's cult, as the guild's heard of it: core/cultword.js)
             cult: {
@@ -913,9 +937,18 @@ export const TREES = Object.freeze({
                 choices: [
                     { if: { waiting: false }, say: "Wait here.", next: "waiting", do: [{ follower: "wait" }] },
                     { if: { waiting: true }, say: "Come on, with me.", next: "following", do: [{ follower: "follow" }] },
+                    { say: "How are you holding up?", next: "holding" },
                     { say: "We part here. Go your own way.", next: "parting" },
                     { say: "Nothing. Carry on.", next: null },
                 ],
+            },
+            // (What they've grown into, in their own words: core/host.js followers, the game's words)
+            holding: {
+                say: [
+                    { if: { wounded: true }, lines: ["{wounds} wounds and counting. A draught wouldn't go amiss.", "I've been better. {wounds} wounds; another bad fall and I'm off to the guild to mend."] },
+                    { lines: ["Level {level}, {kills} foes down since I joined you. {trustWords}", "Fit as a fiddle. {kills} of them down so far, and I'm level {level} now. {trustWords}"] },
+                ],
+                choices: [{ say: "Good. Back to it.", next: "greet" }],
             },
             // (Asked first: they go for good)
             parting: {
@@ -1121,6 +1154,8 @@ export const TREES = Object.freeze({
         nodes: {
             greet: {
                 say: [
+                    // (One of the renowned: core/followers.js RENOWN)
+                    { if: { renowned: true }, lines: ["{name}. You'll have heard of me, I expect. {renown}, they say, and they're right.", "Yes, {name}. That {name}. {renown}, if you want it in a word."] },
                     { if: { met: false }, lines: ["New blood, eh? Name's {name}. Word of advice: read the notice twice before you take it.", "Hm? {name}. Don't mind me, I'm waiting for a better job to go up.", "You look like you can handle yourself. {name}, Iron rank. Almost Bronze."] },
                     { lines: ["{player}. Still breathing? Good.", "Oh, you again. Seen anything worth the walk?"] },
                 ],
@@ -1128,8 +1163,9 @@ export const TREES = Object.freeze({
                     { say: "Any advice?", next: "advice" },
                     { if: { rumour: true }, say: "Heard anything on the road?", next: "war" },
                     { if: { hell: true }, say: "Anything out there worth the walk?", next: "cult", do: [{ heard: "hell" }] },
-                    { if: { hire: true, purse: true }, say: "Would you ride with me? ({hirePrice} gold)", next: "hired", do: [{ hire: true }] },
-                    { if: { hire: true, purse: false }, say: "Would you ride with me? ({hirePrice} gold)", next: "short" },
+                    // (As strong as the player's can be, and as dear: core/host.js hireOffer)
+                    { if: { hire: true, purse: true }, say: "Would you ride with me? (level {hireLevel}, {hirePrice} gold)", next: "hired", do: [{ hire: true }] },
+                    { if: { hire: true, purse: false }, say: "Would you ride with me? (level {hireLevel}, {hirePrice} gold)", next: "short" },
                     { say: "Good hunting.", next: null },
                 ],
             },

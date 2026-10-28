@@ -17,7 +17,7 @@ import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const GUEST = Object.freeze({ hero: { name: "Bryn", shape: {}, look: {}, weapon: "bow", boots: false, race: "human" }, progress: { gold: 50 } });
 const MINUTE = 60000;
-const SERVED = Object.freeze({ rest: "everyone", debug: "owner", invasions: true });
+const SERVED = Object.freeze({ rest: "everyone", debug: "owner", invasions: true, mortal: false });
 
 // How long the world's been going (ms) when it's a time of day (ms from midnight) on day `day`
 const at = (time, day = 1) => day * DAY.length + time - DAY.start;
@@ -92,14 +92,33 @@ describe("a world with no host player (core/host.js RULES)", () => {
     it("keeps its rules with it, each copy and each restored one playing by them; anything unknown as RULES has it", () => {
         const { host } = served();
 
-        assert.deepEqual(RULES, { rest: "host", debug: "host", invasions: true }, "(a world a browser hosts, to begin with)");
+        assert.deepEqual(RULES, { rest: "host", debug: "host", invasions: true, mortal: false }, "(a world a browser hosts, to begin with)");
         assert.deepEqual(host.rules, SERVED);
         assert.deepEqual(host.snapshot().rules, SERVED);
         assert.deepEqual(Host.restore(buildWorld({ seed: 2 }), host.snapshot()).rules, SERVED);
         assert.deepEqual(new Host(buildWorld({ seed: 2 }), { populate: false, rules: { rest: "nobody", debug: 1, invasions: "sometimes" } }).rules, RULES);
         assert.deepEqual(new Host(buildWorld({ seed: 2 }), { populate: false, rules: { rest: "host", debug: "host" } }).rules, RULES, "(one kept before invasions: they come)");
+        assert.equal(new Host(buildWorld({ seed: 2 }), { populate: false, rules: { ...SERVED, mortal: "sometimes" } }).rules.mortal, false, "(one kept before mercenaries could die: they can't)");
         assert.equal(host.players.get("p1").role, "owner");
         assert.equal(host.players.get("p2").role, "player");
+    });
+
+    it("lets its owners alone make its hired adventurers mortal, or not again, telling everyone in it; nothing else changed so", () => {
+        const { host } = served();
+
+        host.events = [];
+        assert.equal(host.command("p2", { type: "rule", rule: "mortal", value: true }).reason, "rule", "(a player: not theirs to say)");
+        assert.equal(host.command("p1", { type: "rule", rule: "rest", value: "host" }).reason, "command", "(only that rule)");
+        assert.equal(host.command("p1", { type: "rule", rule: "mortal", value: "yes" }).reason, "command");
+        assert.equal(host.rules.mortal, false);
+
+        assert.equal(host.command("p1", { type: "rule", rule: "mortal", value: true }).ok, true);
+        assert.deepEqual(host.rules, { ...SERVED, mortal: true });
+        assert.deepEqual(host.events.filter(({ type }) => type === "rules").map(({ rules }) => rules), [{ ...SERVED, mortal: true }]);
+        assert.deepEqual(Host.restore(buildWorld({ seed: 2 }), host.snapshot()).rules, { ...SERVED, mortal: true }, "(kept with the world)");
+
+        assert.equal(host.command("p1", { type: "rule", rule: "mortal", value: false }).ok, true);
+        assert.deepEqual(host.rules, SERVED);
     });
 
     it("passes its time only once everyone's resting, by the shortest of their rests, each woken and told; one resting alone waits", () => {

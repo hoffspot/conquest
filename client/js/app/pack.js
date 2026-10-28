@@ -14,8 +14,9 @@
 //
 // A thing is tapped to see what it is (app/gearinfo.js: its name in the colour of its make, what
 // it does, its set; gear in the pack compared with what's worn), in a card beside it (over the
-// paperdoll, where there's room) with buttons for what can be done with it; one used, or a tap
-// anywhere else (or its ×, or Escape), and the card goes. In a list (a shop's wares, what's carried to sell, what's offered
+// paperdoll, where there's room) with buttons for what can be done with it (a weapon or body
+// armour one of the player's hired adventurers could wear, Give to them: `giveTo`); one used, or a
+// tap anywhere else (or its ×, or Escape), and the card goes. In a list (a shop's wares, what's carried to sell, what's offered
 // in a trade) a row's tapped to open what it is beneath it, a shop's ware with what's rolled on it
 // as it's bought and what buying and putting it on would change. Held, a piece of gear goes on (or, worn, comes off, back into the pack); anything else
 // held (or right-clicked) opens a wheel of what can be done with it, like the action wheel
@@ -979,6 +980,14 @@ export class PackPanel {
             actions.push({ key: "use", label: stack.use ?? stack.equip });
         }
 
+        // (A weapon or body armour one of the player's hired adventurers could wear: given them,
+        // what they wore back in the pack: core/host.js "outfit")
+        if (!trading) {
+            for (const { id, name } of stack.giveTo ?? []) {
+                actions.push({ key: `give:${id}`, label: `Give to ${name.split(",")[0]}` });
+            }
+        }
+
         // (Meat carved from a beast: eaten, or thrown to a beast, as meat bait is: core/wary.js)
         if (stack.toss && !trading) {
             actions.push({ key: "toss", label: "Throw to a beast" });
@@ -1012,6 +1021,8 @@ export class PackPanel {
 
         if (key === "use") {
             this.onCommand(stack.equip ? { type: "equip", index } : { type: "use", index });
+        } else if (key.startsWith("give:")) {
+            this.onCommand({ type: "outfit", follower: key.slice("give:".length), index });
         } else if (key === "toss") {
             this.onCommand({ type: "use", index, toss: true });
         } else if (key === "onWheel") {

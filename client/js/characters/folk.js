@@ -10,7 +10,7 @@
 
 import { createRandom } from "../core/random.js";
 import { everydayDress } from "./dress.js";
-import { LIVERY_PARTS, liveryKit, soldierKit } from "./liveries.js";
+import { LIVERY_PARTS, liveryKit, lookOf, soldierKit } from "./liveries.js";
 import { LOOKS, peopleLook } from "./peoples.js";
 import { HAIR_COLOURS, SKIN_TONES } from "./skin.js";
 
@@ -315,6 +315,26 @@ export function folkLook({ role, local = role, look: calling = null, sex = "m", 
     const human = { label: local, shape: { macro, details }, look, equipment, walk: "natural", sheathed: Boolean(spec.armed) };
 
     return people === "human" ? human : ofPeople(human, { people, part, sex, seed });
+}
+
+// What an adventurer wears on their chest, put off for body armour given them
+const CHEST = new Set(["jerkin", "gambeson", "mail", "breastplate"]);
+
+/**
+ * A hired adventurer as they look (folkLook, as the adventurer they were), in the body armour
+ * their leader gave them (`body`: { id, people }, core/gear.js; drawn as liveries.js lookOf has
+ * it) in place of what they wore on their chest, if they've been given some.
+ */
+export function followerLook({ calling = "warrior", sex = "m", seed = 1, people = "human", body = null }) {
+    const look = folkLook({ role: "adventurer", look: calling, sex, seed, people });
+
+    if (!body?.id) {
+        return look;
+    }
+
+    const worn = lookOf(body);
+
+    return worn.length ? { ...look, equipment: [...new Set([...look.equipment.filter((id) => !CHEST.has(id.split(".")[0])), ...worn])] } : look;
 }
 
 // One of the folk of another people: their people's body, skin, eyes and hair (peoples.js), as
