@@ -27,11 +27,12 @@ import { GROUND } from "../../../core/setpieces/pieces.js";
 import { allAtOnce } from "../../../core/steps.js";
 import { between } from "../../../core/terrain/ground.js";
 import { neglect, rockiness } from "../../../core/wilds.js";
-import { LAYERS, atlasMaterial, wildsMaterial } from "../engine/atlas.js";
+import { LAYERS, atlasMaterial, cliffMaterial, rockMaterial, wildsMaterial } from "../engine/atlas.js";
 import { MATERIALS } from "../engine/painters.js";
 import { releaseGeometry } from "../../release.js";
 import { facingSun } from "../../sun.js";
 import { bushMesh } from "./bushes.js";
+import { familyOf, lookBytes, pileMaking, ROCK_DETAIL, ROCK_FAMILIES, rockLook, rockMaking, StoneMesher, stoneColour } from "./rocks.js";
 import { TREE_WIND } from "./trees.js";
 import { plantsOf } from "./yards.js";
 
@@ -384,16 +385,16 @@ function ballOf(detail) {
     return balls.get(detail);
 }
 
-// --- Rocks ---
+// --- Lumps ---
 
 /**
- * A rock, about a metre across and standing on the ground, into a mesher: a ball (`detail` times
- * divided: -1 an octahedron) pushed in and out by noise (`rough`), cut flat by `cuts` planes (its
- * facets), squashed to `squash` of its width tall and sunk a little into the ground; textured
- * with `layer`, darker at its foot, and green with moss (`moss`), white with snow (`snow`) or
- * flecked with lichen (`lichen`) on top.
+ * A lump, about a metre across, into a mesher (a skull, a cactus's ball; the rocks are rocks.js's):
+ * a ball (`detail` times divided: -1 an octahedron) pushed in and out by noise (`rough`), cut flat
+ * by `cuts` planes, squashed to `squash` of its width tall and sunk a little into the ground;
+ * textured with `layer`, darker at its foot, and green with moss (`moss`), white with snow
+ * (`snow`) or flecked with lichen (`lichen`) on top.
  */
-function rock(mesher, random, { detail = 1, rough = 0.28, cuts = 4, squash = 0.7, layer = "rock", moss = 0, snow = 0, lichen = 0.2, stretch = [1, 1] } = {}) {
+function lump(mesher, random, { detail = 1, rough = 0.28, cuts = 4, squash = 0.7, layer = "rock", moss = 0, snow = 0, lichen = 0.2, stretch = [1, 1] } = {}) {
     const seed = random.int(1, 1e6);
     const planes = Array.from({ length: cuts }, () => {
         const normal = unit([random.range(-1, 1), random.range(-0.2, 1), random.range(-1, 1)]);
@@ -452,6 +453,195 @@ function rock(mesher, random, { detail = 1, rough = 0.28, cuts = 4, squash = 0.7
         }
 
         mesher.tri(a, b, c, { layer: LAYER[layer], colours, uvScale: METRES[layer] ?? 1 });
+    }
+}
+
+// --- Rocks ---
+
+/**
+ * The stony features, drawn as rocks.js draws rock: their look's a stone (a rock or a pile of
+ * them, its corners shared, drawn with the cliffs' material) and what of it isn't stone, a part
+ * (a moonstone's crescents, the sun painted on a kopje, the volcanic lands' basalt columns).
+ */
+export const STONY = Object.freeze(["boulder", "stone", "outcrop", "cairn", "menhir", "kopje", "moonstone"]);
+const STONES = new Set([...STONY, "chip"]);
+
+// A land's moss, snow, lichen and damp, as rocks.js stoneColour puts them on
+const growthOf = (land) => {
+    const look = lookOfLand(land);
+
+    return { moss: look.moss, snow: look.snow ?? 0, lichen: look.lichen ?? 1, wet: look.wet ?? 0 };
+};
+
+/**
+ * A rock look (rocks.js's) as a part to place (place()): its triangles lit by its corners' own
+ * normals, its picture laid on the plane each faces most (as tri() lays it), its colours put on as
+ * rocks.js stoneColour puts them with no turn or ground to know of (`growth`: as growthOf's), no
+ * brighter than any look is (1.3: its snow greyer than the stone's mesh's).
+ */
+export function stonePart(look, growth = {}) {
+    const mesher = new Mesher(look.index.length);
+    const settings = { ...growth };
+    const out = [0, 0, 0];
+    const colours = [];
+    const point = (i) => [look.position[i * 3], look.position[i * 3 + 1], look.position[i * 3 + 2]];
+    const normal = (i) => [look.normal[i * 3], look.normal[i * 3 + 1], look.normal[i * 3 + 2]];
+
+    for (let i = 0; i < look.count; i++) {
+        stoneColour(out, look, i, look.normal[i * 3], look.normal[i * 3 + 1], look.normal[i * 3 + 2], look.position[i * 3 + 1] - look.ground, settings);
+        colours.push(out.map((v) => Math.min(1.3, v)));
+    }
+
+    for (let t = 0; t < look.index.length; t += 3) {
+        const corners = [look.index[t], look.index[t + 1], look.index[t + 2]];
+        const [a, b, c] = corners.map(point);
+        const axis = dominant(faceNormal(a, b, c));
+        const scale = METRES[LAYERS[look.layer[corners[0]]]] ?? 1;
+        const uvs = [a, b, c].map((p) => (axis === 0 ? [p[2] / scale, p[1] / scale] : axis === 1 ? [p[0] / scale, p[2] / scale] : [p[0] / scale, p[1] / scale]));
+
+        mesher.tri(a, b, c, { layer: look.layer[corners[0]], colours: corners.map((i) => colours[i]), normals: corners.map(normal), uvs });
+    }
+
+    return mesher.part();
+}
+
+// A rock on its own as a part (for the undergrowth's stones and pebbles, a campfire's ring, a
+// carved stone): rocks.js rockLook's, its colours put on for its land
+const rockPart = (random, options, growth) => stonePart(rockLook(random, options), growth);
+
+/**
+ * A stony feature's look, made a step at a time (each a yield): { stone (rocks.js's look, or
+ * null), part (what of it isn't stone, or null), family }. `near`: its rocks divided as finely as
+ * they are near the player (ROCK_DETAIL), the same rocks either way.
+ */
+function* stoneMaking(random, kind, land, near) {
+    const look = lookOfLand(land);
+    const family = familyOf(land);
+    const layer = look.stone;
+    const detail = (role) => ROCK_DETAIL[role][near ? "near" : "far"];
+
+    switch (kind) {
+        case "boulder":
+            return { stone: yield* rockMaking(random, { family, detail: detail("big"), layer }), part: null, family };
+        case "stone":
+            return { stone: yield* rockMaking(random, { family, detail: detail("small"), layer }), part: null, family };
+        case "outcrop": {
+            // (The volcanic lands' basalt columns, more often than not)
+            if (land === "volcanic" && random.chance(0.6)) {
+                return { stone: null, part: made((mesher) => columns(mesher, random)), family };
+            }
+
+            // A few rocks breaking out of the ground together, the biggest in the middle
+            const members = Array.from({ length: random.int(3, 6) }, (_, k) => {
+                const angle = random.range(0, TAU);
+                const out = k === 0 ? 0 : random.range(0.18, 0.42);
+                const size = k === 0 ? random.range(0.45, 0.6) : random.range(0.18, 0.36);
+
+                return { family, layer, detail: detail(k === 0 ? "big" : "small"), at: [Math.cos(angle) * out, -0.03, Math.sin(angle) * out], turn: random.range(0, TAU), tilt: [random.range(-0.25, 0.25), random.range(-0.25, 0.25)], scale: [size, size * random.range(0.8, 1.4), size * random.range(0.7, 1)] };
+            });
+
+            return { stone: yield* pileMaking(random, members, { ground: 0.02 }), part: null, family };
+        }
+        case "cairn": {
+            // Flat stones stacked, smaller as they go up
+            const members = [];
+            const count = random.int(5, 8);
+            let y = 0;
+
+            for (let k = 0; k < count; k++) {
+                const width = 0.62 * (1 - (k / count) * 0.6) * random.range(0.85, 1.1);
+                const tall = random.range(0.13, 0.2);
+
+                members.push({ family: "slab", layer, detail: detail("tiny"), squash: 0.45, at: [random.range(-0.04, 0.04), y - tall * 0.25, random.range(-0.04, 0.04)], turn: random.range(0, TAU), scale: [width, tall / 0.37, width * random.range(0.8, 1)] });
+                y += tall * 0.78;
+            }
+
+            return { stone: yield* pileMaking(random, members, { ground: 0.02 }), part: null, family: "slab" };
+        }
+        case "menhir": {
+            const member = { family: "standing", layer, detail: detail("big"), at: [0, -0.05, 0], turn: random.range(0, TAU), tilt: [random.range(-0.08, 0.08), random.range(-0.08, 0.08)], scale: [0.42, 1.18, 0.28] };
+
+            return { stone: yield* pileMaking(random, [member], { ground: 0.04 }), part: null, family: "standing" };
+        }
+        case "kopje": {
+            // The cat folk's: rounded granite boulders heaped where the savannah breaks
+            const members = Array.from({ length: random.int(3, 6) }, (_, k) => {
+                const angle = random.range(0, TAU);
+                const out = k === 0 ? 0 : random.range(0.2, 0.4);
+                const size = k === 0 ? random.range(0.6, 0.75) : random.range(0.28, 0.5);
+                const lift = k > 2 ? random.range(0.25, 0.4) : -0.05;
+
+                return { family: "corestone", layer: random.pick(["granite", "rock-red"]), detail: detail(k === 0 ? "big" : "small"), at: [Math.cos(angle) * out, lift, Math.sin(angle) * out], turn: random.range(0, TAU), tilt: [random.range(-0.2, 0.2), random.range(-0.2, 0.2)], scale: [size, size * 0.85, size * random.range(0.8, 1)] };
+            });
+            const stone = yield* pileMaking(random, members, { ground: 0.02 });
+
+            // (A sun painted on its biggest stone, where it faces south about halfway up)
+            const part = random.chance(0.35) ? made((mesher) => painted(mesher, stone, [0, 0.42, 1])) : null;
+
+            return { stone, part, family: "corestone" };
+        }
+        case "chip":
+            // (A chip of it, strewn round a boulder: always as far off, being so small)
+            return { stone: yield* rockMaking(random, { family, detail: ROCK_DETAIL.tiny.far, layer }), part: null, family };
+        case "moonstone": {
+            // The elves': a pale standing stone, a crescent cut in it that holds the light
+            const member = { family: "standing", layer: random.pick(["marble", "rock-pale"]), detail: detail("big"), at: [0, -0.05, 0], turn: random.range(0, TAU), tilt: [random.range(-0.05, 0.05), random.range(-0.05, 0.05)], scale: [0.36, 1.2, 0.24] };
+            const stone = yield* pileMaking(random, [member], { ground: 0.04 });
+
+            return { stone, part: made((mesher) => crescents(mesher, stone)), family: "standing" };
+        }
+        default:
+            return { stone: null, part: null, family };
+    }
+}
+
+// The corner of a look furthest out along `way` (x z) of those about as high as `way`'s y:
+// where something's set on its surface. [point, normal]
+function surfaceOf(look, [wx, height, wz]) {
+    let best = null;
+
+    for (let i = 0; i < look.count; i++) {
+        const y = look.position[i * 3 + 1];
+
+        if (Math.abs(y - height) < 0.08) {
+            const out = look.position[i * 3] * wx + look.position[i * 3 + 2] * wz;
+
+            if (!best || out > best.out) {
+                best = { out, i };
+            }
+        }
+    }
+
+    const i = best?.i ?? 0;
+
+    return [[look.position[i * 3], look.position[i * 3 + 1], look.position[i * 3 + 2]], [look.normal[i * 3], look.normal[i * 3 + 1], look.normal[i * 3 + 2]]];
+}
+
+// A sun painted on a kopje's stone, facing out where it's set (surfaceOf)
+function painted(mesher, stone, way) {
+    const [at, normal] = surfaceOf(stone, way);
+    const u = unit(cross(UP, normal));
+    const v = cross(normal, u);
+
+    disc(mesher, at.map((x, k) => x + normal[k] * 0.012), u, v, 0.09, 10, linear(0xd8a030), linear(0xb86a20));
+}
+
+// A moonstone's crescents, facing south and north, set on its faces where they stand furthest out
+function crescents(mesher, stone) {
+    for (const face of [1, -1]) {
+        const [[x0, , z0]] = surfaceOf(stone, [0, 0.72, face]);
+        const points = Array.from({ length: 7 }, (_, k) => {
+            const a = -1.2 + (k / 6) * 2.4;
+
+            return [x0 + Math.cos(a) * 0.1, 0.72 + Math.sin(a) * 0.1, z0 + face * 0.006];
+        });
+        const inner = points.map(([x, y, z]) => [x0 + (x - x0) * 0.55 + 0.035, 0.72 + (y - 0.72) * 0.75, z]);
+
+        for (let k = 0; k < 6; k++) {
+            const quad = [points[k], points[k + 1], inner[k + 1], inner[k]];
+
+            mesher.quad(...(face > 0 ? quad : [...quad].reverse()), { colours: MOONLIGHT });
+        }
     }
 }
 
@@ -736,45 +926,6 @@ function logPile(mesher, random) {
 
 // --- Stone ---
 
-/** A cairn: flat stones stacked, smaller as they go up, about a metre tall (placed at its height). */
-function cairn(mesher, random, layer) {
-    let y = 0;
-    const count = random.int(5, 8);
-
-    for (let k = 0; k < count; k++) {
-        const width = 0.62 * (1 - (k / count) * 0.6) * random.range(0.85, 1.1);
-        const tall = random.range(0.13, 0.2);
-        const part = made((inner) => rock(inner, random, { detail: 0, rough: 0.2, cuts: 2, squash: 0.45, layer, lichen: 0.4 }));
-
-        place(mesher, part, { at: [random.range(-0.04, 0.04), y - tall * 0.25, random.range(-0.04, 0.04)], turn: random.range(0, TAU), scale: [width, tall / 0.37, width * random.range(0.8, 1)], shift: [random.next(), random.next()] });
-        y += tall * 0.78;
-    }
-}
-
-/** A standing stone, about a metre tall (placed at its height): tall and flat-sided, leaning a little, lichened. */
-function menhir(mesher, random, layer) {
-    const part = made((inner) => rock(inner, random, { detail: 1, rough: 0.16, cuts: 5, squash: 1, layer, lichen: 0.8 }));
-
-    place(mesher, part, { at: [0, -0.05, 0], turn: random.range(0, TAU), tilt: [random.range(-0.08, 0.08), random.range(-0.08, 0.08)], scale: [0.42, 1.18, 0.28], shift: [random.next(), random.next()] });
-}
-
-/**
- * An outcrop, about a metre across (placed at its size): a few angular stones breaking out of the
- * ground together, the biggest in the middle.
- */
-function outcrop(mesher, random, look) {
-    const count = random.int(3, 6);
-
-    for (let k = 0; k < count; k++) {
-        const angle = random.range(0, TAU);
-        const out = k === 0 ? 0 : random.range(0.18, 0.42);
-        const size = k === 0 ? random.range(0.45, 0.6) : random.range(0.18, 0.36);
-        const part = made((inner) => rock(inner, random, { detail: k === 0 ? 1 : 0, rough: 0.2, cuts: k === 0 ? 6 : 3, squash: random.range(0.5, 0.95), ...look }));
-
-        place(mesher, part, { at: [Math.cos(angle) * out, -0.03, Math.sin(angle) * out], turn: random.range(0, TAU), tilt: [random.range(-0.25, 0.25), random.range(-0.25, 0.25)], scale: [size, size * random.range(0.8, 1.4), size * random.range(0.7, 1)], shift: [random.next(), random.next()] });
-    }
-}
-
 /**
  * Basalt columns (the volcanic lands' outcrops), about a metre across: six-sided pillars packed
  * together, standing to different heights.
@@ -922,7 +1073,7 @@ function ribs(mesher, random) {
     }
 
     // The skull, and its horns
-    const skull = made((inner) => rock(inner, random, { detail: 0, rough: 0.15, cuts: 2, squash: 0.6, layer: "plain", lichen: 0 }));
+    const skull = made((inner) => lump(inner, random, { detail: 0, rough: 0.15, cuts: 2, squash: 0.6, layer: "plain", lichen: 0 }));
 
     place(mesher, skull, { at: [0.47, 0, 0], turn: random.range(-0.3, 0.3), scale: [0.16, 0.14, 0.1], tint: bone });
 
@@ -1192,7 +1343,7 @@ function pebbles(mesher, random, count, layer = "rock") {
         const angle = random.range(0, TAU);
         const out = random.range(0, 0.35);
         const size = random.range(0.04, 0.12);
-        const part = made((inner) => rock(inner, random, { detail: -1, rough: 0.3, cuts: 1, squash: random.range(0.4, 0.7), layer, lichen: 0 }));
+        const part = rockPart(random, { family: "cobble", detail: ROCK_DETAIL.pebble.far, layer, squash: random.range(0.4, 0.7), lichen: 0 });
         const shade = random.range(0.75, 1.15);
 
         place(mesher, part, { at: [Math.cos(angle) * out, -0.01, Math.sin(angle) * out], turn: random.range(0, TAU), scale: [size, size, size * random.range(0.7, 1)], tint: [shade, shade * random.range(0.95, 1.02), shade * random.range(0.9, 1.02)], shift: [random.next(), random.next()] });
@@ -1270,7 +1421,7 @@ function bones(mesher, random) {
     }
 
     if (random.chance(0.4)) {
-        const skull = made((inner) => rock(inner, random, { detail: 0, rough: 0.12, cuts: 2, squash: 0.6, layer: "plain", lichen: 0 }));
+        const skull = made((inner) => lump(inner, random, { detail: 0, rough: 0.12, cuts: 2, squash: 0.6, layer: "plain", lichen: 0 }));
 
         place(mesher, skull, { at: [0, -0.01, 0], turn: random.range(0, TAU), scale: [0.22, 0.14, 0.13], tint: bone });
 
@@ -1305,7 +1456,7 @@ function cactus(mesher, random) {
         head(mesher, [0, h + 0.005, 0], { petals: 6, radius: 0.04, colour: linear(random.pick([0xe86aa0, 0xf2c830, 0xe84a3a])), centre: linear(0xf6e6a0), cup: 0.4, sway: 0 });
     } else {
         const pads = random.int(3, 6);
-        const ball = made((inner) => rock(inner, random, { detail: 0, rough: 0.08, cuts: 0, squash: 1, layer: "plain", lichen: 0 }));
+        const ball = made((inner) => lump(inner, random, { detail: 0, rough: 0.08, cuts: 0, squash: 1, layer: "plain", lichen: 0 }));
 
         for (let k = 0; k < pads; k++) {
             const y = 0.12 + (k > 1 ? 0.18 : 0) + random.range(-0.03, 0.03);
@@ -1371,7 +1522,7 @@ function campfire(mesher, random) {
 
     for (let k = 0; k < 9; k++) {
         const a = (k / 9) * TAU + random.range(-0.1, 0.1);
-        const stone = made((inner) => rock(inner, random, { detail: 0, rough: 0.25, cuts: 2, squash: 0.6, layer: "rock", lichen: 0.1 }));
+        const stone = rockPart(random, { family: "corestone", detail: 0, layer: "rock", squash: 0.6, lichen: 0.2 });
 
         place(mesher, stone, { at: [Math.cos(a) * 0.48, -0.02, Math.sin(a) * 0.48], turn: random.range(0, TAU), scale: [0.16, 0.16, 0.14], tint: [0.8, 0.78, 0.76], shift: [random.next(), random.next()] });
     }
@@ -1427,7 +1578,7 @@ function strand(mesher, a, b, width, colour) {
 // A horned beast's skull (an antelope's, an ox's) at `at`, facing `facing`, `size` long
 function hornedSkull(mesher, random, at, facing, size, { spiral = false } = {}) {
     const [dx, dz] = [Math.cos(facing), Math.sin(facing)];
-    const skull = made((inner) => rock(inner, random, { detail: 0, rough: 0.1, cuts: 2, squash: 0.6, layer: "plain", lichen: 0 }));
+    const skull = made((inner) => lump(inner, random, { detail: 0, rough: 0.1, cuts: 2, squash: 0.6, layer: "plain", lichen: 0 }));
 
     place(mesher, skull, { at: [at[0], at[1] - size * 0.08, at[2]], turn: -facing, scale: [size, size * 0.6, size * 0.55], tint: BONE });
 
@@ -1460,26 +1611,6 @@ function termiteMound(mesher, random) {
         const shift = () => ({ tri: (a, b, c, o) => mesher.tri(...[a, b, c].map(([x, y, z]) => [x + cx, y, z + cz]), o), quad: (a, b, c, d, o) => mesher.quad(...[a, b, c, d].map(([x, y, z]) => [x + cx, y, z + cz]), o) });
 
         lathe(shift(), [[r, -0.03], [r * 0.82, tall * 0.18], [r * 0.52, tall * 0.5], [r * 0.3, tall * 0.8], [r * 0.12, tall * 0.97], [0, tall]], 9, { layer: LAYER.mud, uvScale: METRES.mud * 0.3, jitter: 0.28, random, colours: [earth.map((v) => v * 0.75), earth, earth.map((v) => v * 1.08), earth.map((v) => v * 1.12), earth.map((v) => v * 1.15), earth.map((v) => v * 1.2)] });
-    }
-}
-
-// The cat folk's: a kopje, rounded granite boulders heaped where the savannah breaks
-function kopje(mesher, random) {
-    const count = random.int(3, 6);
-
-    for (let k = 0; k < count; k++) {
-        const angle = random.range(0, TAU);
-        const out = k === 0 ? 0 : random.range(0.2, 0.4);
-        const size = k === 0 ? random.range(0.6, 0.75) : random.range(0.28, 0.5);
-        const lift = k > 2 ? random.range(0.25, 0.4) : -0.05;
-        const part = made((inner) => rock(inner, random, { detail: k === 0 ? 1 : 0, rough: 0.12, cuts: 1, squash: random.range(0.7, 0.95), layer: random.pick(["granite", "rock-red"]), lichen: 0.3 }));
-
-        place(mesher, part, { at: [Math.cos(angle) * out, lift, Math.sin(angle) * out], turn: random.range(0, TAU), tilt: [random.range(-0.2, 0.2), random.range(-0.2, 0.2)], scale: [size, size * 0.85, size * random.range(0.8, 1)], shift: [random.next(), random.next()] });
-    }
-
-    // (A sun painted on its biggest stone)
-    if (random.chance(0.35)) {
-        disc(mesher, [0.02, 0.42, 0.33], [1, 0, 0], [0, 1, 0.2], 0.09, 10, linear(0xd8a030), linear(0xb86a20));
     }
 }
 
@@ -1687,32 +1818,9 @@ function eggshells(mesher, random) {
 
 // The lizard folk's: a carved stone, sunk in the mud, glyphs on it
 function glyphStone(mesher, random) {
-    const part = made((inner) => rock(inner, random, { detail: 0, rough: 0.1, cuts: 5, squash: 0.8, layer: "glyphs", lichen: 0.5 }));
+    const part = rockPart(random, { family: "standing", detail: 0, layer: "glyphs", squash: 0.8, lichen: 0.6 }, growthOf("marsh"));
 
     place(mesher, part, { at: [0, -0.04, 0], turn: random.range(0, TAU), tilt: [random.range(-0.2, 0.2), random.range(-0.2, 0.2)], scale: [0.4, 0.34, 0.32], tint: [0.95, 1, 0.92], shift: [random.next(), random.next()] });
-}
-
-// The elves': a moonstone, a pale standing stone with a crescent cut in it that holds the light
-function moonstone(mesher, random) {
-    const part = made((inner) => rock(inner, random, { detail: 1, rough: 0.08, cuts: 3, squash: 1, layer: random.pick(["marble", "rock-pale"]), lichen: 0.2, moss: 0.4 }));
-
-    place(mesher, part, { at: [0, -0.05, 0], turn: random.range(0, TAU), tilt: [random.range(-0.05, 0.05), random.range(-0.05, 0.05)], scale: [0.36, 1.2, 0.24], shift: [random.next(), random.next()] });
-
-    // (The crescent, facing south, and its twin to the north)
-    for (const face of [1, -1]) {
-        const points = Array.from({ length: 7 }, (_, k) => {
-            const a = -1.2 + (k / 6) * 2.4;
-
-            return [Math.cos(a) * 0.1, 0.72 + Math.sin(a) * 0.1, face * 0.125];
-        });
-        const inner = points.map(([x, y, z]) => [x * 0.55 + 0.035, 0.72 + (y - 0.72) * 0.75, z]);
-
-        for (let k = 0; k < 6; k++) {
-            const quad = [points[k], points[k + 1], inner[k + 1], inner[k]];
-
-            mesher.quad(...(face > 0 ? quad : [...quad].reverse()), { colours: MOONLIGHT });
-        }
-    }
 }
 
 // The elves': a slender post of verdigris curling over at its head, a glowing bud hanging from it
@@ -2440,28 +2548,50 @@ function trumpet(mesher, at, facing, colour, throat) {
 
 /**
  * How each land's rocks and grass look: its stone (an atlas layer), moss on its rocks (0 to 1),
- * snow on them, its grass's colours (at the foot and the tips: sRGB), and the colour of its fallen
- * wood.
+ * snow on them, how much lichen (as the rock's family has it: 1), how damp their feet are (moss
+ * creeping up them: `wet`), its grass's colours (at the foot and the tips: sRGB), and the colour of
+ * its fallen wood.
  */
 export const LOOKS = Object.freeze({
     farmland: { stone: "rock", moss: 0.3, grass: [0x3f5a24, 0x9ab85a] },
     meadow: { stone: "rock", moss: 0.35, grass: [0x3f5a24, 0xa2c05e] },
-    woods: { stone: "rock", moss: 0.9, grass: [0x2f4a1e, 0x6f9440] },
+    woods: { stone: "rock", moss: 0.9, wet: 0.4, grass: [0x2f4a1e, 0x6f9440] },
     heath: { stone: "rock-pale", moss: 0.4, grass: [0x4a4a26, 0xa6a064] },
-    marsh: { stone: "rock", moss: 0.8, grass: [0x34502e, 0x7a9a5c] },
-    elfwood: { stone: "rock-pale", moss: 0.8, grass: [0x2e5a24, 0x8ad05a] },
-    darkwood: { stone: "rock", moss: 1, grass: [0x22301a, 0x4e6a34] },
-    savannah: { stone: "rock-red", moss: 0, grass: [0x6a5a2a, 0xd8c078] },
-    jungle: { stone: "rock", moss: 1, grass: [0x2a5a1e, 0x6ab040] },
-    badlands: { stone: "rock-red", moss: 0, grass: [0x5a4a2a, 0xb89a62] },
-    volcanic: { stone: "rock-dark", moss: 0, grass: [0x3a3a2a, 0x7a7a52] },
+    marsh: { stone: "rock", moss: 0.8, wet: 0.8, grass: [0x34502e, 0x7a9a5c] },
+    elfwood: { stone: "rock-pale", moss: 0.8, wet: 0.3, grass: [0x2e5a24, 0x8ad05a] },
+    darkwood: { stone: "rock", moss: 1, wet: 0.6, grass: [0x22301a, 0x4e6a34] },
+    savannah: { stone: "rock-red", moss: 0, lichen: 0.6, grass: [0x6a5a2a, 0xd8c078] },
+    jungle: { stone: "rock", moss: 1, wet: 0.8, grass: [0x2a5a1e, 0x6ab040] },
+    badlands: { stone: "rock-red", moss: 0, lichen: 0.5, grass: [0x5a4a2a, 0xb89a62] },
+    volcanic: { stone: "rock-dark", moss: 0, lichen: 0.3, grass: [0x3a3a2a, 0x7a7a52] },
     tundra: { stone: "rock", moss: 0.3, snow: 0.35, grass: [0x4a5a44, 0x9aa88a] },
-    snow: { stone: "rock", moss: 0, snow: 1, grass: [0x6a7a6a, 0xc8d0c4] },
+    snow: { stone: "rock", moss: 0, snow: 1, lichen: 0.5, grass: [0x6a7a6a, 0xc8d0c4] },
     mountain: { stone: "rock", moss: 0.2, snow: 0.3, grass: [0x44503a, 0x8e9a76] },
-    beach: { stone: "rock-pale", moss: 0, grass: [0x6a7a5a, 0xb8c49a] },
+    beach: { stone: "rock-pale", moss: 0, lichen: 0.4, grass: [0x6a7a5a, 0xb8c49a] },
 });
 
 const lookOfLand = (land) => LOOKS[land] ?? LOOKS.meadow;
+
+// The ground's colour beside a rock or a cliff where it comes out of it (as a tint of its picture):
+// its land's grass, and the rock the ground's painted with on a slope so steep (GROUND_ROCK of it)
+const tints = new Map();
+
+/** The ground's colour at a rock's or a cliff's foot (kits/cliffs.js), for a land's look (LOOKS'): a multiplier of its stone's picture. */
+export function groundTint(look) {
+    if (!tints.has(look)) {
+        const stone = new THREE.Color(MATERIALS[look.stone]?.base ?? MATERIALS.rock.base);
+        const [dark, light] = look.grass.map((hex) => new THREE.Color(hex));
+        const grass = dark.clone().lerp(light, 0.5).lerp(new THREE.Color(MATERIALS.rock.base), GROUND_ROCK);
+
+        tints.set(look, [grass.r / stone.r, grass.g / stone.g, grass.b / stone.b]);
+    }
+
+    return tints.get(look);
+}
+
+// How much of the ground beside a cliff or a rock, where it comes out of it, is painted rock
+// (world/ground.js ROCK_FROM: at 36°, about a third)
+const GROUND_ROCK = 0.35;
 
 /**
  * What grows where on each land: about how many things to the square metre where it's lushest
@@ -2516,26 +2646,94 @@ const TENDED = new Set(["tuft", "daisy", "dandelion", "clock", "buttercup", "peb
 /** How many looks of each kind are made. */
 export const VARIANTS = 8;
 
-// Each look, made the first time it's wanted, by kind, land and number
+/**
+ * How many bytes of looks are kept (LOOKS_KEPT.bytes): past that, those least lately wanted are let
+ * go of, and made again if they're wanted again (each from its own seed, the same as it was).
+ */
+export const LOOKS_KEPT = Object.freeze({ bytes: 24 * 1024 * 1024 });
+
+// The looks kept, the least lately wanted first: by key, { look, bytes }
 const looks = new Map();
-const lookKey = (kind, land, index) => `${kind}:${land}:${index}`;
+let lookBytesKept = 0;
+const lookKey = (kind, land, index, detail = "") => `${kind}:${land}:${index}${detail}`;
+const partBytes = (part) => part.position.byteLength + part.normal.byteLength + part.color.byteLength + part.uv.byteLength + part.layer.byteLength + part.sway.byteLength;
 
-function lookOf(kind, land, index) {
-    const key = lookKey(kind, land, index);
+// A look kept (made by `make` if it isn't), wanted now
+function kept(key, make, bytesOf) {
+    let entry = looks.get(key);
 
-    if (!looks.has(key)) {
-        const random = randomOf(hashOf(index + 1, kind.length * 131 + [...kind].reduce((sum, c) => sum * 31 + c.charCodeAt(0), 7), [...land].reduce((sum, c) => sum * 31 + c.charCodeAt(0), 11)) * 4294967296);
+    if (entry) {
+        looks.delete(key);
+    } else {
+        const look = make();
 
-        looks.set(key, made((mesher) => draw(mesher, random, kind, land)));
+        entry = { look, bytes: bytesOf(look) };
+        lookBytesKept += entry.bytes;
     }
 
-    return looks.get(key);
+    looks.set(key, entry);
+
+    for (const [oldest, { bytes }] of looks) {
+        if (lookBytesKept <= LOOKS_KEPT.bytes || oldest === key) {
+            break;
+        }
+
+        looks.delete(oldest);
+        lookBytesKept -= bytes;
+    }
+
+    return entry.look;
 }
 
-// Make the looks wanted ([kind, land, index]) that aren't made yet, one a step (each a yield)
-function* makeLooks(wanted) {
+// Each look's own random numbers, by kind, land and number
+const randomFor = (kind, land, index) => randomOf(hashOf(index + 1, kind.length * 131 + [...kind].reduce((sum, c) => sum * 31 + c.charCodeAt(0), 7), [...land].reduce((sum, c) => sum * 31 + c.charCodeAt(0), 11)) * 4294967296);
+
+// A look of a kind for a land (a stony feature's as it's drawn on Low: its rocks as parts, divided
+// as they are far off: stoneLookOf), made the first time it's wanted
+function lookOf(kind, land, index) {
+    return kept(lookKey(kind, land, index), () => (STONES.has(kind) ? lowStone(kind, land, index) : made((mesher) => draw(mesher, randomFor(kind, land, index), kind, land))), partBytes);
+}
+
+// A stony feature's look as a part (on Low, drawn with the atlas as the rest is)
+function lowStone(kind, land, index) {
+    const { stone, part } = stoneLookOf(kind, land, index, false);
+
+    return made((mesher) => {
+        if (stone) {
+            place(mesher, stonePart(stone, growthOf(land)), { at: [0, 0, 0] });
+        }
+
+        if (part) {
+            place(mesher, part, { at: [0, 0, 0] });
+        }
+    });
+}
+
+/**
+ * A stony feature's look (STONY), divided as finely as near the player or as far off: { stone,
+ * part, family }, as stoneMaking makes it; made the first time it's wanted.
+ */
+export function stoneLookOf(kind, land, index, near) {
+    return kept(lookKey(kind, land, index, near ? ":near" : ":far"), () => allAtOnce(stoneMaking(randomFor(kind, land, index), kind, land, near)), stoneBytes);
+}
+
+const stoneBytes = ({ stone, part }) => (stone ? lookBytes(stone) : 0) + (part ? partBytes(part) : 0);
+
+// Make the looks wanted ([kind, land, index]) that aren't made yet, one a step (each a yield); a
+// stony feature's a step a rock (`near`: as finely divided as near the player; `stones`: whether
+// they're drawn as rocks.js draws them, or on Low as parts)
+function* makeLooks(wanted, { near = false, stones = false } = {}) {
     for (const [kind, land, index] of wanted) {
-        if (!looks.has(lookKey(kind, land, index))) {
+        if (STONES.has(kind) && (stones || near)) {
+            const key = lookKey(kind, land, index, near ? ":near" : ":far");
+
+            if (!looks.has(key)) {
+                const look = yield* stoneMaking(randomFor(kind, land, index), kind, land, near);
+
+                kept(key, () => look, stoneBytes);
+                yield;
+            }
+        } else if (!looks.has(lookKey(kind, land, index))) {
             lookOf(kind, land, index);
             yield;
         }
@@ -2545,10 +2743,18 @@ function* makeLooks(wanted) {
 /**
  * Make the looks some features want (featureMesh's) that aren't made yet, one a step (each a
  * yield). A look is made the first time it's wanted, which can take a few milliseconds (tens for
- * the craggier ones), so the chunks make theirs ahead, within each frame's budget.
+ * the craggier ones), so the chunks make theirs ahead, within each frame's budget. `rocks` as
+ * featureMesh's: their stony features' looks as finely divided as they'll be drawn.
  */
-export function* featureLooks(features, landAt) {
-    yield* makeLooks(features.filter(({ kind }) => kind !== "bush").map((feature) => featureLook(feature, landAt)));
+export function* featureLooks(features, landAt, { rocks = ROCK_TIERS.low } = {}) {
+    const wanted = features.filter(({ kind }) => kind !== "bush").map((feature) => featureLook(feature, landAt));
+
+    yield* makeLooks(wanted, { near: rocks.near, stones: rocks.tier > 0 });
+
+    // (And the chips strewn round the bigger boulders)
+    if (rocks.tier > 0) {
+        yield* makeLooks(features.filter(strewn).map((feature) => chipLook(feature, landAt)), { stones: true });
+    }
 }
 
 /** Make the looks some undergrowth wants (undergrowthOf's) that aren't made yet, one a step (as featureLooks). */
@@ -2559,7 +2765,6 @@ export function* undergrowthLooks(items) {
 // Draw one look of a kind for a land
 function draw(mesher, random, kind, land) {
     const look = lookOfLand(land);
-    const stone = { layer: look.stone, moss: look.moss, snow: look.snow ?? 0, lichen: look.moss ? 0.3 : 0.15 };
     const [base, tip] = look.grass.map(linear);
 
     if (GARDENS.has(kind)) {
@@ -2567,22 +2772,12 @@ function draw(mesher, random, kind, land) {
     }
 
     switch (kind) {
-        case "boulder":
-            return rock(mesher, random, { detail: 1, rough: random.range(0.2, 0.35), cuts: random.int(2, 6), squash: random.range(0.55, 0.9), ...stone });
-        case "stone":
-            return rock(mesher, random, { detail: 0, rough: random.range(0.25, 0.4), cuts: random.int(1, 4), squash: random.range(0.5, 0.85), ...stone });
-        case "outcrop":
-            return land === "volcanic" && random.chance(0.6) ? columns(mesher, random) : outcrop(mesher, random, stone);
         case "log":
             return fallenTree(mesher, random);
         case "stump":
             return stump(mesher, random);
         case "snag":
             return snag(mesher, random);
-        case "cairn":
-            return cairn(mesher, random, look.stone);
-        case "menhir":
-            return menhir(mesher, random, look.stone);
         case "mound":
             return mound(mesher, random);
         case "haystack":
@@ -2631,7 +2826,7 @@ function draw(mesher, random, kind, land) {
         case "stones":
             pebbles(mesher, random, random.int(1, 3), look.stone);
 
-            return rockLittle(mesher, random, stone);
+            return rockLittle(mesher, random, land);
         case "scree":
             return pebbles(mesher, random, random.int(10, 18), look.stone);
         case "sticks":
@@ -2657,8 +2852,6 @@ function draw(mesher, random, kind, land) {
         // Each people's own lands'
         case "termites":
             return termiteMound(mesher, random);
-        case "kopje":
-            return kopje(mesher, random);
         case "hornskull":
             return hornSkull(mesher, random);
         case "potsherds":
@@ -2681,8 +2874,6 @@ function draw(mesher, random, kind, land) {
             return eggshells(mesher, random);
         case "glyphstone":
             return glyphStone(mesher, random);
-        case "moonstone":
-            return moonstone(mesher, random);
         case "leaflamp":
             return leafLamp(mesher, random);
         case "petals":
@@ -2704,9 +2895,9 @@ function draw(mesher, random, kind, land) {
     }
 }
 
-// A stone or two, bigger than pebbles
-function rockLittle(mesher, random, stone) {
-    const part = made((inner) => rock(inner, random, { detail: 0, rough: 0.3, cuts: 3, squash: random.range(0.5, 0.8), ...stone }));
+// A stone or two, bigger than pebbles, of its land's rock
+function rockLittle(mesher, random, land) {
+    const part = rockPart(random, { family: familyOf(land), detail: ROCK_DETAIL.small.far, layer: lookOfLand(land).stone, squash: random.range(0.5, 0.8) }, growthOf(land));
 
     place(mesher, part, { at: [random.range(-0.2, 0.2), 0, random.range(-0.2, 0.2)], turn: random.range(0, TAU), scale: [0.3, 0.3, 0.26], shift: [random.next(), random.next()] });
 }
@@ -2741,27 +2932,44 @@ function tintOf(h) {
 
 /**
  * A chunk's features (core/wilds.js's) drawn: { mesh (at the chunk's corner, drawn with the atlas,
- * casting shadows), bushes (their bushes, drawn as the hedges are: kits/bushes.js; or null), boxes
- * ({ min: [x, z], max: [x, z], top }: each one's, in the world, for how tall things stand on each
- * square) }. `landAt(x, y)` is each point's land; `sprigs` as many of the bushes' sprigs as the
- * quality draws (0 to 1).
+ * casting shadows), stones (its stony features' rocks, a mesh of their own: stoneMesh; or null),
+ * bushes (their bushes, drawn as the hedges are: kits/bushes.js; or null), boxes ({ min: [x, z],
+ * max: [x, z], top }: each one's, in the world, for how tall things stand on each square) }.
+ * `landAt(x, y)` is each point's land; `sprigs` as many of the bushes' sprigs as the quality
+ * draws (0 to 1); `rocks` how its rocks are drawn ({ tier, near }: ROCK_TIERS, and whether it's
+ * near the player).
  */
-export function featureMesh(features, landAt, [x0, y0], groundAt = () => 0, { sprigs = 1 } = {}) {
+export function featureMesh(features, landAt, [x0, y0], groundAt = () => 0, { sprigs = 1, rocks = ROCK_TIERS.low } = {}) {
     const mesher = new Mesher(Math.max(64, features.length * 400));
     const boxes = [];
     const bushes = [];
 
     for (const feature of features) {
         const bush = feature.kind === "bush";
+
+        // (A stony feature: its rocks drawn as rocks.js draws them, but on Low; what of it isn't
+        // stone, here)
+        if (STONES.has(feature.kind)) {
+            const [kind, land, index] = featureLook(feature, landAt);
+            const look = stoneLookOf(kind, land, index, rocks.near && rocks.tier > 0);
+            const placed = stonePlacing(feature, look, groundAt, [x0, y0]);
+            const part = rocks.tier > 0 ? look.part : lookOf(kind, land, index);
+
+            if (part) {
+                place(mesher, part, { ...placed, shift: [feature.variant * 7.3, feature.variant * 3.1] });
+            }
+
+            boxes.push({ min: [feature.x - placed.reach, feature.y - placed.reach], max: [feature.x + placed.reach, feature.y + placed.reach], top: placed.at[1] + placed.top * placed.scale[1] });
+            continue;
+        }
+
         const part = bush ? null : lookOf(...featureLook(feature, landAt));
         const { scale, turn } = bush ? { scale: [feature.size * 2, 1, feature.size * 2], turn: feature.turn } : fit(feature, part);
         const tint = tintOf(hashOf(Math.floor(feature.x * 10), Math.floor(feature.y * 10), 17));
         const reach = Math.max(scale[0], scale[2]) * 0.7;
         // (Set down on the lowest of the ground under it, a little into it, so on a slope none of
-        // it's left hanging over the ground; a boulder or a stone well into it, as the earth's
-        // built up round it over the years)
-        const sunk = feature.kind === "boulder" || feature.kind === "stone" ? SUNK * feature.height : 0;
-        const base = Math.min(...[[0, 0], [-reach, 0], [reach, 0], [0, -reach], [0, reach]].map(([dx, dy]) => groundAt(feature.x + dx * 0.7, feature.y + dy * 0.7))) - 0.05 - sunk;
+        // it's left hanging over the ground)
+        const base = Math.min(...[[0, 0], [-reach, 0], [reach, 0], [0, -reach], [0, reach]].map(([dx, dy]) => groundAt(feature.x + dx * 0.7, feature.y + dy * 0.7))) - 0.05;
 
         if (bush) {
             const [, land, index] = featureLook(feature, landAt);
@@ -2792,7 +3000,149 @@ export function featureMesh(features, landAt, [x0, y0], groundAt = () => 0, { sp
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
 
-    return { mesh, bushes: drawn.object, boxes };
+    return { mesh, stones: rocks.tier > 0 ? stoneMesh(features, landAt, [x0, y0], groundAt, { rocks }) : null, bushes: drawn.object, boxes };
+}
+
+/**
+ * How a chunk's rocks are drawn (view.js QUALITY's `rocks`): `low` as parts with the atlas, as
+ * the rest of it is, as finely divided as they are far off; `medium` with the cliffs' material
+ * (engine/atlas.js cliffMaterial), in a mesh of their own, finely divided near the player (`near`:
+ * the chunk the player's in and those round it); `high` with rockMaterial (its lichen's colonies
+ * painted pixel by pixel), finely divided everywhere.
+ */
+export const ROCK_TIERS = Object.freeze({
+    low: Object.freeze({ tier: 0, near: false }),
+    medium: Object.freeze({ tier: 1, near: false }),
+    near: Object.freeze({ tier: 1, near: true }),
+    high: Object.freeze({ tier: 2, near: true }),
+});
+
+/**
+ * A chunk's stony features' rocks (STONY) as one mesh (at the chunk's corner, casting shadows):
+ * each where featureMesh places it, its colours put on where it stands (rocks.js StoneMesher:
+ * moss, snow and lichen as it's turned and tilted, its foot the ground's colour), with chips of
+ * it strewn round the bigger boulders; drawn with the cliffs' material, or rockMaterial on High
+ * (`rocks` as featureMesh's). Its corners let go of once they're on the graphics card. Null if
+ * there are none.
+ */
+export function stoneMesh(features, landAt, [x0, y0], groundAt = () => 0, { rocks = ROCK_TIERS.medium } = {}) {
+    const stony = features.filter(({ kind }) => STONES.has(kind));
+
+    if (!stony.length) {
+        return null;
+    }
+
+    const stones = new StoneMesher(stony.length * (rocks.near ? 900 : 300));
+    const crisp = rocks.tier === 2;
+    const perMetre = (layer) => 1 / (METRES[LAYERS[layer]] ?? 1);
+
+    for (const feature of stony) {
+        const [kind, land, index] = featureLook(feature, landAt);
+        const look = stoneLookOf(kind, land, index, rocks.near);
+
+        if (!look.stone) {
+            continue;
+        }
+
+        const placed = stonePlacing(feature, look, groundAt, [x0, y0]);
+        const shared = { growth: growthOf(land), ground: groundTint(lookOfLand(land)), groundAt, origin: [x0, y0], perMetre, crisp };
+
+        stones.place(look.stone, { ...placed, ...shared });
+
+        // (Chips of it strewn round a bigger boulder, broken off it over the years)
+        if (strewn(feature)) {
+            for (const chip of chipsOf(feature, landAt, groundAt)) {
+                stones.place(stoneLookOf("chip", land, chip.index, false).stone, { at: [chip.x - x0, chip.y, chip.z - y0], turn: chip.turn, tilt: chip.tilt, scale: [chip.size, chip.size * 0.8, chip.size], tint: placed.tint, ...shared });
+            }
+        }
+    }
+
+    if (!stones.count) {
+        return null;
+    }
+
+    const mesh = new THREE.Mesh(releaseGeometry(stones.geometry({ crisp })), crisp ? rockMaterial() : cliffMaterial());
+
+    mesh.name = "rocks";
+    mesh.position.set(x0, 0, y0);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.matrixAutoUpdate = false;
+    mesh.updateMatrix();
+
+    return mesh;
+}
+
+/** A rock drawn as High draws them (rockMaterial), for the chunks' shader primer (chunks3d.js). */
+export function rockPrimer() {
+    const stones = new StoneMesher(16);
+
+    stones.place(rockLook(randomOf(1), { family: "cobble", detail: -1 }), { at: [0, 0, 0], crisp: true });
+
+    const mesh = new THREE.Mesh(stones.geometry({ crisp: true }), rockMaterial());
+
+    mesh.name = "rocks";
+
+    return mesh;
+}
+
+// Where a stony feature's placed (its look stoneLookOf's): { at (from the chunk's corner), turn,
+// tilt, scale, tint, top, reach }. Fitted to its size; a boulder or a stone set into the ground as
+// deep as its family is (ROCK_FAMILIES' `sunk`); one lying on the ground (a boulder, a stone, an
+// outcrop, a kopje) tilted half as far as the ground slopes under it, standing ones upright; set
+// down on the lowest of the ground under it, a little into it, so on a slope none of it's left
+// hanging over the ground
+function stonePlacing(feature, look, groundAt, [x0, y0]) {
+    const top = look.stone?.top ?? look.part?.top ?? 1;
+    const sunk = feature.kind === "boulder" || feature.kind === "stone" ? ROCK_FAMILIES[look.family]?.sunk ?? SUNK : 0;
+    const { scale, turn } = fit(feature, { top }, sunk);
+    const reach = Math.max(scale[0], scale[2]) * 0.7;
+    const at = (dx, dy) => groundAt(feature.x + dx * 0.7, feature.y + dy * 0.7);
+    const base = Math.min(at(0, 0), at(-reach, 0), at(reach, 0), at(0, -reach), at(0, reach)) - 0.05 - sunk * feature.height;
+    let tilt = [0, 0];
+
+    if (LEANS.has(feature.kind)) {
+        const across = reach * 0.7;
+        const [gx, gz] = [(at(reach, 0) - at(-reach, 0)) / (2 * across), (at(0, reach) - at(0, -reach)) / (2 * across)];
+        const [c, s] = [Math.cos(turn), Math.sin(turn)];
+        const [lx, lz] = [c * gx - s * gz, s * gx + c * gz];
+
+        tilt = [-Math.atan(lz) * TILT, Math.atan(lx) * TILT];
+    }
+
+    return { at: [feature.x - x0, base, feature.y - y0], turn, tilt, scale, tint: tintOf(hashOf(Math.floor(feature.x * 10), Math.floor(feature.y * 10), 17)), top, reach };
+}
+
+// The stony features that lie on the ground (and lean as it slopes), and how far, of its slope
+const LEANS = new Set(["boulder", "stone", "outcrop", "kopje"]);
+const TILT = 0.5;
+
+/**
+ * The chips strewn round the bigger boulders (`size`: a boulder's radius, metres, at least):
+ * how many (as the boulder's bigger, more), how big (metres), how far out (of its reach).
+ */
+export const CHIPS = Object.freeze({ size: 0.95, count: [3, 9], chip: [0.08, 0.22], out: [0.85, 1.45] });
+
+// Whether a feature has chips strewn round it, and which chip look one of them has
+const strewn = ({ kind, size }) => kind === "boulder" && size >= CHIPS.size;
+const chipLook = (feature, landAt) => ["chip", landAt(Math.floor(feature.x), Math.floor(feature.y)), Math.floor(feature.variant * VARIANTS) % VARIANTS];
+
+// The chips round a boulder: [{ x, y (on the ground, a little into it), z, size, turn, tilt,
+// index (its look) }], the same every time for the same boulder
+function chipsOf(feature, landAt, groundAt) {
+    const random = randomOf(hashOf(Math.floor(feature.x * 10), Math.floor(feature.y * 10), 61) * 4294967296);
+    const count = Math.round(CHIPS.count[0] + (CHIPS.count[1] - CHIPS.count[0]) * Math.min(1, (feature.size - CHIPS.size) / 0.6) * random.range(0.6, 1));
+    const reach = feature.size * 1.1;
+    const first = chipLook(feature, landAt)[2];
+
+    return Array.from({ length: count }, (_, k) => {
+        const angle = random.range(0, TAU);
+        const out = reach * random.range(...CHIPS.out);
+        const size = random.range(...CHIPS.chip);
+        const [x, z] = [feature.x + Math.cos(angle) * out, feature.y + Math.sin(angle) * out];
+
+        return { x, y: groundAt(x, z) - size * 0.18, z, size, turn: random.range(0, TAU), tilt: [random.range(-0.3, 0.3), random.range(-0.3, 0.3)], index: (first + k) % VARIANTS };
+    });
 }
 
 // Which look a feature has: [kind, land, index]
@@ -2800,22 +3150,23 @@ function featureLook({ kind, x, y, variant }, landAt) {
     return [kind, landAt(Math.floor(x), Math.floor(y)), Math.floor(variant * VARIANTS) % VARIANTS];
 }
 
-// How far into the ground a boulder or a stone is sunk (of its height)
+// How far into the ground a boulder or a stone is sunk (of its height), where its family doesn't say
 const SUNK = 0.22;
 
 // How much longer than broad a boulder or a stone is, lying along the way the rock runs (its turn:
 // core/wilds.js strikeAt)
 const LONG = [1.25, 0.82];
 
-// How a feature's look is stretched and turned to its size (its looks are about a metre)
-function fit({ kind, size, height, turn }, part) {
+// How a feature's look is stretched and turned to its size (its looks are about a metre); a
+// boulder or a stone as deep into the ground as `sunk` (of its height)
+function fit({ kind, size, height, turn }, part, sunk = SUNK) {
     const tall = height / Math.max(0.01, part.top);
 
     switch (kind) {
         case "boulder":
         case "stone":
             // (Lying along the strike: core's turn is from east towards south, ours about the upright)
-            return { scale: [size * 2 * LONG[0], tall * (1 + SUNK), size * 2 * LONG[1]], turn: -turn };
+            return { scale: [size * 2 * LONG[0], tall * (1 + sunk), size * 2 * LONG[1]], turn: -turn };
         case "log":
         case "logpile":
         case "ruin":

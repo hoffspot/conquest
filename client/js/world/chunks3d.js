@@ -28,7 +28,7 @@ import { WILDS } from "./art/engine/atlas.js";
 import { holdSign, isSign, letGoSign, releaseSign } from "./art/kits/signs.js";
 import { VARIANTS, Woodland } from "./art/kits/trees.js";
 import { canopyTint } from "./canopy.js";
-import { featureLooks, featureMesh, Growth, Mesher, sowing, TILE, UNDERGROWTH as LANDS_UNDERGROWTH, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
+import { featureLooks, featureMesh, Growth, Mesher, rockPrimer, ROCK_TIERS, sowing, stoneMesh, TILE, UNDERGROWTH as LANDS_UNDERGROWTH, undergrowthLooks, undergrowthMesh } from "./art/kits/wilds.js";
 import { cliffMesh, cliffsInto } from "./art/kits/cliffs.js";
 import { archMaking } from "./art/kits/arches.js";
 import { aqueductMaking } from "./art/kits/aqueducts.js";
@@ -116,7 +116,7 @@ export class Chunks {
      * @param {object} world - From buildWorld (core/overworld.js): its `maps.town` the world
      *     outside, and its plan.
      */
-    constructor(world, { undergrowth = 1, cliffs = 1 } = {}) {
+    constructor(world, { undergrowth = 1, cliffs = 1, rocks = "medium" } = {}) {
         this.world = world;
 
         /** How thick the undergrowth grows (1 as the lands have it; less on slower devices, 0 none). */
@@ -124,6 +124,12 @@ export class Chunks {
 
         /** Whether the cliffs are drawn (1; 0 none, on slower devices: kits/cliffs.js). */
         this.cliffs = cliffs;
+
+        /**
+         * How the rocks are drawn (kits/wilds.js ROCK_TIERS: "low", "medium", "high"): on Medium
+         * finely divided only in the chunk the player's in and those round it (#rocksNear).
+         */
+        this.rocks = rocks;
         this.overworld = world.maps.town;
         this.land = landColours(world.plan, grassLooks());
 
@@ -153,7 +159,7 @@ export class Chunks {
         /** Everything drawn: add it to the scene. */
         this.object = new THREE.Group();
         this.object.name = "chunks";
-        this.primer = primer();
+        this.primer = primer({ rocks });
         this.object.add(this.woodland.object, this.primer);
 
         // The chunks drawn, by key: { cx, cy, object, lot (its trees), heights, drawing (while
@@ -163,13 +169,16 @@ export class Chunks {
         // undergrowth while it's being grown: its steps), sown (where its undergrowth grows,
         // once that's found: a Growth, its tiles those not yet built), undergrowth (its tiles'
         // meshes, those built), cliffs (its cliffs' mesh, if it has any: setCliffs), arches (its
-        // arches of rock's mesh, if it has any) }; the steps
-        // of the one being drawn; those whose
-        // buildings are being built, in turn; and those whose undergrowth is being grown
+        // arches of rock's mesh, if it has any), features (its land's own: its rocks drawn again
+        // from them), rocks (how they're drawn: ROCK_TIERS'), stones (their mesh, if it has any),
+        // refinement (its rocks being drawn again, its steps: #rocksNear) }; the steps of the one
+        // being drawn; those whose buildings are being built, in turn; those whose undergrowth is
+        // being grown; and those whose rocks are being drawn again
         this.drawn = new Map();
         this.drawing = null;
         this.building = [];
         this.growing = [];
+        this.refining = [];
         this.centre = null;
         this.wanted = [];
 
@@ -240,10 +249,12 @@ export class Chunks {
 
         const built = this.#build(until);
         const grown = this.#grow(until);
+        const refined = this.#refine(until);
 
         this.#detail(x, z);
+        this.#rocksNear();
 
-        return built || grown || drew || changed;
+        return built || grown || refined || drew || changed;
     }
 
     /** Grow the undergrowth this thick from now on (as the constructor's `undergrowth`): grown again if it's changed. */
@@ -275,6 +286,116 @@ export class Chunks {
                 drawn.cliffs.visible = Boolean(cliffs);
             }
         }
+    }
+
+    /**
+     * Draw the rocks so from now on (as the constructor's `rocks`): from or to Low, every chunk's
+     * features drawn again at once (on Low its rocks are drawn with the rest); else its rocks alone,
+     * a step at a time (#rocksNear), and High's material made now (primer).
+     */
+    setRocks(rocks) {
+        if (rocks === this.rocks) {
+            return;
+        }
+
+        const whole = rocks === "low" || this.rocks === "low";
+
+        this.rocks = rocks;
+
+        if (rocks === "high" && !this.primer.getObjectByName("rocks")) {
+            this.primer.add(rockPrimer());
+        }
+
+        for (const drawn of [...this.drawn.values()]) {
+            if (!drawn.drawing && drawn.features && whole) {
+                this.#forget(drawn);
+                this.#draw(drawn.cx, drawn.cy);
+            } else if (drawn.rocks) {
+                drawn.rocks = null;
+            }
+        }
+    }
+
+    // How a chunk's rocks are drawn now (ROCK_TIERS): finely divided on High, and on Medium in the
+    // chunk the player's in and those round it
+    #rocksFor(cx, cy) {
+        if (this.rocks === "low") {
+            return ROCK_TIERS.low;
+        }
+
+        if (this.rocks === "high") {
+            return ROCK_TIERS.high;
+        }
+
+        return this.centre && Math.max(Math.abs(cx - this.centre[0]), Math.abs(cy - this.centre[1])) <= 1 ? ROCK_TIERS.near : ROCK_TIERS.medium;
+    }
+
+    // Each chunk's rocks drawn as finely as they now should be, the player having moved (#rocksFor):
+    // those that aren't queued to be drawn again, a step at a time (#refining)
+    #rocksNear() {
+        if (this.rocks === "low") {
+            return;
+        }
+
+        for (const drawn of this.drawn.values()) {
+            if (drawn.drawing || !drawn.features || drawn.refinement) {
+                continue;
+            }
+
+            const rocks = this.#rocksFor(drawn.cx, drawn.cy);
+
+            if (rocks !== drawn.rocks) {
+                drawn.refinement = this.#refining(drawn, rocks);
+                this.refining.push(drawn);
+            }
+        }
+    }
+
+    // Draw what rocks can be drawn again before `until` (performance.now()'s), a step at a time;
+    // whether a chunk's were
+    #refine(until) {
+        let refined = false;
+
+        while (this.refining.length && performance.now() < until) {
+            const drawn = this.refining[0];
+
+            if (drawn.refinement.next().done) {
+                this.refining.shift();
+                drawn.refinement = null;
+                refined = true;
+            }
+        }
+
+        return refined;
+    }
+
+    // A chunk's rocks drawn again as `rocks` has them, a step at a time (each a yield): their looks
+    // made, then their mesh, which takes the old one's place
+    *#refining(drawn, rocks) {
+        const landAt = (x, y) => this.overworld.biomeAt(x, y);
+        const [x0, y0] = [drawn.cx * CHUNK, drawn.cy * CHUNK];
+
+        yield* featureLooks(drawn.features, landAt, { rocks });
+
+        // (Let go of while it was being drawn again)
+        if (this.drawn.get(key(drawn.cx, drawn.cy)) !== drawn) {
+            return;
+        }
+
+        const stones = stoneMesh(drawn.features, landAt, [x0, y0], this.groundAt, { rocks });
+
+        if (drawn.stones) {
+            drawn.stones.removeFromParent();
+            drawn.stones.geometry.dispose();
+        }
+
+        if (stones) {
+            drawn.object.add(stones);
+        }
+
+        drawn.stones = stones;
+        drawn.rocks = rocks;
+        this.version++;
     }
 
     /** Draw the ground's corners this far apart (as SPACING, ring by ring) from now on. */
@@ -351,7 +472,7 @@ export class Chunks {
 
     /** Whether any chunk near, any settlement's buildings, or any undergrowth near, are still to be drawn. */
     get busy() {
-        return this.drawing !== null || this.building.length > 0 || this.growing.length > 0 || this.wanted.some(([cx, cy]) => !this.drawn.has(key(cx, cy)));
+        return this.drawing !== null || this.building.length > 0 || this.growing.length > 0 || this.refining.length > 0 || this.wanted.some(([cx, cy]) => !this.drawn.has(key(cx, cy)));
     }
 
     // Keep the undergrowth where the player is: grown for the chunks near them (queued), and
@@ -935,11 +1056,18 @@ export class Chunks {
         const features = chunk.features.filter(({ kind }) => kind !== "arch" && kind !== "aqueduct");
 
         if (features.length) {
-            yield* featureLooks(features, landAt);
+            const rocks = this.#rocksFor(cx, cy);
 
-            const wild = featureMesh(features, landAt, [chunk.x0, chunk.y0], this.groundAt, { sprigs: this.undergrowth });
+            yield* featureLooks(features, landAt, { rocks });
+
+            const wild = featureMesh(features, landAt, [chunk.x0, chunk.y0], this.groundAt, { sprigs: this.undergrowth, rocks });
 
             object.add(wild.mesh);
+            Object.assign(drawn, { features, rocks, stones: wild.stones });
+
+            if (wild.stones) {
+                object.add(wild.stones);
+            }
 
             if (wild.bushes) {
                 object.add(wild.bushes);
@@ -1121,7 +1249,7 @@ export class Chunks {
 // never seen, so that their shaders are made while the game loads (with the rest: Game.build)
 // rather than the first time a river, a fall, a bridge, smoke, a banner, the undergrowth, a lit
 // window or a cliff or arch of rock comes into view
-function primer() {
+function primer({ rocks = "medium" } = {}) {
     const group = new THREE.Group();
     const water = primingWater();
     const wet = groundMaterial({ water: { texture: water.userData.mask, area: [0, 0, 1, 1] } });
@@ -1157,6 +1285,11 @@ function primer() {
 
     rock.tri([0, 0, 0], [1, 0, 0], [0, 1, 0]);
     group.add(cliffMesh(rock, [0, 0]));
+
+    // (And on High, a rock as rocks are drawn there: rockMaterial, its program its own)
+    if (rocks === "high") {
+        group.add(rockPrimer());
+    }
 
     return group;
 }

@@ -26,7 +26,7 @@ import { SLOPE } from "../../../core/terrain/height.js";
 import { ALPINE } from "../../ground.js";
 import { cliffMaterial, LAYERS } from "../engine/atlas.js";
 import { MATERIALS } from "../engine/painters.js";
-import { LOOKS } from "./wilds.js";
+import { groundTint, LOOKS } from "./wilds.js";
 
 /**
  * How the cliffs are made: the lattice (metres), how far each of its points is moved off it (of a
@@ -469,26 +469,6 @@ export function chip(mesher, [x, y, z], r, seed, { layer, uvs, look }) {
 }
 
 const mix = (a, b, t) => a.map((v, k) => v + (b[k] - v) * t);
-
-// The ground's colour beside a cliff where it comes out of it (as a tint of the rock's picture):
-// its land's grass, and the rock the ground's painted with on a slope so steep (GROUND_ROCK of it)
-const tints = new Map();
-
-function groundTint(look) {
-    if (!tints.has(look)) {
-        const stone = new THREE.Color(MATERIALS[look.stone]?.base ?? MATERIALS.rock.base);
-        const [dark, light] = look.grass.map((hex) => new THREE.Color(hex));
-        const grass = dark.clone().lerp(light, 0.5).lerp(new THREE.Color(MATERIALS.rock.base), GROUND_ROCK);
-
-        tints.set(look, [grass.r / stone.r, grass.g / stone.g, grass.b / stone.b]);
-    }
-
-    return tints.get(look);
-}
-
-// How much of the ground beside a cliff, where it comes out of it, is painted rock (world/ground.js
-// ROCK_FROM: at 36°, about a third)
-const GROUND_ROCK = 0.35;
 
 /** The steepness (rise over run) past which the ground's a cliff, as the rules have it. */
 export const CLIFF_STEEP = SLOPE.cliff;
