@@ -104,7 +104,7 @@ import { nextOf, sigilSpell } from "../core/prismatic.js";
 import { Variety } from "../core/variety.js";
 import { distanceBetween, longestReach, weaponOf, WEAPONS } from "../core/weapons.js";
 import { Avatar, posingEvery } from "../world/avatar.js";
-import { Crowd, CROWD_CASTS, CrowdAvatar, offstage, onstage } from "../world/crowd.js";
+import { Crowd, CROWD, CROWD_CASTS, CrowdAvatar, offstage, onstage } from "../world/crowd.js";
 import { megabytes } from "../world/gpumemory.js";
 import { heldOnPage } from "../world/release.js";
 import { NavBaker } from "../world/navbaker.js";
@@ -1320,6 +1320,9 @@ export class Game {
             };
         };
         this.thronged = new Map();
+
+        // (Those in a crowd fading from sight as one drawn in full takes their place: #handOver)
+        this.fadingOut = [];
 
         // (Those about to be drawn whose pictures are still to be sent, this frame: #sending)
         this.unsent = [];
@@ -2668,9 +2671,9 @@ export class Game {
         character.object.name = id;
         this.view.scene.add(character.object);
 
-        // (One of a crowd till now, drawn in full in its place)
+        // (One of a crowd till now, drawn in full in its place: as it was, its crowd's figure fading)
         if (this.avatars.get(id) instanceof CrowdAvatar) {
-            this.avatars.get(id).character.dispose();
+            this.#handOver(id, this.avatars.get(id), avatar);
         }
 
         this.avatars.set(id, avatar);
@@ -3720,6 +3723,7 @@ export class Game {
             thronged?.standIn.track(avatar, dt);
         }
 
+        this.#fading(dt);
         this.contacts?.end();
         this.#sending(this.unsent);
         bodies.crowd = this.crowds?.draw(view.camera, pixels) ?? 0;
@@ -4499,7 +4503,74 @@ export class Game {
         }
 
         this.crowdWaiting.delete(actor.id);
-        avatar.actions.setGuard(actor.armed);
+
+        // (Its weapon in hand or put away as it is, on guard or not, and as far through a stride as
+        // it was in full: none of it changed as it goes to its crowd)
+        avatar.character.sheathe(!actor.armed);
+        avatar.guarding = !actor.dead && actor.armed && this.#fighting(actor);
+        avatar.stride = old?.walker?.phase ?? avatar.stride;
+    }
+
+    // One of a crowd (`crowd`) drawn in full in its place (`avatar`, of `id`): its weapon in hand or
+    // put away as it was, on guard or not, as far through a stride; and its crowd's figure kept
+    // where it is, as it's going, till the one in full is shown, then faded from sight over
+    // CROWD.fade (#fading), so the two are never both gone, nor one swapped for the other at once
+    #handOver(id, crowd, avatar) {
+        avatar.character.sheathe?.(!crowd.armed);
+
+        if (crowd.guarding && avatar.actions?.guardName) {
+            avatar.actions.guard = avatar.actions.guardTarget = 1;
+        }
+
+        if (avatar.walker && "phase" in avatar.walker) {
+            avatar.walker.phase = crowd.stride;
+        }
+
+        this.#unfade(id);
+        this.fadingOut.push({ id, crowd, avatar, left: CROWD.fade, visible: crowd.object.visible });
+    }
+
+    // (Any crowd figure of `id` still fading from sight gone at once: another's taken its place)
+    #unfade(id) {
+        this.fadingOut = this.fadingOut.filter((fading) => {
+            if (fading.id !== id) {
+                return true;
+            }
+
+            fading.crowd.character.dispose();
+
+            return false;
+        });
+    }
+
+    // Those fading from sight (#handOver), each frame `dt` seconds on: kept where the one in full
+    // is, as it's going, and seen as it was till it's shown (its shaders ready, its pictures sent:
+    // #register), then less of it each frame, then gone; at once if the one in full is gone
+    #fading(dt) {
+        this.fadingOut = this.fadingOut.filter((fading) => {
+            const { id, crowd, avatar } = fading;
+            const ready = !avatar.compiling && avatar.sent !== false;
+
+            if (this.avatars.get(id) === avatar && fading.left > 0) {
+                crowd.track(avatar, dt);
+
+                if (ready) {
+                    fading.left -= dt;
+                } else {
+                    crowd.object.visible = fading.visible;
+                }
+
+                crowd.shown = Math.max(0, fading.left / CROWD.fade);
+
+                if (fading.left > 0) {
+                    return true;
+                }
+            }
+
+            crowd.character.dispose();
+
+            return false;
+        });
     }
 
     // Is someone one of the wild's people-shaped creatures (a goblin, a troll, a bandit), each a
@@ -5047,8 +5118,15 @@ export class Game {
     #throng(actor, avatar, key, size) {
         const standIn = new CrowdAvatar(this.crowds, key, { height: avatar.character.height / size, size, standIn: true });
 
+        // (Its last stand-in, still fading as its body's not been shown, gone: this one's here)
+        this.#unfade(actor.id);
         standIn.object.position.copy(avatar.object.position);
         standIn.facing = avatar.facing;
+
+        // (Its weapon in hand or put away as it has it, on guard or not, as far through a stride)
+        standIn.armed = !avatar.character.sheathed;
+        standIn.guarding = (avatar.actions?.guardTarget ?? 0) > 0;
+        standIn.stride = avatar.walker?.phase ?? standIn.stride;
         this.thronged.set(actor.id, { avatar, standIn, hidden: offstage(avatar.object), unecho: standIn.echo(avatar, { deadFor: actor.dead ? (avatar.deadFor ?? 0) : null }) });
     }
 
@@ -5065,7 +5143,14 @@ export class Game {
 
         unecho();
         onstage(hidden);
-        this.crowds?.leave(standIn);
+
+        // (As far through a stride as its stand-in, which fades from sight: #handOver)
+        if (avatar.walker && "phase" in avatar.walker) {
+            avatar.walker.phase = standIn.stride;
+        }
+
+        this.#unfade(id);
+        this.fadingOut.push({ id, crowd: standIn, avatar, left: CROWD.fade, visible: true });
         avatar.unposed.dt = Math.min(avatar.unposed.dt, 0.25);
         avatar.unposed.frames = Infinity;
         this.thronged.delete(id);

@@ -39,7 +39,7 @@ const { soldierLook } = await import("../client/js/characters/soldiers.js");
 const { allAtOnce, WAITING } = await import("../client/js/core/steps.js");
 const { WEAPONS } = await import("../client/js/core/weapons.js");
 const { Avatar } = await import("../client/js/world/avatar.js");
-const { CROWD, CROWD_CASTS, CROWD_KEEP, Crowd, CrowdAvatar, figureOf, offstage, OFFSTAGE, onstage, recordingMoves } = await import("../client/js/world/crowd.js");
+const { AS, CROWD, CROWD_CASTS, CROWD_KEEP, CROWD_SETS, Crowd, CrowdAvatar, figureOf, offstage, OFFSTAGE, onstage, recordingMoves, templateFrom } = await import("../client/js/world/crowd.js");
 const { released } = await import("../client/js/world/release.js");
 
 const humanFiles = readHumanFiles();
@@ -221,6 +221,79 @@ describe("a kind's figure (crowd.js figureOf)", () => {
     });
 });
 
+describe("a kind's figure carrying its weapon in hand and put away (crowd.js figureOf stowed)", () => {
+    it("has its sword and shield put away too, each corner marked which it is: in hand where the soldier holds them, put away where the soldier puts them, the shield across its back", () => {
+        const { character, look } = soldier();
+        const { geometry } = figureOf(character, 64, { stowed: true });
+        const { crowdSet, crowdSurface, position } = geometry.attributes;
+        const of = (set) => Array.from({ length: crowdSet.count }, (_, v) => v).filter((v) => crowdSet.getX(v) === set);
+        const pointsOf = (points, corners) => corners.flatMap((v) => [points[v * 3], points[v * 3 + 1], points[v * 3 + 2]]);
+
+        assert.equal(crowdSet.count, position.count);
+        assert.equal(character.sheathed, false, "its weapons in hand again, as it was");
+
+        for (const set of Object.values(CROWD_SETS)) {
+            assert.ok(of(set).length > 30, `some corners of set ${set}`);
+        }
+
+        assert.equal(of(CROWD_SETS.weaponHeld).length, of(CROWD_SETS.weaponAway).length, "the same sword, twice");
+        assert.equal(of(CROWD_SETS.shieldHeld).length, of(CROWD_SETS.shieldAway).length);
+
+        // In hand: its body and what's in hand where the soldier's are, posed anew
+        const avatar = new Avatar(character, { walk: look.walk, guard: "sword" });
+        const held = [...of(CROWD_SETS.always), ...of(CROWD_SETS.weaponHeld), ...of(CROWD_SETS.shieldHeld)];
+
+        avatar.place(0, 0, 0);
+        avatar.actions.setGuard(true);
+
+        for (let k = 0; k < 7; k++) {
+            avatar.update(1 / 20, 0, 0, 0, true);
+        }
+
+        assert.ok(furthestFrom(pointsOf(posedFigure(character, geometry), held), cornersOf(character)) < 0.002, "in hand");
+
+        // Put away: its body and what's put away where the soldier's are, the shield on its back
+        character.sheathe(true);
+        avatar.actions.setGuard(false);
+
+        for (let k = 0; k < 12; k++) {
+            avatar.update(1 / 20, 0, 0, 0, true);
+        }
+
+        const posed = posedFigure(character, geometry);
+
+        const corners = cornersOf(character);
+
+        assert.ok(furthestFrom(pointsOf(posed, [...of(CROWD_SETS.always), ...of(CROWD_SETS.weaponAway)]), corners) < 0.002, "put away");
+
+        // (The shield slung where it's slung, but for the centimetre or so a body keeps what it
+        // carries clear of itself by as it moves, which a figure's can't: as far as it's moved)
+        const slung = furthestFrom(pointsOf(posed, of(CROWD_SETS.shieldAway)), corners);
+
+        assert.ok(slung < 0.03, `the shield ${(slung * 100).toFixed(1)} cm out`);
+
+        const shield = new THREE.Box3().setFromArray(pointsOf(posed, of(CROWD_SETS.shieldAway)));
+        const chest = new THREE.Box3().setFromArray(pointsOf(posed, of(CROWD_SETS.always)));
+
+        assert.ok(shield.max.z < chest.getCenter(new THREE.Vector3()).z, "the shield behind it (it faces +z)");
+
+        // (Shining as what it's of: the blade and the shield's rim metal, not chalk)
+        const metal = (corners) => corners.reduce((sum, v) => sum + crowdSurface.getX(v), 0) / corners.length;
+
+        assert.ok(metal(of(CROWD_SETS.weaponHeld)) > 0.5, "the sword mostly metal");
+        assert.ok(crowdSurface.count === position.count && [...crowdSurface.array].every((value) => value >= 0 && value <= 1));
+        character.sheathe(false);
+    });
+
+    it("is merged with nothing put away but what's in hand, and nothing marked, unless it's asked", () => {
+        const { character } = soldier();
+        const { geometry } = figureOf(character, 64);
+
+        assert.ok([...geometry.attributes.crowdSet.array].every((set) => set === CROWD_SETS.always || set === CROWD_SETS.weaponHeld || set === CROWD_SETS.shieldHeld));
+        assert.equal([...geometry.attributes.crowdSet.array].filter((set) => set === CROWD_SETS.weaponAway).length, 0);
+    });
+});
+
 describe("a character's skin let go of once it's sent (character.js release)", () => {
     it("lets go of the page's copy of its skin and bumps as they're sent, if it's one of the game's; painted again, they're sent and let go of again; and a figure's still merged from it", () => {
         const look = soldierLook({ people: "human", weapon: "sword", seed: 5 });
@@ -263,20 +336,21 @@ describe("a character's skin let go of once it's sent (character.js release)", (
 });
 
 describe("a kind's moves (crowd.js recordingMoves)", () => {
-    it("records its guard, walk, run, a blow, a cast (for one that casts), a flinch and its fall, each so many times a second", () => {
+    it("records its guard, standing ready and at ease, onto guard and off it, walking, strolling, running, a blow, a cast (for one that casts), a flinch, drawing and putting away, and its fall, each so many times a second", () => {
         const { character, look } = soldier();
         const recorded = allAtOnce(recordingMoves(character, { walk: look.walk, guard: "sword", attack: WEAPONS.sword.attacks[0], reaction: "slash", cast: CROWD_CASTS.grimoire }));
-        const { moves, width, rows, data } = recorded;
+        const { moves, width, rows, data, flags } = recorded;
+        const bones = character.rig.skeleton.bones.length;
 
-        assert.equal(width, character.rig.skeleton.bones.length * 3);
+        assert.equal(width, bones * 3 + 1, "three texels a bone, and its flags");
+        assert.equal(flags, bones * 3);
         assert.equal(data.length, width * 4 * rows);
-        assert.deepEqual(Object.keys(moves).sort(), ["attack", "cast", "die", "guard", "hit", "run", "walk"]);
+        assert.deepEqual(Object.keys(moves).sort(), ["attack", "cast", "die", "draw", "guard", "hit", "lower", "ready", "rise", "run", "sheathe", "stand", "stroll", "walk"]);
 
+        // (Each after the last, every row one of them)
         let next = 0;
 
-        for (const name of ["guard", "walk", "run", "attack", "cast", "hit", "die"]) {
-            const move = moves[name];
-
+        for (const [name, move] of Object.entries(moves).sort((a, b) => a[1].start - b[1].start)) {
             assert.equal(move.start, next, `${name} follows the last`);
             assert.ok(move.frames > 3, `${name}: ${move.frames} frames`);
             assert.ok(Math.abs(move.length - move.frames / CROWD.fps) < 1e-9);
@@ -284,26 +358,119 @@ describe("a kind's moves (crowd.js recordingMoves)", () => {
         }
 
         assert.equal(next, rows);
-        assert.ok(moves.guard.loop && moves.walk.loop && moves.run.loop && !moves.attack.loop && !moves.die.loop);
+
+        const loops = ["guard", "stand", "ready", "walk", "stroll", "run"];
+
+        assert.deepEqual(Object.keys(moves).filter((name) => moves[name].loop).sort(), [...loops].sort());
 
         // (A stride's as long as a walk or run goes in it; the blow lasts as the sword's does)
         assert.ok(Math.abs(moves.walk.stride - CROWD.walk * moves.walk.length) < 1e-9);
+        assert.ok(Math.abs(moves.stroll.stride - CROWD.walk * moves.stroll.length) < 1e-9);
         assert.ok(moves.run.stride > moves.walk.stride);
         assert.ok(moves.walk.length > 0.7 && moves.walk.length < 1.6, `a stride walking: ${moves.walk.length} s`);
         assert.ok(moves.attack.length >= WEAPONS.sword.attacks[0].duration / 1000);
         assert.ok(!moves.cast.loop && moves.cast.length >= 1 && moves.cast.hitAt > 0 && moves.cast.hitAt < moves.cast.length);
         assert.deepEqual(CROWD_CASTS, { grimoire: "castStun", wand: "castStun", staff: "castHeal" });
 
-        // (Fallen, its hips are far lower than on guard)
-        const hips = character.rig.skeleton.bones.findIndex(({ name }) => name === "Hips");
-        const rest = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().copy(character.rig.skeleton.boneInverses[hips]).invert());
-        const heightAt = (row) => {
-            const k = row * width * 4 + hips * 12 + 4;
+        // Where a bone's head is at a moment (its skinning there, as the figure's posed by it)
+        const index = (name) => character.rig.skeleton.bones.findIndex((bone) => bone.name === name);
+        const placeOf = (row, bone) => {
+            const rest = new THREE.Vector3().setFromMatrixPosition(new THREE.Matrix4().copy(character.rig.skeleton.boneInverses[bone]).invert());
+            const k = row * width * 4 + bone * 12;
 
-            return data[k] * rest.x + data[k + 1] * rest.y + data[k + 2] * rest.z + data[k + 3];
+            return new THREE.Vector3(
+                data[k] * rest.x + data[k + 1] * rest.y + data[k + 2] * rest.z + data[k + 3],
+                data[k + 4] * rest.x + data[k + 5] * rest.y + data[k + 6] * rest.z + data[k + 7],
+                data[k + 8] * rest.x + data[k + 9] * rest.y + data[k + 10] * rest.z + data[k + 11],
+            );
         };
+        const hands = ["RightHand", "LeftHand", "Head", "Hips"].map(index);
+        const gap = (a, b) => Math.max(...hands.map((bone) => placeOf(a, bone).distanceTo(placeOf(b, bone))));
 
-        assert.ok(heightAt(moves.die.start + moves.die.frames - 1) < heightAt(moves.guard.start) - 0.4, "lying");
+        // (Fallen, its hips are far lower than on guard)
+        const hips = index("Hips");
+
+        assert.ok(placeOf(moves.die.start + moves.die.frames - 1, hips).y < placeOf(moves.guard.start, hips).y - 0.4, "lying");
+
+        // Each played over and over goes round with no jump bigger than its own moments' (its
+        // guard's took the arms from hanging down to on guard as it began: 33 and 48 cm)
+        for (const name of loops) {
+            const { start, frames } = moves[name];
+            let inside = 0;
+
+            for (let k = 0; k < frames - 1; k++) {
+                inside = Math.max(inside, gap(start + k, start + k + 1));
+            }
+
+            const round = gap(start + frames - 1, start);
+
+            assert.ok(round <= Math.max(inside * 1.2, 0.005), `${name} goes round ${(round * 100).toFixed(1)} cm, its moments ${(inside * 100).toFixed(1)} cm at most`);
+        }
+
+        // Onto guard from standing with its weapon in hand, and back; a draw from standing at ease
+        // to standing with it in hand, and putting it away the other way: each where the other is
+        const first = (name) => moves[name].start;
+        const last = (name) => moves[name].start + moves[name].frames - 1;
+
+        assert.ok(gap(first("ready"), first("rise")) < 0.01);
+        assert.ok(gap(last("rise"), first("guard")) < 0.08);
+        assert.ok(gap(first("guard"), first("lower")) < 0.08);
+        assert.ok(gap(last("lower"), first("ready")) < 0.05);
+        assert.ok(gap(first("stand"), first("draw")) < 0.01);
+        assert.ok(gap(last("draw"), first("ready")) < 0.01);
+        assert.ok(gap(first("ready"), first("sheathe")) < 0.01);
+        assert.ok(gap(last("sheathe"), first("stand")) < 0.01);
+
+        // Each moment says what's in hand: on guard, its weapon and shield; at ease, both put
+        // away; as the one drawn so is, running, flinching and falling; drawn, the shield taken
+        // off its back first, then the sword; put away, the sword first
+        const flagsOf = (name) => Array.from({ length: moves[name].frames }, (_, k) => data.slice((moves[name].start + k) * width * 4 + flags * 4, (moves[name].start + k) * width * 4 + flags * 4 + 2).join(""));
+        const once = (list) => list.filter((each, k) => each !== list[k - 1]);
+
+        for (const [names, held] of [
+            [["guard", "ready", "rise", "lower", "walk", "attack", "cast"], "11"],
+            [["stand", "stroll"], "00"],
+            [["run", "hit", "die"], `${AS}${AS}`],
+        ]) {
+            for (const name of names) {
+                assert.deepEqual(once(flagsOf(name)), [held], name);
+            }
+        }
+
+        assert.deepEqual(once(flagsOf("draw")), ["00", "01", "11"]);
+        assert.deepEqual(once(flagsOf("sheathe")), ["11", "01", "00"]);
+        assert.equal(character.sheathed, false, "its weapons in hand again, as its figure has them");
+    });
+
+    it("has nothing to draw or put away for one with nothing to put away", () => {
+        const look = soldierLook({ people: "human", weapon: "sword", seed: 3 });
+        const character = new Character(kit, { shape: look.shape, look: look.look, equipment: look.equipment.filter((id) => !/sword|shield/i.test(id)), hairDetail: 0.2, merge: true });
+        const { moves } = allAtOnce(recordingMoves(character, { walk: look.walk, guard: "sword", attack: WEAPONS.sword.attacks[0], reaction: "slash" }));
+
+        assert.equal(moves.draw, undefined);
+        assert.equal(moves.sheathe, undefined);
+        assert.ok(moves.stand && moves.ready && moves.guard);
+    });
+});
+
+describe("a kind's moves kept as half floats (crowd.js templateFrom)", () => {
+    it("keeps its moves at half the size, as near as half floats hold them, with where its flags are", () => {
+        const { character, look } = soldier();
+        const recorded = allAtOnce(recordingMoves(character, { walk: look.walk, guard: "sword", attack: WEAPONS.sword.attacks[0], reaction: "slash" }));
+        const template = allAtOnce(templateFrom({}, "human:m:sword", { geometry: new THREE.BufferGeometry(), picture: null, height: 1.8, recorded }));
+
+        assert.equal(template.moves.type, THREE.HalfFloatType);
+        assert.equal(template.moves.image.data.length, recorded.data.length);
+        assert.equal(template.flags, recorded.flags);
+        assert.equal(template.table, recorded.moves);
+
+        let worst = 0;
+
+        for (let k = 0; k < recorded.data.length; k += 7) {
+            worst = Math.max(worst, Math.abs(THREE.DataUtils.fromHalfFloat(template.moves.image.data[k]) - recorded.data[k]));
+        }
+
+        assert.ok(worst < 0.002, `${worst} out at most`);
     });
 });
 
@@ -414,6 +581,158 @@ describe("one drawn in a crowd (crowd.js CrowdAvatar)", () => {
         assert.equal(one.character.height, 1.8);
         one.character.dispose();
         assert.ok(!crowd.members.has(one));
+    });
+
+    // (And one whose kind stands at ease and with its weapon in hand, goes onto guard and off it,
+    // strolls and draws, as a soldier's do)
+    const armed = {
+        ...table,
+        stand: { start: 152, frames: 20, length: 1, loop: true },
+        ready: { start: 172, frames: 20, length: 1, loop: true },
+        rise: { start: 192, frames: 6, length: 0.3, loop: false },
+        lower: { start: 198, frames: 6, length: 0.3, loop: false },
+        stroll: { start: 204, frames: 22, length: 1.1, loop: true, stride: 1.43 },
+        draw: { start: 226, frames: 50, length: 2.5, loop: false },
+        sheathe: { start: 276, frames: 50, length: 2.5, loop: false },
+    };
+    const armedOf = () => ({ kinds: new Map([["human:m:sword", { template: { table: armed, height: 1.8 } }]]), members: new Set(), join(one) { this.members.add(one); }, leave(one) { this.members.delete(one); } });
+    const moveIn = (frame) => Object.entries(armed).find(([, { start, frames }]) => frame[0] >= start && frame[0] < start + frames)[0];
+
+    it("stands at ease with its weapon put away, or with it in hand, on guard only while it's fighting, easing onto guard and off it; strolls at ease, walks with it in hand; draws and puts it away", () => {
+        const one = new CrowdAvatar(armedOf(), "human:m:sword");
+        const step = (dt = 0.05, x = 0, z = 0) => {
+            one.update(dt, x, z, 0);
+
+            return one.frameIn(armed);
+        };
+
+        one.place(0, 0, 0);
+
+        // (At ease, its weapon put away: standing, and strolling; shown so, its flags' fourth 0)
+        let frame = step();
+
+        assert.equal(moveIn(frame), "stand");
+        assert.equal(frame[3], 0);
+        assert.equal(one.character.sheathed, true);
+
+        // (Drawn: the draw played, then standing with it in hand)
+        one.actions.draw("sword", true);
+        assert.equal(moveIn(step()), "draw");
+        assert.equal(one.armed, true);
+
+        for (let t = 0; t < 2.5; t += 0.05) {
+            frame = step();
+        }
+
+        frame = step(0.3);
+        assert.equal(moveIn(frame), "ready");
+        assert.equal(frame[3], 1);
+
+        // (Fighting: onto guard, as one in full eases onto it, then on guard; done, off it)
+        one.actions.setGuard(true);
+        assert.equal(moveIn(step()), "rise");
+        step(0.3);
+        assert.equal(moveIn(step(0.3)), "guard");
+        one.actions.setGuard(false);
+        assert.equal(moveIn(step()), "lower");
+        step(0.3);
+        assert.equal(moveIn(step(0.3)), "ready");
+
+        // (Walking with it in hand; put away, strolling)
+        for (let k = 1; k <= 10; k++) {
+            frame = step(0.05, 0, 0.065 * k);
+        }
+
+        assert.equal(moveIn(frame), "walk");
+        one.character.sheathe(true);
+
+        for (let k = 11; k <= 20; k++) {
+            frame = step(0.05, 0, 0.065 * k);
+        }
+
+        assert.equal(moveIn(frame), "stroll");
+        assert.equal(frame[3], 0);
+
+        // (Put away from standing with it in hand: the sheathe played, then at ease)
+        one.character.sheathe(false);
+
+        for (let k = 0; k < 20; k++) {
+            step(0.1, 0, 1.3);
+        }
+
+        one.actions.draw("sword", false);
+        assert.equal(moveIn(step()), "sheathe");
+        assert.equal(one.armed, false);
+
+        for (let t = 0; t < 2.6; t += 0.1) {
+            frame = step(0.1, 0, 1.3);
+        }
+
+        assert.equal(moveIn(frame), "stand");
+    });
+
+    it("eases from one move into another over a moment, from where it was drawn: but not from where it was drawn long ago, out of sight", () => {
+        const one = new CrowdAvatar(armedOf(), "human:m:sword");
+
+        one.place(0, 0, 0);
+        one.character.sheathe(false);
+        one.update(0.05, 0, 0, 0);
+
+        const ready = one.frameIn(armed);
+
+        assert.equal(moveIn(ready), "ready");
+
+        // (A blow begun: its first moments eased from where it stood, the share of that going)
+        one.actions.startAttack("sword", { hitAt: 0.38, duration: 0.8 });
+        one.update(0.05, 0, 0, 0);
+
+        const eased = one.frameIn(armed);
+
+        assert.equal(moveIn(eased), "attack");
+        assert.ok(eased[1] >= armed.ready.start && eased[1] < armed.ready.start + armed.ready.frames, "from where it stood");
+        assert.ok(eased[2] > 0.5, `mostly where it stood still: ${eased[2]}`);
+
+        one.update(CROWD.blend + 0.01, 0, 0, 0);
+
+        const struck = one.frameIn(armed);
+
+        assert.ok(struck[0] >= armed.attack.start && struck[1] >= armed.attack.start && struck[1] < armed.attack.start + armed.attack.frames, "eased in");
+
+        // (Out of sight a while: seen again, where it is, not eased from long ago)
+        one.update(1, 0, 0, 0);
+        one.actions.startAttack("sword", { hitAt: 0.38, duration: 0.8 });
+        one.update(0.05, 0, 0, 0);
+        assert.equal(moveIn(one.frameIn(armed)), "attack");
+        one.update(2, 0, 0, 0);
+
+        const later = one.frameIn(armed);
+
+        assert.equal(moveIn(later), "ready");
+        assert.ok(later[1] >= armed.ready.start && later[1] < armed.ready.start + armed.ready.frames, "not eased from the blow it was drawn in long ago");
+        assert.equal(CROWD.blend, 0.2);
+    });
+
+    it("stands in for one in full as it has its weapon, in hand or put away, and on guard or not; told when it draws", () => {
+        const told = [];
+        const full = { object: new THREE.Object3D(), facing: 0, follow: { x: 0, z: 0, vx: 0, vz: 0 }, character: { sheathed: true }, actions: { guardTarget: 0, draw: (name, on) => told.push(on) } };
+        const one = new CrowdAvatar(armedOf(), "human:m:sword", { standIn: true });
+        const unecho = one.echo(full);
+
+        one.track(full, 0.05);
+        assert.equal(moveIn(one.frameIn(armed)), "stand");
+        full.character.sheathed = false;
+        full.actions.guardTarget = 1;
+        one.track(full, 0.05);
+        assert.equal(one.armed, true);
+        assert.equal(one.guarding, true);
+
+        // (Its draw played, its weapon as the draw has it meanwhile, not as the one in full's says)
+        full.actions.draw("sword", false);
+        assert.deepEqual(told, [false]);
+        one.track(full, 0.05);
+        assert.equal(moveIn(one.frameIn(armed)), "sheathe");
+        assert.equal(one.armed, false);
+        unecho();
     });
 
     it("thrown by a blast, is flung whole along its arc, over about its middle as its fall plays, lying where it lands till it's up; dead, it lies there", () => {
