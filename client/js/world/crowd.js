@@ -40,8 +40,15 @@ import { Steps, WAITING } from "../core/steps.js";
  * - `walk`, `run`: how fast it walks and runs as those are recorded (metres a second: a soldier's,
  *   core/battle.js KINDS), and `pace`, between the two, over which it's drawn running; `still`,
  *   under which it's drawn standing.
- * - `guard`: how long its guard is recorded (seconds), played over and over; `lie`: how long it's
- *   recorded lying after its fall.
+ * - `guard`: how long its guard is recorded (seconds), its sway (actions.js GUARD_SWAYS), and
+ *   `stand` standing at ease or with its weapon in hand (still: none sways but on guard), each
+ *   played over and over, the moments after its end eased into its start over `ease` seconds;
+ *   each recorded once it's stood `settle` seconds (its guard eased into: actions.js setGuard);
+ *   `turn`, how long it takes to go onto guard or off it; `lie`: how long it's recorded lying
+ *   after its fall.
+ * - `blend`: how long one in a crowd eases from one move into another (seconds: from where the
+ *   last was drawn); `fade`: how long it takes to fade from sight once one drawn in full stands in
+ *   its place.
  * - `hair`: how much of its hair's grown (hair.js), little, from afar.
  * - `wait`: how many frames the figure's far level of detail is waited for (lod.js), at most.
  */
@@ -54,7 +61,13 @@ export const CROWD = Object.freeze({
     pace: 1.8,
     still: 0.25,
     guard: 2,
+    stand: 1,
+    ease: 0.4,
+    settle: 0.6,
+    turn: 0.3,
     lie: 0.6,
+    blend: 0.2,
+    fade: 0.25,
     hair: 0.15,
     wait: 900,
 });
@@ -212,12 +225,69 @@ function drawnOf(mesh) {
 }
 
 /**
+ * Which of what a figure carries each of its corners is (its `crowdSet`): what's there whatever
+ * it's doing (its body, its clothes, a scabbard, a bow), its weapon in hand or put away (in its
+ * sheath, on its back), its shield on its arm or slung on its back. Each moment of its moves
+ * says which it shows (MOVES' flags, recordingMoves).
+ */
+export const CROWD_SETS = Object.freeze({ always: 0, weaponHeld: 1, weaponAway: 2, shieldHeld: 3, shieldAway: 4 });
+
+// How many of what it carries a figure's picture has a place for (a shield's face, a blade)
+const GEAR = 3;
+
+// What of a character's `items` a mesh is part of (the nearest it's in), or null
+function itemOf(mesh, items) {
+    for (let at = mesh; at; at = at.parent) {
+        if (items.has(at)) {
+            return at;
+        }
+    }
+
+    return null;
+}
+
+// Which of what it carries a mesh is (CROWD_SETS), held (`away` false) or put away: null if it
+// isn't drawn so (put away, only what's put away somewhere other than where it's held is)
+function setOf(mesh, items, away) {
+    const item = items.size ? itemOf(mesh, items) : null;
+    const { sling, sheath, holder } = item?.userData ?? {};
+
+    if (!item || holder || (!sling && !sheath)) {
+        return away ? null : CROWD_SETS.always;
+    }
+
+    return sling ? (away ? CROWD_SETS.shieldAway : CROWD_SETS.shieldHeld) : away ? CROWD_SETS.weaponAway : CROWD_SETS.weaponHeld;
+}
+
+// Whether a mesh's picture lies within its whole (its coordinates over the triangles drawn between
+// 0 and 1), so that it can be painted into a place in the figure's: not one repeated across it
+function within(geometry, first, count) {
+    const uv = geometry.attributes.uv;
+
+    for (let k = first; uv && k < first + count; k++) {
+        const v = geometry.index ? geometry.index.getX(k) : k;
+        const [u, w] = [uv.getX(v), uv.getY(v)];
+
+        if (u < -0.01 || u > 1.01 || w < -0.01 || w > 1.01) {
+            return false;
+        }
+    }
+
+    return Boolean(uv);
+}
+
+/**
  * A character's figure, merged (as it's posed now, its far level of detail drawn: what it holds
  * where it is): every mesh drawn into one, in the space of its body as it's bound to its skeleton,
  * each corner bound to up to four bones; and one picture of its skin, its clothes and its hair
- * side by side (`size` pixels square each of the first two). Returns { geometry, picture, height }.
+ * side by side (`size` pixels square each of the first two), and of what it carries (up to GEAR
+ * of its pictures: a shield's face, a blade). `stowed`: what it carries put away too (in its
+ * sheath, a shield slung on its back), as well as in hand, each corner marked which it is
+ * (`crowdSet`: CROWD_SETS); and each corner shines as what it's of does (`crowdSurface`: its
+ * metalness and roughness: a blade, a shield's rim and a helm as metal, not chalk). Returns {
+ * geometry, picture, height }.
  */
-export function figureOf(character, size = 256) {
+export function figureOf(character, size = 256, { stowed = false } = {}) {
     const object = character.object;
 
     object.updateMatrixWorld(true);
@@ -225,11 +295,10 @@ export function figureOf(character, size = 256) {
     const skeleton = character.rig.skeleton;
     const bones = skeleton.bones;
     const toObject = new THREE.Matrix4().copy(object.matrixWorld).invert();
+    const items = new Set(character.items ?? []);
 
-    // Each bone's skinning now (in the body's space), and back again
-    const unskin = bones.map((bone, i) => new THREE.Matrix4().multiplyMatrices(toObject, bone.matrixWorld).multiply(skeleton.boneInverses[i]).invert());
-
-    // The picture: its skin's, then its clothes', side by side; its hair's and a corner of white below
+    // The picture: its skin's, then its clothes', side by side; its hair's, a corner of white and
+    // what it carries below
     const hairSize = [Math.max(16, size / 8), Math.max(32, size / 4)];
     const canvas = document.createElement("canvas");
 
@@ -247,6 +316,11 @@ export function figureOf(character, size = 256) {
         hair: { x: 0, y: size, w: hairSize[0], h: hairSize[1] },
         white: { x: hairSize[0] + 2, y: size + 2, w: WHITE, h: WHITE },
     };
+
+    for (let k = 0; k < GEAR; k++) {
+        places[`gear${k}`] = { x: hairSize[0] + WHITE + 6 + k * (hairSize[1] + 2), y: size, w: hairSize[1], h: hairSize[1] };
+    }
+
     const painted = new Map();
 
     // A texture's picture painted into its place (the first time), in the picture's way up
@@ -287,11 +361,30 @@ export function figureOf(character, size = 256) {
         } else {
             context.clearRect(x, y, w, h);
             context.drawImage(image, x, y, w, h);
+
+            // (What it carries, drawn solid where its material is: what its picture leaves clear, white)
+            if (opaque && place.startsWith("gear")) {
+                context.globalCompositeOperation = "destination-over";
+                context.fillRect(x, y, w, h);
+                context.globalCompositeOperation = "source-over";
+            }
         }
 
         painted.set(place, texture);
 
         return true;
+    };
+
+    // What it carries painted into a place of its own (the place it's in already, or the first
+    // free): which, or null if there's none free
+    const gear = (texture, opaque) => {
+        for (let k = 0; k < GEAR; k++) {
+            if (painted.get(`gear${k}`) === texture || (!painted.has(`gear${k}`) && paint(texture, `gear${k}`, opaque))) {
+                return `gear${k}`;
+            }
+        }
+
+        return null;
     };
 
     // Where a texture's coordinate is in the picture (its place's, the texture's way up)
@@ -308,113 +401,157 @@ export function figureOf(character, size = 256) {
     const colours = [];
     const boneIndices = [];
     const boneWeights = [];
+    const sets = [];
+    const surfaces = [];
     const indices = [];
     let corners = 0;
 
-    object.traverse((mesh) => {
-        if (!mesh.isMesh || !shown(mesh, object) || !mesh.geometry?.attributes.position) {
-            return;
-        }
+    // Every mesh drawn now merged in (`away`: what it carries put away, only that)
+    const merge = (away) => {
+        object.updateMatrixWorld(true);
 
-        const geometry = mesh.geometry;
-        const { position, normal, uv, color, skinIndex, skinWeight, fold } = geometry.attributes;
-        const bound = mesh.isSkinnedMesh && mesh.skeleton === skeleton;
-        const anchor = bound ? 0 : mesh.isSkinnedMesh ? bones.indexOf(character.rig.bone("Spine2") ?? bones[0]) : boneOf(mesh, bones);
-        const toBody = new THREE.Matrix4().multiplyMatrices(unskin[Math.max(0, anchor)], toObject).multiply(mesh.matrixWorld);
+        // Each bone's skinning now (in the body's space), and back again
+        const unskin = bones.map((bone, i) => new THREE.Matrix4().multiplyMatrices(toObject, bone.matrixWorld).multiply(skeleton.boneInverses[i]).invert());
 
-        _normalMatrix.getNormalMatrix(toBody);
-
-        for (const { material, first, count } of drawnOf(mesh)) {
-            // What this part's drawn with: a place in the picture, and a colour
-            const map = material.map;
-            let place = null;
-
-            if (material === character.materials.body && map && paint(map, "skin", true)) {
-                place = placing("skin", map.flipY);
-            } else if (character.garments.includes(mesh) && map && paint(map, "clothes", true)) {
-                place = placing("clothes", map.flipY);
-            } else if (material === character.materials.hair && map && paint(map, "hair", false)) {
-                place = placing("hair", map.flipY);
+        object.traverse((mesh) => {
+            if (!mesh.isMesh || !shown(mesh, object) || !mesh.geometry?.attributes.position) {
+                return;
             }
 
-            // (A picture that isn't in the figure's: coloured by it, all told)
-            const base = new THREE.Color(1, 1, 1).copy(material.color ?? _colour.setRGB(1, 1, 1));
+            const set = setOf(mesh, items, away);
 
-            if (map && !place) {
-                base.multiply(averageOf(map));
+            if (set === null) {
+                return;
             }
 
-            const folds = material.colours ?? null;
-            const eyes = material === character.materials.eyes;
-            const seen = new Map();
+            const geometry = mesh.geometry;
+            const { position, normal, uv, color, skinIndex, skinWeight, fold } = geometry.attributes;
+            const bound = mesh.isSkinnedMesh && mesh.skeleton === skeleton;
+            const anchor = bound ? 0 : mesh.isSkinnedMesh ? bones.indexOf(character.rig.bone("Spine2") ?? bones[0]) : boneOf(mesh, bones);
+            const toBody = new THREE.Matrix4().multiplyMatrices(unskin[Math.max(0, anchor)], toObject).multiply(mesh.matrixWorld);
 
-            for (let k = first; k < first + count; k++) {
-                const v = geometry.index ? geometry.index.getX(k) : k;
-                let corner = seen.get(v);
+            _normalMatrix.getNormalMatrix(toBody);
 
-                if (corner === undefined) {
-                    corner = corners++;
-                    seen.set(v, corner);
+            for (const { material, first, count } of drawnOf(mesh)) {
+                // What this part's drawn with: a place in the picture, and a colour
+                const map = material.map;
+                let place = null;
 
-                    // Where it is, bound to its bones as it is to its own, or to the bone it hangs
-                    // from as it's posed now
-                    if (bound) {
-                        _vector.fromBufferAttribute(position, v);
-                        _normal.fromBufferAttribute(normal, v);
-                        boneIndices.push(skinIndex.getX(v), skinIndex.getY(v), skinIndex.getZ(v), skinIndex.getW(v));
-                        boneWeights.push(skinWeight.getX(v), skinWeight.getY(v), skinWeight.getZ(v), skinWeight.getW(v));
-                    } else {
-                        if (mesh.isSkinnedMesh) {
-                            mesh.getVertexPosition(v, _vector);
-                        } else {
-                            _vector.fromBufferAttribute(position, v);
-                        }
+                if (material === character.materials.body && map && paint(map, "skin", true)) {
+                    place = placing("skin", map.flipY);
+                } else if (character.garments.includes(mesh) && map && paint(map, "clothes", true)) {
+                    place = placing("clothes", map.flipY);
+                } else if (material === character.materials.hair && map && paint(map, "hair", false)) {
+                    place = placing("hair", map.flipY);
+                } else if (map && items.size && itemOf(mesh, items) && within(geometry, first, count)) {
+                    // (What it carries: a shield's face, its device on it, as it's painted)
+                    const into = gear(map, !(material.transparent || material.alphaTest > 0));
 
-                        _vector.applyMatrix4(toBody);
-
-                        if (normal) {
-                            _normal.fromBufferAttribute(normal, v).applyMatrix3(_normalMatrix).normalize();
-                        } else {
-                            _normal.set(0, 1, 0);
-                        }
-
-                        boneIndices.push(Math.max(0, anchor), 0, 0, 0);
-                        boneWeights.push(1, 0, 0, 0);
-                    }
-
-                    positions.push(_vector.x, _vector.y, _vector.z);
-                    normals.push(_normal.x, _normal.y, _normal.z);
-
-                    // Its colour and its place in the picture
-                    if (place && uv) {
-                        uvs.push(...place(uv.getX(v), uv.getY(v)));
-                    } else {
-                        uvs.push(...whiteAt);
-                    }
-
-                    if (eyes) {
-                        _colour.setRGB(0.55, 0.52, 0.5);
-                    } else if (folds && fold) {
-                        const f = Math.round(fold.getX(v));
-
-                        _colour.setRGB(folds[f * 3], folds[f * 3 + 1], folds[f * 3 + 2]);
-                    } else {
-                        _colour.copy(base);
-                    }
-
-                    if (color) {
-                        _colour.r *= color.getX(v);
-                        _colour.g *= color.getY(v);
-                        _colour.b *= color.getZ(v);
-                    }
-
-                    colours.push(_colour.r, _colour.g, _colour.b);
+                    place = into ? placing(into, map.flipY) : null;
                 }
 
-                indices.push(corner);
+                // (A picture that isn't in the figure's: coloured by it, all told)
+                const base = new THREE.Color(1, 1, 1).copy(material.color ?? _colour.setRGB(1, 1, 1));
+
+                if (map && !place) {
+                    base.multiply(averageOf(map));
+                }
+
+                const folds = material.colours ?? null;
+                const finish = material.surfaces ?? null;
+                const eyes = material === character.materials.eyes;
+                const seen = new Map();
+
+                for (let k = first; k < first + count; k++) {
+                    const v = geometry.index ? geometry.index.getX(k) : k;
+                    let corner = seen.get(v);
+
+                    if (corner === undefined) {
+                        corner = corners++;
+                        seen.set(v, corner);
+
+                        // Where it is, bound to its bones as it is to its own, or to the bone it hangs
+                        // from as it's posed now
+                        if (bound) {
+                            _vector.fromBufferAttribute(position, v);
+                            _normal.fromBufferAttribute(normal, v);
+                            boneIndices.push(skinIndex.getX(v), skinIndex.getY(v), skinIndex.getZ(v), skinIndex.getW(v));
+                            boneWeights.push(skinWeight.getX(v), skinWeight.getY(v), skinWeight.getZ(v), skinWeight.getW(v));
+                        } else {
+                            if (mesh.isSkinnedMesh) {
+                                mesh.getVertexPosition(v, _vector);
+                            } else {
+                                _vector.fromBufferAttribute(position, v);
+                            }
+
+                            _vector.applyMatrix4(toBody);
+
+                            if (normal) {
+                                _normal.fromBufferAttribute(normal, v).applyMatrix3(_normalMatrix).normalize();
+                            } else {
+                                _normal.set(0, 1, 0);
+                            }
+
+                            boneIndices.push(Math.max(0, anchor), 0, 0, 0);
+                            boneWeights.push(1, 0, 0, 0);
+                        }
+
+                        positions.push(_vector.x, _vector.y, _vector.z);
+                        normals.push(_normal.x, _normal.y, _normal.z);
+                        sets.push(set);
+
+                        // Its colour and its place in the picture
+                        if (place && uv) {
+                            uvs.push(...place(uv.getX(v), uv.getY(v)));
+                        } else {
+                            uvs.push(...whiteAt);
+                        }
+
+                        // (And how it shines: metal as its own metal does, what it is as its own is)
+                        if (eyes) {
+                            _colour.setRGB(0.55, 0.52, 0.5);
+                            surfaces.push(0, 0.8);
+                        } else if (folds && fold) {
+                            const f = Math.round(fold.getX(v));
+
+                            _colour.setRGB(folds[f * 3], folds[f * 3 + 1], folds[f * 3 + 2]);
+                            surfaces.push(finish ? finish[f * 2] : 0, finish ? finish[f * 2 + 1] : 0.8);
+                        } else {
+                            _colour.copy(base);
+                            surfaces.push(material.metalness ?? 0, material.roughness ?? 0.8);
+                        }
+
+                        if (color) {
+                            _colour.r *= color.getX(v);
+                            _colour.g *= color.getY(v);
+                            _colour.b *= color.getZ(v);
+                        }
+
+                        colours.push(_colour.r, _colour.g, _colour.b);
+                    }
+
+                    indices.push(corner);
+                }
             }
+        });
+    };
+
+    merge(false);
+
+    // (And what it carries put away, where it's put away: merged in as it is then, then taken up again)
+    if (stowed && [...items].some(({ userData: { sling, sheath, holder } }) => (sling || sheath) && !holder)) {
+        const { sheathed, slung } = character;
+
+        character.sheathe(true);
+        merge(true);
+        character.sheathe(sheathed);
+
+        if (character.slung !== slung) {
+            character.sling(slung);
         }
-    });
+
+        object.updateMatrixWorld(true);
+    }
 
     const merged = new THREE.BufferGeometry();
 
@@ -424,6 +561,8 @@ export function figureOf(character, size = 256) {
     merged.setAttribute("color", new THREE.Float32BufferAttribute(colours, 3));
     merged.setAttribute("crowdBones", new THREE.Float32BufferAttribute(boneIndices, 4));
     merged.setAttribute("crowdWeights", new THREE.Float32BufferAttribute(boneWeights, 4));
+    merged.setAttribute("crowdSet", new THREE.Float32BufferAttribute(sets, 1));
+    merged.setAttribute("crowdSurface", new THREE.Float32BufferAttribute(surfaces, 2));
     merged.setIndex(corners > 65535 ? new THREE.Uint32BufferAttribute(indices, 1) : new THREE.Uint16BufferAttribute(indices, 1));
     merged.computeBoundingBox();
     merged.computeBoundingSphere();
@@ -479,22 +618,53 @@ export const CROWD_CASTS = Object.freeze({ grimoire: "castStun", wand: "castStun
 const CAST = Object.freeze({ hitAt: 0.6, duration: 1.0 });
 
 /**
- * A character's moves (guard, walk, run, attack, hit, die, and cast for one that casts), each
- * played on it once and recorded CROWD.fps times a second, a step at a time (each a yield): {
- * data (a row of three numbers' worth for each bone at each moment), rows, width (texels: three a
- * bone), moves: name -> { start, frames, length (seconds), loop }, stride: how far a walk's and a
- * run's go over theirs (metres) }. `walk` its walk's style; `guard` how it fights (actions.js
- * GUARDS); `attack` its weapon's blow ({ animation, hitAt, duration }: weapons.js, ms);
- * `reaction` how it flinches (actions.js REACTIONS); `cast` how it casts (CROWD_CASTS), if it does.
+ * A moment's flags (MOVES' last texel each row): whether its weapon (x) and its shield (y) are in
+ * hand (1) or put away (0), or as the one drawn so is (AS: armed or not, CrowdAvatar `armed`).
+ */
+export const AS = 0.5;
+
+// How a move ends, standing (recordingMoves: a draw ends with its weapon in hand, not on guard; a
+// blow or a flinch on guard): which to go onto guard or off it from (CrowdAvatar frameIn)
+const ENDS_AS = Object.freeze({ draw: "ready", lower: "ready", sheathe: "stand", rise: "guard", attack: "guard", cast: "guard", hit: "guard" });
+
+/**
+ * A character's moves, each played on it once and recorded CROWD.fps times a second, a step at a
+ * time (each a yield):
+ *  - on guard (`guard`, its weapon in hand), standing with it in hand (`ready`), and between the
+ *    two (`rise`, `lower`: as an avatar's eased onto guard and off it); standing at ease, put
+ *    away (`stand`);
+ *  - walking (`walk`, its weapon in hand), walking at ease (`stroll`, put away), and running
+ *    (`run`, on guard, as it's armed or not);
+ *  - a blow (`attack`), a cast for one that casts (`cast`), a flinch (`hit`) and its fall (`die`);
+ *  - drawing its weapon (`draw`, a shield slung on its back taken off it first) and putting it
+ *    away (`sheathe`), each moment showing what's in hand then, for one that has a weapon or shield
+ *    to put away.
+ * Returns { data (a row of three numbers' worth for each bone at each moment, then its flags: AS),
+ * rows, width (texels: three a bone, and one), flags (the texel of a row its flags are in),
+ * moves: name -> { start, frames, length (seconds), loop }, stride: how far a walk's and a run's
+ * go over theirs (metres) }. Each one played over and over has its end eased into its start (none
+ * of it jumps going round), and those standing are recorded once they've settled. `walk` its
+ * walk's style; `guard` how it fights (actions.js GUARDS); `attack` its weapon's blow ({
+ * animation, hitAt, duration }: weapons.js, ms); `reaction` how it flinches (actions.js
+ * REACTIONS); `cast` how it casts (CROWD_CASTS), if it does.
  */
 export function* recordingMoves(character, { walk, guard, attack, reaction, cast = null }) {
     const step = 1 / CROWD.fps;
-    const width = character.rig.skeleton.bones.length * 3;
+    const flags = character.rig.skeleton.bones.length * 3;
+    const width = flags + 1;
     const frames = [];
     const moves = {};
+    const stows = Boolean(character.items?.some(({ userData: { sheath, sling, holder } }) => (sheath || sling) && !holder));
 
-    // One move: `start` its avatar ready to play it, then each moment till `until` says it's done
-    const play = (name, { loop = false, start, until, speed = 0, facing = 0 }) => {
+    // What's in hand now (or as the one drawn so is, `as`): the flags written into a moment
+    const heldNow = (as) => (as ? [AS, AS] : [character.sheathed ? 0 : 1, character.slung ? 0 : 1]);
+
+    // One move: its weapons in hand or put away (`away`), `start` its avatar ready to play it, then
+    // each moment till `until` says it's done; standing a while first (`settle` seconds), or got
+    // going first if it's walking or running (`speed`). `as`: its flags as the one drawn so is
+    const play = (name, { loop = false, start, until, speed = 0, facing = 0, settle = 0, away = false, as = false }) => {
+        character.sheathe(away);
+
         const avatar = new Avatar(character, { walk, guard });
         let z = 0;
 
@@ -506,6 +676,18 @@ export function* recordingMoves(character, { walk, guard, attack, reaction, cast
             z += speed * step;
             avatar.update(step, 0, z, facing, true);
         };
+        const pose = () => {
+            const row = new Float32Array(width * 4);
+
+            recordPose(character, row, 0);
+            row.set(heldNow(as), flags * 4);
+
+            return row;
+        };
+
+        for (let k = 0; k < Math.round(settle * CROWD.fps); k++) {
+            moving();
+        }
 
         // (A walk or a run got going first, and recorded from the start of a stride to the next)
         if (speed > 0) {
@@ -527,30 +709,74 @@ export function* recordingMoves(character, { walk, guard, attack, reaction, cast
         }
 
         do {
-            const row = new Float32Array(width * 4);
-
-            recordPose(character, row, 0);
-            frames.push(row);
+            frames.push(pose());
             move.frames++;
             moving();
         } while (!until(avatar, move.frames * step) && move.frames < 6 * CROWD.fps);
 
+        // (Played on a moment past its end, eased into its start: none of it jumps going round)
+        if (loop) {
+            const count = Math.min(Math.round(CROWD.ease * CROWD.fps), Math.floor(move.frames / 2));
+
+            for (let k = 0; k < count; k++) {
+                const past = pose();
+                const into = frames[move.start + k];
+                const share = k / count;
+
+                for (let n = 0; n < flags * 4; n++) {
+                    into[n] = past[n] + (into[n] - past[n]) * share;
+                }
+
+                moving();
+            }
+        }
+
         move.length = move.frames * step;
         moves[name] = move;
+
+        return avatar;
     };
 
-    play("guard", { loop: true, start: (avatar) => avatar.actions.setGuard(true), until: (avatar, t) => t >= CROWD.guard });
+    play("guard", { loop: true, settle: CROWD.settle, start: (avatar) => avatar.actions.setGuard(true), until: (avatar, t) => t >= CROWD.guard });
     yield;
 
-    for (const [name, speed] of [
-        ["walk", CROWD.walk],
-        ["run", CROWD.run],
+    play("stand", { loop: true, away: true, settle: CROWD.settle, start: (avatar) => avatar.actions.setGuard(false), until: (avatar, t) => t >= CROWD.stand });
+    play("ready", { loop: true, settle: CROWD.settle, start: (avatar) => avatar.actions.setGuard(false), until: (avatar, t) => t >= CROWD.stand });
+    yield;
+
+    // (Onto guard and off it, as an avatar eases there: from standing, its weapon in hand, and back)
+    play("rise", {
+        settle: CROWD.settle,
+        start: () => {},
+        until: (avatar, t) => {
+            avatar.actions.setGuard(true);
+
+            return t >= CROWD.turn;
+        },
+    });
+    play("lower", {
+        settle: CROWD.settle,
+        start: (avatar) => avatar.actions.setGuard(true),
+        until: (avatar, t) => {
+            avatar.actions.setGuard(false);
+
+            return t >= CROWD.turn;
+        },
+    });
+    yield;
+
+    for (const [name, speed, away] of [
+        ["walk", CROWD.walk, false],
+        ["stroll", CROWD.walk, true],
+        ["run", CROWD.run, false],
     ]) {
         let last = Infinity;
 
         play(name, {
             loop: true,
             speed,
+            away,
+            as: name === "run",
             start: (avatar) => avatar.actions.setGuard(name === "run"),
             until: (avatar) => {
                 const wrapped = avatar.walker.phase < last && last !== Infinity;
@@ -587,6 +813,7 @@ export function* recordingMoves(character, { walk, guard, attack, reaction, cast
     }
 
     play("hit", {
+        as: true,
         start: (avatar) => {
             avatar.actions.setGuard(true);
             avatar.actions.react(reaction, { from: 0 });
@@ -595,9 +822,36 @@ export function* recordingMoves(character, { walk, guard, attack, reaction, cast
     });
     yield;
 
+    // (Its weapon drawn, from standing at ease, and put away again, from standing with it in hand:
+    // as an avatar draws, actions.js draw, each moment's flags what's in hand then)
+    if (stows) {
+        for (const [name, on] of [
+            ["draw", true],
+            ["sheathe", false],
+        ]) {
+            let lasts = 0;
+
+            play(name, {
+                away: on,
+                settle: CROWD.settle,
+                start: (avatar) => avatar.actions.setGuard(false),
+                until: (avatar, t) => {
+                    // (Begun once it's settled: the first moment as it stands)
+                    if (t <= step + 1e-9) {
+                        lasts = avatar.actions.draw(guard, on) + step;
+                    }
+
+                    return t >= lasts + step;
+                },
+            });
+            yield;
+        }
+    }
+
     let lands = 1;
 
     play("die", {
+        as: true,
         start: (avatar) => {
             lands = avatar.actions.die({ from: 0 }) ?? 1;
         },
@@ -605,31 +859,45 @@ export function* recordingMoves(character, { walk, guard, attack, reaction, cast
     });
     moves.die.lands = lands;
 
+    // (Its weapons in hand again, as its figure has them)
+    character.sheathe(false);
+
     const data = new Float32Array(width * 4 * frames.length);
 
     frames.forEach((row, k) => data.set(row, k * width * 4));
 
-    return { data, rows: frames.length, width, moves };
+    return { data, rows: frames.length, width, flags, moves };
 }
 
 // --- Drawing them ---
 
 // The figure's material: three.js's standard one, its corners moved by the bones they're bound
 // to as each instance is posed (crowdFrame: the two moments of its moves it's between, and how
-// far between), read from the picture of its moves (crowdMoves)
-function crowdMaterial(picture, moves) {
+// far between), read from the picture of its moves (crowdMoves); what it carries shown in hand or
+// put away as that moment's flags say (the texel `flags` of each row, or none: -1; AS, as the
+// instance is: crowdState's first), the rest folded away; each corner shining as what it's of
+// does (crowdSurface: its metalness and roughness); and the instance faded from sight as
+// crowdState's second says (1 all there, 0 gone), a few more of its pixels left out at a time
+function crowdMaterial(picture, moves, flags = -1) {
     const material = new THREE.MeshStandardMaterial({ map: picture, vertexColors: true, roughness: 0.8, metalness: 0, side: THREE.DoubleSide, alphaTest: 0.4 });
 
     material.onBeforeCompile = (shader) => {
         shader.uniforms.crowdMoves = { value: moves };
+        shader.uniforms.crowdFlags = { value: flags };
         shader.vertexShader = shader.vertexShader
             .replace(
                 "#include <common>",
                 `#include <common>
 uniform highp sampler2D crowdMoves;
+uniform int crowdFlags;
 attribute vec4 crowdBones;
 attribute vec4 crowdWeights;
 attribute vec3 crowdFrame;
+attribute vec2 crowdState;
+attribute float crowdSet;
+attribute vec2 crowdSurface;
+varying vec2 vCrowdSurface;
+varying float vCrowdShown;
 mat4 crowdBone( float bone, float row ) {
 	int x = int( bone ) * 3;
 	int y = int( row );
@@ -644,10 +912,35 @@ mat4 crowdPose( float row ) {
 	if ( crowdWeights.z > 0.0 ) pose += crowdBone( crowdBones.z, row ) * crowdWeights.z;
 	if ( crowdWeights.w > 0.0 ) pose += crowdBone( crowdBones.w, row ) * crowdWeights.w;
 	return pose;
+}
+bool crowdShows() {
+	if ( crowdFlags < 0 || crowdSet < 0.5 ) return true;
+	vec4 held = texelFetch( crowdMoves, ivec2( crowdFlags, int( crowdFrame.z < 0.5 ? crowdFrame.x : crowdFrame.y ) ), 0 );
+	float inHand = crowdSet < 2.5 ? held.x : held.y;
+	if ( abs( inHand - ${AS.toFixed(1)} ) < 0.25 ) inHand = crowdState.x;
+	return mod( crowdSet, 2.0 ) > 0.5 ? inHand > 0.5 : inHand < 0.5;
 }`,
             )
             .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\n\tmat4 crowdSkin = crowdPose( crowdFrame.x ) * ( 1.0 - crowdFrame.z ) + crowdPose( crowdFrame.y ) * crowdFrame.z;\n\tobjectNormal = normalize( mat3( crowdSkin ) * objectNormal );")
-            .replace("#include <begin_vertex>", "#include <begin_vertex>\n\ttransformed = ( crowdSkin * vec4( transformed, 1.0 ) ).xyz;");
+            .replace("#include <begin_vertex>", "#include <begin_vertex>\n\ttransformed = crowdShows() ? ( crowdSkin * vec4( transformed, 1.0 ) ).xyz : vec3( 0.0 );\n\tvCrowdSurface = crowdSurface;\n\tvCrowdShown = crowdState.y;");
+        shader.fragmentShader = shader.fragmentShader
+            .replace(
+                "#include <common>",
+                `#include <common>
+varying vec2 vCrowdSurface;
+varying float vCrowdShown;
+const float crowdBayer[ 16 ] = float[ 16 ]( 0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0 );`,
+            )
+            .replace("#include <roughnessmap_fragment>", "float roughnessFactor = vCrowdSurface.y;")
+            .replace("#include <metalnessmap_fragment>", "float metalnessFactor = vCrowdSurface.x;")
+            .replace(
+                "#include <alphatest_fragment>",
+                `#include <alphatest_fragment>
+	if ( vCrowdShown < 1.0 ) {
+		ivec2 cell = ivec2( gl_FragCoord.xy ) % 4;
+		if ( ( crowdBayer[ cell.y * 4 + cell.x ] + 0.5 ) / 16.0 >= vCrowdShown ) discard;
+	}`,
+            );
     };
     material.customProgramCacheKey = () => "crowd";
 
@@ -665,7 +958,7 @@ class Batch {
     constructor(scene, template) {
         this.scene = scene;
         this.template = template;
-        this.material = crowdMaterial(template.picture, template.moves);
+        this.material = crowdMaterial(template.picture, template.moves, template.flags ?? -1);
         this.room = 0;
         this.near = null;
         this.far = null;
@@ -694,6 +987,7 @@ class Batch {
 
             geometry.setIndex(this.template[`${name}Index`] ?? source.index);
             geometry.setAttribute("crowdFrame", new THREE.InstancedBufferAttribute(new Float32Array(this.room * 3), 3).setUsage(THREE.DynamicDrawUsage));
+            geometry.setAttribute("crowdState", new THREE.InstancedBufferAttribute(new Float32Array(this.room * 2), 2).setUsage(THREE.DynamicDrawUsage));
 
             const mesh = new THREE.InstancedMesh(geometry, this.material, this.room);
 
@@ -708,6 +1002,7 @@ class Batch {
             if (old) {
                 old.removeFromParent();
                 old.geometry.deleteAttribute("crowdFrame");
+                old.geometry.deleteAttribute("crowdState");
                 old.geometry.dispose();
                 old.dispose();
             }
@@ -716,7 +1011,7 @@ class Batch {
         }
     }
 
-    /** Draw these (each { matrix, frame: [row, row, between], far }), as many as are in view. */
+    /** Draw these (each { matrix, frame: [row, row, between, armed], shown, far }), as many as are in view. */
     draw(members) {
         if (!members.length && !this.near) {
             return;
@@ -726,13 +1021,14 @@ class Batch {
 
         const counts = { near: 0, far: 0 };
 
-        for (const { matrix, frame, far } of members) {
+        for (const { matrix, frame, shown = 1, far } of members) {
             const name = far ? "far" : "near";
             const mesh = this[name];
             const k = counts[name]++;
 
             mesh.setMatrixAt(k, matrix);
             mesh.geometry.attributes.crowdFrame.setXYZ(k, frame[0], frame[1], frame[2]);
+            mesh.geometry.attributes.crowdState.setXY(k, frame[3] ?? 1, shown);
         }
 
         for (const name of ["near", "far"]) {
@@ -742,6 +1038,7 @@ class Batch {
             mesh.visible = counts[name] > 0;
             mesh.instanceMatrix.needsUpdate = true;
             mesh.geometry.attributes.crowdFrame.needsUpdate = true;
+            mesh.geometry.attributes.crowdState.needsUpdate = true;
         }
     }
 
@@ -750,6 +1047,7 @@ class Batch {
             if (mesh) {
                 mesh.removeFromParent();
                 mesh.geometry.deleteAttribute("crowdFrame");
+                mesh.geometry.deleteAttribute("crowdState");
                 mesh.geometry.dispose();
                 mesh.dispose();
             }
@@ -797,7 +1095,7 @@ export function* makingTemplate(kit, key, { look, guard, attack, reaction = "sla
         }
 
         // (Its figure merged first: falling, it lets go of what it holds)
-        const { geometry, picture, height } = figureOf(character, size);
+        const { geometry, picture, height } = figureOf(character, size, { stowed: true });
 
         yield;
 
@@ -815,11 +1113,24 @@ export function* makingTemplate(kit, key, { look, guard, attack, reaction = "sla
  * triangles near and far waited for a while (each a yield).
  */
 export function* templateFrom(kit, key, { geometry, picture, height, recorded }) {
-    const moves = new THREE.DataTexture(recorded.data, recorded.width, recorded.rows, THREE.RGBAFormat, THREE.FloatType);
+    // (Its moves as half floats: half the memory, a millimetre or so out at most where a figure's
+    // a couple of metres tall; turned a few rows at a time)
+    const halves = new Uint16Array(recorded.data.length);
+    const row = recorded.width * 4;
+
+    for (let k = 0; k < halves.length; k++) {
+        halves[k] = THREE.DataUtils.toHalfFloat(recorded.data[k]);
+
+        if (k % (row * 16) === row * 16 - 1) {
+            yield;
+        }
+    }
+
+    const moves = new THREE.DataTexture(halves, recorded.width, recorded.rows, THREE.RGBAFormat, THREE.HalfFloatType);
 
     moves.needsUpdate = true;
 
-    const template = { key, geometry, nearIndex: null, farIndex: null, picture, moves, table: recorded.moves, height };
+    const template = { key, geometry, nearIndex: null, farIndex: null, picture, moves, table: recorded.moves, flags: recorded.flags ?? -1, height };
 
     // (Fewer triangles near, and fewer still far off: made elsewhere, waited for a while; drawn
     // as merged till they come)
@@ -985,7 +1296,7 @@ export class Crowd {
 
             const away = position.distanceTo(eye);
 
-            list.push({ matrix: avatar.placed(), frame: avatar.frameIn(template.table), far: Boolean(template.farIndex) && (away > CROWD.far.from || (tall * pixels) / Math.max(away, 0.1) < CROWD.far.below) });
+            list.push({ matrix: avatar.placed(), frame: avatar.frameIn(template.table), shown: avatar.shown, far: Boolean(template.farIndex) && (away > CROWD.far.from || (tall * pixels) / Math.max(away, 0.1) < CROWD.far.below) });
             drawn++;
         }
 
@@ -1054,6 +1365,18 @@ export class CrowdAvatar {
         this.fallen = null;
         this.guarding = false;
 
+        /** Whether its weapon's in hand (else put away, a shield slung on its back: its kind's moves' flags, AS). */
+        this.armed = false;
+
+        /** How much of it's seen (1 all of it: fading from sight, less, as one in full takes its place). */
+        this.shown = 1;
+
+        /** The move it was last drawn in (its name in its kind's), the row drawn and when, and easing from it into another (frameIn). */
+        this.moveName = null;
+        this.shownRow = null;
+        this.blend = null;
+        this.drawnAt = -Infinity;
+
         /** Thrown by a blast (#toss), if it is: { from, to, flight, up, ground, start, rises, axis, height }. */
         this.tossed = null;
         this.tumble = new THREE.Quaternion();
@@ -1069,7 +1392,9 @@ export class CrowdAvatar {
             get height() {
                 return (crowd.kinds.get(key)?.template?.height ?? height) * self.size;
             },
-            sheathed: false,
+            get sheathed() {
+                return !self.armed;
+            },
             slings: false,
             // (A flash of red on a blow, as a character's skin has: not shown in a crowd)
             materials: { body: { emissive: new THREE.Color() } },
@@ -1090,7 +1415,10 @@ export class CrowdAvatar {
                 },
             },
             mesh: { castShadow: false },
-            sheathe() {},
+            // (Its weapon put away or in hand, at once: its shield with it)
+            sheathe(on = true) {
+                self.armed = !on;
+            },
             sling() {},
             setEquipment() {},
             fitDetail() {},
@@ -1112,6 +1440,7 @@ export class CrowdAvatar {
             },
             resting: false,
             drawing: false,
+            // (Onto guard or off it, as one in full eases there: frameIn)
             setGuard: (on) => (this.guarding = on),
             setWeapon() {},
             setSeated() {},
@@ -1140,7 +1469,19 @@ export class CrowdAvatar {
             stopEmote() {},
             rest() {},
             stopResting() {},
-            draw() {},
+            // (Its weapon drawn, its shield taken off its back first, or put away: as its kind's
+            // moves have it, if they do, else at once)
+            draw: (name, on = true) => {
+                const move = this.crowd.kinds.get(key)?.template?.table[on ? "draw" : "sheathe"];
+
+                this.armed = on;
+
+                if (move && this.fallen === null) {
+                    this.#start(on ? "draw" : "sheathe");
+                }
+
+                return move?.length ?? 0;
+            },
             holdPose() {},
         };
 
@@ -1207,6 +1548,7 @@ export class CrowdAvatar {
         this.doing = { name, from: this.time, rate: move && seconds ? move.length / seconds : 1 };
     }
 
+
     /** Put it straight somewhere (metres), facing a way (radians from south, towards east). */
     place(x, z, facing = 0) {
         this.object.position.set(x, 0, z);
@@ -1260,7 +1602,7 @@ export class CrowdAvatar {
     #gait(table) {
         const speed = Math.hypot(this.follow.vx, this.follow.vz);
 
-        return !table || speed < CROWD.still ? null : speed > CROWD.pace * Math.sqrt(this.size) ? table.run : table.walk;
+        return !table || speed < CROWD.still ? null : speed > CROWD.pace * Math.sqrt(this.size) ? table.run : this.armed ? table.walk : (table.stroll ?? table.walk);
     }
 
     /** How fast the quickest of it is going (metres a second), as avatar.js's. */
@@ -1313,6 +1655,14 @@ export class CrowdAvatar {
         Object.assign(this.follow, avatar.follow);
         this.time += dt;
 
+        // (Its weapon in hand or put away, and on guard or not, as it has them: but as its own
+        // drawing or putting away plays)
+        if (avatar.character && !["draw", "sheathe"].includes(this.doing?.name)) {
+            this.armed = !avatar.character.sheathed;
+        }
+
+        this.actions.setGuard((avatar.actions?.guardTarget ?? 0) > 0);
+
         const move = this.#gait(this.crowd.kinds.get(this.key)?.template?.table);
 
         if (move) {
@@ -1326,7 +1676,7 @@ export class CrowdAvatar {
      */
     echo(avatar, { deadFor = null } = {}) {
         const actions = avatar.actions;
-        const names = ["startAttack", "react", "dodge", "knockdown", "die", "revive"];
+        const names = ["startAttack", "react", "dodge", "knockdown", "die", "revive", "draw"];
 
         this.fallen = deadFor === null ? null : this.time - deadFor;
         this.doing = null;
@@ -1363,39 +1713,77 @@ export class CrowdAvatar {
 
     /**
      * Where it is in its moves (`table`: a template's), as two of their rows and how far between
-     * them: fallen, its fall (then lying); in the middle of a blow or a flinch, that; walking or
-     * running, its stride; else on guard.
+     * them, and whether its weapon's in hand (1) or put away (0): fallen, its fall (then lying); in
+     * the middle of a blow, a flinch, a draw or going onto guard or off it, that; walking (at ease
+     * with its weapon put away) or running, its stride; else on guard, or standing, its weapon in
+     * hand or put away.
      */
     frameIn(table) {
-        let move = table.guard;
-        let at = (this.time % table.guard.length) / table.guard.length;
+        let name = this.guarding ? "guard" : this.armed ? "ready" : "stand";
+        let at = 0;
+
+        if (!table[name]) {
+            name = "guard";
+        }
 
         if (this.fallen !== null) {
-            move = table.die;
-            at = Math.min(1, (this.time - this.fallen) / move.length);
+            name = "die";
+            at = Math.min(1, (this.time - this.fallen) / table.die.length);
         } else {
             const doing = this.doing && table[this.doing.name];
             const through = doing ? ((this.time - this.doing.from) * this.doing.rate) / doing.length : Infinity;
+            const gait = through < 1 ? null : this.#gait(table);
 
             if (through < 1) {
-                move = doing;
+                name = this.doing.name;
                 at = through;
+            } else if (gait) {
+                this.doing = null;
+                name = Object.keys(table).find((key) => table[key] === gait);
+                at = this.stride;
             } else {
                 this.doing = null;
 
-                const gait = this.#gait(table);
+                // (Onto guard or off it as one in full eases there, from where it stood: rise, lower;
+                // not if it wasn't drawn just now, out of sight)
+                const was = this.time - this.drawnAt <= CROWD.blend ? (ENDS_AS[this.moveName] ?? this.moveName) : null;
+                const turn = was === "ready" && name === "guard" ? "rise" : was === "guard" && name === "ready" ? "lower" : null;
 
-                if (gait) {
-                    move = gait;
-                    at = this.stride;
+                if (turn && table[turn]) {
+                    this.#start(turn);
+                    name = turn;
+                } else {
+                    at = (this.time % table[name].length) / table[name].length;
                 }
             }
         }
 
+        const move = table[name];
         const exact = at * (move.frames - (move.loop ? 0 : 1));
         const first = Math.min(move.frames - 1, Math.floor(exact));
         const next = move.loop ? (first + 1) % move.frames : Math.min(move.frames - 1, first + 1);
+        let frame = [move.start + first, move.start + next, exact - Math.floor(exact), this.armed ? 1 : 0];
 
-        return [move.start + first, move.start + next, exact - Math.floor(exact)];
+        // (Into one move from another: eased from where the last was drawn, over CROWD.blend, the
+        // new move's moment first and the last drawn second, the share of that easing out; not if
+        // it wasn't drawn just now, out of sight)
+        if (name !== this.moveName) {
+            this.blend = this.moveName !== null && this.shownRow !== null && this.time - this.drawnAt <= CROWD.blend ? { from: this.shownRow, start: this.time } : null;
+            this.moveName = name;
+        }
+
+        this.drawnAt = this.time;
+
+        const into = this.blend ? (this.time - this.blend.start) / CROWD.blend : 1;
+
+        if (into < 1) {
+            frame = [frame[2] < 0.5 ? frame[0] : frame[1], this.blend.from, 1 - into * into * (3 - 2 * into), frame[3]];
+        } else {
+            this.blend = null;
+        }
+
+        this.shownRow = frame[2] < 0.5 ? frame[0] : frame[1];
+
+        return frame;
     }
 }

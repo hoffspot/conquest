@@ -15842,6 +15842,126 @@ test("soldiers about the player past the bodies the quality's memory can hold in
     expect(seen.crowded).toBeGreaterThanOrEqual(12 - room - 3);
 });
 
+test("a guard in its crowd stands at ease as one in full does, its sword at its hip and its shield on its back, and draws as one does, the shield off its back first; built in full in its place, it stands as it stood, its crowd's figure fading from sight once the one in full's shown", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=2");
+
+    // (The town's guards in their crowds: room in full for everyone else but them)
+    const id = await page.evaluate(() => {
+        const { game, session } = window.pellagos;
+        const me = game.battle.actor(game.me);
+        const guards = game.battle.actors.filter((actor) => actor.kind === "soldier" && actor.id.includes("/guard-") && actor.map === me.map);
+        const others = game.battle.actors.filter((actor) => actor.kind !== "soldier" && game.avatars.has(actor.id)).length;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        window.quality = session.view.quality;
+        session.view.quality = { ...window.quality, soldiers: { ...window.quality.soldiers, full: 0 }, bodies: others };
+
+        return guards.sort((a, b) => Math.hypot(a.x - me.x, a.y - me.y) - Math.hypot(b.x - me.x, b.y - me.y))[0].id;
+    });
+
+    await page.evaluate((id) => (window.guard = id), id);
+    expect(
+        await playUntil(
+            page,
+            () => {
+                const { game } = window.pellagos;
+                const avatar = game.avatars.get(window.guard);
+
+                return avatar?.constructor.name === "CrowdAvatar" && game.crowds.made(avatar.key);
+            },
+            { seconds: 90 },
+        ),
+    ).toBe(true);
+
+    // How much gold shows of the guard's back (its shield's crown, slung there), seen from behind
+    // as it's drawn now: its crowd laid out for that view, and the middle of the picture read
+    await page.evaluate(() => {
+        window.goldBehind = (id) => {
+            const { game, session } = window.pellagos;
+            const avatar = game.avatars.get(id);
+            const { x, y, z } = avatar.object.position;
+            const camera = session.view.camera;
+
+            camera.position.set(x - Math.sin(avatar.facing) * 3, y + 1.5, z - Math.cos(avatar.facing) * 3);
+            camera.lookAt(x, y + 1.1, z);
+            camera.updateMatrixWorld();
+            game.crowds.draw(camera, session.view.pixelsPerMetre());
+            session.view.render();
+
+            const gl = session.view.renderer.getContext();
+            const [w, h] = [gl.drawingBufferWidth, gl.drawingBufferHeight];
+            const box = { x: Math.round(w * 0.4), y: Math.round(h * 0.3), w: Math.round(w * 0.2), h: Math.round(h * 0.45) };
+            const pixels = new Uint8Array(box.w * box.h * 4);
+            let gold = 0;
+
+            gl.readPixels(box.x, box.y, box.w, box.h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+            for (let k = 0; k < pixels.length; k += 4) {
+                gold += pixels[k] > 130 && pixels[k + 1] > 100 && pixels[k + 2] < 90 && pixels[k] - pixels[k + 2] > 80 ? 1 : 0;
+            }
+
+            return { gold, move: avatar.moveName, armed: avatar.armed };
+        };
+    });
+
+    // At ease, in its crowd: standing, its weapon put away, the crown on its back seen from behind
+    const atEase = await page.evaluate((id) => window.goldBehind(id), id);
+
+    expect(atEase.move).toBe("stand");
+    expect(atEase.armed).toBe(false);
+
+    // Drawing, as the battle has it (fighting, so it keeps it drawn): the draw played, its shield
+    // off its back and on its arm, the crown turned away
+    await page.evaluate((id) => {
+        const { game } = window.pellagos;
+
+        Object.assign(game.battle.actor(id), { armed: true, foughtAt: Infinity });
+        game.avatars.get(id).actions.draw("sword", true);
+    }, id);
+    await playUntil(page, () => false, { seconds: 0.5 });
+    expect((await page.evaluate((id) => window.goldBehind(id), id)).move).toBe("draw");
+    await playUntil(page, () => false, { seconds: 3 });
+
+    const drawn = await page.evaluate((id) => window.goldBehind(id), id);
+
+    expect(drawn).toMatchObject({ move: "ready", armed: true });
+    expect(atEase.gold, `the crown on its back at ease (${atEase.gold} gold pixels), not once it's drawn (${drawn.gold})`).toBeGreaterThan(drawn.gold * 2 + 20);
+
+    // Built in full in its place: its weapon in hand as it was; its crowd's figure seen as it was
+    // till the one in full's shown, then fading from sight, then gone
+    await page.evaluate(() => {
+        window.pellagos.session.view.quality = window.quality;
+    });
+
+    const handing = await page.evaluate(async (id) => {
+        const { game } = window.pellagos;
+        const seen = [];
+
+        for (let k = 0; k < 900 && seen.at(-1)?.fading !== false; k++) {
+            game.advance(1 / 30, { render: true, wait: true });
+
+            const avatar = game.avatars.get(id);
+            const fading = game.fadingOut.find((one) => one.id === id);
+
+            if (avatar && avatar.constructor.name !== "CrowdAvatar") {
+                seen.push({ shown: avatar.object.visible, sheathed: avatar.character.sheathed, fading: fading ? fading.crowd.shown : false });
+            }
+
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        return seen;
+    }, id);
+
+    expect(handing.length).toBeGreaterThan(0);
+    expect(handing.every(({ sheathed }) => sheathed === false)).toBe(true);
+    expect(handing.filter(({ shown }) => !shown).every(({ fading }) => fading === 1), "seen as it was till the one in full's shown").toBe(true);
+    expect(handing.some(({ shown, fading }) => shown && fading > 0 && fading < 1), "fading once it's shown").toBe(true);
+    expect(handing.at(-1)).toMatchObject({ shown: true, fading: false });
+});
+
 test("a crowded fight that comes too slowly (Adaptive): those least seen of the wild's bandits, wolves and spiders stand in their kind's crowd, their bodies kept but unseen; and drawn in full again once there's time to spare", async ({ page }) => {
     test.setTimeout(240000);
     await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ debug: true, sound: false, quality: "low" })));
