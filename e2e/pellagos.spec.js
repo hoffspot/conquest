@@ -6003,19 +6003,53 @@ test("the townsfolk go about their business in the start town: dressed for their
         return !game.enlistees.size && !game.enlisting.length;
     }, { seconds: 90 })).toBe(true);
 
-    const out = await page.evaluate(() => {
-        const { game } = window.pellagos;
+    // (Each as they're drawn: in full, what they wear; in a crowd, which, and how far from the camera)
+    const out = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { folkLook } = await import("/js/characters/folk.js");
+        const camera = session.view.camera.position;
+        const [ox, oz] = game.originOf("town");
 
         return game.battle.actors
             .filter(({ id }) => id.startsWith("townsfolk:"))
-            .map(({ id, x, y, neutral }) => ({ id, at: [x, y], neutral, drawn: game.avatars.has(id), calling: game.host.folk.get(id).look, title: game.host.folk.get(id).title, wearing: [...(game.avatars.get(id)?.character.equipment.values() ?? [])] }));
+            .map(({ id, x, y, neutral }) => {
+                const avatar = game.avatars.get(id);
+                const one = game.host.folk.get(id);
+
+                return {
+                    id,
+                    at: [x, y],
+                    neutral,
+                    drawn: avatar?.constructor.name ?? null,
+                    away: Math.hypot(ox + x - camera.x, oz + y - camera.z),
+                    crowd: avatar?.key ?? null,
+                    kind: `folk:${one.people ?? "human"}:${one.sex}`,
+                    calling: one.look,
+                    title: one.title,
+                    look: folkLook(one).equipment,
+                    wearing: avatar?.character.equipment ? [...avatar.character.equipment.values()] : null,
+                };
+            });
     });
     const carried = ["pannier", "sack", "firewood", "jug", "pitchfork", "broom", "walkingStaff", "ledger", "hoe", "basket"];
 
     expect(out.length).toBe(8);
     expect(out.every(({ drawn, neutral }) => drawn && neutral)).toBe(true);
     expect(new Set(out.map(({ calling }) => calling)).size).toBeGreaterThanOrEqual(4);
-    expect(out.filter(({ wearing }) => wearing.some((id) => carried.includes(id))).length).toBeGreaterThanOrEqual(5);
+    expect(out.filter(({ look }) => look.some((id) => carried.includes(id))).length).toBeGreaterThanOrEqual(5);
+
+    // (Each in full dressed as their calling has them, carrying what they carry; or, gone more
+    // than 45 metres from the camera on their errands, in their people's and sex's crowd: no more
+    // than a step nearer since, or they'd be on their way to being dressed in full again)
+    for (const one of out) {
+        if (one.drawn === "CrowdAvatar") {
+            expect(one.crowd, JSON.stringify(one)).toBe(one.kind);
+            expect(one.away, JSON.stringify(one)).toBeGreaterThan(45 - 2);
+        } else {
+            expect(one.drawn, JSON.stringify(one)).toBe("Avatar");
+            expect([...one.wearing].sort(), JSON.stringify(one)).toEqual([...one.look].sort());
+        }
+    }
 
     // A quarter of a minute on: most of them gone somewhere else
     const moved = await page.evaluate((before) => {
