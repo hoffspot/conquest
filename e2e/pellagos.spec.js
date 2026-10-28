@@ -5271,7 +5271,8 @@ test("the folk out in the streets held in full only as the bodies' budget has ro
         const about = { folk: street().filter(({ held }) => held).length, soldiers: out("soldier").filter(({ id }) => inFull(id)).length };
 
         // Under a budget with room for fewer of them: the furthest let go (all but those only just
-        // past the room), then all dressed again once there's room
+        // past the room: the townsfolk to their crowd, the crier undrawn), then all dressed again
+        // once there's room
         const quality = session.view.quality;
 
         const others = [...game.avatars.keys()].filter((id) => inFull(id) && !out("folk").some((actor) => actor.id === id)).length;
@@ -5346,6 +5347,139 @@ test("the folk out in the streets held in full only as the bodies' budget has ro
 
     // Out again: the townsfolk dressed again
     expect(held.back).toBeGreaterThanOrEqual(held.about.folk - 1);
+});
+
+test("the townsfolk past the bodies' room, or far from the camera, drawn in their people's and sex's crowd once its figure's made, each in their own colours and build; dressed in full again near with room, their crowd's figure fading as they're shown; the crier never in one", async ({ page }) => {
+    // (Seed 2's town on Low: its townsfolk and its crier about the start)
+    await page.addInitScript(() => localStorage.setItem("pellagos.settings", JSON.stringify({ sound: false, quality: "low" })));
+    await playing(page, "/?play&seed=2");
+
+    const seen = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const player = game.battle.actor("player");
+        const play = async (steps, each = () => {}) => {
+            for (let k = 0; k < steps; k++) {
+                game.advance(0.1, { render: k % 5 === 0 });
+                each();
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+        const kindOf = (id) => game.avatars.get(id)?.constructor.name ?? "none";
+        const folk = () => game.battle.actors.filter((actor) => actor.kind === "folk" && actor.map === "town");
+        const camera = session.view.camera.position;
+        const [ox, oz] = game.originOf("town");
+        const away = (actor) => Math.hypot(ox + actor.x - camera.x, oz + actor.y - camera.z);
+        const crowded = () =>
+            folk()
+                .filter(({ id }) => kindOf(id) === "CrowdAvatar")
+                .map((actor) => {
+                    const avatar = game.avatars.get(actor.id);
+                    const one = game.host.folk.get(actor.id);
+
+                    return { id: actor.id, role: one.role, key: avatar.key, kind: `folk:${one.people ?? "human"}:${one.sex}`, tint: [...(avatar.tint ?? [])], build: avatar.build, off: Math.hypot(ox + actor.x - avatar.object.position.x, oz + actor.y - avatar.object.position.z) };
+                });
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        // A while about the square: its folk dressed as they come out
+        await play(200);
+
+        const about = folk().filter(({ id }) => kindOf(id) === "Avatar").length;
+
+        // Under a budget with room for two of them: the rest in their crowd, once its figure's made
+        const quality = session.view.quality;
+        const others = [...game.avatars.keys()].filter((id) => kindOf(id) === "Avatar" && !folk().some((actor) => actor.id === id)).length;
+
+        session.view.quality = { ...quality, bodies: others + 2 };
+
+        for (let k = 0; k < 600 && crowded().length < 3; k++) {
+            await play(1);
+        }
+
+        await play(10);
+
+        const tight = { crowded: crowded(), rationed: { ...game.folkRationed }, crier: folk().filter(({ id }) => /^crier:/.test(id)).map(({ id }) => kindOf(id)) };
+
+        // Room again: dressed in full again, their crowd's figures fading as they're shown
+        session.view.quality = quality;
+
+        let faded = 0;
+
+        await play(150, () => (faded = Math.max(faded, game.fadingOut.length)));
+
+        const loose = { inFull: folk().filter(({ id }) => kindOf(id) === "Avatar").length, crowded: crowded().length, faded };
+
+        // Off down a road from the square, the camera with the player: those far from it in their
+        // crowd, whatever room there is; those near in full
+        const map = game.world.maps.town;
+        const start = [player.x, player.y];
+        let moved = null;
+
+        for (let r = 60; r < 90 && !moved; r += 2) {
+            for (let a = 0; a < 24 && !moved; a++) {
+                const x = Math.floor(start[0] + Math.cos((a / 24) * Math.PI * 2) * r);
+                const y = Math.floor(start[1] + Math.sin((a / 24) * Math.PI * 2) * r);
+
+                if (!map.squares.blocked(x, y)) {
+                    moved = [x, y];
+                }
+            }
+        }
+
+        const go = ([x, y]) => {
+            Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
+            game.avatars.get(game.me).place(x + 0.5, y + 0.5, player.facing);
+            game.previous.set(game.me, { x: player.x, y: player.y });
+        };
+
+        go(moved);
+        await play(60);
+
+        const far = folk().map((actor) => ({ id: actor.id, townsfolk: game.host.folk.get(actor.id)?.role === "townsfolk", away: away(actor), kind: kindOf(actor.id) }));
+
+        // And back: dressed in full again
+        go(start.map(Math.floor));
+        await play(150);
+
+        return { about, tight, loose, far, back: folk().filter(({ id }) => kindOf(id) === "Avatar").length, crowd: { ...game.stats.bodies }.crowd };
+    });
+
+    expect(seen.about, JSON.stringify(seen)).toBeGreaterThanOrEqual(5);
+
+    // (Squeezed: those past the room in their crowd, each of the townsfolk, in their people's and
+    // sex's, where they are, each in their own colours and build; the crier never)
+    const { crowded } = seen.tight;
+
+    expect(crowded.length, JSON.stringify(seen.tight)).toBeGreaterThanOrEqual(3);
+    expect(seen.tight.rationed.crowd).toBe(crowded.length);
+    expect(seen.tight.crier.every((kind) => kind !== "CrowdAvatar")).toBe(true);
+
+    for (const one of crowded) {
+        expect(one.role).toBe("townsfolk");
+        expect(one.key).toBe(one.kind);
+        expect(one.tint).toHaveLength(16);
+        expect(one.tint.every((value) => Number.isFinite(value) && value >= 0)).toBe(true);
+        expect(one.build.every((value) => value >= 0.92 && value <= 1.08)).toBe(true);
+        expect(one.off).toBeLessThan(1.5);
+    }
+
+    expect(new Set(crowded.map(({ tint }) => tint.map((value) => value.toFixed(2)).join())).size).toBeGreaterThanOrEqual(Math.min(3, crowded.length));
+
+    // (Room again: all of them in full, their crowd's figures faded)
+    expect(seen.loose.inFull).toBe(seen.about);
+    expect(seen.loose.crowded).toBe(0);
+    expect(seen.loose.faded).toBeGreaterThan(0);
+
+    // (Far off: the townsfolk past the reach and its slack in their crowd; none near in one)
+    const past = seen.far.filter(({ townsfolk, away }) => townsfolk && away > 45 + 10 + 2);
+
+    expect(past.length, JSON.stringify(seen.far)).toBeGreaterThan(0);
+    expect(past.every(({ kind }) => kind === "CrowdAvatar"), JSON.stringify(seen.far)).toBe(true);
+    expect(seen.far.filter(({ away }) => away < 45 - 2).every(({ kind }) => kind !== "CrowdAvatar"), JSON.stringify(seen.far)).toBe(true);
+
+    // (Back: dressed in full again)
+    expect(seen.back).toBeGreaterThanOrEqual(seen.about - 1);
 });
 
 test("the temple: the priest in white blesses the pews and lights the shrines' candles, worshippers pray, and the priest tells of the temple's patron", async ({ page }) => {
