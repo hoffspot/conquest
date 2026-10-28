@@ -3832,12 +3832,15 @@ their crowds, their bodies in full let go. The debug log says how many soldiers 
 how many had room (`soldiers`). The folk out in the world (the townsfolk in the streets, a
 crier in his square, a stranger by the road) are held in full only as far as the budget leaves
 room too (`#folkRoom`, twice a second): whoever the player's talking or trading with first, then
-the nearest the camera, those on another map last. With no crowd to stand in, those past the
-room aren't drawn: undressed, the furthest first (one held only just past it, `MARSHAL.margin`,
-left as it is), or not dressed at all, and dressed once there's room for them again. The debug
-log says how many there were and how many had room (`folk`); in seed 2's start town on Low, its
-nine had room for 29, and under a budget of 8 the furthest of them, 40 metres off, went undrawn
-till there was room again:
+the nearest the camera, those on another map last. The townsfolk past the room, and those more
+than 45 metres from the camera, are drawn in crowds of their own (*The townsfolk in their
+crowds*, below). The rest past the room (a crier, a stranger, or one of the townsfolk while their
+crowd's figure is made) aren't drawn: undressed, the furthest first (one held only just past it,
+`MARSHAL.margin`, left as it is), or not dressed at all, and dressed once there's room for them
+again. The debug log says how many there were, how many had room and how many were in their
+crowds (`folk`); in seed 2's start town on Low, its nine had room for 29, and under a budget of 8
+the furthest of them, 40 metres off, went undrawn till there was room again (till 2026-10-28;
+now in their crowd):
 
 - **One figure for each kind.** A soldier of each people, sex and weapon (`human:m:sword`) is
   built once, as a template: a character as any soldier is (`soldierLook`), its weapon drawn. Its
@@ -3955,6 +3958,62 @@ ground with every soldier in the crowds, a frame's update took 14 ms for 50 a si
 100, where the battle's own steps are most of it; the crowds themselves don't show among what a
 frame's JavaScript spends its time on. A crowd's figure's drawn with the fewer triangles beyond
 `CROWD.far.from` metres or under `CROWD.far.below` pixels tall on the screen.
+
+### The townsfolk in their crowds (characters/folkcrowd.js)
+
+The townsfolk out in the streets past the bodies' room, and those more than 45 metres from the
+camera (`DETAIL.reach`, as the soldiers'; one drawn in full only once it's `DETAIL.slack` further),
+are drawn in crowds of their own (app/game.js `#folkRoom`), their bodies in full let go or never
+built; whoever the player's talking or trading with never. Till 2026-10-28 those past the room
+went undrawn, and those far off were each a body in full. Not a crier in his livery, nor a stranger
+by the road, nor one of a look of their own (presets.js FOLK): they're held in full as there's room,
+or not drawn.
+
+- **One figure for each people and sex** (`folk:human:f`, `folkKind`), not one for each look:
+  a town's nine townsfolk are eight or nine looks, and a figure is 6 MB or so on Low. It's made
+  from one of them in plain, light clothes, above the hips and below (a woman's a skirt), boots
+  on, nothing on the head or in the hands (`folkFigureLook`): a human fair-skinned and fair-haired,
+  in a linen shirt or chemise; another people's the fairest of 48 of them, in the lightest of
+  their own everyday dress for each piece (dress.js `everydayDress`'s `pick`), with their own parts
+  (a cat's ears and tail, a lizard's tail, an orc's tusks), a cat's fur unstriped. Its hair short,
+  or a bob, where their people wear it so; no beard.
+- **What of it each corner is** (world/crowd.js `crowdPart`, `CROWD_PARTS`): its skin, its clothes
+  above its hips and below them to its knees (by where each corner is, as it's bound to its
+  bones: its boots below as they are), a skirt all of it below, its hair; the rest (its boots,
+  its eyes) as it's made.
+- **Each in their own colours** (`folkTint`): each part dyed, the figure's light and shade kept and
+  its colour taken outright (the colour of their own over how light the figure's is there: so a
+  saffron wrap can be dyed indigo, which a colour multiplied channel by channel can't): their
+  skin's tone; the outermost of what they wear above the hips and what's under it, half and half
+  (a black jerkin over a linen shirt, a bodice over a chemise); trousers, a skirt, or a loincloth
+  below (or as above if they wear nothing there; their skin's, bare above the hips); their hair's
+  colour (their skin's, bald). Each instance's four colours are kept in a little picture of them
+  for its kind (a row of 64 instances to a row of 256 texels, the near ones' first, then the far
+  ones': `Batch` `tints`), the instance's row in `crowdState`'s third (-1 for a soldier, as its
+  figure is). A soldier's figure carries the mark and the picture too, unused.
+- **And their own build** (`folkBuild`): as much taller as their height's slider is over the
+  figure's, and broader as their weight's and their muscle's are, by at most 8% either way.
+- **Calm** (`recordingMoves`' `calm`): only standing at ease, strolling and running at ease, a flinch
+  and a fall are recorded, none of it on guard, and no blow.
+- **Made as they're wanted**, as the soldiers' are: asked for as soon as one of the townsfolk is
+  far off or past the room, and made a step at a time in the background meanwhile, those waiting
+  held in full or undrawn as before. Let go of a minute after the last of them is (`CROWD_KEEP`).
+- **One for the other**, as the soldiers are: near again with room, each is dressed in full in
+  their place, their crowd's figure fading over a quarter of a second once they're shown
+  (`#handOver`). Inside a building those in their crowds stay so till the player's out.
+
+Measured in seed 1's start town, its nearest city and its nearest capital on Low (headless
+Chromium), as they were and under a budget with room in full for two of the folk:
+
+| | Townsfolk | Before: drawn | After: drawn | Bodies' memory before → after | Squeezed before → after |
+|---|---|---|---|---|---|
+| Redton (a town) | 9 | 9 in full | 9 in full | 56 → 56 MB | none drawn → 8 in their crowd (the crier not) |
+| Wilingbury (a city) | 13 | 13 in full, 4 of them past 45 m | 9 in full, the 4 in their crowd | 71 → 49 MB | 2 in full → 4 in full, 9 in their crowd |
+| Redemoor (a capital) | 15 | 15 in full, 3 past 45 m | 12 in full, the 3 in their crowd | 77 → 67 MB | 3 in full → 3 in full, 12 in their crowd |
+
+A frame took about as long (a median of 10 to 13 ms either way); the two figures are made in the
+background in a second or so each, before they're wanted, as soon as one of the townsfolk is far
+off.
 
 ### Standing in (app/game.js #thronging, app/throng.js)
 

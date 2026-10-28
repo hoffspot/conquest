@@ -137,9 +137,11 @@ const skirt = (id) => EQUIPMENT[id]?.kind === "drape" && !EQUIPMENT[id].cape && 
  * What one of a people wears for what a human of their calling would (`equipment`: ids), picked by
  * their `seed`: each piece their people has their own for swapped for one of theirs (or none),
  * the rest kept; one piece to a slot (the first). A man (`sex` "m") never in a skirt: in his
- * people's trousers instead (a priest's robe, a scribe's: theirs for trousers).
+ * people's trousers instead (a priest's robe, a scribe's: theirs for trousers). `pick(choices)`:
+ * which of their choices is worn, if not by the seed (the townsfolk's figure in a crowd, the
+ * lightest: characters/folkcrowd.js).
  */
-export function everydayDress(equipment, people, seed, sex = "f") {
+export function everydayDress(equipment, people, seed, sex = "f", { pick = null } = {}) {
     const own = EVERYDAY[people];
 
     if (!own) {
@@ -147,14 +149,15 @@ export function everydayDress(equipment, people, seed, sex = "f") {
     }
 
     const random = createRandom(seed * 40503 + 211);
+    const choose = (choices) => (pick ? pick(choices) : random.pick(choices));
     const slots = new Set();
     const dressed = [];
 
     for (const id of equipment) {
-        let picked = own[id] ? random.pick(own[id]) : id;
+        let picked = own[id] ? choose(own[id]) : id;
 
         if (sex === "m" && [picked].flat().some(skirt)) {
-            picked = [[picked].flat().filter((piece) => !skirt(piece)), random.pick(own.trousers ?? [null])].flat(2);
+            picked = [[picked].flat().filter((piece) => !skirt(piece)), choose(own.trousers ?? [null])].flat(2);
         }
 
         for (const piece of [picked].flat()) {
