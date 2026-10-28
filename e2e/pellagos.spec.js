@@ -16078,15 +16078,32 @@ test("a crowded fight that comes too slowly (Adaptive): those least seen of the 
     });
     expect(await playUntil(page, () => window.pellagos.game.thronged.size === 0, { seconds: 5 })).toBe(true);
 
-    // (Any stand-in still in its crowd fading from sight, its body shown in its place: app/game.js
-    // #fading; then gone)
-    const fading = await page.evaluate(() => {
+    // (Any stand-in still in its crowd fading from sight, one for each, seen as it was only while
+    // its body's not been shown: app/game.js #fading. A body's pictures are sent as it comes into
+    // the camera's view: #sending)
+    const fading = await page.evaluate(async () => {
         const { game } = window.pellagos;
+        const { CROWD } = await import("/js/world/crowd.js");
+        const ids = game.fadingOut.map(({ id }) => id);
 
-        return [...game.crowds.members].filter(({ standIn }) => standIn).every((standIn) => game.fadingOut.some(({ crowd }) => crowd === standIn));
+        return {
+            fading: [...game.crowds.members].filter(({ standIn }) => standIn).every((standIn) => game.fadingOut.some(({ crowd }) => crowd === standIn)),
+            once: new Set(ids).size === ids.length,
+            waiting: game.fadingOut.every(({ avatar, left }) => left < CROWD.fade || avatar.compiling || avatar.sent === false),
+        };
     });
 
-    expect(fading).toBe(true);
+    expect(fading).toEqual({ fading: true, once: true, waiting: true });
+
+    // (Their bodies shown, as they would be come into view: gone a moment after)
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        for (const { avatar } of game.fadingOut.filter(({ avatar }) => avatar.sent === false)) {
+            game.view.upload([avatar.object], { hidden: true });
+            avatar.sent = true;
+        }
+    });
     expect(await playUntil(page, () => window.pellagos.game.fadingOut.length === 0, { seconds: 2 })).toBe(true);
 
     const back = await page.evaluate((ids) => {

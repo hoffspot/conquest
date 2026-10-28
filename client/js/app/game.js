@@ -4523,7 +4523,21 @@ export class Game {
             avatar.walker.phase = crowd.stride;
         }
 
+        this.#unfade(id);
         this.fadingOut.push({ id, crowd, avatar, left: CROWD.fade, visible: crowd.object.visible });
+    }
+
+    // (Any crowd figure of `id` still fading from sight gone at once: another's taken its place)
+    #unfade(id) {
+        this.fadingOut = this.fadingOut.filter((fading) => {
+            if (fading.id !== id) {
+                return true;
+            }
+
+            fading.crowd.character.dispose();
+
+            return false;
+        });
     }
 
     // Those fading from sight (#handOver), each frame `dt` seconds on: kept where the one in full
@@ -5101,6 +5115,8 @@ export class Game {
     #throng(actor, avatar, key, size) {
         const standIn = new CrowdAvatar(this.crowds, key, { height: avatar.character.height / size, size, standIn: true });
 
+        // (Its last stand-in, still fading as its body's not been shown, gone: this one's here)
+        this.#unfade(actor.id);
         standIn.object.position.copy(avatar.object.position);
         standIn.facing = avatar.facing;
 
@@ -5130,6 +5146,7 @@ export class Game {
             avatar.walker.phase = standIn.stride;
         }
 
+        this.#unfade(id);
         this.fadingOut.push({ id, crowd: standIn, avatar, left: CROWD.fade, visible: true });
         avatar.unposed.dt = Math.min(avatar.unposed.dt, 0.25);
         avatar.unposed.frames = Infinity;

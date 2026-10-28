@@ -3848,10 +3848,12 @@ till there was room again:
   the crowd's figure the same as it was in full. Its crowd's figure's kept where it is, as it's
   going, till the one in full is shown (its shaders ready and its pictures sent: `#register`), then
   fades from sight over a quarter of a second (`CROWD.fade`: a few more of its pixels left out each
-  frame, an ordered dither), the two drawn together meanwhile. Till 2026-10-28 a soldier went from
-  its crowd on guard, its shield on its arm, to standing at ease in full, its shield on its back,
-  at once; and its crowd's figure was gone the moment the one in full was made, unseen for the
-  frames till that was shown.
+  frame, an ordered dither), the two drawn together meanwhile. Out of the camera's view, the one in
+  full isn't shown till it comes into view (its pictures sent then: `#sending`), so its crowd's
+  figure waits there with it; one figure fading for each at most (`#unfade`: a new one in its place
+  lets the old go at once). Till 2026-10-28 a soldier went from its crowd on guard, its shield on
+  its arm, to standing at ease in full, its shield on its back, at once; and its crowd's figure was
+  gone the moment the one in full was made, unseen for the frames till that was shown.
 - **Made as they're wanted.** A kind's template is made a step at a time with half of each frame's
   time for building those drawn (`MARSHAL.share`), its skin painted and its detail lowered in their
   workers meanwhile: about a second each on a desktop. A soldier waiting on its kind's isn't drawn,
