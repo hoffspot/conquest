@@ -11,7 +11,7 @@ import { sampleFiles, scoreFiles } from "../client/js/audio/instruments.js";
 import { SURFACES } from "../client/js/audio/footing.js";
 import { useSound, wearSound } from "../client/js/audio/handling.js";
 import { ON_DEMAND, RECORDED, RECORDED_LEVEL, SOURCES } from "../client/js/audio/recorded.js";
-import { ARMOUR, BATTLE_OUT, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, MADE_AHEAD, mp3Rate, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
+import { ARMOUR, BATTLE_OUT, BUSES, CREATURE_VOICES, creatureSounds, DECODED_BUDGET, FIRST, FOOTSTEPS, GAITS, gainOf, ITEM_SOUNDS, LAND_FADE, LANDS, MADE_AHEAD, MADE_KEPT, MADE_QUICK, mp3Rate, MURMUR, PLACES, RECORDED_ONLY, recordedFiles, SCORES, Sound, spellSounds, VOLUME_DEFAULTS } from "../client/js/audio/sound.js";
 import { SCORE } from "../client/js/audio/score.js";
 import { CLIP_SOUNDS } from "../client/js/beasts/sounds.js";
 import { BEDS, LEVEL, loudness, PEAKS, render, SAMPLE_RATE, SOUNDS, wind } from "../client/js/audio/synth.js";
@@ -630,6 +630,111 @@ describe("playing sounds (sound.js)", () => {
 
         await tick();
         assert.equal(played.length, 0);
+        sound.close();
+    });
+
+    it("plays a made sound each time it was wanted before it was made, each as it was to start: an invasion's two horns, both heard", async () => {
+        const played = fakeAudio();
+        const sound = new Sound({ fetch: fromDisk });
+        const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+        const until = async (done) => {
+            for (let k = 0; k < 100 && !done(); k++) {
+                await tick();
+            }
+        };
+        // (A made sound's own plays: the music may play meanwhile)
+        const of = (name) => played.filter(({ source }) => sound.buffers.get(name)?.includes(source.buffer));
+
+        await sound.prepare();
+        sound.unlock();
+        await tick();
+
+        // The raiders' horn blown twice at once, the second 2.2 s on, the first time it's wanted:
+        // both played once it's made, each at its own time. (Made here on the page, with no
+        // worker, its first variant's made at once: the second may be played from it then)
+        played.length = 0;
+        assert.equal(sound.play("warHorn", { delay: 0 }), null);
+        sound.play("warHorn", { delay: 2.2 });
+        await until(() => of("warHorn").length >= 2);
+
+        const now = sound.context.currentTime;
+
+        assert.deepEqual(
+            of("warHorn").map(({ when }) => Math.round((when - now) * 10) / 10).sort((a, b) => a - b),
+            [0, 2.2],
+        );
+
+        // Judged by when each was to start, not when it was wanted: made a second after they were
+        // wanted, one wanted 2 s on is played, a second on; one wanted at once isn't
+        played.length = 0;
+        sound.play("denied", { delay: 2 });
+        sound.play("coins");
+        sound.context.currentTime += 1;
+        await until(() => sound.took.has("denied") && sound.took.has("coins"));
+        await tick();
+        assert.equal(of("denied").length, 1);
+        assert.equal(of("coins").length, 0);
+        assert.equal(Math.round((of("denied")[0].when - sound.context.currentTime) * 10) / 10, 1);
+        sound.close();
+    });
+
+    it("makes the made sounds asked for ahead before they're wanted (the player's spells', kept; a raid's horns), and lets go of one made as it was wanted and not played for a while, to be made again", async () => {
+        const played = fakeAudio();
+        const sound = new Sound({ fetch: fromDisk });
+        const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+        // (Whether one of a made sound's own was played: the music may play meanwhile)
+        const heard = (name) => played.some(({ source }) => sound.buffers.get(name)?.includes(source.buffer));
+        let now = 0;
+
+        sound.now = () => now;
+        await sound.prepare();
+        sound.unlock();
+        sound.setPaused(false);
+        await tick();
+
+        // Made ahead: played at once the first time it's wanted
+        sound.makeAhead(["castPrismatic", "prismaticBlast"], { keep: true });
+        sound.makeAhead("townHorn");
+
+        for (let k = 0; k < 100 && !["castPrismatic", "prismaticBlast", "townHorn"].every((name) => sound.buffers.has(name)); k++) {
+            await tick();
+        }
+
+        played.length = 0;
+        assert.ok(sound.play("prismaticBlast"));
+        assert.ok(sound.play("townHorn"));
+        assert.equal(played.length, 2);
+
+        // Made as it was wanted (and played then), then not played for MADE_KEPT: let go of (but
+        // those made at the start, and those kept); wanted again, made again and played
+        played.length = 0;
+        sound.play("denied");
+
+        for (let k = 0; k < 100 && !(heard("denied") && sound.took.has("denied")); k++) {
+            await tick();
+        }
+
+        now += MADE_KEPT * 1000 + 1;
+        sound.update(60);
+        assert.ok(!sound.buffers.has("denied"), "let go of");
+        assert.ok(!sound.buffers.has("townHorn"), "let go of");
+        assert.ok(sound.buffers.has("castPrismatic") && sound.buffers.has("prismaticBlast"), "kept");
+        assert.ok(sound.buffers.has("stepGrass") && sound.buffers.has("slash"), "made at the start: kept");
+
+        played.length = 0;
+        assert.equal(sound.play("denied"), null);
+
+        for (let k = 0; k < 100 && !heard("denied"); k++) {
+            await tick();
+        }
+
+        assert.ok(heard("denied"));
+
+        // (One slow to make again: kept however long it's gone unplayed)
+        sound.took.set("denied", MADE_QUICK * 2);
+        now += MADE_KEPT * 1000 + 1;
+        sound.update(60);
+        assert.ok(sound.buffers.has("denied"));
         sound.close();
     });
 

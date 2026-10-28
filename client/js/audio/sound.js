@@ -191,11 +191,23 @@ export const DECODED_BUDGET = Object.freeze({ touch: 48 * 1024 * 1024, other: 96
  * the first time it's wanted (#make), in the worker: all 98 of them, 247 variants at the browser's
  * 48 kHz, held 33 MB from the start, an explosion's or a war horn's as much as a footstep's, and an
  * iPhone's tab was let go holding 105 MB of sound (a player's crash report, 2026-10-27). A sound
- * made the first time it's wanted is played as soon as it's made, if that's within MADE_LATE
- * seconds of when it was wanted (a few hundredths, in the worker); later than that, not at all.
+ * made the first time it's wanted is played as soon as it's made, every time it was wanted
+ * meanwhile (MADE_WAITING at most), each if that's within MADE_LATE seconds of when it was to
+ * start (its `delay` on, or as its peak's timed: `peakAt`; a few hundredths, in the worker): an
+ * invasion's war horn blown twice at once, the second 2.2 s on, both heard. Later than that, not
+ * at all. Some are made before they're wanted (makeAhead): the player's spells' as they come to
+ * know them, kept, and an invasion's horns as it's told of. One made as it was wanted and not
+ * played for MADE_KEPT seconds is let go of, to be made again the next time (in 50 to 400 ms),
+ * but for those kept and those slow to make again (more than MADE_QUICK seconds' making).
  */
 export const MADE_AHEAD = /^(step|swing)|^(slash|hack|cleave|chop|strike|crush|pierce|punch|arcane|fire|arrow|bolt|fireball)$/;
 const MADE_LATE = 0.25;
+const MADE_WAITING = 8;
+export const MADE_KEPT = 300;
+export const MADE_QUICK = 0.1;
+
+// How often the made sounds not played lately are looked over, to let them go (s: MADE_KEPT)
+const MADE_LOOKED = 15;
 
 // What a sound's copy holds (bytes): an MP3's, or its samples' (32-bit, each channel's)
 const bytesOf = (copy) => copy.byteLength ?? (copy.length ?? 0) * (copy.numberOfChannels ?? 1) * 4;
@@ -815,14 +827,21 @@ export class Sound {
 
         /**
          * Which made sounds are made as it starts (`ahead`: by name); those asked to be made so
-         * far (names); what makes them (a worker, or null to make them on the page); and the last
-         * of each wanted before it was made, to play once it is (name → { name, options, at: the
-         * browser's time }: MADE_LATE).
+         * far (name → when they were asked, the page's time, ms: null for those made ahead); what
+         * makes them (a worker, or null to make them on the page); each time each was wanted
+         * before it was made, to play once it is (name → [{ name, options, at: the browser's
+         * time }]: MADE_LATE); those made before they're wanted and kept (names, as makeAhead was
+         * given them); and of those made as they were wanted, how long each took (name → s) and
+         * when each was last played (name → the page's time, ms: MADE_KEPT).
          */
         this.ahead = ahead;
-        this.making = new Set();
+        this.madeAsked = new Map();
         this.maker = null;
         this.late = new Map();
+        this.kept = new Set();
+        this.took = new Map();
+        this.madePlayed = new Map();
+        this.madeLooked = 0;
 
         /**
          * Sounds' recordings (recorded.js) as the browser decodes them (name → [buffer], in
@@ -923,13 +942,14 @@ export class Sound {
         this.downloading ??= this.#download([...first, ...recordedFiles()]);
         this.#wantScore(this.#wanted().score);
         this.ready ??= new Promise((resolve) => {
-            const ahead = Object.keys(SOUNDS).filter((name) => this.ahead(name));
+            // (Those asked to be made ahead already, too: makeAhead before it's prepared)
+            const ahead = [...new Set([...Object.keys(SOUNDS).filter((name) => this.ahead(name)), ...this.madeAsked.keys()])];
             const here = async () => {
                 this.maker?.terminate();
                 this.maker = null;
 
                 // (Those asked of the worker meanwhile, too)
-                for (const name of [...new Set([...ahead, ...this.making])]) {
+                for (const name of [...new Set([...ahead, ...this.madeAsked.keys()])]) {
                     if (!this.#made(name)) {
                         await this.#makeHere(name);
                     }
@@ -939,7 +959,7 @@ export class Sound {
                 resolve();
             };
 
-            ahead.forEach((name) => this.making.add(name));
+            ahead.forEach((name) => this.madeAsked.set(name, null));
 
             try {
                 this.maker = new Worker(new URL("./worker.js", import.meta.url), { type: "module" });
@@ -947,7 +967,7 @@ export class Sound {
                     if (data.done) {
                         resolve();
                     } else if (data.made) {
-                        this.#playLate(data.made);
+                        this.#playLate(data.made, data.ms / 1000);
                     } else {
                         this.#receive(data);
                     }
@@ -967,29 +987,59 @@ export class Sound {
     }
 
     // A made sound wanted that isn't made yet (MADE_AHEAD): made now, once, in the worker; or on
-    // the page, a little at a time, where there's none
+    // the page, a little at a time, where there's none; or, not prepared yet, once it is (prepare)
     #make(name) {
-        if (this.making.has(name) || !SOUNDS[name]) {
+        if (this.madeAsked.has(name) || !SOUNDS[name]) {
             return;
         }
 
-        this.making.add(name);
+        this.madeAsked.set(name, this.now());
 
         if (this.maker) {
             this.maker.postMessage({ make: name });
-        } else {
+        } else if (this.ready) {
             this.#makeHere(name);
+        }
+    }
+
+    /**
+     * Make the made sounds `names` (a name, or a list; a recorded one's stand-in, played till its
+     * recordings are in, unless they are) before they're wanted, so the first time each is played
+     * it's played on time: the player's spells' as they come to know them, kept (`keep`) as long
+     * as the game goes on, while they've no recordings in to play instead; an invasion's horns as
+     * it's told of. Nothing while the sound's off: each is made the first time it's wanted then.
+     */
+    makeAhead(names, { keep = false } = {}) {
+        for (const name of [names].flat()) {
+            const stand = SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead;
+
+            if (!SOUNDS[stand]) {
+                continue;
+            }
+
+            if (keep) {
+                this.kept.add(name);
+            }
+
+            if (this.enabled && !this.#made(stand) && !this.recorded.get(name)?.length) {
+                this.#make(stand);
+            }
         }
     }
 
     // A made sound made on the page, a variant at a time; then played, if it was wanted just now
     async #makeHere(name) {
+        let took = 0;
+
         for (let variant = 0; variant < SOUNDS[name].variants; variant++) {
+            const started = this.now();
+
             this.#receive({ name, variant, samples: render(name, variant) });
+            took += (this.now() - started) / 1000;
             await new Promise((next) => setTimeout(next, 0));
         }
 
-        this.#playLate(name);
+        this.#playLate(name, took);
     }
 
     // Whether a made sound's made (its samples, or the browser's copies of them)
@@ -997,14 +1047,57 @@ export class Sound {
         return this.buffers.has(name) || this.samples.has(name);
     }
 
-    // A made sound just made, all of it: played, if it was wanted no more than MADE_LATE ago
-    #playLate(name) {
-        const late = this.late.get(name);
+    // A made sound just made, all of it (`took` seconds to make: kept, with when, for MADE_KEPT,
+    // if it was made as it was wanted): played each time it was wanted meanwhile, if that's no
+    // more than MADE_LATE after it was to start (its `delay` on, or as its peak's timed, `peakAt`:
+    // from when it was wanted), each as late as it is (one timed by its peak started part way in,
+    // to be loudest on time all the same)
+    #playLate(name, took) {
+        const waiting = this.late.get(name) ?? [];
 
         this.late.delete(name);
 
-        if (late && this.context && this.context.currentTime - late.at <= MADE_LATE) {
-            this.play(late.name, late.options);
+        if (this.madeAsked.get(name) !== null) {
+            this.took.set(name, took);
+            this.madePlayed.set(name, this.now());
+        }
+
+        for (const { name: wanted, options, at } of this.context ? waiting : []) {
+            const since = this.context.currentTime - at;
+            const delay = options.delay - since;
+            const peakAt = options.peakAt === null ? null : options.peakAt - since;
+            const start = peakAt === null ? delay : peakAt - (PEAKS[name] ?? 0) / options.rate;
+
+            if (start >= -MADE_LATE) {
+                this.play(wanted, { ...options, delay: Math.max(0, delay), peakAt });
+            }
+        }
+    }
+
+    // The made sounds made as they were wanted, not played for MADE_KEPT seconds, let go of (made
+    // again the next time they're wanted): not those made ahead (MADE_AHEAD), those kept while
+    // they've no recordings in (makeAhead `keep`), one slow to make again (MADE_QUICK), nor one
+    // wanted again meanwhile. Looked over every MADE_LOOKED seconds
+    #letGoMade(dt) {
+        if ((this.madeLooked -= dt) > 0) {
+            return;
+        }
+
+        this.madeLooked = MADE_LOOKED;
+
+        const now = this.now();
+        const kept = new Set([...this.kept].filter((name) => !this.recorded.get(name)?.length).map((name) => (SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead)));
+
+        for (const [name, took] of this.took) {
+            if (this.ahead(name) || kept.has(name) || took > MADE_QUICK || this.late.has(name) || now - (this.madePlayed.get(name) ?? now) < MADE_KEPT * 1000) {
+                continue;
+            }
+
+            this.buffers.delete(name);
+            this.samples.delete(name);
+            this.madeAsked.delete(name);
+            this.took.delete(name);
+            this.madePlayed.delete(name);
         }
     }
 
@@ -1511,6 +1604,8 @@ export class Sound {
             }
         }
 
+        this.#letGoMade(dt);
+
         // (The murmur, one after another from round about, each overlapping the last)
         if (this.murmur) {
             this.nextMurmur -= dt;
@@ -1563,19 +1658,24 @@ export class Sound {
             this.#recall(name);
         }
 
-        // (Recorded once two of its recordings are in, or its only one)
-        const buffers = recorded?.length >= Math.min(2, RECORDED[name]?.length ?? 2) ? recorded : this.buffers.get(SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead);
+        // (Recorded once two of its recordings are in, or its only one; else its made sound, or
+        // the made one played in its place)
+        const stand = SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead;
+        const buffers = recorded?.length >= Math.min(2, RECORDED[name]?.length ?? 2) ? recorded : this.buffers.get(stand);
 
         // (Counting the sounds still playing by when they end, not by the browser saying they
         // have: a stuck browser never does)
         this.sounding = this.sounding.filter((end) => end > context?.currentTime);
 
         // (Its made sound not made yet, and nothing else to play: made now, and played as soon as
-        // it is, if that's soon enough: MADE_LATE)
-        const stand = SOUNDS[name] ? name : RECORDED_ONLY[name]?.instead;
-
+        // it is, each time it's wanted meanwhile, if that's soon enough: MADE_LATE)
         if (this.playing && !buffers?.length && SOUNDS[stand] && !this.#made(stand)) {
-            this.late.set(stand, { name, options: { at, volume, delay, peakAt, rate, far, variant, made, muffle }, at: context.currentTime });
+            const waiting = this.late.get(stand) ?? [];
+
+            if (waiting.length < MADE_WAITING) {
+                this.late.set(stand, [...waiting, { name, options: { at, volume, delay, peakAt, rate, far, variant, made, muffle }, at: context.currentTime }]);
+            }
+
             this.#make(stand);
 
             return null;
@@ -1583,6 +1683,11 @@ export class Sound {
 
         if (!this.playing || !buffers?.length || this.sounding.length >= VOICES) {
             return null;
+        }
+
+        // (A made one made as it was wanted, played: kept a while longer, MADE_KEPT)
+        if (buffers !== recorded && this.took.has(stand)) {
+            this.madePlayed.set(stand, this.now());
         }
 
         // (A recording's made quieter than a made sound, for its sharper start: played up to match;
