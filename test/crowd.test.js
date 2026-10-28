@@ -39,7 +39,8 @@ const { soldierLook } = await import("../client/js/characters/soldiers.js");
 const { allAtOnce, WAITING } = await import("../client/js/core/steps.js");
 const { WEAPONS } = await import("../client/js/core/weapons.js");
 const { Avatar } = await import("../client/js/world/avatar.js");
-const { AS, CROWD, CROWD_CASTS, CROWD_KEEP, CROWD_SETS, Crowd, CrowdAvatar, figureOf, offstage, OFFSTAGE, onstage, recordingMoves, templateFrom } = await import("../client/js/world/crowd.js");
+const { AS, CROWD, CROWD_CASTS, CROWD_KEEP, CROWD_PARTS, CROWD_SETS, Crowd, CrowdAvatar, figureOf, offstage, OFFSTAGE, onstage, recordingMoves, templateFrom } = await import("../client/js/world/crowd.js");
+const { folkFigureLook } = await import("../client/js/characters/folkcrowd.js");
 const { released } = await import("../client/js/world/release.js");
 
 const humanFiles = readHumanFiles();
@@ -139,9 +140,10 @@ function posedFigure(character, geometry) {
     return points;
 }
 
-// How far each of `points` is from the nearest of `among` (both xyz in turn), at most
-function furthestFrom(points, among) {
-    const cell = 0.01;
+// How far each of `points` is from the nearest of `among` (both xyz in turn), at most; Infinity
+// for one further than `within` (metres) from all of them, as far as it looks
+function furthestFrom(points, among, within = 0.01) {
+    const cell = within;
     const grid = new Map();
     const key = (x, y, z) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
 
@@ -267,8 +269,9 @@ describe("a kind's figure carrying its weapon in hand and put away (crowd.js fig
         assert.ok(furthestFrom(pointsOf(posed, [...of(CROWD_SETS.always), ...of(CROWD_SETS.weaponAway)]), corners) < 0.002, "put away");
 
         // (The shield slung where it's slung, but for the centimetre or so a body keeps what it
-        // carries clear of itself by as it moves, which a figure's can't: as far as it's moved)
-        const slung = furthestFrom(pointsOf(posed, of(CROWD_SETS.shieldAway)), corners);
+        // carries clear of itself by as it moves, which a figure's can't: as far as it's moved,
+        // looked for as far off as that may be, not the centimetre the rest are looked for within)
+        const slung = furthestFrom(pointsOf(posed, of(CROWD_SETS.shieldAway)), corners, 0.03);
 
         assert.ok(slung < 0.03, `the shield ${(slung * 100).toFixed(1)} cm out`);
 
@@ -1010,5 +1013,169 @@ describe("one drawn in a crowd (crowd.js CrowdAvatar)", () => {
         assert.ok(sword.layers.isEnabled(0) && sword.layers.isEnabled(3));
         assert.ok(torch.layers.isEnabled(0));
         assert.equal(hidden.size, 0);
+    });
+});
+
+// One of the townsfolk's figures, a man's or a woman's (characters/folkcrowd.js), built
+function townsfolk(sex) {
+    const look = folkFigureLook({ people: "human", sex });
+
+    return { look, character: new Character(kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: 0.2, merge: true }) };
+}
+
+describe("the townsfolk's figure, what of it each corner is marked (crowd.js figureOf, CROWD_PARTS)", () => {
+    it("marks its skin, its clothes above its hips and below them to its knees (a skirt all of it below), its hair, and the rest (its boots, its eyes) as it's made", () => {
+        for (const sex of ["m", "f"]) {
+            const { character } = townsfolk(sex);
+            const { geometry } = figureOf(character, 64);
+            const { crowdPart, position } = geometry.attributes;
+            const head = (name) => character.rig.heads[character.rig.index.get(name)].y;
+            const [hips, knees] = [head("Hips"), head("LeftLeg")];
+            const of = (part) => Array.from({ length: crowdPart.count }, (_, v) => v).filter((v) => crowdPart.getX(v) === part);
+
+            assert.equal(crowdPart.count, position.count);
+
+            for (const [name, part] of Object.entries(CROWD_PARTS)) {
+                assert.ok(of(part).length > 50, `${sex}: ${of(part).length} corners of its ${name}`);
+            }
+
+            assert.ok(
+                of(CROWD_PARTS.upper).every((v) => position.getY(v) >= hips),
+                `${sex}: its clothes above its hips`,
+            );
+            assert.ok(
+                of(CROWD_PARTS.hair).every((v) => position.getY(v) > character.height * 0.75),
+                `${sex}: its hair on its head`,
+            );
+
+            if (sex === "m") {
+                assert.ok(
+                    of(CROWD_PARTS.lower).every((v) => position.getY(v) < hips && position.getY(v) >= knees),
+                    "his trousers to his knees, his boots below",
+                );
+            } else {
+                assert.ok(
+                    of(CROWD_PARTS.lower).some((v) => position.getY(v) < knees),
+                    "her skirt down past her knees",
+                );
+            }
+        }
+    });
+});
+
+describe("the townsfolk's moves (crowd.js recordingMoves calm)", () => {
+    it("records only standing, strolling and running at ease, a flinch and a fall for one that never fights", () => {
+        const { character, look } = townsfolk("f");
+        const { moves, rows } = allAtOnce(recordingMoves(character, { walk: look.walk, guard: null, attack: null, reaction: "slash", calm: true }));
+        let next = 0;
+
+        assert.deepEqual(Object.keys(moves).sort(), ["die", "hit", "run", "stand", "stroll"]);
+
+        for (const [name, move] of Object.entries(moves).sort((a, b) => a[1].start - b[1].start)) {
+            assert.equal(move.start, next, `${name} follows the last`);
+            assert.ok(move.frames > 3, `${name}: ${move.frames} frames`);
+            next += move.frames;
+        }
+
+        assert.equal(next, rows);
+        assert.ok(moves.stroll.stride > 0.8 && moves.run.stride > moves.stroll.stride);
+    });
+});
+
+describe("one of the townsfolk in a crowd (crowd.js CrowdAvatar, Batch)", () => {
+    // (Its kind's moves, calm: recordingMoves')
+    const calm = {
+        stand: { start: 0, frames: 20, length: 1, loop: true },
+        stroll: { start: 20, frames: 22, length: 1.1, loop: true, stride: 1.43 },
+        run: { start: 42, frames: 14, length: 0.7, loop: true, stride: 1.61 },
+        hit: { start: 56, frames: 10, length: 0.5, loop: false },
+        die: { start: 66, frames: 30, length: 1.5, loop: false, lands: 0.9 },
+    };
+    const moveOf = (frame) => Object.entries(calm).find(([, { start, frames }]) => frame[0] >= start && frame[0] < start + frames)[0];
+
+    it("stands at ease whatever it's told, strolls and runs at ease, and is drawn as tall and broad as it's built", () => {
+        const crowd = { kinds: new Map([["folk:human:f", { template: { table: calm, height: 1.7 } }]]), members: new Set(), join(one) { this.members.add(one); }, leave(one) { this.members.delete(one); } };
+        const one = new CrowdAvatar(crowd, "folk:human:f", { build: [1.05, 0.95] });
+
+        one.place(0, 0, 0);
+        one.guarding = true;
+        one.armed = true;
+        one.update(0.05, 0, 0, 0);
+        assert.equal(moveOf(one.frameIn(calm)), "stand");
+
+        for (const [speed, move] of [
+            [1.3, "stroll"],
+            [2.6, "run"],
+        ]) {
+            for (let k = 0; k < 40; k++) {
+                one.update(0.05, 0, (k + 1) * speed * 0.05 + speed * 2, 0);
+            }
+
+            assert.equal(moveOf(one.frameIn(calm)), move, `at ${speed} m/s`);
+            one.place(0, 0, 0);
+        }
+
+        const scale = new THREE.Vector3();
+
+        one.placed().decompose(new THREE.Vector3(), new THREE.Quaternion(), scale);
+        assert.ok(scale.distanceTo(new THREE.Vector3(1.05, 0.95, 1.05)) < 1e-9);
+        assert.ok(Math.abs(one.character.height - 1.7 * 0.95) < 1e-9);
+    });
+
+    it("is drawn with its own colours in its own place in the picture of them, near and far, and one with none as its figure is; the figure's shader dyes each part so", () => {
+        const geometry = new THREE.BufferGeometry();
+
+        geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0, 0.5, 1.7, 0, -0.5, 1.7, 0], 3));
+        geometry.setIndex([0, 1, 2]);
+
+        const template = { key: "folk:human:f", geometry, nearIndex: null, farIndex: geometry.index, picture: new THREE.Texture(), moves: new THREE.DataTexture(new Uint16Array(4), 1, 1), table: calm, flags: -1, height: 1.7 };
+        const crowd = new Crowd(new THREE.Scene(), kit);
+        const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
+
+        crowd.template("folk:human:f", {
+            // eslint-disable-next-line require-yield
+            make: function* () {
+                return template;
+            },
+        });
+        crowd.work(performance.now() + 1000);
+        assert.ok(crowd.made("folk:human:f"));
+
+        // (One dyed near, one as its figure is, one dyed far off)
+        const tint = Float32Array.from({ length: 16 }, (_, k) => k / 16);
+        const farTint = Float32Array.from({ length: 16 }, (_, k) => 1 - k / 16);
+        const dyed = new CrowdAvatar(crowd, "folk:human:f", { tint });
+        const plain = new CrowdAvatar(crowd, "folk:human:f");
+        const far = new CrowdAvatar(crowd, "folk:human:f", { tint: farTint });
+
+        dyed.place(0, 0, 0);
+        plain.place(1, 0, 0);
+        far.place(0, -40, 0);
+        camera.position.set(0, 1, 6);
+        camera.lookAt(0, 1, 0);
+        camera.updateMatrixWorld();
+        assert.equal(crowd.draw(camera, 600, 0), 3);
+
+        const batch = crowd.kinds.get("folk:human:f").batch;
+        const near = batch.near.geometry.attributes.crowdState;
+        const data = batch.tints.value.image.data;
+        const room = batch.near.instanceMatrix.count;
+
+        assert.deepEqual([near.getZ(0), near.getZ(1)], [0, -1]);
+        assert.equal(batch.far.geometry.attributes.crowdState.getZ(0), room, "the far ones' after the near");
+        assert.deepEqual([...data.subarray(0, 16)], [...tint]);
+        assert.deepEqual([...data.subarray(room * 16, room * 16 + 16)], [...farTint]);
+        assert.equal(batch.tints.value.image.width, 64 * 4);
+
+        // Its shader: each part dyed as its colours say, from its figure's lightness there
+        const shader = { uniforms: {}, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader };
+
+        batch.material.onBeforeCompile(shader);
+        assert.equal(shader.uniforms.crowdTints, batch.tints);
+        assert.match(shader.vertexShader, /attribute float crowdPart;/);
+        assert.match(shader.vertexShader, /vCrowdDye = crowdDye\.rgb;/);
+        assert.match(shader.fragmentShader, /diffuseColor\.rgb = mix\( diffuseColor\.rgb, vCrowdDye \* dot\( diffuseColor\.rgb, vec3\( 0\.2126, 0\.7152, 0\.0722 \) \), vCrowdDyed \);/);
+
+        crowd.dispose();
     });
 });

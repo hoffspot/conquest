@@ -1489,8 +1489,22 @@ test("two players in a party on the maps: what each had found before is the othe
     await expect(menu.locator('.party-players .party-player[data-id="guest-1"] .party-swatch')).toHaveAttribute("style", /background/, { timeout: 30000 });
     await menu.getByRole("button", { name: "Close" }).click();
 
-    for (const page of [host, guest]) {
-        await page.waitForFunction(([x, y]) => window.pellagos.game.host.players.get("player").explored.visitedAt(x, y), far, { timeout: 30000, polling: 250 });
+    // (In each world, the host's and the guest's: told, if it isn't so, what that world has of it,
+    // Ada's and Bryn's maps there, the party each is in and how often the guest's been sent the
+    // world again)
+    for (const [whose, page] of [
+        ["the host's", host],
+        ["the guest's", guest],
+    ]) {
+        const there = () =>
+            page.evaluate(([x, y]) => {
+                const { game } = window.pellagos;
+                const been = (id) => game.host.players.get(id)?.explored.visitedAt(x, y) ?? null;
+
+                return { ada: been("player"), bryn: been("guest-1"), parties: [game.host.partyIds?.get("player") ?? null, game.host.partyIds?.get("guest-1") ?? null], sentAgain: game.remote?.resyncs ?? null };
+            }, far);
+
+        await expect.poll(there, { message: `Bryn's land on Ada's map in ${whose} world`, timeout: 30000, intervals: [250] }).toMatchObject({ ada: true });
     }
 
     expect(await host.evaluate(([x, y]) => window.pellagos.game.explored.visitedAt(x, y), far)).toBe(true);

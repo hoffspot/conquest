@@ -232,6 +232,14 @@ function drawnOf(mesh) {
  */
 export const CROWD_SETS = Object.freeze({ always: 0, weaponHeld: 1, weaponAway: 2, shieldHeld: 3, shieldAway: 4 });
 
+/**
+ * What of a figure each of its corners is (its `crowdPart`), for those of a kind each drawn in
+ * colours of their own (CrowdAvatar `tint`: the townsfolk): its skin; its clothes above its hips
+ * (`upper`), and below them to its knees, or a skirt (`lower`); its hair; the rest (its boots,
+ * its eyes, what it carries) as its figure's made (`other`).
+ */
+export const CROWD_PARTS = Object.freeze({ other: 0, skin: 1, upper: 2, lower: 3, hair: 4 });
+
 // How many of what it carries a figure's picture has a place for (a shield's face, a blade)
 const GEAR = 3;
 
@@ -283,9 +291,9 @@ function within(geometry, first, count) {
  * side by side (`size` pixels square each of the first two), and of what it carries (up to GEAR
  * of its pictures: a shield's face, a blade). `stowed`: what it carries put away too (in its
  * sheath, a shield slung on its back), as well as in hand, each corner marked which it is
- * (`crowdSet`: CROWD_SETS); and each corner shines as what it's of does (`crowdSurface`: its
- * metalness and roughness: a blade, a shield's rim and a helm as metal, not chalk). Returns {
- * geometry, picture, height }.
+ * (`crowdSet`: CROWD_SETS); each corner shines as what it's of does (`crowdSurface`: its
+ * metalness and roughness: a blade, a shield's rim and a helm as metal, not chalk); and each is
+ * marked what of it it is (`crowdPart`: CROWD_PARTS). Returns { geometry, picture, height }.
  */
 export function figureOf(character, size = 256, { stowed = false } = {}) {
     const object = character.object;
@@ -395,6 +403,12 @@ export function figureOf(character, size = 256, { stowed = false } = {}) {
     };
     const whiteAt = [(places.white.x + WHITE / 2) / canvas.width, (places.white.y + WHITE / 2) / canvas.height];
 
+    // (How high its hips and its knees are, as it's bound to its bones: where its clothes are
+    // above them and below, and its boots)
+    const height = (name, share) => character.rig.heads?.[character.rig.index?.get(name)]?.y ?? share * (character.height ?? 1.7);
+    const hips = height("Hips", 0.53);
+    const knees = height("LeftLeg", 0.28);
+
     const positions = [];
     const normals = [];
     const uvs = [];
@@ -403,6 +417,7 @@ export function figureOf(character, size = 256, { stowed = false } = {}) {
     const boneWeights = [];
     const sets = [];
     const surfaces = [];
+    const parts = [];
     const indices = [];
     let corners = 0;
 
@@ -462,6 +477,11 @@ export function figureOf(character, size = 256, { stowed = false } = {}) {
                 const eyes = material === character.materials.eyes;
                 const seen = new Map();
 
+                // (What of it this is: its clothes, but a skirt, above its hips or below as each
+                // corner is)
+                const clothes = character.garments.includes(mesh);
+                const part = material === character.materials.body ? CROWD_PARTS.skin : material === character.materials.hair ? CROWD_PARTS.hair : clothes && mesh.userData.drape ? CROWD_PARTS.lower : clothes ? null : CROWD_PARTS.other;
+
                 for (let k = first; k < first + count; k++) {
                     const v = geometry.index ? geometry.index.getX(k) : k;
                     let corner = seen.get(v);
@@ -499,6 +519,7 @@ export function figureOf(character, size = 256, { stowed = false } = {}) {
                         positions.push(_vector.x, _vector.y, _vector.z);
                         normals.push(_normal.x, _normal.y, _normal.z);
                         sets.push(set);
+                        parts.push(part ?? (_vector.y >= hips ? CROWD_PARTS.upper : _vector.y >= knees ? CROWD_PARTS.lower : CROWD_PARTS.other));
 
                         // Its colour and its place in the picture
                         if (place && uv) {
@@ -563,6 +584,7 @@ export function figureOf(character, size = 256, { stowed = false } = {}) {
     merged.setAttribute("crowdWeights", new THREE.Float32BufferAttribute(boneWeights, 4));
     merged.setAttribute("crowdSet", new THREE.Float32BufferAttribute(sets, 1));
     merged.setAttribute("crowdSurface", new THREE.Float32BufferAttribute(surfaces, 2));
+    merged.setAttribute("crowdPart", new THREE.Float32BufferAttribute(parts, 1));
     merged.setIndex(corners > 65535 ? new THREE.Uint32BufferAttribute(indices, 1) : new THREE.Uint16BufferAttribute(indices, 1));
     merged.computeBoundingBox();
     merged.computeBoundingSphere();
@@ -646,9 +668,11 @@ const ENDS_AS = Object.freeze({ draw: "ready", lower: "ready", sheathe: "stand",
  * of it jumps going round), and those standing are recorded once they've settled. `walk` its
  * walk's style; `guard` how it fights (actions.js GUARDS); `attack` its weapon's blow ({
  * animation, hitAt, duration }: weapons.js, ms); `reaction` how it flinches (actions.js
- * REACTIONS); `cast` how it casts (CROWD_CASTS), if it does.
+ * REACTIONS); `cast` how it casts (CROWD_CASTS), if it does. `calm`: one that never fights (the
+ * townsfolk), only standing, walking and running at ease, flinching and falling, none of it on
+ * guard; and no blow, `attack` null.
  */
-export function* recordingMoves(character, { walk, guard, attack, reaction, cast = null }) {
+export function* recordingMoves(character, { walk, guard, attack, reaction, cast = null, calm = false }) {
     const step = 1 / CROWD.fps;
     const flags = character.rig.skeleton.bones.length * 3;
     const width = flags + 1;
@@ -737,47 +761,62 @@ export function* recordingMoves(character, { walk, guard, attack, reaction, cast
         return avatar;
     };
 
-    play("guard", { loop: true, settle: CROWD.settle, start: (avatar) => avatar.actions.setGuard(true), until: (avatar, t) => t >= CROWD.guard });
-    yield;
+    if (!calm) {
+        play("guard", { loop: true, settle: CROWD.settle, start: (avatar) => avatar.actions.setGuard(true), until: (avatar, t) => t >= CROWD.guard });
+        yield;
+    }
 
     play("stand", { loop: true, away: true, settle: CROWD.settle, start: (avatar) => avatar.actions.setGuard(false), until: (avatar, t) => t >= CROWD.stand });
-    play("ready", { loop: true, settle: CROWD.settle, start: (avatar) => avatar.actions.setGuard(false), until: (avatar, t) => t >= CROWD.stand });
+
+    if (!calm) {
+        play("ready", { loop: true, settle: CROWD.settle, start: (avatar) => avatar.actions.setGuard(false), until: (avatar, t) => t >= CROWD.stand });
+    }
+
     yield;
 
-    // (Onto guard and off it, as an avatar eases there: from standing, its weapon in hand, and back)
-    play("rise", {
-        settle: CROWD.settle,
-        start: () => {},
-        until: (avatar, t) => {
-            avatar.actions.setGuard(true);
+    if (!calm) {
+        // (Onto guard and off it, as an avatar eases there: from standing, its weapon in hand, and back)
+        play("rise", {
+            settle: CROWD.settle,
+            start: () => {},
+            until: (avatar, t) => {
+                avatar.actions.setGuard(true);
 
-            return t >= CROWD.turn;
-        },
-    });
-    play("lower", {
-        settle: CROWD.settle,
-        start: (avatar) => avatar.actions.setGuard(true),
-        until: (avatar, t) => {
-            avatar.actions.setGuard(false);
+                return t >= CROWD.turn;
+            },
+        });
+        play("lower", {
+            settle: CROWD.settle,
+            start: (avatar) => avatar.actions.setGuard(true),
+            until: (avatar, t) => {
+                avatar.actions.setGuard(false);
 
-            return t >= CROWD.turn;
-        },
-    });
+                return t >= CROWD.turn;
+            },
+        });
+    }
+
     yield;
 
     for (const [name, speed, away] of [
         ["walk", CROWD.walk, false],
         ["stroll", CROWD.walk, true],
-        ["run", CROWD.run, false],
+        ["run", CROWD.run, calm],
     ]) {
+        // (Running on guard, as it's armed or not; calm, at ease, and never walking armed)
+        const guarded = name === "run" && !calm;
         let last = Infinity;
+
+        if (calm && name === "walk") {
+            continue;
+        }
 
         play(name, {
             loop: true,
             speed,
             away,
-            as: name === "run",
-            start: (avatar) => avatar.actions.setGuard(name === "run"),
+            as: guarded,
+            start: (avatar) => avatar.actions.setGuard(guarded),
             until: (avatar) => {
                 const wrapped = avatar.walker.phase < last && last !== Infinity;
 
@@ -790,15 +829,17 @@ export function* recordingMoves(character, { walk, guard, attack, reaction, cast
         yield;
     }
 
-    play("attack", {
-        start: (avatar) => {
-            avatar.actions.setGuard(true);
-            avatar.actions.startAttack(attack.animation, { hitAt: attack.hitAt / 1000, duration: attack.duration / 1000 });
-        },
-        until: (avatar, t) => t >= attack.duration / 1000 + step,
-    });
-    moves.attack.hitAt = attack.hitAt / 1000;
-    yield;
+    if (attack) {
+        play("attack", {
+            start: (avatar) => {
+                avatar.actions.setGuard(true);
+                avatar.actions.startAttack(attack.animation, { hitAt: attack.hitAt / 1000, duration: attack.duration / 1000 });
+            },
+            until: (avatar, t) => t >= attack.duration / 1000 + step,
+        });
+        moves.attack.hitAt = attack.hitAt / 1000;
+        yield;
+    }
 
     if (cast) {
         play("cast", {
@@ -813,9 +854,10 @@ export function* recordingMoves(character, { walk, guard, attack, reaction, cast
     }
 
     play("hit", {
-        as: true,
+        as: !calm,
+        away: calm,
         start: (avatar) => {
-            avatar.actions.setGuard(true);
+            avatar.actions.setGuard(!calm);
             avatar.actions.react(reaction, { from: 0 });
         },
         until: (avatar, t) => t >= (REACTIONS[reaction]?.length ?? 0.45) + step,
@@ -876,28 +918,36 @@ export function* recordingMoves(character, { walk, guard, attack, reaction, cast
 // far between), read from the picture of its moves (crowdMoves); what it carries shown in hand or
 // put away as that moment's flags say (the texel `flags` of each row, or none: -1; AS, as the
 // instance is: crowdState's first), the rest folded away; each corner shining as what it's of
-// does (crowdSurface: its metalness and roughness); and the instance faded from sight as
-// crowdState's second says (1 all there, 0 gone), a few more of its pixels left out at a time
-function crowdMaterial(picture, moves, flags = -1) {
+// does (crowdSurface: its metalness and roughness); the instance faded from sight as
+// crowdState's second says (1 all there, 0 gone), a few more of its pixels left out at a time;
+// and each part of it (crowdPart: CROWD_PARTS) dyed the instance's own colours, if it has them:
+// crowdState's third, which of the picture of them (`tints`' value: Batch) are its, or -1 (its
+// figure's lightness there times the colour; its figure's own where its fourth is 0)
+function crowdMaterial(picture, moves, flags = -1, tints = { value: null }) {
     const material = new THREE.MeshStandardMaterial({ map: picture, vertexColors: true, roughness: 0.8, metalness: 0, side: THREE.DoubleSide, alphaTest: 0.4 });
 
     material.onBeforeCompile = (shader) => {
         shader.uniforms.crowdMoves = { value: moves };
         shader.uniforms.crowdFlags = { value: flags };
+        shader.uniforms.crowdTints = tints;
         shader.vertexShader = shader.vertexShader
             .replace(
                 "#include <common>",
                 `#include <common>
 uniform highp sampler2D crowdMoves;
 uniform int crowdFlags;
+uniform highp sampler2D crowdTints;
 attribute vec4 crowdBones;
 attribute vec4 crowdWeights;
 attribute vec3 crowdFrame;
-attribute vec2 crowdState;
+attribute vec3 crowdState;
 attribute float crowdSet;
 attribute vec2 crowdSurface;
+attribute float crowdPart;
 varying vec2 vCrowdSurface;
 varying float vCrowdShown;
+varying vec3 vCrowdDye;
+varying float vCrowdDyed;
 mat4 crowdBone( float bone, float row ) {
 	int x = int( bone ) * 3;
 	int y = int( row );
@@ -919,18 +969,26 @@ bool crowdShows() {
 	float inHand = crowdSet < 2.5 ? held.x : held.y;
 	if ( abs( inHand - ${AS.toFixed(1)} ) < 0.25 ) inHand = crowdState.x;
 	return mod( crowdSet, 2.0 ) > 0.5 ? inHand > 0.5 : inHand < 0.5;
+}
+vec4 crowdTint() {
+	if ( crowdState.z < 0.0 || crowdPart < 0.5 ) return vec4( 0.0 );
+	int at = int( crowdState.z );
+	return texelFetch( crowdTints, ivec2( ( at % ${TINTS_ROW} ) * 4 + int( crowdPart ) - 1, at / ${TINTS_ROW} ), 0 );
 }`,
             )
             .replace("#include <beginnormal_vertex>", "#include <beginnormal_vertex>\n\tmat4 crowdSkin = crowdPose( crowdFrame.x ) * ( 1.0 - crowdFrame.z ) + crowdPose( crowdFrame.y ) * crowdFrame.z;\n\tobjectNormal = normalize( mat3( crowdSkin ) * objectNormal );")
-            .replace("#include <begin_vertex>", "#include <begin_vertex>\n\ttransformed = crowdShows() ? ( crowdSkin * vec4( transformed, 1.0 ) ).xyz : vec3( 0.0 );\n\tvCrowdSurface = crowdSurface;\n\tvCrowdShown = crowdState.y;");
+            .replace("#include <begin_vertex>", "#include <begin_vertex>\n\ttransformed = crowdShows() ? ( crowdSkin * vec4( transformed, 1.0 ) ).xyz : vec3( 0.0 );\n\tvCrowdSurface = crowdSurface;\n\tvCrowdShown = crowdState.y;\n\tvec4 crowdDye = crowdTint();\n\tvCrowdDye = crowdDye.rgb;\n\tvCrowdDyed = crowdDye.a;");
         shader.fragmentShader = shader.fragmentShader
             .replace(
                 "#include <common>",
                 `#include <common>
 varying vec2 vCrowdSurface;
 varying float vCrowdShown;
+varying vec3 vCrowdDye;
+varying float vCrowdDyed;
 const float crowdBayer[ 16 ] = float[ 16 ]( 0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0 );`,
             )
+            .replace("#include <color_fragment>", "#include <color_fragment>\n\tdiffuseColor.rgb = mix( diffuseColor.rgb, vCrowdDye * dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ), vCrowdDyed );")
             .replace("#include <roughnessmap_fragment>", "float roughnessFactor = vCrowdSurface.y;")
             .replace("#include <metalnessmap_fragment>", "float metalnessFactor = vCrowdSurface.x;")
             .replace(
@@ -950,18 +1008,38 @@ const float crowdBayer[ 16 ] = float[ 16 ]( 0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0
 // How many instances a batch is made for to start with, and grown by (doubling)
 const FIRST_ROOM = 32;
 
+// How many instances' colours each row of a batch's picture of them holds (four texels each, as
+// CROWD_PARTS: its skin's, its clothes' above its hips and below, its hair's)
+const TINTS_ROW = 64;
+
 /**
  * Everyone of a kind drawn as instances of its figure (`template`), near and far (CROWD.far): two
- * meshes, each its own instances' places and moments over the figure's corners.
+ * meshes, each its own instances' places and moments over the figure's corners; and those with
+ * colours of their own (the townsfolk), a picture of each one's (`tints`: made once there's one,
+ * the near ones' rows first, then the far ones').
  */
 class Batch {
     constructor(scene, template) {
         this.scene = scene;
         this.template = template;
-        this.material = crowdMaterial(template.picture, template.moves, template.flags ?? -1);
+        this.tints = { value: null };
+        this.material = crowdMaterial(template.picture, template.moves, template.flags ?? -1, this.tints);
         this.room = 0;
         this.near = null;
         this.far = null;
+    }
+
+    // The picture of the instances' colours, room for all of them near and far (made again,
+    // bigger, as there's more room)
+    #tinting() {
+        const rows = Math.ceil((this.room * 2) / TINTS_ROW);
+
+        if (this.tints.value?.image.height !== rows) {
+            this.tints.value?.dispose();
+            this.tints.value = new THREE.DataTexture(new Float32Array(TINTS_ROW * 4 * rows * 4), TINTS_ROW * 4, rows, THREE.RGBAFormat, THREE.FloatType);
+        }
+
+        return this.tints.value;
     }
 
     // Room for `count` instances in each (made again, bigger, when there isn't)
@@ -987,7 +1065,7 @@ class Batch {
 
             geometry.setIndex(this.template[`${name}Index`] ?? source.index);
             geometry.setAttribute("crowdFrame", new THREE.InstancedBufferAttribute(new Float32Array(this.room * 3), 3).setUsage(THREE.DynamicDrawUsage));
-            geometry.setAttribute("crowdState", new THREE.InstancedBufferAttribute(new Float32Array(this.room * 2), 2).setUsage(THREE.DynamicDrawUsage));
+            geometry.setAttribute("crowdState", new THREE.InstancedBufferAttribute(new Float32Array(this.room * 3), 3).setUsage(THREE.DynamicDrawUsage));
 
             const mesh = new THREE.InstancedMesh(geometry, this.material, this.room);
 
@@ -1011,7 +1089,10 @@ class Batch {
         }
     }
 
-    /** Draw these (each { matrix, frame: [row, row, between, armed], shown, far }), as many as are in view. */
+    /**
+     * Draw these (each { matrix, frame: [row, row, between, armed], shown, far, tint: its colours,
+     * or null: CrowdAvatar `tint` }), as many as are in view.
+     */
     draw(members) {
         if (!members.length && !this.near) {
             return;
@@ -1020,15 +1101,33 @@ class Batch {
         this.#fit(members.length);
 
         const counts = { near: 0, far: 0 };
+        let tints = null;
 
-        for (const { matrix, frame, shown = 1, far } of members) {
+        for (const { matrix, frame, shown = 1, far, tint = null } of members) {
             const name = far ? "far" : "near";
             const mesh = this[name];
             const k = counts[name]++;
+            const at = tint ? (far ? this.room : 0) + k : -1;
 
             mesh.setMatrixAt(k, matrix);
             mesh.geometry.attributes.crowdFrame.setXYZ(k, frame[0], frame[1], frame[2]);
-            mesh.geometry.attributes.crowdState.setXY(k, frame[3] ?? 1, shown);
+            mesh.geometry.attributes.crowdState.setXYZ(k, frame[3] ?? 1, shown, at);
+
+            // (Its colours, each part's, in its place in the picture of them)
+            if (tint) {
+                tints ??= this.#tinting();
+
+                const data = tints.image.data;
+                const into = ((at % TINTS_ROW) * 4 + Math.floor(at / TINTS_ROW) * TINTS_ROW * 4) * 4;
+
+                for (let k = 0; k < 16; k++) {
+                    data[into + k] = tint[k];
+                }
+            }
+        }
+
+        if (tints) {
+            tints.needsUpdate = true;
         }
 
         for (const name of ["near", "far"]) {
@@ -1054,6 +1153,7 @@ class Batch {
         }
 
         this.material.dispose();
+        this.tints.value?.dispose();
     }
 }
 
@@ -1062,10 +1162,10 @@ class Batch {
  * `look` has it ({ shape, look, equipment, walk }: soldiers.js soldierLook), carrying `weapon`
  * (weapons.js: its first blow `attack`, `reaction` how a blow of it makes one flinch), fighting
  * as `guard` has it, casting as `cast` has it (CROWD_CASTS, or not at all), its pictures `size`
- * pixels square: returns { key, geometry, farIndex, picture, moves (a texture), table (MOVES'
- * rows and lengths), height }.
+ * pixels square; or `calm`, never fighting (recordingMoves'): returns { key, geometry, farIndex,
+ * picture, moves (a texture), table (MOVES' rows and lengths), height }.
  */
-export function* makingTemplate(kit, key, { look, guard, attack, reaction = "slash", cast = null, size = 256 }) {
+export function* makingTemplate(kit, key, { look, guard = null, attack = null, reaction = "slash", cast = null, size = 256, calm = false }) {
     const character = yield* Character.building(kit, { shape: look.shape, look: look.look, equipment: look.equipment, hairDetail: CROWD.hair, merge: true, far: true });
 
     try {
@@ -1084,11 +1184,11 @@ export function* makingTemplate(kit, key, { look, guard, attack, reaction = "sla
             node.castShadow = false;
         });
 
-        // (Stood on guard a moment, what it holds where it's held)
+        // (Stood on guard a moment, what it holds where it's held; calm, at ease)
         const avatar = new Avatar(character, { walk: look.walk, guard });
 
         avatar.place(0, 0, 0);
-        avatar.actions.setGuard(true);
+        avatar.actions.setGuard(!calm);
 
         for (let k = 0; k < 10; k++) {
             avatar.update(1 / CROWD.fps, 0, 0, 0, true);
@@ -1099,7 +1199,7 @@ export function* makingTemplate(kit, key, { look, guard, attack, reaction = "sla
 
         yield;
 
-        const recorded = yield* recordingMoves(character, { walk: look.walk, guard, attack, reaction, cast });
+        const recorded = yield* recordingMoves(character, { walk: look.walk, guard, attack, reaction, cast, calm });
 
         return yield* templateFrom(kit, key, { geometry, picture, height, recorded });
     } finally {
@@ -1283,7 +1383,7 @@ export class Crowd {
             const template = kind.template;
             const position = avatar.object.position;
 
-            const tall = template.height * avatar.size;
+            const tall = template.height * avatar.size * avatar.build[1];
 
             _sphere.center.set(position.x, position.y + tall / 2, position.z);
             _sphere.radius = tall;
@@ -1296,7 +1396,7 @@ export class Crowd {
 
             const away = position.distanceTo(eye);
 
-            list.push({ matrix: avatar.placed(), frame: avatar.frameIn(template.table), shown: avatar.shown, far: Boolean(template.farIndex) && (away > CROWD.far.from || (tall * pixels) / Math.max(away, 0.1) < CROWD.far.below) });
+            list.push({ matrix: avatar.placed(), frame: avatar.frameIn(template.table), shown: avatar.shown, tint: avatar.tint, far: Boolean(template.farIndex) && (away > CROWD.far.from || (tall * pixels) / Math.max(away, 0.1) < CROWD.far.below) });
             drawn++;
         }
 
@@ -1343,14 +1443,17 @@ export class CrowdAvatar {
      * @param {object} [options]
      * @param {number} [options.height] - How tall it is, till its kind's figure is made (metres).
      * @param {number} [options.size] - How big it's drawn, its figure's size times (a creature bigger or smaller than its kind's).
+     * @param {ArrayLike<number>} [options.tint] - Its own colours, each part's (CROWD_PARTS: its skin's, its clothes' above its hips and below, its hair's), four apiece: what it's dyed (its figure's lightness there times the first three, linear), and whether it is (the fourth: 1, or 0 as its figure's is); or null, all its figure's.
+     * @param {number[]} [options.build] - How much broader and taller it's drawn than its figure ([across, up]: one of the townsfolk's own build).
      * @param {boolean} [options.standIn] - Standing in for one drawn in full (track, echo), not an avatar of its own.
      */
-    constructor(crowd, key, { height = 1.75, tint = 1, size = 1, standIn = false } = {}) {
+    constructor(crowd, key, { height = 1.75, tint = null, build = [1, 1], size = 1, standIn = false } = {}) {
         this.crowd = crowd;
         this.key = key;
         this.object = new THREE.Object3D();
         this.object.name = "crowd";
         this.tint = tint;
+        this.build = build;
         this.size = size;
         this.standIn = standIn;
         this.facing = 0;
@@ -1390,7 +1493,7 @@ export class CrowdAvatar {
         this.character = {
             object: this.object,
             get height() {
-                return (crowd.kinds.get(key)?.template?.height ?? height) * self.size;
+                return (crowd.kinds.get(key)?.template?.height ?? height) * self.size * self.build[1];
             },
             get sheathed() {
                 return !self.armed;
@@ -1593,7 +1696,7 @@ export class CrowdAvatar {
         const move = this.#gait(table);
 
         if (move) {
-            this.stride = (this.stride + moved / (move.stride * this.size)) % 1;
+            this.stride = (this.stride + moved / (move.stride * this.size * this.build[1])) % 1;
         }
     }
 
@@ -1602,7 +1705,7 @@ export class CrowdAvatar {
     #gait(table) {
         const speed = Math.hypot(this.follow.vx, this.follow.vz);
 
-        return !table || speed < CROWD.still ? null : speed > CROWD.pace * Math.sqrt(this.size) ? table.run : this.armed ? table.walk : (table.stroll ?? table.walk);
+        return !table || speed < CROWD.still ? null : speed > CROWD.pace * Math.sqrt(this.size) ? table.run : this.armed && table.walk ? table.walk : (table.stroll ?? table.walk);
     }
 
     /** How fast the quickest of it is going (metres a second), as avatar.js's. */
@@ -1626,10 +1729,10 @@ export class CrowdAvatar {
         return target.set(this.object.position.x + c * across + s * 0.3, this.object.position.y + this.character.height * 0.72, this.object.position.z - s * across + c * 0.3);
     }
 
-    /** Where it's drawn: its place, turned the way it faces (and over about its middle, thrown: #flung), at its size. */
+    /** Where it's drawn: its place, turned the way it faces (and over about its middle, thrown: #flung), at its size and build. */
     placed() {
         _quaternion.setFromAxisAngle(_up, this.facing).premultiply(this.tumble);
-        _scale.setScalar(this.size);
+        _scale.set(this.size * this.build[0], this.size * this.build[1], this.size * this.build[0]);
 
         if (!this.tossed) {
             return _matrix.compose(this.object.position, _quaternion, _scale).clone();
@@ -1666,7 +1769,7 @@ export class CrowdAvatar {
         const move = this.#gait(this.crowd.kinds.get(this.key)?.template?.table);
 
         if (move) {
-            this.stride = (this.stride + moved / (move.stride * this.size)) % 1;
+            this.stride = (this.stride + moved / (move.stride * this.size * this.build[1])) % 1;
         }
     }
 
@@ -1722,8 +1825,9 @@ export class CrowdAvatar {
         let name = this.guarding ? "guard" : this.armed ? "ready" : "stand";
         let at = 0;
 
+        // (Not one it has: on guard, or at ease, calm, as the townsfolk are)
         if (!table[name]) {
-            name = "guard";
+            name = table.guard ? "guard" : "stand";
         }
 
         if (this.fallen !== null) {
