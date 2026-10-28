@@ -5049,9 +5049,23 @@ without a seam. It plays on every screen.
 they're made on the page, a few at a time): as the game starts, only those heard all the time,
 the footsteps, the swings and the blows (`MADE_AHEAD`: about 5 MB, and the wind's 2), the most
 needed first; each other one the first time it's wanted (`#make`), and played as soon as it's
-made if that's within a quarter of a second of when it was wanted (`MADE_LATE`; in the worker,
-a few hundredths), not at all if later. All of them, 98 sounds in 247 variants at the browser's
-48 kHz, were made at the start till 2026-10-27, 33 MB held from then on, an explosion's or a war
+made, each time it was wanted meanwhile (eight at most: `MADE_WAITING`), each if that's within a
+quarter of a second of when it was to start (`MADE_LATE`: its delay on, or as its peak was timed;
+in the worker, a few hundredths), not at all if later. An invasion's war horn is blown twice at
+once, the second 2.2 seconds on: till 2026-10-28 only the last wanted was kept, and lateness
+judged from when it was wanted, so the first raid's first blast was never heard. Some are made
+before they're wanted (`makeAhead`), to be on time the first time: the player's own spells' as
+they come to know them (`#wantSpells`: kept as long as the game goes on, while their recordings
+aren't in: a prismatic blast takes 0.2 to 0.4 s to make, so the first one cast was heard late
+or not at all),
+and an invasion's horns, the raiders', the town's and the retreat, as it's told of (the raiders'
+blown at once, both blasts heard once it's made, a few hundredths on; the town's answer, 4.6 s
+on, and the rest, made by then). One made as it was wanted and not played for five minutes
+(`MADE_KEPT`) is let go of, made again the next time it's wanted, but for those slow to make
+(more than a tenth of a second's making: `MADE_QUICK`), and those kept. In Node on a desktop the
+69 made as they're wanted take 2.75 seconds to make in all, 2 to 200 ms each (six more than a
+tenth), and hold 26 MB, 22 of it in those quick to make again. All of them, 98 sounds in 247
+variants at the browser's 48 kHz, were made at the start till 2026-10-27, 33 MB held from then on, an explosion's or a war
 horn's as much as a footstep's; an iPhone's tab was let go holding 105 MB of sound (a player's
 crash report). In headless Chromium on a phone's screen, standing in seed 2's start town, the
 sound held 76 MB rather than 103. The sound studio makes every one at the start, to play any
