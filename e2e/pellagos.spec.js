@@ -6,6 +6,7 @@ import { stagesOf } from "../client/js/core/burnt.js";
 import { branchesFound, fareOf } from "../client/js/core/portals.js";
 import { NATURAL } from "../client/js/core/weapons.js";
 import { AMBUSH } from "../client/js/core/ambush.js";
+import { BACKDROPS } from "../client/js/app/backdrop.js";
 import { guilds, planWorld, startFor } from "../client/js/core/worldplan/plan.js";
 
 // Pellagos in a real browser. The page exposes itself as window.pellagos ({ game, session,
@@ -196,6 +197,86 @@ test("loads everything, listing what it downloads, then shows the title", async 
     expect(loaded.loaded).toBe(loaded.total);
     expect(loaded.total).toBeGreaterThan(2_000_000);
     expect(loaded.groups).toEqual([true, true, true, true, true, true]);
+});
+
+test("behind the loading screen and the title, the town at dusk, then each scene in turn, faded one into the next and drifting slowly, the way the screen's held (tall upright, wide on its side), an AVIF that won't show as WebP; none behind making a character, the first again back at the title, and none drifting with less motion asked for", async ({ page }) => {
+    // (What's drawn behind: each picture in #backdrop, which scene, as what, faded in or not, and how big)
+    const behind = () => page.evaluate(() => [...document.querySelectorAll("#backdrop img")].map((img) => ({ scene: img.dataset.scene, file: img.currentSrc.split("/").pop(), shown: img.classList.contains("shown"), width: img.naturalWidth })));
+    const shown = async () => (await behind()).map(({ scene, file, shown }) => ({ scene, file, shown }));
+    const next = () => page.evaluate(() => window.pellagos.backdrop.next());
+    // (The scene after one, in BACKDROPS' order, painted the way the screen's held)
+    const after = (scene, way) => {
+        const at = BACKDROPS.findIndex((each) => each.scene === scene);
+
+        return BACKDROPS.map((_, k) => BACKDROPS[(at + k + 1) % BACKDROPS.length]).find((each) => each[way]).scene;
+    };
+    const first = BACKDROPS[0].scene;
+    const second = after(first, "wide");
+    const wideOnly = BACKDROPS.find(({ tall, wide }) => wide && !tall).scene;
+    // (One painted tall that's not been shown before it's come to, its AVIF one that won't show:
+    // the context's route, which sees what the service worker fetches too)
+    const broken = BACKDROPS.find(({ scene, tall }) => tall && scene !== first && scene !== second).scene;
+    // (On, one at a time, each come in over the last and the last let go of)
+    const onTo = async (scene) => {
+        for (let k = 0; k < BACKDROPS.length && (await shown())[0]?.scene !== scene; k++) {
+            await next();
+            await expect.poll(async () => (await shown()).length, { timeout: 10000 }).toBe(1);
+        }
+    };
+
+    await page.context().route(`**/images/backdrops/${broken}-tall.avif`, (route) => route.fulfill({ status: 200, contentType: "image/avif", body: "not a picture" }));
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await title(page);
+    await expect.poll(shown, { timeout: 10000 }).toEqual([{ scene: first, file: `${first}-wide.avif`, shown: true }]);
+    expect((await behind())[0].width).toBeGreaterThan(1000);
+
+    // (Drifting as it's shown, slowly: grown and moved a little, a second on, on the graphics card)
+    const drift = () => page.evaluate(() => [...document.querySelectorAll("#backdrop img")].map((img) => ({ drifting: img.getAnimations().length, transform: getComputedStyle(img).transform })));
+    const [still] = await drift();
+
+    await page.waitForTimeout(1000);
+
+    const [later] = await drift();
+
+    expect(still.drifting).toBe(1);
+    expect(later.transform).not.toBe(still.transform);
+
+    // The next, on a computer: the next scene painted wide, the one under it let go of once it's
+    // faded out; held upright, one painted both ways turns with the screen, its tall one shown
+    await next();
+    await expect.poll(shown, { timeout: 10000 }).toEqual([{ scene: second, file: `${second}-wide.avif`, shown: true }]);
+    expect(BACKDROPS.find(({ scene }) => scene === second).tall).toBe(true);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(shown, { timeout: 10000 }).toEqual([{ scene: second, file: `${second}-tall.avif`, shown: true }]);
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    // On to one painted only wide; held upright, it gives way to the next painted tall; and on to
+    // one whose AVIF won't show, as WebP
+    await onTo(wideOnly);
+    await expect.poll(shown, { timeout: 10000 }).toEqual([{ scene: wideOnly, file: `${wideOnly}-wide.avif`, shown: true }]);
+
+    const upright = after(wideOnly, "tall");
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(shown, { timeout: 10000 }).toEqual([{ scene: upright, file: `${upright}-tall.avif`, shown: true }]);
+    await onTo(broken);
+    await expect.poll(shown, { timeout: 10000 }).toEqual([{ scene: broken, file: `${broken}-tall.webp`, shown: true }]);
+    await expect(page.locator("#backdrop")).toBeVisible();
+
+    // Making a character: none behind its 3D view, nor held; back at the title, the first again
+    await page.locator("#newbutton").click();
+    await expect(page.locator("#create")).toBeVisible();
+    await expect(page.locator("#backdrop")).toBeHidden();
+    expect(await behind()).toEqual([]);
+    await page.locator("#createback").click();
+    await expect(page.locator("#title")).toBeVisible();
+    await expect.poll(shown, { timeout: 10000 }).toEqual([{ scene: first, file: `${first}-tall.avif`, shown: true }]);
+
+    // With less motion asked for, the next one still: no drift
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await next();
+    await expect.poll(async () => (await shown()).map(({ scene }) => scene), { timeout: 10000 }).toEqual([after(first, "tall")]);
+    expect(await drift()).toEqual([{ drifting: 0, transform: "none" }]);
 });
 
 test("loaded again, the game asks the server for none of its code, engine, WebAssembly, body or fonts: the service worker keeps each by the hash of its bytes, and gives what its workers ask for by name from the same copies; a file it hasn't, it fetches, that one alone", async ({ page }) => {

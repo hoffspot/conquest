@@ -32,7 +32,8 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=73c3e33089",
+                    "./js/app/assets.js": "./js/app/assets.js?h=be81081b53",
+                    "./js/app/backdrop.js": "./js/app/backdrop.js?h=c9aa55b56c",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=75d04a21c9",
                     "./js/app/budget.js": "./js/app/budget.js?h=56125585f0",
@@ -297,7 +298,7 @@
                     "./js/core/worldplan/settle.js": "./js/core/worldplan/settle.js?h=75f4607a0d",
                     "./js/core/worldplan/terrain.js": "./js/core/worldplan/terrain.js?h=d0b35d7867",
                     "./js/core/writings.js": "./js/core/writings.js?h=bc540994f2",
-                    "./js/main.js": "./js/main.js?h=367206429b",
+                    "./js/main.js": "./js/main.js?h=0d8cb36ca6",
                     "./js/world/ailments3d.js": "./js/world/ailments3d.js?h=1d60de08f8",
                     "./js/world/art/engine/atlas.js": "./js/world/art/engine/atlas.js?h=ac0b0422df",
                     "./js/world/art/engine/leafcards.js": "./js/world/art/engine/leafcards.js?h=1052ff62f1",
@@ -474,11 +475,21 @@
                 }, { once: true });
             }
         </script>
-        <script type="module" src="js/main.js?h=367206429b"></script>
+        <script type="module" src="js/main.js?h=0d8cb36ca6"></script>
     </head>
     <body>
         <!-- The world, and the character being made, are drawn here, behind every screen -->
         <canvas id="view" aria-hidden="true"></canvas>
+
+        <!-- The paintings behind the loading screen and the title (app/backdrop.js): the first here, so it's fetched as the page is read -->
+        <div id="backdrop" aria-hidden="true">
+            <picture>
+                <source type="image/avif" srcset="images/backdrops/town-dusk-tall.avif" media="(orientation: portrait)">
+                <source type="image/webp" srcset="images/backdrops/town-dusk-tall.webp" media="(orientation: portrait)">
+                <source type="image/avif" srcset="images/backdrops/town-dusk-wide.avif">
+                <img src="images/backdrops/town-dusk-wide.webp" alt="" decoding="async" data-scene="town-dusk">
+            </picture>
+        </div>
 
         <!-- Loading: what's being downloaded and built, and how far it's got -->
         <section id="loading" class="screen" aria-labelledby="loadingtitle">

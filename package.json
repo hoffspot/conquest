@@ -28,6 +28,7 @@
     "vendor:ed25519": "node scripts/vendor-ed25519.js",
     "build:manifest": "node scripts/build-manifest.js",
     "build:pointers": "node scripts/build-pointers.js",
+    "build:backdrops": "node scripts/build-backdrops.js",
     "scramble": "node scripts/scramble-model.js",
     "models:fetch": "node scripts/licensed-models.js fetch",
     "build:characters": "node scripts/build-characters.js",

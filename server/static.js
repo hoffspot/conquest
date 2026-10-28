@@ -31,6 +31,7 @@ const MIME_TYPES = {
     ".gif": "image/gif",
     ".jpg": "image/jpeg",
     ".webp": "image/webp",
+    ".avif": "image/avif",
     ".svg": "image/svg+xml",
     ".ico": "image/x-icon",
     ".mp3": "audio/mpeg",
