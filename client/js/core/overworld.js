@@ -39,7 +39,7 @@ import { Sites } from "./sites.js";
 import { Trails, TRAILS } from "./trails.js";
 import { Interiors } from "./insides.js";
 import { WENCHES } from "./lore/taverns.js";
-import { featuresOf } from "./wilds.js";
+import { featuresOf, ROCKFALL } from "./wilds.js";
 import { archesOf, archSquares, roomOf } from "./arches.js";
 import { AQUEDUCTS, aqueductsOf, pierSquares } from "./aqueducts.js";
 import { CORNERS, GRADE, Ground, PAD_EASE, ROAD } from "./terrain/ground.js";
@@ -2346,6 +2346,71 @@ export class Overworld {
         }
     }
 
+    // How far each of a chunk's squares is out from the foot of a cliff above it (squares, a step
+    // each way at a time: Infinity where none's within wilds.js ROCKFALL's talus, or where it isn't
+    // lower than the cliff), the cliffs of the chunks round it too; or null if none's near
+    #belowCliffs(chunk) {
+        const reach = ROCKFALL.talus;
+        const across = CHUNK + 2 * reach;
+        const [gx0, gy0] = [chunk.x0 - reach, chunk.y0 - reach];
+        const off = new Float32Array(across * across).fill(Infinity);
+        const top = new Float32Array(across * across);
+        const queue = [];
+
+        for (let cy = chunk.cy - 1; cy <= chunk.cy + 1; cy++) {
+            for (let cx = chunk.cx - 1; cx <= chunk.cx + 1; cx++) {
+                if (cx < 0 || cy < 0 || cx >= WORLD_SIZE / CHUNK || cy >= WORLD_SIZE / CHUNK) {
+                    continue;
+                }
+
+                const { heights, slopes } = cx === chunk.cx && cy === chunk.cy ? chunk : this.ground.chunk(cx, cy);
+
+                for (let k = 0; k < CHUNK * CHUNK; k++) {
+                    const [i, j] = [cx * CHUNK + (k % CHUNK) - gx0, cy * CHUNK + Math.floor(k / CHUNK) - gy0];
+
+                    if (slopes?.[k] === SLOPE_CLASS.cliff && i >= 0 && j >= 0 && i < across && j < across) {
+                        off[j * across + i] = 0;
+                        top[j * across + i] = heights[k];
+                        queue.push(j * across + i);
+                    }
+                }
+            }
+        }
+
+        if (!queue.length) {
+            return null;
+        }
+
+        // (Out from every cliff's squares at once, a step at a time, each square the nearest's)
+        for (let q = 0; q < queue.length; q++) {
+            const k = queue[q];
+            const [i, j] = [k % across, Math.floor(k / across)];
+
+            for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+                const [ni, nj] = [i + di, j + dj];
+                const n = nj * across + ni;
+
+                if (ni >= 0 && nj >= 0 && ni < across && nj < across && off[n] === Infinity && off[k] + 1 <= reach) {
+                    off[n] = off[k] + 1;
+                    top[n] = top[k];
+                    queue.push(n);
+                }
+            }
+        }
+
+        const below = new Float32Array(CHUNK * CHUNK).fill(Infinity);
+
+        for (let k = 0; k < CHUNK * CHUNK; k++) {
+            const g = (Math.floor(k / CHUNK) + reach) * across + (k % CHUNK) + reach;
+
+            if (off[g] > 0 && chunk.heights[k] < top[g] - 1) {
+                below[k] = off[g];
+            }
+        }
+
+        return below;
+    }
+
     // A chunk's own features (wilds.js: boulders, fallen trees, bushes...), clear of the trees,
     // roads, water, the town, the settlements and the places still to come, each taking its squares
     #features(chunk) {
@@ -2372,7 +2437,21 @@ export class Overworld {
 
             return !(settlement && this.settlements.squareAt(settlement, x, y)) && !clearings.some(({ at, radius }) => hypot(at[0] - x, at[1] - y) < radius);
         };
-        const features = featuresOf({ x0, y0, size: CHUNK, seed: plan.seed, random, landAt: (x, y) => this.biomeAt(x, y), homeAt: (x, y) => this.homeAt(x, y), free });
+        const below = this.#belowCliffs(chunk);
+        const at = (x, y) => (y - y0) * CHUNK + (x - x0);
+        const inChunk = (x, y) => x >= x0 && y >= y0 && x < x0 + CHUNK && y < y0 + CHUNK;
+        const features = featuresOf({
+            x0,
+            y0,
+            size: CHUNK,
+            seed: plan.seed,
+            random,
+            landAt: (x, y) => this.biomeAt(x, y),
+            homeAt: (x, y) => this.homeAt(x, y),
+            free,
+            cliffOff: (x, y) => (below && inChunk(x, y) ? below[at(x, y)] : Infinity),
+            steepAt: (x, y) => inChunk(x, y) && chunk.slopes?.[at(x, y)] === SLOPE_CLASS.steep,
+        });
 
         // (An arch of rock standing in it, its legs on its squares: unless any of them is a road's,
         // water, a bridge or built on, when it isn't there at all)

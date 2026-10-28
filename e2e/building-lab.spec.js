@@ -181,32 +181,55 @@ test("draws a village out in the world in its chunks, with its tavern, church, s
     expect(village.yards).toBeGreaterThan(3);
 });
 
-test("draws the land itself: its features, and the undergrowth near, swaying, in a few draw calls", async ({ page }) => {
+test("draws the land itself: its features, its rocks in a mesh of their own (as stone, finely near), and the undergrowth near, swaying, in a few draw calls", async ({ page }) => {
+    // (What's drawn of the land: its undergrowth, its features, and its rocks, as each is drawn)
+    const drawn = () =>
+        page.evaluate(() => {
+            const found = { undergrowth: 0, shown: 0, features: 0, materials: new Set(), rocks: new Set(), triangles: 0 };
+
+            window.buildingLab.state.built.traverse((node) => {
+                if (node.name === "undergrowth" && node.isMesh) {
+                    found.undergrowth++;
+                    found.shown += node.visible ? 1 : 0;
+                    found.materials.add(node.material.name);
+                } else if (node.name === "wilds") {
+                    found.features++;
+                } else if (node.name === "rocks" && node.isMesh && node.parent?.name !== "primer") {
+                    found.rocks.add(node.material.name);
+                    found.triangles += node.geometry.index.count / 3;
+                }
+            });
+
+            return { ...found, materials: [...found.materials], rocks: [...found.rocks], stats: window.buildingLab.state.stats };
+        });
+
     await page.goto("/building-lab.html?seed=7&show=wilds-meadow");
     await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
 
-    const land = await page.evaluate(() => {
-        const found = { undergrowth: 0, shown: 0, features: 0, materials: new Set() };
-
-        window.buildingLab.state.built.traverse((node) => {
-            if (node.name === "undergrowth" && node.isMesh) {
-                found.undergrowth++;
-                found.shown += node.visible ? 1 : 0;
-                found.materials.add(node.material.name);
-            } else if (node.name === "wilds") {
-                found.features++;
-            }
-        });
-
-        return { ...found, materials: [...found.materials], stats: window.buildingLab.state.stats };
-    });
+    const land = await drawn();
 
     expect(land.undergrowth).toBeGreaterThan(4);
     expect(land.shown).toBeGreaterThan(2);
     expect(land.shown).toBeLessThanOrEqual(land.undergrowth);
     expect(land.features).toBeGreaterThan(2);
     expect(land.materials).toEqual(["wilds"]);
+    expect(land.rocks).toEqual(["cliffs"]);
     expect(land.stats.calls).toBeLessThan(70);
+
+    // High: its rocks drawn with rockMaterial (their lichen pixel by pixel), finely divided
+    // everywhere, still in a few draw calls; Low: with the rest, none of their own
+    await page.goto("/building-lab.html?seed=7&show=wilds-meadow&rocks=high");
+    await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
+
+    const high = await drawn();
+
+    expect(high.rocks).toEqual(["rocks"]);
+    expect(high.triangles).toBeGreaterThan(land.triangles);
+    expect(high.stats.calls).toBeLessThan(70);
+
+    await page.goto("/building-lab.html?seed=7&show=wilds-meadow&rocks=low");
+    await page.waitForFunction(() => window.buildingLab?.state.ready, null, { timeout: 120000 });
+    expect((await drawn()).rocks).toEqual([]);
 });
 
 test("works out the fields seen from afar on the GPU just as the rules do, metre by metre", async ({ page }) => {

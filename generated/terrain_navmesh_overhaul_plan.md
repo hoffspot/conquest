@@ -691,7 +691,7 @@ and open-source generators, licences checked).
 | 2 | Far silhouettes | Every layout emits a few boxes, prisms and cones for its biggest masses. Everything within 4 km merges into one far mesh, plus the world landmark | Own code; three `mergeGeometries` (MIT) | 1–3 draws; 8–25k triangles | `sites.js`, `settlements.js`, `setpieces/*`; the far pass (M6) |
 | 3 | Landmark composition | Tiers (large, medium, small); plan-grid viewshed so medium landmarks sit on visible high ground; viewpoints; roads that approach landmarks head-on; ~1 small point of interest per 256 m cell | Own code in `core/worldplan/landmarks.js`, exact maths | Plan-time CPU only | `settle.js`, road refinement, `wilds.js` |
 | 4 | Neutral sites (110 exist in the plan but are never built) | Church or chapel ruins, ruined castles, catacomb portals with torches, stone circles, shrines, a lair | Grammar and kit (rows 6–7) | 2–14k triangles each, merged per chunk | `sites.js siteSize()`, `pieces.js` |
-| 5 | Rocks and cliffs | Cliff panels on steep bands, strata stacks, boulders at cliff feet, 1–3 arches per region, moss and snow masks | Port SeedRock `cliff.js` / `erosion.js` (MIT); extend `wilds.js rock()` | 20–45k triangles; 1–3 draws | Chunk building, fed by `heightAt` |
+| 5 | Rocks and cliffs | Cliff panels on steep bands, strata stacks, boulders at cliff feet, 1–3 arches per region, moss and snow masks | Port SeedRock `cliff.js` / `erosion.js` (MIT); rocks as stone breaks (`kits/rocks.js`, 2026-10-28) | Cliffs 24–77k triangles in the mountains; rocks about 40k (Low), 100k (Medium), 200k (High) at worst; a draw a chunk each | Chunk building, fed by `heightAt` |
 | 6 | Ruins | A decay pass over existing kits: roofs removed, broken tops stepped to masonry courses, breaches, rubble, weeds, a tree inside | Own code (ideas from open repos) | Fewer triangles than the intact building | `house.js`, `castle.js`, the peoples' kits via a `decay` option; rubble that blocks, in core |
 | 7 | Churches, citadels, bridges | Romanesque and Gothic church grammar; hill citadels 2–3× today's scale on stepped pads; stone arch bridges; broken aqueducts; grand stairs | Port gremlin-church arch, spire and pinnacle maths (MIT); own `core/setpieces/citadel.js` | Church 6–14k; citadel 30–80k near (3–8 draws), proxy far | `landmarks.js`, `castle.js`, bridges |
 | 8 | Trees | Canopy palette per region; gnarled great lone trees; cheap far trees without shadows | Extend `trees.js`; far LOD instanced | Far 1–2 draws, 40–90k triangles (off beyond 600 m on low) | `Woodland`, far pass |
@@ -5087,3 +5087,24 @@ converted data is to be measured in M8 against today's hm08 data.
     own face shows the folk's mood, as a rest does.
   - The motion check covers every way of every emote, on the plain and the sheathed-sword looks
     (18 motions on 30 bodies): no regressions. `NET_VERSION` 60.
+- **2026-10-28, rocks as stone breaks and weathers** (M7d's *Polygons* and *Where things meet the
+  land*, for the rocks; the research report *Realistic procedural rock generation*; docs/GAME.md
+  *Rocks*, docs/WORLD.md *The land's own features*).
+  - **The ask:** "examine the generation of these rocks and see if you can make something more
+    realistic that doesn't have the polygon look", then all nine steps of the report's plan, with
+    its extras for High, in one PR.
+  - **Shapes** (`kits/rocks.js`): a radius for every way out, joint sets (or bedding, or many
+    breaks, or none) over a lumpy core, joined by an exponential smooth minimum as wide as the rock's
+    weathered; chips, pits and bedding grooves; a family for each land's stone. Read at a welded
+    icosahedron's corners, 320 triangles near and 80 far, the far corners among the near; normals
+    split only past the family's crease.
+  - **Colour** baked (the sky hidden, worn edges, dirty hollows, patches, bands) and put on where
+    placed (moss, snow, lichen colonies, the ground's colour at the foot).
+  - **Drawn** by Visual quality (Low with the rest, coarse; Medium as stone with the cliffs'
+    material, fine near; High fine everywhere with `rockMaterial`, lichen pixel by pixel and finer
+    relief near), corners shared and packed, let go of by the page; looks kept to 24 MB.
+  - **Grounded:** sunk by family, leaning with the slope, chips round the bigger boulders, the
+    ground dark round every rock. The rest that's stony too: scree, arches' rubble, stepping stones,
+    rockslides, dens' boulders.
+  - **Laid** (core/wilds.js `ROCKFALL`): sizes falling off as an exponential does, talus fanned
+    out below cliffs, sorted bigger further out, rockier on steep ground. `NET_VERSION` 190.

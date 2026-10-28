@@ -456,10 +456,15 @@ export function shapeOf(random, family, { squash = null, stretch = [1, 1], core 
     };
 
     // (As big as a rock's ball: its furthest out 1)
+    const probes = [];
     let furthest = 0;
 
     for (let i = 0; i < probe.length; i += 3) {
-        furthest = Math.max(furthest, carved([probe[i], probe[i + 1], probe[i + 2]]));
+        const u = [probe[i], probe[i + 1], probe[i + 2]];
+        const r = carved(u);
+
+        probes.push([u, r]);
+        furthest = Math.max(furthest, r);
     }
 
     const scale = 1 / furthest;
@@ -474,7 +479,11 @@ export function shapeOf(random, family, { squash = null, stretch = [1, 1], core 
         return (l - radius([q[0] / l, q[1] / l, q[2] / l])) * 0.5 * Math.min(sx, tall, sz);
     };
 
-    return { family, radius, toLook, depth, bed, seed, squash: tall, round };
+    // (Its ball's corners once divided, where they are in its look: how tall it is however finely
+    // it's divided, so near and far it's set the same)
+    const outline = probes.map(([u, r]) => toLook(u, r * scale));
+
+    return { family, radius, toLook, depth, bed, seed, squash: tall, round, outline };
 }
 
 // --- Looks ---
@@ -486,7 +495,8 @@ export function shapeOf(random, family, { squash = null, stretch = [1, 1], core 
  * own: hidden sky, worn edges, dirty hollows, patches, bands; no moss, snow or lichen yet), data
  * (four to a corner: its moss's noise, how open to the sky it is, its lichen's colonies, how it
  * bends: convex below 0, hollow above), layer, lichen (each corner's kind of lichen,
- * LICHEN_KINDS'), index, top, family }. `ground` is where the ground comes to on it (y, in its
+ * LICHEN_KINDS'), index, top (how tall it is, near and far alike), family }. `ground` is where the
+ * ground comes to on it (y, in its
  * look: its foot darker below and just above), `lichen` how lichened it is (1 as its family is).
  */
 export function rockLook(random, options = {}) {
@@ -567,8 +577,9 @@ function* lookMaking(members, random, { ground }) {
         return { member, sphere, into, points, triangles, middle, reach };
     });
 
-    // (Where the ground comes to: given, or as its family's sunk into it)
-    const top = Math.max(...built.flatMap(({ points }) => points.map((p) => p[1])));
+    // (How tall it is, the same however finely it's divided (each rock's outline); where the ground
+    // comes to on it: given, or as its family's sunk into it)
+    const top = Math.max(...built.flatMap(({ member, into }) => member.shape.outline.map((p) => into.point(p)[1])));
     const groundLine = ground ?? (top * ROCK_FAMILIES[members[0].shape.family].sunk) / (1 + ROCK_FAMILIES[members[0].shape.family].sunk);
 
     // How far outside the whole look a point is (below 0 inside one of its rocks)

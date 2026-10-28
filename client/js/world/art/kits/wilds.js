@@ -273,7 +273,7 @@ function dominant([x, y, z]) {
  * y, z]), at `at` ([x, y, z]), its colours times `tint` (and its texture shifted by `shift`, so
  * no two rocks show the same patch of stone).
  */
-function place(mesher, part, { at, turn = 0, tilt = [0, 0], scale = [1, 1, 1], tint = [1, 1, 1], shift = [0, 0] }) {
+export function place(mesher, part, { at, turn = 0, tilt = [0, 0], scale = [1, 1, 1], tint = [1, 1, 1], shift = [0, 0] }) {
     const [c, s] = [Math.cos(turn), Math.sin(turn)];
     const [ca, sa, cb, sb] = [Math.cos(tilt[0]), Math.sin(tilt[0]), Math.cos(tilt[1]), Math.sin(tilt[1])];
 
@@ -477,9 +477,11 @@ const growthOf = (land) => {
  * A rock look (rocks.js's) as a part to place (place()): its triangles lit by its corners' own
  * normals, its picture laid on the plane each faces most (as tri() lays it), its colours put on as
  * rocks.js stoneColour puts them with no turn or ground to know of (`growth`: as growthOf's), no
- * brighter than any look is (1.3: its snow greyer than the stone's mesh's).
+ * brighter than any look is (1.3: its snow greyer than the stone's mesh's); or, for the cliffs'
+ * material (cliffMaterial), every corner's texture coordinates `uv` (how many copies of its
+ * picture to a metre).
  */
-export function stonePart(look, growth = {}) {
+export function stonePart(look, growth = {}, { uv = null } = {}) {
     const mesher = new Mesher(look.index.length);
     const settings = { ...growth };
     const out = [0, 0, 0];
@@ -497,7 +499,7 @@ export function stonePart(look, growth = {}) {
         const [a, b, c] = corners.map(point);
         const axis = dominant(faceNormal(a, b, c));
         const scale = METRES[LAYERS[look.layer[corners[0]]]] ?? 1;
-        const uvs = [a, b, c].map((p) => (axis === 0 ? [p[2] / scale, p[1] / scale] : axis === 1 ? [p[0] / scale, p[2] / scale] : [p[0] / scale, p[1] / scale]));
+        const uvs = uv ? [uv, uv, uv] : [a, b, c].map((p) => (axis === 0 ? [p[2] / scale, p[1] / scale] : axis === 1 ? [p[0] / scale, p[2] / scale] : [p[0] / scale, p[1] / scale]));
 
         mesher.tri(a, b, c, { layer: look.layer[corners[0]], colours: corners.map((i) => colours[i]), normals: corners.map(normal), uvs });
     }
@@ -2684,6 +2686,9 @@ function kept(key, make, bytesOf) {
 
     return entry.look;
 }
+
+/** How many looks are kept, and how many bytes they take (LOOKS_KEPT). */
+export const keptLooks = () => ({ count: looks.size, bytes: lookBytesKept });
 
 // Each look's own random numbers, by kind, land and number
 const randomFor = (kind, land, index) => randomOf(hashOf(index + 1, kind.length * 131 + [...kind].reduce((sum, c) => sum * 31 + c.charCodeAt(0), 7), [...land].reduce((sum, c) => sum * 31 + c.charCodeAt(0), 11)) * 4294967296);
