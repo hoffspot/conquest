@@ -9,8 +9,8 @@ import { quickEnough } from "./helpers.js";
 // (Textured materials paint a canvas: enough of one for them to in Node)
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }) }) };
 
-const { buildWorld } = await import("../client/js/core/overworld.js");
-const { featuresOf, FEATURES, ROCKFALL } = await import("../client/js/core/wilds.js");
+const { buildWorld, CHUNKS } = await import("../client/js/core/overworld.js");
+const { cliffsOff, featuresOf, FEATURES, ROCKFALL } = await import("../client/js/core/wilds.js");
 const { createRandom } = await import("../client/js/core/random.js");
 const { contactOf, ROCK_CONTACT } = await import("../client/js/world/ground.js");
 const { LAYERS, ROCKS_HIGH } = await import("../client/js/world/art/engine/atlas.js");
@@ -401,6 +401,66 @@ describe("where the world lays its rocks (core/wilds.js ROCKFALL)", () => {
         assert.ok(foot.length > plain.length, `${foot.length} at a cliff's foot, ${plain.length} with none`);
         assert.ok(mean(out.filter(({ kind }) => kind === "boulder").map(({ size }) => size)) > mean(foot.filter(({ kind }) => kind === "boulder").map(({ size }) => size)), "bigger further out");
         assert.ok(rocky(lay({ steepAt: () => true })).length > plain.length, "rockier on steep ground");
+    });
+
+    it("finds the talus below a cliff, a cliff in the chunk beside counted too, and none above one or off the world", () => {
+        // (A cliff 20 metres high just east of the chunk: its foot six squares out from the chunk's
+        // east edge, the land below it to the west)
+        const below = cliffsOff({ x0: 0, y0: 0, size: 64, heightAt: (x) => (x >= 70 ? 20 : 0) });
+
+        assert.equal(below[10 * 64 + 63], 6, "six squares out from it");
+        assert.equal(below[10 * 64 + 64 - ROCKFALL.talus + 5], ROCKFALL.talus, "as far as its talus reaches");
+        assert.equal(below[10 * 64 + 64 - ROCKFALL.talus + 4], Infinity, "and no further");
+
+        // (Above a cliff, nothing's fallen)
+        assert.ok(cliffsOff({ x0: 0, y0: 0, size: 64, heightAt: (x) => (x >= 70 ? 0 : 20) }).every((off) => off === Infinity));
+
+        // (No cliff near, nor off the world's edge)
+        assert.equal(cliffsOff({ x0: 0, y0: 0, size: 64, heightAt: () => 3 }), null);
+        assert.equal(cliffsOff({ x0: 0, y0: 0, size: 64, heightAt: (x, y) => (x < 0 || y < 0 ? NaN : 3) }), null);
+    });
+
+    it("finds a world's talus from the land's own cliffs, laying a chunk out setting down only the places its ground does", () => {
+        const world = buildWorld({ seed: 3 });
+        const overworld = world.maps.town;
+        const { near, set } = overworld.sites;
+        const round = (cx, cy, reach) => {
+            const ids = new Set();
+
+            for (let dy = -reach; dy <= reach; dy++) {
+                for (let dx = -reach; dx <= reach; dx++) {
+                    (near.get((cy + dy) * CHUNKS + cx + dx) ?? []).forEach(({ id }) => ids.add(id));
+                }
+            }
+
+            return ids;
+        };
+        // (A chunk with places near the chunks round it that aren't near it or them, still to set down)
+        const [sx, sy] = world.start.at.map((at) => Math.floor(at / 64));
+        let chosen = null;
+
+        for (let r = 4; r < 40 && !chosen; r++) {
+            for (let cy = sy - r; cy <= sy + r && !chosen; cy++) {
+                for (let cx = sx - r; cx <= sx + r && !chosen; cx++) {
+                    const own = round(cx, cy, 1);
+
+                    if (cx >= 2 && cy >= 2 && cx < CHUNKS - 2 && cy < CHUNKS - 2 && [...round(cx, cy, 2)].some((id) => !own.has(id) && !set.has(id))) {
+                        chosen = [cx, cy];
+                    }
+                }
+            }
+        }
+
+        assert.ok(chosen, "a chunk with places beyond the chunks round it");
+
+        const before = new Set(set.keys());
+
+        overworld.chunk(...chosen);
+
+        const own = round(...chosen, 1);
+        const setDown = [...set.keys()].filter((id) => !before.has(id));
+
+        assert.deepEqual(setDown.filter((id) => !own.has(id)), [], "nothing set down beyond the chunks round it");
     });
 });
 

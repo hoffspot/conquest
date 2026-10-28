@@ -573,8 +573,9 @@ see GAME.md). Each square of a chunk comes from the plan's cell under it:
   wood where it's been let go. Rock lies as rock does (`ROCKFALL`, the research report behind the
   rocks' looks): many more small rocks than big ones, a rocky kind's size within its range falling
   off as an exponential does (and its stones'); below a cliff, its rockfall's talus fanned out up
-  to 14 squares from the cliff's foot (where the ground's lower than the cliff: worked out from the
-  cliffs of the chunk and those round it, `Overworld #belowCliffs`), rockier there, its blocks
+  to 14 squares from the cliff's foot (where the ground's lower than the cliff: `cliffsOff`, from
+  the land's own cliffs in the chunk and those round it as it lies before anything's built,
+  `Ground landAt`, so asking sets nothing down round it), rockier there, its blocks
   smaller near the cliff and bigger further out, as they roll; and steep ground rockier. (The
   sizes and the talus with `exact.js`'s logarithm and exponential, the same in every browser.)
   A boulder lies along the way the rock runs there, give or take a

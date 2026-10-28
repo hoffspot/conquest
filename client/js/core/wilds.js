@@ -19,6 +19,7 @@
 import { fractal } from "./noise.js";
 import { cos, exp, hypot, log, sin, TAU } from "./exact.js";
 import { createRandom } from "./random.js";
+import { SLOPE_CLASS, slopeClass } from "./terrain/height.js";
 
 /** Features are tried every this many metres (a random way in). */
 export const FEATURE_GRID = 8;
@@ -90,6 +91,78 @@ export const HOMELANDS = Object.freeze({
  * and steep ground's rockier (`steep`).
  */
 export const ROCKFALL = Object.freeze({ fall: 2.2, talus: 14, rockier: 0.85, sorted: 0.5, steep: 0.3 });
+
+/**
+ * How far each of an area's squares (`size` a side, from x0, y0) is out from the foot of a cliff
+ * above it (squares, a step each way at a time: featuresOf's `cliffOff`, row by row), from the
+ * land's height at each corner (`heightAt(x, y)`: NaN where there's none, never a cliff), the
+ * cliffs out to ROCKFALL's talus round it counted too: Infinity where none's within the talus, or
+ * where it isn't a metre lower than the cliff. Null if no cliff's near at all.
+ */
+export function cliffsOff({ x0, y0, size, heightAt }) {
+    const reach = ROCKFALL.talus;
+    const across = size + 2 * reach;
+    const corners = new Float32Array((across + 1) * (across + 1));
+    const off = new Float32Array(across * across).fill(Infinity);
+    const top = new Float32Array(across * across);
+    const land = new Float32Array(across * across);
+    const queue = [];
+
+    for (let j = 0; j <= across; j++) {
+        for (let i = 0; i <= across; i++) {
+            corners[j * (across + 1) + i] = heightAt(x0 - reach + i, y0 - reach + j);
+        }
+    }
+
+    for (let j = 0; j < across; j++) {
+        for (let i = 0; i < across; i++) {
+            const c = j * (across + 1) + i;
+            const [nw, ne, sw, se] = [corners[c], corners[c + 1], corners[c + across + 1], corners[c + across + 2]];
+            const k = j * across + i;
+
+            land[k] = (nw + ne + sw + se) / 4;
+
+            if (slopeClass(nw, ne, sw, se) === SLOPE_CLASS.cliff) {
+                off[k] = 0;
+                top[k] = land[k];
+                queue.push(k);
+            }
+        }
+    }
+
+    if (!queue.length) {
+        return null;
+    }
+
+    // (Out from every cliff's squares at once, a step at a time, each square the nearest's)
+    for (let q = 0; q < queue.length; q++) {
+        const k = queue[q];
+        const [i, j] = [k % across, Math.floor(k / across)];
+
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const [ni, nj] = [i + di, j + dj];
+            const n = nj * across + ni;
+
+            if (ni >= 0 && nj >= 0 && ni < across && nj < across && off[n] === Infinity && off[k] + 1 <= reach) {
+                off[n] = off[k] + 1;
+                top[n] = top[k];
+                queue.push(n);
+            }
+        }
+    }
+
+    const below = new Float32Array(size * size).fill(Infinity);
+
+    for (let k = 0; k < size * size; k++) {
+        const g = (Math.floor(k / size) + reach) * across + (k % size) + reach;
+
+        if (off[g] > 0 && land[g] < top[g] - 1) {
+            below[k] = off[g];
+        }
+    }
+
+    return below;
+}
 
 // A random number from 0 to 1 (`u`) as one of an exponential falling off `fall` fast across 0 to
 // 1: most of them small
