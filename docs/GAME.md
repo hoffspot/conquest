@@ -3772,31 +3772,88 @@ till there was room again:
   built once, as a template: a character as any soldier is (`soldierLook`), its weapon drawn. Its
   body, clothes, hair and all it carries are merged into one mesh at the far level of detail,
   bound to its skeleton: everything carried bound to the bone it's held by, so a sword stays in the
-  hand. One picture holds its skin's and its clothes' pictures side by side and its hair's below
-  them (256 or 512 pixels square each, by quality); what's only coloured (its eyes, its weapon's
-  parts) is coloured at its corners, and a shield's painted device by its picture's colour, all
-  told. Then it's lowered, in the lower-detail worker, to about 45% of its triangles for those
+  hand.
+  - **Carried in hand and put away.** What it puts away is merged twice (`figureOf` `stowed`): in
+    hand, and put away as the soldier puts it away (its sword in its scabbard at the hip, its
+    shield slung across its back: equipment.js SHEATHS, SLING). Each corner says which it is
+    (`crowdSet`, `CROWD_SETS`: always there, the weapon in hand or put away, the shield on the arm
+    or on the back), and the graphics card folds away the one not shown (below). The two cost a
+    tenth more corners than one.
+  - **Its picture.** One picture holds its skin's and its clothes' pictures side by side and its
+    hair's below them (256 or 512 pixels square each, by quality), and the pictures of up to
+    three of what it carries beside its hair's, where their pictures lie within their whole (a
+    face painted on, not a grain repeated across it); what's only coloured (its eyes, its weapon's
+    and shield's parts) is coloured at its corners, and any other picture by its colour, all told.
+  - **Its shine.** Each corner shines as what it's of does (`crowdSurface`: its material's, or its
+    part's in an item's folded material, metalness and roughness): the blade, the helm, the mail
+    and a shield's rimmed back as metal, in the sky's light, as the soldier's own are. All its
+    corners were drawn matte till 2026-10-28, so a shield's silver back, seen from behind, was a
+    chalk-white slab where the soldier in full has a dark gleaming one.
+  - Then it's lowered, in the lower-detail worker, to about 45% of its triangles for those
   near the camera and 18% for those 24 metres or more from it, its picture's seams and its
   smallest pieces let go (`CROWD.near`, `CROWD.far`): a figure is 3,500 to 5,400 triangles near and
   1,400 to 2,100 far (as a character drawn far off is 4,800 to 12,900).
-- **Its moves recorded.** On the template, its guard, its walk and its run (a stride each), its
-  weapon's blow, a cast for a kind that casts (`CROWD_CASTS`: a grimoire's or wand's at an enemy,
-  a staff's healing), a flinch and its fall are played once (avatar.js, actions.js) and where each of
-  its bones is, 20 times a second, is kept in a picture of numbers, a row a moment (`CROWD.fps`).
-  It's merged before its fall is recorded, as falling it lets go of what it holds.
+- **Its moves recorded** (`recordingMoves`). On the template, each is played once (avatar.js,
+  actions.js) and where each of its bones is, 20 times a second, is kept in a picture of numbers,
+  a row a moment (`CROWD.fps`). It's merged before its fall is recorded, as falling it lets go of
+  what it holds.
+  - **Standing:** on guard (2 seconds of its guard's sway), with its weapon in hand (`ready`) and
+    at ease, put away (`stand`, a second each: none sways but on guard), and onto guard and off it
+    from standing with it in hand (`rise`, `lower`: the 0.3 seconds an avatar takes to ease there).
+  - **Going:** walking with it in hand (`walk`), strolling at ease, a hand on the pommel of what
+    hangs at its hip as a soldier in full's is (`stroll`), and running, on guard (`run`); a stride
+    each.
+  - **Doing:** its weapon's blow, a cast for a kind that casts (`CROWD_CASTS`: a grimoire's or
+    wand's at an enemy, a staff's healing), a flinch and its fall; and drawing its weapon from
+    standing at ease and putting it away (`draw`, `sheathe`: as actions.js `draw` plays them, a
+    shield slung on its back taken off it first and slung there after), for a kind with a weapon
+    or shield to put away.
+  - **Seamless.** What's played over and over is recorded once it's stood a moment
+    (`CROWD.settle`), and the moments after its end are eased into its start over `CROWD.ease`
+    seconds, as a herd's are (beasts/herd.js): it goes round with no jump bigger than its own
+    moments'. Till 2026-10-28 its guard was recorded from the moment it was told to stand on
+    guard, the arms still coming up from its sides: every 2 seconds, going round, the sword hand
+    dropped 33 cm and the shield hand 48 cm in a frame and rose again.
+  - **What's in hand.** Each moment says what's in hand then (its flags, the last texel of its row:
+    the weapon, the shield; 1 in hand, 0 put away, `AS` as the soldier drawn so is), so a draw
+    shows the shield on the back, then on the arm, then the sword drawn too.
+  - **Half floats.** Kept as half floats (`templateFrom`, three.js HalfFloatType): a millimetre or
+    so out at most on a body two metres tall, half the memory. A kind's moves are 440 KB so, where
+    its fewer moves were 365 KB as floats.
 - **Drawn all at once.** Everyone of a kind is an instance of its figure, drawn in one go near and
   one far: a draw or two a kind, whatever how many. Each is posed on the graphics card from the
   picture of moves, between the two moments it's between (`crowdFrame`), nothing of it posed on the
-  page. Those out of view aren't drawn.
+  page; what it carries is shown in hand or put away as the nearer moment's flags say (or as it is,
+  `crowdState`), the other folded into a point. Those out of view aren't drawn.
+- **From one move into another**, it eases from where it was drawn last over a fifth of a second
+  (`CROWD.blend`: the new move's moment and the last drawn, the share of that easing out, in the
+  two moments it's posed between as ever), and goes onto guard or off it through `rise` and
+  `lower`, not at once (after a blow it's still on guard; a draw ends with its weapon in hand). Not
+  one that wasn't drawn just now, out of sight: it's seen as it is.
 - **To the game, avatars like any other** (`CrowdAvatar`). Each follows its actor on the same
   spring, faces the way it goes, and is told of blows, flinches and falls as an avatar is: it's
-  drawn on guard, walking or running (its stride kept with how far it's gone), striking (the blow
-  recorded played as fast or slow as the battle's lasts), casting, flinching, falling and lying. What lands
-  on it (an arrow) stays at its chest. It casts no shadow, as no soldier does, and shows no wounds
-  or flush of red. Whoever comes into the nearest few is built in full meanwhile, drawn in the
-  crowd till it's ready, and goes back to the crowd when it's further off again; one of the
-  nearest few not drawn at all yet is drawn in its crowd till it's built too, once its kind's
-  figure's made, not unseen till it's built.
+  drawn standing (on guard only while it's fighting, as one in full is; else with its weapon in
+  hand, or at ease with it put away: `armed`, as the battle has it), walking or strolling or
+  running (its stride kept with how far it's gone), drawing its weapon or putting it away as the
+  battle does (app/game.js `#draw`), striking (the blow recorded played as fast or slow as the
+  battle's lasts), casting, flinching, falling and lying. What lands on it (an arrow) stays at its
+  chest. It casts no shadow, as no soldier does, and shows no wounds or flush of red. Whoever comes
+  into the nearest few is built in full meanwhile, drawn in the crowd till it's ready, and goes
+  back to the crowd when it's further off again; one of the nearest few not drawn at all yet is
+  drawn in its crowd till it's built too, once its kind's figure's made, not unseen till it's
+  built.
+- **One for the other** (app/game.js `#handOver`, `#toCrowd`, `#fading`). Built in full in its
+  place, a soldier has its weapon in hand or put away as its crowd's figure had, is on guard if
+  it was, and is as far through a stride (Walker `phase`, the crowd's `stride`); gone to its crowd,
+  the crowd's figure the same as it was in full. Its crowd's figure's kept where it is, as it's
+  going, till the one in full is shown (its shaders ready and its pictures sent: `#register`), then
+  fades from sight over a quarter of a second (`CROWD.fade`: a few more of its pixels left out each
+  frame, an ordered dither), the two drawn together meanwhile. Out of the camera's view, the one in
+  full isn't shown till it comes into view (its pictures sent then: `#sending`), so its crowd's
+  figure waits there with it; one figure fading for each at most (`#unfade`: a new one in its place
+  lets the old go at once). Till 2026-10-28 a soldier went from its crowd on guard, its shield on
+  its arm, to standing at ease in full, its shield on its back, at once; and its crowd's figure was
+  gone the moment the one in full was made, unseen for the frames till that was shown.
 - **Made as they're wanted.** A kind's template is made a step at a time with half of each frame's
   time for building those drawn (`MARSHAL.share`), its skin painted and its detail lowered in their
   workers meanwhile: about a second each on a desktop. A soldier waiting on its kind's isn't drawn,
@@ -3855,11 +3912,13 @@ when the throng changes:
   killed as ever, but neither posed nor seen: what's drawn of it is put on a layer no camera sees
   (`OFFSTAGE`, so casting no shadow either), as is whatever it takes up meanwhile. A stand-in
   (`CrowdAvatar`, `standIn`) is drawn where it is, the way it faces, going as fast as it goes
-  (`track`), told whatever it's told to do: a blow, a cast, a flinch, a fall, getting up
-  (`echo`: what it doesn't do, a beast's dodge, isn't told); already down, lying there. Its stride
-  is kept as long as it is big, and it runs from a pace the smaller the smaller it is, as a beast
-  does. Drawn in full again, its body's seen and posed again at once (for no more than a moment's
-  time), its stand-in gone: nothing to build either way.
+  (`track`: its weapon in hand or put away, on guard or not, as the body has them), told whatever
+  it's told to do: a blow, a cast, a flinch, a fall, getting up, drawing its weapon or putting it
+  away (`echo`: what it doesn't do, a beast's dodge, isn't told); already down, lying there. Its
+  stride is kept as long as it is big, and it runs from a pace the smaller the smaller it is, as a
+  beast does. Drawn in full again, its body's seen and posed again at once (for no more than a
+  moment's time), as far through a stride as its stand-in, which fades from sight as a soldier's
+  crowd's figure does (*One for the other*, above): nothing to build either way.
 - **Past the bodies' budget, let go.** The wild's people-shaped creatures (not a boss, mini-boss or
   elite) are held in full only as far as the bodies' budget leaves room, as the soldiers are
   (`QUALITY.bodies`, *Soldiers in their crowds*, above; app/game.js `#rationing`, twice a second).
