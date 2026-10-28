@@ -16078,6 +16078,17 @@ test("a crowded fight that comes too slowly (Adaptive): those least seen of the 
     });
     expect(await playUntil(page, () => window.pellagos.game.thronged.size === 0, { seconds: 5 })).toBe(true);
 
+    // (Any stand-in still in its crowd fading from sight, its body shown in its place: app/game.js
+    // #fading; then gone)
+    const fading = await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        return [...game.crowds.members].filter(({ standIn }) => standIn).every((standIn) => game.fadingOut.some(({ crowd }) => crowd === standIn));
+    });
+
+    expect(fading).toBe(true);
+    expect(await playUntil(page, () => window.pellagos.game.fadingOut.length === 0, { seconds: 2 })).toBe(true);
+
     const back = await page.evaluate((ids) => {
         const { game } = window.pellagos;
         let seen = true;
