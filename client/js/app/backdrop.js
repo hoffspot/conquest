@@ -20,10 +20,12 @@ export const BACKDROPS = Object.freeze([
     Object.freeze({ scene: "orc-ring-fort", tall: true, wide: true }),
     Object.freeze({ scene: "six-peoples", tall: false, wide: true }),
     Object.freeze({ scene: "moonlit-ford", tall: true, wide: true }),
-    Object.freeze({ scene: "field-battle", tall: false, wide: true }),
+    Object.freeze({ scene: "field-battle", tall: true, wide: true }),
     Object.freeze({ scene: "lizard-lagoon", tall: true, wide: true }),
     Object.freeze({ scene: "dragon-lair", tall: true, wide: true }),
     Object.freeze({ scene: "dark-elf-halls", tall: true, wide: true }),
+    Object.freeze({ scene: "temple-depths", tall: true, wide: true }),
+    Object.freeze({ scene: "behemoth-rift", tall: true, wide: true }),
 ]);
 
 /**
