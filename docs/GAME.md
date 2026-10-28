@@ -5378,6 +5378,37 @@ it.
    page loaded again, downloading nothing more); in a game, it's said once, to start the next
    time. A new service worker taking over no longer reloads a page that's still loading (it's
    whole whichever worker gives it its files, each by its hash), so the start isn't run twice.
+   **The pictures behind them** (`app/backdrop.js`, `client/images/backdrops/`). Behind the loading
+   screen and the title, with its menus, a painting of the world, each faded into the next every
+   20 seconds (`BACKDROP`): the market town at dusk first, its orc in the fields, then in turn
+   (`BACKDROPS`) the elves' halls among their great trees, the cat folk's mud-brick city at sunset,
+   the town as a raid's torches come down the road (painted only tall), the orcs' ring fort on its
+   moor under a storm, the six peoples' homes round the valley (painted only wide), a ford by
+   moonlight with a werewolf over the wolves' eyes, two armies drawn up at dawn, the lizard folk's
+   stilt village on its lagoon, the Dreadthorn over its burning keep, the dark elves' halls under
+   their cliff, an ancient temple's torchlit depths, and the Behemoth of the Rift rising over a
+   town's walls: thirteen, the evenings, nights and dawns mixed.
+   Each is shown the way the screen's held, the tall ones upright and the wide ones else, a scene
+   painted only one way shown only so; it covers the page (the town kept in sight at the foot of a
+   tall one cut down to a wider screen), under a darker wash so the screens' words stand out, and
+   drifts slowly while it's shown (`DRIFTS`, each in turn): in towards the town at its foot, out
+   again, across one way and back the other. It grows by no more than a tenth and moves no further
+   than that leaves room for, so it always covers the page, eased in and out over its turn and the
+   fades either side; an animation of its transform, which the browser plays on the graphics card,
+   so a phone busy loading the game isn't slowed. Each is an AVIF (12 to 76 KB), or a WebP where a
+   browser can't show that (21 to 106 KB, and one an AVIF that won't show falls back to), and each
+   is downloaded only as it's due: a phone the tall ones (16 KB the first, 296 KB the twelve) and a
+   computer the wide (32 KB the first, 427 KB the twelve), where their masters' JPEGs
+   (`scripts/backdrops/`, as the owner made them with Google's Gemini, at its 1K: `npm run
+   build:backdrops`) come to 3.8 MB. A master made at 2K (2752 by 1536) is made no more than 2560
+   pixels its longest side (`BACKDROP.most`): as big as a computer's screen, or a phone's as it
+   drifts. The first is in the page itself (`index.html`), so it's fetched as the page is read,
+   before the code, and the service worker keeps them as it does its other pictures (from its copy
+   first). None is behind making a
+   character (its 3D view) or the game: they're let go of as either begins, so neither the page
+   nor the graphics card holds them while it's played (about 4 MB each, decoded), and the first's
+   made again back at the title. With less motion asked for (`prefers-reduced-motion`), the first
+   stays, still.
 2. **The title.** **Continue as** the character played last, in the world they're in; make a
    **New character**; choose another of those kept (**Characters on this device**, up to six), or
    a world (**Worlds on this device**, up to eight) and who goes in; join a world someone else has
