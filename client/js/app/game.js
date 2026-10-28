@@ -25,6 +25,7 @@ import * as THREE from "three";
 import { DRAWS, FALL_LANDS, REACTIONS } from "../characters/actions.js";
 import { Character } from "../characters/character.js";
 import { folkLook } from "../characters/folk.js";
+import { folkBuild, folkFigureLook, folkKind, folkTint } from "../characters/folkcrowd.js";
 import { soldierLook } from "../characters/soldiers.js";
 import { FOLK, PRESETS } from "../characters/presets.js";
 import { BeastAvatar, dressCreature, dressingCreature, sizeOf } from "../beasts/beast.js";
@@ -4478,11 +4479,12 @@ export class Game {
     }
 
     // A soldier (or one of the wild's people-shaped creatures past the bodies' budget, as big as
-    // it is: `size`, #rationing) drawn in its kind's crowd from now on: where it's drawn in full
-    // now, or where it is (its character drawn in full let go)
-    #toCrowd(actor, key, size = 1) {
+    // it is: `size`, #rationing; or one of the townsfolk, in their own colours and build: `own`,
+    // #folkRoom) drawn in its kind's crowd from now on: where it's drawn in full now, or where it
+    // is (its character drawn in full let go)
+    #toCrowd(actor, key, size = 1, own = {}) {
         const old = this.avatars.get(actor.id);
-        const avatar = new CrowdAvatar(this.crowds, key, { height: old ? old.character.height / size : undefined, size });
+        const avatar = new CrowdAvatar(this.crowds, key, { height: old ? old.character.height / size : undefined, size, ...own });
 
         this.ailments?.clear(actor.id);
 
@@ -4751,10 +4753,16 @@ export class Game {
     // The folk out in the world held in full no more than the bodies' budget has room for beside
     // everyone else held in full (QUALITY bodies, as the soldiers and the wild's people-shaped
     // creatures are: #marshal, #rationing): whoever the player's talking or trading with first,
-    // then the nearest the camera (those on another map last). Those past it are undressed (one
-    // only just past it, MARSHAL.margin, left as it is) or not dressed at all, the furthest first,
-    // and dressed once there's room for them again. Only there to be seen about, they've no crowd
-    // to stand in: past the room, they're not drawn. A couple of times a second
+    // then the nearest the camera (those on another map last). The townsfolk past it, or past
+    // DETAIL.reach from the camera (DETAIL.slack further, drawn in full), drawn in their people's
+    // and sex's crowd once its figure's made (characters/folkcrowd.js: asked for as they're
+    // about), each in their own colours and build, their body in full let go or never built; and
+    // dressed in full again once they're near with room, their crowd's figure fading as they're
+    // shown (#handOver). Whoever's kept in full (the player talking or trading with them) never
+    // in a crowd. The rest past the room (a crier, a stranger by the road, one the player can't
+    // see from inside, or a townsfolk while their crowd's figure's made) undressed (one only just
+    // past it, MARSHAL.margin, left as it is) or not dressed at all, the furthest first, and
+    // dressed once there's room for them again. A couple of times a second
     #folkRoom(dt) {
         if ((this.folkClock = (this.folkClock ?? 0) - dt) > 0) {
             return;
@@ -4774,6 +4782,7 @@ export class Game {
         // (Room beside everyone else held in full, but the wild's beasts built in code: their
         // bodies shared, each one small)
         const room = Math.max(0, budget - this.#heldInFull((id) => !ids.has(id) && !(this.avatars.get(id) instanceof BeastAvatar)));
+        const crowded = (id) => this.avatars.get(id) instanceof CrowdAvatar;
 
         for (const id of this.folkWaiting) {
             if (!ids.has(id)) {
@@ -4781,29 +4790,58 @@ export class Game {
             }
         }
 
-        this.folkRationed = { folk: folk.length, room };
+        const kept = (actor) => actor.id === this.talking?.id || actor.id === this.shopping?.keeper;
+        // (Far from the camera, one the player can see: the townsfolk drawn in their crowd there)
+        const far = (actor) => !kept(actor) && actor.map === me.map && !this.#walledOff(actor, me) && this.#awayFromCamera(actor) > DETAIL.reach + (this.#drawnInFull(actor.id) ? DETAIL.slack : 0);
 
-        if (folk.length <= room && !this.folkWaiting.size) {
+        this.folkRationed = { folk: folk.length, room, crowd: folk.filter(({ id }) => crowded(id)).length };
+
+        if (folk.length <= room && !this.folkWaiting.size && !folk.some((actor) => crowded(actor.id) || (this.#folkKind(actor) && far(actor)))) {
             return;
         }
 
-        const kept = (actor) => actor.id === this.talking?.id || actor.id === this.shopping?.keeper;
         const ranked = folk.map((actor) => [kept(actor) ? -Infinity : actor.map === me.map ? this.#awayFromCamera(actor) : Infinity, actor]).sort((a, b) => a[0] - b[0]);
         const queued = (id) => this.enlisting.includes(id) || this.enlistees.has(id) || this.aside.has(id);
 
         ranked.forEach(([, actor], place) => {
             const { id } = actor;
+            const kind = this.#folkKind(actor);
 
-            // (With room: dressed again if it was waiting, unless it's out of the player's sight)
+            // (One of the townsfolk past the room, or far off, that the player can see: in their
+            // crowd, once its figure's made; one in full only just past the room, left as it is.
+            // Till it's made, as anyone else of the folk)
+            if (kind && !kept(actor) && (place >= room || far(actor)) && !this.#walledOff(actor, me)) {
+                if (crowded(id) || (this.#drawnInFull(id) && place < room + MARSHAL.margin && !far(actor))) {
+                    return;
+                }
+
+                this.crowds ??= new Crowd(this.view.scene, this.kit, { size: this.view.quality.soldiers?.picture ?? 256 });
+
+                if (!this.crowds.failed(kind.key) && this.crowds.template(kind.key, kind.spec)) {
+                    const look = folkLook(kind.one);
+
+                    this.#unenlist([id]);
+                    this.folkWaiting.delete(id);
+                    this.#toCrowd(actor, kind.key, 1, { tint: folkTint(look, kind.figure), build: folkBuild(look, kind.figure) });
+
+                    return;
+                }
+            }
+
+            // (With room: dressed again if it was waiting, unless it's out of the player's sight;
+            // or in its crowd, once the player can see it, its crowd's figure fading as it's
+            // shown, #handOver)
             if (place < room) {
                 if (this.folkWaiting.delete(id) && !this.avatars.has(id) && !queued(id)) {
                     (this.#walledOff(actor, me) ? this.aside.add(id) : this.enlisting.push(id));
+                } else if (crowded(id) && !queued(id) && !this.#walledOff(actor, me)) {
+                    this.enlisting.push(id);
                 }
 
                 return;
             }
 
-            if (this.folkWaiting.has(id) || (this.avatars.has(id) && place < room + MARSHAL.margin) || (!this.avatars.has(id) && !queued(id))) {
+            if (crowded(id) || this.folkWaiting.has(id) || (this.avatars.has(id) && place < room + MARSHAL.margin) || (!this.avatars.has(id) && !queued(id))) {
                 return;
             }
 
@@ -4814,6 +4852,23 @@ export class Game {
             this.#unenlist([id]);
             this.folkWaiting.add(id);
         });
+    }
+
+    // The crowd one of the townsfolk out in the world is drawn in past the room or far off
+    // (#folkRoom), and what its figure's made from (characters/folkcrowd.js): their people's and
+    // their sex's, calm (world/crowd.js recordingMoves); with who they are (`one`: the host's) and
+    // the figure's look, for their own colours and build. Null for the rest of the folk (a crier in
+    // his livery, a stranger by the road, one of a look of their own: presets.js FOLK)
+    #folkKind(actor) {
+        const one = this.host.folk.get(actor.id);
+
+        if (one?.role !== "townsfolk" || one.preset) {
+            return null;
+        }
+
+        const figure = folkFigureLook(one);
+
+        return { key: folkKind(one), spec: { look: figure, calm: true }, figure, one };
     }
 
     // The great lairs, and the kind each one's master is (a drake, a Dreadthorn), slain or not
