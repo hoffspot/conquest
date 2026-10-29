@@ -397,11 +397,11 @@ describe("holding the line (core/engagement.js FIELD charge, holdOf)", () => {
         assert.ok(engagement.sides.every((side) => side.bodies.every(({ formation }) => battle.formations[formation].hold === FIELD.charge.lap)));
     });
 
-    it("brings a world kept from before forward holding the lines of a battle at it, its archers with their knives, its standard-bearers' shields put down (SNAPSHOT_STEPS 46)", () => {
+    it("brings a world kept from before forward holding the lines of a battle at it, its archers with their knives, its standard-bearers' shields put down (SNAPSHOT_STEPS 47)", () => {
         const bow = { id: "shot", kind: "ranged", reach: 12 };
         const engagement = (id, phase) => ({ id, phase, sides: [{ bodies: [{ formation: `${id}:left` }] }] });
-        const forward = SNAPSHOT_STEPS[46]({
-            version: 46,
+        const forward = SNAPSHOT_STEPS[47]({
+            version: 47,
             soldiers: [
                 ["front", { role: "front" }],
                 ["chief", { role: "heavy", chief: true }],
@@ -426,7 +426,7 @@ describe("holding the line (core/engagement.js FIELD charge, holdOf)", () => {
             },
         });
 
-        assert.equal(forward.version, 47);
+        assert.equal(forward.version, 48);
         assert.deepEqual(
             Object.entries(forward.battle.formations).map(([id, { hold, seek }]) => [id, hold, seek]),
             [

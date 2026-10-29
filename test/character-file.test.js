@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { CHARACTER_EXTENSION, CHARACTER_FORMAT, characterFile, CharacterFileError, readCharacterFile } from "../client/js/app/character-file.js";
 import { defaultHero } from "../client/js/app/heroes.js";
-import { exportCharacter, forgetCharacter, keepCharacter, loadCharacters, loadFollowers, loadProgress, loadTalks, loadWorld, MOST_CHARACTERS, SAVE_STEPS, SAVE_VERSION, saveFollowers, saveProgress, saveTalks, saveWorld, SOLO_KIND, writeSave } from "../client/js/app/save.js";
+import { exportCharacter, forgetCharacter, keepCharacter, loadCharacters, loadFollowers, loadLegends, loadProgress, loadTalks, loadWorld, MOST_CHARACTERS, SAVE_STEPS, SAVE_VERSION, saveFollowers, saveProgress, saveTalks, saveWorld, SOLO_KIND, writeSave } from "../client/js/app/save.js";
 import { isGuid } from "../client/js/core/guid.js";
 import { Progress } from "../client/js/core/progress.js";
 import { WEAPONS } from "../client/js/core/weapons.js";
@@ -34,7 +34,7 @@ function character(name, { seed = 7, gold = 40 } = {}) {
     saveProgress(save, new Progress({ skills: { blade: 120 }, spells: ["vigor"], gold, pack: [{ id: "potion", count: 3 }] }, save.hero));
     saveTalks(save, { memory: { barkeep: { talks: 2, flags: ["ale"] } }, knowledge: ["the road north"] });
     saveFollowers(save, [{ name: "Hob", calling: "warrior", sex: "m", seed: 4, people: "human" }]);
-    saveWorld(save, { version: 9, turn: 12, seed });
+    saveWorld(save, { version: 9, turn: 12, seed }, { played: 600000, gone: ["sample"], next: 2 });
 
     return save;
 }
@@ -68,6 +68,7 @@ describe("a character file", () => {
         assert.deepEqual(loadTalks(save).knowledge, ["the road north"]);
         assert.equal(loadFollowers(save)[0].name, "Hob");
         assert.equal(loadWorld(save).turn, 12, "their world's war with them");
+        assert.deepEqual(loadLegends(save), { played: 600000, gone: ["sample"], next: 2 }, "and its legends");
 
         for (let k = loadCharacters(WEAPONS).length; k < MOST_CHARACTERS; k++) {
             character(`Filler ${k}`, { seed: 100 + k });

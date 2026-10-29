@@ -32,7 +32,7 @@ import { telemetry } from "./app/telemetry.js";
 import { crashedIn, crashesFor, forgetCrashes, keepCrash, letGoCrash, REFUSED_FOR_GOOD } from "./app/crash-reports.js";
 import { Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
-import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMarkers, loadRoll, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
+import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadLegends, loadMarkers, loadRoll, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
 import { MARKER_ICONS, MARKER_NAMES, MARKERS } from "./core/markers.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
@@ -1138,9 +1138,11 @@ async function playing(save, { world, place, war }) {
         wheels: loadWheels(save),
         onWheels: (wheels) => saveWheels(save, wheels),
         war: loadWorld(war),
-        // (Kept each of the war's turns, a minute of play: and where the player is with it)
-        onWar: (now) => {
-            saveWorld(war, now.snapshot());
+        legends: loadLegends(war),
+        // (Kept each of the war's turns, a minute of play, and the world's legends with it: and
+        // where the player is with it)
+        onWar: (now, legends) => {
+            saveWorld(war, now.snapshot(), legends?.toJSON() ?? null);
             keepPlace();
         },
         onWorldMap: openWorldMap,

@@ -140,6 +140,14 @@ export const ITEMS = Object.freeze({
         use: { treasure: true },
         price: 40,
     },
+    // A key dropped by a rare foe below ground (core/rare.js VAULT `key`): carried through the
+    // sealed door added to that floor, it opens it, and it's spent; worth nothing to a shop
+    vaultKey: {
+        label: "Sealed key",
+        about: "Dropped by something rare below ground. Carry it through the sealed door that's come to that floor and the door opens; the key's spent.",
+        key: true,
+        price: 1,
+    },
     // A goblin's bomb, lit and thrown at a foe up to `reach` metres off (battle.js lob, BOMBS): it
     // lands, fizzes and bursts, hurting (`damage`, at its heart) and throwing their side round it;
     // found on goblins, never sold
@@ -507,6 +515,12 @@ export function thingOf(item) {
         thing.effect = effect;
     }
 
+    // (A unique, a rare encounter's reward found nowhere else: which it is, core/rare.js UNIQUES;
+    // bound to who has it)
+    if (def?.slot && typeof item.unique === "string" && item.unique) {
+        thing.unique = item.unique.slice(0, 40);
+    }
+
     return thing;
 }
 
@@ -736,12 +750,15 @@ function gearOf(kept, hero) {
 }
 
 /** A player's skills, gold, pack and gear. */
+// A list of ids kept (strings, each once), from what was kept: none, if it wasn't a list
+const idsOf = (kept) => [...new Set((Array.isArray(kept) ? kept : []).filter((id) => typeof id === "string"))];
+
 export class Progress {
     /**
-     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { slot: piece }, invasion, bestiary }.
+     * @param {object} [kept] - As toJSON gave it: { skills: { tree: xp }, gold, pack: [stacks], gear: { slot: piece }, invasion, bestiary, legends }.
      * @param {object} [hero] - Their hero (for the weapon they started with, and their spiked boots).
      */
-    constructor({ skills = {}, schools = null, spells = [], spellXp = {}, gold = 20, pack = [], gear = null, invasion = null, bestiary = null } = {}, { weapon = "sword", boots = false } = {}) {
+    constructor({ skills = {}, schools = null, spells = [], spellXp = {}, gold = 20, pack = [], gear = null, invasion = null, bestiary = null, legends = null } = {}, { weapon = "sword", boots = false } = {}) {
         this.skills = Object.fromEntries(Object.keys(TREES).map((tree) => [tree, Math.max(0, Number(skills[tree]) || 0)]));
 
         /**
@@ -783,6 +800,13 @@ export class Progress {
 
         /** What they've found out about each kind of creature (core/bestiary.js): carried with them, wherever they go. */
         this.bestiary = new Bestiary(bestiary);
+
+        /**
+         * Their rare encounters (core/rare.js), carried with them wherever they go: the unique
+         * cards they've done (`met`: never met again, in any world), and the uniques they've been
+         * given (`uniques`: never given again).
+         */
+        this.legends = { met: idsOf(legends?.met), uniques: idsOf(legends?.uniques) };
     }
 
     /** A school of magic's tier (1 to its last: 5 for Healing, 7 for the elements). */
@@ -1354,7 +1378,7 @@ export class Progress {
 
     /** What's kept. */
     toJSON() {
-        return { skills: { ...this.skills }, schools: { ...this.schools }, spells: [...this.spells], spellXp: { ...this.spellXp }, gold: this.gold, pack: this.pack.map((stack) => (stack ? { ...stack } : null)), gear: structuredClone(this.gear), invasion: { ...this.invasion }, bestiary: this.bestiary.toJSON() };
+        return { skills: { ...this.skills }, schools: { ...this.schools }, spells: [...this.spells], spellXp: { ...this.spellXp }, gold: this.gold, pack: this.pack.map((stack) => (stack ? { ...stack } : null)), gear: structuredClone(this.gear), invasion: { ...this.invasion }, bestiary: this.bestiary.toJSON(), legends: { met: [...this.legends.met], uniques: [...this.legends.uniques] } };
     }
 }
 

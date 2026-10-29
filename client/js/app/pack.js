@@ -29,13 +29,13 @@
 // It only shows and asks: what's done is the host's (core/host.js commands), through the game.
 
 import { GEAR_SLOTS } from "../core/gear.js";
-import { alike, gradeOf, PACK_PAGE, PACK_SIZE } from "../core/progress.js";
-import { MAKES } from "./gearinfo.js";
+import { alike, PACK_PAGE, PACK_SIZE } from "../core/progress.js";
+import { MAKES, rarityOf } from "./gearinfo.js";
 import { ICONS, iconOf, ITEM_ICONS, useDefs } from "./icons.js";
 import { ActionWheel, directionOf } from "./wheel.js";
 
 // A thing offered in a trade, whole (core/host.js #offer): what it is, not how the pack shows it
-const THING_KEYS = ["id", "quality", "boost", "level", "people", "bonuses", "affixes", "name", "effect"];
+const THING_KEYS = ["id", "quality", "boost", "level", "people", "bonuses", "affixes", "name", "effect", "unique"];
 const thingOf = (item) => Object.fromEntries(THING_KEYS.filter((key) => item[key] !== undefined && item[key] !== null).map((key) => [key, item[key]]));
 
 // Holding this long (ms) on a thing puts it on or takes it off (or opens its wheel); a finger this
@@ -85,19 +85,18 @@ const icon = (item, size = 40) => `<svg viewBox="-24 -24 48 48" width="${size}" 
 function card(thing, { named = true, count = 1, compare = "Put on instead of what's worn:", worth = false } = {}) {
     const info = thing.info ?? null;
     const quality = thing.quality ?? "common";
-    const box = element("div", `pack-card rarity-${gradeOf({ id: thing.id, quality })}`);
+    const rarity = rarityOf({ id: thing.id, quality, unique: thing.unique });
+    const box = element("div", `pack-card rarity-${rarity}`);
 
     if (named) {
         const title = element("p", "pack-what");
 
-        title.append(element("strong", `pack-name rarity-${gradeOf({ id: thing.id, quality })}`, `${thing.label}${count > 1 ? ` ×${count}` : ""}`));
+        title.append(element("strong", `pack-name rarity-${rarity}`, `${thing.label}${count > 1 ? ` ×${count}` : ""}`));
         box.append(title);
     }
 
     if (info?.kind) {
-        const grade = gradeOf({ id: thing.id, quality });
-
-        box.append(element("p", "pack-kind", `${info.kind}${grade !== "common" ? ` · ${MAKES[grade] ?? grade}` : ""}`));
+        box.append(element("p", "pack-kind", `${info.kind}${rarity !== "common" ? ` · ${MAKES[rarity] ?? rarity}` : ""}`));
     }
 
     if (info?.lines.length) {
@@ -542,8 +541,8 @@ export class PackPanel {
                     peek: `carried:${index}:${stack.id}:${stack.quality ?? "common"}`,
                     about: () => card(stack, { named: false }),
                     after: [
-                        element("span", "pack-price", stack.wanted ? `${stack.price} gold${stack.count > 1 ? " each" : ""}` : "Not bought here"),
-                        button("Sell", () => this.#do("sell", index), { label: stack.wanted ? `Sell ${stack.label} for ${stack.price} gold${stack.count > 1 ? " each" : ""}` : `${shop.name} won't buy ${stack.label}`, disabled: !stack.wanted }),
+                        element("span", "pack-price", stack.wanted ? `${stack.price} gold${stack.count > 1 ? " each" : ""}` : stack.bound ? "Bound to you" : "Not bought here"),
+                        button("Sell", () => this.#do("sell", index), { label: stack.wanted ? `Sell ${stack.label} for ${stack.price} gold${stack.count > 1 ? " each" : ""}` : stack.bound ? `${stack.label} is bound to you` : `${shop.name} won't buy ${stack.label}`, disabled: !stack.wanted }),
                     ],
                 });
 
@@ -573,7 +572,7 @@ export class PackPanel {
     // opened), one row at a time (`peek`: which, kept as the list's shown again); tapped again,
     // it closes.
     #row({ thing, label, className = "", peek, about, after = [] }) {
-        const row = element("li", `pack-row peekable rarity-${gradeOf(thing)}${className ? ` ${className}` : ""}`);
+        const row = element("li", `pack-row peekable rarity-${rarityOf(thing)}${className ? ` ${className}` : ""}`);
         const open = element("button", "pack-peek");
         const picture = element("span", "pack-icon");
 
@@ -657,7 +656,7 @@ export class PackPanel {
 
     // A slot of the paperdoll: what's in it (edged by its make), or a faint picture of what goes there
     #slot({ slot, label, item, locked = false, only = null }) {
-        const cell = element("button", `doll-slot pack-worn${item ? ` rarity-${gradeOf(item)}` : " empty"}${locked ? " locked" : ""}`);
+        const cell = element("button", `doll-slot pack-worn${item ? ` rarity-${rarityOf(item)}` : " empty"}${locked ? " locked" : ""}`);
         const weapon = this.view.gear.find((each) => each.slot === "mainHand")?.item;
 
         cell.type = "button";
@@ -767,7 +766,7 @@ export class PackPanel {
 
     // A slot of the pack: its stack's icon, how many, and how well made
     #cell(stack, index) {
-        const cell = element("button", `pack-cell${stack ? ` made-${stack.quality} rarity-${gradeOf(stack)}` : " empty"}`);
+        const cell = element("button", `pack-cell${stack ? ` made-${stack.quality} rarity-${rarityOf(stack)}` : " empty"}`);
 
         cell.type = "button";
         cell.dataset.index = String(index);
@@ -891,7 +890,7 @@ export class PackPanel {
 
         // (Its buttons beneath what it is, always in view: what it is scrolls, if it must)
         inner.append(card(thing, { count: stack?.count ?? 1, compare: stack ? "Put on instead of what's worn:" : null, worth: true }));
-        this.about.className = `pack-about rarity-${gradeOf(thing)}`;
+        this.about.className = `pack-about rarity-${rarityOf(thing)}`;
         this.about.replaceChildren(inner, ...(actions.childElementCount ? [actions] : []), button("", () => this.#select(null), { label: "Put it away", className: "pack-about-close" }));
         this.about.lastChild.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
         this.about.hidden = false;
@@ -1002,6 +1001,14 @@ export class PackPanel {
             actions.push({ key: "split", label: "Split" });
         }
 
+        // (A unique's bound to who it was given to: core/rare.js UNIQUES. Not sold, dropped or
+        // given; only thrown away, for good, once they've said they're sure)
+        if (stack.bound) {
+            actions.push({ key: "discard", label: "Throw away" });
+
+            return actions;
+        }
+
         if (trading) {
             actions.push({ key: "sell", label: `Sell (${stack.price} gold${stack.count > 1 ? " each" : ""})` });
         }
@@ -1041,6 +1048,11 @@ export class PackPanel {
                 this.onCommand({ type: key, index, count });
             }
         } else if (key === "discard") {
+            // (A unique: asked first, being found nowhere else and never given again)
+            if (stack.bound && !(await this.#sure({ title: `Throw away ${stack.label}?`, text: "It's found nowhere else: thrown away, it's gone for good, and you'll never be given it again.", verb: "Throw away" }))) {
+                return;
+            }
+
             this.onCommand({ type: "discard", index });
         } else if (key === "offer" && this.view.trade) {
             // (As many as they carry of it, exactly as it is, in whichever stacks)

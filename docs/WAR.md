@@ -2693,7 +2693,7 @@ opposite it; a reserve and the side's commander with their household held back; 
 morale its own, so one can break alone, leaving its neighbour's flank bare; and each band its own
 way of fighting. The rules are pure data and arithmetic; the host keeps each battle as plain data
 (with its invasion, field battle, armies' clash or last stand, in its snapshot: `SNAPSHOT_VERSION`
-41; and from 47, the lines held, the breaks gone through and the archers given ground: a world
+41; and from 48, the lines held, the breaks gone through and the archers given ground: a world
 kept from before carried on with the lines of a battle at it held) and steps it from the battle as
 it stands, as deterministic as it.
 

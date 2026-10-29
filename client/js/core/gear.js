@@ -519,5 +519,5 @@ export function disguiseOf(gear) {
 export function sameGear(a, b) {
     const bonuses = (item) => JSON.stringify(Object.entries(item.bonuses ?? {}).sort());
 
-    return (a.people ?? null) === (b.people ?? null) && (a.name ?? null) === (b.name ?? null) && levelOf(a.level) === levelOf(b.level) && (a.effect ?? null) === (b.effect ?? null) && bonuses(a) === bonuses(b) && JSON.stringify(a.affixes ?? []) === JSON.stringify(b.affixes ?? []);
+    return (a.people ?? null) === (b.people ?? null) && (a.name ?? null) === (b.name ?? null) && (a.unique ?? null) === (b.unique ?? null) && levelOf(a.level) === levelOf(b.level) && (a.effect ?? null) === (b.effect ?? null) && bonuses(a) === bonuses(b) && JSON.stringify(a.affixes ?? []) === JSON.stringify(b.affixes ?? []);
 }

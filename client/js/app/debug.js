@@ -375,6 +375,10 @@ export class Debug {
         // (Houses near the player burnt by the Behemoth, as they'd be so long after: core/burnt.js)
         const stages = element("select", {}, ...BURN_STAGES.map(([stage, label]) => element("option", { value: stage }, label)));
         const burn = element("button", { type: "button", onclick: () => this.game?.burn(stages.value) }, "Burn");
+        // (Debug mode's sample rare encounter dealt ahead of the player, or, Inside, on the dungeon
+        // floor they're on: core/rare.js SAMPLE, SAMPLE_DEEP)
+        const rare = element("button", { type: "button", onclick: () => this.game?.rare() }, "Deal");
+        const inside = element("button", { type: "button", onclick: () => this.game?.rare({ inside: true }) }, "Inside");
 
         quality.value = settings.quality;
         scale.value = settings.renderScale;
@@ -392,6 +396,7 @@ export class Debug {
             element("label", { class: "field" }, "Invasion", bands, invade),
             element("label", { class: "field" }, "Behemoth of the Rift", rift),
             element("label", { class: "field" }, "Burnt houses", stages, burn),
+            element("label", { class: "field" }, "Rare encounter", rare, inside),
         );
     }
 }

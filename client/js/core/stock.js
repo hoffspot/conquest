@@ -136,10 +136,11 @@ export function dailyStock(shop, { seed = 1, key = "", day = 0, people = "human"
 
 /**
  * What a shop asks for something (gold): its price (progress.js priceOf, less the buyer's
- * haggling), more at a master's shop (its `markup`), and more again as its daily special.
+ * haggling), more at a master's shop (its `markup`), and more again as its daily special; times
+ * `times` (what the world's changes make of its prices: core/rare.js priceTimes).
  */
-export function shopPrice(item, shop, { haggle = 0, special = false } = {}) {
-    const markup = (SHOPS[shop]?.markup ?? 1) * (special ? SPECIAL_MARKUP : 1);
+export function shopPrice(item, shop, { haggle = 0, special = false, times = 1 } = {}) {
+    const markup = (SHOPS[shop]?.markup ?? 1) * (special ? SPECIAL_MARKUP : 1) * times;
 
     return Math.max(1, Math.round(priceOf(item, { haggle }) * markup));
 }
