@@ -872,8 +872,52 @@ sample is ever dealt.
   say to each other changed with it (`NET_VERSION` 193).
 - **Debug mode**: the debug overlay's *Rare encounter* button (`game.rare()`, the host's `rare`
   command) deals the sample (`SAMPLE`: "The Sample", a champion two tiers up, its reward the
-  Signet of the Sample) ahead of the player at once, their clock aside; refused while another's
-  out (`rareOut`) or with nowhere for it (`rareRoom`).
+  Signet of the Sample) ahead of the player at once, their clock aside, or, while its thread's at
+  it, the card that follows it (`SAMPLE_KIN`, "The Sample's Kin"); refused while another's out
+  (`rareOut`) or with nowhere for it (`rareRoom`).
+
+### Threads
+
+Every rare encounter's designed with a thread (`THREADS`; a card's `thread`): what comes of it once
+it's done, the world's, not its finders' alone. It's begun where the encounter was done, by those
+who took part (`Legends` `begin`, the host's `#threadBegin`), and goes on step by step (`advance`,
+`#threadDone`); anyone in the world may take up its next step, and each who takes part in a step is
+given that step's reward (`reward`: gold, a unique, a writing to read in the journal, each their
+own: `#legendReward`). Its steps (`STEPS`), each made ready as it's come to (`#threadSetUp`):
+- *card*: a follow-up card (one whose `requires` is that step), dealt in place of the director's
+  as any rare card is, before any other while the thread's at it and never otherwise
+  (`Legends` `wants`, `pick`); done once it's done.
+- *place*: somewhere to go, `far` (150 to 250 m for the sample's) from where the thread was last,
+  where a cache could be (`#threadSpot`), marked on every player's maps (a scroll, its seal
+  sea-green: mapicons.js `thread`); done once a player's within its `reach` (`#threadFollow`),
+  those there taking part.
+- *talk*: one of the folk (`role`: a barkeep...) in the settlement nearest where it was last
+  (`#nearestTown`): the thread's question (`ask`) added to their first choices (`threadTalk`), and
+  their `reply`; done once it's asked (the talk's `{ thread, step }`: the host's `#threadTalk`, for
+  one of that role in that settlement, at that step; else refused, `thread`).
+- *contract*: a contract on the board of that settlement's adventurers' guild (`#threadContracts`:
+  a "Beasts on the roads" of the thread's, its `need` brought down within 500 m of where it was
+  last); done as it's reported done, by whoever reports it first (`#rewarded`).
+- *lock*: a lock opened (*Locks*, below).
+
+As a step's done the world changes as it says (`change`, `CHANGES`; `Legends` `change`, the host's
+`#threadChange`), in the settlement it was at (or nearest where it was last), for its `lasts` or
+for good: `stock`, a ware on a shop's shelves there (`threadWares`, in the host's `stockOf` and
+`#buy`); `price`, a shop's prices there times `times`; `festival`, a festival there, its shops'
+prices times `times` (`priceTimes`, `shopPrice`'s `times`; the host's `shopTimes`), cried to the
+players in it as it begins ("Oakford holds the Feast of the Sample! Its shops' prices are down for
+the day.", `townHorn`); `reveal`, the plan's nearest place of a kind shown on every player's world
+map. Told (host.js "thread"): to those who took part, as it's begun and as each step's done, what's
+next (`quill`), and its end (`rareDone`); each reward to whoever's given it. The journal's
+*Legends* has each thread: its step, what's known of the next (`threadWords`: its settlement,
+which way it is) and where; and those followed to their end, by whom. Kept in the world's
+`Legends` (`threads`, `changes`).
+
+The sample's thread (`sampleTrail`, debug mode's) has a step of each kind: where the Sample came
+from (20 gold; the nearest ruins revealed); the barkeep in the nearest settlement asked (15 gold;
+the Feast of the Sample there, a day at four-fifths the prices); the guild's contract there (10
+gold besides the contract's own; potions on the barkeep's shelves for good); and the Sample's Kin,
+dealt and felled (40 gold).
 
 ## Adventurers' caches
 

@@ -15,8 +15,9 @@ import { HOST_PLAYER, Host, REFUSALS, SNAPSHOT_VERSION } from "../client/js/core
 import { buildWorld } from "../client/js/core/overworld.js";
 import { Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
-import { cardOf, gatesHold, hourOf, Legends, makeUnique, RARE, RARE_CARDS, SAMPLE, SHAPES, UNIQUES, VENUES } from "../client/js/core/rare.js";
+import { cardOf, CHANGES, DEBUG_CARDS, gatesHold, hourOf, Legends, makeUnique, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_KIN, SHAPES, STEPS, threadTalk, threadWares, threadWords, THREADS, UNIQUES, VENUES } from "../client/js/core/rare.js";
 import { decode, encode } from "../client/js/core/wire.js";
+import { Conversation, TREES } from "../client/js/core/dialogue.js";
 import { describe as describeGear, MAKES, rarityOf } from "../client/js/app/gearinfo.js";
 
 const MINUTE = 60000;
@@ -236,6 +237,95 @@ describe("rare encounters (rare.js)", () => {
         assert.equal(new Legends().pick("wilds", { at: DAY, random: createRandom(1) }), null, "never in a deck");
     });
 
+    it("follows a world's thread step by step, begun once; a follow-up card dealt only while the thread's at it, and before any other", () => {
+        const cards = { ...CARDS, kin: card("kin", { requires: { thread: "sampleTrail", step: 3 } }) };
+        const legends = new Legends(null, { cards });
+
+        assert.equal(legends.stepOf("sampleTrail"), null, "(not begun)");
+        assert.ok(legends.begin("sampleTrail", { at: [10, 20], ids: ["ada"], by: ["Ada"] }));
+        assert.equal(legends.begin("sampleTrail", { at: [0, 0] }), null, "begun once");
+        assert.equal(legends.stepOf("sampleTrail").kind, "place");
+        assert.equal(legends.wants(cards.kin), false);
+
+        // (Never dealt while it's not wanted: the rest first)
+        const random = createRandom(3);
+        const dealt = new Set();
+
+        for (let k = 0; k < 12; k++) {
+            const id = legends.pick("wilds", { at: DAY, random });
+
+            dealt.add(id);
+            legends.deal(id, { venue: "wilds", at: [0, 0], map: "town", to: "ada" });
+            legends.active = null;
+        }
+
+        assert.ok(!dealt.has("kin"), [...dealt].join());
+
+        // (Its steps, each by those who took part, where it was last moved on)
+        const steps = [];
+
+        for (let k = 0; k < 3; k++) {
+            const done = legends.advance("sampleTrail", { ids: [k ? "bram" : "ada"], by: [k ? "Bram" : "Ada"], at: [k, k] });
+
+            steps.push(done.def.kind);
+        }
+
+        assert.deepEqual(steps, ["place", "talk", "contract"]);
+        assert.deepEqual(legends.threads.sampleTrail.by, ["Ada", "Bram"]);
+        assert.deepEqual(legends.threads.sampleTrail.at, [2, 2]);
+        assert.equal(legends.wants(cards.kin), true);
+        assert.equal(legends.pick("wilds", { at: DAY, random }), "kin", "the follow-up first");
+
+        const last = legends.advance("sampleTrail", { ids: ["ada"] });
+
+        assert.equal(last.next, null);
+        assert.equal(legends.threads.sampleTrail.done, true);
+        assert.equal(legends.wants(cards.kin), false);
+        assert.equal(legends.advance("sampleTrail"), null, "done");
+        assert.deepEqual(STEPS, ["card", "place", "talk", "contract", "lock"]);
+        assert.ok(THREADS.sampleTrail.steps.every((step) => STEPS.includes(step.kind) && (!step.change || CHANGES.includes(step.change.kind))));
+    });
+
+    it("changes the world as a thread's steps have it: a shop's prices and a festival's for as long as they last, wares on its shelves", () => {
+        const legends = new Legends();
+
+        legends.change({ kind: "festival", thread: "t", town: "oakford", name: "the Feast", times: 0.8, lasts: 10 * MINUTE });
+        legends.change({ kind: "price", thread: "t", town: "oakford", shop: "alchemist", times: 1.5 });
+        legends.change({ kind: "stock", thread: "t", town: "oakford", shop: "tavern", ware: { id: "potion", count: 3 } });
+
+        const at = (shop, town = "oakford") => priceTimes(legends.changes, { town, shop, played: legends.played });
+
+        assert.equal(at("tavern"), 0.8);
+        assert.ok(Math.abs(at("alchemist") - 1.2) < 1e-9);
+        assert.equal(at("tavern", "elsewhere"), 1);
+        assert.deepEqual(threadWares(legends.changes, { town: "oakford", shop: "tavern", played: 0 }), [{ id: "potion", quality: "common", count: 3 }]);
+        assert.deepEqual(threadWares(legends.changes, { town: "oakford", shop: "smith", played: 0 }), []);
+
+        // (The festival over: its prices with it)
+        legends.pass(11 * MINUTE);
+        assert.equal(at("tavern"), 1);
+        assert.equal(at("alchemist"), 1.5, "a change for good stays");
+        assert.equal(legends.lasting().length, 2);
+        assert.equal(threadWords("The barkeep in {town}, {way} of here.", { town: "Oakford", way: "north" }), "The barkeep in Oakford, north of here.");
+    });
+
+    it("adds a thread's word to one of the folk's talk, asked from their first choices, its doing sent on, back to their talk after", () => {
+        const tree = threadTalk(TREES.barkeep, { thread: "sampleTrail", step: 1 });
+        const step = THREADS.sampleTrail.steps[1];
+        const effects = [];
+        const talk = new Conversation(tree, { speaker: { id: "b", name: "Hal Brewer", title: "Barkeep" }, onEffect: (effect) => effects.push(effect) });
+        const asked = talk.choices.findIndex(({ text }) => text === step.ask);
+
+        assert.ok(asked >= 0, talk.choices.map(({ text }) => text).join(" | "));
+        talk.choose(asked);
+        assert.equal(talk.line, step.reply);
+        assert.deepEqual(effects, [{ thread: "sampleTrail", step: 1 }]);
+        talk.choose(0);
+        assert.ok(!talk.ended && talk.choices.some(({ text }) => text === step.ask), "back to their talk");
+        assert.equal(threadTalk(TREES.barkeep, { thread: "sampleTrail", step: 0 }), TREES.barkeep, "(only a talk step)");
+        assert.ok(!TREES.barkeep.nodes["thread:sampleTrail"], "(their own talk untouched)");
+    });
+
     it("keeps all of it: a world's legends the same after a round trip through JSON", () => {
         const random = createRandom(11);
         const legends = new Legends(null, { cards: CARDS });
@@ -443,6 +533,125 @@ describe("rare encounters in play (host.js)", () => {
 
         assert.deepEqual(new Progress(progress.toJSON()).legends, { met: ["sample"], uniques: ["sampleSignet"] });
         assert.deepEqual(new Progress().legends, { met: [], uniques: [] });
+    });
+
+    it("begins the sample's thread as it's done and follows it, the world's, step by step: a place gone to, the barkeep asked, the guild's contract reported, the card that follows it felled; each step's reward and the world changed", () => {
+        const { host, ada, bram } = hosted();
+        const fell = () => {
+            const foe = host.battle.actor(host.legends.active.ids[0]);
+
+            put(ada, [Math.floor(foe.x) - 2, Math.floor(foe.y)]);
+            put(bram, [Math.floor(foe.x) - 3, Math.floor(foe.y) + 1]);
+            Object.assign(foe, { hp: 1 });
+            Object.assign(ada, { power: { melee: 1e4, ranged: 1e4 } });
+            host.command(HOST_PLAYER, { type: "engage", target: foe.id });
+
+            return run(host, 8000);
+        };
+        const told = (events) => events.filter(({ type }) => type === "thread");
+
+        host.command(HOST_PLAYER, { type: "rare" });
+
+        const begun = told(fell()).find(({ change }) => change === "begun");
+        const thread = host.legends.threads.sampleTrail;
+        const at = host.legends.done.at(-1).at;
+
+        assert.ok(begun, "(begun as it's done)");
+        assert.deepEqual(begun.ids.sort(), [HOST_PLAYER, "bram"].sort());
+        assert.equal(thread.step, 0);
+
+        // A place: somewhere 150 to 250 m from where it fell (or there, at worst), reached
+        const far = Math.hypot(thread.place[0] - at[0], thread.place[1] - at[1]);
+
+        assert.ok(far === 0 || (far >= 145 && far <= 255), `${far} m`);
+
+        const gold = host.players.get(HOST_PLAYER).progress.gold;
+
+        put(ada, [Math.floor(thread.place[0]), Math.floor(thread.place[1])]);
+
+        const reached = told(run(host, 2500));
+
+        assert.ok(reached.some(({ change, id, gold: given }) => change === "given" && id === HOST_PLAYER && given === 20), JSON.stringify(reached));
+        assert.ok(reached.some(({ change }) => change === "step"));
+        assert.equal(host.players.get(HOST_PLAYER).progress.gold, gold + 20);
+        assert.equal(thread.step, 1);
+        assert.ok(thread.town, "(the talk's settlement: the nearest)");
+        assert.ok(host.legends.changes.every(({ kind }) => kind === "reveal"));
+
+        // The barkeep asked, in the tavern of the settlement it's at (put at home, here)
+        thread.town = host.world.start.id;
+
+        const tavern = [...host.world.interiors.buildings.values()].find(({ kind, place }) => kind === "tavern" && place === "home");
+        const me = host.battle.actor(HOST_PLAYER);
+
+        put(me, tavern.door.ends[0].squares[0]);
+        Object.assign(me, { map: "town" });
+        assert.equal(host.command(HOST_PLAYER, { type: "enter", link: tavern.door.id }).ok, true);
+        run(host, STEP_MS * 4);
+
+        const barkeep = host.battle.actor(tavern.folk.find(({ role }) => role === "barkeep").id);
+
+        put(me, [barkeep.square[0], barkeep.square[1] + 2]);
+        Object.assign(me, { map: barkeep.map });
+        assert.equal(host.command(HOST_PLAYER, { type: "talk", with: barkeep.id }).ok, true);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "sampleTrail", step: 0 } }), { ok: false, reason: "thread" }, "(not the step it's at)");
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { thread: "sampleTrail", step: 1 } }).ok, true);
+
+        const asked = told(run(host, 200));
+
+        assert.ok(asked.some(({ change }) => change === "festival"), JSON.stringify(asked));
+        assert.equal(thread.step, 2);
+        assert.equal(host.shopTimes(barkeep.id), 0.8, "the feast's prices");
+
+        // The guild's contract, on its board in that settlement, taken and reported
+        thread.town = host.world.start.id;
+
+        const guild = [...host.world.interiors.buildings.values()].find(({ kind, place }) => kind === "guild" && place === "home");
+
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+        put(me, tavern.door.ends[0].squares[0]);
+        Object.assign(me, { map: "town" });
+        put(me, guild.door.ends[0].squares[0]);
+        assert.equal(host.command(HOST_PLAYER, { type: "enter", link: guild.door.id }).ok, true);
+        run(host, STEP_MS * 4);
+
+        const receptionist = host.battle.actor(guild.folk.find(({ role }) => role === "receptionist").id);
+
+        put(me, [receptionist.square[0], receptionist.square[1] + 2]);
+        Object.assign(me, { map: receptionist.map });
+        host.players.get(HOST_PLAYER).standing.guild = { merit: 0 };
+        assert.equal(host.command(HOST_PLAYER, { type: "talk", with: receptionist.id }).ok, true);
+
+        const board = host.command(HOST_PLAYER, { type: "effect", effect: { work: "ask" } }).board;
+        const notice = board.find((request) => request.thread?.id === "sampleTrail");
+
+        assert.ok(notice, board.map(({ title }) => title).join());
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { work: "accept", which: `${notice.kind}:${notice.key}` } }).ok, true);
+
+        const contract = host.players.get(HOST_PLAYER).standing.requests.find((request) => request.thread);
+
+        contract.count = contract.target.need;
+        contract.state = "done";
+        assert.equal(host.command(HOST_PLAYER, { type: "effect", effect: { report: true } }).ok, true);
+        assert.equal(thread.step, 3);
+        assert.deepEqual(host.threadWaresOf(barkeep.id), [{ id: "potion", quality: "common", count: 3 }], "the barkeep keeps potions now");
+
+        // The card that follows it, dealt (debug mode: its thread's at it), felled: the thread's end
+        host.command(HOST_PLAYER, { type: "talk", with: null });
+        put(me, [Math.floor(at[0]), Math.floor(at[1])]);
+        Object.assign(me, { map: "town" });
+        run(host, 200);
+        host.legends.last = -Infinity;
+        assert.equal(host.command(HOST_PLAYER, { type: "rare" }).card, SAMPLE_KIN.id);
+
+        const end = told(fell());
+
+        assert.ok(end.some(({ change }) => change === "done"), JSON.stringify(end));
+        assert.equal(thread.done, true);
+        assert.deepEqual(DEBUG_CARDS, { sample: SAMPLE, sampleKin: SAMPLE_KIN });
+
+        // (Kept: in its snapshot, as it was)
+        assert.deepEqual(Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot()))).legends.threads, host.legends.threads);
     });
 
     it("lets go one out as a world played alone is loaded again (its foe not kept with it): back in the deck, not gone, never on that spot", () => {

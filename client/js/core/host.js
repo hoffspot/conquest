@@ -25,7 +25,7 @@ import { Explored } from "./explored.js";
 import { abilityLabel, abilityOf, BANES, bynameOf, capOf, FALL_BACK, freshRecord, GIFTS, GIVE_REACH, givable, hirePrice, LEVEL_XP, levelOfXp, MENDING, MERC_GEAR, MERCENARY, mercenaryOf, mercSlotOf, pickOf, recallPrice, renownOf, SHARE, sharesOf, trustOf, UNIT_ABILITIES, wayOf, wearable } from "./followers.js";
 import { namePeople } from "./names.js";
 import { rumouredBy, rumouredOf, rumoursNear } from "./rumours.js";
-import { hourOf, Legends, makeUnique, RARE, SAMPLE, UNIQUES } from "./rare.js";
+import { DEBUG_CARDS, hourOf, Legends, makeUnique, priceTimes, RARE, SAMPLE, threadWares, threadWords, THREADS, UNIQUES } from "./rare.js";
 import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { levelOf, offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
@@ -57,7 +57,7 @@ import { atPortal, branchesFound, branchOf, fareOf, outOf, portalOn } from "./po
 import { atWarTable, mayRead, warTableOn } from "./wartable.js";
 import { rollSpoils } from "./spoils.js";
 import { campTier, CHUNK, CHUNKS, guilds, landAt, RACE, startFor, WORLD_SIZE } from "./worldplan/plan.js";
-import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, meritIn, meritOf, MOST_CARRIED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, REQUESTS, Standing, TITHE_RATE } from "./standing.js";
+import { armouryGift, COUNSEL, FAILED, GUILD_FAILED, HUNTING, meritIn, meritOf, MOST_CARRIED, MOST_REQUESTS, objectiveOf, offerBoard, offerRequest, OPENS, REQUEST_REACH, REQUESTS, Standing, TITHE_RATE } from "./standing.js";
 import { bannersOf, braziersOf, campOf, CAMP, PATROL_SIZE, POSTED, postsOf, QUARTERED, roundsOf } from "./war/muster.js";
 import { brokenOf, SIDES, STOCKADE, walkwayOf } from "./war/stockade.js";
 import { ARMY, CAMP as ARMY_CAMP } from "./war/armies.js";
@@ -905,6 +905,7 @@ export const REFUSALS = Object.freeze({
     bound: "It's bound to you: it goes where you go, and no further.",
     rareOut: "Something rare's out in the world already.",
     rareRoom: "There's nowhere for it out here.",
+    thread: "They've nothing to say of that now.",
     unwanted: "There's nothing there auto-snag's set to take.",
     locked: "It's locked fast, and its guardians still hold the place.",
     sealed: "The portal won't let you through while this level's master still stands.",
@@ -4058,9 +4059,11 @@ export class Host {
 
         const key = stockKey(keeper);
         const day = dayOf(elapsedOf(this.war));
-        const { wares: shelves, special } = dailyStock(shop, { seed: this.world.seed ?? 1, key, day, people: folk?.people ?? "human" });
+        const { wares: daily, special } = dailyStock(shop, { seed: this.world.seed ?? 1, key, day, people: folk?.people ?? "human" });
         const kept = this.stocks.get(key);
         const today = kept?.day === day ? kept : { sold: {}, special: false };
+        // (And what a thread's put on its shelves: core/rare.js CHANGES `stock`)
+        const shelves = [...daily, ...this.threadWaresOf(keeper).filter((ware) => !daily.some((each) => wareKey(each) === wareKey(ware)))];
 
         return { key, day, shop, wares: shelves.map((ware) => ({ ...ware, left: ware.count - (today.sold[wareKey(ware)] ?? 0) })), special, specialLeft: Boolean(special) && !today.special };
     }
@@ -4090,8 +4093,8 @@ export class Host {
         }
 
         const stock = this.stockOf(trading.keeper.id);
-        const same = (ware) => ware.id === item?.id && ware.quality === (item?.quality ?? "common");
-        const ware = special ? stock?.special : stock ? stock.wares.find(same) : wares(trading.shop, trading.people, { tier: mightTier(this.mightFor(player.id)) }).find(same);
+        const same = (ware) => ware.id === item?.id && (ware.quality ?? "common") === (item?.quality ?? "common");
+        const ware = special ? stock?.special : stock ? stock.wares.find(same) : [...wares(trading.shop, trading.people, { tier: mightTier(this.mightFor(player.id)) }), ...this.threadWaresOf(trading.keeper.id)].find(same);
 
         if (!ware) {
             return refuse("shop");
@@ -4103,7 +4106,7 @@ export class Host {
 
         // (Made at their might's level, and as dear: the special, made already, brought to it)
         const level = levelOf(this.mightFor(player.id));
-        const price = shopPrice(special ? atLevel(ware, level) : { id: ware.id, quality: ware.quality, level }, trading.shop, { haggle: player.progress.bonuses().haggle, special });
+        const price = shopPrice(special ? atLevel(ware, level) : { id: ware.id, quality: ware.quality, level }, trading.shop, { haggle: player.progress.bonuses().haggle, special, times: this.shopTimes(trading.keeper.id) });
 
         if (price > player.progress.gold) {
             return refuse("gold");
@@ -10038,6 +10041,7 @@ export class Host {
         this.#obstaclesAbout(homes);
         this.#ambushesAbout();
         this.#rareFollow();
+        this.#threadFollow();
 
         // (Fresh tracks old, left far behind, or their pack all gone: let go)
         for (const [id, tracks] of [...this.fresh]) {
@@ -10527,6 +10531,15 @@ export class Host {
                     this.legends.owe(id, card.id);
                 }
             }
+
+            // (A thread's follow-up done, its step with it; its own thread begun)
+            if (card.requires && this.legends.wants(card)) {
+                this.#threadDone(card.requires.thread, took.filter((id) => this.players.has(id)), ended.at);
+            }
+
+            if (card.thread) {
+                this.#threadBegin(card.thread, ended.at, took.filter((id) => this.players.has(id)));
+            }
         }
     }
 
@@ -10536,20 +10549,40 @@ export class Host {
     // till they take it up
     #rareGive(player, card) {
         const kept = player.progress.legends;
-        const unique = UNIQUES[card.reward?.unique] ?? null;
 
         if (card.kind === "unique" && !kept.met.includes(card.id)) {
             kept.met.push(card.id);
         }
 
+        const given = this.#legendReward(player, card.reward ?? {});
+
+        if (given.had) {
+            this.#event("rare", { change: "had", id: player.id, card: card.id, unique: given.had });
+        }
+
+        if (given.item || given.gold) {
+            this.#event("rare", { change: "given", id: player.id, card: card.id, item: given.item, gold: given.gold });
+        }
+    }
+
+    // A rare card's or a thread step's reward given a player (`reward`: { gold?, unique?, writing?
+    // }): the gold in their purse; a unique (rare.js UNIQUES), their own, made at their level, bound
+    // to them, or, one they've had already, not again; a writing (writings.js), theirs to read (the
+    // client keeps it as read). What was given: { gold, item, had (a unique not given again),
+    // writing }. A unique their pack's no room for left at their feet, theirs, till they take it up
+    #legendReward(player, { gold = 0, unique: id = null, writing = null }) {
+        const kept = player.progress.legends;
+        const unique = UNIQUES[id] ?? null;
+        const given = { gold: Math.max(0, Math.floor(gold)), item: null, had: null, writing };
+
+        player.progress.gold += given.gold;
+
         if (!unique) {
-            return;
+            return given;
         }
 
         if (kept.uniques.includes(unique.id)) {
-            this.#event("rare", { change: "had", id: player.id, card: card.id, unique: unique.id });
-
-            return;
+            return { ...given, had: unique.id };
         }
 
         const random = createRandom([...`${unique.id}:${player.id}:unique`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, this.world.seed ?? 1) >>> 0);
@@ -10565,11 +10598,230 @@ export class Host {
             this.#event("spoils", { id: player.id, ground, from: player.id, given: true });
         }
 
-        this.#event("rare", { change: "given", id: player.id, card: card.id, item });
+        return { ...given, item };
     }
 
-    // Debug mode's sample (rare.js SAMPLE) dealt ahead of a player at once, their clock and the
-    // gap aside; not while another's out
+    // --- Threads (core/rare.js THREADS; docs/WILDS.md *Threads*) ---
+
+    // A rare encounter's thread begun where it was done (`at`), by those who took part (`ids`): at
+    // its first step, set up (#threadSetUp), told
+    #threadBegin(id, at, ids) {
+        const by = ids.map((one) => this.players.get(one)?.hero.name).filter(Boolean);
+
+        if (!this.legends.begin(id, { at, ids, by })) {
+            return;
+        }
+
+        this.#threadSetUp(id);
+        this.#event("thread", { change: "begun", thread: id, step: 0, ids: [...ids] });
+    }
+
+    // The step a thread's at made ready (rare.js STEPS): a place's spot found (#threadSpot), on the
+    // maps; a talk's or contract's settlement, the nearest where it was last
+    #threadSetUp(id) {
+        const thread = this.legends.threads[id];
+        const def = this.legends.stepOf(id);
+
+        if (def?.kind === "place") {
+            thread.place = this.#threadSpot(thread.at, def.far ?? [150, 250]);
+        } else if (def?.kind === "talk" || def?.kind === "contract") {
+            thread.town = this.#nearestTown(thread.at);
+        }
+    }
+
+    // Somewhere for a thread's place step, `far` ([least, most] metres) from `at`, where a cache
+    // could be (caches.js cacheClear, openAround): its middle; or, of a dozen tries none, `at` itself
+    #threadSpot(at, [least, most]) {
+        const plan = this.world.plan;
+        const overworld = this.world.maps.town;
+        const squares = squaresOf(overworld);
+
+        for (let tries = 0; tries < 12; tries++) {
+            const turn = this.random.next() * 2 * Math.PI;
+            const reach = least + this.random.next() * (most - least);
+            const heart = [Math.floor(at[0] + cos(turn) * reach) + 0.5, Math.floor(at[1] + sin(turn) * reach) + 0.5];
+
+            if (plan && cacheClear(plan, heart, { nearRoad: () => false, others: [] }) && openAround(heart, (x, y) => squares.blocked(x, y))) {
+                return heart;
+            }
+        }
+
+        return [...at];
+    }
+
+    // The settlement nearest `at` (a plan place a people holds, or any settlement of a world with
+    // no war): its id, or null
+    #nearestTown(at) {
+        const places = (this.world.plan?.places ?? []).filter((place) => (this.war ? this.war.town(place.id) : SETTLEMENT_KINDS[place.kind]));
+
+        return places.reduce((best, place) => (!best || hypot(place.at[0] - at[0], place.at[1] - at[1]) < hypot(best.at[0] - at[0], best.at[1] - at[1]) ? place : best), null)?.id ?? null;
+    }
+
+    // The settlement a map's in (a building's, insides.js townOf), or null (out in the world)
+    #townOfMap(map) {
+        const building = map && map !== "town" ? this.world.interiors?.of(map) : null;
+
+        return building ? townOf(building, { plan: this.world.plan, war: this.war, start: this.world.start }) : null;
+    }
+
+    // A thread's step done by those who took part in it (`ids`, there now), where (`at`, if it's
+    // somewhere: else where it was): each given their own reward, the world changed as the step
+    // has it (#threadChange), on to the next step (set up), told
+    #threadDone(id, ids, at = null) {
+        const thread = this.legends.threads[id];
+        const town = thread?.town ?? (thread ? this.#nearestTown(thread.place ?? thread.at) : null);
+        const by = ids.map((one) => this.players.get(one)?.hero.name).filter(Boolean);
+        const done = this.legends.advance(id, { ids, by, at });
+
+        if (!done) {
+            return null;
+        }
+
+        for (const one of ids) {
+            const player = this.players.get(one);
+            const given = player && done.def.reward ? this.#legendReward(player, done.def.reward) : null;
+
+            if (given && (given.gold || given.item || given.had || given.writing)) {
+                this.#event("thread", { change: "given", id: one, thread: id, step: done.step, gold: given.gold, item: given.item, had: given.had, writing: given.writing });
+            }
+        }
+
+        if (done.def.change) {
+            this.#threadChange(id, done.def.change, town, thread.at);
+        }
+
+        this.#threadSetUp(id);
+        this.#event("thread", { change: done.next ? "step" : "done", thread: id, step: done.step, ids: [...ids], by });
+
+        return done;
+    }
+
+    // The world changed by a thread's step (rare.js CHANGES), in `town` (the settlement it was at,
+    // or nearest where it was last: `at`): a shop's stock or prices, a festival (cried), a place
+    // shown on the maps (the plan's nearest of its kind)
+    #threadChange(id, change, town, at) {
+        if (change.kind === "reveal") {
+            const sites = (this.world.plan?.sites ?? []).filter((site) => site.kind === change.site);
+            const site = sites.reduce((best, one) => (!best || hypot(one.at[0] - at[0], one.at[1] - at[1]) < hypot(best.at[0] - at[0], best.at[1] - at[1]) ? one : best), null);
+
+            if (site) {
+                this.legends.change({ kind: "reveal", thread: id, site: site.id, at: [...site.at], lasts: change.lasts ?? null });
+            }
+
+            return;
+        }
+
+        if (!town) {
+            return;
+        }
+
+        const made = this.legends.change({ ...structuredClone(change), thread: id, town });
+
+        if (made.kind === "festival") {
+            this.#event("thread", { change: "festival", thread: id, town, name: made.name, until: made.until });
+        }
+    }
+
+    // The place steps of the threads followed (#caches, at each look about): done once a player's
+    // come within its `reach`, those there taking part
+    #threadFollow() {
+        for (const [id, thread] of Object.entries(this.legends.threads)) {
+            const def = this.legends.stepOf(id);
+
+            if (def?.kind !== "place" || !thread.place) {
+                continue;
+            }
+
+            const there = [...this.players.keys()].map((one) => this.battle.actor(one)).filter((actor) => actor && !actor.dead && actor.map === "town" && hypot(actor.x - thread.place[0], actor.y - thread.place[1]) <= (def.reach ?? 15));
+
+            if (there.length) {
+                this.#threadDone(id, there.map((actor) => actor.id), thread.place);
+            }
+        }
+    }
+
+    // A thread's word asked of one of the folk (a choice of their talk: rare.js threadTalk): the
+    // one its talk step's for (its `role`, in its settlement), at that step; the step done by who
+    // asked
+    #threadTalk(player, actor, { thread: id, step }) {
+        const thread = this.legends.threads[id];
+        const def = this.legends.stepOf(id);
+        const npc = this.battle.actor(actor.talkingTo);
+
+        if (def?.kind !== "talk" || thread.step !== step || !npc || npc.role !== def.role || this.#townOfMap(npc.map) !== thread.town) {
+            return refuse("thread");
+        }
+
+        this.#threadDone(id, [player.id]);
+
+        return OK;
+    }
+
+    // The threads' contracts on a guild's board (their contract steps at its settlement), for a
+    // player who doesn't carry one of the same: [request], as standing.js offerContract makes them
+    // ("beasts": brought down near where the thread was last)
+    #threadContracts(player, post) {
+        const town = this.war?.town(post.town);
+
+        if (!town) {
+            return [];
+        }
+
+        return Object.values(this.legends.threads).flatMap((thread) => {
+            const def = this.legends.stepOf(thread.id);
+
+            if (def?.kind !== "contract" || thread.town !== post.town || player.standing.requests.some((request) => request.thread?.id === thread.id)) {
+                return [];
+            }
+
+            const { reward, turns } = REQUESTS.beasts;
+            const need = def.need ?? 2;
+            const way = compass(town.at, thread.at);
+
+            return [
+                {
+                    kind: "beasts",
+                    title: THREADS[thread.id].title,
+                    key: `thread:${thread.id}`,
+                    from: { id: post.id, name: post.name, title: post.title || "Guild receptionist", town: town.id, townName: town.name, post: "guild" },
+                    given: this.war.turn,
+                    state: "open",
+                    count: 0,
+                    target: { wild: true, need, level: 1, near: { town: null, name: "where the trail leads", at: [...thread.at], reach: HUNTING.reach } },
+                    text: `${threadWords(def.word, { town: town.name, way })} ${need} of them, within ${HUNTING.reach} m of there.`,
+                    until: this.war.turn + turns,
+                    reward: { standing: 0, gold: reward.gold + reward.each.gold * need, merit: reward.merit },
+                    thread: { id: thread.id, step: thread.step },
+                },
+            ];
+        });
+    }
+
+    /**
+     * How the world's changes (rare.js CHANGES: a thread's price or festival) put a shopkeeper's
+     * prices up or down (`keeper`, their id): times this.
+     */
+    shopTimes(keeper) {
+        const trading = this.battle.actor(keeper);
+        const folk = this.folk.get(keeper);
+        const shop = folk?.shop ?? SHOPKEEPERS[folk?.role ?? trading?.role];
+        const town = folk?.place ?? this.#townOfMap(trading?.map);
+
+        return town && shop ? priceTimes(this.legends.changes, { town, shop, played: this.legends.played }) : 1;
+    }
+
+    /** The wares the world's changes put on a shopkeeper's shelves (rare.js CHANGES `stock`): [{ id, quality, count }]. */
+    threadWaresOf(keeper) {
+        const trading = this.battle.actor(keeper);
+        const folk = this.folk.get(keeper);
+        const shop = folk?.shop ?? SHOPKEEPERS[folk?.role ?? trading?.role];
+        const town = folk?.place ?? this.#townOfMap(trading?.map);
+
+        return town && shop ? threadWares(this.legends.changes, { town, shop, played: this.legends.played }) : [];
+    }
+
+    // Debug mode's sample (rare.js SAMPLE), or the card that follows it while its thread's at it,
+    // dealt ahead of a player at once, their clock and the gap aside; not while another's out
     #rareNow(player, actor) {
         if (this.legends.active) {
             return refuse("rareOut");
@@ -10577,7 +10829,10 @@ export class Host {
 
         const homes = [...this.players.values()].map((each) => ({ at: this.#whereIs(each), home: this.#homeOf(each) })).filter(({ at }) => at);
 
-        return actor.map === "town" && this.#rarePut(SAMPLE, actor, this.travel.get(player.id)?.heading ?? null, homes) ? { ok: true, n: this.legends.active.n } : refuse("rareRoom");
+        // (A debug thread's follow-up, while its thread's at it; else the sample)
+        const card = Object.values(DEBUG_CARDS).find((one) => one.requires && this.legends.wants(one)) ?? SAMPLE;
+
+        return actor.map === "town" && this.#rarePut(card, actor, this.travel.get(player.id)?.heading ?? null, homes) ? { ok: true, n: this.legends.active.n, card: card.id } : refuse("rareRoom");
     }
 
     // A peaceful find (core/director.js FINDS: a fallen adventurer's remains, to search; an old
@@ -14114,6 +14369,11 @@ export class Host {
             return this.#official(player, actor, effect);
         }
 
+        // (A thread's word asked of one of the folk: core/rare.js threadTalk)
+        if (effect.thread) {
+            return this.#threadTalk(player, actor, effect);
+        }
+
         // (An adventurer hired; a follower told what to do: M9; one mending sent for)
         if (effect.hire) {
             return this.#hire(player, actor);
@@ -14575,7 +14835,7 @@ export class Host {
                 // (The parts a guild wants are what's found near it for them: as strong as it is
                 // that far from their home)
                 const asked = { war: this.war, realm: player.realm, town: post.town, post: post.post, giver: post, rank, guildRank: standing.guildRank() ?? 0, home: this.#homeOf(player), held: standing.requests, explored: player.explored, random: this.random };
-                const board = kept?.turn === this.war.turn && kept.board.length ? kept.board : post.post === "guild" ? offerBoard(asked) : [offerRequest(asked)].filter(Boolean);
+                const board = kept?.turn === this.war.turn && kept.board.length ? kept.board : post.post === "guild" ? [...this.#threadContracts(player, post), ...offerBoard(asked)] : [offerRequest(asked)].filter(Boolean);
 
                 player.offers[post.id] = { turn: this.war.turn, board };
 
@@ -14717,6 +14977,11 @@ export class Host {
 
         standing.close(request.id, "done");
         player.progress.gold += this.#won(player, reward.gold);
+
+        // (A thread's contract: its step done, by whoever reports it first: core/rare.js)
+        if (request.thread && this.legends.threads[request.thread.id]?.step === request.thread.step) {
+            this.#threadDone(request.thread.id, [player.id]);
+        }
 
         // (A tome from the guild's library besides: in the pack, or at their feet if there's no room)
         if (reward.tome) {

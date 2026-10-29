@@ -8,7 +8,8 @@
 // cave, the dragon's lair, the Tower of Sar Mordal (a broken tower, the rift's green tear by it), a shrine, standing stones, a graveyard and a camp, each rimmed in the
 // colour of who holds it (PLACE_RIMS); a dungeon's way in (an arch over steps going down, grey
 // while it's cleared); an adventurers' cache once it's been seen (a chest); a rare encounter out,
-// once it's been seen (an eye opened wide in a star: core/rare.js); and each people's
+// once it's been seen (an eye opened wide in a star: core/rare.js), and where one of the world's
+// threads leads next (a scroll, its seal sea-green); and each people's
 // works, a lumber mill (a log and an axe), a mine (a pick over its ore) and a quarry (a squared
 // block), rimmed in their holder's colour; and their fortifications, a guard tower (a
 // battlemented tower) and a forward garrison (a curtain wall between two turrets, its gate in
@@ -358,6 +359,16 @@ const LOOKS = {
             ["M-7,0 q7,-6.4 14,0 q-7,6.4 -14,0 z", "#e8fff8", "#0a2420", 1],
             ["M0,0 m-2.8,0 a2.8,2.8 0 1 0 5.6,0 a2.8,2.8 0 1 0 -5.6,0", "#3fe0c0", "#0a2420", 0.8],
             ["M0,0 m-1.2,0 a1.2,1.2 0 1 0 2.4,0 a1.2,1.2 0 1 0 -2.4,0", "#0a2420", null, 0],
+        ],
+    },
+    // (Where one of the world's threads leads next: core/rare.js `place` steps. A scroll unrolled,
+    // its seal the uniques' sea-green)
+    thread: {
+        rim: "#3fe0c0",
+        parts: [
+            ["M-8,-7 h14 a2,2 0 0 1 0,4 h-1 v11 a2,2 0 0 1 -2,2 h-13 a2,2 0 0 1 0,-4 h1 v-11 a2,2 0 0 1 1,-2 z", "#efe2c0", "#3a2a12", 1],
+            ["M-5,-2 h8 M-5,1 h8 M-5,4 h5", null, "#8a6a3a", 0.9],
+            ["M5,6 m-3,0 a3,3 0 1 0 6,0 a3,3 0 1 0 -6,0", "#3fe0c0", "#0a2420", 0.8],
         ],
     },
     campsite: {
@@ -877,6 +888,7 @@ export const ICON_NAMES = Object.freeze({
     remains: "Fallen adventurer's remains",
     campsite: "Old campsite",
     legend: "Something rare, seen here",
+    thread: "Where a thread leads",
     mill: "Lumber mill",
     mine: "Mine",
     quarry: "Quarry",
