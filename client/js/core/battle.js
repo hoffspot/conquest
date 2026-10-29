@@ -377,6 +377,17 @@ export const AGGRO = Object.freeze({ reach: 15, melee: 6, ranged: 4 });
 const DEFEND_MS = 10000;
 
 /**
+ * Enmity (docs/WILDS.md *Whom they go for*; the user: "how threat is dealt with in the MMO Final
+ * Fantasy XIV"): what the wild's creatures and the soldiers keep of those set on them, and how
+ * much: the harm done them (a blow that missed, `seed`; a lingering ill, `lingering` of its harm),
+ * times the doer's own `enmityWeight` (1 to begin with), till FOE_MS after the last of it. Each goes
+ * for the one with the most, but keeps to the one it's on till another's is past theirs by `near`
+ * (one within `hand` squares of it) or `far` (one further off): WoW's margin, so none's pulled back
+ * and forth. With none to go for, the nearest (as ever: first come), on it with `seed`.
+ */
+export const ENMITY = Object.freeze({ seed: 1, lingering: 0.5, near: 1.1, far: 1.3, hand: 3 });
+
+/**
  * The folk in danger (#afraid): afraid of whoever they can see within `sight` squares that's
  * fighting (set on someone still standing), a creature of the wild that's a menace to all, or an
  * enemy of the people whose town they're in (their `side`). They run from the nearest, at `pace`
@@ -792,9 +803,11 @@ export class Battle {
             assist: null,
             post: facing,
             // Whom it holds a grudge against (by id), and until when (FOE_MS); and who's struck it,
-            // until when it goes after them beyond its leash (DEFEND_MS)
+            // until when it goes after them beyond its leash (DEFEND_MS); and its enmity, each set on
+            // it by id: [how much, until when] (ENMITY)
             foes: {},
             struckBy: {},
+            enmity: {},
             // How much stronger its blows (up close, from afar), heals and stuns are than their
             // own (a player's skills and gear: core/progress.js), the share of each blow its
             // armour takes off, and how much stronger its next blow is (a power strike: null
@@ -1342,8 +1355,9 @@ export class Battle {
                 other.talkingTo = null;
             }
 
-            // (And no one holds a grudge against it, or remembers seeing or sparing it)
-            for (const kept of [other.foes, other.seeing, other.spared]) {
+            // (And no one holds a grudge against it, or remembers seeing or sparing it, being
+            // struck by it, or any enmity for it)
+            for (const kept of [other.foes, other.seeing, other.spared, other.struckBy, other.enmity]) {
                 if (kept && id in kept) {
                     delete kept[id];
                 }
@@ -2741,7 +2755,11 @@ export class Battle {
         if (!broken && !seen && actor.holdFire) {
             seen = this.#nearestSeen(actor, (enemy) => enemy.target === actor.id || enemy.attack?.target === actor.id);
         } else if (!broken && !seen && (thinking || actor.target !== null)) {
-            seen = this.#drawnTo(actor) ?? this.#nearestSeen(actor, (enemy) => this.#leashed(actor, enemy) && this.#roomOn(actor, enemy)) ?? this.#alarmed(actor);
+            // (Whom its enmity has it go for, room or no on the one it's on already; else a player
+            // near before anyone, as ever: ENMITY)
+            const room = (enemy) => this.#leashed(actor, enemy) && this.#roomOn(actor, enemy);
+
+            seen = this.#chosen(actor, (enemy) => this.#leashed(actor, enemy) && (enemy.id === actor.target || this.#roomOn(actor, enemy))) ?? this.#seeded(actor, this.#drawnTo(actor) ?? this.#nearestSeen(actor, room) ?? this.#alarmed(actor));
 
             if (actor.formation) {
                 actor.rethinkAt = this.time + RETHINK_MS;
@@ -2866,7 +2884,9 @@ export class Battle {
         const rouses = wild.reacts
             ? (enemy) => provoked(enemy) || (actor.mood?.kind === "attack" && actor.mood.by === enemy.id)
             : (enemy) => provoked(enemy) || wild.temper === "aggressive" || (wild.temper === "territorial" && distanceBetween(actor.square, enemy.square) <= wild.guard);
-        const seen = this.#nearestSeen(actor, (enemy) => leashed(enemy) && rouses(enemy));
+        // (Whom its enmity has it go for, else the nearest it's roused by: ENMITY)
+        const rousing = (enemy) => leashed(enemy) && rouses(enemy);
+        const seen = this.#chosen(actor, rousing) ?? this.#seeded(actor, this.#nearestSeen(actor, rousing));
 
         if (seen) {
             // (Holding a place gone into, set on no one: a moment's pause on first seeing them,
@@ -2886,6 +2906,8 @@ export class Battle {
                 actor.pathGoal = null;
                 actor.waitUntil = 0;
                 actor.waryUntil = 0;
+                // (Given up, none left it can go for: its enmity let go)
+                actor.enmity = {};
             }
         }
 
@@ -3301,7 +3323,7 @@ export class Battle {
             }
 
             actor.mood = { kind: "flee", by: actor.mood?.by ?? null, at: this.time, until: null, spared: true, feedings: 0 };
-            Object.assign(actor, { target: null, path: [], pathGoal: null, eating: null });
+            Object.assign(actor, { target: null, path: [], pathGoal: null, eating: null, enmity: {} });
             this.#emit("fled", { id: actor.id });
         }
     }
@@ -5369,6 +5391,7 @@ export class Battle {
         target.spared = { ...target.spared, [caster.id]: true };
         delete target.foes[caster.id];
         delete caster.foes?.[target.id];
+        delete target.enmity?.[caster.id];
 
         if (target.target === caster.id) {
             Object.assign(target, { target: null, path: [], pathGoal: null });
@@ -6014,6 +6037,8 @@ export class Battle {
                     ailing.next += AFFLICTIONS[ailing.kind].every;
                     actor.hp = Math.max(0, actor.hp - ailing.damage);
                     this.#emit("ail", { id: actor.id, kind: ailing.kind, damage: ailing.damage, hp: actor.hp, maxHp: actor.maxHp, by: ailing.by });
+                    // (Its enmity for whoever laid it on, a little: ENMITY lingering; never turned by it)
+                    this.#enmity(actor, this.actor(ailing.by), ailing.damage * ENMITY.lingering);
 
                     if (actor.hp === 0) {
                         this.#die(actor, this.actor(ailing.by));
@@ -6238,7 +6263,7 @@ export class Battle {
         }
 
         if (attacker) {
-            this.#provoke(attacker, target);
+            this.#provoke(attacker, target, { enmity: Math.max(ENMITY.seed, damage) });
         }
 
         if (target.hp === 0) {
@@ -6261,6 +6286,79 @@ export class Battle {
         return damage;
     }
 
+    // One of the wild's or a soldier's enmity for someone set on it (ENMITY) the more by `amount`
+    // (times their `enmityWeight`), kept till FOE_MS after: none kept by those who choose their
+    // foes otherwise (players, followers), nor for one of their own, nor themselves
+    #enmity(holder, by, amount) {
+        if (!by || by === holder || holder.dead || (holder.ai !== "wild" && holder.ai !== "patrol" && holder.ai !== "colossus") || !(amount > 0)) {
+            return;
+        }
+
+        holder.enmity ??= {};
+
+        const [had = 0] = holder.enmity[by.id] ?? [];
+
+        holder.enmity[by.id] = [had + amount * (by.enmityWeight ?? 1), this.time + FOE_MS];
+    }
+
+    // Whom one keeping enmity (ENMITY) goes for, of those it has some for that pass `test` (an
+    // enemy it's noticed): the one it's on, kept till another's enmity is past theirs by `near`
+    // (one within `hand` of it) or `far` (one it was set on otherwise, sprung at or charging, as
+    // if with a seed); or, on no one it can go for, the one it has the most for. Only one it can see
+    // (as #nearestSeen: its sight); null for none (the nearest, then: #seeded). The first of two
+    // with as much (as each was first set on it: the same in every copy)
+    #chosen(actor, test) {
+        const table = actor.enmity ?? {};
+        const on = actor.target === null || table[actor.target] ? null : this.actor(actor.target);
+        let [top, most, held, holding] = on && !on.dead && on.map === actor.map && this.hostile(on, actor) && this.#noticed(actor, on) && test(on) ? [on, ENMITY.seed, on, ENMITY.seed] : [null, 0, null, 0];
+
+        for (const id in table) {
+            const [amount, until] = table[id];
+
+            if (until <= this.time) {
+                delete table[id];
+                continue;
+            }
+
+            const other = this.actor(id);
+
+            if (!other || other.dead || other.map !== actor.map || !this.hostile(other, actor) || !this.#noticed(actor, other) || !test(other)) {
+                continue;
+            }
+
+            if (id === actor.target) {
+                [held, holding] = [other, amount];
+            }
+
+            if (amount > most) {
+                [top, most] = [other, amount];
+            }
+        }
+
+        const sight = actor.wild?.sight ?? actor.sight ?? (actor.engine ? Math.max(SIGHT, longestReach(actor.arms)) : SIGHT);
+        const sees = (other) => this.canSee(actor, other, sight);
+
+        if (held && top !== held && sees(top) && most > holding * (distanceBetween(actor.square, top.square) <= ENMITY.hand ? ENMITY.near : ENMITY.far)) {
+            return top;
+        }
+
+        if (held && sees(held)) {
+            return held;
+        }
+
+        return top && sees(top) ? top : null;
+    }
+
+    // One newly gone for by the nearest rule (#chosen had none): on its enmity with a seed, so it's
+    // kept to as others come nearer, till another's set on it harder. `other` back
+    #seeded(actor, other) {
+        if (other && !actor.enmity?.[other.id]) {
+            this.#enmity(actor, other, ENMITY.seed);
+        }
+
+        return other;
+    }
+
     // A creature or a guard turned on whoever set on it (`lastSeen`: as if seen till then): set on,
     // it defends itself, however many are on a player already (AGGRO keeps back only those who
     // haven't been: the user, "make sure any unit that is attacked attempts to defend itself")
@@ -6275,6 +6373,14 @@ export class Battle {
             return;
         }
 
+        // (On someone else already, still there to go for: whom it goes for is its enmity's to say,
+        // #chosen; on no one, it turns on whoever set on it)
+        const held = actor.target === null ? null : this.actor(actor.target);
+
+        if (held && held !== attacker && !held.dead && held.map === actor.map) {
+            return;
+        }
+
         if (attacker.kind === "player" && actor.target !== attacker.id) {
             this.#onPlayer(attacker)[this.#shoots(actor) ? "ranged" : "melee"]++;
         }
@@ -6285,8 +6391,9 @@ export class Battle {
 
     // Someone set on (struck, or a spell cast at them): they fight back (`turn`: a creature or a
     // guard turns on whoever did it), calm towards them no longer (Pacify), and hold it against
-    // them a while, as do those of their own who saw (not one that's `lone`'s: it's its own)
-    #provoke(attacker, target, { turn = true } = {}) {
+    // them a while, as do those of their own who saw (not one that's `lone`'s: it's its own); their
+    // enmity for whoever did it the more by `enmity` (the harm done: ENMITY), their pack's by a seed
+    #provoke(attacker, target, { turn = true, enmity = ENMITY.seed } = {}) {
         // (Struck while it waited, holding a place: it fights back at once)
         target.waryUntil = 0;
 
@@ -6299,6 +6406,7 @@ export class Battle {
         // (After whoever did it, beyond its leash if need be, a while)
         if (attacker !== target) {
             this.#struckBy(target, attacker);
+            this.#enmity(target, attacker, enmity);
         }
 
         if (turn) {
@@ -6314,6 +6422,7 @@ export class Battle {
             for (const other of this.actors) {
                 if (other !== target && other.wild?.pack === pack && !other.dead && other.map === target.map) {
                     this.#struckBy(other, attacker);
+                    this.#enmity(other, attacker, ENMITY.seed);
                     other.foes[attacker.id] = this.time + FOE_MS;
 
                     if (turn && other.target === null) {
@@ -6379,10 +6488,17 @@ export class Battle {
         actor.order = null;
         actor.path = [];
         actor.target = null;
+        // (Its enmity gone with it, and it from everyone's, knocked down or not: as FFXIV wipes
+        // it at a fall)
+        actor.enmity = {};
 
         for (const other of this.actors) {
             if (other.target === actor.id) {
                 other.target = null;
+            }
+
+            if (other.enmity?.[actor.id]) {
+                delete other.enmity[actor.id];
             }
 
             if (other.order?.target === actor.id) {

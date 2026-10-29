@@ -678,7 +678,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 45;
+export const SNAPSHOT_VERSION = 46;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -792,6 +792,8 @@ export const SNAPSHOT_STEPS = Object.freeze({
             battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => (ids.has(actor.id) ? { rises: 1, downed: false, dodge: 0, abilityTimes: 1, ...actor } : actor)) },
         };
     },
+    // 46: each one's enmity (battle.js ENMITY): none yet, theirs from the next blow
+    45: (snapshot) => ({ ...snapshot, version: 46, battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => ({ enmity: {}, ...actor })) } }),
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -3106,7 +3108,8 @@ export class Host {
     /**
      * A number that tells two copies of a world apart (docs/WAR.md M11: whether one that's
      * joined has gone astray from its host's): the battle's time, and everyone in it, where they
-     * are and how they are; the war's turn and clock; what's on the ground, and in each pack.
+     * are, how they are and whom they're on; the war's turn and clock; what's on the ground, and
+     * in each pack.
      */
     checksum() {
         let sum = 2166136261;
@@ -3127,6 +3130,11 @@ export class Host {
             mix(Math.round(actor.y * 1000));
             mix(Math.round(actor.hp * 100));
             mix(actor.dead ? 1 : 0);
+
+            // (Whom they're on: their enmity gone astray shows at once, not only as they wander)
+            for (let k = 0; k < (actor.target?.length ?? 0); k++) {
+                mix(actor.target.charCodeAt(k));
+            }
         }
 
         mix(this.war?.turn ?? 0);
