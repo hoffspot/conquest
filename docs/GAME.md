@@ -5567,12 +5567,15 @@ it.
    made again back at the title. With less motion asked for (`prefers-reduced-motion`), the first
    stays, still.
    **The crest** (`app/crest.js`, `client/images/crest/`). Over the loading screen and the title, at
-   the top of the screen, the game's crest: a seal of hammered gold, the market town on its hill
-   above a ribbon of dark leather and its ploughed fields below, a pair of amber eyes watching
-   from the dark furrows; a longsword behind it, crimson banners and laurels of oak and wheat
-   either side, and eight great medallions about it, four above the ribbon and four below (a
-   griffin, a seven-pointed star, a dragon and crossed keys; a crescent moon among clouds and
-   stars, crossed brands aflame, a coiled cobra and a snarling wolf). PELLAGOS is on its ribbon.
+   the top of the screen, the game's crest: a seal of hammered gold, the market town on its hill,
+   rising behind a wide ribbon of dark leather; below the ribbon the town's fields run down into a
+   cleft in the dark under the world, where the Hollow One's amber eyes watch (`core/lore/gods.js`);
+   a longsword behind it all, crimson banners and laurels of oak and wheat either side, and six
+   medallions of gold bearing the signs of the Six. Four are above the ribbon, either side of the
+   seal: Aurelia's sun rising over a bough, Ithriel's eye in a seven-pointed star, Seliane's rose
+   through two rings and Dunmar's hammer and chisel over an anvil. Two are below it, either side
+   of the cleft, keeping it: Brannoc's antlers over a spear and bow, and Morvaine's lantern
+   hanging from a key. PELLAGOS is on its ribbon.
    It's as wide as the screen leaves room for, no more than 620 pixels, nor a quarter of the
    screen's height tall, so the title's card has room under it on a computer; on a phone held
    upright it's the screen's width, on one on its side much smaller. It's the same crest over both
@@ -5598,7 +5601,7 @@ it.
    - **Made from the owner's painting** (Google's Gemini), painted on flat magenta and cut out of it
      (`npm run build:crest`: the magenta as the master has it at its corners, never quite #FF00FF;
      each pixel's share of it made see-through and taken out of its colour, so no pink fringe is
-     left), an AVIF of 111 KB with its see-through beside it, or a WebP of 180 KB (1376 by 768
+     left), an AVIF of 77 KB with its see-through beside it, or a WebP of 113 KB (1376 by 768
      pixels). It's in the page itself, so it's fetched as the page is read.
 2. **The title.** **Continue as** the character played last, in the world they're in; make a
    **New character**; choose another of those kept (**Characters on this device**, up to six), or
