@@ -66,7 +66,7 @@ describe("growing stronger (progress.js)", () => {
         assert.equal(progress.toNext("blade").to, null);
     });
 
-    it("gives each tree's bonuses at its rank, and its abilities, every one a spell, a stronger blow or a stunning one", () => {
+    it("gives each tree's bonuses at its rank, and its abilities, every one a spell, a stronger blow, a stunning one, or one that turns a foe's enmity", () => {
         const progress = new Progress({ skills: { blade: 300, hexes: 300, endurance: 2000, trade: 100 }, gear: { mainHand: { id: "sword" } } });
         const bonus = progress.bonuses();
 
@@ -77,12 +77,18 @@ describe("growing stronger (progress.js)", () => {
         assert.equal(bonus.stamina, 30);
         assert.ok(Math.abs(bonus.armor - 0.08) < 1e-9);
         assert.ok(Math.abs(bonus.haggle - 0.05) < 1e-9);
-        assert.deepEqual(progress.abilities().sort(), ["hold", "powerStrike"]);
+        assert.deepEqual(progress.abilities().sort(), ["hold", "powerStrike", "taunt", "warCry"], "(Endurance a Master's: its Taunt and War cry)");
 
+        // (Each brought by its tree, at a rank: a spell; a blow made stronger, or stunning; or what
+        // a foe's enmity makes of them, a taunt, a war cry or slipping away)
         for (const [id, ability] of Object.entries(ABILITIES)) {
-            assert.ok(TREES[ability.tree].abilities[2] === id);
-            assert.ok(ability.spell ? SPELLS[ability.spell] : ability.factor > 1 || ability.stun > 0, id);
+            assert.ok(Object.values(TREES[ability.tree].abilities).includes(id), id);
+            assert.ok(ability.spell ? SPELLS[ability.spell] : ability.taunt || ability.cry || ability.slip || ability.factor > 1 || ability.stun > 0, id);
+            assert.ok(ability.spell || ability.cooldown > 0, id);
         }
+
+        assert.deepEqual(TREES.endurance.abilities, { 2: "taunt", 3: "warCry" });
+        assert.deepEqual(TREES.evasion.abilities, { 2: "slipAway" });
     });
 
     it("counts the make of a weapon in its blows, and everything worn: its armour, its bonuses and its sets', to a point", () => {

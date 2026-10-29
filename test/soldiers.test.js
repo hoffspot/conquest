@@ -229,10 +229,12 @@ describe("the war come to life (host.js, muster.js)", () => {
         const player = host.battle.actor(HOST_PLAYER);
         const orc = host.battle.actor("orc");
 
-        // Felled (by the orc, then gone from the world), and taken away
+        // Felled (by the orc, set on it past anyone else who comes at it: battle.js ENMITY; then
+        // gone from the world), and taken away
         Object.assign(orc, { hp: 5000, maxHp: 5000 });
         guard.hp = 1;
         put(orc, inSight(host, guard, 2));
+        Object.assign(orc, { target: guard.id, enmity: { [guard.id]: [1e6, host.battle.time + 60000] } });
 
         for (let t = 0; t < 10000 && !guard.dead; t += STEP_MS) {
             host.advance(STEP_MS);

@@ -318,10 +318,11 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         strike(game, struck);
         assert.ok(host.battle.hostile(host.battle.actor(struck), me));
 
-        // (Long after the grudge of the blow's worn off: theirs still; its fellows still not)
+        // (Long after the grudge of the blow's worn off: theirs still; its fellows still not, those
+        // of its band who came with it or after it)
         play(game, FOE_MS + 5000);
 
-        const fellows = others.filter((id) => host.battle.actor(id) && !host.battle.actor(id).dead);
+        const fellows = [...new Set([...others, ...invasion.invaders])].filter((id) => id !== struck && host.battle.actor(id) && !host.battle.actor(id).dead);
 
         assert.ok(host.battle.hostile(host.battle.actor(struck), me));
         assert.ok(fellows.length && fellows.every((id) => !host.battle.hostile(host.battle.actor(id), me)), "its fellows leave them be");
@@ -514,10 +515,25 @@ describe("an invasion in the world (core/host.js #invade)", () => {
 
         for (const [side, ones] of [["raiders", raiders], ["town", town]]) {
             const thick = ones.filter((one) => near(one, enemies(one), 3)).length;
-            const idle = ones.filter((one) => one.target === null && near(one, enemies(one), INVASION.charge.sight)).length;
 
             assert.ok(thick >= ones.length * 0.6, `${side}: ${thick} of ${ones.length} in the thick of it`);
-            assert.ok(idle <= ones.length * 0.1, `${side}: ${idle} of ${ones.length} standing with an enemy near`);
+        }
+
+        // (Few standing with an enemy near, over the next few seconds: one here and there between
+        // foes, each looking again only so often, core/battle.js RETHINK_MS)
+        const idle = { raiders: [0, 0], town: [0, 0] };
+
+        for (let k = 0; k < 8; k++) {
+            for (const [side, ones] of [["raiders", standing(invasion.invaders)], ["town", standing(invasion.defenders)]]) {
+                idle[side][0] += ones.filter((one) => one.target === null && near(one, enemies(one), INVASION.charge.sight)).length;
+                idle[side][1] += ones.length;
+            }
+
+            host.advance(500);
+        }
+
+        for (const [side, [stood, of]] of Object.entries(idle)) {
+            assert.ok(stood <= of * 0.1, `${side}: ${stood} of ${of} standing with an enemy near, over 4 s`);
         }
     });
 

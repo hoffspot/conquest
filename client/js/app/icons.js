@@ -316,6 +316,34 @@ export const ICONS = Object.freeze({
         <path d="M-21,-12 L-14,-9 M-22,0 L-15,0 M-21,12 L-14,9" stroke="#f2e6cf" stroke-width="2" stroke-linecap="round"/>
         <path d="${star(15, -14, 4.6, 2)}" fill="url(#icon-stun-star)" stroke="#a86b00" stroke-width="0.9"/>`,
 
+    // A glaring red eye, arrows drawn in to it from either side: a taunt, every eye on you
+    taunt: `
+        <circle r="21" fill="#c83a2a" opacity="0.3"/>
+        <path d="M-15,0 Q0,-13 15,0 Q0,13 -15,0 Z" fill="#f2e6cf" stroke="#4a1410" stroke-width="1.6"/>
+        <circle r="6.5" fill="#c83a2a" stroke="#4a1410" stroke-width="1.2"/>
+        <circle r="2.6" fill="#1a0806"/>
+        <circle cx="-2" cy="-2.2" r="1.2" fill="#fff"/>
+        <path d="M-22,-13 L-17,-5 M22,-13 L17,-5 M-22,13 L-17,5 M22,13 L17,5" stroke="#ffcc4d" stroke-width="2.4" stroke-linecap="round"/>`,
+
+    // A shout's waves breaking out either side of a red burst: a war cry
+    warCry: `
+        <path d="${star(0, 0, 13, 5, 8)}" fill="#c83a2a" stroke="#4a1410" stroke-width="1.2"/>
+        <circle r="4" fill="#ffcc4d"/>
+        <g fill="none" stroke="#ffcc4d" stroke-linecap="round">
+            <path d="M-14,-8 Q-18,0 -14,8 M14,-8 Q18,0 14,8" stroke-width="2.4"/>
+            <path d="M-18,-12 Q-24,0 -18,12 M18,-12 Q24,0 18,12" stroke-width="2" opacity="0.75"/>
+        </g>`,
+
+    // A hooded figure stepping off, fainter copies of it left behind: slipping away
+    slipAway: `
+        <g fill="#5a6470">
+            <path d="M-12,18 L-12,0 Q-12,-12 -4,-14 Q4,-12 4,0 L4,18 Z" opacity="0.25"/>
+            <path d="M-6,18 L-6,0 Q-6,-12 2,-14 Q10,-12 10,0 L10,18 Z" opacity="0.5"/>
+        </g>
+        <path d="M0,18 L0,0 Q0,-12 8,-14 Q16,-12 16,0 L16,18 Z" fill="#2b3138" stroke="#c8d0d8" stroke-width="1.2"/>
+        <circle cx="9" cy="-4" r="3.2" fill="#0d1014"/>
+        <path d="M-20,-6 L-12,-6 M-22,2 L-14,2 M-20,10 L-12,10" stroke="#c8d0d8" stroke-width="1.8" stroke-linecap="round" opacity="0.8"/>`,
+
     // An arrow in the middle of a target: an aimed shot
     aimedShot: `
         <circle r="18" fill="#f2e6cf" stroke="#6b1f1f" stroke-width="1.4"/>
@@ -501,7 +529,8 @@ export const ICONS = Object.freeze({
     // set on, a sword pointed at a red target mark; follow, footsteps after an arrow; wait here, a
     // raised hand; guard them, a kite shield over a figure; fall back, an arrow turning back to a
     // figure; hold fire, a sword sheathed downwards under a bar; fight at will, a sword raised in a
-    // green glow; their own ability, a gold star burst; go, an arrow out of the circle
+    // green glow; cover me, a shield before a figure, foes' blows coming at it; their own ability,
+    // a gold star burst; go, an arrow out of the circle
     "unit:assist": `
         <circle r="20" fill="#7a1a14" opacity="0.45"/>
         <g fill="none" stroke="#ff5a3c" stroke-width="2.4">
@@ -539,6 +568,12 @@ export const ICONS = Object.freeze({
         <circle r="20" fill="#1f5a2c" opacity="0.55"/>
         <g transform="scale(0.86)">${SWORD}</g>
         <path d="M-15,12 l5,-4 M15,12 l-5,-4 M-17,-2 h6 M17,-2 h-6" stroke="#9cf2a8" stroke-width="2" stroke-linecap="round"/>`,
+    "unit:cover": `
+        <circle r="20" fill="#7a1a14" opacity="0.4"/>
+        <circle cx="-8" cy="-2" r="3.2" fill="#f2e6cf"/>
+        <path d="M-13,10 C-13,4 -3,4 -3,10 Z" fill="#f2e6cf"/>
+        <path d="M6,-15 L16,-11 L16,-2 C16,6 11,11 6,14 C1,11 -4,6 -4,-2 L-4,-11 Z" fill="#8d949b" stroke="#2f363d" stroke-width="1.6" transform="translate(1 1) scale(0.9)"/>
+        <path d="M19,-18 L13,-12 M21,-6 L15,-5 M19,8 L14,4" stroke="#ff5a3c" stroke-width="2.2" stroke-linecap="round"/>`,
     "unit:ability": `
         <path d="${star(0, 0, 20, 8, 8)}" fill="#ffcc4d" stroke="#a86b00" stroke-width="1.2"/>
         <path d="${star(0, 0, 10, 4, 8, Math.PI / 8)}" fill="#fff3c4"/>`,

@@ -475,15 +475,15 @@ A player grows by what they do (`Progress`, `core/progress.js`), kept with their
 docs/MAGIC.md). A rank takes 100, 300, 800, 2,000 and 4,500
 experience in all: Untried, Trained, Adept, Veteran, Master, Legend.
 
-| Tree | Grows by | Brings, by Legend | Rank 2 ability |
+| Tree | Grows by | Brings, by Legend | Abilities (rank) |
 | --- | --- | --- | --- |
-| Blade | landing blows up close (their damage) | +60% damage up close, +20 hit points | Power strike |
-| Marksman | landing shots from afar (their damage) | +60% damage from afar | Aimed shot |
-| Healing | healing with spells (what's healed) | +100% healed | Greater heal |
-| Hexes | stunning foes (15 a stun) | stuns twice as long | Hold |
-| Endurance | taking blows (their damage), running out of stamina | +40 hit points and stamina, 10% of each blow taken off | |
-| Evasion | slipping blows (20 a blow), and three tenths of all Blade, Marksman and Endurance grow by | a blow or a shot slipped one time in four (one in twenty from the start) | |
-| Shield | catching blows on a shield (20 a blow), and stunning with a shield bash (15) | a blow or a shot from in front caught on a shield one time in two (one in ten from the start) | Shield bash |
+| Blade | landing blows up close (their damage) | +60% damage up close, +20 hit points | Power strike (2) |
+| Marksman | landing shots from afar (their damage) | +60% damage from afar | Aimed shot (2) |
+| Healing | healing with spells (what's healed) | +100% healed | Greater heal (2) |
+| Hexes | stunning foes (15 a stun) | stuns twice as long | Hold (2) |
+| Endurance | taking blows (their damage), running out of stamina | +40 hit points and stamina, 10% of each blow taken off | Taunt (2), War cry (3) |
+| Evasion | slipping blows (20 a blow), and three tenths of all Blade, Marksman and Endurance grow by | a blow or a shot slipped one time in four (one in twenty from the start) | Slip away (2) |
+| Shield | catching blows on a shield (20 a blow), and stunning with a shield bash (15) | a blow or a shot from in front caught on a shield one time in two (one in ten from the start); with it in hand, foes' enmity for them twice as much | Shield bash (2) |
 | Trade | buying and selling (half a point a gold piece) | 25% off what's bought, 25% more for what's sold (all haggling together 35% at most: `HAGGLE_CAP`) | |
 | Talk | talking with the folk | persuasion (M4, M7) | |
 | Command | leading followers | more followers (M9) | |
@@ -507,10 +507,13 @@ knocks no one down and staggers for half as long. "Blocked" shows over the head,
 braces into it (docs/CHARACTERS.md) and the boss rings (a spellward's light flares). Others
 carrying a shield block too (`NPC_SHIELDS`): a people's soldiers with a sword or a cleaver (their
 uniform's shield: `SHIELD_ARMS`) one blow in seven, 30% of it; their captains one in four, 45%;
-a hired warrior (who always carries one) one in five, 30%.
+a hired warrior (who always carries one) one in five, 30%. With a shield in hand, a player counts
+for more in foes' enmity: a fifth more a rank of Shield, twice as much as a Legend (host.js
+`SHIELD_ENMITY`; docs/WILDS.md *Whom they go for*), so one who carries a shield holds what they
+take.
 
-**Abilities** come with a tree's second rank, and can then be put on an action wheel (Game
-options, Action wheels: docs/GAME.md):
+**Abilities** come with a tree's ranks (most with its second), and can then be put on an action
+wheel or the Action Bar (Game options, Action Wheel and Bar: docs/GAME.md):
 - **Greater heal** (the player's own wheel): a slower cast healing 25 to 40.
 - **Hold** (an enemy's wheel): a longer stun, from 9 squares.
 - **Power strike** and **aimed shot** (an enemy's wheel): the next blow (up close, or from
@@ -531,6 +534,19 @@ options, Action wheels: docs/GAME.md):
   your other hand"): the next blow up close slams the shield into them too, stunning them for 2
   seconds (longer for a stronger stunner: Hexes, of Binding). A shield of the Ram makes it harder
   and longer by its bonus. Ready again 15 seconds after.
+- **Taunt** (Endurance at Adept; an enemy's wheel; no shield needed): the foe, up to 16 m off and
+  seeing the player, comes for them, made to for 4 seconds, its enmity for them half again the most
+  it has for anyone (docs/WILDS.md *Whom they go for*). Heard (a weapon banged on a shield, a
+  bark) and told over it ("Taunted"). Too far: "Too far away"; not seeing them: "They can't see you
+  to be taunted"; another's taunt holding it still: "Someone else's taunt holds them still". Ready
+  again 15 seconds after; refused, still ready. A hired warrior leaves a foe the player's taunted
+  to them for 15 seconds, unless they're badly hurt.
+- **War cry** (Endurance at Veteran; their own wheel): every foe within 6 m that can see them,
+  taunted at once, for 3 seconds. Heard far (a roar over a horn). None near enough: "No foe near
+  enough to hear you". Ready again 30 seconds after.
+- **Slip away** (Evasion at Adept; their own wheel): every foe within 12 m half as set on them as
+  it was, and any taunt of theirs given up, for whoever's next on its table to take it (a cloak's
+  whoosh). Ready again 30 seconds after.
 
 **Gear** (`core/gear.js`) goes in a slot for each part of a player, as in the old dungeon
 games' inventories: head, amulet, cloak, chest, bracers, gloves, belt, legs, boots, two rings, and
@@ -3409,6 +3425,12 @@ host.js `#orderUnit`, an `order` command; core/followers.js `UNIT_ORDERS`):
   `FALL_BACK`; then as they were told before);
 - **hold fire** (`hold`: they start no fights, taking on only those after them, following or
   waiting alike) or **at will** (`free`: after any enemy they see again);
+- **cover me** (`cover`: a hired warrior takes the foes on their leader off them with its taunts
+  for the next 8 seconds, even those they've taunted themselves, `TAUNT.cover`; a creature called
+  to their side roars, a war cry taking every foe near it, every 30 seconds; anyone else, refused:
+  "Only a warrior or a creature called to your side can cover you"; docs/WILDS.md *Whom they go
+  for*). It's on their followers' wheel's other side, at NE (a wheel kept from before, given it
+  there: app/wheel.js `WHEELS_VERSION` 3);
 - **their own ability** (`ability`, below);
 - or **go their own way** (dismissed: asked first, in talk or from the party alike, as it's for
   good).
@@ -3464,8 +3486,11 @@ of the first level, `NET_VERSION` 191).
   twentieth more armour; a ranger's hunter's eye, shots a tenth harder; a rogue's dirty tricks,
   one blow in ten bleeding; a mage's counsel, spells a tenth stronger; a cleric's blessing,
   healing a seventh stronger), added as the leader's outfitted (host.js `#outfit`), never to their
-  might; at level 10, **mastery** (`MASTERY`: a warrior's shield as a captain's, a ranger's dodging
-  one blow in seven, a rogue's one in five, a mage's stronger spells, a cleric's Detraumatize).
+  might, and a rogue learns to **slip away** (`KNACKS`, `MERCENARY.slip`: once a foe near it's on
+  it, every foe near it half as set on it, every half minute; docs/WILDS.md *Whom they go for*),
+  shown in the party menu's More; at level 10, **mastery** (`MASTERY`: a warrior's shield as a
+  captain's, and its war cry as three or more foes crowd its leader; a ranger's dodging one blow
+  in seven, a rogue's one in five, a mage's stronger spells, a cleric's Detraumatize).
 
 **Offered at the guilds** (host.js `hireOffer`, asked in talk: "Would you ride with me? (level 4,
 320 gold)"): each adventurer a level under the most the player can lead (the first at least), for
@@ -3492,14 +3517,15 @@ a trait (tireless, deadly, lucky or quick), and says so.
   player or an owner, Game options *Mercenaries can die*, a `rule` command, told to everyone as a
   `rules` event), the third fall is their last (`#fallForGood`).
 
-**How the wild weighs them** (docs/WILDS.md *A side's strength*): at about a third of their
-fighting value (`STRENGTH.hired`, 0.3), so four as mighty as their leader count about as one more
-like them would, not four; and as if standing while they're knocked down, so their getting up
-again brings no more of a pack. The wild goes for whoever's nearest, most often their leader, so
-they spare them less than another player would: counted at half (the user's first choice, "At
-half their worth"), a player with four of the tier's might lost as much as alone; at a third,
-about 0.85 of it at tiers 5 and 8 (the balance runner, docs/WILDS.md *Tuning it*; the user: "About
-a third").
+**How the wild weighs them** (docs/WILDS.md *A side's strength*): at half their fighting value
+(`STRENGTH.hired`, 0.5, the user's "At half their worth"), so four as mighty as their leader count
+about as two more like them would, not four; and as if standing while they're knocked down, so
+their getting up again brings no more of a pack. Before foes kept enmity, the wild went for
+whoever was nearest, most often their leader, and at half a player with four of the tier's might
+lost as much as alone, so they were counted at a third. Now a hired warrior takes the foes on its
+leader off them and holds them (docs/WILDS.md *Whom they go for*), and at half a player with four
+loses about 0.65 and 0.9 of what one alone does at tiers 5 and 8 (the balance runner,
+docs/WILDS.md *Tuning it*).
 
 **The share** (`SHARE`, `sharesOf`; host.js `#won`): each follower standing within 60 m of their
 leader takes 5 in a hundred of the gold they win (loot, a bundle, a reward, a bounty), a point

@@ -682,7 +682,7 @@ export class PartyPanel {
     // What a hired adventurer's grown into, beneath them (More: the member's `merc`, as the game
     // tells it): their level and how far to the next, their trust and the ways it's let them grow
     // (each rank's two, the one chosen pressed; to choose), what they wear (to take back), what
-    // they've done, their gift and mastery; and a name of the player's for them. Made again only
+    // they've done, their gift, knack and mastery; and a name of the player's for them. Made again only
     // when it's changed
     #grown(row, id, merc) {
         const key = JSON.stringify(merc);
@@ -738,7 +738,7 @@ export class PartyPanel {
 
         parts.push(line(merc.record));
 
-        for (const each of [merc.gift, merc.mastery, merc.renowned].filter(Boolean)) {
+        for (const each of [merc.gift, merc.knack, merc.mastery, merc.renowned].filter(Boolean)) {
             parts.push(line(each));
         }
 

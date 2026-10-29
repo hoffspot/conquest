@@ -15,14 +15,14 @@
 // Pure JavaScript, no DOM: it runs in the browser of the player who's hosting, or in Node.
 
 import { AFFLICTIONS, curedWith } from "./afflictions.js";
-import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH } from "./battle.js";
+import { Battle, FOE_MS, FOLLOW, KINDS, TALK_REACH, TAUNT } from "./battle.js";
 import { CACHE_BANDS, cacheBand, cacheClear, cacheCount, CACHES, cacheTier, elitePrize, openAround, rollCache, roundOf, startsOf } from "./caches.js";
 import { banditToll, clearedTurnsUp, clearRate, DIRECTOR, FINDS, foodFor, FRESH, freshTrail, HEALING_DRAUGHTS, noteOf, obstacleBox, OBSTACLES, PACING, peacefulNext, rollRemains, rollSpilled, shuffled, STRANGERS, TRACKLESS, WELL_RESTED } from "./director.js";
 import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./daytime.js";
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
-import { abilityLabel, abilityOf, BANES, bynameOf, capOf, FALL_BACK, freshRecord, GIFTS, GIVE_REACH, givable, hirePrice, LEVEL_XP, levelOfXp, MENDING, MERC_GEAR, MERCENARY, mercenaryOf, mercSlotOf, pickOf, recallPrice, renownOf, SHARE, sharesOf, trustOf, UNIT_ABILITIES, wayOf, wearable } from "./followers.js";
+import { abilityLabel, abilityOf, BANES, bynameOf, capOf, ENMITY_WEIGHTS, FALL_BACK, freshRecord, GIFTS, GIVE_REACH, givable, hirePrice, LEVEL_XP, levelOfXp, MENDING, MERC_GEAR, MERCENARY, mercenaryOf, mercSlotOf, pickOf, recallPrice, renownOf, SHARE, sharesOf, trustOf, UNIT_ABILITIES, wayOf, wearable } from "./followers.js";
 import { namePeople } from "./names.js";
 import { rumouredBy, rumouredOf, rumoursNear } from "./rumours.js";
 import { sightedFrom, SIGHTING } from "./sighting.js";
@@ -380,6 +380,16 @@ export const WILDS = Object.freeze({ count: 4, night: 1, about: 60, from: 30, to
 export const REINFORCE = Object.freeze({ grown: 1, from: 10 });
 
 /**
+ * A player's blows count for more in foes' enmity (battle.js ENMITY: their `enmityWeight`) while
+ * they've a shield in hand: `SHIELD_ENMITY` more a rank of their Shield (twice as much at Legend),
+ * FFXIV's tank stance as one earned by blocking, no button to it (the user: "Shield bonus +
+ * Taunt"). And a creature called by Summon comes in with a roar, those about it at it for
+ * CALLED_CRY_MS (battle.js warCry).
+ */
+export const SHIELD_ENMITY = 0.2;
+export const CALLED_CRY_MS = 1500;
+
+/**
  * A creature's flock called to it (battle.js #calls: the Ant Monster's ants, #flock): from `from`
  * metres behind it, `down` tiers under its own.
  */
@@ -678,7 +688,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 45;
+export const SNAPSHOT_VERSION = 46;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -792,6 +802,26 @@ export const SNAPSHOT_STEPS = Object.freeze({
             battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => (ids.has(actor.id) ? { rises: 1, downed: false, dodge: 0, abilityTimes: 1, ...actor } : actor)) },
         };
     },
+    // 46: each one's enmity (battle.js ENMITY): none yet, theirs from the next blow; taunted by no
+    // one; and how much a player's own count for in it (ENMITY_WEIGHTS: a player's, 1 till they're
+    // next outfitted); a seasoned rogue slipping away from foes, a Shield master's war cry
+    // (followers.js wayOf)
+    45: (snapshot) => {
+        const followers = new Map(snapshot.followers ?? []);
+        const companions = new Map(snapshot.companions ?? []);
+        const weight = (id) => (followers.has(id) ? mercenaryOf(followers.get(id)).enmity : companions.has(id) ? (companions.get(id).risen ? ENMITY_WEIGHTS.risen : ENMITY_WEIGHTS.called) : 1);
+        const knacks = (id) => {
+            if (!followers.has(id)) {
+                return {};
+            }
+
+            const { slips, cries } = mercenaryOf(followers.get(id));
+
+            return { slips: Boolean(slips), cries: Boolean(cries) };
+        };
+
+        return { ...snapshot, version: 46, battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => ({ enmity: {}, taunted: null, enmityWeight: weight(actor.id), ...knacks(actor.id), ...actor })) } };
+    },
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -895,6 +925,11 @@ export const REFUSALS = Object.freeze({
     guildhall: "That can only be chosen again in a guild hall.",
     rule: "Only the world's host can change that.",
     untargeted: "Set on an enemy first, for them to fight.",
+    cover: "Only a warrior or a creature called to your side can cover you.",
+    unseen: "They can't see you to be taunted.",
+    taunted: "Someone else's taunt holds them still.",
+    resisted: "It shrugs off taunts for now.",
+    unheard: "No foe near enough to hear you.",
     shop: "They've nothing like that to sell.",
     soldOut: "They've sold all they had of that today: there'll be more tomorrow.",
     full: "Your pack is full.",
@@ -3106,7 +3141,8 @@ export class Host {
     /**
      * A number that tells two copies of a world apart (docs/WAR.md M11: whether one that's
      * joined has gone astray from its host's): the battle's time, and everyone in it, where they
-     * are and how they are; the war's turn and clock; what's on the ground, and in each pack.
+     * are, how they are and whom they're on; the war's turn and clock; what's on the ground, and
+     * in each pack.
      */
     checksum() {
         let sum = 2166136261;
@@ -3127,6 +3163,11 @@ export class Host {
             mix(Math.round(actor.y * 1000));
             mix(Math.round(actor.hp * 100));
             mix(actor.dead ? 1 : 0);
+
+            // (Whom they're on: their enmity gone astray shows at once, not only as they wander)
+            for (let k = 0; k < (actor.target?.length ?? 0); k++) {
+                mix(actor.target.charCodeAt(k));
+            }
         }
 
         mix(this.war?.turn ?? 0);
@@ -3827,6 +3868,7 @@ export class Host {
         player.charms = charmsOf(player.progress);
         actor.dodge = bonus.dodge;
         actor.shield = player.progress.guard(bonus);
+        actor.enmityWeight = actor.shield ? 1 + SHIELD_ENMITY * player.progress.rank("shield") : 1;
 
         // (Blows sooner, health drawn from them, foes left bleeding: core/gear.js; and a legendary
         // weapon's effect, its charge begun again with another: core/legendary.js)
@@ -4727,8 +4769,9 @@ export class Host {
         return OK;
     }
 
-    // An ability learnt: a greater spell cast, or the next blow made stronger (and a target
-    // fought, if one's given); each blow's ability ready again only after a while
+    // An ability learnt: a greater spell cast, the next blow made stronger (and a target fought,
+    // if one's given), or a foe's enmity turned (#enmityAbility); each but a spell ready again only
+    // after a while
     #ability(player, actor, id, target) {
         const ability = ABILITIES[id];
 
@@ -4746,6 +4789,10 @@ export class Host {
 
         if ((player.readyAt[id] ?? 0) > this.battle.time) {
             return refuse("cooldown");
+        }
+
+        if (ability.taunt || ability.cry || ability.slip) {
+            return this.#enmityAbility(player, actor, id, ability, target);
         }
 
         // (A blow up close with a weapon for it; a shot from afar with one for that; a shield
@@ -4796,6 +4843,43 @@ export class Host {
         if (blow?.engage) {
             return this.command(actor.id, { type: "engage", target: foe.id, run: true });
         }
+
+        return OK;
+    }
+
+    // A taunt, a war cry, slipping away (ABILITIES taunt, cry, slip: battle.js taunt, warCry,
+    // slipAway; docs/WILDS.md *Whom they go for*): a taunt on a foe within TAUNT reach that can see
+    // them, refused if another's taunt holds it still or it's a boss shrugging them off; a war cry
+    // no foe hears, refused. Refused, it's still ready
+    #enmityAbility(player, actor, id, ability, target) {
+        if (ability.taunt) {
+            const foe = target === null ? null : this.battle.actor(target);
+
+            if (!foe || foe.dead || !this.canFight(actor, foe)) {
+                return refuse("target");
+            }
+
+            if (foe.map !== actor.map || distanceBetween(actor.square, foe.square) > TAUNT.reach) {
+                return refuse("far");
+            }
+
+            if (!this.battle.canSee(foe, actor)) {
+                return refuse("unseen");
+            }
+
+            if (!this.battle.taunt(actor.id, foe.id)) {
+                return refuse(this.battle.tauntProof(foe.id) ? "resisted" : "taunted");
+            }
+        } else if (ability.cry) {
+            if (!this.battle.warCry(actor.id)) {
+                return refuse("unheard");
+            }
+        } else {
+            this.battle.slipAway(actor.id);
+        }
+
+        player.readyAt[id] = this.battle.time + ability.cooldown;
+        this.#event("ability", { id: actor.id, ability: id });
 
         return OK;
     }
@@ -9111,6 +9195,15 @@ export class Host {
             return;
         }
 
+        // (After whom it's most set on, as it is: its top, battle.js ENMITY)
+        const on = this.battle.actor(target);
+
+        if (on && !on.dead && on.map === map) {
+            for (const more of ids) {
+                Object.assign(this.battle.actor(more), { target: on.id, lastSeen: this.battle.time });
+            }
+        }
+
         if (level >= 0) {
             delve.awake[level].push(...ids);
         }
@@ -11995,12 +12088,14 @@ export class Host {
         const id = `follower-${this.nextFollower++}`;
         const kept = this.#recordOf(one);
         const { weapon } = HIRES[kept.calling] ?? HIRES.warrior;
-        const { hp, power, armor, dodge, rises, cooldown, ...way } = mercenaryOf(kept, { made: makeOf, school: PEOPLE_SCHOOL[kept.people] ?? "fire" });
+        const { hp, power, armor, dodge, rises, cooldown, enmity, slips, cries, ...way } = mercenaryOf(kept, { made: makeOf, school: PEOPLE_SCHOOL[kept.people] ?? "fire" });
 
         this.followers.set(id, { leader: player.id, ...kept, waiting: false });
         this.battle.add({ id, kind: "follower", name: this.#calledBy(kept), weapon, team: player.realm, square, map, ai: "follow", leader: player.id, role: "guard", hp, power, armor, dodge, rises, shield: this.#mercShield(kept), ...way });
-        // (Their ability ready again as much sooner as their level and trust make it: #unitAbility)
-        this.battle.actor(id).abilityTimes = cooldown;
+        // (Their ability ready again as much sooner as their level and trust make it: #unitAbility;
+        // their blows as much for foes' enmity as their calling has them: ENMITY_WEIGHTS; a seasoned
+        // rogue slipping away, a Shield master's war cry: followers.js wayOf)
+        Object.assign(this.battle.actor(id), { abilityTimes: cooldown, enmityWeight: enmity, slips: Boolean(slips), cries: Boolean(cries) });
         this.#event("follower", { id: player.id, follower: id, name: this.#calledBy(kept), change: "joined", level: kept.level, ...(back ? { back } : {}) });
         this.#gifted(player, kept);
 
@@ -12031,9 +12126,9 @@ export class Host {
             return;
         }
 
-        const { hp, power, armor, dodge, rises, cooldown, ...way } = mercenaryOf(one, { made: makeOf, school: PEOPLE_SCHOOL[one.people] ?? "fire" });
+        const { hp, power, armor, dodge, rises, cooldown, enmity, slips, cries, ...way } = mercenaryOf(one, { made: makeOf, school: PEOPLE_SCHOOL[one.people] ?? "fire" });
 
-        Object.assign(actor, { name: this.#calledBy(one), power: { ...actor.power, ...power }, armor, dodge, rises, abilityTimes: cooldown, shield: this.#mercShield(one), casts: way.casts ? [...way.casts] : null, heals: way.heals ? [...way.heals] : null });
+        Object.assign(actor, { name: this.#calledBy(one), power: { ...actor.power, ...power }, armor, dodge, rises, abilityTimes: cooldown, enmityWeight: enmity, slips: Boolean(slips), cries: Boolean(cries), shield: this.#mercShield(one), casts: way.casts ? [...way.casts] : null, heals: way.heals ? [...way.heals] : null });
 
         if (actor.maxHp !== hp) {
             actor.hp = actor.dead ? 0 : Math.max(1, Math.round((actor.hp * hp) / actor.maxHp));
@@ -12821,6 +12916,19 @@ export class Host {
 
             one.waiting = false;
             Object.assign(unit, { ...following, assist: target.id, fallBackUntil: 0 });
+        } else if (order === "cover") {
+            // (Cover me: a hired warrior takes the foes on its leader off them as its taunt's ready,
+            // theirs or not, a while (battle.js TAUNT cover); a creature called roars, those about it
+            // at it; anyone else can't)
+            if (unit.tactic === "protect") {
+                one.waiting = false;
+                Object.assign(unit, { ...following, coverUntil: this.battle.time + TAUNT.cover });
+            } else if (one.creature && !one.risen && (unit.cryReadyAt ?? 0) <= this.battle.time) {
+                unit.cryReadyAt = this.battle.time + TAUNT.cry.cooldown;
+                this.battle.warCry(id);
+            } else {
+                return refuse("cover");
+            }
         } else if (order === "ability") {
             return this.#unitAbility(player, one, unit);
         } else if (order === "dismiss") {
@@ -13141,6 +13249,14 @@ export class Host {
             wards: spec.wards ?? null,
             wild: { creature, tier, temper: "aggressive", guard: 0, roam: 0, leash: 0, pack: id, leader: null, menace: false, unique: false, ...traitsOf(creature), companion: tamed ? "tamed" : risen ? "risen" : "called" },
         });
+        // (A shield for their caller in foes' enmity, one raised less so: ENMITY_WEIGHTS; one called
+        // coming in with a roar, those about it at it a moment: battle.js warCry)
+        this.battle.actor(id).enmityWeight = risen ? ENMITY_WEIGHTS.risen : ENMITY_WEIGHTS.called;
+
+        if (!risen && !tamed) {
+            this.battle.warCry(id, { ms: CALLED_CRY_MS });
+        }
+
         this.#event("roused", { ids: [id], creature });
         this.#event("companion", { id: player.id, companion: id, creature, change: tamed ? "tamed" : risen ? "risen" : "called" });
 

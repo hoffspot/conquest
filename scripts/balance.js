@@ -19,7 +19,8 @@
 // out of that fight, as in play (they'd wake at home), and once they all have, it's lost. For
 // each side and tier it says how strong the side was (S, and the opposition F against it), how
 // many foes they fought a fight, how long a fight went on (to its last blow), the hit points each
-// player lost in one (and a minute), how often a player fell and their allies were knocked down,
+// player lost in one (and a minute), those their allies bore (and what share of the wild's blows
+// that was, drawn off the players), how often a player fell and their allies were knocked down,
 // and how many fights were won; and, beside one player alone at the tier, the share of what one
 // alone loses that each of them does (the aims: SIDES `aim`). Fights go one way or another by
 // what's about, so it takes a good many (`--fights`, on several worlds: `--seeds`) to say.
@@ -34,18 +35,20 @@ import { buildWorld } from "../client/js/core/overworld.js";
 import { landAt } from "../client/js/core/worldplan/plan.js";
 
 /**
- * The sides set against the wild: how many players, how many hired adventurers with the first
- * (warriors, each of the level a guild offers one as mighty as the tier: a level under the most
+ * The sides set against the wild: how many players, the callings of the hired adventurers with
+ * the first (each of the level a guild offers one as mighty as the tier: a level under the most
  * they could lead, core/followers.js capOf; docs/WAR.md *Mercenaries that grow*), how many
  * creatures it's called; and the share of what one alone loses that each of its players should
  * (`aim`: a side as strong as N alike, about N^-0.2, core/strength.js SCALING; four together about
- * three quarters, a player with four hired adventurers about four fifths).
+ * three quarters, a player with four hired adventurers about four fifths). `hirelings` are four
+ * warriors; a `company` one of each calling that fights in the line, and a cleric.
  */
 export const SIDES = Object.freeze({
     solo: { players: 1, aim: 1 },
     pair: { players: 2, aim: 0.87 },
     four: { players: 4, aim: 0.75 },
-    hirelings: { players: 1, hirelings: 4, aim: 0.8 },
+    hirelings: { players: 1, hired: ["warrior", "warrior", "warrior", "warrior"], aim: 0.8 },
+    company: { players: 1, hired: ["warrior", "cleric", "mage", "ranger"], aim: 0.8 },
     summoner: { players: 1, summons: 5, aim: 0.8 },
 });
 
@@ -133,8 +136,9 @@ export function boosting(host, ids, times) {
 
 /**
  * A side (SIDES) against the wild at a tier of land, `fights` times over (fresh ground each
- * time): { side, tier, strength, opposition, fights: [{ foes (fought), seconds (to the last blow),
- * taken (each player's lost hit points, on average), falls, knocked (their allies, down),
+ * time): { side, tier, strength, opposition, players, fights: [{ foes (fought), seconds (to the
+ * last blow), taken (each player's lost hit points, on average), borne (all their allies'), falls,
+ * knocked (their allies, down),
  * cleared (won: before RUN.most, a player standing), rested (camp made first) }] }. On the world
  * of `seed`.
  */
@@ -145,7 +149,7 @@ export function balance(name, tier, { fights = 4, seed = 2 } = {}) {
     const players = Array.from({ length: side.players }, (each, k) => (k ? `player-${k + 1}` : HOST_PLAYER));
 
     // (The first's hired adventurers with them as a character brings them: host.js #follow)
-    const hirelings = Array.from({ length: side.hirelings ?? 0 }, (each, k) => ({ name: `Hireling ${k + 1}`, calling: "warrior", sex: "m", seed: k + 1, level: Math.max(1, capOf(tier) - 1) }));
+    const hirelings = (side.hired ?? []).map((calling, k) => ({ name: `Hireling ${k + 1}`, calling, sex: "m", seed: k + 1, level: Math.max(1, capOf(tier) - 1) }));
 
     players.forEach((id, k) => host.join({ id, hero: { ...HERO, name: `Player ${k + 1}` }, followers: k ? [] : hirelings }));
     host.populate();
@@ -192,7 +196,7 @@ export function balance(name, tier, { fights = 4, seed = 2 } = {}) {
     const standing = () => players.filter((id) => !host.battle.actor(id).dead);
     const { strength, opposition } = host.strengthOf(players[0]);
     const foes = () => [...host.wild.keys()].filter((id) => !host.companions.has(id)).map((id) => host.battle.actor(id)).filter((actor) => actor && !actor.dead && actor.map === "town" && hypot(actor.x - lead.x, actor.y - lead.y) <= RUN.near);
-    const report = { side: name, tier, strength, opposition, fights: [] };
+    const report = { side: name, tier, strength, opposition, players: players.length, fights: [] };
 
     for (let f = 0; f < fights; f++) {
         // (What's left of the wild about the last ground let go, as if walked away from: else it
@@ -225,7 +229,7 @@ export function balance(name, tier, { fights = 4, seed = 2 } = {}) {
 
         const met = new Set();
         const taken = new Map(players.map((id) => [id, 0]));
-        let [seconds, falls, knocked, struck] = [0, 0, 0, 0];
+        let [seconds, falls, knocked, struck, borne] = [0, 0, 0, 0, 0];
 
         // (Each player running at the nearest of them coming at the side, else the nearest, till
         // none's left near, or none's come to blows with them for RUN.quiet; or till every one of
@@ -256,6 +260,11 @@ export function balance(name, tier, { fights = 4, seed = 2 } = {}) {
                     knocked++;
                 }
 
+                // (One of their allies struck by a foe: what they bore of it)
+                if (event.type === "hit" && (host.followers.has(event.id) || host.companions.has(event.id)) && !side.has(event.by)) {
+                    borne += event.damage ?? 0;
+                }
+
                 if (event.type === "hit" && taken.has(event.id) && !players.includes(event.by)) {
                     taken.set(event.id, taken.get(event.id) + (event.damage ?? 0));
                 }
@@ -272,7 +281,7 @@ export function balance(name, tier, { fights = 4, seed = 2 } = {}) {
         }
 
         // (Its time to the last blow; won if it ended before RUN.most with a player standing)
-        report.fights.push({ foes: met.size, seconds: struck, taken: [...taken.values()].reduce((sum, each) => sum + each, 0) / players.length, falls, knocked, cleared: seconds < RUN.most && standing().length > 0, rested: rested === players.length });
+        report.fights.push({ foes: met.size, seconds: struck, taken: [...taken.values()].reduce((sum, each) => sum + each, 0) / players.length, borne, falls, knocked, cleared: seconds < RUN.most && standing().length > 0, rested: rested === players.length });
     }
 
     return report;
@@ -291,15 +300,17 @@ function advance(host, ms, keep = () => {}) {
 }
 
 /**
- * A run's fights summed up: { foes, seconds, taken, falls, knocked } on average, a fight; the hit
- * points each player lost a minute (`rate`: over all its fights' time); and how many of its fights
- * were won (`cleared`).
+ * A run's fights summed up: { foes, seconds, taken, borne, falls, knocked } on average, a fight;
+ * the hit points each player lost a minute (`rate`: over all its fights' time); the share of what
+ * the wild struck the side for that its allies bore (`drawn`: drawn off the players); and how
+ * many of its fights were won (`cleared`).
  */
-export function summary({ fights }) {
+export function summary({ fights, players = 1 }) {
     const mean = (key) => fights.reduce((sum, fight) => sum + (fight[key] ?? 0), 0) / Math.max(1, fights.length);
     const time = fights.reduce((sum, fight) => sum + fight.seconds, 0);
+    const [borne, taken] = [mean("borne"), mean("taken") * players];
 
-    return { foes: mean("foes"), seconds: mean("seconds"), taken: mean("taken"), rate: time ? (fights.reduce((sum, fight) => sum + fight.taken, 0) * 60) / time : 0, falls: mean("falls"), knocked: mean("knocked"), cleared: fights.filter((fight) => fight.cleared).length };
+    return { foes: mean("foes"), seconds: mean("seconds"), taken: mean("taken"), rate: time ? (fights.reduce((sum, fight) => sum + fight.taken, 0) * 60) / time : 0, borne, drawn: borne + taken > 0 ? borne / (borne + taken) : 0, falls: mean("falls"), knocked: mean("knocked"), cleared: fights.filter((fight) => fight.cleared).length };
 }
 
 function main() {
@@ -336,10 +347,10 @@ function main() {
 
     const fixed = (value, places = 2) => (value === null ? "—" : value.toFixed(places));
 
-    console.log("side       tier     S     F   foes  seconds   taken  a min  falls  knocked  won    share    aim");
+    console.log("side       tier     S     F   foes  seconds   taken  a min   borne  drawn  falls  knocked  won    share    aim");
 
     for (const row of rows) {
-        console.log(`${row.side.padEnd(10)} ${String(row.tier).padStart(4)} ${fixed(row.S).padStart(5)} ${fixed(row.F).padStart(5)} ${fixed(row.foes, 1).padStart(6)} ${fixed(row.seconds, 0).padStart(8)} ${fixed(row.taken, 0).padStart(7)} ${fixed(row.rate, 0).padStart(6)} ${fixed(row.falls).padStart(6)} ${fixed(row.knocked).padStart(8)} ${`${row.cleared}/${row.fights}`.padStart(4)} ${fixed(row.share).padStart(8)} ${fixed(row.aim).padStart(6)}`);
+        console.log(`${row.side.padEnd(10)} ${String(row.tier).padStart(4)} ${fixed(row.S).padStart(5)} ${fixed(row.F).padStart(5)} ${fixed(row.foes, 1).padStart(6)} ${fixed(row.seconds, 0).padStart(8)} ${fixed(row.taken, 0).padStart(7)} ${fixed(row.rate, 0).padStart(6)} ${fixed(row.borne, 0).padStart(7)} ${fixed(row.drawn).padStart(6)} ${fixed(row.falls).padStart(6)} ${fixed(row.knocked).padStart(8)} ${`${row.cleared}/${row.fights}`.padStart(4)} ${fixed(row.share).padStart(8)} ${fixed(row.aim).padStart(6)}`);
     }
 }
 

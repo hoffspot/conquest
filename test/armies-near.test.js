@@ -119,8 +119,9 @@ describe("the armies in the world near a player (host.js ARMY_NEAR, war.js)", ()
         const routed = () => events.find(({ type, event }) => type === "war" && event.type === "battle" && event.routed);
         let clash = null;
 
-        for (let k = 0; k < 240 && !routed(); k++) {
-            events.push(...run(host, 1000, () => (war.relations["human|orc"] = { state: "hostile", since: 0 })));
+        // (A step at a time, to stop as it's routed: what it lost reckoned as it stood then)
+        for (let k = 0; k < 240000 / STEP_MS && !routed(); k++) {
+            events.push(...run(host, STEP_MS, () => (war.relations["human|orc"] = { state: "hostile", since: 0 })));
             clash ??= [...host.clashes.values()][0] ?? null;
         }
 
