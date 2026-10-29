@@ -2,6 +2,7 @@ import { expect, test } from "./fixtures.js";
 import { LEFT_OUT, licensedModelsHere } from "../scripts/licensed-models.js";
 import { Explored } from "../client/js/core/explored.js";
 import { behemothSides, BOMBERS, ENGINES, INVASION, REWARD, SIZE } from "../client/js/core/invasions.js";
+import { FIELD } from "../client/js/core/engagement.js";
 import { stagesOf } from "../client/js/core/burnt.js";
 import { branchesFound, fareOf } from "../client/js/core/portals.js";
 import { NATURAL } from "../client/js/core/weapons.js";
@@ -18368,7 +18369,7 @@ test("an invasion: the raiders' war horn blown twice where they come out, the to
     await expect(thanks).toBeHidden();
 });
 
-test("an invasion's two lines charge each other once near: the raiders' horn from their line and the town's answering from its own, both running, and those of their lines who fight up close in one press, not standing in their ranks", async ({ page }) => {
+test("an invasion's two lines charge each other once near: the raiders' horn from their line and the town's answering from its own, both running, and those of their lines who fight up close in one press, holding the line: none standing in their ranks with a foe near, none after one far from their place", async ({ page }) => {
     test.setTimeout(180000);
     await playing(page, "/?play&seed=2");
 
@@ -18451,7 +18452,10 @@ test("an invasion's two lines charge each other once near: the raiders' horn fro
 
     // A second and a half of it, a look each half second: those who fight up close in the press,
     // and few standing in their ranks with an enemy near all that while (one between foes, its
-    // last just cut down, looks for the next a moment after: battle.js RETHINK_MS)
+    // last just cut down, looks for the next a moment after: battle.js RETHINK_MS); and the line
+    // held, few after a foe further from their place in it than their role holds (core/
+    // engagement.js holdOf: FIELD charge `hold`; a little more, their place moving as their body
+    // does, the foe as they're struck)
     const looks = [];
 
     for (let k = 0; k < 4; k++) {
@@ -18461,13 +18465,28 @@ test("an invasion's two lines charge each other once near: the raiders' horn fro
 
         looks.push(
             await page.evaluate(
-                (sight) =>
+                ({ sight, hold }) =>
                     window.lineFighters().map(({ fighters, foes }) => {
+                        const { game } = window.pellagos;
                         const near = (one, within) => foes.some((foe) => Math.hypot(foe.x - one.x, foe.y - one.y) <= within);
+                        // (Their place in their body's line: core/formation.js placeAt)
+                        const place = (one) => {
+                            const { anchor, facing } = game.battle.formations[one.formation.id];
+                            const [right, back] = one.formation.slot;
 
-                        return { fighters: fighters.length, thick: fighters.filter((one) => near(one, 3)).length, idle: fighters.filter((one) => one.target === null && near(one, sight)).map(({ id }) => id) };
+                            return [anchor[0] - Math.cos(facing) * right - Math.sin(facing) * back, anchor[1] + Math.sin(facing) * right - Math.cos(facing) * back];
+                        };
+                        const far = (one) => {
+                            const on = one.target === null ? null : game.battle.actor(one.target);
+                            const record = game.host.soldiers.get(one.id);
+                            const [x, y] = place(one);
+
+                            return Boolean(on) && Math.hypot(on.x - x, on.y - y) > (record.chief || record.commander ? hold.chief : hold[record.role]) + 2;
+                        };
+
+                        return { fighters: fighters.length, thick: fighters.filter((one) => near(one, 3)).length, idle: fighters.filter((one) => one.target === null && near(one, sight)).map(({ id }) => id), far: fighters.filter(far).length };
                     }),
-                INVASION.charge.sight,
+                { sight: FIELD.charge.sight, hold: FIELD.charge.hold },
             ),
         );
     }
@@ -18480,5 +18499,6 @@ test("an invasion's two lines charge each other once near: the raiders' horn fro
         }
 
         expect(standing.length, JSON.stringify(looks)).toBeLessThanOrEqual(looks[0][side].fighters * 0.2);
+        expect(looks.reduce((sum, look) => sum + look[side].far, 0), JSON.stringify(looks)).toBeLessThanOrEqual(looks[0][side].fighters * 0.25);
     }
 });

@@ -19,6 +19,8 @@ let COMMANDER;
 let JOB;
 let TROPHY;
 let FIELD;
+let holdOf;
+let placeAt;
 let FORMATION;
 let behemothReward;
 let behemothSides;
@@ -69,8 +71,8 @@ before(async () => {
     ({ ALARM, BANDS, BEHEMOTH, BEHEMOTH_REWARD, BOMBERS, ENGINES, INVASION, REWARD, SIZE, bandFor, behemothReward, behemothSides, bombersOf, clockOf, criesOf, dueAfter, isBehemoth, isDue, isSize, raiderArms, raiderName, rewardOf, sidesOf, sizeFor, thanksOf } = await import("../client/js/core/invasions.js"));
     ({ RIFT } = await import("../client/js/core/creatures.js"));
     ({ DAY } = await import("../client/js/core/daytime.js"));
-    ({ FORMATION, ROLES } = await import("../client/js/core/formation.js"));
-    ({ COMMANDER, FIELD, JOB, TROPHY } = await import("../client/js/core/engagement.js"));
+    ({ FORMATION, placeAt, ROLES } = await import("../client/js/core/formation.js"));
+    ({ COMMANDER, FIELD, holdOf, JOB, TROPHY } = await import("../client/js/core/engagement.js"));
     ({ BUDGET, InvasionBudget } = await import("../client/js/app/budget.js"));
     ({ OPENINGS } = await import("../client/js/core/crying.js"));
     ({ BOMBS, FOE_MS, KINDS, STEP_MS } = await import("../client/js/core/battle.js"));
@@ -459,7 +461,7 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         }
     });
 
-    it("charges once its lines are near, the town's halting first while its archers loose: both run at each other and meet between them, everyone of either side who fights up close going after the other; few of their lines standing in their ranks with an enemy near", () => {
+    it("charges once its lines are near, the town's halting first while its archers loose: both run at each other and meet between them; then each holds its line, those who fight up close at the enemy before them or helping their own beside them, most of them at it, none chasing a foe from their place across the field", () => {
         const game = inTown({ invasion: { clock: INVASION.first } });
         const { host } = game;
 
@@ -490,51 +492,63 @@ describe("an invasion in the world (core/host.js #invade)", () => {
         assert.deepEqual(charges[0].raiders, theirs.anchor);
         assert.deepEqual(charges[0].town, ours.anchor);
 
-        // (Those who fight up close going after the enemy as far as the charge goes; the archers and
-        // healers as they did)
+        // (Those who fight up close holding the line from now, as their roles do, their lines'
+        // formations holding it; the archers and healers as they did, keeping off a foe come at them)
         const close = (id) => INVASION.close.includes(host.soldiers.get(id).role) || host.soldiers.get(id).chief;
         const all = [...invasion.invaders, ...invasion.defenders].map((id) => host.battle.actor(id));
 
-        assert.ok(all.filter(({ id }) => close(id)).every(({ leash, sight }) => leash === INVASION.charge.leash && sight === INVASION.charge.sight));
-        assert.ok(all.filter(({ id }) => host.soldiers.get(id).role === "archer").every(({ leash, sight }) => leash === ROLES.archer.leash && sight === undefined));
+        assert.ok(all.filter(({ id }) => close(id)).every(({ id, leash, sight }) => leash === holdOf(host.soldiers.get(id)) && sight === FIELD.charge.sight));
+        assert.ok(all.filter(({ id }) => host.soldiers.get(id).role === "archer").every(({ leash, sight, keep }) => leash === ROLES.archer.leash && sight === undefined && keep === FIELD.archers.keep));
+        assert.ok(engagement.sides.flatMap(({ bodies }) => bodies).every(({ formation }) => host.battle.formations[formation].hold === FIELD.charge.lap));
 
         // (Met between them: the raiders' line came on as the town's did, and their fronts met)
         play(game, 15000, () => !theirs.charge && !ours.charge);
         assert.ok(Math.hypot(theirs.anchor[0] - before.raiders[0], theirs.anchor[1] - before.raiders[1]) > INVASION.charge.at / 4, "the raiders charged on");
         assert.ok(apart() <= INVASION.charge.gap + 0.5, `their fronts ${apart().toFixed(1)} m apart`);
 
-        // (From the first blow, those of their lines who fight up close in the thick of it, few of
-        // them standing in their ranks with an enemy near; not those held back behind them)
+        // (From the first blow, over the next few seconds: most of those of their lines who fight
+        // up close and stand in their places at it (not those coming up to them, nor those held
+        // back behind); and none of a body standing where it is fighting a foe further from their
+        // place than one of their own beside them would be, helped: FIELD charge `lap`. Not one
+        // whose body's moved or turned in the last 2 s, closing up or wheeling: their place goes
+        // with it, they finishing the fight they're in where they stood)
         play(game, 30000, () => invasion.fightAt !== null && host.battle.time - invasion.fightAt >= 10000);
 
         const lines = new Set(engagement.sides.flatMap(({ bodies }) => bodies.filter(({ part }) => ["left", "centre", "right"].includes(part)).map(({ formation }) => formation)));
-        const standing = (ids) => ids.map((id) => host.battle.actor(id)).filter((one) => one && !one.dead && close(one.id) && lines.has(one.formation?.id));
-        const [raiders, town] = [standing(invasion.invaders), standing(invasion.defenders)];
-        const near = (one, foes, within) => foes.some((foe) => !foe.dead && Math.hypot(foe.x - one.x, foe.y - one.y) <= within);
-        const enemies = (one) => (invasion.invaders.includes(one.id) ? invasion.defenders : invasion.invaders).map((id) => host.battle.actor(id)).filter(Boolean);
-
-        for (const [side, ones] of [["raiders", raiders], ["town", town]]) {
-            const thick = ones.filter((one) => near(one, enemies(one), 3)).length;
-
-            assert.ok(thick >= ones.length * 0.6, `${side}: ${thick} of ${ones.length} in the thick of it`);
-        }
-
-        // (Few standing with an enemy near, over the next few seconds: one here and there between
-        // foes, each looking again only so often, core/battle.js RETHINK_MS)
-        const idle = { raiders: [0, 0], town: [0, 0] };
+        const placeOf = (one) => placeAt(host.battle.formations[one.formation.id], one.formation.slot);
+        const off = (one, [x, y]) => Math.hypot(one.x - x, one.y - y);
+        const [placed, chases] = [[0, 0], []];
+        const stood = [];
 
         for (let k = 0; k < 8; k++) {
-            for (const [side, ones] of [["raiders", standing(invasion.invaders)], ["town", standing(invasion.defenders)]]) {
-                idle[side][0] += ones.filter((one) => one.target === null && near(one, enemies(one), INVASION.charge.sight)).length;
-                idle[side][1] += ones.length;
+            stood.push(new Map([...lines].map((id) => [id, { anchor: [...host.battle.formations[id].anchor], facing: host.battle.formations[id].facing }])));
+
+            const before = stood.at(-5) ?? stood[0];
+            const standing = (id) => {
+                const [then, now] = [before.get(id), stood.at(-1).get(id)];
+
+                return Math.hypot(now.anchor[0] - then.anchor[0], now.anchor[1] - then.anchor[1]) <= 0.5 && Math.abs(now.facing - then.facing) <= 0.05 && !host.battle.formations[id].to;
+            };
+
+            for (const one of [...invasion.invaders, ...invasion.defenders].map((id) => host.battle.actor(id)).filter((each) => each && !each.dead && close(each.id) && lines.has(each.formation?.id))) {
+                const place = placeOf(one);
+                const target = one.target === null ? null : host.battle.actor(one.target);
+
+                if (off(one, place) <= FIELD.charge.lap - 2) {
+                    placed[0] += one.target !== null ? 1 : 0;
+                    placed[1]++;
+                }
+
+                if (target && !target.dead && standing(one.formation.id)) {
+                    chases.push(off(target, place));
+                }
             }
 
             host.advance(500);
         }
 
-        for (const [side, [stood, of]] of Object.entries(idle)) {
-            assert.ok(stood <= of * 0.1, `${side}: ${stood} of ${of} standing with an enemy near, over 4 s`);
-        }
+        assert.ok(placed[0] >= placed[1] * 0.5, `${placed[0]} of ${placed[1]} in their places at it, over 4 s`);
+        assert.ok(chases.length && Math.max(...chases) <= FIELD.charge.lap + 2, `none fighting a foe across the field from their place (the furthest ${Math.max(...chases).toFixed(1)} m)`);
     });
 
     it("thanks the player for the raiders they felled, and a share of them brings the lord's purse and a rare piece from the armoury", () => {

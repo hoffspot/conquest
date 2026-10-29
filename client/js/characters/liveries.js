@@ -38,6 +38,25 @@ export const LIVERIES = Object.freeze({
 /** The peoples with a livery. */
 export const LIVERIED = Object.freeze(Object.keys(LIVERIES));
 
+/**
+ * Each band's standard (core/invasions.js BANDS), carried by its commander's standard-bearer (a
+ * people's is their livery's): its cloth (`main`), its trim and emblem in it, its finial's metal;
+ * the bandits', the cult's and the corsairs' ragged (`ragged`), the others cut in two tails.
+ */
+export const BAND_STANDARDS = Object.freeze({
+    bandits: Object.freeze({ main: "#4a3a2a", trim: "#9a2a1c", metal: "#6a625a", emblem: "claws", ragged: true }),
+    northmen: Object.freeze({ main: "#8a2a1e", trim: "#e2d8c0", metal: "#8a8a88", emblem: "serpent", ragged: false }),
+    cult: Object.freeze({ main: "#1e1616", trim: "#d8641c", metal: "#3a3230", emblem: "sun", ragged: true }),
+    sellswords: Object.freeze({ main: "#4e5258", trim: "#d0a43c", metal: "#b8b8b4", emblem: "crown", ragged: false }),
+    corsairs: Object.freeze({ main: "#181818", trim: "#e8e2d0", metal: "#6a6460", emblem: "claws", ragged: true }),
+});
+
+/** Whose standards there are: each people's with a livery, and each band's. */
+export const STANDARDS = Object.freeze([...LIVERIED, ...Object.keys(BAND_STANDARDS)]);
+
+/** A standard's colours (`who`: a people, or a band): its livery's, or the band's own (BAND_STANDARDS); anyone else's, the humans'. */
+export const standardOf = (who) => LIVERIES[who] ?? BAND_STANDARDS[who] ?? LIVERIES.human;
+
 // A people with a livery (anyone else wears the humans')
 const liveried = (people) => (LIVERIES[people] ? people : "human");
 

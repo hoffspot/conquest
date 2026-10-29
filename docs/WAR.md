@@ -2444,12 +2444,14 @@ model viewer*: `?person=raider-northmen&weapon=throwingAxes`, `?person=chief-cul
   band that stands off (the Ashen Cult) stands, and the town's charges on to its front. Both sides'
   horns sound for it, the raiders' from their line and the town's 1.2 s after from its own (the
   "invasion" event's `charge`). From then on everyone of either side who fights up close (their
-  shield lines and two-handers, the rear guards too, their chiefs, and any who come up after) goes
-  after an enemy as far as 30 m from their place in their line, looking that far for one (not a
-  soldier's 12 m: battle.js `SIGHT`, the actor's `sight`), so all of them close and fight in one
-  press, the archers and casters still shooting from their line and the healers keeping back.
-  Without it, the lines halted short of each other at the first blow, a few at the front
-  fighting while the rest stood in their ranks, out of reach. Measured on the first bandits
+  shield lines and two-handers, the rear guards too, their chiefs, and any who come up after)
+  holds the line (*Battles*, below: going after an enemy no further from their place in it than
+  their role holds, 5 to 7 m, looking 12 m; with none that near, to the help of their own within
+  10 m), so all of them close and fight in one press, as a line, the archers and casters still
+  shooting from their line and the healers keeping back. (Till lines held, each went after an
+  enemy as far as 30 m from their place, looking that far, chasing foes out of the press; and
+  before that, the lines halted short of each other at the first blow, a few at the front
+  fighting while the rest stood in their ranks, out of reach.) Measured on the first bandits
   in seed 2, 10 seconds from the first blow, 23 of the 29 raiders who fight up close were in the
   thick of it (within 3 m of an enemy; 13 of 22 before) and 21 of the town's 34 (19 of 31), and
   at 30 seconds none of the town's stood in its ranks (16 of 17 before). Since battles open with
@@ -2457,9 +2459,14 @@ model viewer*: `?person=raider-northmen&weapon=throwingAxes`, `?person=chief-cul
   10 seconds on the outnumbered line's being cut down; so the browser test looks from the lines'
   meeting (a quarter of either's within 3 m of an enemy), two seconds on, half a second apart
   for a second and a half: at least half of each in the thick of it at each look, and no more
-  than a fifth standing in their ranks with an enemy within 30 m all that while (not one only
+  than a fifth standing in their ranks with an enemy within 12 m all that while (not one only
   between foes, its last just cut down: a line soldier looks for its next a moment after,
-  battle.js `RETHINK_MS`). Measured once, at 10 seconds, it failed on a slow runner.
+  battle.js `RETHINK_MS`); and the line held, no more than a quarter as many as stand at the
+  first look, over the four, after a foe more than 2 m further from their place than their role
+  holds. Measured once, at 10 seconds, it failed on a slow runner. Holding the line, the smallest
+  invasion of seeds 2 to 9 has 56% to 100% of each side's in the thick of it at each look, none
+  standing in its ranks with a foe near, and at most 2 of 8 looks' fighters (about 100) after a
+  foe past their hold.
 
 Then the two lines meet and grind. **Reinforced** (`reinforce`,
 `#reinforceInvasion`): from the first blow, for three minutes, every 15 seconds each side's fallen
@@ -2686,7 +2693,9 @@ opposite it; a reserve and the side's commander with their household held back; 
 morale its own, so one can break alone, leaving its neighbour's flank bare; and each band its own
 way of fighting. The rules are pure data and arithmetic; the host keeps each battle as plain data
 (with its invasion, field battle, armies' clash or last stand, in its snapshot: `SNAPSHOT_VERSION`
-41) and steps it from the battle as it stands, as deterministic as it.
+41; and from 48, the lines held, the breaks gone through and the archers given ground: a world
+kept from before carried on with the lines of a battle at it held) and steps it from the battle as
+it stands, as deterministic as it.
 
 **How a side stands** (`BODIES`, `bodiesOf`, `layoutOf`, `offsetsOf`; the host's `#formSide`):
 - **Its line**: three bodies, a left, a centre and a right, the centre two fifths of it and each
@@ -2703,11 +2712,17 @@ way of fighting. The rules are pure data and arithmetic; the host keeps each bat
   bring down as a soldier, striking 1.3 times as hard, their armour taking a fifth more off each
   blow), named as who they lead have it (`COMMANDERS`: "Bandit King Mord", "Jarl Ulfgar", "Ash
   Prophet Vael", "Captain Varro", "Corsair Captain Saltjaw"; a town's "Captain of the Guard
-  Maren"; an army's "General Severa"); the next their standard-bearer ("Northern
-  standard-bearer"), the rest their household guards ("Northern huscarl", "Bandit king's man",
-  "Human household guard"), each 1.8 times as hard to bring down, striking 1.2 times as hard, their
-  armour taking 15% more. A commander's plate is edged and named in gold, as an elite's; a
-  standard-bearer's name is under a pennant (app/hud.js `track` `rank`).
+  Maren"; an army's "General Severa"); the first of its shield line after them their
+  standard-bearer ("Northern standard-bearer"), the rest their household guards ("Northern
+  huscarl", "Bandit king's man", "Human household guard"), each 1.8 times as hard to bring down,
+  striking 1.2 times as hard, their armour taking 15% more. A commander's plate is edged and named
+  in gold, as an elite's; a standard-bearer's name is under a pennant (app/hud.js `track` `rank`).
+- **Its standard**: borne by its standard-bearer in the hand their shield would be in, so they
+  carry none (a cult's standard-bearer a sword for their staff, a weapon held in both hands): their
+  people's in its colours with its emblem, or their band's own (docs/CHARACTERS.md *Uniforms and
+  livery*), drawn in full and in their crowd as a kind of its own (app/game.js `#crowdKind`). An
+  army's, made so as it's first drawn up (`#promote`), is told the game ("standard") to be drawn
+  bearing it from then on.
 
 **How it goes** (`stepEngagement`, `FIELD`):
 1. **The march**: each side's bodies march on the enemy's centre abreast, keeping their places in
@@ -2718,15 +2733,68 @@ way of fighting. The rules are pure data and arithmetic; the host keeps each bat
    at the enemy's weakest body (`FIELD.probe`), back after 7 seconds or once half of them are down.
    Neither side looses (a side too few to stand in three bodies doesn't): straight to the charge.
 3. **The charge**: each body of the line at the one opposite it (our left at their right:
-   `pairOf`), at a run, on till their fronts are 2 m apart; everyone who fights up close goes
-   after an enemy as far as 30 m from their place, looking as far.
-4. **At it**: each body as its side fights. A body whose enemy before it is gone wheels in on the
-   nearest flank of the enemy's there is (`flank`); a wing's two-handers, once it's been at it 4
+   `pairOf`), at a run, on till their fronts are 2 m apart.
+4. **Holding the line** (`FIELD.charge`, `holdOf`; battle.js formation `hold`): from the charge
+   on, each who fights up close goes after an enemy no further from their place in their body
+   than their role holds: the shield line 5 m (just across the gap between the fronts, at the foes
+   before it and its neighbours'), the two-handers behind its ends 7 m, the chiefs and the
+   household 7 m; looking 12 m. So a line fights as a line, none leaving it to chase a foe unless
+   they're sent (flankers, a reserve, a breakthrough):
+   - **Its own fallen, the nearest**: one whose foe falls takes the nearest foe, not whoever they've
+     the most enmity for; their enmity only turns them from the one they're on to another past it
+     by its margin (docs/WILDS.md *Whom they go for*), and a taunt still holds them.
+   - **Not drawn out by the arrows**: struck from beyond their hold, by an archer's shot, they keep
+     their place (battle.js `#leashed`), where one who isn't holding a line goes after whoever
+     struck it.
+   - **Helping their neighbours**: one with no foe that near goes to the help of one of their own
+     fighting a foe within 10 m of their place (`lap`), so the longer line's ends lap round the
+     shorter's.
+   - **Closing up**: the ranks behind step up as the front's fall, and a body narrows about its
+     middle as it thins (battle.js `#closeRanks`), so a hole between two bodies shows as open
+     ground.
+5. **At it**: each body as its side fights. A body standing (not held back) faces the nearest body
+   of the enemy's within 12 m of its front, turning once it's more than an eighth of a turn off it,
+   as one that's wheeled onto a flank or come up beside its own does once it's there. A body whose
+   enemy before it is gone wheels in on the nearest flank of the enemy's there is (`flank`); a wing's two-handers, once it's been at it 4
    seconds, are sent wide round the end of the enemy's line, 10 m out, then in on its rear (`flankers`,
    in a formation of their own: `${body}:flank`). Its reserve, then (no sooner than 10 seconds
    after) its household, are sent in where a body of its line is giving way (its morale under
-   0.45), or through a gap where one of the enemy's has broken (`commit`); a side whose whole line
-   is broken throws in whatever it holds back, the last throw.
+   0.45); a side whose whole line is broken throws in whatever it holds back, the last throw.
+6. **A body standing idle** (`FIELD.idle`): fewer than half its shield line and two-handers
+   fighting for 3 seconds. With an enemy who fights up close within 12 m of it, it closes up with
+   them, its whole front at them, not one end of it; with none, the enemy massing elsewhere, a body
+   of its line wheels on the flank of the nearest body of theirs (a side that wheels), or comes up
+   beside the nearest of its own that's fighting (the cult, who don't), so no stretch of a line
+   stands idle while the battle's fought beside it ("...comes up beside the centre!"); else (a
+   reserve or household sent in, done with what it was sent to) it goes at the nearest body of
+   theirs still standing. Its commander fallen, it only closes up or goes at them, and only after 9
+   seconds, so no battle's left with two sides standing apart.
+7. **A break in the enemy's line** (`FIELD.breach`, `TACTICS` `breach`, `breachesOf`): a body of
+   their line broken and run, where it stood; or a hole torn in it, the open ground between two of
+   their bodies' fronts 4.8 m wider than it was formed. Seen by a side with a body of its line
+   within 25 m of it, each break once, its commander standing, it's gone through by way of
+   fighting:
+   - **A bold band** (the bandits, the northmen, the corsairs: `pour`) pours the two-handers and
+     rear ranks of its body nearest the break through at once, three abreast in a formation of their
+     own (`${body}:through`; not its chief), its front rank holding.
+   - **A steady line** (a town's, an army's, the sellswords': `commit`) sends its reserve through,
+     or its household after it (as its next to send, no sooner than 10 seconds after the last),
+     the bodies beside the break holding and turning on the bared flank (the wheel).
+   - **The cult** stands.
+
+   Those sent through run (2.6 m/s) out 6 m past the enemy's front, then at the archers, casters
+   and healers of theirs within 30 m, the nearest wherever they give ground to (only at them on the
+   way: battle.js formation `seek`; or at one who strikes them), each going after an enemy as far as
+   8 m from their place, looking 14 m; and, once none's there (or after 15 seconds), round on the
+   back of the nearest body of the enemy's line, 6 m behind it.
+8. **Archers with an enemy among them** (`FIELD.archers`): one who fights up close come round or
+   through their body's front, within 6 m of one of its archers, casters or healers. They give
+   ground, back behind the nearest body of their own that isn't beset (its reserve or household,
+   held back, first), 4 m behind its rearmost rank, and shoot from there; back in their places once
+   no such enemy's within 10 m of them. Each keeps 3 m from a foe come at it while it can (battle.js
+   `#backOff`), and, once it can't, fights with its knife (weapons.js `KNIFE`: a quick stab of 2 to
+   4, first of an archer's or a caster's attacks while they're in a line: battle.js `armsIn`). Their
+   body's beset from behind meanwhile.
 
 **Each band's way** (`TACTICS`, `BAND_TACTICS`; a town's and an army's a `line`'s: loosing, trying
 the enemy's line, wheeling, flankers and a reserve):
@@ -2744,7 +2812,9 @@ half a second. Down 1.3 times the share of it that's fallen since, the harder th
 outnumbered by the enemy before it (its `odds`: times the square root of how many to each of it,
 from a half to two); up as much as fresh soldiers come up to it (an invasion's reinforcements);
 down 0.03 a second while it's beset on its flank or from behind (a body of the enemy's fighting
-within 8 m of its end, not facing it head on: the wheel, or flankers come round); else steadying,
+within 8 m of its end, off its front's end or behind it, facing it, not head on: the wheel, or
+flankers come round, not a body it's wheeled onto the flank of itself; or an enemy among its
+archers, casters and healers); else steadying,
 0.01 a second, to as high as its odds hold it (0.8 at even odds, 1 at three to two, 0.6 at one to
 two); up 0.012 a second while its commander's near it (within 14 m), its losses then counting
 half; and up 0.004 a second while it's giving more than it gets. Under 0.45 it's **giving way**
@@ -2779,10 +2849,14 @@ else a favour of theirs to the player's people).
 and the player's own job, trophy and reward, always): "The northmen's left breaks and runs!",
 "Marleyworth's right wheels onto their flank!", "Jarl Ulfgar leads their household in!", "Jarl
 Ulfgar has fallen! The northmen's lines are leaderless!", "The northmen's standard has fallen!",
-"The bandits' left falls back!", "...comes on again!". The horns: the lines of a field battle or the
-armies met charging, the enemy's war horn from their line and the other's town horn 1.2 seconds
-after; a reserve or household sent in, its side's horn twice where it's going (the enemy's war
-horn, the other's the town's); an invasion's own horns as they were. On the minimap, out in the world: an arrow from each body
+"The bandits' left falls back!", "...comes on again!", "The bandits' right pours through the gap in
+their line!", "Marleyworth's reserve goes through the gap!", "Jarl Ulfgar leads their household
+through the gap!", "The bandits' right falls on their centre from behind!", "Marleyworth's left
+comes up beside the centre!", "The bandits' archers fall back!" (a body's at most every 20
+seconds). The horns: the lines of a field battle or the armies met charging, the enemy's war horn
+from their line and the other's town horn 1.2 seconds after; a reserve or household sent in, or
+any going through a break, its side's horn twice where it's going (the enemy's war horn, the
+other's the town's); an invasion's own horns as they were. On the minimap, out in the world: an arrow from each body
 charging, wheeling round a flank, sent in or sent to try the enemy's line to where it's going, red
 for the player's enemies and green for the rest, and a crown of gold on a disc at each commander
 standing.
@@ -2818,6 +2892,19 @@ the first body giving way, the corsairs' wings hitting and falling back, the ban
 faltering and coming on again. A field battle of 60 a side was over in 93 seconds, each side
 breaking a wing in turn; two armies of 60 met in the field fought it out in 45 seconds of melee,
 the humans' line breaking, routed and running, the orcs forming up again and going on.
+
+Holding the line (headless, seeds 2 to 4, each band's invasion of 120 in the start town and the
+field battle of 60 a side, the player standing aside; sampled each second of the melee):
+
+- **Outcomes**: every invasion beaten off, the town holding (15 of 15), in 183 to 189 seconds of
+  melee (181 to 200 before); a field battle 51 to 71 seconds (39 to 46: the lines grind rather than
+  dissolve into one chase).
+- **The lines kept**: whoever a fighter of a line is on stands 4.2 to 6.4 m from their place in it
+  on average (10.8 to 19.2 before), and 5% to 30% of them more than 8 m from it (60% to 92%). Fewer
+  of a line fight at once (31% to 66%, 71% to 92% before), those behind its front waiting their
+  turn, as a line's ranks do.
+- **Breaks** gone through 1 to 4 times an invasion, those through falling on the rear of a body
+  after; archers giving ground 13 to 25 times; bodies wheeling onto a flank up to 10 times.
 
 ### Playing together (M11)
 

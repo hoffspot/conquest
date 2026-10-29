@@ -2,15 +2,17 @@
 // army's mix of roles and each one's place in its line; a line marching where it's sent, each
 // soldier keeping its place, halting to fight and closing with the enemy; its ranks closed over
 // its fallen; casters casting their people's spells and healers healing the most hurt; enemies
-// near a player going for them first, so many at once; and the greatsword and the axe.
+// near a player going for them first, so many at once; the greatsword and the axe; and a line
+// held: the nearest foe taken once one's own falls, no archer chased from it, a neighbour helped,
+// those sent through a break at the archers only, and an archer's knife.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
-import { ADVANCE, AGGRO, Battle, HEALING, STEP_MS } from "../client/js/core/battle.js";
+import { ADVANCE, AGGRO, Battle, HEALING, STEP_MS, TAUNT } from "../client/js/core/battle.js";
 import { DOCTRINES, FORMATION, MIX, placeAt, placesOf, roleOf, ROLES, rolesOf } from "../client/js/core/formation.js";
 import { HEALER_SPELLS, PEOPLE_SCHOOL, ROLE_ARMS, soldierOf } from "../client/js/core/host.js";
 import { SCHOOLS, SPELLS } from "../client/js/core/spells.js";
-import { WEAPONS } from "../client/js/core/weapons.js";
+import { armsOf, chooseAttack, KNIFE, WEAPONS } from "../client/js/core/weapons.js";
 import { parseGrid } from "./helpers.js";
 
 const open = (width, height) => ({ blocked: parseGrid(Array.from({ length: height }, () => ".".repeat(width))).map((row) => Uint8Array.from(row)) });
@@ -391,5 +393,107 @@ describe("enemies near a player go for them first (battle.js AGGRO)", () => {
 
         assert.deepEqual(most, { melee: AGGRO.melee, ranged: AGGRO.ranged }, "as many as can be");
         assert.ok(orcs.filter(({ target }) => target?.startsWith("ally-")).length >= 6, "the rest on the player's own");
+    });
+});
+
+describe("holding a line of battle (battle.js formation `hold`, `seek`; core/engagement.js)", () => {
+    // One of a line (`inLine`: in a formation holding it, `hold` metres) at [30, 30], its leash 5;
+    // and foes standing still where they're put (stunned: they fight no one), each with as much
+    // enmity from it as given, for a minute
+    function holding({ inLine = true, hold = 10, seek = null, foes = [] } = {}) {
+        const battle = new Battle(open(60, 60), { seed: 3 });
+
+        if (inLine) {
+            battle.formation("f", { anchor: [30, 30], facing: 0, hold, seek });
+        }
+
+        const soldier = battle.add({ id: "s", kind: "soldier", team: "hero", weapon: "sword", square: [30, 30], ai: "patrol", patrol: [[30, 30]], leash: 5, armed: true, hp: 1e6, ...(inLine ? { formation: { id: "f", slot: [0, 0], role: "front" } } : {}) });
+
+        battle.formation("o", { anchor: [30, 50], facing: Math.PI });
+
+        for (const { id, square, role = "front", weapon = "cleaver", hp = 1e6, still = true } of foes) {
+            battle.add({ id, kind: "soldier", team: "orcs", weapon, square, ai: "patrol", patrol: [square], leash: 40, armed: true, hp, formation: { id: "o", slot: [0, 0], role } });
+            battle.actor(id).stunnedUntil = still ? Infinity : 0;
+        }
+
+        const enmity = (amounts) => (soldier.enmity = Object.fromEntries(Object.entries(amounts).map(([id, amount]) => [id, [amount, battle.time + 60000]])));
+
+        return { battle, soldier, enmity };
+    }
+
+    it("has one of a line take the nearest foe once theirs falls, not whom it's most enmity for (one out of a line does); its enmity still turning it from the one it's on, and a taunt", () => {
+        for (const inLine of [true, false]) {
+            const { battle, soldier, enmity } = holding({ inLine, foes: [{ id: "near", square: [32, 30] }, { id: "doomed", square: [28, 30], hp: 1 }, { id: "hated", square: [30, 34] }] });
+
+            run(battle, STEP_MS);
+            assert.equal(soldier.target, "near", "the nearest first");
+
+            // (More enmity for another: turned on them, a line or no; not on one with too little
+            // more than the one it's on, further off than ENMITY.hand)
+            enmity({ near: 45, doomed: 100, hated: 50 });
+            run(battle, 1000);
+            assert.equal(soldier.target, "doomed");
+
+            // (They fall: the nearest now, in a line, and kept to; whom it's most enmity for, out of one)
+            run(battle, 4000);
+            assert.ok(battle.actor("doomed").dead);
+            assert.equal(soldier.target, inLine ? "near" : "hated", inLine ? "the nearest" : "the most enmity");
+
+            // (Taunted: on the taunter, in a line too)
+            assert.equal(battle.taunt("hated", "s"), true);
+            run(battle, TAUNT.ms / 2);
+            assert.equal(soldier.target, "hated");
+        }
+    });
+
+    it("has one holding a line keep its place under an archer's shots from beyond its leash (one not holding goes after it); and go to the help of its own fighting a foe within `hold` of its place", () => {
+        for (const hold of [10, 0]) {
+            const { battle, soldier, enmity } = holding({ hold, foes: [{ id: "archer", square: [30, 40], role: "archer", weapon: "bow" }] });
+
+            run(battle, STEP_MS);
+            assert.equal(soldier.target, null, "none within its leash");
+
+            // (Shot at: struck lately, and with enmity for the archer)
+            soldier.struckBy = { archer: battle.time + 5000 };
+            enmity({ archer: 20 });
+            run(battle, 1000);
+            assert.equal(soldier.target, hold ? null : "archer", hold ? "held its place" : "went after the archer");
+        }
+
+        for (const hold of [10, 0]) {
+            const { battle, soldier } = holding({ hold, foes: [{ id: "orc", square: [38, 30], still: false }] });
+
+            battle.add({ id: "mate", kind: "soldier", team: "hero", weapon: "sword", square: [39, 30], ai: "patrol", patrol: [[39, 30]], leash: 1, armed: true, hp: 1e6 });
+            run(battle, 2000);
+            assert.equal(battle.actor("orc").target, "mate", "the orc on its neighbour");
+            assert.equal(soldier.target, hold ? "orc" : null, hold ? "helping" : "beyond its leash");
+        }
+    });
+
+    it("has one sent at certain roles (`seek`) go only at those of them, past a nearer foe of another role; one who strikes it fought", () => {
+        const { battle, soldier } = holding({ seek: ["archer"], foes: [{ id: "shield", square: [32, 30] }, { id: "archer", square: [30, 34], role: "archer", weapon: "bow" }] });
+
+        run(battle, 1000);
+        assert.equal(soldier.target, "archer", "past the nearer");
+
+        const other = holding({ seek: ["caster"], foes: [{ id: "shield", square: [32, 30] }] });
+
+        run(other.battle, 1000);
+        assert.equal(other.soldier.target, null, "none of them");
+        other.soldier.struckBy = { shield: other.battle.time + 5000 };
+        run(other.battle, 1000);
+        assert.equal(other.soldier.target, "shield", "but one who struck it");
+    });
+
+    it("gives an archer or a caster in a line a knife, for a foe on them they can't get away from; their bow at any further off", () => {
+        const battle = new Battle(open(20, 20), { seed: 3 });
+        const archer = battle.add({ id: "a", kind: "soldier", team: "hero", weapon: "bow", square: [5, 5], ai: "patrol", patrol: [[5, 5]], formation: { id: "f", slot: [0, 0], role: "archer" } });
+        const loose = battle.add({ id: "b", kind: "soldier", team: "hero", weapon: "bow", square: [9, 9], ai: "patrol", patrol: [[9, 9]] });
+
+        assert.deepEqual(archer.arms, [KNIFE, ...armsOf("bow")]);
+        assert.deepEqual(loose.arms, armsOf("bow"), "none out of a line");
+        assert.equal(chooseAttack(archer.arms, [5, 5], [6, 5]), KNIFE);
+        assert.equal(chooseAttack(archer.arms, [5, 5], [5, 10]), WEAPONS.bow.attacks[0]);
+        assert.ok(KNIFE.damage[1] < WEAPONS.sword.attacks[0].damage[0] * 1.5, "a weak stab");
     });
 });

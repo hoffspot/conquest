@@ -81,7 +81,7 @@ import { createRandom } from "./random.js";
 import { BECKON, REST_EVERY, ROLES } from "./roles.js";
 import { rollHeal, rollSpell, SCHOOLS, SPELL_COOLDOWN, SPELLS, WARD } from "./spells.js";
 import { Variety } from "./variety.js";
-import { armsOf, blowEvery, chooseAttack, distanceBetween, longestReach, MELEE_REACH, ringsApart, rollDamage, WEAPONS } from "./weapons.js";
+import { armsOf, blowEvery, chooseAttack, distanceBetween, KNIFE, longestReach, MELEE_REACH, ringsApart, rollDamage, WEAPONS } from "./weapons.js";
 import { CHARGE, effectAt, EFFECTS } from "./legendary.js";
 import { BAIT, eats, MOODS, MORALE, moodFor, NERVE, twoDice, WARY } from "./wary.js";
 import { atan2, cos, hypot, pow, sin } from "./exact.js";
@@ -450,6 +450,10 @@ const RANKS_RUN = 3;
 // A formation that advances closes with the nearest enemy within `sight` metres of any of it, its
 // front stopping `to` metres from them
 export const ADVANCE = Object.freeze({ sight: 60, to: 2 });
+
+// One's attacks: its weapon's, and its kicks; an archer's or a caster's in a line of battle (its
+// `formation`), its knife first, for one come at it that it can't get away from (weapons.js KNIFE)
+const armsIn = (weapon, boots, formation) => (formation?.role === "archer" || formation?.role === "caster" ? [KNIFE, ...armsOf(weapon, boots)] : armsOf(weapon, boots));
 
 // How long an enemy waits at each end of its patrol (ms)
 const PATROL_PAUSE_MS = 1500;
@@ -822,9 +826,10 @@ export class Battle {
             name,
             weapon,
             boots: boots || weapon === "boots",
-            // Its attacks (its weapon's, and kicks); whether its weapon is drawn, and drawing
-            // it or putting it away ({ on, until }); when it was last in a fight
-            arms: armsOf(weapon, boots),
+            // Its attacks (its weapon's, and kicks: an archer's or a caster's in a line, its knife
+            // first, armsIn); whether its weapon is drawn, and drawing it or putting it away ({ on,
+            // until }); when it was last in a fight
+            arms: armsIn(weapon, boots, formation),
             armed,
             drawing: null,
             foughtAt: -Infinity,
@@ -1022,7 +1027,13 @@ export class Battle {
      * whoever's fighting), charge (whether it's charging: it runs on to where it's going whoever
      * of it's fighting, each of it running with it, and stops charging once it's there), layout
      * (how its ranks are laid out as they close: core/formation.js placesOf's, or null as a
-     * line's) }, each left as it is if not given. Those in it (add's `formation`) keep
+     * line's), hold (holding a line of battle, metres: none of it goes after one who's struck it
+     * from beyond its leash, an archer's shot, as it would otherwise: #leashed; one of it with no
+     * foe within its leash goes to the help of one of its own fighting a foe within so far of its
+     * place, #patrol. 0, it's not), seek
+     * (roles: none of it goes after anyone but those in a formation in one of them, or anyone
+     * who's struck it lately: sent through a break at the archers, core/engagement.js; null,
+     * anyone) }, each left as it is if not given. Those in it (add's `formation`) keep
      * to their places in it as it goes (or the `post`s they're given: [x, y] metres, facing its
      * `facing`, if they have one), and go after enemies as far from them as their role's leash;
      * it stops marching while any of them are fighting, and closes its ranks as they fall
@@ -1035,9 +1046,9 @@ export class Battle {
             return null;
         }
 
-        const formation = (this.formations[id] ??= { anchor: [0, 0], facing: 0, to: null, speed: 1, advance: false, broken: false, charge: false, layout: null, engagedAt: -Infinity, member: null, sighted: null, lookAt: 0, strength: null, closeAt: 0 });
+        const formation = (this.formations[id] ??= { anchor: [0, 0], facing: 0, to: null, speed: 1, advance: false, broken: false, charge: false, layout: null, hold: 0, seek: null, engagedAt: -Infinity, member: null, sighted: null, lookAt: 0, strength: null, closeAt: 0 });
 
-        for (const key of ["anchor", "facing", "to", "speed", "advance", "broken", "charge", "layout"]) {
+        for (const key of ["anchor", "facing", "to", "speed", "advance", "broken", "charge", "layout", "hold", "seek"]) {
             if (settings[key] !== undefined) {
                 formation[key] = Array.isArray(settings[key]) ? [...settings[key]] : settings[key] && typeof settings[key] === "object" ? { ...settings[key] } : settings[key];
             }
@@ -1260,7 +1271,7 @@ export class Battle {
             return;
         }
 
-        Object.assign(actor, { weapon, boots: boots || weapon === "boots", arms: armsOf(weapon, boots), attack: null, drawing: null, armed: false, empowered: null });
+        Object.assign(actor, { weapon, boots: boots || weapon === "boots", arms: armsIn(weapon, boots, actor.formation), attack: null, drawing: null, armed: false, empowered: null });
     }
 
     /**
@@ -2955,10 +2966,19 @@ export class Battle {
             seen = this.#nearestSeen(actor, (enemy) => enemy.target === actor.id || enemy.attack?.target === actor.id);
         } else if (!broken && !seen && (thinking || actor.target !== null)) {
             // (Whom its enmity has it go for, room or no on the one it's on already; else a player
-            // near before anyone, as ever: ENMITY)
-            const room = (enemy) => this.#leashed(actor, enemy) && this.#roomOn(actor, enemy);
+            // near before anyone, as ever: ENMITY. One in a line of battle: the one it's on, or
+            // another it's set on harder, else the nearest, `hold`; with none within its leash,
+            // one fighting one of its own within its formation's `hold` of its place, helping its
+            // neighbour. One sent at those of certain roles, its formation's `seek`: only at them,
+            // or at one who's struck it)
+            const { seek = null, hold: lap = 0 } = actor.formation ? (this.formations[actor.formation.id] ?? {}) : {};
+            const sought = (enemy) => !seek || seek.includes(enemy.formation?.role) || (actor.struckBy?.[enemy.id] ?? -Infinity) > this.time;
+            const room = (enemy) => this.#leashed(actor, enemy) && this.#roomOn(actor, enemy) && sought(enemy);
+            const helps = (enemy) => offRound(actor.patrol, enemy.square) <= lap && this.#roomOn(actor, enemy) && this.actor(enemy.target)?.team === actor.team;
 
-            seen = this.#chosen(actor, (enemy) => this.#leashed(actor, enemy) && (enemy.id === actor.target || this.#roomOn(actor, enemy))) ?? this.#seeded(actor, this.#drawnTo(actor) ?? this.#nearestSeen(actor, room) ?? this.#alarmed(actor));
+            seen =
+                this.#chosen(actor, (enemy) => this.#leashed(actor, enemy) && (enemy.id === actor.target || this.#roomOn(actor, enemy)) && sought(enemy), { hold: Boolean(actor.formation) }) ??
+                this.#seeded(actor, (seek ? null : this.#drawnTo(actor)) ?? this.#nearestSeen(actor, room) ?? (seek ? null : (this.#alarmed(actor) ?? (lap > 0 ? this.#nearestSeen(actor, helps) : null))));
 
             if (actor.formation) {
                 actor.rethinkAt = this.time + RETHINK_MS;
@@ -4446,12 +4466,14 @@ export class Battle {
     // Is someone within a guard's leash of its post, or of the round it walks (always, for those
     // with none), or within what it holds (`holds`: a box of squares, [x0, y0, x1, y1]: a camp's
     // stockade, host.js #holdStockade), or one who's struck it lately (DEFEND_MS: it defends
-    // itself), however far?
+    // itself), however far (but not by one holding a line of battle, its formation's `hold`: it
+    // keeps its place under the enemy's arrows)?
     #leashed(actor, other) {
         const [x, y] = other?.square ?? [];
         const held = actor.holds && x >= actor.holds[0] && y >= actor.holds[1] && x <= actor.holds[2] && y <= actor.holds[3];
+        const struck = (actor.struckBy?.[other?.id] ?? -Infinity) > this.time && !this.formations[actor.formation?.id]?.hold;
 
-        return !actor.leash || !other || (other.map === actor.spawnMap && (held || offRound(actor.patrol, other.square) <= actor.leash || (actor.struckBy?.[other.id] ?? -Infinity) > this.time));
+        return !actor.leash || !other || (other.map === actor.spawnMap && (held || offRound(actor.patrol, other.square) <= actor.leash || struck));
     }
 
     // The nearest enemy on its map that it's noticed (not unseen: Invisibility), within `within`
@@ -6564,10 +6586,12 @@ export class Battle {
     // Whom one keeping enmity (ENMITY) goes for, of those it has some for that pass `test` (an
     // enemy it's noticed): the one it's on, kept till another's enmity is past theirs by `near`
     // (one within `hand` of it) or `far` (one it was set on otherwise, sprung at or charging, as
-    // if with a seed); or, on no one it can go for, the one it has the most for. Only one it can see
-    // (as #nearestSeen: its sight); null for none (the nearest, then: #seeded). The first of two
-    // with as much (as each was first set on it: the same in every copy)
-    #chosen(actor, test) {
+    // if with a seed); or, on no one it can go for, the one it has the most for (but not one in a
+    // line of battle, `hold`: its own fallen, it takes the nearest, as a soldier in a line does,
+    // its enmity only for switching while it's on one, and for taunts). Only one it can see (as
+    // #nearestSeen: its sight); null for none (the nearest, then: #seeded). The first of two with
+    // as much (as each was first set on it: the same in every copy)
+    #chosen(actor, test, { hold = false } = {}) {
         // (Taunted: on the taunter, made to, while it holds)
         const taunter = this.#taunter(actor);
 
@@ -6613,7 +6637,7 @@ export class Battle {
             return held;
         }
 
-        return top && sees(top) ? top : null;
+        return !hold && top && sees(top) ? top : null;
     }
 
     // One newly gone for by the nearest rule (#chosen had none): on its enmity with a seed, so it's
