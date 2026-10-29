@@ -8629,7 +8629,8 @@ test("a hired adventurer knocked down, up again with the player by them, wounded
     await expect(talk).toBeVisible();
     await talk.getByRole("button", { name: `Send for Tam, please. (${price} gold)` }).click();
     await expect(talk.locator(".talk-line")).toContainText(/runner's gone for Tam|Mended nicely/);
-    expect(await toldOf(page, new RegExp(`^Tam is back at your side, mended \\(${price} gold\\)\\.$`))).not.toBe(null);
+    // (Said once the host's had the sending for, a step or two after the receptionist's answer)
+    await expect.poll(() => toldOf(page, new RegExp(`^Tam is back at your side, mended \\(${price} gold\\)\\.$`)), { timeout: 10000 }).not.toBe(null);
     expect(await joins()).toBe(joined);
     expect(await page.evaluate(() => ({ gold: window.pellagos.game.progress.gold, mending: window.pellagos.game.host.mendingOf(window.pellagos.game.me).length, wounds: [...window.pellagos.game.host.followers.values()].map(({ wounds }) => wounds) }))).toEqual({ gold: 200 - price, mending: 0, wounds: [0] });
     await page.keyboard.press("Escape");
