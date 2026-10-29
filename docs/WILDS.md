@@ -299,11 +299,20 @@ their hired adventurers and the creatures they've called or raised.
   - So gear, skills, spells and a creature's tier all count. A new adventurer and a newly hired
     one are about alike; as the player grows, their hire is less beside them.
 - **The side's strength (S)** is its members' values summed, over its strongest player's: a
-  player alone is 1, two alike 2, a new player and a new hire about 2, a mighty player and that
-  same hire about 1.3. Never less than 1.
-- **The opposition (F)** the wild sets against it is a little less than it, S^0.8
-  (`OPPOSITION.answer`): 1 alone, about 1.7 for two alike, about 3 for four. So each of a group
-  finds it a little easier than alone, and every ally is still worth having.
+  player alone is 1, two alike 2, a new player and a new hire about 1.3, a mighty player and that
+  same hire about 1.1. Never less than 1.
+  - *Allies the game fights for count at about a third* of their value: a hired adventurer
+    (`STRENGTH.hired`, 0.3), and a creature called, raised or tamed (`STRENGTH.called`, 0.3). The
+    wild goes for whoever's nearest (*How they behave*), most often the player, who comes at it
+    first, so the game's own fighters, however hard they hit, spare their leader less than another
+    player would: counted at half, a player with four hirelings of
+    the tier's might lost as much as one alone (the balance runner, *Tuning it*, below; the user:
+    "About a third").
+  - *One knocked down* (a hired adventurer, battle.js `downed`) counts as if standing: they'll be
+    up again, so their getting up isn't taken for the side growing (*More mid-fight*).
+- **The opposition (F)** the wild sets against it is a little less than it, S^0.85
+  (`OPPOSITION.answer`): 1 alone, about 1.8 for two alike, about 3.25 for four. So each of a
+  group finds it a little easier than alone, and every ally is still worth having.
 
 The debug overlay shows it for the player's side ("Side S 2.00  F 1.74  (2 players, 0 allies)").
 
@@ -323,14 +332,16 @@ the foes are put out, never after):
 | Their side | S | How many | Each one's hit points | A leader's |
 | --- | --- | --- | --- | --- |
 | Alone | 1 | ×1 | ×1 | ×1 |
-| Two alike | 2 | ×1.7 | ×1.15 | ×1.6 |
-| Four alike | 4 | ×3 | ×1.3 | ×2.4 |
-| A new adventurer and a new hire | about 2 | ×1.7 | ×1.15 | ×1.6 |
+| Two alike | 2 | ×1.8 | ×1.16 | ×1.6 |
+| Four alike | 4 | ×3.25 | ×1.34 | ×2.6 |
+| A new adventurer and a new hire | about 1.3 | ×1.25 | ×1.06 | ×1.2 |
+| A player and four hires of the tier's might | about 1.6 | ×1.5 | ×1.11 | ×1.4 |
 
-So a tier-4 wolf pack is three wolves of 39 hit points against one player, five of 45 against two,
-nine of 52 against four. Each of a side of N alike so takes about N^-0.2 of what one alone would
-(0.87 for two, 0.76 for four): a little easier together, as the balance runner bears out (*Tuning
-it*, below: it was F^0.75 first, and each of four took under half).
+So a tier-4 wolf pack is three wolves of 39 hit points against one player, five or six of 45
+against two, nine or ten of 52 against four. Each of a side of N alike so takes about N^-0.2 of
+what one alone would (0.87 for two, 0.76 for four): a little easier together, as the balance
+runner bears out (*Tuning it*, below: it was S^0.75 first, then S^0.8, when each of four took about
+two thirds of what one alone did once the runner was put right).
 
 ### Where it applies
 
@@ -411,18 +422,62 @@ for each player near.
 `npm run balance` (`scripts/balance.js`) runs the world's rules alone, nothing drawn: sides of
 each make-up out in the wilds at tiers 2, 5 and 8 (`SIDES`: one player, two, four, one with four
 hired warriors of the level a guild offers for the tier, docs/WAR.md *Mercenaries that grow*, a
-summoner with five creatures), the players as strong for the tier as its creatures,
-each at the nearest of the wild's about, fight after fight on fresh ground. For each it says the
-side's S and F, how many foes a fight brought, how long it lasted, the hit points each player lost
-in it and how often one fell, and the share of what one alone loses that each of them does. The
-aim is about three quarters for four together; the numbers here (`OPPOSITION`, `SCALING`,
-`BODIES`) are where it started, for it to bear out or change.
+summoner with five creatures), fight after fight on fresh ground:
+
+- **The players** are as strong for the tier as its creatures (hit points and power × its
+  `tierPower`) and three times as hardy (`RUN.hardy`: what their gear and skills would make them),
+  kept so through everything that outfits them again (a skill's rank come up), as hurt as they
+  were (`boosting`).
+- **At each ground** they make camp first (a player rests between fights; their hired
+  adventurers' wounds mended), then each runs at the nearest foe coming at the side (else the
+  nearest about), as a player would.
+- **A fight's over** when none's left near, or none's come to blows with them for 20 s
+  (`RUN.quiet`: those left are wary beasts keeping away); or lost, once every player's fallen (a
+  player who falls is out of it, as in play, where they'd wake at home). What's left of the wild
+  there is let go before the next, as if walked away from.
+- **For each side and tier** it says the side's S and F, the foes fought a fight, how long to the
+  last blow, the hit points each player lost in one (and a minute), how often a player fell and
+  their allies were knocked down, how many fights were won, and the share of what one alone loses
+  that each of them does, beside its aim (`SIDES` `aim`).
+- **The aims:** each of N alike about N^-0.2 of what one alone loses (0.87 for two, 0.75 for
+  four); a player with four hired adventurers, or five creatures called, about 0.8 (the user:
+  "About 0.8 of solo").
+
+Fights go one way or another by what's about (a pack of trolls or a lone wolf), so it takes a
+good many to say: a world's dice are the same each run, so `--seeds` pools the fights of several
+worlds, and two settings are told apart on the very same fights.
 
 ```
 npm run balance                        # every side, at tiers 2, 5 and 8 (a few minutes)
 npm run balance -- --tiers 5 --sides solo,four --fights 6
 npm run balance -- --json              # the numbers as JSON
+npm run balance -- --seeds 2,3,4,5,6,7,8,9 --fights 8   # 64 fights a side: what tuning takes
 ```
+
+**What it found, put right** (eight worlds, 64 fights a side and tier; each player's share of
+what one alone loses, at tiers 2, 5 and 8):
+
+| Side | Aim | Before | After |
+| --- | --- | --- | --- |
+| Two | 0.87 | 0.75, 0.86, 0.63 | 0.78, 0.97, 0.69 |
+| Four | 0.75 | 0.63, 0.68, 0.65 | 0.74, 0.81, 0.68 |
+| One with four hired | 0.8 | 1.43, 1.28, 1.01 | 1.08, 0.87, 0.84 |
+| A summoner with five | 0.8 | 1.08, 1.17, 0.94 | 0.85, 0.82, 0.73 |
+
+- **The runner first** (the user: "Fix all the identified issues with the runner and balance"):
+  its players' strength for the tier was let go of at their first rank come up, a little way
+  into the first fight; a wary beast keeping out of reach held a fight to its end; a fallen
+  player was stood up again where they fell to go on, so a fight lost ran on, more packs coming;
+  and what was left of the wild chased the side to the next ground, kilometres off. "Before" is
+  the old rules measured with the runner put right.
+- **Then the rules:** the wild answering S^0.85 (it was S^0.8); a hired adventurer and a creature
+  called, raised or tamed counted at 0.3 of their worth (they were 1, and hired ones a half for a
+  while); one knocked down counted as if standing; and a night's rest mending a hired
+  adventurer's wounds (docs/WAR.md *Mercenaries that grow*).
+- **Still off:** each of two takes a little less than the aim (0.81 for 0.87), and a player with
+  hirelings a little more at tier 2, where one alone loses only about 50 hit points a fight and a
+  few fights sway it. The wild goes for whoever's nearest, most often the player, rather than for
+  those hitting it hardest: threat, for a change of its own, is what's next.
 
 That the players together are one group, one roll for an elite and one cache between them, the
 wild answering their side's strength wherever foes are put out, more coming mid-fight, a dungeon

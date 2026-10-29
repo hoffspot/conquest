@@ -3480,7 +3480,9 @@ a trait (tireless, deadly, lucky or quick), and says so.
   with 30% of their health (a `respawn` event with `rose`); a heal cast on them, or a healing
   draught given them, gets them up at once;
 - each fall leaves a **wound** (`MENDING`): a tenth less health till it's mended (a healing
-  draught given them mends one);
+  draught given them mends one; a night's rest with their leader, at an inn or camped out, mends
+  them all, and gets one knocked down up again whole: host.js `#restMends`, told as a `follower`
+  event, `rested`; the user: "A night's rest mends them");
 - the third fall, they can't go on, and go **home to mend** (`#sendHome`; one carried off by
   magic and left behind too): still the player's, counted in their company, and kept with the
   character (`away`); sent for at any guild's receptionist for a quarter of their price
@@ -3489,6 +3491,15 @@ a trait (tireless, deadly, lucky or quick), and says so.
 - where the world's rule has it (`RULES` `mortal`: off to begin with; set by the world's host's
   player or an owner, Game options *Mercenaries can die*, a `rule` command, told to everyone as a
   `rules` event), the third fall is their last (`#fallForGood`).
+
+**How the wild weighs them** (docs/WILDS.md *A side's strength*): at about a third of their
+fighting value (`STRENGTH.hired`, 0.3), so four as mighty as their leader count about as one more
+like them would, not four; and as if standing while they're knocked down, so their getting up
+again brings no more of a pack. The wild goes for whoever's nearest, most often their leader, so
+they spare them less than another player would: counted at half (the user's first choice, "At
+half their worth"), a player with four of the tier's might lost as much as alone; at a third,
+about 0.85 of it at tiers 5 and 8 (the balance runner, docs/WILDS.md *Tuning it*; the user: "About
+a third").
 
 **The share** (`SHARE`, `sharesOf`; host.js `#won`): each follower standing within 60 m of their
 leader takes 5 in a hundred of the gold they win (loot, a bundle, a reward, a bounty), a point

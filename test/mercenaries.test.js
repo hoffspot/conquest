@@ -13,6 +13,7 @@ import { nearestFree, squareKey, squaresOf } from "../client/js/core/grid.js";
 import { HIRES, HOST_PLAYER, Host, ROLL_MOST, SNAPSHOT_STEPS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { QUALITIES, RANKS } from "../client/js/core/progress.js";
+import { SETTLEMENT_KINDS } from "../client/js/core/setpieces/town.js";
 import { decode, encode } from "../client/js/core/wire.js";
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
@@ -374,6 +375,61 @@ describe("mercenaries that grow, in play (core/host.js)", () => {
 
         assert.deepEqual({ name: again.name, level: again.level, wounds: again.wounds, falls: again.record.falls }, { name: one.name, level: one.level, wounds: 0, falls: 3 });
         assert.equal(host.battle.actor(back.follower).maxHp, mercenaryOf(again, { made }).hp);
+    });
+
+    it("is mended of every wound by a night's rest with its leader, camped out or at an inn; one knocked down up again, whole", () => {
+        const { host, ids, me } = leading([
+            { name: "Tam", calling: "warrior", level: 3, wounds: 2 },
+            { name: "Pip", calling: "mage", level: 2, wounds: 0 },
+        ]);
+        const [tam, pip] = ids.map((id) => host.followers.get(id));
+        const [middle, radius] = [host.world.stamp.middle, SETTLEMENT_KINDS[host.world.start.kind].radius];
+
+        // (Out in the wilds west of their town, the two of them by them; Pip knocked down there)
+        put(me, "town", [Math.floor(middle[0] - radius - 80), Math.floor(middle[1] - 20)]);
+        ids.forEach((id, k) => put(host.battle.actor(id), "town", [me.square[0] + 2 + k, me.square[1] + 2]));
+
+        const brigand = brigandBy(host, host.battle.actor(ids[1]));
+
+        host.battle.actor(ids[1]).hp = 1;
+        run(host, 4000);
+        Object.assign(brigand, { dead: true, respawnAt: Infinity });
+        assert.ok(host.battle.actor(ids[1]).downed);
+        assert.deepEqual([tam.wounds, pip.wounds], [2, 1]);
+        host.events = [];
+        Object.assign(me, { target: null, attack: null });
+
+        // (The wild that's come about them gone, so a camp can be made)
+        for (const id of host.wild.keys()) {
+            Object.assign(host.battle.actor(id) ?? {}, { dead: true, respawnAt: Infinity });
+        }
+
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "camp", until: { hours: 1 } }), { ok: true });
+        assert.deepEqual([tam.wounds, pip.wounds], [0, 0]);
+
+        for (const [id, one] of [[ids[0], tam], [ids[1], pip]]) {
+            const actor = host.battle.actor(id);
+
+            assert.ok(!actor.dead && !actor.downed, `${one.name} up`);
+            assert.equal(actor.maxHp, mercenaryOf(one, { made }).hp);
+            assert.equal(actor.hp, actor.maxHp);
+        }
+
+        assert.deepEqual(followerEvents(host.events, "rested").map(({ name, wounds }) => [name, wounds]), [["Tam", 2], ["Pip", 1]]);
+
+        // (At an inn, a room taken: the same; none told of where none had a wound)
+        const inn = leading([{ name: "Tam", calling: "warrior", level: 3, wounds: 1 }]);
+        const [kept] = inn.ids.map((id) => inn.host.followers.get(id));
+
+        inn.player.progress.gold = 50;
+        inn.me.talkingTo = "someone";
+        assert.equal(inn.host.command(HOST_PLAYER, { type: "effect", effect: { rent: "room", price: 8 } }).ok, true);
+        assert.equal(kept.wounds, 0);
+        assert.equal(inn.host.battle.actor(inn.ids[0]).maxHp, mercenaryOf(kept, { made }).hp);
+        inn.host.events = [];
+        inn.me.talkingTo = "someone";
+        assert.equal(inn.host.command(HOST_PLAYER, { type: "effect", effect: { rent: "room", price: 8 } }).ok, true);
+        assert.deepEqual(followerEvents(inn.host.events, "rested"), []);
     });
 
     it("let go at the guild's desk while mending, asked first: what they wore given back, their name on the roll, room for another", () => {

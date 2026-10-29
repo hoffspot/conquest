@@ -105,7 +105,7 @@ describe("a side's strength (strength.js)", () => {
 
         assert.equal(opposition(1), 1);
         assert.ok(Math.abs(opposition(4) - Math.pow(4, OPPOSITION.answer)) < 1e-9);
-        assert.ok(opposition(4) > 2.9 && opposition(4) < 3.1, "about three for four alike");
+        assert.ok(opposition(4) > 3.15 && opposition(4) < 3.35, "about three and a quarter for four alike");
         assert.ok(opposition(2) / 2 < 1 && opposition(4) / 4 < opposition(2) / 2, "each of more finds it a little easier");
         assert.equal(opposition(0.5), 1);
     });
@@ -116,9 +116,9 @@ describe("a side's strength (strength.js)", () => {
         const four = scalingOf(opposition(4));
 
         assert.ok(Math.abs(four.count - Math.pow(opposition(4), SCALING.count)) < 1e-9);
-        assert.ok(four.count > 2.9 && four.count < 3.1, `${four.count} as many`);
-        assert.ok(four.health > 1.25 && four.health < 1.4, `${four.health} as tough`);
-        assert.ok(four.leader > 2.3 && four.leader < 2.5, `a leader ${four.leader} as tough`);
+        assert.ok(four.count > 3.15 && four.count < 3.35, `${four.count} as many`);
+        assert.ok(four.health > 1.3 && four.health < 1.4, `${four.health} as tough`);
+        assert.ok(four.leader > 2.45 && four.leader < 2.65, `a leader ${four.leader} as tough`);
     });
 
     it("makes so many whole with the world's dice: a whole number as it is, no dice thrown; a half as often one way as the other", () => {
@@ -203,7 +203,7 @@ describe("a side's strength in play (host.js strengthOf)", () => {
         assert.equal(host.strengthOf("nobody"), null);
     });
 
-    it("counts those with a player near them: a hired adventurer and a creature called to their side, each as strong as they are; not once they're far off", () => {
+    it("counts those with a player near them: a hired adventurer at STRENGTH.hired of their worth, knocked down or standing; not once they're far off", () => {
         const host = hosted();
         const me = host.battle.actor(HOST_PLAYER);
         const guild = [...host.world.interiors.buildings.values()].find(({ kind, place }) => kind === "guild" && place === "home");
@@ -223,8 +223,17 @@ describe("a side's strength in play (host.js strengthOf)", () => {
         const own = fightingValue(me, host.players.get(HOST_PLAYER).progress.known());
 
         assert.equal(side.allies, 1);
-        assert.ok(Math.abs(side.strength - (own + fightingValue(hired)) / own) < 1e-9, `${side.strength}`);
-        assert.ok(side.strength > 1.3 && side.strength < 2.5, "a new hire about as strong as a new adventurer");
+        assert.ok(Math.abs(side.strength - (own + fightingValue(hired) * STRENGTH.hired) / own) < 1e-9, `${side.strength}`);
+        assert.ok(side.strength > 1.15 && side.strength < 1.5, "a new hire about a third of a new adventurer's worth again");
+
+        // (Knocked down, to be up again: still counted, as they were standing)
+        Object.assign(hired, { dead: true, downed: true });
+        assert.deepEqual(host.strengthOf(HOST_PLAYER), side);
+
+        // (Gone for good: not)
+        hired.downed = false;
+        assert.equal(host.strengthOf(HOST_PLAYER).allies, 0);
+        Object.assign(hired, { dead: false });
 
         // (Stronger, the player: the hire's share less)
         Object.assign(me, { maxHp: 200, power: { ...me.power, melee: 3 } });
@@ -236,7 +245,7 @@ describe("a side's strength in play (host.js strengthOf)", () => {
         assert.equal(host.strengthOf(HOST_PLAYER).strength, 1);
     });
 
-    it("counts the creatures called to a player's side as strong as their tier makes them, and none once they've gone", () => {
+    it("counts the creatures called to a player's side at STRENGTH.called of what their tier makes them, and none once they've gone", () => {
         const host = hosted();
 
         host.players.get(HOST_PLAYER).progress.learn("summon");
@@ -248,8 +257,10 @@ describe("a side's strength in play (host.js strengthOf)", () => {
         const called = host.battle.actor(id);
         const side = host.strengthOf(HOST_PLAYER);
 
+        const own = fightingValue(host.battle.actor(HOST_PLAYER), host.players.get(HOST_PLAYER).progress.known());
+
         assert.equal(side.allies, 1);
-        assert.ok(side.strength > 1);
+        assert.ok(Math.abs(side.strength - (own + fightingValue(called) * STRENGTH.called) / own) < 1e-9, `${side.strength}`);
 
         called.dead = true;
         assert.equal(host.strengthOf(HOST_PLAYER).allies, 0);

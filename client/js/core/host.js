@@ -9151,12 +9151,17 @@ export class Host {
     // A group's side (#groups): its players, and everyone with any player (their hired adventurers,
     // the creatures they've called or raised) on their map within STRENGTH.reach of one of them;
     // its strength (strength.js sideStrength: over its strongest player's) and the opposition the
-    // wild sets against it (opposition). { strength, opposition, players, allies }
+    // wild sets against it (opposition). A hired adventurer counts at STRENGTH.hired of their
+    // value, a creature called, raised or tamed at STRENGTH.called of its; and one knocked down
+    // (battle.js `downed`) as if they were standing: they'll be up again, so the wild doesn't take
+    // them getting up for the side growing (#reinforce).
+    // { strength, opposition, players, allies }
     #side(group) {
-        const near = (actor) => !actor.dead && group.actors.some((each) => each.map === actor.map && hypot(actor.x - each.x, actor.y - each.y) <= STRENGTH.reach);
+        const near = (actor) => (!actor.dead || actor.downed) && group.actors.some((each) => each.map === actor.map && hypot(actor.x - each.x, actor.y - each.y) <= STRENGTH.reach);
         const allies = [...this.followers.keys(), ...this.companions.keys()].map((id) => this.battle.actor(id)).filter((actor) => actor && near(actor));
         const players = group.actors.map((actor) => this.#valueOf(actor));
-        const strength = sideStrength([...players, ...allies.map((actor) => this.#valueOf(actor))], Math.max(0, ...players));
+        const ally = (actor) => this.#valueOf(actor.dead ? { ...actor, dead: false } : actor) * (this.followers.has(actor.id) ? STRENGTH.hired : STRENGTH.called);
+        const strength = sideStrength([...players, ...allies.map(ally)], Math.max(0, ...players));
 
         return { strength, opposition: opposition(strength), players: players.length, allies: allies.length };
     }
@@ -13986,7 +13991,39 @@ export class Host {
             this.#warOn(passed);
         }
 
+        this.#restMends(player);
         this.#event("slept", { id: actor.id, where, passed, ...(until !== null ? { until } : {}) });
+    }
+
+    // A player's hired adventurers rested with them (a night's sleep, at an inn or by their
+    // camp's fire): one knocked down up again, every wound mended (followers.js MENDING), whole
+    // again; told of, for those that had any
+    #restMends(player) {
+        for (const id of this.#company(player.id)) {
+            const one = this.followers.get(id);
+            const actor = this.battle.actor(id);
+
+            if (!actor) {
+                continue;
+            }
+
+            if (actor.dead) {
+                this.battle.rise(id);
+            }
+
+            const wounds = one.wounds;
+
+            one.wounds = 0;
+            this.#fit(id);
+
+            if (actor.hp < actor.maxHp) {
+                this.battle.mend(id, { hp: actor.maxHp });
+            }
+
+            if (wounds) {
+                this.#event("follower", { id: player.id, follower: id, name: this.#calledBy(one), change: "rested", wounds });
+            }
+        }
     }
 
     // How long a rest passes the world's time (ms): as long as was chosen camping (CAMP_HOURS:
@@ -14023,6 +14060,7 @@ export class Host {
 
         resting.forEach((player, k) => {
             player.resting = null;
+            this.#restMends(player);
             this.#event("slept", { id: player.id, where: rests[k].where, passed: shortest.passed, ...(shortest.until !== null ? { until: shortest.until } : {}) });
         });
     }
