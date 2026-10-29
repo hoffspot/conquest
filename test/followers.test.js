@@ -1,12 +1,14 @@
 // Followers (client/js/core/host.js, core/battle.js; docs/WAR.md M9): an adventurer at a guild
 // hired for gold, as many as a player's Command lets them lead; following them, through doors
 // too, fighting their enemies near them (what they bring down counting for their leader, whose
-// Command grows by it); told to wait, to follow, or to go; one who falls, gone; and all of it kept
-// with the character, and with the world
+// Command grows by it); told to wait, to follow, or to go; one who falls knocked down, theirs
+// still (test/mercenaries.test.js: how they grow, fall and get up); and all of it kept with the
+// character, and with the world
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { FOLLOW, keepingUp, SPRINT, STEP_MS } from "../client/js/core/battle.js";
 import { TREES } from "../client/js/core/dialogue.js";
+import { freshRecord, renownOf } from "../client/js/core/followers.js";
 import { COMPANION, HIRES, HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { nearestFree, squareKey, squaresOf } from "../client/js/core/grid.js";
@@ -192,7 +194,7 @@ describe("followers (host.js, battle.js)", () => {
         assert.equal(no.next, "greet");
     });
 
-    it("loses a follower who falls", () => {
+    it("knocks down a follower who falls, not losing them: theirs still, down a while", () => {
         const { host, guild, me } = atTheGuild();
         const { result } = hire(host, guild);
         const follower = host.battle.actor(result.follower);
@@ -205,8 +207,9 @@ describe("followers (host.js, battle.js)", () => {
 
         const events = run(host, 20000);
 
-        assert.ok(events.some(({ type, change, follower: id }) => type === "follower" && change === "fallen" && id === follower.id));
-        assert.ok(!host.followers.has(follower.id));
+        assert.ok(events.some(({ type, change, follower: id }) => type === "follower" && change === "down" && id === follower.id));
+        assert.ok(!events.some(({ type, change }) => type === "follower" && change === "fallen"));
+        assert.ok(host.followers.has(follower.id) && follower.dead && follower.downed);
     });
 
     it("keeps its followers with the character, and with the world", () => {
@@ -218,7 +221,7 @@ describe("followers (host.js, battle.js)", () => {
 
         const character = host.characterOf(host.players.get(HOST_PLAYER));
 
-        assert.deepEqual(character.followers, [{ name: one.name, calling: one.look, sex: one.sex, seed: one.seed, people: one.people ?? "human" }]);
+        assert.deepEqual(character.followers, [{ name: one.name, calling: one.look, sex: one.sex, seed: one.seed, people: one.people ?? "human", from: one.id, level: 1, xp: 0, wounds: 0, owed: 0, gear: { mainHand: null, body: null }, record: freshRecord(), called: null, picks: [], renowned: renownOf(one.seed) }]);
 
         // Carried on exactly
         const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));

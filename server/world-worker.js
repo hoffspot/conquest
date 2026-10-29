@@ -173,7 +173,7 @@ async function forward(character, player) {
 // What the world takes of a character brought to it: who they are and what they carry (their
 // look, their own id, what they've grown into, their gear and gold); what another world knew of
 // them stays there, and this one's is its own (docs/SERVER.md, "Visitors")
-const carried = (brought) => ({ hero: brought.hero, talks: { memory: {}, knowledge: [] }, explored: {}, progress: brought.progress, standing: {}, followers: [] });
+const carried = (brought) => ({ hero: brought.hero, talks: { memory: {}, knowledge: [] }, explored: {}, progress: brought.progress, standing: {}, followers: [], roll: [] });
 
 // The character a player comes in with (as Hosting.characterOf hands it over), from what their
 // hello asked for, by the world's character rule (storage/worlds.js CHARACTER_RULES): visiting,
@@ -240,7 +240,7 @@ async function characterFor(one, { character, hero = "new" }) {
     one.slot = free;
 
     // (Else new, as the character maker made it, with an id of its own)
-    return { ...brought, hero: freshOf(brought.hero), talks: { memory: {}, knowledge: [] }, explored: {}, progress: {}, standing: {}, followers: [] };
+    return { ...brought, hero: freshOf(brought.hero), talks: { memory: {}, knowledge: [] }, explored: {}, progress: {}, standing: {}, followers: [], roll: [] };
 }
 
 // What a player's game said: its hello answered once their hero's found; the rest to the world

@@ -459,10 +459,12 @@ export const rarityOf = (boost) => (BOOSTS.find(({ band }) => boost < band[1]) ?
  */
 export const alike = (a, b) => Boolean(a && b) && a.id === b.id && (a.quality ?? "common") === (b.quality ?? "common") && (a.boost ?? null) === (b.boost ?? null) && sameGear(a, b);
 
-// A thing as it's kept: its kind, its make, (a wand or grimoire) its boost, (gear and charms) its
-// level past the first, (gear) whose make it is, what was rolled on it and its own name, (a
-// legendary weapon) its effect, and (a charm) what was rolled on it
-function thingOf(item) {
+/**
+ * A thing as it's kept: its kind, its make, (a wand or grimoire) its boost, (gear and charms) its
+ * level past the first, (gear) whose make it is, what was rolled on it and its own name, (a
+ * legendary weapon) its effect, and (a charm) what was rolled on it. Anything else of it left off.
+ */
+export function thingOf(item) {
     const def = ITEMS[item.id];
     const quality = QUALITIES[item.quality] ? item.quality : "common";
     const thing = { id: item.id, quality, ...(def?.magic ? { boost: boostOf(item) } : def?.robust ? { boost: blockOf(item.id, quality, item.boost) } : {}) };

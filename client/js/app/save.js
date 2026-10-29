@@ -104,6 +104,9 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     // The Action Bar kept up along the bottom out of a fight too, not only in one and a moment
     // after (app/game.js `quickAlways`): off to start with, as they always were
     quickAlways: false,
+    // Hired adventurers saying a word now and then over their heads (app/game.js `chatter`:
+    // core/followers.js BARKS): on to start with
+    chatter: true,
     // (Summoned by another player: said no to at once, not asked)
     resistSummons: false,
     // (Asked to another player's party: let go unanswered, not asked)
@@ -703,7 +706,7 @@ function visitorPlace(id, hero) {
 export function visitorOf(id, brought) {
     const place = visitorPlace(id, brought.hero);
 
-    return { hero: brought.hero, progress: brought.progress, talks: loadTalks(place), explored: loadExplored(place), standing: loadStanding(place), followers: loadFollowers(place), place: loadPlace(place), vitals: loadVitals(place), pin: loadPin(place), markers: loadMarkers(place) };
+    return { hero: brought.hero, progress: brought.progress, talks: loadTalks(place), explored: loadExplored(place), standing: loadStanding(place), followers: loadFollowers(place), roll: loadRoll(place), place: loadPlace(place), vitals: loadVitals(place), pin: loadPin(place), markers: loadMarkers(place) };
 }
 
 /**
@@ -720,12 +723,12 @@ export function keepVisitor(id, character) {
     }
 
     const marked = { created: place.created, seed: place.seed };
-    const { talks, explored, standing, followers, place: where, vitals, pin = null, markers = [] } = character;
+    const { talks, explored, standing, followers, roll = [], place: where, vitals, pin = null, markers = [] } = character;
     const kept = [
         write(keyOf(place, "talks"), { ...marked, memory: isObject(talks?.memory) ? talks.memory : {}, knowledge: Array.isArray(talks?.knowledge) ? talks.knowledge : [] }),
         write(keyOf(place, "explored"), { ...marked, ...(isObject(explored) ? explored : {}) }),
         write(keyOf(place, "standing"), { ...marked, ...(isObject(standing) ? standing : {}) }),
-        write(keyOf(place, "followers"), { ...marked, followers: Array.isArray(followers) ? followers : [] }),
+        write(keyOf(place, "followers"), { ...marked, followers: Array.isArray(followers) ? followers : [], roll: Array.isArray(roll) ? roll : [] }),
         savePlace(place, where),
         saveVitals(place, vitals),
         savePin(place, pin),
@@ -829,7 +832,9 @@ export function saveStanding(save, standing) {
 
 /**
  * The followers a saved game's character leads (docs/WAR.md M9: core/host.js characterOf's
- * followers: [{ name, calling, sex, seed, people }]), as kept: none yet, or another game's.
+ * followers: [{ name, calling, sex, seed, people, and what they've grown into: level, xp,
+ * wounds, gear, record... }]: those kept before they grew, fresh ones of theirs), as kept: none
+ * yet, or another game's.
  */
 export function loadFollowers(save) {
     const kept = own(save, "followers");
@@ -838,9 +843,20 @@ export function loadFollowers(save) {
     return kept && Array.isArray(kept.followers) ? kept.followers.filter((one) => one && ((typeof one.name === "string" && typeof one.calling === "string") || (one.tamed === true && typeof one.creature === "string"))) : [];
 }
 
-/** Keep the followers the character leads, in a saved game. */
-export function saveFollowers(save, followers) {
-    return save?.id ? write(keyOf(save, "followers"), { created: save.created, seed: save.seed, followers }) : false;
+/**
+ * The roll of the hired adventurers who've parted from a saved game's character (core/host.js
+ * #rollCall: [{ name, calling, level, byname, gone, kills, day }]), kept with its followers: none
+ * yet, or another game's.
+ */
+export function loadRoll(save) {
+    const kept = own(save, "followers");
+
+    return kept && Array.isArray(kept.roll) ? kept.roll.filter((one) => one && typeof one.name === "string" && typeof one.calling === "string") : [];
+}
+
+/** Keep the followers the character leads, and their roll (loadRoll), in a saved game. */
+export function saveFollowers(save, followers, roll = []) {
+    return save?.id ? write(keyOf(save, "followers"), { created: save.created, seed: save.seed, followers, roll }) : false;
 }
 
 /**

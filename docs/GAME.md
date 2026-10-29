@@ -1842,7 +1842,16 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   with their likeness (tapped, chosen to help), what they are ("Hired warrior", "Called wolf ·
   4:05 left": `memberKind`), their health, whether they follow, wait or guard the player, and
   whether they're holding fire ("· Holding fire": core/host.js `stance`), and Follow or Wait and
-  Dismiss; with no one, how to come by some. Dismissing's for good (a hired adventurer goes their
+  Dismiss; with no one, how to come by some. A hired adventurer's shows their level ("Hired
+  warrior · level 4", a renowned one's trait before it), their wounds, "Down" while they're
+  knocked down, and "Trusts you more: choose how they grow" when there's a way to choose; and
+  **More** (Less to close it: `PartyPanel #grown`, game.js `#mercView`; docs/WAR.md *Mercenaries
+  that grow*) shows what they've grown into: their level and how far to the next (or held at the
+  most the player can lead now), their trust and the ways it's let them grow (each pair's two,
+  the chosen one pressed: a `pick` command), what they wear (Take back: an `unoutfit` command),
+  what they've done, a veteran's gift and their mastery, their renown, and Rename (a `rename`
+  command; empty, their own name again). Those mending at a guild are listed after the rest, with
+  what it costs to send for them. Dismissing's for good (a hired adventurer goes their
   own way, a creature's gone), so it's asked first, from the menu or the wheel alike: "Dismiss
   Bryn?", Dismiss Bryn or Keep them (game.js `onAskDismiss`, main.js `askDismiss`: the
   `#dismissask` dialog), where the menu once asked twice ("Dismiss?" for three seconds); and in
@@ -5878,8 +5887,11 @@ it.
      tilting and Invert tilt (*The camera's settings*, above).
    - **Gameplay:** the Auto-snag switch (off to start with) and under it, while it's on, what it
      takes (its own page: docs/WILDS.md *What they leave*); Auto target lock (on to start with:
-     *Locked on*, under *Those attacking the player*); Resist all summons; Refuse party
-     invites.
+     *Locked on*, under *Those attacking the player*); Mercenaries' chatter (on to start with:
+     their words over their heads, docs/WAR.md *Mercenaries that grow*); Mercenaries can die (off
+     to start with: the world's rule, `RULES` `mortal`, shown only to the world's host's player
+     or an owner, who alone can change it: main.js `showMortal`, game.js `mayRule`, `setMortal`);
+     Resist all summons; Refuse party invites.
    - **Debug log** (below).
 
    Each page under the main one has an arrow back (‹) at the left of its heading and Back at its

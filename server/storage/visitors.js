@@ -28,7 +28,7 @@ import { forward, SERVER_VERSION } from "./versions.js";
  * OWN, all that's the world's: their wheels, messages and what they've been told once are their
  * device's, as they go from world to world).
  */
-export const REMEMBERED = Object.freeze(["talks", "explored", "standing", "followers", "place", "vitals", "pin", "markers"]);
+export const REMEMBERED = Object.freeze(["talks", "explored", "standing", "followers", "roll", "place", "vitals", "pin", "markers"]);
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 

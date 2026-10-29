@@ -22,7 +22,7 @@ import { DAY, dayOf, elapsedOf, HOUR, SUNDOWN, untilTime, untilWaking } from "./
 import { CHAMPIONS, DELVES, foeKey, hoardTier, rollCoffer, rollFallen, rollHoard } from "./dungeons/play.js";
 import { isEmote } from "./emotes.js";
 import { Explored } from "./explored.js";
-import { abilityLabel, abilityOf, FALL_BACK, GIVE_REACH, givable, UNIT_ABILITIES, wayOf } from "./followers.js";
+import { abilityLabel, abilityOf, BANES, bynameOf, capOf, FALL_BACK, freshRecord, GIFTS, GIVE_REACH, givable, hirePrice, LEVEL_XP, levelOfXp, MENDING, MERC_GEAR, MERCENARY, mercenaryOf, mercSlotOf, pickOf, recallPrice, renownOf, SHARE, sharesOf, trustOf, UNIT_ABILITIES, wayOf, wearable } from "./followers.js";
 import { namePeople } from "./names.js";
 import { rumouredBy, rumouredOf, rumoursNear } from "./rumours.js";
 import { sightedFrom, SIGHTING } from "./sighting.js";
@@ -32,7 +32,7 @@ import { falloff, fighterOf, levelFor, MASTERED_STEPS, mightOf, mightTier, packP
 import { BAIT, MORALE as NERVE_GONE, NERVE, nerveOf, wary, WARY } from "./wary.js";
 import { AMBUSH, ambushBand, ambushStyle, placeOf, STYLES as AMBUSHES } from "./ambush.js";
 import { carriesTorch, lighting, sightAt, skyLight, torchesLit } from "./light.js";
-import { ABILITIES, alike, ARMOR_CAP, buys, gradeOf, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
+import { ABILITIES, alike, ARMOR_CAP, buys, gradeOf, ITEMS, priceOf, Progress, QUALITIES, rollLoot, SHOPS, thingOf, WARE_KINDS, wareKind, wares, weaponOf } from "./progress.js";
 import { MASTERED, payOf, RESEARCH } from "./bestiary.js";
 import { atLevel, dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
@@ -283,6 +283,10 @@ export const HIRES = Object.freeze({
     cleric: { weapon: "hammer", price: 60 },
 });
 
+// How strong a piece of gear of a make is (progress.js QUALITIES power): a hired adventurer's
+// (core/followers.js mercenaryOf)
+const makeOf = (quality) => QUALITIES[quality]?.power ?? 1;
+
 /**
  * The shields others carry (core/battle.js `shield`): a people's soldiers with a one-handed blade
  * (core/gear.js SHIELD_ARMS: their uniform's shield), their captains' better, and a hired
@@ -333,6 +337,9 @@ const CORPSE_MS = 30000;
  * how far behind them they're put (m: `behind`, the way they face; a free square near it).
  */
 export const COMPANION = Object.freeze({ behind: 2 });
+
+/** How many hired adventurers a player's roll keeps (#rollCall: those fallen and gone their own way, the latest first). */
+export const ROLL_MOST = 20;
 
 /** How long a player being summoned by another has to come (ms): no answer, and they've resisted. */
 export const SUMMONING_MS = 30000;
@@ -396,9 +403,12 @@ export const REST = Object.freeze({ clear: 40, least: 5 * 60000, burns: 3 * 6000
  *    the time passed the shortest of their rests: a world with no host player, a world server's);
  *  - `debug`: who may use the debug commands (a field battle called up): "host" (its host's
  *    player), "owner" (its owners: Host.join's `role`), or "none";
- *  - `invasions`: whether invasions come to the towns the players are in (core/invasions.js).
+ *  - `invasions`: whether invasions come to the towns the players are in (core/invasions.js);
+ *  - `mortal`: whether the players' hired adventurers can die (docs/WAR.md *Mercenaries that
+ *    grow*): the fall that would send one home to mend (followers.js MENDING) its last. Off to
+ *    begin with; set by the world's host's player or an owner (the "rule" command).
  */
-export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: true });
+export const RULES = Object.freeze({ rest: "host", debug: "host", invasions: true, mortal: false });
 
 // A world's rules as given (RULES), anything unknown left as RULES has it
 function rulesOf(rules = {}) {
@@ -406,6 +416,7 @@ function rulesOf(rules = {}) {
         rest: ["host", "everyone"].includes(rules?.rest) ? rules.rest : RULES.rest,
         debug: ["host", "owner", "none"].includes(rules?.debug) ? rules.debug : RULES.debug,
         invasions: typeof rules?.invasions === "boolean" ? rules.invasions : RULES.invasions,
+        mortal: typeof rules?.mortal === "boolean" ? rules.mortal : RULES.mortal,
     });
 }
 
@@ -667,7 +678,7 @@ const KEEP_DONE = 50;
  * (npm run snapshot-fixture): a world kept by an older version is carried on, not lost
  * (generated/world_server_plan.md §5.1).
  */
-export const SNAPSHOT_VERSION = 44;
+export const SNAPSHOT_VERSION = 45;
 
 /**
  * The steps that bring a world kept by an older version forward (Host.forward): [n] takes its
@@ -765,6 +776,22 @@ export const SNAPSHOT_STEPS = Object.freeze({
     // 44: the ambushes the wilds director's laid (core/ambush.js: none yet), and the food thrown to
     // the wild's beasts (battle.js baits, core/wary.js: none)
     43: (snapshot) => ({ ...snapshot, version: 44, ambushes: [], battle: { ...snapshot.battle, baits: [] } }),
+    // 45: hired adventurers who grow (docs/WAR.md *Mercenaries that grow*): each a fresh one of
+    // the first level, unhurt, wearing nothing of their leader's, nothing done yet (followers.js
+    // freshRecord); knocked down when they fall, not lost (battle.js `rises`: their actors); none
+    // mending (Host mending); each player's roll empty
+    44: (snapshot) => {
+        const ids = new Set((snapshot.followers ?? []).map(([id]) => id));
+
+        return {
+            ...snapshot,
+            version: 45,
+            followers: (snapshot.followers ?? []).map(([id, one]) => [id, { level: 1, xp: 0, wounds: 0, owed: 0, gear: { mainHand: null, body: null }, record: freshRecord(), called: null, picks: [], renowned: null, ...one }]),
+            mending: [],
+            players: snapshot.players.map((player) => ({ roll: [], ...player })),
+            battle: { ...snapshot.battle, actors: snapshot.battle.actors.map((actor) => (ids.has(actor.id) ? { rises: 1, downed: false, dodge: 0, abilityTimes: 1, ...actor } : actor)) },
+        };
+    },
 });
 
 // A band's invasion kept from before battles were fought in bodies (SNAPSHOT_STEPS 40): its two
@@ -861,6 +888,12 @@ export const REFUSALS = Object.freeze({
     hire: "They're not for hire.",
     company: "You can't lead any more than you have.",
     follower: "They don't follow you.",
+    recall: "No one of yours is mending at the guild.",
+    calling: "That's not what their calling fights with.",
+    mightier: "That was made for someone mightier than them.",
+    unpicked: "They don't trust you that far yet.",
+    guildhall: "That can only be chosen again in a guild hall.",
+    rule: "Only the world's host can change that.",
     untargeted: "Set on an enemy first, for them to fight.",
     shop: "They've nothing like that to sell.",
     soldOut: "They've sold all they had of that today: there'll be more tomorrow.",
@@ -1213,10 +1246,23 @@ export class Host {
         /**
          * The adventurers following the players (by id): { leader (a player's id), name, calling,
          * sex, seed, people, from (the one of the folk they were, by id), waiting (standing where
-         * they were told to) }. A player's go with their character (characterOf).
+         * they were told to), and what they've grown into (docs/WAR.md *Mercenaries that grow*):
+         * level, xp, wounds (core/followers.js MENDING), owed (what's over of their share of gold
+         * won: SHARE, sharesOf), gear ({ mainHand, body }: MERC_GEAR), record (what they've done:
+         * followers.js freshRecord), called (the name their leader's given them, or null), picks
+         * (the ways they've grown as they came to trust their leader: TRUST_PICKS ids), renowned
+         * (their trait: RENOWN, or null) }. A player's go with their character (characterOf).
          */
         this.followers = new Map();
         this.nextFollower = 1;
+
+        /**
+         * The players' hired adventurers gone home to mend (by id, as they were among `followers`,
+         * with `since`: when they went, battle ms): too wounded to go on (MENDING), or left behind
+         * as their leader was carried off by magic; called back at any guild (#sendFor). Still
+         * theirs, counted among those they lead, and kept with their character.
+         */
+        this.mending = new Map();
 
         /** The folk hired (their ids): never among the folk again, wherever they were. */
         this.hired = new Set();
@@ -1469,7 +1515,7 @@ export class Host {
      * what they've been told once and their settings), kept with them. Returns their record
      * (players).
      */
-    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, standing = {}, followers = [], square = this.world.spawns?.player, map = "town", role = "player", place = null, vitals = null, wheels, pin, markers, messages, told, settings }) {
+    join({ id = HOST_PLAYER, hero, talks = {}, explored = {}, progress = {}, standing = {}, followers = [], roll = [], square = this.world.spawns?.player, map = "town", role = "player", place = null, vitals = null, wheels, pin, markers, messages, told, settings }) {
         const plain = (value) => (typeof value?.toJSON === "function" ? value.toJSON() : structuredClone(value));
         const as = PLAYER_ROLES.includes(role) ? role : "player";
         let back = place && [place.x, place.y, place.facing].every(Number.isFinite) ? { x: place.x, y: place.y, facing: place.facing } : null;
@@ -1487,7 +1533,7 @@ export class Host {
             }
         }
 
-        this.recorder?.(["j", { id, hero: structuredClone(hero), talks: { memory: structuredClone(talks.memory ?? {}), knowledge: [...(talks.knowledge ?? [])] }, explored: plain(explored), progress: plain(progress), standing: plain(standing), followers: structuredClone(followers), square: home.square, map: home.map, ...(as === "player" ? {} : { role: as }), ...(back ? { place: back } : {}), ...(vitals ? { vitals: structuredClone(vitals) } : {}) }]);
+        this.recorder?.(["j", { id, hero: structuredClone(hero), talks: { memory: structuredClone(talks.memory ?? {}), knowledge: [...(talks.knowledge ?? [])] }, explored: plain(explored), progress: plain(progress), standing: plain(standing), followers: structuredClone(followers), ...(roll.length ? { roll: structuredClone(roll) } : {}), square: home.square, map: home.map, ...(as === "player" ? {} : { role: as }), ...(back ? { place: back } : {}), ...(vitals ? { vitals: structuredClone(vitals) } : {}) }]);
 
         if (this.players.has(id)) {
             return this.players.get(id);
@@ -1527,6 +1573,8 @@ export class Host {
             // What their own game keeps of them (OWN), not the world's: never recorded, no copy
             // of the world needing it
             own: ownOf({ wheels, pin, markers, messages, told, settings }),
+            // The hired adventurers who've parted from them, fallen or gone their own way (#rollCall)
+            roll: structuredClone(roll).slice(0, ROLL_MOST),
         };
         const taken = new Set(this.battle.actors.filter((actor) => actor.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
         const at = taken.size ? nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), square, { taken }) : square;
@@ -1544,10 +1592,13 @@ export class Host {
         this.battle.add({ id, kind: "player", name: hero.name, weapon: player.hero.weapon, boots: player.hero.boots, team: player.realm, square: at, map });
         this.#outfit(player);
 
-        // (Their followers, with them; and a beast they've tamed, core/wary.js)
+        // (Their followers, with them, or mending at the guild still; and a beast they've tamed,
+        // core/wary.js)
         for (const one of followers) {
             if (one.tamed) {
                 this.#companion(player, one.creature, one.tier, { map, square: at }, { tamed: true });
+            } else if (one.away) {
+                this.mending.set(`follower-${this.nextFollower++}`, { leader: id, ...this.#recordOf(one), waiting: false, since: this.battle.time });
             } else {
                 this.#follow(player, one);
             }
@@ -1709,6 +1760,10 @@ export class Host {
             this.followers.delete(follower);
         }
 
+        for (const follower of this.mendingOf(id)) {
+            this.mending.delete(follower);
+        }
+
         // (Out of their party, and their asking, or being asked, forgotten)
         this.#quit(id, "left");
 
@@ -1729,12 +1784,15 @@ export class Host {
     }
 
     /** A player's character, as it's kept (as join takes it): with what their own game keeps of them (OWN). */
-    characterOf({ id, hero, talks, explored, progress, standing, own }) {
-        const followers = this.#company(id).map((each) => {
-            const { name, calling, sex, seed, people } = this.followers.get(each);
+    characterOf({ id, hero, talks, explored, progress, standing, own, roll = [] }) {
+        // (Each hired adventurer as they are, what they've grown into too; those mending at the
+        // guild, `away`: core/followers.js, #recordOf)
+        const kept = (one, away) => {
+            const { name, calling, sex, seed, people, from, level, xp, wounds, owed, gear, record, called, picks, renowned } = one;
 
-            return { name, calling, sex, seed, people };
-        });
+            return { name, calling, sex, seed, people, from, level, xp, wounds, owed, gear: structuredClone(gear), record: structuredClone(record), called, picks: [...picks], renowned, ...(away ? { away: true } : {}) };
+        };
+        const followers = [...this.#company(id).map((each) => kept(this.followers.get(each), false)), ...this.mendingOf(id).map((each) => kept(this.mending.get(each), true))];
 
         // (A beast they've tamed kept with their followers, core/wary.js: { tamed, creature, tier, name })
         for (const [each, one] of this.companions) {
@@ -1743,7 +1801,7 @@ export class Host {
             }
         }
 
-        return { hero: { ...hero }, talks: { memory: structuredClone(talks.memory), knowledge: [...talks.knowledge] }, explored: explored.toJSON(), progress: progress.toJSON(), standing: standing.toJSON(), followers, ...structuredClone(own ?? {}) };
+        return { hero: { ...hero }, talks: { memory: structuredClone(talks.memory), knowledge: [...talks.knowledge] }, explored: explored.toJSON(), progress: progress.toJSON(), standing: standing.toJSON(), followers, roll: structuredClone(roll), ...structuredClone(own ?? {}) };
     }
 
     /**
@@ -1806,6 +1864,15 @@ export class Host {
      *    give (all of it, each time); { type: "agree" }: take the other's offer for theirs (once
      *    both have, it's done); { type: "cancel", with }: call off the trade (or say no to a
      *    player's asking, or stop asking).
+     *  - { type: "outfit", follower, index }: give one of their hired adventurers (by id) near them
+     *    a weapon or body armour from their pack (core/followers.js wearable), what they wore
+     *    back in it; { type: "unoutfit", follower, slot }: take back what one wears in a slot
+     *    (MERC_GEAR slots); { type: "rename", follower, name }: call one by a name of their own
+     *    (none: theirs again); { type: "pick", follower, pick }: choose how one grows as they
+     *    come to trust them (TRUST_PICKS: of a rank they've reached; chosen again only in a guild
+     *    hall);
+     *  - { type: "rule", rule: "mortal", value }: whether the world's hired adventurers can die
+     *    (RULES mortal), by its host's player or an owner (debugs' permission).
      * Returns { ok: true } (with what came of it, for some: an offer of work, what was handed
      * in) or { ok: false, reason } (a REFUSALS key; a spell's own reasons: spells.js
      * CAST_FAILURES). (A command that fails to be carried out is refused, told in the console,
@@ -2002,6 +2069,16 @@ export class Host {
                 return this.#talk(actor, command.with ?? null);
             case "order":
                 return this.#orderUnit(player, command.unit, command.order);
+            case "outfit":
+                return this.#outfitFollower(player, actor, command.follower, command.index);
+            case "unoutfit":
+                return this.#unoutfit(player, actor, command.follower, command.slot);
+            case "rename":
+                return this.#rename(player, command.follower, command.name);
+            case "pick":
+                return this.#pick(player, actor, command.follower, command.pick);
+            case "rule":
+                return this.#setRule(player, command.rule, command.value);
             case "effect":
                 return this.#effect(player, actor, command.effect);
             case "camp":
@@ -2351,13 +2428,20 @@ export class Host {
                 this.#owed(event);
             }
 
-            // (A follower fallen: gone from their company, and taken away a while after)
+            // (A follower knocked down: wounded (MENDING), up again a while after (battle.js
+            // DOWNED); with as many wounds as they can take, gone home to mend, or where
+            // mercenaries can die (RULES mortal), dead; one that falls and doesn't rise, gone)
             if (event.type === "death" && this.followers.has(event.id)) {
-                const { leader, name } = this.followers.get(event.id);
+                this.#knockedDown(event);
+            }
 
-                this.followers.delete(event.id);
-                this.#fall(event.id, FALLEN_MS);
-                this.#event("follower", { id: leader, follower: event.id, name, change: "fallen" });
+            // (A follower up again where they fell)
+            if (event.type === "respawn" && event.rose && this.followers.has(event.id)) {
+                const one = this.followers.get(event.id);
+
+                one.record.rises += 1;
+                this.#event("follower", { id: one.leader, follower: event.id, name: this.#calledBy(one), change: "up", by: typeof event.rose === "string" ? event.rose : null });
+                this.#gifted(this.players.get(one.leader), one);
             }
 
             // (A companion by magic fallen: gone from their side, and taken away a while after)
@@ -2747,6 +2831,7 @@ export class Host {
             quartered: [...this.quartered.entries()],
             wagons: [...this.wagons.entries()],
             followers: [...this.followers.entries()],
+            mending: [...this.mending.entries()],
             nextFollower: this.nextFollower,
             parties: structuredClone([...this.parties.values()]),
             invites: structuredClone([...this.invites.entries()]),
@@ -2928,6 +3013,7 @@ export class Host {
         host.quartered = new Map(structuredClone(snapshot.quartered ?? []));
         host.wagons = new Map(structuredClone(snapshot.wagons ?? []));
         host.followers = new Map(structuredClone(snapshot.followers ?? []));
+        host.mending = new Map(structuredClone(snapshot.mending ?? []));
         host.nextFollower = snapshot.nextFollower ?? 1;
         host.parties = new Map((snapshot.parties ?? []).map((party) => [party.id, structuredClone(party)]));
         host.partyIds = new Map([...host.parties.values()].flatMap(({ id, members }) => members.map((member) => [member, id])));
@@ -3006,12 +3092,12 @@ export class Host {
         }
 
         for (const player of snapshot.players) {
-            const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, prayed, inRing, discarded, safety, role, lastCommand, away, out, resting, budget, mightPeak } = player;
+            const { id, realm, hero, talks, explored, progress, standing, boons, readyAt, prayed, inRing, discarded, safety, role, lastCommand, away, out, resting, budget, mightPeak, roll } = player;
             const kept = new Progress(progress, hero);
 
             // (Outfitted as they were: their actor's carried on as it was, charms and all; and what
             // their own game keeps of them, as it was)
-            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, prayed: { ...(prayed ?? {}) }, inRing: inRing ?? null, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null, mightPeak: structuredClone(mightPeak ?? null), own: ownOf(player) });
+            host.players.set(id, { id, realm, hero, talks: { memory: talks.memory, knowledge: new Set(talks.knowledge) }, explored: new Explored(explored), progress: kept, standing: new Standing(standing), boons: structuredClone(boons ?? []), readyAt: { ...readyAt }, prayed: { ...(prayed ?? {}) }, inRing: inRing ?? null, discarded: structuredClone(discarded ?? null), safety: structuredClone(safety ?? null), offers: {}, charms: charmsOf(kept), role, lastCommand, away, out, resting: structuredClone(resting), budget: budget ?? null, mightPeak: structuredClone(mightPeak ?? null), own: ownOf(player), roll: structuredClone(roll ?? []) });
         }
 
         host.random.state = snapshot.random ?? host.random.state;
@@ -3104,7 +3190,7 @@ export class Host {
         this.#wounded(event);
 
         // (What a player's followers do, their leader's: their Command grows by it, and what they
-        // bring down counts for them)
+        // bring down counts for them; and they learn from it, and remember it: #train, #noted)
         const leads = this.followers.get(event.by);
 
         if (leads && (event.type === "hit" || event.type === "death")) {
@@ -3112,6 +3198,8 @@ export class Host {
 
             if (event.type === "hit") {
                 this.#gain(leader, "command", event.damage * XP.command);
+                leads.record.damage += Math.round(event.damage);
+                this.#train(event.by, event.damage);
             }
 
             if (event.type === "death") {
@@ -3119,10 +3207,30 @@ export class Host {
 
                 if (leader && fallen && !this.players.has(fallen.id) && fallen.kind !== "follower") {
                     this.#credit(leader, fallen);
+                    this.#noted(event.by, fallen);
+                    this.#together(leads.leader, fallen);
                 }
             }
 
             return;
+        }
+
+        // (A player's blows teach their followers standing by them half as much as their own:
+        // MERCENARY leader; and a foe they bring down counts towards their trust: #together)
+        if (event.type === "hit" && this.players.has(event.by) && event.damage > 0) {
+            for (const id of this.#company(event.by)) {
+                if (this.#standingBy(id, event.by)) {
+                    this.#train(id, event.damage * MERCENARY.leader);
+                }
+            }
+        }
+
+        if (event.type === "death" && this.players.has(event.by)) {
+            const fallen = this.battle.actor(event.id);
+
+            if (fallen && !this.players.has(fallen.id) && fallen.kind !== "follower") {
+                this.#together(event.by, fallen);
+            }
         }
 
         // (What a creature called to a player's side, or raised from the dead, brings down counts
@@ -3258,7 +3366,7 @@ export class Host {
         const piece = rollGear(ITEMS[weapon]?.slot ? weapon : "ring", TROPHY.quality, random, { people: this.soldiers.get(fallen.id)?.people, level: levelFor(powerOf(fallen), this.mightFor(player.id), random) });
         const merit = player.standing.guild ? TROPHY.merit : 0;
 
-        player.progress.gold += TROPHY.bounty;
+        player.progress.gold += this.#won(player, TROPHY.bounty);
 
         for (const up of player.standing.earn(merit)) {
             this.#event("guild", { id: player.id, change: "rank", ...up });
@@ -3648,7 +3756,7 @@ export class Host {
             return;
         }
 
-        const found = this.#fortune(player, gold);
+        const found = this.#won(player, this.#fortune(player, gold));
 
         player.progress.gold += found;
         this.#event("loot", { id: player.id, from: fallen.id, gold: found, items: kept });
@@ -3677,6 +3785,17 @@ export class Host {
         for (const boon of player.boons) {
             for (const key of ["melee", "ranged", "heal", "stun", "spell", "bash", "armor", "dodge", "hp", "wardFire", "wardWater", "wardAir", "wardEarth", "wardMagic"]) {
                 bonus[key] += boon[key] ?? 0;
+            }
+        }
+
+        // (A veteran's gift, from each of their hired adventurers on their feet with them:
+        // core/followers.js GIFTS; never their might, which is theirs alone)
+        for (const id of this.#company(player.id)) {
+            const one = this.followers.get(id);
+            const gift = one.level >= MERCENARY.gift && !this.battle.actor(id)?.dead ? GIFTS[one.calling] : null;
+
+            for (const key of ["armor", "ranged", "bleed", "spell", "heal"]) {
+                bonus[key] += gift?.[key] ?? 0;
             }
         }
 
@@ -3747,6 +3866,9 @@ export class Host {
         // (Their might, remembered for what they find; the war comes on with the mightiest's)
         this.#rememberMight(player);
         this.war?.setMight(Math.max(0, ...[...this.players.values()].map((each) => mightTier(mightOf(each.progress)))));
+
+        // (Their followers up as far as they can be now: the most they can be follows their might)
+        this.#upTo(player.id);
     }
 
     // A player's might as what they find has it (mightFor): the highest they've had in the last
@@ -4113,7 +4235,7 @@ export class Host {
                 return refuse(wanted.length ? "full" : "unwanted");
             }
 
-            player.progress.gold += this.#fortune(player, taken);
+            player.progress.gold += this.#won(player, this.#fortune(player, taken));
             dropped.bundle = { gold: gold - taken, items: left };
 
             const over = left.length + (dropped.bundle.gold ? 1 : 0);
@@ -4562,11 +4684,16 @@ export class Host {
     // A draught, a meal or a cure (core/followers.js givable) from a player's pack (its `index`th)
     // given to one of their own near them (GIVE_REACH): healing them, and curing what's on them
     // that it cures; not if there's nothing for it to do
+    // A hired adventurer knocked down, given a draught, is up again at once (battle.js rise);
+    // one wounded has a wound mended by it (followers.js MENDING)
     #handOver(player, actor, index, unit) {
         const use = ITEMS[player.progress.pack[index].id].use;
         const cures = use.cure ? curedWith(use.cure) : [];
+        const hired = this.followers.get(unit.id);
+        const downed = Boolean(unit.dead && unit.downed && use.heal);
+        const mends = Boolean(hired && use.heal && hired.wounds > 0);
 
-        if (unit.dead || unit.map !== actor.map || hypot(unit.x - actor.x, unit.y - actor.y) > GIVE_REACH) {
+        if ((unit.dead && !downed) || unit.map !== actor.map || hypot(unit.x - actor.x, unit.y - actor.y) > GIVE_REACH) {
             return refuse("far");
         }
 
@@ -4574,11 +4701,21 @@ export class Host {
             return refuse("unafflicted");
         }
 
-        if (!use.cure && unit.hp >= unit.maxHp) {
+        if (!use.cure && unit.hp >= unit.maxHp && !downed && !mends) {
             return refuse("healthy");
         }
 
         const item = player.progress.take(index, 1);
+
+        if (downed) {
+            this.battle.rise(unit.id, player.id);
+        }
+
+        if (mends) {
+            hired.wounds -= 1;
+            this.#fit(unit.id);
+            this.#event("follower", { id: player.id, follower: unit.id, name: this.#calledBy(hired), change: "mended", wounds: hired.wounds });
+        }
 
         for (const kind of cures) {
             this.battle.cure(unit.id, kind);
@@ -6232,7 +6369,7 @@ export class Host {
         const own = people === player.realm;
 
         job.done = this.battle.time;
-        player.progress.gold += JOB.gold;
+        player.progress.gold += this.#won(player, JOB.gold);
 
         for (const up of player.standing.earn(merit)) {
             this.#event("guild", { id: player.id, change: "rank", ...up });
@@ -6421,7 +6558,7 @@ export class Host {
             const merit = player.standing.guild ? reward.merit : 0;
             let piece = null;
 
-            player.progress.gold += reward.gold;
+            player.progress.gold += this.#won(player, reward.gold);
 
             for (const up of player.standing.earn(merit)) {
                 this.#event("guild", { id, change: "rank", ...up });
@@ -11738,21 +11875,60 @@ export class Host {
         return [...this.followers].filter(([, one]) => one.leader === playerId).map(([id]) => id);
     }
 
-    // One of the adventurers at a guild (or drinking at its tables) hired: out of the folk, and
-    // following the player, for their price
-    #hire(player, actor) {
-        const one = this.folk.get(actor.talkingTo);
+    /**
+     * The most a player's hired adventurers can grow to (core/followers.js capOf): the tier of the
+     * land their might's fit for (mightFor: core/might.js mightTier) and one more, and half their
+     * Command's rank more. 1 for no such player.
+     */
+    capFor(playerId) {
+        const player = this.players.get(playerId);
+
+        return player ? capOf(mightTier(this.mightFor(playerId)), player.progress.rank("command")) : 1;
+    }
+
+    /**
+     * What one of the adventurers at a guild (by their id among the folk) would follow a player
+     * for (docs/WAR.md *Mercenaries that grow*): { calling, level (a level under the most the
+     * player's can grow to: capFor; a renowned one's at it), price (gold: followers.js
+     * hirePrice), renowned (their trait: RENOWN, or null) }; or null for one who isn't for hire.
+     * Asked by the game for what they say they'd want, and by #hire for what they're paid.
+     */
+    hireOffer(playerId, folkId) {
+        const one = this.folk.get(folkId);
         const calling = one?.look;
 
         if (!one || !(one.role === "adventurer" || one.talk === "adventurer") || !HIRES[calling]) {
+            return null;
+        }
+
+        const cap = this.capFor(playerId);
+        const renowned = renownOf(one.seed);
+        const level = renowned ? cap : Math.max(1, cap - 1);
+
+        return { calling, level, price: hirePrice(HIRES[calling].price, level, Boolean(renowned)), renowned };
+    }
+
+    /** A player's hired adventurers gone home to mend (their ids: #sendHome). */
+    mendingOf(playerId) {
+        return [...this.mending].filter(([, one]) => one.leader === playerId).map(([id]) => id);
+    }
+
+    // One of the adventurers at a guild (or drinking at its tables) hired: out of the folk, and
+    // following the player, for their price (hireOffer: as strong as the player's can be, and as
+    // dear)
+    #hire(player, actor) {
+        const one = this.folk.get(actor.talkingTo);
+        const offer = this.hireOffer(player.id, actor.talkingTo);
+
+        if (!offer) {
             return refuse("hire");
         }
 
-        if (this.#company(player.id).length >= this.mostFollowers(player.id)) {
+        if (this.#company(player.id).length + this.mendingOf(player.id).length >= this.mostFollowers(player.id)) {
             return refuse("company");
         }
 
-        const { price } = HIRES[calling];
+        const { calling, level, price, renowned } = offer;
 
         if (player.progress.gold < price) {
             return refuse("gold");
@@ -11768,30 +11944,548 @@ export class Host {
         this.folk.delete(one.id);
         this.hired.add(one.id);
 
-        const id = this.#follow(player, { name: one.name, calling, sex: one.sex, seed: one.seed, people: one.people ?? "human", from: one.id }, at);
+        const id = this.#follow(player, { name: one.name, calling, sex: one.sex, seed: one.seed, people: one.people ?? "human", from: one.id, level, xp: LEVEL_XP[level], renowned }, at);
 
         actor.talkingTo = null;
         this.#event("gone", { id: one.id });
 
-        return { ok: true, follower: id, price };
+        return { ok: true, follower: id, price, level };
     }
 
-    // A follower of a player's, into the world by them (or where `at` says): { name, calling,
-    // sex, seed, people }, fighting their calling's way (core/followers.js wayOf: a mage's spells
-    // their people's school's). Returns their id
-    #follow(player, one, at = null) {
+    // A hired adventurer's record as it's kept (with their character, in the snapshot), made whole:
+    // what's missing (one kept from before they grew: a fresh one's) filled in, what can't be so
+    // put right (followers.js MERCENARY, MENDING)
+    #recordOf(one) {
+        const level = Number.isInteger(one.level) ? Math.max(1, Math.min(MERCENARY.most, one.level)) : 1;
+        const record = { ...freshRecord(), ...(one.record ?? {}) };
+
+        return {
+            name: one.name,
+            calling: one.calling,
+            sex: one.sex ?? "m",
+            seed: one.seed ?? 1,
+            people: one.people ?? "human",
+            from: one.from ?? null,
+            level,
+            xp: Number.isInteger(one.xp) ? Math.max(LEVEL_XP[level], one.xp) : LEVEL_XP[level],
+            wounds: Number.isInteger(one.wounds) ? Math.max(0, Math.min(MENDING.most - 1, one.wounds)) : 0,
+            owed: Number.isInteger(one.owed) ? Math.max(0, Math.min(9999, one.owed)) : 0,
+            gear: { mainHand: one.gear?.mainHand ?? null, body: one.gear?.body ?? null },
+            record: { ...record, slain: { ...record.slain } },
+            called: typeof one.called === "string" && one.called.trim() ? one.called.trim() : null,
+            picks: Array.isArray(one.picks) ? one.picks.filter((pick) => pickOf(pick)) : [],
+            renowned: one.renowned ?? null,
+        };
+    }
+
+    // A follower of a player's, into the world by them (or where `at` says): their record
+    // (#recordOf: a fresh one's, or as they were kept), fighting as their level, wounds, gear,
+    // trust and renown make them (core/followers.js mercenaryOf: their calling's way, a mage's
+    // spells their people's school's). Returns their id
+    #follow(player, one, at = null, { back = false } = {}) {
         const leader = this.battle.actor(player.id);
         const map = at?.map ?? leader.map;
         const taken = new Set(this.battle.actors.filter((each) => each.map === map).map(({ square: [x, y] }) => squareKey(x, y)));
         const square = nearestFree(squaresOf(this.world.maps?.[map] ?? this.world), at?.square ?? leader.square, { taken });
         const id = `follower-${this.nextFollower++}`;
-        const { weapon } = HIRES[one.calling] ?? HIRES.warrior;
+        const kept = this.#recordOf(one);
+        const { weapon } = HIRES[kept.calling] ?? HIRES.warrior;
+        const { hp, power, armor, dodge, rises, cooldown, ...way } = mercenaryOf(kept, { made: makeOf, school: PEOPLE_SCHOOL[kept.people] ?? "fire" });
 
-        this.followers.set(id, { leader: player.id, name: one.name, calling: one.calling, sex: one.sex ?? "m", seed: one.seed ?? 1, people: one.people ?? "human", from: one.from ?? null, waiting: false });
-        this.battle.add({ id, kind: "follower", name: one.name, weapon, team: player.realm, square, map, ai: "follow", leader: player.id, role: "guard", shield: (HIRES[one.calling] ?? HIRES.warrior).shield ? NPC_SHIELDS.follower : null, ...wayOf(one.calling, PEOPLE_SCHOOL[one.people] ?? "fire") });
-        this.#event("follower", { id: player.id, follower: id, name: one.name, change: "joined" });
+        this.followers.set(id, { leader: player.id, ...kept, waiting: false });
+        this.battle.add({ id, kind: "follower", name: this.#calledBy(kept), weapon, team: player.realm, square, map, ai: "follow", leader: player.id, role: "guard", hp, power, armor, dodge, rises, shield: this.#mercShield(kept), ...way });
+        // (Their ability ready again as much sooner as their level and trust make it: #unitAbility)
+        this.battle.actor(id).abilityTimes = cooldown;
+        this.#event("follower", { id: player.id, follower: id, name: this.#calledBy(kept), change: "joined", level: kept.level, ...(back ? { back } : {}) });
+        this.#gifted(player, kept);
 
         return id;
+    }
+
+    // What a hired adventurer's called: the name their leader's given them, or their own; and
+    // the byname they've earned (followers.js bynameOf), after it
+    #calledBy(one) {
+        const byname = bynameOf(one.record);
+
+        return `${one.called ?? one.name}${byname ? `, ${byname}` : ""}`;
+    }
+
+    // A hired warrior's shield (NPC_SHIELDS: a captain's, at their calling's mastery), or none
+    #mercShield(one) {
+        return (HIRES[one.calling] ?? HIRES.warrior).shield ? (one.level >= MERCENARY.mastery ? NPC_SHIELDS.captain : NPC_SHIELDS.follower) : null;
+    }
+
+    // A follower made as strong as they are now (their level, wounds, gear, trust: mercenaryOf),
+    // their health the same share of it as before; and their leader outfitted again (a veteran's
+    // gift: GIFTS)
+    #fit(id) {
+        const one = this.followers.get(id);
+        const actor = this.battle.actor(id);
+
+        if (!one || !actor) {
+            return;
+        }
+
+        const { hp, power, armor, dodge, rises, cooldown, ...way } = mercenaryOf(one, { made: makeOf, school: PEOPLE_SCHOOL[one.people] ?? "fire" });
+
+        Object.assign(actor, { name: this.#calledBy(one), power: { ...actor.power, ...power }, armor, dodge, rises, abilityTimes: cooldown, shield: this.#mercShield(one), casts: way.casts ? [...way.casts] : null, heals: way.heals ? [...way.heals] : null });
+
+        if (actor.maxHp !== hp) {
+            actor.hp = actor.dead ? 0 : Math.max(1, Math.round((actor.hp * hp) / actor.maxHp));
+            actor.maxHp = hp;
+        }
+
+        this.#gifted(this.players.get(one.leader), one);
+    }
+
+    // A player outfitted again as one of their hired adventurers grows, comes, goes, falls or gets
+    // up, if they're a veteran (MERCENARY gift): their gift to them (GIFTS) theirs now, or not
+    #gifted(player, one) {
+        if (player && one.level >= MERCENARY.gift) {
+            this.#outfit(player);
+        }
+    }
+
+    // Whether a follower's standing by their leader (on their map, within MERCENARY reach): to
+    // learn from them, to share in what's won with them (SHARE), to count what they bring down
+    // together (TRUST)
+    #standingBy(id, leaderId, reach = MERCENARY.reach) {
+        const actor = this.battle.actor(id);
+        const leader = this.battle.actor(leaderId);
+
+        return Boolean(actor && leader && !actor.dead && actor.map === leader.map && hypot(actor.x - leader.x, actor.y - leader.y) <= reach);
+    }
+
+    // A follower learning from a fight (`amount`: hit points taken off a foe, theirs or their
+    // leader's share: MERCENARY), the faster the further under the most they can be (capFor:
+    // twice a level under, three times two or more), and going up a level as far as they can
+    #train(id, amount) {
+        const one = this.followers.get(id);
+
+        if (!one || !(amount > 0)) {
+            return;
+        }
+
+        const cap = this.capFor(one.leader);
+        const times = one.level < cap - 1 ? MERCENARY.further : one.level < cap ? MERCENARY.behind : 1;
+
+        one.xp += Math.max(1, Math.round(amount * times));
+        this.#levelUp(id, cap);
+    }
+
+    // A follower up as many levels as their experience brings them to, no higher than `cap`: as
+    // strong as that (#fit), told of (the "follower" event's "levelled")
+    #levelUp(id, cap = this.capFor(this.followers.get(id)?.leader)) {
+        const one = this.followers.get(id);
+        const level = one ? levelOfXp(one.xp, cap) : 0;
+
+        if (!one || level <= one.level) {
+            return;
+        }
+
+        one.level = level;
+        this.#fit(id);
+        this.#event("follower", { id: one.leader, follower: id, name: this.#calledBy(one), change: "levelled", level, gift: level >= MERCENARY.gift ? (GIFTS[one.calling]?.label ?? null) : null });
+    }
+
+    // A player's followers up as far as their experience takes them, the most they can be having
+    // risen (their might, their Command: capFor): what they'd learnt while held back, counted now
+    #upTo(playerId) {
+        const cap = this.capFor(playerId);
+
+        for (const id of this.#company(playerId)) {
+            this.#levelUp(id, cap);
+        }
+    }
+
+    // A foe a follower brought down, remembered with them: one more, of its kind (a bane's:
+    // followers.js BANES), the mightiest yet (core/might.js powerOf); any byname earned told of
+    #noted(id, fallen) {
+        const one = this.followers.get(id);
+
+        if (!one) {
+            return;
+        }
+
+        const before = bynameOf(one.record);
+        const creature = this.wild.get(fallen.id)?.creature ?? null;
+        const bane = BANES[creature];
+        const power = powerOf(fallen);
+
+        one.record.kills += 1;
+
+        if (bane) {
+            one.record.slain[bane] = (one.record.slain[bane] ?? 0) + 1;
+        }
+
+        if (power > (one.record.best?.power ?? -1)) {
+            one.record.best = { name: fallen.name ?? fallen.kind, power };
+        }
+
+        const byname = bynameOf(one.record);
+
+        if (byname !== before) {
+            this.battle.actor(id).name = this.#calledBy(one);
+            this.#event("follower", { id: one.leader, follower: id, name: this.#calledBy(one), change: "byname", byname });
+        }
+    }
+
+    // A foe brought down by a player or one of their followers: one more for each of their
+    // followers standing by them, towards the trust they come to (followers.js TRUST): a rank
+    // reached told of (the "follower" event's "trusted": a way to grow to choose, TRUST_PICKS)
+    #together(playerId, fallen) {
+        if (!fallen || fallen.neutral || fallen.kind === "folk") {
+            return;
+        }
+
+        for (const id of this.#company(playerId)) {
+            const one = this.followers.get(id);
+
+            if (!this.#standingBy(id, playerId)) {
+                continue;
+            }
+
+            const before = trustOf(one.record.together);
+
+            one.record.together += 1;
+
+            const rank = trustOf(one.record.together);
+
+            if (rank > before) {
+                this.#event("follower", { id: playerId, follower: id, name: this.#calledBy(one), change: "trusted", rank });
+            }
+        }
+    }
+
+    // A follower fallen (a battle "death" event): knocked down and wounded, the kind that did it
+    // remembered (their nemesis: a bark when they meet it again); with as many wounds as they can
+    // take (MENDING most), gone home to mend (#sendHome), or dead where mercenaries can die
+    // (RULES mortal: #fallForGood); and one that doesn't get up (a world kept from before they
+    // did), gone
+    #knockedDown(event) {
+        const one = this.followers.get(event.id);
+        const name = this.#calledBy(one);
+
+        if (!event.downed) {
+            this.#fallForGood(event.id);
+
+            return;
+        }
+
+        one.wounds += 1;
+        one.record.falls += 1;
+        one.record.nemesis = this.wild.get(event.by)?.creature ?? one.record.nemesis;
+
+        if (one.wounds >= MENDING.most) {
+            if (this.rules.mortal) {
+                this.#fallForGood(event.id);
+            } else {
+                this.#sendHome(event.id, "wounded");
+            }
+
+            return;
+        }
+
+        this.#fit(event.id);
+        this.#event("follower", { id: one.leader, follower: event.id, name, change: "down", wounds: one.wounds });
+    }
+
+    // A follower gone home to mend (MENDING: their wounds, or left behind, "lost": carried off by
+    // magic), out of the world and among the mending (still theirs: #sendFor), what they were
+    // fighting with them; told of (the "follower" event's "home", `why`)
+    #sendHome(id, why) {
+        const one = this.followers.get(id);
+        const player = this.players.get(one.leader);
+
+        this.followers.delete(id);
+        this.battle.remove(id);
+        this.mending.set(id, { ...one, waiting: false, since: this.battle.time });
+        this.#event("follower", { id: one.leader, follower: id, name: this.#calledBy(one), change: "home", why });
+        this.#event("gone", { id });
+        this.#gifted(player, one);
+    }
+
+    // A follower fallen for good (RULES mortal): out of their company, taken away a while after,
+    // what they wore given back to their leader (#giveBack), and their name on their roll
+    // (#rollCall)
+    #fallForGood(id) {
+        const one = this.followers.get(id);
+        const player = this.players.get(one.leader);
+
+        this.followers.delete(id);
+        this.#fall(id, FALLEN_MS);
+
+        if (player) {
+            this.#giveBack(player, one);
+            this.#rollCall(player, one, "fallen");
+            this.#gifted(player, one);
+        }
+
+        this.#event("follower", { id: one.leader, follower: id, name: this.#calledBy(one), change: "fallen" });
+    }
+
+    // What a follower wore (MERC_GEAR) back in their leader's pack as they part, or at their feet
+    // if there's no room
+    #giveBack(player, one) {
+        const pieces = MERC_GEAR.slots.map((slot) => one.gear?.[slot]).filter(Boolean);
+        const left = pieces.filter((item) => !player.progress.stow(item));
+        const actor = this.battle.actor(player.id);
+
+        if (left.length && actor) {
+            const ground = `ground-${this.nextGround++}`;
+
+            this.ground.set(ground, { id: ground, bundle: { gold: 0, items: left }, for: player.id, from: "follower", map: actor.map, square: [...actor.square], until: this.battle.time + GROUND_MS });
+            this.#event("spoils", { id: player.id, ground, from: null, creature: null });
+        }
+
+        one.gear = { mainHand: null, body: null };
+
+        return pieces;
+    }
+
+    // A follower named on their leader's roll as they part from them (the company's: the journal):
+    // { name, calling, level, byname, gone ("fallen", "dismissed"), kills, at (the world's day) }, the
+    // latest first, ROLL_MOST at most
+    #rollCall(player, one, gone) {
+        player.roll = [{ name: one.called ?? one.name, calling: one.calling, level: one.level, byname: bynameOf(one.record), gone, kills: one.record.kills, day: this.war ? dayOf(elapsedOf(this.war)) : Math.floor(this.battle.time / DAY.length) }, ...(player.roll ?? [])].slice(0, ROLL_MOST);
+    }
+
+    /**
+     * The first of a player's hired adventurers mending at the guild (#sendHome), and what it
+     * costs to send for them (followers.js recallPrice: a quarter of what they'd cost to hire):
+     * { id, name, price }, or null for none. Asked by the game for what the guild says, and by
+     * #sendFor for what's paid.
+     */
+    recallOffer(playerId) {
+        const [id] = this.mendingOf(playerId);
+        const one = id ? this.mending.get(id) : null;
+
+        return one ? { id, name: this.#calledBy(one), price: recallPrice(hirePrice((HIRES[one.calling] ?? HIRES.warrior).price, one.level, Boolean(one.renowned))) } : null;
+    }
+
+    // One of a player's hired adventurers mending at the guild sent for (at any guild's
+    // receptionist, recallOffer's price): back at their side, their wounds mended
+    #sendFor(player, actor) {
+        const offer = this.recallOffer(player.id);
+
+        if (this.folk.get(actor.talkingTo)?.role !== "receptionist" || !offer) {
+            return refuse("recall");
+        }
+
+        if (player.progress.gold < offer.price) {
+            return refuse("gold");
+        }
+
+        const one = this.mending.get(offer.id);
+
+        player.progress.gold -= offer.price;
+        this.mending.delete(offer.id);
+
+        const id = this.#follow(player, { ...one, wounds: 0 }, null, { back: true });
+
+        this.#event("follower", { id: player.id, follower: id, name: offer.name, change: "recalled", price: offer.price });
+
+        return { ok: true, follower: id, price: offer.price };
+    }
+
+    // One of a player's hired adventurers mending at the guild let go (at any guild's
+    // receptionist, recallOffer's): what they wore given back (#giveBack), their name on the
+    // roll (#rollCall), and room for another in their company
+    #letMendingGo(player, actor) {
+        const offer = this.recallOffer(player.id);
+
+        if (this.folk.get(actor.talkingTo)?.role !== "receptionist" || !offer) {
+            return refuse("recall");
+        }
+
+        const one = this.mending.get(offer.id);
+
+        this.mending.delete(offer.id);
+        this.#giveBack(player, one);
+        this.#rollCall(player, one, "dismissed");
+        this.#event("follower", { id: player.id, follower: offer.id, name: offer.name, change: "dismissed" });
+
+        return OK;
+    }
+
+    // Gold won by a player (`gold`: loot, a bundle picked up, a reward), less what their hired
+    // adventurers standing by them take of it (core/followers.js SHARE, sharesOf: a little at a
+    // time adding up, the more they trust them the less), told of (a "share" event). What the
+    // player keeps of it
+    #won(player, gold) {
+        const takers = this.#company(player.id).filter((id) => this.#standingBy(id, player.id, SHARE.reach));
+
+        if (!(gold > 0) || !takers.length) {
+            return gold;
+        }
+
+        const shares = sharesOf(gold, takers.map((id) => ({ id, trust: trustOf(this.followers.get(id).record.together), owed: this.followers.get(id).owed })));
+        const taken = [];
+
+        for (const { id, gold: share, owed } of shares) {
+            const one = this.followers.get(id);
+
+            one.owed = owed;
+            one.record.earned += share;
+
+            if (share > 0) {
+                taken.push({ follower: id, name: this.#calledBy(one), gold: share });
+            }
+        }
+
+        const total = taken.reduce((sum, each) => sum + each.gold, 0);
+
+        if (total > 0) {
+            this.#event("share", { id: player.id, gold: total, taken });
+        }
+
+        return gold - total;
+    }
+
+    // One of a player's hired adventurers, near them and on their feet, to give them gear (by
+    // id), or why not
+    #nearFollower(player, actor, id) {
+        const one = this.followers.get(id);
+        const unit = this.battle.actor(id);
+
+        if (!one || one.leader !== player.id || !unit) {
+            return { reason: "follower" };
+        }
+
+        if (unit.dead || unit.map !== actor.map || hypot(unit.x - actor.x, unit.y - actor.y) > GIVE_REACH) {
+            return { reason: "far" };
+        }
+
+        return { one };
+    }
+
+    // Gear from a player's pack (its `index`th) given to one of their hired adventurers to wear
+    // (core/followers.js wearable: a weapon of their calling's, or body armour, made for no
+    // mightier than them): what they wore in its place back in the pack (or at the player's feet)
+    #outfitFollower(player, actor, id, index) {
+        const near = this.#nearFollower(player, actor, id);
+        const stack = player.progress.pack[index];
+
+        if (near.reason) {
+            return refuse(near.reason);
+        }
+
+        const { one } = near;
+        const why = stack ? wearable(stack, { weapon: (HIRES[one.calling] ?? HIRES.warrior).weapon, level: one.level }) : "slot";
+
+        if (why) {
+            return refuse({ slot: "item", calling: "calling", level: "mightier" }[why]);
+        }
+
+        const slot = mercSlotOf(stack.id);
+        // (One of a stack, as it's kept: progress.js thingOf)
+        const item = thingOf(player.progress.take(index, 1));
+        const was = one.gear[slot];
+
+        one.gear = { ...one.gear, [slot]: item };
+
+        if (was) {
+            this.#giveBack(player, { gear: { [slot]: was } });
+        }
+
+        this.#fit(id);
+        this.#event("follower", { id: player.id, follower: id, name: this.#calledBy(one), change: "outfitted", slot, item: { id: item.id, quality: item.quality, level: item.level ?? 1 } });
+
+        return OK;
+    }
+
+    // What one of a player's hired adventurers wears in a slot (MERC_GEAR slots) taken back into
+    // their pack (or at their feet)
+    #unoutfit(player, actor, id, slot) {
+        const near = this.#nearFollower(player, actor, id);
+
+        if (near.reason) {
+            return refuse(near.reason);
+        }
+
+        const { one } = near;
+
+        if (!MERC_GEAR.slots.includes(slot) || !one.gear[slot]) {
+            return refuse("item");
+        }
+
+        this.#giveBack(player, { gear: { [slot]: one.gear[slot] } });
+        one.gear = { ...one.gear, [slot]: null };
+        this.#fit(id);
+        this.#event("follower", { id: player.id, follower: id, name: this.#calledBy(one), change: "outfitted", slot, item: null });
+
+        return OK;
+    }
+
+    // One of a player's hired adventurers called by a name of the player's (twenty letters at
+    // most, nothing that isn't printed), or by their own again (none)
+    #rename(player, id, name) {
+        const one = this.followers.get(id) ?? this.mending.get(id);
+
+        if (!one || one.leader !== player.id) {
+            return refuse("follower");
+        }
+
+        const called = typeof name === "string" ? [...name.replace(/\p{Cc}/gu, " ").replace(/\s+/g, " ").trim()].slice(0, 20).join("").trim() : "";
+
+        one.called = called && called !== one.name ? called : null;
+
+        if (this.battle.actor(id)) {
+            this.battle.actor(id).name = this.#calledBy(one);
+        }
+
+        this.#event("follower", { id: player.id, follower: id, name: this.#calledBy(one), change: "renamed" });
+
+        return OK;
+    }
+
+    // How one of a player's hired adventurers grows as they come to trust them chosen (TRUST_PICKS:
+    // one of each rank's two, of a rank they've reached), as strong as that now; one already
+    // chosen chosen again only in a guild hall
+    #pick(player, actor, id, pickId) {
+        const one = this.followers.get(id);
+        const pick = pickOf(pickId);
+
+        if (!one || one.leader !== player.id || !this.battle.actor(id)) {
+            return refuse("follower");
+        }
+
+        if (!pick) {
+            return refuse("command");
+        }
+
+        if (pick.rank >= trustOf(one.record.together)) {
+            return refuse("unpicked");
+        }
+
+        const before = one.picks.find((each) => pickOf(each)?.rank === pick.rank) ?? null;
+
+        if (before !== null && before !== pick.id && this.world.interiors?.of(actor.map)?.kind !== "guild") {
+            return refuse("guildhall");
+        }
+
+        one.picks = [...one.picks.filter((each) => pickOf(each)?.rank !== pick.rank), pick.id];
+        this.#fit(id);
+        this.#event("follower", { id: player.id, follower: id, name: this.#calledBy(one), change: "picked", pick: pick.id });
+
+        return OK;
+    }
+
+    // One of the world's rules changed (RULES mortal), by whoever may (debugs: its host's player,
+    // or an owner), told to everyone in it (a "rules" event)
+    #setRule(player, rule, value) {
+        if (rule !== "mortal" || typeof value !== "boolean") {
+            return refuse("command");
+        }
+
+        if (!(player.id === HOST_PLAYER || player.role === "owner")) {
+            return refuse("rule");
+        }
+
+        this.rules = rulesOf({ ...this.rules, [rule]: value });
+        this.#event("rules", { rules: { ...this.rules } });
+
+        return OK;
     }
 
     // A player's followers brought along with them (through a door, up the stairs): by them where
@@ -12128,10 +12822,14 @@ export class Host {
             if (this.companions.has(id)) {
                 this.#letGo(id, "dismissed");
             } else {
+                // (What they wore given back, and their name on the roll: #giveBack, #rollCall)
+                this.#giveBack(player, one);
+                this.#rollCall(player, one, "dismissed");
                 this.followers.delete(id);
                 this.battle.remove(id);
-                this.#event("follower", { id: player.id, follower: id, name: one.name, change: "dismissed" });
+                this.#event("follower", { id: player.id, follower: id, name: this.#calledBy(one), change: "dismissed" });
                 this.#event("gone", { id });
+                this.#gifted(player, one);
             }
         } else {
             return refuse("command");
@@ -12167,7 +12865,7 @@ export class Host {
         const school = hired?.calling === "mage" ? (PEOPLE_SCHOOL[hired.people] ?? "fire") : null;
         const { about, cooldown } = UNIT_ABILITIES[ability];
 
-        return { id: ability, label: abilityLabel(ability, school), about, cooldown, readyAt: unit.abilityReadyAt ?? 0, school };
+        return { id: ability, label: abilityLabel(ability, school), about, cooldown: Math.round(cooldown * (unit.abilityTimes ?? 1)), readyAt: unit.abilityReadyAt ?? 0, school };
     }
 
     // One of a player's own told to use their ability (unitAbility, once each its cooldown): a
@@ -12232,7 +12930,7 @@ export class Host {
             }
         }
 
-        unit.abilityReadyAt = this.battle.time + def.cooldown;
+        unit.abilityReadyAt = this.battle.time + Math.round(def.cooldown * (unit.abilityTimes ?? 1));
         this.#event("unitAbility", { id: player.id, unit: unit.id, ability: ability.id, label: ability.label });
 
         return OK;
@@ -12911,22 +13609,12 @@ export class Host {
         }
     }
 
-    // Those with a player, lost when they're carried off by magic: their followers gone back to
-    // where they were hired (the next time it's open), their companions by magic vanished (a beast
-    // they've tamed finds them again: #keepUp)
+    // Those with a player, lost when they're carried off by magic: their followers gone home to
+    // the guild (still theirs: called back at any guild, #sendFor), their companions by magic
+    // vanished (a beast they've tamed finds them again: #keepUp)
     #loseRetinue(player) {
         for (const id of this.#company(player.id)) {
-            const one = this.followers.get(id);
-
-            this.followers.delete(id);
-            this.battle.remove(id);
-
-            if (one.from) {
-                this.hired.delete(one.from);
-            }
-
-            this.#event("follower", { id: player.id, follower: id, name: one.name, change: "lost" });
-            this.#event("gone", { id });
+            this.#sendHome(id, "lost");
         }
 
         for (const [id, one] of [...this.companions]) {
@@ -13077,9 +13765,17 @@ export class Host {
             return this.#official(player, actor, effect);
         }
 
-        // (An adventurer hired; a follower told what to do: M9)
+        // (An adventurer hired; a follower told what to do: M9; one mending sent for)
         if (effect.hire) {
             return this.#hire(player, actor);
+        }
+
+        if (effect.recall) {
+            return this.#sendFor(player, actor);
+        }
+
+        if (effect.release) {
+            return this.#letMendingGo(player, actor);
         }
 
         if (effect.follower) {
@@ -13638,7 +14334,7 @@ export class Host {
         const { reward } = request;
 
         standing.close(request.id, "done");
-        player.progress.gold += reward.gold;
+        player.progress.gold += this.#won(player, reward.gold);
 
         // (A tome from the guild's library besides: in the pack, or at their feet if there's no room)
         if (reward.tome) {

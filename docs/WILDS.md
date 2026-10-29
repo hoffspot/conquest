@@ -410,7 +410,8 @@ for each player near.
 
 `npm run balance` (`scripts/balance.js`) runs the world's rules alone, nothing drawn: sides of
 each make-up out in the wilds at tiers 2, 5 and 8 (`SIDES`: one player, two, four, one with four
-hirelings, a summoner with five creatures), the players as strong for the tier as its creatures,
+hired warriors of the level a guild offers for the tier, docs/WAR.md *Mercenaries that grow*, a
+summoner with five creatures), the players as strong for the tier as its creatures,
 each at the nearest of the wild's about, fight after fight on fresh ground. For each it says the
 side's S and F, how many foes a fight brought, how long it lasted, the hit points each player lost
 in it and how often one fell, and the share of what one alone loses that each of them does. The
