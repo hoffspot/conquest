@@ -773,6 +773,29 @@ export const SOUNDS = {
         },
     },
 
+    // Enmity (battle.js taunt, warCry, slipAway): a taunt, a weapon banged twice on a shield and
+    // a short brassy bark up a fourth; a war cry, a rousing roar over a horn's blast falling away;
+    // slipping away, a cloak's soft whoosh, dying off
+    taunt: {
+        variants: 2,
+        volume: 0.55,
+        make: (random) => {
+            const bang = () => add(burst(random, 0.12, "bandpass", 2200, 1.2, 0.001, 0.03), ring([[1870, 0.3, 0.12], [2930, 0.2, 0.08]], 0.25), 0.6);
+
+            return add(add(bang(), bang(), 0.8, 0.14), horn(random, [[147, 0.12], [196, 0.3, 0.08]], { gap: 0.02 }), 0.7, 0.3);
+        },
+    },
+    warCry: {
+        variants: 2,
+        volume: 0.65,
+        make: (random) => {
+            const roar = shape(filter(noise(random, 1.2), "bandpass", (t) => 520 + 380 * Math.exp(-t / 0.4), 0.9), swell(1.2, 0.2));
+
+            return add(horn(random, [[131, 1.1, 0.06]]), roar, 0.5, 0.02);
+        },
+    },
+    slipAway: { variants: 2, volume: 0.4, make: (random) => whoosh(random, { length: 0.5, from: 2400, top: 3800, to: 700, peak: 0.25, q: 0.9 }) },
+
     // War: an invasion's raiders' war horn, a long, low blast (the G under the bass clef: blown
     // twice as they come, app/game.js HORNS), and as they break and run, a short one and a long one
     // falling away; a town's horn, answering them as its soldiers march out, a bright call up a

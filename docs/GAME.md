@@ -965,7 +965,8 @@ same holds for the nearest enemy and an alarm raised, but not for one the player
 stunned, or cast at): set on, an enemy always turns on whoever did it (`#turnOn`), however many
 are on them already (the user: "make sure any unit that is attacked attempts to defend itself").
 The rest fight whoever else is near: a player in a battle of hundreds has a fight, not a crowd,
-on them.
+on them. That's whom each goes for first; once set on, it keeps to whoever's top of its enmity,
+whoever's harmed it most, and can be taunted off them (docs/WILDS.md *Whom they go for*).
 
 - **Moving.** Each character is a circle 0.3 metres across the middle (`BODY`), anywhere on the
   ground: its `x, y` are metres, and the square it's on is the one under its middle. It finds
@@ -5284,16 +5285,19 @@ says which side it is. The other seven slices (`PLACES`) hold what the player's 
 **What's on them.** The player has three wheels to set, each with two sides (`SETTABLE`):
 - **Their own** (held on themselves): the heals and the spells cast on oneself or a friend
   (docs/MAGIC.md), things from the pack to use (a healing draught, a hot meal, an ale: `item:potion`...), each showing how many
-  there are, and greyed out once none are left, and the emotes (`emote:wave`...: *Emotes*,
-  under *Characters in the world*).
+  there are, and greyed out once none are left, a war cry and slipping away once learnt
+  (docs/WAR.md *Abilities*), and the emotes (`emote:wave`...: *Emotes*, under *Characters in the
+  world*).
 - **An enemy's**: Attack (`attack`, at the top to start with: walking up to them, into reach of
   what's in hand, and fighting them, as a tap on them did before a tap set on them where the
   player stands: *Tapping*), the elements' spells, Stun, and once learnt Hold and the tomes'
   spells cast at enemies, a power strike and an aimed shot (a blow for another kind of weapon
-  than the one in hand is greyed out), and what's thrown at them from the pack: a goblin bomb,
-  and food for the wild's beasts, meat bait and a feed bag (`actionOf`: thrown to the one held
-  on, docs/WILDS.md *Bait*). Wheels kept from before Attack was have it put at the top of their
-  first side once (`WHEELS_VERSION`, `version`), what was there moved to the first empty slice.
+  than the one in hand is greyed out), a taunt (docs/WAR.md *Abilities*), and what's thrown at
+  them from the pack: a goblin bomb, and food for the wild's beasts, meat bait and a feed bag
+  (`actionOf`: thrown to the one held on, docs/WILDS.md *Bait*). Wheels kept from before Attack
+  was have it put at the top of their first side once (`WHEELS_VERSION` 2, `version`), what was
+  there moved to the first empty slice; and from before Cover me was, it's put on their
+  followers' other side once, at NE or the first empty slice (`WHEELS_VERSION` 3).
   The first time a player carries meat bait or a feed bag it's put on the first empty slice of an
   enemy's wheel of itself, and they're told where ("Meat bait is on an enemy's wheel one, at NE:
   hold on a beast and throw it to them."), unless it's on a wheel or the Action Bar already; only
@@ -5306,7 +5310,8 @@ says which side it is. The other seven slices (`PLACES`) hold what the player's 
   `#orderUnit`, docs/WAR.md *Followers*), Attack my target (`unit:assist`, "My target" on its
   slice, to fit), Follow me, Wait here,
   Guard me, Fall back, Hold fire (`unit:stance`: At will instead, with its own icon, while
-  they're holding fire), their own ability (`unit:ability`: by its own name and icon on each,
+  they're holding fire), Cover me (`unit:cover`: a hired warrior taking the foes on them off
+  them, a creature called roaring; docs/WAR.md *Followers*), their own ability (`unit:ability`: by its own name and icon on each,
   "Shield bash", "Burstflame", "Heal me"..., swept over while it cools down) and Dismiss; the
   heals, cures and wards to cast on them (a spell that can be cast on a friend, `forFriends`);
   and the draughts, meals and cures to give them (`give`: core/followers.js `givable`), each
@@ -5323,7 +5328,8 @@ wave (NW), a bow (NE), a nod (W) and a cheer (E) round it, and Burn (N), Hurt (N
 Blister (E) and Stun (W) on an enemy's (`WHEELS`: the elements' greyed until their tomes are
 read, docs/MAGIC.md, and a flick at one says where the tome's sold); on their followers', Attack
 my target (N), their ability (NE), Follow me (E), Fall back (SE), Dismiss (SW), Wait here (W)
-and Guard me (NW), and on its other side Vigor (N), Hold fire (E) and a healing draught (W);
+and Guard me (NW), and on its other side Vigor (N), Cover me (NE), Hold fire (E) and a healing
+draught (W);
 everything else starts empty, until the player puts something there in **Game options, Action
 Wheel and Bar, Action wheels** (app/wheelsetup.js). There, tabs choose whose wheel (Yourself, A
 foe, Your followers) and which side;

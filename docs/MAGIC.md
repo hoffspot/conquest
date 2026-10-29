@@ -59,7 +59,12 @@ tier: the first tier of either is weak, as a new adventurer is.
 
 ### Healing
 
-On anyone at all, friend, neutral or foe: it never counts as an attack.
+On anyone at all, friend, neutral or foe: it never counts as an attack, and never starts a fight.
+But the foes already on the one healed take note of the healer: half the hit points it mends (not
+what's past their full health) is the healer's enmity with them, shared among them all, as in
+Final Fantasy XIV (battle.js `ENMITY.healing`; docs/WILDS.md *Whom they go for*). A cleric healing
+a warrior holding three wolves draws a sixth of what it mends from each; a hired warrior covers it
+when they turn on it.
 
 | Spell | Casts in | Cooldown | Heals | Also |
 | --- | --- | --- | --- | --- |

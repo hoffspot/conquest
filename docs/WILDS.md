@@ -1021,6 +1021,63 @@ hours (`night` in `CREATURES`; the terrain plan's M7e-3):
   a moment, sit up with their feet drawn under them and rise; until they're up they can't move,
   fight, cast, use anything or talk (the host refuses: "You're down: get up first").
 
+## Whom they go for
+
+Each of the wild's creatures, and each soldier, keeps a table of those set on it and how much:
+its *enmity* (battle.js `ENMITY`, `TAUNT`, `SLIP`; the owner: "how threat is dealt with in the
+MMO Final Fantasy XIV"). It goes for whoever's top of it, so whoever harms it most draws it, and a
+warrior can take it off whoever it's on.
+
+- **What fills it.** Each blow that lands, its harm (one that misses, `seed`: 1); a lingering ill
+  (poison, burning), half its harm (`lingering`) as it ticks; healing someone it's on, half the hit
+  points mended (`healing`), the healer's, shared among all those on the one healed. Healing never
+  starts a fight: one not on them takes none of it.
+- **Weighed by who does it** (their `enmityWeight`): a player 1, more with a shield in hand, 0.2 a
+  rank of their Shield (twice as much at Legend, host.js `SHIELD_ENMITY`: FFXIV's tank stance,
+  earned by blocking, no button to it); a hired warrior 3 (a Shield master 4), a mage and a
+  cleric 1, a ranger 0.7, a rogue 0.5; a creature called 2, one raised 1.5 (followers.js
+  `ENMITY_WEIGHTS`); a soldier or a creature 1.
+- **Whom it goes for.** The one with the most that it can see and go for (within its leash, and
+  for a guard, AGGRO's room on a player). But it keeps to the one it's on till another's past them
+  by a tenth, if they're within 3 squares of it (`near`, `hand`), or by three tenths from further
+  off (`far`), as in World of Warcraft: no one's pulled back and forth across a fight, and a
+  creature fighting up close doesn't cross the field after a mage who's edged ahead. Of two with
+  as much, whoever was on its table first.
+- **To begin with**, with no one on its table, whom it went for before: the nearest it can see (a
+  guard, first a player near it: *How they behave*), put on its table with a seed. One it was set
+  on otherwise (sprung at, charging) counts as if seeded.
+- **Forgotten** a minute after the last of it (`FOE_MS`); at once if they fall (knocked down or
+  dead) or are taken away; and all of it when it gives up and goes home, is pacified, or its nerve
+  goes.
+- **A taunt** (FFXIV's Provoke) makes one go for the taunter: their enmity set to half again the
+  most it has for anyone (`over`), at the least, and on them, made to, for 4 seconds (`ms`); from up
+  to 16 squares off (`reach`), on one that can see them, every 15 seconds. It's struck at, as a
+  blow is: a wolf taunted, its pack's after them too. While one's taunt holds, another's doesn't
+  take (as in Path of Exile); it's over at once if the taunter falls or goes. Always lands: there's
+  no roll.
+- **A war cry** (`cry`) taunts every foe within 6 squares that can see the crier at once, to a
+  fifth again the most, for 3 seconds, every 30.
+- **Slipping away** (`SLIP`) halves one's enmity with every foe within 12 squares and gives up any
+  taunt of theirs, every 30 seconds.
+- **Who uses them:**
+  - *The player*: Taunt (Endurance at Adept), War cry (Endurance at Veteran) and Slip away
+    (Evasion at Adept), put on an action wheel or the Action Bar (docs/GAME.md *Abilities*). Taunt
+    needs no shield: anyone can pull a foe off their cleric.
+  - *A hired warrior* (its "protect"): coming to a foe that's on its leader, or on a cleric or mage
+    of theirs, it taunts it off them as soon as its taunt's ready (15 s, sooner from level 4). Not
+    one its leader's taunted in the last 15 seconds (`leave`): a foe the player's taken is theirs
+    to hold. Unless they're under half their health (`rescue`), or they've told it to cover them
+    (Cover me, on their followers' wheel: 8 seconds, `cover`). A Shield master (level 10) gives a
+    war cry once three or more foes near it (`many`) are on its leader or those it guards.
+  - *A hired rogue* of level 7 or more slips away as soon as a foe near it's on it.
+  - *A creature called by Summon* comes in with a roar, a war cry 1.5 seconds long (host.js
+    `CALLED_CRY_MS`); told to cover its caller, it roars again, every 30 seconds.
+- **The same in every copy.** Amounts are only added and multiplied by plain numbers, and ties go
+  to whoever was first on the table, so every copy of a world keeps the same tables step for step.
+  They're kept in a snapshot (`SNAPSHOT_VERSION` 46: a world kept from before with none yet,
+  taunted by no one, a player's own weighed by their calling), and the world's checksum takes in
+  whom each is on.
+
 ## Wary beasts
 
 The wild's natural beasts roaming out in the world (`core/wary.js` `WARY`: rats, porcupines,

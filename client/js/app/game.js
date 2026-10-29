@@ -186,7 +186,7 @@ import { Charge } from "./charge.js";
 import { LegendaryLooks } from "../world/legendaries.js";
 import { worldLinkOf } from "./worldlink.js";
 import { abilityIcon, ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, forFriends, iconOf, offensive, PLACES, QUICK_SHOWN, readWheels, SETTABLE, SIDES, WHEELS } from "./wheel.js";
-import { BARKS, bynameOf, GIFTS as VETERAN_GIFTS, hirePrice, LEVEL_XP, MASTERY, MERCENARY, recallPrice, RENOWN, TRUST_PICKS, trustOf, wearable } from "../core/followers.js";
+import { BARKS, bynameOf, GIFTS as VETERAN_GIFTS, hirePrice, KNACKS, LEVEL_XP, MASTERY, MERCENARY, recallPrice, RENOWN, TRUST_PICKS, trustOf, wearable } from "../core/followers.js";
 
 /** What every character wears under their gear: a tunic, and trousers if nothing's on their legs. */
 export const BASE_OUTFIT = Object.freeze(["tunic", "trousers"]);
@@ -944,7 +944,7 @@ const calledBy = (one) => {
 const BARK_EVERY = 45;
 const BARK_GAP = 6;
 
-const UNIT_TOLD = Object.freeze({ follow: "follows you.", wait: "waits here.", assist: "goes for your target.", guard: "guards you.", fallback: "falls back to you.", hold: "holds fire.", free: "fights at will." });
+const UNIT_TOLD = Object.freeze({ follow: "follows you.", wait: "waits here.", assist: "goes for your target.", guard: "guards you.", fallback: "falls back to you.", hold: "holds fire.", free: "fights at will.", cover: "covers you." });
 
 // Why another of the player's party wasn't given a request they shared (host.js #unshared), as told
 const SHARE_SKIPPED = Object.freeze({
@@ -10848,7 +10848,7 @@ export class Game {
     // What one of the player's hired adventurers has grown into, as the party menu's More shows it
     // (app/partypanel.js #grown): their level and experience (held at the most the player can lead
     // now: core/host.js capFor), wounds, whether they're down, their trust and its ways to grow,
-    // what they wear, what they've done, a veteran's gift and mastery, their renown
+    // what they wear, what they've done, a veteran's gift, knack and mastery, their renown
     #mercView(id, one) {
         const actor = this.battle.actor(id);
         const next = one.level >= MERCENARY.most ? null : LEVEL_XP[one.level + 1];
@@ -10857,6 +10857,7 @@ export class Game {
         const piece = (item) => (item ? `${itemLabel(item)}${(item.level ?? 1) > 1 ? ` (level ${item.level})` : ""}` : null);
         const { kills, falls, rises, best, earned } = one.record;
         const gift = VETERAN_GIFTS[one.calling];
+        const knack = KNACKS[one.calling];
         const mastery = MASTERY[one.calling];
         const renown = RENOWN.traits[one.renowned];
 
@@ -10879,6 +10880,7 @@ export class Game {
             ],
             record: `Brought down ${kills} foe${kills === 1 ? "" : "s"}${best ? `, the mightiest a ${best.name.toLowerCase()}` : ""}; knocked down ${falls} time${falls === 1 ? "" : "s"}, up again ${rises}; earned ${earned} gold.`,
             gift: gift ? (one.level >= MERCENARY.gift ? `${gift.label}: ${gift.about}` : `At level ${MERCENARY.gift}, ${gift.label.toLowerCase()} for you: ${gift.about}`) : null,
+            knack: knack ? (one.level >= knack.level ? `${knack.label}: ${knack.about}` : `At level ${knack.level}, ${knack.label.toLowerCase()}: ${knack.about}`) : null,
             mastery: mastery && one.level >= MERCENARY.mastery ? `${mastery.label}: ${mastery.about}` : null,
             renowned: renown ? `Renowned: ${renown.label}. ${renown.about}` : null,
             renownedName: renown ? "Renowned" : null,
@@ -13136,6 +13138,24 @@ export class Game {
                         this.sound?.play("denied");
                     }
 
+                    break;
+                case "taunted":
+                    // (A foe made to go for someone, heard where they are: a war cry's, as its own
+                    // ("cried"); one the player's taunted, told over it)
+                    if (!event.cried) {
+                        this.sound?.play("taunt", { at: (this.avatars.get(event.by) ?? avatar).object.position });
+                    }
+
+                    if (event.by === this.me) {
+                        hud.damage(this.#screenAbove(event.id), "Taunted", { kind: "stun" });
+                    }
+
+                    break;
+                case "cried":
+                    this.sound?.play("warCry", { at: avatar.object.position });
+                    break;
+                case "slipped":
+                    this.sound?.play("slipAway", { at: avatar.object.position });
                     break;
                 case "stunned":
                     effects.stun(avatar.point(0.9), avatar.object, avatar.character.height * 1.08, (event.until - battle.time) / 1000, this.#landing(event.id, "stun"));

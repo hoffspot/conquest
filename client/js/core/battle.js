@@ -392,12 +392,20 @@ export const ENMITY = Object.freeze({ seed: 1, lingering: 0.5, healing: 0.5, nea
  * times the most it has for anyone (at the least), for `ms`; from within `reach` squares, a foe
  * that can see them, every `cooldown` ms. While one's taunt holds, another's doesn't take (the
  * first's, as in Path of Exile). A war cry (`cry`): every foe within its `reach` that can see the
- * crier, taunted at once. A hired warrior leaves a foe its leader's taunted to them for `leave`
- * ms, unless they're under `rescue` of their health or it's told to cover them (`cover` ms).
- * Healing: ENMITY `healing` of the hit points mended, the healer's, shared among those set on the
- * one healed (docs/WILDS.md *Whom they go for*)
+ * crier, taunted at once; a Shield master's (followers.js MASTERY), once `many` or more near it
+ * are on its leader or one of theirs it guards. A hired warrior leaves a foe its leader's taunted
+ * to them for `leave` ms, unless they're under `rescue` of their health or it's told to cover them
+ * (`cover` ms). Healing: ENMITY `healing` of the hit points mended, the healer's, shared among
+ * those set on the one healed (docs/WILDS.md *Whom they go for*)
  */
-export const TAUNT = Object.freeze({ over: 1.5, ms: 4000, reach: 16, cooldown: 15000, leave: 15000, rescue: 0.5, cover: 8000, cry: Object.freeze({ over: 1.2, ms: 3000, reach: 6, cooldown: 30000 }) });
+export const TAUNT = Object.freeze({ over: 1.5, ms: 4000, reach: 16, cooldown: 15000, leave: 15000, rescue: 0.5, cover: 8000, cry: Object.freeze({ over: 1.2, ms: 3000, reach: 6, cooldown: 30000, many: 3 }) });
+
+/**
+ * Slipping away (FFXIV's old Diversion, WoW's Fade): one's enmity with every foe within `reach`
+ * squares cut to `share` of it, and any taunt of theirs given up, every `cooldown` ms; a player's
+ * (Evasion), and a seasoned rogue's whenever a foe near it's on it (followers.js MERCENARY slip)
+ */
+export const SLIP = Object.freeze({ share: 0.5, reach: 12, cooldown: 30000 });
 
 /**
  * The folk in danger (#afraid): afraid of whoever they can see within `sight` squares that's
@@ -1064,9 +1072,9 @@ export class Battle {
      * most they have for anyone, at the least, and on them, made to, for `ms`; struck at as far as
      * grudges and a pack go (a wolf taunted: its pack after them too). Whether it took: not on one
      * that's no enemy of theirs, nor one that keeps no enmity (a player, a follower), nor one
-     * another's taunt holds still. Told as "taunted" ({ id, by, until })
+     * another's taunt holds still. Told as "taunted" ({ id, by, until, and `cried`: by a war cry })
      */
-    taunt(id, targetId, { over = TAUNT.over, ms = TAUNT.ms } = {}) {
+    taunt(id, targetId, { over = TAUNT.over, ms = TAUNT.ms, cried = false } = {}) {
         const [actor, foe] = [this.actor(id), this.actor(targetId)];
 
         if (!actor || !foe || actor.dead || foe.dead || foe.map !== actor.map || !this.hostile(foe, actor) || (foe.ai !== "wild" && foe.ai !== "patrol" && foe.ai !== "colossus")) {
@@ -1092,7 +1100,7 @@ export class Battle {
         }
 
         Object.assign(foe, { taunted: { by: id, at: this.time, until: this.time + ms }, target: id, lastSeen: this.time, waryUntil: 0 });
-        this.#emit("taunted", { id: foe.id, by: id, until: foe.taunted.until });
+        this.#emit("taunted", { id: foe.id, by: id, until: foe.taunted.until, ...(cried ? { cried } : {}) });
 
         return true;
     }
@@ -1111,7 +1119,7 @@ export class Battle {
         let took = 0;
 
         for (const other of this.actors) {
-            if (!other.dead && other.map === actor.map && distanceBetween(actor.square, other.square) <= reach && this.hostile(other, actor) && this.canSee(other, actor) && this.taunt(id, other.id, { over, ms })) {
+            if (!other.dead && other.map === actor.map && distanceBetween(actor.square, other.square) <= reach && this.hostile(other, actor) && this.canSee(other, actor) && this.taunt(id, other.id, { over, ms, cried: true })) {
                 took++;
             }
         }
@@ -1119,6 +1127,42 @@ export class Battle {
         this.#emit("cried", { id, took });
 
         return took;
+    }
+
+    /**
+     * Slipping away (SLIP): one's enmity with every foe within `reach` squares cut to `share` of it,
+     * and any taunt of theirs on them given up. How many it was cut with. Told as "slipped"
+     * ({ id, from })
+     */
+    slipAway(id, { share = SLIP.share, reach = SLIP.reach } = {}) {
+        const actor = this.actor(id);
+
+        if (!actor || actor.dead) {
+            return 0;
+        }
+
+        let from = 0;
+
+        for (const other of this.actors) {
+            if (other.dead || other.map !== actor.map || distanceBetween(actor.square, other.square) > reach) {
+                continue;
+            }
+
+            if (other.taunted?.by === id && other.taunted.until > this.time) {
+                other.taunted.until = this.time;
+            }
+
+            const entry = other.enmity?.[id];
+
+            if (entry) {
+                entry[0] *= share;
+                from++;
+            }
+        }
+
+        this.#emit("slipped", { id, from });
+
+        return from;
     }
 
     empower(id, blow, factor, { stun = 0 } = {}) {
@@ -3904,6 +3948,11 @@ export class Battle {
             return;
         }
 
+        // (A seasoned rogue: slipping away from a foe that's on it, as it can: #slip)
+        if (actor.slips) {
+            this.#slip(actor);
+        }
+
         // (Falling back: after no one, running back to its leader till it's by them)
         if (actor.fallBackUntil > this.time) {
             if (distanceBetween(actor.square, leader.square) > FOLLOW.near) {
@@ -3947,8 +3996,13 @@ export class Battle {
         const seen = (actor.holdFire || actor.guarding ? null : this.#firstFor(actor, leader, test)) ?? this.#nearestSeen(actor, test);
 
         if (seen) {
-            // (One that protects: the foe taunted off its leader first, as it can be: #takeOff)
+            // (One that protects: a war cry, a Shield master's, as foes crowd its leader; the foe
+            // taunted off them first, as it can be: #cryOut, #takeOff)
             if (actor.tactic === "protect") {
+                if (actor.cries) {
+                    this.#cryOut(actor, leader);
+                }
+
                 this.#takeOff(actor, leader, seen);
             }
 
@@ -3980,12 +4034,8 @@ export class Battle {
     // fighting, if it can see them. Null for none
     #firstFor(actor, leader, test) {
         if (actor.tactic === "protect") {
-            // (Its leader's, or on one of theirs that heals or casts: #takeOff)
-            const ward = (id) => {
-                const one = id === null || id === undefined ? null : this.actor(id);
-
-                return Boolean(one) && (one === leader || (one !== actor && one.leader === leader.id && one.ai === "follow" && (one.heals || one.casts)));
-            };
+            // (Its leader's, or on one of theirs that heals or casts: #guards)
+            const ward = (id) => this.#guards(actor, leader, id);
 
             return this.#nearestSeen(actor, (enemy) => test(enemy) && (ward(enemy.target) || ward(enemy.attack?.target)));
         }
@@ -6497,13 +6547,11 @@ export class Battle {
             return;
         }
 
-        const on = foe.target === null ? null : this.actor(foe.target);
-        const ward = on && on !== actor && (on === leader || (on.leader === leader.id && on.ai === "follow" && (on.heals || on.casts)));
-
-        if (!ward) {
+        if (!this.#guards(actor, leader, foe.target)) {
             return;
         }
 
+        const on = this.actor(foe.target);
         const theirs = on === leader && foe.taunted?.by === leader.id && this.time - foe.taunted.at < TAUNT.leave;
 
         if (theirs && leader.hp >= leader.maxHp * TAUNT.rescue && !((actor.coverUntil ?? 0) > this.time)) {
@@ -6512,6 +6560,49 @@ export class Battle {
 
         if (this.canSee(foe, actor) && this.taunt(actor.id, foe.id)) {
             actor.tauntReadyAt = this.time + Math.round(TAUNT.cooldown * (actor.abilityTimes ?? 1));
+        }
+    }
+
+    // Whether one that protects (`actor`) guards whoever `id` is: its leader, or one of theirs
+    // (not itself) that heals or casts
+    #guards(actor, leader, id) {
+        const one = id === null || id === undefined ? null : this.actor(id);
+
+        return Boolean(one) && (one === leader || (one !== actor && one.leader === leader.id && one.ai === "follow" && Boolean(one.heals || one.casts)));
+    }
+
+    // A Shield master's war cry (TAUNT cry), as it's ready, once `many` or more foes within its
+    // reach that can see it are on its leader or one of theirs it guards
+    #cryOut(actor, leader) {
+        if ((actor.cryReadyAt ?? 0) > this.time) {
+            return;
+        }
+
+        const { reach, many, cooldown } = TAUNT.cry;
+        let crowding = 0;
+
+        for (const other of this.actors) {
+            if (!other.dead && other.map === actor.map && this.#guards(actor, leader, other.target) && distanceBetween(actor.square, other.square) <= reach && this.hostile(other, actor) && this.canSee(other, actor)) {
+                crowding++;
+            }
+        }
+
+        if (crowding >= many && this.warCry(actor.id)) {
+            actor.cryReadyAt = this.time + Math.round(cooldown * (actor.abilityTimes ?? 1));
+        }
+    }
+
+    // A seasoned rogue's slipping away (SLIP), as it's ready, once a foe within its reach is on it
+    #slip(actor) {
+        if ((actor.slipReadyAt ?? 0) > this.time) {
+            return;
+        }
+
+        const on = this.actors.some((other) => !other.dead && other.map === actor.map && other.target === actor.id && distanceBetween(actor.square, other.square) <= SLIP.reach && this.hostile(other, actor));
+
+        if (on) {
+            this.slipAway(actor.id);
+            actor.slipReadyAt = this.time + Math.round(SLIP.cooldown * (actor.abilityTimes ?? 1));
         }
     }
 

@@ -11941,6 +11941,190 @@ test("meat bait the player carries goes on an enemy's wheel of itself the first 
     await expect(page.locator("#party .member.tamed")).toHaveAttribute("aria-label", "Wolf, tamed, at your side");
 });
 
+test("Endurance at Adept brings Taunt: put on an enemy's wheel and flicked on a wary wolf warning the player off, it's made to come at them, heard and told (Taunted over it); its slice greyed as it cools down, and flicked again too soon, refused", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    const wheel = page.locator(".action-wheel");
+
+    // A wolf 10 m off, its dice thrown 2 and swayed +2 (4: core/wary.js REACTION): warning them off
+    await page.evaluate(WARY_WILDS, { metres: 10, nerve: 2 });
+
+    const ready = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { settle } = window.wild;
+        const heard = [];
+        const floated = [];
+        const play = game.sound.play.bind(game.sound);
+
+        game.sound.play = (name, options) => (heard.push(name), play(name, options));
+        new MutationObserver((records) => floated.push(...records.flatMap(({ addedNodes }) => [...addedNodes].map((node) => node.textContent)))).observe(game.hud.floaters, { childList: true });
+        window.taunting = { heard, floated };
+
+        // (Endurance an Adept's: its Taunt learnt, and put at SW on the first side of an enemy's
+        // wheel, as Game options would)
+        game.progress.gain("endurance", 300);
+        game.wheels.enemy[0].sw = "taunt";
+        await settle(8);
+
+        const wolf = game.battle.actor("wary-wolf");
+
+        return { learnt: game.progress.abilities().includes("taunt"), mood: wolf.mood?.kind ?? null, after: wolf.target, at: session.view.toScreen(game.avatars.get("wary-wolf").point(0.5)) };
+    });
+
+    expect(ready).toMatchObject({ learnt: true, mood: "warn", after: null });
+
+    // Held on the wolf: Taunt at SW; flicked into it, the wolf taunted
+    const flick = async ({ x, y }) => {
+        await page.evaluate(() => window.pellagos.game.start());
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await expect(wheel).toBeVisible();
+        await expect(wheel.locator('.slice[data-direction="sw"] .label')).toHaveText("Taunt");
+        await page.mouse.move(x - 20, y + 20, { steps: 2 });
+        await page.mouse.move(x - 50, y + 50, { steps: 2 });
+        await page.mouse.up();
+        await page.evaluate(() => window.pellagos.game.stop());
+    };
+
+    await flick(ready.at);
+
+    const taunted = await page.evaluate(async () => {
+        const { game, session } = window.pellagos;
+        const { battle, host } = game;
+        const wolf = battle.actor("wary-wolf");
+        const player = battle.actor("player");
+        const far = Math.hypot(wolf.x - player.x, wolf.y - player.y);
+
+        for (let k = 0; k < 4; k++) {
+            game.advance(0.25);
+        }
+
+        return {
+            by: wolf.taunted?.by ?? null,
+            forced: (wolf.taunted?.until ?? 0) - wolf.taunted?.at,
+            after: wolf.target,
+            mood: wolf.mood?.kind ?? null,
+            nearer: Math.hypot(wolf.x - player.x, wolf.y - player.y) < far,
+            cooling: (host.players.get(game.me).readyAt.taunt ?? 0) - battle.time,
+            heard: [...window.taunting.heard],
+            floated: [...window.taunting.floated],
+            at: session.view.toScreen(game.avatars.get("wary-wolf").point(0.5)),
+        };
+    });
+
+    expect(taunted).toMatchObject({ by: "player", forced: 4000, after: "player", mood: "attack", nearer: true });
+    expect(taunted.cooling).toBeGreaterThan(13000);
+    expect(taunted.heard).toContain("taunt");
+    expect(taunted.floated).toContain("Taunted");
+
+    // Flicked again a moment after: its slice greyed over as it cools down, flashed refused, and
+    // nothing done (its cooldown as it was)
+    await page.evaluate(() => window.taunting.heard.splice(0));
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.mouse.move(taunted.at.x, taunted.at.y);
+    await page.mouse.down();
+    await expect(wheel).toBeVisible();
+    await expect(wheel.locator('.slice[data-direction="sw"]')).toHaveClass(/cooling/);
+
+    const readyAt = await page.evaluate(() => window.pellagos.game.host.players.get(window.pellagos.game.me).readyAt.taunt);
+
+    await page.mouse.move(taunted.at.x - 20, taunted.at.y + 20, { steps: 2 });
+    await page.mouse.move(taunted.at.x - 50, taunted.at.y + 50, { steps: 2 });
+    await expect(wheel.locator('.slice[data-direction="sw"]')).toHaveClass(/refused/);
+    await page.mouse.up();
+    expect(await page.evaluate(() => window.taunting.heard)).toContain("denied");
+    expect(await page.evaluate(() => window.pellagos.game.host.players.get(window.pellagos.game.me).readyAt.taunt)).toBe(readyAt);
+});
+
+test("Show whom foes are on (Game options, on): a ring round a foe's icon on the right, grey off them, yellow about to turn on them, orange on them with another close, red held; a dot for one of theirs it's on, and a count on that one's icon; a taunt's mark over it; none of it with the switch off", async ({ page }) => {
+    test.setTimeout(180000);
+    await playing(page, "/?play&seed=1");
+
+    // A wolf 6 m off, kept from minding anyone of itself (whom it's on and its enmity set here) and
+    // too hardy to fall, and a creature called to the player's side
+    await page.evaluate(WARY_WILDS, { metres: 6, nerve: 2 });
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        Object.assign(game.battle.actor("wary-wolf"), { ai: null, mood: null, hp: 1e6, maxHp: 1e6 });
+        game.progress.learn("summon");
+        Object.assign(game.battle.actor(game.me), { spellReadyAt: 0, spellsReadyAt: {} });
+        game.host.command(game.me, { type: "cast", spell: "summon" });
+    });
+    expect(await playUntil(page, () => window.pellagos.game.host.companions.size === 1 && document.querySelector("#party .member.summon"), { seconds: 60 })).toBe(true);
+
+    const id = await page.evaluate(() => [...window.pellagos.game.host.companions.keys()][0]);
+    const shown = (set) =>
+        page.evaluate(async (set) => {
+            const { game } = window.pellagos;
+            const { battle } = game;
+            const wolf = battle.actor("wary-wolf");
+            const called = [...game.host.companions.keys()][0];
+            const at = (amount) => [amount, battle.time + 60000];
+
+            game.stop();
+            Object.assign(wolf, { ai: null, dead: false });
+
+            if (set.on !== undefined) {
+                wolf.target = set.on === "called" ? called : set.on;
+            }
+
+            if (set.enmity) {
+                wolf.enmity = Object.fromEntries(Object.entries(set.enmity).map(([who, amount]) => [who === "called" ? called : who, at(amount)]));
+            }
+
+            // (A taunt takes only on one that keeps enmity)
+            if (set.taunt) {
+                wolf.ai = "wild";
+                battle.taunt(game.me, wolf.id);
+                wolf.ai = null;
+            }
+
+            if (set.show !== undefined) {
+                game.showEnmity = set.show;
+            }
+
+            for (let k = 0; k < 6; k++) {
+                game.advance(0.05);
+            }
+
+            const icon = document.querySelector('#attackers .attacker[data-id="wary-wolf"]');
+            const dot = icon?.querySelector(".attacker-on");
+            const count = document.querySelector(`#party .member[data-id="${called}"] .member-foes`);
+            const mark = game.hud.tracked.get("wary-wolf")?.querySelector(".taunt") ?? null;
+
+            return {
+                ring: icon ? ([...icon.classList].find((name) => name.startsWith("enmity-")) ?? null) : "no icon",
+                dot: dot && !dot.hidden ? dot.textContent : null,
+                count: count && !count.hidden ? count.textContent : null,
+                mark: mark && mark.getAttribute("aria-label"),
+                label: icon?.getAttribute("aria-label") ?? null,
+            };
+        }, set);
+
+    // On the creature, the player not on its table: grey, a dot with the creature's initial, a
+    // count of one on its icon
+    const name = await page.evaluate((one) => window.pellagos.game.battle.actor(one).name, id);
+    const onIt = await shown({ on: "called", enmity: { called: 60 } });
+
+    expect(onIt).toMatchObject({ ring: "enmity-none", dot: name.slice(0, 1).toUpperCase(), count: "1", mark: null });
+    expect(onIt.label).toContain(`on ${name}`);
+
+    // The player's enmity past the creature's, not by the margin (three tenths from 6 m): yellow
+    expect(await shown({ enmity: { called: 60, player: 70 } })).toMatchObject({ ring: "enmity-pull", count: "1" });
+
+    // On the player, the creature within a tenth: orange, no dot or count; then well behind: red
+    expect(await shown({ on: "player", enmity: { called: 95, player: 100 } })).toMatchObject({ ring: "enmity-near", dot: null, count: null });
+    expect(await shown({ enmity: { called: 40, player: 100 } })).toMatchObject({ ring: "enmity-held", dot: null, count: null });
+
+    // Taunted by the player: held, and its mark over it
+    expect(await shown({ enmity: { called: 400, player: 100 }, taunt: true })).toMatchObject({ ring: "enmity-held", mark: "Taunted by you" });
+
+    // With Show whom foes are on off: no ring, no dot, no count, no mark
+    expect(await shown({ show: false })).toEqual({ ring: null, dot: null, count: null, mark: null, label: expect.any(String) });
+});
+
 test("the wilds director lays an ambush ahead of a player crossing the wilds: its band hidden in cover, no bars over them; told as they come near, then sprung on them, said, and after them", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
@@ -15419,7 +15603,7 @@ test("the action wheels: flicked down, the other side; what's on each chosen in 
     // Their followers': the healing to cast on them, what to tell them (their own ability among
     // it) and the draughts to give them; Attack my target at the top
     await setup.getByRole("tab", { name: "Your followers" }).click();
-    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Attack my target", "Follow me", "Wait here", "Guard me", "Fall back", "Hold fire / At will", "Their own ability", "Dismiss", "Draught"]);
+    await expect(setup.locator(".wheels-choice")).toHaveText(["Nothing", "Vigor", "Mend Wounds", "Attack my target", "Follow me", "Wait here", "Guard me", "Fall back", "Hold fire / At will", "Cover me", "Their own ability", "Dismiss", "Draught"]);
     await expect(setup.locator('.slice[data-direction="n"] .label')).toHaveText("My target");
     await setup.getByRole("tab", { name: "Yourself" }).click();
 
