@@ -295,7 +295,8 @@ game says how, as it goes:
 3. **Its name** (the world's, to start with), and whether others make new characters
    there (made here) or may copy one of theirs in (copied in).
 
-The server makes a world with the same seed (its home people the character's), its war carried on as it stood, and
+The server makes a world with the same seed (its home people the character's), its war carried on as it stood (and its
+legends, the rare encounters met there: docs/WILDS.md *Rare encounters*), and
 the rest made from the seed, as the game makes it each time it's loaded. Its heroes are kept by
 the world, and a copy of the character is the first of them (it never leaves the world), put right as this version of the game plays
 them, as a character file is (what changed is said to the player, and in the world's journal).

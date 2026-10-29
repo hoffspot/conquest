@@ -4708,7 +4708,7 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 }
 
 /* How well made things are: common plain, fine blue, masterwork gold, rare violet, very rare
-   rose, legendary orange */
+   rose, legendary orange; and a unique (core/rare.js UNIQUES), found nowhere else, sea-green */
 .rarity-fine {
     --rarity: #6aa6ff;
 }
@@ -4727,6 +4727,10 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 .rarity-legendary {
     --rarity: #f08a3a;
+}
+
+.rarity-unique {
+    --rarity: #3fe0c0;
 }
 
 .doll-slot[class*="rarity-"]:not(.rarity-common),
@@ -4914,6 +4918,12 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 .tone-effect {
     color: #f0a050;
     text-shadow: 0 0 6px rgba(240, 138, 58, 0.45);
+}
+
+/* (A unique: found nowhere else, bound to who it was given to: core/rare.js UNIQUES) */
+.tone-unique {
+    color: #5fe8cc;
+    text-shadow: 0 0 6px rgba(63, 224, 192, 0.4);
 }
 
 /* (What a thing that isn't gear does; what's rolled on a shop's piece as it's bought, which of
@@ -5360,7 +5370,8 @@ body[data-screen="hud"][data-minimap="on"] #debug {
     border: 1px solid var(--field-border);
 }
 
-.journal-treasure .journal-request-title[class*="rarity-"]:not(.rarity-common) {
+.journal-treasure .journal-request-title[class*="rarity-"]:not(.rarity-common),
+.journal-unique .journal-request-title.rarity-unique {
     color: var(--rarity);
 }
 

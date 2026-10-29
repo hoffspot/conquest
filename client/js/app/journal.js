@@ -25,6 +25,8 @@
 //   they've read and which way the last ran, till they've tracked it home (then where that is);
 // - the moon roads (core/rings.js): tonight's moon, and the rings of standing stones they've stood
 //   in, the moon each wakes under and where it is;
+// - the world's legends (core/rare.js): the rare encounters out that they or their party have
+//   seen, those overcome in the world and by whom, and the uniques their character's been given;
 // - by a tab at its top, the bestiary: a page for each kind of creature met, telling as much of
 //   it as they've found out (core/bestiary.js; its pages made by app/bestiary.js and given it, so
 //   the journal, wanted before the game's loaded (app/save.js), needs nothing of the creatures);
@@ -221,7 +223,8 @@ export class JournalPanel {
      * hunting: core/treasure.js), trails: [{ title, words, where, tracked }] (the trails they've
      * read signs on: core/tracks.js, those still to follow first), moonRoads: { tonight, rings: [{
      * name, phase, where, tonight }], trial (where Lunara's guardian is tonight, under a full moon)
-     * } or null (the rings stood in: core/rings.js), bestiary (what's been found out about each kind of creature: {
+     * } or null (the rings stood in: core/rings.js), legends: { notes: [{ title, state, words, where
+     * }], uniques: [{ name, about }] } or null (the world's rare encounters: core/rare.js), bestiary (what's been found out about each kind of creature: {
      * met: the kinds met (app/bestiary.js contentsOf), of: how many kinds there are, levels: how
      * many levels each has, pageOf(kind): its page, app/bestiary.js pageOf, or null; and
      * portraitOf(kind): a promise of its portrait's URL, or null: app/game.js portraitOf }),
@@ -231,7 +234,7 @@ export class JournalPanel {
      * lead), messages: the last told, oldest first (keepMessage) }.
      */
     show(shown) {
-        const { standing, guild = null, requests, party = false, people, done, company = [], mending = [], roll = [], most = 1, heard = [], writings = [], treasures = [], trails = [], moonRoads = null, bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
+        const { standing, guild = null, requests, party = false, people, done, company = [], mending = [], roll = [], most = 1, heard = [], writings = [], treasures = [], trails = [], moonRoads = null, legends = null, bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
 
         this.shown = shown;
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
@@ -415,6 +418,34 @@ export class JournalPanel {
             );
 
             sections.push(this.#section("Moon roads", roads));
+        }
+
+        // The world's legends: the rare encounters out, those overcome, and the uniques they keep
+        if (legends && (legends.notes.length || legends.uniques.length)) {
+            const told = element("ul", "journal-list legends");
+
+            told.append(
+                ...legends.notes.map(({ title, state, words, where }) => {
+                    const row = element("li", `journal-trail${state === "Overcome" ? " tracked" : ""}`);
+                    const head = element("div", "journal-request-head");
+
+                    head.append(element("span", "journal-request-title", title), element("span", "journal-request-from", state));
+                    row.append(head, ...(words ? [element("p", "journal-request-text", words)] : []), ...(where ? [element("p", "journal-request-progress", where)] : []));
+
+                    return row;
+                }),
+                ...legends.uniques.map(({ name, about }) => {
+                    const row = element("li", "journal-trail journal-unique");
+                    const head = element("div", "journal-request-head");
+
+                    head.append(element("span", "journal-request-title rarity-unique", name), element("span", "journal-request-from", "Kept with you"));
+                    row.append(head, element("p", "journal-request-text", about));
+
+                    return row;
+                }),
+            );
+
+            sections.push(this.#section("Legends", told));
         }
 
         // What they've read, each to be read again

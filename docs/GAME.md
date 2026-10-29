@@ -822,6 +822,31 @@ The rings of standing stones the player's stood in, and tonight's moon:
   tonight; then each ring stood in, the nearest first, with the moon it wakes under and which way and
   how far it is, those awake tonight edged in pale green.
 
+### Legends (core/rare.js; docs/WILDS.md *Rare encounters*)
+
+The world's rare encounters, and what the player keeps of them:
+- **On the world map and the minimap** (app/game.js `rareIcons`, app/mapicons.js `legend`): an
+  eye opened wide in a sea-green star where a rare encounter out was seen, by them or one of their
+  party, till it ends.
+- **On the maps, too**: where one of the world's threads leads next (a scroll, its seal
+  sea-green), and a place a thread's revealed, known to every player.
+- **In the journal** (app/journal.js, *Legends*): those out that they or their party have seen,
+  with what was said of each and which way and how far it was seen from them now; the world's
+  threads still to follow, each's step, what's known of the next and where (docs/WILDS.md
+  *Threads*); those overcome in this world, the latest first, by whom and where (a unique's never
+  to come again); the threads followed to their end; and the uniques their character's been
+  given, each in its sea-green, with its tale, kept with them.
+- **In talk and the shops**: a thread's question in the talk of the one it's for; a thread's
+  contract on a guild's board; a festival's prices, and a thread's wares on a shop's shelves.
+- **At a door**: one a thread's lock keeps shut (or a hell's portal sealed from this side, or a
+  sealed room's door without its key) says what might open it as it's chosen, and isn't walked to;
+  any that refuses says why. A sealed room's door on a dungeon's floor is an arch against the rock
+  (world/vault3d.js), its seal glowing sea-green while it's shut.
+- **In the pack** (app/gearinfo.js `rarityOf`, styles.css `.rarity-unique`): a unique's its own
+  make, *Unique*, sea-green in its card, its cell and its glow on the ground (world/drops3d.js),
+  found nowhere else and bound to them: nothing to sell, drop or give it by, only *Throw away*,
+  asked first (gone for good, and never given again).
+
 ### Writings (core/writings.js, app/reader.js)
 
 What's written down and left where it was, to be found and read there: the wizard Sinclair's
@@ -6085,6 +6110,9 @@ switched off (in the game, under the minimap). It folds away to just the frame r
   running);
 - how much was downloaded and how long each group took, and how long each part of the world took
   to build;
+- the debug controls: a field battle, an invasion, the Behemoth of the Rift, burnt houses, and a
+  rare encounter (*Rare encounter*: Deal, debug mode's sample ahead of the player; Inside, its
+  inside sample on the dungeon floor they're on: docs/WILDS.md *Rare encounters*, *Inside*);
 - the downloader (app/fetcher.js, which fetches the models the game downloads only as they're
   wanted, in the background): what it's fetching and how far it's got, its rate and what the link
   has carried, alone or together, the queueing delay it sees (the round trip over the least lately),

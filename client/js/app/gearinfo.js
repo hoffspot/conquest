@@ -4,19 +4,27 @@
 // set it's part of and how far that set's worn, and, for gear in the pack (or a shop's, or
 // another's), what putting it on would change (better or worse), and what it's worth. A shop's
 // ware has what's rolled on it as it's bought said as what it could be. Each piece's level (core/
-// gear.js levelOf), and a legendary weapon's effect (core/legendary.js). Pure: from the player's
-// progress (core/progress.js), no DOM.
+// gear.js levelOf), a legendary weapon's effect (core/legendary.js), and a unique's tale and that
+// it's bound to its finder (core/rare.js UNIQUES). Pure: from the player's progress
+// (core/progress.js), no DOM.
 
 import { AFFIXES, affixesFor, blockMost, bonusCounts, disguiseOf, effectOf, GEAR, GEAR_SLOTS, handsOf, levelFactor, levelOf, offHandFits, ROLLS, setCounts, SETS, STATS, statsOf } from "../core/gear.js";
 import { ADJECTIVES } from "../core/war/peoples.js";
 import { CHARM_ROLLS, CHARMS, charmOf } from "../core/goods.js";
 import { chargeOf, EFFECTS, effectAt } from "../core/legendary.js";
 import { mightOf } from "../core/might.js";
-import { BOOSTS, ITEMS, priceOf, QUALITIES } from "../core/progress.js";
+import { BOOSTS, gradeOf, ITEMS, priceOf, QUALITIES } from "../core/progress.js";
+import { UNIQUES } from "../core/rare.js";
 import { WEAPONS } from "../core/weapons.js";
 
-/** Each make's name as shown (a common one, none), rarest last. */
-export const MAKES = Object.freeze({ common: "Common", fine: "Fine", masterwork: "Masterwork", rare: "Rare", veryRare: "Very rare", legendary: "Legendary" });
+/** Each make's name as shown (a common one, none), rarest last; and a unique's (core/rare.js). */
+export const MAKES = Object.freeze({ common: "Common", fine: "Fine", masterwork: "Masterwork", rare: "Rare", veryRare: "Very rare", legendary: "Legendary", unique: "Unique" });
+
+/**
+ * How rare a thing's shown as, its colour's name (styles.css `.rarity-…`): a unique's own
+ * (core/rare.js UNIQUES), whatever it's made as; else its make's (core/progress.js gradeOf).
+ */
+export const rarityOf = (thing) => (thing?.unique && UNIQUES[thing.unique] ? "unique" : gradeOf(thing));
 
 // A bonus as shown: "+12% melee damage", "+5 hit points"; armour: "takes 4% off each blow"
 function worded(stat, value) {
@@ -144,6 +152,18 @@ export function describe(item, progress, { index = null, label = item.id, haggle
     // Its level (the might it was found or made for: core/might.js)
     lines.push({ text: `Level ${levelOf(item.level)}`, tone: "note" });
 
+    // (A unique, given for a rare encounter: found nowhere else, its tale, and kept by who it was
+    // given to: core/rare.js UNIQUES)
+    const unique = item.unique ? (UNIQUES[item.unique] ?? null) : null;
+
+    if (unique) {
+        lines.push({ text: "Unique: found nowhere else, and bound to you (it can't be sold, traded, dropped or given away; thrown away, it's gone for good)", tone: "unique" });
+
+        if (unique.about) {
+            lines.push({ text: unique.about, tone: "note" });
+        }
+    }
+
     // What it does
     if (def.slot === "mainHand") {
         for (const text of blowsOf(item.id, power * levelFactor(item.level))) {
@@ -223,7 +243,7 @@ export function describe(item, progress, { index = null, label = item.id, haggle
     const rolls = ware ? rolledOf(item) : null;
     const compare = tried ? comparing(progress, tried, item.id, { unknown: ware && def.magic ? ["spell"] : [], rolled: Boolean(rolls) }) : [];
 
-    return { label, rarity: quality, kind: kindOf(item.id), lines, rolls, compare, price: priceOf(item, { haggle, selling: true }) };
+    return { label, rarity: unique ? "unique" : quality, kind: kindOf(item.id), lines, rolls, compare, price: unique ? 0 : priceOf(item, { haggle, selling: true }) };
 }
 
 // A wand's or grimoire's spell power, as it's rolled when it's bought (core/progress.js

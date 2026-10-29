@@ -1158,6 +1158,15 @@ export const ITEM_ICONS = Object.freeze({
         <path d="M-15,-19 L15,-19 C15,-1 9,12 0,21 C-9,12 -15,-1 -15,-19 Z" fill="none" stroke="#c9d1d8" stroke-width="1.6" transform="scale(0.9) translate(0 -1)"/>`,
 
     // A flask of red draught, stoppered
+    // A sealed key (core/rare.js VAULT `key`): an old iron key, its bow ringed, a sea-green seal
+    // hung from it by a cord
+    vaultKey: `
+        <circle cx="-8" cy="-8" r="7.5" fill="none" stroke="#4a4a52" stroke-width="3.4"/>
+        <circle cx="-8" cy="-8" r="7.5" fill="none" stroke="#9aa0aa" stroke-width="1.6"/>
+        <path d="M-3,-3 L13,13 M8,8 L12,4 M11,11 L15,7" stroke="#4a4a52" stroke-width="3.6" stroke-linecap="round"/>
+        <path d="M-3,-3 L13,13 M8,8 L12,4 M11,11 L15,7" stroke="#9aa0aa" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M-14,-2 C-17,4 -15,10 -11,12" fill="none" stroke="#6a4a2a" stroke-width="1"/>
+        <circle cx="-10" cy="14" r="4" fill="#3fe0c0" stroke="#0a2420" stroke-width="1"/>`,
     // A treasure map (core/treasure.js): a torn sheet of parchment, its corner curled, a dotted
     // trail across it past two hills to a red X, and a compass star in its corner
     treasureMap: `

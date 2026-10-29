@@ -59,6 +59,8 @@ describe("loot lying on the ground: each thing floating over its rarity's glow (
             { id: "wolfPelt", grade: "common" },
         ]);
         assert.deepEqual(shownOf({ item: { id: "ring", quality: "rare", count: 1 } }), [{ id: "ring", grade: "rare" }]);
+        // (A unique, given for a rare encounter, its own: core/rare.js UNIQUES)
+        assert.deepEqual(shownOf({ bundle: { gold: 0, items: [{ id: "ring", quality: "legendary", unique: "sampleSignet", count: 1 }] } }), [{ id: "ring", grade: "unique" }]);
 
         const { things } = laid([wolf]).drawn.get("g1");
 
@@ -68,12 +70,13 @@ describe("loot lying on the ground: each thing floating over its rarity's glow (
         assert.ok(things.every(({ icon }, k) => things.every((other, j) => j === k || icon.position.distanceTo(other.icon.position) > FLOAT.size * 0.6)));
     });
 
-    it("glows each rarity in the pack's own colour for it (styles.css .rarity-*), every rarity its own", () => {
+    it("glows each rarity in the pack's own colour for it (styles.css .rarity-*), every rarity its own, a unique's too", () => {
         const css = readFileSync(new URL("../client/styles.css", import.meta.url), "utf8");
+        const grades = [...Object.keys(QUALITIES), "unique"];
 
-        assert.deepEqual(Object.keys(RARITY_GLOW).sort(), Object.keys(QUALITIES).sort());
+        assert.deepEqual(Object.keys(RARITY_GLOW).sort(), grades.sort());
 
-        for (const grade of Object.keys(QUALITIES).filter((each) => each !== "common")) {
+        for (const grade of grades.filter((each) => each !== "common")) {
             const colour = css.match(new RegExp(`\\.rarity-${grade} \\{\\s*--rarity: #([0-9a-f]{6});`))?.[1];
 
             assert.equal(RARITY_GLOW[grade], Number.parseInt(colour, 16), grade);
