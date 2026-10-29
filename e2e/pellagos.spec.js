@@ -380,21 +380,13 @@ test("an update's downloaded in the background: the page finds a release newer t
     await expect(page.locator("#titleupdate")).toBeHidden();
 });
 
-test("the title's name on its crest's ribbon, every letter painted, in the ribbon's middle, the title's card under the crest: on a computer, on a phone held upright, a small one, and one on its side", async ({ page }) => {
-    // Each letter against its own box, which its gradient's painted in; the name against the
-    // ribbon (crest.js CREST.ribbon), and the card against the crest
+test("the title's name on its crest's ribbon, every letter painted, its letters in the ribbon's middle with a little of the leather above and below them, the title's card under the crest: on a computer, on a phone held upright, a small one, and one on its side", async ({ page }) => {
+    // Each letter against its own box, which its gradient's painted in; and the card against the
+    // crest
     const fits = () =>
-        page.evaluate(async () => {
-            const { CREST } = await import("/js/app/crest.js");
+        page.evaluate(() => {
             const box = document.querySelector("#crest").getBoundingClientRect();
-            const name = document.createRange();
-
-            name.selectNodeContents(document.querySelector("#titlename"));
-
-            const text = name.getBoundingClientRect();
             const card = document.querySelector("#title .card").getBoundingClientRect();
-            const { left, right, top, bottom } = CREST.ribbon;
-            const ribbon = { left: box.left + left * box.width, right: box.left + right * box.width, top: box.top + top * box.height, bottom: box.top + bottom * box.height };
             const painted = [...document.querySelectorAll("#titlename .letter")].every((letter) => {
                 const range = document.createRange();
 
@@ -405,18 +397,64 @@ test("the title's name on its crest's ribbon, every letter painted, in the ribbo
                 return glyph.left >= own.left - 0.5 && glyph.right <= own.right + 0.5;
             });
 
-            return {
-                painted,
-                inRibbon: text.left >= ribbon.left && text.right <= ribbon.right && text.top >= ribbon.top - 2 && text.bottom <= ribbon.bottom + 2,
-                centred: Math.abs((text.left + text.right) / 2 - (ribbon.left + ribbon.right) / 2) < box.width * 0.02,
-                onScreen: box.left >= 0 && box.right <= innerWidth,
-                under: card.top >= box.bottom - 1,
-            };
+            return { painted, onScreen: box.left >= 0 && box.right <= innerWidth, under: card.top >= box.bottom - 1 };
         });
-    const all = { painted: true, inRibbon: true, centred: true, onScreen: true, under: true };
+
+    // Its letters as they're drawn, against the ribbon (crest.js CREST.ribbon, CREST.leather): the
+    // crest shot with nothing of it shown but its letters, on nothing, and where in it any of them
+    // is (shares of its width and height); in the ribbon's middle to a hundredth of the crest (a
+    // pixel or two), and that far at least inside the leather above and below them
+    const { CREST } = await import("../client/js/app/crest.js");
+
+    const inked = async () => {
+        const box = await page.locator("#crest").boundingBox();
+
+        await page.evaluate(() => document.documentElement.classList.add("inked"));
+
+        const shot = await page.screenshot({ omitBackground: true, clip: box });
+
+        await page.evaluate(() => document.documentElement.classList.remove("inked"));
+
+        const ink = await page.evaluate(async (png) => {
+            const bitmap = await createImageBitmap(new Blob([Uint8Array.from(atob(png), (c) => c.charCodeAt(0))], { type: "image/png" }));
+            const context = new OffscreenCanvas(bitmap.width, bitmap.height).getContext("2d");
+
+            context.drawImage(bitmap, 0, 0);
+
+            const { data, width, height } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+            let [top, bottom, left, right] = [height, 0, width, 0];
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    if (data[(y * width + x) * 4 + 3] > 64) {
+                        [top, bottom, left, right] = [Math.min(top, y), Math.max(bottom, y + 1), Math.min(left, x), Math.max(right, x + 1)];
+                    }
+                }
+            }
+
+            return { top: top / height, bottom: bottom / height, left: left / width, right: right / width };
+        }, shot.toString("base64"));
+        const { left, right, top, bottom } = CREST.ribbon;
+
+        return {
+            ink,
+            across: Math.abs((ink.left + ink.right) / 2 - (left + right) / 2) < 0.01,
+            down: Math.abs((ink.top + ink.bottom) / 2 - (top + bottom) / 2) < 0.01,
+            room: ink.top >= CREST.leather.top + 0.005 && ink.bottom <= CREST.leather.bottom - 0.005,
+        };
+    };
+    const check = async (said) => {
+        expect(await fits(), said).toEqual({ painted: true, onScreen: true, under: true });
+
+        const { ink, ...placed } = await inked();
+
+        expect(placed, `${said}: ${JSON.stringify(ink)}`).toEqual({ across: true, down: true, room: true });
+    };
 
     await title(page);
-    expect(await fits()).toEqual(all);
+    await expect(page.locator("#crest")).toHaveAttribute("data-forged", "true", { timeout: 10000 });
+    await page.addStyleTag({ content: "html.inked, html.inked body { background: transparent !important; } html.inked body * { visibility: hidden !important; } html.inked #crest .wordmark { filter: none !important; } html.inked #crest .letter { visibility: visible !important; }" });
+    await check("on a computer");
 
     for (const [width, height] of [
         [393, 852],
@@ -424,32 +462,35 @@ test("the title's name on its crest's ribbon, every letter painted, in the ribbo
         [844, 390],
     ]) {
         await page.setViewportSize({ width, height });
-        expect(await fits(), `${width} by ${height}`).toEqual(all);
+        await check(`${width} by ${height}`);
     }
 });
 
-test("the crest over the loading screen and the title: PELLAGOS on its ribbon, forged a letter at a time as the page opens, glinting, embers rising off it, the eyes under the town blinking; the same crest over the title, not forged again; none of it moving with less motion asked for, nor seen in the game", async ({ page }) => {
+test("the crest over the loading screen and the title: PELLAGOS on its ribbon in its own lettering, forged a letter at a time once that's here, a shine run across it once, the eyes under the town blinking; the same crest over the title, not forged again; none of it moving with less motion asked for, nor seen in the game", async ({ page }) => {
     await page.goto("/");
 
     const crest = page.locator("#crest");
     const letters = page.locator("#titlename .letter");
 
     // (Over the loading screen as the page opens, the name on its ribbon a letter at a time, read as
-    // the name it is; forged, then forged for good)
+    // the name it is; waited for its lettering, forged, then forged for good)
     await expect(crest).toBeVisible();
     await expect(letters).toHaveCount(8);
     await expect(page.locator("#titlename")).toHaveAttribute("aria-label", "Pellagos");
     await expect(page.locator("#loading")).toHaveAttribute("aria-labelledby", "titlename");
 
-    const forging = await page.evaluate(() => document.querySelector("#crest").classList.contains("forging") || document.querySelector("#crest").dataset.forged === "true");
+    const forging = await page.evaluate(() => ["waiting", "forging"].some((name) => document.querySelector("#crest").classList.contains(name)) || document.querySelector("#crest").dataset.forged === "true");
 
     expect(forging).toBe(true);
-    await expect(crest).not.toHaveClass(/forging/, { timeout: 10000 });
+    await expect(crest).toHaveAttribute("data-forged", "true", { timeout: 10000 });
+    await expect(crest).not.toHaveClass(/waiting|forging/);
     await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
 
-    // Over the title: its letters struck and cooled (each all there, none still hot), its picture
-    // the AVIF, see-through about it and solid in its middle (where it's placed: the test before this)
-    const placed = await page.evaluate(() => {
+    // Over the title: its letters struck and cooled (each all there, none still hot), in its own
+    // lettering, its picture the AVIF, see-through about it and solid in its middle (where it's
+    // placed: the test before this)
+    const placed = await page.evaluate(async () => {
+        const { CREST_FONT } = await import("/js/app/crest.js");
         const img = document.querySelector("#crest .crest-art");
         const canvas = Object.assign(document.createElement("canvas"), { width: img.naturalWidth, height: img.naturalHeight });
         const context = canvas.getContext("2d");
@@ -459,6 +500,7 @@ test("the crest over the loading screen and the title: PELLAGOS on its ribbon, f
 
         return {
             letters: [...document.querySelectorAll("#titlename .letter")].map((letter) => ({ shown: Number(getComputedStyle(letter).opacity), hot: Number(getComputedStyle(letter, "::after").opacity) })),
+            lettering: { here: document.fonts.check(`${CREST_FONT.weight} 1em "${CREST_FONT.family}"`), first: getComputedStyle(document.querySelector("#titlename")).fontFamily.split(",")[0].replaceAll('"', "") === CREST_FONT.family },
             picture: img.currentSrc.split("/").pop(),
             about: [alpha(0.005, 0.01), alpha(0.995, 0.01), alpha(0.005, 0.99), alpha(0.995, 0.99), alpha(0.5, 0.005)],
             middle: alpha(0.5, 0.5),
@@ -466,32 +508,24 @@ test("the crest over the loading screen and the title: PELLAGOS on its ribbon, f
     });
 
     expect(placed.letters.every(({ shown, hot }) => shown === 1 && hot === 0), JSON.stringify(placed.letters)).toBe(true);
+    expect(placed.lettering).toEqual({ here: true, first: true });
     expect(placed.picture).toBe("crest.avif");
     // (Nearly nothing of it about it, nearly all in its middle: an AVIF's see-through, kept as small
     // as it is, a little out)
     expect(placed.about.every((alpha) => alpha <= 4), JSON.stringify(placed.about)).toBe(true);
     expect(placed.middle).toBeGreaterThanOrEqual(250);
 
-    // Embers rising off it (its canvas drawn on), the torch's glint and flicker playing, and its
-    // eyes blinking now and then (told to now: each lid closed over its eye a moment, then open)
-    await expect.poll(() => page.evaluate(() => {
-        const canvas = document.querySelector("#crest .crest-embers");
-        const pixels = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
-        let lit = 0;
-
-        for (let k = 3; k < pixels.length; k += 4) {
-            lit += pixels[k] > 0 ? 1 : 0;
-        }
-
-        return lit;
-    }), { timeout: 10000 }).toBeGreaterThan(20);
+    // A shine run across it once, the torch's flicker playing, and its eyes blinking every so
+    // often (told to now: each lid closed over its eye a moment, then open)
+    await expect(crest).toHaveClass(/shining/, { timeout: 10000 });
 
     const moving = await page.evaluate(() => ({
-        glint: document.querySelector("#crest .crest-sheen").getAnimations().length,
+        shine: document.querySelector("#crest .crest-sheen").getAnimations().map((animation) => animation.effect.getTiming().iterations),
         flicker: document.querySelector("#crest .crest-glow").getAnimations().length,
+        embers: document.querySelectorAll("#crest canvas").length,
     }));
 
-    expect(moving).toEqual({ glint: 1, flicker: 1 });
+    expect(moving).toEqual({ shine: [1], flicker: 1, embers: 0 });
 
     const blink = await page.evaluate(async () => {
         const lid = document.querySelector("#crest .crest-lid.left");
@@ -522,21 +556,21 @@ test("the crest over the loading screen and the title: PELLAGOS on its ribbon, f
     await expect(crest).toBeHidden();
     expect(await page.evaluate(() => window.pellagos.crest.on)).toBe(false);
 
-    // With less motion asked for: forged already as the page opens, no embers, no glint
+    // With less motion asked for: forged already as the page opens, no shine, no flicker
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
     await expect(crest).toBeVisible();
-    expect(await page.evaluate(() => document.querySelector("#crest").classList.contains("forging"))).toBe(false);
+    expect(await page.evaluate(() => ["waiting", "forging"].some((name) => document.querySelector("#crest").classList.contains(name)))).toBe(false);
     await expect(page.locator("#title")).toBeVisible({ timeout: 60000 });
 
     const still = await page.evaluate(() => ({
-        frame: window.pellagos.crest.frame,
-        glint: document.querySelector("#crest .crest-sheen").getAnimations().length,
+        shining: document.querySelector("#crest").classList.contains("shining"),
+        shine: document.querySelector("#crest .crest-sheen").getAnimations().length,
         flicker: document.querySelector("#crest .crest-glow").getAnimations().length,
         shown: [...document.querySelectorAll("#titlename .letter")].every((letter) => Number(getComputedStyle(letter).opacity) === 1),
     }));
 
-    expect(still).toEqual({ frame: null, glint: 0, flicker: 0, shown: true });
+    expect(still).toEqual({ shining: false, shine: 0, flicker: 0, shown: true });
 });
 
 test("debug mode shows how the game runs, and is remembered", async ({ page }) => {
