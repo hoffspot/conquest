@@ -385,7 +385,19 @@ const DEFEND_MS = 10000;
  * (one within `hand` squares of it) or `far` (one further off): WoW's margin, so none's pulled back
  * and forth. With none to go for, the nearest (as ever: first come), on it with `seed`.
  */
-export const ENMITY = Object.freeze({ seed: 1, lingering: 0.5, near: 1.1, far: 1.3, hand: 3 });
+export const ENMITY = Object.freeze({ seed: 1, lingering: 0.5, healing: 0.5, near: 1.1, far: 1.3, hand: 3 });
+
+/**
+ * A taunt (FFXIV's Provoke): a foe made to go for the taunter, its enmity for them set to `over`
+ * times the most it has for anyone (at the least), for `ms`; from within `reach` squares, a foe
+ * that can see them, every `cooldown` ms. While one's taunt holds, another's doesn't take (the
+ * first's, as in Path of Exile). A war cry (`cry`): every foe within its `reach` that can see the
+ * crier, taunted at once. A hired warrior leaves a foe its leader's taunted to them for `leave`
+ * ms, unless they're under `rescue` of their health or it's told to cover them (`cover` ms).
+ * Healing: ENMITY `healing` of the hit points mended, the healer's, shared among those set on the
+ * one healed (docs/WILDS.md *Whom they go for*)
+ */
+export const TAUNT = Object.freeze({ over: 1.5, ms: 4000, reach: 16, cooldown: 15000, leave: 15000, rescue: 0.5, cover: 8000, cry: Object.freeze({ over: 1.2, ms: 3000, reach: 6, cooldown: 30000 }) });
 
 /**
  * The folk in danger (#afraid): afraid of whoever they can see within `sight` squares that's
@@ -808,6 +820,8 @@ export class Battle {
             foes: {},
             struckBy: {},
             enmity: {},
+            // Who's taunted it, when, and till when it's made to go for them (TAUNT): { by, at, until }
+            taunted: null,
             // How much stronger its blows (up close, from afar), heals and stuns are than their
             // own (a player's skills and gear: core/progress.js), the share of each blow its
             // armour takes off, and how much stronger its next blow is (a power strike: null
@@ -1043,6 +1057,68 @@ export class Battle {
         if (actor && !actor.dead) {
             actor.striking = { target: targetId, until, tag };
         }
+    }
+
+    /**
+     * One made to go for whoever taunts them (`id`: TAUNT): their enmity for them `over` times the
+     * most they have for anyone, at the least, and on them, made to, for `ms`; struck at as far as
+     * grudges and a pack go (a wolf taunted: its pack after them too). Whether it took: not on one
+     * that's no enemy of theirs, nor one that keeps no enmity (a player, a follower), nor one
+     * another's taunt holds still. Told as "taunted" ({ id, by, until })
+     */
+    taunt(id, targetId, { over = TAUNT.over, ms = TAUNT.ms } = {}) {
+        const [actor, foe] = [this.actor(id), this.actor(targetId)];
+
+        if (!actor || !foe || actor.dead || foe.dead || foe.map !== actor.map || !this.hostile(foe, actor) || (foe.ai !== "wild" && foe.ai !== "patrol" && foe.ai !== "colossus")) {
+            return false;
+        }
+
+        const holder = this.#taunter(foe);
+
+        if (holder && holder !== actor) {
+            return false;
+        }
+
+        this.#provoke(actor, foe, { turn: false, enmity: 0 });
+        foe.enmity ??= {};
+
+        const top = Object.values(foe.enmity).reduce((most, [amount]) => Math.max(most, amount), 0);
+        const [had = 0] = foe.enmity[id] ?? [];
+
+        foe.enmity[id] = [Math.max(had, top * over, ENMITY.seed), this.time + FOE_MS];
+
+        if (actor.kind === "player" && foe.target !== id) {
+            this.#onPlayer(actor)[this.#shoots(foe) ? "ranged" : "melee"]++;
+        }
+
+        Object.assign(foe, { taunted: { by: id, at: this.time, until: this.time + ms }, target: id, lastSeen: this.time, waryUntil: 0 });
+        this.#emit("taunted", { id: foe.id, by: id, until: foe.taunted.until });
+
+        return true;
+    }
+
+    /**
+     * A war cry (TAUNT cry): every foe within its `reach` that can see the crier taunted at once
+     * (`over`, `ms`). How many it took. Told as "cried" ({ id, took })
+     */
+    warCry(id, { over = TAUNT.cry.over, ms = TAUNT.cry.ms, reach = TAUNT.cry.reach } = {}) {
+        const actor = this.actor(id);
+
+        if (!actor || actor.dead) {
+            return 0;
+        }
+
+        let took = 0;
+
+        for (const other of this.actors) {
+            if (!other.dead && other.map === actor.map && distanceBetween(actor.square, other.square) <= reach && this.hostile(other, actor) && this.canSee(other, actor) && this.taunt(id, other.id, { over, ms })) {
+                took++;
+            }
+        }
+
+        this.#emit("cried", { id, took });
+
+        return took;
     }
 
     empower(id, blow, factor, { stun = 0 } = {}) {
@@ -3871,6 +3947,11 @@ export class Battle {
         const seen = (actor.holdFire || actor.guarding ? null : this.#firstFor(actor, leader, test)) ?? this.#nearestSeen(actor, test);
 
         if (seen) {
+            // (One that protects: the foe taunted off its leader first, as it can be: #takeOff)
+            if (actor.tactic === "protect") {
+                this.#takeOff(actor, leader, seen);
+            }
+
             this.#fightFor(actor, seen);
 
             return;
@@ -3899,7 +3980,14 @@ export class Battle {
     // fighting, if it can see them. Null for none
     #firstFor(actor, leader, test) {
         if (actor.tactic === "protect") {
-            return this.#nearestSeen(actor, (enemy) => test(enemy) && (enemy.target === leader.id || enemy.attack?.target === leader.id));
+            // (Its leader's, or on one of theirs that heals or casts: #takeOff)
+            const ward = (id) => {
+                const one = id === null || id === undefined ? null : this.actor(id);
+
+                return Boolean(one) && (one === leader || (one !== actor && one.leader === leader.id && one.ai === "follow" && (one.heals || one.casts)));
+            };
+
+            return this.#nearestSeen(actor, (enemy) => test(enemy) && (ward(enemy.target) || ward(enemy.attack?.target)));
         }
 
         if (actor.tactic === "flank") {
@@ -5295,6 +5383,7 @@ export class Battle {
 
             target.hp = spell.full ? target.maxHp : Math.min(target.maxHp, target.hp + Math.round(rollHeal(spell, this.random) * (actor.power?.heal ?? 1) * shareOf(target, "healing")));
             this.#emit("healed", { id: target.id, by: actor.id, spell: id, amount: target.hp - before, hp: target.hp, maxHp: target.maxHp, cured });
+            this.#mended(actor, target, target.hp - before);
             landed += target.hp > before || cured.length ? 1 : 0;
         } else if (spell.cures) {
             // (A cure: what it's for ended, told as healing that restores nothing)
@@ -6308,6 +6397,13 @@ export class Battle {
     // (as #nearestSeen: its sight); null for none (the nearest, then: #seeded). The first of two
     // with as much (as each was first set on it: the same in every copy)
     #chosen(actor, test) {
+        // (Taunted: on the taunter, made to, while it holds)
+        const taunter = this.#taunter(actor);
+
+        if (taunter) {
+            return taunter;
+        }
+
         const table = actor.enmity ?? {};
         const on = actor.target === null || table[actor.target] ? null : this.actor(actor.target);
         let [top, most, held, holding] = on && !on.dead && on.map === actor.map && this.hostile(on, actor) && this.#noticed(actor, on) && test(on) ? [on, ENMITY.seed, on, ENMITY.seed] : [null, 0, null, 0];
@@ -6357,6 +6453,66 @@ export class Battle {
         }
 
         return other;
+    }
+
+    // Whom a taunt has one go for still (TAUNT): the taunter, while it holds and they're there to go
+    // for; null, else (one gone, the taunt's over)
+    #taunter(actor) {
+        const taunted = actor.taunted;
+
+        if (!taunted || taunted.until <= this.time) {
+            return null;
+        }
+
+        const by = this.actor(taunted.by);
+
+        if (!by || by.dead || by.map !== actor.map || !this.hostile(by, actor)) {
+            taunted.until = this.time;
+
+            return null;
+        }
+
+        return by;
+    }
+
+    // Hit points mended (`amount`, by `healer`): their enmity with those set on the one mended, ENMITY
+    // healing of it shared among them; never with one that wasn't, so healing starts no fight
+    #mended(healer, target, amount) {
+        if (!(amount > 0)) {
+            return;
+        }
+
+        const on = this.actors.filter((other) => !other.dead && other.target === target.id && other.map === target.map && this.hostile(other, healer));
+
+        for (const other of on) {
+            this.#enmity(other, healer, (amount * ENMITY.healing) / on.length);
+        }
+    }
+
+    // One that protects (a hired warrior, its `tactic`): a foe it's going for that's on its leader
+    // (or on one of theirs that heals or casts), taunted off them as its taunt's ready (TAUNT); not
+    // one its leader's taunted lately, unless they're badly hurt or it's told to cover them
+    #takeOff(actor, leader, foe) {
+        if ((actor.tauntReadyAt ?? 0) > this.time || distanceBetween(actor.square, foe.square) > TAUNT.reach) {
+            return;
+        }
+
+        const on = foe.target === null ? null : this.actor(foe.target);
+        const ward = on && on !== actor && (on === leader || (on.leader === leader.id && on.ai === "follow" && (on.heals || on.casts)));
+
+        if (!ward) {
+            return;
+        }
+
+        const theirs = on === leader && foe.taunted?.by === leader.id && this.time - foe.taunted.at < TAUNT.leave;
+
+        if (theirs && leader.hp >= leader.maxHp * TAUNT.rescue && !((actor.coverUntil ?? 0) > this.time)) {
+            return;
+        }
+
+        if (this.canSee(foe, actor) && this.taunt(actor.id, foe.id)) {
+            actor.tauntReadyAt = this.time + Math.round(TAUNT.cooldown * (actor.abilityTimes ?? 1));
+        }
     }
 
     // A creature or a guard turned on whoever set on it (`lastSeen`: as if seen till then): set on,

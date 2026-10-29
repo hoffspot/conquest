@@ -25,10 +25,11 @@ import { SCHOOLS, SPELLS } from "./spells.js";
  * The orders one of a player's own takes (core/host.js #orderUnit): go for whom the player's
  * fighting (`assist`), follow, wait where they are, guard the player (`guard`: at their side,
  * taking on only those after them or it), break off and run back to them (`fallback`), start no
- * fights (`hold`: only fighting back) or go after any enemy seen again (`free`), use their own
+ * fights (`hold`: only fighting back) or go after any enemy seen again (`free`), take the foes on
+ * the player off them (`cover`: a hired warrior's taunts, a called creature's roar), use their own
  * ability (`ability`), or go for good (`dismiss`).
  */
-export const UNIT_ORDERS = Object.freeze(["assist", "follow", "wait", "guard", "fallback", "hold", "free", "ability", "dismiss"]);
+export const UNIT_ORDERS = Object.freeze(["assist", "follow", "wait", "guard", "fallback", "hold", "free", "cover", "ability", "dismiss"]);
 
 /**
  * One falling back (the `fallback` order): running back to its leader, after no one, till it's
@@ -54,6 +55,16 @@ export const GIVE_REACH = 16;
  * own: one that heals or cures, and does nothing else (not a spell's scroll, a bomb, a boon...).
  */
 export const givable = (use) => Boolean(use?.heal || use?.cure) && !["cast", "bomb", "learn", "boon", "safety", "treasure", "ward", "buff", "stamina"].some((key) => use[key]);
+
+/**
+ * How much the blows (and a cleric's healing) of each of a player's own count for in the enmity of
+ * those they're set on (battle.js ENMITY: their `enmityWeight`): a hired warrior's three times as
+ * much, to draw foes off its leader and hold them (`master`, a Shield master's: MERCENARY
+ * mastery), a ranger's and a rogue's less, to keep out of it; a creature called by Summon or
+ * tamed (`called`), more than its leader's, a shield for them; one raised from the dead (`risen`),
+ * between (docs/WAR.md *Whom they go for*).
+ */
+export const ENMITY_WEIGHTS = Object.freeze({ warrior: 3, master: 4, ranger: 0.7, rogue: 0.5, mage: 1, cleric: 1, called: 2, risen: 1.5 });
 
 /** A cleric's healing, the weakest first (battle.js #mend), as the peoples' healers'. */
 export const CLERIC_HEALS = Object.freeze(["vigor", "mendWounds"]);
@@ -306,6 +317,7 @@ export function mercenaryOf(one, { made = () => 1, school = "fire" } = {}) {
         dodge: Math.min(0.5, (mastery.dodge ?? 0) + sum("dodge") + (worn.dodge ?? 0)),
         cooldown: (level >= MERCENARY.sooner ? MERCENARY.cooldown : 1) * times("cooldown"),
         rises: times("rises"),
+        enmity: one.calling === "warrior" && level >= MERCENARY.mastery ? ENMITY_WEIGHTS.master : (ENMITY_WEIGHTS[one.calling] ?? 1),
         ...wayOf(one.calling, school, level),
     };
 }
