@@ -3495,10 +3495,11 @@ a trait (tireless, deadly, lucky or quick), and says so.
 **How the wild weighs them** (docs/WILDS.md *A side's strength*): at about a third of their
 fighting value (`STRENGTH.hired`, 0.3), so four as mighty as their leader count about as one more
 like them would, not four; and as if standing while they're knocked down, so their getting up
-again brings no more of a pack. The wild goes for their leader first, so they spare them less than
-another player would: counted at half (the user's first choice, "At half their worth"), a player
-with four of the tier's might lost as much as alone; at a third, about a fifth less (the balance
-runner, docs/WILDS.md *Tuning it*; the user: "About a third").
+again brings no more of a pack. The wild goes for whoever's nearest, most often their leader, so
+they spare them less than another player would: counted at half (the user's first choice, "At
+half their worth"), a player with four of the tier's might lost as much as alone; at a third,
+about 0.85 of it at tiers 5 and 8 (the balance runner, docs/WILDS.md *Tuning it*; the user: "About
+a third").
 
 **The share** (`SHARE`, `sharesOf`; host.js `#won`): each follower standing within 60 m of their
 leader takes 5 in a hundred of the gold they win (loot, a bundle, a reward, a bounty), a point

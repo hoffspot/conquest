@@ -303,8 +303,9 @@ their hired adventurers and the creatures they've called or raised.
   same hire about 1.1. Never less than 1.
   - *Allies the game fights for count at about a third* of their value: a hired adventurer
     (`STRENGTH.hired`, 0.3), and a creature called, raised or tamed (`STRENGTH.called`, 0.3). The
-    wild goes for the players first, so the game's own fighters, however hard they hit, spare
-    their leader less than another player would: counted at half, a player with four hirelings of
+    wild goes for whoever's nearest (*How they behave*), most often the player, who comes at it
+    first, so the game's own fighters, however hard they hit, spare their leader less than another
+    player would: counted at half, a player with four hirelings of
     the tier's might lost as much as one alone (the balance runner, *Tuning it*, below; the user:
     "About a third").
   - *One knocked down* (a hired adventurer, battle.js `downed`) counts as if standing: they'll be
@@ -452,6 +453,31 @@ npm run balance -- --tiers 5 --sides solo,four --fights 6
 npm run balance -- --json              # the numbers as JSON
 npm run balance -- --seeds 2,3,4,5,6,7,8,9 --fights 8   # 64 fights a side: what tuning takes
 ```
+
+**What it found, put right** (eight worlds, 64 fights a side and tier; each player's share of
+what one alone loses, at tiers 2, 5 and 8):
+
+| Side | Aim | Before | After |
+| --- | --- | --- | --- |
+| Two | 0.87 | 0.75, 0.86, 0.63 | 0.78, 0.97, 0.69 |
+| Four | 0.75 | 0.63, 0.68, 0.65 | 0.74, 0.81, 0.68 |
+| One with four hired | 0.8 | 1.43, 1.28, 1.01 | 1.08, 0.87, 0.84 |
+| A summoner with five | 0.8 | 1.08, 1.17, 0.94 | 0.85, 0.82, 0.73 |
+
+- **The runner first** (the user: "Fix all the identified issues with the runner and balance"):
+  its players' strength for the tier was let go of at their first rank come up, a little way
+  into the first fight; a wary beast keeping out of reach held a fight to its end; a fallen
+  player was stood up again where they fell to go on, so a fight lost ran on, more packs coming;
+  and what was left of the wild chased the side to the next ground, kilometres off. "Before" is
+  the old rules measured with the runner put right.
+- **Then the rules:** the wild answering S^0.85 (it was S^0.8); a hired adventurer and a creature
+  called, raised or tamed counted at 0.3 of their worth (they were 1, and hired ones a half for a
+  while); one knocked down counted as if standing; and a night's rest mending a hired
+  adventurer's wounds (docs/WAR.md *Mercenaries that grow*).
+- **Still off:** each of two takes a little less than the aim (0.81 for 0.87), and a player with
+  hirelings a little more at tier 2, where one alone loses only about 50 hit points a fight and a
+  few fights sway it. The wild goes for whoever's nearest, most often the player, rather than for
+  those hitting it hardest: threat, for a change of its own, is what's next.
 
 That the players together are one group, one roll for an elite and one cache between them, the
 wild answering their side's strength wherever foes are put out, more coming mid-fight, a dungeon

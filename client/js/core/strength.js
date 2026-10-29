@@ -7,8 +7,9 @@
 // blows; their weapon and power, the spells they cast), so gear, skills and a creature's tier
 // all count. A side's strength (S) is the sum of its members' values over its strongest
 // player's, a hired adventurer's and a called creature's at about a third of its value
-// (STRENGTH: the wild goes for the players, so the game's own fighters spare them less than
-// another player would; one knocked down still counted, as they'll be up again): a player alone
+// (STRENGTH: the wild goes for the nearest, most often a player, who comes at it first, so the
+// game's own fighters spare them less than another player would; one knocked down still
+// counted, as they'll be up again): a player alone
 // is 1, two alike 2, a new adventurer and a new hire about 1.3. The wild answers it with an
 // opposition a little less than it (F = S^0.85: OPPOSITION), each of a party's members finding it
 // a little easier than alone, and every ally still worth having.
@@ -30,11 +31,11 @@ import { armsOf, blowEvery } from "./weapons.js";
  * Who's counted on a side: those within `reach` metres of where foes are put out (or of any of
  * a group's players), and the players `apart` metres or less from one another, one after
  * another, one group; a hired adventurer at `hired` of their fighting value, a creature called,
- * raised or tamed at `called` of its (the balance runner's: four hired as mighty as the tier, or
- * five called, spare their leader about a fifth of what they'd lose alone, docs/WILDS.md *Tuning
- * it*; the user: "About a third"). Armour, slipping blows and a shield each count as taking off
- * at most `most` of what comes at someone; a shield, only what comes from in front of them, about
- * `front` of it.
+ * raised or tamed at `called` of its (the balance runner's: with four hired as mighty as the
+ * tier, or five called, their leader loses about 0.8 to 0.9 of what they'd lose alone,
+ * docs/WILDS.md *Tuning it*; the user: "About a third"). Armour, slipping blows and a shield each
+ * count as taking off at most `most` of what comes at someone; a shield, only what comes from in
+ * front of them, about `front` of it.
  */
 export const STRENGTH = Object.freeze({ reach: 60, apart: 60, most: 0.9, front: 0.5, hired: 0.3, called: 0.3 });
 
