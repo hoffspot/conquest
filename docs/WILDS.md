@@ -301,13 +301,14 @@ their hired adventurers and the creatures they've called or raised.
 - **The side's strength (S)** is its members' values summed, over its strongest player's: a
   player alone is 1, two alike 2, a new player and a new hire about 1.3, a mighty player and that
   same hire about 1.1. Never less than 1.
-  - *Allies the game fights for count at about a third* of their value: a hired adventurer
-    (`STRENGTH.hired`, 0.3), and a creature called, raised or tamed (`STRENGTH.called`, 0.3). The
-    wild goes for whoever's nearest (*How they behave*), most often the player, who comes at it
-    first, so the game's own fighters, however hard they hit, spare their leader less than another
-    player would: counted at half, a player with four hirelings of
-    the tier's might lost as much as one alone (the balance runner, *Tuning it*, below; the user:
-    "About a third").
+  - *Allies the game fights for count for less* than their value: a hired adventurer at half
+    (`STRENGTH.hired`, 0.5), and a creature called, raised or tamed at about a third
+    (`STRENGTH.called`, 0.3). Their foes' enmity (*Whom they go for*) has hired warriors take foes
+    off their leader and hold them, and called creatures draw them, but the game's own fighters
+    still spare their leader less than another player would: at half, a player with four hired of
+    the tier's might loses about 0.65 and 0.9 of what one alone does at tiers 5 and 8 (the balance
+    runner, *Tuning it*, below; the owner: "At half their worth", and before enmity, "About a
+    third").
   - *One knocked down* (a hired adventurer, battle.js `downed`) counts as if standing: they'll be
     up again, so their getting up isn't taken for the side growing (*More mid-fight*).
 - **The opposition (F)** the wild sets against it is a little less than it, S^0.85
@@ -421,8 +422,9 @@ for each player near.
 
 `npm run balance` (`scripts/balance.js`) runs the world's rules alone, nothing drawn: sides of
 each make-up out in the wilds at tiers 2, 5 and 8 (`SIDES`: one player, two, four, one with four
-hired warriors of the level a guild offers for the tier, docs/WAR.md *Mercenaries that grow*, a
-summoner with five creatures), fight after fight on fresh ground:
+hired warriors of the level a guild offers for the tier, docs/WAR.md *Mercenaries that grow*, one
+with a company of four (a warrior, a cleric, a mage and a ranger), a summoner with five
+creatures), fight after fight on fresh ground:
 
 - **The players** are as strong for the tier as its creatures (hit points and power × its
   `tierPower`) and three times as hardy (`RUN.hardy`: what their gear and skills would make them),
@@ -436,12 +438,13 @@ summoner with five creatures), fight after fight on fresh ground:
   player who falls is out of it, as in play, where they'd wake at home). What's left of the wild
   there is let go before the next, as if walked away from.
 - **For each side and tier** it says the side's S and F, the foes fought a fight, how long to the
-  last blow, the hit points each player lost in one (and a minute), how often a player fell and
-  their allies were knocked down, how many fights were won, and the share of what one alone loses
-  that each of them does, beside its aim (`SIDES` `aim`).
+  last blow, the hit points each player lost in one (and a minute), what their allies bore of the
+  wild's blows (`borne`, and the share of them, `drawn`: what enmity has them take off their
+  leader), how often a player fell and their allies were knocked down, how many fights were won,
+  and the share of what one alone loses that each of them does, beside its aim (`SIDES` `aim`).
 - **The aims:** each of N alike about N^-0.2 of what one alone loses (0.87 for two, 0.75 for
-  four); a player with four hired adventurers, or five creatures called, about 0.8 (the user:
-  "About 0.8 of solo").
+  four); a player with four hired adventurers, a company, or five creatures called, about 0.8
+  (the user: "About 0.8 of solo").
 
 Fights go one way or another by what's about (a pack of trolls or a lone wolf), so it takes a
 good many to say: a world's dice are the same each run, so `--seeds` pools the fights of several
@@ -478,6 +481,36 @@ what one alone loses, at tiers 2, 5 and 8):
   hirelings a little more at tier 2, where one alone loses only about 50 hit points a fight and a
   few fights sway it. The wild goes for whoever's nearest, most often the player, rather than for
   those hitting it hardest: threat, for a change of its own, is what's next.
+
+**With enmity** (*Whom they go for*; the same eight worlds), hired warriors take foes off their
+leader and hold them, so they could be counted at the owner's "half" again (`STRENGTH.hired` 0.5);
+a creature called weighs three times its caller in foes' enmity, and stays at 0.3:
+
+| Side | Aim | Before enmity | With it | Allies' share of the blows |
+| --- | --- | --- | --- | --- |
+| Two | 0.87 | 0.78, 0.97, 0.69 | 0.94, 0.86, 0.71 | |
+| Four | 0.75 | 0.74, 0.81, 0.68 | 0.62, 0.80, 0.62 | |
+| One with four hired (at 0.3; 0.5) | 0.8 | 1.08, 0.87, 0.84 | 0.22, 0.65, 0.91 | 0.86, 0.65, 0.53 |
+| One with a company (at 0.3; 0.5) | 0.8 | 0.68, 0.93, 0.84 | 0.48, 0.70, 0.97 | 0.37, 0.54, 0.54 |
+| A summoner with five | 0.8 | 0.85, 0.82, 0.73 | 0.82, 0.81, 0.81 | 0.23, 0.28, 0.27 |
+
+How the hired were weighed (averaged over tiers 5 and 8, where a fight's long enough to say):
+
+| `STRENGTH.hired` | Four hired | A company |
+| --- | --- | --- |
+| 0.3 | 0.64 | 0.56 |
+| 0.4 | 0.71 | 0.60 |
+| 0.5 | 0.76 | 0.84 |
+| 0.6 | 0.77 | 0.88 (1.14 at tier 8) |
+
+And the called: weighed 2 in foes' enmity, five creatures cost their summoner 0.86 to 0.97 of what
+one alone loses, at 0.3 or at 0.5; weighed 3, 0.81 at every tier.
+
+- **Still off:** the hired by tier. At tier 2 four warriors hold everything (their leader loses a
+  fifth of what one alone does), at tier 8 they're knocked down twice a fight and the wild's back
+  on their leader (0.91). How sturdy a hired adventurer is beside the tier's creatures, not whom
+  the wild goes for, is what's left. Four players take a little less than the aim (0.68 over the
+  tiers, for 0.75): the wild answering S^0.875 put them at 0.85, and two at 0.89, so 0.85 stays.
 
 That the players together are one group, one roll for an elite and one cache between them, the
 wild answering their side's strength wherever foes are put out, more coming mid-fight, a dungeon

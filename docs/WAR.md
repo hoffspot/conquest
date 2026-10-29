@@ -3517,14 +3517,15 @@ a trait (tireless, deadly, lucky or quick), and says so.
   player or an owner, Game options *Mercenaries can die*, a `rule` command, told to everyone as a
   `rules` event), the third fall is their last (`#fallForGood`).
 
-**How the wild weighs them** (docs/WILDS.md *A side's strength*): at about a third of their
-fighting value (`STRENGTH.hired`, 0.3), so four as mighty as their leader count about as one more
-like them would, not four; and as if standing while they're knocked down, so their getting up
-again brings no more of a pack. The wild goes for whoever's nearest, most often their leader, so
-they spare them less than another player would: counted at half (the user's first choice, "At
-half their worth"), a player with four of the tier's might lost as much as alone; at a third,
-about 0.85 of it at tiers 5 and 8 (the balance runner, docs/WILDS.md *Tuning it*; the user: "About
-a third").
+**How the wild weighs them** (docs/WILDS.md *A side's strength*): at half their fighting value
+(`STRENGTH.hired`, 0.5, the user's "At half their worth"), so four as mighty as their leader count
+about as two more like them would, not four; and as if standing while they're knocked down, so
+their getting up again brings no more of a pack. Before foes kept enmity, the wild went for
+whoever was nearest, most often their leader, and at half a player with four of the tier's might
+lost as much as alone, so they were counted at a third. Now a hired warrior takes the foes on its
+leader off them and holds them (docs/WILDS.md *Whom they go for*), and at half a player with four
+loses about 0.65 and 0.9 of what one alone does at tiers 5 and 8 (the balance runner,
+docs/WILDS.md *Tuning it*).
 
 **The share** (`SHARE`, `sharesOf`; host.js `#won`): each follower standing within 60 m of their
 leader takes 5 in a hundred of the gold they win (loot, a bundle, a reward, a bounty), a point
