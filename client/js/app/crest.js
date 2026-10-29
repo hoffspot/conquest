@@ -3,12 +3,12 @@
 // Cinzel Decorative (client/fonts), at the top of the screen, each's card under it. As the page
 // opens, once its lettering's to hand, the name's forged on it a letter at a time, each struck
 // white-hot and cooling to gold; a moment after, a shine runs across it once, left to right;
-// torchlight flickers on the leather behind it; and the eyes in the dark furrows under the town
-// blink every 5 to 8 seconds, now and then twice. Its letters, not their line, in the ribbon's
-// middle, whatever they're drawn in, at whatever size it's shown (set again as it's resized: a
-// phone turned). Nothing moves with reduced motion asked for. The same crest over both, where it
-// was (styles.css #crest), not forged again; never seen, nor anything of it moving, anywhere else
-// (main.js show).
+// torchlight flickers on the leather behind it; and the Hollow One's eyes, in the dark under the
+// town's fields, blink every 5 to 8 seconds, now and then twice. Its letters, not their line, in
+// the ribbon's middle, whatever they're drawn in, at whatever size it's shown (set again as it's
+// resized: a phone turned). Nothing moves with reduced motion asked for. The same crest over both,
+// where it was (styles.css #crest), not forged again; never seen, nor anything of it moving,
+// anywhere else (main.js show).
 
 /** Where it is (from the page): crest.avif and crest.webp. */
 export const CREST_FOLDER = "images/crest";
@@ -24,8 +24,8 @@ export const CREST_FONT = Object.freeze({ family: "Cinzel Decorative", weight: 7
  * - `ribbon`: its leather band, the gold along its edges too, the name set across it (a share of
  *   its width or height: styles.css .crest-name, the same); `leather`, the band between its gold
  *   edges (shares of its height), the name's letters within it, a little of it above and below.
- * - `eyes`: where its eyes are, in the dark under the town ([across, down], shares: styles.css
- *   .crest-eye and .crest-lid).
+ * - `eyes`: where its eyes are, the Hollow One's, in the dark under the town's fields ([across,
+ *   down], shares: styles.css .crest-eye and .crest-lid).
  * - `forge`: as it's first shown, how long it waits for its lettering at most (s: forged in what
  *   it has, if that's slow), how long till its first letter's struck (s), how long after each the
  *   next is (s), and how long each takes to cool (s: styles.css crest-heat).
@@ -36,9 +36,9 @@ export const CREST_FONT = Object.freeze({ family: "Cinzel Decorative", weight: 7
  */
 export const CREST = Object.freeze({
     size: Object.freeze([1376, 768]),
-    ribbon: Object.freeze({ left: 0.127, right: 0.872, top: 0.414, bottom: 0.579 }),
-    leather: Object.freeze({ top: 0.426, bottom: 0.569 }),
-    eyes: Object.freeze([Object.freeze([0.469, 0.638]), Object.freeze([0.531, 0.638])]),
+    ribbon: Object.freeze({ left: 0.115, right: 0.885, top: 0.411, bottom: 0.613 }),
+    leather: Object.freeze({ top: 0.421, bottom: 0.604 }),
+    eyes: Object.freeze([Object.freeze([0.475, 0.652]), Object.freeze([0.526, 0.652])]),
     forge: Object.freeze({ wait: 2, delay: 0.4, each: 0.12, cool: 1.4 }),
     shine: Object.freeze({ after: 1, length: 1.6 }),
     blink: Object.freeze({ from: 5, to: 8, twice: 0.2, length: 0.24 }),
