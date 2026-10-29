@@ -9152,14 +9152,15 @@ export class Host {
     // the creatures they've called or raised) on their map within STRENGTH.reach of one of them;
     // its strength (strength.js sideStrength: over its strongest player's) and the opposition the
     // wild sets against it (opposition). A hired adventurer counts at STRENGTH.hired of their
-    // value, and one knocked down (battle.js `downed`) as if they were standing: they'll be up
-    // again, so the wild doesn't take them getting up for the side growing (#reinforce).
+    // value, a creature called, raised or tamed at STRENGTH.called of its; and one knocked down
+    // (battle.js `downed`) as if they were standing: they'll be up again, so the wild doesn't take
+    // them getting up for the side growing (#reinforce).
     // { strength, opposition, players, allies }
     #side(group) {
         const near = (actor) => (!actor.dead || actor.downed) && group.actors.some((each) => each.map === actor.map && hypot(actor.x - each.x, actor.y - each.y) <= STRENGTH.reach);
         const allies = [...this.followers.keys(), ...this.companions.keys()].map((id) => this.battle.actor(id)).filter((actor) => actor && near(actor));
         const players = group.actors.map((actor) => this.#valueOf(actor));
-        const ally = (actor) => this.#valueOf(actor.dead ? { ...actor, dead: false } : actor) * (this.followers.has(actor.id) ? STRENGTH.hired : 1);
+        const ally = (actor) => this.#valueOf(actor.dead ? { ...actor, dead: false } : actor) * (this.followers.has(actor.id) ? STRENGTH.hired : STRENGTH.called);
         const strength = sideStrength([...players, ...allies.map(ally)], Math.max(0, ...players));
 
         return { strength, opposition: opposition(strength), players: players.length, allies: allies.length };

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { HOST_PLAYER, Host } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
+import { OPPOSITION } from "../client/js/core/strength.js";
 import { balance, boosting, RUN, SIDES, summary } from "../scripts/balance.js";
 
 describe("the balance runner (scripts/balance.js)", () => {
@@ -14,7 +15,7 @@ describe("the balance runner (scripts/balance.js)", () => {
         assert.equal(report.side, "pair");
         assert.equal(report.tier, 2);
         assert.ok(Math.abs(report.strength - 2) < 1e-9, `${report.strength}`);
-        assert.ok(report.opposition > 1.7 && report.opposition < 1.8);
+        assert.ok(Math.abs(report.opposition - Math.pow(2, OPPOSITION.answer)) < 1e-9, `${report.opposition}`);
         assert.equal(report.fights.length, 1);
         assert.ok(fight.foes > 0, "the wild came, and they fought");
         assert.ok(fight.seconds > 0 && fight.taken >= 0 && fight.falls >= 0 && fight.knocked === 0);

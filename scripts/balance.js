@@ -15,11 +15,12 @@
 // the wilds where the land's of that tier from their home. At each fight's ground they make camp
 // first (as a player rests between fights: their hired adventurers' wounds mended), then run at
 // the nearest of the wild's that's coming at them (else the nearest about), till none's left near
-// them or none's come to blows with them a while (those left keeping away). For each side and
-// tier it says how strong the side was (S, and the opposition F against it), how many foes they
-// fought a fight, how long a fight went on (to its last blow), the hit points each player lost in
-// one (and a minute), how often a player fell and their allies were knocked down, and how many
-// fights were won before RUN.most; and, beside one player alone at the tier, the share of what one
+// them or none's come to blows with them a while (those left keeping away). A player who falls is
+// out of that fight, as in play (they'd wake at home), and once they all have, it's lost. For
+// each side and tier it says how strong the side was (S, and the opposition F against it), how
+// many foes they fought a fight, how long a fight went on (to its last blow), the hit points each
+// player lost in one (and a minute), how often a player fell and their allies were knocked down,
+// and how many fights were won; and, beside one player alone at the tier, the share of what one
 // alone loses that each of them does (the aims: SIDES `aim`). Fights go one way or another by
 // what's about, so it takes a good many (`--fights`, on several worlds: `--seeds`) to say.
 import { pathToFileURL } from "node:url";
@@ -134,7 +135,8 @@ export function boosting(host, ids, times) {
  * A side (SIDES) against the wild at a tier of land, `fights` times over (fresh ground each
  * time): { side, tier, strength, opposition, fights: [{ foes (fought), seconds (to the last blow),
  * taken (each player's lost hit points, on average), falls, knocked (their allies, down),
- * cleared (won before RUN.most), rested (camp made first) }] }. On the world of `seed`.
+ * cleared (won: before RUN.most, a player standing), rested (camp made first) }] }. On the world
+ * of `seed`.
  */
 export function balance(name, tier, { fights = 4, seed = 2 } = {}) {
     const side = SIDES[name];
@@ -187,12 +189,26 @@ export function balance(name, tier, { fights = 4, seed = 2 } = {}) {
     }
 
     const allies = () => [...host.followers.keys(), ...host.companions.keys()].filter((id) => host.battle.actor(id) && !host.battle.actor(id).dead);
+    const standing = () => players.filter((id) => !host.battle.actor(id).dead);
     const { strength, opposition } = host.strengthOf(players[0]);
     const foes = () => [...host.wild.keys()].filter((id) => !host.companions.has(id)).map((id) => host.battle.actor(id)).filter((actor) => actor && !actor.dead && actor.map === "town" && hypot(actor.x - lead.x, actor.y - lead.y) <= RUN.near);
     const report = { side: name, tier, strength, opposition, fights: [] };
 
     for (let f = 0; f < fights; f++) {
-        stand(host, [...players, ...allies()], grounds[f]);
+        // (What's left of the wild about the last ground let go, as if walked away from: else it
+        // goes after them all the way to the next, kilometres off)
+        const side = new Set([...players, ...host.followers.keys(), ...host.companions.keys()]);
+
+        for (const id of host.wild.keys()) {
+            const actor = host.battle.actor(id);
+
+            if (actor && !actor.dead && !host.companions.has(id) && (side.has(actor.target) || hypot(actor.x - lead.x, actor.y - lead.y) <= RUN.near * 2)) {
+                Object.assign(actor, { dead: true, respawnAt: Infinity, target: null, attack: null, path: [] });
+            }
+        }
+
+        // (Those knocked down brought along too, to be got up by the camp)
+        stand(host, [...players, ...allies(), ...[...host.followers.keys()].filter((id) => host.battle.actor(id)?.downed)], grounds[f]);
 
         for (const id of players) {
             Object.assign(host.battle.actor(id), { hp: host.battle.actor(id).maxHp, dead: false });
@@ -212,11 +228,12 @@ export function balance(name, tier, { fights = 4, seed = 2 } = {}) {
         let [seconds, falls, knocked, struck] = [0, 0, 0, 0];
 
         // (Each player running at the nearest of them coming at the side, else the nearest, till
-        // none's left near, or none's come to blows with them for RUN.quiet)
-        while (foes().length && seconds < RUN.most && seconds - struck < RUN.quiet) {
+        // none's left near, or none's come to blows with them for RUN.quiet; or till every one of
+        // the players has fallen, the fight lost)
+        while (standing().length && foes().length && seconds < RUN.most && seconds - struck < RUN.quiet) {
             const side = new Set([...players, ...allies()]);
 
-            for (const id of players) {
+            for (const id of standing()) {
                 const actor = host.battle.actor(id);
                 const target = host.battle.actor(actor.order?.type === "engage" ? actor.order.target : actor.target);
                 const coming = foes().filter((foe) => side.has(foe.target));
@@ -243,18 +260,19 @@ export function balance(name, tier, { fights = 4, seed = 2 } = {}) {
                     taken.set(event.id, taken.get(event.id) + (event.damage ?? 0));
                 }
 
-                // (A player fallen: counted, and up again where they fell, to go on)
+                // (A player fallen: counted, and out of this fight, as in play, where they'd wake
+                // at home)
                 if (event.type === "death" && taken.has(event.id)) {
                     falls++;
-                    Object.assign(host.battle.actor(event.id), { dead: false, hp: host.battle.actor(event.id).maxHp, respawnAt: Infinity });
+                    host.battle.actor(event.id).respawnAt = Infinity;
                 }
             }
 
             seconds++;
         }
 
-        // (Its time to the last blow; won if it ended before RUN.most)
-        report.fights.push({ foes: met.size, seconds: struck, taken: [...taken.values()].reduce((sum, each) => sum + each, 0) / players.length, falls, knocked, cleared: seconds < RUN.most, rested: rested === players.length });
+        // (Its time to the last blow; won if it ended before RUN.most with a player standing)
+        report.fights.push({ foes: met.size, seconds: struck, taken: [...taken.values()].reduce((sum, each) => sum + each, 0) / players.length, falls, knocked, cleared: seconds < RUN.most && standing().length > 0, rested: rested === players.length });
     }
 
     return report;
@@ -275,7 +293,7 @@ function advance(host, ms, keep = () => {}) {
 /**
  * A run's fights summed up: { foes, seconds, taken, falls, knocked } on average, a fight; the hit
  * points each player lost a minute (`rate`: over all its fights' time); and how many of its fights
- * were won before RUN.most (`cleared`).
+ * were won (`cleared`).
  */
 export function summary({ fights }) {
     const mean = (key) => fights.reduce((sum, fight) => sum + (fight[key] ?? 0), 0) / Math.max(1, fights.length);
