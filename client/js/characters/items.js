@@ -1309,7 +1309,7 @@ function standard(who) {
         for (let i = 0; i < position.count; i++) {
             const [x, y] = [position.getX(i), position.getY(i) - head];
 
-            position.setZ(i, position.getZ(i) + fold * Math.sin(x * 21 + 0.6) * (0.35 + Math.min(1, -y / drop)));
+            position.setZ(i, position.getZ(i) + fold * Math.sin(x * 12 + 0.6) * (0.35 + Math.min(1, -y / drop)));
         }
 
         geometry.computeVertexNormals();
@@ -1329,18 +1329,18 @@ function standard(who) {
             mark.rotateY(Math.PI);
         }
 
-        parts.push([folded(mark.translate(0, head - drop * 0.42, 0.035 + side * 0.004)), clothOf(colours.trim)]);
+        parts.push([folded(subdivided(mark.translate(0, head - drop * 0.42, 0.035 + side * 0.007), 1)), clothOf(colours.trim)]);
     }
 
     return assemble(parts, "standard");
 }
 
-// A flat shape's triangles cut smaller (each edge halved, twice), so it can be folded; its corners
-// each its own (not indexed)
-function subdivided(geometry) {
+// A flat shape's triangles cut smaller (each edge halved, `rounds` times), so it can be folded;
+// its corners each its own (not indexed)
+function subdivided(geometry, rounds = 3) {
     let flat = geometry.index ? geometry.toNonIndexed() : geometry;
 
-    for (let round = 0; round < 2; round++) {
+    for (let round = 0; round < rounds; round++) {
         const from = flat.attributes.position.array;
         const to = new Float32Array(from.length * 4);
         let n = 0;

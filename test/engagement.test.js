@@ -3,12 +3,16 @@
 // lines halting while the archers loose, then charging, each body at the one opposite; each body's
 // morale its own, broken alone (a band that never breaks falling back and coming on again), its
 // reserve and household sent in where its line gives way; its commander fallen, no tactics left
-// and its morale shaken. Played on a battle of the engine's own making here: its soldiers, their
-// formations and their fights set as each test wants
+// and its morale shaken; its line held once they've charged, a break in the enemy's gone through
+// to their archers, its archers giving ground from an enemy among them, and a body standing idle
+// closing up, wheeling or coming up beside its own. Played on a battle of the engine's own making
+// here: its soldiers, their formations and their fights set as each test wants
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { BAND_TACTICS, BODIES, bodiesOf, COMMANDERS, engagementOf, FIELD, layoutOf, MORALE, moraleAfter, offsetsOf, pairOf, relativeTo, stepEngagement, tacticsOf } from "../client/js/core/engagement.js";
+import { BAND_TACTICS, BODIES, bodiesOf, breachesOf, COMMANDERS, engagementOf, FIELD, holdOf, layoutOf, MORALE, moraleAfter, offsetsOf, pairOf, relativeTo, stepEngagement, TACTICS, tacticsOf, towards } from "../client/js/core/engagement.js";
 import { FORMATION, MIX, placeAt, placesOf } from "../client/js/core/formation.js";
+import { SNAPSHOT_STEPS } from "../client/js/core/host.js";
+import { KNIFE } from "../client/js/core/weapons.js";
 
 // A battle of the engine's own: its formations kept as battle.js keeps them (the settings given
 // over what they were), its soldiers as given
@@ -39,7 +43,7 @@ function battleOf(actors = []) {
 
 // Two sides of `size` drawn up `apart` metres from each other across the y axis (side 0 at y 0
 // facing +y, side 1 facing it), each body's soldiers at their places, as the host draws them up
-function drawnUp({ size = 60, apart = 60, tactics = ["line", "line"], falters = [false, false] } = {}) {
+function drawnUp({ size = 60, apart = 60, tactics = ["line", "line"], falters = [false, false], records = false } = {}) {
     const actors = [];
     const battle = battleOf(actors);
     const sides = [0, 1].map((k) => {
@@ -74,10 +78,31 @@ function drawnUp({ size = 60, apart = 60, tactics = ["line", "line"], falters = 
     const engagement = engagementOf({ id: "test", now: 0, sides });
     const told = [];
     const afflicted = [];
-    const step = (now, { hold = false } = {}) => stepEngagement(engagement, { battle, now, hold, record: () => ({}), event: (change, data) => told.push({ change, ...data }), afflict: (id, kind, ms) => afflicted.push({ id, kind, ms }) });
+    // (The host's record of each, if it's wanted: their role, and whether they're its commander)
+    const record = records ? (id) => ({ role: battle.actor(id)?.formation.role, commander: sides.some(({ commander }) => commander === id) }) : () => ({});
+    const step = (now, { hold = false } = {}) => stepEngagement(engagement, { battle, now, hold, record, event: (change, data) => told.push({ change, ...data }), afflict: (id, kind, ms) => afflicted.push({ id, kind, ms }) });
 
     return { battle, engagement, told, afflicted, step, members: (k, part) => actors.filter(({ formation }) => formation.id === `${k}:${part}`) };
 }
+
+// Two sides drawn up (drawnUp's), their lines charged at each other once the archers' time is up,
+// and there: every formation's march over. `now` the time they charged
+function atIt(options = {}) {
+    const drawn = drawnUp(options);
+
+    drawn.engagement.phase = "volley";
+    drawn.engagement.at = 0;
+    drawn.step(FIELD.volley.ms);
+
+    for (const formation of Object.values(drawn.battle.formations)) {
+        formation.to = null;
+    }
+
+    return { ...drawn, now: FIELD.volley.ms };
+}
+
+const apart = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+const SHOOTERS = ["archer", "caster", "healer"];
 
 describe("a side drawn up for battle (core/engagement.js bodiesOf, layoutOf, offsetsOf)", () => {
     it("puts a side's line in three bodies, a reserve behind once it's 40 strong and its commander's household once it's 24, one body for too few", () => {
@@ -309,7 +334,7 @@ describe("a battle fought (core/engagement.js stepEngagement)", () => {
         assert.equal(side.bodies.find(({ part }) => part === "reserve").state, "held");
     });
 
-    it("counts a body beset on its flank by an enemy's fighting near its end, not facing it head on; not by the one before it", () => {
+    it("counts a body beset on its flank by an enemy's fighting near its end, facing it, not head on; not by the one before it, nor by one it's wheeled onto the flank of", () => {
         const { battle, engagement, step } = drawnUp();
         const ours = engagement.sides[0].bodies.find(({ part }) => part === "left");
         const mine = battle.formations["0:left"];
@@ -319,9 +344,15 @@ describe("a battle fought (core/engagement.js stepEngagement)", () => {
         step(500);
         assert.equal(ours.flanked, false, "head on");
 
-        Object.assign(battle.formations["1:right"], { anchor: placeAt(mine, [-12, 0]), facing: mine.facing + Math.PI / 2, engagedAt: 1000 });
+        // (Off its left end, facing it)
+        Object.assign(battle.formations["1:right"], { anchor: placeAt(mine, [-12, 0]), facing: mine.facing - Math.PI / 2, engagedAt: 1000 });
         step(1000);
         assert.equal(ours.flanked, true, "on its flank");
+
+        // (There, facing away: its own flank, wheeled onto)
+        Object.assign(battle.formations["1:right"], { facing: mine.facing + Math.PI / 2, engagedAt: 1500 });
+        step(1500);
+        assert.equal(ours.flanked, false, "wheeled onto");
     });
 
     it("tells which sides are beaten: none of whose bodies stand", () => {
@@ -336,5 +367,354 @@ describe("a battle fought (core/engagement.js stepEngagement)", () => {
 
         assert.deepEqual(step(1000), [1]);
         assert.deepEqual(engagement.beaten, [1]);
+    });
+});
+
+describe("holding the line (core/engagement.js FIELD charge, holdOf)", () => {
+    it("has each who fights up close hold the line once the lines charge, no further from their place than their role's hold, looking so far; the archers keeping off a foe; every body helping its own within FIELD charge lap", () => {
+        assert.equal(holdOf({ role: "front" }), FIELD.charge.hold.front);
+        assert.equal(holdOf({ role: "heavy" }), FIELD.charge.hold.heavy);
+        assert.equal(holdOf({ role: "front", chief: true }), FIELD.charge.hold.chief);
+        assert.equal(holdOf({ role: "front", commander: true }), FIELD.charge.hold.chief);
+        assert.equal(holdOf({ role: "archer" }), null);
+        assert.equal(holdOf(null), null);
+        assert.ok(FIELD.charge.hold.front < FIELD.charge.hold.heavy && FIELD.charge.hold.heavy <= FIELD.charge.lap, "the shield line the closest held");
+
+        const { battle, engagement } = atIt({ size: 100, records: true });
+
+        for (const actor of battle.actors) {
+            const { role } = actor.formation;
+
+            if (actor.id.endsWith("/vanguard-0")) {
+                assert.deepEqual([actor.leash, actor.sight], [FIELD.charge.hold.chief, FIELD.charge.sight], actor.id);
+            } else if (role === "front" || role === "heavy") {
+                assert.deepEqual([actor.leash, actor.sight], [FIELD.charge.hold[role], FIELD.charge.sight], actor.id);
+            } else {
+                assert.deepEqual([actor.leash, actor.sight, actor.keep], [undefined, undefined, FIELD.archers.keep], actor.id);
+            }
+        }
+
+        assert.ok(engagement.sides.every((side) => side.bodies.every(({ formation }) => battle.formations[formation].hold === FIELD.charge.lap)));
+    });
+
+    it("brings a world kept from before forward holding the lines of a battle at it, its archers with their knives, its standard-bearers' shields put down (SNAPSHOT_STEPS 46)", () => {
+        const bow = { id: "shot", kind: "ranged", reach: 12 };
+        const engagement = (id, phase) => ({ id, phase, sides: [{ bodies: [{ formation: `${id}:left` }] }] });
+        const forward = SNAPSHOT_STEPS[46]({
+            version: 46,
+            soldiers: [
+                ["front", { role: "front" }],
+                ["chief", { role: "heavy", chief: true }],
+                ["archer", { role: "archer" }],
+                ["bearer", { role: "front", banner: true }],
+                ["marching", { role: "front" }],
+            ],
+            invasions: [{ engagement: engagement("a", "melee") }],
+            fields: [{ engagement: engagement("b", "march") }],
+            clashes: [],
+            leaders: [],
+            battle: {
+                formations: { "a:left": { anchor: [0, 0] }, "b:left": { anchor: [0, 0] }, other: { anchor: [0, 0], hold: 3 } },
+                actors: [
+                    { id: "front", leash: 30, sight: 30, formation: { id: "a:left", role: "front" } },
+                    { id: "chief", leash: 30, sight: 30, formation: { id: "a:left:flank", role: "heavy" } },
+                    { id: "archer", leash: 22, arms: [bow], formation: { id: "a:left", role: "archer" } },
+                    { id: "bearer", leash: 30, shield: { chance: 0.3 }, formation: { id: "a:left", role: "front" } },
+                    { id: "marching", leash: 4, arms: [bow], formation: { id: "b:left", role: "caster" } },
+                    { id: "loose", leash: 9, arms: [bow] },
+                ],
+            },
+        });
+
+        assert.equal(forward.version, 47);
+        assert.deepEqual(
+            Object.entries(forward.battle.formations).map(([id, { hold, seek }]) => [id, hold, seek]),
+            [
+                ["a:left", FIELD.charge.lap, null],
+                ["b:left", 0, null],
+                ["other", 3, null],
+            ],
+        );
+        assert.deepEqual(
+            forward.battle.actors.map(({ id, leash, sight = null, keep = null, arms = null, shield }) => [id, leash, sight, keep, arms?.[0]?.id ?? null, shield ?? null]),
+            [
+                ["front", FIELD.charge.hold.front, FIELD.charge.sight, null, null, null],
+                ["chief", FIELD.charge.hold.chief, FIELD.charge.sight, null, null, null],
+                ["archer", 22, null, FIELD.archers.keep, KNIFE.id, null],
+                ["bearer", FIELD.charge.hold.front, FIELD.charge.sight, null, null, null],
+                ["marching", 4, null, null, KNIFE.id, null],
+                ["loose", 9, null, null, "shot", null],
+            ],
+        );
+    });
+});
+
+describe("a break in the enemy's line (core/engagement.js FIELD breach, TACTICS breach)", () => {
+    it("finds a body of a side's line broken and run, and a hole torn between two of its bodies standing side by side; none as it's formed", () => {
+        const { battle, engagement, step, members } = drawnUp({ size: 100 });
+        const theirs = engagement.sides[1];
+        const formationOf = (body) => battle.formations[body.formation] ?? null;
+        const breaches = () => breachesOf(theirs, { members: new Map(theirs.bodies.map((body) => [body, members(1, body.part)])), formationOf });
+
+        engagement.phase = "melee";
+        step(500);
+        assert.deepEqual(breaches(), [], "as it's formed");
+
+        // (Its left drawn away from its centre: a hole between them)
+        const [left, centre] = ["left", "centre"].map((part) => battle.formations[`1:${part}`]);
+        const away = relativeTo(left, centre.anchor)[0] >= 0 ? -1 : 1;
+
+        left.anchor = placeAt(left, [away * (FIELD.breach.hole + 0.5), 0]);
+        assert.deepEqual(
+            breaches().map(({ key, kind }) => [key, kind]),
+            [["left|centre", "hole"]],
+        );
+        assert.ok(apart(breaches()[0].at, left.anchor) < apart(left.anchor, centre.anchor) && apart(breaches()[0].at, centre.anchor) < apart(left.anchor, centre.anchor), "between them");
+
+        // (Its right run: a break where it stood)
+        for (const actor of members(1, "right")) {
+            actor.dead = true;
+        }
+
+        step(1000);
+        assert.deepEqual(
+            breaches().map(({ key, kind }) => [key, kind]),
+            [
+                ["right", "broken"],
+                ["left|centre", "hole"],
+            ],
+        );
+        assert.deepEqual(breaches()[0].at, battle.formations["1:right"].anchor);
+    });
+
+    it("has a bold band pour its nearest body's two-handers and rear ranks through a break, at the enemy's archers, then round on the back of their line; each break once", () => {
+        assert.deepEqual(
+            Object.entries(TACTICS).map(([tactic, { breach }]) => [tactic, breach]),
+            [
+                ["line", "commit"],
+                ["steady", "commit"],
+                ["wedge", "pour"],
+                ["swarm", "pour"],
+                ["standoff", null],
+                ["skirmish", "pour"],
+            ],
+        );
+
+        const { battle, engagement, told, step, members, now } = atIt({ size: 100, apart: 12, tactics: ["swarm", "line"], records: true });
+        const ours = engagement.sides[0];
+
+        for (const actor of members(1, "left")) {
+            actor.dead = true;
+        }
+
+        step(now + 500);
+
+        const breach = told.find(({ change }) => change === "breach");
+
+        assert.ok(breach, "through the break");
+        assert.deepEqual([breach.side, breach.by, breach.kind, breach.gap], ["a", "pour", "broken", "left"]);
+
+        const body = ours.bodies.find(({ part }) => part === breach.part);
+        const through = battle.formations[`0:${breach.part}:through`];
+        const sent = battle.actors.filter(({ formation }) => formation.id === `0:${breach.part}:through`);
+
+        assert.ok(through && through.to && through.charge && through.speed === FIELD.breach.speed, "running through");
+        assert.deepEqual(through.seek, SHOOTERS, "at their archers");
+        assert.ok(sent.length >= 2 && sent.every(({ formation: { role }, leash, sight }) => (role === "heavy" || role === "front") && leash === FIELD.breach.leash && sight === FIELD.breach.sight));
+        assert.ok(sent.every(({ id }) => !id.endsWith("/vanguard-0")), "not its commander");
+        assert.ok(
+            members(0, breach.part).some(({ formation: { role } }) => role === "front"),
+            "its front rank holding",
+        );
+        assert.deepEqual([body.through.stage, ours.breached.left], ["through", now + 500]);
+
+        // (Through: at the nearest of their archers, casters and healers)
+        through.to = null;
+        step(now + 1000);
+        assert.equal(body.through.stage, "archers");
+
+        const shooters = battle.actors.filter(({ side, formation: { role } }) => side === 1 && SHOOTERS.includes(role));
+
+        assert.ok(shooters.some(({ x, y }) => through.to && x === through.to[0] && y === through.to[1]), "at one of them");
+
+        // (None of them left: round on the back of their nearest body)
+        for (const actor of shooters) {
+            actor.dead = true;
+        }
+
+        step(now + 1500);
+        assert.equal(body.through.stage, "rear");
+        assert.equal(through.seek, null);
+
+        const rear = told.find(({ change }) => change === "rear");
+
+        assert.ok(rear && rear.side === "a" && ["centre", "right"].includes(rear.on));
+        assert.ok(relativeTo(battle.formations[`1:${rear.on}`], through.to)[1] > 0, "behind it");
+
+        // (The break gone through once)
+        step(now + 2000);
+        assert.equal(told.filter(({ change }) => change === "breach").length, 1);
+    });
+
+    it("has a steady line send its reserve through a break, the bodies beside it holding; not the cult, who stand; not one whose commander's fallen", () => {
+        for (const [tactics, kill, goes] of [
+            [["line", "line"], false, true],
+            [["standoff", "line"], false, false],
+            [["line", "line"], true, false],
+        ]) {
+            const { battle, engagement, told, step, members, now } = atIt({ size: 100, apart: 12, tactics });
+            const ours = engagement.sides[0];
+            const [left, centre] = ["left", "centre"].map((part) => battle.formations[`1:${part}`]);
+
+            if (kill) {
+                battle.actor(ours.commander).dead = true;
+            }
+
+            left.anchor = placeAt(left, [(relativeTo(left, centre.anchor)[0] >= 0 ? -1 : 1) * (FIELD.breach.hole + 0.5), 0]);
+
+            const lines = ["left", "centre", "right"].map((part) => battle.formations[`0:${part}`].to);
+
+            step(now + 500);
+
+            const breach = told.find(({ change }) => change === "breach");
+
+            assert.equal(Boolean(breach), goes, tactics.join());
+
+            if (!goes) {
+                continue;
+            }
+
+            const reserve = ours.bodies.find(({ part }) => part === "reserve");
+
+            assert.deepEqual([breach.by, breach.part, breach.kind, breach.gap], ["commit", "reserve", "hole", "left|centre"]);
+            assert.equal(reserve.state, "committed");
+            assert.deepEqual(battle.formations["0:reserve"].seek, SHOOTERS);
+            assert.ok(battle.formations["0:reserve"].to && battle.formations["0:reserve"].speed === FIELD.breach.speed);
+            assert.ok(members(0, "reserve").filter(({ formation: { role } }) => !SHOOTERS.includes(role)).every(({ leash }) => leash === FIELD.breach.leash));
+            assert.deepEqual(
+                ["left", "centre", "right"].map((part) => battle.formations[`0:${part}`].to),
+                lines,
+                "its line holding",
+            );
+        }
+    });
+});
+
+describe("archers with an enemy among them (core/engagement.js FIELD archers)", () => {
+    it("has them give ground behind a body of their own held back, shooting from there, their body beset from behind; back in their places once none's near", () => {
+        const { battle, engagement, told, step, members, now } = atIt({ size: 100, records: true });
+        const body = engagement.sides[0].bodies.find(({ part }) => part === "left");
+        const formation = battle.formations["0:left"];
+        const archer = members(0, "left")
+            .filter(({ formation: { role } }) => role === "archer")
+            .sort((a, b) => b.formation.slot[1] - a.formation.slot[1])[0];
+        const enemy = members(1, "centre").find(({ formation: { role } }) => role === "front");
+
+        Object.assign(enemy, { x: archer.x + 0.5, y: archer.y });
+        assert.ok(relativeTo(formation, [enemy.x, enemy.y])[1] > FORMATION.rank, "come round behind its front");
+
+        const before = body.morale;
+
+        step(now + 1000);
+
+        const refuge = engagement.sides[0].bodies.find(({ formation: id }) => id === archer.formation.refuge);
+
+        assert.ok(refuge && refuge.state === "held" && refuge !== body, `behind ${archer.formation.refuge}`);
+        assert.ok(relativeTo(battle.formations[refuge.formation], archer.formation.post)[1] > 0, "behind its rearmost rank");
+        assert.ok(told.some(({ change, side, part }) => change === "fallBack" && side === "a" && part === "left"));
+        assert.equal(body.rear, true);
+        assert.ok(body.morale < before, "shaken");
+
+        // (Gone: back in their places)
+        Object.assign(enemy, { x: enemy.x + 200 });
+        step(now + 1500);
+        assert.deepEqual([archer.formation.refuge, archer.formation.post, body.rear], [undefined, undefined, false]);
+    });
+});
+
+describe("a body standing idle (core/engagement.js FIELD idle)", () => {
+    it("closes up with an enemy near it, after FIELD idle ms", () => {
+        const { battle, engagement, step, members, now } = atIt();
+        const body = engagement.sides[0].bodies.find(({ part }) => part === "left");
+        const formation = battle.formations["0:left"];
+        const enemy = members(1, "centre").find(({ formation: { role } }) => role === "front");
+
+        Object.assign(enemy, { x: placeAt(formation, [0, -FIELD.idle.close + 2])[0], y: placeAt(formation, [0, -FIELD.idle.close + 2])[1] });
+        step(now + 500);
+        step(now + FIELD.idle.ms);
+        assert.equal(formation.to, null, "not yet");
+
+        step(now + 500 + FIELD.idle.ms);
+        assert.equal(body.state, "closing");
+        assert.ok(Math.abs(apart(formation.to, [enemy.x, enemy.y]) - FIELD.charge.gap) < 1e-9, "its front at them");
+    });
+
+    it("wheels on the flank of the nearest body of the enemy's line, the enemy massing elsewhere (a way that wheels); or comes up beside its own that's fighting (one that doesn't)", () => {
+        const wheeling = atIt();
+        const left = wheeling.engagement.sides[0].bodies.find(({ part }) => part === "left");
+
+        wheeling.step(wheeling.now + 500);
+        wheeling.step(wheeling.now + 500 + FIELD.idle.ms);
+        assert.equal(left.state, "flanking");
+        assert.ok(wheeling.told.some(({ change, side, part }) => change === "flank" && side === "a" && part === "left"));
+
+        const flanked = wheeling.battle.formations[`1:${left.pair}`];
+
+        assert.ok(Math.abs(relativeTo(flanked, wheeling.battle.formations["0:left"].to)[0]) > FORMATION.apart * 3, "off its end");
+
+        // (The cult, who don't wheel: up beside their centre, fighting)
+        const standing = atIt({ tactics: ["standoff", "line"] });
+        const body = standing.engagement.sides[0].bodies.find(({ part }) => part === "left");
+        const centre = standing.battle.formations["0:centre"];
+
+        for (const at of [500, 500 + FIELD.idle.ms]) {
+            centre.engagedAt = standing.now + at;
+            standing.step(standing.now + at);
+        }
+
+        assert.equal(body.state, "reinforcing");
+        assert.ok(standing.told.some(({ change, part, beside }) => change === "reinforce" && part === "left" && beside === "centre"));
+        assert.equal(standing.battle.formations["0:left"].facing, centre.facing);
+        assert.ok(apart(standing.battle.formations["0:left"].to, centre.anchor) > BODIES.gap, "beside it");
+    });
+
+    it("turns a body standing to face the nearest body of the enemy's near its front, once it's an eighth of a turn off it; not one held back", () => {
+        const { battle, step, now } = atIt({ size: 100 });
+        const [mine, reserve, them] = ["0:left", "0:reserve", "1:right"].map((id) => battle.formations[id]);
+        const [facing, held] = [mine.facing, reserve.facing];
+
+        // (A little off its front: not turned)
+        them.anchor = placeAt(mine, [-4, -10]);
+        step(now + 500);
+        assert.equal(mine.facing, facing);
+
+        // (Off its end: turned to face it)
+        them.anchor = placeAt(mine, [-12, 0]);
+        step(now + 1000);
+        assert.equal(mine.facing, towards(mine.anchor, them.anchor));
+
+        // (Near the reserve held back: it stands as it stood)
+        them.anchor = placeAt(reserve, [-8, 0]);
+        step(now + 1500);
+        assert.equal(reserve.facing, held);
+    });
+
+    it("leaderless, only closes up or goes at the nearest of theirs, after FIELD idle leaderless times as long", () => {
+        const { battle, engagement, told, step, now } = atIt();
+        const side = engagement.sides[0];
+        const left = side.bodies.find(({ part }) => part === "left");
+        const formation = battle.formations["0:left"];
+
+        battle.actor(side.commander).dead = true;
+        step(now + 500);
+        assert.equal(side.tactics, false);
+
+        step(now + 500 + FIELD.idle.ms);
+        assert.equal(formation.to, null, "not as soon");
+
+        step(now + 500 + FIELD.idle.ms * FIELD.idle.leaderless);
+        assert.equal(left.state, "closing");
+        assert.ok(formation.to, "at them");
+        assert.ok(!told.some(({ change, side: key }) => (change === "flank" || change === "reinforce") && key === "a"), "no wheeling");
     });
 });

@@ -173,7 +173,9 @@ export const tacticsOf = (band) => BAND_TACTICS[band] ?? "line";
  * stretch of a line stands idle while the battle's fought beside it; else (a reserve or household
  * sent in, done with what it was sent to), it goes at the nearest body of theirs still standing.
  * Its commander fallen, it only closes up or goes at them, and only after `leaderless` times as
- * long: so no battle's left with two sides standing apart.
+ * long: so no battle's left with two sides standing apart. Any body standing, not held back, faces
+ * the nearest body of the enemy's within `close` of its front, once it's an eighth of a turn off
+ * it.
  */
 export const FIELD = Object.freeze({
     every: 500,
@@ -392,6 +394,9 @@ const probeOf = (body) => `${body.formation}:probe`;
 const flankOf = (body) => `${body.formation}:flank`;
 const throughOf = (body) => `${body.formation}:through`;
 
+// How far apart two ways are (radians, 0 to π)
+const across = (a, b) => Math.abs((((a - b) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI);
+
 /** The formations a body's soldiers can be in, by its own (`formation`): its own, its probe's, its flankers' and those it sent through a break. */
 export const formationsOfBody = (formation) => [formation, `${formation}:probe`, `${formation}:flank`, `${formation}:through`];
 
@@ -513,16 +518,24 @@ export function stepEngagement(engagement, ctx) {
             const aura = Boolean(commander && !commander.dead && apart(formation.anchor, [commander.x, commander.y]) <= COMMANDER.aura + half);
 
             // (Beset on its flank or from behind: a body of the enemy's fighting near its end, off
-            // its front's end or behind it, its own way not head on at it, as a body wheeled in on
-            // its flank or two-handers round behind it come; how far its way's turned from the way
-            // back at this one's, 0 behind it)
+            // its front's end or behind it, facing it, its own way not head on at it, as a body
+            // wheeled in on its flank or two-handers round behind it come; not one this one's
+            // wheeled onto the flank of, facing away. How far its way's turned from the way back at
+            // this one's, 0 behind it; and from the way to this one, 0 straight at it)
             body.flanked = foe.bodies.some((theirs) =>
                 formationsOfBody(theirs.formation).some((id) => {
                     const them = battle.formations[id];
-                    const turned = them ? Math.abs((((them.facing - formation.facing) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI) : 0;
                     const [right, back] = them ? relativeTo(formation, them.anchor) : [0, 0];
 
-                    return Boolean(them) && !them.broken && now - them.engagedAt < 1500 && apart(them.anchor, formation.anchor) <= half + FIELD.flank.near && (Math.abs(right) > half || back > 0) && turned < (Math.PI * 3) / 4;
+                    return (
+                        Boolean(them) &&
+                        !them.broken &&
+                        now - them.engagedAt < 1500 &&
+                        apart(them.anchor, formation.anchor) <= half + FIELD.flank.near &&
+                        (Math.abs(right) > half || back > 0) &&
+                        across(them.facing, formation.facing) < (Math.PI * 3) / 4 &&
+                        across(them.facing, towards(them.anchor, formation.anchor)) < Math.PI / 3
+                    );
                 }),
             );
             // (Beset from behind, too: an enemy who fights up close among its archers, casters and
@@ -862,6 +875,23 @@ function melee(side, foe, { battle, now, ctx, members, formationOf, line, foes =
                 formation.advance = false;
             } else {
                 charging(body, side, foe, { formationOf, raid: true, now });
+            }
+        }
+
+        // (Standing, not held back: facing the nearest body of the enemy's within FIELD idle
+        // `close` of its front, as one turns that's wheeled onto a flank or come up beside its
+        // own, once it's there; not for less than an eighth of a turn)
+        if (!formation.to && body.state !== "held") {
+            const half = Math.max(FORMATION.apart * 3, ...(members.get(body) ?? []).filter(({ formation: { id } }) => id === body.formation).map(({ formation: { slot } }) => Math.abs(slot[0])));
+            const them = foe.bodies
+                .filter((one) => live(one) && formationOf(one) && !formationOf(one).broken)
+                .map(formationOf)
+                .filter(({ anchor }) => apart(anchor, formation.anchor) <= half + FIELD.idle.close)
+                .sort((p, q) => apart(p.anchor, formation.anchor) - apart(q.anchor, formation.anchor))[0];
+            const way = them ? towards(formation.anchor, them.anchor) : formation.facing;
+
+            if (across(way, formation.facing) > Math.PI / 4) {
+                formation.facing = way;
             }
         }
 

@@ -36,19 +36,27 @@ const CARRIED = new Set(["sword", "roundShield", "kiteShield", "bow", "quiver", 
  * A soldier's look: { shape, look, equipment, walk, sheathed } (as folk.js folkLook's), for one
  * of a people (a RACES id), fighting with `weapon` (a WEAPONS key), a man or a woman (`sex`),
  * from a seed of their own; a captain (`captain`) in a cloak; an envoy (`part`: "envoy") in their
- * people's livery, with a staff. One of a band of raiders (`people` a core/invasions.js BANDS
+ * people's livery, with a staff; a commander's standard-bearer (`banner`) bearing their people's
+ * standard in the off hand (bearing). One of a band of raiders (`people` a core/invasions.js BANDS
  * id) as its own are dressed (raiderLook).
  */
-export function soldierLook({ people, weapon, sex = "m", seed = 1, part = null, captain = false }) {
+export function soldierLook({ people, weapon, sex = "m", seed = 1, part = null, captain = false, banner = false }) {
     if (BANDS[people]) {
-        return raiderLook({ band: people, weapon, sex, seed, captain });
+        return raiderLook({ band: people, weapon, sex, seed, captain, banner });
     }
 
     const body = people === "orc" ? peopleLook({ people, sex, seed }) : folkLook({ role: "soldier", look: weapon === "bow" ? "ranger" : "warrior", sex, seed, people });
     const own = people === "orc" ? ["tusks"] : body.equipment.filter((id) => OWN.has(EQUIPMENT[id]?.slot));
     const kit = part === "envoy" ? [...liveryKit(people, "envoy", sex), ...(WEAPONS[weapon]?.equipment ?? [])] : soldierKit(people, weapon, { captain });
 
-    return { shape: body.shape, look: body.look, equipment: [...new Set([...kit, ...own])], walk: body.walk, sheathed: true };
+    return { shape: body.shape, look: body.look, equipment: bearing([...new Set([...kit, ...own])], people, banner), walk: body.walk, sheathed: true };
+}
+
+// What a standard-bearer (`banner`) carries: their people's or band's standard in their off hand
+// (equipment.js `standard.${who}`), for whatever was there (a shield, a bow: no one's put to
+// bear it but one of the shield line, core/host.js)
+function bearing(equipment, who, banner) {
+    return banner ? [...equipment.filter((id) => EQUIPMENT[id]?.slot !== "offHand"), `standard.${who}`] : equipment;
 }
 
 /**
@@ -119,9 +127,10 @@ const RAIDERS = Object.freeze({
  * One of a band of raiders' look (core/invasions.js BANDS; RAIDERS): over the body of an
  * adventurer of their calling, in their band's wear (bandits, the calling's own), their chief's
  * too; carrying their own weapon (weapons.js, a creature's weapon's pieces too), a shield of their
- * band's with a sword or cleaver, a quiver with a bow; their faces painted, as their band's are.
+ * band's with a sword or cleaver, a quiver with a bow (a standard-bearer, `banner`, their band's
+ * standard instead of the shield); their faces painted, as their band's are.
  */
-export function raiderLook({ band, weapon, sex = "m", seed = 1, captain = false }) {
+export function raiderLook({ band, weapon, sex = "m", seed = 1, captain = false, banner = false }) {
     const raiders = RAIDERS[band] ?? RAIDERS.bandits;
     const random = createRandom(seed * 2246822519 + 13);
     const body = folkLook({ role: "adventurer", look: raiders.callings?.[weapon] ?? raiders.calling, sex, seed });
@@ -132,5 +141,5 @@ export function raiderLook({ band, weapon, sex = "m", seed = 1, captain = false 
     const kit = [...(weaponOf(weapon)?.equipment ?? []), ...(weapon === "sword" || weapon === "cleaver" ? [random.pick(raiders.shields)] : []), ...(weapon === "bow" ? ["quiver"] : [])];
     const look = raiders.paint && random.chance(raiders.painted) ? { ...body.look, skin: { ...body.look.skin, warpaint: random.pick(raiders.paint) } } : body.look;
 
-    return { shape: body.shape, look, equipment: [...new Set([...worn.filter((id) => !slots.has(EQUIPMENT[id]?.slot)), ...chief, ...kit])], walk: body.walk, sheathed: true };
+    return { shape: body.shape, look, equipment: bearing([...new Set([...worn.filter((id) => !slots.has(EQUIPMENT[id]?.slot)), ...chief, ...kit])], band, banner), walk: body.walk, sheathed: true };
 }
