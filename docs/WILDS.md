@@ -920,6 +920,44 @@ the Feast of the Sample there, a day at four-fifths the prices); the guild's con
 gold besides the contract's own; potions on the barkeep's shelves for good); and the Sample's Kin,
 dealt and felled (40 gold); and the way it kept shut gone in by (25 gold).
 
+### Inside
+
+Inside cards (`venue` "inside") come on a dungeon's floors, by each player's own inside clock
+(`RARE.inside`: the time since their last inside card, from 20 minutes the first time and 60
+after, then a chance on each floor they go into, rising 0.1 with each, certain by the tenth: the
+host's `#rareInside`, at the battle's "cross"). One's put on the floor gone into as far from them
+as it can be, at least 12 m off and clear of the floor's ways in (`#insideSpot`): a foe of the
+floor's own packs, ranked, its card's `up` tiers above the floor (`#rarePutInside`); and it's
+followed as any rare encounter is, on that floor (no mark on the world map; to the party, "seen
+something strange below ground").
+
+An inside card has a sealed room (`vault`: `opens`, `foes`, `up`; rare.js `VAULT`). As its foe
+falls (`#vaultMake`), a door's added to that floor: against the rock within 14 m of where it fell,
+beside a square that can be stood on, clear of the floor's ways in (`#vaultDoor`), drawn as a stone
+arch over a dark way in (world/vault3d.js), and either its ward's broken then ("A ward breaks as it
+falls: a sealed door's open in the rock nearby.", `chainBroken`) or it drops a key where it fell
+(`vaultKey`, "Sealed key": anyone's to take up). Till its key's carried through it, the door's
+shut: a sea-green seal across the arch, breathing, refused (`vaultKey`), and its hint said as it's
+chosen; carried through, the key's spent and the door's open from then on.
+
+The room behind (`#vaultBuild`) is a map of its own, the dungeon's own look (`VAULT.rows`: its
+chest at the back, its keepers' places, a flight up into the rock its way out, torches on its
+walls), at origins of its own east of the hells' (`vaultOrigin`), so it overlaps nothing; the
+dungeon's floors drawn, it's drawn with them. Gone into (`#vaultWake`), its keepers wake (of the
+floor's own, `up` tiers more) and its chest's set down at the back, shut ("kept") till they've
+fallen (`#vaultFell`: "Its keepers are down. The chest is yours to open."). Opened (`#openVault`),
+each who took part in its encounter, and each there then, finds their own reward in it (the card's:
+its unique, made at their level), theirs alone till they take it up; one gone from the world is
+owed it. The card's kept as met by each who took part as its foe falls.
+
+Kept: the room's record (`Legends` `vaults`: its dungeon and generation, its floor, its door, how
+it opens, who took part, its keepers, whether it's cleared and its chest given), the room made
+again from it once its floor's made after a reload (`#vaultsAbout`), as the dungeon's floors are
+from its seed; and let go of once the dungeon's made anew (another generation). Debug mode's
+*Inside* button (`game.rare({ inside: true })`) puts the inside sample (`SAMPLE_DEEP`, "The Sample
+Below", a ward its door's, three keepers) on the dungeon floor the player's on (`rareFloor`
+anywhere else).
+
 ### Locks
 
 A thread can keep a way in shut till it comes to it (`LOCKS`; a `lock` step): a lock is put on

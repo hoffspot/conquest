@@ -162,6 +162,7 @@ import { hitch } from "../world/art/kits/wagon.js";
 import { compassTurn, Minimap, treesOf } from "./minimap.js";
 import { CameraFollow, PITCH } from "./camera.js";
 import { Doors } from "./doors.js";
+import { VaultDoors } from "../world/vault3d.js";
 import { Readying } from "./readying.js";
 import { FatePanel, fateWords } from "./fate.js";
 import { plateScale } from "./hud.js";
@@ -994,7 +995,7 @@ const STRANGER_LINES = Object.freeze({
 const HEARD_FOUND = 5;
 
 /** What the host tells of besides the battle's events (#hear: every kind it has a word for). */
-export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "share", "rules"]);
+export const HOST_EVENTS = new Set(["open", "close", "join", "leave", "explored", "bestiary", "talk", "effect", "war", "turn", "muster", "relieved", "fieldBattle", "invasion", "engagement", "burnt", "dismiss", "worksOut", "worksDown", "works", "convoy", "convoyed", "parted", "fortOut", "fortDown", "squadsOut", "quartered", "unquartered", "barracks", "taken", "camp", "strike", "stockades", "hacking", "breach", "stormed", "army", "supply", "skirmishers", "leaders", "envoy", "envoyed", "farewell", "follower", "fate", "unrest", "gone", "roused", "cleared", "rank", "loot", "bought", "sold", "used", "gear", "disguise", "discarded", "dropped", "picked", "spoils", "ability", "unitAbility", "request", "standing", "guild", "gift", "counsel", "trade", "tier", "learnt", "grown", "companion", "summons", "carried", "polymorphed", "attracted", "slept", "resting", "rose", "away", "boon", "safety", "townsfolk", "emote", "party", "treasure", "sign", "prayed", "cured", "ring", "trial", "dungeon", "cache", "find", "pace", "stranger", "obstacle", "obstacles", "ambush", "rare", "thread", "vault", "share", "rules"]);
 
 // What lies on the ground (core/battle.js HAZARDS), as it shows: what rises off it now and then,
 // anywhere on it (effects.js BURSTS)
@@ -2014,6 +2015,8 @@ export class Game {
         }
 
         this.doors = new Doors(world, view.scene);
+        // (And the doors the rare encounters inside add to a dungeon's floors: world/vault3d.js)
+        this.vaultDoors = new VaultDoors(world, view.scene);
         this.banners = new Banners(view.scene);
         this.camps = new Camps(view.scene);
         // (And the fortifications standing near the player: world/forts3d.js, #syncForts)
@@ -3004,6 +3007,7 @@ export class Game {
 
         this.interiors.clear();
         this.doors?.dispose();
+        this.vaultDoors?.dispose();
         this.banners?.dispose();
         this.camps?.dispose();
         this.forts3d?.dispose();
@@ -6338,7 +6342,7 @@ export class Game {
      * ("legend", "thread"), x, z (metres), about }]; gone as each ends, or its step's done.
      */
     rareIcons() {
-        const seen = [...this.raresSeen.values()].map(({ n, card, at: [x, z] }) => ({ id: `rare-${n}`, kind: "legend", x, z, about: `${cardOf(card)?.title ?? "Something rare"}: seen here` }));
+        const seen = [...this.raresSeen.values()].filter(({ map }) => map === "town").map(({ n, card, at: [x, z] }) => ({ id: `rare-${n}`, kind: "legend", x, z, about: `${cardOf(card)?.title ?? "Something rare"}: seen here` }));
         // (And where the world's threads lead next, theirs to go to: core/rare.js `place` steps)
         const threads = Object.entries(this.host.legends?.threads ?? {})
             .filter(([id, thread]) => thread.place && ["place", "lock"].includes(this.host.legends.stepOf(id)?.kind))
@@ -11246,11 +11250,11 @@ export class Game {
     #legendNotes(at) {
         const names = (list) => (list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : (list[0] ?? ""));
         const titleOf = (card) => cardOf(card)?.title ?? "Something rare";
-        const out = [...this.raresSeen.values()].map(({ card, at: seen }) => ({ title: titleOf(card), state: "Out there", words: cardOf(card)?.word ?? "", where: at ? `Seen ${bearing(at, seen)}` : "" }));
+        const out = [...this.raresSeen.values()].map(({ card, at: seen, map }) => ({ title: titleOf(card), state: map === "town" ? "Out there" : "Below ground", words: cardOf(card)?.word ?? "", where: at && map === "town" ? `Seen ${bearing(at, seen)}` : "" }));
         const met = [...(this.host.legends?.done ?? [])]
             .filter(({ how }) => how === "done")
             .reverse()
-            .map(({ card, by, at: where }) => ({ title: titleOf(card), state: "Overcome", words: by.length ? `Overcome by ${names(by)}${cardOf(card)?.kind === "unique" ? ": it won't come again." : "."}` : "Overcome.", where: at && where ? bearing(at, where) : "" }));
+            .map(({ card, by, at: where, map }) => ({ title: titleOf(card), state: "Overcome", words: by.length ? `Overcome by ${names(by)}${cardOf(card)?.kind === "unique" ? ": it won't come again." : "."}` : "Overcome.", where: at && where && (map ?? "town") === "town" ? bearing(at, where) : "" }));
         const uniques = (this.progress.legends?.uniques ?? []).map((id) => UNIQUES[id]).filter(Boolean).map(({ name, about }) => ({ name, about }));
         // (The world's threads: what's next of each, and where; those at an end, that they are)
         const threads = Object.entries(this.host.legends?.threads ?? {}).map(([id, thread]) => {
@@ -11894,18 +11898,20 @@ export class Game {
                 }
 
                 const first = !this.raresSeen.has(event.n);
+                // (Out in the wilds, or on one of a dungeon's floors: core/rare.js venues)
+                const map = event.map ?? "town";
 
-                this.raresSeen.set(event.n, { n: event.n, card: event.card, at: [...event.at] });
+                this.raresSeen.set(event.n, { n: event.n, card: event.card, at: [...event.at], map });
 
                 if (event.id === this.me) {
-                    const [ox, oz] = this.originOf("town");
-                    const at = new THREE.Vector3(ox + event.at[0], this.#groundOn("town", event.at[0], event.at[1]) + 1, oz + event.at[1]);
+                    const [ox, oz] = this.originOf(map);
+                    const at = new THREE.Vector3(ox + event.at[0], (map === "town" ? this.#groundOn("town", event.at[0], event.at[1]) : 0) + 1, oz + event.at[1]);
 
                     this.hud.message(card?.word ?? "Something waits ahead that has no business being there.", 5);
                     this.sound?.play("rareSting", { at });
                 } else if (first) {
                     const who = this.battle.actor(event.id)?.name ?? "One of your party";
-                    const way = mine?.map === "town" ? ` to the ${compass([mine.x, mine.y], event.at)}` : "";
+                    const way = map !== "town" ? " below ground" : mine?.map === "town" ? ` to the ${compass([mine.x, mine.y], event.at)}` : "";
 
                     this.hud.message(`${who} has seen something strange${way}.`, 4);
                     this.sound?.play("rareSting");
@@ -11947,6 +11953,63 @@ export class Game {
             case "had":
                 if (event.id === this.me) {
                     this.hud.message(`You've had ${UNIQUES[event.unique]?.name ?? "its reward"} already: it's given only once.`, 4);
+                }
+
+                break;
+        }
+
+        if (!this.remote) {
+            this.onWar(this.host.war, this.host.legends);
+        }
+    }
+
+    // A sealed room a rare encounter inside brings (core/rare.js VAULT; host.js "vault"): made, its
+    // floor drawn (with the dungeon's, if they're drawn) and its door; its ward broken or its key
+    // dropped, said to those who took part, and its door on the floor shown; opened by its key, its
+    // keepers fallen, its chest opened, said to those there. The world's legends kept as it changes
+    #vaultTold(event) {
+        const me = this.battle.actor(this.me);
+        const mine = (event.took ?? []).includes(this.me);
+        const room = (n) => Object.values(this.host.legends?.vaults ?? {}).find((one) => one.n === n);
+        const inRoom = (n) => me && room(n) && me.map === `${room(n).floor}/vault-${n}`;
+
+        switch (event.change) {
+            case "made": {
+                const visit = this.visits.get(event.building);
+
+                if (visit && !visit.bare) {
+                    visit.queue.push(() => this.#furnishing(visit, event.map));
+                }
+
+                this.doors?.sync();
+                this.vaultDoors?.sync();
+
+                break;
+            }
+            case "warded":
+                if (mine) {
+                    this.hud.message("A ward breaks as it falls: a sealed door's open in the rock nearby.", 5);
+                    this.sound?.play("chainBroken");
+                }
+
+                break;
+            case "keyed":
+                if (mine) {
+                    this.hud.message("It drops a key as it falls, and a sealed door shows in the rock nearby.", 5);
+                    this.sound?.play("drop");
+                }
+
+                break;
+            case "opened":
+                if (event.id === this.me) {
+                    this.hud.message("The key turns in the seal, and crumbles: the way's open.", 4);
+                    this.sound?.play("chainBroken");
+                }
+
+                break;
+            case "cleared":
+                if (inRoom(event.n)) {
+                    this.hud.message("Its keepers are down. The chest is yours to open.", 4);
                 }
 
                 break;
@@ -12684,7 +12747,8 @@ export class Game {
     // The work of building a building's floors, one to a piece of work, and telling the doors of
     // its insides after
     #floorsOf(visit, building) {
-        return [...building.maps.map((id) => () => this.#furnishing(visit, id)), () => this.doors?.sync()];
+        // (And the sealed rooms the rare encounters inside have added to it: core/rare.js VAULT)
+        return [...[...building.maps, ...(building.vaults ?? [])].map((id) => () => this.#furnishing(visit, id)), () => this.doors?.sync(), () => this.vaultDoors?.sync()];
     }
 
     // A building's floors let go of, the player well away from it (FLOORS), though it's still got
@@ -13083,6 +13147,7 @@ export class Game {
         }
 
         this.doors?.update(dt, this.clock, { map: this.mapId, heading: player?.order?.type === "enter" ? player.order.link : null });
+        this.vaultDoors?.update(this.clock, { map: this.mapId, shut: (link) => Boolean(this.host.shutOf?.(link.id, this.mapId, this.me)) });
 
         const me = this.avatars.get(this.me)?.object.position;
 
@@ -13715,6 +13780,9 @@ export class Game {
                 break;
             case "thread":
                 this.#threadTold(event);
+                break;
+            case "vault":
+                this.#vaultTold(event);
                 break;
             case "obstacles":
                 // (Something across the way come down or cleared: the ground under it drawn again,
@@ -15322,10 +15390,11 @@ export class Game {
 
     /**
      * Debug mode's sample rare encounter (core/rare.js SAMPLE) dealt ahead of the player at once,
-     * their clock aside (the debug overlay's): host.js "rare".
+     * their clock aside, or (`inside`) its inside sample put on the dungeon floor they're on
+     * (SAMPLE_DEEP) (the debug overlay's): host.js "rare".
      */
-    rare() {
-        this.#command({ type: "rare" }, (result) => {
+    rare({ inside = false } = {}) {
+        this.#command({ type: "rare", ...(inside ? { inside: true } : {}) }, (result) => {
             if (!result.ok) {
                 this.hud.message(REFUSALS[result.reason] ?? "Only out in the wilds of the world you've opened, with no rare encounter out", 2.5);
             }
@@ -16756,7 +16825,7 @@ export class Game {
         if (door) {
             // (A way in kept shut, a thread's lock or a hell's seal: what might open it said at once,
             // and not walked to: core/rare.js LOCKS)
-            const shut = this.host.shutOf?.(door.link.id, player.map);
+            const shut = this.host.shutOf?.(door.link.id, player.map, this.me);
 
             if (shut) {
                 this.hud.message(shut.hint, 4);

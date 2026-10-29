@@ -5,7 +5,9 @@ The plan for the wilds director's rare encounters, from `reports/Rare once per w
 pays out rare encounters; the encounters themselves (the cards, their threads and their unique
 rewards) are designed later, one at a time. Until then the engine deals nothing in play: a sample
 card only debug mode can deal tries every part of it. Four stages, built in this order and
-shipped together in one pull request (the owner's word, 2026-10-29).
+shipped together in one pull request (the owner's word, 2026-10-29). All four are built: what
+each does in play is told in docs/WILDS.md *Rare encounters* (and its *Threads*, *Inside* and
+*Locks*); what's below is the plan they were built from.
 
 ## Decided
 

@@ -133,6 +133,14 @@ export const ITEMS = Object.freeze({
         use: { treasure: true },
         price: 40,
     },
+    // A key dropped by a rare foe below ground (core/rare.js VAULT `key`): carried through the
+    // sealed door added to that floor, it opens it, and it's spent; worth nothing to a shop
+    vaultKey: {
+        label: "Sealed key",
+        about: "Dropped by something rare below ground. Carry it through the sealed door that's come to that floor and the door opens; the key's spent.",
+        key: true,
+        price: 1,
+    },
     // A goblin's bomb, lit and thrown at a foe up to `reach` metres off (battle.js lob, BOMBS): it
     // lands, fizzes and bursts, hurting (`damage`, at its heart) and throwing their side round it;
     // found on goblins, never sold

@@ -15,7 +15,7 @@ import { HOST_PLAYER, Host, REFUSALS, SNAPSHOT_VERSION } from "../client/js/core
 import { buildWorld } from "../client/js/core/overworld.js";
 import { Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
-import { cardOf, CHANGES, DEBUG_CARDS, gatesHold, hourOf, Legends, LOCKS, lockSite, makeUnique, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_KIN, SHAPES, siteDoor, STEPS, threadTalk, threadWares, threadWords, THREADS, UNIQUES, VENUES } from "../client/js/core/rare.js";
+import { cardOf, CHANGES, DEBUG_CARDS, gatesHold, hourOf, Legends, LOCKS, lockSite, makeUnique, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_DEEP, SAMPLE_KIN, SHAPES, siteDoor, STEPS, threadTalk, threadWares, threadWords, THREADS, UNIQUES, VAULT, VENUES } from "../client/js/core/rare.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { Conversation, TREES } from "../client/js/core/dialogue.js";
 import { describe as describeGear, MAKES, rarityOf } from "../client/js/app/gearinfo.js";
@@ -703,7 +703,7 @@ describe("rare encounters in play (host.js)", () => {
 
         assert.ok(end.some(({ change }) => change === "done"), JSON.stringify(end));
         assert.equal(thread.done, true);
-        assert.deepEqual(DEBUG_CARDS, { sample: SAMPLE, sampleKin: SAMPLE_KIN });
+        assert.deepEqual(DEBUG_CARDS, { sample: SAMPLE, sampleKin: SAMPLE_KIN, sampleDeep: SAMPLE_DEEP });
 
         // (Kept: in its snapshot, as it was)
         assert.deepEqual(Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot()))).legends.threads, host.legends.threads);
@@ -749,5 +749,197 @@ describe("rare encounters in play (host.js)", () => {
         // (18 minutes in: day; 48, dusk; 54, night; 8 of the next, dawn)
         assert.deepEqual([0, 30, 36, 50].map((minutes) => hourOf(minutes * MINUTE)), ["day", "dusk", "night", "dawn"]);
         assert.ok(["dawn", "day", "dusk", "night"].every((hour) => Array.from({ length: 60 }, (_, k) => hourOf(k * MINUTE)).includes(hour)));
+    });
+});
+
+describe("rare encounters inside (host.js)", () => {
+    // A world (seed 1) with Ada in it, hard to kill, at the way in of the dungeon nearest where
+    // she starts (made as she comes to it), an inside card in play there (the sample's, as `opens`
+    // has it) and her inside clock come up
+    function below({ opens = "ward" } = {}) {
+        const world = buildWorld({ seed: 1 });
+        const host = new Host(world, { populate: false });
+
+        host.join({ id: HOST_PLAYER, hero: HERO });
+        host.populate();
+        Object.assign(host.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+        const me = host.battle.actor(HOST_PLAYER);
+        const [sx, sy] = world.start.at;
+        const site = world.plan.sites.filter(({ kind, theme }) => kind === "dungeon" && theme !== "hell").sort((a, b) => Math.hypot(a.at[0] - sx, a.at[1] - sy) - Math.hypot(b.at[0] - sx, b.at[1] - sy))[0];
+
+        Object.assign(me, { hp: 1e6, maxHp: 1e6 });
+        world.maps.town.sites.heartOf(site);
+        put(me, world.maps.town.sites.set.get(site.id).entrance.outside);
+        run(host, 1500);
+
+        const building = world.interiors.buildings.get(`site:${site.id}`);
+
+        host.legends.cards = { deep: { ...SAMPLE_DEEP, id: "deep", debug: false, vault: { ...SAMPLE_DEEP.vault, opens } } };
+        host.legends.clock(HOST_PLAYER).inside.due = true;
+
+        return { world, host, me, site, building };
+    }
+
+    // Through a link from where `actor` is: stood where one comes off it, told to go, played on
+    // till they've crossed; the events on the way
+    function through(host, actor, link) {
+        const events = [];
+
+        put(actor, link.ends.find(({ map }) => map === actor.map).arrive);
+        host.command(actor.id, { type: "enter", link: link.id });
+
+        for (let t = 0; t < 30000 && !events.some(({ type, id }) => type === "cross" && id === actor.id); t += 250) {
+            events.push(...run(host, 250));
+        }
+
+        return events;
+    }
+
+    // A foe felled by `actor`, beside it, kept alive the while
+    function fell(host, actor, id) {
+        const foe = host.battle.actor(id);
+        const events = [];
+
+        put(actor, host.battle.actor(id).square.map((v, k) => v + (k ? 0 : 1)));
+        Object.assign(foe, { hp: 1 });
+        Object.assign(actor, { power: { melee: 1e4, ranged: 1e4 } });
+        host.command(actor.id, { type: "engage", target: id });
+
+        for (let t = 0; t < 8000 && !foe.dead; t += 250) {
+            Object.assign(actor, { hp: 1e6, maxHp: 1e6 });
+            events.push(...run(host, 250));
+        }
+
+        events.push(...run(host, 500));
+
+        return events;
+    }
+
+    it("deals an inside card on a floor as it's gone into, a player's clock come up: its foe of the floor's own, ranked, as far from them as it can be", () => {
+        const { host, me, building } = below();
+        const events = through(host, me, building.door).filter(({ type }) => type === "rare");
+        const active = host.legends.active;
+
+        assert.ok(events.some(({ change, map }) => change === "put" && map === building.maps[0]), JSON.stringify(events));
+        assert.equal(active.venue, "inside");
+        assert.equal(active.map, building.maps[0]);
+
+        const foe = host.battle.actor(active.ids[0]);
+
+        assert.equal(foe.map, building.maps[0]);
+        assert.equal(foe.wild.champion, "mini");
+        assert.ok(Math.hypot(foe.x - me.x, foe.y - me.y) >= 12);
+        assert.equal(host.legends.clock(HOST_PLAYER).inside.due, false);
+    });
+
+    it("breaks a ward as its foe falls: a door added to that floor, to a sealed room of its own, its keepers woken as it's gone into, its chest each one's own reward once they've fallen; made again from the world's record", () => {
+        const { host, me, building } = below();
+
+        through(host, me, building.door);
+
+        const active = host.legends.active;
+        const events = fell(host, me, active.ids[0]);
+        const warded = events.find(({ type, change }) => type === "vault" && change === "warded");
+
+        assert.ok(warded, events.filter(({ type }) => type === "rare" || type === "vault").map(({ type, change }) => `${type}:${change}`).join());
+
+        const vault = host.legends.vaults[warded.n];
+        const link = host.battle.links.find((one) => one.vault === vault.n);
+        const room = host.world.maps[`${vault.floor}/vault-${vault.n}`];
+
+        assert.equal(vault.open, true);
+        assert.equal(vault.floor, building.maps[0]);
+        assert.equal(room.plan.length, VAULT.rows.length);
+        assert.ok(room.origin[0] >= VAULT.origins.x && room.dungeon.vault === vault.n);
+        assert.equal(host.world.maps[vault.floor].plan[vault.door.square[1]][vault.door.square[0]], "#", "(against the rock)");
+        assert.ok(Math.hypot(vault.door.square[0] - active.at[0], vault.door.square[1] - active.at[1]) <= VAULT.near + 1);
+        assert.equal(host.world.interiors.of(room.id), building);
+        assert.equal(host.players.get(HOST_PLAYER).progress.legends.met.includes("deep") || SAMPLE_DEEP.kind !== "unique", true, "(kept as met)");
+        assert.ok(!host.players.get(HOST_PLAYER).progress.pack.some((stack) => stack?.unique), "(its reward's in the chest)");
+
+        // Gone into: its keepers woken, its chest shut till they fall
+        const woken = through(host, me, link);
+
+        assert.equal(me.map, room.id);
+        assert.ok(vault.keepers.length > 0 && vault.keepers.every((id) => host.battle.actor(id)?.map === room.id), JSON.stringify(vault));
+        assert.ok(woken.some(({ type }) => type === "roused"));
+
+        const chest = host.ground.get(`vault-chest-${vault.n}`);
+
+        assert.equal(chest.locked, true);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "pickUp", ground: chest.id }).ok, false);
+
+        for (const id of vault.keepers) {
+            fell(host, me, id);
+        }
+
+        assert.equal(vault.cleared, true);
+        assert.equal(chest.locked, false);
+
+        // Opened: hers in it, theirs alone, till she takes it up
+        put(me, chest.square);
+        assert.equal(host.command(HOST_PLAYER, { type: "pickUp", ground: chest.id }).ok, true);
+
+        const hers = [...host.ground.values()].find((one) => one.for === HOST_PLAYER && one.map === room.id && one.bundle?.items.some((item) => item.unique === "sampleSignet"));
+
+        assert.ok(hers, "her unique in it");
+        assert.equal(host.command(HOST_PLAYER, { type: "pickUp", ground: hers.id }).ok, true);
+        assert.ok(host.players.get(HOST_PLAYER).progress.pack.some((stack) => stack?.unique === "sampleSignet"));
+        assert.equal(vault.given, true);
+
+        // (Kept: in the snapshot, and made again from it as its floor's made)
+        const again = Host.restore(buildWorld({ seed: 1 }), decode(encode(host.snapshot())));
+
+        assert.deepEqual(again.legends.vaults[vault.n].door, vault.door);
+        put(again.battle.actor(HOST_PLAYER), host.world.maps.town.sites.set.get(building.site).entrance.outside);
+        Object.assign(again.battle.actor(HOST_PLAYER), { map: "town", hp: 1e6, maxHp: 1e6 });
+        run(again, 1500);
+        assert.ok(again.world.maps[room.id], "the room made again");
+        assert.ok(again.battle.links.some((one) => one.vault === vault.n));
+    });
+
+    it("drops the key that opens it, where its foe falls: its door refused to those without it, said why as it's chosen, and the key spent going through", () => {
+        const { host, me, building } = below({ opens: "key" });
+
+        through(host, me, building.door);
+
+        const active = host.legends.active;
+        const events = fell(host, me, active.ids[0]);
+        const keyed = events.find(({ type, change }) => type === "vault" && change === "keyed");
+
+        assert.ok(keyed, events.filter(({ type }) => type === "vault").map(({ change }) => change).join());
+
+        const vault = host.legends.vaults[keyed.n];
+        const link = host.battle.links.find((one) => one.vault === vault.n);
+        const key = [...host.ground.values()].find((one) => one.bundle?.items.some(({ id }) => id === "vaultKey"));
+
+        assert.equal(vault.open, false);
+        assert.ok(key && key.map === vault.floor);
+        assert.equal(host.shutOf(link.id, vault.floor, HOST_PLAYER).hint, REFUSALS.vaultKey);
+        put(me, link.ends.find(({ map }) => map === vault.floor).arrive);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "enter", link: link.id }), { ok: false, reason: "vaultKey" });
+
+        // (The key taken up: the way open to her, and spent as she goes through)
+        put(me, key.square);
+        assert.equal(host.command(HOST_PLAYER, { type: "pickUp", ground: key.id }).ok, true);
+        assert.equal(host.shutOf(link.id, vault.floor, HOST_PLAYER), null);
+
+        const went = through(host, me, link);
+
+        assert.ok(went.some(({ type, change }) => type === "vault" && change === "opened"));
+        assert.equal(vault.open, true);
+        assert.equal(host.players.get(HOST_PLAYER).progress.count("vaultKey"), 0);
+    });
+
+    it("puts debug mode's inside sample on the floor the player's on, and only on one of a dungeon's floors", () => {
+        const { host, me, building } = below();
+
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "rare", inside: true }), { ok: false, reason: "rareFloor" });
+        host.legends.clock(HOST_PLAYER).inside.due = false;
+        through(host, me, building.door);
+        assert.equal(host.command(HOST_PLAYER, { type: "rare", inside: true }).card, SAMPLE_DEEP.id);
+        assert.equal(host.legends.active.map, building.maps[0]);
+        assert.ok(REFUSALS.rareFloor);
     });
 });

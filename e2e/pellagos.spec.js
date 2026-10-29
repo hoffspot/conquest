@@ -12026,6 +12026,210 @@ test("the wilds director lays an ambush ahead of a player crossing the wilds: it
     expect(laid.shown).toBe(laid.count);
 });
 
+test("a rare encounter dealt in the wilds (debug mode's sample) in a party of two: seen, its word said and its mark on the maps; felled, each given their own unique, bound and sea-green in the pack; its thread begun, in the journal's Legends with what was met", async ({ page }) => {
+    test.setTimeout(240000);
+    await playing(page, "/?play&seed=2");
+
+    const met = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const host = game.host;
+        const player = game.battle.actor(game.me);
+        const until = async (done, steps = 200) => {
+            for (let k = 0; k < steps && !done(); k++) {
+                player.hp = player.maxHp;
+                game.advance(0.1, { render: false });
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+        const at = (actor, x, y) => Object.assign(actor, { x: Math.floor(x) + 0.5, y: Math.floor(y) + 0.5, square: [Math.floor(x), Math.floor(y)], path: [], order: null });
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // (Out in the wilds north-east of the start, Bram with her, in her party)
+        const [sx, sy] = game.world.start.at;
+
+        at(player, sx + 600, sy + 600);
+        host.join({ id: "bram", hero: { ...game.hero, name: "Bram" } });
+
+        const bram = game.battle.actor("bram");
+
+        Object.assign(bram, { hp: 1e6, maxHp: 1e6 });
+        at(bram, player.x + 2, player.y);
+        host.command(game.me, { type: "party", action: "invite", who: "bram" });
+        host.command("bram", { type: "party", action: "accept" });
+        host.travel.set(game.me, { at: [player.x, player.y], walked: 0, next: null, heading: [Math.SQRT1_2, Math.SQRT1_2], deck: ["remains"] });
+        await until(() => false, 10);
+
+        const dealt = host.command(game.me, { type: "rare" });
+        const foe = game.battle.actor(host.legends.active.ids[0]);
+
+        // (Come near: seen)
+        at(player, foe.x - 20, foe.y);
+        at(bram, foe.x - 22, foe.y);
+        await until(() => game.raresSeen.size > 0, 100);
+
+        const seen = { word: game.messages.some(({ text }) => text === "Something waits ahead that has no business being there."), marked: game.rareIcons().some(({ kind }) => kind === "legend"), onWorldMap: game.worldMapView().icons.some(({ kind }) => kind === "legend") };
+
+        // (Felled by her, Bram beside her)
+        at(player, foe.x - 1.5, foe.y);
+        at(bram, foe.x - 3, foe.y + 1);
+        Object.assign(player, { power: { melee: 1e4, ranged: 1e4 } });
+        Object.assign(foe, { hp: 1 });
+        host.command(game.me, { type: "engage", target: foe.id });
+        await until(() => !host.legends.active, 150);
+
+        const theirs = (id) => host.players.get(id).progress.pack.find((stack) => stack?.unique) ?? null;
+
+        game.start();
+
+        return {
+            dealt,
+            seen,
+            out: host.legends.active,
+            mine: theirs(game.me)?.unique ?? null,
+            bram: theirs("bram")?.unique ?? null,
+            kept: game.progress.legends,
+            thread: host.legends.threads.sampleTrail?.step ?? null,
+            told: game.messages.map(({ text }) => text).filter((text) => /overcome the Sample|found nowhere else|A thread: The Sample's trail/.test(text)),
+            unmarked: !game.rareIcons().some(({ kind }) => kind === "legend"),
+            led: game.rareIcons().some(({ kind }) => kind === "thread"),
+        };
+    });
+
+    expect(met.dealt).toMatchObject({ ok: true, card: "sample" });
+    expect(met.seen).toEqual({ word: true, marked: true, onWorldMap: true });
+    expect(met.out).toBeNull();
+    expect(met).toMatchObject({ mine: "sampleSignet", bram: "sampleSignet", thread: 0, unmarked: true, led: true });
+    expect(met.kept).toEqual({ met: ["sample"], uniques: ["sampleSignet"] });
+    expect(met.told.length, JSON.stringify(met.told)).toBe(3);
+
+    // The journal: its Legends, the thread and the Sample overcome by both
+    const journal = page.getByRole("dialog", { name: "Journal" });
+
+    await page.keyboard.press("j");
+    await expect(journal).toBeVisible();
+
+    const legends = journal.locator(".journal-list.legends");
+
+    await expect(legends).toBeVisible();
+    await expect(legends).toContainText("The Sample's trail");
+    await expect(legends).toContainText(/Overcome by \w+ and Bram: it won't come again/);
+    await expect(legends.locator(".journal-unique .rarity-unique")).toHaveText("Signet of the Sample");
+    await page.keyboard.press("Escape");
+
+    // The pack: the unique sea-green, its card saying it's bound, nothing to sell or drop it by
+    await page.keyboard.press("i");
+
+    const cell = page.locator(".pack-cell.rarity-unique");
+
+    await expect(cell).toHaveCount(1);
+    await cell.click();
+    await expect(page.locator(".pack-card.rarity-unique .tone-unique")).toContainText("found nowhere else, and bound to you");
+    await expect(page.locator(".pack-card.rarity-unique .pack-kind")).toHaveText("Ring · Unique");
+    expect(await page.evaluate(() => getComputedStyle(document.querySelector(".pack-name.rarity-unique")).color)).toBe("rgb(63, 224, 192)");
+});
+
+test("a rare encounter inside (debug mode's inside sample) on a dungeon's floor: felled, a ward broken and a door shown in the rock, an arch over its way in; gone through to a sealed room of its own, drawn, its keepers woken, its chest each one's reward once they've fallen", async ({ page }) => {
+    test.setTimeout(300000);
+    await playing(page, "/?play&seed=2");
+
+    const below = await page.evaluate(async () => {
+        const { game } = window.pellagos;
+        const host = game.host;
+        const player = game.battle.actor(game.me);
+        const until = async (done, steps = 200) => {
+            for (let k = 0; k < steps && !done(); k++) {
+                player.hp = player.maxHp;
+                game.advance(0.1, { render: false });
+                await new Promise((resolve) => setTimeout(resolve, 0));
+            }
+        };
+        const settle = async (steps) => {
+            for (let k = 0; k < steps; k++) {
+                game.advance(0.25, { render: false });
+
+                while (game.chunks.update(player.x, player.y, { budget: 200 }) || game.chunks.busy) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+        };
+        const through = async (link) => {
+            const end = link.ends.find(({ map }) => map === player.map);
+            const from = player.map;
+
+            Object.assign(player, { x: end.arrive[0] + 0.5, y: end.arrive[1] + 0.5, square: [...end.arrive], path: [], order: null, progress: null });
+            host.command(game.me, { type: "enter", link: link.id });
+            await until(() => player.map !== from, 300);
+            await until(() => game.interiors.get(player.map)?.object.visible || player.map === "town", 300);
+        };
+        const fell = async (id) => {
+            const foe = game.battle.actor(id);
+
+            Object.assign(player, { x: foe.x - 1.5, y: foe.y, square: [Math.floor(foe.x - 1.5), Math.floor(foe.y)], path: [], order: null, power: { melee: 1e4, ranged: 1e4 } });
+            Object.assign(foe, { hp: 1 });
+            host.command(game.me, { type: "engage", target: id });
+            await until(() => foe.dead, 150);
+        };
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+        Object.assign(player, { hp: 1e6, maxHp: 1e6 });
+
+        // (Into the nearest dungeon to the start)
+        const site = game.world.plan.sites.filter(({ kind, theme }) => kind === "dungeon" && theme !== "hell").sort((a, b) => Math.hypot(a.at[0] - player.x, a.at[1] - player.y) - Math.hypot(b.at[0] - player.x, b.at[1] - player.y))[0];
+
+        Object.assign(player, { x: site.at[0] + 25, y: site.at[1], path: [], order: null, progress: null });
+        await settle(8);
+
+        const building = game.world.interiors.buildings.get(`site:${site.id}`);
+        const [ox, oy] = building.entrance.outside;
+
+        Object.assign(player, { x: ox + 0.5, y: oy + 0.5, path: [], order: null, progress: null });
+        await through(building.door);
+
+        const dealt = host.command(game.me, { type: "rare", inside: true });
+
+        await fell(host.legends.active.ids[0]);
+
+        const vault = Object.values(host.legends.vaults)[0];
+        const link = game.world.links.find((one) => one.vault === vault?.n);
+        const arch = game.vaultDoors.drawn.get(link?.id);
+
+        await until(() => false, 5);
+
+        const shown = { floor: player.map === vault?.floor, arch: Boolean(arch?.group.visible), sealed: Boolean(arch?.seal.visible), warded: game.messages.some(({ text }) => /A ward breaks as it falls/.test(text)) };
+
+        // (Through it: the room drawn, its keepers out, its chest shut till they fall)
+        await through(link);
+
+        const room = { map: player.map, drawn: Boolean(game.interiors.get(player.map)?.object.visible), keepers: vault.keepers.length, locked: host.ground.get(`vault-chest-${vault.n}`)?.locked ?? null };
+
+        for (const id of vault.keepers) {
+            await fell(id);
+        }
+
+        await until(() => vault.cleared, 50);
+
+        const chest = host.ground.get(`vault-chest-${vault.n}`);
+
+        Object.assign(player, { x: chest.square[0] + 0.5, y: chest.square[1] + 1.5, path: [], order: null });
+
+        const opened = host.command(game.me, { type: "pickUp", ground: chest.id });
+        const mine = [...host.ground.values()].find((one) => one.for === game.me && one.map === room.map && one.bundle?.items.some(({ unique }) => unique === "sampleSignet"));
+
+        return { dealt, shown, room, cleared: vault.cleared, opened, mine: Boolean(mine), told: game.messages.some(({ text }) => /keepers are down/.test(text)) };
+    });
+
+    expect(below.dealt).toMatchObject({ ok: true, card: "sampleDeep" });
+    expect(below.shown).toEqual({ floor: true, arch: true, sealed: false, warded: true });
+    expect(below.room.map).toMatch(/\/vault-\d+$/);
+    expect(below.room).toMatchObject({ drawn: true, locked: true });
+    expect(below.room.keepers).toBeGreaterThan(0);
+    expect(below).toMatchObject({ cleared: true, opened: { ok: true }, mine: true, told: true });
+});
+
 test("the wilds director lays a fallen tree across the way: drawn over its squares, said, the way round it; held on, the player walks up to it and clears it, swinging at it, and it's gone for everyone", async ({ page }) => {
     test.setTimeout(240000);
     await playing(page, "/?play&seed=1");

@@ -116,8 +116,58 @@ export const SAMPLE_KIN = Object.freeze({
     debug: true,
 });
 
-/** Debug mode's cards, by id: never in a deck, dealt by its Rare encounter button. */
-export const DEBUG_CARDS = Object.freeze({ [SAMPLE.id]: SAMPLE, [SAMPLE_KIN.id]: SAMPLE_KIN });
+/**
+ * Debug mode's inside card: a foe of the floor's own on the floor gone into, its fall breaking the
+ * ward on the door it brings (VAULT), its unique in the room behind.
+ */
+export const SAMPLE_DEEP = Object.freeze({
+    id: "sampleDeep",
+    title: "The Sample Below",
+    word: "Something waits on this floor that has no business being here.",
+    kind: "unique",
+    venue: "inside",
+    where: "ahead",
+    shape: Object.freeze({ kind: "foe", creature: null, champion: "mini", up: 2, title: "the Sample below" }),
+    vault: Object.freeze({ opens: "ward", foes: 3, up: 1 }),
+    reward: Object.freeze({ unique: "sampleSignet" }),
+    debug: true,
+});
+
+/** Debug mode's cards, by id: never in a deck, dealt by its Rare encounter buttons. */
+export const DEBUG_CARDS = Object.freeze({ [SAMPLE.id]: SAMPLE, [SAMPLE_KIN.id]: SAMPLE_KIN, [SAMPLE_DEEP.id]: SAMPLE_DEEP });
+
+/**
+ * An inside card's sealed room (a card's `vault`: { opens ("ward": its foe's fall breaks the ward on
+ * its door; "key": its foe drops the key that opens it, spent going through), foes (how many keep
+ * it), up (tiers above the floor's) }): its door added to the floor its foe fell on, against the
+ * rock within `near` metres of where it fell and at least `clear` from the floor's ways in; the room
+ * itself a map of its own (`rows`: rock, floor, its chest `h` at the back, its keepers `g`, its way
+ * out `^`, a flight up into the rock, and its foot `<`), at origins of its own (`origins`: east of the hells', a row of `across`, `step` apart),
+ * its torches on its walls (`lights`).
+ */
+export const VAULT = Object.freeze({
+    near: 14,
+    clear: 6,
+    origins: Object.freeze({ x: 30000, step: 40, across: 50 }),
+    rows: Object.freeze([
+        "#############",
+        "#...........#",
+        "#...........#",
+        "#.....h.....#",
+        "#..g.....g..#",
+        "#...........#",
+        "#.....g.....#",
+        "#...........#",
+        "#...........#",
+        "#.....<<....#",
+        "######^^#####",
+        "######^^#####",
+    ]),
+    lights: Object.freeze([Object.freeze({ at: [1, 4], kind: "torch", wall: [-1, 0] }), Object.freeze({ at: [11, 4], kind: "torch", wall: [1, 0] }), Object.freeze({ at: [1, 8], kind: "torch", wall: [-1, 0] }), Object.freeze({ at: [11, 8], kind: "torch", wall: [1, 0] })]),
+});
+
+/** Where a world's `n`th sealed room is drawn ([x, y] metres: VAULT `origins`). */
+export const vaultOrigin = (n) => [VAULT.origins.x + ((n - 1) % VAULT.origins.across) * VAULT.origins.step, Math.floor((n - 1) / VAULT.origins.across) * VAULT.origins.step];
 
 /** A card by its id: one in play, or one of debug mode's. */
 export function cardOf(id) {
@@ -309,6 +359,11 @@ export function makeUnique(id, level, random) {
  *   took (their ids), done }.
  * - `changes`: the world's changes (CHANGES), each { kind, thread, town, ..., from, until }.
  * - `opened`: the locks opened (LOCKS).
+ * - `vaults`: the sealed rooms inside cards have brought, by their number (VAULT): { n, card,
+ *   building (the dungeon's key), generation (its), level, floor (the map its door's on), door ({
+ *   square, arrive, facing }), opens, open (its ward broken, or its key gone through), took (those
+ *   who took part, theirs its rewards), woken (its keepers roused), keepers (their ids), cleared
+ *   (they've fallen), given (its chest opened) }.
  *
  * `cards`, by id, those it deals from: those in play and debug mode's (or a test's own).
  */
@@ -333,6 +388,7 @@ export class Legends {
         this.threads = structuredClone(json.threads ?? {});
         this.changes = structuredClone(json.changes ?? []);
         this.opened = new Set(json.opened ?? []);
+        this.vaults = structuredClone(json.vaults ?? {});
     }
 
     toJSON() {
@@ -352,6 +408,7 @@ export class Legends {
             threads: this.threads,
             changes: this.changes,
             opened: [...this.opened],
+            vaults: this.vaults,
         };
     }
 
