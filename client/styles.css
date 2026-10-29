@@ -2541,6 +2541,50 @@ three corners and a padlock at its top left */
     display: block;
 }
 
+/* How the player stands in its enmity (hud.js attackers, battle.js enmityStanding): a ring round
+   it, thicker the surer it's on them, so it doesn't lean on colour alone: red, on them; orange, on
+   them with another close; yellow, about to turn on them; grey, not */
+.attacker.enmity-held {
+    outline: 4px solid #e0402a;
+    outline-offset: 2px;
+}
+
+.attacker.enmity-near {
+    outline: 3px solid #ff9a2e;
+    outline-offset: 2px;
+}
+
+.attacker.enmity-pull {
+    outline: 2px dashed #f2d23a;
+    outline-offset: 2px;
+}
+
+.attacker.enmity-none {
+    outline: 1px solid rgba(200, 200, 200, 0.55);
+    outline-offset: 2px;
+}
+
+/* (Whom else it's on: a dot at its foot, a player's colour, or the initial of one of their own) */
+.attacker-on {
+    position: absolute;
+    left: -5px;
+    bottom: -5px;
+    display: grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    color: #10140e;
+    background: var(--ally);
+    box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.75);
+    font: 700 10px/1 var(--font-ui);
+    pointer-events: none;
+}
+
+.attacker-on[hidden] {
+    display: none;
+}
+
 @keyframes attacker-pulse {
     from {
         box-shadow:
@@ -2753,6 +2797,28 @@ body[data-minimap="off"] #party {
 
 .member.waiting .member-wait {
     display: block;
+}
+
+/* (How many foes are on them: a count at the top left, Show whom foes are on) */
+.member-foes {
+    position: absolute;
+    left: -4px;
+    top: -4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
+    border-radius: 8px;
+    color: #fff;
+    background: #b8321f;
+    box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.75);
+    font: 700 11px/16px var(--font-ui);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    pointer-events: none;
+}
+
+.member-foes[hidden] {
+    display: none;
 }
 
 .member.away {
@@ -8063,4 +8129,18 @@ dialog.you .you-qr {
 
 .plate.mood-flee .mood {
     background: #c86a5a;
+}
+
+/* A taunt on a foe (hud.js taunt): a mark by its name, its time left swept round it */
+.plate .taunt {
+    display: inline-block;
+    width: 1.05em;
+    height: 1.05em;
+    margin-right: 0.3em;
+    border-radius: 50%;
+    background:
+        radial-gradient(circle, #ffe7a8 0 28%, transparent 30%),
+        conic-gradient(#ffb02e calc(var(--left, 1) * 360deg), rgba(0, 0, 0, 0.55) 0);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+    vertical-align: -0.1em;
 }

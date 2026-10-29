@@ -107,6 +107,9 @@ export const SETTINGS_DEFAULTS = Object.freeze({
     // Hired adventurers saying a word now and then over their heads (app/game.js `chatter`:
     // core/followers.js BARKS): on to start with
     chatter: true,
+    // Whom foes are on (app/game.js `showEnmity`: the rings and dots on the enemies list, the
+    // counts on the party's icons, a taunt's mark): on to start with
+    showEnmity: true,
     // (Summoned by another player: said no to at once, not asked)
     resistSummons: false,
     // (Asked to another player's party: let go unanswered, not asked)

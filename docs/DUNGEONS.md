@@ -611,20 +611,28 @@ through, its squares one pool) and `@` the heart its Halls of Bone beat to. The 
 - **The caves' Goblin King** is the goblins' elite (docs/WILDS.md *Goblins*) on its throne, and
   harder than met in the wild: as a boss, four times its kind's hit points (an elite three) and
   blows 1.3 times as hard (an elite 1.25), two tiers over its level; its big bombs three at a time
-  (the others half to all of 3 metres about whoever it's after) every 4.5 seconds (the wild's one
-  every 7: creatures.js `boss`); its own war band about it, raiders and bombers in turn (a boss's
-  `guard` in its theme, in place of one of the theme's packs); and never thrown by a blast, as no
-  dungeon's boss is.
+  (the others half to all of 3 metres about them) every 4.5 seconds (the wild's one every 7:
+  creatures.js `boss`), lobbed at whoever's **second** in its enmity, if they're where it can lob
+  one (3.5 to 11 m off, seen; battle.js `#second`), else at whoever it's after: as Final Fantasy
+  XIV's tankbusters read the table, the one holding it isn't the only one who has to mind it; its
+  own war band about it, raiders and bombers in turn (a boss's `guard` in its theme, in place of
+  one of the theme's packs); and never thrown by a blast, as no dungeon's boss is.
 - **An ants' nest's Ant Monster calls her flock** (creatures.js `call`, battle.js `#calls`,
   host.js `#flock`). Six seconds after she first sets on someone, then every 15 seconds as a boss
   (20 elsewhere), between blows, she stops to call (`CALL`): a motion of her own that strikes no
   one, heard far off and told to whoever she's after. As her call goes out, two to four ants (two
   or three elsewhere) come running from 7 m behind her (`FLOCK`). They come two tiers under her (her
-  level's), of her pack, for anyone they see, and never more than six of them about her at once
+  level's), of her pack, set on whoever she's after (the top of her enmity) and then for anyone
+  they see, and never more than six of them about her at once
   (four elsewhere), nor more bodies than `BODIES` has about anyone. They're kept with her level's
   foes and let go with them, and they leave only their gold and parts (`extra`). None of them is
   one of the nest's plan, so their falls aren't kept. Stunned or knocked down as she rears to
   call (a shield bash, a stunning spell), her call is cut short.
+- **Bosses resist taunts** (battle.js `TAUNT.resist`; docs/WILDS.md *Whom they go for*): a
+  dungeon's boss (and a hell level's own, an elite, one of a kind) is made to go for a taunter for
+  half as long (2 seconds for a Taunt, 1.5 for a war cry), and taunted three times within 20
+  seconds, it shrugs taunts off for 10 ("It shrugs off taunts for now."). So a warrior holds it
+  with its weight in its enmity and a taunt now and then, but four warriors can't chain-lock it.
 - **The slain stay slain** (`foeKey`: level, pack, place in it) till the dungeon's made again,
   however often a level's woken and let go.
 

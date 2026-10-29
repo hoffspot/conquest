@@ -544,10 +544,10 @@ describe("rare encounters in play (host.js)", () => {
         const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
 
         assert.deepEqual(again.legends.toJSON(), host.legends.toJSON());
-        assert.equal(SNAPSHOT_VERSION, 46);
+        assert.equal(SNAPSHOT_VERSION, 47);
 
         // (A world kept before: none met, none out; its players' progress none either)
-        const old = { ...host.snapshot(), version: 45 };
+        const old = { ...host.snapshot(), version: 46 };
 
         delete old.legends;
         old.players = old.players.map((player) => ({ ...player, progress: Object.fromEntries(Object.entries(player.progress).filter(([key]) => key !== "legends")) }));

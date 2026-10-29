@@ -20,11 +20,13 @@ describe("the balance runner (scripts/balance.js)", () => {
         assert.ok(fight.foes > 0, "the wild came, and they fought");
         assert.ok(fight.seconds > 0 && fight.taken >= 0 && fight.falls >= 0 && fight.knocked === 0);
         assert.equal(fight.rested, true, "camp made first");
-        assert.deepEqual(Object.keys(summary(report)).sort(), ["cleared", "falls", "foes", "knocked", "rate", "seconds", "taken"]);
+        assert.deepEqual(Object.keys(summary(report)).sort(), ["borne", "cleared", "drawn", "falls", "foes", "knocked", "rate", "seconds", "taken"]);
+        assert.equal(summary(report).drawn, 0, "none drawn off them, with no allies");
     });
 
     it("has each side's aim: a share of what one alone loses, less the stronger the side", () => {
-        assert.deepEqual(Object.keys(SIDES), ["solo", "pair", "four", "hirelings", "summoner"]);
+        assert.deepEqual(Object.keys(SIDES), ["solo", "pair", "four", "hirelings", "company", "summoner"]);
+        assert.deepEqual(SIDES.company.hired, ["warrior", "cleric", "mage", "ranger"]);
         assert.equal(SIDES.solo.aim, 1);
         assert.ok(SIDES.four.aim < SIDES.pair.aim && SIDES.pair.aim < SIDES.solo.aim);
         assert.ok(Object.values(SIDES).every(({ aim }) => aim > 0 && aim <= 1));

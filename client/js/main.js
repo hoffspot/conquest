@@ -861,6 +861,7 @@ showPlaySettings();
 $("#quicksixswitch").checked = settings.quickSix;
 $("#quickalwaysswitch").checked = settings.quickAlways;
 $("#chatterswitch").checked = settings.chatter;
+$("#enmityswitch").checked = settings.showEnmity;
 $("#fullscreenswitch").checked = settings.fullscreen;
 // (Where the browser won't have it, no switch: on an iPhone, a word on the Home Screen instead)
 $("#fullscreenoption").hidden = !fullScreen.available;
@@ -1185,6 +1186,7 @@ async function playing(save, { world, place, war }) {
     game.autoLock = settings.autoLock;
     game.quickAlways = settings.quickAlways;
     game.chatter = settings.chatter;
+    game.showEnmity = settings.showEnmity;
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -2816,6 +2818,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     game.autoLock = settings.autoLock;
     game.quickAlways = settings.quickAlways;
     game.chatter = settings.chatter;
+    game.showEnmity = settings.showEnmity;
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -4644,6 +4647,7 @@ $("#battlecamswitch").addEventListener("change", (event) => applySetting("battle
 $("#quicksixswitch").addEventListener("change", (event) => applySetting("quickSix", event.target.checked));
 $("#quickalwaysswitch").addEventListener("change", (event) => applySetting("quickAlways", event.target.checked));
 $("#chatterswitch").addEventListener("change", (event) => applySetting("chatter", event.target.checked));
+$("#enmityswitch").addEventListener("change", (event) => applySetting("showEnmity", event.target.checked));
 // (Whether this world's mercenaries can die: the world's rule, its host's to change, core/host.js RULES mortal)
 $("#mortalswitch").addEventListener("change", (event) => state.game?.setMortal(event.target.checked));
 $("#invertswitch").addEventListener("change", (event) => applySetting("invertTilt", event.target.checked));
@@ -4838,7 +4842,7 @@ function applySetting(key, value) {
             tellPlaySettings();
             showBlocked();
         }
-    } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock" || key === "quickAlways" || key === "chatter") {
+    } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock" || key === "quickAlways" || key === "chatter" || key === "showEnmity") {
         if (state.game) {
             state.game[key] = value;
         }

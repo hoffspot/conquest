@@ -67,6 +67,9 @@ export const ACTIONS = Object.freeze({
     powerStrike: { label: "Power strike", ability: "powerStrike", learnt: "powerStrike", on: "enemy" },
     aimedShot: { label: "Aimed shot", ability: "aimedShot", learnt: "aimedShot", on: "enemy" },
     shieldBash: { label: "Shield bash", ability: "shieldBash", learnt: "shieldBash", on: "enemy" },
+    taunt: { label: "Taunt", ability: "taunt", learnt: "taunt", on: "enemy" },
+    warCry: { label: "War cry", ability: "warCry", learnt: "warCry", on: "self" },
+    slipAway: { label: "Slip away", ability: "slipAway", learnt: "slipAway", on: "self" },
     attack: { label: "Attack", order: "engage", on: "enemy" },
     fight: { label: "Fight", order: "engage", on: "provoke" },
     camp: { label: "Make camp", order: "camp", on: "self" },
@@ -77,6 +80,7 @@ export const ACTIONS = Object.freeze({
     "unit:guard": { label: "Guard me", unit: "guard", on: "unit" },
     "unit:fallback": { label: "Fall back", unit: "fallback", on: "unit" },
     "unit:stance": { label: "Hold fire", listed: "Hold fire / At will", unit: "stance", on: "unit" },
+    "unit:cover": { label: "Cover me", unit: "cover", on: "unit" },
     "unit:ability": { label: "Their ability", listed: "Their own ability", unit: "ability", on: "unit" },
     "unit:dismiss": { label: "Dismiss", unit: "dismiss", on: "unit" },
     ...Object.fromEntries(Object.entries(EMOTES).map(([name, { label }]) => [`emote:${name}`, { label, emote: name, on: "self" }])),
@@ -148,13 +152,13 @@ function lookOf(key) {
  * a bow, a nod and a cheer round it; Attack at the top of an enemy's, the four elements' first
  * spells and Stun round it; their followers', Attack my target at the top, with their own
  * ability, Follow me, Wait here, Guard me, Fall back and Dismiss round it, and on its other side
- * Vigor at the top, with Hold fire and a healing draught; everything else empty. (A soldier's of
+ * Vigor at the top, with Hold fire, Cover me and a healing draught; everything else empty. (A soldier's of
  * a people not friendly to theirs has one side: Fight, to pick a fight with them.)
  */
 export const WHEELS = Object.freeze({
     self: Object.freeze([Object.freeze({ n: "vigor" }), Object.freeze({ n: "camp", nw: "emote:wave", ne: "emote:bow", w: "emote:nod", e: "emote:cheer" })]),
     enemy: Object.freeze([Object.freeze({ n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" }), Object.freeze({})]),
-    unit: Object.freeze([Object.freeze({ n: "unit:assist", ne: "unit:ability", e: "unit:follow", w: "unit:wait", nw: "unit:guard", se: "unit:fallback", sw: "unit:dismiss" }), Object.freeze({ n: "vigor", e: "unit:stance", w: "item:potion" })]),
+    unit: Object.freeze([Object.freeze({ n: "unit:assist", ne: "unit:ability", e: "unit:follow", w: "unit:wait", nw: "unit:guard", se: "unit:fallback", sw: "unit:dismiss" }), Object.freeze({ n: "vigor", ne: "unit:cover", e: "unit:stance", w: "item:potion" })]),
     provoke: Object.freeze([Object.freeze({ n: "fight" })]),
 });
 
@@ -164,9 +168,10 @@ export const SETTABLE = Object.freeze(["self", "enemy", "unit"]);
 /**
  * Which wheels kept these are (`version`): kept before 2, Attack wasn't on an enemy's; read, it's
  * put at the top of its first side (once: taken off after, it stays off), whatever was there moved
- * to the first empty slice.
+ * to the first empty slice. Kept before 3, Cover me wasn't on their followers'; read, it's put at
+ * NE on its other side, or the first empty slice (once, as Attack).
  */
-export const WHEELS_VERSION = 2;
+export const WHEELS_VERSION = 3;
 
 // Attack put at the top of an enemy's wheel (`sides`), unless it's on it already
 function withAttack(sides) {
@@ -184,6 +189,24 @@ function withAttack(sides) {
 
         if (place) {
             slots[place] = there;
+
+            return;
+        }
+    }
+}
+
+// Cover me put on their followers' wheel (`sides`), unless it's on it already: at NE on its other
+// side, or the first empty slice of that side, then of the first; every one full, it's left off
+function withCover(sides) {
+    if (sides.some((slots) => Object.values(slots).includes("unit:cover"))) {
+        return;
+    }
+
+    for (const slots of [sides[1], sides[0]]) {
+        const place = ["ne", ...PLACES].find((each) => !slots[each]);
+
+        if (place) {
+            slots[place] = "unit:cover";
 
             return;
         }
@@ -255,8 +278,12 @@ export function readWheels(kept) {
 
     wheels.quick = QUICK.map((_, slot) => (quickable(actionOf(quick[slot])) ? (RENAMED[quick[slot]] ?? quick[slot]) : null));
 
-    if (kept && !(kept.version >= WHEELS_VERSION)) {
+    if (kept && !(kept.version >= 2)) {
         withAttack(wheels.enemy);
+    }
+
+    if (kept && !(kept.version >= 3)) {
+        withCover(wheels.unit);
     }
 
     wheels.version = WHEELS_VERSION;

@@ -370,7 +370,7 @@ export class Forecast {
 
         if (ability?.spell) {
             battle.cast(me, ability.spell, target);
-        } else if (ability && target !== null && battle.actor(target)) {
+        } else if (ability?.blow && target !== null && battle.actor(target)) {
             const blow = blowAt(battle, hero, battle.actor(target));
 
             if (blow.strike) {

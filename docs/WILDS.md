@@ -301,13 +301,14 @@ their hired adventurers and the creatures they've called or raised.
 - **The side's strength (S)** is its members' values summed, over its strongest player's: a
   player alone is 1, two alike 2, a new player and a new hire about 1.3, a mighty player and that
   same hire about 1.1. Never less than 1.
-  - *Allies the game fights for count at about a third* of their value: a hired adventurer
-    (`STRENGTH.hired`, 0.3), and a creature called, raised or tamed (`STRENGTH.called`, 0.3). The
-    wild goes for whoever's nearest (*How they behave*), most often the player, who comes at it
-    first, so the game's own fighters, however hard they hit, spare their leader less than another
-    player would: counted at half, a player with four hirelings of
-    the tier's might lost as much as one alone (the balance runner, *Tuning it*, below; the user:
-    "About a third").
+  - *Allies the game fights for count for less* than their value: a hired adventurer at half
+    (`STRENGTH.hired`, 0.5), and a creature called, raised or tamed at about a third
+    (`STRENGTH.called`, 0.3). Their foes' enmity (*Whom they go for*) has hired warriors take foes
+    off their leader and hold them, and called creatures draw them, but the game's own fighters
+    still spare their leader less than another player would: at half, a player with four hired of
+    the tier's might loses about 0.65 and 0.9 of what one alone does at tiers 5 and 8 (the balance
+    runner, *Tuning it*, below; the owner: "At half their worth", and before enmity, "About a
+    third").
   - *One knocked down* (a hired adventurer, battle.js `downed`) counts as if standing: they'll be
     up again, so their getting up isn't taken for the side growing (*More mid-fight*).
 - **The opposition (F)** the wild sets against it is a little less than it, S^0.85
@@ -421,8 +422,9 @@ for each player near.
 
 `npm run balance` (`scripts/balance.js`) runs the world's rules alone, nothing drawn: sides of
 each make-up out in the wilds at tiers 2, 5 and 8 (`SIDES`: one player, two, four, one with four
-hired warriors of the level a guild offers for the tier, docs/WAR.md *Mercenaries that grow*, a
-summoner with five creatures), fight after fight on fresh ground:
+hired warriors of the level a guild offers for the tier, docs/WAR.md *Mercenaries that grow*, one
+with a company of four (a warrior, a cleric, a mage and a ranger), a summoner with five
+creatures), fight after fight on fresh ground:
 
 - **The players** are as strong for the tier as its creatures (hit points and power × its
   `tierPower`) and three times as hardy (`RUN.hardy`: what their gear and skills would make them),
@@ -436,12 +438,13 @@ summoner with five creatures), fight after fight on fresh ground:
   player who falls is out of it, as in play, where they'd wake at home). What's left of the wild
   there is let go before the next, as if walked away from.
 - **For each side and tier** it says the side's S and F, the foes fought a fight, how long to the
-  last blow, the hit points each player lost in one (and a minute), how often a player fell and
-  their allies were knocked down, how many fights were won, and the share of what one alone loses
-  that each of them does, beside its aim (`SIDES` `aim`).
+  last blow, the hit points each player lost in one (and a minute), what their allies bore of the
+  wild's blows (`borne`, and the share of them, `drawn`: what enmity has them take off their
+  leader), how often a player fell and their allies were knocked down, how many fights were won,
+  and the share of what one alone loses that each of them does, beside its aim (`SIDES` `aim`).
 - **The aims:** each of N alike about N^-0.2 of what one alone loses (0.87 for two, 0.75 for
-  four); a player with four hired adventurers, or five creatures called, about 0.8 (the user:
-  "About 0.8 of solo").
+  four); a player with four hired adventurers, a company, or five creatures called, about 0.8
+  (the user: "About 0.8 of solo").
 
 Fights go one way or another by what's about (a pack of trolls or a lone wolf), so it takes a
 good many to say: a world's dice are the same each run, so `--seeds` pools the fights of several
@@ -478,6 +481,36 @@ what one alone loses, at tiers 2, 5 and 8):
   hirelings a little more at tier 2, where one alone loses only about 50 hit points a fight and a
   few fights sway it. The wild goes for whoever's nearest, most often the player, rather than for
   those hitting it hardest: threat, for a change of its own, is what's next.
+
+**With enmity** (*Whom they go for*; the same eight worlds), hired warriors take foes off their
+leader and hold them, so they could be counted at the owner's "half" again (`STRENGTH.hired` 0.5);
+a creature called weighs three times its caller in foes' enmity, and stays at 0.3:
+
+| Side | Aim | Before enmity | With it | Allies' share of the blows |
+| --- | --- | --- | --- | --- |
+| Two | 0.87 | 0.78, 0.97, 0.69 | 0.94, 0.86, 0.71 | |
+| Four | 0.75 | 0.74, 0.81, 0.68 | 0.62, 0.80, 0.62 | |
+| One with four hired (at 0.3; 0.5) | 0.8 | 1.08, 0.87, 0.84 | 0.22, 0.65, 0.91 | 0.86, 0.65, 0.53 |
+| One with a company (at 0.3; 0.5) | 0.8 | 0.68, 0.93, 0.84 | 0.48, 0.70, 0.97 | 0.37, 0.54, 0.54 |
+| A summoner with five | 0.8 | 0.85, 0.82, 0.73 | 0.82, 0.81, 0.81 | 0.23, 0.28, 0.27 |
+
+How the hired were weighed (averaged over tiers 5 and 8, where a fight's long enough to say):
+
+| `STRENGTH.hired` | Four hired | A company |
+| --- | --- | --- |
+| 0.3 | 0.64 | 0.56 |
+| 0.4 | 0.71 | 0.60 |
+| 0.5 | 0.76 | 0.84 |
+| 0.6 | 0.77 | 0.88 (1.14 at tier 8) |
+
+And the called: weighed 2 in foes' enmity, five creatures cost their summoner 0.86 to 0.97 of what
+one alone loses, at 0.3 or at 0.5; weighed 3, 0.81 at every tier.
+
+- **Still off:** the hired by tier. At tier 2 four warriors hold everything (their leader loses a
+  fifth of what one alone does), at tier 8 they're knocked down twice a fight and the wild's back
+  on their leader (0.91). How sturdy a hired adventurer is beside the tier's creatures, not whom
+  the wild goes for, is what's left. Four players take a little less than the aim (0.68 over the
+  tiers, for 0.75): the wild answering S^0.875 put them at 0.85, and two at 0.89, so 0.85 stays.
 
 That the players together are one group, one roll for an elite and one cache between them, the
 wild answering their side's strength wherever foes are put out, more coming mid-fight, a dungeon
@@ -865,11 +898,11 @@ sample is ever dealt.
   character keeps.
 - **Kept**: the world's `Legends` (its clocks, decks, the one out, what's been met, the uniques and
   spots used, the recurring ones' return, owed rewards) in the host's snapshot (`legends`,
-  `SNAPSHOT_VERSION` 46) for a world server, and on a device with the world's war (save.js
+  `SNAPSHOT_VERSION` 47) for a world server, and on a device with the world's war (save.js
   `saveWorld`, `loadLegends`), each turn and as each changes; carried in a character's export and
   brought to a server with it. A character's own (`progress.legends`: the unique cards they've
   overcome and the uniques they've been given) goes with them into every world. What two games
-  say to each other changed with it (`NET_VERSION` 193).
+  say to each other changed with it (`NET_VERSION` 194).
 - **Debug mode**: the debug overlay's *Rare encounter* button (`game.rare()`, the host's `rare`
   command) deals the sample (`SAMPLE`: "The Sample", a champion two tiers up, its reward the
   Signet of the Sample) ahead of the player at once, their clock aside, or, while its thread's at
@@ -1191,6 +1224,69 @@ hours (`night` in `CREATURES`; the terrain plan's M7e-3):
   the rock tusker's charge, 1.5 s; a Cape buffalo's, 1.2 s) stuns them for that long. They fall (quicker than a death), lie
   a moment, sit up with their feet drawn under them and rise; until they're up they can't move,
   fight, cast, use anything or talk (the host refuses: "You're down: get up first").
+
+## Whom they go for
+
+Each of the wild's creatures, and each soldier, keeps a table of those set on it and how much:
+its *enmity* (battle.js `ENMITY`, `TAUNT`, `SLIP`; the owner: "how threat is dealt with in the
+MMO Final Fantasy XIV"). It goes for whoever's top of it, so whoever harms it most draws it, and a
+warrior can take it off whoever it's on.
+
+- **What fills it.** Each blow that lands, its harm (one that misses, `seed`: 1); a lingering ill
+  (poison, burning), half its harm (`lingering`) as it ticks; healing someone it's on, half the hit
+  points mended (`healing`), the healer's, shared among all those on the one healed. Healing never
+  starts a fight: one not on them takes none of it.
+- **Weighed by who does it** (their `enmityWeight`): a player 1, more with a shield in hand, 0.2 a
+  rank of their Shield (twice as much at Legend, host.js `SHIELD_ENMITY`: FFXIV's tank stance,
+  earned by blocking, no button to it); a hired warrior 3 (a Shield master 4), a mage and a
+  cleric 1, a ranger 0.7, a rogue 0.5; a creature called 3, one raised 1.5 (followers.js
+  `ENMITY_WEIGHTS`); a soldier or a creature 1.
+- **Whom it goes for.** The one with the most that it can see and go for (within its leash, and
+  for a guard, AGGRO's room on a player). But it keeps to the one it's on till another's past them
+  by a tenth, if they're within 3 squares of it (`near`, `hand`), or by three tenths from further
+  off (`far`), as in World of Warcraft: no one's pulled back and forth across a fight, and a
+  creature fighting up close doesn't cross the field after a mage who's edged ahead. Of two with
+  as much, whoever was on its table first.
+- **To begin with**, with no one on its table, whom it went for before: the nearest it can see (a
+  guard, first a player near it: *How they behave*), put on its table with a seed. One it was set
+  on otherwise (sprung at, charging) counts as if seeded.
+- **Forgotten** a minute after the last of it (`FOE_MS`); at once if they fall (knocked down or
+  dead) or are taken away; and all of it when it gives up and goes home, is pacified, or its nerve
+  goes.
+- **A taunt** (FFXIV's Provoke) makes one go for the taunter: their enmity set to half again the
+  most it has for anyone (`over`), at the least, and on them, made to, for 4 seconds (`ms`); from up
+  to 16 squares off (`reach`), on one that can see them, every 15 seconds. It's struck at, as a
+  blow is: a wolf taunted, its pack's after them too. While one's taunt holds, another's doesn't
+  take (as in Path of Exile); it's over at once if the taunter falls or goes. Always lands: there's
+  no roll.
+- **A war cry** (`cry`) taunts every foe within 6 squares that can see the crier at once, to a
+  fifth again the most, for 3 seconds, every 30.
+- **Slipping away** (`SLIP`) halves one's enmity with every foe within 12 squares and gives up any
+  taunt of theirs, every 30 seconds.
+- **Who uses them:**
+  - *The player*: Taunt (Endurance at Adept), War cry (Endurance at Veteran) and Slip away
+    (Evasion at Adept), put on an action wheel or the Action Bar (docs/GAME.md *Abilities*). Taunt
+    needs no shield: anyone can pull a foe off their cleric.
+  - *A hired warrior* (its "protect"): coming to a foe that's on its leader, or on a cleric or mage
+    of theirs, it taunts it off them as soon as its taunt's ready (15 s, sooner from level 4). Not
+    one its leader's taunted in the last 15 seconds (`leave`): a foe the player's taken is theirs
+    to hold. Unless they're under half their health (`rescue`), or they've told it to cover them
+    (Cover me, on their followers' wheel: 8 seconds, `cover`). A Shield master (level 10) gives a
+    war cry once three or more foes near it (`many`) are on its leader or those it guards.
+  - *A hired rogue* of level 7 or more slips away as soon as a foe near it's on it.
+  - *A creature called by Summon* comes in with a roar, a war cry 1.5 seconds long (host.js
+    `CALLED_CRY_MS`); told to cover its caller, it roars again, every 30 seconds.
+- **Bosses resist** (`TAUNT.resist`): a dungeon's boss, a hell level's own, one of a kind (the
+  Behemoth among them) or an elite is made to for half as long, and taunted three times within 20
+  seconds, shrugs taunts off for 10 (as in Elder Scrolls Online): held, not chain-locked. Their
+  tables work as anyone's, and some of their specials read them (docs/DUNGEONS.md: the Goblin
+  King's volley at whoever's second, the Ant Monster's flock set on her top). The Behemoth weighs
+  whom it's most set on as two more of their fellows near them (battle.js `COLOSSAL_ENMITY`).
+- **The same in every copy.** Amounts are only added and multiplied by plain numbers, and ties go
+  to whoever was first on the table, so every copy of a world keeps the same tables step for step.
+  They're kept in a snapshot (`SNAPSHOT_VERSION` 46: a world kept from before with none yet,
+  taunted by no one, a player's own weighed by their calling), and the world's checksum takes in
+  whom each is on.
 
 ## Wary beasts
 
@@ -2068,7 +2164,9 @@ again, its spines glowing green (`beasts/looks.js`).
 - **Whom it fights** (`#colossalTarget`, looked at again every second): of the enemies it sees
   within 90 m, standing, those within reach of its jaws first (as far from its body's middle as
   they land, 14 m); of them, the one with the most of their fellows within 6 m of them, those where
-  its breath would land counting more. On its way it walks over whoever's at its feet.
+  its breath would land counting more, and whom it's most set on (its enmity, against the most it
+  has for anyone, as two more fellows: `COLOSSAL_ENMITY`). Taunted, it goes for the taunter, as a
+  boss does (*Whom they go for*). On its way it walks over whoever's at its feet.
 - **Where it goes**: on to them till they're under its jaws (16 m before where it stands), then it
   stands its ground, turned to them, and never backs off. Its breath catches them as they come
   within its reach on the way.

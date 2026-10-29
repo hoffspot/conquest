@@ -666,7 +666,7 @@ describe("saving (save.js)", () => {
         useStorage();
 
         const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
-        const wheels = { self: [{ n: "vigor", ne: "item:potion" }, { e: "item:ale" }], enemy: [{ n: "stun" }, { w: "hold" }], unit: [{ n: "unit:ability", ne: "item:potion" }, { w: "vigor" }], quick: ["stun", null, "item:ale", "vigor", "hold", null], version: 2 };
+        const wheels = { self: [{ n: "vigor", ne: "item:potion" }, { e: "item:ale" }], enemy: [{ n: "stun" }, { w: "hold" }], unit: [{ n: "unit:ability", ne: "item:potion" }, { w: "vigor" }], quick: ["stun", null, "item:ale", "vigor", "hold", null], version: 3 };
 
         assert.equal(loadWheels(save), null);
         assert.equal(saveWheels(save, wheels), true);
@@ -1200,13 +1200,13 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         assert.ok(path.startsWith("M-67.88,-67.88"), path);
     });
 
-    it("starts with Vigor at the top of the player's own wheel (Make camp on its other side, with a wave, a bow, a nod and a cheer), Attack at the top of an enemy's with the elements' first spells and Stun round it, their followers' with what to tell them (Vigor, Hold fire and a draught on its other side), and Fight on a soldier's of a people not friendly to theirs, each with an icon", () => {
+    it("starts with Vigor at the top of the player's own wheel (Make camp on its other side, with a wave, a bow, a nod and a cheer), Attack at the top of an enemy's with the elements' first spells and Stun round it, their followers' with what to tell them (Vigor, Hold fire, Cover me and a draught on its other side), and Fight on a soldier's of a people not friendly to theirs, each with an icon", () => {
         const enemy = { n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" };
         const self = [{ n: "vigor" }, { n: "camp", nw: "emote:wave", ne: "emote:bow", w: "emote:nod", e: "emote:cheer" }];
-        const unit = [{ n: "unit:assist", ne: "unit:ability", e: "unit:follow", w: "unit:wait", nw: "unit:guard", se: "unit:fallback", sw: "unit:dismiss" }, { n: "vigor", e: "unit:stance", w: "item:potion" }];
+        const unit = [{ n: "unit:assist", ne: "unit:ability", e: "unit:follow", w: "unit:wait", nw: "unit:guard", se: "unit:fallback", sw: "unit:dismiss" }, { n: "vigor", ne: "unit:cover", e: "unit:stance", w: "item:potion" }];
 
         assert.deepEqual(WHEELS, { self, enemy: [enemy, {}], unit, provoke: [{ n: "fight" }] });
-        assert.deepEqual(readWheels(null), { self, enemy: [enemy, {}], unit, quick: ["vigor", "stun", "burn", "item:potion", null, null], version: 2, placed: [] });
+        assert.deepEqual(readWheels(null), { self, enemy: [enemy, {}], unit, quick: ["vigor", "stun", "burn", "item:potion", null, null], version: 3, placed: [] });
         assert.deepEqual(actionOf("attack"), { label: "Attack", order: "engage", on: "enemy" }, "walking up to an enemy and fighting them");
 
         for (const [id, action] of Object.entries(ACTIONS)) {
@@ -1297,7 +1297,7 @@ describe("the action wheel (wheel.js, icons.js)", () => {
 
         // (Their followers': the healing to cast on them, what to tell them, and what heals or
         // cures to give them; not ale, a bomb, nor a blow of the player's)
-        assert.deepEqual(assignable("unit", { learnt: [...starting, "mendWounds", "powerStrike"], carries: ["potion", "sword", "ale", "antidote", "goblinBomb"] }), ["vigor", "mendWounds", "unit:assist", "unit:follow", "unit:wait", "unit:guard", "unit:fallback", "unit:stance", "unit:ability", "unit:dismiss", "item:potion", "item:antidote"]);
+        assert.deepEqual(assignable("unit", { learnt: [...starting, "mendWounds", "powerStrike"], carries: ["potion", "sword", "ale", "antidote", "goblinBomb"] }), ["vigor", "mendWounds", "unit:assist", "unit:follow", "unit:wait", "unit:guard", "unit:fallback", "unit:stance", "unit:cover", "unit:ability", "unit:dismiss", "item:potion", "item:antidote"]);
         assert.ok(!assignable("quick", { learnt: starting }).some((key) => key.startsWith("unit:")), "(nothing to tell them on the Action Bar)");
     });
 
@@ -1305,14 +1305,15 @@ describe("the action wheel (wheel.js, icons.js)", () => {
         const kept = { self: [{ n: "heal", ne: "item:potion", s: "heal", e: "stun", w: "nonsense" }, { nw: "greaterHeal" }, { n: "heal" }], enemy: "nonsense" };
 
         // (Heal and Greater heal, as kept before they were renamed: Vigor and Mend Wounds now)
-        assert.deepEqual(readWheels(kept), { self: [{ n: "vigor", ne: "item:potion" }, { nw: "mendWounds" }], enemy: [{ n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" }, {}], unit: WHEELS.unit, quick: [...QUICK], version: 2, placed: [] });
-        assert.deepEqual(readWheels({ self: [], enemy: [{}, {}], unit: [{}, {}], quick: [], version: 2 }), { self: [{}, {}], enemy: [{}, {}], unit: [{}, {}], quick: [null, null, null, null, null, null], version: 2, placed: [] });
+        assert.deepEqual(readWheels(kept), { self: [{ n: "vigor", ne: "item:potion" }, { nw: "mendWounds" }], enemy: [{ n: "attack", ne: "hurt", nw: "rumble", e: "blister", w: "stun", se: "burn" }, {}], unit: WHEELS.unit, quick: [...QUICK], version: 3, placed: [] });
+        assert.deepEqual(readWheels({ self: [], enemy: [{}, {}], unit: [{}, {}], quick: [], version: 3 }), { self: [{}, {}], enemy: [{}, {}], unit: [{}, {}], quick: [null, null, null, null, null, null], version: 3, placed: [] });
 
         // (Bait put on an enemy's wheel of itself the first time it was carried: kept so, never again; nothing else kept there)
         assert.deepEqual(readWheels({ placed: ["meatBait", 3, null, "feedBag"] }).placed, ["meatBait", "feedBag"]);
 
-        // (Their followers': only what goes on it; kept from before there was one, as it starts)
-        assert.deepEqual(readWheels({ unit: [{ n: "unit:guard", e: "stun", w: "emote:wave", s: "unit:wait", nw: "item:ale", ne: "item:potion", se: "mendWounds" }, {}] }).unit, [{ n: "unit:guard", ne: "item:potion", se: "mendWounds" }, {}]);
+        // (Their followers': only what goes on it, and Cover me, kept from before it was; kept from
+        // before there was one, as it starts)
+        assert.deepEqual(readWheels({ unit: [{ n: "unit:guard", e: "stun", w: "emote:wave", s: "unit:wait", nw: "item:ale", ne: "item:potion", se: "mendWounds" }, {}] }).unit, [{ n: "unit:guard", ne: "item:potion", se: "mendWounds" }, { ne: "unit:cover" }]);
         assert.deepEqual(readWheels({ self: [{}, {}], version: 2 }).unit, WHEELS.unit);
     });
 
@@ -1331,6 +1332,21 @@ describe("the action wheel (wheel.js, icons.js)", () => {
 
         // (Kept since, without it: as kept)
         assert.deepEqual(readWheels({ enemy: [{ n: "stun" }, {}], version: 2 }).enemy, [{ n: "stun" }, {}]);
+    });
+
+    it("puts Cover me on their followers' wheel kept from before it was, at NE on its other side, or the first empty slice; once: taken off after, it stays off", () => {
+        assert.deepEqual(readWheels({ unit: [{ n: "unit:assist" }, { n: "vigor", e: "unit:stance", w: "item:potion" }], version: 2 }).unit, [{ n: "unit:assist" }, { n: "vigor", ne: "unit:cover", e: "unit:stance", w: "item:potion" }]);
+
+        // (NE taken: the next empty of that side; the other side full: on the first; on it already, left where it is)
+        assert.deepEqual(readWheels({ unit: [{}, { ne: "vigor" }], version: 2 }).unit, [{}, { ne: "vigor", n: "unit:cover" }]);
+
+        const full = { n: "vigor", ne: "unit:assist", e: "unit:follow", se: "unit:wait", sw: "unit:guard", w: "unit:fallback", nw: "unit:dismiss" };
+
+        assert.deepEqual(readWheels({ unit: [{ n: "unit:ability" }, full], version: 2 }).unit, [{ n: "unit:ability", ne: "unit:cover" }, full]);
+        assert.deepEqual(readWheels({ unit: [{ w: "unit:cover" }, {}], version: 2 }).unit, [{ w: "unit:cover" }, {}]);
+
+        // (Kept since, without it: as kept)
+        assert.deepEqual(readWheels({ unit: [{}, {}], version: 3 }).unit, [{}, {}]);
     });
 
     it("starts the Action Bar with Vigor, Stun, Burn and a draught, and two empty for six across; reads them as kept, six, each something either wheel can hold", () => {

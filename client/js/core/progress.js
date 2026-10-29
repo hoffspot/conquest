@@ -6,7 +6,7 @@
 // stunning (hexes), taking blows (endurance), slipping them (evasion: and a share of every skill
 // of the body's growth), buying and selling (trade), talking (talk), and leading followers
 // (command, from M9). Each rank up its tree makes it stronger, and some bring a
-// new ability: a power strike, an aimed shot, a hold.
+// new ability: a power strike, an aimed shot, a hold, a taunt.
 //
 // Magic's schools (core/spells.js SCHOOLS: Healing, Fire, Earth, Air, Water) grow by the spells
 // of each that land: each tier a school comes to, its next spell. Healing's open from the start;
@@ -54,8 +54,8 @@ export const TREES = Object.freeze({
     blade: { name: "Blade", grows: "landing blows up close", fighting: true, bonus: { melee: [0, 0.1, 0.2, 0.3, 0.45, 0.6], hp: [0, 0, 0, 10, 15, 20] }, abilities: { 2: "powerStrike" } },
     marksman: { name: "Marksman", grows: "landing shots from afar", fighting: true, bonus: { ranged: [0, 0.1, 0.2, 0.3, 0.45, 0.6] }, abilities: { 2: "aimedShot" } },
     hexes: { name: "Hexes", grows: "stunning your foes", fighting: true, bonus: { stun: [0, 0.15, 0.3, 0.5, 0.75, 1] }, abilities: { 2: "hold" } },
-    endurance: { name: "Endurance", grows: "taking blows and running hard", fighting: false, bonus: { hp: [0, 5, 10, 20, 30, 40], stamina: [0, 5, 10, 20, 30, 40], armor: [0, 0, 0.03, 0.05, 0.08, 0.1] }, abilities: {} },
-    evasion: { name: "Evasion", grows: "fighting with the body and slipping blows", fighting: false, bonus: { dodge: [0.05, 0.09, 0.13, 0.17, 0.21, 0.25] }, abilities: {} },
+    endurance: { name: "Endurance", grows: "taking blows and running hard", fighting: false, bonus: { hp: [0, 5, 10, 20, 30, 40], stamina: [0, 5, 10, 20, 30, 40], armor: [0, 0, 0.03, 0.05, 0.08, 0.1] }, abilities: { 2: "taunt", 3: "warCry" } },
+    evasion: { name: "Evasion", grows: "fighting with the body and slipping blows", fighting: false, bonus: { dodge: [0.05, 0.09, 0.13, 0.17, 0.21, 0.25] }, abilities: { 2: "slipAway" } },
     shield: { name: "Shield", grows: "blocking blows with a shield", fighting: false, bonus: { block: [0.1, 0.18, 0.26, 0.34, 0.42, 0.5] }, abilities: { 2: "shieldBash" } },
     trade: { name: "Trade", grows: "buying and selling", fighting: false, bonus: { haggle: [0, 0.05, 0.1, 0.15, 0.2, 0.25] }, abilities: {} },
     talk: { name: "Talk", grows: "talking with people", fighting: false, bonus: { persuade: [0, 0.1, 0.2, 0.3, 0.45, 0.6] }, abilities: {} },
@@ -64,7 +64,8 @@ export const TREES = Object.freeze({
 
 /**
  * The abilities the trees bring: what each is (a spell cast as the one it's a greater form of,
- * or the next blow made stronger), and how it's shown.
+ * the next blow made stronger, or what a foe's enmity makes of them: battle.js TAUNT, SLIP), and
+ * how it's shown.
  */
 export const ABILITIES = Object.freeze({
     powerStrike: { label: "Power strike", tree: "blade", blow: "melee", factor: 2, cooldown: 12000 },
@@ -73,6 +74,12 @@ export const ABILITIES = Object.freeze({
     shieldBash: { label: "Shield bash", tree: "shield", blow: "melee", factor: 1, stun: 2000, cooldown: 15000, shield: true },
     aimedShot: { label: "Aimed shot", tree: "marksman", blow: "ranged", factor: 2, cooldown: 12000 },
     hold: { label: "Hold", tree: "hexes", spell: "hold" },
+    // (A foe made to come for them, from off whoever it's on (FFXIV's Provoke); every foe near enough
+    // to hear, at once; their enmity with those near cut by half, any taunt of theirs given up:
+    // battle.js taunt, warCry, slipAway. No shield needed: anyone can pull a foe off their healer)
+    taunt: { label: "Taunt", tree: "endurance", taunt: true, cooldown: 15000 },
+    warCry: { label: "War cry", tree: "endurance", cry: true, cooldown: 30000 },
+    slipAway: { label: "Slip away", tree: "evasion", slip: true, cooldown: 30000 },
 });
 
 /**
