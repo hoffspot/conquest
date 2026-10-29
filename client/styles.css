@@ -530,6 +530,18 @@ h2 {
     letter-spacing: 0.02em;
 }
 
+/* The headers of what the title screen's buttons open, and its worlds on a server: in the title's
+   lettering (the crest's, above: Cinzel Decorative). Half as wide again as the other headers', so
+   a little smaller, the smaller the narrower the screen: the longest (Characters on this device)
+   on one line on a phone 360 pixels wide or more; on a narrower one, or a long name, its lines
+   kept even */
+.lettering {
+    font-family: "Cinzel Decorative", var(--font-display);
+    font-size: clamp(16px, 4.5vw, 22px);
+    font-weight: 700;
+    text-wrap: balance;
+}
+
 .note {
     color: var(--muted);
     font-size: 14px;
