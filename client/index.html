@@ -32,7 +32,7 @@
                     "three/addons/utils/BufferGeometryUtils.js": "./vendor/three-r186/addons/utils/BufferGeometryUtils.js?h=aba9507c8d",
                     "three/addons/utils/SkeletonUtils.js": "./vendor/three-r186/addons/utils/SkeletonUtils.js?h=6c660e1682",
                     "three/addons/utils/WorkerPool.js": "./vendor/three-r186/addons/utils/WorkerPool.js?h=d46dc565a8",
-                    "./js/app/assets.js": "./js/app/assets.js?h=c2bad31ebb",
+                    "./js/app/assets.js": "./js/app/assets.js?h=05ecc831e4",
                     "./js/app/backdrop.js": "./js/app/backdrop.js?h=c9aa55b56c",
                     "./js/app/battlemap.js": "./js/app/battlemap.js?h=7d6695a2ef",
                     "./js/app/bestiary.js": "./js/app/bestiary.js?h=75d04a21c9",
@@ -44,6 +44,7 @@
                     "./js/app/charge.js": "./js/app/charge.js?h=c8f09bc0a5",
                     "./js/app/crash-reports.js": "./js/app/crash-reports.js?h=54b2e6e4ad",
                     "./js/app/creator.js": "./js/app/creator.js?h=7fd3466b50",
+                    "./js/app/crest.js": "./js/app/crest.js?h=0ad833c5cb",
                     "./js/app/debug.js": "./js/app/debug.js?h=e1cae3d332",
                     "./js/app/device.js": "./js/app/device.js?h=d3701a0855",
                     "./js/app/doors.js": "./js/app/doors.js?h=94b9294183",
@@ -299,7 +300,7 @@
                     "./js/core/worldplan/settle.js": "./js/core/worldplan/settle.js?h=75f4607a0d",
                     "./js/core/worldplan/terrain.js": "./js/core/worldplan/terrain.js?h=d0b35d7867",
                     "./js/core/writings.js": "./js/core/writings.js?h=bc540994f2",
-                    "./js/main.js": "./js/main.js?h=2deaccb88a",
+                    "./js/main.js": "./js/main.js?h=0e4b2c87af",
                     "./js/world/ailments3d.js": "./js/world/ailments3d.js?h=1d60de08f8",
                     "./js/world/art/engine/atlas.js": "./js/world/art/engine/atlas.js?h=ac0b0422df",
                     "./js/world/art/engine/leafcards.js": "./js/world/art/engine/leafcards.js?h=1052ff62f1",
@@ -476,7 +477,7 @@
                 }, { once: true });
             }
         </script>
-        <script type="module" src="js/main.js?h=2deaccb88a"></script>
+        <script type="module" src="js/main.js?h=0e4b2c87af"></script>
     </head>
     <body>
         <!-- The world, and the character being made, are drawn here, behind every screen -->
@@ -492,10 +493,27 @@
             </picture>
         </div>
 
+        <!-- The crest over the loading screen and the title, the name on its ribbon (app/crest.js) -->
+        <div class="crest" id="crest">
+            <picture>
+                <source type="image/avif" srcset="images/crest/crest.avif">
+                <img class="crest-art" src="images/crest/crest.webp" alt="" width="1376" height="768" decoding="async">
+            </picture>
+            <span class="crest-glow" aria-hidden="true"></span>
+            <span class="crest-eye left" aria-hidden="true"></span>
+            <span class="crest-eye right" aria-hidden="true"></span>
+            <span class="crest-lid left" aria-hidden="true"></span>
+            <span class="crest-lid right" aria-hidden="true"></span>
+            <div class="crest-name">
+                <h1 class="wordmark" id="titlename">Pellagos</h1>
+                <span class="wordmark crest-sheen" aria-hidden="true">Pellagos</span>
+            </div>
+            <canvas class="crest-embers" aria-hidden="true"></canvas>
+        </div>
+
         <!-- Loading: what's being downloaded and built, and how far it's got -->
-        <section id="loading" class="screen" aria-labelledby="loadingtitle">
+        <section id="loading" class="screen" aria-labelledby="titlename">
             <div class="card loader">
-                <h1 class="wordmark" id="loadingtitle">Pellagos</h1>
                 <p class="status" id="loadstatus" role="status">Starting…</p>
                 <div class="progress" id="loadbar" role="progressbar" aria-labelledby="loadstatus" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="fill"></div></div>
                 <p class="amount" id="loadamount"></p>
@@ -506,7 +524,6 @@
         <!-- The title screen -->
         <section id="title" class="screen" hidden aria-labelledby="titlename">
             <div class="card title">
-                <h1 class="wordmark" id="titlename">Pellagos</h1>
                 <p class="tagline">A market town on the edge of the wilds. Something prowls its fields.</p>
                 <!-- An update downloaded in the background (app/updater.js): started here, downloading nothing more; at the top, where a phone held on its side shows it -->
                 <div class="title-update" id="titleupdate" role="status" hidden>

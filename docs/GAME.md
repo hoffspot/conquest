@@ -5539,6 +5539,32 @@ it.
    nor the graphics card holds them while it's played (about 4 MB each, decoded), and the first's
    made again back at the title. With less motion asked for (`prefers-reduced-motion`), the first
    stays, still.
+   **The crest** (`app/crest.js`, `client/images/crest/`). Over the loading screen and the title, at
+   the top of the screen, the game's crest: a seal of hammered gold, the market town on its hill
+   above a ribbon of dark leather and its ploughed fields below, a pair of amber eyes watching
+   from the dark furrows; a longsword behind it, crimson banners and laurels of oak and wheat
+   either side, and eight great medallions about it, four above the ribbon and four below (a
+   griffin, a seven-pointed star, a dragon and crossed keys; a crescent moon among clouds and
+   stars, crossed brands aflame, a coiled cobra and a snarling wolf). PELLAGOS is on its ribbon.
+   It's as wide as the screen leaves room for, no more than 620 pixels, nor a quarter of the
+   screen's height tall, so the title's card has room under it on a computer; on a phone held
+   upright it's the screen's width, on one on its side much smaller. It's the same crest over both
+   screens, where it was, each's card under it; on no other screen.
+   - **Forged as the page opens.** Each letter of the name is struck in turn (0.12 seconds apart,
+     the first 0.4 seconds in: `CREST.forge`), white-hot as it lands with a burst of sparks off it,
+     and cools to gold over 1.4 seconds.
+   - **Then, now and then,** torchlight glints along the name, a band of light across its gold
+     every 7 seconds, and it flickers warmly on the leather behind it; a few embers rise off it and
+     drift up past the crest, three a second and no more than 11 at once (`CREST.embers`, on a
+     canvas of their own); and once in a while the eyes in the furrows blink, 15 to 40 seconds
+     apart and one time in five twice (`CREST.blink`), their glow pulsing slowly between.
+   - **Still with less motion asked for**: forged already, no embers, glint, flicker or blinking.
+     Nothing of it moves once the game's begun (making a character, or playing).
+   - **Made from the owner's painting** (Google's Gemini), painted on flat magenta and cut out of it
+     (`npm run build:crest`: the magenta as the master has it at its corners, never quite #FF00FF;
+     each pixel's share of it made see-through and taken out of its colour, so no pink fringe is
+     left), an AVIF of 111 KB with its see-through beside it, or a WebP of 180 KB (1376 by 768
+     pixels). It's in the page itself, so it's fetched as the page is read.
 2. **The title.** **Continue as** the character played last, in the world they're in; make a
    **New character**; choose another of those kept (**Characters on this device**, up to six), or
    a world (**Worlds on this device**, up to eight) and who goes in; join a world someone else has

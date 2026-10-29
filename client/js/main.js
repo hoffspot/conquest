@@ -18,6 +18,7 @@
 
 import { ASSETS } from "./app/assets.js";
 import { Backdrop } from "./app/backdrop.js";
+import { Crest } from "./app/crest.js";
 import { mappedOf, releaseOf } from "./app/catalog.js";
 import { isInstalledApp, isIOS, keepDownloads, keepLoaded, lockLandscape, looked, registerServiceWorker } from "./app/device.js";
 import { Debug } from "./app/debug.js";
@@ -47,6 +48,9 @@ const debug = new Debug($("#debug"), { settings, onChange: applySetting });
 // The paintings behind the loading screen and the title, each in turn (app/backdrop.js); let go of
 // once a character's being made or the game's begun
 const backdrop = new Backdrop($("#backdrop"));
+
+// The crest over them, the name on it forged as the page opens (app/crest.js); still anywhere else
+const crest = new Crest($("#crest"));
 
 // The mouse pointer, a sword over the whole page (Game options: app/pointer.js), told by the game
 // what's under it
@@ -115,6 +119,7 @@ window.pellagos = {
     },
     debug,
     backdrop,
+    crest,
     fetcher,
     fullScreen,
     playing: false,
@@ -130,6 +135,7 @@ function show(id) {
 
     document.body.dataset.screen = id;
     backdrop.screen(id);
+    crest.screen(id);
 }
 
 // --- Loading ---

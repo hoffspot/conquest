@@ -982,8 +982,9 @@ asset out of this public repository. A licensed model the game serves is scrambl
 what it doesn't cover.
 
 - The paintings behind the loading screen and the title (`client/images/backdrops/`, their
-  masters in `scripts/backdrops/`) were made for the game by its owner with Google's Gemini.
-  They're the repository's own, under its licence.
+  masters in `scripts/backdrops/`) and the crest over them (`client/images/crest/`, its master in
+  `scripts/crest/`) were made for the game by its owner with Google's Gemini. They're the
+  repository's own, under its licence.
 - The Dreadthorn is HuyKhoi2407's Dreadthorn Dragon, bought on Superhive. It's in the game with
   permission, in its converted form only, scrambled. It isn't in this repository, but in a private
   one the game's builds fetch it from (`client/models/beasts/LICENSE.md`,
