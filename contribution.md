@@ -94,7 +94,7 @@ CI (`.github/workflows/ci.yml`) runs on every pull request, and on `main` when o
 pull request's run is cancelled when you push to it again; only its newest commit's run counts.
 `main`'s runs always run to the end. A job that hangs is ended at about twice the longest it's
 taken, rather than held to GitHub's 6 hours: `test` at 30 minutes (it takes about 13½), `motion`
-at 25 (about 12), each `e2e` job at 40 (about 15, the longest 19; its Chromium download is tried
+at 25 (about 12), each `e2e` job at 80 (about 32, the longest 40; its Chromium download is tried
 three times, 5 minutes a try).
 
 | CI job | What it runs | Locally |
@@ -461,7 +461,7 @@ git status               # only the files you meant to change
    - how you tested it (which unit and browser tests; what you checked by playing);
    - before and after pictures for anything that looks different;
    - any version you bumped.
-3. CI runs: the `test` job, the `motion` job and the 8 `e2e` jobs, about ten minutes. A first-time contributor's
+3. CI runs: the `test` job, the `motion` job and the 8 `e2e` jobs, about forty minutes. A first-time contributor's
    CI may wait for a maintainer to approve the run.
 4. If CI fails, read the failing job's log, reproduce it locally, fix it and push again. A
    failure is never "just flaky" until a re-run of the same commit passes and you know why it
@@ -582,7 +582,7 @@ A good first message in a session:
 | A conflict in `manifest.js`, `assets.js`, `index.html`'s import map, `package-lock.json` or a version number | Section 6: regenerate it or take the higher number; don't merge it by hand |
 | The `motion` job fails | Its `WORSE:` lines say which motion, on which body, and what. Draw them: `npm run check:motion`, then `/motion-sheet.html?new=1` (section 2) |
 | A pull request waits on "Expected — Waiting for status to be reported" | A required check that CI no longer runs (a job renamed or removed). The owner updates the ruleset (section 6, *The repository's settings*) |
-| An `e2e` job failed at *Install Chromium for the end-to-end tests* after three 5-minute tries, or was ended at 40 minutes | Playwright's download hung: not your change. *Re-run failed jobs* on the run. If its log says a library is missing, the runner's image changed: CI installs Chromium without `--with-deps` (apt-get there has hung for good), so add the library to the step |
+| An `e2e` job failed at *Install Chromium for the end-to-end tests* after three 5-minute tries, or was ended at 80 minutes | Playwright's download hung: not your change. *Re-run failed jobs* on the run. If its log says a library is missing, the runner's image changed: CI installs Chromium without `--with-deps` (apt-get there has hung for good), so add the library to the step |
 | An `e2e` job was still running its tests when it was ended | Tests added without being timed each count for the median (about 40 s), so a job can get more than its share of slow ones: time them (`npm run e2e:durations`, section 2) and commit `e2e/durations.json`. If every job has grown, raise `timeout-minutes` in `ci.yml` to twice the longest, and say why in the pull request |
 | Another CI job "has exceeded the maximum execution time" | It ran twice as long as it ever has. A unit test or the motion check that hangs (a promise that never settles, a loop that never ends) is the usual reason: run the job's checks locally. If it was only slow, raise its `timeout-minutes` in `.github/workflows/`, and say why in the pull request |
 | A CI job cancelled after about 15 minutes, with no steps and no logs | It was never given a runner: GitHub's doing, not your change. *Re-run failed jobs* on the run |
