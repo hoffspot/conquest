@@ -11,6 +11,7 @@
 // Pure data and arithmetic, no DOM; a world's host keeps its Legends and drives it with its own
 // random (host.js #rare...), every copy alike.
 
+import { DAY, timeOfDay } from "./daytime.js";
 import { shuffled } from "./director.js";
 import { hypot } from "./exact.js";
 import { rollGear } from "./gear.js";
@@ -96,6 +97,13 @@ export const SAMPLE = Object.freeze({
 /** A card by its id: one in play, or the sample. */
 export function cardOf(id) {
     return RARE_CARDS[id] ?? (id === SAMPLE.id ? SAMPLE : null);
+}
+
+/** The hour it is when the world's been going `elapsed` ms: "dawn", "day", "dusk" or "night" (daytime.js DAY). */
+export function hourOf(elapsed) {
+    const time = timeOfDay(elapsed);
+
+    return time >= DAY.dawn && time < DAY.day ? "dawn" : time >= DAY.day && time < DAY.dusk ? "day" : time >= DAY.dusk && time < DAY.night ? "dusk" : "night";
 }
 
 /**

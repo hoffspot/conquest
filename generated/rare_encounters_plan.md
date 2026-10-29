@@ -4,7 +4,8 @@ The plan for the wilds director's rare encounters, from `reports/Rare once per w
 (the research) and the owner's decisions of 2026-10-29. It builds the engine that keeps, deals and
 pays out rare encounters; the encounters themselves (the cards, their threads and their unique
 rewards) are designed later, one at a time. Until then the engine deals nothing in play: a sample
-card only debug mode can deal tries every part of it. One stage to a pull request, in this order.
+card only debug mode can deal tries every part of it. Four stages, built in this order and
+shipped together in one pull request (the owner's word, 2026-10-29).
 
 ## Decided
 

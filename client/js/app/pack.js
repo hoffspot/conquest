@@ -35,7 +35,7 @@ import { ICONS, iconOf, ITEM_ICONS, useDefs } from "./icons.js";
 import { ActionWheel, directionOf } from "./wheel.js";
 
 // A thing offered in a trade, whole (core/host.js #offer): what it is, not how the pack shows it
-const THING_KEYS = ["id", "quality", "boost", "level", "people", "bonuses", "affixes", "name", "effect"];
+const THING_KEYS = ["id", "quality", "boost", "level", "people", "bonuses", "affixes", "name", "effect", "unique"];
 const thingOf = (item) => Object.fromEntries(THING_KEYS.filter((key) => item[key] !== undefined && item[key] !== null).map((key) => [key, item[key]]));
 
 // Holding this long (ms) on a thing puts it on or takes it off (or opens its wheel); a finger this

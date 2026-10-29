@@ -8,10 +8,15 @@
 // and all of it kept
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { STEP_MS } from "../client/js/core/battle.js";
 import { DIRECTOR } from "../client/js/core/director.js";
 import { GEAR } from "../client/js/core/gear.js";
+import { HOST_PLAYER, Host, REFUSALS, SNAPSHOT_VERSION } from "../client/js/core/host.js";
+import { buildWorld } from "../client/js/core/overworld.js";
+import { Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
-import { cardOf, gatesHold, Legends, makeUnique, RARE, RARE_CARDS, SAMPLE, SHAPES, UNIQUES, VENUES } from "../client/js/core/rare.js";
+import { cardOf, gatesHold, hourOf, Legends, makeUnique, RARE, RARE_CARDS, SAMPLE, SHAPES, UNIQUES, VENUES } from "../client/js/core/rare.js";
+import { decode, encode } from "../client/js/core/wire.js";
 
 const MINUTE = 60000;
 
@@ -247,5 +252,201 @@ describe("rare encounters (rare.js)", () => {
         assert.deepEqual(again.toJSON(), legends.toJSON());
         assert.deepEqual(new Legends(null).toJSON(), new Legends().toJSON());
         assert.deepEqual(Object.keys(new Legends().clock("x")), VENUES);
+    });
+});
+
+const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
+
+function run(host, ms) {
+    const events = [];
+
+    for (let t = 0; t < ms; t += STEP_MS) {
+        events.push(...host.advance(STEP_MS));
+    }
+
+    return events;
+}
+
+const put = (actor, [x, y]) => Object.assign(actor, { square: [x, y], x: x + 0.5, y: y + 0.5, path: [], order: null, target: null });
+
+// A world (seed 2) with Ada in it, hard to kill, the orc gone, out in the wilds north-east of the
+// start town, and Bram beside her (in her party, `party`)
+function hosted({ party = true } = {}) {
+    const world = buildWorld({ seed: 2 });
+    const host = new Host(world, { populate: false });
+
+    host.join({ id: HOST_PLAYER, hero: HERO });
+    host.join({ id: "bram", hero: { ...HERO, name: "Bram" } });
+    host.populate();
+    Object.assign(host.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+
+    const [sx, sy] = world.start.at;
+    const at = [Math.floor(sx + 600), Math.floor(sy + 600)];
+    const [ada, bram] = [host.battle.actor(HOST_PLAYER), host.battle.actor("bram")];
+
+    for (const [actor, [dx, dy]] of [[ada, [0, 0]], [bram, [2, 0]]]) {
+        Object.assign(actor, { hp: 1e6, maxHp: 1e6 });
+        put(actor, [at[0] + dx, at[1] + dy]);
+    }
+
+    if (party) {
+        host.command(HOST_PLAYER, { type: "party", action: "invite", who: "bram" });
+        host.command("bram", { type: "party", action: "accept" });
+    }
+
+    host.travel.set(HOST_PLAYER, { at: [ada.x, ada.y], walked: 0, next: null, heading: [Math.SQRT1_2, Math.SQRT1_2], deck: ["remains"] });
+    run(host, 200);
+
+    return { host, world, ada, bram };
+}
+
+describe("rare encounters in play (host.js)", () => {
+    it("deals debug mode's sample ahead of a player, one at a time: a foe of what lives there, ranked and named, its spot seen from where they are", () => {
+        const { host, ada } = hosted();
+        const dealt = host.command(HOST_PLAYER, { type: "rare" });
+
+        assert.equal(dealt.ok, true, JSON.stringify(dealt));
+
+        const active = host.legends.active;
+        const foe = host.battle.actor(active.ids[0]);
+        const far = Math.hypot(active.at[0] - ada.x, active.at[1] - ada.y);
+
+        assert.equal(active.card, "sample");
+        assert.ok(far >= RARE.ahead[0] - 2 && far <= RARE.ahead[1] + 2, `${far} m`);
+        assert.equal(foe.name, SAMPLE.shape.title);
+        assert.equal(foe.wild.champion, "mini");
+        assert.equal(host.wild.get(foe.id).rare, active.n);
+        assert.deepEqual(host.command(HOST_PLAYER, { type: "rare" }), { ok: false, reason: "rareOut" });
+        assert.ok(REFUSALS.rareOut && REFUSALS.rareRoom && REFUSALS.bound);
+
+        // (Not for one who isn't allowed debug mode's commands)
+        assert.deepEqual(host.command("bram", { type: "rare" }), { ok: false, reason: "command" });
+    });
+
+    it("tells those who come near it, starts their clocks again; done once its foe falls, each of the party who took part given their own unique, bound to them, the card kept as done by their characters", () => {
+        const { host, ada, bram } = hosted();
+
+        host.legends.count(HOST_PLAYER, "wilds", 30 * MINUTE);
+        host.command(HOST_PLAYER, { type: "rare" });
+
+        const active = host.legends.active;
+        const foe = host.battle.actor(active.ids[0]);
+
+        put(ada, [Math.floor(foe.x) - 8, Math.floor(foe.y)]);
+        put(bram, [Math.floor(foe.x) - 9, Math.floor(foe.y) + 1]);
+
+        const seen = run(host, 2500).filter(({ type, change }) => type === "rare" && change === "seen");
+
+        assert.deepEqual(seen.map(({ id }) => id).sort(), [HOST_PLAYER, "bram"].sort());
+        assert.ok(host.legends.clock(HOST_PLAYER).wilds.since < 5000, "(begun again)");
+        assert.equal(host.legends.clock(HOST_PLAYER).wilds.had, true);
+
+        // (Felled by Ada, Bram beside her)
+        Object.assign(foe, { hp: 1 });
+        Object.assign(ada, { power: { melee: 1e4, ranged: 1e4 } });
+        host.command(HOST_PLAYER, { type: "engage", target: foe.id });
+
+        const events = run(host, 8000);
+        const done = events.find(({ type, change }) => type === "rare" && change === "done");
+        const given = events.filter(({ type, change }) => type === "rare" && change === "given");
+
+        assert.ok(done, events.filter(({ type }) => type === "rare").map(({ change }) => change).join());
+        assert.deepEqual(done.took.sort(), [HOST_PLAYER, "bram"].sort());
+        assert.equal(host.legends.active, null);
+        assert.ok(host.legends.gone.has("sample"));
+        assert.deepEqual(given.map(({ id }) => id).sort(), [HOST_PLAYER, "bram"].sort());
+
+        for (const id of [HOST_PLAYER, "bram"]) {
+            const progress = host.players.get(id).progress;
+            const index = progress.pack.findIndex((stack) => stack?.unique === "sampleSignet");
+
+            assert.ok(index >= 0, `${id}: in their pack`);
+            assert.deepEqual(progress.legends, { met: ["sample"], uniques: ["sampleSignet"] });
+            assert.equal(progress.pack[index].name, UNIQUES.sampleSignet.name);
+
+            // (Bound: not sold, dropped, thrown away nor traded)
+            assert.deepEqual(host.command(id, { type: "drop", index }), { ok: false, reason: "bound" });
+            assert.deepEqual(host.command(id, { type: "discard", index }), { ok: false, reason: "bound" });
+        }
+
+        // (Never given twice: dealt again by debug mode, its unique's had already)
+        host.legends.last = -Infinity;
+        host.command(HOST_PLAYER, { type: "rare" });
+
+        const again = host.battle.actor(host.legends.active.ids[0]);
+
+        put(ada, [Math.floor(again.x) - 2, Math.floor(again.y)]);
+        Object.assign(again, { hp: 1 });
+        host.command(HOST_PLAYER, { type: "engage", target: again.id });
+
+        const twice = run(host, 8000).filter(({ type }) => type === "rare");
+
+        assert.ok(twice.some(({ change, id }) => change === "had" && id === HOST_PLAYER), twice.map(({ change }) => change).join());
+        assert.equal(host.players.get(HOST_PLAYER).progress.pack.filter((stack) => stack?.unique).length, 1);
+    });
+
+    it("leaves one no one took up once everyone's far, its foe let go, its spot not used again; and keeps owed a reward for one who left before it was given", () => {
+        const { host, ada } = hosted({ party: false });
+
+        host.command(HOST_PLAYER, { type: "rare" });
+
+        const active = host.legends.active;
+        const foe = active.ids[0];
+
+        // (Never seen: everyone far, back in the deck at once)
+        put(ada, [Math.floor(active.at[0]) + RARE.far + 20, Math.floor(active.at[1])]);
+        put(host.battle.actor("bram"), [Math.floor(active.at[0]) + RARE.far + 22, Math.floor(active.at[1])]);
+
+        const events = run(host, 2500).filter(({ type }) => type === "rare");
+
+        assert.deepEqual(events.map(({ change }) => change), ["put", "passed"], JSON.stringify(events));
+        assert.equal(host.legends.active, null);
+        assert.ok(!host.battle.actor(foe) || host.battle.actor(foe).dead || !host.wild.has(foe), "(its foe let go)");
+        assert.ok(host.legends.spent("sample", active.at));
+        assert.equal(host.legends.done.at(-1).how, "passed");
+
+        // (Owed: given once they're back)
+        host.legends.owe("cy", "sample");
+        host.join({ id: "cy", hero: { ...HERO, name: "Cy" } });
+
+        const cy = host.players.get("cy").progress;
+
+        assert.ok(cy.pack.some((stack) => stack?.unique === "sampleSignet"));
+        assert.deepEqual(host.legends.owedTo("cy"), []);
+    });
+
+    it("keeps a world's legends in its snapshot, the one out as it was, and each character's in their progress; an old world's brought forward with none", () => {
+        const { host } = hosted();
+
+        host.legends.count(HOST_PLAYER, "wilds", 12 * MINUTE);
+        host.command(HOST_PLAYER, { type: "rare" });
+
+        const again = Host.restore(buildWorld({ seed: 2 }), decode(encode(host.snapshot())));
+
+        assert.deepEqual(again.legends.toJSON(), host.legends.toJSON());
+        assert.equal(SNAPSHOT_VERSION, 46);
+
+        // (A world kept before: none met, none out; its players' progress none either)
+        const old = { ...host.snapshot(), version: 45 };
+
+        delete old.legends;
+        old.players = old.players.map((player) => ({ ...player, progress: { ...player.progress, legends: undefined } }));
+
+        const forward = Host.forward(structuredClone(old));
+
+        assert.equal(forward.legends, null);
+        assert.ok(forward.players.every((player) => player.progress.legends === undefined || Array.isArray(player.progress.legends.met)));
+
+        // (The character's, round a save)
+        const progress = new Progress({ legends: { met: ["sample", 3, "sample"], uniques: ["sampleSignet"] } });
+
+        assert.deepEqual(new Progress(progress.toJSON()).legends, { met: ["sample"], uniques: ["sampleSignet"] });
+        assert.deepEqual(new Progress().legends, { met: [], uniques: [] });
+    });
+
+    it("tells the hour of the day as the world's dawn, day, dusk and night (daytime.js DAY: a new world's begun at 18 minutes into its first day)", () => {
+        // (18 minutes in: day; 48, dusk; 54, night; 8 of the next, dawn)
+        assert.deepEqual([0, 30, 36, 50].map((minutes) => hourOf(minutes * MINUTE)), ["day", "dusk", "night", "dawn"]);
+        assert.ok(["dawn", "day", "dusk", "night"].every((hour) => Array.from({ length: 60 }, (_, k) => hourOf(k * MINUTE)).includes(hour)));
     });
 });
