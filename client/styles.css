@@ -219,11 +219,32 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #crest {
     grid-area: 1 / 1;
 }
 
+/* Its lettering: Cinzel Decorative, by Natanael Gama, as he made it (SIL Open Font License,
+   client/fonts/CinzelDecorative-OFL.txt; crest.js CREST_FONT). Not drawn till it's here, for as
+   long as a moment (crest.js waits for it to forge the name, CREST.forge.wait) */
+@font-face {
+    font-family: "Cinzel Decorative";
+    src: url("fonts/CinzelDecorative-Bold.ttf") format("truetype");
+    font-weight: 700;
+    font-display: block;
+}
+
+/* Small enough for a little of the leather above and below its letters, their flourishes too,
+   and moved up or down so they're in its middle, whatever they're drawn in (crest.js level:
+   --level). Not kerned, so the shine over it is drawn letter for letter where its letters are.
+   Its letters' boxes a little bigger than their lines, so their flourishes are painted to their
+   tips; the same space taken */
 .crest .wordmark {
-    font-size: 8.6cqi;
+    font-family: "Cinzel Decorative", var(--font-display);
+    font-weight: 700;
+    font-size: 6.6cqi;
+    font-kerning: none;
+    font-variant-ligatures: none;
     line-height: 1;
     letter-spacing: 0.15em;
-    padding-left: 0.15em;
+    padding: 0.12em 0 0.12em 0.15em;
+    margin: -0.12em 0;
+    translate: 0 var(--level, 0em);
     background: none;
     color: transparent;
     filter: drop-shadow(0 0.04em 0 rgba(0, 0, 0, 0.75));
@@ -233,6 +254,8 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #crest {
 .crest .letter {
     position: relative;
     display: inline-block;
+    padding: 0.12em;
+    margin: -0.12em;
     background: linear-gradient(180deg, #fff1c8 0%, var(--gold) 55%, var(--gold-deep) 100%);
     -webkit-background-clip: text;
     background-clip: text;
@@ -244,21 +267,27 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #crest {
     content: attr(data-letter);
     position: absolute;
     inset: 0;
+    padding: 0.12em;
     color: #fff6dc;
     -webkit-text-fill-color: #fff6dc;
     text-shadow: 0 0 0.12em #ffd27a, 0 0 0.35em #ff8a1e, 0 0 0.7em #ff4f00;
     opacity: 0;
 }
 
-/* Torchlight glinting along it now and then (the same name over it, its light only) */
+/* A shine run across it once, left to right, a moment after it's forged (crest.js CREST.shine:
+   the same name over it, its light only) */
 .crest .crest-sheen {
-    background: linear-gradient(100deg, transparent 40%, rgba(255, 248, 226, 0.95) 48%, transparent 56%) no-repeat;
+    background: linear-gradient(105deg, transparent 41%, rgba(255, 232, 170, 0.6) 45%, rgba(255, 255, 248, 1) 48.5%, rgba(255, 232, 170, 0.6) 52%, transparent 56%) no-repeat;
     background-size: 300% 100%;
     background-position: 100% 0;
     -webkit-background-clip: text;
     background-clip: text;
     filter: none;
-    animation: crest-glint 7s ease-in-out 3.4s infinite;
+    mix-blend-mode: plus-lighter;
+}
+
+.crest.shining .crest-sheen {
+    animation: crest-shine 1.6s ease-in-out both;
 }
 
 /* And flickering on the leather behind it */
@@ -308,19 +337,15 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #crest {
     left: 53.1%;
 }
 
-/* Its embers, rising off the name and a little above it */
-.crest-embers {
-    position: absolute;
-    left: 0;
-    width: 100%;
-    top: -25%;
-    height: 85%;
-}
-
-/* As it's first shown (crest.js forge): the crest, then each letter in turn struck white-hot and
-   cooled to gold */
+/* As it's first shown (crest.js forge): the crest, then, its lettering here, each letter in turn
+   struck white-hot and cooled to gold */
+.crest.waiting .crest-art,
 .crest.forging .crest-art {
     animation: crest-rise 0.6s ease-out both;
+}
+
+.crest.waiting .letter {
+    opacity: 0;
 }
 
 .crest.forging .letter {
@@ -333,6 +358,7 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #crest {
     animation-delay: calc(0.4s + var(--i) * 0.12s);
 }
 
+.crest.waiting .crest-sheen,
 .crest.forging .crest-sheen {
     visibility: hidden;
 }
@@ -376,13 +402,12 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #crest {
     }
 }
 
-@keyframes crest-glint {
-    0% {
+@keyframes crest-shine {
+    from {
         background-position: 100% 0;
     }
 
-    16%,
-    100% {
+    to {
         background-position: 0% 0;
     }
 }

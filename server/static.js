@@ -41,14 +41,17 @@ const MIME_TYPES = {
     ".bin": "application/octet-stream",
     ".bvh": "text/plain; charset=utf-8",
     ".txt": "text/plain; charset=utf-8",
+    ".ttf": "font/ttf",
+    ".woff2": "font/woff2",
 };
 
 // A hash in an address: the first 10 hex digits of the SHA-256 of the file's bytes
 const HASH = /^[0-9a-f]{10}$/;
 
-// What's worth compressing: text (code, pages, data written as JSON) and the navigation's
-// WebAssembly. Not pictures, sounds or models, which are compressed already
-const COMPRESSIBLE = new Set([".html", ".css", ".js", ".mjs", ".json", ".webmanifest", ".svg", ".txt", ".bvh", ".gltf", ".wasm"]);
+// What's worth compressing: text (code, pages, data written as JSON), the navigation's
+// WebAssembly and TrueType lettering (the crest's). Not pictures, sounds, models or WOFF2
+// lettering, which are compressed already
+const COMPRESSIBLE = new Set([".html", ".css", ".js", ".mjs", ".json", ".webmanifest", ".svg", ".txt", ".bvh", ".gltf", ".wasm", ".ttf"]);
 
 /**
  * Compressing: each encoding's quality (brotli 9 is game.js in 60 ms, within a tenth of its best,

@@ -1,12 +1,14 @@
 // The crest over the loading screen and the title (app/crest.js): its pictures there
 // (scripts/build-crest.js), AVIF and WebP, see-through, as big as its master, within their budget;
-// the page's crest as crest.js has it, and styles.css placing its name and eyes where crest.js says
-// they are, and forging it as long; its embers rising, its sparks thrown off and slowing, each
-// gone once it's lasted; and its eyes blinking only once in a while
+// its lettering, Cinzel Decorative as it was made, its licence beside it; the page's crest as
+// crest.js has it, and styles.css placing its name and eyes where crest.js says they are, its name
+// in its lettering, forging it as long and shining it once; its name moved for its letters to be in
+// its line's middle, by their outlines, and again as it's resized; forged once its lettering's here,
+// or it's waited long enough; and its eyes blinking every 5 to 8 seconds
 import assert from "node:assert/strict";
 import { readFileSync, statSync } from "node:fs";
 import { describe, it } from "node:test";
-import { CREST, CREST_FOLDER, Crest, emberAt, stepEmbers } from "../client/js/app/crest.js";
+import { CREST, CREST_FOLDER, CREST_FONT, Crest, levelOf } from "../client/js/app/crest.js";
 
 const client = new URL("../client/", import.meta.url);
 const master = new URL("../scripts/crest/crest.jpg", import.meta.url);
@@ -87,34 +89,132 @@ describe("the crest over the loading screen and the title (crest.js)", () => {
 
         assert.match(rule(".crest.forging .letter"), new RegExp(`animation-delay: calc\\(${delay}s \\+ var\\(--i\\) \\* ${each}s\\);`));
         assert.match(rule(".crest.forging .letter::after"), new RegExp(`animation: crest-heat ${cool}s ease-out both;`));
+
+        // (Shone once, as long as crest.js has it; its name in its lettering, moved level)
+        assert.match(rule(".crest.shining .crest-sheen"), new RegExp(`animation: crest-shine ${CREST.shine.length}s ease-in-out both;`));
+        assert.match(rule("@font-face"), new RegExp(`font-family: "${CREST_FONT.family}";\\s+src: url\\("${CREST_FONT.file}"\\) format\\("truetype"\\);\\s+font-weight: ${CREST_FONT.weight};`));
+        assert.match(rule(".crest .wordmark"), new RegExp(`font-family: "${CREST_FONT.family}", var\\(--font-display\\);\\s+font-weight: ${CREST_FONT.weight};`));
+        assert.match(rule(".crest .wordmark"), /translate: 0 var\(--level, 0em\);/);
     });
 
-    it("has its embers rise off its name, swaying a little, and its sparks thrown off every way and slowing; each gone once it's lasted", () => {
-        let seed = 7;
-        const random = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-        let embers = Array.from({ length: 30 }, () => emberAt(0.5, 0.45, random));
+    it("has its lettering, Cinzel Decorative as Natanael Gama made it, with its licence beside it", () => {
+        const font = readFileSync(new URL(CREST_FONT.file, client));
+        const licence = readFileSync(new URL(CREST_FONT.file.replace(/-Bold\.ttf$/, "-OFL.txt"), client), "utf8");
+        const named = (name) => font.includes(name) || font.includes(Buffer.from([...name].flatMap((c) => [0, c.charCodeAt(0)])));
 
-        assert.ok(embers.every(({ vy, life }) => vy < 0 && life >= CREST.embers.life[0] && life <= CREST.embers.life[1]));
-
-        embers = stepEmbers(embers, 1);
-        assert.ok(embers.every(({ y, x }) => y < 0.45 - CREST.embers.rise[0] * 0.99 && Math.abs(x - 0.5) < 0.1), "risen, not far aside");
-
-        embers = stepEmbers(stepEmbers(embers, 1), 1);
-        assert.equal(embers.length, 0, "gone once they've lasted");
-
-        // (Sparks off a letter: every way, slowing, soon gone)
-        const sparks = Array.from({ length: CREST.embers.sparks }, () => emberAt(0.3, 0.5, random, { spark: true }));
-        const ways = new Set(sparks.map(({ vx, vy }) => `${Math.sign(vx)}${Math.sign(vy)}`));
-        const before = Math.hypot(sparks[0].vx);
-
-        assert.ok(ways.size >= 3, `${ways.size} ways`);
-        assert.ok(sparks.every(({ life }) => life < 0.75));
-        stepEmbers(sparks, 0.1);
-        assert.ok(Math.hypot(sparks[0].vx) < before || before === 0, "slowing");
-        assert.equal(stepEmbers(sparks, 1).length, 0);
+        assert.equal(font.readUInt32BE(0), 0x00010000, "a TrueType font");
+        assert.ok(named(CREST_FONT.family), `named ${CREST_FONT.family}`);
+        assert.match(licence, /SIL Open Font License, Version 1\.1/);
+        assert.match(licence, /Copyright \(c\) 2012 Natanael Gama/);
     });
 
-    it("blinks its eyes only once in a while: 15 to 40 seconds apart, now and then twice; not while the page is hidden", () => {
+    it("moves its name for its letters' ink to be in its line's middle, whatever its lettering sets them at", () => {
+        // (A line 100 pixels tall, its baseline 80 down: letters 70 above it and none below, too
+        // high by 10, moved down a tenth of the 100 pixel size; in the middle already, not moved)
+        assert.equal(levelOf({ baseline: 80, height: 100, ascent: 70, descent: 0, size: 100 }), 0.05);
+        assert.equal(levelOf({ baseline: 85, height: 100, ascent: 70, descent: 0, size: 100 }), 0);
+        assert.equal(levelOf({ baseline: 90, height: 100, ascent: 70, descent: 10, size: 100 }), -0.1);
+        assert.equal(levelOf({ baseline: 80, height: 100, ascent: 70, descent: 0, size: 0 }), 0);
+    });
+
+    it("sets its name level by its letters' outlines, not the whole pixels measureText has their edges in at the size they're drawn at; and again as it's resized", () => {
+        // (Letters 0.74 of their size above their baseline and 0.26 below, as a canvas measures
+        // them, in whole pixels; drawn 10 pixels tall, on a line as tall, its baseline 8 down)
+        const ink = { ascent: 0.74, descent: 0.26 };
+        const drawn = { size: 10, height: 10, baseline: 8 };
+        const levels = [];
+        let font = "";
+        let resized = null;
+        const canvas = {
+            getContext: () => ({
+                set font(value) {
+                    font = value;
+                },
+                measureText: () => {
+                    const size = parseFloat(font.split(" ")[1]);
+
+                    return { actualBoundingBoxAscent: Math.round(ink.ascent * size), actualBoundingBoxDescent: Math.round(ink.descent * size) };
+                },
+            }),
+        };
+        const page = { createElement: (tag) => (tag === "canvas" ? canvas : { style: { setProperty() {} }, dataset: {}, getBoundingClientRect: () => ({ top: drawn.baseline }), remove() {} }) };
+        const name = { textContent: "Pellagos", setAttribute() {}, append() {}, getBoundingClientRect: () => ({ top: 0, height: drawn.height }) };
+        const element = { ownerDocument: page, dataset: {}, classList: { add() {}, remove() {} }, style: { setProperty: (key, value) => levels.push(value) }, querySelector: () => name, querySelectorAll: () => [] };
+        const view = {
+            matchMedia: () => ({ matches: true }),
+            getComputedStyle: () => ({ fontSize: `${drawn.size}px`, fontWeight: "700", fontFamily: `"${CREST_FONT.family}"` }),
+            setTimeout() {},
+            clearTimeout() {},
+            ResizeObserver: class {
+                constructor(run) {
+                    resized = run;
+                }
+
+                observe(target) {
+                    assert.equal(target, element);
+                }
+            },
+        };
+        const crest = new Crest(element, { window: view });
+
+        // (Measured in whole pixels at 10, 7 and 3: moved 0.1 em up, 0.04 too far)
+        crest.level();
+        assert.equal(levels.at(-1), "-0.060em");
+
+        // (Made twice as big, its baseline a pixel and a half lower in its line than that was)
+        Object.assign(drawn, { size: 20, height: 20, baseline: 15.5 });
+        resized();
+        assert.equal(levels.at(-1), "-0.035em");
+    });
+
+    it("is forged once its lettering's here, or once it's waited long enough for it, and shone once a moment after", async () => {
+        const forging = async (loads) => {
+            const timers = [];
+            const classes = new Set();
+            const element = { dataset: {}, style: { setProperty() {} }, classList: { add: (name) => classes.add(name), remove: (name) => classes.delete(name) }, querySelector: () => null, querySelectorAll: () => [] };
+            let loaded = () => {};
+            const page = {
+                document: { fonts: { load: () => (loads ? Promise.resolve([]) : new Promise((done) => (loaded = done))) } },
+                setTimeout: (run, ms) => timers.push({ run, ms }),
+                clearTimeout() {},
+            };
+
+            new Crest(element, { window: page });
+
+            const waiting = classes.has("waiting");
+
+            await new Promise((done) => setImmediate(done));
+
+            return { waiting, classes, timers, loaded };
+        };
+
+        // (Its lettering here at once: forged, the waiting given up)
+        const ready = await forging(true);
+
+        assert.ok(ready.waiting);
+        assert.deepEqual([...ready.classes], ["forging"]);
+
+        // (Not here: waiting till it's waited long enough, then forged in what it has)
+        const slow = await forging(false);
+
+        assert.deepEqual([...slow.classes], ["waiting"]);
+        assert.equal(slow.timers[0].ms, CREST.forge.wait * 1000);
+        slow.timers[0].run();
+        await new Promise((done) => setImmediate(done));
+        assert.deepEqual([...slow.classes], ["forging"]);
+
+        // (Forged for good once the last letter's cooled, and shone a moment after)
+        const { delay, each, cool } = CREST.forge;
+        const forged = ready.timers.find(({ ms }) => ms === (delay + 0 * each + cool) * 1000);
+
+        forged.run();
+        assert.deepEqual([...ready.classes], []);
+        assert.equal(ready.timers.at(-1).ms, CREST.shine.after * 1000);
+        ready.timers.at(-1).run();
+        assert.deepEqual([...ready.classes], ["shining"]);
+    });
+
+    it("blinks its eyes every 5 to 8 seconds, now and then twice; not while the page is hidden", () => {
         // (A crest of its eyes and lids only, on a page whose timers are kept to be run here)
         const animated = [];
         const part = (kind) => ({ classList: { contains: (name) => name === kind }, animate: (frames, { iterations }) => animated.push({ kind, iterations }) });
@@ -138,8 +238,8 @@ describe("the crest over the loading screen and the title (crest.js)", () => {
             run();
         }
 
-        assert.ok(gaps.every((gap) => gap >= 15 && gap <= 40), gaps.join(", "));
-        assert.ok(Math.max(...gaps) - Math.min(...gaps) > 10, "not like clockwork");
+        assert.ok(gaps.every((gap) => gap >= 5 && gap <= 8), gaps.join(", "));
+        assert.ok(Math.max(...gaps) - Math.min(...gaps) > 2, "not like clockwork");
         assert.equal(animated.length, 40 * parts.length, "each lid and eye, each time");
 
         const twice = animated.filter(({ iterations }) => iterations === 2).length / parts.length;
