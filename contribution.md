@@ -93,9 +93,9 @@ files. Read what it wants to do, above all a `git push`.
 CI (`.github/workflows/ci.yml`) runs on every pull request, and on `main` when one is merged. A
 pull request's run is cancelled when you push to it again; only its newest commit's run counts.
 `main`'s runs always run to the end. A job that hangs is ended at about twice the longest it
-should take, rather than held to GitHub's 6 hours: `test` at 60 minutes (its own work about 17,
-then its share of the browser tests about 10), `motion` at 60 (about 10, then about 18), each
-`e2e` job at 80 (about 29; its Chromium download is tried three times, 5 minutes a try). Every
+should take, rather than held to GitHub's 6 hours: `test` at 60 minutes (its own work about 19½,
+then its share of the browser tests about 8), `motion` at 60 (about 13, then about 15), each
+`e2e` job at 80 (about 28; its Chromium download is tried three times, 5 minutes a try). Every
 job ends about together, about half an hour in.
 
 | CI job | What it runs | Locally |
@@ -107,7 +107,7 @@ job ends about together, about half an hour in.
 **The browser tests' shares.** They're split ten ways, by how long each took on CI
 (`scripts/e2e-shard.js`, `e2e/durations.json`): a share for each `e2e` job, and one each for the
 `motion` and `test` jobs once their own work's done, given that much less (`ci.yml`'s
-`E2E_SHARES` and `E2E_AHEAD`: `9:11,10:19`, the minutes each does first), so that every job ends
+`E2E_SHARES` and `E2E_AHEAD`: `9:13,10:20`, the minutes each does first), so that every job ends
 about together. Each job runs its share with `.github/actions/e2e-share` (Chromium installed, the
 share chosen and run), and its JSON report is kept with the run as `e2e-report-<share>`, failed
 or not: how long each test took there, to time them by (below). If the unit tests or the motion
