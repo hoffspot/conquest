@@ -155,11 +155,12 @@ export function makeUnique(id, level, random) {
  */
 export class Legends {
     constructor(was = null, { cards = { ...RARE_CARDS, [SAMPLE.id]: SAMPLE } } = {}) {
-        const json = was ?? {};
+        // (As it was kept, on a device or a server: anything that isn't as it should be let go)
+        const json = was && typeof was === "object" ? was : {};
 
         this.cards = cards;
-        this.played = json.played ?? 0;
-        this.clocks = new Map(Object.entries(json.clocks ?? {}).map(([id, clock]) => [id, Object.fromEntries(VENUES.map((venue) => [venue, { since: 0, misses: 0, due: false, had: false, ...clock[venue] }]))]));
+        this.played = Number.isFinite(json.played) ? json.played : 0;
+        this.clocks = new Map(Object.entries(json.clocks ?? {}).map(([id, clock]) => [id, Object.fromEntries(VENUES.map((venue) => [venue, { since: 0, misses: 0, due: false, had: false, ...clock?.[venue] }]))]));
         this.decks = Object.fromEntries(VENUES.map((venue) => [venue, [...(json.decks?.[venue] ?? [])]]));
         this.active = json.active ? structuredClone(json.active) : null;
         this.done = [...(json.done ?? [])];

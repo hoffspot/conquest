@@ -13,7 +13,7 @@ import { SPELLS } from "../client/js/core/spells.js";
 import { EMOTES } from "../client/js/core/emotes.js";
 import { ABILITIES, ITEMS, Progress } from "../client/js/core/progress.js";
 import { isGuid } from "../client/js/core/guid.js";
-import { BLOCKS, blocksOf, clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
+import { BLOCKS, blocksOf, clearSave, enterWorld, exportCharacter, forgetCharacter, forgetWorld, importCharacter, isHero, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadLegends, loadLocalWorld, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, SAVE_VERSION, saveExplored, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, SETTINGS_DEFAULTS, stayOf, visitorOf, MOST_VISITORS, writeSave } from "../client/js/app/save.js";
 import { ago, KEPT_FROM, keepMessage, MESSAGES_KEPT } from "../client/js/app/journal.js";
 import { encode } from "../client/js/core/wire.js";
 import { Standing } from "../client/js/core/standing.js";
@@ -313,19 +313,20 @@ describe("saving (save.js)", () => {
         const there = enterWorld(wren, vale.id);
 
         saveTalks(there.place, { memory: {}, knowledge: new Set(["troll"]) });
-        saveWorld(there.war, { version: 1, seed: 21, turn: 2 });
+        saveWorld(there.war, { version: 1, seed: 21, turn: 2 }, { played: 90000, next: 3 });
         saveProgress(wren, new Progress({ gold: 80 }));
 
         const exported = exportCharacter(wren);
 
         assert.deepEqual([exported.save.seed, exported.save.created, "world" in exported.save], [21, wren.created, false], "the world's seed, as a character's export always had");
-        assert.deepEqual([exported.world.name, exported.world.war.turn], ["Thornvale", 2]);
+        assert.deepEqual([exported.world.name, exported.world.war.turn, exported.world.legends], ["Thornvale", 2, { played: 90000, next: 3 }]);
 
         const read = importCharacter(exported);
 
         assert.deepEqual(read.talks.knowledge, ["troll"]);
         assert.equal(read.progress.gold, 80);
         assert.equal(read.war.turn, 2);
+        assert.deepEqual(read.legends, { played: 90000, next: 3 }, "its legends with it (core/rare.js)");
 
         // (Or with their own, as they left it)
         const own = exportCharacter(wren, { world: wren.id });
@@ -344,6 +345,7 @@ describe("saving (save.js)", () => {
 
         assert.deepEqual(loadTalks(stay.place).knowledge, ["troll"]);
         assert.equal(loadWorld(stay.war).turn, 2);
+        assert.deepEqual(loadLegends(stay.war), { played: 90000, next: 3 });
         assert.equal(loadProgress(save).gold, 80);
         assert.deepEqual(keepCharacter(exported), { error: "here" });
 
@@ -629,6 +631,22 @@ describe("saving (save.js)", () => {
         assert.equal(loadWorld({ ...save, created: "2026-09-27T10:00:00.000Z" }), null);
         assert.equal(loadWorld({ ...save, seed: 13 }), null);
         assert.equal(saveWorld({ seed: 1 }, war), false);
+    });
+
+    it("keeps a saved game's world's legends with its war (core/rare.js Legends), as they were; none till they're kept, and not for another", () => {
+        useStorage();
+
+        const save = { id: "abcd1234", seed: 12, created: "2026-09-26T10:00:00.000Z" };
+        const war = { version: 1, seed: 12, turn: 40 };
+        const legends = { played: 3600000, clocks: { host: { wilds: { since: 120000, misses: 2, due: false, had: true } } }, done: [{ n: 1, card: "sample", how: "done", by: ["Ada"] }], gone: ["sample"], next: 2 };
+
+        assert.equal(saveWorld(save, war), true);
+        assert.equal(loadLegends(save), null, "none kept yet");
+        assert.equal(saveWorld(save, war, legends), true);
+        assert.deepEqual(loadLegends(save), legends);
+        assert.deepEqual(loadWorld(save), war, "the war beside them, as it was");
+        assert.equal(loadLegends({ ...save, seed: 13 }), null);
+        assert.equal(loadLegends({ ...save, created: "2026-09-27T10:00:00.000Z" }), null);
     });
 
     it("keeps where a saved game's character stands with their people, and what they've been asked; not for another", () => {

@@ -1065,6 +1065,8 @@ export class Host {
      *     else it starts afresh (in a world with a plan: buildWorld's).
      * @param {object} [options.rules] - The world's rules (RULES): those of a world a browser
      *     hosts, to begin with.
+     * @param {object} [options.legends] - Its rare encounters as they were kept (rare.js Legends'
+     *     toJSON), to carry on from; else none met yet.
      */
     constructor(world, { seed = world.seed ?? 1, populate = true, war = null, rules = RULES, legends = null } = {}) {
         this.world = world;
@@ -10497,11 +10499,12 @@ export class Host {
 
     // The rare encounter out ended, `how` (rare.js Legends end): done, each who took part given
     // their reward (#rareGive), those gone from the world owed it; failed or passed, its foe let go.
-    // Told to everyone, with who took part
+    // Told to everyone, with who took part and who'd seen it
     #rareEnd(how) {
         const active = this.legends.active;
         const card = this.legends.cards[active.card] ?? null;
         const took = [...active.took];
+        const told = [...active.told];
         const by = took.map((id) => this.players.get(id)?.hero.name ?? null).filter(Boolean);
 
         if (how !== "done") {
@@ -10514,7 +10517,7 @@ export class Host {
 
         const ended = this.legends.end(how, { by, random: this.random });
 
-        this.#event("rare", { change: how, n: ended.n, card: ended.card, at: ended.at, took, by });
+        this.#event("rare", { change: how, n: ended.n, card: ended.card, at: ended.at, took, told, by });
 
         if (how === "done" && card) {
             for (const id of took) {

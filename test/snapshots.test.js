@@ -174,7 +174,7 @@ describe("a kept world opened by the server (server/reopen.js)", () => {
             assert.ok(writeSave(save));
             saveProgress(save, { toJSON: () => ({ skills: { blades: 3 }, spells: [], gold: 77, pack: [], gear: null }) });
             saveTalks(save, { memory: { barkeep: ["ale"] }, knowledge: ["the road north"] });
-            saveWorld(save, kept.war);
+            saveWorld(save, kept.war, { played: 7200000, gone: ["sample"], next: 2 });
 
             const exported = JSON.parse(JSON.stringify(exportCharacter(save)));
             const folder = await DataFolder.open(await scratch());
@@ -193,6 +193,7 @@ describe("a kept world opened by the server (server/reopen.js)", () => {
             const { host } = await openWorld(stored);
 
             assert.equal(host.war.turn, kept.war.turn, "(its war carried on)");
+            assert.deepEqual([host.legends.played, [...host.legends.gone]], [7200000, ["sample"]], "(and its legends: core/rare.js)");
             assert.equal(host.players.size, 0, "(no one in it till they come)");
 
             // (Not an export, or a newer game's: refused)

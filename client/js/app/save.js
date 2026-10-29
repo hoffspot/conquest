@@ -973,14 +973,33 @@ export function loadWorld(save) {
     }
 }
 
-/** Keep the war in a saved game's world (not in one that isn't saved: ?play). */
-export function saveWorld(save, war) {
+/**
+ * A saved game's world's legends ({ seed, created }: core/rare.js Legends' toJSON, the rare
+ * encounters met there, what's out and each player's clocks), kept with its war; or null (none
+ * yet, or another game's).
+ */
+export function loadLegends(save) {
+    try {
+        const text = save?.id ? storage()?.getItem(keyOf(save, "world")) : null;
+        const world = text ? decode(text) : null;
+
+        return world && world.created === save.created && world.seed === save.seed && isObject(world.legends) ? world.legends : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Keep the war in a saved game's world (not in one that isn't saved: ?play), and its legends
+ * (core/rare.js Legends' toJSON) with it.
+ */
+export function saveWorld(save, war, legends = null) {
     if (!save?.id) {
         return false;
     }
 
     try {
-        globalThis.localStorage?.setItem(keyOf(save, "world"), encode({ created: save.created, seed: save.seed, war }));
+        globalThis.localStorage?.setItem(keyOf(save, "world"), encode({ created: save.created, seed: save.seed, war, legends }));
 
         return true;
     } catch {
@@ -1052,11 +1071,11 @@ export function forwardExport(exported) {
  * Everything kept of a character and a world they've been in (`world`, its id: the one they're in,
  * unless another's given), as one piece of plain data, for taking them to another device or their
  * world to a world server (generated/world_server_plan.md §5: "bring my world to the server"): {
- * kind, version, saveVersion, save, talks, explored, progress, ..., world (its war, and its name)
- * }, each as it's kept here (null where nothing is), as if the world were theirs alone: everything
- * marked with when they were started and the world's seed (save.seed), as a character's export
- * always was. Null for a character that isn't kept. One in no world is exported with none, and
- * their own seed.
+ * kind, version, saveVersion, save, talks, explored, progress, ..., world (its war, its legends
+ * and its name) }, each as it's kept here (null where nothing is), as if the world were theirs
+ * alone: everything marked with when they were started and the world's seed (save.seed), as a
+ * character's export always was. Null for a character that isn't kept. One in no world is
+ * exported with none, and their own seed.
  */
 export function exportCharacter(save, { world: id } = {}) {
     if (!save?.id || !own(save, "save")) {
@@ -1078,7 +1097,7 @@ export function exportCharacter(save, { world: id } = {}) {
         const text = stay ? globalThis.localStorage?.getItem(keyOf(stay.war, "world")) : null;
         const war = text ? decode(text) : null;
 
-        world = war && war.created === stay.war.created && war.seed === stay.war.seed ? { created: save.created, seed, war: war.war, name: stay.world.name } : null;
+        world = war && war.created === stay.war.created && war.seed === stay.war.seed ? { created: save.created, seed, war: war.war, legends: isObject(war.legends) ? war.legends : null, name: stay.world.name } : null;
     } catch {
         world = null;
     }
@@ -1089,7 +1108,7 @@ export function exportCharacter(save, { world: id } = {}) {
 /**
  * A character and their world from an export (exportCharacter's), read by the same code the game
  * reads what it keeps with (each kind brought forward as it is here): { save, hero, talks,
- * explored, progress, standing, followers, wheels, pin, place, vitals, messages, told, war }; or
+ * explored, progress, standing, followers, wheels, pin, place, vitals, messages, told, war, legends }; or
  * null if it isn't an export, or is one from a newer version of the game.
  */
 export function importCharacter(given) {
@@ -1132,6 +1151,7 @@ export function importCharacter(given) {
             messages: loadMessages(save),
             told: loadTold(save),
             war: loadWorld(save),
+            legends: loadLegends(save),
         };
     } finally {
         reading = null;
@@ -1182,7 +1202,7 @@ export function keepCharacter(exported) {
 
     if (isObject(exported.world) && exported.world.war) {
         try {
-            globalThis.localStorage?.setItem(keyOf(save, "world"), encode({ created: save.created, seed: save.seed, war: exported.world.war }));
+            globalThis.localStorage?.setItem(keyOf(save, "world"), encode({ created: save.created, seed: save.seed, war: exported.world.war, legends: isObject(exported.world.legends) ? exported.world.legends : null }));
         } catch {
             kept = false;
         }

@@ -130,7 +130,7 @@ export async function freshStart(stored, { why = "its owner asked", build = buil
 
     if (kept) {
         try {
-            host = new Host(world, { war: kept.snapshot.war, rules });
+            host = new Host(world, { war: kept.snapshot.war, legends: kept.snapshot.legends ?? null, rules });
             war = `its war carried on from ${kept.from}, at turn ${host.war?.turn ?? 0}`;
         } catch (error) {
             war = `a new war (its war couldn't be taken: ${error.message})`;
@@ -204,11 +204,11 @@ export async function importSolo(store, exported, { name = null, creator = null,
         let host;
 
         try {
-            host = new Host(build({ seed: imported.save.seed, race: hero.race }), { war: imported.war, rules: rulesFor(stored.meta) });
+            host = new Host(build({ seed: imported.save.seed, race: hero.race }), { war: imported.war, legends: imported.legends, rules: rulesFor(stored.meta) });
         } catch (error) {
             host = new Host(build({ seed: imported.save.seed, race: hero.race }), { rules: rulesFor(stored.meta) });
             imported.war = null;
-            await stored.journal(`Its war couldn't be taken (${error.message}): a new war.`, when());
+            await stored.journal(`Its war and legends couldn't be taken (${error.message}): a new war.`, when());
         }
 
         await stored.save(host.snapshot(), { why: "brought from a solo game", when });

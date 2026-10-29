@@ -32,8 +32,8 @@ const ICON = Object.freeze({ size: 0.46, above: 0.62, bob: 0.06 });
 export const FLOAT = Object.freeze({ size: 0.42, lift: 0.055, bob: 0.03, pace: 2.4, apart: 0.34 });
 export const RING = Object.freeze({ radius: 0.27, above: 0.012, glow: [0.6, 0.95] });
 
-/** The colour each rarity glows (progress.js QUALITIES: the pack's own, styles.css .rarity-*). */
-export const RARITY_GLOW = Object.freeze({ common: 0xe9e1d0, fine: 0x6aa6ff, masterwork: 0xe8c35a, rare: 0xb07cff, veryRare: 0xff6aa8, legendary: 0xf08a3a });
+/** The colour each rarity glows (progress.js QUALITIES, and a unique: the pack's own, styles.css .rarity-*). */
+export const RARITY_GLOW = Object.freeze({ common: 0xe9e1d0, fine: 0x6aa6ff, masterwork: 0xe8c35a, rare: 0xb07cff, veryRare: 0xff6aa8, legendary: 0xf08a3a, unique: 0x3fe0c0 });
 
 /**
  * What's shown of something dropped (not a chest): its gold, if any, and each thing in it, as { id
@@ -45,11 +45,14 @@ export function shownOf(dropped) {
         return [{ id: "gold", grade: "common" }];
     }
 
+    // (A unique, given for a rare encounter, glows its own colour: core/rare.js UNIQUES)
+    const grade = (item) => (item.unique ? "unique" : gradeOf(item));
+
     if (dropped.item) {
-        return [{ id: dropped.item.id, grade: gradeOf(dropped.item) }];
+        return [{ id: dropped.item.id, grade: grade(dropped.item) }];
     }
 
-    return [...(dropped.bundle.gold > 0 ? [{ id: "gold", grade: "common" }] : []), ...dropped.bundle.items.map((item) => ({ id: item.id, grade: gradeOf(item) }))];
+    return [...(dropped.bundle.gold > 0 ? [{ id: "gold", grade: "common" }] : []), ...dropped.bundle.items.map((item) => ({ id: item.id, grade: grade(item) }))];
 }
 
 // (What's in it, in short: drawn again when it changes, part of it taken)

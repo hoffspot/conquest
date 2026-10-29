@@ -802,6 +802,79 @@ for it. Seen through and struck first, before it springs, it's caught out.
 - **Let go** once every player's 220 m from it (`AMBUSH.far`) and none of its band's fighting, or
   once they've all fallen; kept in the world's snapshot (`ambushes`, `SNAPSHOT_VERSION` 44).
 
+## Rare encounters
+
+Now and then, in place of one of the wilds director's cards, something that isn't one of them: a
+card from the world's own deck of rare encounters (`core/rare.js`, the host's `#rare…`; the plan:
+`generated/rare_encounters_plan.md`). The engine's in the game; the cards themselves are designed
+one at a time, each with its thread and its reward, and till the first is, only debug mode's
+sample is ever dealt.
+- **Two kinds** (`RARE_CARDS` `kind`): a *unique* card comes once in a world and once to a
+  character (one who's overcome it never meets it again, in any world: `progress.legends.met`); a
+  *recurring* one now and then, at most once every 4 to 6 hours of the world's play (`RARE.recur`).
+- **Each player's own clock** (`Legends` `clocks`, `RARE.wilds`): the time they've spent out in the
+  wilds (out of the settlements) since their last rare card, or since they first came out in the
+  world. From `least` on, at each of the director's cards dealt them, a chance of the rare one
+  instead, rising by `step` (0.007) with each dealt instead, certain once it's `most`: the first
+  between 40 and 90 minutes (about an hour), then between 100 and 150 (about two). A simulation of
+  400 seeded walks in the unit tests holds it to that, and never past the caps. Seeing one starts
+  that player's clock again.
+- **Held, not lost**: one that's due but can't be dealt (another's out in the world, the 10
+  minutes since the last ended aren't up: `RARE.gap`; a bad moment: a foe after the player or one
+  within the last 5 seconds, below half their health, a build-up's hunters coming, the last card
+  an ambush; no card fits) stays due, and comes at the next card that's clear.
+- **One at a time** in the world, whichever venue, and dealt without repeats: each venue's deck
+  (`decks`) shuffled once in an order of its own, a card dealt going to the back, so none comes
+  again before the rest have had their turn. A card for a player (and the group they're with) is
+  one none of their characters has overcome, not gone from the world, not waiting out its
+  `recur`, its gates holding (`gatesHold`: its hours of the day, its lands, its peoples), or passed
+  over by them `RARE.pass` (3) times already, and then dealt anyway.
+- **Put** ahead of the player (`#rareSpot`): 90 to 140 m on (`RARE.ahead`), further than any other
+  card, within a third of a turn of the way they're going (any way, at last), where a cache could
+  be, with a sight line to it from where they are, and never where that card was left before
+  (`spots`, within `RARE.seen`). Its shape (`SHAPES`) says what it is: so far a `foe`, a named
+  champion of what lives there (or its own `creature`), ranked as a dungeon's are, `up` tiers
+  above the land (`#rareFoe`).
+- **Its life** (`Legends` `sees`, `takes`, `left`, `end`; the host's `#rareFollow`, at each look
+  about): *seen* by whoever comes within 140 m (`RARE.seen`: its sting, `rareSting`, where it is,
+  its word, and its mark on the maps, an eye opened wide in a star, mapicons.js `legend`; and to
+  the rest of their party, "Bryn has seen something strange to the north-east", marked for them
+  too); *taken up* by whoever comes within 40 m of it (`RARE.reach`) or fights it; *done* once it's
+  fallen; *failed* (taken up, then everyone 220 m off, `RARE.far`, for 10 minutes, `RARE.wait`, or
+  its foe gone some other way, as it is after a reload) or *passed* (not taken up: no one ever saw
+  it and everyone's far; or seen, then everyone far for 10 minutes since it was first seen, or its
+  hours past, a night one at dawn). Failed and passed, it's let go, goes back in the deck and
+  comes again in its turn, never on that spot; said to those who'd seen it ("The Sample is gone
+  from here. It may yet be met again."). Done: a unique's gone from the world, a recurring one
+  away for its `recur`; said to those who took part ("You've overcome the Sample. It won't come
+  again.", `rareDone`) and to those who'd seen it, who did it.
+- **Taking part**: whoever was near it as it was taken up, near it as it fell (`RARE.reach`), or
+  felled it. Each is given their own reward (`#rareGive`), no rolling for it: a unique (`UNIQUES`),
+  found nowhere else, made as a legendary of its base at their level (`makeUnique`: from their
+  might, seeded by the world, the unique and the player, so it's the same on every copy), its name
+  its own. It's stowed, or left at their feet, theirs, if their pack's full. One who left the world
+  before it was given finds it waiting as they come back (`owed`). A character's given each unique
+  once (`progress.legends.uniques`): one who's had it is told so instead.
+- **Bound**: a unique (`unique` on the item) is coloured as nothing else is (sea-green,
+  styles.css `.rarity-unique`, its glow on the ground too), and its card says it's found nowhere
+  else and bound to its finder, with its tale. It can't be sold, traded, dropped, thrown away or
+  given to a follower (refused, `bound`: "It's bound to you: it goes where you go, and no
+  further."); the pack offers none of those for it.
+- **The journal's *Legends***: the rare encounters out that the player or their party have seen
+  (where, from here), those overcome in this world (by whom, and where), and the uniques their
+  character keeps.
+- **Kept**: the world's `Legends` (its clocks, decks, the one out, what's been met, the uniques and
+  spots used, the recurring ones' return, owed rewards) in the host's snapshot (`legends`,
+  `SNAPSHOT_VERSION` 46) for a world server, and on a device with the world's war (save.js
+  `saveWorld`, `loadLegends`), each turn and as each changes; carried in a character's export and
+  brought to a server with it. A character's own (`progress.legends`: the unique cards they've
+  overcome and the uniques they've been given) goes with them into every world. What two games
+  say to each other changed with it (`NET_VERSION` 193).
+- **Debug mode**: the debug overlay's *Rare encounter* button (`game.rare()`, the host's `rare`
+  command) deals the sample (`SAMPLE`: "The Sample", a champion two tiers up, its reward the
+  Signet of the Sample) ahead of the player at once, their clock aside; refused while another's
+  out (`rareOut`) or with nowhere for it (`rareRoom`).
+
 ## Adventurers' caches
 
 Here and there out in the wilds lies a chest some adventurer stowed and never came back for, and a

@@ -17,6 +17,7 @@ import { Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
 import { cardOf, gatesHold, hourOf, Legends, makeUnique, RARE, RARE_CARDS, SAMPLE, SHAPES, UNIQUES, VENUES } from "../client/js/core/rare.js";
 import { decode, encode } from "../client/js/core/wire.js";
+import { describe as describeGear, MAKES, rarityOf } from "../client/js/app/gearinfo.js";
 
 const MINUTE = 60000;
 
@@ -430,18 +431,54 @@ describe("rare encounters in play (host.js)", () => {
         const old = { ...host.snapshot(), version: 45 };
 
         delete old.legends;
-        old.players = old.players.map((player) => ({ ...player, progress: { ...player.progress, legends: undefined } }));
+        old.players = old.players.map((player) => ({ ...player, progress: Object.fromEntries(Object.entries(player.progress).filter(([key]) => key !== "legends")) }));
 
         const forward = Host.forward(structuredClone(old));
 
         assert.equal(forward.legends, null);
-        assert.ok(forward.players.every((player) => player.progress.legends === undefined || Array.isArray(player.progress.legends.met)));
+        assert.ok(forward.players.every((player) => Array.isArray(player.progress.legends.met) && Array.isArray(player.progress.legends.uniques)));
 
         // (The character's, round a save)
         const progress = new Progress({ legends: { met: ["sample", 3, "sample"], uniques: ["sampleSignet"] } });
 
         assert.deepEqual(new Progress(progress.toJSON()).legends, { met: ["sample"], uniques: ["sampleSignet"] });
         assert.deepEqual(new Progress().legends, { met: [], uniques: [] });
+    });
+
+    it("lets go one out as a world played alone is loaded again (its foe not kept with it): back in the deck, not gone, never on that spot", () => {
+        const { host, ada } = hosted({ party: false });
+
+        host.command(HOST_PLAYER, { type: "rare" });
+
+        const active = structuredClone(host.legends.active);
+        const kept = JSON.parse(JSON.stringify(host.legends.toJSON()));
+        // (As the game makes one again from what a device keeps: save.js loadLegends)
+        const again = new Host(buildWorld({ seed: 2 }), { populate: false, legends: kept });
+
+        again.join({ id: HOST_PLAYER, hero: HERO });
+        again.populate();
+        Object.assign(again.battle.actor(HOST_PLAYER), { hp: 1e6, maxHp: 1e6 });
+        put(again.battle.actor(HOST_PLAYER), ada.square);
+
+        const events = run(again, 1000).filter(({ type }) => type === "rare");
+
+        assert.deepEqual(events.map(({ change }) => change), ["failed"]);
+        assert.equal(again.legends.active, null);
+        assert.ok(!again.legends.gone.has("sample"), "it may come again");
+        assert.ok(again.legends.spent("sample", active.at));
+    });
+
+    it("shows a unique as nothing else: its own make and colour, found nowhere else and bound, its tale; worth nothing to a shop (app/gearinfo.js, world/drops3d.js)", () => {
+        const item = makeUnique("sampleSignet", 30, createRandom(5));
+        const shown = describeGear(item, new Progress());
+
+        assert.equal(rarityOf(item), "unique");
+        assert.equal(rarityOf({ ...item, unique: undefined }), "legendary");
+        assert.equal(shown.rarity, "unique");
+        assert.equal(shown.price, 0);
+        assert.ok(shown.lines.some(({ text, tone }) => tone === "unique" && /found nowhere else, and bound to you/.test(text)));
+        assert.ok(shown.lines.some(({ text }) => text === UNIQUES.sampleSignet.about));
+        assert.equal(MAKES.unique, "Unique");
     });
 
     it("tells the hour of the day as the world's dawn, day, dusk and night (daytime.js DAY: a new world's begun at 18 minutes into its first day)", () => {

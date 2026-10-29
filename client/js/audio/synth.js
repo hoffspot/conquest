@@ -761,6 +761,28 @@ export const SOUNDS = {
     baitLand: { variants: 2, volume: 0.4, make: () => thump(190, 70, 0.2, 0.06) },
     beastEat: { variants: 3, volume: 0.42, make: (random) => softened(add(grains(random, 1.6, 14, 450, 1300, { decay: 0.025, bunch: 1, q: 1.4 }), grains(random, 1.6, 10, 180, 420, { decay: 0.04, bunch: 1, q: 1 }), 0.7), 1.8) },
     tamedChime: { variants: 1, volume: 0.45, make: () => notes([[392, 0], [494, 0.12], [587, 0.24], [784, 0.4]], { decay: 0.6, harmonics: GLASS, length: 1.6 }) },
+
+    // A rare encounter (core/rare.js; app/game.js #rareTold): seen, a low drone on D swelling under
+    // four glass bells (D, up a tritone, down a semitone, up to the D over it) and a breath of wind
+    // wandering through them, unlike any of the director's cards; and overcome, a bell struck low
+    // and a glass chord rolled up through D major, ringing long
+    rareSting: {
+        variants: 1,
+        volume: 0.5,
+        make: (random) => {
+            const length = 1.9;
+            const drone = shape(tone(length, (t) => 73.4 * (1 + 0.004 * Math.sin(t * 5)), { harmonics: [[1, 1], [2, 0.45], [3, 0.2], [5, 0.06]] }), swell(length, 0.4));
+            const bells = notes([[587, 0.08], [831, 0.4], [784, 0.72], [1175, 1.04]], { decay: 0.5, harmonics: GLASS, length });
+            const wind = shape(filter(noise(random, length), "bandpass", (t) => 700 + 500 * Math.sin(t * 2.4), 0.7), swell(length, 0.5));
+
+            return add(add(drone, bells, 0.55), wind, 0.12);
+        },
+    },
+    rareDone: {
+        variants: 1,
+        volume: 0.5,
+        make: () => add(shape(tone(1.9, 147, { harmonics: [[1, 1], [2.01, 0.5], [3.02, 0.25], [4.1, 0.12]] }), hit(0.004, 0.6)), notes([[294, 0.06], [370, 0.16], [440, 0.26], [587, 0.38], [740, 0.52]], { decay: 0.65, harmonics: GLASS, length: 1.9 }), 0.6),
+    },
     chainBroken: { variants: 1, volume: 0.35, make: (random) => add(notes([[1175, 0], [880, 0.08], [622, 0.16]], { decay: 0.3, harmonics: GLASS, length: 0.9 }), burst(random, 0.15, "highpass", 3000, 0.7, 0.002, 0.05), 0.3) },
     wake: { variants: 1, volume: 0.35, make: () => notes([[880, 0], [1320, 0.12]], { decay: 0.7, harmonics: [[1, 1], [2.76, 0.2], [5.4, 0.06]], length: 1.6 }) },
     breath: {

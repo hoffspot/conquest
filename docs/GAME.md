@@ -822,6 +822,20 @@ The rings of standing stones the player's stood in, and tonight's moon:
   tonight; then each ring stood in, the nearest first, with the moon it wakes under and which way and
   how far it is, those awake tonight edged in pale green.
 
+### Legends (core/rare.js; docs/WILDS.md *Rare encounters*)
+
+The world's rare encounters, and what the player keeps of them:
+- **On the world map and the minimap** (app/game.js `rareIcons`, app/mapicons.js `legend`): an
+  eye opened wide in a sea-green star where a rare encounter out was seen, by them or one of their
+  party, till it ends.
+- **In the journal** (app/journal.js, *Legends*): those out that they or their party have seen,
+  with what was said of each and which way and how far it was seen from them now; those overcome
+  in this world, the latest first, by whom and where (a unique's never to come again); and the
+  uniques their character's been given, each in its sea-green, with its tale, kept with them.
+- **In the pack** (app/gearinfo.js `rarityOf`, styles.css `.rarity-unique`): a unique's its own
+  make, *Unique*, sea-green in its card, its cell and its glow on the ground (world/drops3d.js),
+  found nowhere else and bound to them: nothing to sell, drop, throw away or give.
+
 ### Writings (core/writings.js, app/reader.js)
 
 What's written down and left where it was, to be found and read there: the wizard Sinclair's
@@ -6052,6 +6066,9 @@ switched off (in the game, under the minimap). It folds away to just the frame r
   running);
 - how much was downloaded and how long each group took, and how long each part of the world took
   to build;
+- the debug controls: a field battle, an invasion, the Behemoth of the Rift, burnt houses, and a
+  rare encounter (*Rare encounter*, Deal: debug mode's sample ahead of the player, docs/WILDS.md
+  *Rare encounters*);
 - the downloader (app/fetcher.js, which fetches the models the game downloads only as they're
   wanted, in the background): what it's fetching and how far it's got, its rate and what the link
   has carried, alone or together, the queueing delay it sees (the round trip over the least lately),
