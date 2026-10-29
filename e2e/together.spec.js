@@ -51,6 +51,16 @@ async function sentAgain(page) {
     return await page.evaluate(() => window.pellagos.game.remote.resyncs - window.pellagos.game.remote.skips);
 }
 
+// Something done by hand to the host's world (`done`, with `arg`: a test setting up), and the
+// guest's copy of it given it as the host sends it the world again, asked for, till that copy has
+// it (`had`). Not done to the guest's copy as well: a world the host sent it before, still on its
+// way to a guest just come in and behind, would take it out again as it came (Host.adopt)
+async function inHostsWorld(host, guest, done, had, arg = null) {
+    await host.evaluate(done, arg);
+    await guest.evaluate(() => window.pellagos.game.remote.resync());
+    await expect.poll(() => guest.evaluate(had, arg), { timeout: 30000 }).toBe(true);
+}
+
 test("a world opened to others: an elf joins it by its code, is brought in by the elves' town, walks in the host's world, and leaves; closed, whoever's in it is told", async ({ ownBrowser: browser }) => {
     const hostContext = await browser.newContext();
     const guestContext = await browser.newContext();
@@ -1464,19 +1474,23 @@ test("two players in a party on the maps: what each had found before is the othe
     await playing(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 
-    // (Bryn had been somewhere Ada hasn't, far off: so in the host's world, and in the guest's as
-    // the host sends it the world again, asked for. Not put in the guest's copy directly as well: a
-    // world the host sent it before that, still on its way to a guest just come in and behind,
-    // would take it out again as it came)
+    // (Bryn had been somewhere Ada hasn't, far off: the same in both worlds, the host's and the
+    // guest's as it's sent it)
     const far = await host.evaluate(() => {
         const me = window.pellagos.game.battle.actor("player");
 
         return [me.x + 64 * 12 + 32, me.y + 32];
     });
 
-    await host.evaluate(([x, y]) => window.pellagos.game.host.players.get("guest-1").explored.visit(x, y), far);
-    await guest.evaluate(() => window.pellagos.game.remote.resync());
-    await expect.poll(() => guest.evaluate(([x, y]) => window.pellagos.game.host.players.get("guest-1").explored.visitedAt(x, y), far), { timeout: 30000 }).toBe(true);
+    await inHostsWorld(
+        host,
+        guest,
+        ([x, y]) => {
+            window.pellagos.game.host.players.get("guest-1").explored.visit(x, y);
+        },
+        ([x, y]) => window.pellagos.game.host.players.get("guest-1").explored.visitedAt(x, y),
+        far,
+    );
 
     expect(await host.evaluate(([x, y]) => window.pellagos.game.explored.visitedAt(x, y), far)).toBe(false);
 
@@ -1583,22 +1597,25 @@ test("a request shared with the party from the journal: in a party, each request
     await playing(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 
-    // A bounty the host carries (taken in both worlds alike), part done
+    // A bounty the host carries, part done (the same in both worlds, the host's and the guest's as
+    // it's sent it)
     const { name, home } = await host.evaluate(() => {
         const { game } = window.pellagos;
 
         return { name: game.host.players.get("player").hero.name, home: { id: game.world.start.id, name: game.world.start.name } };
     });
 
-    for (const page of [host, guest]) {
-        await page.evaluate(
-            (town) =>
-                window.pellagos.game.host.players
-                    .get("player")
-                    .standing.take({ kind: "bounty", title: "Thin their numbers", from: { id: "reeve", name: "Ann Hale", title: "Reeve", town: town.id, townName: town.name, post: "hall" }, given: 0, state: "open", count: 2, key: "orc", target: { realm: "orc", need: 4 }, text: "Bring down 4 of the orcs.", until: 999, reward: { standing: 28, gold: 16 } }),
-            home,
-        );
-    }
+    await inHostsWorld(
+        host,
+        guest,
+        (town) => {
+            window.pellagos.game.host.players
+                .get("player")
+                .standing.take({ kind: "bounty", title: "Thin their numbers", from: { id: "reeve", name: "Ann Hale", title: "Reeve", town: town.id, townName: town.name, post: "hall" }, given: 0, state: "open", count: 2, key: "orc", target: { realm: "orc", need: 4 }, text: "Bring down 4 of the orcs.", until: 999, reward: { standing: 28, gold: 16 } });
+        },
+        () => window.pellagos.game.host.players.get("player").standing.requests.some(({ title }) => title === "Thin their numbers"),
+        home,
+    );
 
     // Alone, the journal has no Share
     const journal = host.getByRole("dialog", { name: "Journal" });
