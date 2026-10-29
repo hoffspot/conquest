@@ -5672,7 +5672,16 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 .journal-follower-state {
     font-size: 12px;
     color: var(--muted);
-    text-transform: capitalize;
+}
+
+/* Those mending at the guilds, and on the roll those who fell */
+.journal-follower.mending .journal-follower-name,
+.journal-follower.fallen .journal-follower-name {
+    color: var(--muted);
+}
+
+.journal-follower.fallen .journal-follower-state {
+    color: #e0826f;
 }
 
 /* The party menu (app/partypanel.js): a row for each of those with the player, their likeness
@@ -5683,6 +5692,7 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 
 .party-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 10px;
     padding: 6px 8px;
@@ -5790,6 +5800,59 @@ body[data-screen="hud"][data-minimap="on"] #debug {
 .party-actions .journal-button {
     min-width: 0;
     padding: 0 10px;
+}
+
+/* A hired adventurer's More (app/partypanel.js #grown): what they've grown into, beneath their row */
+.party-more {
+    flex-basis: 100%;
+    display: grid;
+    gap: 6px;
+    padding: 4px 2px 2px;
+    border-top: 1px solid var(--field-border);
+}
+
+.party-more[hidden] {
+    display: none;
+}
+
+.party-more-line {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.party-more-picks,
+.party-more-gear,
+.party-more-rename {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.party-more-gear .party-more-line {
+    flex: 1;
+    min-width: 0;
+}
+
+.party-more-pick[aria-pressed="true"] {
+    border-color: var(--ally);
+    color: var(--ink);
+}
+
+.party-more-rename .chat-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.party-mending-row {
+    display: grid;
+    gap: 2px;
+    padding: 6px 8px;
+    border-radius: 10px;
+    background: var(--field);
+    border: 1px solid var(--field-border);
+    opacity: 0.8;
 }
 
 .party-player {

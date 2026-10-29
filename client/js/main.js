@@ -32,7 +32,7 @@ import { telemetry } from "./app/telemetry.js";
 import { crashedIn, crashesFor, forgetCrashes, keepCrash, letGoCrash, REFUSED_FOR_GOOD } from "./app/crash-reports.js";
 import { Updater } from "./app/updater.js";
 import { builtAt, codeVersion } from "./app/version.js";
-import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMarkers, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
+import { blocksOf, enterWorld, exportCharacter, forgetCharacter, forgetWorld, keepCharacter, keepVisitor, loadCharacters, loadExplored, loadFollowers, loadMarkers, loadRoll, loadMessages, loadPin, loadPlace, loadProgress, loadSave, loadSettings, loadStanding, loadTalks, loadTold, loadVitals, loadWheels, loadWorld, loadWorlds, makeWorld, MOST_CHARACTERS, MOST_WORLDS, newSeed, PLAY_SETTINGS, playedSave, playSettingsOf, renameWorld, saveExplored, saveFollowers, saveMarkers, saveMessages, savePin, savePlace, saveProgress, saveSettings, saveStanding, saveTalks, saveTold, saveVitals, saveWheels, saveWorld, stayOf, visitorOf, writeSave } from "./app/save.js";
 import { MARKER_ICONS, MARKER_NAMES, MARKERS } from "./core/markers.js";
 import { Steps } from "./core/steps.js";
 import { WEAPONS } from "./core/weapons.js";
@@ -860,6 +860,7 @@ $("#crashswitch").checked = settings.sendCrashes;
 showPlaySettings();
 $("#quicksixswitch").checked = settings.quickSix;
 $("#quickalwaysswitch").checked = settings.quickAlways;
+$("#chatterswitch").checked = settings.chatter;
 $("#fullscreenswitch").checked = settings.fullscreen;
 // (Where the browser won't have it, no switch: on an iPhone, a word on the Home Screen instead)
 $("#fullscreenoption").hidden = !fullScreen.available;
@@ -1131,7 +1132,8 @@ async function playing(save, { world, place, war }) {
         standing: loadStanding(place),
         onStanding: (standing) => saveStanding(place, standing),
         followers: loadFollowers(place),
-        onFollowers: (followers) => saveFollowers(place, followers),
+        roll: loadRoll(place),
+        onFollowers: (followers, roll) => saveFollowers(place, followers, roll),
         wheels: loadWheels(save),
         onWheels: (wheels) => saveWheels(save, wheels),
         war: loadWorld(war),
@@ -1180,6 +1182,7 @@ async function playing(save, { world, place, war }) {
     game.snagFilter = snagChoiceOf();
     game.autoLock = settings.autoLock;
     game.quickAlways = settings.quickAlways;
+    game.chatter = settings.chatter;
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -1316,9 +1319,20 @@ function menuPage(page, focus = MENU_PAGES[page].focus) {
     // (What auto-snag takes, told under its switch; the players blocked, under theirs and on their page)
     if (page === "gameplay") {
         showSnag(settings.autoSnag);
+        showMortal();
     } else if (page === "chat" || page === "blocked") {
         showBlocked();
     }
+}
+
+// Whether this world's mercenaries can die (core/host.js RULES mortal), under its switch: shown in
+// a game, changed only by the world's host (its owner, on a server)
+function showMortal() {
+    const game = state.game;
+
+    $("#mortaloption").hidden = !game;
+    $("#mortalswitch").checked = Boolean(game?.host.rules.mortal);
+    $("#mortalswitch").disabled = !game?.mayRule();
 }
 
 // Back a page (the arrow in a page's heading, the Back at its foot, or Escape): to the page above
@@ -2799,6 +2813,7 @@ async function playingJoined(save, welcome, joining, { server = false, kept = fa
     game.snagFilter = snagChoiceOf();
     game.autoLock = settings.autoLock;
     game.quickAlways = settings.quickAlways;
+    game.chatter = settings.chatter;
     applyCamera();
     game.onAdapt = showAdapted;
     game.onChooseQuick = chooseQuick;
@@ -4626,6 +4641,9 @@ $("#followswitch").addEventListener("change", (event) => applySetting("cameraFol
 $("#battlecamswitch").addEventListener("change", (event) => applySetting("battleCam", event.target.checked));
 $("#quicksixswitch").addEventListener("change", (event) => applySetting("quickSix", event.target.checked));
 $("#quickalwaysswitch").addEventListener("change", (event) => applySetting("quickAlways", event.target.checked));
+$("#chatterswitch").addEventListener("change", (event) => applySetting("chatter", event.target.checked));
+// (Whether this world's mercenaries can die: the world's rule, its host's to change, core/host.js RULES mortal)
+$("#mortalswitch").addEventListener("change", (event) => state.game?.setMortal(event.target.checked));
 $("#invertswitch").addEventListener("change", (event) => applySetting("invertTilt", event.target.checked));
 $("#shakeswitch").addEventListener("change", (event) => applySetting("shake", event.target.checked));
 $("#fullscreenswitch").addEventListener("change", (event) => applySetting("fullscreen", event.target.checked));
@@ -4818,7 +4836,7 @@ function applySetting(key, value) {
             tellPlaySettings();
             showBlocked();
         }
-    } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock" || key === "quickAlways") {
+    } else if (key === "resistSummons" || key === "refuseInvites" || key === "autoSnag" || key === "autoLock" || key === "quickAlways" || key === "chatter") {
         if (state.game) {
             state.game[key] = value;
         }

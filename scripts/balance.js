@@ -20,14 +20,17 @@ import { pathToFileURL } from "node:url";
 import { STEP_MS } from "../client/js/core/battle.js";
 import { clearOfSettlements, tierAt, tierPower } from "../client/js/core/creatures.js";
 import { hypot } from "../client/js/core/exact.js";
+import { capOf } from "../client/js/core/followers.js";
 import { nearestFree, squareKey, squaresOf } from "../client/js/core/grid.js";
-import { HIRES, HOST_PLAYER, Host, NPC_SHIELDS, WILDS } from "../client/js/core/host.js";
+import { HOST_PLAYER, Host, WILDS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { landAt } from "../client/js/core/worldplan/plan.js";
 
 /**
  * The sides set against the wild: how many players, how many hired adventurers with the first
- * (each half as strong as a player: a seasoned player's hire), how many creatures it's called.
+ * (warriors, each of the level a guild offers one as mighty as the tier: a level under the most
+ * they could lead, core/followers.js capOf; docs/WAR.md *Mercenaries that grow*), how many
+ * creatures it's called.
  */
 export const SIDES = Object.freeze({
     solo: { players: 1 },
@@ -110,7 +113,10 @@ export function balance(name, tier, { fights = 4, seed = 2 } = {}) {
     const host = new Host(world, { populate: false });
     const players = Array.from({ length: side.players }, (each, k) => (k ? `player-${k + 1}` : HOST_PLAYER));
 
-    players.forEach((id, k) => host.join({ id, hero: { ...HERO, name: `Player ${k + 1}` } }));
+    // (The first's hired adventurers with them as a character brings them: host.js #follow)
+    const hirelings = Array.from({ length: side.hirelings ?? 0 }, (each, k) => ({ name: `Hireling ${k + 1}`, calling: "warrior", sex: "m", seed: k + 1, level: Math.max(1, capOf(tier) - 1) }));
+
+    players.forEach((id, k) => host.join({ id, hero: { ...HERO, name: `Player ${k + 1}` }, followers: k ? [] : hirelings }));
     host.populate();
     Object.assign(host.battle.actor("orc") ?? {}, { dead: true, respawnAt: Infinity });
 
@@ -130,17 +136,9 @@ export function balance(name, tier, { fights = 4, seed = 2 } = {}) {
 
     stand(host, players, grounds[0]);
 
-    // (Hired adventurers, as host.js #follow has them, half as strong as their leader)
-    for (let k = 0; k < (side.hirelings ?? 0); k++) {
-        const id = `follower-${host.nextFollower++}`;
-        const hire = HIRES.warrior;
-
-        host.followers.set(id, { leader: players[0], name: `Hireling ${k + 1}`, calling: "warrior", sex: "m", seed: k + 1, people: "human", from: null, waiting: false });
-        host.battle.add({ id, kind: "follower", name: `Hireling ${k + 1}`, weapon: hire.weapon, team: lead.team, square: [...lead.square], map: "town", ai: "follow", leader: players[0], role: "guard", shield: hire.shield ? NPC_SHIELDS.follower : null });
-
-        const hired = host.battle.actor(id);
-
-        Object.assign(hired, { maxHp: Math.round(lead.maxHp / 2), hp: Math.round(lead.maxHp / 2), power: Object.fromEntries(Object.entries(lead.power).map(([kind, power]) => [kind, power / 2])) });
+    // (Their hired adventurers by them, as strong as their level makes them)
+    for (const id of host.followers.keys()) {
+        Object.assign(host.battle.actor(id), { map: "town", square: [...lead.square], x: lead.x, y: lead.y, path: [], order: null, target: null, attack: null });
     }
 
     // (Creatures called to the first's side: Summon at its fullest)

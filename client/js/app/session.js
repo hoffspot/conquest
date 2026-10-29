@@ -57,10 +57,10 @@ export async function createSession({ canvas, quality, sound = true, volumes, fe
  * messages they were told, and who hears of them; and what they've been told once and needn't
  * be again, and who hears of that).
  */
-export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, onPing, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels, pin, onPin, markers = [], onMarkers = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
+export function createGame({ view, kit, sound, hud, hero, seed, talks, onTalk, explored, onExplore, onWorldMap, onPing, war, onWar, progress, onProgress, standing, onStanding, followers, roll = [], onFollowers, wheels, onWheels, pin, onPin, markers = [], onMarkers = () => {}, place = null, vitals = null, messages = [], onMessages = () => {}, told = [], onTold = () => {} }) {
     const world = buildWorld({ seed, race: hero.race ?? "human" });
 
-    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, onPing, war, onWar, progress, onProgress, standing, onStanding, followers, onFollowers, wheels, onWheels, pin, onPin, markers, onMarkers, place, vitals, messages, onMessages, told, onTold });
+    return new Game({ view, kit, sound, world, hero, hud, talks, onTalk, explored, onExplore, onWorldMap, onPing, war, onWar, progress, onProgress, standing, onStanding, followers, roll, onFollowers, wheels, onWheels, pin, onPin, markers, onMarkers, place, vitals, messages, onMessages, told, onTold });
 }
 
 /**

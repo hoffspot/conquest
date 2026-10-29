@@ -122,7 +122,7 @@ describe("a kept world opened by the server (server/reopen.js)", () => {
         const { host, from } = await openWorld(stored);
 
         assert.equal(from, null);
-        assert.deepEqual(host.rules, { rest: "everyone", debug: "none", invasions: true });
+        assert.deepEqual(host.rules, { rest: "everyone", debug: "none", invasions: true, mortal: false });
         assert.equal(host.battle.time, 0);
     });
 

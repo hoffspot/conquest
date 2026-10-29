@@ -12,7 +12,8 @@
 // - the requests lately done, failed or given up;
 // - where their people stand at the war's end: serving another and how near to rising, fallen, or
 //   ruling the continent (docs/WAR.md M10);
-// - their company: the followers they lead (docs/WAR.md M9), and how many more they could;
+// - their company: the followers they lead (docs/WAR.md M9), each's level, those mending at the
+//   guilds, and how many more they could; and their roll, those who followed them and have left;
 // - what they've heard tell of (docs/GAME.md *Rumours of places*): what the criers have told of
 //   the places round their towns, and what's said of the hells' cults, as it was said, who said
 //   it, and which way it is, till each is found;
@@ -224,10 +225,13 @@ export class JournalPanel {
      * met: the kinds met (app/bestiary.js contentsOf), of: how many kinds there are, levels: how
      * many levels each has, pageOf(kind): its page, app/bestiary.js pageOf, or null; and
      * portraitOf(kind): a promise of its portrait's URL, or null: app/game.js portraitOf }),
-     * messages: the last told, oldest first (keepMessage) }.
+     * company: [{ name, calling, level, hp, maxHp, waiting, down }] (their followers), mending: [{
+     * name, calling, level }] (those mending at the guilds), roll: [{ name, byname, calling, level,
+     * gone, kills, day }] (those who've left them: core/host.js #rollCall), most (how many they can
+     * lead), messages: the last told, oldest first (keepMessage) }.
      */
     show(shown) {
-        const { standing, guild = null, requests, party = false, people, done, company = [], most = 1, heard = [], writings = [], treasures = [], trails = [], moonRoads = null, bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
+        const { standing, guild = null, requests, party = false, people, done, company = [], mending = [], roll = [], most = 1, heard = [], writings = [], treasures = [], trails = [], moonRoads = null, bestiary = { met: [], of: 0, levels: 4, pageOf: () => null }, messages = [] } = shown;
 
         this.shown = shown;
         this.rank.textContent = `${standing.title}${people ? ` of ${people.name}` : ""}`;
@@ -463,20 +467,32 @@ export class JournalPanel {
             sections.push(this.#section("Your people", about));
         }
 
-        // Their company
+        // Their company: each follower, their level and how they are, and those mending at the
+        // guilds (docs/WAR.md *Mercenaries that grow*)
         const band = element("ul", "journal-list company");
+        const follower = (name, state, kind = "") => {
+            const row = element("li", `journal-follower${kind ? ` ${kind}` : ""}`);
+
+            row.append(element("span", "journal-follower-name", name), element("span", "journal-follower-state", state));
+
+            return row;
+        };
 
         band.append(
-            ...company.map(({ name, calling, hp, maxHp, waiting }) => {
-                const row = element("li", "journal-follower");
-
-                row.append(element("span", "journal-follower-name", name), element("span", "journal-follower-state", `${calling}, ${Math.max(0, Math.round((hp / maxHp) * 100))}%${waiting ? ", waiting" : ""}`));
-
-                return row;
-            }),
-            element("li", "journal-empty", company.length ? `You can lead ${most} in all.` : `No one follows you. Adventurers at the guilds will, for gold: you can lead ${most}.`),
+            ...company.map(({ name, calling, level, hp, maxHp, waiting, down }) => follower(name, `Level ${level} ${calling}, ${down ? "down" : `${Math.max(0, Math.round((hp / maxHp) * 100))}%`}${waiting ? ", waiting" : ""}`)),
+            ...mending.map(({ name, calling, level }) => follower(name, `Level ${level} ${calling}, mending at the guild`, "mending")),
+            element("li", "journal-empty", company.length + mending.length ? `You can lead ${most} in all.` : `No one follows you. Adventurers at the guilds will, for gold: you can lead ${most}.`),
         );
         sections.push(this.#section("Your company", band));
+
+        // Their roll: those who followed them and have left, fallen or gone their own way, the
+        // latest first (core/host.js #rollCall)
+        if (roll.length) {
+            const gone = element("ul", "journal-list roll");
+
+            gone.append(...roll.map(({ name, byname, calling, level, gone: how, kills, day }) => follower(`${name}${byname ? `, ${byname}` : ""}`, `Level ${level} ${calling}, ${kills} foe${kills === 1 ? "" : "s"}; ${how === "fallen" ? "fell" : "parted"} on day ${(day ?? 0) + 1}`, how)));
+            sections.push(this.#section("Your roll", gone));
+        }
 
         // What's been done
         if (done.length) {

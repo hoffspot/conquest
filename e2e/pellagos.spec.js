@@ -8166,10 +8166,11 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
     await expect(talk).toBeVisible();
     await expect(talk.locator(".talk-name")).toHaveText(guild.name);
 
-    // Asked to ride along, for their price: paid, and they follow, drawn at once as the
-    // adventurer they were, the same body (not dressed there and then from nothing, which held an
-    // iPhone up for 0.6 s; nor gone from where they stood till built a step at a time)
-    const ask = talk.getByRole("button", { name: /Would you ride with me\? \(\d+ gold\)$/ });
+    // Asked to ride along, at their level for their price (docs/WAR.md *Mercenaries that grow*: a
+    // fresh player's, the first): paid, and they follow, drawn at once as the adventurer they
+    // were, the same body (not dressed there and then from nothing, which held an iPhone up for
+    // 0.6 s; nor gone from where they stood till built a step at a time)
+    const ask = talk.getByRole("button", { name: /Would you ride with me\? \(level 1, \d+ gold\)$/ });
     const price = Number((await ask.textContent()).match(/(\d+) gold/)[1]);
 
     await page.evaluate((adventurer) => {
@@ -8269,13 +8270,13 @@ test("an adventurer at the guild, hired for gold, follows the player out and kee
     expect(out.brought.apart).toBeLessThan(6);
     expect(out.brought.drawnAt).toBeLessThan(0.5);
 
-    // The journal: who follows the player, and how they are
+    // The journal: who follows the player, their level, and how they are
     const journal = page.getByRole("dialog", { name: "Journal" });
 
     await page.keyboard.press("j");
     await expect(journal).toBeVisible();
     await expect(journal.locator(".journal-follower-name")).toHaveText([guild.name]);
-    await expect(journal.locator(".journal-follower-state")).toContainText([/^(warrior|ranger|rogue|mage|cleric), 100%$/]);
+    await expect(journal.locator(".journal-follower-state")).toContainText([/^Level 1 (warrior|ranger|rogue|mage|cleric), 100%$/]);
     await page.keyboard.press("Escape");
 
     // Kept with the character: with them again the next time
@@ -8345,7 +8346,7 @@ test("an adventurer hired from their drink at one of the guild's tables follows 
     const talk = page.locator(".talk");
 
     await expect(talk).toBeVisible();
-    await talk.getByRole("button", { name: /Would you ride with me\? \(\d+ gold\)$/ }).click();
+    await talk.getByRole("button", { name: /Would you ride with me\? \(level \d+, \d+ gold\)$/ }).click();
     await expect(page.locator("#banner")).toContainText("follows you now.");
     await page.keyboard.press("Escape");
     await expect(talk).toBeHidden();
@@ -8384,6 +8385,236 @@ test("an adventurer hired from their drink at one of the guild's tables follows 
     expect(carried.outside).not.toContain("tankard");
     expect(carried.outside).toContain(carried.weapon);
     expect(carried.sheathed).toBe(true);
+});
+
+// A saved game in seed 2's world (SAVE_VERSION 1's keys, moved under an id of their own as it's
+// opened: save.js migrate) with a hired warrior grown to the third level, and the roll of one
+// who's fallen (docs/WAR.md *Mercenaries that grow*)
+const TAM = Object.freeze({ name: "Tam", calling: "warrior", sex: "m", seed: 7, people: "human", level: 3, xp: 450, wounds: 0, record: { kills: 12, damage: 300, falls: 1, rises: 1, together: 35, earned: 4, best: null, slain: {}, nemesis: null } });
+
+async function leadingTam(page, tam = TAM) {
+    await page.addInitScript(
+        ({ save, kept }) => {
+            localStorage.setItem("pellagos.save", JSON.stringify(save));
+            localStorage.setItem("pellagos.followers", JSON.stringify(kept));
+        },
+        { save: { ...SAVE, seed: 2 }, kept: { seed: 2, created: SAVE.created, followers: [tam], roll: [{ name: "Bryn", calling: "mage", level: 4, byname: null, gone: "fallen", kills: 9, day: 2 }] } },
+    );
+    await title(page);
+    await page.locator("#continuebutton").click();
+    await page.waitForFunction(() => window.pellagos.playing, null, { timeout: 90000 });
+    await page.evaluate(() => {
+        const { game } = window.pellagos;
+
+        game.stop();
+        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+    });
+
+    // (Drawn, as the adventurer they were)
+    expect(
+        await playUntil(page, () => {
+            const { game } = window.pellagos;
+            const [id] = game.host.followers.keys();
+
+            return Boolean(id && game.avatars.get(id)?.character?.equipment?.size);
+        }),
+    ).toBe(true);
+}
+
+// A key pressed (the game going again a moment, as keys are heard only then), and what it opens
+// (or closes) shown (or hidden)
+async function keyed(page, key, what, { shown = true } = {}) {
+    await page.evaluate(() => window.pellagos.game.start());
+    await page.keyboard.press(key);
+    await (shown ? expect(what).toBeVisible() : expect(what).toBeHidden());
+    await page.evaluate(() => window.pellagos.game.stop());
+}
+
+// What the player's hired adventurer wears, as the host has it and as they're drawn
+const tamWears = (page) =>
+    page.evaluate(() => {
+        const { game } = window.pellagos;
+        const [id] = game.host.followers.keys();
+
+        return { body: game.host.followers.get(id).gear.body?.id ?? null, drawn: [...game.avatars.get(id).character.equipment.values()] };
+    });
+
+test("a hired adventurer grown with the player: the party menu's More tells their level, trust and what they wear; a way to grow chosen; armour given from the pack worn and drawn on them, and taken back; renamed; the journal shows their level and the roll", async ({ page }) => {
+    // (A good deal looked at: more than the usual time)
+    test.setTimeout(180000);
+    await leadingTam(page);
+
+    // The party menu: their level, and trust to choose how they grow
+    const panel = page.locator(".party-panel");
+    const row = panel.locator(".party-row", { hasText: "Tam" });
+
+    await keyed(page, "p", panel);
+    await expect(row.locator(".party-kind")).toHaveText("Hired warrior · level 3");
+    await expect(row.locator(".party-state")).toContainText("Trusts you more: choose how they grow (More)");
+    await row.getByRole("button", { name: "More", exact: true }).click();
+
+    const more = row.locator(".party-more");
+
+    await expect(more).toBeVisible();
+    await expect(more).toContainText("Level 3: 450 of 1000 experience to the next.");
+    await expect(more).toContainText("They trust you (1 of 3: 35 foes brought down together).");
+    await expect(more).toContainText("Armour: nothing of yours (give them gear from your pack)");
+    await expect(more).toContainText("Brought down 12 foes");
+    await more.getByRole("button", { name: "Fierce" }).click();
+    await expect(more.getByRole("button", { name: "Fierce" })).toHaveAttribute("aria-pressed", "true");
+    await expect(row.locator(".party-state")).not.toContainText("Trusts you more");
+    expect(await page.evaluate(() => [...window.pellagos.game.host.followers.values()][0].picks)).toEqual(["fierce"]);
+
+    // Renamed
+    await more.getByRole("textbox", { name: "Their name" }).fill("Old Tam");
+    await more.getByRole("button", { name: "Rename" }).click();
+    await expect(row.locator(".party-name")).toHaveText("Old Tam");
+    await keyed(page, "Escape", panel, { shown: false });
+
+    // Plate armour given them from the pack: worn, and drawn on them in place of their own
+    const before = await tamWears(page);
+
+    expect(before.body).toBe(null);
+    expect(before.drawn).not.toContain("breastplate");
+    await page.evaluate(() => window.pellagos.game.host.players.get(window.pellagos.game.me).progress.stow({ id: "plate" }, 1));
+
+    const pack = page.locator(".pack");
+
+    await keyed(page, "i", pack);
+    await pack.locator('.carried .pack-cell[data-item="plate"]').click();
+    await pack.locator(".pack-about").getByRole("button", { name: "Give to Old Tam" }).click();
+    expect(await playUntil(page, () => document.querySelector("#banner")?.textContent.includes("Old Tam wears what you gave them."), { seconds: 2 })).toBe(true);
+
+    const after = await tamWears(page);
+
+    expect(after.body).toBe("plate");
+    expect(after.drawn).toEqual(expect.arrayContaining(["mail", "breastplate"]));
+    expect(after.drawn.filter((each) => ["gambeson", "jerkin"].includes(each))).toEqual([]);
+    await expect(pack.locator('.carried .pack-cell[data-item="plate"]')).toHaveCount(0);
+    await keyed(page, "i", pack, { shown: false });
+
+    // Taken back from the party menu (their More still open, as it was left): in the pack again,
+    // their own on them again
+    await keyed(page, "p", panel);
+    await expect(row.getByRole("button", { name: "Less", exact: true })).toBeVisible();
+    await expect(more).toContainText("Armour: Plate armour");
+    await more.getByRole("button", { name: "Take back" }).click();
+    await expect(more).toContainText("Armour: nothing of yours");
+    expect(
+        await playUntil(
+            page,
+            () => {
+                const { game } = window.pellagos;
+                const [id] = game.host.followers.keys();
+
+                return ![...game.avatars.get(id).character.equipment.values()].includes("breastplate");
+            },
+            { seconds: 2 },
+        ),
+    ).toBe(true);
+    expect(await tamWears(page)).toEqual(before);
+    expect(await page.evaluate(() => window.pellagos.game.host.players.get(window.pellagos.game.me).progress.pack.some((stack) => stack?.id === "plate"))).toBe(true);
+    await keyed(page, "Escape", panel, { shown: false });
+
+    // The journal: their level, and the roll of those who've left
+    const journal = page.getByRole("dialog", { name: "Journal" });
+
+    await keyed(page, "j", journal);
+    await expect(journal.locator(".company .journal-follower-name")).toHaveText(["Old Tam"]);
+    await expect(journal.locator(".company .journal-follower-state")).toHaveText(["Level 3 warrior, 100%"]);
+    await expect(journal.getByRole("heading", { name: "Your roll" })).toBeVisible();
+    await expect(journal.locator(".roll .journal-follower-name")).toHaveText(["Bryn"]);
+    await expect(journal.locator(".roll .journal-follower-state")).toHaveText(["Level 4 mage, 9 foes; fell on day 3"]);
+});
+
+test("a hired adventurer knocked down, up again with the player by them, wounded; home to mend after the third fall, listed so in the party menu, and sent for at the guild's desk; Game options' Mercenaries' chatter and Mercenaries can die", async ({ page }) => {
+    // (Played a while: more than the usual time)
+    test.setTimeout(150000);
+    await leadingTam(page, { ...TAM, wounds: 1 });
+
+    const panel = page.locator(".party-panel");
+    const row = panel.locator(".party-row", { hasText: "Tam" });
+    const poison = () =>
+        page.evaluate(() => {
+            const { game } = window.pellagos;
+            const [id] = game.host.followers.keys();
+
+            game.battle.actor(id).hp = 1;
+            game.battle.afflict(id, "poison", { damage: 999 });
+        });
+
+    // Knocked down: down in the party menu, then up again, the player by them
+    await keyed(page, "p", panel);
+    await expect(row.locator(".party-state")).toContainText("1 wound");
+    await poison();
+    expect(await playUntil(page, () => [...window.pellagos.game.host.followers.keys()].some((id) => window.pellagos.game.battle.actor(id)?.downed), { seconds: 5 })).toBe(true);
+    await expect(row.locator(".party-state")).toContainText(/^Down · 2 wounds/);
+    expect(await toldOf(page, /^Tam is down \(2 wounds\)!/)).not.toBe(null);
+    expect(await playUntil(page, () => [...window.pellagos.game.host.followers.keys()].every((id) => !window.pellagos.game.battle.actor(id)?.dead), { seconds: 10 })).toBe(true);
+    await expect(row.locator(".party-state")).not.toContainText("Down");
+    expect(await toldOf(page, /^Tam is back on their feet\.$/)).not.toBe(null);
+
+    // The third fall: home to mend, listed in the party menu with what it'll cost to send for them
+    await poison();
+    expect(await playUntil(page, () => window.pellagos.game.host.mendingOf(window.pellagos.game.me).length === 1, { seconds: 5 })).toBe(true);
+    expect(await toldOf(page, /^Tam can't go on, and goes home to mend\./)).not.toBe(null);
+    await expect(row).toHaveCount(0);
+    await expect(panel.locator(".party-mending-row")).toContainText(/Tam.*Hired warrior · level 3 · Send for them at any guild's desk \((\d+) gold\)/);
+    await keyed(page, "Escape", panel, { shown: false });
+
+    // Sent for at the guild's desk: back at the player's side, mended, for the price asked (not
+    // told as if they were hired anew)
+    const joins = () => page.evaluate(() => window.pellagos.game.messages.filter(({ text }) => text.startsWith("Tam follows you now")).length);
+    const joined = await joins();
+    const price = await page.evaluate(() => {
+        const { game } = window.pellagos;
+        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "guild");
+        const player = game.battle.actor("player");
+        const [x, y] = building.door.ends[0].squares[0];
+
+        game.progress.gold = 200;
+        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+        game.battle.command("player", { type: "enter", link: building.door.id });
+        game.advance(0.3);
+
+        const receptionist = game.battle.actors.find((actor) => actor.map === player.map && actor.role === "receptionist");
+
+        game.approaching = receptionist.id;
+        game.battle.command("player", { type: "approach", target: receptionist.id });
+
+        for (let k = 0; k < 200 && !game.talking; k++) {
+            game.advance(0.1, { render: false });
+        }
+
+        game.start();
+
+        return game.host.recallOffer(game.me).price;
+    });
+    const talk = page.locator(".talk");
+
+    await expect(talk).toBeVisible();
+    await talk.getByRole("button", { name: `Send for Tam, please. (${price} gold)` }).click();
+    await expect(talk.locator(".talk-line")).toContainText(/runner's gone for Tam|Mended nicely/);
+    expect(await toldOf(page, new RegExp(`^Tam is back at your side, mended \\(${price} gold\\)\\.$`))).not.toBe(null);
+    expect(await joins()).toBe(joined);
+    expect(await page.evaluate(() => ({ gold: window.pellagos.game.progress.gold, mending: window.pellagos.game.host.mendingOf(window.pellagos.game.me).length, wounds: [...window.pellagos.game.host.followers.values()].map(({ wounds }) => wounds) }))).toEqual({ gold: 200 - price, mending: 0, wounds: [0] });
+    await page.keyboard.press("Escape");
+    await expect(talk).toBeHidden();
+
+    // Game options: their chatter on to start with; whether they can die, the world's host's to say
+    await page.locator("#menubutton").click();
+    await page.locator("#optionsbutton").click();
+    await page.locator("#gameplaybutton").click();
+    await expect(page.locator("#chatterswitch")).toBeChecked();
+    await expect(page.locator("#mortaloption")).toBeVisible();
+    await expect(page.locator("#mortalswitch")).not.toBeChecked();
+    await expect(page.locator("#mortalswitch")).toBeEnabled();
+    await page.locator("label:has(#mortalswitch)").click();
+    await expect(page.locator("#mortalswitch")).toBeChecked();
+    expect(await page.evaluate(() => window.pellagos.game.host.rules.mortal)).toBe(true);
+    await page.locator("label:has(#chatterswitch)").click();
+    await expect(page.locator("#chatterswitch")).not.toBeChecked();
+    expect(await page.evaluate(() => window.pellagos.game.chatter)).toBe(false);
 });
 
 test("the player's people brought under another: told, and served; stirred to rising, they rise; and their victory, told and honoured", async ({ page }) => {

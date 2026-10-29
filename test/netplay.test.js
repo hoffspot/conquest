@@ -11,6 +11,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { STEP_MS } from "../client/js/core/battle.js";
+import { freshRecord } from "../client/js/core/followers.js";
 import { newGuid } from "../client/js/core/guid.js";
 import { HOST_PLAYER, Host, OWN } from "../client/js/core/host.js";
 import { Navigation } from "../client/js/core/navigation.js";
@@ -768,14 +769,40 @@ describe("playing together (netplay.js)", () => {
         hosting.hear("p11", encode({ kind: "command", seq: 1, command: { type: "stop" } }));
     });
 
-    it("brings a character in safe: its people one there is, its name trimmed, only real followers", () => {
+    it("brings a character in safe: its people one there is, its name trimmed, only real followers, each made whole and no more than one can be; their roll", () => {
         const safe = characterFrom({ hero: { name: "  Ada the Bold of the Long Marches  ", shape: {}, look: {}, weapon: "sword", race: "goblin", parts: ["catEars", 3] }, followers: [{ name: "Tam", calling: "warrior" }, { name: "Bad", calling: "dragon" }], talks: { knowledge: ["x", 1] } });
 
         assert.equal(safe.hero.name, "Ada the Bold of the");
         assert.equal(safe.hero.race, "human");
         assert.deepEqual(safe.hero.parts, ["catEars"]);
-        assert.deepEqual(safe.followers, [{ name: "Tam", calling: "warrior" }]);
+        assert.deepEqual(safe.followers, [{ name: "Tam", calling: "warrior", sex: "m", seed: 1, people: "human", from: null, level: 1, xp: 0, wounds: 0, owed: 0, gear: { mainHand: null, body: null }, record: freshRecord(), called: null, picks: [], renowned: null }]);
         assert.deepEqual(safe.talks.knowledge, ["x"]);
+        assert.deepEqual(safe.roll, []);
+
+        // (A hired adventurer grown past what one can be, in what they can't wear, chosen ways that
+        // aren't: brought in as one could be; their roll only those who were)
+        const grown = characterFrom({
+            hero: { name: "Ada", shape: {}, look: {}, weapon: "sword" },
+            followers: [
+                { name: "Tam", calling: "ranger", level: 99, xp: -5, wounds: 7, owed: 1e9, gear: { mainHand: { id: "sword" }, body: { id: "mail", level: 999, junk: "x".repeat(99) } }, picks: ["hardy", "flying", "hardy"], renowned: "immortal", called: "  Tammy  ", record: { kills: 3.5, slain: { Wolfsbane: 30, Dragonbane: 9 }, nemesis: "nobody" }, away: true },
+                { name: "Pip", calling: "warrior", gear: { mainHand: { id: "sword", quality: "rare" }, body: { id: "mail", level: 50 } } },
+            ],
+            roll: [{ name: "Bryn", calling: "mage", level: 4, gone: "fallen", kills: 12, day: 3, byname: null }, { name: "Odd", calling: "mage", gone: "eaten" }, "x"],
+        });
+        const [tam, pip] = grown.followers;
+
+        assert.equal(tam.level, 10);
+        assert.equal(tam.xp, 0);
+        assert.equal(tam.wounds, 2, "(no more wounds than one still standing can have)");
+        assert.equal(tam.owed, 9999);
+        assert.deepEqual(tam.gear, { mainHand: null, body: { id: "mail", quality: "common", level: 100 } }, "(a sword's no ranger's; mail as it can be, and nothing else of it)");
+        assert.deepEqual(pip.gear, { mainHand: { id: "sword", quality: "rare" }, body: null }, "(mail made for the mighty: not for one of the first level)");
+        assert.deepEqual(tam.picks, ["hardy"]);
+        assert.equal(tam.renowned, null);
+        assert.equal(tam.called, "Tammy");
+        assert.deepEqual({ kills: tam.record.kills, slain: tam.record.slain, nemesis: tam.record.nemesis }, { kills: 0, slain: { Wolfsbane: 30 }, nemesis: null });
+        assert.equal(tam.away, true, "(mending at the guild still)");
+        assert.deepEqual(grown.roll, [{ name: "Bryn", calling: "mage", level: 4, byname: null, gone: "fallen", kills: 12, day: 3 }]);
         assert.equal(characterFrom({ hero: { name: "Ada", shape: {}, look: {}, weapon: "cleaver" } }), null, "(not a weapon a player starts with)");
         assert.equal(characterFrom(null), null);
     });

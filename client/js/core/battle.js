@@ -122,7 +122,8 @@ export const KINDS = Object.freeze({
     orc: { hp: 50, speed: 1.1, chase: 1.8, respawn: 30000 },
     folk: { hp: 50, speed: 1.2, respawn: 5000 },
     soldier: { hp: 40, speed: 1.3, chase: 2.3, respawn: Infinity },
-    // (A player's follower: a hired sword, keeping up with them; one who falls is gone: M9)
+    // (A player's follower: a hired sword, keeping up with them; one who falls is knocked down,
+    // up again where it fell a while after (`rises`: DOWNED), or gone: M9, host.js)
     follower: { hp: 50, speed: 1.7, chase: 2.3, respawn: Infinity },
     // (One of the wild's creatures: core/creatures.js has how strong and fast each is)
     beast: { hp: 30, speed: 1.2, chase: 2.4, respawn: Infinity },
@@ -137,6 +138,14 @@ export const KINDS = Object.freeze({
     // `siege`, or a player told to), and felled it's broken open)
     stakes: { hp: 300, speed: 0, chase: 0, respawn: Infinity },
 });
+
+/**
+ * One that's only knocked down when it falls (`rises`: a hired adventurer, docs/WAR.md
+ * *Mercenaries that grow*): down `ms` (as many times as long as its `rises`), or only `near` more
+ * once its leader's standing within FOLLOW.near of it; up again where it fell with `hp` of its
+ * health. A heal cast on it, or a draught given it (host.js), has it up at once.
+ */
+export const DOWNED = Object.freeze({ ms: 20000, near: 5000, hp: 0.3 });
 
 /**
  * How a follower (or a companion by magic) keeps with its leader (docs/WAR.md M9): how near
@@ -753,9 +762,11 @@ export class Battle {
      * against it for others of their own it strikes (#provoke: an invasion's raiders). One with a
      * `sight` (squares) looks for enemies as far as that, not SIGHT (#nearestSeen: an invasion's
      * close fighters once its lines have charged). A follower fights its calling's way
-     * (core/followers.js wayOf): `casts`, `heals`, `tactic` and `keep` (#follow).
+     * (core/followers.js wayOf): `casts`, `heals`, `tactic` and `keep` (#follow); and one that
+     * `rises` (a share of DOWNED ms: a hired adventurer's) is only knocked down when it falls,
+     * up again where it fell (#rise), dodging `dodge` of blows.
      */
-    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, tactic = null, keep = null, lone = false, engine = null, sight = null }) {
+    add({ id, kind, name = kind, weapon = null, boots = false, team, square, map = "town", ai = null, patrol = null, neutral = false, routine = null, role = null, side = null, facing = 0, armed = false, leash = null, leader = null, hp = null, speed = null, chase = null, power = null, armor = 0, wards = null, shield = null, wild = null, footprint = null, formation = null, casts = null, heals = null, tactic = null, keep = null, lone = false, engine = null, sight = null, rises = null, dodge = 0 }) {
         const kindOf = KINDS[kind];
         const type = { ...kindOf, hp: hp ?? kindOf.hp, speed: speed ?? kindOf.speed, chase: chase ?? speed ?? kindOf.chase };
         const chance = createRandom(this.seed + 7919 + [...id].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, 0));
@@ -885,6 +896,11 @@ export class Battle {
             prism: null,
             dead: false,
             respawnAt: 0,
+            // Only knocked down when it falls (a share of DOWNED ms, or null: gone, or back where it
+            // came from: `respawnMs`), and whether it's down now; and how often it dodges a blow
+            rises,
+            downed: false,
+            dodge,
             // What lingers on it after some blows (afflictions.js): poison, a web...
             afflictions: [],
             // The squares it stands over, if more than its own (a fortification): [x0, y0, x1, y1],
@@ -1624,7 +1640,8 @@ export class Battle {
             return !target || !target.dead || target.map !== actor.map || distanceBetween(actor.square, target.square) > spell.reach ? { reason: "corpse" } : target;
         }
 
-        if (!target || target.dead) {
+        // (Healing on one knocked down has it up again: #land)
+        if (!target || (target.dead && !(target.downed && (spell.heal || spell.full) && !this.hostile(actor, target)))) {
             return { reason: "lifeless" };
         }
 
@@ -2130,7 +2147,18 @@ export class Battle {
         }
 
         if (actor.dead) {
-            if (this.time >= actor.respawnAt) {
+            // (Knocked down: up sooner with its leader standing by it, and up where it fell)
+            if (actor.downed) {
+                const leader = actor.leader ? this.actor(actor.leader) : null;
+
+                if (leader && !leader.dead && leader.map === actor.map && distanceBetween(leader.square, actor.square) <= FOLLOW.near) {
+                    actor.respawnAt = Math.min(actor.respawnAt, this.time + Math.round(DOWNED.near * actor.rises));
+                }
+
+                if (this.time >= actor.respawnAt) {
+                    this.#rise(actor);
+                }
+            } else if (this.time >= actor.respawnAt) {
                 this.#respawn(actor);
             }
 
@@ -4462,11 +4490,12 @@ export class Battle {
         for (const k of best ? [] : this.#nearSquare(actor, reach)) {
             const other = this.actors[k];
 
-            if (other.dead || other.neutral || other.map !== actor.map || other.maxHp <= 0 || (other !== actor && this.hostile(other, actor))) {
+            // (One knocked down the most hurt of all: healing has it up again)
+            if ((other.dead && !other.downed) || other.neutral || other.map !== actor.map || other.maxHp <= 0 || (other !== actor && this.hostile(other, actor))) {
                 continue;
             }
 
-            const share = other.hp / other.maxHp;
+            const share = other.dead ? 0 : other.hp / other.maxHp;
 
             if ((share < worst || (share === worst && k < bestK)) && seen(other)) {
                 [best, worst, bestK] = [other, share, k];
@@ -5216,6 +5245,11 @@ export class Battle {
         const target = this.actor(targetId);
 
         actor.casting = null;
+
+        // (Healing on one knocked down: up again, then healed)
+        if (target?.dead && target.downed && (spell.heal || spell.full)) {
+            this.#rise(target, actor.id);
+        }
 
         if (!target || (target.dead && spell.target !== "corpse")) {
             return;
@@ -6332,7 +6366,9 @@ export class Battle {
 
     #die(actor, killer) {
         actor.dead = true;
-        actor.respawnAt = this.time + actor.respawnMs;
+        // (Only knocked down, up again where it fell a while after: #rise)
+        actor.downed = Boolean(actor.rises);
+        actor.respawnAt = this.time + (actor.downed ? Math.round(DOWNED.ms * actor.rises) : actor.respawnMs);
         // (Up in the air: falling)
         actor.aloft = null;
         actor.afflictions = [];
@@ -6358,7 +6394,7 @@ export class Battle {
             }
         }
 
-        this.#emit("death", { id: actor.id, by: killer?.id ?? null, respawnAt: actor.respawnAt });
+        this.#emit("death", { id: actor.id, by: killer?.id ?? null, respawnAt: actor.respawnAt, ...(actor.downed ? { downed: true } : {}) });
 
         // (One of a wary pack: the rest's nerve gone, once its leader's down or half of it)
         if (actor.wild?.reacts) {
@@ -6371,15 +6407,46 @@ export class Battle {
         }
     }
 
+    /**
+     * One knocked down (`rises`: DOWNED) up again now, where it fell (or by it, if someone's
+     * standing there), with DOWNED hp of its health: a heal cast on it, or a draught given it
+     * (host.js). Told as "respawn" (`rose`: by whom, or true). Whether it was.
+     */
+    rise(id, by = null) {
+        const actor = this.actor(id);
+
+        if (!actor?.dead || !actor.downed) {
+            return false;
+        }
+
+        this.#rise(actor, by);
+
+        return true;
+    }
+
+    #rise(actor, by = null) {
+        const square = nearestFree(this.#squares(actor.map), actor.square, { taken: this.#others(actor.map, actor) });
+
+        this.#upAgain(actor, { map: actor.map, square, facing: actor.facing, hp: Math.max(1, Math.round(actor.maxHp * DOWNED.hp)) });
+        this.#emit("respawn", { id: actor.id, square, map: actor.map, from: actor.map, rose: by ?? true });
+    }
+
     #respawn(actor) {
         const square = nearestFree(this.#squares(actor.spawnMap), actor.spawn, { taken: this.#others(actor.spawnMap, actor) });
         const from = actor.map;
 
+        this.#upAgain(actor, { map: actor.spawnMap, square, facing: 0, hp: actor.maxHp, crossed: null });
+        this.#emit("respawn", { id: actor.id, square, map: actor.map, from });
+    }
+
+    // One dead (or knocked down) alive again, on a map's square, facing a way, with so much health
+    #upAgain(actor, { map, square, facing, hp, ...more }) {
         Object.assign(actor, {
-            map: actor.spawnMap,
-            crossed: null,
+            ...more,
+            map,
             dead: false,
-            hp: actor.maxHp,
+            downed: false,
+            hp,
             stamina: actor.maxStamina,
             pace: actor.speed,
             walkPace: actor.speed,
@@ -6389,7 +6456,7 @@ export class Battle {
             y: square[1] + 0.5,
             path: [],
             offPath: false,
-            facing: 0,
+            facing,
             attack: null,
             readyAt: this.time,
             staggeredUntil: 0,
@@ -6410,7 +6477,6 @@ export class Battle {
             foughtAt: -Infinity,
         });
         this.#version++;
-        this.#emit("respawn", { id: actor.id, square, map: actor.map, from });
     }
 }
 
