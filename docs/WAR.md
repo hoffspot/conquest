@@ -2893,6 +2893,19 @@ faltering and coming on again. A field battle of 60 a side was over in 93 second
 breaking a wing in turn; two armies of 60 met in the field fought it out in 45 seconds of melee,
 the humans' line breaking, routed and running, the orcs forming up again and going on.
 
+Holding the line (headless, seeds 2 to 4, each band's invasion of 120 in the start town and the
+field battle of 60 a side, the player standing aside; sampled each second of the melee):
+
+- **Outcomes**: every invasion beaten off, the town holding (15 of 15), in 183 to 189 seconds of
+  melee (181 to 200 before); a field battle 51 to 71 seconds (39 to 46: the lines grind rather than
+  dissolve into one chase).
+- **The lines kept**: whoever a fighter of a line is on stands 4.2 to 6.4 m from their place in it
+  on average (10.8 to 19.2 before), and 5% to 30% of them more than 8 m from it (60% to 92%). Fewer
+  of a line fight at once (31% to 66%, 71% to 92% before), those behind its front waiting their
+  turn, as a line's ranks do.
+- **Breaks** gone through 1 to 4 times an invasion, those through falling on the rear of a body
+  after; archers giving ground 13 to 25 times; bodies wheeling onto a flank up to 10 times.
+
 ### Playing together (M11)
 
 **Opening a world.** In the menu, **Invite others** opens the world to others. It gets a room at
