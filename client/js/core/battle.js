@@ -365,6 +365,8 @@ const RETHINK_MS = 250;
 const COLOSSAL_THINK_MS = 1000;
 const COLOSSAL_FELLOWS = 6;
 const COLOSSAL_NEAR = 4;
+// (Whom it's most set on, counting as so many more of their fellows near them: #colossalTarget)
+const COLOSSAL_ENMITY = 2;
 
 // Enemies near a player go for them before anyone else: those within `reach` squares, at most
 // `melee` of them up close and `ranged` shooting or casting at once (the rest fight whoever else
@@ -396,9 +398,22 @@ export const ENMITY = Object.freeze({ seed: 1, lingering: 0.5, healing: 0.5, nea
  * are on its leader or one of theirs it guards. A hired warrior leaves a foe its leader's taunted
  * to them for `leave` ms, unless they're under `rescue` of their health or it's told to cover them
  * (`cover` ms). Healing: ENMITY `healing` of the hit points mended, the healer's, shared among
- * those set on the one healed (docs/WILDS.md *Whom they go for*)
+ * those set on the one healed (docs/WILDS.md *Whom they go for*). A boss (a dungeon's, a hell's
+ * level's, one of a kind, an elite, the Behemoth) resists (`resist`): made to for `share` as long,
+ * and taunted `many` times within `within` ms, it shrugs off taunts for `proof` ms (as in Elder
+ * Scrolls Online), so it can be held, not chain-locked
  */
-export const TAUNT = Object.freeze({ over: 1.5, ms: 4000, reach: 16, cooldown: 15000, leave: 15000, rescue: 0.5, cover: 8000, cry: Object.freeze({ over: 1.2, ms: 3000, reach: 6, cooldown: 30000, many: 3 }) });
+export const TAUNT = Object.freeze({
+    over: 1.5,
+    ms: 4000,
+    reach: 16,
+    cooldown: 15000,
+    leave: 15000,
+    rescue: 0.5,
+    cover: 8000,
+    cry: Object.freeze({ over: 1.2, ms: 3000, reach: 6, cooldown: 30000, many: 3 }),
+    resist: Object.freeze({ share: 0.5, many: 3, within: 20000, proof: 10000 }),
+});
 
 /**
  * Slipping away (FFXIV's old Diversion, WoW's Fade): one's enmity with every foe within `reach`
@@ -1072,7 +1087,9 @@ export class Battle {
      * most they have for anyone, at the least, and on them, made to, for `ms`; struck at as far as
      * grudges and a pack go (a wolf taunted: its pack after them too). Whether it took: not on one
      * that's no enemy of theirs, nor one that keeps no enmity (a player, a follower), nor one
-     * another's taunt holds still. Told as "taunted" ({ id, by, until, and `cried`: by a war cry })
+     * another's taunt holds still, nor a boss shrugging taunts off (TAUNT resist: one taken, made
+     * to for half as long). Told as "taunted" ({ id, by, until; `from`, whom it was on;
+     * `cried`, by a war cry })
      */
     taunt(id, targetId, { over = TAUNT.over, ms = TAUNT.ms, cried = false } = {}) {
         const [actor, foe] = [this.actor(id), this.actor(targetId)];
@@ -1083,8 +1100,20 @@ export class Battle {
 
         const holder = this.#taunter(foe);
 
-        if (holder && holder !== actor) {
+        if ((holder && holder !== actor) || this.tauntProof(targetId)) {
             return false;
+        }
+
+        // (A boss: made to for half as long; taunted too often, shrugging them off a while)
+        if (this.#resists(foe)) {
+            const { share, many, within, proof } = TAUNT.resist;
+
+            foe.tauntsTaken = [...(foe.tauntsTaken ?? []).filter((at) => this.time - at < within), this.time];
+            ms = Math.round(ms * share);
+
+            if (foe.tauntsTaken.length >= many) {
+                Object.assign(foe, { tauntsTaken: [], tauntProofUntil: this.time + proof });
+            }
         }
 
         this.#provoke(actor, foe, { turn: false, enmity: 0 });
@@ -1099,8 +1128,10 @@ export class Battle {
             this.#onPlayer(actor)[this.#shoots(foe) ? "ranged" : "melee"]++;
         }
 
+        const from = foe.target;
+
         Object.assign(foe, { taunted: { by: id, at: this.time, until: this.time + ms }, target: id, lastSeen: this.time, waryUntil: 0 });
-        this.#emit("taunted", { id: foe.id, by: id, until: foe.taunted.until, ...(cried ? { cried } : {}) });
+        this.#emit("taunted", { id: foe.id, by: id, until: foe.taunted.until, ...(from !== null && from !== id ? { from } : {}), ...(cried ? { cried } : {}) });
 
         return true;
     }
@@ -1127,6 +1158,11 @@ export class Battle {
         this.#emit("cried", { id, took });
 
         return took;
+    }
+
+    /** Whether a boss shrugs off taunts just now (TAUNT resist). */
+    tauntProof(id) {
+        return (this.actor(id)?.tauntProofUntil ?? 0) > this.time;
     }
 
     /**
@@ -1163,6 +1199,49 @@ export class Battle {
         this.#emit("slipped", { id, from });
 
         return from;
+    }
+
+    /**
+     * How one (`id`) stands in a foe's enmity, as the enemies list's ring shows it (app/hud.js
+     * attackers; docs/GAME.md *The foes about the player*): "held", it's on them, no one else near
+     * them; "near", it's on them, but another's within ENMITY `near` of them; "pull", it's on
+     * someone else, but theirs is past that one's (a little more, and it turns on them); "none",
+     * else (not on its table, or behind). Taunted by them, held; by another, none. It only reads.
+     */
+    enmityStanding(foeId, id) {
+        const foe = this.actor(foeId);
+
+        if (!foe || foe.dead || foe.target === null) {
+            return "none";
+        }
+
+        if (foe.taunted && foe.taunted.until > this.time) {
+            return foe.taunted.by === id ? "held" : "none";
+        }
+
+        const table = foe.enmity ?? {};
+        const amount = (who) => {
+            const entry = table[who];
+
+            return entry && entry[1] > this.time ? entry[0] : 0;
+        };
+
+        if (foe.target === id) {
+            const own = Math.max(amount(id), ENMITY.seed);
+            let other = 0;
+
+            for (const who in table) {
+                if (who !== id) {
+                    other = Math.max(other, amount(who));
+                }
+            }
+
+            return other * ENMITY.near >= own ? "near" : "held";
+        }
+
+        const own = amount(id);
+
+        return own > 0 && own > Math.max(amount(foe.target), ENMITY.seed) ? "pull" : "none";
     }
 
     empower(id, blow, factor, { stun = 0 } = {}) {
@@ -3710,11 +3789,20 @@ export class Battle {
     // within reach of its jaws (as far from its body's middle as they'd land on) before any others
     // (on its way, it walks over them); of them, the one with most of their fellows near them
     // (within COLOSSAL_FELLOWS metres), those its breath would land on where it stands counting
-    // more; the nearest of as many. Null if it sees none
+    // more, and those it's most set on (its enmity, against the most it has: COLOSSAL_ENMITY); the
+    // nearest of as many. Taunted, the taunter (TAUNT, a boss's: made to for half as long). Null if
+    // it sees none
     #colossalTarget(actor) {
         const { colossus } = actor.wild;
         const was = actor.target === null ? null : this.actor(actor.target);
         const still = was && !was.dead && was.map === actor.map && this.hostile(actor, was);
+
+        // (Taunted: on the taunter, made to, while it holds and it can see them)
+        const taunter = this.#taunter(actor);
+
+        if (taunter && this.canSee(actor, taunter, colossus.sight)) {
+            return taunter;
+        }
 
         if (still && this.time < (actor.rethinkAt ?? 0)) {
             return was;
@@ -3733,6 +3821,10 @@ export class Battle {
 
         // (Not one in where it's kept out of: a town it's come against, host.js `keepOut`)
         const { keepOut = null } = actor.wild;
+        // (Its enmity, each one's against the most it has for anyone: COLOSSAL_ENMITY)
+        const table = actor.enmity ?? {};
+        const amount = (id) => (table[id] && table[id][1] > this.time ? table[id][0] : 0);
+        const top = Object.keys(table).reduce((most, id) => Math.max(most, amount(id)), 0);
         const kept = (other) => Boolean(keepOut) && hypot(other.x - keepOut.middle[0], other.y - keepOut.middle[1]) < keepOut.within;
 
         for (const k of this.#within(actor.map, actor.x, actor.y, colossus.sight)) {
@@ -3749,7 +3841,7 @@ export class Battle {
                 return !fellow.dead && fellow.map === actor.map && this.hostile(actor, fellow) && hypot(fellow.x - other.x, fellow.y - other.y) <= COLOSSAL_FELLOWS;
             }).length;
             const near = standing && hypot(other.x - bx, other.y - by) <= jaws;
-            const score = fellows + (Math.abs(far - lands) <= COLOSSAL_NEAR * 2 ? 3 : 0) - far / colossus.sight;
+            const score = fellows + (Math.abs(far - lands) <= COLOSSAL_NEAR * 2 ? 3 : 0) + (top > 0 ? (COLOSSAL_ENMITY * amount(other.id)) / top : 0) - far / colossus.sight;
 
             if ((near && !bestNear) || (near === bestNear && score > bestScore)) {
                 best = other;
@@ -4130,20 +4222,49 @@ export class Battle {
     // A bomb lobbed (`wild.bomb`: { kind, damage, every, beyond, reach, volley, spread }) at
     // whoever it's after, now and then (every `every` ms), while they keep `beyond` metres off and
     // within its `reach`, in sight (and `volley` at a time, the others about them, `spread` metres
-    // off at most: the caves' Goblin King): whether it's thrown
+    // off at most: the caves' Goblin King, at whoever's second in its enmity, if they're where it
+    // can lob one: FFXIV's tankbuster on the off-tank): whether it's thrown
     #lobs(actor, target) {
         const { kind, damage, every, beyond, reach, volley = 1, spread = 0 } = actor.wild.bomb;
-        const far = hypot(target.x - actor.x, target.y - actor.y);
 
-        if (this.time < (actor.bombAt ?? 0) || this.time < actor.readyAt || !actor.armed || target.map !== actor.map || far < beyond || far > reach || !this.canSee(actor, target, Math.max(SIGHT, reach))) {
+        if (this.time < (actor.bombAt ?? 0) || this.time < actor.readyAt || !actor.armed) {
+            return false;
+        }
+
+        const lobbable = (other) => {
+            const far = hypot(other.x - actor.x, other.y - actor.y);
+
+            return other.map === actor.map && far >= beyond && far <= reach && this.canSee(actor, other, Math.max(SIGHT, reach));
+        };
+        const at = (volley > 1 ? this.#second(actor, target, lobbable) : null) ?? target;
+
+        if (!lobbable(at)) {
             return false;
         }
 
         actor.bombAt = this.time + every;
         actor.path = [];
-        this.#throwAt(actor, target, { id: kind, kind: "ranged", reach, damage, hitAt: 700, duration: 1300, interval: 1300, stagger: 300, reaction: "crush", animation: "throw", bomb: kind, volley, spread });
+        this.#throwAt(actor, at, { id: kind, kind: "ranged", reach, damage, hitAt: 700, duration: 1300, interval: 1300, stagger: 300, reaction: "crush", animation: "throw", bomb: kind, volley, spread });
 
         return true;
+    }
+
+    // Who's second in one's enmity (ENMITY), after `top`: of those on its table still standing,
+    // its enemies, that pass `test`, the one it has the most for (the first of two with as much);
+    // null for none
+    #second(actor, top, test) {
+        let [best, most] = [null, 0];
+
+        for (const id in actor.enmity ?? {}) {
+            const [amount, until] = actor.enmity[id];
+            const other = id === top.id || until <= this.time ? null : this.actor(id);
+
+            if (other && !other.dead && amount > most && this.hostile(actor, other) && test(other)) {
+                [best, most] = [other, amount];
+            }
+        }
+
+        return best;
     }
 
     // Its flock called to it (`wild.call`: creatures.js `call`) now and then while it's after
@@ -6561,6 +6682,12 @@ export class Battle {
         if (this.canSee(foe, actor) && this.taunt(actor.id, foe.id)) {
             actor.tauntReadyAt = this.time + Math.round(TAUNT.cooldown * (actor.abilityTimes ?? 1));
         }
+    }
+
+    // Whether a foe resists taunts (TAUNT resist): a dungeon's boss or a hell level's own, one of a
+    // kind, an elite, or what stands over more than its square (the Behemoth)
+    #resists(actor) {
+        return Boolean(actor.footprint || actor.wild?.unique || actor.wild?.elite || actor.wild?.champion === "boss" || actor.wild?.champion === "floor");
     }
 
     // Whether one that protects (`actor`) guards whoever `id` is: its leader, or one of theirs

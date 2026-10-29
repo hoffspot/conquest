@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Battle, ENMITY, SLIP, STEP_MS, TAUNT } from "../client/js/core/battle.js";
-import { WILD } from "../client/js/core/creatures.js";
+import { CREATURES, traitsOf, WILD } from "../client/js/core/creatures.js";
 import { ENMITY_WEIGHTS, MERCENARY, mercenaryOf } from "../client/js/core/followers.js";
 import { HOST_PLAYER, Host, SHIELD_ENMITY, SNAPSHOT_STEPS } from "../client/js/core/host.js";
 import { buildWorld } from "../client/js/core/overworld.js";
@@ -270,7 +270,90 @@ describe("enmity (battle.js ENMITY)", () => {
         assert.equal(battle.slipAway("gone"), 0);
     });
 
-    it("weighs each of a player's own by their calling: a warrior three times (four at its mastery), a ranger and a rogue less; a creature called twice, one raised half again", () => {
+    it("tells how one stands in a foe's enmity: held, near (another within a tenth of them), pull (past the one it's on), none; a taunt held by its taunter, and whom it took it from told", () => {
+        const { battle, wolf } = fight();
+
+        run(battle, STEP_MS);
+        wolf.enmity = { near: kept(battle, 100), far: kept(battle, 50) };
+        assert.deepEqual(["near", "far"].map((id) => battle.enmityStanding("wolf", id)), ["held", "none"]);
+
+        wolf.enmity.far = kept(battle, 95);
+        assert.deepEqual(["near", "far"].map((id) => battle.enmityStanding("wolf", id)), ["near", "none"]);
+
+        wolf.enmity.far = kept(battle, 120);
+        assert.deepEqual(["near", "far"].map((id) => battle.enmityStanding("wolf", id)), ["near", "pull"]);
+
+        assert.equal(battle.taunt("far", "wolf"), true);
+        assert.deepEqual(["near", "far"].map((id) => battle.enmityStanding("wolf", id)), ["none", "held"]);
+        assert.ok(run(battle, STEP_MS).some(({ type, id, by, from }) => type === "taunted" && id === "wolf" && by === "far" && from === "near"));
+        assert.equal(battle.enmityStanding("nobody", "near"), "none");
+    });
+
+    it("has a boss resist taunts: made to for half as long, and taunted three times in 20 s, shrugging them off for 10 s; an ordinary foe never", () => {
+        const { battle, wolf } = fight();
+        const { share, within, proof } = TAUNT.resist;
+
+        wolf.wild.champion = "boss";
+        run(battle, STEP_MS);
+        assert.equal(battle.taunt("far", "wolf"), true);
+        assert.equal(wolf.taunted.until - wolf.taunted.at, TAUNT.ms * share);
+
+        run(battle, 3000);
+        assert.equal(battle.taunt("near", "wolf"), true);
+        run(battle, 3000);
+        assert.equal(battle.taunt("far", "wolf"), true, "the third takes");
+        assert.ok(6000 < within);
+        run(battle, 3000);
+        assert.equal(battle.tauntProof("wolf"), true);
+        assert.equal(battle.taunt("near", "wolf"), false, "shrugged off");
+        run(battle, proof);
+        assert.equal(battle.taunt("near", "wolf"), true, "taken again");
+
+        // (An ordinary one: made to for all of it, as often as it's taunted)
+        const plain = fight();
+
+        run(plain.battle, STEP_MS);
+
+        for (let k = 0; k < 4; k++) {
+            assert.equal(plain.battle.taunt(k % 2 ? "near" : "far", "wolf"), true);
+            assert.equal(plain.wolf.taunted.until - plain.wolf.taunted.at, TAUNT.ms);
+            run(plain.battle, TAUNT.ms + STEP_MS);
+        }
+
+        assert.equal(plain.battle.tauntProof("wolf"), false);
+    });
+
+    it("has the caves' Goblin King lob its volley at whoever's second in its enmity, where it can; else at whom it's after", () => {
+        const battle = new Battle(field(60), { seed: 6 });
+        const { weapon, speed, chase } = CREATURES.goblinKing;
+        const king = battle.add({ id: "king", kind: "beast", name: "Goblin King", weapon, team: WILD, square: [30, 30], ai: "wild", hp: 1e6, speed, chase, armed: true, wild: { creature: "goblinKing", tier: 4, temper: "aggressive", guard: 0, roam: 0, leash: 40, pack: "king", leader: null, menace: true, ...traitsOf("goblinKing", { boss: true }), champion: "boss", regalia: "goblinKing" } });
+
+        // (Holding it, up close; a mage 7 m off; another further off than it lobs)
+        for (const [id, square] of [["tank", [31, 30]], ["mage", [30, 37]], ["afar", [30, 52]]]) {
+            battle.add({ id, kind: "player", weapon: "sword", team: "hero", square, hp: 1e6 }).stunnedUntil = Infinity;
+        }
+
+        Object.assign(king, { target: "tank", enmity: { tank: kept(battle, 500), afar: kept(battle, 300), mage: kept(battle, 200) } });
+
+        // (Each bomb as it's thrown, against where the mage stands then: its blasts throw them)
+        const mage = battle.actor("mage");
+        const off = [];
+
+        for (let t = 0; t < 9000; t += STEP_MS) {
+            for (const { type, id, x, y } of battle.advance(STEP_MS)) {
+                if (type === "bomb" && id === "king") {
+                    off.push(Math.hypot(x - mage.x, y - mage.y));
+                }
+            }
+        }
+
+        assert.equal(king.target, "tank");
+        assert.ok(off.length >= 3);
+        assert.ok(off.some((far) => far < 0.01), "at the mage, second of those it can lob at");
+        assert.ok(off.every((far) => far <= CREATURES.goblinKing.boss.bomb.spread + 0.01), "the volley about them");
+    });
+
+    it("weighs each of a player's own by their calling: a warrior three times (four at its mastery), a ranger and a rogue less; a creature called three times, one raised half again", () => {
         assert.equal(mercenaryOf({ calling: "warrior", level: 3 }).enmity, ENMITY_WEIGHTS.warrior);
         assert.equal(mercenaryOf({ calling: "warrior", level: 10 }).enmity, ENMITY_WEIGHTS.master);
         assert.deepEqual(["ranger", "rogue", "mage", "cleric"].map((calling) => mercenaryOf({ calling, level: 5 }).enmity), [0.7, 0.5, 1, 1]);
@@ -394,6 +477,10 @@ describe("enmity in play (host.js)", () => {
         host.battle.add({ id: "someone", kind: "player", weapon: "sword", team: "hero", square: [me.square[0] - 3, me.square[1]], hp: 1e6 });
         assert.equal(ability("taunt", wolf.id).reason, "taunted");
         assert.equal(leading([]).host.command(HOST_PLAYER, { type: "ability", ability: "taunt", target: wolf.id }).reason, "unknown");
+
+        // (A boss shrugging taunts off: refused, said so)
+        Object.assign(wolf, { taunted: null, tauntProofUntil: host.battle.time + 5000 });
+        assert.equal(ability("taunt", wolf.id).reason, "resisted");
     });
 
     it("gives a player Endurance's War cry at Veteran, every foe near taunted at once, refused with none to hear; and Evasion's Slip away at Adept", () => {

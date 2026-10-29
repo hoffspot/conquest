@@ -1780,6 +1780,24 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   what's in hand, locked on (game.js `#attackerPressed`). Pressed from the keyboard, an icon's a
   tap. With **Auto target lock** on (*Locked on*, below), each of those locks on too, and a tap
   on whoever they're locked on lets go instead.
+- **Whom each foe is on** (Game options, Gameplay: **Show whom foes are on**, on to start with;
+  game.js `showEnmity`; docs/WILDS.md *Whom they go for*), as Final Fantasy XIV and World of
+  Warcraft show it, without numbers:
+  - *A ring round each foe's icon* (battle.js `enmityStanding`, read from the player's own copy
+    of the battle: nothing more's sent): red and thickest, it's on them and no one's close
+    (`held`); orange, on them with another within a tenth of them (`near`); yellow and dashed,
+    on someone else but the player's past them, about to draw it (`pull`); thin and grey, not
+    (`none`). Thicker the surer it's on them, so it doesn't lean on colour alone, and said in its
+    name ("Wolf, on you, another close behind").
+  - *A dot at its foot* for whom else it's on: another player of their party in their colour
+    (app/mapicons.js `partyColour`), one of their own with their initial ("Wolf, on Tam").
+  - *A count on each of the party's icons* (*The party*, below): how many foes are on them, at
+    its top left, so "Tam ③" is a warrior holding three.
+  - *A taunt's mark* over a foe taunted, by its name on its bar, its time left swept round it,
+    whose it is said ("Taunted by you": hud.js `taunt`, game.js `#tauntMarks`).
+  - *Told, now and then* (once every 30 s at most, `DRAWN_OFF_EVERY`), one of theirs drawing a
+    foe off them ("Tam draws the wolf off you.": the `taunted` event's `from`).
+  Off, none of it's shown.
 - **Stepping through them from the keyboard** (game.js `cycleTarget`, `#setOn`), each sets the
   player on the foe as a tap on its icon does (where they stand, locked on with Auto target
   lock): **X** the next in the enemies list's order and **Z** the last, round again at either
@@ -1822,8 +1840,9 @@ lull: game.js `#kept`, `FIGHT_VIEW`):
   stick if it's shown: their likeness (drawn once, as an attacker's is, kept in
   `partyLikenesses`) in a green frame (`--ally`; violet, `--summoned`, for a creature called;
   bone, `--risen`, for one raised), a thin line of their health along its foot, a called
-  creature's time left along its head, two bars in its corner while they're told to wait, faded
-  while they're elsewhere (another floor). The icons are 44 pixels while they fit between the
+  creature's time left along its head, two bars in its corner while they're told to wait, how
+  many foes are on them at its top left (Show whom foes are on, above), faded while they're
+  elsewhere (another floor). The icons are 44 pixels while they fit between the
   Party button and the stick (or the Action Bar, up, under them; or the bottom), shrunk to
   fit down to 30, and past that as many as fit with a "+N" chip under them opening the party
   menu (`PARTY_ICON`, `partyFit`: measured only when what decides it changes, `#partyFit`). Their
@@ -5929,7 +5948,8 @@ it.
      tilting and Invert tilt (*The camera's settings*, above).
    - **Gameplay:** the Auto-snag switch (off to start with) and under it, while it's on, what it
      takes (its own page: docs/WILDS.md *What they leave*); Auto target lock (on to start with:
-     *Locked on*, under *Those attacking the player*); Mercenaries' chatter (on to start with:
+     *Locked on*, under *Those attacking the player*); Show whom foes are on (on to start with:
+     the rings, dots, counts and taunt marks, *Whom each foe is on*); Mercenaries' chatter (on to start with:
      their words over their heads, docs/WAR.md *Mercenaries that grow*); Mercenaries can die (off
      to start with: the world's rule, `RULES` `mortal`, shown only to the world's host's player
      or an owner, who alone can change it: main.js `showMortal`, game.js `mayRule`, `setMortal`);

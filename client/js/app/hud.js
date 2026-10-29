@@ -136,6 +136,10 @@ const PARTY_KINDS = { player: "in your party", adventurer: "hired adventurer", s
 
 // A wary beast's mood as its plate marks it (core/wary.js MOODS: hud.mood): its mark, and what
 // it's said to be (a hunter watching them, stalking)
+// How the player stands in each foe's enmity (battle.js enmityStanding), as its icon on the right
+// says it, after its name: its ring red, orange, yellow or grey (hud.js attackers)
+const STANDINGS = Object.freeze({ held: "on you", near: "on you, another close behind", pull: "about to turn on you", none: null });
+
 const MOOD_MARKS = Object.freeze({
     warn: Object.freeze({ mark: "!", said: "Warning you off" }),
     watch: Object.freeze({ mark: "◉", said: "Watching you", hunts: "Stalking you" }),
@@ -485,6 +489,35 @@ export class Hud {
 
         chip.textContent = marked.mark;
         chip.title = (hunts && marked.hunts) || marked.said;
+        chip.setAttribute("aria-label", chip.title);
+    }
+
+    /**
+     * A taunt on a foe, marked on its plate by its name (`left`: the share of it still to go, 0 to
+     * 1, swept round its mark as it passes; null: none, its mark gone); `by`: whose taunt it is.
+     */
+    taunt(id, left, by = "") {
+        const plate = this.tracked.get(id);
+
+        if (!plate) {
+            return;
+        }
+
+        let chip = plate.querySelector(".taunt");
+
+        if (left === null) {
+            chip?.remove();
+
+            return;
+        }
+
+        if (!chip) {
+            chip = element("span", "taunt");
+            plate.querySelector(".name").prepend(chip);
+        }
+
+        chip.style.setProperty("--left", left.toFixed(2));
+        chip.title = by ? `Taunted by ${by}` : "Taunted";
         chip.setAttribute("aria-label", chip.title);
     }
 
@@ -892,12 +925,17 @@ export class Hud {
 
     /**
      * The icons down the right side of the screen for the foes about the player, in order (none:
-     * gone): [{ id, name, hp, maxHp, target, locked, attacking, picture }] (`target`: whoever the
-     * player's set on, its frame glowing and pulsing; `locked`: the player locked on them, the
-     * lock's sights round it and a padlock at its corner; `attacking`: after the player, its frame
-     * full red, else in range and seen, not after them (yet), its frame fainter; `picture`: an
-     * ImageData, their likeness, or null till it's drawn, their name's first letter shown till then).
-     * Tapped, or held (HOLD_MS, not moving off it), each tells onAttacker.
+     * gone): [{ id, name, hp, maxHp, target, locked, attacking, picture, standing, on }] (`target`:
+     * whoever the player's set on, its frame glowing and pulsing; `locked`: the player locked on
+     * them, the lock's sights round it and a padlock at its corner; `attacking`: after the player,
+     * its frame full red, else in range and seen, not after them (yet), its frame fainter;
+     * `picture`: an ImageData, their likeness, or null till it's drawn, their name's first letter
+     * shown till then; `standing`: how the player stands in its enmity (battle.js
+     * enmityStanding), a ring round it, thicker the surer it's on them: red, it's on them; orange,
+     * on them with another close; yellow, about to turn on them; grey, not; none, not shown
+     * (Game options: Show whom foes are on); `on`: whom else it's on, { name, colour }, a dot at
+     * its foot in a player's colour, or with the initial of one of their own). Tapped, or held
+     * (HOLD_MS, not moving off it), each tells onAttacker.
      */
     attackers(list) {
         if (!this.attackerColumn) {
@@ -918,7 +956,7 @@ export class Hud {
             }
         }
 
-        list.forEach(({ id, name, hp, maxHp, target, locked = false, attacking = true, picture }, k) => {
+        list.forEach(({ id, name, hp, maxHp, target, locked = false, attacking = true, picture, standing = null, on = null }, k) => {
             const icon = this.attackerIcons.get(id) ?? this.#attackerIcon(id);
             const health = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
 
@@ -930,9 +968,27 @@ export class Hud {
             icon.root.classList.toggle("target", Boolean(target));
             icon.root.classList.toggle("locked", Boolean(locked));
             icon.root.classList.toggle("idle", !attacking && !target);
-            icon.root.setAttribute("aria-label", locked ? `${name}, locked on (tap to let go)` : target ? `${name}, set on` : attacking ? name : `${name}, in range`);
+            icon.root.setAttribute("aria-label", `${locked ? `${name}, locked on (tap to let go)` : target ? `${name}, set on` : attacking ? name : `${name}, in range`}${STANDINGS[standing] ? `, ${STANDINGS[standing]}` : ""}${on ? `, on ${on.name}` : ""}`);
             icon.root.setAttribute("aria-pressed", String(Boolean(target)));
             icon.health.style.transform = `scaleX(${health.toFixed(3)})`;
+
+            // (How the player stands in its enmity, its ring; and whom else it's on, its dot)
+            if (icon.standing !== standing) {
+                for (const each of Object.keys(STANDINGS)) {
+                    icon.root.classList.toggle(`enmity-${each}`, each === standing);
+                }
+
+                icon.standing = standing;
+            }
+
+            const onKey = on ? `${on.name}|${on.colour ?? ""}` : "";
+
+            if (icon.onKey !== onKey) {
+                icon.onKey = onKey;
+                icon.on.hidden = !on;
+                icon.on.textContent = on && !on.colour ? on.name.slice(0, 1).toUpperCase() : "";
+                icon.on.style.background = on?.colour ?? "";
+            }
 
             if (picture && !icon.painted) {
                 icon.canvas.width = picture.width;
@@ -946,8 +1002,9 @@ export class Hud {
         this.attackerColumn.hidden = list.length === 0;
     }
 
-    // An attacker's icon (attackers): a button with their likeness and a line of their health, and
-    // the lock's sights (shown while locked on them); a tap or a hold on it heard
+    // An attacker's icon (attackers): a button with their likeness and a line of their health, the
+    // lock's sights (shown while locked on them), and a dot for whom else it's on; a tap or a hold
+    // on it heard
     #attackerIcon(id) {
         const root = element("button", "attacker");
         const canvas = element("canvas", "attacker-likeness");
@@ -955,6 +1012,7 @@ export class Hud {
         const line = element("span", "attacker-health");
         const health = element("span", "attacker-health-fill");
         const lock = element("span", "attacker-lock");
+        const on = element("span", "attacker-on");
 
         root.type = "button";
         root.dataset.id = id;
@@ -962,10 +1020,12 @@ export class Hud {
         initial.setAttribute("aria-hidden", "true");
         lock.setAttribute("aria-hidden", "true");
         lock.innerHTML = LOCK_SIGHTS;
-        root.append(initial, canvas, line, lock);
+        on.setAttribute("aria-hidden", "true");
+        on.hidden = true;
+        root.append(initial, canvas, line, lock, on);
         pressable(root, (gesture, { time }) => this.onAttacker(id, gesture, time));
 
-        const icon = { root, canvas, initial, health, painted: false };
+        const icon = { root, canvas, initial, health, on, painted: false, standing: null, onKey: "" };
 
         this.attackerIcons.set(id, icon);
 
@@ -977,7 +1037,8 @@ export class Hud {
      * thumb stick, if it's shown), for the player's party, in order (none: gone): [{ id, name, hp, maxHp, kind, ally,
      * waiting, away, left, picture, leader }] (`kind`: "player", "adventurer", "summon", "risen" or "unit";
      * `leader`: a player leading the party, crowned; `colour`: a player's own in the party, their
-     * frame and initial in it (app/mapicons.js PARTY_COLOURS);
+     * frame and initial in it (app/mapicons.js PARTY_COLOURS); `foes`: how many foes are on them,
+     * a count at its corner (none, or Show whom foes are on off: none shown);
      * `ally`: the one the player's chosen to help, its frame glowing green; `waiting`: told to wait
      * where they are; `away`: not where the player is; `left`: a called creature's time, the share
      * of it left, or null; `picture` as attackers'). As many as fit (partyFit), shrunk to, then a
@@ -1010,7 +1071,7 @@ export class Hud {
             column.style.setProperty("--member-size", `${size}px`);
         }
 
-        showing.forEach(({ id, name, hp, maxHp, kind, ally = false, waiting = false, away = false, left = null, picture = null, leader = false, colour = null }, k) => {
+        showing.forEach(({ id, name, hp, maxHp, kind, ally = false, waiting = false, away = false, left = null, picture = null, leader = false, colour = null, foes = 0 }, k) => {
             const icon = this.partyIcons.get(id) ?? this.#memberIcon(id);
             const health = Math.max(0, Math.min(1, hp / Math.max(1, maxHp)));
             const look = `${kind}|${ally}|${waiting}|${away}|${name}|${leader}|${colour}`;
@@ -1037,6 +1098,14 @@ export class Hud {
 
             icon.health.style.transform = `scaleX(${health.toFixed(3)})`;
             icon.time.hidden = left === null;
+
+            // (How many foes are on them)
+            if (icon.foesShown !== foes) {
+                icon.foesShown = foes;
+                icon.foes.hidden = !foes;
+                icon.foes.textContent = foes ? String(foes) : "";
+                icon.foes.title = foes ? `${foes} foe${foes === 1 ? "" : "s"} on them` : "";
+            }
 
             if (left !== null) {
                 icon.time.firstChild.style.transform = `scaleX(${Math.max(0, Math.min(1, left)).toFixed(3)})`;
@@ -1096,18 +1165,20 @@ export class Hud {
         const health = element("span", "member-health-fill");
         const time = element("span", "member-time");
         const wait = element("span", "member-wait");
+        const foes = element("span", "member-foes");
 
         root.type = "button";
         root.dataset.id = id;
         line.append(health);
         time.append(element("span", "member-time-fill"));
         time.hidden = true;
+        foes.hidden = true;
         initial.setAttribute("aria-hidden", "true");
         wait.setAttribute("aria-hidden", "true");
-        root.append(initial, canvas, line, time, wait);
+        root.append(initial, canvas, line, time, wait, foes);
         pressable(root, (gesture, press) => this.onPartyMember(id, gesture, press));
 
-        const icon = { root, canvas, initial, health, time, painted: false, look: null };
+        const icon = { root, canvas, initial, health, time, foes, painted: false, look: null, foesShown: 0 };
 
         this.partyIcons.set(id, icon);
 

@@ -944,6 +944,9 @@ const calledBy = (one) => {
 const BARK_EVERY = 45;
 const BARK_GAP = 6;
 
+// How often the player's told one of their own's drawn a foe off them, at most (seconds)
+const DRAWN_OFF_EVERY = 30;
+
 const UNIT_TOLD = Object.freeze({ follow: "follows you.", wait: "waits here.", assist: "goes for your target.", guard: "guards you.", fallback: "falls back to you.", hold: "holds fire.", free: "fights at will.", cover: "covers you." });
 
 // Why another of the player's party wasn't given a request they shared (host.js #unshared), as told
@@ -1219,6 +1222,14 @@ export class Game {
         // each last did, by follower and what it was, game time s: #bark)
         this.chatter = true;
         this.barked = new Map();
+
+        // (Whom foes are on, shown: Game options; the rings and dots on the enemies list, the
+        // counts on the party's icons, a taunt's mark over a foe: #attackers, #partyIcons,
+        // #tauntMarks; each taunt's mark as last shown, by foe; and when the player was last told
+        // one of theirs drew a foe off them, game time s)
+        this.showEnmity = true;
+        this.tauntsShown = new Map();
+        this.drawnOffAt = -Infinity;
 
         /**
          * Asks whether one of the party's to be let go, for good ({ name, note, go }: `go` lets them
@@ -7286,7 +7297,51 @@ export class Game {
             this.#likeness(this.likenesses, actor.id);
         }
 
-        this.hud.attackers(shown.map((actor) => ({ id: actor.id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, target: actor === target, locked: actor === target && player.lock === actor.id, attacking: fighting.has(actor.id), picture: this.likenesses.get(actor.id) ?? null })));
+        // (How the player stands in each one's enmity, and whom else it's on: Show whom foes are on)
+        const enmity = this.showEnmity && player && !player.dead;
+
+        this.hud.attackers(shown.map((actor) => ({ id: actor.id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, target: actor === target, locked: actor === target && player.lock === actor.id, attacking: fighting.has(actor.id), picture: this.likenesses.get(actor.id) ?? null, standing: enmity ? this.battle.enmityStanding(actor.id, player.id) : null, on: enmity ? this.#onWhom(actor, player) : null })));
+    }
+
+    // Whom a foe's on, if not the player: { name, colour (a player's in their party, or null) }, or null
+    #onWhom(actor, player) {
+        const one = actor.target === null || actor.target === player.id ? null : this.battle.actor(actor.target);
+
+        if (!one || one.dead) {
+            return null;
+        }
+
+        const members = this.host.partyFor(this.me)?.members ?? [];
+        const colour = one.kind === "player" && members.includes(one.id) ? partyColour(members, one.id) : null;
+
+        return { name: (one.kind === "player" ? this.host.players.get(one.id)?.hero.name : null) ?? one.name ?? "", colour };
+    }
+
+    // A taunt's mark over each foe tracked that's taunted (Show whom foes are on: hud.js taunt), its
+    // time left swept round it, and whose it is; gone as it ends, or with the switch off
+    #tauntMarks() {
+        const battle = this.battle;
+
+        for (const id of this.tauntsShown.keys()) {
+            if (!this.hud.tracked.has(id)) {
+                this.tauntsShown.delete(id);
+            }
+        }
+
+        for (const id of this.hud.tracked.keys()) {
+            const taunted = this.showEnmity ? battle.actor(id)?.taunted : null;
+            const live = taunted && taunted.until > battle.time && !battle.actor(id).dead;
+            // (Its time left, a twentieth at a time: shown again only as that changes)
+            const left = live ? Math.ceil(((taunted.until - battle.time) / Math.max(1, taunted.until - taunted.at)) * 20) / 20 : null;
+            const shown = this.tauntsShown.get(id) ?? null;
+
+            if (shown?.left !== left || (live && shown?.by !== taunted.by)) {
+                const by = live ? battle.actor(taunted.by) : null;
+
+                this.tauntsShown.set(id, { left, by: live ? taunted.by : null });
+                this.hud.taunt(id, left, taunted?.by === this.me ? "you" : (by?.name ?? ""));
+            }
+        }
     }
 
     // The foes the player can see about them (ids, the nearest first): on their map, within
@@ -10655,9 +10710,20 @@ export class Game {
             }
         }
 
+        // (How many foes are on each of them: Show whom foes are on)
+        const foesOn = new Map();
+
+        if (this.showEnmity && player && !player.dead) {
+            for (const actor of this.battle.actors) {
+                if (!actor.dead && actor.target !== null && ids.has(actor.target) && this.battle.hostile(actor, this.battle.actor(actor.target))) {
+                    foesOn.set(actor.target, (foesOn.get(actor.target) ?? 0) + 1);
+                }
+            }
+        }
+
         this.hud.party(
             player && !player.dead
-                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture, leader: kind === "player" && this.host.partyFor(this.me)?.leader === id, colour: kind === "player" ? partyColour(this.host.partyFor(this.me)?.members ?? [], id) : null }))
+                ? party.map(({ id, kind, actor, waiting, left, picture }) => ({ id, name: actor.name ?? "", hp: actor.hp, maxHp: actor.maxHp, kind, ally: id === this.allyTarget, waiting, away: actor.map !== player.map, left: left?.share ?? null, picture, leader: kind === "player" && this.host.partyFor(this.me)?.leader === id, colour: kind === "player" ? partyColour(this.host.partyFor(this.me)?.members ?? [], id) : null, foes: foesOn.get(id) ?? 0 }))
                 : [],
         );
 
@@ -11876,6 +11942,8 @@ export class Game {
                 this.hud.mood(id, mood, { hunts: Boolean(WARY[actor?.wild?.creature]?.predator) });
             }
         }
+
+        this.#tauntMarks();
 
         // (Eyes in the dark: a hunting beast's, out beyond the light, at night)
         const light = daylight(timeOfDay(elapsedOf(this.host.war)));
@@ -13148,6 +13216,12 @@ export class Game {
 
                     if (event.by === this.me) {
                         hud.damage(this.#screenAbove(event.id), "Taunted", { kind: "stun" });
+                    }
+
+                    // (One of the player's own drawing a foe off them: told, now and then)
+                    if (this.showEnmity && event.from === this.me && !event.cried && this.battle.actor(event.by)?.leader === this.me && this.clock - this.drawnOffAt >= DRAWN_OFF_EVERY) {
+                        this.drawnOffAt = this.clock;
+                        hud.message(`${this.battle.actor(event.by).name} draws the ${(this.battle.actor(event.id).name ?? "foe").toLowerCase()} off you.`, 2.5);
                     }
 
                     break;

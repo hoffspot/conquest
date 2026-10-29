@@ -61,10 +61,10 @@ export const givable = (use) => Boolean(use?.heal || use?.cure) && !["cast", "bo
  * those they're set on (battle.js ENMITY: their `enmityWeight`): a hired warrior's three times as
  * much, to draw foes off its leader and hold them (`master`, a Shield master's: MERCENARY
  * mastery), a ranger's and a rogue's less, to keep out of it; a creature called by Summon or
- * tamed (`called`), more than its leader's, a shield for them; one raised from the dead (`risen`),
- * between (docs/WAR.md *Whom they go for*).
+ * tamed (`called`), three times its leader's, a shield for them; one raised from the dead
+ * (`risen`), between (docs/WILDS.md *Whom they go for*).
  */
-export const ENMITY_WEIGHTS = Object.freeze({ warrior: 3, master: 4, ranger: 0.7, rogue: 0.5, mage: 1, cleric: 1, called: 2, risen: 1.5 });
+export const ENMITY_WEIGHTS = Object.freeze({ warrior: 3, master: 4, ranger: 0.7, rogue: 0.5, mage: 1, cleric: 1, called: 3, risen: 1.5 });
 
 /** A cleric's healing, the weakest first (battle.js #mend), as the peoples' healers'. */
 export const CLERIC_HEALS = Object.freeze(["vigor", "mendWounds"]);

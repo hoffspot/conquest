@@ -1035,7 +1035,7 @@ warrior can take it off whoever it's on.
 - **Weighed by who does it** (their `enmityWeight`): a player 1, more with a shield in hand, 0.2 a
   rank of their Shield (twice as much at Legend, host.js `SHIELD_ENMITY`: FFXIV's tank stance,
   earned by blocking, no button to it); a hired warrior 3 (a Shield master 4), a mage and a
-  cleric 1, a ranger 0.7, a rogue 0.5; a creature called 2, one raised 1.5 (followers.js
+  cleric 1, a ranger 0.7, a rogue 0.5; a creature called 3, one raised 1.5 (followers.js
   `ENMITY_WEIGHTS`); a soldier or a creature 1.
 - **Whom it goes for.** The one with the most that it can see and go for (within its leash, and
   for a guard, AGGRO's room on a player). But it keeps to the one it's on till another's past them
@@ -1072,6 +1072,12 @@ warrior can take it off whoever it's on.
   - *A hired rogue* of level 7 or more slips away as soon as a foe near it's on it.
   - *A creature called by Summon* comes in with a roar, a war cry 1.5 seconds long (host.js
     `CALLED_CRY_MS`); told to cover its caller, it roars again, every 30 seconds.
+- **Bosses resist** (`TAUNT.resist`): a dungeon's boss, a hell level's own, one of a kind (the
+  Behemoth among them) or an elite is made to for half as long, and taunted three times within 20
+  seconds, shrugs taunts off for 10 (as in Elder Scrolls Online): held, not chain-locked. Their
+  tables work as anyone's, and some of their specials read them (docs/DUNGEONS.md: the Goblin
+  King's volley at whoever's second, the Ant Monster's flock set on her top). The Behemoth weighs
+  whom it's most set on as two more of their fellows near them (battle.js `COLOSSAL_ENMITY`).
 - **The same in every copy.** Amounts are only added and multiplied by plain numbers, and ties go
   to whoever was first on the table, so every copy of a world keeps the same tables step for step.
   They're kept in a snapshot (`SNAPSHOT_VERSION` 46: a world kept from before with none yet,
@@ -1954,7 +1960,9 @@ again, its spines glowing green (`beasts/looks.js`).
 - **Whom it fights** (`#colossalTarget`, looked at again every second): of the enemies it sees
   within 90 m, standing, those within reach of its jaws first (as far from its body's middle as
   they land, 14 m); of them, the one with the most of their fellows within 6 m of them, those where
-  its breath would land counting more. On its way it walks over whoever's at its feet.
+  its breath would land counting more, and whom it's most set on (its enmity, against the most it
+  has for anyone, as two more fellows: `COLOSSAL_ENMITY`). Taunted, it goes for the taunter, as a
+  boss does (*Whom they go for*). On its way it walks over whoever's at its feet.
 - **Where it goes**: on to them till they're under its jaws (16 m before where it stands), then it
   stands its ground, turned to them, and never backs off. Its breath catches them as they come
   within its reach on the way.

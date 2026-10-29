@@ -6,10 +6,10 @@
 // √(toughness × harm), from what they are now (their health, armour, shield, knack for slipping
 // blows; their weapon and power, the spells they cast), so gear, skills and a creature's tier
 // all count. A side's strength (S) is the sum of its members' values over its strongest
-// player's, a hired adventurer's and a called creature's at about a third of its value
-// (STRENGTH: the wild goes for the nearest, most often a player, who comes at it first, so the
-// game's own fighters spare them less than another player would; one knocked down still
-// counted, as they'll be up again): a player alone
+// player's, a hired adventurer's at half its value and a called creature's at about a third
+// (STRENGTH: their foes' enmity has hired warriors take foes off their leader and hold them, and
+// called creatures draw them, but the game's own fighters still spare their leader less than
+// another player would; one knocked down still counted, as they'll be up again): a player alone
 // is 1, two alike 2, a new adventurer and a new hire about 1.3. The wild answers it with an
 // opposition a little less than it (F = S^0.85: OPPOSITION), each of a party's members finding it
 // a little easier than alone, and every ally still worth having.
@@ -32,12 +32,13 @@ import { armsOf, blowEvery } from "./weapons.js";
  * a group's players), and the players `apart` metres or less from one another, one after
  * another, one group; a hired adventurer at `hired` of their fighting value, a creature called,
  * raised or tamed at `called` of its (the balance runner's: with four hired as mighty as the
- * tier, or five called, their leader loses about 0.8 to 0.9 of what they'd lose alone,
- * docs/WILDS.md *Tuning it*; the user: "About a third"). Armour, slipping blows and a shield each
+ * tier, or five called, their leader loses about 0.8 of what they'd lose alone at tiers 5 and 8,
+ * docs/WILDS.md *Tuning it*; the user: "At half their worth", once foes' enmity had hired warriors
+ * hold what they took). Armour, slipping blows and a shield each
  * count as taking off at most `most` of what comes at someone; a shield, only what comes from in
  * front of them, about `front` of it.
  */
-export const STRENGTH = Object.freeze({ reach: 60, apart: 60, most: 0.9, front: 0.5, hired: 0.3, called: 0.3 });
+export const STRENGTH = Object.freeze({ reach: 60, apart: 60, most: 0.9, front: 0.5, hired: 0.5, called: 0.3 });
 
 /** How the wild answers a side's strength S: an opposition of S^`answer` (1 alone; about 1.8 for two alike, 3.25 for four). */
 export const OPPOSITION = Object.freeze({ answer: 0.85 });

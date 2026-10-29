@@ -928,6 +928,7 @@ export const REFUSALS = Object.freeze({
     cover: "Only a warrior or a creature called to your side can cover you.",
     unseen: "They can't see you to be taunted.",
     taunted: "Someone else's taunt holds them still.",
+    resisted: "It shrugs off taunts for now.",
     unheard: "No foe near enough to hear you.",
     shop: "They've nothing like that to sell.",
     soldOut: "They've sold all they had of that today: there'll be more tomorrow.",
@@ -4848,8 +4849,8 @@ export class Host {
 
     // A taunt, a war cry, slipping away (ABILITIES taunt, cry, slip: battle.js taunt, warCry,
     // slipAway; docs/WILDS.md *Whom they go for*): a taunt on a foe within TAUNT reach that can see
-    // them, refused if another's taunt holds it still; a war cry no foe hears, refused. Refused,
-    // it's still ready
+    // them, refused if another's taunt holds it still or it's a boss shrugging them off; a war cry
+    // no foe hears, refused. Refused, it's still ready
     #enmityAbility(player, actor, id, ability, target) {
         if (ability.taunt) {
             const foe = target === null ? null : this.battle.actor(target);
@@ -4867,7 +4868,7 @@ export class Host {
             }
 
             if (!this.battle.taunt(actor.id, foe.id)) {
-                return refuse("taunted");
+                return refuse(this.battle.tauntProof(foe.id) ? "resisted" : "taunted");
             }
         } else if (ability.cry) {
             if (!this.battle.warCry(actor.id)) {
@@ -9192,6 +9193,15 @@ export class Host {
 
         if (!ids.length) {
             return;
+        }
+
+        // (After whom it's most set on, as it is: its top, battle.js ENMITY)
+        const on = this.battle.actor(target);
+
+        if (on && !on.dead && on.map === map) {
+            for (const more of ids) {
+                Object.assign(this.battle.actor(more), { target: on.id, lastSeen: this.battle.time });
+            }
         }
 
         if (level >= 0) {

@@ -167,6 +167,31 @@ describe("the Behemoth of the Rift (battle.js #colossus)", () => {
         assert.ok(kaiju.path.length > 0, "on its way");
     });
 
+    it("goes for whom it's most set on, of those as near and as many (its enmity: battle.js COLOSSAL_ENMITY); and a taunt takes it, for half as long, a boss's", () => {
+        // (A soldier each side of it, as far off; whom it's most set on chosen)
+        const facing = (most) => {
+            const battle = new Battle(field(90), { seed: 2 });
+            const kaiju = behemoth(battle, [45, 45]);
+            const [west] = soldiers(battle, "w", [33, 45], 1);
+            const [east] = soldiers(battle, "e", [57, 45], 1);
+
+            kaiju.enmity = { [west.id]: [most === "w0" ? 400 : 100, 60000], [east.id]: [most === "e0" ? 400 : 100, 60000] };
+            run(battle, STEP_MS);
+
+            return { battle, kaiju, east };
+        };
+
+        assert.equal(facing("e0").kaiju.target, "e0");
+
+        const { battle, kaiju, east } = facing("w0");
+
+        assert.equal(kaiju.target, "w0");
+        assert.equal(battle.taunt(east.id, kaiju.id), true);
+        assert.equal(kaiju.taunted.until - kaiju.taunted.at, 2000);
+        run(battle, 1000);
+        assert.equal(kaiju.target, east.id, "made to");
+    });
+
     it("is everyone's enemy and everyone its, the wild's creatures too; nothing stuns, frightens, slows or throws it", () => {
         const battle = new Battle(field(80), { seed: 13 });
         const kaiju = behemoth(battle, [40, 40]);
