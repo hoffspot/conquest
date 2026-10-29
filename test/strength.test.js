@@ -203,7 +203,7 @@ describe("a side's strength in play (host.js strengthOf)", () => {
         assert.equal(host.strengthOf("nobody"), null);
     });
 
-    it("counts those with a player near them: a hired adventurer and a creature called to their side, each as strong as they are; not once they're far off", () => {
+    it("counts those with a player near them: a hired adventurer at STRENGTH.hired of their worth, knocked down or standing; not once they're far off", () => {
         const host = hosted();
         const me = host.battle.actor(HOST_PLAYER);
         const guild = [...host.world.interiors.buildings.values()].find(({ kind, place }) => kind === "guild" && place === "home");
@@ -223,8 +223,17 @@ describe("a side's strength in play (host.js strengthOf)", () => {
         const own = fightingValue(me, host.players.get(HOST_PLAYER).progress.known());
 
         assert.equal(side.allies, 1);
-        assert.ok(Math.abs(side.strength - (own + fightingValue(hired)) / own) < 1e-9, `${side.strength}`);
-        assert.ok(side.strength > 1.3 && side.strength < 2.5, "a new hire about as strong as a new adventurer");
+        assert.ok(Math.abs(side.strength - (own + fightingValue(hired) * STRENGTH.hired) / own) < 1e-9, `${side.strength}`);
+        assert.ok(side.strength > 1.3 && side.strength < 1.75, "a new hire about half a new adventurer's worth again");
+
+        // (Knocked down, to be up again: still counted, as they were standing)
+        Object.assign(hired, { dead: true, downed: true });
+        assert.deepEqual(host.strengthOf(HOST_PLAYER), side);
+
+        // (Gone for good: not)
+        hired.downed = false;
+        assert.equal(host.strengthOf(HOST_PLAYER).allies, 0);
+        Object.assign(hired, { dead: false });
 
         // (Stronger, the player: the hire's share less)
         Object.assign(me, { maxHp: 200, power: { ...me.power, melee: 3 } });

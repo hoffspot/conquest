@@ -1559,7 +1559,9 @@ a look of its own (`LOOKS`), which the world takes on round the player:
   A room at an inn is slept in to the next sunrise or sunset at least five minutes off. Either
   way they wake mended, their stamina full (the screen coming up from black, told how long they
   slept: "You sleep by the fire for 8 hours, 20 minutes gone."), the war's turns meanwhile all
-  played as they would have been. The camp's fire burns on three minutes after, lighting the dark round it as a war
+  played as they would have been. Their hired adventurers wake mended too: every wound gone, one
+  knocked down up again, all whole (host.js `#restMends`; told for each that had a wound, "Tam is
+  rested, their wounds mended.": docs/WAR.md *Mercenaries that grow*). The camp's fire burns on three minutes after, lighting the dark round it as a war
   camp's does (seen as by day within 14 m). In a world shared with others only the host passes
   the time, everyone woken with them; anyone else who sleeps just rests. A world with no host
   player (a world server's: core/host.js `RULES` rest "everyone") passes it only once everyone in

@@ -194,7 +194,8 @@ export function wearable(item, { weapon, level = 1 }) {
 
 /**
  * A hired adventurer's wounds (docs/WAR.md *Mercenaries that grow*): each fall leaves one, `wound`
- * of its health the less till it's mended (a healing draught given them mends one); with `most`,
+ * of its health the less till it's mended (a healing draught given them mends one, a night's rest
+ * with their leader all of them: host.js #restMends); with `most`,
  * it can't go on, and goes home to its guild to mend, called back to its leader's side for `fee`
  * of what it'd cost to hire (any guild sends for it). Where mercenaries can die (host.js RULES
  * `mortal`), the fall that would send it home is its last.

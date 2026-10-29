@@ -10963,6 +10963,7 @@ export class Game {
             renamed: `You call them ${name} now.`,
             picked: `${name} will grow as you chose.`,
             mended: `One of ${name}'s wounds is mended (${wounds} left).`,
+            rested: `${name} is rested, their wounds mended.`,
         }[event.change];
 
         if (words) {
