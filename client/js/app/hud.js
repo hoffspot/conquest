@@ -968,7 +968,11 @@ export class Hud {
             icon.root.classList.toggle("target", Boolean(target));
             icon.root.classList.toggle("locked", Boolean(locked));
             icon.root.classList.toggle("idle", !attacking && !target);
-            icon.root.setAttribute("aria-label", `${locked ? `${name}, locked on (tap to let go)` : target ? `${name}, set on` : attacking ? name : `${name}, in range`}${STANDINGS[standing] ? `, ${STANDINGS[standing]}` : ""}${on ? `, on ${on.name}` : ""}`);
+            // (How the player stands in its enmity and whom else it's on, after its name; what the
+            // player's doing about it, and a tap's, last)
+            const said = `${name}${STANDINGS[standing] ? `, ${STANDINGS[standing]}` : ""}${on ? `, on ${on.name}` : ""}`;
+
+            icon.root.setAttribute("aria-label", locked ? `${said}, locked on (tap to let go)` : target ? `${said}, set on` : attacking ? said : `${said}, in range`);
             icon.root.setAttribute("aria-pressed", String(Boolean(target)));
             icon.health.style.transform = `scaleX(${health.toFixed(3)})`;
 
