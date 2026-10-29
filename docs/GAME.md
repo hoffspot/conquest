@@ -838,6 +838,8 @@ The world's rare encounters, and what the player keeps of them:
   given, each in its sea-green, with its tale, kept with them.
 - **In talk and the shops**: a thread's question in the talk of the one it's for; a thread's
   contract on a guild's board; a festival's prices, and a thread's wares on a shop's shelves.
+- **At a door**: one a thread's lock keeps shut (or a hell's portal sealed from this side) says
+  what might open it as it's chosen, and isn't walked to; any that refuses says why.
 - **In the pack** (app/gearinfo.js `rarityOf`, styles.css `.rarity-unique`): a unique's its own
   make, *Unique*, sea-green in its card, its cell and its glow on the ground (world/drops3d.js),
   found nowhere else and bound to them: nothing to sell, drop, throw away or give.

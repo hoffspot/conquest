@@ -41,7 +41,7 @@ import { aloftShare, BOMBS, LOCK_REACH, SIGHT, sitting, STEP_MS, TALK_REACH, WAI
 import { CACHE_BANDS } from "../core/caches.js";
 import { FINDS, foodFor, FRESH, HEALING_DRAUGHTS, OBSTACLES, STRANGERS } from "../core/director.js";
 import { compass } from "../core/ways.js";
-import { cardOf, THREADS, threadTalk, threadWords, UNIQUES } from "../core/rare.js";
+import { cardOf, LOCKS, lockSite, THREADS, threadTalk, threadWords, UNIQUES } from "../core/rare.js";
 import { CREATURES, ELITES, LAIRS, notable } from "../core/creatures.js";
 import { BESTIARY_LORE } from "../core/lore/bestiary.js";
 import { homeWords, signOf, signsNear, TRAILS, trailsNear } from "../core/tracks.js";
@@ -6341,7 +6341,7 @@ export class Game {
         const seen = [...this.raresSeen.values()].map(({ n, card, at: [x, z] }) => ({ id: `rare-${n}`, kind: "legend", x, z, about: `${cardOf(card)?.title ?? "Something rare"}: seen here` }));
         // (And where the world's threads lead next, theirs to go to: core/rare.js `place` steps)
         const threads = Object.entries(this.host.legends?.threads ?? {})
-            .filter(([id, thread]) => thread.place && this.host.legends.stepOf(id)?.kind === "place")
+            .filter(([id, thread]) => thread.place && ["place", "lock"].includes(this.host.legends.stepOf(id)?.kind))
             .map(([id, { place: [x, z] }]) => ({ id: `thread-${id}`, kind: "thread", x, z, about: `${THREADS[id]?.title ?? "A thread"}: where it leads` }));
 
         return [...seen, ...threads];
@@ -11256,7 +11256,7 @@ export class Game {
         const threads = Object.entries(this.host.legends?.threads ?? {}).map(([id, thread]) => {
             const def = this.host.legends.stepOf(id);
             const town = thread.town ? this.world.plan?.places.find((place) => place.id === thread.town) : null;
-            const where = def?.kind === "place" && thread.place ? thread.place : town?.at;
+            const where = (def?.kind === "place" || def?.kind === "lock") && thread.place ? thread.place : town?.at;
 
             return {
                 title: THREADS[id]?.title ?? "A thread",
@@ -11982,9 +11982,11 @@ export class Game {
         }
 
         const town = thread.town ? this.world.plan?.places.find((place) => place.id === thread.town) : null;
-        const to = def.kind === "place" ? thread.place : town?.at;
+        const to = def.kind === "place" || def.kind === "lock" ? thread.place : town?.at;
+        // (A lock's place, by its name: core/rare.js LOCKS, lockSite)
+        const site = def.kind === "lock" && LOCKS[def.lock] ? lockSite(this.world.plan, LOCKS[def.lock], this.world.seed ?? 1) : null;
 
-        return threadWords(def.word, { town: town?.name, way: to ? compass(thread.at, to) : "near" });
+        return threadWords(def.word, { town: town?.name, way: to ? compass(thread.at, to) : "near", place: site ? (site.name ?? `the ${site.kind}`) : undefined });
     }
 
     // A thread (core/rare.js THREADS; host.js "thread"): begun, or a step of it done, told to those
@@ -16696,7 +16698,7 @@ export class Game {
                 this.start();
 
                 if (how !== "back") {
-                    this.#command({ type: "enter", link: door.link.id, run });
+                    this.#command({ type: "enter", link: door.link.id, run }, (result) => this.#doorRefused(result));
                     this.doors.light(door, this.clock);
                 }
             },
@@ -16704,6 +16706,15 @@ export class Game {
         readying.ready.then(() => this.readyingAt === waiting && this.readyCard.ready());
 
         return true;
+    }
+
+    // A way in that wouldn't let the player through: why, said (a hell's portal sealed, or cold by
+    // day; a thread's lock)
+    #doorRefused(result) {
+        if (!result?.ok && result?.reason) {
+            this.hud.message(REFUSALS[result.reason] ?? "There's no way through there.", 3);
+            this.sound?.play("denied");
+        }
     }
 
     // Send the player to fight an enemy, through a door (or up or down the stairs), or to a point
@@ -16743,8 +16754,19 @@ export class Game {
         // The door's edge glows green as they make for it (once what's in there's ready, if it
         // isn't: #readyAtDoor)
         if (door) {
+            // (A way in kept shut, a thread's lock or a hell's seal: what might open it said at once,
+            // and not walked to: core/rare.js LOCKS)
+            const shut = this.host.shutOf?.(door.link.id, player.map);
+
+            if (shut) {
+                this.hud.message(shut.hint, 4);
+                this.sound?.play("denied");
+
+                return;
+            }
+
             if (!this.#readyAtDoor(door, run)) {
-                this.#command({ type: "enter", link: door.link.id, run });
+                this.#command({ type: "enter", link: door.link.id, run }, (result) => this.#doorRefused(result));
                 this.doors.light(door, this.clock);
             }
 

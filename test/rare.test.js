@@ -15,7 +15,7 @@ import { HOST_PLAYER, Host, REFUSALS, SNAPSHOT_VERSION } from "../client/js/core
 import { buildWorld } from "../client/js/core/overworld.js";
 import { Progress } from "../client/js/core/progress.js";
 import { createRandom } from "../client/js/core/random.js";
-import { cardOf, CHANGES, DEBUG_CARDS, gatesHold, hourOf, Legends, makeUnique, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_KIN, SHAPES, STEPS, threadTalk, threadWares, threadWords, THREADS, UNIQUES, VENUES } from "../client/js/core/rare.js";
+import { cardOf, CHANGES, DEBUG_CARDS, gatesHold, hourOf, Legends, LOCKS, lockSite, makeUnique, priceTimes, RARE, RARE_CARDS, SAMPLE, SAMPLE_KIN, SHAPES, siteDoor, STEPS, threadTalk, threadWares, threadWords, THREADS, UNIQUES, VENUES } from "../client/js/core/rare.js";
 import { decode, encode } from "../client/js/core/wire.js";
 import { Conversation, TREES } from "../client/js/core/dialogue.js";
 import { describe as describeGear, MAKES, rarityOf } from "../client/js/app/gearinfo.js";
@@ -276,11 +276,15 @@ describe("rare encounters (rare.js)", () => {
         assert.equal(legends.wants(cards.kin), true);
         assert.equal(legends.pick("wilds", { at: DAY, random }), "kin", "the follow-up first");
 
+        const kin = legends.advance("sampleTrail", { ids: ["ada"] });
+
+        assert.equal(kin.next.kind, "lock");
+        assert.equal(legends.wants(cards.kin), false, "(past it)");
+
         const last = legends.advance("sampleTrail", { ids: ["ada"] });
 
         assert.equal(last.next, null);
         assert.equal(legends.threads.sampleTrail.done, true);
-        assert.equal(legends.wants(cards.kin), false);
         assert.equal(legends.advance("sampleTrail"), null, "done");
         assert.deepEqual(STEPS, ["card", "place", "talk", "contract", "lock"]);
         assert.ok(THREADS.sampleTrail.steps.every((step) => STEPS.includes(step.kind) && (!step.change || CHANGES.includes(step.change.kind))));
@@ -324,6 +328,31 @@ describe("rare encounters (rare.js)", () => {
         assert.ok(!talk.ended && talk.choices.some(({ text }) => text === step.ask), "back to their talk");
         assert.equal(threadTalk(TREES.barkeep, { thread: "sampleTrail", step: 0 }), TREES.barkeep, "(only a talk step)");
         assert.ok(!TREES.barkeep.nodes["thread:sampleTrail"], "(their own talk untouched)");
+    });
+
+    it("puts a lock on one of the world's places of its kinds, chosen from its seed; shut once its thread's begun (a debug thread's) or from the first (a card's in play), till it's opened", () => {
+        const plan = buildWorld({ seed: 2 }).plan;
+        const site = lockSite(plan, LOCKS.sampleDoor, 2);
+
+        assert.ok(LOCKS.sampleDoor.on.includes(site.kind));
+        assert.equal(lockSite(plan, LOCKS.sampleDoor, 2).id, site.id, "the same every time");
+        assert.equal(lockSite({ sites: [] }, LOCKS.sampleDoor, 2), null);
+        assert.equal(siteDoor(site), `site:${site.id}/door`);
+
+        const legends = new Legends();
+
+        assert.equal(legends.shut("sampleDoor"), false, "(a debug thread's: not in a world it's not begun in)");
+        legends.begin("sampleTrail", { at: [0, 0] });
+        assert.equal(legends.shut("sampleDoor"), true);
+        legends.opened.add("sampleDoor");
+        assert.equal(legends.shut("sampleDoor"), false);
+        assert.deepEqual(new Legends(JSON.parse(JSON.stringify(legends))).opened, new Set(["sampleDoor"]));
+
+        // (A card in play whose thread it is: shut from the world's making)
+        const playing = new Legends(null, { cards: { real: card("real", { thread: "sampleTrail" }) } });
+
+        assert.equal(playing.shut("sampleDoor"), true);
+        assert.equal(playing.shut("nothing"), false);
     });
 
     it("keeps all of it: a world's legends the same after a round trip through JSON", () => {
@@ -535,7 +564,7 @@ describe("rare encounters in play (host.js)", () => {
         assert.deepEqual(new Progress().legends, { met: [], uniques: [] });
     });
 
-    it("begins the sample's thread as it's done and follows it, the world's, step by step: a place gone to, the barkeep asked, the guild's contract reported, the card that follows it felled; each step's reward and the world changed", () => {
+    it("begins the sample's thread as it's done and follows it, the world's, step by step: a place gone to, the barkeep asked, the guild's contract reported, the card that follows it felled, the way it kept shut gone in by; each step's reward and the world changed", () => {
         const { host, ada, bram } = hosted();
         const fell = () => {
             const foe = host.battle.actor(host.legends.active.ids[0]);
@@ -559,6 +588,21 @@ describe("rare encounters in play (host.js)", () => {
         assert.ok(begun, "(begun as it's done)");
         assert.deepEqual(begun.ids.sort(), [HOST_PLAYER, "bram"].sort());
         assert.equal(thread.step, 0);
+
+        // (Its lock shut now: its way in refused, and why said before anyone walks to it)
+        const site = lockSite(host.world.plan, LOCKS.sampleDoor, host.world.seed);
+
+        host.world.maps.town.sites.heartOf(site);
+
+        const way = host.battle.links.find(({ id }) => id === siteDoor(site));
+        const outside = way.ends.find((end) => end.map === "town");
+
+        assert.equal(host.shutOf(way.id, "town").hint, LOCKS.sampleDoor.hint);
+        assert.equal(host.shutOf(way.id, way.ends.find((end) => end.map !== "town").map), null, "(not from inside)");
+        put(bram, outside.squares[0]);
+        assert.deepEqual(host.command("bram", { type: "enter", link: way.id }), { ok: false, reason: "sealedWay" });
+        assert.ok(REFUSALS.sealedWay);
+        put(bram, [Math.floor(ada.x) - 1, Math.floor(ada.y)]);
 
         // A place: somewhere 150 to 250 m from where it fell (or there, at worst), reached
         const far = Math.hypot(thread.place[0] - at[0], thread.place[1] - at[1]);
@@ -644,7 +688,18 @@ describe("rare encounters in play (host.js)", () => {
         host.legends.last = -Infinity;
         assert.equal(host.command(HOST_PLAYER, { type: "rare" }).card, SAMPLE_KIN.id);
 
-        const end = told(fell());
+        const opened = told(fell());
+
+        assert.ok(opened.some(({ change, lock }) => change === "unlocked" && lock === "sampleDoor"), JSON.stringify(opened));
+        assert.equal(thread.step, 4);
+        assert.deepEqual(thread.place, site.at, "(its way in marked)");
+        assert.equal(host.shutOf(way.id, "town"), null);
+
+        // Its way in, open now, gone in by: the thread's end
+        put(ada, outside.squares[0]);
+        assert.equal(host.command(HOST_PLAYER, { type: "enter", link: way.id }).ok, true);
+
+        const end = told(run(host, 4000));
 
         assert.ok(end.some(({ change }) => change === "done"), JSON.stringify(end));
         assert.equal(thread.done, true);

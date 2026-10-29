@@ -898,7 +898,8 @@ own: `#legendReward`). Its steps (`STEPS`), each made ready as it's come to (`#t
 - *contract*: a contract on the board of that settlement's adventurers' guild (`#threadContracts`:
   a "Beasts on the roads" of the thread's, its `need` brought down within 500 m of where it was
   last); done as it's reported done, by whoever reports it first (`#rewarded`).
-- *lock*: a lock opened (*Locks*, below).
+- *lock*: a lock opened as the thread comes to it, its way in marked; done once someone goes in
+  by it (*Locks*, below).
 
 As a step's done the world changes as it says (`change`, `CHANGES`; `Legends` `change`, the host's
 `#threadChange`), in the settlement it was at (or nearest where it was last), for its `lasts` or
@@ -917,7 +918,22 @@ The sample's thread (`sampleTrail`, debug mode's) has a step of each kind: where
 from (20 gold; the nearest ruins revealed); the barkeep in the nearest settlement asked (15 gold;
 the Feast of the Sample there, a day at four-fifths the prices); the guild's contract there (10
 gold besides the contract's own; potions on the barkeep's shelves for good); and the Sample's Kin,
-dealt and felled (40 gold).
+dealt and felled (40 gold); and the way it kept shut gone in by (25 gold).
+
+### Locks
+
+A thread can keep a way in shut till it comes to it (`LOCKS`; a `lock` step): a lock is put on
+one of the world's places of its kinds (`on`: the sample's on ruins or a cave), chosen from the
+world's seed (`lockSite`, the same on every copy), its door (`siteDoor`) refused to anyone outside
+(`#lockedOn`, in the host's `enter`: `sealedWay`, "Its way in is sealed fast: something must open
+it first."). It's shut from the world's making while its thread is a card's in play, and a debug
+thread's only once that thread's begun (`Legends` `shut`), so a world nothing's been dealt in has
+none. Choosing its door says at once what might open it (its `hint`), before the player walks
+there (the host's `shutOf`, which says as much for a hell's portal sealed from this side). As the
+thread comes to its lock step the lock's opened (`opened`) and its way in marked on every player's
+maps; the step's done once someone goes in by it (`#threadCrossed`, at the battle's "cross"). And
+any way in that won't let a player through now says why (app/game.js `#doorRefused`: a hell's
+portal sealed, cold by day, or held by its cult's rite).
 
 ## Adventurers' caches
 

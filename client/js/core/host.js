@@ -25,7 +25,7 @@ import { Explored } from "./explored.js";
 import { abilityLabel, abilityOf, BANES, bynameOf, capOf, FALL_BACK, freshRecord, GIFTS, GIVE_REACH, givable, hirePrice, LEVEL_XP, levelOfXp, MENDING, MERC_GEAR, MERCENARY, mercenaryOf, mercSlotOf, pickOf, recallPrice, renownOf, SHARE, sharesOf, trustOf, UNIT_ABILITIES, wayOf, wearable } from "./followers.js";
 import { namePeople } from "./names.js";
 import { rumouredBy, rumouredOf, rumoursNear } from "./rumours.js";
-import { DEBUG_CARDS, hourOf, Legends, makeUnique, priceTimes, RARE, SAMPLE, threadWares, threadWords, THREADS, UNIQUES } from "./rare.js";
+import { DEBUG_CARDS, hourOf, Legends, LOCKS, lockSite, makeUnique, priceTimes, RARE, SAMPLE, siteDoor, threadWares, threadWords, THREADS, UNIQUES } from "./rare.js";
 import { sightedFrom, SIGHTING } from "./sighting.js";
 import { nearestFree, squareKey, squaresOf } from "./grid.js";
 import { levelOf, offHandFits, rollGear, SHIELD_ARMS } from "./gear.js";
@@ -906,6 +906,7 @@ export const REFUSALS = Object.freeze({
     rareOut: "Something rare's out in the world already.",
     rareRoom: "There's nowhere for it out here.",
     thread: "They've nothing to say of that now.",
+    sealedWay: "Its way in is sealed fast: something must open it first.",
     unwanted: "There's nothing there auto-snag's set to take.",
     locked: "It's locked fast, and its guardians still hold the place.",
     sealed: "The portal won't let you through while this level's master still stands.",
@@ -1986,6 +1987,11 @@ export class Host {
                     return refuse(link.seal.refusal ?? "sealed");
                 }
 
+                // (A way in one of the world's threads keeps shut: core/rare.js LOCKS)
+                if (this.#lockedOn(link.id, actor.map)) {
+                    return refuse("sealedWay");
+                }
+
                 // (A hell's way in from the wilds: only by night, and only once its cult's rite is
                 // broken)
                 const rite = this.#riteHolds(link, actor.map);
@@ -2490,9 +2496,11 @@ export class Host {
                 this.#event("companion", { id: leader, companion: event.id, creature, change: "fallen" });
             }
 
-            // (A player through a door or up the stairs: their followers with them, unless told to wait)
+            // (A player through a door or up the stairs: their followers with them, unless told to wait;
+            // a thread's way in, opened, gone in by)
             if (event.type === "cross" && this.players.has(event.id)) {
                 this.#bring(event.id);
+                this.#threadCrossed(event);
             }
 
             // A section of a camp's palisade hacked down: broken open (#hacked)
@@ -10626,6 +10634,60 @@ export class Host {
             thread.place = this.#threadSpot(thread.at, def.far ?? [150, 250]);
         } else if (def?.kind === "talk" || def?.kind === "contract") {
             thread.town = this.#nearestTown(thread.at);
+        } else if (def?.kind === "lock") {
+            // (Its lock opened, its way in marked: told)
+            const site = LOCKS[def.lock] ? lockSite(this.world.plan, LOCKS[def.lock], this.world.seed ?? 1) : null;
+
+            this.legends.opened.add(def.lock);
+            thread.place = site ? [...site.at] : null;
+            this.#event("thread", { change: "unlocked", thread: id, lock: def.lock, site: site?.id ?? null });
+        }
+    }
+
+    // The way in a lock (rare.js LOCKS) keeps shut, from outside (`map`): the lock's id, or null
+    #lockedOn(link, map) {
+        if (map !== "town") {
+            return null;
+        }
+
+        this.lockDoors ??= new Map(Object.values(LOCKS).map((lock) => [lock.id, lockSite(this.world.plan, lock, this.world.seed ?? 1)]));
+
+        for (const [id, site] of this.lockDoors) {
+            if (site && siteDoor(site) === link && this.legends.shut(id)) {
+                return id;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * What keeps a way in shut to someone outside it on `map`, said as its door's chosen (before
+     * they walk to it): { hint } for a lock of the world's threads (rare.js LOCKS) or a hell's portal
+     * sealed from this side; else null.
+     */
+    shutOf(linkId, map) {
+        const lock = this.#lockedOn(linkId, map);
+
+        if (lock) {
+            return { lock, hint: LOCKS[lock].hint };
+        }
+
+        const link = this.battle.links.find(({ id }) => id === linkId);
+
+        return link && this.#sealed(link, map) ? { hint: REFUSALS[link.seal.refusal ?? "sealed"] } : null;
+    }
+
+    // A player gone in by a way in (`event`: the battle's "cross"): a thread whose lock step's
+    // that way's, done by them
+    #threadCrossed(event) {
+        for (const [id, thread] of Object.entries(this.legends.threads)) {
+            const def = this.legends.stepOf(id);
+            const site = def?.kind === "lock" && LOCKS[def.lock] ? lockSite(this.world.plan, LOCKS[def.lock], this.world.seed ?? 1) : null;
+
+            if (site && event.link === siteDoor(site) && event.from === "town") {
+                this.#threadDone(id, [event.id], thread.place);
+            }
         }
     }
 

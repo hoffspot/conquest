@@ -19,6 +19,7 @@ import { DAY, timeOfDay } from "./daytime.js";
 import { shuffled } from "./director.js";
 import { hypot } from "./exact.js";
 import { rollGear } from "./gear.js";
+import { createRandom } from "./random.js";
 
 const MINUTE = 60000;
 const HOUR = 60 * MINUTE;
@@ -135,7 +136,8 @@ export function cardOf(id) {
  *   talk; done once it's asked.
  * - `contract`: a contract on the board of that settlement's adventurers' guild: `need` beasts
  *   brought down near where it was last; done once it's reported done.
- * - `lock`: a lock opened (stage 3).
+ * - `lock`: a lock opened (`lock`: LOCKS), as the thread comes to it, its way in marked on every
+ *   player's maps; done once someone goes in by it.
  */
 export const STEPS = Object.freeze(["card", "place", "talk", "contract", "lock"]);
 
@@ -169,12 +171,42 @@ export const THREADS = Object.freeze({
             Object.freeze({ kind: "talk", role: "barkeep", word: "The barkeep in {town} may have heard where the Sample came from.", ask: "Have you heard tell of the Sample?", reply: "The Sample? Aye, it's all anyone talks of. Out of the old places it came, they say, and its kin with it. The town's feasting that it's gone.", reward: Object.freeze({ gold: 15 }), change: Object.freeze({ kind: "festival", name: "the Feast of the Sample", times: 0.8, lasts: DAY.length }) }),
             Object.freeze({ kind: "contract", need: 2, word: "The guild in {town} wants the beasts the Sample stirred up brought down, out {way}.", reward: Object.freeze({ gold: 10 }), change: Object.freeze({ kind: "stock", shop: "tavern", ware: Object.freeze({ id: "potion", quality: "common", count: 3 }) }) }),
             Object.freeze({ kind: "card", card: "sampleKin", word: "The Sample's kin is out in the wilds somewhere. It will come to you." }),
+            Object.freeze({ kind: "lock", lock: "sampleDoor", word: "The Sample's kin bore the mark that opens the sealed way into {place}, {way} of where it fell. It's open now.", reward: Object.freeze({ gold: 25 }) }),
         ]),
     }),
 });
 
-/** A thread step's words (`word`) filled in: {town}, the settlement's name; {way}, which way it is from where the thread was last. */
-export const threadWords = (text, { town = "the nearest town", way = "near" } = {}) => text.replace(/\{town\}/g, town).replace(/\{way\}/g, way);
+/**
+ * The world's locks, by id: a way in kept shut, a thread's (`thread`), till the thread comes to it
+ * (a `lock` step): `{ id, thread, on (the kinds of place, the plan's sites, one of which it's put
+ * on, chosen from the world's seed: lockSite), hint (said as its door's chosen, of what might open
+ * it) }`. One's shut from the world's making while its thread's a card's in play, else (a debug
+ * thread's) once its thread's begun: none in a world nothing's been dealt in. None's in play yet
+ * but the sample's.
+ */
+export const LOCKS = Object.freeze({
+    sampleDoor: Object.freeze({ id: "sampleDoor", thread: "sampleTrail", on: Object.freeze(["ruins", "cave"]), hint: "Its way in is sealed, a mark like the Sample's pressed into the seal. Whatever opens it, the Sample's kin will have it." }),
+});
+
+/**
+ * The place a lock's put on in a world (`plan`: its sites; `seed`, the world's): one of its kinds
+ * (`on`), the same on every copy and every time it's asked; or null, the world having none.
+ */
+export function lockSite(plan, lock, seed = 1) {
+    const sites = (plan?.sites ?? []).filter((site) => lock.on.includes(site.kind)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const random = createRandom([...`${lock.id}:lock`].reduce((hash, character) => (Math.imul(hash, 31) + character.charCodeAt(0)) | 0, seed) >>> 0);
+
+    return sites.length ? sites[Math.floor(random.next() * sites.length)] : null;
+}
+
+/** The door of a site's building (insides.js addSite): its link's id. */
+export const siteDoor = (site) => `site:${site.id}/door`;
+
+/**
+ * A thread step's words (`word`) filled in: {town}, the settlement's name; {way}, which way it is
+ * from where the thread was last; {place}, the name of the place it leads to.
+ */
+export const threadWords = (text, { town = "the nearest town", way = "near", place = "the place" } = {}) => text.replace(/\{town\}/g, town).replace(/\{way\}/g, way).replace(/\{place\}/g, place);
 
 /**
  * How much the world's changes (Legends `changes`, as they are now: `played`) put a shop's prices
@@ -276,6 +308,7 @@ export function makeUnique(id, level, random) {
  *   place (a place step's: [x, y]), began (when), by (the names of those who've taken part),
  *   took (their ids), done }.
  * - `changes`: the world's changes (CHANGES), each { kind, thread, town, ..., from, until }.
+ * - `opened`: the locks opened (LOCKS).
  *
  * `cards`, by id, those it deals from: those in play and debug mode's (or a test's own).
  */
@@ -299,6 +332,7 @@ export class Legends {
         this.next = json.next ?? 1;
         this.threads = structuredClone(json.threads ?? {});
         this.changes = structuredClone(json.changes ?? []);
+        this.opened = new Set(json.opened ?? []);
     }
 
     toJSON() {
@@ -317,6 +351,7 @@ export class Legends {
             next: this.next,
             threads: this.threads,
             changes: this.changes,
+            opened: [...this.opened],
         };
     }
 
@@ -591,6 +626,16 @@ export class Legends {
         this.changes = [...this.changes.filter((each) => lasting(each, this.played)), made];
 
         return made;
+    }
+
+    /**
+     * Whether a lock (LOCKS) keeps its way in shut now: not opened, and its thread a card's in play
+     * (`cards`: those dealt from) or begun.
+     */
+    shut(id) {
+        const lock = LOCKS[id];
+
+        return Boolean(lock) && !this.opened.has(id) && (Boolean(this.threads[lock.thread]) || Object.values(this.cards).some((card) => card.thread === lock.thread && !card.debug));
     }
 
     /** The world's changes still in it. */
