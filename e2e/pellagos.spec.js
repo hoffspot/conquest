@@ -3982,291 +3982,377 @@ test("walks out of the town into the world, drawn round the player as they go, w
     expect(reading.filter(({ read }) => read > 16)).toEqual([]);
 });
 
-test("up in the mountains, cliffs of rock where it's too steep to climb, and an arch of rock over open ground, its legs not walked into", async ({ page }) => {
+// (One start for the five, each its own step: none of them leaves anything another goes by, each
+// taking the player where it looks and loading the land there)
+test("the land round the first start town (seed 1), drawn and walked: cliffs up in the mountains and an arch of rock, the road's stone bridge over the river, a broken aqueduct, the humans' hill citadel and a ford in the woods", async ({ page }) => {
+    test.setTimeout(240000);
     await playing(page, "/?play&seed=1");
     await page.evaluate(() => window.pellagos.game.stop());
 
-    // Up in the mountains to the north east, where the ground's too steep to climb: cliffs of rock
-    // stand out of it, a mesh of their own a chunk, drawn with the rock's picture laid on from
-    // three sides
-    const cliffs = await page.evaluate(async () => {
-        const { game, session } = window.pellagos;
-        const [x, y] = [5776, 528];
+    await test.step("up in the mountains, cliffs of rock where it's too steep to climb, and an arch of rock over open ground, its legs not walked into", async () => {
+        // Up in the mountains to the north east, where the ground's too steep to climb: cliffs of rock
+        // stand out of it, a mesh of their own a chunk, drawn with the rock's picture laid on from
+        // three sides
+        const cliffs = await page.evaluate(async () => {
+            const { game, session } = window.pellagos;
+            const [x, y] = [5776, 528];
 
-        Object.assign(game.battle.actor(game.me), { x, y, path: [], order: null, progress: null });
-        game.avatars.get(game.me).object.position.set(x, game.world.maps.town.ground.heightAt(x, y), y);
+            Object.assign(game.battle.actor(game.me), { x, y, path: [], order: null, progress: null });
+            game.avatars.get(game.me).object.position.set(x, game.world.maps.town.ground.heightAt(x, y), y);
 
-        for (let n = 0; n < 4; n++) {
-            game.advance(0.25, { render: false });
+            for (let n = 0; n < 4; n++) {
+                game.advance(0.25, { render: false });
 
-            for (let k = 0; k < 400 && (game.chunks.update(x, y, { budget: 200 }) || game.chunks.busy); k++) {
-                await new Promise((resolve) => setTimeout(resolve, 0));
+                for (let k = 0; k < 400 && (game.chunks.update(x, y, { budget: 200 }) || game.chunks.busy); k++) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
             }
-        }
 
-        game.advance(0.05);
+            game.advance(0.05);
 
-        const meshes = [];
+            const meshes = [];
 
-        session.view.scene.traverse((node) => node.name === "cliffs" && meshes.push(node));
+            session.view.scene.traverse((node) => node.name === "cliffs" && meshes.push(node));
 
-        return {
-            meshes: meshes.length,
-            triangles: meshes.reduce((sum, mesh) => sum + mesh.geometry.getAttribute("position").count / 3, 0),
-            material: [...new Set(meshes.map((mesh) => mesh.material.name))],
-            compiled: session.view.renderer.info.programs.some(({ name }) => name === "cliffs"),
-        };
-    });
-
-    expect(cliffs.meshes).toBeGreaterThan(2);
-    expect(cliffs.triangles).toBeGreaterThan(3000);
-    expect(cliffs.material).toEqual(["cliffs"]);
-    expect(cliffs.compiled).toBe(true);
-
-    // At an arch of rock (core/arches.js): drawn over its legs, which can't be walked into, the
-    // ground under its span open
-    const arch = await page.evaluate(async () => {
-        const { game, session } = window.pellagos;
-        const land = game.world.maps.town;
-        const [{ x, y, turn, span }] = land.arches;
-        const [sx, sy] = [x - Math.sin(turn) * 20, y + Math.cos(turn) * 20];
-
-        Object.assign(game.battle.actor(game.me), { x: sx, y: sy, path: [], order: null, progress: null });
-        game.avatars.get(game.me).object.position.set(sx, land.ground.heightAt(sx, sy), sy);
-
-        for (let n = 0; n < 4; n++) {
-            game.advance(0.25, { render: false });
-
-            for (let k = 0; k < 400 && (game.chunks.update(sx, sy, { budget: 200 }) || game.chunks.busy); k++) {
-                await new Promise((resolve) => setTimeout(resolve, 0));
-            }
-        }
-
-        game.advance(0.05);
-
-        const meshes = [];
-
-        session.view.scene.traverse((node) => node.name === "arches" && meshes.push(node));
-
-        const foot = [x - (Math.cos(turn) * span) / 2, y - (Math.sin(turn) * span) / 2];
-
-        return {
-            drawn: meshes.length,
-            leg: land.squares.blocked(Math.floor(foot[0]), Math.floor(foot[1])),
-            under: land.squares.blocked(Math.floor(x), Math.floor(y)),
-        };
-    });
-
-    expect(arch.drawn).toBe(1);
-    expect(arch.leg).toBe(true);
-    expect(arch.under).toBe(false);
-
-    // Their shader, as every other drawn so far, reads no more textures than an iPhone lets one read
-    const reading = await texturesRead(page);
-
-    expect(reading.map(({ name }) => name)).toContain("cliffs");
-    expect(reading.filter(({ read }) => read > 16)).toEqual([]);
-});
-
-test("by the start town the road crosses the river on a stone bridge: drawn of stone over its arches, walked over on its cobbles, up its ramp and down the other", async ({ page }) => {
-    await playing(page, "/?play&seed=1");
-    await page.evaluate(() => window.pellagos.game.stop());
-
-    const crossing = await page.evaluate(async () => {
-        const { game, session } = window.pellagos;
-        const land = game.world.maps.town;
-        const bridge = land.chunkAt(3005, 5150).bridges.find(({ stone }) => stone);
-        const { a, b } = bridge;
-        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-        const [ux, uy] = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
-        const [sx, sy] = [a[0] - ux * 3, a[1] - uy * 3];
-        const me = game.battle.actor(game.me);
-        const avatar = game.avatars.get(game.me);
-
-        Object.assign(me, { x: sx, y: sy, path: [], order: null, progress: null });
-        avatar.object.position.set(sx, land.ground.heightAt(sx, sy), sy);
-
-        for (let n = 0; n < 4; n++) {
-            game.advance(0.25, { render: false });
-
-            for (let k = 0; k < 400 && (game.chunks.update(sx, sy, { budget: 200 }) || game.chunks.busy); k++) {
-                await new Promise((resolve) => setTimeout(resolve, 0));
-            }
-        }
-
-        game.advance(0.05);
-
-        const drawn = [];
-
-        session.view.scene.traverse((node) => node.name === "stone bridges" && drawn.push(node));
-
-        // Over it to the far bank, as high as its deck at its middle on the way
-        const to = [Math.floor(b[0] + ux * 3), Math.floor(b[1] + uy * 3)];
-        let highest = -Infinity;
-
-        game.battle.command(game.me, { type: "move", to });
-
-        for (let k = 0; k < 80 && Math.hypot(me.x - to[0] - 0.5, me.y - to[1] - 0.5) > 1; k++) {
-            game.advance(0.25, { render: false });
-            highest = Math.max(highest, avatar.object.position.y);
-        }
-
-        const [mx, my] = [Math.floor((a[0] + b[0]) / 2), Math.floor((a[1] + b[1]) / 2)];
-
-        return {
-            kind: bridge.kind,
-            drawn: drawn.length,
-            over: Math.hypot(me.x - to[0] - 0.5, me.y - to[1] - 0.5) <= 1,
-            high: highest - land.deckOf(bridge, 0.5),
-            cobbles: land.squares.ground(mx, my),
-        };
-    });
-
-    expect(crossing.kind).toBe("road");
-    expect(crossing.drawn).toBeGreaterThanOrEqual(1);
-    expect(crossing.over).toBe(true);
-    expect(Math.abs(crossing.high)).toBeLessThan(0.2);
-    expect(crossing.cobbles).toBe(2);
-});
-
-test("out in the human lands a broken aqueduct strides across a dip: drawn over its piers, which can't be walked into, walked under through its arches", async ({ page }) => {
-    await playing(page, "/?play&seed=1");
-    await page.evaluate(() => window.pellagos.game.stop());
-
-    const under = await page.evaluate(async () => {
-        const { game, session } = window.pellagos;
-        const land = game.world.maps.town;
-        // (One of its arches in the stretch kept whole, and a step either side of it)
-        const aqueduct = land.aqueducts.find(({ spans }) => spans.some(Boolean));
-        const n = aqueduct.spans.findIndex(Boolean);
-        const [pier, next] = [aqueduct.piers[n], aqueduct.piers[n + 1]];
-        const [mx, my] = [(pier.x + next.x) / 2, (pier.y + next.y) / 2];
-        const [px, py] = [-Math.sin(aqueduct.turn), Math.cos(aqueduct.turn)];
-        const [sx, sy] = [mx - px * 7, my - py * 7];
-        const me = game.battle.actor(game.me);
-        const avatar = game.avatars.get(game.me);
-
-        Object.assign(me, { x: sx, y: sy, path: [], order: null, progress: null });
-        avatar.object.position.set(sx, land.ground.heightAt(sx, sy), sy);
-
-        for (let n = 0; n < 4; n++) {
-            game.advance(0.25, { render: false });
-
-            for (let k = 0; k < 400 && (game.chunks.update(sx, sy, { budget: 200 }) || game.chunks.busy); k++) {
-                await new Promise((resolve) => setTimeout(resolve, 0));
-            }
-        }
-
-        game.advance(0.05);
-
-        const drawn = [];
-
-        session.view.scene.traverse((node) => node.name === "aqueducts" && drawn.push(node));
-
-        // Through under its arch to the other side, passing between its piers
-        const to = [Math.floor(mx + px * 7), Math.floor(my + py * 7)];
-        let nearest = Infinity;
-
-        game.battle.command(game.me, { type: "move", to });
-
-        for (let k = 0; k < 80 && Math.hypot(me.x - to[0] - 0.5, me.y - to[1] - 0.5) > 1; k++) {
-            game.advance(0.25, { render: false });
-            nearest = Math.min(nearest, Math.hypot(me.x - mx, me.y - my));
-        }
-
-        return {
-            drawn: drawn.length,
-            pier: land.squares.blocked(Math.floor(pier.x), Math.floor(pier.y)),
-            arch: land.squares.blocked(Math.floor(mx), Math.floor(my)),
-            over: Math.hypot(me.x - to[0] - 0.5, me.y - to[1] - 0.5) <= 1,
-            nearest,
-        };
-    });
-
-    expect(under.drawn).toBeGreaterThanOrEqual(1);
-    expect(under.pier).toBe(true);
-    expect(under.arch).toBe(false);
-    expect(under.over).toBe(true);
-    expect(under.nearest).toBeLessThan(3);
-});
-
-test("the humans' castle is a hill citadel: its wards on terraces up its hill, drawn part by part, the keep's spires over everything, its walls and its moat in the way, its gate tower's and its gate's ways walked through at its outer ward's level", async ({ page }) => {
-    test.setTimeout(180000);
-    await playing(page, "/?play&seed=1");
-    await page.evaluate(() => window.pellagos.game.stop());
-
-    const seen = await page.evaluate(async () => {
-        const { game } = window.pellagos;
-        const land = game.world.maps.town;
-        const site = game.world.plan.sites.find(({ race, kind }) => race === "human" && kind === "castle");
-
-        land.sites.settle(Math.floor(site.at[0] / 64), Math.floor(site.at[1] / 64));
-
-        const set = land.sites.set.get(site.id);
-        const { x, y, facing, citadel } = set;
-        const place = ([u, v]) => [x + u * Math.cos(facing) + v * Math.sin(facing), y - u * Math.sin(facing) + v * Math.cos(facing)];
-        const [outer] = citadel.wards;
-        // (Out before its gate tower, past its glacis, along its front)
-        const [sx, sy] = place([0, outer.apothem + 40]);
-        const me = game.battle.actor(game.me);
-        const avatar = game.avatars.get(game.me);
-
-        Object.assign(me, { x: sx, y: sy, path: [], order: null, progress: null });
-        avatar.object.position.set(sx, land.ground.heightAt(sx, sy), sy);
-
-        for (let n = 0; n < 4; n++) {
-            game.advance(0.25, { render: false });
-
-            for (let k = 0; k < 800 && (game.chunks.update(sx, sy, { budget: 200 }) || game.chunks.busy); k++) {
-                await new Promise((resolve) => setTimeout(resolve, 0));
-            }
-        }
-
-        game.advance(0.05);
-
-        // (The keep's chunk drawn, its highest point its spires')
-        const keep = set.pieces.find(({ part }) => part === "keep");
-        const drawn = [...game.chunks.drawn.values()].find(({ cx, cy }) => cx === Math.floor(keep.x / 64) && cy === Math.floor(keep.y / 64));
-        let top = -Infinity;
-
-        drawn?.buildings?.updateMatrixWorld(true);
-        drawn?.buildings?.traverse((node) => {
-            if (node.isMesh) {
-                node.geometry.computeBoundingBox();
-                top = Math.max(top, node.geometry.boundingBox.clone().applyMatrix4(node.matrixWorld).max.y);
-            }
+            return {
+                meshes: meshes.length,
+                triangles: meshes.reduce((sum, mesh) => sum + mesh.geometry.getAttribute("position").count / 3, 0),
+                material: [...new Set(meshes.map((mesh) => mesh.material.name))],
+                compiled: session.view.renderer.info.programs.some(({ name }) => name === "cliffs"),
+            };
         });
 
-        const tower = set.pieces.find(({ part }) => part === "gatetower");
-        const [gx, gy] = place([0, outer.apothem - 1]);
-        // (Its moat, round at its back)
-        const [mx, my] = place([0, -outer.apothem - 7]);
-        const moat = land.chunkAt(Math.floor(mx), Math.floor(my));
+        expect(cliffs.meshes).toBeGreaterThan(2);
+        expect(cliffs.triangles).toBeGreaterThan(3000);
+        expect(cliffs.material).toEqual(["cliffs"]);
+        expect(cliffs.compiled).toBe(true);
 
-        return {
-            built: Boolean(drawn?.buildings),
-            top: top - (set.level + citadel.wards.at(-1).rise + keep.high),
-            inner: land.ground.heightAt(keep.x, keep.y) - set.pads.at(-1).level,
-            outer: land.ground.heightAt(...place([0, outer.apothem - 6])) - set.pads[0].level,
-            // (Its gate tower either side of the way through it)
-            tower: [-4, 4].every((u) => land.squares.blocked(Math.floor(tower.x + u * Math.cos(facing)), Math.floor(tower.y - u * Math.sin(facing)))) && !land.squares.blocked(Math.floor(tower.x), Math.floor(tower.y)),
-            // (The way through its gate, the outer ward's level, as over its bridge before it)
-            gate: !land.squares.blocked(Math.floor(gx), Math.floor(gy)) && Math.abs(land.heightAt(gx, gy) - set.pads[0].level) < 0.05,
-            bridge: !land.squares.blocked(...place([0, outer.apothem + 10]).map(Math.floor)) && Math.abs(land.heightAt(...place([0, outer.apothem + 10])) - set.pads[0].level) < 0.05,
-            moat: Boolean(moat.water[(Math.floor(my) - moat.y0) * 64 + (Math.floor(mx) - moat.x0)]) && land.squares.blocked(Math.floor(mx), Math.floor(my)),
-            before: land.squares.blocked(Math.floor(sx), Math.floor(sy)),
-        };
+        // At an arch of rock (core/arches.js): drawn over its legs, which can't be walked into, the
+        // ground under its span open
+        const arch = await page.evaluate(async () => {
+            const { game, session } = window.pellagos;
+            const land = game.world.maps.town;
+            const [{ x, y, turn, span }] = land.arches;
+            const [sx, sy] = [x - Math.sin(turn) * 20, y + Math.cos(turn) * 20];
+
+            Object.assign(game.battle.actor(game.me), { x: sx, y: sy, path: [], order: null, progress: null });
+            game.avatars.get(game.me).object.position.set(sx, land.ground.heightAt(sx, sy), sy);
+
+            for (let n = 0; n < 4; n++) {
+                game.advance(0.25, { render: false });
+
+                for (let k = 0; k < 400 && (game.chunks.update(sx, sy, { budget: 200 }) || game.chunks.busy); k++) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+
+            game.advance(0.05);
+
+            const meshes = [];
+
+            session.view.scene.traverse((node) => node.name === "arches" && meshes.push(node));
+
+            const foot = [x - (Math.cos(turn) * span) / 2, y - (Math.sin(turn) * span) / 2];
+
+            return {
+                drawn: meshes.length,
+                leg: land.squares.blocked(Math.floor(foot[0]), Math.floor(foot[1])),
+                under: land.squares.blocked(Math.floor(x), Math.floor(y)),
+            };
+        });
+
+        expect(arch.drawn).toBe(1);
+        expect(arch.leg).toBe(true);
+        expect(arch.under).toBe(false);
+
+        // Their shader, as every other drawn so far, reads no more textures than an iPhone lets one read
+        const reading = await texturesRead(page);
+
+        expect(reading.map(({ name }) => name)).toContain("cliffs");
+        expect(reading.filter(({ read }) => read > 16)).toEqual([]);
     });
 
-    expect(seen.built).toBe(true);
-    expect(seen.top).toBeGreaterThan(20);
-    expect(Math.abs(seen.inner)).toBeLessThan(0.05);
-    expect(Math.abs(seen.outer)).toBeLessThan(0.05);
-    expect(seen.tower).toBe(true);
-    expect(seen.gate).toBe(true);
-    expect(seen.bridge).toBe(true);
-    expect(seen.moat).toBe(true);
-    expect(seen.before).toBe(false);
+    await test.step("by the start town the road crosses the river on a stone bridge: drawn of stone over its arches, walked over on its cobbles, up its ramp and down the other", async () => {
+        const crossing = await page.evaluate(async () => {
+            const { game, session } = window.pellagos;
+            const land = game.world.maps.town;
+            const bridge = land.chunkAt(3005, 5150).bridges.find(({ stone }) => stone);
+            const { a, b } = bridge;
+            const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+            const [ux, uy] = [(b[0] - a[0]) / length, (b[1] - a[1]) / length];
+            const [sx, sy] = [a[0] - ux * 3, a[1] - uy * 3];
+            const me = game.battle.actor(game.me);
+            const avatar = game.avatars.get(game.me);
+
+            Object.assign(me, { x: sx, y: sy, path: [], order: null, progress: null });
+            avatar.object.position.set(sx, land.ground.heightAt(sx, sy), sy);
+
+            for (let n = 0; n < 4; n++) {
+                game.advance(0.25, { render: false });
+
+                for (let k = 0; k < 400 && (game.chunks.update(sx, sy, { budget: 200 }) || game.chunks.busy); k++) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+
+            game.advance(0.05);
+
+            const drawn = [];
+
+            session.view.scene.traverse((node) => node.name === "stone bridges" && drawn.push(node));
+
+            // Over it to the far bank, as high as its deck at its middle on the way
+            const to = [Math.floor(b[0] + ux * 3), Math.floor(b[1] + uy * 3)];
+            let highest = -Infinity;
+
+            game.battle.command(game.me, { type: "move", to });
+
+            for (let k = 0; k < 80 && Math.hypot(me.x - to[0] - 0.5, me.y - to[1] - 0.5) > 1; k++) {
+                game.advance(0.25, { render: false });
+                highest = Math.max(highest, avatar.object.position.y);
+            }
+
+            const [mx, my] = [Math.floor((a[0] + b[0]) / 2), Math.floor((a[1] + b[1]) / 2)];
+
+            return {
+                kind: bridge.kind,
+                drawn: drawn.length,
+                over: Math.hypot(me.x - to[0] - 0.5, me.y - to[1] - 0.5) <= 1,
+                high: highest - land.deckOf(bridge, 0.5),
+                cobbles: land.squares.ground(mx, my),
+            };
+        });
+
+        expect(crossing.kind).toBe("road");
+        expect(crossing.drawn).toBeGreaterThanOrEqual(1);
+        expect(crossing.over).toBe(true);
+        expect(Math.abs(crossing.high)).toBeLessThan(0.2);
+        expect(crossing.cobbles).toBe(2);
+    });
+
+    await test.step("out in the human lands a broken aqueduct strides across a dip: drawn over its piers, which can't be walked into, walked under through its arches", async () => {
+        const under = await page.evaluate(async () => {
+            const { game, session } = window.pellagos;
+            const land = game.world.maps.town;
+            // (One of its arches in the stretch kept whole, and a step either side of it)
+            const aqueduct = land.aqueducts.find(({ spans }) => spans.some(Boolean));
+            const n = aqueduct.spans.findIndex(Boolean);
+            const [pier, next] = [aqueduct.piers[n], aqueduct.piers[n + 1]];
+            const [mx, my] = [(pier.x + next.x) / 2, (pier.y + next.y) / 2];
+            const [px, py] = [-Math.sin(aqueduct.turn), Math.cos(aqueduct.turn)];
+            const [sx, sy] = [mx - px * 7, my - py * 7];
+            const me = game.battle.actor(game.me);
+            const avatar = game.avatars.get(game.me);
+
+            Object.assign(me, { x: sx, y: sy, path: [], order: null, progress: null });
+            avatar.object.position.set(sx, land.ground.heightAt(sx, sy), sy);
+
+            for (let n = 0; n < 4; n++) {
+                game.advance(0.25, { render: false });
+
+                for (let k = 0; k < 400 && (game.chunks.update(sx, sy, { budget: 200 }) || game.chunks.busy); k++) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+
+            game.advance(0.05);
+
+            const drawn = [];
+
+            session.view.scene.traverse((node) => node.name === "aqueducts" && drawn.push(node));
+
+            // Through under its arch to the other side, passing between its piers
+            const to = [Math.floor(mx + px * 7), Math.floor(my + py * 7)];
+            let nearest = Infinity;
+
+            game.battle.command(game.me, { type: "move", to });
+
+            for (let k = 0; k < 80 && Math.hypot(me.x - to[0] - 0.5, me.y - to[1] - 0.5) > 1; k++) {
+                game.advance(0.25, { render: false });
+                nearest = Math.min(nearest, Math.hypot(me.x - mx, me.y - my));
+            }
+
+            return {
+                drawn: drawn.length,
+                pier: land.squares.blocked(Math.floor(pier.x), Math.floor(pier.y)),
+                arch: land.squares.blocked(Math.floor(mx), Math.floor(my)),
+                over: Math.hypot(me.x - to[0] - 0.5, me.y - to[1] - 0.5) <= 1,
+                nearest,
+            };
+        });
+
+        expect(under.drawn).toBeGreaterThanOrEqual(1);
+        expect(under.pier).toBe(true);
+        expect(under.arch).toBe(false);
+        expect(under.over).toBe(true);
+        expect(under.nearest).toBeLessThan(3);
+    });
+
+    await test.step("the humans' castle is a hill citadel: its wards on terraces up its hill, drawn part by part, the keep's spires over everything, its walls and its moat in the way, its gate tower's and its gate's ways walked through at its outer ward's level", async () => {
+        const seen = await page.evaluate(async () => {
+            const { game } = window.pellagos;
+            const land = game.world.maps.town;
+            const site = game.world.plan.sites.find(({ race, kind }) => race === "human" && kind === "castle");
+
+            land.sites.settle(Math.floor(site.at[0] / 64), Math.floor(site.at[1] / 64));
+
+            const set = land.sites.set.get(site.id);
+            const { x, y, facing, citadel } = set;
+            const place = ([u, v]) => [x + u * Math.cos(facing) + v * Math.sin(facing), y - u * Math.sin(facing) + v * Math.cos(facing)];
+            const [outer] = citadel.wards;
+            // (Out before its gate tower, past its glacis, along its front)
+            const [sx, sy] = place([0, outer.apothem + 40]);
+            const me = game.battle.actor(game.me);
+            const avatar = game.avatars.get(game.me);
+
+            Object.assign(me, { x: sx, y: sy, path: [], order: null, progress: null });
+            avatar.object.position.set(sx, land.ground.heightAt(sx, sy), sy);
+
+            for (let n = 0; n < 4; n++) {
+                game.advance(0.25, { render: false });
+
+                for (let k = 0; k < 800 && (game.chunks.update(sx, sy, { budget: 200 }) || game.chunks.busy); k++) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+
+            game.advance(0.05);
+
+            // (The keep's chunk drawn, its highest point its spires')
+            const keep = set.pieces.find(({ part }) => part === "keep");
+            const drawn = [...game.chunks.drawn.values()].find(({ cx, cy }) => cx === Math.floor(keep.x / 64) && cy === Math.floor(keep.y / 64));
+            let top = -Infinity;
+
+            drawn?.buildings?.updateMatrixWorld(true);
+            drawn?.buildings?.traverse((node) => {
+                if (node.isMesh) {
+                    node.geometry.computeBoundingBox();
+                    top = Math.max(top, node.geometry.boundingBox.clone().applyMatrix4(node.matrixWorld).max.y);
+                }
+            });
+
+            const tower = set.pieces.find(({ part }) => part === "gatetower");
+            const [gx, gy] = place([0, outer.apothem - 1]);
+            // (Its moat, round at its back)
+            const [mx, my] = place([0, -outer.apothem - 7]);
+            const moat = land.chunkAt(Math.floor(mx), Math.floor(my));
+
+            return {
+                built: Boolean(drawn?.buildings),
+                top: top - (set.level + citadel.wards.at(-1).rise + keep.high),
+                inner: land.ground.heightAt(keep.x, keep.y) - set.pads.at(-1).level,
+                outer: land.ground.heightAt(...place([0, outer.apothem - 6])) - set.pads[0].level,
+                // (Its gate tower either side of the way through it)
+                tower: [-4, 4].every((u) => land.squares.blocked(Math.floor(tower.x + u * Math.cos(facing)), Math.floor(tower.y - u * Math.sin(facing)))) && !land.squares.blocked(Math.floor(tower.x), Math.floor(tower.y)),
+                // (The way through its gate, the outer ward's level, as over its bridge before it)
+                gate: !land.squares.blocked(Math.floor(gx), Math.floor(gy)) && Math.abs(land.heightAt(gx, gy) - set.pads[0].level) < 0.05,
+                bridge: !land.squares.blocked(...place([0, outer.apothem + 10]).map(Math.floor)) && Math.abs(land.heightAt(...place([0, outer.apothem + 10])) - set.pads[0].level) < 0.05,
+                moat: Boolean(moat.water[(Math.floor(my) - moat.y0) * 64 + (Math.floor(mx) - moat.x0)]) && land.squares.blocked(Math.floor(mx), Math.floor(my)),
+                before: land.squares.blocked(Math.floor(sx), Math.floor(sy)),
+            };
+        });
+
+        expect(seen.built).toBe(true);
+        expect(seen.top).toBeGreaterThan(20);
+        expect(Math.abs(seen.inner)).toBeLessThan(0.05);
+        expect(Math.abs(seen.outer)).toBeLessThan(0.05);
+        expect(seen.tower).toBe(true);
+        expect(seen.gate).toBe(true);
+        expect(seen.bridge).toBe(true);
+        expect(seen.moat).toBe(true);
+        expect(seen.before).toBe(false);
+    });
+
+    await test.step("a ford is marked to be seen: stepping stones across it and a fallen trunk in the woods, its banks trodden bare, in no one's way, and a row of stones across it on the minimap", async () => {
+        // (Beside the ford in the woods south of the town: test/navigation.test.js's)
+        const ford = await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const map = game.world.maps.town;
+            const found = map.waters.fords().sort((a, b) => Math.hypot(a.at[0] - 3112.5, a.at[1] - 4374.5) - Math.hypot(b.at[0] - 3112.5, b.at[1] - 4374.5))[0];
+            const [[ax, ay], [bx, by]] = found.banks;
+            const long = Math.hypot(bx - ax, by - ay);
+            const [x, y] = [Math.floor(ax - ((bx - ax) / long) * 3), Math.floor(ay - ((by - ay) / long) * 3)];
+            const player = game.battle.actor("player");
+
+            game.stop();
+            Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+            Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
+            game.avatars.get("player").place(x + 0.5, y + 0.5, player.facing);
+            game.previous.set("player", { x: player.x, y: player.y });
+
+            return { at: found.at, banks: found.banks, bank: [x, y] };
+        });
+
+        expect(await playUntil(page, () => {
+            let found = false;
+
+            window.pellagos.session.view.scene.traverse((node) => (found ||= node.name === "fords"));
+
+            return found;
+        }, { seconds: 60 })).toBe(true);
+
+        const seen = await page.evaluate(({ at, banks, bank }) => {
+            const { game, session } = window.pellagos;
+            const map = game.world.maps.town;
+            const meshes = [];
+
+            session.view.scene.traverse((node) => node.name === "fords" && meshes.push(node));
+
+            // (The stones over the water: walked through, the ford's squares open; the bank trodden bare)
+            const middle = [Math.floor(at[0]), Math.floor(at[1])];
+
+            return {
+                near: meshes.some((mesh) => {
+                    mesh.updateWorldMatrix(true, false);
+                    mesh.geometry.computeBoundingBox();
+
+                    const box = mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld);
+
+                    return box.min.x < at[0] && box.max.x > at[0] && box.min.z < at[1] && box.max.z > at[1];
+                }),
+                open: !map.squares.blocked(...middle),
+                trodden: map.squares.ground(...bank),
+                road: game.world.maps.town.landAt(...bank).road,
+                wade: map.wades?.(...middle) ?? null,
+                banks: banks.length,
+            };
+        }, ford);
+
+        expect(seen.near).toBe(true);
+        expect(seen.open).toBe(true);
+        expect(seen.trodden).toBe(1);
+        expect(seen.road).toBe(null);
+        expect(seen.banks).toBe(2);
+
+        // On the minimap: a row of pale stones across the river (its picture of the world round the
+        // player, four pixels to the metre: painted a step at a time, so played on till it's there)
+        const minimap = await page.evaluate(({ at }) => {
+            const { game } = window.pellagos;
+            const covers = () => {
+                const patch = game.minimap.patch;
+
+                return patch && at[0] > patch.x + 2 && at[1] > patch.z + 2 && at[0] < patch.x + patch.image.width / 4 - 2 && at[1] < patch.z + patch.image.height / 4 - 2 && !game.minimap.painting;
+            };
+
+            for (let k = 0; k < 400 && !covers(); k++) {
+                game.minimap.drawn = -Infinity;
+                game.advance(0.05);
+            }
+
+            const { x, z, image } = game.minimap.patch;
+            const pixels = image.getContext("2d").getImageData(Math.round((at[0] - x) * 4) - 8, Math.round((at[1] - z) * 4) - 8, 17, 17).data;
+            let pale = 0;
+
+            for (let k = 0; k < pixels.length; k += 4) {
+                pale += pixels[k] > 200 && pixels[k + 1] > 190 && pixels[k + 2] > 160 ? 1 : 0;
+            }
+
+            return { covered: covers(), pale };
+        }, ford);
+
+        expect(minimap.covered).toBe(true);
+        expect(minimap.pale).toBeGreaterThan(10);
+    });
 });
 
 test("debug mode draws the navigation meshes round the player, baked in a worker", async ({ page }) => {
@@ -4574,162 +4660,164 @@ test("tapping an enemy sets the player on them where they stand; tapped twice, t
     expect(taps.halted.walking).toBe(false);
 });
 
-test("a bar stays on the head it's over as the camera turns, however fast: put where the camera that draws the frame sees it, not a frame behind", async ({ page }) => {
+// (One start for the two, each its own step: the second puts its slimes the way the camera then
+// looks, the orc the first moved felled)
+test("the bars over others: each stays on the head it's over as the camera turns, however fast; full size near the player, smaller and fainter evenly the farther off, gone out of sight, and growing again as one comes near", async ({ page }) => {
     await playing(page, "/?play&seed=1");
 
-    // The orc a couple of steps from the player; the camera swung round by a big step each frame
-    // (played on without drawing, so the camera's only ever placed, never drawn from)
-    const off = await page.evaluate(() => {
-        const { game, session } = window.pellagos;
-        const { battle } = game;
-        const player = battle.actor(game.me);
-        const orc = battle.actor("orc");
-        const square = [player.square[0] + 2, player.square[1] + 1];
-        const offs = [];
+    await test.step("a bar stays on the head it's over as the camera turns, however fast: put where the camera that draws the frame sees it, not a frame behind", async () => {
+        // The orc a couple of steps from the player; the camera swung round by a big step each frame
+        // (played on without drawing, so the camera's only ever placed, never drawn from)
+        const off = await page.evaluate(() => {
+            const { game, session } = window.pellagos;
+            const { battle } = game;
+            const player = battle.actor(game.me);
+            const orc = battle.actor("orc");
+            const square = [player.square[0] + 2, player.square[1] + 1];
+            const offs = [];
 
-        game.stop();
-        Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null, target: null });
-        game.avatars.get("orc").place(orc.x, orc.y, 0);
-        game.previous.set("orc", { x: orc.x, y: orc.y });
+            game.stop();
+            Object.assign(orc, { square, x: square[0] + 0.5, y: square[1] + 0.5, to: null, path: [], ai: null, target: null });
+            game.avatars.get("orc").place(orc.x, orc.y, 0);
+            game.previous.set("orc", { x: orc.x, y: orc.y });
 
-        for (let k = 0; k < 12; k++) {
-            game.cameraFollow.yaw += 0.25;
-            game.cameraFollow.turning = 0;
-            game.advance(1 / 60);
+            for (let k = 0; k < 12; k++) {
+                game.cameraFollow.yaw += 0.25;
+                game.cameraFollow.turning = 0;
+                game.advance(1 / 60);
 
-            const plate = game.hud.tracked.get("orc");
-            const [, x, y] = /translate3d\(([-\d.]+)px, ([-\d.]+)px/.exec(plate.style.transform);
+                const plate = game.hud.tracked.get("orc");
+                const [, x, y] = /translate3d\(([-\d.]+)px, ([-\d.]+)px/.exec(plate.style.transform);
 
-            // (Where this frame's camera sees its head)
-            session.view.camera.updateMatrixWorld();
+                // (Where this frame's camera sees its head)
+                session.view.camera.updateMatrixWorld();
 
-            const head = session.view.toScreen(game.avatars.get("orc").point(1.08));
+                const head = session.view.toScreen(game.avatars.get("orc").point(1.08));
 
-            if (head && !plate.hidden) {
-                offs.push(Math.hypot(Number(x) - head.x, Number(y) - head.y));
+                if (head && !plate.hidden) {
+                    offs.push(Math.hypot(Number(x) - head.x, Number(y) - head.y));
+                }
             }
-        }
 
-        return offs;
-    });
-
-    expect(off.length).toBeGreaterThan(4);
-    expect(Math.max(...off)).toBeLessThan(1);
-});
-
-test("the bars over others are full size near the player, smaller and fainter evenly the farther off, gone out of sight, and grow again as one comes near; the nearer over the farther and all under the buttons; a creature's level by its name", async ({ page }) => {
-    await playing(page, "/?play&seed=1");
-
-    // Four slimes in a line the way the camera looks, 6, 24, 48 and 66 m ahead of the player (by
-    // day: full size within 12 m, gone at 60 m)
-    await page.evaluate(() => {
-        const { game, session } = window.pellagos;
-        const me = game.battle.actor(game.me);
-        const looking = session.view.camera.getWorldDirection(session.view.camera.position.clone());
-        const length = Math.hypot(looking.x, looking.z);
-
-        game.stop();
-        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
-        [6, 24, 48, 66].forEach((ahead, k) => {
-            const [x, y] = [me.x + (looking.x / length) * ahead, me.y + (looking.z / length) * ahead];
-
-            game.battle.add({ id: `slime${k}`, kind: "beast", name: "Green slime", weapon: "slime", team: "wild", square: [Math.floor(x), Math.floor(y)], ai: null, hp: 30, wild: { creature: "slime", tier: 1, temper: "defensive", guard: 0, roam: 0, leash: 12, pack: `slimes${k}`, leader: null, menace: false } });
-            Object.assign(game.battle.actor(`slime${k}`), { x, y });
-            game.enlisting.push(`slime${k}`);
+            return offs;
         });
+
+        expect(off.length).toBeGreaterThan(4);
+        expect(Math.max(...off)).toBeLessThan(1);
     });
-    expect(await playUntil(page, () => [0, 1, 2, 3].every((k) => window.pellagos.game.avatars.has(`slime${k}`)))).toBe(true);
 
-    // (How each bar's drawn, and how far its slime is from the player)
-    await page.evaluate(() => {
-        window.platesNow = () => {
-            const { game } = window.pellagos;
-            const own = game.avatars.get(game.me).object.position;
+    await test.step("the bars over others are full size near the player, smaller and fainter evenly the farther off, gone out of sight, and grow again as one comes near; the nearer over the farther and all under the buttons; a creature's level by its name", async () => {
+        // Four slimes in a line the way the camera looks, 6, 24, 48 and 66 m ahead of the player (by
+        // day: full size within 12 m, gone at 60 m)
+        await page.evaluate(() => {
+            const { game, session } = window.pellagos;
+            const me = game.battle.actor(game.me);
+            const looking = session.view.camera.getWorldDirection(session.view.camera.position.clone());
+            const length = Math.hypot(looking.x, looking.z);
 
-            return [0, 1, 2, 3].map((k) => {
-                const plate = document.querySelector(`.floater[data-id="slime${k}"]`);
-                const at = game.avatars.get(`slime${k}`).object.position;
-                const { width, height } = plate.getBoundingClientRect();
-                const name = plate.querySelector(".name").getBoundingClientRect();
-                const level = plate.querySelector(".level");
+            game.stop();
+            Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+            [6, 24, 48, 66].forEach((ahead, k) => {
+                const [x, y] = [me.x + (looking.x / length) * ahead, me.y + (looking.z / length) * ahead];
 
-                return {
-                    off: Math.hypot(at.x - own.x, at.z - own.z),
-                    hidden: plate.hidden,
-                    width,
-                    height,
-                    faint: Number(getComputedStyle(plate).opacity),
-                    layer: Number(plate.style.zIndex),
-                    level: getComputedStyle(level).display,
-                    levelLine: Math.abs(level.getBoundingClientRect().top - name.top) < name.height / 2,
-                };
+                game.battle.add({ id: `slime${k}`, kind: "beast", name: "Green slime", weapon: "slime", team: "wild", square: [Math.floor(x), Math.floor(y)], ai: null, hp: 30, wild: { creature: "slime", tier: 1, temper: "defensive", guard: 0, roam: 0, leash: 12, pack: `slimes${k}`, leader: null, menace: false } });
+                Object.assign(game.battle.actor(`slime${k}`), { x, y });
+                game.enlisting.push(`slime${k}`);
             });
-        };
-    });
+        });
+        expect(await playUntil(page, () => [0, 1, 2, 3].every((k) => window.pellagos.game.avatars.has(`slime${k}`)))).toBe(true);
 
-    const plates = await page.evaluate(() => {
-        window.pellagos.game.advance(0.05);
+        // (How each bar's drawn, and how far its slime is from the player)
+        await page.evaluate(() => {
+            window.platesNow = () => {
+                const { game } = window.pellagos;
+                const own = game.avatars.get(game.me).object.position;
 
-        return { light: window.pellagos.game.battle.light, each: window.platesNow(), stacking: getComputedStyle(document.querySelector("#floaters")).zIndex };
-    });
-    const [near, middle, far, gone] = plates.each;
+                return [0, 1, 2, 3].map((k) => {
+                    const plate = document.querySelector(`.floater[data-id="slime${k}"]`);
+                    const at = game.avatars.get(`slime${k}`).object.position;
+                    const { width, height } = plate.getBoundingClientRect();
+                    const name = plate.querySelector(".name").getBoundingClientRect();
+                    const level = plate.querySelector(".level");
 
-    // (By day: seen as far as ever)
-    expect(plates.light).toBeNull();
+                    return {
+                        off: Math.hypot(at.x - own.x, at.z - own.z),
+                        hidden: plate.hidden,
+                        width,
+                        height,
+                        faint: Number(getComputedStyle(plate).opacity),
+                        layer: Number(plate.style.zIndex),
+                        level: getComputedStyle(level).display,
+                        levelLine: Math.abs(level.getBoundingClientRect().top - name.top) < name.height / 2,
+                    };
+                });
+            };
+        });
 
-    // The nearest full size and solid; each farther one smaller and fainter, evenly with the
-    // distance, to none at the edge of sight; and drawn under the nearer
-    expect(near.off).toBeLessThan(12);
-    expect(near.width).toBeGreaterThan(110 * 0.6);
-    expect(near.faint).toBe(1);
-    expect(middle.width / near.width).toBeCloseTo((60 - middle.off) / 48, 1);
-    expect(middle.faint).toBeCloseTo((60 - middle.off) / 48, 1);
-    expect(far.width / near.width).toBeCloseTo((60 - far.off) / 48, 1);
-    expect(far.faint).toBeCloseTo((60 - far.off) / 48, 1);
-    expect(far.width).toBeLessThan(middle.width * 0.5);
-    expect(gone.off).toBeGreaterThan(60);
-    expect(gone.hidden).toBe(true);
-    expect(near.layer).toBeGreaterThan(middle.layer);
-    expect(middle.layer).toBeGreaterThan(far.layer);
+        const plates = await page.evaluate(() => {
+            window.pellagos.game.advance(0.05);
 
-    // (All in their own stacking, under the buttons; "Lv 1" on the name's line)
-    expect(plates.stacking).toBe("0");
-    expect(plates.each.slice(0, 3).map(({ level, levelLine }) => [level, levelLine])).toEqual([["inline", true], ["inline", true], ["inline", true]]);
+            return { light: window.pellagos.game.battle.light, each: window.platesNow(), stacking: getComputedStyle(document.querySelector("#floaters")).zIndex };
+        });
+        const [near, middle, far, gone] = plates.each;
 
-    // The farthest seen comes near: its bar grows as it comes, to full size
-    await page.evaluate(() => {
-        const { game } = window.pellagos;
-        const [near, far] = [game.battle.actor("slime0"), game.battle.actor("slime2")];
+        // (By day: seen as far as ever)
+        expect(plates.light).toBeNull();
 
-        Object.assign(far, { square: [near.square[0] + 1, near.square[1]], x: near.x + 1, y: near.y });
-    });
+        // The nearest full size and solid; each farther one smaller and fainter, evenly with the
+        // distance, to none at the edge of sight; and drawn under the nearer
+        expect(near.off).toBeLessThan(12);
+        expect(near.width).toBeGreaterThan(110 * 0.6);
+        expect(near.faint).toBe(1);
+        expect(middle.width / near.width).toBeCloseTo((60 - middle.off) / 48, 1);
+        expect(middle.faint).toBeCloseTo((60 - middle.off) / 48, 1);
+        expect(far.width / near.width).toBeCloseTo((60 - far.off) / 48, 1);
+        expect(far.faint).toBeCloseTo((60 - far.off) / 48, 1);
+        expect(far.width).toBeLessThan(middle.width * 0.5);
+        expect(gone.off).toBeGreaterThan(60);
+        expect(gone.hidden).toBe(true);
+        expect(near.layer).toBeGreaterThan(middle.layer);
+        expect(middle.layer).toBeGreaterThan(far.layer);
 
-    // (Frame by frame, as its figure walks up)
-    const growing = await page.evaluate(async () => {
-        const { game } = window.pellagos;
-        const seen = [];
+        // (All in their own stacking, under the buttons; "Lv 1" on the name's line)
+        expect(plates.stacking).toBe("0");
+        expect(plates.each.slice(0, 3).map(({ level, levelLine }) => [level, levelLine])).toEqual([["inline", true], ["inline", true], ["inline", true]]);
 
-        for (let k = 0; k < 90; k++) {
-            game.advance(1 / 30, { render: false, wait: true });
-            await new Promise((resolve) => setTimeout(resolve, 0));
+        // The farthest seen comes near: its bar grows as it comes, to full size
+        await page.evaluate(() => {
+            const { game } = window.pellagos;
+            const [near, far] = [game.battle.actor("slime0"), game.battle.actor("slime2")];
 
-            const [near, , far] = window.platesNow();
+            Object.assign(far, { square: [near.square[0] + 1, near.square[1]], x: near.x + 1, y: near.y });
+        });
 
-            seen.push({ off: far.off, share: far.width / near.width });
+        // (Frame by frame, as its figure walks up)
+        const growing = await page.evaluate(async () => {
+            const { game } = window.pellagos;
+            const seen = [];
 
-            if (far.off < 12 && far.share > 0.99) {
-                break;
+            for (let k = 0; k < 90; k++) {
+                game.advance(1 / 30, { render: false, wait: true });
+                await new Promise((resolve) => setTimeout(resolve, 0));
+
+                const [near, , far] = window.platesNow();
+
+                seen.push({ off: far.off, share: far.width / near.width });
+
+                if (far.off < 12 && far.share > 0.99) {
+                    break;
+                }
             }
-        }
 
-        return seen;
+            return seen;
+        });
+
+        expect(growing.at(-1).off).toBeLessThan(12);
+        expect(growing.at(-1).share).toBeCloseTo(1, 1);
+        expect(growing.some(({ share }) => share > 0.4 && share < 0.9), "between sizes on the way").toBe(true);
+        expect(growing.every(({ share, off }, k) => !k || (share >= growing[k - 1].share - 0.01 && off <= growing[k - 1].off + 0.01))).toBe(true);
+        expect(growing.filter(({ off }) => off > 12).every(({ share, off }) => Math.abs(share - (60 - off) / 48) < 0.05), "as big as its distance has it each frame").toBe(true);
     });
-
-    expect(growing.at(-1).off).toBeLessThan(12);
-    expect(growing.at(-1).share).toBeCloseTo(1, 1);
-    expect(growing.some(({ share }) => share > 0.4 && share < 0.9), "between sizes on the way").toBe(true);
-    expect(growing.every(({ share, off }, k) => !k || (share >= growing[k - 1].share - 0.01 && off <= growing[k - 1].off + 0.01))).toBe(true);
-    expect(growing.filter(({ off }) => off > 12).every(({ share, off }) => Math.abs(share - (60 - off) / 48) < 0.05), "as big as its distance has it each frame").toBe(true);
 });
 
 test("tapping the tavern's door lights its edge green, and the player walks in: well inside, facing into the room, the camera behind them under the ceiling; up the stairs (where a courtesan beckons), down, and out, facing out; each time a tap round them is a step, not back through", async ({ page }) => {
@@ -5408,62 +5496,100 @@ test("buildings' floors built only once the player comes to their doors, though 
     expect(stood.MB).toBeLessThan(counted.MB);
 });
 
-test("the smithy: the smith heats, hammers and quenches the work, the apprentice pumps the bellows and turns the grindstone, each heard and seen at it", async ({ page }) => {
-    // (Seed 2's town's smithy, a few steps from the start)
+// (One start for the two, each its own step: the fingerpost's only looked at, as the game begins)
+test("seed 2's start town: a fingerpost by its main road out, its boards lettered with the nearest towns; and its smithy, the smith and the apprentice at work, each heard and seen", async ({ page }) => {
     await playing(page, "/?play&seed=2");
 
-    const smithy = await page.evaluate(async () => {
-        const { game, session } = window.pellagos;
-        const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "blacksmith");
-        const player = game.battle.actor("player");
-        const heard = [];
-        const acts = [];
-        const play = session.sound.play.bind(session.sound);
+    await test.step("a fingerpost stands by the town's main road out, past its edge, on squares it blocks, its boards lettered with the nearest towns", async () => {
+        const post = await page.evaluate(() => {
+            const { game, session } = window.pellagos;
+            const piece = game.world.town.pieces.find(({ name }) => name === "signpost");
+            const [ox, oy] = game.world.origin;
+            const { at, width, height } = game.world.stamp;
+            const drawn = [];
 
-        game.stop();
-        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
-        session.sound.play = (name, options) => {
-            heard.push(name);
-
-            return play(name, options);
-        };
-
-        // Straight through its door (built there and then)
-        const [x, y] = building.door.ends[0].squares[0];
-
-        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
-        game.battle.command("player", { type: "enter", link: building.door.id });
-        game.advance(0.3);
-
-        // (Its folk dressed while the screen's dark, a little of each frame)
-        for (let k = 0, visit = game.visits.get(building.key); k < 600 && (visit.queue.length || visit.steps); k++) {
-            game.advance(0.1, { render: false });
-        }
-
-        // A while at work (what each of them does, as the battle says)
-        for (let k = 0; k < 90; k++) {
-            game.advance(0.5, { render: false });
-
-            for (const id of [`${building.key}/smith`, `${building.key}/apprentice`]) {
-                const name = game.avatars.get(id).actions.attack?.name;
-
-                if (name && !acts.includes(`${id.split("/")[1]}:${name}`)) {
-                    acts.push(`${id.split("/")[1]}:${name}`);
+            session.view.scene.traverse((node) => {
+                if (node.isMesh && node.material.name?.startsWith("finger ")) {
+                    drawn.push(node.material.name);
                 }
-            }
-        }
+            });
 
-        const smith = game.world.interiors.buildings.get(building.key).folk.find(({ local }) => local === "smith");
+            return {
+                at: [piece.x + ox, piece.y + oy],
+                outside: piece.x + ox < at[0] || piece.y + oy < at[1] || piece.x + ox >= at[0] + width || piece.y + oy >= at[1] + height,
+                blocked: game.world.maps.town.squares.blocked(piece.x + ox, piece.y + oy),
+                boards: piece.boards.map(({ name, km }) => ({ name, km })),
+                nearest: game.world.plan.places
+                    .filter((place) => place !== game.world.start && ["town", "city", "capital"].includes(place.kind))
+                    .sort((a, b) => Math.hypot(a.at[0] - piece.x - ox, a.at[1] - piece.y - oy) - Math.hypot(b.at[0] - piece.x - ox, b.at[1] - piece.y - oy))
+                    .slice(0, 3)
+                    .map(({ name }) => name),
+                drawn: drawn.sort(),
+            };
+        });
 
-        return { map: player.map, name: building.name, smith: smith.name, holding: [...game.avatars.get(smith.id).character.equipment.values()], acts, heard: [...new Set(heard)], place: session.sound.place };
+        expect(post.outside).toBe(true);
+        expect(post.blocked).toBe(true);
+        expect(post.boards.map(({ name }) => name)).toEqual(post.nearest);
+        expect(post.boards.every(({ km }) => km > 0)).toBe(true);
+        expect(post.drawn).toEqual(post.nearest.flatMap((name) => [`finger ${name}`, `finger ${name} back`]).sort());
     });
 
-    expect(smithy.map).toMatch(/blacksmith-\d+\/forge$/);
-    expect(smithy.name).toBe(`${smithy.smith.split(" ")[1]}'s Forge`);
-    expect(smithy.holding).toEqual(expect.arrayContaining(["smithHammer", "tongs", "leatherApron"]));
-    expect(smithy.acts).toEqual(expect.arrayContaining(["smith:heat", "smith:forge", "smith:quench", "apprentice:pump", "apprentice:crank"]));
-    expect(smithy.heard).toEqual(expect.arrayContaining(["anvil", "hiss", "bellows", "grind"]));
-    expect(smithy.place).toBe("smithy");
+    await test.step("the smithy: the smith heats, hammers and quenches the work, the apprentice pumps the bellows and turns the grindstone, each heard and seen at it", async () => {
+        // (Seed 2's town's smithy, a few steps from the start)
+        const smithy = await page.evaluate(async () => {
+            const { game, session } = window.pellagos;
+            const building = [...game.world.interiors.buildings.values()].find((each) => each.kind === "blacksmith");
+            const player = game.battle.actor("player");
+            const heard = [];
+            const acts = [];
+            const play = session.sound.play.bind(session.sound);
+
+            game.stop();
+            Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
+            session.sound.play = (name, options) => {
+                heard.push(name);
+
+                return play(name, options);
+            };
+
+            // Straight through its door (built there and then)
+            const [x, y] = building.door.ends[0].squares[0];
+
+            Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [] });
+            game.battle.command("player", { type: "enter", link: building.door.id });
+            game.advance(0.3);
+
+            // (Its folk dressed while the screen's dark, a little of each frame)
+            for (let k = 0, visit = game.visits.get(building.key); k < 600 && (visit.queue.length || visit.steps); k++) {
+                game.advance(0.1, { render: false });
+            }
+
+            // A while at work (what each of them does, as the battle says)
+            for (let k = 0; k < 90; k++) {
+                game.advance(0.5, { render: false });
+
+                for (const id of [`${building.key}/smith`, `${building.key}/apprentice`]) {
+                    const name = game.avatars.get(id).actions.attack?.name;
+
+                    if (name && !acts.includes(`${id.split("/")[1]}:${name}`)) {
+                        acts.push(`${id.split("/")[1]}:${name}`);
+                    }
+                }
+            }
+
+            const smith = game.world.interiors.buildings.get(building.key).folk.find(({ local }) => local === "smith");
+
+            return { map: player.map, name: building.name, smith: smith.name, holding: [...game.avatars.get(smith.id).character.equipment.values()], acts, heard: [...new Set(heard)], place: session.sound.place };
+        });
+
+        expect(smithy.map).toMatch(/blacksmith-\d+\/forge$/);
+        expect(smithy.name).toBe(`${smithy.smith.split(" ")[1]}'s Forge`);
+        expect(smithy.holding).toEqual(expect.arrayContaining(["smithHammer", "tongs", "leatherApron"]));
+        expect(smithy.acts).toEqual(expect.arrayContaining(["smith:heat", "smith:forge", "smith:quench", "apprentice:pump", "apprentice:crank"]));
+        expect(smithy.heard).toEqual(expect.arrayContaining(["anvil", "hiss", "bellows", "grind"]));
+        expect(smithy.place).toBe("smithy");
+    });
 });
 
 test("the folk out in the streets held in full only as the bodies' budget has room, the furthest let go first; and indoors, those out in the world let go of a few seconds in, the soldiers to their crowds, and dressed again coming out", async ({ page }) => {
@@ -6596,136 +6722,6 @@ test("asked, a crier tells of the places round the town still to be found, two t
     await talk.getByRole("button", { name: ask }).click();
     expect(await page.evaluate(() => window.pellagos.game.memory.heard.length)).toBe(3);
     await expect(talk.getByRole("button", { name: "What else is said?" })).toHaveCount(0);
-});
-
-test("a fingerpost stands by the town's main road out, past its edge, on squares it blocks, its boards lettered with the nearest towns", async ({ page }) => {
-    await playing(page, "/?play&seed=2");
-
-    const post = await page.evaluate(() => {
-        const { game, session } = window.pellagos;
-        const piece = game.world.town.pieces.find(({ name }) => name === "signpost");
-        const [ox, oy] = game.world.origin;
-        const { at, width, height } = game.world.stamp;
-        const drawn = [];
-
-        session.view.scene.traverse((node) => {
-            if (node.isMesh && node.material.name?.startsWith("finger ")) {
-                drawn.push(node.material.name);
-            }
-        });
-
-        return {
-            at: [piece.x + ox, piece.y + oy],
-            outside: piece.x + ox < at[0] || piece.y + oy < at[1] || piece.x + ox >= at[0] + width || piece.y + oy >= at[1] + height,
-            blocked: game.world.maps.town.squares.blocked(piece.x + ox, piece.y + oy),
-            boards: piece.boards.map(({ name, km }) => ({ name, km })),
-            nearest: game.world.plan.places
-                .filter((place) => place !== game.world.start && ["town", "city", "capital"].includes(place.kind))
-                .sort((a, b) => Math.hypot(a.at[0] - piece.x - ox, a.at[1] - piece.y - oy) - Math.hypot(b.at[0] - piece.x - ox, b.at[1] - piece.y - oy))
-                .slice(0, 3)
-                .map(({ name }) => name),
-            drawn: drawn.sort(),
-        };
-    });
-
-    expect(post.outside).toBe(true);
-    expect(post.blocked).toBe(true);
-    expect(post.boards.map(({ name }) => name)).toEqual(post.nearest);
-    expect(post.boards.every(({ km }) => km > 0)).toBe(true);
-    expect(post.drawn).toEqual(post.nearest.flatMap((name) => [`finger ${name}`, `finger ${name} back`]).sort());
-});
-
-test("a ford is marked to be seen: stepping stones across it and a fallen trunk in the woods, its banks trodden bare, in no one's way, and a row of stones across it on the minimap", async ({ page }) => {
-    await playing(page, "/?play&seed=1");
-
-    // (Beside the ford in the woods south of the town: test/navigation.test.js's)
-    const ford = await page.evaluate(() => {
-        const { game } = window.pellagos;
-        const map = game.world.maps.town;
-        const found = map.waters.fords().sort((a, b) => Math.hypot(a.at[0] - 3112.5, a.at[1] - 4374.5) - Math.hypot(b.at[0] - 3112.5, b.at[1] - 4374.5))[0];
-        const [[ax, ay], [bx, by]] = found.banks;
-        const long = Math.hypot(bx - ax, by - ay);
-        const [x, y] = [Math.floor(ax - ((bx - ax) / long) * 3), Math.floor(ay - ((by - ay) / long) * 3)];
-        const player = game.battle.actor("player");
-
-        game.stop();
-        Object.assign(game.battle.actor("orc"), { dead: true, respawnAt: Infinity });
-        Object.assign(player, { square: [x, y], x: x + 0.5, y: y + 0.5, to: null, path: [], order: null });
-        game.avatars.get("player").place(x + 0.5, y + 0.5, player.facing);
-        game.previous.set("player", { x: player.x, y: player.y });
-
-        return { at: found.at, banks: found.banks, bank: [x, y] };
-    });
-
-    expect(await playUntil(page, () => {
-        let found = false;
-
-        window.pellagos.session.view.scene.traverse((node) => (found ||= node.name === "fords"));
-
-        return found;
-    }, { seconds: 60 })).toBe(true);
-
-    const seen = await page.evaluate(({ at, banks, bank }) => {
-        const { game, session } = window.pellagos;
-        const map = game.world.maps.town;
-        const meshes = [];
-
-        session.view.scene.traverse((node) => node.name === "fords" && meshes.push(node));
-
-        // (The stones over the water: walked through, the ford's squares open; the bank trodden bare)
-        const middle = [Math.floor(at[0]), Math.floor(at[1])];
-
-        return {
-            near: meshes.some((mesh) => {
-                mesh.updateWorldMatrix(true, false);
-                mesh.geometry.computeBoundingBox();
-
-                const box = mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld);
-
-                return box.min.x < at[0] && box.max.x > at[0] && box.min.z < at[1] && box.max.z > at[1];
-            }),
-            open: !map.squares.blocked(...middle),
-            trodden: map.squares.ground(...bank),
-            road: game.world.maps.town.landAt(...bank).road,
-            wade: map.wades?.(...middle) ?? null,
-            banks: banks.length,
-        };
-    }, ford);
-
-    expect(seen.near).toBe(true);
-    expect(seen.open).toBe(true);
-    expect(seen.trodden).toBe(1);
-    expect(seen.road).toBe(null);
-    expect(seen.banks).toBe(2);
-
-    // On the minimap: a row of pale stones across the river (its picture of the world round the
-    // player, four pixels to the metre: painted a step at a time, so played on till it's there)
-    const minimap = await page.evaluate(({ at }) => {
-        const { game } = window.pellagos;
-        const covers = () => {
-            const patch = game.minimap.patch;
-
-            return patch && at[0] > patch.x + 2 && at[1] > patch.z + 2 && at[0] < patch.x + patch.image.width / 4 - 2 && at[1] < patch.z + patch.image.height / 4 - 2 && !game.minimap.painting;
-        };
-
-        for (let k = 0; k < 400 && !covers(); k++) {
-            game.minimap.drawn = -Infinity;
-            game.advance(0.05);
-        }
-
-        const { x, z, image } = game.minimap.patch;
-        const pixels = image.getContext("2d").getImageData(Math.round((at[0] - x) * 4) - 8, Math.round((at[1] - z) * 4) - 8, 17, 17).data;
-        let pale = 0;
-
-        for (let k = 0; k < pixels.length; k += 4) {
-            pale += pixels[k] > 200 && pixels[k + 1] > 190 && pixels[k + 2] > 160 ? 1 : 0;
-        }
-
-        return { covered: covers(), pale };
-    }, ford);
-
-    expect(minimap.covered).toBe(true);
-    expect(minimap.pale).toBeGreaterThan(10);
 });
 
 // (How often each is posed goes by how tall they look on the screen, in its pixels: at the
