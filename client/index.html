@@ -542,7 +542,7 @@
                 <p class="note" id="savenote" hidden></p>
                 <!-- The game opened from a world server: its worlds, each joined with a tap -->
                 <div class="title-server" id="titleserver" hidden>
-                    <h2 class="title-server-name" id="titleservername">Worlds on this server</h2>
+                    <h2 class="title-server-name lettering" id="titleservername">Worlds on this server</h2>
                     <p class="note" id="titleservernote"></p>
                     <ul class="title-worlds" id="titleworlds"></ul>
                 </div>
@@ -561,7 +561,7 @@
         <section id="create" class="screen" hidden aria-labelledby="createtitle">
             <div class="card creator">
                 <header class="creator-head">
-                    <h2 id="createtitle">Make your character</h2>
+                    <h2 class="lettering" id="createtitle">Make your character</h2>
                     <ol class="steps" aria-label="Steps">
                         <li data-step="look" aria-current="step">Look</li>
                         <li data-step="weapon">Weapon</li>
@@ -745,7 +745,7 @@
         <!-- Joining a world someone else has opened: its code -->
         <dialog id="join" class="together" aria-labelledby="jointitle">
             <form method="dialog" id="joinform">
-                <h2 id="jointitle">Join a world</h2>
+                <h2 class="lettering" id="jointitle">Join a world</h2>
                 <p class="note">Someone playing can open their world to others (in its menu: Invite others). Type the code they give you.</p>
                 <label class="field" for="joincode">Code</label>
                 <input type="text" id="joincode" class="code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" inputmode="text" placeholder="ABCD" required>
@@ -779,7 +779,7 @@
              each's worlds (those listed, and those a key or ticket's held for), servers added by an
              address, and short codes and invite links; worlds made; servers and tickets carried -->
         <dialog id="worlds" class="together characters worlds" aria-labelledby="worldstitle">
-            <h2 id="worldstitle">Worlds on servers</h2>
+            <h2 class="lettering" id="worldstitle">Worlds on servers</h2>
             <p class="note" id="worldsnote">Worlds kept on a server, a Mac at home or a friend's, that go on when you leave and wait for you to come back.</p>
             <ul class="character-list world-list" id="worldslist"></ul>
             <form id="worldsaddform" class="worlds-add">
@@ -1027,7 +1027,7 @@
              new one, or to bring to someone's world; and all of them exported, or characters brought
              in from a file (app/character-file.js) -->
         <dialog id="characters" class="together characters" aria-labelledby="characterstitle">
-            <h2 id="characterstitle">Characters on this device</h2>
+            <h2 class="lettering" id="characterstitle">Characters on this device</h2>
             <p class="note" id="charactersnote"></p>
             <ul class="character-list" id="characterlist"></ul>
             <div class="menu">
@@ -1042,7 +1042,7 @@
         <!-- You, the player (app/you.js): the name you go by, your own id, the same on every server,
              and your code to carry you to another device -->
         <dialog id="you" class="together you" aria-labelledby="youtitle">
-            <h2 id="youtitle">You</h2>
+            <h2 class="lettering" id="youtitle">You</h2>
             <p class="note">Worlds on servers know you by this, on every server, whichever character you play. It's kept on this device.</p>
             <label class="field" for="youname">The name you go by</label>
             <input type="text" id="youname" class="text" maxlength="24" autocomplete="off" spellcheck="false">
@@ -1066,7 +1066,7 @@
         <!-- The worlds kept on this device, apart from the characters: each with its own land and war,
              played in by choosing who goes in; or where a character in none goes -->
         <dialog id="localworlds" class="together characters" aria-labelledby="localworldstitle">
-            <h2 id="localworldstitle">Worlds on this device</h2>
+            <h2 class="lettering" id="localworldstitle">Worlds on this device</h2>
             <p class="note" id="localworldsnote"></p>
             <ul class="character-list" id="localworldlist"></ul>
             <div class="menu">
@@ -1167,7 +1167,7 @@
 
         <!-- About the game: what it is, and how it's played (the title's About) -->
         <dialog id="about" class="together about" aria-labelledby="abouttitle">
-            <h2 id="abouttitle">About Pellagos</h2>
+            <h2 class="lettering" id="abouttitle">About Pellagos</h2>
             <nav class="about-contents" aria-label="Contents">
                 <button type="button" data-to="about-what">The game</button>
                 <button type="button" data-to="about-start">Starting</button>

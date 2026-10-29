@@ -5633,6 +5633,13 @@ it.
    a world (**Worlds on this device**, up to eight) and who goes in; join a world someone else has
    opened (its code: docs/WAR.md M11) or one on a server (**Worlds on servers**); and the debug
    mode switch.
+   - **The headers** of what its buttons open (**Make your character**, **Characters on this
+     device**, **Worlds on this device**, **Join a world**, **Worlds on servers**, **You** and
+     **About Pellagos**), and of its worlds on a server, are in the title's own lettering: the
+     crest's Cinzel Decorative (styles.css `.lettering`). It's half as wide again as the other
+     headers' lettering, so it's a little smaller, the smaller the narrower the screen (16 to 22
+     pixels), each header on one line on a phone 360 pixels wide or more; on a narrower one, or
+     for a long name, over two even lines.
    - **About**, at the bottom, opens what the game is and how it's played, in a dialog that
      scrolls (index.html `#about`): the game, starting, getting about, fighting, magic, gear and
      gold, towns and folk, the world and its war, your party, playing together, saving, the keys,
