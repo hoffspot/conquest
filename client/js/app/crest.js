@@ -5,9 +5,10 @@
 // white-hot and cooling to gold; a moment after, a shine runs across it once, left to right;
 // torchlight flickers on the leather behind it; and the eyes in the dark furrows under the town
 // blink every 5 to 8 seconds, now and then twice. Its letters, not their line, in the ribbon's
-// middle, whatever they're drawn in. Nothing moves with reduced motion asked for. The same crest
-// over both, where it was (styles.css #crest), not forged again; never seen, nor anything of it
-// moving, anywhere else (main.js show).
+// middle, whatever they're drawn in, at whatever size it's shown (set again as it's resized: a
+// phone turned). Nothing moves with reduced motion asked for. The same crest over both, where it
+// was (styles.css #crest), not forged again; never seen, nor anything of it moving, anywhere else
+// (main.js show).
 
 /** Where it is (from the page): crest.avif and crest.webp. */
 export const CREST_FOLDER = "images/crest";
@@ -49,6 +50,11 @@ const OVER = new Set(["loading", "title"]);
 // (A number between two, by `random`: 0 to 1)
 const between = ([from, to], random) => from + (to - from) * random();
 
+// How big its letters' ink is measured (px): measureText has their edges in whole pixels, at the
+// size they're drawn at on a phone on its side a twelfth of their height; at this size, to a
+// thousandth of it, as true at any size
+const INKED = 1000;
+
 /**
  * How far down to move a name for its letters' ink to be in the middle of its box (em; up, if
  * less than 0): from where its baseline is (`baseline`, px down from the box's top), the box's
@@ -79,6 +85,11 @@ export class Crest {
         this.blinking = null;
 
         this.#lettered();
+
+        // (Set level again whenever it's resized, a phone turned or a window made bigger: where its
+        // letters sit in their line goes by the size they're drawn at, each to the pixel)
+        this.resized = view.ResizeObserver ? new view.ResizeObserver(() => this.level()) : null;
+        this.resized?.observe(element);
 
         // (Its lettering asked for, its name set level once it's here; forged as the page opens,
         // once it is or it's been waited for long enough: its letters never seen before they're
@@ -119,8 +130,9 @@ export class Crest {
 
     /**
      * Its name moved for its letters' ink to be in the middle of its line, so of the ribbon
-     * (styles.css --level, in em: whatever size it's drawn at), as drawn in the lettering it's in
-     * now (levelOf). Not while it isn't laid out (in a screen not shown).
+     * (styles.css --level, in em), as drawn in the lettering it's in now and at the size it's
+     * drawn at now (levelOf: its ink measured at INKED px, as true at any size). Not while it isn't
+     * laid out (in a screen not shown).
      */
     level() {
         const name = this.element.querySelector?.(".wordmark:not([aria-hidden])");
@@ -148,10 +160,11 @@ export class Crest {
         const baseline = mark.getBoundingClientRect().top - box.top;
 
         mark.remove();
-        context.font = `${style.fontWeight} ${size}px ${style.fontFamily}`;
+        context.font = `${style.fontWeight} ${INKED}px ${style.fontFamily}`;
 
         const ink = context.measureText(name.textContent.toUpperCase());
-        const level = levelOf({ baseline, height: box.height, ascent: ink.actualBoundingBoxAscent, descent: ink.actualBoundingBoxDescent, size });
+        const scale = size / INKED;
+        const level = levelOf({ baseline, height: box.height, ascent: ink.actualBoundingBoxAscent * scale, descent: ink.actualBoundingBoxDescent * scale, size });
 
         this.element.style.setProperty("--level", `${level.toFixed(3)}em`);
     }

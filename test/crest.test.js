@@ -3,8 +3,8 @@
 // its lettering, Cinzel Decorative as it was made, its licence beside it; the page's crest as
 // crest.js has it, and styles.css placing its name and eyes where crest.js says they are, its name
 // in its lettering, forging it as long and shining it once; its name moved for its letters to be in
-// its line's middle; forged once its lettering's here, or it's waited long enough; and its eyes
-// blinking every 5 to 8 seconds
+// its line's middle, by their outlines, and again as it's resized; forged once its lettering's here,
+// or it's waited long enough; and its eyes blinking every 5 to 8 seconds
 import assert from "node:assert/strict";
 import { readFileSync, statSync } from "node:fs";
 import { describe, it } from "node:test";
@@ -115,6 +115,56 @@ describe("the crest over the loading screen and the title (crest.js)", () => {
         assert.equal(levelOf({ baseline: 85, height: 100, ascent: 70, descent: 0, size: 100 }), 0);
         assert.equal(levelOf({ baseline: 90, height: 100, ascent: 70, descent: 10, size: 100 }), -0.1);
         assert.equal(levelOf({ baseline: 80, height: 100, ascent: 70, descent: 0, size: 0 }), 0);
+    });
+
+    it("sets its name level by its letters' outlines, not the whole pixels measureText has their edges in at the size they're drawn at; and again as it's resized", () => {
+        // (Letters 0.74 of their size above their baseline and 0.26 below, as a canvas measures
+        // them, in whole pixels; drawn 10 pixels tall, on a line as tall, its baseline 8 down)
+        const ink = { ascent: 0.74, descent: 0.26 };
+        const drawn = { size: 10, height: 10, baseline: 8 };
+        const levels = [];
+        let font = "";
+        let resized = null;
+        const canvas = {
+            getContext: () => ({
+                set font(value) {
+                    font = value;
+                },
+                measureText: () => {
+                    const size = parseFloat(font.split(" ")[1]);
+
+                    return { actualBoundingBoxAscent: Math.round(ink.ascent * size), actualBoundingBoxDescent: Math.round(ink.descent * size) };
+                },
+            }),
+        };
+        const page = { createElement: (tag) => (tag === "canvas" ? canvas : { style: { setProperty() {} }, dataset: {}, getBoundingClientRect: () => ({ top: drawn.baseline }), remove() {} }) };
+        const name = { textContent: "Pellagos", setAttribute() {}, append() {}, getBoundingClientRect: () => ({ top: 0, height: drawn.height }) };
+        const element = { ownerDocument: page, dataset: {}, classList: { add() {}, remove() {} }, style: { setProperty: (key, value) => levels.push(value) }, querySelector: () => name, querySelectorAll: () => [] };
+        const view = {
+            matchMedia: () => ({ matches: true }),
+            getComputedStyle: () => ({ fontSize: `${drawn.size}px`, fontWeight: "700", fontFamily: `"${CREST_FONT.family}"` }),
+            setTimeout() {},
+            clearTimeout() {},
+            ResizeObserver: class {
+                constructor(run) {
+                    resized = run;
+                }
+
+                observe(target) {
+                    assert.equal(target, element);
+                }
+            },
+        };
+        const crest = new Crest(element, { window: view });
+
+        // (Measured in whole pixels at 10, 7 and 3: moved 0.1 em up, 0.04 too far)
+        crest.level();
+        assert.equal(levels.at(-1), "-0.060em");
+
+        // (Made twice as big, its baseline a pixel and a half lower in its line than that was)
+        Object.assign(drawn, { size: 20, height: 20, baseline: 15.5 });
+        resized();
+        assert.equal(levels.at(-1), "-0.035em");
     });
 
     it("is forged once its lettering's here, or once it's waited long enough for it, and shone once a moment after", async () => {

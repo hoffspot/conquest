@@ -5555,7 +5555,10 @@ it.
      leather above and below it, its flourishes too (`CREST.leather`). Its letters are set in the
      ribbon's middle as they're drawn (`Crest.level`: how far the ink is from the middle of its
      line, measured, the name moved by that), so in another lettering too, should it not come:
-     Palatino, on an iPhone, sets its capitals well above the middle of their line.
+     Palatino, on an iPhone, sets its capitals well above the middle of their line. The ink is
+     measured at 1000 pixels, where its edges are true to a thousandth of its size (at the size
+     it's drawn at, only to the pixel), and again whenever the crest's resized, as a phone's
+     turned: where letters sit in their line goes by the pixel at each size.
    - **Forged as the page opens**, once its lettering's here (or it's waited 2 seconds for it:
      `CREST.forge`). Each letter of the name is struck in turn (0.12 seconds apart, the first 0.4
      seconds in), white-hot as it lands, and cools to gold over 1.4 seconds.

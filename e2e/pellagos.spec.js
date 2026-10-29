@@ -380,90 +380,130 @@ test("an update's downloaded in the background: the page finds a release newer t
     await expect(page.locator("#titleupdate")).toBeHidden();
 });
 
-test("the title's name on its crest's ribbon, every letter painted, its letters in the ribbon's middle with a little of the leather above and below them, the title's card under the crest: on a computer, on a phone held upright, a small one, and one on its side", async ({ page }) => {
-    // Each letter against its own box, which its gradient's painted in; and the card against the
-    // crest
-    const fits = () =>
-        page.evaluate(() => {
-            const box = document.querySelector("#crest").getBoundingClientRect();
-            const card = document.querySelector("#title .card").getBoundingClientRect();
-            const painted = [...document.querySelectorAll("#titlename .letter")].every((letter) => {
-                const range = document.createRange();
+// (Its letters' pixels counted at three to each of the page's, as an iPhone draws them: at the half
+// the others are drawn at, one of them is more than the leather left above and below its letters on
+// a phone on its side: playwright.config.js)
+test.describe("drawn at an iPhone's pixels", () => {
+    test.use({ deviceScaleFactor: 3 });
 
-                range.selectNodeContents(letter);
+    test("the title's name on its crest's ribbon, every letter painted, its letters in the ribbon's middle with a little of the leather above and below them, the title's card under the crest: on a computer, on a phone held upright, a small one, and one on its side", async ({ page }) => {
+        // Each letter against its own box, which its gradient's painted in; and the card against
+        // the crest
+        const fits = () =>
+            page.evaluate(() => {
+                const box = document.querySelector("#crest").getBoundingClientRect();
+                const card = document.querySelector("#title .card").getBoundingClientRect();
+                const painted = [...document.querySelectorAll("#titlename .letter")].every((letter) => {
+                    const range = document.createRange();
 
-                const [glyph, own] = [range.getBoundingClientRect(), letter.getBoundingClientRect()];
+                    range.selectNodeContents(letter);
 
-                return glyph.left >= own.left - 0.5 && glyph.right <= own.right + 0.5;
+                    const [glyph, own] = [range.getBoundingClientRect(), letter.getBoundingClientRect()];
+
+                    return glyph.left >= own.left - 0.5 && glyph.right <= own.right + 0.5;
+                });
+
+                return { painted, onScreen: box.left >= 0 && box.right <= innerWidth, under: card.top >= box.bottom - 1 };
             });
 
-            return { painted, onScreen: box.left >= 0 && box.right <= innerWidth, under: card.top >= box.bottom - 1 };
-        });
+        // Its letters against the ribbon (crest.js CREST.ribbon, CREST.leather), where they're
+        // up and down as shares of the crest's height:
+        // - as they're laid out: their ink as their outlines have it (measureText, at a size it has
+        //   their edges to a thousandth of an em), on the baseline they're set on (a mark with no
+        //   height, sat on it). In the ribbon's middle to a fifth of a pixel on the smallest crest,
+        //   at whatever size it's been resized to, a little of the leather above and below them.
+        // - as they're drawn: the crest shot with nothing of it shown but its letters, on nothing,
+        //   and where in it any of them is. The browser sets them a little higher or lower than their
+        //   outlines have them, by as much as a fifteenth of their size, as it draws them at that
+        //   size: in the ribbon's middle to a hundredth of the crest (a pixel or two), on its leather,
+        //   not its gold.
+        const { CREST } = await import("../client/js/app/crest.js");
+        const { left, right, top, bottom } = CREST.ribbon;
+        const middle = (ink, within) => Math.abs((ink.top + ink.bottom) / 2 - (top + bottom) / 2) < within;
 
-    // Its letters as they're drawn, against the ribbon (crest.js CREST.ribbon, CREST.leather): the
-    // crest shot with nothing of it shown but its letters, on nothing, and where in it any of them
-    // is (shares of its width and height); in the ribbon's middle to a hundredth of the crest (a
-    // pixel or two), and that far at least inside the leather above and below them
-    const { CREST } = await import("../client/js/app/crest.js");
+        const outlined = () =>
+            page.evaluate(() => {
+                const crest = document.querySelector("#crest").getBoundingClientRect();
+                const name = document.querySelector("#titlename");
+                const style = getComputedStyle(name);
+                const mark = document.createElement("span");
 
-    const inked = async () => {
-        const box = await page.locator("#crest").boundingBox();
+                mark.style.cssText = "display: inline-block; width: 0; height: 0";
+                name.append(mark);
 
-        await page.evaluate(() => document.documentElement.classList.add("inked"));
+                const baseline = mark.getBoundingClientRect().top - crest.top;
 
-        const shot = await page.screenshot({ omitBackground: true, clip: box });
+                mark.remove();
 
-        await page.evaluate(() => document.documentElement.classList.remove("inked"));
+                const context = document.createElement("canvas").getContext("2d");
 
-        const ink = await page.evaluate(async (png) => {
-            const bitmap = await createImageBitmap(new Blob([Uint8Array.from(atob(png), (c) => c.charCodeAt(0))], { type: "image/png" }));
-            const context = new OffscreenCanvas(bitmap.width, bitmap.height).getContext("2d");
+                context.font = `${style.fontWeight} 1000px ${style.fontFamily}`;
 
-            context.drawImage(bitmap, 0, 0);
+                const { actualBoundingBoxAscent: ascent, actualBoundingBoxDescent: descent } = context.measureText(name.textContent.toUpperCase());
+                const em = parseFloat(style.fontSize) / 1000;
 
-            const { data, width, height } = context.getImageData(0, 0, bitmap.width, bitmap.height);
-            let [top, bottom, left, right] = [height, 0, width, 0];
+                return { top: (baseline - ascent * em) / crest.height, bottom: (baseline + descent * em) / crest.height };
+            });
 
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    if (data[(y * width + x) * 4 + 3] > 64) {
-                        [top, bottom, left, right] = [Math.min(top, y), Math.max(bottom, y + 1), Math.min(left, x), Math.max(right, x + 1)];
+        const inked = async () => {
+            const box = await page.locator("#crest").boundingBox();
+
+            await page.evaluate(() => document.documentElement.classList.add("inked"));
+
+            const shot = await page.screenshot({ omitBackground: true, clip: box });
+
+            await page.evaluate(() => document.documentElement.classList.remove("inked"));
+
+            return page.evaluate(async (png) => {
+                const bitmap = await createImageBitmap(new Blob([Uint8Array.from(atob(png), (c) => c.charCodeAt(0))], { type: "image/png" }));
+                const context = new OffscreenCanvas(bitmap.width, bitmap.height).getContext("2d");
+
+                context.drawImage(bitmap, 0, 0);
+
+                const { data, width, height } = context.getImageData(0, 0, bitmap.width, bitmap.height);
+                let [top, bottom, left, right] = [height, 0, width, 0];
+
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        if (data[(y * width + x) * 4 + 3] > 64) {
+                            [top, bottom, left, right] = [Math.min(top, y), Math.max(bottom, y + 1), Math.min(left, x), Math.max(right, x + 1)];
+                        }
                     }
                 }
-            }
 
-            return { top: top / height, bottom: bottom / height, left: left / width, right: right / width };
-        }, shot.toString("base64"));
-        const { left, right, top, bottom } = CREST.ribbon;
-
-        return {
-            ink,
-            across: Math.abs((ink.left + ink.right) / 2 - (left + right) / 2) < 0.01,
-            down: Math.abs((ink.top + ink.bottom) / 2 - (top + bottom) / 2) < 0.01,
-            room: ink.top >= CREST.leather.top + 0.005 && ink.bottom <= CREST.leather.bottom - 0.005,
+                return { top: top / height, bottom: bottom / height, left: left / width, right: right / width };
+            }, shot.toString("base64"));
         };
-    };
-    const check = async (said) => {
-        expect(await fits(), said).toEqual({ painted: true, onScreen: true, under: true });
 
-        const { ink, ...placed } = await inked();
+        const check = async (said) => {
+            expect(await fits(), said).toEqual({ painted: true, onScreen: true, under: true });
 
-        expect(placed, `${said}: ${JSON.stringify(ink)}`).toEqual({ across: true, down: true, room: true });
-    };
+            const outline = await outlined();
 
-    await title(page);
-    await expect(page.locator("#crest")).toHaveAttribute("data-forged", "true", { timeout: 10000 });
-    await page.addStyleTag({ content: "html.inked, html.inked body { background: transparent !important; } html.inked body * { visibility: hidden !important; } html.inked #crest .wordmark { filter: none !important; } html.inked #crest .letter { visibility: visible !important; }" });
-    await check("on a computer");
+            expect({ middle: middle(outline, 0.002), room: outline.top >= CREST.leather.top + 0.005 && outline.bottom <= CREST.leather.bottom - 0.005 }, `${said}, as laid out: ${JSON.stringify(outline)}`).toEqual({ middle: true, room: true });
 
-    for (const [width, height] of [
-        [393, 852],
-        [320, 640],
-        [844, 390],
-    ]) {
-        await page.setViewportSize({ width, height });
-        await check(`${width} by ${height}`);
-    }
+            const ink = await inked();
+
+            expect({ across: Math.abs((ink.left + ink.right) / 2 - (left + right) / 2) < 0.01, middle: middle(ink, 0.01), leather: ink.top >= CREST.leather.top && ink.bottom <= CREST.leather.bottom }, `${said}, as drawn: ${JSON.stringify(ink)}`).toEqual({ across: true, middle: true, leather: true });
+        };
+
+        await title(page);
+        await expect(page.locator("#crest")).toHaveAttribute("data-forged", "true", { timeout: 10000 });
+        await page.addStyleTag({ content: "html.inked, html.inked body { background: transparent !important; } html.inked body * { visibility: hidden !important; } html.inked #crest .wordmark { filter: none !important; } html.inked #crest .letter { visibility: visible !important; }" });
+        await check("on a computer");
+
+        // (The same page made the size of each in turn, as a phone's turned: set level again each
+        // time, as it's resized)
+        for (const [width, height] of [
+            [393, 852],
+            [320, 640],
+            [844, 390],
+        ]) {
+            await page.setViewportSize({ width, height });
+            await expect.poll(async () => middle(await outlined(), 0.002), { message: `resized to ${width} by ${height}, set level again` }).toBe(true);
+            await check(`${width} by ${height}`);
+        }
+    });
 });
 
 test("the crest over the loading screen and the title: PELLAGOS on its ribbon in its own lettering, forged a letter at a time once that's here, a shine run across it once, the eyes under the town blinking; the same crest over the title, not forged again; none of it moving with less motion asked for, nor seen in the game", async ({ page }) => {
