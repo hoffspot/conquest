@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { fireLit } from "../world/firelight.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { HeadMap, headPlate, rimLine } from "./headwear.js";
-import { LIVERIES } from "./liveries.js";
+import { LIVERIES, standardOf } from "./liveries.js";
 import { smoothstep } from "./noise.js";
 
 const materials = new Map();
@@ -1277,6 +1277,96 @@ function peopleShield(people) {
     return assemble(parts, "shield");
 }
 
+// A standard's size (metres): its pole's length and how far up it the hand holds it (the grip at
+// the origin), the cloth's width and drop, how far below the pole's top its crossbar is, how deep
+// its folds, and its emblem's size
+const STANDARD = Object.freeze({ pole: 2.5, grip: 0.8, width: 0.62, drop: 0.92, bar: 0.08, fold: 0.022, emblem: 0.34 });
+
+/**
+ * A standard (characters/liveries.js standardOf: a people's livery, or a band's own): a tall ash
+ * pole, a gilt finial over a crossbar at its top, and its cloth hung from that, in its colours,
+ * its emblem on both faces and a strip of its trim along its head; cut in two tails at its foot,
+ * a band's ragged one torn. Folded a little as cloth hangs. Upright, the hand round its pole a
+ * third of the way up (the origin), its faces ahead and behind.
+ */
+function standard(who) {
+    const colours = standardOf(who);
+    const { pole, grip, width, drop, bar: below, fold, emblem: size } = STANDARD;
+    const top = pole - grip;
+    const head = top - below;
+    const metal = metalOf(colours);
+    const half = width / 2;
+    const parts = [[at(new THREE.CylinderGeometry(0.016, 0.019, pole, 8), 0, pole / 2 - grip, 0), "wood"], [at(new THREE.CylinderGeometry(0.011, 0.011, width + 0.1, 6), 0, head, 0.025, 0, 0, Math.PI / 2), "wood"], [at(new THREE.ConeGeometry(0.035, 0.16, 8), 0, top + 0.08, 0), metal], [at(new THREE.SphereGeometry(0.03, 8, 6), 0, top - 0.005, 0), metal]];
+
+    // Its cloth's outline, from the crossbar down: two tails, or (ragged) torn along its foot
+    const outline = colours.ragged
+        ? [[-half, 0], [half, 0], [half, -drop * 0.86], [half * 0.62, -drop * 0.97], [half * 0.3, -drop * 0.8], [0, -drop], [-half * 0.35, -drop * 0.83], [-half * 0.7, -drop * 0.95], [-half, -drop * 0.78]]
+        : [[-half, 0], [half, 0], [half, -drop], [0, -drop * 0.72], [-half, -drop]];
+    // (Folded a little, as cloth hangs: down it and across it, the more the further down)
+    const folded = (geometry) => {
+        const position = geometry.attributes.position;
+
+        for (let i = 0; i < position.count; i++) {
+            const [x, y] = [position.getX(i), position.getY(i) - head];
+
+            position.setZ(i, position.getZ(i) + fold * Math.sin(x * 21 + 0.6) * (0.35 + Math.min(1, -y / drop)));
+        }
+
+        geometry.computeVertexNormals();
+
+        return geometry;
+    };
+    const cloth = new THREE.ShapeGeometry(polygon(outline), 1);
+    const strip = new THREE.ShapeGeometry(polygon([[-half, 0], [half, 0], [half, -0.07], [-half, -0.07]]), 1);
+
+    parts.push([folded(subdivided(cloth.translate(0, head, 0.035))), clothOf(colours.main)], [folded(subdivided(strip.translate(0, head, 0.037))), clothOf(colours.trim)]);
+
+    // Its emblem on both its faces, a third of the way down it
+    for (const side of [1, -1]) {
+        const mark = emblemGeometry(colours.emblem, size);
+
+        if (side < 0) {
+            mark.rotateY(Math.PI);
+        }
+
+        parts.push([folded(mark.translate(0, head - drop * 0.42, 0.035 + side * 0.004)), clothOf(colours.trim)]);
+    }
+
+    return assemble(parts, "standard");
+}
+
+// A flat shape's triangles cut smaller (each edge halved, twice), so it can be folded; its corners
+// each its own (not indexed)
+function subdivided(geometry) {
+    let flat = geometry.index ? geometry.toNonIndexed() : geometry;
+
+    for (let round = 0; round < 2; round++) {
+        const from = flat.attributes.position.array;
+        const to = new Float32Array(from.length * 4);
+        let n = 0;
+
+        for (let face = 0; face < from.length; face += 9) {
+            const [a, b, c] = [0, 3, 6].map((k) => [from[face + k], from[face + k + 1], from[face + k + 2]]);
+            const mid = (p, q) => [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2];
+            const [ab, bc, ca] = [mid(a, b), mid(b, c), mid(c, a)];
+
+            for (const triangle of [[a, ab, ca], [ab, b, bc], [ca, bc, c], [ab, bc, ca]]) {
+                for (const corner of triangle) {
+                    to.set(corner, n);
+                    n += 3;
+                }
+            }
+        }
+
+        flat = new THREE.BufferGeometry();
+        flat.setAttribute("position", new THREE.BufferAttribute(to, 3));
+    }
+
+    flat.computeVertexNormals();
+
+    return flat;
+}
+
 // A leather cap, close round the top of the head, a rim round its edge (on a cat's head, `open`:
 // the rim, and a strap over the top between the ears)
 function leatherCap(radius, open = false) {
@@ -2108,6 +2198,11 @@ export function buildItem(model, fit = {}) {
 
     if (people && kind === "shield") {
         return peopleShield(people);
+    }
+
+    // (Each people's and band's standard: "standard.orc", "standard.northmen")
+    if (people && kind === "standard") {
+        return standard(people);
     }
 
     switch (model) {

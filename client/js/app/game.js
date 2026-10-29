@@ -187,6 +187,7 @@ import { LegendaryLooks } from "../world/legendaries.js";
 import { worldLinkOf } from "./worldlink.js";
 import { abilityIcon, ACTIONS, ActionWheel, actionOf, assignable, directionOf, flicked, forFriends, iconOf, offensive, PLACES, QUICK_SHOWN, readWheels, SETTABLE, SIDES, WHEELS } from "./wheel.js";
 import { BARKS, bynameOf, GIFTS as VETERAN_GIFTS, hirePrice, KNACKS, LEVEL_XP, MASTERY, MERCENARY, recallPrice, RENOWN, TRUST_PICKS, trustOf, wearable } from "../core/followers.js";
+import { formationsOfBody } from "../core/engagement.js";
 
 /** What every character wears under their gear: a tunic, and trousers if nothing's on their legs. */
 export const BASE_OUTFIT = Object.freeze(["tunic", "trousers"]);
@@ -5749,7 +5750,7 @@ export class Game {
 
         for (const { sides } of me ? (this.host?.engagements?.() ?? []) : []) {
             for (const side of sides) {
-                const ids = side.bodies.flatMap(({ formation }) => [formation, `${formation}:probe`, `${formation}:flank`]);
+                const ids = side.bodies.flatMap(({ formation }) => formationsOfBody(formation));
                 const commander = side.commander === null ? null : this.battle.actor(side.commander);
                 const one = commander && !commander.dead ? commander : this.battle.actors.find((actor) => !actor.dead && ids.includes(actor.formation?.id));
 
@@ -8409,8 +8410,8 @@ export class Game {
                 break;
         }
 
-        // (Near the player, out in the world: where it came)
-        const where = event.at ?? event.to ?? event.anchors?.find(Boolean) ?? null;
+        // (Near the player, out in the world: where it came, the first of its places there is)
+        const where = [event.at, event.to, ...(event.anchors ?? [])].find(Array.isArray) ?? null;
 
         if (!me || !where || me.map !== "town" || Math.hypot(me.x - where[0], me.y - where[1]) > BATTLE_TOLD.near) {
             return;
@@ -8461,6 +8462,20 @@ export class Game {
                 break;
             case "flank":
                 told(`${Whose} ${part} wheels onto their flank!`);
+                break;
+            case "breach":
+                this.#invasionHorn(horn, event.to);
+                this.#invasionHorn(horn, event.to, HORNS.again);
+                told(event.by === "pour" ? `${Whose} pour through the gap in the line!` : event.part === "vanguard" && event.commander ? `${this.battle.actor(event.commander)?.name ?? Whose} leads their household through the gap!` : `${Whose} reserve goes through the gap!`);
+                break;
+            case "rear":
+                told(`${Whose} fall on the rear of the ${BATTLE_TOLD.parts[event.on] ?? event.on}!`);
+                break;
+            case "reinforce":
+                told(`${Whose} ${part} comes up beside their ${BATTLE_TOLD.parts[event.beside] ?? event.beside}!`);
+                break;
+            case "fallBack":
+                told(`${Whose} archers fall back!`);
                 break;
             case "falter":
                 told(`${Whose} ${part} falls back!`);

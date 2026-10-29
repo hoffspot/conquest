@@ -42,6 +42,13 @@ export const MELEE_REACH = 1;
 const melee = (settings) => ({ kind: "melee", reach: MELEE_REACH, stagger: 150, ...settings });
 const ranged = (settings) => ({ kind: "ranged", stagger: 150, ...settings });
 
+/**
+ * The knife an archer or a caster in a line of battle draws once an enemy's on them and they
+ * can't get away (battle.js: theirs first of their attacks, so it's the one in reach up close):
+ * a quick, weak stab, fought with badly.
+ */
+export const KNIFE = Object.freeze(melee({ id: "knife", damage: [2, 4], hitAt: 260, duration: 620, interval: 1200, stagger: 60, reaction: "pierce", animation: "punch" }));
+
 // A bomb thrower's (NATURAL bombardier and its kin): a sword up close, and `bomb`s (battle.js
 // BOMBS) lobbed at whoever's further off, its shield hand free for them
 const bomber = (label, bomb) => ({

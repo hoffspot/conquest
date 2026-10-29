@@ -37,7 +37,7 @@ import { MASTERED, payOf, RESEARCH } from "./bestiary.js";
 import { atLevel, dailyStock, madeOf, shopPrice, stockKey, wareKey } from "./stock.js";
 import { SCHOOLS, SPELL_XP, SPELLS, tomeOf } from "./spells.js";
 import { DOCTRINES, FORMATION, placeAt, placesOf as linePlaces, ROLES, rolesOf } from "./formation.js";
-import { BODIES as BATTLE_BODIES, bodiesOf, COMMANDER, COMMANDERS, engagementOf, FIELD, JOB, layoutOf, MORALE, offsetsOf, STANDARD, stepEngagement, tacticsOf, TROPHY } from "./engagement.js";
+import { BODIES as BATTLE_BODIES, bodiesOf, COMMANDER, COMMANDERS, engagementOf, FIELD, formationsOfBody, holdOf, JOB, layoutOf, MORALE, offsetsOf, STANDARD, stepEngagement, tacticsOf, TROPHY } from "./engagement.js";
 import { createRandom } from "./random.js";
 import { DEN, DENS, denOf, densOf, denTier } from "./dens.js";
 import { GIFT_BOONS, giftId, sanctuaryAt, SHRINE, shrineOf } from "./shrines.js";
@@ -5612,7 +5612,7 @@ export class Host {
             field.ids = left.filter((id) => !going.includes(id));
 
             if (!field.ids.length) {
-                for (const formation of field.formations.flatMap((id) => [id, `${id}:probe`, `${id}:flank`])) {
+                for (const formation of field.formations.flatMap(formationsOfBody)) {
                     this.battle.formation(formation, null);
                 }
 
@@ -6394,7 +6394,7 @@ export class Host {
     // bodies', and any sent out of them (core/engagement.js: a probe, flankers); the Behemoth's
     // town's line's
     #formationsOf(invasion, k) {
-        const formations = invasion.engagement ? invasion.engagement.sides[k].bodies.flatMap(({ formation }) => [formation, `${formation}:probe`, `${formation}:flank`]) : [k ? invasion.formations.defenders : invasion.formations.invaders];
+        const formations = invasion.engagement ? invasion.engagement.sides[k].bodies.flatMap(({ formation }) => formationsOfBody(formation)) : [k ? invasion.formations.defenders : invasion.formations.invaders];
 
         return formations.filter((id) => this.battle.formations[id]);
     }
@@ -6514,16 +6514,21 @@ export class Host {
 
     // Whether one of an invasion's lines (`soldier`: its record, host.soldiers') charges with it,
     // its lines having charged (#charge): any who fight up close (INVASION.close, and the chiefs),
-    // going after an enemy as far as the charge's `leash` from their place in their line, and
-    // looking as far as its `sight`
+    // holding the line from then on (core/engagement.js holdOf: going after an enemy no further
+    // from their place in it than their role's FIELD charge `hold`, looking as far as its `sight`)
     #charging(invasion, soldier) {
         return (invasion.charged ?? null) !== null && (INVASION.close.includes(soldier?.role) || Boolean(soldier?.chief));
     }
 
     // How one of an invasion's lines come up to it (#reinforceInvasion) goes after an enemy: as
-    // its role does (`leash`), or, its lines having charged, as those charging do (#charging)
+    // its role does (`leash`), or, its lines having charged, as those charging do (#charging), its
+    // archers, casters and healers keeping off a foe come at them (core/engagement.js FIELD archers)
     #chargingWith(invasion, role, leash) {
-        return this.#charging(invasion, { role }) ? { leash: Math.max(leash, INVASION.charge.leash), sight: INVASION.charge.sight } : { leash };
+        if ((invasion.charged ?? null) === null) {
+            return { leash };
+        }
+
+        return this.#charging(invasion, { role }) ? { leash: holdOf({ role }), sight: FIELD.charge.sight } : { leash, keep: FIELD.archers.keep };
     }
 
     // A band's invasion's fallen made good (INVASION.reinforce): its raiders' back up to `raiders`
@@ -7044,15 +7049,15 @@ export class Host {
                     actor.formation = { id: met.formation, slot: places[n], role: actor.formation.role };
                     actor.leash = ROLES[actor.formation.role]?.leash ?? actor.leash;
                     actor.power.melee = this.soldiers.get(actor.id)?.power ?? 1;
-                    delete actor.formation.post;
                     delete actor.sight;
+                    delete actor.keep;
                 });
 
-                this.battle.formation(met.formation, { to: null, charge: false, broken: false, layout: null, speed: ARMY_NEAR.pace });
+                this.battle.formation(met.formation, { to: null, charge: false, broken: false, layout: null, hold: false, seek: null, speed: ARMY_NEAR.pace });
                 delete met.clash;
             }
 
-            for (const formation of side.bodies.flatMap((body) => [body.formation, `${body.formation}:probe`, `${body.formation}:flank`])) {
+            for (const formation of side.bodies.flatMap((body) => formationsOfBody(body.formation))) {
                 if (formation !== met?.formation && this.battle.formations[formation]) {
                     this.battle.formation(formation, null);
                 }
