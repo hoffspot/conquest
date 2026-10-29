@@ -70,16 +70,16 @@ jobs:
 
   # The end-to-end tests, split between jobs run side by side, each job's about as long as the
   # others' (scripts/e2e-shard.js: by how long each test took, e2e/durations.json). Eight jobs
-  # take about 8 minutes each (and another 40 s or so getting ready): more would be quicker,
-  # down to the longest test's 1¾ minutes, but a run is then 10 jobs (with the unit tests and the
-  # motion check), and two runs at once (a merge's and the next pull request's) stay within
-  # GitHub's 20 at a time
+  # take about 32 minutes each by e2e/durations.json (and another 40 s or so getting ready), but
+  # from 21 to 40 as runners are quicker or slower: more would be quicker, down to the longest
+  # test's 4¾ minutes, but a run is then 10 jobs (with the unit tests and the motion check), and
+  # two runs at once (a merge's and the next pull request's) stay within GitHub's 20 at a time
   e2e:
     runs-on: ubuntu-latest
-    # (Forty minutes is twice the longest a job's taken, 19, and a little more; a job hung
-    # longer is ended rather than held to GitHub's six hours. At twenty, a job was ended
-    # still running as the tests grew)
-    timeout-minutes: 40
+    # (Eighty minutes is twice the longest a job's taken, 40; a job hung longer is ended rather
+    # than held to GitHub's six hours. At twenty, then at forty, a job was ended still running
+    # as the tests grew: at forty, #600's merge, every test passed)
+    timeout-minutes: 80
     strategy:
       fail-fast: false
       matrix:
