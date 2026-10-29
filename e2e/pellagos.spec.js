@@ -568,24 +568,39 @@ test("the crest over the loading screen and the title: PELLAGOS on its ribbon in
     expect(moving).toEqual({ shine: [1], flicker: 1, embers: 0 });
 
     const blink = await page.evaluate(async () => {
+        const { crest } = window.pellagos;
         const lid = document.querySelector("#crest .crest-lid.left");
         const shut = () => new DOMMatrix(getComputedStyle(lid).transform).d;
+
+        // (Its own blinks, every 5 to 8 seconds, stopped for it as any other screen stops them, and
+        // one under way let finish, so the blink seen is the one it's told to; then started again)
+        crest.screen("still");
+        await Promise.all(lid.getAnimations().map((animation) => animation.finished));
+
         const before = shut();
 
-        window.pellagos.crest.blink();
+        crest.blink();
 
-        let most = before;
+        // (Its lid seen halfway through the blink and once it's done: put there, not waited for, so
+        // a slow page's frames can't step over the moment it's shut)
+        const blinks = lid.getAnimations();
+        const [animation] = blinks;
 
-        for (let k = 0; k < 30; k++) {
-            await new Promise((resolve) => requestAnimationFrame(resolve));
-            most = Math.max(most, shut());
-        }
+        animation.pause();
+        animation.currentTime = animation.effect.getTiming().duration * 0.45;
 
-        await new Promise((resolve) => setTimeout(resolve, 400));
+        const most = shut();
 
-        return { before, most, after: shut() };
+        animation.finish();
+
+        const after = shut();
+
+        crest.screen("title");
+
+        return { blinks: blinks.length, before, most, after };
     });
 
+    expect(blink.blinks).toBe(1);
     expect(blink.before).toBe(0);
     expect(blink.most).toBeGreaterThan(0.9);
     expect(blink.after).toBe(0);
