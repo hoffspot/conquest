@@ -5552,16 +5552,24 @@ it.
    screen's height tall, so the title's card has room under it on a computer; on a phone held
    upright it's the screen's width, on one on its side much smaller. It's the same crest over both
    screens, where it was, each's card under it; on no other screen.
-   - **Forged as the page opens.** Each letter of the name is struck in turn (0.12 seconds apart,
-     the first 0.4 seconds in: `CREST.forge`), white-hot as it lands with a burst of sparks off it,
-     and cools to gold over 1.4 seconds.
-   - **Then, now and then,** torchlight glints along the name, a band of light across its gold
-     every 7 seconds, and it flickers warmly on the leather behind it; a few embers rise off it and
-     drift up past the crest, three a second and no more than 11 at once (`CREST.embers`, on a
-     canvas of their own); and once in a while the eyes in the furrows blink, 15 to 40 seconds
-     apart and one time in five twice (`CREST.blink`), their glow pulsing slowly between.
-   - **Still with less motion asked for**: forged already, no embers, glint, flicker or blinking.
-     Nothing of it moves once the game's begun (making a character, or playing).
+   - **Its own lettering**: Cinzel Decorative Bold (`client/fonts`, SIL Open Font License, as its
+     maker made it: `CREST_FONT`), the same on every device, small enough for a little of the
+     leather above and below it, its flourishes too (`CREST.leather`). Its letters are set in the
+     ribbon's middle as they're drawn (`Crest.level`: how far the ink is from the middle of its
+     line, measured, the name moved by that), so in another lettering too, should it not come:
+     Palatino, on an iPhone, sets its capitals well above the middle of their line. The ink is
+     measured at 1000 pixels, where its edges are true to a thousandth of its size (at the size
+     it's drawn at, only to the pixel), and again whenever the crest's resized, as a phone's
+     turned: where letters sit in their line goes by the pixel at each size.
+   - **Forged as the page opens**, once its lettering's here (or it's waited 2 seconds for it:
+     `CREST.forge`). Each letter of the name is struck in turn (0.12 seconds apart, the first 0.4
+     seconds in), white-hot as it lands, and cools to gold over 1.4 seconds.
+   - **Then** a shine runs across the name once, left to right, a second after it's forged
+     (`CREST.shine`); torchlight flickers warmly on the leather behind it; and the eyes in the
+     furrows blink every 5 to 8 seconds, one time in five twice (`CREST.blink`), their glow pulsing
+     slowly between.
+   - **Still with less motion asked for**: forged already, no shine, flicker or blinking. Nothing
+     of it moves once the game's begun (making a character, or playing).
    - **Made from the owner's painting** (Google's Gemini), painted on flat magenta and cut out of it
      (`npm run build:crest`: the magenta as the master has it at its corners, never quite #FF00FF;
      each pixel's share of it made see-through and taken out of its colour, so no pink fringe is

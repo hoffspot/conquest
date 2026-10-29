@@ -667,7 +667,8 @@ client/                 The game (static files served to the browser)
                         are its own now), kept for serving glTF
   models/kenney/        The town's siege engines, a catapult and a ballista, and their wrecks
                         (Kenney's Castle Kit, CC0)
-  fonts/                UnifrakturMaguntia, the blackletter of the tavern's signs (SIL OFL)
+  fonts/                UnifrakturMaguntia, the blackletter of the tavern's signs, and Cinzel
+                        Decorative, the crest's name (SIL OFL)
   music/                The music's instruments: short recordings of real ones, as MP3s (made by
                         npm run build:music from the Versilian Community Sample Library and
                         VS Chamber Orchestra: Community Edition, CC0)
@@ -1128,6 +1129,9 @@ what it doesn't cover.
 - The tavern's lettering: UnifrakturMaguntia by j. 'mach' wust (after Peter Wiegel), SIL Open
   Font License 1.1
   (`client/fonts/UnifrakturMaguntia-OFL.txt`).
+- The crest's lettering: Cinzel Decorative by Natanael Gama, SIL Open Font License 1.1, with the
+  Reserved Font Name "Cinzel" (`client/fonts/CinzelDecorative-OFL.txt`), its Bold as he made it,
+  unchanged.
 - 3D engine: [Three.js](https://threejs.org) (MIT license, in `client/vendor/three-r186/LICENSE`).
 - Meshes simplified for characters seen from afar, and models read that were compressed for the
   game: [meshoptimizer](https://github.com/zeux/meshoptimizer) by Arseny Kapoulkine, its simplifier

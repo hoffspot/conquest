@@ -250,7 +250,7 @@ export const MANIFEST = Object.freeze([
             ["js/core/spoils.js", 27976, "e9f5be2ca3"],
             ["js/core/standing.js", 62759, "941b336755"],
             ["js/core/stock.js", 6828, "9367a1187a"],
-            ["js/core/strength.js", 9923, "805dcec6c7"],
+            ["js/core/strength.js", 9978, "9fa664a8d2"],
             ["js/core/terrain/curve.js", 2252, "30bcf52cea"],
             ["js/core/terrain/flats.js", 3355, "55c9fe4704"],
             ["js/core/terrain/ground.js", 26787, "15c42093cd"],
