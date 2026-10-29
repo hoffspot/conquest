@@ -3,8 +3,8 @@
 //
 //     npm run e2e:durations -- report-1.json report-2.json ...
 //
-// Each of CI's e2e jobs leaves its report (the e2e-report-<job> artifacts); give it all of one
-// run's. Or run the tests here with `--reporter=json` (PLAYWRIGHT_JSON_OUTPUT_NAME=report.json),
+// Each share of the tests CI runs leaves its report (the e2e-report-<share> artifacts: gh run
+// download <run> -p 'e2e-report-*'); give it all of one run's. Or run the tests here with `--reporter=json` (PLAYWRIGHT_JSON_OUTPUT_NAME=report.json),
 // one at a time (--workers=1) as CI runs them. A test in the reports gets its time from them (its
 // passing run, or its last); the others keep theirs; e2e/durations.json is written in seconds.
 
