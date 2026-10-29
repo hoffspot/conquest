@@ -1464,16 +1464,19 @@ test("two players in a party on the maps: what each had found before is the othe
     await playing(guest);
     await expect(host.locator("#banner")).toContainText("Bryn has come into the world", { timeout: 30000 });
 
-    // (Bryn had been somewhere Ada hasn't, far off: the same in both worlds)
+    // (Bryn had been somewhere Ada hasn't, far off: so in the host's world, and in the guest's as
+    // the host sends it the world again, asked for. Not put in the guest's copy directly as well: a
+    // world the host sent it before that, still on its way to a guest just come in and behind,
+    // would take it out again as it came)
     const far = await host.evaluate(() => {
         const me = window.pellagos.game.battle.actor("player");
 
         return [me.x + 64 * 12 + 32, me.y + 32];
     });
 
-    for (const page of [host, guest]) {
-        await page.evaluate(([x, y]) => window.pellagos.game.host.players.get("guest-1").explored.visit(x, y), far);
-    }
+    await host.evaluate(([x, y]) => window.pellagos.game.host.players.get("guest-1").explored.visit(x, y), far);
+    await guest.evaluate(() => window.pellagos.game.remote.resync());
+    await expect.poll(() => guest.evaluate(([x, y]) => window.pellagos.game.host.players.get("guest-1").explored.visitedAt(x, y), far), { timeout: 30000 }).toBe(true);
 
     expect(await host.evaluate(([x, y]) => window.pellagos.game.explored.visitedAt(x, y), far)).toBe(false);
 
@@ -1501,10 +1504,10 @@ test("two players in a party on the maps: what each had found before is the othe
                 const { game } = window.pellagos;
                 const been = (id) => game.host.players.get(id)?.explored.visitedAt(x, y) ?? null;
 
-                return { ada: been("player"), bryn: been("guest-1"), parties: [game.host.partyIds?.get("player") ?? null, game.host.partyIds?.get("guest-1") ?? null], sentAgain: game.remote?.resyncs ?? null };
+                return JSON.stringify({ ada: been("player"), bryn: been("guest-1"), parties: [game.host.partyIds?.get("player") ?? null, game.host.partyIds?.get("guest-1") ?? null], sentAgain: game.remote?.resyncs ?? null });
             }, far);
 
-        await expect.poll(there, { message: `Bryn's land on Ada's map in ${whose} world`, timeout: 30000, intervals: [250] }).toMatchObject({ ada: true });
+        await expect.poll(there, { message: `Bryn's land on Ada's map in ${whose} world`, timeout: 30000, intervals: [250] }).toMatch(/"ada":true/);
     }
 
     expect(await host.evaluate(([x, y]) => window.pellagos.game.explored.visitedAt(x, y), far)).toBe(true);
