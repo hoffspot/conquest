@@ -6734,7 +6734,19 @@ test.describe("drawn at the screen's own pixels", () => {
             const was = { x: aside.x, y: aside.y, square: [...aside.square], facing: aside.facing, path: [...(aside.path ?? [])], to: aside.to, order: aside.order };
             const { camera } = session.view;
             const look = camera.getWorldDirection(camera.position.clone()).setY(0).normalize();
-            const [bx, by] = [camera.position.x - look.x * 3, camera.position.z - look.z * 3];
+            const ground = game.groundOf(aside.map) ?? (() => 0);
+            const { height } = game.avatars.get(aside.id).character;
+            // (A few steps behind the camera, or further till it's out of view as the world was last
+            // drawn, which is what its posing goes by: from high up looking steeply down, the
+            // ground a few steps behind it is in view)
+            const behind = (back) => [camera.position.x - look.x * back, camera.position.z - look.z * back];
+            let back = 3;
+
+            while (back < 100 && session.view.heightOnScreen({ x: behind(back)[0], y: ground(...behind(back)), z: behind(back)[1] }, height) > 0) {
+                back *= 2;
+            }
+
+            const [bx, by] = behind(back);
 
             Object.assign(aside, { x: bx, y: by, square: [Math.floor(bx), Math.floor(by)], path: [], to: null, order: null });
             game.avatars.get(aside.id).place(bx, by, aside.facing);
