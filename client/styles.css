@@ -207,10 +207,10 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #crest {
 /* Its name on its ribbon (crest.js CREST.ribbon) */
 .crest-name {
     position: absolute;
-    left: 12.7%;
-    right: 12.8%;
-    top: 41.4%;
-    bottom: 42.1%;
+    left: 11.5%;
+    right: 11.5%;
+    top: 41.1%;
+    bottom: 38.7%;
     display: grid;
     place-items: center;
 }
@@ -237,7 +237,7 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #crest {
 .crest .wordmark {
     font-family: "Cinzel Decorative", var(--font-display);
     font-weight: 700;
-    font-size: 6.6cqi;
+    font-size: 8.8cqi;
     font-kerning: none;
     font-variant-ligatures: none;
     line-height: 1;
@@ -293,10 +293,10 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #crest {
 /* And flickering on the leather behind it */
 .crest-glow {
     position: absolute;
-    left: 22%;
-    right: 22%;
-    top: 36%;
-    bottom: 37%;
+    left: 21%;
+    right: 21%;
+    top: 37.5%;
+    bottom: 35.5%;
     background: radial-gradient(ellipse at 50% 50%, rgba(255, 168, 70, 0.34), rgba(255, 140, 40, 0) 70%);
     mix-blend-mode: screen;
     animation: crest-flicker 4.3s linear infinite;
@@ -306,7 +306,7 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #crest {
 .crest-eye,
 .crest-lid {
     position: absolute;
-    top: 63.8%;
+    top: 65.2%;
     translate: -50% -50%;
 }
 
@@ -320,21 +320,21 @@ body[data-screen]:not([data-screen="loading"], [data-screen="title"]) #crest {
 }
 
 .crest-lid {
-    width: 3.4%;
-    height: 3.8%;
-    background: radial-gradient(ellipse at 50% 55%, #1d140d 52%, rgba(29, 20, 13, 0.85) 62%, rgba(29, 20, 13, 0) 74%);
+    width: 3.6%;
+    height: 4%;
+    background: radial-gradient(ellipse at 50% 55%, #0b0500 52%, rgba(11, 5, 0, 0.85) 62%, rgba(11, 5, 0, 0) 74%);
     transform-origin: 50% 0;
     transform: scaleY(0);
 }
 
 .crest-eye.left,
 .crest-lid.left {
-    left: 46.9%;
+    left: 47.5%;
 }
 
 .crest-eye.right,
 .crest-lid.right {
-    left: 53.1%;
+    left: 52.6%;
 }
 
 /* As it's first shown (crest.js forge): the crest, then, its lettering here, each letter in turn
