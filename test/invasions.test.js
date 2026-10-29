@@ -508,16 +508,28 @@ describe("an invasion in the world (core/host.js #invade)", () => {
 
         // (From the first blow, over the next few seconds: most of those of their lines who fight
         // up close and stand in their places at it (not those coming up to them, nor those held
-        // back behind); and none fighting a foe further from their place than one of their own
-        // beside them would be, helped: FIELD charge `lap`)
+        // back behind); and none of a body standing where it is fighting a foe further from their
+        // place than one of their own beside them would be, helped: FIELD charge `lap`. Not one
+        // whose body's moved or turned in the last 2 s, closing up or wheeling: their place goes
+        // with it, they finishing the fight they're in where they stood)
         play(game, 30000, () => invasion.fightAt !== null && host.battle.time - invasion.fightAt >= 10000);
 
         const lines = new Set(engagement.sides.flatMap(({ bodies }) => bodies.filter(({ part }) => ["left", "centre", "right"].includes(part)).map(({ formation }) => formation)));
         const placeOf = (one) => placeAt(host.battle.formations[one.formation.id], one.formation.slot);
         const off = (one, [x, y]) => Math.hypot(one.x - x, one.y - y);
         const [placed, chases] = [[0, 0], []];
+        const stood = [];
 
         for (let k = 0; k < 8; k++) {
+            stood.push(new Map([...lines].map((id) => [id, { anchor: [...host.battle.formations[id].anchor], facing: host.battle.formations[id].facing }])));
+
+            const before = stood.at(-5) ?? stood[0];
+            const standing = (id) => {
+                const [then, now] = [before.get(id), stood.at(-1).get(id)];
+
+                return Math.hypot(now.anchor[0] - then.anchor[0], now.anchor[1] - then.anchor[1]) <= 0.5 && Math.abs(now.facing - then.facing) <= 0.05 && !host.battle.formations[id].to;
+            };
+
             for (const one of [...invasion.invaders, ...invasion.defenders].map((id) => host.battle.actor(id)).filter((each) => each && !each.dead && close(each.id) && lines.has(each.formation?.id))) {
                 const place = placeOf(one);
                 const target = one.target === null ? null : host.battle.actor(one.target);
@@ -527,7 +539,7 @@ describe("an invasion in the world (core/host.js #invade)", () => {
                     placed[1]++;
                 }
 
-                if (target && !target.dead) {
+                if (target && !target.dead && standing(one.formation.id)) {
                     chases.push(off(target, place));
                 }
             }
