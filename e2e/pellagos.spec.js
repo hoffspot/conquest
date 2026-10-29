@@ -2869,7 +2869,8 @@ test("those attacking the player have an icon each down the right side, a likene
         expect(icon.target).toBe(false);
     }
 
-    expect(icons.each[1].label).toBe("Green slime");
+    // (How the player stands in its enmity said with its name: Show whom foes are on)
+    expect(icons.each[1].label).toBe("Green slime, on you");
 
     // (Where the player is and what they're doing a moment after a tap, a double tap or a hold)
     const state = (seconds) =>
