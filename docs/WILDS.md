@@ -890,9 +890,12 @@ sample is ever dealt.
   once (`progress.legends.uniques`): one who's had it is told so instead.
 - **Bound**: a unique (`unique` on the item) is coloured as nothing else is (sea-green,
   styles.css `.rarity-unique`, its glow on the ground too), and its card says it's found nowhere
-  else and bound to its finder, with its tale. It can't be sold, traded, dropped, thrown away or
-  given to a follower (refused, `bound`: "It's bound to you: it goes where you go, and no
-  further."); the pack offers none of those for it.
+  else and bound to its finder, with its tale. It can't be sold, traded, dropped or given to a
+  follower (refused, `bound`: "It's bound to you: it goes where you go, and no further."), and the
+  pack offers none of those for it; it can only be thrown away, the player asked first ("Throw
+  away Signet of the Sample? It's found nowhere else: thrown away, it's gone for good, and you'll
+  never be given it again."), so one no longer wanted needn't take up the pack for good. The
+  character's kept as having had it (`progress.legends.uniques`), so it's never given again.
 - **The journal's *Legends***: the rare encounters out that the player or their party have seen
   (where, from here), those overcome in this world (by whom, and where), and the uniques their
   character keeps.

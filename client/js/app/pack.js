@@ -1001,8 +1001,11 @@ export class PackPanel {
             actions.push({ key: "split", label: "Split" });
         }
 
-        // (A unique's bound to who it was given to: core/rare.js UNIQUES)
+        // (A unique's bound to who it was given to: core/rare.js UNIQUES. Not sold, dropped or
+        // given; only thrown away, for good, once they've said they're sure)
         if (stack.bound) {
+            actions.push({ key: "discard", label: "Throw away" });
+
             return actions;
         }
 
@@ -1045,6 +1048,11 @@ export class PackPanel {
                 this.onCommand({ type: key, index, count });
             }
         } else if (key === "discard") {
+            // (A unique: asked first, being found nowhere else and never given again)
+            if (stack.bound && !(await this.#sure({ title: `Throw away ${stack.label}?`, text: "It's found nowhere else: thrown away, it's gone for good, and you'll never be given it again.", verb: "Throw away" }))) {
+                return;
+            }
+
             this.onCommand({ type: "discard", index });
         } else if (key === "offer" && this.view.trade) {
             // (As many as they carry of it, exactly as it is, in whichever stacks)

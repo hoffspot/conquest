@@ -111,8 +111,9 @@ Pure data and arithmetic, no DOM, as `core/director.js` is; the host drives it w
 - A unique is `{ id, name, base (a piece of gear), about, effect?, bonuses? }`: made as a legendary
   of its base at the player's level when it's given (`rollGear`'s level, from their might), its
   name, its effect and its look its own. A new make, `unique`, coloured as no other.
-- **Bound to the character**: it can't be sold, dropped, traded, discarded or given to a follower
-  (refused, said why); a character who's had one can't be given it again (`progress.legends`).
+- **Bound to the character**: it can't be sold, dropped, traded or given to a follower (refused,
+  said why), only thrown away, the player asked first (the owner's word, 2026-10-29); a character
+  who's had one can't be given it again (`progress.legends`).
 - Its effect is one of the legendary effects, or one of its own added to them (`legendary.js
   EFFECTS`, with its look in `world/effects.js` and its sound in the catalog), designed with it.
 
@@ -146,7 +147,7 @@ Pure data and arithmetic, no DOM, as `core/director.js` is; the host drives it w
 - The host: the wilds clock at each ordinary card (`#deal`), the rare card placed ahead or at its
   site, its life followed each step (seen, taken up, done, failed, passed), the rewards given, the
   world's `done` kept; a debug command to deal the sample.
-- Uniques: the `unique` make, `UNIQUES`, bound items refused for sale, dropping, trade, discarding
+- Uniques: the `unique` make, `UNIQUES`, bound items refused for sale, dropping, trade
   and followers; `progress.legends`.
 - Kept: the snapshot step, the world save beside the war, `loadProgress`, character files.
 - Shown: the sting (catalog), its mark, the party's line, the journal's *Legends*.

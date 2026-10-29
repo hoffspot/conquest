@@ -844,7 +844,8 @@ The world's rare encounters, and what the player keeps of them:
   (world/vault3d.js), its seal glowing sea-green while it's shut.
 - **In the pack** (app/gearinfo.js `rarityOf`, styles.css `.rarity-unique`): a unique's its own
   make, *Unique*, sea-green in its card, its cell and its glow on the ground (world/drops3d.js),
-  found nowhere else and bound to them: nothing to sell, drop, throw away or give.
+  found nowhere else and bound to them: nothing to sell, drop or give it by, only *Throw away*,
+  asked first (gone for good, and never given again).
 
 ### Writings (core/writings.js, app/reader.js)
 

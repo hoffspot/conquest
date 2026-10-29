@@ -157,7 +157,7 @@ export function describe(item, progress, { index = null, label = item.id, haggle
     const unique = item.unique ? (UNIQUES[item.unique] ?? null) : null;
 
     if (unique) {
-        lines.push({ text: "Unique: found nowhere else, and bound to you (it can't be sold, traded, dropped or given away)", tone: "unique" });
+        lines.push({ text: "Unique: found nowhere else, and bound to you (it can't be sold, traded, dropped or given away; thrown away, it's gone for good)", tone: "unique" });
 
         if (unique.about) {
             lines.push({ text: unique.about, tone: "note" });

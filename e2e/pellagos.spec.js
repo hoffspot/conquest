@@ -12211,7 +12211,7 @@ test("the wilds director lays an ambush ahead of a player crossing the wilds: it
     expect(laid.shown).toBe(laid.count);
 });
 
-test("a rare encounter dealt in the wilds (debug mode's sample) in a party of two: seen, its word said and its mark on the maps; felled, each given their own unique, bound and sea-green in the pack; its thread begun, in the journal's Legends with what was met", async ({ page }) => {
+test("a rare encounter dealt in the wilds (debug mode's sample) in a party of two: seen, its word said and its mark on the maps; felled, each given their own unique, bound and sea-green in the pack, only to be thrown away, the player asked first; its thread begun, in the journal's Legends with what was met", async ({ page }) => {
     test.setTimeout(240000);
     await playing(page, "/?play&seed=2");
 
@@ -12314,6 +12314,24 @@ test("a rare encounter dealt in the wilds (debug mode's sample) in a party of tw
     await expect(page.locator(".pack-card.rarity-unique .tone-unique")).toContainText("found nowhere else, and bound to you");
     await expect(page.locator(".pack-card.rarity-unique .pack-kind")).toHaveText("Ring · Unique");
     expect(await page.evaluate(() => getComputedStyle(document.querySelector(".pack-name.rarity-unique")).color)).toBe("rgb(63, 224, 192)");
+
+    // Not to be dropped; only thrown away, the player asked first: Cancel keeps it, Throw away
+    // and it's gone, never to be given again
+    const pack = page.locator(".pack");
+    const ask = pack.locator(".pack-ask");
+
+    await expect(pack.getByRole("button", { name: "Drop: Signet of the Sample" })).toHaveCount(0);
+    await pack.getByRole("button", { name: "Throw away: Signet of the Sample" }).click();
+    await expect(ask).toBeVisible();
+    await expect(ask.locator(".pack-ask-title")).toHaveText("Throw away Signet of the Sample?");
+    await expect(ask.locator(".pack-ask-text")).toHaveText("It's found nowhere else: thrown away, it's gone for good, and you'll never be given it again.");
+    await ask.getByRole("button", { name: "Cancel" }).click();
+    await expect(cell).toHaveCount(1);
+    await cell.click();
+    await pack.getByRole("button", { name: "Throw away: Signet of the Sample" }).click();
+    await ask.getByRole("button", { name: "Throw away", exact: true }).click();
+    await expect(cell).toHaveCount(0);
+    expect(await page.evaluate(() => window.pellagos.game.progress.legends.uniques)).toEqual(["sampleSignet"]);
 });
 
 test("a rare encounter inside (debug mode's inside sample) on a dungeon's floor: felled, a ward broken and a door shown in the rock, an arch over its way in; gone through to a sealed room of its own, drawn, its keepers woken, its chest each one's reward once they've fallen", async ({ page }) => {

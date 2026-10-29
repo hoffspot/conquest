@@ -484,10 +484,18 @@ describe("rare encounters in play (host.js)", () => {
             assert.deepEqual(progress.legends, { met: ["sample"], uniques: ["sampleSignet"] });
             assert.equal(progress.pack[index].name, UNIQUES.sampleSignet.name);
 
-            // (Bound: not sold, dropped, thrown away nor traded)
+            // (Bound: not dropped, sold nor traded)
             assert.deepEqual(host.command(id, { type: "drop", index }), { ok: false, reason: "bound" });
-            assert.deepEqual(host.command(id, { type: "discard", index }), { ok: false, reason: "bound" });
         }
+
+        // (Only thrown away, for good: Bram's, his character never given it again)
+        const brams = host.players.get("bram").progress;
+        const thrown = host.command("bram", { type: "discard", index: brams.pack.findIndex((stack) => stack?.unique === "sampleSignet") });
+
+        assert.equal(thrown.ok, true);
+        assert.equal(thrown.item.unique, "sampleSignet");
+        assert.ok(!brams.pack.some((stack) => stack?.unique));
+        assert.deepEqual(brams.legends.uniques, ["sampleSignet"], "(kept as had: never given again)");
 
         // (Never given twice: dealt again by debug mode, its unique's had already)
         host.legends.last = -Infinity;

@@ -4240,10 +4240,8 @@ export class Host {
 
     // A stack thrown away: gone, but kept a moment to take back
     #discard(player, index) {
-        if (player.progress.pack[index]?.unique) {
-            return refuse("bound");
-        }
-
+        // (A unique too: thrown away, it's gone for good, its character never given it again,
+        // core/rare.js UNIQUES; the player's asked first, app/pack.js)
         const item = player.progress.take(index);
 
         if (!item) {
