@@ -13,7 +13,8 @@ Demon; the hells' fiends, Fab's Monster4, with its two other skins; and, to come
 flayed, Fab's Monster1's six builds, and its six gorgers, Fab's Monster2's four builds; the
 hells' henchmen of the Pit, Andrew Ermakov's Monster3 "Villain's Henchman" from Fab, with its three
 other skins; the hells' walkers, Andrew Ermakov's Monster4 "Walking Villain" from Fab, in its five
-skins; and, to come, the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). This page is how such
+skins; and, to come, the Stone Golem, Alexander Lenski's Armored Stone Golem - Dark Fantasy Boss
+from Fab, with its three other skins, kept for a card; and the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). This page is how such
 models are kept out of anyone else's hands, as far as a game played in a browser can, and what the owner sets up for it.
 
 **Status: done.** The owner set the private repository up on 16 October 2026 (*Setting it up*,

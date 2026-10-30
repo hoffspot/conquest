@@ -229,10 +229,12 @@ test("the centipede's model as it was made (the ants' nests' great centipede's):
     await openViewer(page, "/model-viewer.html?model=beast-centipede&clip=Run");
 
     // (In the game now, as are the ant, the spiders, the scorpion, the cockroach, the wasp, the
-    // black widow, the Ant Monster, the greater demon (a hell's lord), the fiend (its packs), its
-    // six flayed and six gorgers, and the kaiju (the Behemoth of the Rift): every bought model,
-    // none listed as to come; read, its clips listed, the one asked for by its address played)
-    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual([]);
+    // black widow, the Ant Monster, the greater demon (the River of Fire's master), the infernal
+    // demon (a hell's lord), the fiend (its packs), its six flayed and six gorgers, the henchmen,
+    // the walkers, and the kaiju (the Behemoth of the Rift): every bought model but the Stone
+    // Golem, kept for a card, listed as to come; read, its clips listed, the one asked for by its
+    // address played)
+    expect(await page.locator("#picker optgroup[label^='Coming to the wilds'] option").allTextContents()).toEqual(["Stone Golem"]);
     expect(await page.locator("#picker optgroup[label='For the mightiest'] option").allTextContents()).toContain("Behemoth of the Rift");
     expect(await page.locator("#picker optgroup[label=\"The ants' nests\"] option").allTextContents()).toEqual(["Giant ant", "Great centipede", "Dungeon spider", "Elite dungeon spider", "Giant cockroach", "Dungeon wasp", "Dungeon scorpion", "Black widow", "Ant Monster"]);
     await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
@@ -798,6 +800,52 @@ test("and the Infernal Demon: all 21 of its own clips, as long as they were made
     expect(await page.getByLabel("Skin").locator("option").allTextContents()).toEqual(["Its own skin", "Dark"]);
     await page.getByLabel("Skin").selectOption("dark");
     await page.waitForFunction(() => window.lab.current().thing.skin === "dark", null, { timeout: 60000 });
+});
+
+test("and the Stone Golem, kept for a card: all 25 of its own clips, its hammer and shield on the bones that hold them, its three materials, each of its skins put on, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-golem&clip=Attack%201");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack 1",
+        "Attack 2",
+        "Attack 3",
+        "Attack 4",
+        "Attack 5",
+        "Death 1",
+        "Death 2",
+        "Death 3",
+        "Dodge",
+        "Hit 1",
+        "Hit 2",
+        "Hit 3",
+        "Idle",
+        "Idle 2",
+        "Idle 3",
+        "Idle 4",
+        "Jog",
+        "Jog Back",
+        "Jog Left",
+        "Jog Right",
+        "Turn 180",
+        "Walk",
+        "Walk Back",
+        "Walk Left",
+        "Walk Right",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Attack 1", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Stone Golem");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ triangles: 45704, bones: 81, materials: 3 });
+    await expect(page.locator("#details")).toContainText("Alexander Lenski's \"Armored Stone Golem - Dark Fantasy Boss\", bought on Fab: used with the permission its Standard License gives");
+
+    // (Each of its skins put on)
+    expect(await page.getByLabel("Skin").locator("option").allTextContents()).toEqual(["Its own skin", "Ember", "Moss", "Frost"]);
+
+    for (const skin of ["ember", "moss", "frost"]) {
+        await page.getByLabel("Skin").selectOption(skin);
+        await page.waitForFunction((want) => window.lab.current().thing.skin === want, skin, { timeout: 60000 });
+    }
 });
 
 test("the werewolf as the game draws it, from its model once that's read: the game's moves for it, and the skin each one wears", async ({ page }) => {
