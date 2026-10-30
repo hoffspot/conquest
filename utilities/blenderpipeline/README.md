@@ -56,7 +56,9 @@ Build one asset, or several: `node build.js my-asset.json [more.json...]`. Optio
 2. Brings in actions from other files (`actions`): a `.blend`'s by name (one clip a file, as
    Mesh2Motion keeps them, or a pack bought separately), or an `.fbx`'s, the clip moving its
    skeleton (an animation FBX, as Unity and Unreal packs have one for each clip: the skeleton it
-   brings, and a control rig's clips, are left behind). It picks the armature's actions to export
+   brings, and a control rig's clips, are left behind; one made at another rate than the source,
+   as Unreal's clips may be at 30 frames a second to their mesh's 25, retimed to the source's, to
+   last as long as it was made to). It picks the armature's actions to export
    (`clips.include`, `clips.exclude`) and names them (`clips.rename`): every one that moves its
    bones, played or not, those an older Blender saved too (before 4.4, an action nothing played
    was kept for no kind of thing: it's claimed for the armature). Each becomes one glTF
@@ -521,9 +523,10 @@ Browser, it exports:
     with several skeletons: which clips go with which mesh);
   - each material's textures by parameter, and its numbers and colours: which texture is the
     colour, the normals, the packed masks (*Materials from textures*);
-  - each texture's colour space and compression: `"normal": true` for a normal map, Unreal's
-    DirectX kind (`"flipGreen": true`); `TC_MASKS` for packed masks (an ORM's occlusion, roughness
-    and metal in red, green and blue);
+  - each texture's size (as exported, not the little of it the editor may have loaded), colour
+    space and compression: `"normal": true` for a normal map, Unreal's DirectX kind
+    (`"flipGreen": true`); `TC_MASKS` for packed masks (an ORM's occlusion, roughness and metal in
+    red, green and blue);
   - and what couldn't be exported.
 
 Zip the folder for the session, with the asset's Fab page and its licence.

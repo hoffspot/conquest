@@ -274,6 +274,12 @@ describe("an asset from FBX files, as a bought one comes (fbx-creature), built f
                 ["Wave", "creature@wave.fbx"],
             ],
         );
+
+        // (Its clip from the other FBX, made at 30 frames a second to the model's 24, as long as it
+        // was made: 19 frames at 30, not at 24)
+        const wave = report.clips.find((clip) => clip.name === "Wave");
+
+        assert.ok(Math.abs(wave.seconds - 19 / 30) < 0.01, `${wave.seconds} s`);
         assert.ok(report.notes.includes("actions not exported: Ctrl_Hips|Scene (animates no bone)"));
         assert.deepEqual(report.exported.joined, [
             { name: "Body", objects: ["Body", "Teeth"] },

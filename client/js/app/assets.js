@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "cfcdada3b7",
+    release: "36d8b627b8",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2256,8 +2256,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/beasts/henchman.bin",
-                    "hash": "92a439581b",
-                    "bytes": 1550092
+                    "hash": "255ebec1ab",
+                    "bytes": 1550700
                 }
             ]
         },
@@ -2290,8 +2290,8 @@ export const ASSETS = Object.freeze({
             "files": [
                 {
                     "path": "models/beasts/hellwalker.bin",
-                    "hash": "75323b4333",
-                    "bytes": 1708492
+                    "hash": "d3f8197912",
+                    "bytes": 1710232
                 }
             ]
         },
@@ -2319,6 +2319,30 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/hellwalker.char.bin",
                     "hash": "2596ebc2fb",
                     "bytes": 170464
+                }
+            ]
+        },
+        "beast-infernal": {
+            "tier": "demand",
+            "label": "The Lord of the Pit, the Infernal Demon (Lilpupinduy's \"Infernal Demon RIG\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/infernal.bin",
+                    "hash": "478ba02cdb",
+                    "bytes": 5190372
+                }
+            ]
+        },
+        "beast-infernal-skins": {
+            "tier": "demand",
+            "label": "The Infernal Demon's other skin: dark, its glow green, kept for something rarer than the Pit's lord (Lilpupinduy's \"Infernal Demon RIG\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/infernal.dark.bin",
+                    "hash": "b581b0088b",
+                    "bytes": 583128
                 }
             ]
         },

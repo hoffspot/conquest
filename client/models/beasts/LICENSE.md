@@ -247,8 +247,9 @@ Hit and Death, its wings beating to them (`clips.invent`).
 
 It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
 in this repository, but in the private one the game's builds fetch it from
-(`docs/LICENSED_MODELS.md`). In the game it's the hells' Lord of the Pit (`beasts/model.js`
-`demonLord`).
+(`docs/LICENSED_MODELS.md`). In the game it's the master of the River of Fire, a hell's third
+level (`beasts/model.js` `greaterDemon`); it was the hells' Lord of the Pit until the Infernal
+Demon (below).
 
 Don't copy it out of this game or use it in anything else.
 
@@ -382,6 +383,36 @@ in this repository, but in the private one the game's builds fetch it from
 Brimstone walkers of the Breach, the Ash walkers of the Halls of Bone, the Hellwalkers of the
 River of Fire (its own skin and char) and the Bile walkers of the Pit (`beasts/model.js`
 `brimstoneWalker`, `ashWalker`, `hellwalker`, `bileWalker`).
+
+Don't copy it out of this game or use it in anything else.
+
+## infernal.bin, infernal.dark.bin
+
+**Infernal Demon RIG**, by **Lilpupinduy** (its Unreal Engine files: its skeletal mesh, its
+textures and its 20 animations, exported from Unreal Engine by this repository's owner), bought on
+**Fab** by this repository's owner under **Fab's Standard License**: the Infernal Demon.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/infernal.json`, which stays out of the repository with the bought files), its `phone`
+build. That's its whole mesh (`SKM_Demon_Full`: body, armour, wings and its wings' fire) of 28,180
+triangles, with two lower details packed in (12,679 and 5,634), its four materials kept apart
+(body, armour, wings, and the fire, blended), each its textures (colour, normal, its packed
+occlusion, roughness and metal, and its glow) as 1,024-pixel KTX2, made from its own and from its
+materials' numbers (its body darkened as its red one has it; its glows, and its wings' fire from
+its smoke); and all 21 of its own clips (the 20 and a jump's start cut short): two attacks with
+its claws, two with its wings, a spell, a cast, walking, running, a flinch, deaths on the ground
+and in the air, jumping, falling, landing and five ways of flying. Its other look, dark, its glows
+green and its armour's cloth green as its `Dark` materials have them, is its textures alone
+(`infernal.dark.bin`). Its pack's own copies of Unreal's mannequins and their animations
+(`Demo/Characters/Mannequins`, and the clips retargeted from them, `MM_*` and `MF_*`) aren't in it:
+they're Epic's, licensed for Unreal Engine only.
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`). In the game it's the hells' Lord of the Pit (`beasts/model.js`
+`demonLord`), in its red; its dark one is kept for something rarer, and shown in the model viewer.
 
 Don't copy it out of this game or use it in anything else.
 

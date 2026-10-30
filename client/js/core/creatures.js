@@ -285,6 +285,9 @@ export const CREATURES = Object.freeze({
     // until a bought model of its own is read: beasts/looks.js)
     // (A cult's high priest, keeping its rite by a hell's portal at night: host.js #lairs, RITES)
     cultLeader: { name: "High priest of the cult", hp: 80, hands: true, weapon: "cultLeader", speed: 1.2, chase: 2.3, temper: "aggressive", roam: 3, leash: 24, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.15, perilous: true, darkSight: true },
+    // (The River of Fire's master, a hell's third level's (dungeons/themes.js `hell`): the Greater
+    // Demon, the Lord of the Pit's before the Infernal Demon took the Pit)
+    greaterDemon: { name: "Greater demon", hp: 80, hands: true, weapon: "greaterDemon", speed: 1.1, chase: 2.4, temper: "aggressive", roam: 4, leash: 26, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true, darkSight: true, steady: true },
     demonLord: { name: "Demon lord", hp: 120, hands: true, weapon: "demonLord", speed: 1.1, chase: 2.4, temper: "aggressive", roam: 4, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.3, perilous: true, darkSight: true, steady: true },
     // (A fiend of the hells, met in packs on every level of one: core/dungeons/themes.js hell.
     // Lean, winged and horned, a head and more taller than a man, its claws raking and its spring

@@ -199,7 +199,24 @@ def material_notes(material):
     return notes
 
 
-def texture_notes(texture, file):
+def image_size(path):
+    """An exported image's width and height, as its file has them (TGA, PNG); None for another."""
+    try:
+        with open(path, "rb") as file:
+            head = file.read(24)
+    except OSError:
+        return None
+
+    if head[:8] == b"\x89PNG\r\n\x1a\n" and len(head) == 24:
+        return [int.from_bytes(head[16:20], "big"), int.from_bytes(head[20:24], "big")]
+
+    if path.lower().endswith(".tga") and len(head) >= 16:
+        return [int.from_bytes(head[12:14], "little"), int.from_bytes(head[14:16], "little")]
+
+    return None
+
+
+def texture_notes(texture, file, path):
     notes = {"file": file}
 
     for name in ("srgb", "compression_settings", "lod_group"):
@@ -208,10 +225,16 @@ def texture_notes(texture, file):
         if value is not None:
             notes[name] = value if isinstance(value, bool) else enum_name(value)
 
-    try:
-        notes["size"] = [texture.blueprint_get_size_x(), texture.blueprint_get_size_y()]
-    except Exception:
-        pass
+    # (Its size as exported, else as it was imported: not what's loaded of it, blueprint_get_size_x,
+    # only as much as the editor's drawn, 32 pixels across for one it hasn't)
+    size = image_size(path)
+    imported = get(texture, "imported_size")
+
+    if size is None and imported is not None:
+        size = [int(imported.x), int(imported.y)]
+
+    if size:
+        notes["size"] = size
 
     notes["normal"] = "NORMALMAP" in str(notes.get("compression_settings", "")).upper()
 
@@ -263,7 +286,7 @@ def main(root=None, out=None):
                 file = next((base + ext for ext in TEXTURE_FORMATS if export(asset, os.path.join(out, base + ext))), None)
 
                 if file:
-                    notes["textures"][path_of(asset)] = texture_notes(asset, file.replace(os.sep, "/"))
+                    notes["textures"][path_of(asset)] = texture_notes(asset, file.replace(os.sep, "/"), os.path.join(out, file))
                 else:
                     notes["failed"].append({"asset": package, "why": "no texture exporter took it"})
             elif export(asset, os.path.join(out, base + ".fbx"), fbx_options()):

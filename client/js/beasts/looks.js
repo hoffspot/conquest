@@ -675,8 +675,10 @@ export const LOOKS = Object.freeze({
     frostTroll: { body: "humanoid", scale: [1.5, 1.6] },
     // (A cult's high priest: robed as its faithful are, a head taller, its staff in hand)
     cultLeader: { body: "humanoid", scale: [1.08, 1.12] },
-    // (A hell's lord: a great horned brute, until a bought model of its own is read)
+    // (A hell's lord, and the River of Fire's master: great horned brutes, until the bought models
+    // of their own are read)
     demonLord: { body: "humanoid", scale: [1.6, 1.65] },
+    greaterDemon: { body: "humanoid", scale: [1.55, 1.6] },
     // (A hell's fiend: lean, horned and a head and more taller than a man, until its own model's read)
     fiend: { body: "humanoid", scale: [1.28, 1.33] },
     // (A hell's flayed, gaunt and skinned, a man's height to a head and more taller, until their
@@ -806,6 +808,18 @@ const BRUTES = {
         macro: { gender: 1, muscle: [0.95, 1], weight: [0.6, 0.75], height: [0.95, 1], african: 0.3, asian: 0.3, caucasian: 0.4 },
         details: { browRidge: [0.9, 1], underbite: [0.5, 0.8], jawWidth: [0.7, 0.9], headSquare: [0.4, 0.7], eyeSize: [-0.6, -0.3], earPoint: [0.9, 1], earSize: [0.4, 0.7], noseHump: [0.4, 0.8], armLength: [0.7, 0.9], handSize: [0.8, 1], footSize: [0.7, 0.9], neck: [0.8, 1], shoulders: [0.9, 1], belly: [0, 0.2] },
         skin: { tones: ["#8a2216", "#7a1c12", "#962a1a"], warts: [0.2, 0.4], veins: [0.7, 1], blush: [0, 0.05], brows: [0.6, 0.9], warpaint: "#140808" },
+        irises: ["#ffb020", "#ff8a1a"],
+        slit: true,
+        hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
+        wear: [["loincloth"], ["belt"], ["bracers"], ["tusks"], ["orcHelm"]],
+        walk: "orc",
+    },
+    // (The River of Fire's master, standing in for its own model: the lord's brute a shade darker,
+    // the colour of a cooling coal)
+    greaterDemon: {
+        macro: { gender: 1, muscle: [0.95, 1], weight: [0.6, 0.75], height: [0.95, 1], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { browRidge: [0.9, 1], underbite: [0.5, 0.8], jawWidth: [0.7, 0.9], headSquare: [0.4, 0.7], eyeSize: [-0.6, -0.3], earPoint: [0.9, 1], earSize: [0.4, 0.7], noseHump: [0.4, 0.8], armLength: [0.7, 0.9], handSize: [0.8, 1], footSize: [0.7, 0.9], neck: [0.8, 1], shoulders: [0.9, 1], belly: [0, 0.2] },
+        skin: { tones: ["#6a1a12", "#5e160e", "#741e14"], warts: [0.2, 0.4], veins: [0.7, 1], blush: [0, 0.05], brows: [0.6, 0.9], warpaint: "#140808" },
         irises: ["#ffb020", "#ff8a1a"],
         slit: true,
         hair: { styles: ["bald"], colour: HAIR_COLOURS.black },

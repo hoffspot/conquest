@@ -400,7 +400,8 @@ export const THEMES = {
                     { id: "brander", creature: "salamander", title: "Fire-brander", weight: 2 },
                     { id: "forgeChimera", creature: "chimera", title: "Forge chimera", weight: 1 },
                 ],
-                warden: { id: "forgeBeast", creature: "chimera", title: "the Forge Beast", guard: ["salamander"] },
+                // (Its master the Greater Demon, by the Hellforge: the Lord of the Pit's before)
+                warden: { id: "forgeDemon", creature: "greaterDemon", title: "the Forge Demon", guard: ["salamander"] },
                 rooms: {
                     mouth: [{ id: "landing", props: [{ char: "*", count: [1, 2], at: "wall" }, { char: "y", count: [1, 2], at: "wall" }, { char: "d", count: [2, 3], at: "wall" }], torches: [1, 1] }],
                     cavern: [

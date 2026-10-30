@@ -242,8 +242,10 @@ def main():
     clip(armature, "Idle", "spine", "x", 0.15, 24)
     export(os.path.join(HERE, "creature.fbx"), everything)
 
-    scene.frame_start, scene.frame_end = 1, 16
-    clip(armature, "Wave", "spine", "z", 0.6, 16)
+    # (Its clip made at another rate than the model, as Unreal's may be: 20 frames at 30 a second)
+    scene.render.fps = 30
+    scene.frame_start, scene.frame_end = 1, 20
+    clip(armature, "Wave", "spine", "z", 0.6, 20)
     export(os.path.join(HERE, "creature@wave.fbx"), [armature, empty])
 
 

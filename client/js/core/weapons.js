@@ -731,11 +731,24 @@ export const NATURAL = Object.freeze({
         label: "Raking claws",
         attacks: [melee({ id: "rake", damage: [7, 12], hitAt: 560, duration: 1900, interval: 1900, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } })],
     },
+    // (The Lord of the Pit, the Infernal Demon: its claws swept, the blow landing a third of the
+    // way through, as its model's clips have it; hellfire flung from its hands as they open, six
+    // tenths of the way through its spell)
     demonLord: {
+        label: "Burning claws and hellfire",
+        attacks: [
+            melee({ id: "smash", damage: [9, 15], hitAt: 500, duration: 1500, interval: 1800, stagger: 450, reaction: "crush", animation: "hammer", afflict: { kind: "burn", chance: 0.5 } }),
+            ranged({ id: "hellfire", reach: 8, damage: [7, 12], hitAt: 900, duration: 1500, interval: 3200, stagger: 250, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.8 } }),
+        ],
+    },
+    // (The River of Fire's master, the Greater Demon: the Lord of the Pit's fists and hellfire as
+    // they were, a little less hard, its hit points a master's three times: dungeons/play.js
+    // CHAMPIONS)
+    greaterDemon: {
         label: "Burning fists and hellfire",
         attacks: [
-            melee({ id: "smash", damage: [9, 15], hitAt: 640, duration: 1100, interval: 1600, stagger: 450, reaction: "crush", animation: "hammer", afflict: { kind: "burn", chance: 0.5 } }),
-            ranged({ id: "hellfire", reach: 8, damage: [7, 12], hitAt: 700, duration: 1300, interval: 3200, stagger: 250, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.8 } }),
+            melee({ id: "smash", damage: [8, 13], hitAt: 640, duration: 1100, interval: 1600, stagger: 450, reaction: "crush", animation: "hammer", afflict: { kind: "burn", chance: 0.5 } }),
+            ranged({ id: "hellfire", reach: 8, damage: [6, 10], hitAt: 700, duration: 1300, interval: 3200, stagger: 250, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.8 } }),
         ],
     },
 });

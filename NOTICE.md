@@ -22,4 +22,6 @@ It doesn't cover:
   the Chained Glutton, the Bloat Gorger, the Pit Ravager and the Gorger Warlord), Fab's Monster2's
   four builds; and the Pit henchman, Andrew Ermakov's Monster3 "Villain's Henchman" from Fab, with
   its three other skins; and a hell's walkers (the Brimstone, Ash and Bile walkers and the
-  Hellwalker), Andrew Ermakov's Monster4 "Walking Villain" from Fab, in its five skins; and the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
+  Hellwalker), Andrew Ermakov's Monster4 "Walking Villain" from Fab, in its five skins; and the
+  Lord of the Pit, the Infernal Demon, Lilpupinduy's Infernal Demon RIG from Fab, with its dark
+  look; and the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.

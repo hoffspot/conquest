@@ -392,12 +392,34 @@ export const MODELS = Object.freeze({
         pace: 2.34,
         flinch: 0.8,
     }),
-    // (The Lord of the Pit, a hell's throne's (dungeons/themes.js `hell`): the Greater Demon, made
-    // 2.5 metres tall, drawn 3.2, its wings spread 5 metres; a human's moves played on its
-    // skeleton (utilities/blenderpipeline's clips), its wings beating to them: raking with its
-    // claws or punching (its smash), hellfire hurled from its fist as it punches (weapons.js's
-    // "wand"); roaring as it rests. Its run's a sprint: at its chase it's played slower)
+    // (The Lord of the Pit, a hell's throne's (dungeons/themes.js `hell`): the Infernal Demon,
+    // drawn as it's made, 3.2 metres tall (3.5 to its wings' tips), its wings spread 5.2 and
+    // burning; its own clips: its claws swept one way or the other (its smash), hellfire flung
+    // from its hands as it opens them (its spell, weapons.js's "wand"). Walking at 1.62 m/s; its
+    // run a sprint (5.88), played slower at its chase. In its own red: its green kept for
+    // something rarer (the catalog's skins))
     demonLord: Object.freeze({
+        asset: "beast-infernal",
+        length: 1.92,
+        made: Object.freeze({ long: 1.92, tall: 3.51 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit", dead: "Death" }),
+        attacks: Object.freeze({ claw: "Attack L", rake: "Attack R" }),
+        specials: Object.freeze({ wand: "Spell In" }),
+        rests: Object.freeze({}),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "hand_r", left: "hand_l" }),
+        mouth: null,
+        pace: 1.62,
+        runPace: 5.88,
+        flinch: 0.5,
+    }),
+    // (The River of Fire's master (dungeons/themes.js `hell`), the Lord of the Pit's before: the
+    // Greater Demon, made 2.5 metres tall, drawn 3.2, its wings spread 5 metres; a human's moves
+    // played on its skeleton (utilities/blenderpipeline's clips), its wings beating to them:
+    // raking with its claws or punching (its smash), hellfire hurled from its fist as it punches
+    // (weapons.js's "wand"); roaring as it rests. Its run's a sprint: at its chase it's played
+    // slower)
+    greaterDemon: Object.freeze({
         asset: "beast-greater-demon",
         length: 1.78,
         made: Object.freeze({ long: 1.41, tall: 2.53 }),
