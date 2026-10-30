@@ -51,6 +51,10 @@ client/models/beasts/hellwalker.brimstone.bin
 client/models/beasts/hellwalker.char.bin
 client/models/beasts/infernal.bin
 client/models/beasts/infernal.dark.bin
+client/models/beasts/golem.bin
+client/models/beasts/golem.ember.bin
+client/models/beasts/golem.moss.bin
+client/models/beasts/golem.frost.bin
 client/models/beasts/kaiju.bin
 # (A licensed model's earlier builds, kept ignored where a copy's left behind)
 client/models/beasts/werewolf.bin
