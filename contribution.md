@@ -301,6 +301,11 @@ CHROMIUM_PATH=/opt/pw-browsers/chromium npm run test:browser   # every GLB playe
   in the private repository (`docs/LICENSED_MODELS.md`).
 - Its test fixtures are made by scripts (`node build.js --fixtures`), never bought: a test of FBX
   input uses `fixtures/fbx-creature/`, made by `fixtures/make_fbx_creature.py`.
+- An asset sold for Unreal Engine is exported out of it by `unreal/export_assets.py`, run in the
+  Unreal Editor (its `README.md`, *From Unreal*): its meshes and animations as FBX, its textures,
+  and `notes.json` (which texture each material takes). Unreal can't run here, so its tests run on
+  a stand-in for Unreal's Python module (`python3 unreal/test_export_assets.py`; `npm test` runs
+  them too).
 
 ## 3. Making a change
 
