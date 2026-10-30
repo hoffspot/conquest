@@ -368,12 +368,36 @@ export const BESTIARY_LORE = Object.freeze({
         lore: "The lord of the Pit's gorgers, in a horned helm under skulls and banners, met one at a time. Its spiked club knocks whoever it catches off their feet, its maw bites, and it roars its bloat gorgers to it; no blast moves it.",
         sign: "a skull fallen from a banner pole",
     }),
+    henchman: Object.freeze({
+        lore: "The Lord of the Pit's own: horned, clawed and broad, a man's height, met in twos and threes in his Pit and standing about his throne. Their claws rend, leaving wounds that bleed, and the blow staggers; their hides turn some of every blow, and they see in the dark.",
+        sign: "deep claw marks scored in black stone",
+    }),
+    brimstoneWalker: Object.freeze({
+        lore: "A hell's walker in the Breach, its sinews yellowed by the brimstone: lean, a head taller than a man, as if flayed. Walkers are quick, and their raking claws leave wounds that bleed.",
+        sign: "long bare footprints in the sulphur",
+    }),
+    ashWalker: Object.freeze({
+        lore: "A hell's walker in the Halls of Bone, grey as ash: lean, a head taller than a man, as if flayed. Walkers are quick, and their raking claws leave wounds that bleed.",
+        sign: "long bare footprints in the bone dust",
+    }),
+    hellwalker: Object.freeze({
+        lore: "A hell's walker at home in the River of Fire, raw or charred black, met there more than anywhere: lean, a head taller than a man, as if flayed. Walkers are quick, and their raking claws leave wounds that bleed.",
+        sign: "long bare footprints in the cinders",
+    }),
+    bileWalker: Object.freeze({
+        lore: "A hell's walker in the Pit, green as the bile it wades through: lean, a head taller than a man, as if flayed. Walkers are quick, and their raking claws leave wounds that bleed.",
+        sign: "long bare footprints, wet with bile",
+    }),
     cultLeader: Object.freeze({
         lore: "The cult's high priest, robed as its faithful are and a head taller, keeping its rite at a hell's way in, only after dark. It swings its staff and calls hellfire down out of the dark. Once it and all its faithful are slain, the portal stands open till daybreak; the next night the cult's back at it.",
         sign: "a pentagram scorched into the earth, candles at its points",
     }),
+    greaterDemon: Object.freeze({
+        lore: "The master of the River of Fire, waiting by the Hellforge at the portal down: a winged, horned demon nearly twice a man's height that sat the Pit's throne before the Lord who sits it now. It smashes with burning fists and hurls hellfire from its hand, and no blast moves it.",
+        sign: "fist-sized dents in the anvils, still warm",
+    }),
     demonLord: Object.freeze({
-        lore: "The Lord of the Pit, on his horned throne at the bottom of a hell, under the violet light that is his own. Winged and horned, nearly twice a man's height, he smashes with burning fists and hurls hellfire from his hand, and no blast moves him. Beyond his throne lies the way out.",
+        lore: "The Lord of the Pit, on his horned throne at the bottom of a hell, under the violet light that is his own. Armoured in black iron, his wings burning, nearly twice a man's height, he sweeps with burning claws and flings hellfire from his open hands, and no blast moves him. Beyond his throne lies the way out.",
         sign: "sigils glowing violet in polished black stone",
     }),
     fiend: Object.freeze({

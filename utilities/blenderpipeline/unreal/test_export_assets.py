@@ -59,11 +59,13 @@ class AnimSequence(Asset):
 
 
 class Texture2D(Asset):
+    # (What's loaded of it: as Unreal has it, only as much as the editor's drawn, 32 pixels across
+    # for a texture it hasn't, whatever its size)
     def blueprint_get_size_x(self):
-        return self.properties.get("size", (0, 0))[0]
+        return 32
 
     def blueprint_get_size_y(self):
-        return self.properties.get("size", (0, 0))[1]
+        return 32
 
 
 class MaterialInterface(Asset):
@@ -115,8 +117,16 @@ class Exporter:
         if os.path.splitext(filename)[1] in asset.properties.get("refuses", ()):
             return False
 
-        with open(filename, "w") as file:
-            file.write("exported")
+        # (An image as its format starts: its size in its header, as Unreal writes it)
+        width, height = asset.properties.get("size", (0, 0))
+        ext = os.path.splitext(filename)[1]
+        heads = {
+            ".tga": bytes(12) + width.to_bytes(2, "little") + height.to_bytes(2, "little") + bytes([32, 8]),
+            ".png": b"\x89PNG\r\n\x1a\n" + bytes([0, 0, 0, 13]) + b"IHDR" + width.to_bytes(4, "big") + height.to_bytes(4, "big"),
+        }
+
+        with open(filename, "wb") as file:
+            file.write(heads.get(ext, b"exported"))
 
         return True
 
@@ -219,7 +229,8 @@ from export_assets import main, relative_file  # noqa: E402
 skeleton = Skeleton("/Game/Monster4/Meshes/SK_Monster4_Skeleton.SK_Monster4_Skeleton")
 colour = Texture2D("/Game/Monster4/Textures/T_Monster4_D.T_Monster4_D", srgb=True, compression_settings=Enum("TC_DEFAULT"), size=(4096, 4096))
 normal = Texture2D("/Game/Monster4/Textures/T_Monster4_N.T_Monster4_N", srgb=False, compression_settings=Enum("TC_NORMALMAP"), size=(4096, 4096))
-masks = Texture2D("/Game/Monster4/Textures/T_Monster4_ORM.T_Monster4_ORM", srgb=False, compression_settings=Enum("TC_MASKS"), refuses=(".tga",))
+masks = Texture2D("/Game/Monster4/Textures/T_Monster4_ORM.T_Monster4_ORM", srgb=False, compression_settings=Enum("TC_MASKS"), size=(2048, 2048), refuses=(".tga",))
+sky = Texture2D("/Game/Monster4/Textures/T_Sky.T_Sky", srgb=False, imported_size=types.SimpleNamespace(x=1024, y=512), refuses=(".tga", ".png"))
 broken = Texture2D("/Game/Monster4/Textures/T_Broken.T_Broken", refuses=(".tga", ".png", ".exr", ".hdr"))
 master = Material("/Game/Monster4/Materials/M_Creature.M_Creature", used=[colour, normal, masks])
 skin = MaterialInstanceConstant(
@@ -247,6 +258,7 @@ entries = [
     AssetData(colour, "Texture2D"),
     AssetData(normal, "Texture2D"),
     AssetData(masks, "Texture2D"),
+    AssetData(sky, "Texture2D"),
     AssetData(broken, "Texture2D"),
     AssetData(master, "Material"),
     AssetData(skin, "MaterialInstanceConstant"),
@@ -274,6 +286,7 @@ class Export(unittest.TestCase):
                 "Monster4/Textures/T_Monster4_D.tga",
                 "Monster4/Textures/T_Monster4_N.tga",
                 "Monster4/Textures/T_Monster4_ORM.png",
+                "Monster4/Textures/T_Sky.exr",
                 "Props/SM_Rock.fbx",
                 "notes.json",
             ],
@@ -321,6 +334,12 @@ class Export(unittest.TestCase):
         self.assertEqual(notes["textures"][normal.path], {"file": "Monster4/Textures/T_Monster4_N.tga", "srgb": False, "compression_settings": "TC_NORMALMAP", "size": [4096, 4096], "normal": True})
         self.assertEqual(notes["textures"][colour.path]["normal"], False)
         self.assertEqual(notes["textures"][masks.path]["file"], "Monster4/Textures/T_Monster4_ORM.png")
+
+        # (Each one's size as exported, not what the editor's loaded of it; one whose file it can't
+        # read, as it was imported)
+        self.assertEqual(notes["textures"][colour.path]["size"], [4096, 4096])
+        self.assertEqual(notes["textures"][masks.path]["size"], [2048, 2048])
+        self.assertEqual([notes["textures"][sky.path]["file"], notes["textures"][sky.path]["size"]], ["Monster4/Textures/T_Sky.exr", [1024, 512]])
 
     def test_what_failed_said(self):
         self.assertEqual(

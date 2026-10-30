@@ -151,6 +151,7 @@ const ABOUT = {
     wightLord: ["Wight lord", "Ruined castles: for the mightiest"],
     frostTroll: ["Frost troll", "The snows: for the mightiest", "hammer"],
     demonLord: ["Demon lord", "A hell's throne, at the bottom of its pit"],
+    greaterDemon: ["Greater demon", "A hell's River of Fire, by the Hellforge: its master"],
     fiend: ["Fiend", "A hell's every level, in packs: the more of them the deeper down"],
     flayling: ["Flayling", "A hell's Breach, in swarms: raw claws that leave you bleeding"],
     cinderHusk: ["Cinder husk", "A hell's Breach: fire hardly hurts it, and it bursts in embers as it falls"],
@@ -164,6 +165,11 @@ const ABOUT = {
     bloatGorger: ["Bloat gorger", "A hell's Pit: spewing bile, and bursting in it as it falls"],
     pitRavager: ["Pit ravager", "A hell's Pit, in packs: quick, its club and teeth leaving you bleeding"],
     gorgerWarlord: ["Gorger warlord", "A hell's Pit, one alone: roaring its bloat gorgers to it"],
+    henchman: ["Pit henchman", "A hell's Pit, in packs and about its lord's throne: claws that leave you bleeding, staggering"],
+    brimstoneWalker: ["Brimstone walker", "A hell's Breach: quick, its claws leaving you bleeding"],
+    ashWalker: ["Ash walker", "A hell's Halls of Bone: quick, its claws leaving you bleeding"],
+    hellwalker: ["Hellwalker", "A hell's River of Fire, in packs, at home: quick, its claws leaving you bleeding"],
+    bileWalker: ["Bile walker", "A hell's Pit: quick, its claws leaving you bleeding"],
 };
 
 // --- The scene ---
@@ -1396,8 +1402,8 @@ const groups = [
     ["The restless dead", ["ghost", "wraith"]],
     ["The ants' nests", ["ant", "greatCentipede", "dungeonSpider", "eliteDungeonSpider", "giantCockroach", "dungeonWasp", "dungeonScorpion", "blackWidow", "antMonster"]],
     ["The Tower of Sar Mordal", ["riftling", "riftStalker"]],
-    ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord"]],
-    ["For the mightiest", ["kaiju", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "cultLeader", "demonLord"]],
+    ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord", "henchman", "brimstoneWalker", "ashWalker", "hellwalker", "bileWalker"]],
+    ["For the mightiest", ["kaiju", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "cultLeader", "greaterDemon", "demonLord"]],
 ];
 
 for (const [label, ids] of groups) {

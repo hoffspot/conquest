@@ -91,7 +91,7 @@ describe("spell tomes (spells.js, progress.js, spoils.js, standing.js, host.js)"
     });
 
     it("has a tome carried now and then by the creatures with hands from the middle tiers on, never by a beast", () => {
-        assert.deepEqual(Object.keys(CREATURES).filter((id) => CREATURES[id].hands).sort(), ["bandit", "banditChief", "boggart", "cultLeader", "cultist", "demonLord", "draugr", "frostTroll", "goblin", "goblinBomber", "goblinKing", "ogre", "skeleton", "troll", "wightLord"]);
+        assert.deepEqual(Object.keys(CREATURES).filter((id) => CREATURES[id].hands).sort(), ["bandit", "banditChief", "boggart", "cultLeader", "cultist", "demonLord", "draugr", "frostTroll", "goblin", "goblinBomber", "goblinKing", "greaterDemon", "ogre", "skeleton", "troll", "wightLord"]);
 
         // (Not below the middle tiers; rarely there, a little more further out; the perilous
         // places' own far more)

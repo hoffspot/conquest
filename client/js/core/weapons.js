@@ -719,11 +719,36 @@ export const NATURAL = Object.freeze({
             melee({ id: "smash", reach: 1.8, damage: [12, 19], hitAt: 1100, duration: 2500, interval: 2600, stagger: 500, knockdown: 1400, reaction: "crush", animation: "melee" }),
             melee({ id: "bite", damage: [9, 14], hitAt: 550, duration: 1300, interval: 1700, reaction: "pierce", animation: "bite", afflict: { kind: "bleed", chance: 0.4 } }))],
     },
+    // (The Lord of the Pit's henchmen: creatures.js. Their claws rend, the blow landing two fifths of
+    // the way through it, as their model's clip has it)
+    henchman: {
+        label: "Claws",
+        attacks: [melee({ id: "rend", damage: [9, 15], hitAt: 780, duration: 2000, interval: 2300, stagger: 350, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.35 } })],
+    },
+    // (A hell's walkers, each level's: creatures.js. Their claws rake, the blow landing three tenths
+    // of the way through it, as their model's clip has it)
+    hellwalker: {
+        label: "Raking claws",
+        attacks: [melee({ id: "rake", damage: [7, 12], hitAt: 560, duration: 1900, interval: 1900, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } })],
+    },
+    // (The Lord of the Pit, the Infernal Demon: its claws swept, the blow landing a third of the
+    // way through, as its model's clips have it; hellfire flung from its hands as they open, six
+    // tenths of the way through its spell)
     demonLord: {
+        label: "Burning claws and hellfire",
+        attacks: [
+            melee({ id: "smash", damage: [9, 15], hitAt: 500, duration: 1500, interval: 1800, stagger: 450, reaction: "crush", animation: "hammer", afflict: { kind: "burn", chance: 0.5 } }),
+            ranged({ id: "hellfire", reach: 8, damage: [7, 12], hitAt: 900, duration: 1500, interval: 3200, stagger: 250, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.8 } }),
+        ],
+    },
+    // (The River of Fire's master, the Greater Demon: the Lord of the Pit's fists and hellfire as
+    // they were, a little less hard, its hit points a master's three times: dungeons/play.js
+    // CHAMPIONS)
+    greaterDemon: {
         label: "Burning fists and hellfire",
         attacks: [
-            melee({ id: "smash", damage: [9, 15], hitAt: 640, duration: 1100, interval: 1600, stagger: 450, reaction: "crush", animation: "hammer", afflict: { kind: "burn", chance: 0.5 } }),
-            ranged({ id: "hellfire", reach: 8, damage: [7, 12], hitAt: 700, duration: 1300, interval: 3200, stagger: 250, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.8 } }),
+            melee({ id: "smash", damage: [8, 13], hitAt: 640, duration: 1100, interval: 1600, stagger: 450, reaction: "crush", animation: "hammer", afflict: { kind: "burn", chance: 0.5 } }),
+            ranged({ id: "hellfire", reach: 8, damage: [6, 10], hitAt: 700, duration: 1300, interval: 3200, stagger: 250, reaction: "fire", animation: "wand", projectile: { kind: "fireball", speed: 12 }, afflict: { kind: "burn", chance: 0.8 } }),
         ],
     },
 });

@@ -40,6 +40,17 @@ client/models/beasts/chained-glutton.bin
 client/models/beasts/bloat-gorger.bin
 client/models/beasts/pit-ravager.bin
 client/models/beasts/gorger-warlord.bin
+client/models/beasts/henchman.bin
+client/models/beasts/henchman.bone.bin
+client/models/beasts/henchman.blood.bin
+client/models/beasts/henchman.bile.bin
+client/models/beasts/hellwalker.bin
+client/models/beasts/hellwalker.ash.bin
+client/models/beasts/hellwalker.bile.bin
+client/models/beasts/hellwalker.brimstone.bin
+client/models/beasts/hellwalker.char.bin
+client/models/beasts/infernal.bin
+client/models/beasts/infernal.dark.bin
 client/models/beasts/kaiju.bin
 # (A licensed model's earlier builds, kept ignored where a copy's left behind)
 client/models/beasts/werewolf.bin

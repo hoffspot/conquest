@@ -60,7 +60,7 @@ const PLACES = Object.freeze({
 
 // The ants' nests' own, and the hells' (met nowhere else)
 const NESTS = new Set(["ant", "greatCentipede", "dungeonSpider", "eliteDungeonSpider", "dungeonScorpion", "giantCockroach", "dungeonWasp", "blackWidow", "antMonster"]);
-const HELLS = new Set(["flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord", "demonLord", "fiend"]);
+const HELLS = new Set(["flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord", "demonLord", "greaterDemon", "fiend", "henchman", "brimstoneWalker", "ashWalker", "hellwalker", "bileWalker"]);
 
 // The wild camps' holders, by faction (worldplan/races.js FACTIONS), and the lairs, in words
 const CAMPS = Object.freeze({ bandits: "the bandits' camps", wolves: "the wolf packs' camps", goblins: "the goblins' camps", spiders: "the giant spiders' camps", undead: "the restless dead's camps", trolls: "the trolls' camps", raiders: "the raiders' camps", cultists: "the cultists' camps" });

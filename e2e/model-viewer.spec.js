@@ -757,6 +757,49 @@ test("and the Greater Demon: its own showcase and the roar cut from it, the huma
     await expect(page.locator("#details")).toContainText("Gloomy Demon, bought on Fab: used with the permission its Standard License gives");
 });
 
+test("and the Infernal Demon: all 21 of its own clips, as long as they were made, its four materials, its dark look put on, and whose it is", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?model=beast-infernal&clip=Attack%20L");
+
+    await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.watch().clips)).toEqual([
+        "Attack L",
+        "Attack R",
+        "Cast",
+        "Death",
+        "Fall",
+        "Fly Death",
+        "Fly Forward",
+        "Fly In",
+        "Fly Out",
+        "Hit",
+        "Idle",
+        "Idle Fly",
+        "Jump Start",
+        "Jump Start Cut",
+        "Landing",
+        "Run",
+        "Spell In",
+        "Spell Loop",
+        "Walk",
+        "Wing Attack L",
+        "Wing Attack R",
+    ]);
+    await page.waitForFunction(() => window.lab.watch().clip === "Attack L", null, { timeout: 60000 });
+    await expect(page.locator("#name")).toHaveText("The Lord of the Pit, the Infernal Demon");
+    expect(await page.evaluate(() => window.lab.details())).toMatchObject({ triangles: 28180, bones: 105, materials: 4 });
+    await expect(page.locator("#details")).toContainText("Lilpupinduy's \"Infernal Demon RIG\", bought on Fab: used with the permission its Standard License gives");
+
+    // (Its clips as long as they were made, at 30 frames a second to its mesh's 25: a swipe of its
+    // claws 0.9 seconds, not 1.08)
+    await expect(page.locator("#clips").getByRole("button", { name: /^Attack L · / })).toHaveText(/0\.9\d s/);
+
+    // (Its dark look, kept for something rarer than the Pit's lord, put on)
+    expect(await page.getByLabel("Skin").locator("option").allTextContents()).toEqual(["Its own skin", "Dark"]);
+    await page.getByLabel("Skin").selectOption("dark");
+    await page.waitForFunction(() => window.lab.current().thing.skin === "dark", null, { timeout: 60000 });
+});
+
 test("the werewolf as the game draws it, from its model once that's read: the game's moves for it, and the skin each one wears", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?creature=werewolf");
@@ -821,12 +864,23 @@ test("and the Fiend: all 25 of its own clips, its one simplified mesh, and whose
     await expect(page.locator("#details")).toContainText("Monster4, bought on Fab: used with the permission its Standard License gives");
 });
 
-test("a hell's lord as the game draws it: a people-shaped brute till the Greater Demon's read, then the demon, its claws, its punch, hellfire hurled from its fist, and its roar", async ({ page }) => {
+test("a hell's lord as the game draws it: a people-shaped brute till the Infernal Demon's read, then the demon, its claws swept either way and hellfire flung from its hands, in its red", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?creature=demonLord");
 
     // (Its stand-in a character, as the wild's people-shaped ones are, till its model's read; then
     // the model, as a beast drawn from one is)
+    await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+    expect(await page.evaluate(() => window.lab.current())).toMatchObject({ humanoid: false, attacks: ["claw", "rake"], specials: ["wand"], rests: [], skin: "" });
+    expect(await page.evaluate(() => window.lab.watch().moves)).toEqual(expect.arrayContaining(["claw", "rake", "wand"]));
+
+    // (Drawn as it's made, 3.5 metres to its wings' tips)
+    expect(await page.evaluate(() => window.lab.avatar().character.height)).toBeCloseTo(3.51, 1);
+});
+
+test("the River of Fire's master as the game draws it: a people-shaped brute till the Greater Demon's read, then the demon, its claws, its punch, hellfire hurled from its fist, and its roar", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    await openViewer(page, "/model-viewer.html?creature=greaterDemon");
     await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
     expect(await page.evaluate(() => window.lab.current())).toMatchObject({ humanoid: false, attacks: ["claw", "punch"], specials: ["wand"], rests: ["roar"] });
     expect(await page.evaluate(() => window.lab.watch().moves)).toEqual(expect.arrayContaining(["claw", "punch", "wand", "roar"]));
@@ -838,7 +892,7 @@ test("a hell's lord as the game draws it: a people-shaped brute till the Greater
 test("a hell's fiend as the game draws it: a horned stand-in till its model's read, then the fiend, its claws raked four ways, its spring, its rest, in one of its three skins", async ({ page }) => {
     test.skip(!licensedModelsHere(), LEFT_OUT);
     await openViewer(page, "/model-viewer.html?creature=fiend");
-    await expect(page.locator("#picker optgroup[label='The hells'] option")).toHaveText(["Fiend", "Flayling", "Cinder husk", "Pyre acolyte", "Ossuary priest", "Dirge warden", "Flayed hierarch", "Slag gorger", "Forge brute", "Chained glutton", "Bloat gorger", "Pit ravager", "Gorger warlord"]);
+    await expect(page.locator("#picker optgroup[label='The hells'] option")).toHaveText(["Fiend", "Flayling", "Cinder husk", "Pyre acolyte", "Ossuary priest", "Dirge warden", "Flayed hierarch", "Slag gorger", "Forge brute", "Chained glutton", "Bloat gorger", "Pit ravager", "Gorger warlord", "Pit henchman", "Brimstone walker", "Ash walker", "Hellwalker", "Bile walker"]);
 
     // (Its stand-in a character, as the wild's people-shaped ones are, till its model's read; then
     // the model)
@@ -1094,9 +1148,38 @@ test("and a hell's six gorgers: each from one of Monster2's builds, its five cli
     }
 });
 
+test("and the Pit henchman and a hell's walkers: Monster3's five clips and Monster4's six, their one mesh each, each of their skins put on, and whose they are", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(240000);
+
+    // ([its catalog entry, its name, its clips, its triangles and bones, whose, its skins in the chooser])
+    const TWO = [
+        ["beast-henchman", "The Pit henchman", ["Attack", "Death", "Hit", "Idle", "Walk"], { triangles: 11012, bones: 55 }, "Andrew Ermakov's Monster3 \"Villain's Henchman\", bought on Fab", ["Its own skin", "Bone", "Blood", "Bile"]],
+        ["beast-hellwalker", "A hell's walkers", ["Attack", "Death", "Hit", "Idle", "Run", "Walk"], { triangles: 9209, bones: 46 }, "Andrew Ermakov's Monster4 \"Walking Villain\", bought on Fab", ["Its own skin", "Ash", "Bile", "Brimstone", "Char"]],
+    ];
+
+    for (const [id, name, clips, details, whose, skins] of TWO) {
+        await openViewer(page, `/model-viewer.html?model=${id}&clip=Attack`);
+        await expect(page.locator("#clips").getByRole("button", { name: /^Idle · / })).toBeVisible({ timeout: 60000 });
+        expect(await page.evaluate(() => window.lab.watch().clips)).toEqual(clips);
+        await page.waitForFunction(() => window.lab.watch().clip === "Attack", null, { timeout: 60000 });
+        await expect(page.locator("#name")).toHaveText(name);
+        expect(await page.evaluate(() => window.lab.details())).toMatchObject({ meshes: 1, ...details });
+        await expect(page.locator("#details")).toContainText(`${whose}: used with the permission its Standard License gives`);
+
+        // (Each of its skins put on: its colour in place of its own, the rest its own)
+        expect(await page.getByLabel("Skin").locator("option").allTextContents()).toEqual(skins);
+
+        for (const skin of skins.slice(1)) {
+            await page.getByLabel("Skin").selectOption({ label: skin });
+            await page.waitForFunction((want) => window.lab.current().thing.skin === want, skin.toLowerCase(), { timeout: 60000 });
+        }
+    }
+});
+
 // Each of a hell's own kinds (creatures.js) as the game draws it: a stand-in till its model's read,
 // then its model, as tall as MODELS has it, its ways of attacking, its own special one and its
-// rest ([kind, its attacks, a special of its own, its rest, how tall it's drawn])
+// rest ([kind, its attacks, a special of its own, its rest (null: none), how tall it's drawn])
 async function drawnAsTheGame(page, kinds) {
     for (const [kind, attacks, special, rest, height] of kinds) {
         await openViewer(page, `/model-viewer.html?creature=${kind}`);
@@ -1104,7 +1187,7 @@ async function drawnAsTheGame(page, kinds) {
 
         const current = await page.evaluate(() => window.lab.current());
 
-        expect(current, kind).toMatchObject({ humanoid: false, attacks, rests: [rest] });
+        expect(current, kind).toMatchObject({ humanoid: false, attacks, rests: rest ? [rest] : [] });
 
         if (special) {
             expect(current.specials, kind).toContain(special);
@@ -1139,4 +1222,33 @@ test("a hell's gorgers as the game draws them: each its model, as tall as it's d
         ["pitRavager", ["rend"], "bite", "roar", 2.06],
         ["gorgerWarlord", ["smash"], "bite", "roar", 3.38],
     ]);
+});
+
+test("a hell's walkers and the Pit henchmen as the game draws them: each its model, as tall as it's drawn, its claws, no rest of its own; each kind of walker in its level's skins, the henchmen in any of their four", async ({ page }) => {
+    test.skip(!licensedModelsHere(), LEFT_OUT);
+    test.setTimeout(300000);
+    await drawnAsTheGame(page, [
+        ["henchman", ["rend"], null, null, 1.9],
+        ["brimstoneWalker", ["rake"], null, null, 1.99],
+        ["ashWalker", ["rake"], null, null, 1.99],
+        ["hellwalker", ["rake"], null, null, 1.99],
+        ["bileWalker", ["rake"], null, null, 1.99],
+    ]);
+
+    // (Another one, another skin: each of its kind's, by its seed)
+    for (const [kind, skins] of [["henchman", ["", "bile", "blood", "bone"]], ["brimstoneWalker", ["brimstone"]], ["ashWalker", ["ash"]], ["hellwalker", ["", "char"]], ["bileWalker", ["bile"]]]) {
+        await openViewer(page, `/model-viewer.html?creature=${kind}`);
+        await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+
+        const seen = new Set([await page.evaluate(() => window.lab.current().skin)]);
+
+        for (let i = 0; i < 16 && seen.size < skins.length; i++) {
+            await page.getByRole("button", { name: "Another one" }).click();
+            await page.waitForFunction(() => window.lab.current().model, null, { timeout: 60000 });
+            seen.add(await page.evaluate(() => window.lab.current().skin));
+        }
+
+        expect([...seen].sort(), kind).toEqual(skins);
+        await expect(page.locator("#details"), kind).toContainText(`one of ${skins.length} its kind wears`);
+    }
 });
