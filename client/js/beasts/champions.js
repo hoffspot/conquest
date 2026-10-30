@@ -70,12 +70,12 @@ export const REGALIA = Object.freeze({
     crawler: { tint: 0xa8a098, scale: 1.05 },
     matriarch: { tint: 0x8a7a90, scale: 1.3, glow: 1.3 },
     // A hell's, its levels' masters burnt and blackened by it, horned, their eyes burning: the
-    // Breach Priest hooded, the Bone Lord's bones scorched, the Forge Beast red-hot, the
+    // Breach Priest hooded, the Bone Lord's bones scorched, the Forge Demon's eyes burning, the
     // Gatekeeper helmed; and the lord of the Pit, horned already, its eyes burning brightest. Its
     // mini-bosses the same way, the less
     breachPriest: { wear: ["darkHood"], tint: 0xc07060, glow: 1.4 },
     boneLord: { tint: 0xa08070, glow: 1.4 },
-    forgeBeast: { tint: 0xd07050, scale: 1.1, glow: 1.4 },
+    forgeDemon: { glow: 1.4 },
     gatekeeper: { wear: ["orcHelm"], tint: 0xb06050, glow: 1.3 },
     demonLord: { glow: 1.5 },
     fireCaller: { wear: ["darkHood"], tint: 0xd08070 },

@@ -337,6 +337,20 @@ def matches(name, patterns):
     return any(fnmatch.fnmatchcase(name, pattern) for pattern in patterns)
 
 
+def retime(action, ratio):
+    """An action's keys (and their handles, and its own frame range) at `ratio` times their frames."""
+    for curve in action.fcurves:
+        for key in curve.keyframe_points:
+            key.co.x *= ratio
+            key.handle_left.x *= ratio
+            key.handle_right.x *= ratio
+
+        curve.update()
+
+    if action.use_frame_range:
+        action.frame_start, action.frame_end = action.frame_start * ratio, action.frame_end * ratio
+
+
 def import_fbx_actions(path, strip, scene):
     """The clips an FBX brings that move a skeleton's bones (its armature's own); everything else
     it brings (its objects, their meshes and materials, the clips of a rig's control objects, as
@@ -347,7 +361,9 @@ def import_fbx_actions(path, strip, scene):
     fps = (scene.render.fps, scene.render.fps_base)
     import_fbx(path)
 
-    # (Its clips keep their own frames: the scene's rate stays the source's)
+    # (The scene's rate stays the source's; the clips' frames are the FBX's, at its own rate,
+    # retimed below if that's another)
+    made = scene.render.fps / scene.render.fps_base
     scene.render.fps, scene.render.fps_base = fps
     brought = [thing for thing in bpy.data.objects if thing not in objects]
     kept = []
@@ -372,6 +388,13 @@ def import_fbx_actions(path, strip, scene):
 
     if not kept:
         raise PipelineError(f"{os.path.basename(path)} has no clip moving a skeleton's bones")
+
+    # (A clip made at another rate than the source's, as Unreal's clips may be (30 frames a second
+    # against its mesh's 25): its frames retimed to the source's, to play as long as it was made)
+    ratio = (fps[0] / fps[1]) / made
+
+    for action in kept if abs(ratio - 1) > 1e-6 else []:
+        retime(action, ratio)
 
     for action in kept:
         # (Kept with nothing playing it)

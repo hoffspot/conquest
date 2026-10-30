@@ -10,7 +10,7 @@
     "sourceSavedWith": null,
     "sourceFormat": "fbx"
   },
-  "kilobytes": 19.6,
+  "kilobytes": 19.8,
   "compression": "meshopt",
   "extensionsRequired": [
     "EXT_meshopt_compression",
@@ -132,7 +132,7 @@
       "name": "Wave",
       "seconds": 0.625,
       "channels": 9,
-      "keyframes": 31,
+      "keyframes": 32,
       "loops": true,
       "inPlace": false,
       "rootMotion": {
@@ -165,22 +165,22 @@
     },
     "animated": {
       "min": [
-        -0.769,
+        -0.7694,
         0,
         -0.2857
       ],
       "max": [
         0.3494,
-        1.5218,
+        1.5232,
         0.363
       ],
       "size": [
-        1.1184,
-        1.5218,
+        1.1188,
+        1.5232,
         0.6487
       ]
     },
-    "radius": 1.542
+    "radius": 1.5424
   },
   "lods": [
     {
@@ -260,17 +260,17 @@
         ]
       },
       {
-        "name": "Mane",
-        "vertices": 4,
-        "faces": 1,
+        "name": "Body",
+        "vertices": 24,
+        "faces": 18,
         "modifiers": [
           "ARMATURE"
         ]
       },
       {
-        "name": "Body",
-        "vertices": 24,
-        "faces": 18,
+        "name": "Mane",
+        "vertices": 4,
+        "faces": 1,
         "modifiers": [
           "ARMATURE"
         ]
@@ -294,19 +294,19 @@
         "lost": []
       },
       {
-        "object": "Mane",
+        "object": "Body",
         "baked": false,
         "materials": [
-          "fur"
+          "skin"
         ],
         "udim": false,
         "lost": []
       },
       {
-        "object": "Body",
+        "object": "Mane",
         "baked": false,
         "materials": [
-          "skin"
+          "fur"
         ],
         "udim": false,
         "lost": []

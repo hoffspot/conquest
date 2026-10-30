@@ -4026,7 +4026,7 @@ function sigilsDrawn(map) {
     return mesh;
 }
 
-// The Hellforge, in the River of Fire's last room, where the Forge Beast waits by the portal down
+// The Hellforge, in the River of Fire's last room, where the Forge Demon waits by the portal down
 // (a plan's "F" there, three squares by two against the rock: themes.js's River of Fire's `goal`):
 // a great furnace of dark stone its back to the rock, a chimney rising from it into the roof, iron
 // horns at its top corners, bands of iron; its mouth full of molten metal (drawn as lava is,

@@ -246,6 +246,8 @@ export const SPOILS = Object.freeze({
     kaiju: { items: [{ id: "riftScale", chance: 0.95, count: [4, 7] }, { id: "riftSpine", chance: 0.8, count: [1, 2] }, { id: "riftHeart", chance: 0.6 }] },
     riftling: { items: [{ id: "riftlingScale", chance: 0.7, count: [1, 2] }, { id: "riftGland", chance: 0.2 }] },
     riftStalker: { items: [{ id: "riftlingScale", chance: 0.9, count: [2, 4] }, { id: "riftGland", chance: 0.8 }, { id: "riftSpine", chance: 0.25 }] },
+    // (The River of Fire's master: what the lord pays it in)
+    greaterDemon: { gold: [40, 90], items: [{ id: "obsidian", chance: 0.7, count: [1, 2] }, { id: "soulShard", chance: 0.5 }, { id: "fireGland", chance: 0.4 }] },
     demonLord: { gold: [60, 140], items: [{ id: "obsidian", chance: 0.8, count: [2, 3] }, { id: "soulShard", chance: 0.6 }, { id: "fireGland", chance: 0.5 }] },
     // (A hell's flayed: the Breach's with what the cult gave them and what burnt them, the Halls of
     // Bone's with their bones and their crowns' gold)
@@ -262,6 +264,9 @@ export const SPOILS = Object.freeze({
     bloatGorger: { gold: [4, 12], items: [{ id: "boneDust", chance: 0.4 }, { id: "rustedMail", chance: 0.2 }] },
     pitRavager: { gold: [6, 16], items: [{ id: "boneDust", chance: 0.35 }, { id: "rustedMail", chance: 0.3 }, { id: "oldSkull", chance: 0.2 }] },
     gorgerWarlord: { gold: [30, 70], items: [{ id: "crownShard", chance: 0.4 }, { id: "soulShard", chance: 0.5 }, { id: "obsidian", chance: 0.5, count: [1, 2] }] },
+    // (The Lord of the Pit's henchmen: what he pays them in; a hell's walkers, what they've taken)
+    henchman: { gold: [12, 30], items: [{ id: "soulShard", chance: 0.3 }, { id: "obsidian", chance: 0.3 }, { id: "crownShard", chance: 0.1 }] },
+    ...Object.fromEntries(["brimstoneWalker", "ashWalker", "hellwalker", "bileWalker"].map((id) => [id, { gold: [6, 16], items: [{ id: "boneDust", chance: 0.35 }, { id: "soulShard", chance: 0.15 }, { id: "obsidian", chance: 0.2 }] }])),
 });
 
 /**

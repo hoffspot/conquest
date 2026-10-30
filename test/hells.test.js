@@ -16,6 +16,7 @@ import { HELL_ORIGINS } from "../client/js/core/insides.js";
 import { routeBetween } from "../client/js/core/interiors.js";
 import { buildWorld } from "../client/js/core/overworld.js";
 import { BIOMES } from "../client/js/core/worldplan/plan.js";
+import { NATURAL } from "../client/js/core/weapons.js";
 
 // (Textured materials paint a canvas: enough of one for them to in Node)
 globalThis.document ??= { createElement: () => ({ width: 0, height: 0, getContext: () => ({ createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {} }) }) };
@@ -24,6 +25,8 @@ const THREE = await import("three");
 const { dungeonRooms } = await import("../client/js/core/insides.js");
 const { readPlan } = await import("../client/js/core/interiors.js");
 const { buildInterior, VEILS } = await import("../client/js/world/interiors3d.js");
+const { ASSETS } = await import("../client/js/app/assets.js");
+const { MODELS } = await import("../client/js/beasts/model.js");
 
 const HERO = Object.freeze({ name: "Ada", shape: {}, look: {}, weapon: "sword", boots: false });
 const HELL = THEMES.hell;
@@ -168,6 +171,35 @@ describe("a hell as it's made (dungeons/build.js, place.js, themes.js hell)", ()
         // (The lord a creature of its own, met nowhere else)
         assert.deepEqual(CREATURES.demonLord.biomes, []);
         assert.deepEqual(CREATURES.demonLord.tiers, [10, 10]);
+    });
+
+    it("has the Infernal Demon for its lord, in its red, and the Greater Demon, its lord before, for the River of Fire's master by the Hellforge; neither met anywhere else", () => {
+        // (The River of Fire's master, in each hell made: the Greater Demon, the Forge Demon)
+        for (const dungeon of made) {
+            const fire = dungeon.levels[HELL.realms.findIndex(({ id }) => id === "fire")];
+            const master = fire.packs.find(({ role }) => role === "warden").foes[0];
+
+            assert.deepEqual([master.creature, master.warden, master.title], ["greaterDemon", true, "the Forge Demon"]);
+        }
+
+        // (Each drawn from its own model: the lord's dark look kept for something rarer, not worn)
+        assert.deepEqual([MODELS.demonLord.asset, MODELS.demonLord.skins ?? [""]], ["beast-infernal", [""]]);
+        assert.ok(ASSETS.models["beast-infernal-skins"].files.some(({ path }) => path.endsWith("infernal.dark.bin")));
+        assert.equal(MODELS.greaterDemon.asset, "beast-greater-demon");
+
+        for (const kind of ["demonLord", "greaterDemon"]) {
+            assert.deepEqual([CREATURES[kind].biomes, CREATURES[kind].tiers], [[], [10, 10]], kind);
+
+            for (const [id, theme] of Object.entries(THEMES)) {
+                assert.ok(!(theme.packs ?? []).some(({ creatures }) => creatures.includes(kind)), `${kind} in ${id}'s packs`);
+            }
+        }
+
+        // (Its blows timed to its own clips: a swipe of its claws a third of the way through, its
+        // hellfire six tenths)
+        const [smash, hellfire] = NATURAL.demonLord.attacks;
+
+        assert.deepEqual([smash.hitAt / smash.duration, hellfire.hitAt / hellfire.duration].map((share) => +share.toFixed(2)), [0.33, 0.6]);
     });
 
     it("has fiends hunting every level in packs of their own, the more of them the deeper down; met nowhere else", () => {

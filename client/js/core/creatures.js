@@ -261,12 +261,33 @@ export const CREATURES = Object.freeze({
     bloatGorger: { name: "Bloat gorger", hp: 75, weapon: "bloatGorger", speed: 0.9, chase: 2.1, temper: "aggressive", roam: 6, leash: 22, pack: [2, 3], tiers: [9, 10], biomes: [], blood: "slime", darkSight: true, burst: { kind: "bile", damage: [8, 14] } },
     pitRavager: { name: "Pit ravager", hp: 85, weapon: "pitRavager", speed: 1.1, chase: 3, temper: "aggressive", roam: 8, leash: 24, pack: [2, 3], tiers: [9, 10], biomes: [], blood: "red", armor: 0.15, darkSight: true },
     gorgerWarlord: { name: "Gorger warlord", hp: 160, weapon: "gorgerWarlord", speed: 1.05, chase: 2.3, temper: "aggressive", roam: 4, leash: 26, pack: [1, 1], tiers: [9, 10], biomes: [], blood: "red", armor: 0.35, darkSight: true, steady: true, call: { kind: "bloatGorger", count: [1, 2], most: 3, every: 16000, first: 3000 } },
+    // (The Lord of the Pit's henchmen, horned and clawed, a man's height and broad: only in a hell's
+    // Pit, in twos and threes, and about his throne (dungeons/themes.js hell's `bosses` `guard`),
+    // each in one of their model's four skins. Their claws rend, leaving wounds that bleed, and the
+    // blow staggers)
+    henchman: { name: "Pit henchman", hp: 90, weapon: "henchman", speed: 1, chase: 2.6, temper: "aggressive", roam: 5, leash: 24, pack: [2, 3], tiers: [9, 10], biomes: [], blood: "red", armor: 0.25, darkSight: true, steady: true },
+    // (A hell's walkers, lean and sinewy, a head taller than a man, as if flayed, from one model in
+    // its five skins: one kind on each level, wearing that level's (beasts/model.js `skins`). Most
+    // at home in the River of Fire, as hellwalkers, its own skin or charred, met there the most;
+    // brimstone walkers in the Breach, ash walkers in the Halls of Bone, bile walkers in the Pit.
+    // Quick, their claws raking, leaving wounds that bleed)
+    ...Object.fromEntries(
+        [
+            ["brimstoneWalker", "Brimstone walker"],
+            ["ashWalker", "Ash walker"],
+            ["hellwalker", "Hellwalker"],
+            ["bileWalker", "Bile walker"],
+        ].map(([id, name]) => [id, { name, hp: 66, weapon: "hellwalker", speed: 1.15, chase: 3.3, temper: "aggressive", roam: 8, leash: 24, pack: [2, 3], tiers: [9, 10], biomes: [], blood: "red", armor: 0.1, darkSight: true }]),
+    ),
 
     // (The lord of a hell, on its throne at the bottom of the pit: core/dungeons/themes.js hell. A
     // great horned brute for now, red as a coal, its fists burning and hellfire in its hands,
     // until a bought model of its own is read: beasts/looks.js)
     // (A cult's high priest, keeping its rite by a hell's portal at night: host.js #lairs, RITES)
     cultLeader: { name: "High priest of the cult", hp: 80, hands: true, weapon: "cultLeader", speed: 1.2, chase: 2.3, temper: "aggressive", roam: 3, leash: 24, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.15, perilous: true, darkSight: true },
+    // (The River of Fire's master, a hell's third level's (dungeons/themes.js `hell`): the Greater
+    // Demon, the Lord of the Pit's before the Infernal Demon took the Pit)
+    greaterDemon: { name: "Greater demon", hp: 80, hands: true, weapon: "greaterDemon", speed: 1.1, chase: 2.4, temper: "aggressive", roam: 4, leash: 26, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.25, perilous: true, darkSight: true, steady: true },
     demonLord: { name: "Demon lord", hp: 120, hands: true, weapon: "demonLord", speed: 1.1, chase: 2.4, temper: "aggressive", roam: 4, leash: 30, pack: [1, 1], tiers: [10, 10], biomes: [], blood: "red", armor: 0.3, perilous: true, darkSight: true, steady: true },
     // (A fiend of the hells, met in packs on every level of one: core/dungeons/themes.js hell.
     // Lean, winged and horned, a head and more taller than a man, its claws raking and its spring

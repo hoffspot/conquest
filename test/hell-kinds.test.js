@@ -1,14 +1,17 @@
 // A hell's own kinds (creatures.js): its flayed, six kinds met only in its first two levels, three
-// in each, and its gorgers, six more met only in its last two; and what they do that nothing else
-// does: the cinder husk's embers and the bloat gorger's bile bursting as they fall (`burst`,
-// battle.js BOMBS), fire hardly hurting the cinder husk (`wards`), and the flayed hierarch's curse
-// and the chained glutton's bite drawing back into them the life they take (weapons.js `drain`)
+// in each, and its gorgers, six more met only in its last two; its walkers, a kind to each level in
+// its level's skins, and the Lord of the Pit's henchmen; and what they do that nothing else does:
+// the cinder husk's embers and the bloat gorger's bile bursting as they fall (`burst`, battle.js
+// BOMBS), fire hardly hurting the cinder husk (`wards`), and the flayed hierarch's curse and the
+// chained glutton's bite drawing back into them the life they take (weapons.js `drain`)
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Battle, BOMBS, STEP_MS } from "../client/js/core/battle.js";
 import { CREATURES, traitsOf, WILD } from "../client/js/core/creatures.js";
+import { buildDungeon } from "../client/js/core/dungeons/build.js";
 import { THEMES } from "../client/js/core/dungeons/themes.js";
 import { NATURAL } from "../client/js/core/weapons.js";
+import { MODELS } from "../client/js/beasts/model.js";
 import { parseGrid } from "./helpers.js";
 
 const BREACH = ["flayling", "cinderHusk", "pyreAcolyte"];
@@ -16,6 +19,7 @@ const BONE = ["ossuaryPriest", "dirgeWarden", "flayedHierarch"];
 const FIRE = ["slagGorger", "forgeBrute", "chainedGlutton"];
 const PIT = ["bloatGorger", "pitRavager", "gorgerWarlord"];
 const OWN = [...BREACH, ...BONE, ...FIRE, ...PIT];
+const WALKERS = { breach: "brimstoneWalker", bone: "ashWalker", fire: "hellwalker", pit: "bileWalker" };
 
 // An open field (no walls, nothing in the way) `size` squares across
 const field = (size) => ({ blocked: parseGrid(Array.from({ length: size }, () => ".".repeat(size))).map((row) => Uint8Array.from(row)) });
@@ -198,5 +202,80 @@ describe("a hell's gorgers (creatures.js)", () => {
         assert.equal(traitsOf("bloatGorger").burst.kind, "bile");
         assert.ok(CREATURES.pitRavager.chase > Math.max(...[...FIRE, ...PIT].filter((kind) => kind !== "pitRavager").map((kind) => CREATURES[kind].chase)));
         assert.ok(attacks("pitRavager").every(({ afflict }) => afflict?.kind === "bleed"));
+    });
+});
+
+describe("a hell's walkers and the Lord of the Pit's henchmen (creatures.js)", () => {
+    it("meets a kind of walker on each level, in its level's skins, the hellwalkers the most on the River of Fire; the henchmen only in the Pit, and about the Lord; none of them anywhere else", () => {
+        const packsOf = (realm) => THEMES.hell.realms.find(({ id }) => id === realm).packs;
+        const weightOf = (realm, kind) => packsOf(realm).filter(({ creatures }) => creatures.includes(kind)).reduce((sum, { weight }) => sum + weight, 0);
+        const shareOf = (realm, kind) => weightOf(realm, kind) / packsOf(realm).reduce((sum, { weight }) => sum + weight, 0);
+
+        for (const realm of Object.keys(WALKERS)) {
+            for (const [other, kind] of Object.entries(WALKERS)) {
+                assert.equal(weightOf(realm, kind) > 0, other === realm, `${kind} in ${realm}`);
+            }
+
+            assert.equal(weightOf(realm, "henchman") > 0, realm === "pit", `henchmen in ${realm}`);
+        }
+
+        // (The hellwalkers at home on the River of Fire: a bigger share of its packs than any other
+        // level's walkers have of theirs)
+        for (const realm of ["breach", "bone", "pit"]) {
+            assert.ok(shareOf("fire", "hellwalker") > shareOf(realm, WALKERS[realm]), realm);
+        }
+
+        // (One model for the walkers, each kind in its level's skins; the henchmen in any of theirs)
+        assert.ok(Object.values(WALKERS).every((kind) => MODELS[kind].asset === "beast-hellwalker"));
+        assert.deepEqual(Object.values(WALKERS).map((kind) => MODELS[kind].skins), [["brimstone"], ["ash"], ["", "char"], ["bile"]]);
+        assert.deepEqual([MODELS.henchman.asset, MODELS.henchman.skins], ["beast-henchman", ["", "bone", "blood", "bile"]]);
+
+        for (const kind of [...Object.values(WALKERS), "henchman"]) {
+            const spec = CREATURES[kind];
+
+            assert.deepEqual([spec.biomes, spec.tiers], [[], [9, 10]], kind);
+            assert.ok(NATURAL[spec.weapon], kind);
+            assert.ok(!spec.perilous, `${kind}: robust, not a boss`);
+
+            for (const [id, theme] of Object.entries(THEMES)) {
+                if (id !== "hell") {
+                    assert.ok(!(theme.packs ?? []).some(({ creatures }) => creatures.includes(kind)), `${kind} in ${id}`);
+                }
+            }
+        }
+
+        // (Two or three of the henchmen about the Lord, as the hell's made)
+        for (const seed of [1, 2, 3, 4]) {
+            const boss = buildDungeon({ seed, theme: "hell", tier: 9 }).levels.at(-1).packs.find(({ role }) => role === "boss");
+            const guard = boss.foes.slice(1).map(({ creature }) => creature);
+
+            assert.equal(boss.foes[0].creature, "demonLord");
+            assert.ok(guard.length >= 2 && guard.length <= 3 && guard.every((kind) => kind === "henchman"), `${seed}: ${guard}`);
+        }
+    });
+
+    it("gives them what makes them their own: the walkers quick, their claws raked; the henchmen armoured and steady, their claws rending; the wounds of both bleeding", () => {
+        const attacks = (kind) => NATURAL[CREATURES[kind].weapon].attacks.flatMap((one) => one.either ?? [one]);
+
+        for (const kind of Object.values(WALKERS)) {
+            assert.ok(CREATURES[kind].chase > CREATURES.henchman.chase, kind);
+            assert.deepEqual(attacks(kind).map(({ id, afflict }) => [id, afflict?.kind]), [["rake", "bleed"]], kind);
+        }
+
+        assert.deepEqual(attacks("henchman").map(({ id, afflict }) => [id, afflict?.kind]), [["rend", "bleed"]]);
+        assert.ok(CREATURES.henchman.armor > Math.max(...Object.values(WALKERS).map((kind) => CREATURES[kind].armor ?? 0)));
+        assert.equal(traitsOf("henchman").steady, true);
+
+        // (A henchman's claws, in a battle: its foe bleeding)
+        const battle = new Battle(field(30), { seed: 9 });
+        const me = battle.add({ id: "me", kind: "player", weapon: "sword", team: "hero", square: [10, 15], hp: 5000 });
+
+        creature(battle, "henchman", "henchman", [11, 15]);
+        me.stunnedUntil = 1e9;
+
+        const events = run(battle, 30000);
+
+        assert.ok(events.some(({ type, attack, by }) => type === "hit" && attack === "rend" && by === "henchman"), "clawed");
+        assert.ok(events.some(({ type, id, kind }) => type === "afflicted" && id === "me" && kind === "bleed") || me.afflictions.some(({ kind }) => kind === "bleed"), "bleeding");
     });
 });
