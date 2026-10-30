@@ -42,6 +42,10 @@ const TAU = Math.PI * 2;
 const LAYER = Object.fromEntries(LAYERS.map((name, k) => [name, k]));
 const METRES = Object.fromEntries(Object.entries(MATERIALS).map(([name, { world }]) => [name, world / 5]));
 
+// The layers drawn once in the middle of their picture, not repeated (end grain, centred on its
+// pith), which place() doesn't shift
+const CENTRED = Object.freeze([LAYER.endgrain, LAYER["endgrain-old"]]);
+
 // A colour (sRGB hex) as the vertices want it: linear RGB
 const _colour = new THREE.Color();
 const linear = (hex) => {
@@ -271,7 +275,8 @@ function dominant([x, y, z]) {
 /**
  * Place a part into a mesher: turned `turn` about the upright, tilted, stretched by `scale` ([x,
  * y, z]), at `at` ([x, y, z]), its colours times `tint` (and its texture shifted by `shift`, so
- * no two rocks show the same patch of stone).
+ * no two rocks show the same patch of stone; but not its end grain, drawn once in the middle of
+ * its picture and centred on its pith: CENTRED).
  */
 export function place(mesher, part, { at, turn = 0, tilt = [0, 0], scale = [1, 1, 1], tint = [1, 1, 1], shift = [0, 0] }) {
     const [c, s] = [Math.cos(turn), Math.sin(turn)];
@@ -292,6 +297,7 @@ export function place(mesher, part, { at, turn = 0, tilt = [0, 0], scale = [1, 1
 
     const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = m;
     const [ax, ay, az, t0, t1, t2, u0, u1] = [at[0], at[1], at[2], tint[0], tint[1], tint[2], shift[0], shift[1]];
+    const [c0, c1] = CENTRED;
 
     for (let i = 0; i < n; i++) {
         const i3 = i * 3;
@@ -316,8 +322,10 @@ export function place(mesher, part, { at, turn = 0, tilt = [0, 0], scale = [1, 1
         color[j3] = C[i3] * t0;
         color[j3 + 1] = C[i3 + 1] * t1;
         color[j3 + 2] = C[i3 + 2] * t2;
-        uv[(base + i) * 2] = U[i * 2] + u0;
-        uv[(base + i) * 2 + 1] = U[i * 2 + 1] + u1;
+        const shifted = L[i] !== c0 && L[i] !== c1;
+
+        uv[(base + i) * 2] = U[i * 2] + (shifted ? u0 : 0);
+        uv[(base + i) * 2 + 1] = U[i * 2 + 1] + (shifted ? u1 : 0);
         layer[base + i] = L[i];
         sway[base + i] = S[i];
         foot[base + i] = ay;
@@ -833,58 +841,447 @@ function fallenTree(mesher, random) {
     }
 }
 
+// --- Stumps ---
+
 /**
- * An old stump, about a metre across (placed at its size): sawn or broken off, its roots
- * flaring into the ground, its top pale where it was cut, and shelf fungus on its side now and
- * then.
+ * How stumps are made (the research report "Realistic procedural tree stumps"): `sides` round, as
+ * wide as `radius` at the top (placed at their size), as tall as `tall` (look units); their walls
+ * in rings from a little under the ground up, and their tops made inward from the wall's own top
+ * ring, so nothing shows through where the two meet: the bark's cut edge, then the inner bark,
+ * a step down (`step`: fresh, then weathered or old), then the wood, its heartwood out to
+ * `heart` of the way to the bark, round a pith up to `pith` of the radius off the middle. The cut
+ * wood's drawn with the end grain's picture (engine/painters.js ENDGRAIN), `across` look units of
+ * it across, centred on the pith. Broken off, a stump's top is torn, highest on one side, with up
+ * to `slivers` standing up there (the tallest `sliver` look units, and none higher than `highest`
+ * in all), the floor of the break sunk in it, and `shards` of splintered wood standing from it.
  */
-function stump(mesher, random) {
-    const r = 0.5;
-    const height = random.range(0.5, 0.9);
-    const sawn = random.chance(0.5);
-    const profile = [[r * 1.25, -0.02], [r * 1.05, height * 0.15], [r, height * 0.6], [r * 0.97, height]];
+export const STUMPS = Object.freeze({ sides: 14, radius: 0.48, tall: [0.5, 0.82], step: [0.006, 0.016], heart: [0.55, 0.8], pith: 0.15, across: 1.2, slivers: [1, 3], sliver: [0.18, 0.4], highest: 1.45, shards: [2, 4] });
 
-    lathe(mesher, profile, 9, { layer: LAYER.bark, uvScale: METRES.bark, jitter: 0.06, random, colours: [[0.7, 0.7, 0.7], [0.9, 0.9, 0.9], [1, 1, 1], [1, 1, 1]] });
+// The trees stumps are left of (the report's palette): their bark (its layer, and a tint of its
+// picture), how thick it is (a share of the radius), their heartwood's colour (none, where it
+// shows none), how many roots flare from their foot and how far, and whether their hearts rot
+// out, leaving them hollow
+const STUMP_TREES = {
+    oak: { bark: "bark", tint: [1, 1, 1], thick: 0.09, heart: 0xae8654, lobes: [4, 6], lobe: [0.14, 0.3], hollows: true },
+    pine: { bark: "bark", tint: [1.1, 0.86, 0.74], thick: 0.1, heart: 0xbf8552, lobes: [4, 5], lobe: [0.1, 0.22], hollows: false },
+    spruce: { bark: "bark", tint: [0.88, 0.8, 0.76], thick: 0.06, heart: null, lobes: [4, 5], lobe: [0.12, 0.24], hollows: false },
+    beech: { bark: "bark-silver", tint: [0.62, 0.62, 0.6], thick: 0.03, heart: null, lobes: [4, 6], lobe: [0.16, 0.32], hollows: true },
+    birch: { bark: "bark-silver", tint: [1.05, 1.05, 1.02], thick: 0.035, heart: null, lobes: [3, 5], lobe: [0.1, 0.2], hollows: true },
+    alder: { bark: "bark", tint: [0.8, 0.77, 0.74], thick: 0.04, heart: null, lobes: [4, 5], lobe: [0.12, 0.25], hollows: true },
+    buttress: { bark: "bark-silver", tint: [0.7, 0.66, 0.58], thick: 0.035, heart: 0xa47a4c, lobes: [3, 5], lobe: [0.35, 0.6], narrow: true, hollows: true },
+};
 
-    // Its top: sawn flat and pale, or broken off jagged
-    const rim = Array.from({ length: 9 }, (_, j) => {
-        const angle = (j / 9) * TAU;
+// Each land's stumps: what trees they were, how many of them fresh, weathered and old (one age a
+// stump: its top, bark, moss and fungus all of a piece), and how many sawn, felled (the hinge left
+// standing across the cut) or broken off; any land not here, as the meadow's
+const STUMP_LANDS = {
+    farmland: { trees: ["oak", "pine"], ages: [3, 4, 1], cuts: [3, 4, 1] },
+    meadow: { trees: ["oak", "pine", "beech"], ages: [3, 4, 1], cuts: [3, 3, 2] },
+    woods: { trees: ["oak", "beech", "pine"], ages: [2, 4, 2], cuts: [2, 3, 3] },
+    marsh: { trees: ["alder", "birch"], ages: [0, 3, 5], cuts: [1, 1, 4] },
+    elfwood: { trees: ["birch", "beech"], ages: [1, 4, 3], cuts: [2, 2, 3] },
+    darkwood: { trees: ["oak", "spruce"], ages: [0, 2, 6], cuts: [1, 1, 5] },
+    jungle: { trees: ["buttress"], ages: [1, 3, 4], cuts: [1, 2, 3] },
+};
 
-        return [Math.cos(angle) * r * 0.97, height + (sawn ? 0 : random.range(0, 0.25)), Math.sin(angle) * r * 0.97];
-    });
-    const middle = [0, height + (sawn ? 0 : random.range(0.05, 0.3)), 0];
+// Colours a stump's wood and bark are times their pictures by, by its age (fresh, weathered, old):
+// the bark (darkening), the cut face (the end grain's own picture fresh; gone silver, then green
+// with algae in its hollows), the inner bark's edge, a hollow's rotten wood, moss
+const INNER_BARK = [linear(0xc9a27a), linear(0x8a5a3a), linear(0x5e4030)];
+const AGED_BARK = [[1, 1, 1], [0.92, 0.9, 0.88], [0.8, 0.79, 0.78]];
+const AGED_WOOD = [[1, 1, 1], [1, 1, 1], [0.86, 0.9, 0.8]];
+const ROTTEN = linear(0x3e2c20);
 
-    for (let j = 0; j < 9; j++) {
-        mesher.tri(middle, rim[(j + 1) % 9], rim[j], { colours: [END_GRAIN.map((v) => v * 1.1), END_GRAIN.map((v) => v * 0.8), END_GRAIN.map((v) => v * 0.8)] });
+// Wood torn rather than cut (a broken stump's top and slivers), times its picture (heartwood's
+// fresh, paler; then deadwood's)
+const FRESH_TORN = [[1.2, 1.2, 1.3], [1, 1, 1], [0.86, 0.9, 0.8]];
+const MOSSY = [0.72, 1.12, 0.55];
+const BRACKETS = [[linear(0x7a4e2a), linear(0xd8c39a)], [linear(0x5e4034), linear(0xc9b28c)], [linear(0x9c5a24), linear(0xe0b060)]];
+
+// One of a few, as likely as their weights
+function weighted(random, weights) {
+    let left = random.next() * weights.reduce((sum, weight) => sum + weight, 0);
+
+    for (const [k, weight] of weights.entries()) {
+        left -= weight;
+
+        if (left < 0) {
+            return k;
+        }
     }
 
-    // Roots running out along the ground
-    for (let k = 0; k < random.int(3, 5); k++) {
-        const angle = random.range(0, TAU);
-        const out = random.range(0.8, 1.4);
+    return weights.length - 1;
+}
 
-        tube(mesher, [[Math.cos(angle) * r * 0.8, height * 0.2, Math.sin(angle) * r * 0.8], [Math.cos(angle) * r * out * 1.3, -0.02, Math.sin(angle) * r * out * 1.3]], [r * 0.25, r * 0.06], 5, { layer: LAYER.bark, uvScale: METRES.bark });
+// A quad or triangle facing `toward` (it's turned round if it faces away)
+function facing(mesher, points, toward, options) {
+    const n = faceNormal(points[0], points[1], points[2]);
+    const turned = n[0] * toward[0] + n[1] * toward[1] + n[2] * toward[2] < 0;
+    const order = turned ? [...points].reverse() : points;
+    const flip = (list) => (Array.isArray(list) && Array.isArray(list[0]) && list.length === points.length && turned ? [...list].reverse() : list);
+    const given = { ...options, colours: flip(options.colours), uvs: flip(options.uvs), normals: flip(options.normals) };
+
+    if (points.length === 4) {
+        mesher.quad(...order, given);
+    } else {
+        mesher.tri(...order, given);
     }
+}
 
-    // Shelf fungus
-    if (random.chance(0.45)) {
-        const colour = random.pick([linear(0xc98a3a), linear(0xd8c9a4), linear(0x9c6a3c)]);
+/**
+ * The shape of a stump (its rings and top: STUMPS), for a land (STUMP_LANDS), from `random`; with
+ * `slivers` false, a broken one's top is torn but nothing stands up from it (the dark elves', the
+ * web over it).
+ */
+function stumpShape(random, land, { slivers: tall = true } = {}) {
+    const { trees, ages, cuts } = STUMP_LANDS[land] ?? STUMP_LANDS.meadow;
+    const tree = STUMP_TREES[random.pick(trees)];
+    const age = weighted(random, ages);
+    const top = ["sawn", "felled", "broken"][weighted(random, cuts)];
+    const N = STUMPS.sides;
+    const r0 = STUMPS.radius;
+    const h = random.range(...STUMPS.tall);
+    const seed = random.int(1, 1e6);
 
-        for (let k = 0; k < random.int(1, 3); k++) {
-            const angle = random.range(0, TAU);
-            const y = random.range(0.15, 0.7) * height;
-            const [cx, cz] = [Math.cos(angle) * r, Math.sin(angle) * r];
-            const size = random.range(0.12, 0.2);
-            const edge = Array.from({ length: 5 }, (_, j) => {
-                const a = angle + ((j / 4) - 0.5) * 2.2;
+    // Its outline: a few slow waves round, and lobes at its foot where its roots go
+    const waves = [2, 3, 4].map((k) => [random.range(0.015, 0.05) / (k - 1), random.range(0, TAU), k]);
+    const count = random.int(...tree.lobes);
+    const lobes = Array.from({ length: count }, (_, k) => ({ at: ((k + random.range(-0.3, 0.3)) / count) * TAU, size: random.range(...tree.lobe), width: tree.narrow ? random.range(0.16, 0.26) : random.range(0.26, 0.42) }));
+    const reach = h * (tree.narrow ? random.range(0.6, 0.8) : random.range(0.32, 0.5));
+    const spread = random.range(0.08, 0.14);
+    const lobeAt = (angle) => lobes.reduce((sum, { at, size, width }) => {
+        const off = Math.atan2(Math.sin(angle - at), Math.cos(angle - at)) / width;
 
-                return [cx + Math.cos(a) * size, y, cz + Math.sin(a) * size];
-            });
+        return sum + size * Math.exp(-off * off);
+    }, 0);
+    const flareAt = (y) => Math.max(0, 1 - Math.max(0, y) / reach) ** 2;
+    const radius = (angle, y) => {
+        const outline = waves.reduce((sum, [a, phase, k]) => sum + a * Math.cos(k * angle + phase), 0);
+        const lumps = (noise3(Math.cos(angle) * 1.6 + 7, y * 2.5, Math.sin(angle) * 1.6 + 7, seed) - 0.5) * 0.05;
 
-            for (let j = 0; j < 4; j++) {
-                mesher.tri([cx * 0.95, y + 0.02, cz * 0.95], edge[j + 1], edge[j], { colours: colour });
+        return r0 * (1 + 0.04 * (1 - y / h)) * (1 + outline) * (1 + flareAt(y) * (spread + lobeAt(angle))) * (1 + lumps);
+    };
+    const angles = Array.from({ length: N }, (_, j) => (j / N) * TAU);
+    const at = (angle, y) => {
+        const r = radius(angle, y);
+
+        return [Math.cos(angle) * r, y, Math.sin(angle) * r];
+    };
+
+    // Its top: sawn level or nearly, felled (the same, the hinge standing across it), or broken
+    const slope = [random.range(-0.06, 0.06), random.range(-0.06, 0.06)];
+    const cut = (x, z) => h + slope[0] * x + slope[1] * z;
+    const high = random.range(0, TAU);
+    const breakAt = h * random.range(0.8, 0.95);
+    const rise = random.range(0.05, 0.14);
+    const spikes = new Array(N).fill(0);
+
+    if (top === "broken" && tall) {
+        // (Up to three slivers on the side that held longest, one tall and the rest short)
+        const near = angles.map((angle, j) => [Math.abs(Math.atan2(Math.sin(angle - high), Math.cos(angle - high))), j]).filter(([off]) => off < Math.PI / 3).sort(() => random.next() - 0.5);
+        const tallest = random.range(...STUMPS.sliver);
+
+        for (const [k, [, j]] of near.slice(0, random.int(...STUMPS.slivers)).entries()) {
+            spikes[j] = Math.max(spikes[j], tallest * (k === 0 ? 1 : random.range(0.3, 0.55)));
+        }
+
+        // (Their shoulders a little up with them)
+        for (const [j, spike] of [...spikes.entries()].filter(([, spike]) => spike > 0)) {
+            for (const side of [-1, 1]) {
+                const next = (j + side + N) % N;
+
+                spikes[next] = Math.max(spikes[next], spike * random.range(0.12, 0.3));
             }
         }
+    }
+
+    const tops = angles.map((angle, j) => {
+        if (top !== "broken") {
+            const [x, , z] = at(angle, h);
+
+            return cut(x, z);
+        }
+
+        const torn = breakAt + random.range(0, 0.07) + rise * Math.max(0, Math.cos(angle - high)) ** 2;
+
+        return Math.min(STUMPS.highest, torn + spikes[j]);
+    });
+
+    // The wall's rings: a little under the ground, the foot, the flare, half way, the top
+    const below = Math.min(h, breakAt);
+    const heights = [-0.06, 0.03, 0.1, below * 0.3, below * 0.62];
+    const rings = [...heights.map((y) => angles.map((angle) => at(angle, y))), angles.map((angle, j) => {
+        const [x, y, z] = at(angle, tops[j]);
+        // (A sliver's tip leaning in a little)
+        const lean = spikes[j] > 0 ? 1 - 0.08 * (spikes[j] / STUMPS.sliver[1]) : 1;
+
+        return [x * lean, y, z * lean];
+    })];
+
+    return { tree, age, top, h, r0, N, angles, rings, spikes, lobes, flareAt, lobeAt, radius, cut, high, breakAt, hollow: age === 2 && tree.hollows && top !== "broken" && random.chance(0.5) };
+}
+
+/**
+ * An old stump, about a metre across (placed at its size): its walls and its roots flaring into
+ * the ground, and its top built inward from the wall's own top ring (STUMPS); sawn, felled or
+ * broken off; fresh, weathered or old (its land's: STUMP_LANDS); its moss and fungus as old as it
+ * is. `roots` and `fungus` false, fewer roots and no fungus (the dark elves', the web over it);
+ * the shape it was made to (stumpShape's).
+ */
+function stump(mesher, random, land = "meadow", { roots: many = true, fungus = true, slivers = true, extras = true } = {}) {
+    const shape = stumpShape(random, land, { slivers });
+    const { tree, age, top, h, r0, N, angles, rings } = shape;
+    const bark = LAYER[tree.bark];
+    const wood = LAYER[age > 0 ? "endgrain-old" : "endgrain"];
+    const fibre = LAYER[age > 0 ? "deadwood" : "heartwood"];
+    const tint = tree.tint.map((v, i) => v * AGED_BARK[age][i]);
+    const K = rings.length;
+
+    // Its wall, smooth: each vertex's normal across the rings round and up
+    const normals = rings.map((ring, k) => ring.map((p, j) => {
+        const around = sub(ring[(j + 1) % N], ring[(j - 1 + N) % N]);
+        const up = sub(rings[Math.min(K - 1, k + 1)][j], rings[Math.max(0, k - 1)][j]);
+        const n = unit(cross(up, around));
+
+        return n[0] * p[0] + n[2] * p[2] < 0 ? n.map((v) => -v) : n;
+    }));
+
+    // Its bark wrapped round it a whole number of times, so there's no seam
+    const around = Math.max(1, Math.round((TAU * r0) / (METRES.bark * random.range(0.8, 1.2))));
+    const tall = METRES.bark * random.range(0.8, 1.2);
+    const u0 = random.next();
+    const uv = (j, y) => [u0 + (j / N) * around, y / tall];
+
+    // (Its foot in shadow and in the earth, darker between its roots; moss on it, weathered and
+    // old, thickest at its foot and on its shaded side, in patches)
+    const mossSide = random.range(0, TAU);
+    const mossOn = (k, j) => {
+        const [, y] = rings[k][j];
+        const side = Math.max(0, Math.cos(angles[j] - mossSide) + (age === 2 ? 0.35 : -0.1));
+        const low = 1 - Math.min(1, Math.max(0, y - 0.02) / (age === 2 ? 0.45 : 0.22));
+
+        return age === 0 ? 0 : Math.min(1, side * low * (0.4 + hashOf(j, k, 57) * 0.9));
+    };
+    const shade = (k, j) => {
+        const y = rings[k][j][1];
+        const foot = 0.55 + 0.45 * Math.min(1, Math.max(0, (y + 0.02) / 0.16));
+        const crotch = 1 - 0.3 * shape.flareAt(y) * (1 - Math.min(1, shape.lobeAt(angles[j]) / 0.12));
+        const moss = mossOn(k, j);
+
+        return tint.map((v, i) => v * foot * crotch * (1 + (MOSSY[i] - 1) * moss));
+    };
+
+    for (let k = 0; k < K - 1; k++) {
+        for (let j = 0; j < N; j++) {
+            const j1 = (j + 1) % N;
+            const [a, b, c, d] = [rings[k][j], rings[k][j1], rings[k + 1][j1], rings[k + 1][j]];
+            const normal = [normals[k][j], normals[k][j1], normals[k + 1][j1], normals[k + 1][j]];
+
+            // (A broken stump's slivers bare wood where its bark's torn away)
+            if (top === "broken" && k === K - 2 && (shape.spikes[j] > 0 || shape.spikes[j1] > 0)) {
+                mesher.quad(a, d, c, b, { layer: fibre, normals: [normal[0], normal[3], normal[2], normal[1]], colours: FRESH_TORN[age], uvs: [[a[1] / 0.5, (j / N) * 6], [d[1] / 0.5, (j / N) * 6], [c[1] / 0.5, ((j + 1) / N) * 6], [b[1] / 0.5, ((j + 1) / N) * 6]] });
+            } else {
+                mesher.quad(a, d, c, b, { layer: bark, normals: [normal[0], normal[3], normal[2], normal[1]], colours: [shade(k, j), shade(k + 1, j), shade(k + 1, j1), shade(k, j1)], uvs: [uv(j, a[1]), uv(j, d[1]), uv(j + 1, c[1]), uv(j + 1, b[1])] });
+            }
+        }
+    }
+
+    // Its top, from the wall's own top ring inward
+    const rim = rings[K - 1];
+    const thick = tree.thick * r0;
+    const inward = (p, j, by) => [p[0] - Math.cos(angles[j]) * by, p[1], p[2] - Math.sin(angles[j]) * by];
+    const pithAngle = random.range(0, TAU);
+    const pithOff = random.range(0, STUMPS.pith) * r0;
+    const pith = [Math.cos(pithAngle) * pithOff, 0, Math.sin(pithAngle) * pithOff];
+
+    // (The end grain's picture centred on the pith, turned and maybe mirrored, so no two show the same)
+    const turn = random.range(0, TAU);
+    const mirror = random.chance(0.5) ? -1 : 1;
+    const grainUv = (p) => {
+        const [dx, dz] = [p[0] - pith[0], p[2] - pith[2]];
+
+        return [0.5 + ((Math.cos(turn) * dx - Math.sin(turn) * dz) * mirror) / STUMPS.across, 0.5 + (Math.sin(turn) * dx + Math.cos(turn) * dz) / STUMPS.across];
+    };
+    const up = [0, 1, 0];
+    const lip = rim.map((p, j) => inward(p, j, thick));
+
+    if (top === "broken") {
+        brokenTop(mesher, random, shape, { rim, lip, pith, bark, fibre, tint, shards: extras });
+    } else {
+        const step = STUMPS.step[age > 0 ? 1 : 0];
+        const raised = [0.004, 0, -0.004][age];
+        const edge = lip.map(([x, , z]) => [x, shape.cut(x, z) + raised, z]);
+        const sunk = lip.map(([x, , z]) => [x, shape.cut(x, z) - step, z]);
+        const share = random.range(...STUMPS.heart);
+        const heart = sunk.map((p) => {
+            const s = share + random.range(-0.03, 0.03);
+            const [x, z] = [pith[0] + (p[0] - pith[0]) * s, pith[2] + (p[2] - pith[2]) * s];
+
+            return [x, shape.cut(x, z) - step, z];
+        });
+        const middle = [pith[0], shape.cut(pith[0], pith[2]) - step, pith[2]];
+        const sap = AGED_WOOD[age];
+        const heartColour = tree.heart && age === 0 ? linear(tree.heart).map((v, i) => v / linear(MATERIALS.endgrain.base)[i]) : sap;
+        const inner = INNER_BARK[age];
+        const depth = h * random.range(0.25, 0.45);
+
+        for (let j = 0; j < N; j++) {
+            const j1 = (j + 1) % N;
+
+            // The bark's cut edge, darker than its side
+            facing(mesher, [rim[j], rim[j1], edge[j1], edge[j]], up, { layer: bark, colours: tint.map((v) => v * 0.7) });
+
+            // The inner bark, a step down to the wood
+            facing(mesher, [edge[j], edge[j1], sunk[j1], sunk[j]], sub(middle, edge[j]), { layer: LAYER.plain, colours: inner });
+
+            // The sapwood
+            facing(mesher, [sunk[j], sunk[j1], heart[j1], heart[j]], up, { layer: wood, colours: sap, uvs: [sunk[j], sunk[j1], heart[j1], heart[j]].map(grainUv) });
+
+            // The heartwood, or the hollow where it's rotted out
+            if (shape.hollow) {
+                const [a, b] = [heart[j], heart[j1]].map((p) => [pith[0] + (p[0] - pith[0]) * 0.92, p[1] - depth, pith[2] + (p[2] - pith[2]) * 0.92]);
+
+                facing(mesher, [heart[j], heart[j1], b, a], sub(middle, heart[j]), { layer: fibre, colours: [ROTTEN.map((v) => v * 1.6), ROTTEN.map((v) => v * 1.6), ROTTEN, ROTTEN] });
+                facing(mesher, [[middle[0], middle[1] - depth * 1.15, middle[2]], a, b], up, { layer: LAYER.plain, colours: ROTTEN.map((v) => v * 0.7) });
+            } else {
+                facing(mesher, [middle, heart[j], heart[j1]], up, { layer: wood, colours: heartColour, uvs: [middle, heart[j], heart[j1]].map(grainUv) });
+            }
+        }
+
+        if (top === "felled" && extras) {
+            hinge(mesher, random, shape, { pith, fibre, age });
+        }
+    }
+
+    // Roots, out of the biggest lobes of its foot and into the ground
+    const biggest = extras ? [...shape.lobes].sort((a, b) => b.size - a.size).slice(0, many ? random.int(2, 3) : 2) : [];
+
+    for (const lobe of biggest) {
+        const a = lobe.at;
+        const turn = random.range(-0.15, 0.15);
+        const out = random.range(1.45, 1.8);
+        const points = [[Math.cos(a) * r0 * 0.6, h * random.range(0.08, 0.14), Math.sin(a) * r0 * 0.6], [Math.cos(a) * r0 * 1.2, random.range(0.01, 0.04), Math.sin(a) * r0 * 1.2], [Math.cos(a + turn) * r0 * out, -0.12, Math.sin(a + turn) * r0 * out]];
+
+        tube(mesher, points, [r0 * (0.16 + lobe.size * 0.15), r0 * 0.15, r0 * 0.06], 5, { layer: bark, uvScale: METRES.bark, colours: [tint.map((v) => v * 0.8), tint.map((v) => v * 0.65), tint.map((v) => v * 0.5)] });
+    }
+
+    // Bracket fungus, weathered and old: a few shelves one over another on one side
+    if (extras && fungus && age > 0 && random.chance(age === 1 ? 0.35 : 0.7)) {
+        const [inside, edge] = random.pick(BRACKETS);
+        const side = random.range(0, TAU);
+        const shelves = random.int(2, 3);
+
+        for (let k = 0; k < shelves; k++) {
+            const angle = side + random.range(-0.25, 0.25);
+            const y = h * (0.2 + (0.45 * (k + random.range(0, 0.6))) / shelves);
+            const r = shape.radius(angle, y) * 0.96;
+            const size = random.range(0.06, 0.11) * (1 - k * 0.15);
+            const [cx, cz] = [Math.cos(angle) * r, Math.sin(angle) * r];
+            const out = Array.from({ length: 5 }, (_, q) => {
+                const a = angle + ((q / 4) - 0.5) * 2.4;
+
+                return [cx + Math.cos(a) * size, y - 0.01, cz + Math.sin(a) * size];
+            });
+
+            for (let q = 0; q < 4; q++) {
+                mesher.tri([cx * 0.96, y + 0.015, cz * 0.96], out[q + 1], out[q], { colours: [inside, edge, edge] });
+                mesher.tri([cx * 0.96, y - 0.01, cz * 0.96], out[q], out[q + 1], { colours: [inside.map((v) => v * 0.6), edge.map((v) => v * 0.75), edge.map((v) => v * 0.75)] });
+            }
+        }
+    }
+
+    return shape;
+}
+
+// A broken stump's top: the torn bark round its rim, the wood inside it torn away down to the
+// floor of the break, which sinks in the middle (never a peak), its fibres running the way it fell,
+// and shards of splintered wood standing up from it on the side that held longest
+function brokenTop(mesher, random, shape, { rim, lip, pith, bark, fibre, tint, shards = true }) {
+    const { N, angles, breakAt, high, age } = shape;
+    const up = [0, 1, 0];
+    const wood = FRESH_TORN[age];
+    const torn = lip.map((p, j) => [p[0], rim[j][1] - (shape.spikes[j] > 0 ? 0.015 : 0.004), p[2]]);
+    const floor = torn.map((p, j) => [pith[0] + (p[0] - pith[0]) * 0.8, rim[j][1] - shape.spikes[j] - random.range(0.008, 0.03) - (age === 2 ? 0.015 : 0), pith[2] + (p[2] - pith[2]) * 0.8]);
+    const lowest = Math.min(...floor.map((p) => p[1]));
+    const middle = [pith[0], floor.reduce((sum, p) => sum + p[1], 0) / N - (age === 2 ? 0.03 : 0.01), pith[2]];
+
+    // (Torn, not flat: a ring half way in, each point of it up or down a few centimetres)
+    const rough = floor.map((p) => {
+        const s = random.range(0.4, 0.6);
+
+        return [pith[0] + (p[0] - pith[0]) * s, Math.min(p[1], lerp(p, middle, 0.5)[1] + random.range(-0.03, 0.035)), pith[2] + (p[2] - pith[2]) * s];
+    });
+    const along = [Math.cos(high), Math.sin(high)];
+    const fibres = (p) => [(p[0] * along[0] + p[2] * along[1]) / 0.6, (p[0] * -along[1] + p[2] * along[0]) / 0.07];
+    const vertical = (j, p) => [p[1] / 0.5, (j / N) * 6];
+
+    for (let j = 0; j < N; j++) {
+        const j1 = (j + 1) % N;
+
+        // The bark's torn edge, and the wood inside it down to the floor of the break
+        facing(mesher, [rim[j], rim[j1], torn[j1], torn[j]], up, { layer: bark, colours: tint.map((v) => v * 0.7) });
+        const inward = unit(sub([pith[0], torn[j][1], pith[2]], torn[j]));
+
+        facing(mesher, [torn[j], torn[j1], floor[j1], floor[j]], [inward[0], 1, inward[2]], { layer: fibre, colours: wood, uvs: [vertical(j, torn[j]), vertical(j + 1, torn[j1]), vertical(j + 1, floor[j1]), vertical(j, floor[j])] });
+        facing(mesher, [floor[j], floor[j1], rough[j1], rough[j]], up, { layer: fibre, colours: wood, uvs: [floor[j], floor[j1], rough[j1], rough[j]].map(fibres) });
+        facing(mesher, [middle, rough[j], rough[j1]], up, { layer: fibre, colours: wood.map((v) => v * 0.94), uvs: [middle, rough[j], rough[j1]].map(fibres) });
+    }
+
+    // Shards, splintered off and standing up out of the floor on the side that held
+    for (let k = 0, count = shards ? random.int(...STUMPS.shards) : 0; k < count; k++) {
+        const angle = high + random.range(-0.9, 0.9);
+        const out = random.range(0.1, 0.3);
+        const [cx, cz] = [pith[0] + Math.cos(angle) * out, pith[2] + Math.sin(angle) * out];
+        const base = random.range(0.018, 0.035);
+        const foot = Array.from({ length: 3 }, (_, q) => {
+            const a = angle + (q / 3) * TAU;
+
+            return [cx + Math.cos(a) * base, lowest - 0.04, cz + Math.sin(a) * base];
+        });
+        const tip = [cx + Math.cos(angle) * random.range(0.01, 0.05), lowest + random.range(0.07, 0.2), cz + Math.sin(angle) * random.range(0.01, 0.05)];
+
+        for (let q = 0; q < 3; q++) {
+            const [a, b] = [foot[q], foot[(q + 1) % 3]];
+
+            facing(mesher, [a, b, tip], sub(lerp(a, b, 0.5), [cx, a[1], cz]), { layer: fibre, colours: AGED_WOOD[age].map((v) => v * 1.05), uvs: [vertical(0, a), vertical(1, b), vertical(0.5, tip)] });
+        }
+    }
+}
+
+// A felled stump's hinge: the strip of wood left standing across the cut between the notch and
+// the back cut, torn when the tree went over, jagged along its top
+function hinge(mesher, random, shape, { pith, fibre, age }) {
+    const fall = random.range(0, TAU);
+    const [fx, fz] = [Math.cos(fall), Math.sin(fall)];
+    const offset = random.range(-0.12, 0.08) * shape.r0;
+    const reach = Math.sqrt(Math.max(0.01, (shape.r0 * 0.82) ** 2 - offset ** 2));
+    const width = random.range(0.025, 0.045);
+    const colours = AGED_WOOD[age].map((v) => v * 1.04);
+    const points = [-1, -1 / 3, 1 / 3, 1].map((t) => {
+        const [x, z] = [pith[0] + fx * offset - fz * reach * t, pith[2] + fz * offset + fx * reach * t];
+        const ground = shape.cut(x, z) - 0.03;
+        const height = Math.abs(t) === 1 ? random.range(0.005, 0.02) : random.range(0.03, 0.11);
+
+        return { x, z, ground, top: ground + 0.03 + height };
+    });
+    const side = (point, s, y) => {
+        const wide = y > point.ground ? 0.35 : 1.4;
+
+        return [point.x + fx * width * wide * s * 0.5, y, point.z + fz * width * wide * s * 0.5];
+    };
+
+    for (let k = 0; k < points.length - 1; k++) {
+        const [a, b] = [points[k], points[k + 1]];
+
+        for (const s of [-1, 1]) {
+            facing(mesher, [side(a, s, a.ground), side(b, s, b.ground), side(b, s, b.top), side(a, s, a.top)], [fx * s, 0, fz * s], { layer: fibre, colours, uvs: [[0, k], [0, k + 1], [(b.top - b.ground) / 0.5, k + 1], [(a.top - a.ground) / 0.5, k]] });
+        }
+
+        facing(mesher, [side(a, -1, a.top), side(b, -1, b.top), side(b, 1, b.top), side(a, 1, a.top)], [0, 1, 0], { layer: fibre, colours: colours.map((v) => v * 1.05) });
+    }
+
+    for (const [point, s] of [[points[0], -1], [points.at(-1), 1]]) {
+        facing(mesher, [side(point, -1, point.ground), side(point, 1, point.ground), side(point, 1, point.top), side(point, -1, point.top)], [-fz * s, 0, fx * s], { layer: fibre, colours });
     }
 }
 
@@ -1877,26 +2274,28 @@ function moonbuds(mesher, random) {
     }
 }
 
-// The dark elves': a dead stump shrouded in web
+// The dark elves': a dead stump shrouded in web (a darkwood stump, two roots and no fungus, under
+// it, and nothing standing up from it to tear the web)
 function webStump(mesher, random) {
-    stump(mesher, random);
-
+    const shape = stump(mesher, random, "darkwood", { roots: false, fungus: false, slivers: false });
+    const top = Math.max(...shape.rings.at(-1).map((p) => p[1]));
     const r = 0.5;
 
-    for (let k = 0; k < random.int(7, 11); k++) {
+    for (let k = 0, strands = random.int(7, 11); k < strands; k++) {
         const a = random.range(0, TAU);
-        const from = [Math.cos(a) * r * 0.9, random.range(0.3, 0.8), Math.sin(a) * r * 0.9];
+        const from = [Math.cos(a) * r * 0.9, random.range(0.4, 0.95) * top, Math.sin(a) * r * 0.9];
         const to = [Math.cos(a + random.range(-0.6, 0.6)) * random.range(0.9, 1.5), 0.01, Math.sin(a + random.range(-0.6, 0.6)) * random.range(0.9, 1.5)];
 
         strand(mesher, from, to, 0.006, SILK);
     }
 
     // (A sheet of web over its top)
-    const rim = Array.from({ length: 8 }, (_, k) => [Math.cos((k / 8) * TAU) * r * 1.1, 0.55 + random.range(0, 0.25), Math.sin((k / 8) * TAU) * r * 1.1]);
+    const rim = Array.from({ length: 8 }, (_, k) => [Math.cos((k / 8) * TAU) * r * 1.1, top * random.range(0.8, 0.95), Math.sin((k / 8) * TAU) * r * 1.1]);
+    const peak = [0, top + 0.12, 0];
 
     for (let k = 0; k < 8; k++) {
-        mesher.tri([0, 0.95, 0], rim[(k + 1) % 8], rim[k], { colours: SILK.map((v) => v * 0.8) });
-        mesher.tri([0, 0.95, 0], rim[k], rim[(k + 1) % 8], { colours: SILK.map((v) => v * 0.7) });
+        mesher.tri(peak, rim[(k + 1) % 8], rim[k], { colours: SILK.map((v) => v * 0.8) });
+        mesher.tri(peak, rim[k], rim[(k + 1) % 8], { colours: SILK.map((v) => v * 0.7) });
     }
 }
 
@@ -2780,7 +3179,7 @@ function draw(mesher, random, kind, land) {
         case "log":
             return fallenTree(mesher, random);
         case "stump":
-            return stump(mesher, random);
+            return stump(mesher, random, land);
         case "snag":
             return snag(mesher, random);
         case "mound":
@@ -3519,6 +3918,18 @@ const HOME_FEATURES = ["termites", "kopje", "skullpole", "stakes", "wrack", "man
 
 /** Every kind drawn here (the features' and the undergrowth's; not the bushes, kits/bushes.js's), for tests and the lab. */
 export const KINDS = Object.freeze([...new Set(["boulder", "stone", "outcrop", "log", "stump", "snag", "cairn", "menhir", "mound", "haystack", "scarecrow", "logpile", "ruin", "ribs", ...HOME_FEATURES, ...Object.values(UNDERGROWTH).flatMap(({ kinds }) => Object.keys(kinds)), ...Object.values(HOME_UNDERGROWTH).flatMap((kinds) => Object.keys(kinds)), ...GARDEN_KINDS])]);
+
+/**
+ * A stump's body alone (its wall and top: no roots, fungus, shards or hinge), as its look `index`
+ * for a land is made (for tests: closed but for its foot, under the ground).
+ */
+export function stumpBody(land = "meadow", index = 0) {
+    const mesher = new Mesher();
+
+    stump(mesher, randomFor("stump", land, index), land, { extras: false });
+
+    return mesher.geometry();
+}
 
 /** One look of a kind for a land, as a geometry on its own (for tests and the lab). */
 export function lookGeometry(kind, land = "meadow", index = 0) {

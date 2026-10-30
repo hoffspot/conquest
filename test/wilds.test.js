@@ -13,7 +13,9 @@ const { buildWorld, CHUNK, Overworld } = await import("../client/js/core/overwor
 const { GROUND } = await import("../client/js/core/setpieces/pieces.js");
 const { CLUSTER, FEATURES, HOMELANDS, LANDS, strikeAt } = await import("../client/js/core/wilds.js");
 const { patchNoise } = await import("../client/js/world/ground.js");
-const { featureMesh, Growth, HOME_UNDERGROWTH, KINDS, LOOKS, lookGeometry, TILE, undergrowthOf, UNDERGROWTH } = await import("../client/js/world/art/kits/wilds.js");
+const { featureMesh, Growth, HOME_UNDERGROWTH, KINDS, LOOKS, lookGeometry, Mesher, place, STUMPS, stumpBody, TILE, undergrowthOf, UNDERGROWTH } = await import("../client/js/world/art/kits/wilds.js");
+const { LAYERS } = await import("../client/js/world/art/engine/atlas.js");
+const { ENDGRAIN, paintLayer } = await import("../client/js/world/art/engine/painters.js");
 const { SUN_FROM } = await import("../client/js/world/sun.js");
 
 let world;
@@ -236,7 +238,9 @@ describe("the land's things drawn (world/art/kits/wilds.js)", () => {
                 const geometry = lookGeometry(kind, land, 3);
                 const triangles = geometry.attributes.position.count / 3;
 
-                assert.ok(triangles >= 4 && triangles <= (["ring", "ribs", "bush", "campfire", "outcrop", "ruin", "bean"].includes(kind) ? 400 : 260), `${kind} (${land}): ${triangles} triangles`);
+                // (Stumps more than most: their tops made inward from their walls, rings of bark,
+                // inner bark, sapwood and heartwood, and roots out of their flaring foot)
+                assert.ok(triangles >= 4 && triangles <= (["ring", "ribs", "bush", "campfire", "outcrop", "ruin", "bean", "stump", "webstump"].includes(kind) ? 400 : 260), `${kind} (${land}): ${triangles} triangles`);
 
                 for (const name of ["position", "normal", "color", "uv", "layer", "wild"]) {
                     assert.ok(valuesOf(geometry.attributes[name]).every(Number.isFinite), `${kind} (${land}): ${name}`);
@@ -434,5 +438,133 @@ describe("the land's things drawn (world/art/kits/wilds.js)", () => {
         // where each thing grows)
         assert.ok(checked > 1000, `${checked} vertices`);
         assert.ok(farthest > 100, `${farthest} copies`);
+    });
+});
+
+describe("stumps (world/art/kits/wilds.js)", () => {
+    // Each look's body (stumpBody: its wall and top), as triangles of three points
+    const bodies = () => Object.keys(LOOKS).flatMap((land) => Array.from({ length: 8 }, (_, index) => {
+        const position = stumpBody(land, index).attributes.position.array;
+
+        return { land, index, triangles: Array.from({ length: position.length / 9 }, (_, t) => [0, 1, 2].map((k) => Array.from(position.slice(t * 9 + k * 3, t * 9 + k * 3 + 3)))) };
+    }));
+
+    it("closes every stump's body: its top made inward from its wall's own top ring, so nothing shows through where they meet, and every face turned outward", () => {
+        const key = (p) => p.map((v) => Math.round(v * 1e5)).join();
+
+        for (const { land, index, triangles } of bodies()) {
+            const edges = new Map();
+
+            for (const corners of triangles) {
+                for (let e = 0; e < 3; e++) {
+                    const [a, b] = [corners[e], corners[(e + 1) % 3]];
+
+                    // (Its foot, under the ground, left open)
+                    if (a[1] > -0.05 || b[1] > -0.05) {
+                        edges.set(`${key(a)}|${key(b)}`, (edges.get(`${key(a)}|${key(b)}`) ?? 0) + 1);
+                    }
+                }
+            }
+
+            for (const [edge, count] of edges) {
+                const back = edge.split("|").reverse().join("|");
+
+                assert.ok(count === 1 && edges.get(back) === 1, `${land} ${index}: the edge ${edge} has ${count} the one way and ${edges.get(back) ?? 0} the other`);
+            }
+        }
+    });
+
+    it("tears a broken stump's top, never peaked: the middle of every stump's top no higher than its rim", () => {
+        for (const { land, index, triangles } of bodies()) {
+            const points = triangles.flat();
+            const out = (p) => Math.hypot(p[0], p[2]);
+
+            // (Its rim: the highest point of its edge each way round)
+            const bins = new Map();
+
+            for (const p of points.filter((point) => out(point) > STUMPS.radius * 0.85)) {
+                const bin = Math.round(Math.atan2(p[2], p[0]) * (STUMPS.sides / (Math.PI * 2)));
+
+                bins.set(bin, Math.max(bins.get(bin) ?? -Infinity, p[1]));
+            }
+
+            const rim = [...bins.values()].sort((a, b) => a - b);
+
+            // (Its middle: the point its top's triangles all meet at, round the pith, or a
+            // hollow's bottom)
+            const shared = new Map();
+
+            for (const p of points.filter((point) => point[1] > 0.1)) {
+                shared.set(p.join(), (shared.get(p.join()) ?? 0) + 1);
+            }
+
+            const [middle] = [...shared].filter(([, count]) => count >= STUMPS.sides).map(([point]) => Number(point.split(",")[1]));
+
+            assert.ok(Number.isFinite(middle), `${land} ${index}: a middle`);
+            assert.ok(middle <= rim[Math.floor(rim.length / 2)] + 1e-6, `${land} ${index}: its middle ${middle.toFixed(3)} over its rim ${rim[Math.floor(rim.length / 2)].toFixed(3)}`);
+        }
+    });
+
+    it("draws a stump's cut wood with the end grain's picture once, centred on its pith, wherever it's placed", () => {
+        const [grain, old] = [LAYERS.indexOf("endgrain"), LAYERS.indexOf("endgrain-old")];
+        let cuts = 0;
+
+        for (const land of Object.keys(LOOKS)) {
+            for (let index = 0; index < 8; index++) {
+                const geometry = lookGeometry("stump", land, index);
+                const { layer, uv } = geometry.attributes;
+
+                for (let i = 0; i < layer.count; i++) {
+                    if (layer.getX(i) === grain || layer.getX(i) === old) {
+                        const [u, v] = [uv.getX(i), uv.getY(i)];
+
+                        cuts++;
+                        assert.ok(u > 0 && u < 1 && v > 0 && v < 1, `${land} ${index}: ${u}, ${v}`);
+                    }
+                }
+            }
+        }
+
+        assert.ok(cuts > 0, "some stumps' tops cut");
+
+        // (Placed shifted, as each of a chunk's features is so no two show the same bark, its end
+        // grain isn't)
+        const mesher = new Mesher();
+
+        mesher.tri([0, 0, 0], [1, 0, 0], [0, 0, 1], { layer: grain, uvs: [[0.5, 0.5], [0.9, 0.5], [0.5, 0.9]] });
+        mesher.tri([0, 0, 0], [0, 1, 0], [1, 0, 0], { layer: LAYERS.indexOf("bark"), uvs: [[0, 0], [0, 1], [1, 0]] });
+
+        const placed = new Mesher();
+
+        place(placed, mesher.part(), { at: [0, 0, 0], shift: [7.3, 3.1] });
+        assert.deepEqual(Array.from(placed.arrays.uv.slice(0, 6)).map((v) => Math.round(v * 10) / 10), [0.5, 0.5, 0.9, 0.5, 0.5, 0.9]);
+        assert.deepEqual(Array.from(placed.arrays.uv.slice(6, 12)).map((v) => Math.round(v * 10) / 10), [7.3, 3.1, 7.3, 4.1, 8.3, 3.1]);
+    });
+
+    it("paints end grain the same every time: its pith dark in the middle, its rings round it no narrower than shows far off, and plain past its bark", () => {
+        const size = 256;
+
+        for (const name of ["endgrain", "endgrain-old"]) {
+            const painted = paintLayer(name, size);
+            const brightness = (x, y) => {
+                const i = (Math.round(y) * size + Math.round(x)) * 4;
+
+                return painted[i] + painted[i + 1] + painted[i + 2];
+            };
+            const ring = (radius) => Array.from({ length: 64 }, (_, k) => brightness(size / 2 + Math.cos((k / 64) * Math.PI * 2) * radius, size / 2 + Math.sin((k / 64) * Math.PI * 2) * radius));
+            const mean = (values) => values.reduce((sum, v) => sum + v, 0) / values.length;
+
+            assert.deepEqual(paintLayer(name, size), painted, `${name}: the same every time`);
+            assert.ok(brightness(size / 2, size / 2) < mean(ring(size * ENDGRAIN.bark * 0.6)) * 0.8, `${name}: its pith dark`);
+
+            // (Across the rings, light and dark; past the bark, its wood's colour, even)
+            const across = Array.from({ length: Math.round(size * ENDGRAIN.bark * 0.5) }, (_, k) => brightness(size / 2 + size * ENDGRAIN.bark * 0.35 + k, size / 2 + 3));
+            const corner = Array.from({ length: 20 }, (_, k) => brightness(4 + k, 4));
+            const spread = (values) => Math.max(...values) - Math.min(...values);
+
+            assert.ok(spread(across) > spread(corner) * 2, `${name}: rings ${spread(across)}, past the bark ${spread(corner)}`);
+        }
+
+        assert.ok(ENDGRAIN.least >= 3, "no ring drawn under three pixels");
     });
 });

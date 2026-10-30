@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "c5fdf005b0",
+    release: "b42df36dbf",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
