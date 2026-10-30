@@ -14,6 +14,12 @@ export const SIZE = 128;
 const hex = (value) => [(value >> 16) & 255, (value >> 8) & 255, value & 255];
 const mix = (a, b, t) => a.map((channel, i) => channel + (b[i] - channel) * t);
 const scale = (colour, factor) => colour.map((channel) => channel * factor);
+const TAU = Math.PI * 2;
+const smoothstep = (a, b, x) => {
+    const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+
+    return t * t * (3 - 2 * t);
+};
 
 // Smooth noise from 0 to 1 that repeats every `period` lattice cells (so textures tile)
 function periodicNoise(seed, period) {
@@ -118,6 +124,190 @@ function courses(seed, rows, lengths, block) {
  * the joints `joint` metres wide.
  */
 export const OLD_STONE = Object.freeze({ metres: 4.2, courses: [0.2, 0.28, 0.35, 0.45, 0.6], long: [1, 3], joint: 0.03 });
+
+/**
+ * End grain, the cut top of a trunk (kits/wilds.js stumps; the research report "Realistic
+ * procedural tree stumps"): drawn once in the middle of the picture, not repeated, its pith at the
+ * middle and the bark `bark` of the way across from it (the cut face's texture coordinates are
+ * centred on its pith); `rings` growth rings out to `beyond` that (past the bark, under its lip),
+ * none narrower than `least` pixels at the atlas's 256 (narrower, they'd shimmer far off: they
+ * fade to their wood's colour instead); each ring pale earlywood and then latewood, darker and
+ * ending sharp, in the shares `profile` gives (low, rising, high, falling).
+ */
+export const ENDGRAIN = Object.freeze({ bark: 0.4, rings: 26, beyond: 1.18, least: 3, profile: [0.55, 0.15, 0.27, 0.03] });
+
+// How much of a ring is latewood from its start to `f` (0 to 1, and on round the rings past 1):
+// the earlywood/latewood profile's integral, so a ring can be averaged over a pixel
+function latewoodTo(f) {
+    const [low, rise, high, fall] = ENDGRAIN.profile;
+    const whole = rise / 2 + high + fall / 2;
+    const turns = Math.floor(f);
+    const t = f - turns;
+    let part = 0;
+
+    if (t >= low + rise + high) {
+        const g = t - low - rise - high;
+
+        part = rise / 2 + high + g - (g * g) / (2 * fall);
+    } else if (t >= low + rise) {
+        part = rise / 2 + (t - low - rise);
+    } else if (t >= low) {
+        part = ((t - low) * (t - low)) / (2 * rise);
+    }
+
+    return turns * whole + part;
+}
+
+// The end grain's painter: fresh (cream, faint rings, a hairline check or two) or `weathered` (gone
+// silver, its latewood standing as ridges, checked wide from the bark in and from the pith out,
+// its heart rotting)
+function endGrain({ base, light, dark, mortar }, seed, weathered) {
+    const random = createRandom(seed);
+    const gauss = () => Math.sqrt(-2 * Math.log(1 - random.next())) * Math.cos(TAU * random.next());
+    const warp = periodicNoise(seed + 1, 4);
+    const fine = periodicNoise(seed + 2, 24);
+    const across = ENDGRAIN.bark * SIZE;
+    const pixel = SIZE / 256 / across;
+
+    // The rings' widths: the first few wide (a young tree's), then narrowing as it grew, years good
+    // and bad, and a dry spell or two of narrow rings; scaled to reach `beyond`
+    const widths = Array.from({ length: ENDGRAIN.rings }, (_, k) => (k < 5 ? 1.6 : 1) * (k + 1) ** -0.25 * Math.max(0.4, 1 + gauss() * 0.28));
+
+    for (let spell = 0; spell < 2; spell++) {
+        const from = random.int(6, ENDGRAIN.rings - 4);
+
+        for (let k = from; k < from + random.int(2, 3); k++) {
+            widths[k] *= 0.5;
+        }
+    }
+
+    const total = widths.reduce((sum, width) => sum + width, 0);
+    const edges = [0];
+
+    for (const width of widths) {
+        edges.push(edges.at(-1) + (width / total) * ENDGRAIN.beyond);
+    }
+
+    const tones = widths.map(() => 1 + (random.next() - 0.5) * 0.08);
+
+    // Rays (oak's broad, others' faint), from where each starts out to the bark
+    const RAYS = 160;
+    const rays = Array.from({ length: RAYS }, (_, k) => ({ at: ((k + random.next() * 0.8) / RAYS) * TAU, from: random.range(0.12, 0.85), strength: random.range(0.08, 0.2) * (weathered ? 0.5 : 1) }));
+
+    // Checks, as the wood dried: from the bark in, a main one wide at the bark and tapering to a
+    // hairline (two when weathered, with short ones off it), short ones round the bark, and hairlines
+    // out from the pith; each wobbling a little as it goes
+    const checks = [];
+    const check = (from, to, width, angle = random.range(0, TAU)) => checks.push({ angle, from, to, width, wobble: random.range(0.006, 0.02), phase: random.range(0, TAU), bend: random.range(-0.06, 0.06) });
+    const mains = weathered ? random.int(1, 2) : 1;
+    const first = random.range(0, TAU);
+
+    for (let k = 0; k < mains; k++) {
+        check(ENDGRAIN.beyond, weathered ? random.range(0.04, 0.25) : random.range(0.35, 0.6), weathered ? random.range(3.2, 4.6) : random.range(1.2, 1.8), first + k * random.range(1.6, 4.6));
+    }
+
+    for (let k = 0; k < (weathered ? random.int(2, 4) : random.int(0, 1)); k++) {
+        check(ENDGRAIN.beyond, random.range(0.72, 0.9), weathered ? random.range(1.2, 2) : random.range(0.7, 1));
+    }
+
+    for (let k = 0; k < (weathered ? random.int(2, 3) : 1); k++) {
+        check(random.range(0.1, weathered ? 0.26 : 0.14), 0.01, weathered ? random.range(0.5, 0.8) : 0.35);
+    }
+
+    // (Which ring each distance out is in, looked up rather than searched for at every pixel)
+    const STEPS = 4096;
+    const span = 1.4;
+    const ringAt = new Uint8Array(STEPS);
+
+    for (let i = 0, ring = 0; i < STEPS; i++) {
+        while (ring < ENDGRAIN.rings - 1 && edges[ring + 1] <= ((i + 0.5) / STEPS) * span) {
+            ring++;
+        }
+
+        ringAt[i] = ring;
+    }
+
+    const rot = weathered ? random.range(0.12, 0.22) : 0;
+    const mean = mix(base, dark, 0.3);
+
+    return (x, y) => {
+        const [dx, dy] = [x - SIZE / 2, y - SIZE / 2];
+        const angle = Math.atan2(dy, dx);
+        const straight = Math.hypot(dx, dy) / across;
+
+        // (Bent by slow noise, more the further out, so the rings wander as a trunk's do)
+        const wander = (warp((x / SIZE) * 4, (y / SIZE) * 4) - 0.5) * (weathered ? 0.09 : 0.06);
+        const rho = straight * (1 + wander * Math.min(1, straight * 1.5));
+
+        // Which ring, and how far through it (0 to 1); latewood averaged over the pixel, faded out
+        // where the ring's too narrow to show
+        let ring = ringAt[Math.min(STEPS - 1, Math.floor((rho / span) * STEPS))];
+
+        ring += ring < ENDGRAIN.rings - 1 && edges[ring + 1] <= rho ? 1 : ring > 0 && edges[ring] > rho ? -1 : 0;
+
+        const width = edges[ring + 1] - edges[ring];
+        const f = Math.max(0, (rho - edges[ring]) / width);
+        const half = pixel / 2 / width;
+        const late = (latewoodTo(f + half) - latewoodTo(f - half)) / (2 * half);
+        const shows = smoothstep(1.5, ENDGRAIN.least, (width / pixel) * 0.75) * (1 - smoothstep(1.05, 1.25, rho));
+        let colour = scale(mix(base, dark, late * (weathered ? 0.55 : 0.8) * shows), rho < ENDGRAIN.beyond ? tones[ring] : 1);
+        let lift = 0.55 + (weathered ? 0.22 : 0.06) * late * shows;
+
+        // Rays, a pixel or so wide, paler
+        const nearest = Math.round((angle / TAU) * RAYS);
+
+        for (let k = nearest - 1; k <= nearest + 1; k++) {
+            const ray = rays[((k % RAYS) + RAYS) % RAYS];
+            const off = Math.abs(Math.atan2(Math.sin(angle - ray.at), Math.cos(angle - ray.at))) * straight * across;
+
+            if (rho > ray.from && rho < 1.05) {
+                const on = 1 - smoothstep(0.2, 0.55, off);
+
+                colour = mix(colour, light, on * ray.strength);
+                lift += on * 0.03;
+            }
+        }
+
+        // The heart: the pith dark, rot round it when weathered, soft and dark
+        const grain = fine((x / SIZE) * 24, (y / SIZE) * 24);
+
+        if (rot > 0 && rho < rot * 1.4) {
+            const rotten = 1 - smoothstep(rot * 0.6, rot * 1.4, rho + (grain - 0.5) * 0.08);
+
+            colour = mix(colour, mix(dark, mortar, 0.45), rotten * 0.75);
+            lift -= rotten * 0.2;
+        }
+
+        const pith = 1 - smoothstep(0.012, 0.03, straight + (grain - 0.5) * 0.012);
+
+        colour = mix(colour, mix(dark, mortar, 0.4), pith * 0.8);
+
+        // The checks: a near-black core, a dark halo round it
+        for (const { angle: at, from, to, width: wide, wobble, phase, bend } of checks) {
+            const [inner, outer] = [Math.min(from, to), Math.max(from, to)];
+
+            if (rho < inner || rho > outer) {
+                continue;
+            }
+
+            // (0 at the hairline's end, 1 where it's widest: the bark, or the pith for a heart check)
+            const t = from > to ? (rho - to) / (from - to) : (from - rho) / (from - to);
+            const middle = at + wobble * Math.sin(rho * 9 + phase) + bend * (1 - t);
+            const off = Math.abs(Math.atan2(Math.sin(angle - middle), Math.cos(angle - middle))) * straight * across;
+            const open = (wide / 2) * t ** 1.4 + 0.05;
+            const core = 1 - smoothstep(open * 0.6, open + 0.25, off);
+            const halo = 1 - smoothstep(open, open * 2.5 + 0.6, off);
+
+            colour = mix(mix(colour, scale(dark, 0.8), halo * 0.35), mortar, core);
+            lift = lift + (0.08 - lift) * core;
+        }
+
+        // (Past the bark, under its lip: its wood's colour)
+        colour = mix(colour, mean, smoothstep(1.12, 1.3, rho));
+
+        return [...scale(colour, 0.96 + grain * 0.08), Math.max(0, Math.min(1, lift))];
+    };
+}
 
 export const PAINTERS = {
     // Castle stone: squared blocks in courses, with mortar joints and lit upper edges
@@ -610,6 +800,15 @@ export const PAINTERS = {
         };
     },
 
+    // End grain, a trunk's cut top (ENDGRAIN): fresh, or weathered silver
+    endgrain(colours, seed) {
+        return endGrain(colours, seed, false);
+    },
+
+    endgrainOld(colours, seed) {
+        return endGrain(colours, seed, true);
+    },
+
     // Ploughed soil: furrows running east to west
     soil({ base, light, dark }, seed) {
         const grain = periodicNoise(seed, 64);
@@ -1056,6 +1255,12 @@ export const MATERIALS = {
     leafscale: { painter: "leafscale", world: 9, base: 0x86a95e, light: 0x9fbf78, dark: 0x6a8a4a },
     "bark-silver": { painter: "bark", world: 8, base: 0xc4c3b8, light: 0xe2e1d8, dark: 0x5e5d56 },
     heartwood: { painter: "grain", world: 16, base: 0xb08a5a, light: 0xcca878, dark: 0x7e5e3a },
+    // (A trunk's cut top, as the stumps show it: fresh, cream with its rings, rays and pith, the
+    // tree's own colour and heartwood its vertices'; and gone silver after a year or so, checked
+    // and ridged, its heart rotting. Drawn once in the middle of the picture, its pith at the
+    // middle: ENDGRAIN)
+    endgrain: { painter: "endgrain", world: 5, base: 0xe6d3b0, light: 0xf2e6cc, dark: 0xc4a274, mortar: 0x3a2a1c },
+    "endgrain-old": { painter: "endgrainOld", world: 5, base: 0xa39e94, light: 0xbdb8ae, dark: 0x7a756c, mortar: 0x2a2622 },
     "stone-black": { painter: "ashlar", world: 14, base: 0x2a2830, light: 0x3c3944, dark: 0x1c1b21, mortar: 0x121116 },
     obsidian: { painter: "obsidian", world: 30, base: 0x121018, light: 0x6e6680, dark: 0x07060a },
 };
