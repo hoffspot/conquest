@@ -719,6 +719,18 @@ export const NATURAL = Object.freeze({
             melee({ id: "smash", reach: 1.8, damage: [12, 19], hitAt: 1100, duration: 2500, interval: 2600, stagger: 500, knockdown: 1400, reaction: "crush", animation: "melee" }),
             melee({ id: "bite", damage: [9, 14], hitAt: 550, duration: 1300, interval: 1700, reaction: "pierce", animation: "bite", afflict: { kind: "bleed", chance: 0.4 } }))],
     },
+    // (The Lord of the Pit's henchmen: creatures.js. Their claws rend, the blow landing two fifths of
+    // the way through it, as their model's clip has it)
+    henchman: {
+        label: "Claws",
+        attacks: [melee({ id: "rend", damage: [9, 15], hitAt: 780, duration: 2000, interval: 2300, stagger: 350, reaction: "hack", animation: "melee", afflict: { kind: "bleed", chance: 0.35 } })],
+    },
+    // (A hell's walkers, each level's: creatures.js. Their claws rake, the blow landing three tenths
+    // of the way through it, as their model's clip has it)
+    hellwalker: {
+        label: "Raking claws",
+        attacks: [melee({ id: "rake", damage: [7, 12], hitAt: 560, duration: 1900, interval: 1900, reaction: "slash", animation: "melee", afflict: { kind: "bleed", chance: 0.3 } })],
+    },
     demonLord: {
         label: "Burning fists and hellfire",
         attacks: [

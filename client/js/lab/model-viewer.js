@@ -164,6 +164,11 @@ const ABOUT = {
     bloatGorger: ["Bloat gorger", "A hell's Pit: spewing bile, and bursting in it as it falls"],
     pitRavager: ["Pit ravager", "A hell's Pit, in packs: quick, its club and teeth leaving you bleeding"],
     gorgerWarlord: ["Gorger warlord", "A hell's Pit, one alone: roaring its bloat gorgers to it"],
+    henchman: ["Pit henchman", "A hell's Pit, in packs and about its lord's throne: claws that leave you bleeding, staggering"],
+    brimstoneWalker: ["Brimstone walker", "A hell's Breach: quick, its claws leaving you bleeding"],
+    ashWalker: ["Ash walker", "A hell's Halls of Bone: quick, its claws leaving you bleeding"],
+    hellwalker: ["Hellwalker", "A hell's River of Fire, in packs, at home: quick, its claws leaving you bleeding"],
+    bileWalker: ["Bile walker", "A hell's Pit: quick, its claws leaving you bleeding"],
 };
 
 // --- The scene ---
@@ -1396,7 +1401,7 @@ const groups = [
     ["The restless dead", ["ghost", "wraith"]],
     ["The ants' nests", ["ant", "greatCentipede", "dungeonSpider", "eliteDungeonSpider", "giantCockroach", "dungeonWasp", "dungeonScorpion", "blackWidow", "antMonster"]],
     ["The Tower of Sar Mordal", ["riftling", "riftStalker"]],
-    ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord"]],
+    ["The hells", ["fiend", "flayling", "cinderHusk", "pyreAcolyte", "ossuaryPriest", "dirgeWarden", "flayedHierarch", "slagGorger", "forgeBrute", "chainedGlutton", "bloatGorger", "pitRavager", "gorgerWarlord", "henchman", "brimstoneWalker", "ashWalker", "hellwalker", "bileWalker"]],
     ["For the mightiest", ["kaiju", "dreadthorn", "dragon", "moonfang", "wightLord", "frostTroll", "banditChief", "cultLeader", "demonLord"]],
 ];
 

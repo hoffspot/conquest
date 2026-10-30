@@ -20,4 +20,6 @@ It doesn't cover:
   Flayling, the Cinder Husk, the Pyre Acolyte, the Ossuary Priest, the Dirge Warden and the Flayed
   Hierarch), Fab's Monster1's six builds; and its six gorgers (the Slag Gorger, the Forge Brute,
   the Chained Glutton, the Bloat Gorger, the Pit Ravager and the Gorger Warlord), Fab's Monster2's
-  four builds; and the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.
+  four builds; and the Pit henchman, Andrew Ermakov's Monster3 "Villain's Henchman" from Fab, with
+  its three other skins; and a hell's walkers (the Brimstone, Ash and Bile walkers and the
+  Hellwalker), Andrew Ermakov's Monster4 "Walking Villain" from Fab, in its five skins; and the Kaiju, HuyKhoi2407's Kaiju from Fab (`client/models/beasts/LICENSE.md`). Don't copy one out of the game or use it in anything else.

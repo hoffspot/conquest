@@ -7,7 +7,7 @@
 // says what each field is for.
 
 export const ASSETS = Object.freeze({
-    release: "c5fdf005b0",
+    release: "cfcdada3b7",
     models: {
         "dungeon-rock-cave": {
             "tier": "demand",
@@ -2246,6 +2246,79 @@ export const ASSETS = Object.freeze({
                     "path": "models/beasts/gorger-warlord.bin",
                     "hash": "b7d4a362fb",
                     "bytes": 2854240
+                }
+            ]
+        },
+        "beast-henchman": {
+            "tier": "demand",
+            "label": "The Pit henchman (Andrew Ermakov's Monster3 \"Villain's Henchman\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/henchman.bin",
+                    "hash": "92a439581b",
+                    "bytes": 1550092
+                }
+            ]
+        },
+        "beast-henchman-skins": {
+            "tier": "demand",
+            "label": "The Pit henchman's other skins: bone, blood and bile (Andrew Ermakov's Monster3 \"Villain's Henchman\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/henchman.bone.bin",
+                    "hash": "e24341edfd",
+                    "bytes": 161904
+                },
+                {
+                    "path": "models/beasts/henchman.blood.bin",
+                    "hash": "ac8bc6453a",
+                    "bytes": 158344
+                },
+                {
+                    "path": "models/beasts/henchman.bile.bin",
+                    "hash": "56852329b6",
+                    "bytes": 161760
+                }
+            ]
+        },
+        "beast-hellwalker": {
+            "tier": "demand",
+            "label": "A hell's walkers (Andrew Ermakov's Monster4 \"Walking Villain\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/hellwalker.bin",
+                    "hash": "75323b4333",
+                    "bytes": 1708492
+                }
+            ]
+        },
+        "beast-hellwalker-skins": {
+            "tier": "demand",
+            "label": "A hell's walkers' other skins: ash, bile, brimstone and char (Andrew Ermakov's Monster4 \"Walking Villain\", bought on Fab: used with the permission its Standard License gives; client/models/beasts/LICENSE.md)",
+            "licensed": true,
+            "files": [
+                {
+                    "path": "models/beasts/hellwalker.ash.bin",
+                    "hash": "82f9be1c0e",
+                    "bytes": 175976
+                },
+                {
+                    "path": "models/beasts/hellwalker.bile.bin",
+                    "hash": "5d7d80e1e2",
+                    "bytes": 167616
+                },
+                {
+                    "path": "models/beasts/hellwalker.brimstone.bin",
+                    "hash": "c8681d7998",
+                    "bytes": 178192
+                },
+                {
+                    "path": "models/beasts/hellwalker.char.bin",
+                    "hash": "2596ebc2fb",
+                    "bytes": 170464
                 }
             ]
         },

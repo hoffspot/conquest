@@ -445,6 +445,13 @@ export const CREATURE_VOICES = Object.freeze({
     bloatGorger: { family: "troll", rate: 0.92, fall: "deathThudBig" },
     pitRavager: { family: "troll", rate: 1.1, fall: "deathThudBig" },
     gorgerWarlord: { family: "troll", rate: 0.74, fall: "deathThudBig" },
+    // (The Lord of the Pit's henchmen growling as trolls do, a little lower; a hell's walkers
+    // rasping as wights do, a little lower)
+    henchman: { family: "troll", rate: 0.95, fall: "deathThudBig" },
+    brimstoneWalker: { family: "wight", rate: 0.92, fall: "deathThudMid" },
+    ashWalker: { family: "wight", rate: 0.92, fall: "deathThudMid" },
+    hellwalker: { family: "wight", rate: 0.92, fall: "deathThudMid" },
+    bileWalker: { family: "wight", rate: 0.92, fall: "deathThudMid" },
 });
 
 // What a creature's voice is heard doing, and how loud (as synth.js's `volume`): calling (heard

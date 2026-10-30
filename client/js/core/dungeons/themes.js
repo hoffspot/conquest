@@ -305,6 +305,8 @@ export const THEMES = {
                     { id: "flaylings", creatures: ["flayling"], size: [3, 5], weight: 3 },
                     { id: "husks", creatures: ["cinderHusk"], size: [2, 3], weight: 2 },
                     { id: "acolytes", creatures: ["pyreAcolyte"], size: [1, 2], weight: 2 },
+                    // (Its walkers, in their brimstone skin: creatures.js)
+                    { id: "walkers", creatures: ["brimstoneWalker"], size: [1, 2], weight: 1 },
                 ],
                 minis: [
                     { id: "fireCaller", creature: "cultist", title: "Fire-caller", weight: 2 },
@@ -345,6 +347,8 @@ export const THEMES = {
                     { id: "priests", creatures: ["ossuaryPriest"], size: [1, 1], weight: 2 },
                     { id: "wardens", creatures: ["dirgeWarden"], size: [1, 2], weight: 2 },
                     { id: "hierarch", creatures: ["flayedHierarch"], size: [1, 1], weight: 1 },
+                    // (Its walkers, ash grey: creatures.js)
+                    { id: "walkers", creatures: ["ashWalker"], size: [1, 2], weight: 1 },
                 ],
                 minis: [
                     { id: "boneChampion", creature: "skeleton", title: "Bone champion", weight: 2 },
@@ -388,6 +392,8 @@ export const THEMES = {
                     { id: "slagGorgers", creatures: ["slagGorger"], size: [2, 3], weight: 2 },
                     { id: "forgeBrutes", creatures: ["forgeBrute"], size: [1, 2], weight: 2 },
                     { id: "glutton", creatures: ["chainedGlutton"], size: [1, 1], weight: 1 },
+                    // (Its hellwalkers, at home here, met the most: creatures.js)
+                    { id: "hellwalkers", creatures: ["hellwalker"], size: [2, 3], weight: 3 },
                 ],
                 minis: [
                     { id: "moltenLord", creature: "magmaSlime", title: "Molten lord", weight: 1 },
@@ -431,6 +437,9 @@ export const THEMES = {
                     { id: "bloatGorgers", creatures: ["bloatGorger"], size: [2, 3], weight: 2 },
                     { id: "ravagers", creatures: ["pitRavager"], size: [2, 3], weight: 2 },
                     { id: "warlord", creatures: ["gorgerWarlord"], size: [1, 1], weight: 1 },
+                    // (Its lord's henchmen, and its walkers, bile green: creatures.js)
+                    { id: "henchmen", creatures: ["henchman"], size: [2, 3], weight: 2 },
+                    { id: "walkers", creatures: ["bileWalker"], size: [1, 2], weight: 1 },
                 ],
                 minis: [
                     { id: "pitPriest", creature: "cultist", title: "Pit priest", weight: 1 },
@@ -452,7 +461,8 @@ export const THEMES = {
                 },
             },
         ],
-        bosses: [{ id: "demonLord", creature: "demonLord", title: "the Lord of the Pit", weight: 1, guard: ["wraith", "cultist"] }],
+        // (The Lord of the Pit, its henchmen about it)
+        bosses: [{ id: "demonLord", creature: "demonLord", title: "the Lord of the Pit", weight: 1, guard: ["henchman"] }],
         // (Its realms' packs, mini-bosses (their wardens among them) and rooms all together, for
         // whatever asks of the theme as a whole: who may be in it, beasts/model.js modelsInside)
         get packs() {

@@ -695,6 +695,13 @@ export const LOOKS = Object.freeze({
     bloatGorger: { body: "humanoid", scale: [1.17, 1.21] },
     pitRavager: { body: "humanoid", scale: [1.12, 1.16] },
     gorgerWarlord: { body: "humanoid", scale: [1.37, 1.41] },
+    // (The Lord of the Pit's henchmen, broad and a man's height, and a hell's walkers, lean and a head
+    // taller, until their own models are read: creatures.js)
+    henchman: { body: "humanoid", scale: [1.02, 1.06] },
+    brimstoneWalker: { body: "humanoid", scale: [1.12, 1.16] },
+    ashWalker: { body: "humanoid", scale: [1.12, 1.16] },
+    hellwalker: { body: "humanoid", scale: [1.12, 1.16] },
+    bileWalker: { body: "humanoid", scale: [1.12, 1.16] },
 });
 
 // A value between two, from the random numbers
@@ -836,6 +843,24 @@ const BRUTES = {
     bloatGorger: gorger(["#5a6a2c", "#4e5c24", "#667634"], [["loincloth"]]),
     pitRavager: gorger(["#a08070", "#927262", "#ac8c7a"], [["loincloth"], ["belt"]]),
     gorgerWarlord: gorger(["#a08070", "#927262", "#ac8c7a"], [["loincloth"], ["belt"], ["bracers"], ["orcHelm"]]),
+    // (The Lord of the Pit's henchmen, standing in for their own model: broad, horned, rust red,
+    // their eyes burning, in loincloths and belts)
+    henchman: {
+        macro: { gender: 1, muscle: [0.85, 1], weight: [0.45, 0.6], height: [0.9, 1], african: 0.3, asian: 0.3, caucasian: 0.4 },
+        details: { browRidge: [0.8, 1], jawWidth: [0.7, 0.9], headSquare: [0.4, 0.6], eyeSize: [-0.5, -0.2], earPoint: [0.9, 1], earSize: [0.4, 0.7], armLength: [0.8, 0.95], handSize: [0.85, 1], footSize: [0.7, 0.9], neck: [0.8, 1], shoulders: [0.85, 1], belly: [0, 0.2] },
+        skin: { tones: ["#7a3a24", "#6a321e", "#86422a"], warts: [0.2, 0.4], veins: [0.6, 0.9], blush: [0, 0.05], brows: [0.5, 0.8], warpaint: "#140806" },
+        irises: ["#ffb020", "#ff6a1a"],
+        slit: true,
+        hair: { styles: ["bald"], colour: HAIR_COLOURS.black },
+        wear: [["loincloth"], ["belt"], ["orcHelm"]],
+        walk: "orc",
+    },
+    // (A hell's walkers, standing in for their own model: gaunt and skinned as the flayed are, in
+    // their level's skin: brimstone amber, ash grey, raw flesh, bile green)
+    brimstoneWalker: flayed(["#9a6a2a", "#8a5e24", "#a87632"], ["#ffb020", "#ff6a1a"], [["loincloth"]]),
+    ashWalker: flayed(["#6e6a66", "#625e5a", "#7a7570"], ["#ffb020", "#ff6a1a"], [["loincloth"]]),
+    hellwalker: flayed(["#8a4a3a", "#7a3e30", "#965444"], ["#ffb020", "#ff6a1a"], [["loincloth"]]),
+    bileWalker: flayed(["#5a6a3a", "#4e5c32", "#667644"], ["#9aff5a", "#6adf3a"], [["loincloth"]]),
 };
 
 /**

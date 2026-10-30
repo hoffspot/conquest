@@ -72,6 +72,27 @@ const gorger = (asset, made, scale, attacks) => Object.freeze({
     flinch: 0.6,
 });
 
+// One of a hell's walkers (MODELS): Monster4's model ("Walking Villain"), made 2 metres tall and
+// drawn so, in the skins its level's wear (`skins`); its own clips: its claws raked, its flinch,
+// its fall; walking at 1.22 m/s and running at 3.25. (Not the idle and run its pack's demo
+// retargets from Unreal's template: Epic's, for Unreal Engine only)
+const walker = (skins) => Object.freeze({
+    asset: "beast-hellwalker",
+    skins: Object.freeze(skins),
+    length: 0.43,
+    made: Object.freeze({ long: 0.43, tall: 1.99 }),
+    clips: Object.freeze({ idle: "Idle", walk: "Walk", run: "Run", react: "Hit", dead: "Death" }),
+    attacks: Object.freeze({ rake: "Attack" }),
+    specials: Object.freeze({}),
+    rests: Object.freeze({}),
+    fire: Object.freeze({}),
+    joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "head", left: "hand_l" }),
+    mouth: null,
+    pace: 1.22,
+    runPace: 3.25,
+    flinch: 0.6,
+});
+
 /**
  * The creatures drawn from a model, by their LOOKS id (which stands in for one until it's read):
  * the catalog's entry (`asset`: two kinds may be drawn from one), and the skins one of them may
@@ -434,6 +455,34 @@ export const MODELS = Object.freeze({
     bloatGorger: gorger("beast-bloat-gorger", { long: 0.7, tall: 1.87 }, 1.15, { claw: "Attack" }),
     pitRavager: gorger("beast-pit-ravager", { long: 1.03, tall: 1.87 }, 1.1, { rend: "Attack" }),
     gorgerWarlord: gorger("beast-gorger-warlord", { long: 1.18, tall: 2.5 }, 1.35, { smash: "Attack" }),
+    // (The Lord of the Pit's henchmen (creatures.js): Monster3 ("Villain's Henchman"), made 1.8
+    // metres tall, drawn 1.9; its own clips: its claws (one way), its flinch, its fall; walking at
+    // 1.69 m/s. No run (its pack's demo has one, retargeted from Unreal's template: Epic's, for
+    // Unreal Engine only): it walks, as a gorger does, its walk up to twice its pace. In one of
+    // its four skins by its seed (its own rust, bone, blood with its eyes burning, bile))
+    henchman: Object.freeze({
+        asset: "beast-henchman",
+        skins: Object.freeze(["", "bone", "blood", "bile"]),
+        length: 0.99,
+        made: Object.freeze({ long: 0.94, tall: 1.8 }),
+        clips: Object.freeze({ idle: "Idle", walk: "Walk", react: "Hit", dead: "Death" }),
+        attacks: Object.freeze({ rend: "Attack" }),
+        specials: Object.freeze({}),
+        rests: Object.freeze({}),
+        fire: Object.freeze({}),
+        joints: Object.freeze({ torso: "spine_03", body: "pelvis", head: "head", mouth: "head", left: "hand_l" }),
+        mouth: null,
+        pace: 1.69,
+        runPace: null,
+        flinch: 0.6,
+    }),
+    // (A hell's walkers (creatures.js), one kind on each level, each in its level's skins: brimstone
+    // in the Breach, ash in the Halls of Bone, their own or charred in the River of Fire (where
+    // they're at home, met the most), bile in the Pit)
+    brimstoneWalker: walker(["brimstone"]),
+    ashWalker: walker(["ash"]),
+    hellwalker: walker(["", "char"]),
+    bileWalker: walker(["bile"]),
 });
 
 // The models read and those asked for, by kind (each in its skins); and each model file's read,
@@ -1210,6 +1259,13 @@ export function modelBody(id, gltf, { scale = 1, groundAt = () => 0, skin = "" }
 
             for (const map of MAPS.filter((one) => given?.[one])) {
                 own[map] = given[map];
+            }
+
+            // (A skin that glows where its model's own doesn't: its glow's colour and strength with
+            // its map, its model's own black)
+            if (given?.emissiveMap) {
+                own.emissive.copy(given.emissive);
+                own.emissiveIntensity = given.emissiveIntensity;
             }
 
             materials.set(node.material.name, own);

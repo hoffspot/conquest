@@ -91,10 +91,10 @@ wilds, and only by night, once the cult keeping its rite there is slain ([The wa
 
   | Level | Realm | Dug as | Drawn as | Heard as | Who's in it | Its master |
   |---|---|---|---|---|---|---|
-  | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | its drone ([The sound of hell](#the-sound-of-hell)); lava belching, hissing close by; drips | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats, fiends; its own flaylings, cinder husks and pyre acolytes | the Breach Priest, a cultist |
-  | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | the drone a tone lower; a crypt's still air; the heart, louder nearer it; the dead groaning and wailing far off | skeletons, draugr, wraiths, ghosts, shadow stalkers, fiends; its own ossuary priests, dirge wardens and flayed hierarchs | the Bone Lord, a wight lord |
-  | 3 | the River of Fire | caves, flooded | `hell-fire`: black basalt, its caverns lakes of lava, causeways across them, embers in its rock and thick in its hot air, the Hellforge in its last room | the drone two tones lower; lava belching and roaring, hissing close by; the Hellforge's hammer | magma slimes, salamanders, black shucks, chimeras, wyverns, fiends; its own slag gorgers, forge brutes and chained gluttons | the Forge Beast, a chimera |
-  | 4 | the Pit | an ancient temple's halls | `hell-pit`: polished black stone, sigils inlaid in its floor glowing violet, the lord's own colour, his horned throne, its lava only a rim along the throne hall's walls | the drone a fifth lower; a crypt's air, lower; wails far off | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders, fiends; its own bloat gorgers, pit ravagers and gorger warlords | the Gatekeeper, an ogre; then the Lord of the Pit |
+  | 1 | the Breach | caves | `hell-breach`: sooty caves crusted with sulphur, embers glowing in their cracks and drifting, pools of lava against the rock, the rift over the cult's altar | its drone ([The sound of hell](#the-sound-of-hell)); lava belching, hissing close by; drips | the cult's faithful, magma slimes, salamanders, black shucks, wraiths, bats, fiends; its own flaylings, cinder husks and pyre acolytes, and brimstone walkers | the Breach Priest, a cultist |
+  | 2 | the Halls of Bone | a hideout's rooms | `hell-bone`: walls of wet flesh, veins of blood beating in them, bone ribs arching over the halls, blood pooled on the floor, the heart in its last room | the drone a tone lower; a crypt's still air; the heart, louder nearer it; the dead groaning and wailing far off | skeletons, draugr, wraiths, ghosts, shadow stalkers, fiends; its own ossuary priests, dirge wardens and flayed hierarchs, and ash walkers | the Bone Lord, a wight lord |
+  | 3 | the River of Fire | caves, flooded | `hell-fire`: black basalt, its caverns lakes of lava, causeways across them, embers in its rock and thick in its hot air, the Hellforge in its last room | the drone two tones lower; lava belching and roaring, hissing close by; the Hellforge's hammer | magma slimes, salamanders, black shucks, chimeras, wyverns, fiends; its own slag gorgers, forge brutes and chained gluttons, and hellwalkers, met the most here | the Forge Beast, a chimera |
+  | 4 | the Pit | an ancient temple's halls | `hell-pit`: polished black stone, sigils inlaid in its floor glowing violet, the lord's own colour, his horned throne, its lava only a rim along the throne hall's walls | the drone a fifth lower; a crypt's air, lower; wails far off | the legion (wraiths and skeletons), the faithful, draugr, shadow stalkers, hounds, slimes and salamanders, fiends; its own bloat gorgers, pit ravagers and gorger warlords, the lord's henchmen and bile walkers | the Gatekeeper, an ogre; then the Lord of the Pit, its henchmen about it |
 
   Each realm's rooms are dressed its own way: the cult's altars and candles and pools of lava in
   the Breach, tombs and charnel heaps and pools of blood in the Halls of Bone, braziers and anvils and lakes of lava by the River of
@@ -120,7 +120,7 @@ wilds, and only by night, once the cult keeping its rite there is slain ([The wa
   horned, its eyes burning. It snarls as the big cats do, lowest of them (`audio/sound.js`), and
   may leave a fire gland, a soul shard or obsidian (`spoils.js`).
 - **Its own kinds** (`creatures.js`, tiers 9 and 10, met nowhere else; none of them champions),
-  three to each level, each drawn from a bought model of its own (`beasts/model.js` `MODELS`,
+  four or five to each level, each drawn from a bought model of its own (`beasts/model.js` `MODELS`,
   `client/models/beasts/LICENSE.md`), a people-shaped stand-in till it's read (`beasts/looks.js`):
   - **Its flayed**, in its first two levels: the cult's sacrifices and priests, skinned and given
     back their lives below, gaunt, a man's height to a head taller; Monster1's six builds, each in
@@ -144,10 +144,22 @@ wilds, and only by night, once the cult keeping its rite there is slain ([The wa
     (`BOMBS.bile`); *pit ravagers*, quick for their size, their clubs and teeth leaving wounds that
     bleed; and one *gorger warlord* at a time under skulls and banners, roaring its bloat gorgers
     to it.
+  - **Its walkers**, on every level: gaunt, long-armed, two metres tall, a curved blade in one
+    hand; Monster4 ("Walking Villain"), one kind to each level in its own skin, quick (a run
+    of their own), their claws raked, leaving wounds that bleed. *Brimstone walkers* in the
+    Breach, *ash walkers* in the Halls of Bone, one or two at a time; *hellwalkers* on the River
+    of Fire, where they're at home, two or three at a time and met the most, in their own skin or
+    charred; *bile walkers* in the Pit (`beasts/model.js` `walker`).
+  - **The Lord of the Pit's henchmen**, in the Pit, two or three at a time, and two or three
+    about the Lord (the boss's `guard` in its theme): spined and hunched, a man's height
+    and a little more, armoured (a quarter of the harm kept off them) and steady on their feet,
+    their claws rending, leaving wounds that bleed; Monster3 ("Villain's Henchman"), in one of its
+    four skins: its own rust, bone, blood (its eyes burning) or bile. No run of their own: they
+    walk, as the gorgers do, their walk up to twice its pace.
 
   Each has a voice of a family's own at its own pitch (`audio/sound.js`: the flayed as goblins,
-  wights or men, the gorgers as trolls), spoils of its own (`spoils.js`), and its place in the
-  model viewer under *The hells*. Tests: `test/hell-kinds.test.js` (where they're met; the embers
+  wights or men, the gorgers and the henchmen as trolls, the walkers as wights), spoils of its own
+  (`spoils.js`), and its place in the model viewer under *The hells*. Tests: `test/hell-kinds.test.js` (where they're met; the embers
   and the bile bursting on their foes, never their own; the wards; the drain; the rest of each),
   `e2e/model-viewer.spec.js` (each as the game draws it).
 - **Stand-ins for now**: everyone else in it but its lord, its fiends and its own kinds is one of

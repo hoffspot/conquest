@@ -331,6 +331,60 @@ they're in the game.
 
 Don't copy them out of this game or use them in anything else.
 
+## henchman.bin, henchman.bone.bin, henchman.blood.bin, henchman.bile.bin
+
+**Monster3, "Villain's Henchman"**, by **Andrew Ermakov** (its Unreal Engine files: its skeletal
+mesh, its textures and its five animations, exported from Unreal Engine by this repository's
+owner), bought on **Fab** by this repository's owner under **Fab's Standard License**: the Pit
+henchman.
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/henchman.json`, which stays out of the repository with the bought files), its `phone`
+build. That's its mesh of 11,012 triangles, with two lower details packed in (4,955 and 2,201),
+its own skin's textures (colour, normal, and occlusion, roughness and metal) as 1,024-pixel KTX2,
+and all five of its own clips: an idle, a walk, an attack, a flinch and a death. Its other three
+skins, bone, blood and bile, are their colour textures alone, and the blood one's glow
+(`henchman.bone.bin`, `henchman.blood.bin`, `henchman.bile.bin`). Its pack's demo
+(`Animations/Demo`) isn't in it: an idle, a walk, a run and jumps retargeted from Unreal's
+third-person template, which are Epic's, licensed for Unreal Engine only.
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`). In the game it's the henchmen of the Pit, the hells' fourth level,
+and the Lord of the Pit's guard (`beasts/model.js` `henchman`).
+
+Don't copy it out of this game or use it in anything else.
+
+## hellwalker.bin, hellwalker.char.bin, hellwalker.ash.bin, hellwalker.brimstone.bin, hellwalker.bile.bin
+
+**Monster4, "Walking Villain"**, by **Andrew Ermakov** (its Unreal Engine files: its skeletal
+mesh, its textures and its six animations, exported from Unreal Engine by this repository's
+owner), bought on **Fab** by this repository's owner under **Fab's Standard License**: a hell's
+walkers. (Not the Fiend's Monster4, above: another pack of the same name.)
+
+It is not CC0 and not free to reuse. That licence lets it be used in a game its buyer makes and
+distributed as part of it, never on its own, so it's in the game only in this converted form,
+served scrambled as part of the game: the bought files put through `utilities/blenderpipeline`
+(`private/hellwalker.json`, which stays out of the repository with the bought files), its `phone`
+build. That's its mesh of 9,209 triangles, with two lower details packed in (4,140 and 1,836), its
+own skin's textures (colour, normal, and occlusion and roughness: the pack has no metal map, so
+it's built without metal) as 1,024-pixel KTX2, and all six of its own clips: an idle, a walk, a
+run, an attack, a flinch and a death. Its other four skins, char, ash, brimstone and bile, are
+their colour textures alone (`hellwalker.char.bin`, `hellwalker.ash.bin`,
+`hellwalker.brimstone.bin`, `hellwalker.bile.bin`). Its pack's demo (`Animations/DEMO`) isn't in
+it, as the henchman's isn't.
+
+It's scrambled as the game serves it, with whose it is in its glTF asset's `copyright`. It isn't
+in this repository, but in the private one the game's builds fetch it from
+(`docs/LICENSED_MODELS.md`). In the game it's the hells' walkers, a skin to each level: the
+Brimstone walkers of the Breach, the Ash walkers of the Halls of Bone, the Hellwalkers of the
+River of Fire (its own skin and char) and the Bile walkers of the Pit (`beasts/model.js`
+`brimstoneWalker`, `ashWalker`, `hellwalker`, `bileWalker`).
+
+Don't copy it out of this game or use it in anything else.
+
 ## kaiju.bin
 
 **Kaiju**, by **HuyKhoi2407** (its Blender files, rigged and animated, `Kaiju_Animation-baked.blend`
