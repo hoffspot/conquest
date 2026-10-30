@@ -1833,10 +1833,16 @@ test("swiping up from the player turns them the way the camera looks and sends t
         return clearest;
     });
 
-    // (The game playing on, taking taps and swipes)
-    const start = await page.evaluate(() => {
+    // (The game taking taps and swipes, its drawing held: the browser hands a move over with the
+    // next frame it draws, and a frame drawn in software on a slow runner can take longer than a
+    // press is held to open the action wheel (game.js HOLD_MS), which would open under the finger
+    // before the flick got to it. A frame or two let by first, so none is still being drawn)
+    const start = await page.evaluate(async () => {
         const { game, session } = window.pellagos;
         const avatar = game.avatars.get("player");
+
+        game.view.renderer.setAnimationLoop(null);
+        await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
 
         return { at: session.view.toScreen(avatar.point(0.5)), facing: avatar.facing, x: avatar.object.position.x, z: avatar.object.position.z };
     });
