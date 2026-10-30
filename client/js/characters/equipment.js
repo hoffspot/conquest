@@ -78,7 +78,15 @@ const HOLDS = {
     shoulder: { Arm: { flex: -10, abduct: 15, rotate: 0 }, ForeArm: { flex: 138, pronate: 0 }, Hand: { flex: 5, deviate: -5 }, swing: 0.08 },
     // (A basket by its handle at the side, the arm down and a little out to keep it off the hip)
     basket: { Arm: { flex: 4, abduct: 14, rotate: 0 }, ForeArm: { flex: 14, pronate: 0 }, Hand: { flex: 0, deviate: 0 }, swing: 0.3 },
+    // (A torch carried at night in the left hand, in place of what's there by day, held up before
+    // the body as a walking staff is: the forearm forward, the thumb up and turned a little out,
+    // so its shaft stands up out of the fist, not leaning in over the head, and its flame burns
+    // clear of the head and of the other hand: Character.holdTorch)
+    torch: { Arm: { flex: 12, abduct: 10, rotate: 10 }, ForeArm: { flex: 78, pronate: -20 }, Hand: { flex: -5, deviate: 10 }, swing: 0.2 },
 };
+
+/** How a torch carried at night is held (Character.holdTorch: in the left hand, whatever's on that arm by day). */
+export const TORCH_HOLD = HOLDS.torch;
 
 /**
  * Where weapons are put away (`sheath`): on a socket (a hip, the back), where the grip goes from

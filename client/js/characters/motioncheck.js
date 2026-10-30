@@ -97,7 +97,7 @@ export function dress(human, look, { sheathed = true } = {}) {
     const character = { human, rig, object, positions, normals, joints, height, holds: {}, items: [], equipment: new Map() };
     const ids = look.equipment.filter((id) => EQUIPMENT[id]?.kind === "item");
 
-    for (const method of ["sheathe", "sling", "arrange", "showOffHand", "sheathPose", "settle", "hang", "pommelOf"]) {
+    for (const method of ["sheathe", "sling", "arrange", "showOffHand", "sheathPose", "settle", "hang", "pommelOf", "holdTorch"]) {
         character[method] = Character.prototype[method].bind(character);
     }
 

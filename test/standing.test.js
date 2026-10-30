@@ -93,6 +93,17 @@ describe("standing (standing.js)", () => {
             assert.ok(far.reward.standing >= near.reward.standing && far.until - far.given >= near.until - near.given);
         }
 
+        // (Paid mostly for the way there: the nearest no less than a healing draught, and the
+        // guild's sealed package as far more again, as it pays in gold, not standing)
+        for (const letter of letters) {
+            const km = apart(letter.target.at, home.at) / 1000;
+            const { gold, perKm } = REQUESTS.message.reward;
+
+            assert.equal(letter.reward.gold, Math.round(gold + perKm.gold * km));
+            assert.ok(letter.reward.gold >= 15, `${letter.reward.gold} gold for ${km.toFixed(2)} km`);
+            assert.ok(REQUESTS.courier.reward.gold + REQUESTS.courier.reward.perKm.gold * km > gold + perKm.gold * km);
+        }
+
         // (A tithe only while the treasury's thin)
         war.realm("human").treasury = 10;
         assert.ok(offers(war, { town: home.id }).some((request) => request?.kind === "tithe"));

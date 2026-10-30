@@ -1935,6 +1935,15 @@
   "dodge/left|orc-thinnest-f": {
    "joint": 4.94
   },
+  "dodge/right|cat-bulkiest-m": {
+   "item": 0.0136
+  },
+  "dodge/right|cat-shortest-f": {
+   "item": 0.0139
+  },
+  "dodge/right|cat-tallest-m": {
+   "item": 0.0137
+  },
   "dodge/right|orc-bulkiest-f": {
    "joint": 4.94
   },
@@ -2305,6 +2314,9 @@
   },
   "draw/sword|darkElf-thinnest-f": {
    "item": 0.0156
+  },
+  "emote/puzzled/0/armed|orc-shortest-f": {
+   "item": 0.0121
   },
   "fall/dead-forward|darkElf-bulkiest-m": {
    "item": 0.0206
@@ -3805,10 +3817,16 @@
    "joint": 4.03
   },
   "rest/arcanist/0|darkElf-shortest-f": {
-   "item": 0.0795
+   "item": 0.0773
   },
   "rest/arcanist/2|darkElf-shortest-f": {
-   "item": 0.0867
+   "item": 0.08
+  },
+  "rest/arcanist/4|orc-bulkiest-m": {
+   "item": 0.0129
+  },
+  "rest/arcanist/4|orc-tallest-m": {
+   "item": 0.0137
   },
   "rest/barmaid/1|orc-bulkiest-f": {
    "joint": 3.46
@@ -3952,6 +3970,12 @@
   "rest/courtesan/4|orc-tallest-m": {
    "item": 0.0272
   },
+  "rest/crier/3|orc-shortest-f": {
+   "joint": 3.25
+  },
+  "rest/hunter/2|orc-shortest-f": {
+   "joint": 3.25
+  },
   "rest/madam/0|cat-bulkiest-m": {
    "item": 0.0219
   },
@@ -4011,6 +4035,75 @@
   },
   "rest/patron/1|orc-bulkiest-m": {
    "item": 0.0214
+  },
+  "rest/pedlar/0|darkElf-bulkiest-m": {
+   "item": 0.0148
+  },
+  "rest/pedlar/0|lizard-bulkiest-f": {
+   "item": 0.0136
+  },
+  "rest/pedlar/0|lizard-shortest-f": {
+   "item": 0.0143
+  },
+  "rest/pedlar/0|lizard-thinnest-f": {
+   "item": 0.0137
+  },
+  "rest/pedlar/0|orc-bulkiest-m": {
+   "item": 0.0141
+  },
+  "rest/pedlar/1|lizard-bulkiest-f": {
+   "item": 0.0138
+  },
+  "rest/pedlar/1|lizard-shortest-f": {
+   "item": 0.0141
+  },
+  "rest/pedlar/1|lizard-thinnest-f": {
+   "item": 0.0138
+  },
+  "rest/pedlar/1|orc-shortest-f": {
+   "joint": 3.03
+  },
+  "rest/pedlar/2|lizard-bulkiest-f": {
+   "item": 0.0139
+  },
+  "rest/pedlar/2|lizard-shortest-f": {
+   "item": 0.0142
+  },
+  "rest/pedlar/2|lizard-thinnest-f": {
+   "item": 0.0139
+  },
+  "rest/pedlar/3|lizard-bulkiest-f": {
+   "item": 0.0136
+  },
+  "rest/pedlar/3|lizard-shortest-f": {
+   "item": 0.0139
+  },
+  "rest/pedlar/3|lizard-thinnest-f": {
+   "item": 0.0136
+  },
+  "rest/pedlar/3|orc-shortest-f": {
+   "joint": 3.25
+  },
+  "rest/pedlar/4|lizard-bulkiest-f": {
+   "item": 0.0136
+  },
+  "rest/pedlar/4|lizard-shortest-f": {
+   "item": 0.0139
+  },
+  "rest/pedlar/4|lizard-thinnest-f": {
+   "item": 0.0136
+  },
+  "rest/pedlar/5|cat-thinnest-f": {
+   "item": 0.0144
+  },
+  "rest/pedlar/5|lizard-bulkiest-f": {
+   "item": 0.0136
+  },
+  "rest/pedlar/5|lizard-shortest-f": {
+   "item": 0.0139
+  },
+  "rest/pedlar/5|lizard-thinnest-f": {
+   "item": 0.0136
   },
   "rest/quartermaster/3|cat-bulkiest-f": {
    "joint": 4.03
@@ -4101,6 +4194,9 @@
   },
   "rest/quartermaster/3|orc-thinnest-f": {
    "joint": 4.03
+  },
+  "rest/sentry/0|orc-bulkiest-m": {
+   "item": 0.0125
   },
   "rest/sentry/1|cat-bulkiest-f": {
    "joint": 4.03,
@@ -4329,6 +4425,66 @@
   },
   "rest/smith/4|orc-tallest-m": {
    "limb": 0.0316
+  },
+  "rest/townsfolk/0/basket|darkElf-bulkiest-m": {
+   "item": 0.0148
+  },
+  "rest/townsfolk/0/broom|darkElf-bulkiest-m": {
+   "item": 0.0148
+  },
+  "rest/townsfolk/0/hoe|darkElf-bulkiest-m": {
+   "item": 0.0148
+  },
+  "rest/townsfolk/0/pitchfork|darkElf-bulkiest-m": {
+   "item": 0.0148
+  },
+  "rest/townsfolk/0/walkingStaff|darkElf-bulkiest-m": {
+   "item": 0.0148
+  },
+  "rest/townsfolk/0|darkElf-bulkiest-m": {
+   "item": 0.0148
+  },
+  "rest/townsfolk/1/basket|orc-shortest-f": {
+   "joint": 3.03
+  },
+  "rest/townsfolk/1/broom|orc-shortest-f": {
+   "joint": 3.03
+  },
+  "rest/townsfolk/1/hoe|orc-shortest-f": {
+   "joint": 3.03
+  },
+  "rest/townsfolk/1/ledger|orc-shortest-f": {
+   "joint": 3.03
+  },
+  "rest/townsfolk/1/pitchfork|orc-shortest-f": {
+   "joint": 3.03
+  },
+  "rest/townsfolk/1/walkingStaff|orc-shortest-f": {
+   "joint": 3.03
+  },
+  "rest/townsfolk/1|orc-shortest-f": {
+   "joint": 3.03
+  },
+  "rest/townsfolk/3/basket|orc-shortest-f": {
+   "joint": 3.25
+  },
+  "rest/townsfolk/3/broom|orc-shortest-f": {
+   "joint": 3.25
+  },
+  "rest/townsfolk/3/hoe|orc-shortest-f": {
+   "joint": 3.25
+  },
+  "rest/townsfolk/3/ledger|orc-shortest-f": {
+   "joint": 3.25
+  },
+  "rest/townsfolk/3/pitchfork|orc-shortest-f": {
+   "joint": 3.25
+  },
+  "rest/townsfolk/3/walkingStaff|orc-shortest-f": {
+   "joint": 3.25
+  },
+  "rest/townsfolk/3|orc-shortest-f": {
+   "joint": 3.25
   },
   "sheathe/axe|darkElf-bulkiest-m": {
    "joint": 3.04
