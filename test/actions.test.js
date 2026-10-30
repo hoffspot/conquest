@@ -674,6 +674,45 @@ describe("a blade hung at the hip (equipment.js SHEATHS, Character.hang, Actions
         assert.equal(drawn.character.held, 0, "nothing to hold in the scabbard");
     });
 
+    it("holds a torch carried at night up before the body, its shaft upright, not on the pommel: its flame clear of the other hand and the head; put out, the hand goes back to the pommel", () => {
+        for (const body of BODIES) {
+            const { character, walker } = soldier(body);
+            const torch = character.holdTorch(true);
+
+            for (const speed of [0, 1.3]) {
+                walk(walker, speed, 1.5);
+
+                let [lean, hand, head] = [0, Infinity, Infinity];
+
+                for (let t = 0; t < 1; t += FRAME) {
+                    walker.update(FRAME, { speed });
+                    torch.updateWorldMatrix(true, false);
+
+                    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(torch.getWorldQuaternion(new THREE.Quaternion()));
+                    const flame = torch.userData.flame.clone().applyMatrix4(torch.matrixWorld);
+
+                    lean = Math.max(lean, (Math.acos(Math.min(1, up.y)) * 180) / Math.PI);
+                    hand = Math.min(hand, flame.distanceTo(world("RightHand", character)));
+                    head = Math.min(head, flame.distanceTo(world("Head", character)));
+                }
+
+                // (An orc's, as it walks stooped, leaning forward with it)
+                assert.ok(lean < 30, `${body.id} at ${speed} m/s: leaning ${lean.toFixed(0)}° from upright`);
+                assert.ok(hand > 0.5, `${body.id} at ${speed} m/s: its flame ${(hand * 100).toFixed(0)} cm from the right hand`);
+                assert.ok(head > 0.35, `${body.id} at ${speed} m/s: its flame ${(head * 100).toFixed(0)} cm from the head`);
+                assert.ok(!(character.held > 0), `${body.id} at ${speed} m/s: not on the pommel`);
+            }
+
+            character.holdTorch(false);
+            assert.equal(character.holds.Left?.Arm, character.slung ? undefined : ITEMS[character.equipment.get("offHand")]?.hold?.Arm, `${body.id}: the shield's hold again, on the arm`);
+
+            if (character.slung) {
+                walk(walker, 1.3, 1.5);
+                assert.ok(character.held > 0.99, `${body.id}: put out, the hand on the pommel again`);
+            }
+        }
+    });
+
     it("rests the hand on the pommel shifting the weight, armed; without a blade at the hip, the thumb in the belt", () => {
         const variant = ROLES.adventurer.rests.findIndex(({ name }) => name === "shifting the weight");
 

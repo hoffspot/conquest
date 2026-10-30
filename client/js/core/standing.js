@@ -54,25 +54,28 @@ const KEEP_DONE = 12;
 /**
  * What's asked, and what it's worth: each kind's title, the rank it's first offered at, how long
  * there is to do it (war turns: a minute's play each; with `perKm`, more the further it is), and
- * its reward (standing and gold; `each` for each foe, `perKm` for each km to go).
+ * its reward (standing and gold; `each` for each foe, `perKm` for each km to go). A people's gold
+ * is about what the same time fighting would bring in, a letter's mostly for the way there (a
+ * reeve's go 0.3 to 2 km, most of them nearly 1: 16 to 37 gold, most of them about 23); the
+ * guilds' a little more for the same work, as they pay in gold and merit, not standing.
  */
 export const REQUESTS = Object.freeze({
-    message: { title: "A letter to carry", rank: 0, turns: 12, perKm: 10, reward: { standing: 10, gold: 6, perKm: { standing: 5, gold: 3 } } },
+    message: { title: "A letter to carry", rank: 0, turns: 12, perKm: 10, reward: { standing: 10, gold: 12, perKm: { standing: 5, gold: 12 } } },
     tithe: { title: "A tithe for the treasury", rank: 0, turns: 30, reward: { standing: 0, gold: 0 } },
-    bounty: { title: "Thin their numbers", rank: 0, turns: 60, reward: { standing: 4, gold: 4, each: { standing: 6, gold: 3 } } },
-    wild: { title: "Clear the roads", rank: 0, turns: 45, reward: { standing: 6, gold: 6, each: { standing: 8, gold: 4 } } },
-    scout: { title: "Scouting", rank: OPENS.scout, turns: 40, reward: { standing: 25, gold: 15 } },
-    defend: { title: "Hold the town", rank: OPENS.defend, turns: null, reward: { standing: 50, gold: 30 } },
-    rout: { title: "Break the camp", rank: OPENS.rout, turns: 40, reward: { standing: 60, gold: 40 } },
-    escort: { title: "See the envoy there", rank: OPENS.escort, turns: null, reward: { standing: 70, gold: 40 } },
-    waylay: { title: "Stop their envoy", rank: OPENS.waylay, turns: null, reward: { standing: 70, gold: 50 } },
+    bounty: { title: "Thin their numbers", rank: 0, turns: 60, reward: { standing: 4, gold: 8, each: { standing: 6, gold: 6 } } },
+    wild: { title: "Clear the roads", rank: 0, turns: 45, reward: { standing: 6, gold: 8, each: { standing: 8, gold: 5 } } },
+    scout: { title: "Scouting", rank: OPENS.scout, turns: 40, reward: { standing: 25, gold: 30 } },
+    defend: { title: "Hold the town", rank: OPENS.defend, turns: null, reward: { standing: 50, gold: 60 } },
+    rout: { title: "Break the camp", rank: OPENS.rout, turns: 40, reward: { standing: 60, gold: 80 } },
+    escort: { title: "See the envoy there", rank: OPENS.escort, turns: null, reward: { standing: 70, gold: 80 } },
+    waylay: { title: "Stop their envoy", rank: OPENS.waylay, turns: null, reward: { standing: 70, gold: 100 } },
     // (The works and their convoys: docs/WAR.md *Convoys*)
-    convoy: { title: "See the convoy in", rank: OPENS.convoy, turns: null, reward: { standing: 45, gold: 30 } },
-    plunder: { title: "Fall on their convoy", rank: OPENS.plunder, turns: null, reward: { standing: 55, gold: 40 } },
-    retake: { title: "Win back the works", rank: OPENS.retake, turns: 40, reward: { standing: 50, gold: 35 } },
-    seize: { title: "Take their works", rank: OPENS.seize, turns: 40, reward: { standing: 70, gold: 45 } },
+    convoy: { title: "See the convoy in", rank: OPENS.convoy, turns: null, reward: { standing: 45, gold: 60 } },
+    plunder: { title: "Fall on their convoy", rank: OPENS.plunder, turns: null, reward: { standing: 55, gold: 80 } },
+    retake: { title: "Win back the works", rank: OPENS.retake, turns: 40, reward: { standing: 50, gold: 70 } },
+    seize: { title: "Take their works", rank: OPENS.seize, turns: 40, reward: { standing: 70, gold: 90 } },
     // (An enemy's town taken, its whole garrison put to the sword: docs/WAR.md *Standing armies*)
-    take: { title: "Take the town", rank: OPENS.take, turns: 60, reward: { standing: 120, gold: 80 } },
+    take: { title: "Take the town", rank: OPENS.take, turns: 60, reward: { standing: 120, gold: 160 } },
     // The adventurers' guild's contracts (M8): open to any registered adventurer, of any people,
     // paid in gold and the guild's merit, never their people's standing; `rank` here is the guild
     // rank each is first offered at (GUILD_RANKS)
@@ -84,7 +87,7 @@ export const REQUESTS = Object.freeze({
     // core/rumours.js; nothing lost for letting it run out)
     survey: { title: "A look round", rank: 0, turns: 45, reward: { standing: 0, gold: 12, merit: 2 } },
     // (A sealed package to another town's guild, on the way to strangers: offerCourier)
-    courier: { title: "A sealed package", rank: 0, turns: 12, perKm: 10, reward: { standing: 0, gold: 8, perKm: { standing: 0, gold: 6 }, merit: 3 } },
+    courier: { title: "A sealed package", rank: 0, turns: 12, perKm: 10, reward: { standing: 0, gold: 14, perKm: { standing: 0, gold: 14 }, merit: 3 } },
     // (A place held by outlaws or the dead put to the sword: more for a bigger place, and more for
     // each tier of its land's danger; its merit by its size)
     clear: { title: "Put them to the sword", rank: 0, turns: 90, reward: { standing: 0, gold: 30, size: { small: 0, medium: 25, large: 60 }, tier: 9, merit: { small: 4, medium: 7, large: 12 } } },

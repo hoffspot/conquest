@@ -9,7 +9,7 @@
 
 import * as THREE from "three";
 import { Rig } from "./rig.js";
-import { EQUIPMENT, heldRound, limbThickness, secondGrip, SLING, socketOn } from "./equipment.js";
+import { EQUIPMENT, heldRound, limbThickness, secondGrip, SLING, socketOn, TORCH_HOLD } from "./equipment.js";
 import { buildDrape, drapeMaterial, drapeSkeleton, DRAPES, skirtUnder } from "./drapes.js";
 import { COMPOSITE_BUMP, compositingGarments, fittingOutfit, GARMENTS, measureBody, paintGarment, paintingGarment, stackOrder, texelMap } from "./garments.js";
 import { BEARDS, growingHair, hairTexture, HAIRSTYLES } from "./hair.js";
@@ -480,7 +480,8 @@ export class Character {
             this.torch = null;
         }
 
-        this.showOffHand();
+        // (Held up as a torch is, or as what's on that arm is again: arrange)
+        this.arrange();
 
         return this.torch;
     }
@@ -905,6 +906,13 @@ export class Character {
             } else if (item.grips) {
                 this.holds[/left|Left/.test(item.socket) ? "Left" : "Right"] = { grips: true };
             }
+        }
+
+        // (A torch carried in the left hand held up before the body, its shaft upright, whatever's
+        // on that arm or slung on the back: not resting on a pommel, its flame clear of the other
+        // hand and the head)
+        if (this.torch) {
+            this.holds.Left = { ...TORCH_HOLD, grips: true, grip: this.torch.userData.grip };
         }
 
         // (An arm swinging free held a little out, clear of what hangs at that hip: a scabbard, a

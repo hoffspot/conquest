@@ -923,20 +923,20 @@ adventurers' guilds' work gives the guilds' merit instead (M8, *The guilds' rank
 
 | Request | Asked | Done when | Worth |
 | --- | --- | --- | --- |
-| A letter to carry | to one of the three nearest of their own towns | it's handed to the reeve there (or a capital's steward) | 10 standing and 6 gold, and 5 and 3 for each km |
+| A letter to carry | to one of the three nearest of their own towns | it's handed to the reeve there (or a capital's steward) | 10 standing and 12 gold, and 5 and 12 for each km |
 | A tithe for the treasury | while the treasury's thin | its gold is paid (a quarter of it goes into the treasury) | half its gold in standing |
-| Thin their numbers | in a war | so many of the enemy's soldiers are brought down | 4 and 4, and 6 and 3 for each |
-| Clear the roads | always | so many of the wild are brought down | 6 and 6, and 8 and 4 for each |
-| Scouting | from a Freeholder | the player goes within 220 m of an enemy camp or army near (or their nearest town) | 25 and 15 |
-| Hold the town | from a Retainer, with an enemy camp within 1 km | the player was there (within 180 m of its edge) and the camp's gone, the town still theirs | 50 and 30 |
-| Break the camp | from a Retainer, with an enemy camp within 1 km (M6) | the player was at the camp (within 150 m) and it's gone; failed if it takes the town | 60 and 40 |
-| See the envoy there | from a Knight, at the keep, with one of their envoys on the road (M7) | the player was with them (within 60 m) and they're heard at their road's end; failed if they're waylaid | 70 and 40 |
-| Stop their envoy | from a Knight, at the keep, with an enemy's envoy on the road (M7) | they're waylaid by the player's people; failed if they get there | 70 and 50 |
-| See the convoy in | from a Retainer, at the keep, with one of their convoys on the road laden (M13) | the player was with it (within 60 m) and its goods are in; failed if it's fallen on | 45 and 30 |
-| Fall on their convoy | from a Knight, at the keep, with an enemy's convoy on the road laden (M13) | the player's people fall on it in the world and carry its goods off; failed if they get in | 55 and 40 |
-| Win back the works | from a Retainer, at the keep, with one of their works held by brigands or another people (M13) | the player's people win it in the world (within 40 turns) | 50 and 35 |
-| Take their works | from a Knight, at the keep, with an enemy's works (M13) | the player's people seize it in the world (within 40 turns); come to nothing if another takes it | 70 and 45 |
-| Take the town | from a Knight, at the keep, with an enemy town the age lets be taken: the nearest (M16) | the player's people put its whole garrison to the sword, its guards, patrols, and its barracks' guardsmen and captain, and take it (within 60 turns); come to nothing if it's taken any other way | 120 and 80 |
+| Thin their numbers | in a war | so many of the enemy's soldiers are brought down | 4 and 8, and 6 and 6 for each |
+| Clear the roads | always | so many of the wild are brought down | 6 and 8, and 8 and 5 for each |
+| Scouting | from a Freeholder | the player goes within 220 m of an enemy camp or army near (or their nearest town) | 25 and 30 |
+| Hold the town | from a Retainer, with an enemy camp within 1 km | the player was there (within 180 m of its edge) and the camp's gone, the town still theirs | 50 and 60 |
+| Break the camp | from a Retainer, with an enemy camp within 1 km (M6) | the player was at the camp (within 150 m) and it's gone; failed if it takes the town | 60 and 80 |
+| See the envoy there | from a Knight, at the keep, with one of their envoys on the road (M7) | the player was with them (within 60 m) and they're heard at their road's end; failed if they're waylaid | 70 and 80 |
+| Stop their envoy | from a Knight, at the keep, with an enemy's envoy on the road (M7) | they're waylaid by the player's people; failed if they get there | 70 and 100 |
+| See the convoy in | from a Retainer, at the keep, with one of their convoys on the road laden (M13) | the player was with it (within 60 m) and its goods are in; failed if it's fallen on | 45 and 60 |
+| Fall on their convoy | from a Knight, at the keep, with an enemy's convoy on the road laden (M13) | the player's people fall on it in the world and carry its goods off; failed if they get in | 55 and 80 |
+| Win back the works | from a Retainer, at the keep, with one of their works held by brigands or another people (M13) | the player's people win it in the world (within 40 turns) | 50 and 70 |
+| Take their works | from a Knight, at the keep, with an enemy's works (M13) | the player's people seize it in the world (within 40 turns); come to nothing if another takes it | 70 and 90 |
+| Take the town | from a Knight, at the keep, with an enemy town the age lets be taken: the nearest (M16) | the player's people put its whole garrison to the sword, its guards, patrols, and its barracks' guardsmen and captain, and take it (within 60 turns); come to nothing if it's taken any other way | 120 and 160 |
 
 Each has so long to be done (war turns: a minute's play each; a letter longer the further it
 goes), and fails when it runs out; one whose target's gone comes to nothing. What's done is told
@@ -3621,7 +3621,7 @@ Copper is asked and paid (a higher rank's: *The guilds' ranks*, below):
 | The camp outside the walls | from Bronze; an enemy camp before the town (M6), within 1.5 km | the player was at it, and it's gone | 70 | 6 |
 | Wanted at the guild | the parts of the creatures found within 1.5 km (`candidatesAt`, by day or night), at the tiers the asking player meets them there (measured from their home: docs/WILDS.md); never what only the ruins' dead leave | 2 to 5 of a creature's parts brought to the counter | 4, and 1.6 times what they'd sell for | 2 |
 | Put them to the sword | a place within 1.5 km held by outlaws or the dead (docs/GAME.md *Held, in play*): a small one for a Copper | the place cleared (its band and their leader, or a ruined castle's master) with the player there | 30; 25 more for a middling place, 60 for a great one; 9 more for each tier of its land's danger; half the time a tome | 4, 7 for a middling place, 12 for a great one |
-| A sealed package | the courier work, below | taken to the guild it's for, and told of at its counter | 8, and 6 for each km | 3 |
+| A sealed package | the courier work, below | taken to the guild it's for, and told of at its counter | 14, and 14 for each km | 3 |
 | A look round | a place within 2 km the player's still to find (below), the nearest not already asked of | the player near enough to see it (the maps' rule, or within 150 m: `REQUEST_REACH.survey`), and told of at the counter | 12 | 2; nothing lost if it runs out or is given up |
 
 **The guilds' ranks** (`GUILD_RANKS`): registering at any guild's counter gives the player one
